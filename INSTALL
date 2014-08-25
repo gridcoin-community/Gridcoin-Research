@@ -1,0 +1,9 @@
+Building GridCoin
+
+See doc/readme-qt.rst for instructions on building GridCoin QT,
+the intended-for-end-users, nice-graphical-interface, reference
+implementation of GridCoin.
+
+See doc/build-*.txt for instructions on building gridcoind,
+the intended-for-services, no-graphical-interface, reference
+implementation of GridCoin.

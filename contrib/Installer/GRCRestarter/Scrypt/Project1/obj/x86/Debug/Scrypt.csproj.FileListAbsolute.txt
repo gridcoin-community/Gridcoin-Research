@@ -1,0 +1,8 @@
+C:\Gridcoin-master\contrib\RD\GridCoinDotNet\GRCRestarter\Project1\Project1\bin\Debug\Scrypt.exe
+C:\Gridcoin-master\contrib\RD\GridCoinDotNet\GRCRestarter\Project1\Project1\bin\Debug\Scrypt.pdb
+C:\Gridcoin-master\contrib\RD\GridCoinDotNet\GRCRestarter\Project1\Project1\bin\Debug\OpenCL.Net.dll
+C:\Gridcoin-master\contrib\RD\GridCoinDotNet\GRCRestarter\Project1\Project1\obj\x86\Debug\Project1.RamGec_About_Box1.resources
+C:\Gridcoin-master\contrib\RD\GridCoinDotNet\GRCRestarter\Project1\Project1\obj\x86\Debug\Scrypt.csproj.GenerateResource.Cache
+C:\Gridcoin-master\contrib\RD\GridCoinDotNet\GRCRestarter\Project1\Project1\obj\x86\Debug\Scrypt.exe
+C:\Gridcoin-master\contrib\RD\GridCoinDotNet\GRCRestarter\Project1\Project1\obj\x86\Debug\Scrypt.pdb
+C:\Gridcoin-master\contrib\RD\GridCoinDotNet\GRCRestarter\Project1\Project1\obj\x86\Debug\Scrypt.csprojResolveAssemblyReference.cache

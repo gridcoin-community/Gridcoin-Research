@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd">
+  <metadata>
+    <id>OpenCL.Net</id>
+    <version>2.2.9.0</version>
+    <title>OpenCL.Net</title>
+    <authors>Ananth Balasubramaniam</authors>
+    <owners>Ananth Balasubramaniam</owners>
+    <licenseUrl>http://www.opensource.org/licenses/eclipse-1.0.php</licenseUrl>
+    <projectUrl>http://openclnet.codeplex.com/</projectUrl>
+    <iconUrl>http://download.codeplex.com/Download?ProjectName=openclnet&amp;DownloadId=221265&amp;Build=18301</iconUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>Provides types, classes and methods that provide .NET bindings to OpenCL</description>
+    <summary>.NET bindings for OpenCL that are easy-to-use and true to the original API. There is no 
+OOP abstraction, nor will there ever be. OpenCL.Net is meant to be small, fast (with as 
+little explicit marshaling as possible) and .NET friendly at the same time.
+
+The contents of this project are made available under the terms of the
+Eclipse Public License v1.0 (the "License") which accompanies this
+distribution, and is available at the following URL:
+http://www.opensource.org/licenses/eclipse-1.0.php
+
+Software distributed under the License is distributed on an "AS IS" basis,
+WITHOUT WARRANTY OF ANY KIND, either expressed or implied. See the License for
+the specific language governing rights and limitations under the License.
+
+By using this software in any fashion, you are agreeing to be bound by the
+terms of the License.
+
+Please send comments and/or suggestions to ananth&lt;at&gt;ananthonline&lt;dot&gt;net.</summary>
+    <releaseNotes />
+    <copyright>Copyright 2010</copyright>
+    <tags>OpenCL C# .NET GPGPU Dataparallel Compute multicore multi-core parallel HPC</tags>
+  </metadata>
+</package>
