@@ -1000,7 +1000,7 @@ boost::filesystem::path GetDefaultDataDir()
     // Unix: ~/.gridcoin
 #ifdef WIN32
     // Windows
-    return GetSpecialFolderPath(CSIDL_APPDATA) / "gridcoinresearch";
+    return GetSpecialFolderPath(CSIDL_APPDATA) / "GridcoinResearch";
 #else
     fs::path pathRet;
     char* pszHome = getenv("HOME");
@@ -1012,10 +1012,10 @@ boost::filesystem::path GetDefaultDataDir()
     // Mac
     pathRet /= "Library/Application Support";
     fs::create_directory(pathRet);
-    return pathRet / "gridcoinresearch";
+    return pathRet / "GridcoinResearch";
 #else
     // Unix
-    return pathRet / ".gridcoinresearch";
+    return pathRet / ".GridcoinResearch";
 #endif
 #endif
 }

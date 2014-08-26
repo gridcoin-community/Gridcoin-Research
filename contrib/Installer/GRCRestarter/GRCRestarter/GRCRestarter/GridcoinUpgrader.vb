@@ -174,7 +174,7 @@ Public Class GridcoinUpgrader
                 ProgressBar1.Maximum = 1000
                 ProgressBar1.Value = 1
                 RefreshScreen()
-                txtStatus.Text = "Waiting for Gridcoin Stake Wallet to exit..."
+                txtStatus.Text = "Waiting for Gridcoin Wallet to exit..."
                 RefreshScreen()
                 System.Threading.Thread.Sleep(8000)
                 KillProcess("gridcoinresearch*")
