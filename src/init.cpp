@@ -119,8 +119,8 @@ void DetectShutdownThread(boost::thread_group* threadGroup)
         if (fRequestShutdown)
 		{
 			printf("Shutting down forcefully...");
-			//Note: this code is used in Litecoin, but not in Peercoin
-		/*
+			//Note: this code is used in Litecoin, but not in Peercoin/Gridcoin
+     		/*
             threadGroup->interrupt_all();
 			//threadGroup.join_all();
 			printf("Stopping node\r\n");
@@ -327,6 +327,8 @@ bool AppInit(int argc, char* argv[])
     boost::thread* detectShutdownThread = NULL;
 
     bool fRet = false;
+	printf("AppInit");
+
     try
     {
         //
@@ -372,8 +374,12 @@ bool AppInit(int argc, char* argv[])
         fRet = AppInit2();
     }
     catch (std::exception& e) {
+		printf("AppInit()Exception1");
+
         PrintException(&e, "AppInit()");
     } catch (...) {
+		printf("AppInit()Exception2");
+
         PrintException(NULL, "AppInit()");
     }
     if (!fRet)

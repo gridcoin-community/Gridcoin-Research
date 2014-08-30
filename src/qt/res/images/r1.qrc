@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="images">
+    <file>grc600.png</file>
+  </qresource>
+</RCC>

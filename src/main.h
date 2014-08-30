@@ -53,7 +53,6 @@ inline bool MoneyRange(int64_t nValue) { return (nValue >= 0 && nValue <= MAX_MO
 /** Threshold for nLockTime: below this value it is interpreted as block number, otherwise as UNIX timestamp. */
 static const unsigned int LOCKTIME_THRESHOLD = 500000000; // Tue Nov  5 00:53:20 1985 UTC
 
-static const int64_t COIN_YEAR_REWARD = 5 * CENT; // 5% per year
 
 //Gridcoin:  Genesis1 with HashBoinc Removed:
 //static const uint256 hashGenesisBlock("0x0000042f4f3c6e9d56919a409f385b83bb4bec0e66244a4467af796c682218d9");
@@ -97,6 +96,9 @@ extern CCriticalSection cs_setpwalletRegistered;
 extern std::set<CWallet*> setpwalletRegistered;
 extern unsigned char pchMessageStart[4];
 extern std::map<uint256, CBlock*> mapOrphanBlocks;
+
+extern int64_t COIN_YEAR_REWARD;
+
 
 // Settings
 extern int64_t nTransactionFee;
@@ -152,7 +154,7 @@ bool LoadExternalBlockFile(FILE* fileIn);
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfStake);
 int64_t GetProofOfWorkReward(int64_t nFees);
-int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, bool VerifyingBlock);
+int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, bool VerifyingBlock,int64_t locktime);
 
 unsigned int ComputeMinWork(unsigned int nBase, int64_t nTime);
 unsigned int ComputeMinStake(unsigned int nBase, int64_t nTime, unsigned int nBlockTime);

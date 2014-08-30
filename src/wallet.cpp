@@ -1760,7 +1760,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
         if (!txNew.GetCoinAge(txdb, nCoinAge))
             return error("CreateCoinStake : failed to calculate coin age");
 		
-        int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false);
+        int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,txNew.nTime);
 	
 		printf("Creating POS Reward for %s  amt  %"PRId64"  \r\n",GlobalCPUMiningCPID.cpid.c_str(),nReward/COIN);
 

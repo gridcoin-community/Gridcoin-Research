@@ -66,6 +66,7 @@
 #include <QMovie>
 #include <QFileDialog>
 #include <QDesktopServices>
+
 #include <QTimer>
 #include <QDragEnterEvent>
 #include <QUrl>
@@ -505,24 +506,41 @@ void BitcoinGUI::createActions()
 
 
 	
-	miningAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Mining Console"), this);
-	miningAction->setStatusTip(tr("Go to the mining console"));
-	miningAction->setMenuRole(QAction::TextHeuristicRole);
+//	miningAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Mining Console"), this);
+//	miningAction->setStatusTip(tr("Go to the mining console"));
+//	miningAction->setMenuRole(QAction::TextHeuristicRole);
 
 
-	emailAction = new QAction(QIcon(":/icons/bitcoin"), tr("&E-Mail Center"), this);
-	emailAction->setStatusTip(tr("Go to the E-Mail center"));
-	emailAction->setMenuRole(QAction::TextHeuristicRole);
+//	emailAction = new QAction(QIcon(":/icons/bitcoin"), tr("&E-Mail Center"), this);
+//	emailAction->setStatusTip(tr("Go to the E-Mail center"));
+//	emailAction->setMenuRole(QAction::TextHeuristicRole);
 
-	sqlAction = new QAction(QIcon(":/icons/bitcoin"), tr("&SQL Query Analyzer"), this);
-	sqlAction->setStatusTip(tr("SQL Query Analyzer"));
-	sqlAction->setMenuRole(QAction::TextHeuristicRole);
+//	sqlAction = new QAction(QIcon(":/icons/bitcoin"), tr("&SQL Query Analyzer"), this);
+//	sqlAction->setStatusTip(tr("SQL Query Analyzer"));
+//	sqlAction->setMenuRole(QAction::TextHeuristicRole);
 
-	leaderboardAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Leaderboard"), this);
-	leaderboardAction->setStatusTip(tr("Leaderboard"));
-	leaderboardAction->setMenuRole(QAction::TextHeuristicRole);
+//	leaderboardAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Leaderboard"), this);
+//	leaderboardAction->setStatusTip(tr("Leaderboard"));
+//	leaderboardAction->setMenuRole(QAction::TextHeuristicRole);
 
+
+	bxAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Block Explorer"), this);
+	bxAction->setStatusTip(tr("Block Explorer"));
+	bxAction->setMenuRole(QAction::TextHeuristicRole);
+
+	exchangeAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Exchange"), this);
+	exchangeAction->setStatusTip(tr("Web Site"));
+	exchangeAction->setMenuRole(QAction::TextHeuristicRole);
+
+	boincAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Boinc Stats"), this);
+	boincAction->setStatusTip(tr("Boinc Stats"));
+	boincAction->setMenuRole(QAction::TextHeuristicRole);
 	
+	websiteAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Web Site"), this);
+	websiteAction->setStatusTip(tr("Web Site"));
+	websiteAction->setMenuRole(QAction::TextHeuristicRole);
+
+
 	//aboutQtAction = new QAction(QIcon(":/trolltech/qmessagebox/images/qtlogo-64.png"), tr("About &Qt"), this);
     //aboutQtAction->setToolTip(tr("Show information about Qt"));
     //aboutQtAction->setMenuRole(QAction::AboutQtRole);
@@ -562,14 +580,16 @@ void BitcoinGUI::createActions()
     connect(signMessageAction, SIGNAL(triggered()), this, SLOT(gotoSignMessageTab()));
     connect(verifyMessageAction, SIGNAL(triggered()), this, SLOT(gotoVerifyMessageTab()));
 
-	connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
-	connect(emailAction, SIGNAL(triggered()), this, SLOT(emailClicked()));
+	//connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
+	//connect(emailAction, SIGNAL(triggered()), this, SLOT(emailClicked()));
 	connect(rebuildAction, SIGNAL(triggered()), this, SLOT(rebuildClicked()));
 	connect(upgradeAction, SIGNAL(triggered()), this, SLOT(upgradeClicked()));
 	connect(downloadAction, SIGNAL(triggered()), this, SLOT(downloadClicked()));
 
-	connect(sqlAction, SIGNAL(triggered()), this, SLOT(sqlClicked()));
-	connect(leaderboardAction, SIGNAL(triggered()), this, SLOT(leaderboardClicked()));
+	connect(websiteAction, SIGNAL(triggered()), this, SLOT(websiteClicked()));
+	connect(bxAction, SIGNAL(triggered()), this, SLOT(bxClicked()));
+	connect(exchangeAction, SIGNAL(triggered()), this, SLOT(exchangeClicked()));
+	connect(boincAction, SIGNAL(triggered()), this, SLOT(boincClicked()));
 
 }
 
@@ -606,14 +626,19 @@ void BitcoinGUI::createMenuBar()
     help->addAction(aboutAction);
     help->addAction(aboutQtAction);
 
+	/*
 	QMenu *mining = appMenuBar->addMenu(tr("&Mining"));
     mining->addSeparator();
     mining->addAction(miningAction);
-		
+	*/
+
+	/*
 	QMenu *email = appMenuBar->addMenu(tr("&E-Mail"));
     email->addSeparator();
     email->addAction(emailAction);
-	
+	*/
+
+
 	QMenu *upgrade = appMenuBar->addMenu(tr("&Upgrade QT Client"));
 	upgrade->addSeparator();
 	upgrade->addAction(upgradeAction);
@@ -626,14 +651,32 @@ void BitcoinGUI::createMenuBar()
 	rebuild->addAction(downloadAction);
 	rebuild->addSeparator();
 	
+	/*
 	QMenu *sql = appMenuBar->addMenu(tr("&SQL Query Analyzer"));
 	sql->addSeparator();
 	sql->addAction(sqlAction);
+	
 
 	QMenu *leaderboard = appMenuBar->addMenu(tr("&Leaderboard"));
 	leaderboard->addSeparator();
 	leaderboard->addAction(leaderboardAction);
+	*/
 
+	QMenu *qmenuBlockexplorer = appMenuBar->addMenu(tr("&Block Explorer"));
+	qmenuBlockexplorer->addSeparator();
+	qmenuBlockexplorer->addAction(bxAction);
+
+	QMenu *qmenuWebsite = appMenuBar->addMenu(tr("&Web Site"));
+	qmenuWebsite->addSeparator();
+	qmenuWebsite->addAction(websiteAction);
+	
+	QMenu *qmenuExchange = appMenuBar->addMenu(tr("&Exchange"));
+	qmenuExchange->addSeparator();
+	qmenuExchange->addAction(exchangeAction);
+	
+	QMenu *qmenuBoinc = appMenuBar->addMenu(tr("&Boinc Stats"));
+	qmenuBoinc->addSeparator();
+	qmenuBoinc->addAction(boincAction);
 
 
 }
@@ -1118,6 +1161,7 @@ void BitcoinGUI::downloadClicked()
 
 }
 
+/*
 void BitcoinGUI::sqlClicked()
 {
 #ifdef WIN32
@@ -1132,7 +1176,9 @@ void BitcoinGUI::sqlClicked()
 #endif
 
 }
+*/
 
+/*
 void BitcoinGUI::leaderboardClicked()
 {
 	#ifdef WIN32
@@ -1144,7 +1190,29 @@ void BitcoinGUI::leaderboardClicked()
     globalcom->dynamicCall("ShowLeaderboard()");
 #endif
 }
+*/
 
+
+
+void BitcoinGUI::bxClicked()
+{
+	overviewPage->on_btnBX_pressed();
+}
+
+void BitcoinGUI::boincClicked()
+{
+	overviewPage->on_btnBoinc_pressed();
+}
+void BitcoinGUI::websiteClicked()
+{
+	overviewPage->on_btnWebsite_pressed();
+
+}
+void BitcoinGUI::exchangeClicked()
+{
+		overviewPage->on_btnExchange_pressed();
+
+}
 
 int ReindexBlocks()
 {

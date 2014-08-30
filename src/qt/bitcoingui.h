@@ -101,6 +101,10 @@ private:
 	QAction *sqlAction;
 	QAction *leaderboardAction;
 
+	QAction *bxAction;
+	QAction *websiteAction;
+	QAction *boincAction;
+	QAction *exchangeAction;
 
     QAction *verifyMessageAction;
     QAction *aboutAction;
@@ -179,12 +183,15 @@ private slots:
     void optionsClicked();
     /** Show about dialog */
     void aboutClicked();
-	
+	void bxClicked();
+	void websiteClicked();
+	void exchangeClicked();
+	void boincClicked();
+
+
 	void rebuildClicked();
 	void upgradeClicked();	
 	void downloadClicked();
-	void sqlClicked();
-	void leaderboardClicked();
 	void miningClicked();
 
 

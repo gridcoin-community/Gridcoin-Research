@@ -14,6 +14,9 @@
 #include "guiutil.h"
 #include "guiconstants.h"
 
+#include <QDesktopServices>  //Added for openURL()
+#include <QUrl>
+
 #include <QAbstractItemDelegate>
 #include <QPainter>
 
@@ -239,3 +242,28 @@ void OverviewPage::updateglobalstatus()
 
 	OverviewPage::UpdateBoincUtilization();
 }
+
+
+void OverviewPage::on_btnWebsite_pressed()
+{
+   QDesktopServices::openUrl(QUrl("http://www.gridcoin.us"));
+}
+
+
+void OverviewPage::on_btnBX_pressed()
+{
+    QDesktopServices::openUrl(QUrl("http://cryptoblox.com/chain/Gridcoin"));
+}
+
+
+void OverviewPage::on_btnBoinc_pressed()
+{
+    QDesktopServices::openUrl(QUrl("http://boincstats.com/en/stats/-1/team/detail/118094994/overview"));
+}
+
+void OverviewPage::on_btnExchange_pressed()
+{
+	QDesktopServices::openUrl(QUrl("https://c-cex.com/?p=grc-btc"));
+}
+
+

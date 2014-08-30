@@ -55,11 +55,13 @@ extern bool IsLockTimeVeryRecent(double locktime);
 
 extern double CalculatedMagnitude();
 
+extern int64_t GetCoinYearReward(int64_t nTime);
+
 
 extern bool Resuscitate();
 
 
-extern bool CreditCheckOnline(std::string cpid, double purported_magnitude, double mint, uint64_t nCoinAge, uint64_t nFees);
+extern bool CreditCheckOnline(std::string cpid, double purported_magnitude, double mint, uint64_t nCoinAge, uint64_t nFees, int64_t locktime);
 
 extern void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, double mint, bool IsStake);
 
@@ -1699,9 +1701,50 @@ int64_t GetProofOfWorkMaxReward(int64_t nFees)
     return nSubsidy + nFees;
 }
 
-int64_t GetProofOfStakeMaxReward(int64_t nCoinAge, int64_t nFees)
+
+int64_t GetCoinYearReward(int64_t nTime)
 {
-	int64_t nInterest = nCoinAge * COIN_YEAR_REWARD * 33 / (365 * 33 + 8);
+	// Gridcoin Global Interest Rate Schedule
+	int64_t INTEREST = 0; 
+	if (nTime <  1409421299)                        INTEREST = 	12 * CENT; // 12% before  08-30-2014
+	if (nTime >= 1409421299 && nTime <= 1412035200) INTEREST = 	11 * CENT; // 11% between 09-01-2014 and 09-30-2014
+	if (nTime >= 1412035200 && nTime <= 1414627200) INTEREST = 	10 * CENT; // 10% between 09-30-2014 and 10-30-2014
+	if (nTime >= 1414627200 && nTime <= 1417305600) INTEREST = 	 9 * CENT; // 09% between 10-30-2014 and 11-30-2014
+	if (nTime >= 1417305600 && nTime <= 1419897600) INTEREST = 	 8 * CENT; // 08% between 11-30-2014 and 12-30-2014
+	if (nTime >= 1419897600 && nTime <= 1422576000) INTEREST = 	 7 * CENT; // 07% between 12-30-2014 and 01-30-2015
+	if (nTime >= 1422576000 && nTime <= 1425254400) INTEREST = 	 6 * CENT; // 06% between 01-30-2015 and 02-30-2015
+	if (nTime >= 1425254400 && nTime <= 1427673600) INTEREST = 	 5 * CENT; // 05% between 02-30-2015 and 03-30-2015
+	if (nTime >= 1427673600 && nTime <= 1430352000) INTEREST = 	 4 * CENT; // 04% between 03-30-2015 and 04-30-2015
+	if (nTime >= 1430352000 && nTime <= 1432944000) INTEREST = 	 3 * CENT; // 03% between 04-30-2015 and 05-30-2015
+	if (nTime >= 1432944000 && nTime <= 1435622400) INTEREST = 	 2 * CENT; // 02% between 05-30-2015 and 06-30-2015
+	if (nTime >  1435622400)                        INTEREST = 	 1 * CENT; // 01% after   06-30-2015
+	return INTEREST;
+}
+
+double GetMagnitudeMultiplier(int64_t nTime)
+{
+	// Gridcoin Global Resarch Subsidy Multiplier Schedule
+	double magnitude_multiplier=0;
+	if (nTime <  1409421299)                        magnitude_multiplier =  5; //  5* before  08-30-2014
+	if (nTime >= 1409421299 && nTime <= 1412035200) magnitude_multiplier =  4; //  4* between 09-01-2014 and 09-30-2014
+	if (nTime >= 1412035200 && nTime <= 1414627200) magnitude_multiplier =  3; //  3* between 09-30-2014 and 10-30-2014
+	if (nTime >= 1414627200 && nTime <= 1417305600) magnitude_multiplier =  2; //  2* between 10-30-2014 and 11-30-2014
+	if (nTime >= 1417305600 && nTime <= 1419897600) magnitude_multiplier =  1; //  1* between 11-30-2014 and 12-30-2014
+	if (nTime >= 1419897600 && nTime <= 1422576000) magnitude_multiplier = .9; // .9* between 12-30-2014 and 01-30-2015
+	if (nTime >= 1422576000 && nTime <= 1425254400) magnitude_multiplier = .8; // .8* between 01-30-2015 and 02-30-2015
+	if (nTime >= 1425254400 && nTime <= 1427673600) magnitude_multiplier = .7; // .7* between 02-30-2015 and 03-30-2015
+	if (nTime >= 1427673600 && nTime <= 1430352000) magnitude_multiplier = .6; // .6* between 03-30-2015 and 04-30-2015
+	if (nTime >= 1430352000 && nTime <= 1432944000) magnitude_multiplier = .5; // .5* between 04-30-2015 and 05-30-2015
+	if (nTime >= 1432944000 && nTime <= 1435622400) magnitude_multiplier = .4; // .4* between 05-30-2015 and 06-30-2015
+	if (nTime >  1435622400)                        magnitude_multiplier = .3; // .3* after   06-30-2015
+	return magnitude_multiplier;
+}
+
+
+
+int64_t GetProofOfStakeMaxReward(int64_t nCoinAge, int64_t nFees, int64_t locktime)
+{
+	int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
 	int64_t nBoinc    = (MAXIMUM_BOINC_SUBSIDY+1) * COIN;
 	int64_t nSubsidy  = nInterest + nBoinc;
     return nSubsidy + nFees;
@@ -1744,10 +1787,10 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 
 
 // miner's coin stake reward based on coin age spent (coin-days)
-int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, bool VerifyingBlock)
+int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, bool VerifyingBlock, int64_t locktime)
 {
     
-	int64_t nInterest = nCoinAge * COIN_YEAR_REWARD * 33 / (365 * 33 + 8);
+	int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
 	int64_t nBoinc    = GetProofOfResearchReward(cpid,VerifyingBlock);
 	int64_t nSubsidy  = nInterest + nBoinc;
 
@@ -2439,14 +2482,14 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
         if (!vtx[1].GetCoinAge(txdb, nCoinAge))
             return error("ConnectBlock() : %s unable to get coin age for coinstake", vtx[1].GetHash().ToString().substr(0,10).c_str());
 
-        int64_t nCalculatedStakeReward = GetProofOfStakeMaxReward(nCoinAge, nFees);
+        int64_t nCalculatedStakeReward = GetProofOfStakeMaxReward(nCoinAge, nFees, nTime);
 
 		if (nStakeReward > nCalculatedStakeReward)
             return DoS(1, error("ConnectBlock() : coinstake pays above maximum (actual=%"PRId64" vs calculated=%"PRId64")", nStakeReward, nCalculatedStakeReward));
 		
 		if (IsLockTimeVeryRecent(nTime) && bb.cpid=="INVESTOR" && nStakeReward > 1)
 		{
-			int64_t nCalculatedResearchReward = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true);
+			int64_t nCalculatedResearchReward = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime);
 			if (nStakeReward > nCalculatedResearchReward*TOLERANCE_PERCENT)
             return DoS(1, error("ConnectBlock() : Investor Reward pays too much : cpid %s (actual=%"PRId64" vs calculated=%"PRId64")",
 			  bb.cpid.c_str(), nStakeReward, nCalculatedResearchReward));
@@ -2469,15 +2512,15 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		if (IsLockTimeVeryRecent(nTime))
 		{
 			//Block being accepted within the last hour: Check with Netsoft - AND Verify User will not be overpaid:
-			bool outcome = CreditCheckOnline(bb.cpid,bb.Magnitude,mint,nCoinAge,nFees);
+			bool outcome = CreditCheckOnline(bb.cpid,bb.Magnitude,mint,nCoinAge,nFees,nTime);
 			if (!outcome) return DoS(1,error("ConnectBlock(): Netsoft online check failed\r\n"));
-			int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid,true);
+			int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime);
 
 			if (nStakeReward > (nCalculatedResearch*TOLERANCE_PERCENT))
 			{
 				//One last chance...clear cache and retrieve magnitude from netsoft:
 				CreditCheck(bb.cpid,true);
-				nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid,true);
+				nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime);
 				if (nStakeReward > (nCalculatedResearch*TOLERANCE_PERCENT))
 				{
 		
@@ -3867,7 +3910,7 @@ double Cap(double dAmt, double Ceiling)
 }
 
 
-double GetOutstandingAmountOwed(std::string cpid)
+double GetOutstandingAmountOwed(std::string cpid, int64_t locktime)
 {
 	
 	StructCPID mag = mvMagnitudes[cpid];
@@ -3875,23 +3918,19 @@ double GetOutstandingAmountOwed(std::string cpid)
 	{
 		return 0;
 	}
-	//Research Multiplier
-	double RESEARCH_MULTIPLIER = 1;
-
+	
 	//Gridcoin - 8-10-2014 ; payment range is stored in HighLockTime-LowLockTime
 	StructCPID globalmag = mvMagnitudes["global"];
 	double payment_timespan = (globalmag.HighLockTime-globalmag.LowLockTime)/86400;  //Lock time window in days
 	double research_magnitude = LederstrumpfMagnitude(mag.ConsensusMagnitude);
-	double owed = payment_timespan * Cap(research_magnitude*RESEARCH_MULTIPLIER, MAXIMUM_BOINC_SUBSIDY);
-
+	double owed = payment_timespan * Cap(research_magnitude*GetMagnitudeMultiplier(locktime), MAXIMUM_BOINC_SUBSIDY);
 	double paid = mag.payments;
 	double outstanding = Cap(owed-paid, MAXIMUM_BOINC_SUBSIDY);
 	//printf("Getting payment_timespan %f for outstanding amount for %s; owed %f paid %f Research Magnitude %f \r\n",		payment_timespan,cpid.c_str(),owed,paid,mag.ConsensusMagnitude);
-
 	if (outstanding < 0) outstanding=0;
-
 	return outstanding;
 }
+
 bool IsLockTimeRecent(double locktime)
 {
 	double nCutoff = GetTime() - (60*60*24*14);
@@ -3975,7 +4014,7 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 		//mvMagnitudes[cpid] = structMagnitude;
 		//8-16-2014
 
-		structMagnitude.owed = GetOutstandingAmountOwed(cpid);
+		structMagnitude.owed = GetOutstandingAmountOwed(cpid,LockTime);
 		
 		mvMagnitudes[cpid] = structMagnitude;
 		mvMagnitudes["global"] = globalMag;
@@ -5529,12 +5568,13 @@ double GetMagnitude(std::string cpid, double purported, bool UseNetSoft)
 			
 }
 
-bool CreditCheckOnline(std::string cpid, double purported_magnitude, double mint, uint64_t nCoinAge, uint64_t nFees)
+
+
+bool CreditCheckOnline(std::string cpid, double purported_magnitude, double mint, uint64_t nCoinAge, uint64_t nFees, int64_t locktime)
 {
 	if (cpid=="INVESTOR" && purported_magnitude==0) return true;
 	// First, check the magnitude report
-	//double TOLERANCE_PERCENT = 1.20;
-    StructCPID mag = mvMagnitudes[cpid];
+	StructCPID mag = mvMagnitudes[cpid];
 	bool consensus_passed = false;
 	if (mag.initialized && purported_magnitude > 0) 
 	{
@@ -5565,7 +5605,7 @@ bool CreditCheckOnline(std::string cpid, double purported_magnitude, double mint
 	if (purported_magnitude > 0)
 	{
 		//TODO: Ensure Inflation portion of mint is compared properly (	COIN_YEAR_REWARD = APR )
-		double owed = GetProofOfStakeReward(nCoinAge,nFees,cpid,true);
+		double owed = GetProofOfStakeReward(nCoinAge,nFees,cpid,true,locktime);
 		if (mint > (owed*TOLERANCE_PERCENT))
 		{
 			printf("Credit Check Online failed:  Mint results in a payment > outstanding owed; owed %f - mint %f.",owed,mint);
