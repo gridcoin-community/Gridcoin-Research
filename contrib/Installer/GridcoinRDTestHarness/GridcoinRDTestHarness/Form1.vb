@@ -97,40 +97,21 @@ Public Class Form1
     End Function
 
 
+    Public bu As New BoincStake.Utilization
+
     Private Sub Button1_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles Button1.Click
 
-
-
-        Dim x As New BoincStake.Utilization
         Dim vv As Integer
-        vv = x.Version
+        vv = bu.Version
+        bu.StartWireFrameRenderer()
+
+
+        Exit Sub
 
         Stop
 
        
-        'Test AES 512 in .NET:
-        Dim sNonEncHash As String = "12345"
-        Dim sEncHash As String = ""
-        sEncHash = x.cAES512Encrypt(sNonEncHash)
-        Dim sDecHash As String = ""
-        sDecHash = x.cAES512Decrypt(sEncHash)
-        Debug.Print(sDecHash)
-        'Decrypt Pool Key:
-        Dim sPool As String = "RnU0Q0FLc3VRYzFSZ3hneTVqalVyckhSdVNCVTFyWkZtdzs2ZjdjOTNiNTFjY2Y1NWU0ZTA1MjllN2U1ZjZmZGNmYXJhY2hhbHVwYUB5YWhvby5jb20="
-        Dim m As New MiningKey
-        m = ReceiveMiningKey(sPool)
-
-
-        'Test p2pool AES
-        Dim sENC1 As String = "HÊxâ>xï¹GWÿ©²8ó§^Ž%Àä|XÂ1IÙÓŸ®:ëUž*êÿO’¯_íÁóÔŽ¡æµ¢7Á´fÊ"
-
-
-        x._boincmagnitude = 286
-
-
-        x.ShowMiningConsole()
-        Exit Sub
-
+   
 
     End Sub
 
@@ -312,12 +293,8 @@ Public Class Form1
     End Sub
 
     Private Sub Button2_Click(sender As System.Object, e As System.EventArgs) Handles Button2.Click
-        Dim m As New Utilization
-        m.UpdateLeaderBoard()
+        bu.stopWireFrameRenderer()
 
-        Dim d As New Sql
-        d.UpdateUserSummary()
-        d = Nothing
 
     End Sub
 End Class

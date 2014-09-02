@@ -15,6 +15,7 @@ Module modGRC
 
     Public mfrmProjects As frmProjects
     Public mfrmSql As frmSQL
+    Public mfrmWireFrame As frmGRCWireFrameCanvas
 
     Public mfrmLeaderboard As frmLeaderboard
     Public MerkleRoot As String = "0xda43abf15a2fcd57ceae9ea0b4e0d872981e2c0b72244466650ce6010a14efb8"
@@ -88,7 +89,23 @@ Module modGRC
         Catch ex As Exception
         End Try
     End Function
+    Public Sub ThreadWireFrame()
+        If Not mfrmWireFrame Is Nothing Then
+            mfrmWireFrame.EndWireFrame()
 
+
+        End If
+        
+        mfrmWireFrame = New frmGRCWireFrameCanvas
+        mfrmWireFrame.Show()
+
+    End Sub
+    Public Sub StopWireFrame()
+        If mfrmWireFrame Is Nothing Then
+            mfrmWireFrame = New frmGRCWireFrameCanvas
+        End If
+
+    End Sub
     Public Function Base64File(sFileName As String)
         Dim sFilePath As String = GetGRCAppDir() + "\" + sFileName
         Dim b() As Byte

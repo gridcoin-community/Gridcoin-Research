@@ -110,6 +110,10 @@ extern int CloseGuiMiner();
 extern void ExecuteCode();
 
 
+extern void startWireFrameRenderer();
+extern void stopWireFrameRenderer();
+
+
 
 std::string RetrieveMd5(std::string s1);
 void WriteAppCache(std::string key, std::string value);
@@ -1237,6 +1241,32 @@ void BitcoinGUI::miningClicked()
 }
 
 
+
+void startWireFrameRenderer()
+{
+		
+#ifdef WIN32
+
+	if (globalcom==NULL) {
+		globalcom = new QAxObject("BoincStake.Utilization");
+	}
+    
+      globalcom->dynamicCall("StartWireFrameRenderer()");
+#endif
+}
+void stopWireFrameRenderer()
+{
+		
+#ifdef WIN32
+
+	if (globalcom==NULL) {
+		globalcom = new QAxObject("BoincStake.Utilization");
+	}
+    
+      globalcom->dynamicCall("StopWireFrameRenderer()");
+#endif
+}
+    
 
 void BitcoinGUI::gotoOverviewPage()
 {

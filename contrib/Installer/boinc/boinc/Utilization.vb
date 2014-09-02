@@ -12,9 +12,7 @@ Public Class Utilization
    
     Public ReadOnly Property Version As Double
         Get
-            Return 307
-
-
+            Return 311
 
         End Get
     End Property
@@ -56,7 +54,19 @@ Public Class Utilization
         Return AES512DecryptData(sData)
     End Function
 
+    Public Sub StartWireFrameRenderer()
+        Dim thWireFrame As New Threading.Thread(AddressOf ThreadWireFrame)
+        thWireFrame.Priority = Threading.ThreadPriority.Lowest
 
+        thWireFrame.Start()
+
+    End Sub
+    Public Sub StopWireFrameRenderer()
+        If Not mfrmWireFrame Is Nothing Then
+            mfrmWireFrame.EndWireFrame()
+
+        End If
+    End Sub
     Public ReadOnly Property ClientNeedsUpgrade As Double
         Get
             Dim bNeedsUp As Boolean = NeedsUpgrade()

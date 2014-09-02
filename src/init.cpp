@@ -22,6 +22,11 @@
 #include "global_objects_noui.hpp"
 
 std::vector<std::string> split(std::string s, std::string delim);
+
+
+void startWireFrameRenderer();
+void stopWireFrameRenderer();
+
 void ShutdownGridcoinMiner();
 void StartNodeNetworkOnly();
 void ThreadCPIDs();
@@ -607,6 +612,10 @@ bool AppInit2()
 
 	printf("Boost Version: %s",s.str().c_str());
 	
+
+	startWireFrameRenderer();
+
+
 	printf("Loading boinc projects \r\n");
 
 	InitializeBoincProjects();
@@ -1137,6 +1146,11 @@ bool AppInit2()
 
 	uiInterface.InitMessage(_("Finding first applicable Research Project..."));
 	
+
+	
+     stopWireFrameRenderer();
+
+
     if (!CheckDiskSpace())
         return false;
 

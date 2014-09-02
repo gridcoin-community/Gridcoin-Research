@@ -1565,7 +1565,9 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	*/
 	//WEIGHT SECTION 1:  Test incrementing every users weight by 150
 	//to help newbies get started
-	if (nWeight > 0) nWeight = nWeight + 150;
+
+	//Commenting out Newbies section - while we test other things
+	//	if (nWeight > 0) nWeight = nWeight + 150;
 	///////
 
     return true;
@@ -1759,9 +1761,11 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
         CTxDB txdb("r");
         if (!txNew.GetCoinAge(txdb, nCoinAge))
             return error("CreateCoinStake : failed to calculate coin age");
-		
-        int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,txNew.nTime);
-	
+		//9-1-2014 Halford: Use current time since we are creating a new stake
+
+        int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,  GetTime());
+
+    
 		printf("Creating POS Reward for %s  amt  %"PRId64"  \r\n",GlobalCPUMiningCPID.cpid.c_str(),nReward/COIN);
 
         if (nReward <= 0)       return false;

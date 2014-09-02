@@ -21,6 +21,9 @@ extern bool Resuscitate();
 bool ProjectIsValid(std::string project);
 
 
+void stopWireFrameRenderer();
+void startWireFrameRenderer();
+
 int CreateRestorePoint();
 int DownloadBlocks();
 double GetBlockValueByHash(uint256 hash);
@@ -829,6 +832,18 @@ Value execute(const Array& params, bool fHelp)
 	{
 		bExecuteCode = true;
 		printf("Executing volatile code \r\n");
+	}
+	else if (sItem == "startwireframe")
+	{
+		
+			startWireFrameRenderer();
+
+	}
+	else if (sItem == "endwireframe")
+	{
+		
+			stopWireFrameRenderer();
+
 	}
 	else if (sItem == "tally")
 	{

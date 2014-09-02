@@ -88,6 +88,12 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="clsMailFunctions.vb" />
+    <Compile Include="frmGRCWireFrameCanvasRenderer.Designer.vb">
+      <DependentUpon>frmGRCWireFrameCanvasRenderer.vb</DependentUpon>
+    </Compile>
+    <Compile Include="frmGRCWireFrameCanvasRenderer.vb">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="frmLeaderboard.Designer.vb">
       <DependentUpon>frmLeaderboard.vb</DependentUpon>
     </Compile>
@@ -129,6 +135,12 @@
     <Compile Include="modGRC.vb">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="modGRCWireFrameColor.vb" />
+    <Compile Include="modGRCWireFrameMatrix.vb" />
+    <Compile Include="modGRCWireFrameObject.vb" />
+    <Compile Include="modGRCWireFrameRender.vb" />
+    <Compile Include="modGRCWireFrameState.vb" />
+    <Compile Include="modGRCWireFrameVector.vb" />
     <Compile Include="modWinAPI.vb" />
     <Compile Include="Mutex.vb" />
     <Compile Include="Sql.vb" />
@@ -150,6 +162,9 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="frmGRCWireFrameCanvasRenderer.resx">
+      <DependentUpon>frmGRCWireFrameCanvasRenderer.vb</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="frmLeaderboard.resx">
       <DependentUpon>frmLeaderboard.vb</DependentUpon>
     </EmbeddedResource>

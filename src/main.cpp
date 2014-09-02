@@ -2507,7 +2507,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	//Grandfather
 
 	double mint = pindex->nMint/COIN;
-	if (pindex->nHeight > 1 && IsProofOfStake())
+	if (pindex->nHeight > 6600 && IsProofOfStake())
 	{
 		if (IsLockTimeVeryRecent(nTime))
 		{
