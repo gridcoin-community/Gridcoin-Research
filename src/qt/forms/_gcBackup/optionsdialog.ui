@@ -13,6 +13,9 @@
   <property name="windowTitle">
    <string>Options</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true">background-color:black;color:green</string>
+  </property>
   <property name="modal">
    <bool>true</bool>
   </property>
@@ -125,20 +128,10 @@
        <item>
         <widget class="QCheckBox" name="bitcoinAtStartup">
          <property name="toolTip">
-          <string>Automatically start Gridcoin after logging in to the system.</string>
+          <string>Automatically start GridCoin after logging in to the system.</string>
          </property>
          <property name="text">
-          <string>&amp;Start Gridcoin on system login</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QCheckBox" name="detachDatabases">
-         <property name="toolTip">
-          <string>Detach block and address databases at shutdown. This means they can be moved to another data directory, but it slows down shutdown. The wallet is always detached.</string>
-         </property>
-         <property name="text">
-          <string>&amp;Detach databases at shutdown</string>
+          <string>&amp;Start GridCoin on system login</string>
          </property>
         </widget>
        </item>
@@ -165,7 +158,7 @@
        <item>
         <widget class="QCheckBox" name="mapPortUpnp">
          <property name="toolTip">
-          <string>Automatically open the Gridcoin client port on the router. This only works when your router supports UPnP and it is enabled.</string>
+          <string>Automatically open the GridCoin client port on the router. This only works when your router supports UPnP and it is enabled.</string>
          </property>
          <property name="text">
           <string>Map port using &amp;UPnP</string>
@@ -175,7 +168,7 @@
        <item>
         <widget class="QCheckBox" name="connectSocks">
          <property name="toolTip">
-          <string>Connect to the Gridcoin network through a SOCKS proxy (e.g. when connecting through Tor).</string>
+          <string>Connect to the GridCoin network through a SOCKS proxy (e.g. when connecting through Tor).</string>
          </property>
          <property name="text">
           <string>&amp;Connect through SOCKS proxy:</string>
@@ -349,7 +342,7 @@
          <item>
           <widget class="QValueComboBox" name="lang">
            <property name="toolTip">
-            <string>The user interface language can be set here. This setting will take effect after restarting Gridcoin.</string>
+            <string>The user interface language can be set here. This setting will take effect after restarting GridCoin.</string>
            </property>
           </widget>
          </item>
@@ -382,7 +375,7 @@
        <item>
         <widget class="QCheckBox" name="displayAddresses">
          <property name="toolTip">
-          <string>Whether to show Gridcoin addresses in the transaction list or not.</string>
+          <string>Whether to show GridCoin addresses in the transaction list or not.</string>
          </property>
          <property name="text">
           <string>&amp;Display addresses in transaction list</string>

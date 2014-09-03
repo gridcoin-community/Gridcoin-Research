@@ -25,6 +25,9 @@
   <property name="windowTitle">
    <string>Passphrase Dialog</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true">background-color:black;color:lightgreen</string>
+  </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
     <widget class="QLabel" name="warningLabel">
@@ -104,14 +107,14 @@
        <property name="enabled">
         <bool>true</bool>
        </property>
+       <property name="visible">
+        <bool>false</bool>
+       </property>
        <property name="toolTip">
         <string>Serves to disable the trivial sendmoney when OS account compromised. Provides no real security.</string>
        </property>
        <property name="text">
         <string>For staking only</string>
-       </property>
-       <property name="visible">
-        <bool>false</bool>
        </property>
       </widget>
      </item>

@@ -13,6 +13,9 @@
   <property name="windowTitle">
    <string>Send Coins</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true">background-color:black;color:green</string>
+  </property>
   <layout class="QVBoxLayout" name="verticalLayout" stretch="0,1,0">
    <property name="bottomMargin">
     <number>8</number>
@@ -173,16 +176,7 @@
            <string notr="true"/>
           </property>
           <layout class="QHBoxLayout" name="horizontalLayoutCoinControl5">
-           <property name="leftMargin">
-            <number>0</number>
-           </property>
-           <property name="topMargin">
-            <number>0</number>
-           </property>
-           <property name="rightMargin">
-            <number>0</number>
-           </property>
-           <property name="bottomMargin">
+           <property name="margin">
             <number>0</number>
            </property>
            <item>
@@ -330,7 +324,7 @@
                   <enum>Qt::ActionsContextMenu</enum>
                  </property>
                  <property name="text">
-                  <string>0.00 GRC</string>
+                  <string>0.00 BC</string>
                  </property>
                  <property name="textInteractionFlags">
                   <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
@@ -416,7 +410,7 @@
                   <enum>Qt::ActionsContextMenu</enum>
                  </property>
                  <property name="text">
-                  <string>0.00 GRC</string>
+                  <string>0.00 BC</string>
                  </property>
                  <property name="textInteractionFlags">
                   <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
@@ -502,7 +496,7 @@
                   <enum>Qt::ActionsContextMenu</enum>
                  </property>
                  <property name="text">
-                  <string>0.00 GRC</string>
+                  <string>0.00 BC</string>
                  </property>
                  <property name="textInteractionFlags">
                   <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
@@ -534,7 +528,7 @@
                   <enum>Qt::ActionsContextMenu</enum>
                  </property>
                  <property name="text">
-                  <string>0.00 GRC</string>
+                  <string>0.00 BC</string>
                  </property>
                  <property name="textInteractionFlags">
                   <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
@@ -626,9 +620,6 @@
    </item>
    <item>
     <widget class="QScrollArea" name="scrollArea">
-     <property name="styleSheet">
-      <string notr="true">background-image: url(:/images/bkg);</string>
-     </property>
      <property name="widgetResizable">
       <bool>true</bool>
      </property>
@@ -642,16 +633,7 @@
        </rect>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout_2">
-       <property name="leftMargin">
-        <number>0</number>
-       </property>
-       <property name="topMargin">
-        <number>0</number>
-       </property>
-       <property name="rightMargin">
-        <number>0</number>
-       </property>
-       <property name="bottomMargin">
+       <property name="margin">
         <number>0</number>
        </property>
        <item>
@@ -753,7 +735,7 @@
           <cursorShape>IBeamCursor</cursorShape>
          </property>
          <property name="text">
-          <string>123.456 GRC</string>
+          <string>123.456 BC</string>
          </property>
          <property name="textInteractionFlags">
           <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>

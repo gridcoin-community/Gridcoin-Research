@@ -49,8 +49,11 @@ Friend Module modGRCWireFrameState
             For i = 0 To WireFrameMethod.Length - 1
                 WireFrameMethod(i) = IIf(i = Index, True, False)
             Next
+            RO.RType = RenderType.Dot 'Prevent Freaking People Out
+
+
         Catch ex As Exception
-            Stop '
+            Log("Wireframe error " + Trim(ex.Message))
         End Try
 
     End Sub
@@ -77,6 +80,7 @@ Friend Module modGRCWireFrameState
             If iRndWire < 10 Or iRendered = 1 Then
                 Dim iWireType As Integer
                 iWireType = Rnd(1) * 5
+                'Change Wireframe Type
                 Call mnuRender_Click(iWireType)
 
                 SetLight()

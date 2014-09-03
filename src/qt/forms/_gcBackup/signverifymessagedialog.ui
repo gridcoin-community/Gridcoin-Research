@@ -19,6 +19,12 @@
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
     <widget class="QTabWidget" name="tabWidget">
+     <property name="styleSheet">
+      <string notr="true">
+background-color:qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:0, stop:0 rgba(0, 0, 0, 255), stop:1 rgba(127, 127, 127, 255));
+color:green;
+</string>
+     </property>
      <property name="currentIndex">
       <number>1</number>
      </property>
@@ -48,7 +54,7 @@
          <item>
           <widget class="QValidatedLineEdit" name="addressIn_SM">
            <property name="toolTip">
-            <string>The address to sign the message with (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</string>
+            <string>The address to sign the message with (e.g. Ler4HNAEfwYhBmGXcFP2Po1NpRUEiK8km2)</string>
            </property>
            <property name="maxLength">
             <number>34</number>
@@ -105,6 +111,16 @@
         </widget>
        </item>
        <item>
+        <widget class="QLabel" name="signatureLabel_SM">
+         <property name="text">
+          <string>Signature</string>
+         </property>
+         <property name="textFormat">
+          <enum>Qt::PlainText</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
         <layout class="QHBoxLayout" name="horizontalLayout_2_SM">
          <property name="spacing">
           <number>0</number>
@@ -145,10 +161,10 @@
          <item>
           <widget class="QPushButton" name="signMessageButton_SM">
            <property name="toolTip">
-            <string>Sign the message to prove you own this Gridcoin address</string>
+            <string>Sign the message to prove you own this Litecoin address</string>
            </property>
            <property name="text">
-            <string>&amp;Sign Message</string>
+            <string>Sign &amp;Message</string>
            </property>
            <property name="icon">
             <iconset resource="../bitcoin.qrc">
@@ -229,6 +245,12 @@
       <layout class="QVBoxLayout" name="verticalLayout_VM">
        <item>
         <widget class="QLabel" name="infoLabel_VM">
+         <property name="styleSheet">
+          <string notr="true">
+background-color:qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:0, stop:0 rgba(0, 0, 0, 255), stop:1 rgba(127, 127, 127, 255));
+color:lightgreen;
+</string>
+         </property>
          <property name="text">
           <string>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</string>
          </property>
@@ -251,7 +273,7 @@
          <item>
           <widget class="QValidatedLineEdit" name="addressIn_VM">
            <property name="toolTip">
-            <string>The address the message was signed with (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</string>
+            <string>The address the message was signed with (e.g. Ler4HNAEfwYhBmGXcFP2Po1NpRUEiK8km2)</string>
            </property>
            <property name="maxLength">
             <number>34</number>
@@ -291,10 +313,10 @@
          <item>
           <widget class="QPushButton" name="verifyMessageButton_VM">
            <property name="toolTip">
-            <string>Verify the message to ensure it was signed with the specified Gridcoin address</string>
+            <string>Verify the message to ensure it was signed with the specified Litecoin address</string>
            </property>
            <property name="text">
-            <string>&amp;Verify Message</string>
+            <string>Verify &amp;Message</string>
            </property>
            <property name="icon">
             <iconset resource="../bitcoin.qrc">
