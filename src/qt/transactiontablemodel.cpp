@@ -354,13 +354,13 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
     case TransactionRecord::SendToSelf:
         return tr("Payment to yourself");
     case TransactionRecord::Generated:
-		if (((wtx->credit + wtx->debit)) >= 25*COIN) 
-		{
-			return tr("Mined - PoR");
-		}
-		else
-	    {
-			return tr("Mined - Interest");
+    	if (((wtx->credit + wtx->debit)) >= 25*COIN)
+			{
+				return tr("Mined - PoR");
+			}
+			else
+		    {
+				return tr("Mined - Interest");
 		}
     default:
         return QString();
@@ -372,15 +372,14 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
     switch(wtx->type)
     {
     case TransactionRecord::Generated:
-		if (((wtx->credit + wtx->debit)) >= 25*COIN) 
-		{
-			return QIcon(":/icons/tx_cpumined");
-		}
-		else
-		{
-			return QIcon(":/icons/tx_mined");
-		}
-
+      		if (((wtx->credit + wtx->debit)) >= 25*COIN)
+	   		{
+	   			return QIcon(":/icons/tx_cpumined");
+	   		}
+	   		else
+	   		{
+	   			return QIcon(":/icons/tx_mined");
+	   		}
 
     case TransactionRecord::RecvWithAddress:
     case TransactionRecord::RecvFromOther:

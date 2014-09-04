@@ -13,12 +13,18 @@
   <property name="windowTitle">
    <string>Options</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true"> background:rgb(69,65,63); color: rgb(169,192,7)</string>
+  </property>
   <property name="modal">
    <bool>true</bool>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
     <widget class="QTabWidget" name="tabWidget">
+     <property name="styleSheet">
+      <string notr="true"> background:rgb(69,65,63); color: rgb(169,192,7)</string>
+     </property>
      <property name="tabPosition">
       <enum>QTabWidget::North</enum>
      </property>
@@ -465,6 +471,9 @@
      </item>
      <item>
       <widget class="QPushButton" name="okButton">
+       <property name="styleSheet">
+        <string notr="true"> background:rgb(69,65,63); color: rgb(169,192,7)</string>
+       </property>
        <property name="text">
         <string>&amp;OK</string>
        </property>
@@ -472,6 +481,9 @@
      </item>
      <item>
       <widget class="QPushButton" name="cancelButton">
+       <property name="styleSheet">
+        <string notr="true"> background:rgb(69,65,63); color: rgb(169,192,7)</string>
+       </property>
        <property name="text">
         <string>&amp;Cancel</string>
        </property>
@@ -482,6 +494,9 @@
      </item>
      <item>
       <widget class="QPushButton" name="applyButton">
+       <property name="styleSheet">
+        <string notr="true"> background:rgb(69,65,63); color: rgb(169,192,7);border=1</string>
+       </property>
        <property name="text">
         <string>&amp;Apply</string>
        </property>

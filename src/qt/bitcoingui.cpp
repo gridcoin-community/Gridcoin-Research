@@ -66,7 +66,6 @@
 #include <QMovie>
 #include <QFileDialog>
 #include <QDesktopServices>
-
 #include <QTimer>
 #include <QDragEnterEvent>
 #include <QUrl>
@@ -147,8 +146,10 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     rpcConsole(0),
     nWeight(0)
 {
-    resize(850, 550);
-    setWindowTitle(tr("GridCoin") + " - " + tr("Wallet"));
+    setFixedSize(980, 550);
+    setWindowTitle(tr("Gridcoin") + " " + tr("Wallet"));
+    qApp->setStyleSheet("QMainWindow { background-image:url(:images/bkg);border:none;font-family:'Open Sans,sans-serif'; } #frame { } QToolBar QLabel { padding-top:15px;padding-bottom:10px;margin:0px; } #spacer { background:rgb(69,65,63);border:none; } #toolbar3 { border:none;width:1px; background-color: rgb(169,192,7); } #toolbar2 { border:none;width:10px; background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(210,220,7), stop: 1 rgb(98,116,3)); } #toolbar { border:none;height:100%;padding-top:20px; background: rgb(69,65,63); text-align: left; color: rgb(169,192,7); min-width:160px; max-width:160px;} QToolBar QToolButton:hover {background-color:qlineargradient(x1: 0, y1: 0, x2: 2, y2: 2,stop: 0 rgb(69,65,63), stop: 1 rgb(216,252,251),stop: 2 rgb(59,62,65));} QToolBar QToolButton { font-family:Century Gothic;padding-left:20px;padding-right:200px;padding-top:10px;padding-bottom:10px; width:100%; color: rgb(169,192,7); text-align: left; background-color: rgb(69,65,63) } #labelMiningIcon { padding-left:5px;font-family:Century Gothic;width:100%;font-size:10px;text-align:center;color: rgb(169,192,7); } QMenu { background: rgb(69,65,63); color: rgb(169,192,7); padding-bottom:10px; } QMenu::item { color: rgb(169,192,7); background-color: transparent; } QMenu::item:selected { background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(69,65,63), stop: 1 rgb(98,116,3)); } QMenuBar { background: rgb(69,65,63); color: rgb(169,192,7); } QMenuBar::item { font-size:12px;padding-bottom:8px;padding-top:8px;padding-left:15px;padding-right:15px;color: rgb(169,192,7); background-color: transparent; } QMenuBar::item:selected { background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(69,65,63), stop: 1 rgb(98,116,3)); }");
+
 #ifndef Q_OS_MAC
     qApp->setWindowIcon(QIcon(":icons/bitcoin"));
     setWindowIcon(QIcon(":icons/bitcoin"));
@@ -197,26 +198,25 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     setCentralWidget(centralWidget);
 
     // Create status bar
-    statusBar();
+    // statusBar();
 
     // Status bar notification icons
     QFrame *frameBlocks = new QFrame();
+    frameBlocks->setStyleSheet("frameBlocks { background: rgb(127,154,131); }");
     frameBlocks->setContentsMargins(0,0,0,0);
-    frameBlocks->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
-    QHBoxLayout *frameBlocksLayout = new QHBoxLayout(frameBlocks);
-    frameBlocksLayout->setContentsMargins(3,0,3,0);
-    frameBlocksLayout->setSpacing(3);
+
+    frameBlocks->setMinimumWidth(30);
+    frameBlocks->setMaximumWidth(30);
+    QVBoxLayout *frameBlocksLayout = new QVBoxLayout(frameBlocks);
+    frameBlocksLayout->setContentsMargins(1,0,1,0);
+    frameBlocksLayout->setSpacing(-1);
     labelEncryptionIcon = new QLabel();
     labelStakingIcon = new QLabel();
     labelConnectionsIcon = new QLabel();
     labelBlocksIcon = new QLabel();
-    frameBlocksLayout->addStretch();
     frameBlocksLayout->addWidget(labelEncryptionIcon);
-    frameBlocksLayout->addStretch();
     frameBlocksLayout->addWidget(labelStakingIcon);
-    frameBlocksLayout->addStretch();
     frameBlocksLayout->addWidget(labelConnectionsIcon);
-    frameBlocksLayout->addStretch();
     frameBlocksLayout->addWidget(labelBlocksIcon);
     frameBlocksLayout->addStretch();
 
@@ -234,21 +234,40 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     progressBar = new QProgressBar();
     progressBar->setAlignment(Qt::AlignCenter);
     progressBar->setVisible(false);
+    progressBar->setOrientation(Qt::Vertical);
+    progressBar->setObjectName("progress");
+    progressBar->setStyleSheet("QProgressBar{"
+                               "border: 1px solid transparent;"
+							   "font-size:9px;"
+                               "text-align: center;"
+                               "color:rgba(0,0,0,100);"
+                               "border-radius: 5px;"
+                               "background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 rgba(182, 182, 182, 100), stop:1 rgba(209, 209, 209, 100));"
+                                   "}"
+                               "QProgressBar::chunk{"
+                               "background-color: rgba(0,255,0,100);"
+                               "}");
+    frameBlocks->setObjectName("frame");
+	addToolBarBreak(Qt::LeftToolBarArea);
+    QToolBar *toolbar2 = addToolBar(tr("Tabs toolbar"));
+    addToolBar(Qt::LeftToolBarArea,toolbar2);
+    toolbar2->setOrientation(Qt::Vertical);
+    toolbar2->setMovable( false );
+    toolbar2->setObjectName("toolbar2");
+    toolbar2->setFixedWidth(25);
+    toolbar2->addWidget(frameBlocks);
+    toolbar2->addWidget(progressBarLabel);
+    toolbar2->addWidget(progressBar);
 
-    // Override style sheet for progress bar for styles that have a segmented progress bar,
-    // as they make the text unreadable (workaround for issue #1071)
-    // See https://qt-project.org/doc/qt-4.8/gallery.html
-    QString curStyle = qApp->style()->metaObject()->className();
-    if(curStyle == "QWindowsStyle" || curStyle == "QWindowsXPStyle")
-    {
-        progressBar->setStyleSheet("QProgressBar { background-color: #e8e8e8; border: 1px solid grey; border-radius: 7px; padding: 1px; text-align: center; } QProgressBar::chunk { background: QLinearGradient(x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 #FF8000, stop: 1 orange); border-radius: 7px; margin: 0px; }");
-    }
+	addToolBarBreak(Qt::TopToolBarArea);
+    QToolBar *toolbar3 = addToolBar(tr("Green bar"));
+    addToolBar(Qt::TopToolBarArea,toolbar3);
+    toolbar3->setOrientation(Qt::Horizontal);
+    toolbar3->setMovable( false );
+    toolbar3->setObjectName("toolbar3");
+    toolbar3->setFixedHeight(2);
 
-    statusBar()->addWidget(progressBarLabel);
-    statusBar()->addWidget(progressBar);
-    statusBar()->addPermanentWidget(frameBlocks);
-
-    syncIconMovie = new QMovie(":/movies/update_spinner", "mng", this);
+    syncIconMovie = new QMovie(":/movies/update_spinner", "GIF", this);
 
     // Clicking on a transaction on the overview page simply sends you to transaction history page
     connect(overviewPage, SIGNAL(transactionClicked(QModelIndex)), this, SLOT(gotoHistoryPage()));
@@ -292,7 +311,7 @@ int ReindexWallet()
 			if (!fTestNet)
 			{
 #ifdef WIN32
-				if (!globalcom) 
+				if (!globalcom)
 				{
 					globalcom = new QAxObject("BoincStake.Utilization");
 				}
@@ -320,7 +339,7 @@ int CreateRestorePoint()
 			QString sArgument = "";
 			QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
 			QProcess p;
-            
+
 
 			if (!fTestNet)
 			{
@@ -351,7 +370,7 @@ int DownloadBlocks()
 			QProcess p;
 
 			#ifdef WIN32
-				if (!globalcom) 
+				if (!globalcom)
 				{
 					globalcom = new QAxObject("BoincStake.Utilization");
 				}
@@ -359,7 +378,7 @@ int DownloadBlocks()
 				globalcom->dynamicCall("DownloadBlocks()");
 				StartShutdown();
 			#endif
-			
+
 			return 1;
 }
 
@@ -370,7 +389,7 @@ int DownloadBlocks()
 
 int RestartClient()
 {
-	
+
 	printf("executing grcrestarter restart");
 
 	QString sFilename = "GRCRestarter.exe";
@@ -412,13 +431,13 @@ int UpgradeClient()
 
 int CloseGuiMiner()
 {
-	try 
+	try
 	{
 #ifdef WIN32
 			globalcom->dynamicCall("CloseGUIMiner()");
 #endif
 	}
-	catch(...) { return 0; } 
+	catch(...) { return 0; }
 
 	return 1;
 }
@@ -471,6 +490,22 @@ void BitcoinGUI::createActions()
     addressBookAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_5));
     tabGroup->addAction(addressBookAction);
 
+	bxAction = new QAction(QIcon(":/icons/block"), tr("&Block Explorer"), this);
+	bxAction->setStatusTip(tr("Block Explorer"));
+	bxAction->setMenuRole(QAction::TextHeuristicRole);
+
+	exchangeAction = new QAction(QIcon(":/icons/ex"), tr("&Exchange"), this);
+	exchangeAction->setStatusTip(tr("Web Site"));
+	exchangeAction->setMenuRole(QAction::TextHeuristicRole);
+
+	boincAction = new QAction(QIcon(":/icons/boinc"), tr("&Boinc Stats"), this);
+	boincAction->setStatusTip(tr("Boinc Stats"));
+	boincAction->setMenuRole(QAction::TextHeuristicRole);
+
+	websiteAction = new QAction(QIcon(":/icons/www"), tr("&Web Site"), this);
+	websiteAction->setStatusTip(tr("Web Site"));
+	websiteAction->setMenuRole(QAction::TextHeuristicRole);
+
     connect(overviewAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(overviewAction, SIGNAL(triggered()), this, SLOT(gotoOverviewPage()));
     connect(sendCoinsAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
@@ -482,13 +517,18 @@ void BitcoinGUI::createActions()
     connect(addressBookAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(addressBookAction, SIGNAL(triggered()), this, SLOT(gotoAddressBookPage()));
 
+	connect(websiteAction, SIGNAL(triggered()), this, SLOT(websiteClicked()));
+	connect(bxAction, SIGNAL(triggered()), this, SLOT(bxClicked()));
+	connect(exchangeAction, SIGNAL(triggered()), this, SLOT(exchangeClicked()));
+	connect(boincAction, SIGNAL(triggered()), this, SLOT(boincClicked()));
+
     quitAction = new QAction(QIcon(":/icons/quit"), tr("E&xit"), this);
     quitAction->setToolTip(tr("Quit application"));
     quitAction->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_Q));
     quitAction->setMenuRole(QAction::QuitRole);
 
 
-	
+
 	rebuildAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Rebuild Block Chain"), this);
 	rebuildAction->setStatusTip(tr("Rebuild Block Chain"));
 	rebuildAction->setMenuRole(QAction::TextHeuristicRole);
@@ -509,7 +549,7 @@ void BitcoinGUI::createActions()
     aboutAction->setMenuRole(QAction::AboutRole);
 
 
-	
+
 //	miningAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Mining Console"), this);
 //	miningAction->setStatusTip(tr("Go to the mining console"));
 //	miningAction->setMenuRole(QAction::TextHeuristicRole);
@@ -526,23 +566,6 @@ void BitcoinGUI::createActions()
 //	leaderboardAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Leaderboard"), this);
 //	leaderboardAction->setStatusTip(tr("Leaderboard"));
 //	leaderboardAction->setMenuRole(QAction::TextHeuristicRole);
-
-
-	bxAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Block Explorer"), this);
-	bxAction->setStatusTip(tr("Block Explorer"));
-	bxAction->setMenuRole(QAction::TextHeuristicRole);
-
-	exchangeAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Exchange"), this);
-	exchangeAction->setStatusTip(tr("Web Site"));
-	exchangeAction->setMenuRole(QAction::TextHeuristicRole);
-
-	boincAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Boinc Stats"), this);
-	boincAction->setStatusTip(tr("Boinc Stats"));
-	boincAction->setMenuRole(QAction::TextHeuristicRole);
-	
-	websiteAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Web Site"), this);
-	websiteAction->setStatusTip(tr("Web Site"));
-	websiteAction->setMenuRole(QAction::TextHeuristicRole);
 
 
 	//aboutQtAction = new QAction(QIcon(":/trolltech/qmessagebox/images/qtlogo-64.png"), tr("About &Qt"), this);
@@ -584,16 +607,15 @@ void BitcoinGUI::createActions()
     connect(signMessageAction, SIGNAL(triggered()), this, SLOT(gotoSignMessageTab()));
     connect(verifyMessageAction, SIGNAL(triggered()), this, SLOT(gotoVerifyMessageTab()));
 
-	//connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
-	//connect(emailAction, SIGNAL(triggered()), this, SLOT(emailClicked()));
+	//	connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
+	//	connect(emailAction, SIGNAL(triggered()), this, SLOT(emailClicked()));
+
 	connect(rebuildAction, SIGNAL(triggered()), this, SLOT(rebuildClicked()));
 	connect(upgradeAction, SIGNAL(triggered()), this, SLOT(upgradeClicked()));
 	connect(downloadAction, SIGNAL(triggered()), this, SLOT(downloadClicked()));
 
-	connect(websiteAction, SIGNAL(triggered()), this, SLOT(websiteClicked()));
-	connect(bxAction, SIGNAL(triggered()), this, SLOT(bxClicked()));
-	connect(exchangeAction, SIGNAL(triggered()), this, SLOT(exchangeClicked()));
-	connect(boincAction, SIGNAL(triggered()), this, SLOT(boincClicked()));
+	//connect(sqlAction, SIGNAL(triggered()), this, SLOT(sqlClicked()));
+	//connect(leaderboardAction, SIGNAL(triggered()), this, SLOT(leaderboardClicked()));
 
 }
 
@@ -619,8 +641,8 @@ void BitcoinGUI::createMenuBar()
     QMenu *settings = appMenuBar->addMenu(tr("&Settings"));
     settings->addAction(encryptWalletAction);
     settings->addAction(changePassphraseAction);
-    settings->addAction(unlockWalletAction);
-    settings->addAction(lockWalletAction);
+//    settings->addAction(unlockWalletAction);
+//    settings->addAction(lockWalletAction);
     settings->addSeparator();
     settings->addAction(optionsAction);
 
@@ -630,18 +652,13 @@ void BitcoinGUI::createMenuBar()
     help->addAction(aboutAction);
     help->addAction(aboutQtAction);
 
-	/*
-	QMenu *mining = appMenuBar->addMenu(tr("&Mining"));
-    mining->addSeparator();
-    mining->addAction(miningAction);
-	*/
+//	QMenu *mining = appMenuBar->addMenu(tr("&Mining"));
+//    mining->addSeparator();
+//    mining->addAction(miningAction);
 
-	/*
-	QMenu *email = appMenuBar->addMenu(tr("&E-Mail"));
-    email->addSeparator();
-    email->addAction(emailAction);
-	*/
-
+//	QMenu *email = appMenuBar->addMenu(tr("&E-Mail"));
+//    email->addSeparator();
+//    email->addAction(emailAction);
 
 	QMenu *upgrade = appMenuBar->addMenu(tr("&Upgrade QT Client"));
 	upgrade->addSeparator();
@@ -654,33 +671,15 @@ void BitcoinGUI::createMenuBar()
 	rebuild->addSeparator();
 	rebuild->addAction(downloadAction);
 	rebuild->addSeparator();
-	
-	/*
-	QMenu *sql = appMenuBar->addMenu(tr("&SQL Query Analyzer"));
-	sql->addSeparator();
-	sql->addAction(sqlAction);
-	
 
-	QMenu *leaderboard = appMenuBar->addMenu(tr("&Leaderboard"));
-	leaderboard->addSeparator();
-	leaderboard->addAction(leaderboardAction);
-	*/
+//	QMenu *sql = appMenuBar->addMenu(tr("&SQL Query Analyzer"));
+//	sql->addSeparator();
+//	sql->addAction(sqlAction);
 
-	QMenu *qmenuBlockexplorer = appMenuBar->addMenu(tr("&Block Explorer"));
-	qmenuBlockexplorer->addSeparator();
-	qmenuBlockexplorer->addAction(bxAction);
+//	QMenu *leaderboard = appMenuBar->addMenu(tr("&Leaderboard"));
+//	leaderboard->addSeparator();
+//	leaderboard->addAction(leaderboardAction);
 
-	QMenu *qmenuWebsite = appMenuBar->addMenu(tr("&Web Site"));
-	qmenuWebsite->addSeparator();
-	qmenuWebsite->addAction(websiteAction);
-	
-	QMenu *qmenuExchange = appMenuBar->addMenu(tr("&Exchange"));
-	qmenuExchange->addSeparator();
-	qmenuExchange->addAction(exchangeAction);
-	
-	QMenu *qmenuBoinc = appMenuBar->addMenu(tr("&Boinc Stats"));
-	qmenuBoinc->addSeparator();
-	qmenuBoinc->addAction(boincAction);
 
 
 }
@@ -688,16 +687,29 @@ void BitcoinGUI::createMenuBar()
 void BitcoinGUI::createToolBars()
 {
     QToolBar *toolbar = addToolBar(tr("Tabs toolbar"));
+    toolbar->setObjectName("toolbar");
+    addToolBar(Qt::LeftToolBarArea,toolbar);
+    toolbar->setOrientation(Qt::Vertical);
+    toolbar->setMovable( false );
     toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    toolbar->setIconSize(QSize(50,25));
     toolbar->addAction(overviewAction);
     toolbar->addAction(sendCoinsAction);
     toolbar->addAction(receiveCoinsAction);
     toolbar->addAction(historyAction);
     toolbar->addAction(addressBookAction);
-
-    QToolBar *toolbar2 = addToolBar(tr("Actions toolbar"));
-    toolbar2->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    toolbar2->addAction(exportAction);
+	toolbar->addAction(bxAction);
+	toolbar->addAction(websiteAction);
+	toolbar->addAction(exchangeAction);
+	toolbar->addAction(boincAction);
+//	toolbar->addAction(statisticsAction);
+//	toolbar->addAction(blockAction);
+    QWidget* spacer = new QWidget();
+    spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    toolbar->addWidget(spacer);
+    spacer->setObjectName("spacer");
+	toolbar->addAction(unlockWalletAction);
+	toolbar->addAction(lockWalletAction);
 }
 
 void BitcoinGUI::setClientModel(ClientModel *clientModel)
@@ -1076,21 +1088,21 @@ std::string TrimD(double i)
 
 
 
-bool IsInvalidChar(char c) 
-{  
+bool IsInvalidChar(char c)
+{
 	int asc = (int)c;
 
 	if (asc >= 0 && asc < 32) return true;
 	if (asc > 128) return true;
 	if (asc == 124) return true;
 	return false;
-} 
+}
 
-std::string Clean(std::string s) 
+std::string Clean(std::string s)
 {
 	char ch;
 	std::string sOut = "";
-	for (unsigned int i=0; i < s.length(); i++) 
+	for (unsigned int i=0; i < s.length(); i++)
 	{
 		ch = s.at(i);
 		if (IsInvalidChar(ch)==false) sOut = sOut + ch;
@@ -1103,9 +1115,9 @@ std::string RetrieveBlockAsString(int lSqlBlock)
 {
 
 	//Insert into Blocks (hash,confirmations,size,height,version,merkleroot,tx,time,nonce,bits,difficulty,boinchash,previousblockhash,nextblockhash) VALUES ();
-    
+
 	try {
-	
+
 		if (lSqlBlock==0) lSqlBlock=1;
 		if (lSqlBlock > nBestHeight-2) return "";
 		CBlock block;
@@ -1156,7 +1168,7 @@ void BitcoinGUI::upgradeClicked()
 {
 	printf("Upgrading Gridcoin...");
 	UpgradeClient();
-	
+
 }
 
 void BitcoinGUI::downloadClicked()
@@ -1170,19 +1182,17 @@ void BitcoinGUI::sqlClicked()
 {
 #ifdef WIN32
 
-	if (!globalcom) 
+	if (!globalcom)
 	{
 		globalcom = new QAxObject("BoincStake.Utilization");
 	}
-    
+
     globalcom->dynamicCall("ShowSql()");
 
 #endif
 
 }
-*/
 
-/*
 void BitcoinGUI::leaderboardClicked()
 {
 	#ifdef WIN32
@@ -1190,12 +1200,38 @@ void BitcoinGUI::leaderboardClicked()
 	if (globalcom==NULL) {
 		globalcom = new QAxObject("BoincStake.Utilization");
 	}
-    
+
     globalcom->dynamicCall("ShowLeaderboard()");
 #endif
 }
 */
 
+
+
+int ReindexBlocks()
+{
+
+	int result = ReindexWallet();
+	return 1;
+
+}
+
+
+/*
+
+void BitcoinGUI::miningClicked()
+{
+
+#ifdef WIN32
+
+	if (globalcom==NULL) {
+		globalcom = new QAxObject("BoincStake.Utilization");
+	}
+
+      globalcom->dynamicCall("ShowMiningConsole()");
+#endif
+}
+*/
 
 
 void BitcoinGUI::bxClicked()
@@ -1218,55 +1254,36 @@ void BitcoinGUI::exchangeClicked()
 
 }
 
-int ReindexBlocks()
-{
-
-	int result = ReindexWallet();
-	return 1;
-		
-}
-
-
-void BitcoinGUI::miningClicked()
-{
-		
-#ifdef WIN32
-
-	if (globalcom==NULL) {
-		globalcom = new QAxObject("BoincStake.Utilization");
-	}
-    
-      globalcom->dynamicCall("ShowMiningConsole()");
-#endif
-}
-
 
 
 void startWireFrameRenderer()
 {
-		
-#ifdef WIN32
 
-	if (globalcom==NULL) {
+#ifdef WIN32
+	if (globalcom==NULL)
+	{
 		globalcom = new QAxObject("BoincStake.Utilization");
 	}
-    
+
       globalcom->dynamicCall("StartWireFrameRenderer()");
 #endif
 }
+
 void stopWireFrameRenderer()
 {
-		
-#ifdef WIN32
 
-	if (globalcom==NULL) {
+#ifdef WIN32
+	if (globalcom==NULL)
+	{
 		globalcom = new QAxObject("BoincStake.Utilization");
 	}
-    
-      globalcom->dynamicCall("StopWireFrameRenderer()");
+
+    globalcom->dynamicCall("StopWireFrameRenderer()");
 #endif
 }
-    
+
+
+
 
 void BitcoinGUI::gotoOverviewPage()
 {
@@ -1526,23 +1543,23 @@ void ReinstantiateGlobalcom()
 {
 #ifdef WIN32
 
-			//Note, on Windows, if the performance counters are corrupted, rebuild them by going to an elevated command prompt and 
+			//Note, on Windows, if the performance counters are corrupted, rebuild them by going to an elevated command prompt and
 	   		//issue the command: lodctr /r (to rebuild the performance counters in the registry)
 			std::string os = GetArg("-os", "windows");
 			if (os == "linux" || os == "mac")
 			{
-				printf("Instantiating globalcom for Linux");			
+				printf("Instantiating globalcom for Linux");
 				globalcom = new QAxObject("Boinc.LinuxUtilization");
 			}
 			else
 			{
 					printf("Instantiating globalcom for Windows");
-		
+
 					globalcom = new QAxObject("BoincStake.Utilization");
 								printf("Instantiated globalcom for Windows");
-		
+
 			}
-		
+
 		    //	globalcom->dynamicCall("ShowMiningConsole()");
 			//printf("Showing Mining Console");
 			if (false && bCheckedForUpgrade == false && !fTestNet)
@@ -1563,7 +1580,7 @@ void ExecuteCode()
 	printf("Globalcom executing .net code\r\n");
 
 	std::string q = "\"";
-	std::string sCode = "For x = 1 to 5:sOut=sOut + " + q + "COUNTING: " + q + "+ trim(x):Next x:MsgBox(" + q + "Hello: " 
+	std::string sCode = "For x = 1 to 5:sOut=sOut + " + q + "COUNTING: " + q + "+ trim(x):Next x:MsgBox(" + q + "Hello: "
 		+ q + " + sOut,MsgBoxStyle.Critical," + q + "Message Title" + q + ")";
 
     QString qsCode = QString::fromUtf8(sCode.c_str());
@@ -1593,7 +1610,7 @@ void BitcoinGUI::timerfire()
 			bExecuteCode = false;
 			ExecuteCode();
 		}
-			
+
 		//Backup the wallet once per day:
 		if (Timer("backupwallet", 6*60*20))
 		{
@@ -1615,8 +1632,8 @@ void BitcoinGUI::timerfire()
 			#endif
 		}
 
-		
-		
+
+
 		if (Timer("status_update",2))
 		{
 			printf("Status Update");
@@ -1629,13 +1646,13 @@ void BitcoinGUI::timerfire()
 				//double POB = GetPoBDifficulty();
 				TallyNetworkAverages(false);
 		}
-   
 
-		
+
+
 
 		if (false)
 		{
-		if (mapArgs["-restartnetlayer"] != "false") 
+		if (mapArgs["-restartnetlayer"] != "false")
 		{
 			if (Timer("restart_network",6*25))
 			{
@@ -1663,7 +1680,7 @@ void BitcoinGUI::timerfire()
 					#ifdef WIN32
 					//Upload the current block to the GVM
 					//printf("Ready to sync SQL...\r\n");
-     				//QString lbh = QString::fromUtf8(hashBestChain.ToString().c_str()); 
+     				//QString lbh = QString::fromUtf8(hashBestChain.ToString().c_str());
 	  			    //Retrieve SQL high block number:
 					int iSqlBlock = 0;
 					iSqlBlock = globalcom->dynamicCall("RetrieveSqlHighBlock()").toInt();
@@ -1671,7 +1688,7 @@ void BitcoinGUI::timerfire()
 					QString qsblock = QString::fromUtf8(RetrieveBlocksAsString(iSqlBlock).c_str());
 					globalcom->dynamicCall("SetSqlBlock(Qstring)",qsblock);
 	    			//Set Public Wallet Address
-     				//QString pwa = QString::fromUtf8(DefaultWalletAddress().c_str()); 
+     				//QString pwa = QString::fromUtf8(DefaultWalletAddress().c_str());
 					//globalcom->dynamicCall("SetPublicWalletAddress(QString)",pwa);
 	    			//Set Best Block
 	    			globalcom->dynamicCall("SetBestBlock(int)", nBestHeight);
@@ -1679,7 +1696,7 @@ void BitcoinGUI::timerfire()
 				}
 		}
 		}
-		catch(std::runtime_error &e) 
+		catch(std::runtime_error &e)
 		{
 			printf("GENERAL RUNTIME ERROR!");
 		}
@@ -1691,7 +1708,7 @@ void BitcoinGUI::timerfire()
 
 
 
-QString BitcoinGUI::toqstring(int o) 
+QString BitcoinGUI::toqstring(int o)
 {
 	std::string pre="";
 	pre=strprintf("%d",o);
@@ -1699,7 +1716,7 @@ QString BitcoinGUI::toqstring(int o)
 	return str1;
 }
 
-std::string tostdstring(QString q) 
+std::string tostdstring(QString q)
 {
 	std::string ss1 = q.toLocal8Bit().constData();
 	return ss1;

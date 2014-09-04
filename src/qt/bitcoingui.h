@@ -91,6 +91,10 @@ private:
     QAction *sendCoinsAction;
     QAction *addressBookAction;
     QAction *signMessageAction;
+	QAction *bxAction;
+	QAction *websiteAction;
+	QAction *boincAction;
+	QAction *exchangeAction;
 
 	QAction *miningAction;
 	QAction *emailAction;
@@ -101,10 +105,6 @@ private:
 	QAction *sqlAction;
 	QAction *leaderboardAction;
 
-	QAction *bxAction;
-	QAction *websiteAction;
-	QAction *boincAction;
-	QAction *exchangeAction;
 
     QAction *verifyMessageAction;
     QAction *aboutAction;
@@ -183,16 +183,18 @@ private slots:
     void optionsClicked();
     /** Show about dialog */
     void aboutClicked();
+
 	void bxClicked();
 	void websiteClicked();
 	void exchangeClicked();
 	void boincClicked();
 
-
 	void rebuildClicked();
-	void upgradeClicked();	
+	void upgradeClicked();
 	void downloadClicked();
-	void miningClicked();
+	//void sqlClicked();
+	//void leaderboardClicked();
+	//void miningClicked();
 
 
 #ifndef Q_OS_MAC
@@ -227,7 +229,7 @@ private slots:
 
 
 	void timerfire();
-	
+
 
 };
 

@@ -189,7 +189,7 @@ void TransactionView::setModel(WalletModel *model)
 
 		
 		//Add stylesheet to transaction view list:
-		transactionView->setStyleSheet("background-color: #161616;alternate-background-color: #363636;color:green;");
+		transactionView->setStyleSheet("background-image:url(:images/bkg);color:black;");
 
 
     }

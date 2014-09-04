@@ -1707,7 +1707,17 @@ int64_t GetCoinYearReward(int64_t nTime)
 	// Gridcoin Global Interest Rate Schedule
 	int64_t INTEREST = 0; 
 	if (nTime <  1409421299)                        INTEREST = 	12 * CENT; // 12% before  08-30-2014
-	if (nTime >= 1409421299 && nTime <= 1412035200) INTEREST = 	11 * CENT; // 11% between 09-01-2014 and 09-30-2014
+	//Between 9-04-2014 and 9-12-2014:
+	if (nTime >= 1409421299 && nTime <= 1409788800) INTEREST =  50 * CENT; // 50% between 09-04-2014 and 09-05-2014;
+	if (nTime >= 1409788800 && nTime <= 1409875200) INTEREST =  40 * CENT; // 40% between 09-05-2014 and 09-06-2014;
+	if (nTime >= 1409875200 && nTime <= 1409961600) INTEREST =  35 * CENT; // 35% between 09-06-2014 and 09-07-2014;
+	if (nTime >= 1409961600 && nTime <= 1410048000) INTEREST =  30 * CENT; // 30% between 09-07-2014 and 09-08-2014;
+	if (nTime >= 1410048000 && nTime <= 1410134400) INTEREST =  25 * CENT; // 25% between 09-08-2014 and 09-09-2014;
+	if (nTime >= 1410134400 && nTime <= 1410307200) INTEREST =  20 * CENT; // 20% between 09-09-2014 and 09-10-2014;
+	if (nTime >= 1410307200 && nTime <= 1410393600) INTEREST =  15 * CENT; // 15% between 09-10-2014 and 09-11-2014;
+	// Back to Standard Schedule
+
+	if (nTime >= 1410393600 && nTime <= 1412035200) INTEREST = 	11 * CENT; // 11% between 09-11-2014 and 09-30-2014
 	if (nTime >= 1412035200 && nTime <= 1414627200) INTEREST = 	10 * CENT; // 10% between 09-30-2014 and 10-30-2014
 	if (nTime >= 1414627200 && nTime <= 1417305600) INTEREST = 	 9 * CENT; // 09% between 10-30-2014 and 11-30-2014
 	if (nTime >= 1417305600 && nTime <= 1419897600) INTEREST = 	 8 * CENT; // 08% between 11-30-2014 and 12-30-2014
@@ -1726,7 +1736,17 @@ double GetMagnitudeMultiplier(int64_t nTime)
 	// Gridcoin Global Resarch Subsidy Multiplier Schedule
 	double magnitude_multiplier=0;
 	if (nTime <  1409421299)                        magnitude_multiplier =  5; //  5* before  08-30-2014
-	if (nTime >= 1409421299 && nTime <= 1412035200) magnitude_multiplier =  4; //  4* between 09-01-2014 and 09-30-2014
+	//Between 9-4-2014 and 9-12-2014:
+	if (nTime >= 1409421299 && nTime <= 1409788800) magnitude_multiplier =  11; // 11* between 09-04-2014 and 09-05-2014;
+	if (nTime >= 1409788800 && nTime <= 1409875200) magnitude_multiplier =  10; // 10* between 09-05-2014 and 09-06-2014;
+	if (nTime >= 1409875200 && nTime <= 1409961600) magnitude_multiplier =   9; // 09* between 09-06-2014 and 09-07-2014;
+	if (nTime >= 1409961600 && nTime <= 1410048000) magnitude_multiplier =   8; // 08* between 09-07-2014 and 09-08-2014;
+	if (nTime >= 1410048000 && nTime <= 1410134400) magnitude_multiplier =   7; // 07* between 09-08-2014 and 09-09-2014;
+	if (nTime >= 1410134400 && nTime <= 1410307200) magnitude_multiplier =   6; // 06* between 09-09-2014 and 09-10-2014;
+	if (nTime >= 1410307200 && nTime <= 1410393600) magnitude_multiplier =   5; // 05* between 09-10-2014 and 09-11-2014;
+	// Back to Standard Schedule
+
+	if (nTime >= 1410393600 && nTime <= 1412035200) magnitude_multiplier =  4; //  4* between 09-01-2014 and 09-30-2014
 	if (nTime >= 1412035200 && nTime <= 1414627200) magnitude_multiplier =  3; //  3* between 09-30-2014 and 10-30-2014
 	if (nTime >= 1414627200 && nTime <= 1417305600) magnitude_multiplier =  2; //  2* between 10-30-2014 and 11-30-2014
 	if (nTime >= 1417305600 && nTime <= 1419897600) magnitude_multiplier =  1; //  1* between 11-30-2014 and 12-30-2014

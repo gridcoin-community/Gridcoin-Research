@@ -14,11 +14,10 @@
 #include "guiutil.h"
 #include "guiconstants.h"
 
-#include <QDesktopServices>  //Added for openURL()
-#include <QUrl>
-
 #include <QAbstractItemDelegate>
 #include <QPainter>
+#include <QDesktopServices>  //Added for openURL()
+#include <QUrl>
 
 #ifdef WIN32
 #include <QAxObject>
@@ -243,7 +242,6 @@ void OverviewPage::updateglobalstatus()
 	OverviewPage::UpdateBoincUtilization();
 }
 
-
 void OverviewPage::on_btnWebsite_pressed()
 {
    QDesktopServices::openUrl(QUrl("http://www.gridcoin.us"));
@@ -265,5 +263,3 @@ void OverviewPage::on_btnExchange_pressed()
 {
 	QDesktopServices::openUrl(QUrl("https://c-cex.com/?p=grc-btc"));
 }
-
-
