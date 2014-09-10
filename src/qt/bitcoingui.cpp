@@ -15,6 +15,7 @@
 #include <ActiveQt/qaxobject.h>
 #endif
 
+#include <QInputDialog>
 
 
 #include "bitcoingui.h"
@@ -105,6 +106,7 @@ void InitializeCPIDs();
 void RestartGridcoinMiner();
 extern int UpgradeClient();
 extern int CloseGuiMiner();
+bool IsConfigFileEmpty();
 
 extern void ExecuteCode();
 
@@ -539,8 +541,8 @@ void BitcoinGUI::createActions()
 
 
 
-	upgradeAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Upgrade QT Client"), this);
-	upgradeAction->setStatusTip(tr("Upgrade QT Client"));
+	upgradeAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Upgrade Client"), this);
+	upgradeAction->setStatusTip(tr("Upgrade Client"));
 	upgradeAction->setMenuRole(QAction::TextHeuristicRole);
 
 
@@ -1024,6 +1026,60 @@ void BitcoinGUI::askFee(qint64 nFeeRequired, bool *payFee)
           QMessageBox::Yes|QMessageBox::Cancel, QMessageBox::Yes);
     *payFee = (retval == QMessageBox::Yes);
 }
+
+
+std::string tostdstring(QString q)
+{
+	std::string ss1 = q.toLocal8Bit().constData();
+	return ss1;
+}
+
+
+
+
+bool CreateNewConfigFile(std::string boinc_email)
+{
+	std::string filename = "gridcoinresearch.conf";
+	boost::filesystem::path path = GetDataDir() / filename;
+	ofstream myConfig;
+	myConfig.open (path.string().c_str());
+	std::string row = "cpumining=true\r\n";
+	myConfig << row;
+	row = "email=" + boinc_email + "\r\n";
+	myConfig << row;
+	myConfig.close();
+	return true;
+}
+
+void BitcoinGUI::NewUserWizard()
+{
+	if (!IsConfigFileEmpty()) return;
+	    QString boincemail = "";
+		bool ok;
+		boincemail = QInputDialog::getText(this, tr("New User Wizard"),
+                                          tr("Please enter your boinc E-mail address, or click <Cancel> to skip for now:"),
+										  QLineEdit::Normal,
+                                          "", &ok);
+		if (ok && !boincemail.isEmpty()) 
+		{
+			std::string new_email = tostdstring(boincemail);
+			printf("User entered %s \r\n",new_email.c_str());
+			//Create Config File
+			CreateNewConfigFile(new_email);
+ 		    QString strMessage = tr("Created new Configuration File Successfully. ");
+			QMessageBox::warning(this, tr("New Account Created - Welcome Aboard!"), strMessage);
+			//Load CPIDs:
+			HarvestCPIDs(true);
+ 		}
+		else
+		{
+		    QString strMessage = tr("To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. ");
+			QMessageBox::warning(this, tr("New User Wizard - Skipped"), strMessage);
+		}
+
+}
+
+
 
 void BitcoinGUI::incomingTransaction(const QModelIndex & parent, int start, int end)
 {
@@ -1625,6 +1681,8 @@ void BitcoinGUI::timerfire()
 		if (nRegVersion==0 || Timer("start",10))
 		{
 			printf("Starting globalcom...\r\n");
+			nRegVersion==9999;
+			NewUserWizard();
 			#ifdef WIN32
 			if (globalcom==NULL) ReinstantiateGlobalcom();
 			nRegVersion = globalcom->dynamicCall("Version()").toInt();
@@ -1716,13 +1774,6 @@ QString BitcoinGUI::toqstring(int o)
 	return str1;
 }
 
-std::string tostdstring(QString q)
-{
-	std::string ss1 = q.toLocal8Bit().constData();
-	return ss1;
-}
-
-
 void BitcoinGUI::detectShutdown()
 {
 	//Note: This routine is used in Litecoin but not Peercoin
@@ -1743,7 +1794,7 @@ void BitcoinGUI::updateStakingIcon()
     if (nLastCoinStakeSearchInterval && nWeight)
     {
         uint64_t nNetworkWeight = GetPoSKernelPS();
-        unsigned nEstimateTime = GetTargetSpacing(nBestHeight) * nNetworkWeight / (nWeight+.001);
+        unsigned nEstimateTime = GetTargetSpacing(nBestHeight) * (nNetworkWeight / (nWeight+.001)) * 15;
 
         QString text;
         if (nEstimateTime < 60)
@@ -1770,7 +1821,7 @@ void BitcoinGUI::updateStakingIcon()
         }
 
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
-        labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br>Expected time to earn reward is %3").arg(nWeight).arg(nNetworkWeight).arg(text));
+        labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br>Guesstimated time to earn reward is %3").arg(nWeight).arg(nNetworkWeight).arg(text));
     }
     else
     {

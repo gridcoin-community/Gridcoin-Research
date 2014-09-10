@@ -18,6 +18,13 @@ using namespace std;
 static unsigned int GetStakeSplitAge() { return IsProtocolV2(nBestHeight) ? (10 * 24 * 60 * 60) : (1 * 24 * 60 * 60); }
 static int64_t GetStakeCombineThreshold() { return IsProtocolV2(nBestHeight) ? (50 * COIN) : (1000 * COIN); }
 
+bool OutOfSyncByAgeWithChanceOfMining();
+
+std::string SerializeBoincBlock(MiningCPID mcpid);
+
+
+MiningCPID GetNextProject();
+
 //////////////////////////////////////////////////////////////////////////////
 //
 // mapWallet
@@ -1504,6 +1511,41 @@ bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx&
     return CreateTransaction(vecSend, wtxNew, reservekey, nFeeRet, coinControl);
 }
 
+
+bool NewbieCompliesWithFirstTimeStakeWeightRule()
+{
+	    if (!GlobalCPUMiningCPID.initialized) return false;
+			
+		//CPID <> INVESTOR:
+	
+		if (GlobalCPUMiningCPID.cpid != "INVESTOR") 
+		{
+    		if (GlobalCPUMiningCPID.projectname == "") 	return false;
+	    	if (GlobalCPUMiningCPID.rac < 100) 			return false;
+		    //If we already have a consensus on the node, the cpid does not qualify
+			if (mvMagnitudes.size() > 0)
+			{
+				StructCPID UntrustedHost = mvMagnitudes[GlobalCPUMiningCPID.cpid]; //Contains Consensus Magnitude
+				if (UntrustedHost.initialized)
+				{
+					if (UntrustedHost.Accuracy > 9) 
+					{	
+						printf("User has a history (createPORStake) \r\n");
+						return false; //User has a history
+					}
+				}
+			}
+			//if (GlobalCPUMiningCPID.Magnitude < 1.1) return false; //Block magnitude too low
+			printf("Newbie complies with first time stakeweight rule.\r\n");
+			return true;
+		}
+
+	return false;
+}
+
+
+
+
 bool CWallet::GetStakeWeight(uint64_t& nWeight)
 {
     // Choose coins to use
@@ -1554,22 +1596,21 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
     }
 	
 
-	/*
-	//HALFORD: 8-5-2014 (Blended Stake Weight feature - On Hold)
-	if (nWeight > 0 && boincmangitude > 0)
+	
+	//HALFORD: 9-6-2014 (Blended Stake Weight feature for Newbies):
+	//WEIGHT SECTION 1: When a new CPID enters the ecosystem, and is seen on less than 9 blocks, this newbie
+	//receives an extra 2500 in stakeweight to help them get started.
+	if (NewbieCompliesWithFirstTimeStakeWeightRule() && nWeight > 0)
 	{
-		int64_t magnitude_percent = ncmagnitude/100;
-		int64_t boinc_boost = nWeight * magnitude_percent;
-		//nWeight += boinc_boost;
+		nWeight += 2500;
 	}
-	*/
-	//WEIGHT SECTION 1:  Test incrementing every users weight by 150
-	//to help newbies get started
+	else if (nWeight)
+	{
+		nWeight += 1000;
+	}
 
-	//Commenting out Newbies section - while we test other things
-	//	if (nWeight > 0) nWeight = nWeight + 150;
-	///////
-
+	
+	
     return true;
 }
 
@@ -1605,6 +1646,14 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		return false;
 	}
 
+	if (OutOfSyncByAgeWithChanceOfMining())
+	{
+	    printf("Wallet out of sync - unable to stake..\r\n");
+		MilliSleep(500);
+		return false;
+	}
+
+
     vector<const CWalletTx*> vwtxPrev;
 
     set<pair<const CWalletTx*,unsigned int> > setCoins;
@@ -1620,6 +1669,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     int64_t nCredit = 0;
     CScript scriptPubKeyKernel;
     CTxDB txdb("r");
+	MiningCPID miningcpid = GetNextProject();
+	std::string hashBoinc = SerializeBoincBlock(miningcpid);
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
     {
         CTxIndex txindex;
@@ -1637,6 +1688,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
                 continue;
         }
 
+			
+
         static int nMaxStakeSearchInterval = 60;
         if (block.GetBlockTime() + nStakeMinAge > txNew.nTime - nMaxStakeSearchInterval)
             continue; // only count coins meeting min age requirement
@@ -1648,7 +1701,9 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             // Search nSearchInterval seconds back up to nMaxStakeSearchInterval
             uint256 hashProofOfStake = 0, targetProofOfStake = 0;
             COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);
-            if (CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, *pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, targetProofOfStake))
+			//Note: At this point block.vtx[0] is still null, so we send the hashBoinc in separately
+            if (CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, 
+				*pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, targetProofOfStake, hashBoinc, false))
             {
                 // Found a kernel
                 if (fDebug && GetBoolArg("-printcoinstake"))

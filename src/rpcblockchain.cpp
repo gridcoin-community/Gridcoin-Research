@@ -34,7 +34,7 @@ bool AESSkeinHash(unsigned int diffbytes, double rac, uint256 scrypthash, std::s
 				  std::string aes_complex_hash(uint256 scrypt_hash);
 std::vector<std::string> split(std::string s, std::string delim);
 double Lederstrumpf(double RAC, double NetworkRAC);
-double LederstrumpfMagnitude(double mag);
+double LederstrumpfMagnitude(double mag,int64_t locktime);
 
 int TestAESHash(double rac, unsigned int diffbytes, uint256 scrypt_hash, std::string aeshash);
 std::string TxToString(const CTransaction& tx, const uint256 hashBlock, int64_t& out_amount, int64_t& out_locktime, int64_t& out_projectid, 
@@ -66,7 +66,7 @@ void ExecuteCode();
 
 void CreditCheck(std::string cpid, bool clearcache);
 
-double CalculatedMagnitude();
+double CalculatedMagnitude(int64_t locktime);
 
 
 
@@ -577,11 +577,23 @@ void fileopen_and_copy(std::string src, std::string dest)
 
 
 
+bool xCreateNewConfigFile(std::string boinc_email)
+{
+	std::string filename = "gridcoinresearch.conf";
+	boost::filesystem::path path = GetDataDir() / filename;
+	ofstream myConfig;
+	myConfig.open (path.string().c_str());
+	std::string row = "cpumining=true\r\n";
+	myConfig << row;
+	row = "email=" + boinc_email + "\r\n";
+	myConfig << row;
+	myConfig.close();
+	return true;
+}
 
 	
 std::string BackupGridcoinWallet()
 {
-	//5-1-2014
 
 	std::string filename = "grc_" + DateTimeStrFormat("%m-%d-%Y", GetTime()) + ".dat";
 	std::string filename_backup = "backup.dat";
@@ -598,12 +610,9 @@ std::string BackupGridcoinWallet()
 	//Copy the standard wallet first:
 	//	fileopen_and_copy(source_path_standard.string().c_str(), target_path_standard.string().c_str());
 	BackupWallet(*pwalletMain, target_path_standard.string().c_str());
-
-
 	
 	//Dump all private keys into the Level 2 backup
-	//5-4-2014
-
+	
 	ofstream myBackup;
 
 	myBackup.open (path.string().c_str());
@@ -695,20 +704,6 @@ std::string RestoreGridcoinBackupWallet()
 					{
 							std::string sSecret = vKey[0];
 							std::string sPublic = vKey[1];
-
-							//
-//							CBitcoinSecret vchSecret;
-  //      if (!vchSecret.SetString(vstr[0]))            continue;
-
-   //     bool fCompressed;
-     //   CKey key;
-      //  CSecret secret = vchSecret.GetSecret(fCompressed);
-     //   key.SetSecret(secret, fCompressed);
-    //    CKeyID keyid = key.GetPubKey().GetID();
-
-		//
-
-
 
 							bool IsCompressed;
 							CBitcoinSecret vchSecret;
@@ -1003,7 +998,7 @@ Value listitem(const Array& params, bool fHelp)
 			Object entry;
 	
 			CreditCheck(GlobalCPUMiningCPID.cpid,true);
-			double boincmagnitude = CalculatedMagnitude();
+			double boincmagnitude = CalculatedMagnitude(GetTime());
 			entry.push_back(Pair("Magnitude",boincmagnitude));
 			results.push_back(entry);
 	}
@@ -1115,13 +1110,13 @@ Value listitem(const Array& params, bool fHelp)
 	if (sitem == "leder")
 	{
 		
-		double subsidy = LederstrumpfMagnitude(450);
+		double subsidy = LederstrumpfMagnitude(450,GetTime());
 		Object entry;
 		entry.push_back(Pair("Mag Out For 450",subsidy));
 		if (args.length() > 1)
 		{
 			double myrac=cdbl(args,0);
-			subsidy = LederstrumpfMagnitude(myrac);
+			subsidy = LederstrumpfMagnitude(myrac,GetTime());
 			entry.push_back(Pair("Mag Out",subsidy));
 		}
 		results.push_back(entry);

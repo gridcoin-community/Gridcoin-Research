@@ -18,6 +18,8 @@ using namespace std;
 extern unsigned int nMinerSleep;
 MiningCPID GetNextProject();
 
+bool OutOfSyncByAgeWithChanceOfMining();
+
 bool TallyNetworkAverages(bool ColdBoot);
 
 std::string SerializeBoincBlock(MiningCPID mcpid);
@@ -112,6 +114,10 @@ public:
     }
 };
 
+
+
+
+
 // CreateNewBlock: create new block (without proof-of-work/proof-of-stake)
 CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 {
@@ -122,6 +128,15 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		MilliSleep(500);
 		return NULL;
 	}
+
+	if (OutOfSyncByAgeWithChanceOfMining())
+	{
+	    printf("Wallet out of sync - unable to mine...");
+		MilliSleep(500);
+		return NULL;
+	}
+
+
     // Create new block
     auto_ptr<CBlock> pblock(new CBlock());
     if (!pblock.get())
@@ -382,14 +397,13 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		//Add Boinc Hash
 		MiningCPID miningcpid = GetNextProject();
 		std::string hashBoinc = SerializeBoincBlock(miningcpid);
-
-
+		
 	    if (LessVerbose(10)) printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
 
 		pblock->vtx[0].hashBoinc = hashBoinc;
 
         if (!fProofOfStake)
-            pblock->vtx[0].vout[0].nValue = GetProofOfWorkReward(nFees);
+            pblock->vtx[0].vout[0].nValue = GetProofOfWorkReward(nFees,GetTime());
 
         if (pFees)
             *pFees = nFees;
@@ -521,7 +535,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
         return error("CheckStake() : %s is not a proof-of-stake block", hashBlock.GetHex().c_str());
 
     // verify hash target and signature of coinstake tx
-    if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget))
+    if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc))
         return error("CheckStake() : proof-of-stake checking failed");
 
     //// debug print

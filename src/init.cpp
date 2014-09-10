@@ -41,6 +41,7 @@ bool fGenerate = false;
 extern void InitializeBoincProjects();
 
 bool IsConfigFileEmpty();
+
 void GetNextProject();
 void HarvestCPIDs(bool cleardata);
 std::string ToOfficialName(std::string proj);
@@ -592,13 +593,12 @@ bool AppInit2()
     // ********************************************************* Step 2: parameter interactions
 
 
-	// 10-13-2013: Gridcoin
+	// Gridcoin - Check to see if config is empty?
 	if (IsConfigFileEmpty()) 
 	{
 
 		   uiInterface.ThreadSafeMessageBox(
-                       "Configuration file empty.  \r\n" + _("Would you like to Exit?"),
-                    "", 0);
+                 "Configuration file empty.  \r\n" + _("Please wait for new user wizard to start..."), "", 0);
 	}
 
 	//6-10-2014: R Halford: Updating Boost version to 1.5.5 to prevent sync issues; print the boost version to verify:
@@ -741,7 +741,7 @@ bool AppInit2()
     // ********************************************************* Step 4: application initialization: dir lock, daemonize, pidfile, debug log
     // Sanity check
     if (!InitSanityCheck())
-        return InitError(_("Initialization sanity check failed. GridCoin is shutting down."));
+        return InitError(_("Initialization sanity check failed. Gridcoin is shutting down."));
 
     std::string strDataDir = GetDataDir().string();
     std::string strWalletFileName = GetArg("-wallet", "wallet.dat");
@@ -756,7 +756,7 @@ bool AppInit2()
     if (file) fclose(file);
     static boost::interprocess::file_lock lock(pathLockFile.string().c_str());
     if (!lock.try_lock())
-        return InitError(strprintf(_("Cannot obtain a lock on data directory %s.  GridCoin is probably already running."), strDataDir.c_str()));
+        return InitError(strprintf(_("Cannot obtain a lock on data directory %s.  Gridcoin is probably already running."), strDataDir.c_str()));
 
 #if !defined(WIN32) && !defined(QT_GUI)
     if (fDaemon)
@@ -825,7 +825,8 @@ bool AppInit2()
                                      " Original wallet.dat saved as wallet.{timestamp}.bak in %s; if"
                                      " your balance or transactions are incorrect you should"
                                      " restore from a backup."), strDataDir.c_str());
-            uiInterface.ThreadSafeMessageBox(msg, _("GridCoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
+            uiInterface.ThreadSafeMessageBox(msg, _("GridCoin"), 
+				CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
         }
         if (r == CDBEnv::RECOVER_FAIL)
             return InitError(_("wallet.dat corrupt, salvage failed"));

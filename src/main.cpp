@@ -49,11 +49,16 @@ CTxMemPool mempool;
 unsigned int nTransactionsUpdated = 0;
 
 extern uint256 GridcoinMultipleAlgoHash(std::string t1);
+extern bool OutOfSyncByAgeWithChanceOfMining();
 
+
+int64_t GetMaximumBoincSubsidy(int64_t nTime);
 
 extern bool IsLockTimeVeryRecent(double locktime);
 
-extern double CalculatedMagnitude();
+
+extern double CalculatedMagnitude(int64_t locktime);
+
 
 extern int64_t GetCoinYearReward(int64_t nTime);
 
@@ -142,7 +147,8 @@ extern void PobSleep(int milliseconds);
 extern bool CheckWorkCPU(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey);
 extern double Lederstrumpf(double RAC, double NetworkRAC);
 
-extern double LederstrumpfMagnitude(double Magnitude);
+extern double LederstrumpfMagnitude(double Magnitude, int64_t locktime);
+
 
 
 extern double cdbl(std::string s, int place);
@@ -424,15 +430,15 @@ std::string GetGlobalStatus()
 	try
 	{
 	std::string status = "";
-	double boincmagnitude = CalculatedMagnitude();
+	double boincmagnitude = CalculatedMagnitude(GetTime());
 	uint64_t nWeight = 0;
 	pwalletMain->GetStakeWeight(nWeight);
 	nBoincUtilization = boincmagnitude; //Legacy Support for the about screen
 	double weight = nWeight;
 	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-	status = "Blocks: " + RoundToString((double)nBestHeight,0) + "; PoR Difficulty: " + RoundToString(PORDiff,6) 
-		+ "; Net Hp/s: " + RoundToString(GetPoSKernelPS2(),6)  + "; Stake Weight: " +  RoundToString(weight,0)
-		+ " <br>Status: " + msMiningErrors + "; Boinc Magnitude: " + RoundToString(boincmagnitude,3) + ";<br>CPU Project: " + msMiningProject;
+	status = "Blocks: " + RoundToString((double)nBestHeight,0) + "; PoR Difficulty: " + RoundToString(PORDiff,6) + "; Net Hp/s: " + RoundToString(GetPoSKernelPS2(),6)  
+		+ "<br>Stake Weight: " +  RoundToString(weight,0) + "; Status: " + msMiningErrors + "; Boinc Magnitude: " + RoundToString(boincmagnitude,3) 
+		+ "<br>CPU Project: " + msMiningProject;
 
 	msGlobalStatus = status;
 	return status;
@@ -1668,8 +1674,9 @@ static CBigNum GetProofOfStakeLimit(int nHeight)
 }
 
 
-double CalculatedMagnitude()
+double CalculatedMagnitude(int64_t locktime)
 {
+	
 	//StructCPID mag = mvMagnitudes[GlobalCPUMiningCPID.cpid];
 	StructCPID mag = mvCreditNodeCPID[GlobalCPUMiningCPID.cpid];
 	if (GlobalCPUMiningCPID.cpid != "INVESTOR" && mag.Magnitude==0) 
@@ -1679,14 +1686,14 @@ double CalculatedMagnitude()
 	}
 	double calcmag = mag.Magnitude;
 	if (calcmag < 0) calcmag=0;
-	if (calcmag > MAXIMUM_BOINC_SUBSIDY) calcmag=MAXIMUM_BOINC_SUBSIDY;
+	if (calcmag > GetMaximumBoincSubsidy(locktime)) calcmag=GetMaximumBoincSubsidy(locktime);
 	return calcmag;
 }
 
 // miner's coin base reward
-int64_t GetProofOfWorkReward(int64_t nFees)
+int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime)
 {
-    int64_t nSubsidy = CalculatedMagnitude() * COIN;
+    int64_t nSubsidy = CalculatedMagnitude(locktime) * COIN;
     if (fDebug && GetBoolArg("-printcreation"))
         printf("GetProofOfWorkReward() : create=%s nSubsidy=%"PRId64"\n", FormatMoney(nSubsidy).c_str(), nSubsidy);
 
@@ -1694,13 +1701,45 @@ int64_t GetProofOfWorkReward(int64_t nFees)
 }
 
 
-int64_t GetProofOfWorkMaxReward(int64_t nFees)
+int64_t GetProofOfWorkMaxReward(int64_t nFees, int64_t locktime)
 {
-    int64_t nSubsidy = (MAXIMUM_BOINC_SUBSIDY+1) * COIN;
+	int64_t nSubsidy = (GetMaximumBoincSubsidy(locktime)+1) * COIN;
 	
     return nSubsidy + nFees;
 }
 
+
+//static const int MAXIMUM_BOINC_SUBSIDY = 500;
+
+int64_t GetMaximumBoincSubsidy(int64_t nTime)
+{
+	// Gridcoin Global Daily Maximum Researcher Subsidy Schedule
+	int MaxSubsidy = 0; 
+	if (nTime <  1409421299)                        MaxSubsidy = 750; // 500  before  08-30-2014
+	//Between 9-04-2014 and 9-12-2014:  (This section is for Testing Only)
+	if (nTime >= 1409421299 && nTime <= 1409788800) MaxSubsidy =  600 * CENT; //between 09-04-2014 and 09-05-2014;
+	if (nTime >= 1409788800 && nTime <= 1409875200) MaxSubsidy =  700 * CENT; //between 09-05-2014 and 09-06-2014;
+	if (nTime >= 1409875200 && nTime <= 1409961600) MaxSubsidy =  800 * CENT; //between 09-06-2014 and 09-07-2014;
+	if (nTime >= 1409961600 && nTime <= 1410048000) MaxSubsidy =  900 * CENT; //between 09-07-2014 and 09-08-2014;
+	if (nTime >= 1410048000 && nTime <= 1410134400) MaxSubsidy =  1000 * CENT; //between 09-08-2014 and 09-09-2014;
+	if (nTime >= 1410134400 && nTime <= 1410307200) MaxSubsidy =  1100 * CENT; //between 09-09-2014 and 09-10-2014;
+	if (nTime >= 1410307200 && nTime <= 1410393600) MaxSubsidy =  1200 * CENT; //between 09-10-2014 and 09-11-2014;
+	// Back to Standard Schedule
+
+	if (nTime >= 1410393600 && nTime <= 1412035200) MaxSubsidy = 	750; // between 09-11-2014 and 09-30-2014
+	if (nTime >= 1412035200 && nTime <= 1414627200) MaxSubsidy = 	700; // between 09-30-2014 and 10-30-2014
+	if (nTime >= 1414627200 && nTime <= 1417305600) MaxSubsidy = 	650; // between 10-30-2014 and 11-30-2014
+	if (nTime >= 1417305600 && nTime <= 1419897600) MaxSubsidy = 	600; // between 11-30-2014 and 12-30-2014
+	if (nTime >= 1419897600 && nTime <= 1422576000) MaxSubsidy = 	500; // between 12-30-2014 and 01-30-2015
+	if (nTime >= 1422576000 && nTime <= 1425254400) MaxSubsidy = 	400; // between 01-30-2015 and 02-30-2015
+	if (nTime >= 1425254400 && nTime <= 1427673600) MaxSubsidy = 	300; // between 02-30-2015 and 03-30-2015
+	if (nTime >= 1427673600 && nTime <= 1430352000) MaxSubsidy = 	200; // between 03-30-2015 and 04-30-2015
+	if (nTime >= 1430352000 && nTime <= 1432944000) MaxSubsidy = 	100; // between 04-30-2015 and 05-30-2015
+	if (nTime >= 1432944000 && nTime <= 1435622400) MaxSubsidy = 	50; // between 05-30-2015 and 06-30-2015
+	if (nTime >  1435622400)                        MaxSubsidy = 	30; // after   06-30-2015
+	return MaxSubsidy;
+
+}
 
 int64_t GetCoinYearReward(int64_t nTime)
 {
@@ -1765,7 +1804,7 @@ double GetMagnitudeMultiplier(int64_t nTime)
 int64_t GetProofOfStakeMaxReward(int64_t nCoinAge, int64_t nFees, int64_t locktime)
 {
 	int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
-	int64_t nBoinc    = (MAXIMUM_BOINC_SUBSIDY+1) * COIN;
+	int64_t nBoinc    = (GetMaximumBoincSubsidy(locktime)+1) * COIN;
 	int64_t nSubsidy  = nInterest + nBoinc;
     return nSubsidy + nFees;
 }
@@ -1777,31 +1816,17 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 		StructCPID mag = mvMagnitudes[cpid];
 		double owed = mag.owed;
 		double magnitude = mag.Magnitude;
-		if (owed < 0) owed = 0; // Can happen (newbies)
-			    
-		/*
-		double UserBalance = GetTotalBalance();
-		printf("UserBalance: %s  ub=%f \n",	FormatMoney(UserBalance).c_str(), UserBalance);
-		double nParticipationPercent = (nCoinAge*COIN)/(UserBalance+.00001);
-		std::string NicePct = RoundToString(nParticipationPercent,12);
-		if (nParticipationPercent > 1) nParticipationPercent = 1;
-		double nBoincReward = nParticipationPercent * (CalculatedMagnitude());
-		if (nBoincReward > (500)) nBoincReward = 500;
-		std::string NiceReward = RoundToString(nBoincReward,8);
-        printf("GetProofOfResearchReward(): BoincSubsidy=%s NiceReward=%s  NicePP=%s  CoinAge=%f nParticipationPercent=%f     \n",
-			FormatMoney(nBoincReward).c_str(), NiceReward.c_str(), NicePct.c_str(),  nCoinAge,  nParticipationPercent);
-			*/
-		//Halford 8-15-2014 - Add in Coarse Payment Rule (helps prevent sync problems):
+		if (owed < 0) owed = 0;
+		//Coarse Payment Rule (helps prevent sync problems):
 		if (!VerifyingBlock)
 		{
 			if (owed < 50) owed = 0;
 			owed = owed/2;
 		}
 		//End of Coarse Payment Rule
-
 		return owed * COIN;
 		//Summary:
-		// ProofOfResearchParticipationPercent=(StakeableCoinAge)/UserBalance; BoincReward=ProofOfResearchParticipationPercent*CalculatedMagnitude
+		// ProofOfResearchParticipationPercent=(StakeableCoinAge)/UserBalance; BoincReward=ProofOfResearchParticipationPercent*ConsensusMagnitude
 
 }
 
@@ -2243,13 +2268,21 @@ bool OutOfSyncByAge()
 }
 
 
-
 bool LessVerbose(int iMax1000)
 {
 	 int iVerbosityLevel = rand() % 1000; 
 	 if (iVerbosityLevel < iMax1000) return true;
 	 return false;
 }
+bool OutOfSyncByAgeWithChanceOfMining()
+{
+	bool oosbyage = OutOfSyncByAge();
+	if (!oosbyage) return oosbyage;
+	bool com = LessVerbose(100);
+	if (com) return false;
+	return true;
+}
+
 
 int Races(int iMax1000)
 {
@@ -2484,7 +2517,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
     if (IsProofOfWork())
     {
-        int64_t nReward = GetProofOfWorkMaxReward(nFees);
+        int64_t nReward = GetProofOfWorkMaxReward(nFees,nTime);
         // Check coinbase reward
         if (vtx[0].GetValueOut() > nReward)
             return DoS(50, error("ConnectBlock() : coinbase reward exceeded (actual=%"PRId64" vs calculated=%"PRId64")",
@@ -2527,7 +2560,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	//Grandfather
 
 	double mint = pindex->nMint/COIN;
-	if (pindex->nHeight > 6600 && IsProofOfStake())
+	if (pindex->nHeight > 4800 && IsProofOfStake())
 	{
 		if (IsLockTimeVeryRecent(nTime))
 		{
@@ -2543,10 +2576,16 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 				nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime);
 				if (nStakeReward > (nCalculatedResearch*TOLERANCE_PERCENT))
 				{
-		
-					return DoS(10, error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64")", 
-						bb.cpid.c_str(),
-						nStakeReward/COIN, nCalculatedResearch/COIN));
+					TallyNetworkAverages(false);
+					//9-9-2014
+					nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime);
+					if (nStakeReward > (nCalculatedResearch*TOLERANCE_PERCENT))
+					{
+						double user_magnitude = GetMagnitude(bb.cpid,1,false);
+						
+						return DoS(1, error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f", 
+						bb.cpid.c_str(), nStakeReward/COIN, nCalculatedResearch/COIN, user_magnitude));
+					}
 				}
 			}
 		}
@@ -3183,7 +3222,7 @@ bool CBlock::AcceptBlock()
     if (IsProofOfStake())
     {
         uint256 targetProofOfStake;
-        if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake))
+        if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc))
         {
             printf("WARNING: AcceptBlock(): check proof-of-stake failed for block %s\n", hash.ToString().c_str());
             return false; // do not error here as we expect this during initial block download
@@ -3202,7 +3241,7 @@ bool CBlock::AcceptBlock()
         return error("AcceptBlock() : rejected by synchronized checkpoint");
 
     if (CheckpointsMode == Checkpoints::ADVISORY && !cpSatisfies)
-        strMiscWarning = _("WARNING: syncronized checkpoint violation detected, but skipped!");
+        strMiscWarning = _("WARNING: synchronized checkpoint violation detected, but skipped!");
 
     // Enforce rule that the coinbase starts with serialized block height
     CScript expect = CScript() << nHeight;
@@ -3942,10 +3981,10 @@ double GetOutstandingAmountOwed(std::string cpid, int64_t locktime)
 	//Gridcoin - 8-10-2014 ; payment range is stored in HighLockTime-LowLockTime
 	StructCPID globalmag = mvMagnitudes["global"];
 	double payment_timespan = (globalmag.HighLockTime-globalmag.LowLockTime)/86400;  //Lock time window in days
-	double research_magnitude = LederstrumpfMagnitude(mag.ConsensusMagnitude);
-	double owed = payment_timespan * Cap(research_magnitude*GetMagnitudeMultiplier(locktime), MAXIMUM_BOINC_SUBSIDY);
+	double research_magnitude = LederstrumpfMagnitude(mag.ConsensusMagnitude,locktime);
+	double owed = payment_timespan * Cap(research_magnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime));
 	double paid = mag.payments;
-	double outstanding = Cap(owed-paid, MAXIMUM_BOINC_SUBSIDY);
+	double outstanding = Cap(owed-paid, GetMaximumBoincSubsidy(locktime));
 	//printf("Getting payment_timespan %f for outstanding amount for %s; owed %f paid %f Research Magnitude %f \r\n",		payment_timespan,cpid.c_str(),owed,paid,mag.ConsensusMagnitude);
 	if (outstanding < 0) outstanding=0;
 	return outstanding;
@@ -5327,7 +5366,7 @@ int TestAESHash(double rac, unsigned int diffbytes, uint256 scrypt_hash, std::st
 }
 
 
-double LederstrumpfMagnitude(double Magnitude)
+double LederstrumpfMagnitude(double Magnitude, int64_t locktime)
 {
    // Establish constants
     double e = 2.718;
@@ -5335,32 +5374,16 @@ double LederstrumpfMagnitude(double Magnitude)
 	double r = 0.915;
 	double x = 0;
 	double new_magnitude = 0;
-	double magnitude_cap = 3000; //This is where the full 500 magnitude is achieved
-	//Function is only good for Magnitudes > 400:
-	if (Magnitude < 400) return Magnitude;
-	x = Magnitude / (magnitude_cap);
-	new_magnitude = (200 / (1 + pow((double)e, (double)(-v * (x - r))))) + 400;
+	double user_magnitude_cap = 3000; //This is where the full 500 magnitude is achieved
+	//Function returns a new magnitude between Magnitudes > 80% of Cap and <= Cap;
+	double MagnitudeCap_LowSide = GetMaximumBoincSubsidy(locktime)*.80;
+	if (Magnitude < MagnitudeCap_LowSide) return Magnitude;
+	x = Magnitude / (user_magnitude_cap);
+	new_magnitude = ((MagnitudeCap_LowSide/2) / (1 + pow((double)e, (double)(-v * (x - r))))) + MagnitudeCap_LowSide;
 	//Debug.Print "With RAC of " + Trim(Rac) + ", NetRac of " + Trim(NetworkRac) + ", Subsidy = " + Trim(Subsidy)
-	if (new_magnitude < 400) new_magnitude=400;
-	if (new_magnitude > 500) new_magnitude=500;
+	if (new_magnitude < MagnitudeCap_LowSide) new_magnitude=MagnitudeCap_LowSide;
+	if (new_magnitude > GetMaximumBoincSubsidy(locktime)) new_magnitude=GetMaximumBoincSubsidy(locktime);
 	return new_magnitude;
-}
-
-double Lederstrumpf(double RAC, double NetworkRAC)
-{
-    //Given Rac, Network Rac, calculate Gridcoin Block subsidy based on Lederstrumpf's formula:
-	// Establish constants
-    double e = 2.718;
-	double v = 5;
-	double r = 0.915;
-	double x = 0;
-	x = RAC / (NetworkRAC+.01);
-	double subsidy = 0;
-    subsidy = 150 / (1 + pow((double)e, (double)(-v * (x - r))));
-    //Debug.Print "With RAC of " + Trim(Rac) + ", NetRac of " + Trim(NetworkRac) + ", Subsidy = " + Trim(Subsidy)
-	if (subsidy < .05) subsidy=.05;
-	if (subsidy > 150) subsidy=150;
-	return subsidy;
 }
 
 
@@ -5373,38 +5396,6 @@ bool Contains(std::string data, std::string instring)
 	return false;
 }
 
-
-int64_t static GetBlockValuePoB(int nHeight, int64_t nFees, double RAC, double NetworkRAC, int algo_type)
-{
-	//GridCoin - variable reward based on BoincProcess Utilization (minimum 5, Max 150)
-	if (RAC < 100) RAC = 0;
-	if (NetworkRAC < 1) NetworkRAC = 1;
-	if (nFees > 100) nFees=0;
-	double sub1 = (RAC/NetworkRAC)*150;
-	if (sub1 > 149.99) sub1 = 149.999;
-	std::string sSub = RoundToString(sub1,3);
-	double subsidy = 0;
-	if (algo_type==3)
-	{
-		if (Contains(sSub,"."))
-		{
-			 sSub = sSub + "1";  //This is for a green-icon indicator on the coinbase type tx list, since tx has no parent blockhash
-		}
-		subsidy = cdbl(sSub,4); //Note the precision change to 4 digits
-
-	}
-	else
-	{
-		subsidy = cdbl(sSub,3); //Note the precision change to 3 digits
-	}
-	if (subsidy > 150) subsidy = 150;
-    int64_t nSubsidy = subsidy * COIN;
-    // Subsidy is cut in half every 840000 blocks, which will occur approximately every 4 years
-    nSubsidy >>= (nHeight / 840000); // Gridcoin: 840k blocks in ~4 years
-	//Gridcoin : Total block pays 5-150 + 2*Fees
-	if (nSubsidy < 0) nSubsidy=0;
-    return nSubsidy + (nFees*2);
-}
 
 
 

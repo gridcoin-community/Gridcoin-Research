@@ -9,6 +9,8 @@
 #include "txdb.h"
 
 using namespace std;
+MiningCPID DeserializeBoincBlock(std::string block);
+bool IsCPIDValid(std::string cpid, std::string ENCboincpubkey);
 
 typedef std::map<int, unsigned int> MapModifierCheckpoints;
 /*
@@ -269,14 +271,63 @@ static bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64_t& nStakeModifi
 //   quantities so as to generate blocks faster, degrading the system back into
 //   a proof-of-work situation.
 //
-static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, uint256& targetProofOfStake, bool fPrintProofOfStake)
+bool NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::string hashBoinc)
 {
-    if (nTimeTx < txPrev.nTime)  // Transaction timestamp violation
+	    //printf("noo1.");
+		if (hashBoinc.length() > 1)
+		{
+			MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
+			//printf("noo2.");
+			if (boincblock.cpid == "" || boincblock.cpid.length() < 6) return false;  //Block has no CPID
+			//CPID <> INVESTOR:
+			if (boincblock.cpid != "INVESTOR") 
+			{
+    			if (boincblock.projectname == "") 	return false;
+	    		if (boincblock.rac < 100) 			return false;
+				if (!IsCPIDValid(boincblock.cpid,boincblock.enccpid)) return false;
+				//If we already have a consensus on the node, the cpid does not qualify
+				if (mvMagnitudes.size() > 0)
+				{
+					StructCPID UntrustedHost = mvMagnitudes[boincblock.cpid]; //Contains Consensus Magnitude
+					if (UntrustedHost.initialized)
+					{
+						if (UntrustedHost.Accuracy > 9) 
+						{	
+						
+							return false; 
+						}
+					}
+				}
+				//if (boincblock.Magnitude < 1.1) return false; //Block magnitude too low
+				//printf("Newbie complies with first time stakeweight rule.[BlockFound]\r\n");
+				//printf("ncwftsr");
+				return true;
+			}
+		}
+
+
+	return false;
+}
+
+
+static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, unsigned int nTxPrevOffset, 
+	const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, 
+	uint256& targetProofOfStake, bool fPrintProofOfStake, std::string hashBoinc)
+{
+    if (nTimeTx < txPrev.nTime)  
+	{
+		// Transaction timestamp violation
+		printf(".TimestampViolation.");
         return error("CheckStakeKernelHash() : nTime violation");
+	}
 
     unsigned int nTimeBlockFrom = blockFrom.GetBlockTime();
-    if (nTimeBlockFrom + nStakeMinAge > nTimeTx) // Min age requirement
+    if (nTimeBlockFrom + nStakeMinAge > nTimeTx) 
+	{
+		// Min age requirement
+		printf(".MinimumAgeRequirementViolation.,");
         return error("CheckStakeKernelHash() : min age violation");
+	}
 
     CBigNum bnTargetPerCoinDay;
     bnTargetPerCoinDay.SetCompact(nBits);
@@ -284,17 +335,22 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 
     uint256 hashBlockFrom = blockFrom.GetHash();
 
-//    CBigNum bnCoinDayWeight = CBigNum(nValueIn) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
 	//Testing Magnitude Modifier Here (08-21-2014):
 	//WEIGHT MODIFICATION SECTION 2: Testing newbie stake allowance
 	//ToDo: Change this to be related to magnitude before go-live - investors can get started automatically
 	//This is primarily to allow a newbie researcher to get started with a low balance.
-	//9-1-2014 Removigng Newbie modification
 	
 	//CBigNum bnCoinDayWeight = CBigNum(nValueIn + (5*COIN) ) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
-	
-	CBigNum bnCoinDayWeight = CBigNum(nValueIn) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
-	
+	int64_t NewbieStakeWeightModifier = 0;
+	if (NewbieCompliesWithFirstTimeStakeWeightRule(blockFrom,hashBoinc)) 
+	{
+			NewbieStakeWeightModifier = 5*COIN;
+	}
+	else
+	{
+			NewbieStakeWeightModifier = 1*COIN;
+	}
+	CBigNum bnCoinDayWeight = CBigNum(nValueIn + (NewbieStakeWeightModifier)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
     targetProofOfStake = (bnCoinDayWeight * bnTargetPerCoinDay).getuint256();
 
     // Calculate hash
@@ -325,7 +381,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
     // Now check if proof-of-stake hash meets target protocol
     if (CBigNum(hashProofOfStake) > bnCoinDayWeight * bnTargetPerCoinDay)
 	{   
-		//printf("!");
+		printf(".PORDiffTooLow.");
         return false;
 	}
     if (fDebug && !fPrintProofOfStake)
@@ -364,7 +420,9 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 //   quantities so as to generate blocks faster, degrading the system back into
 //   a proof-of-work situation.
 //
-static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, unsigned int nTimeBlockFrom, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, uint256& targetProofOfStake, bool fPrintProofOfStake)
+static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, unsigned int nTimeBlockFrom, 
+	const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, 
+	uint256& targetProofOfStake, bool fPrintProofOfStake, std::string hashBoinc)
 {
 	printf("StakeV2");
     if (nTimeTx < txPrev.nTime)  // Transaction timestamp violation
@@ -424,16 +482,18 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
     return true;
 }
 
-bool CheckStakeKernelHash(CBlockIndex* pindexPrev, unsigned int nBits, const CBlock& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, uint256& targetProofOfStake, bool fPrintProofOfStake)
+bool CheckStakeKernelHash(CBlockIndex* pindexPrev, unsigned int nBits, const CBlock& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, 
+	uint256& targetProofOfStake, std::string hashBoinc, bool fPrintProofOfStake)
 {
     if (IsProtocolV2(pindexPrev->nHeight+1))
-        return CheckStakeKernelHashV2(pindexPrev, nBits, blockFrom.GetBlockTime(), txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake);
+        return CheckStakeKernelHashV2(pindexPrev, nBits, blockFrom.GetBlockTime(), txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake, hashBoinc);
     else
-        return CheckStakeKernelHashV1(nBits, blockFrom, nTxPrevOffset, txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake);
+        return CheckStakeKernelHashV1(nBits, blockFrom, nTxPrevOffset, txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake, hashBoinc);
 }
 
 // Check kernel hash target and coinstake signature
-bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned int nBits, uint256& hashProofOfStake, uint256& targetProofOfStake)
+bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned int nBits, 
+	uint256& hashProofOfStake, uint256& targetProofOfStake, std::string hashBoinc)
 {
     if (!tx.IsCoinStake())
         return error("CheckProofOfStake() : called on non-coinstake %s", tx.GetHash().ToString().c_str());
@@ -457,7 +517,7 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
     if (!block.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
         return fDebug? error("CheckProofOfStake() : read block failed") : false; // unable to read block of previous transaction
 
-    if (!CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, txPrev, txin.prevout, tx.nTime, hashProofOfStake, targetProofOfStake, fDebug))
+    if (!CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, txPrev, txin.prevout, tx.nTime, hashProofOfStake, targetProofOfStake, hashBoinc, fDebug))
         return tx.DoS(1, error("CheckProofOfStake() : INFO: check kernel failed on coinstake %s, hashProof=%s", tx.GetHash().ToString().c_str(), hashProofOfStake.ToString().c_str())); // may occur during initial download or if behind on block chain sync
 
     return true;
