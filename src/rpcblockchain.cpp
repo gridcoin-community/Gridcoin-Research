@@ -6,8 +6,10 @@
 #include "main.h"
 #include "bitcoinrpc.h"
 #include <fstream>
+
 #include "kernel.h"
 
+// R Halford - Removing Reference to OptionsModel
 
 #include "init.h" // for pwalletMain
 #include <boost/lexical_cast.hpp>
