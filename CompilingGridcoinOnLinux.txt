@@ -49,35 +49,35 @@ sudo make -f makefile.unix USE_UPNP=-
 
 
 
-sudo strip gridcoind
-sudo chmod 755 gridcoind
-sudo cp gridcoind /usr/bin/gridcoind 
-sudo mkdir ~/.gridcoin
-cd ~/.gridcoin
+sudo strip gridcoinresearchd
+sudo chmod 755 gridcoinresearchd
+sudo cp gridcoinresearchd /usr/bin/gridcoinresearchd 
+sudo mkdir ~/.gridcoinresearch
+cd ~/.gridcoinresearch
 
 
 #### SSL: ###################################################################
-#Optional: Setting up gridcoind for ssl 
+#Optional: Setting up gridcoinresearchd for ssl 
 #openssl genrsa -out server.pem 2048 
 #openssl req -new -x509 -nodes -sha1 -days 3650 -key server.pem > server.cert 
 #############################################################################
 
-nano ~/.gridcoin/gridcoin.conf 
+sudo nano ~/.gridcoinresearch/gridcoinresearch.conf 
 server=1 
 daemon=1 
-rpcuser=username
-rpcpassword=password
 rpcport=9332 
 rpcallowip=127.0.0.1 
+rpcuser=username
+rpcpassword=yourpassword
 rpcallowip=external IP 
-addnode=www.gridcoin.us
+addnode=node.gridcoin.us
 #rpcssl=1
 #save and exit.  Leave the lines with ssl in them out if you don't need ssl.
 
 ####### Testing Gridcoin gridcoind :
-./gridcoind
+./gridcoinresearchd
 #Let server start
-./gridcoind getmininginfo
+./gridcoinresearchd getmininginfo
 #Should return current difficulty
 
 
@@ -87,15 +87,15 @@ addnode=www.gridcoin.us
 cd /src
 
 
-cd ..     #cd to the directory where bitcoin.pro is 
+cd ..     #cd to the directory where gridcoinstake.pro is 
 sudo rm build/o.*
 sudo qmake "USE_UPNP=-"
 sudo make
-sudo strip gridcoin-qt
-sudo chmod 755 gridcoind-qt
-sudo cp gridcoin-qt /usr/bin/gridcoin-qt
-#look for gridcoin-qt
-sudo ./gridcoin-qt
+sudo strip gridcoinresearch
+sudo chmod 755 gridcoindresearch
+sudo cp gridcoinresearch /usr/bin/gridcoinresearch
+#look for gridcoinresearch
+sudo ./gridcoinresearch
 #Verify wallet finds nodes and starts syncing
 
 
