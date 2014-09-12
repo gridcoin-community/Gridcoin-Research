@@ -103,38 +103,6 @@ sudo ./gridcoinresearch
 
 
 
-
-
-
-###### Step 3:  Wine :
-
-
-###### Temporary instructions for Wine Alpha testing:
-###### Tested on Ubuntu 12.04
-###### First, install the latest version of wine
-###### Then download gridcoin-qt-wine:
-
-download:
-
-Extract into Linux working directory
-## Do the following steps once:
-
-wget http://www.gridcoin.us/download/gridcoin-qt.msi
-
-chmod 777 gridcoinqtdirectory
-cd gridcoinqtdirectory
-wine gridcoin-qt.msi
-
-## To execute gridcoin-qt wallet in wine:
-wine gridcoin-qt
-
-## There will be 3 debug files written to the app directory
-## Known issues:
-## If you kill boinc, it takes 10 minutes for gridcoin utilization to go back to zero (it does eventually)
-
-
-
-
 ##############################################################################################################################################
 # Updated 6-18-2014 by Rob Halford
 # Use this section to upgrade Ubuntu to Boost 1_55_0
