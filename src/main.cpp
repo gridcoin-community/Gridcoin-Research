@@ -689,13 +689,11 @@ MiningCPID GetNextProject()
 		GlobalCPUMiningCPID.rac=0;
 		GlobalCPUMiningCPID.encboincpublickey = "";
 		GlobalCPUMiningCPID.enccpid = "";
-		double ProjectRAC = 0;
+		//double ProjectRAC = 0;
 		GlobalCPUMiningCPID.NetworkRAC =0;
 		GlobalCPUMiningCPID.Magnitude = 0;
 		mdMiningNetworkRAC = 0;
-	    //printf("User is an investor");
-
-     	}
+	  	}
 		catch (std::exception& e)
 		{
 			msMiningErrors = "Error obtaining next project.  Error 16172014.";
@@ -1811,11 +1809,10 @@ int64_t GetProofOfStakeMaxReward(int64_t nCoinAge, int64_t nFees, int64_t lockti
 
 double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 {
-	    //printf("Calculating PoR\r\n");
-			
+	    	
 		StructCPID mag = mvMagnitudes[cpid];
 		double owed = mag.owed;
-		double magnitude = mag.Magnitude;
+		//double magnitude = mag.Magnitude;
 		if (owed < 0) owed = 0;
 		//Coarse Payment Rule (helps prevent sync problems):
 		if (!VerifyingBlock)
@@ -1825,9 +1822,7 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 		}
 		//End of Coarse Payment Rule
 		return owed * COIN;
-		//Summary:
-		// ProofOfResearchParticipationPercent=(StakeableCoinAge)/UserBalance; BoincReward=ProofOfResearchParticipationPercent*ConsensusMagnitude
-
+		
 }
 
 

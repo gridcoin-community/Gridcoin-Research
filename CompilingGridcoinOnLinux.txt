@@ -1,0 +1,177 @@
+########################### Linux Instructions: #####################################################################
+# 	
+#	Released 1-25-2014 - Gridcoin
+#
+# This guide is broken up into 3 versions.
+#   
+# 1. Gridcoind - headless daemon 
+# 2. Gridcoin-qt 
+# 3. Wine version of Gridcoin-qt
+#
+# 
+# Section 1: Compiling Gridcoind
+#
+# -Tested on Ubuntu 12.04
+#
+#
+#
+#####################################################################################################################
+
+
+
+#### Building Gridcoind ####
+
+
+
+#### (Tested with #boost 1_5_5_0, Berkeley db 4.8.30, miniupnpc 1.8, openssl 1.0.1e
+#### Step 1: Building the headless daemon:
+If you have trouble updating source from git:
+git config --global http.sslverify false
+
+
+sudo apt-get install ntp git build-essential libssl-dev libdb-dev libdb++-dev libboost-all-dev libqrencode-dev
+sudo apt-get install qt-sdk
+ 
+cd ~
+sudo git clone https://github.com/gridcoin/Gridcoin-master
+NOTE: If you already have Gridcoin, do this:
+#git fetch --all
+#git reset --hard origin/master
+
+
+
+cd ~/Gridcoin-master/src
+
+sudo rm obj/*.o 
+
+sudo chmod 755 leveldb/build_detect_platform 
+
+sudo make -f makefile.unix USE_UPNP=- 
+
+
+##### End of Step 1: gridcoind will be found in /src directory
+
+
+
+sudo strip gridcoind
+sudo chmod 755 gridcoind
+sudo cp gridcoind /usr/bin/gridcoind 
+sudo mkdir ~/.gridcoin
+cd ~/.gridcoin
+
+
+#### SSL: ###################################################################
+#Optional: Setting up gridcoind for ssl 
+#openssl genrsa -out server.pem 2048 
+#openssl req -new -x509 -nodes -sha1 -days 3650 -key server.pem > server.cert 
+#############################################################################
+
+nano ~/.gridcoin/gridcoin.conf 
+server=1 
+daemon=1 
+rpcuser=username
+rpcpassword=password
+rpcport=9332 
+rpcallowip=127.0.0.1 
+rpcallowip=external IP 
+addnode=www.gridcoin.us
+#rpcssl=1
+#save and exit.  Leave the lines with ssl in them out if you don't need ssl.
+
+####### Testing Gridcoin gridcoind :
+./gridcoind
+#Let server start
+./gridcoind getmininginfo
+#Should return current difficulty
+
+
+#Step 2:
+############################################### Building Gridcoin-QT: ##########################################
+
+cd /src
+
+
+cd ..     #cd to the directory where bitcoin.pro is 
+sudo rm build/o.*
+sudo qmake "USE_UPNP=-"
+sudo make
+sudo strip gridcoin-qt
+sudo chmod 755 gridcoind-qt
+sudo cp gridcoin-qt /usr/bin/gridcoin-qt
+#look for gridcoin-qt
+sudo ./gridcoin-qt
+#Verify wallet finds nodes and starts syncing
+
+
+###############################################################################################################
+
+
+
+
+
+
+###### Step 3:  Wine :
+
+
+###### Temporary instructions for Wine Alpha testing:
+###### Tested on Ubuntu 12.04
+###### First, install the latest version of wine
+###### Then download gridcoin-qt-wine:
+
+download:
+
+Extract into Linux working directory
+## Do the following steps once:
+
+wget http://www.gridcoin.us/download/gridcoin-qt.msi
+
+chmod 777 gridcoinqtdirectory
+cd gridcoinqtdirectory
+wine gridcoin-qt.msi
+
+## To execute gridcoin-qt wallet in wine:
+wine gridcoin-qt
+
+## There will be 3 debug files written to the app directory
+## Known issues:
+## If you kill boinc, it takes 10 minutes for gridcoin utilization to go back to zero (it does eventually)
+
+
+
+
+##############################################################################################################################################
+# Updated 6-18-2014 by Rob Halford
+# Use this section to upgrade Ubuntu to Boost 1_55_0
+# Adjust the libdir, includedir, and exec-prefix if you do not want Boost 1_55_0 upgraded system wide.
+#
+cd /
+sudo mkdir boost
+cd boost
+sudo wget http://sourceforge.net/projects/boost/files/boost/1.55.0/boost_1_55_0.zip/download
+
+
+sudo unzip boost_1_55_0.zip
+cd boost_1_55_0
+sudo apt-get install python-dev
+sudo apt-get install python-bzutils
+sudo apt-get install libbz2-dev
+sudo ./bootstrap.sh --includedir=/usr/include --exec-prefix=/usr/local --libdir=/usr/lib
+sudo ./b2 
+sudo ./bjam install
+#
+# End of Boost Upgrade Commands
+#
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 

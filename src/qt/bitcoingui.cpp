@@ -16,7 +16,7 @@
 #endif
 
 #include <QInputDialog>
-
+#include <fstream>
 
 #include "bitcoingui.h"
 #include "transactiontablemodel.h"
@@ -1073,7 +1073,7 @@ void BitcoinGUI::NewUserWizard()
  		}
 		else
 		{
-		    QString strMessage = tr("To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. ");
+		    QString strMessage = tr("To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. ");
 			QMessageBox::warning(this, tr("New User Wizard - Skipped"), strMessage);
 		}
 
@@ -1267,7 +1267,7 @@ void BitcoinGUI::leaderboardClicked()
 int ReindexBlocks()
 {
 
-	int result = ReindexWallet();
+	ReindexWallet();
 	return 1;
 
 }
@@ -1681,7 +1681,7 @@ void BitcoinGUI::timerfire()
 		if (nRegVersion==0 || Timer("start",10))
 		{
 			printf("Starting globalcom...\r\n");
-			nRegVersion==9999;
+			nRegVersion=9999;
 			NewUserWizard();
 			#ifdef WIN32
 			if (globalcom==NULL) ReinstantiateGlobalcom();

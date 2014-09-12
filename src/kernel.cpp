@@ -381,7 +381,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
     // Now check if proof-of-stake hash meets target protocol
     if (CBigNum(hashProofOfStake) > bnCoinDayWeight * bnTargetPerCoinDay)
 	{   
-		printf(".PORDiffTooLow.");
+		//printf(".PORDiffTooLow.");
         return false;
 	}
     if (fDebug && !fPrintProofOfStake)
