@@ -7,7 +7,7 @@
 #include "bitcoinrpc.h"
 #include <fstream>
 #include "kernel.h"
-#include "qt/optionsmodel.h"
+
 
 #include "init.h" // for pwalletMain
 #include <boost/lexical_cast.hpp>

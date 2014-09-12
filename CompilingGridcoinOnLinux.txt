@@ -33,16 +33,12 @@ sudo apt-get install ntp git build-essential libssl-dev libdb-dev libdb++-dev li
 sudo apt-get install qt-sdk
  
 cd ~
-sudo git clone https://github.com/gridcoin/Gridcoin-master
+sudo git clone https://github.com/gridcoin/Gridcoin-Research
 NOTE: If you already have Gridcoin, do this:
 #git fetch --all
 #git reset --hard origin/master
 
-
-
 cd ~/Gridcoin-master/src
-
-sudo rm obj/*.o 
 
 sudo chmod 755 leveldb/build_detect_platform 
 
