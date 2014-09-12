@@ -1,4 +1,4 @@
-@set COINNAME=gridcoin
+@set COINNAME=gridcoinresearch
 @call set_vars.bat
 @bash patch_files.sh
 @echo Building Gridcoin daemon...
@@ -7,10 +7,10 @@
 @set PARAMS=BOOST_SUFFIX=%BOOSTSUFFIX%
 @set PARAMS=%PARAMS% INCLUDEPATHS="
 @rem set PARAMS=%PARAMS%-I'../src'
-@set PARAMS=%PARAMS% -I'../src/skein.c'
 @set PARAMS=%PARAMS% -I'../%EWBLIBS%/%BOOST%'
 @set PARAMS=%PARAMS% -I'../%EWBLIBS%/%OPENSSL%/include'
 @set PARAMS=%PARAMS% -I'../%EWBLIBS%/%BERKELEYDB%/build_unix'
+@set PARAMS=%PARAMS% -I'../%EWBLIBS%/%LEVELDB%/include'
 @set PARAMS=%PARAMS% -I'../%EWBLIBS%/%MINIUPNPC%'
 @set PARAMS=%PARAMS% -I'../%QTPATH%/'
 @set PARAMS=%PARAMS%"
@@ -26,16 +26,14 @@
 @set PARAMS=%PARAMS:\=/%
 @echo PARAMS: %PARAMS%
 
-@set PARAMS=%PARAMS% USE_UPNP=1
+@rem set PARAMS=%PARAMS% USE_UPNP=1
 @rem remove "rem " from the next line to deactivate upnp
-@rem set PARAMS=%PARAMS% USE_UPNP=-
+@set PARAMS=%PARAMS% USE_UPNP=-
 
 @set PARAMS=%PARAMS% USE_DEVDIR=1
 
 @cd %ROOTPATH%\src
 
-copy gridcoin.h gridcoinh.bak
-copy A:\deps-master\extras\gridcoin.h gridcoin.h
 
 @mingw32-make -f makefile.mingw %PARAMS%
 @if errorlevel 1 goto error

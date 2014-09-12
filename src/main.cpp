@@ -214,8 +214,7 @@ bool FindRAC(bool CheckingWork,std::string TargetCPID, std::string TargetProject
 bool FindTransactionSlow(uint256 txhashin, CTransaction& txout,  std::string& out_errors);
 std::string msCurrentRAC = "";
 
-
-static boost::thread_group* minerThreads = NULL;
+//static boost::thread_group* minerThreads = NULL;
 static boost::thread_group* cpidThreads = NULL;
 extern void FlushGridcoinBlockFile(bool fFinalize);
 

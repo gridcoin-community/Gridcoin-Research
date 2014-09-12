@@ -9,6 +9,7 @@
 @set BERKELEYDB=db-4.8.30.NC
 @set BOOST=boost_1_55_0
 @set BOOSTVERSION=1.55.0
+@set LEVELDB=leveldb
 @rem If you wonder why there is no -s- see: https://github.com/bitcoin/bitcoin/pull/2835#issuecomment-21231694
 @set BOOSTSUFFIX=-mgw46-mt-1_55
 @set MINIUPNPC=miniupnpc-1.8
@@ -23,14 +24,14 @@ set PATH=%PATH%;a:\qt\4.8.4\qmake\bin
 
 @set EWBPATH=contrib/easywinbuilder
 set ROOTPATH=..\..
-set ROOTPATH=a:\gridcoin-research
+xset ROOTPATH=a:\gridcoin-research
 
 @set ROOTPATHSH=%ROOTPATH:\=/%
 
 @rem bootstrap coin name
 @for /F %%a in ('dir /b %ROOTPATH%\*.pro') do @set COINNAME=%%a
 @set COINNAME=%COINNAME:-qt.pro=%
-@set COINNAME=gridcoin
+@set COINNAME=gridcoinresearch
 
 
 @set QTDOWNLOADPATH=http://download.qt-project.org/official_releases/qt/4.8/4.8.5/qt-win-opensource-4.8.5-mingw.exe

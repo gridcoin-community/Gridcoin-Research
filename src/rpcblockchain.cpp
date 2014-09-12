@@ -824,7 +824,11 @@ Value execute(const Array& params, bool fHelp)
 	else if (sItem == "executecode")
 	{
 			printf("Executing .net code\r\n");
+			#if defined(WIN32) && defined(QT_GUI)
+		
     	    ExecuteCode();
+			#endif
+
 	}
 	else if (sItem == "volatilecode")
 	{
@@ -833,15 +837,18 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "startwireframe")
 	{
-		
+			#if defined(WIN32) && defined(QT_GUI)
+			
 			startWireFrameRenderer();
+			#endif
 
 	}
 	else if (sItem == "endwireframe")
 	{
+			#if defined(WIN32) && defined(QT_GUI)
 		
 			stopWireFrameRenderer();
-
+			#endif
 	}
 	else if (sItem == "tally")
 	{
@@ -1010,7 +1017,6 @@ Value listitem(const Array& params, bool fHelp)
 
 		double mytotalrac = 0;
 		double nettotalrac  = 0;
-		double mycount = 0;
 		double projpct = 0;
 		double mytotalpct = 0;
 		double myprojects = 0;

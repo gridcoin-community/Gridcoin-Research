@@ -38,7 +38,7 @@ NOTE: If you already have Gridcoin, do this:
 #git fetch --all
 #git reset --hard origin/master
 
-cd ~/Gridcoin-master/src
+cd ~/Gridcoin-research/src
 
 sudo chmod 755 leveldb/build_detect_platform 
 

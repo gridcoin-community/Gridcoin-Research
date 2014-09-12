@@ -612,8 +612,9 @@ bool AppInit2()
 
 	printf("Boost Version: %s",s.str().c_str());
 	
-
+	#if defined(WIN32) && defined(QT_GUI)
 	startWireFrameRenderer();
+	#endif
 
 
 	printf("Loading boinc projects \r\n");
@@ -1148,9 +1149,9 @@ bool AppInit2()
 	uiInterface.InitMessage(_("Finding first applicable Research Project..."));
 	
 
-	
-     stopWireFrameRenderer();
-
+	#if defined(WIN32) && defined(QT_GUI)
+	stopWireFrameRenderer();
+	#endif
 
     if (!CheckDiskSpace())
         return false;

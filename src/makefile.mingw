@@ -2,24 +2,45 @@
 # Distributed under the MIT/X11 software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+CXX ?= g++
+
 USE_UPNP:=0
 
-INCLUDEPATHS?= \
- -I"C:\boost-1.50.0-mgw" \
- -I"C:\db-4.8.30.NC-mgw\build_unix" \
- -I"C:\openssl-1.0.1c-mgw\include"
+UNIX_INCLUDEPATHS?= \
+ -I"a:\deps-master\boost_1_55_0" \
+ -I"a:\deps-master\db" \
+ -I"a:\deps-master\ssl"
 
-LIBPATHS?= \
- -L"C:\boost-1.50.0-mgw\stage\lib" \
- -L"C:\db-4.8.30.NC-mgw\build_unix" \
- -L"C:\openssl-1.0.1c-mgw"
+UNIX_LIBPATHS?= \
+ -L"a:\deps-master\boost_1_55_0\stage\lib" \
+ -L"a:\deps-master\db" \
+ -L"a:\deps-master\ssl"
+ 
+ 
+ DEPSDIR?=/usr/local
+#BOOST_SUFFIX?=-mgw46-mt-sd-1_55
+ BOOST_SUFFIX?=-mgw46-mt-1_55
+ 
+
+ INCLUDEPATHS?= \
+  -I"$(CURDIR)" \
+  -I"$(DEPSDIR)/include" \
+  -I"$(DEPSDIR)/include/boost" \
+  -I"$(DEPSDIR)/boost_1_55_0/boost"
+ 
+ LIBPATHS?= \
+  -L"$(CURDIR)/leveldb" \
+  -L"$(DEPSDIR)/lib"
+
 
 LIBS= \
- -l boost_system-mgw44-mt-1_53 \
- -l boost_filesystem-mgw44-mt-1_53 \
- -l boost_program_options-mgw44-mt-1_53 \
- -l boost_thread-mgw44-mt-1_53 \
- -l boost_chrono-mgw44-mt-1_53 \
+ -l leveldb \
+ -l memenv \
+ -l boost_system$(BOOST_SUFFIX) \
+ -l boost_filesystem$(BOOST_SUFFIX) \
+ -l boost_program_options$(BOOST_SUFFIX) \
+ -l boost_thread$(BOOST_SUFFIX) \
+ -l boost_chrono$(BOOST_SUFFIX) \
  -l db_cxx \
  -l ssl \
  -l crypto
@@ -35,8 +56,10 @@ ifndef USE_UPNP
 	override USE_UPNP = -
 endif
 ifneq (${USE_UPNP}, -)
- INCLUDEPATHS += -I"C:\miniupnpc-1.6-mgw"
- LIBPATHS += -L"C:\miniupnpc-1.6-mgw"
+ INCLUDEPATHS += -I"a:\deps-master\miniupnpc-1.6"
+ LIBPATHS += -L"a:\deps-master\miniupnpc-1.6"
+ 
+ 
  LIBS += -l miniupnpc -l iphlpapi
  DEFS += -DSTATICLIB -DUSE_UPNP=$(USE_UPNP)
 endif
@@ -47,6 +70,7 @@ LIBS += -l kernel32 -l user32 -l gdi32 -l comdlg32 -l winspool -l winmm -l shell
 HEADERS = $(wildcard *.h)
 
 OBJS= \
+    leveldb/libleveldb.a \
     obj/alert.o \
     obj/version.o \
     obj/checkpoints.o \
@@ -93,12 +117,24 @@ OBJS= \
 
 all: gridcoinresearchd.exe
 
+
+#
+# LevelDB support
+#
+
+
 LIBS += $(CURDIR)/leveldb/libleveldb.a $(CURDIR)/leveldb/libmemenv.a
 DEFS += $(addprefix -I,$(CURDIR)/leveldb/include)
 DEFS += $(addprefix -I,$(CURDIR)/leveldb/helpers)
 OBJS += obj/txdb-leveldb.o
-leveldb/libleveldb.a:
-	cd leveldb; make; cd ..
+
+
+#leveldb/libleveldb.a:
+#cd leveldb && $(MAKE) CC=$(CC) CXX=$(CXX) OPT="$(CFLAGS)" TARGET_OS=NATIVE_WINDOWS libleveldb.a libmemenv.a && cd ..
+
+#oldcd leveldb; make; cd ..
+	
+	
 obj/txdb-leveldb.o: leveldb/libleveldb.a
 
 obj/%.o: %.cpp $(HEADERS)
@@ -114,11 +150,11 @@ obj/scrypt-x86_64.o: scrypt-x86_64.S
 	$(CXX) -c $(xCXXFLAGS) -MMD -o $@ $<
 
 gridcoinresearchd.exe: $(OBJS:obj/%=obj/%)
-	g++ $(CFLAGS) $(LDFLAGS) -o $@ $(LIBPATHS) $^ $(LIBS)
+	$(CXX) $(CFLAGS) $(LDFLAGS) -o $@ $(LIBPATHS) $^ $(LIBS)
 
 clean:
 	-del /Q gridcoinresearchd
 	-del /Q obj\*
 	-del /Q obj\zerocoin\*
-
+	cd leveldb && $(MAKE) TARGET_OS=NATIVE_WINDOWS clean && cd ..
 FORCE:
