@@ -1514,7 +1514,10 @@ bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx&
 
 bool NewbieCompliesWithFirstTimeStakeWeightRule()
 {
-	    if (!GlobalCPUMiningCPID.initialized) return false;
+
+	try 
+	{
+	  if (!GlobalCPUMiningCPID.initialized) return false;
 			
 		//CPID <> INVESTOR:
 	
@@ -1539,6 +1542,19 @@ bool NewbieCompliesWithFirstTimeStakeWeightRule()
 			printf("Newbie complies with first time stakeweight rule.\r\n");
 			return true;
 		}
+
+	return false;
+	}
+	catch (std::exception &e) 
+	{
+	    printf("Error while assessing Newbie Rule 1.\r\n");
+		return false;
+	}
+    catch(...)
+	{
+		printf("Error while assessing Newbie Rule 1[1].\r\n");
+		return false;
+	}
 
 	return false;
 }

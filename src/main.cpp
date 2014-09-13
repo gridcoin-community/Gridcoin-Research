@@ -2270,11 +2270,27 @@ bool LessVerbose(int iMax1000)
 }
 bool OutOfSyncByAgeWithChanceOfMining()
 {
-	bool oosbyage = OutOfSyncByAge();
-	if (!oosbyage) return oosbyage;
-	bool com = LessVerbose(100);
-	if (com) return false;
+	try
+	{
+		bool oosbyage = OutOfSyncByAge();
+		if (!oosbyage) return oosbyage;
+		bool com = LessVerbose(100);
+		if (com) return false;
+		return true;
+	}
+	catch (std::exception &e) 
+	{
+				printf("Error while assessing Sync Condition\r\n");
+				return true;
+	}
+	catch(...)
+	{
+				printf("Error while assessing Sync Condition[2].\r\n");
+				return true;
+	}
 	return true;
+
+
 }
 
 

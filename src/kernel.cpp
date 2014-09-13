@@ -273,11 +273,11 @@ static bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64_t& nStakeModifi
 //
 bool NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::string hashBoinc)
 {
-	    //printf("noo1.");
+	try
+	{
 		if (hashBoinc.length() > 1)
 		{
 			MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
-			//printf("noo2.");
 			if (boincblock.cpid == "" || boincblock.cpid.length() < 6) return false;  //Block has no CPID
 			//CPID <> INVESTOR:
 			if (boincblock.cpid != "INVESTOR") 
@@ -293,19 +293,26 @@ bool NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::st
 					{
 						if (UntrustedHost.Accuracy > 9) 
 						{	
-						
 							return false; 
 						}
 					}
 				}
-				//if (boincblock.Magnitude < 1.1) return false; //Block magnitude too low
 				//printf("Newbie complies with first time stakeweight rule.[BlockFound]\r\n");
-				//printf("ncwftsr");
 				return true;
 			}
 		}
-
-
+		return false;
+	}
+    catch (std::exception &e) 
+	{
+	    printf("Error while assessing Newbie Rule 1.\r\n");
+		return false;
+	}
+    catch(...)
+	{
+		printf("Error while assessing Newbie Rule 1[1].\r\n");
+		return false;
+	}
 	return false;
 }
 
