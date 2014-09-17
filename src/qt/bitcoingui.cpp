@@ -125,6 +125,7 @@ extern int RestartClient();
 extern int ReindexWallet();
 #ifdef WIN32
 QAxObject *globalcom = NULL;
+QAxObject *globalwire = NULL;
 #endif
 int ThreadSafeVersion();
 void FlushGridcoinBlockFile(bool fFinalize);
@@ -1316,12 +1317,12 @@ void startWireFrameRenderer()
 {
 
 #ifdef WIN32
-	if (globalcom==NULL)
+	if (globalwire==NULL)
 	{
-		globalcom = new QAxObject("BoincStake.Utilization");
+		globalwire = new QAxObject("BoincStake.Utilization");
 	}
 
-      globalcom->dynamicCall("StartWireFrameRenderer()");
+      globalwire->dynamicCall("StartWireFrameRenderer()");
 #endif
 }
 
@@ -1329,12 +1330,12 @@ void stopWireFrameRenderer()
 {
 
 #ifdef WIN32
-	if (globalcom==NULL)
+	if (globalwire==NULL)
 	{
-		globalcom = new QAxObject("BoincStake.Utilization");
+		globalwire = new QAxObject("BoincStake.Utilization");
 	}
 
-    globalcom->dynamicCall("StopWireFrameRenderer()");
+    globalwire->dynamicCall("StopWireFrameRenderer()");
 #endif
 }
 

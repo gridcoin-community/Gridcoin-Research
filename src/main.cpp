@@ -1705,94 +1705,58 @@ int64_t GetProofOfWorkMaxReward(int64_t nFees, int64_t locktime)
     return nSubsidy + nFees;
 }
 
+//Survey Results: Start inflation rate: 9%, end=1%, 30 day steps, 9 steps, mag multiplier start: 2, mag end .3, 9 steps
+
 
 //static const int MAXIMUM_BOINC_SUBSIDY = 500;
 
 int64_t GetMaximumBoincSubsidy(int64_t nTime)
 {
 	// Gridcoin Global Daily Maximum Researcher Subsidy Schedule
-	int MaxSubsidy = 0; 
-	if (nTime <  1409421299)                        MaxSubsidy = 750; // 500  before  08-30-2014
-	//Between 9-04-2014 and 9-12-2014:  (This section is for Testing Only)
-	if (nTime >= 1409421299 && nTime <= 1409788800) MaxSubsidy =  600 * CENT; //between 09-04-2014 and 09-05-2014;
-	if (nTime >= 1409788800 && nTime <= 1409875200) MaxSubsidy =  700 * CENT; //between 09-05-2014 and 09-06-2014;
-	if (nTime >= 1409875200 && nTime <= 1409961600) MaxSubsidy =  800 * CENT; //between 09-06-2014 and 09-07-2014;
-	if (nTime >= 1409961600 && nTime <= 1410048000) MaxSubsidy =  900 * CENT; //between 09-07-2014 and 09-08-2014;
-	if (nTime >= 1410048000 && nTime <= 1410134400) MaxSubsidy =  1000 * CENT; //between 09-08-2014 and 09-09-2014;
-	if (nTime >= 1410134400 && nTime <= 1410307200) MaxSubsidy =  1100 * CENT; //between 09-09-2014 and 09-10-2014;
-	if (nTime >= 1410307200 && nTime <= 1410393600) MaxSubsidy =  1200 * CENT; //between 09-10-2014 and 09-11-2014;
-	// Back to Standard Schedule
-
-	if (nTime >= 1410393600 && nTime <= 1412035200) MaxSubsidy = 	750; // between 09-11-2014 and 09-30-2014
-	if (nTime >= 1412035200 && nTime <= 1414627200) MaxSubsidy = 	700; // between 09-30-2014 and 10-30-2014
-	if (nTime >= 1414627200 && nTime <= 1417305600) MaxSubsidy = 	650; // between 10-30-2014 and 11-30-2014
-	if (nTime >= 1417305600 && nTime <= 1419897600) MaxSubsidy = 	600; // between 11-30-2014 and 12-30-2014
-	if (nTime >= 1419897600 && nTime <= 1422576000) MaxSubsidy = 	500; // between 12-30-2014 and 01-30-2015
-	if (nTime >= 1422576000 && nTime <= 1425254400) MaxSubsidy = 	400; // between 01-30-2015 and 02-30-2015
-	if (nTime >= 1425254400 && nTime <= 1427673600) MaxSubsidy = 	300; // between 02-30-2015 and 03-30-2015
-	if (nTime >= 1427673600 && nTime <= 1430352000) MaxSubsidy = 	200; // between 03-30-2015 and 04-30-2015
-	if (nTime >= 1430352000 && nTime <= 1432944000) MaxSubsidy = 	100; // between 04-30-2015 and 05-30-2015
-	if (nTime >= 1432944000 && nTime <= 1435622400) MaxSubsidy = 	50; // between 05-30-2015 and 06-30-2015
-	if (nTime >  1435622400)                        MaxSubsidy = 	30; // after   06-30-2015
-	return MaxSubsidy;
+	int MaxSubsidy = 500;
+    if (nTime >= 1410393600 && nTime <= 1414627200) MaxSubsidy = 	500; // between inception and  10-30-2014
+	if (nTime >= 1414627200 && nTime <= 1417305600) MaxSubsidy = 	400; // between 10-30-2014 and 11-30-2014
+	if (nTime >= 1417305600 && nTime <= 1419897600) MaxSubsidy = 	300; // between 11-30-2014 and 12-30-2014
+	if (nTime >= 1419897600 && nTime <= 1422576000) MaxSubsidy = 	250; // between 12-30-2014 and 01-30-2015
+	if (nTime >= 1422576000 && nTime <= 1425254400) MaxSubsidy = 	200; // between 01-30-2015 and 02-28-2015
+	if (nTime >= 1425254400 && nTime <= 1427673600) MaxSubsidy = 	150; // between 02-28-2015 and 03-30-2015
+	if (nTime >= 1427673600 && nTime <= 1430352000) MaxSubsidy = 	100; // between 03-30-2015 and 04-30-2015
+	if (nTime >= 1430352000 && nTime <= 1432944000) MaxSubsidy = 	50;  // between 04-30-2015 and 05-30-2015
+	if (nTime > 1432944000) MaxSubsidy = 	5; // from  05-30-2015 forever
+    return MaxSubsidy;
 
 }
 
 int64_t GetCoinYearReward(int64_t nTime)
 {
 	// Gridcoin Global Interest Rate Schedule
-	int64_t INTEREST = 0; 
-	if (nTime <  1409421299)                        INTEREST = 	12 * CENT; // 12% before  08-30-2014
-	//Between 9-04-2014 and 9-12-2014:
-	if (nTime >= 1409421299 && nTime <= 1409788800) INTEREST =  50 * CENT; // 50% between 09-04-2014 and 09-05-2014;
-	if (nTime >= 1409788800 && nTime <= 1409875200) INTEREST =  40 * CENT; // 40% between 09-05-2014 and 09-06-2014;
-	if (nTime >= 1409875200 && nTime <= 1409961600) INTEREST =  35 * CENT; // 35% between 09-06-2014 and 09-07-2014;
-	if (nTime >= 1409961600 && nTime <= 1410048000) INTEREST =  30 * CENT; // 30% between 09-07-2014 and 09-08-2014;
-	if (nTime >= 1410048000 && nTime <= 1410134400) INTEREST =  25 * CENT; // 25% between 09-08-2014 and 09-09-2014;
-	if (nTime >= 1410134400 && nTime <= 1410307200) INTEREST =  20 * CENT; // 20% between 09-09-2014 and 09-10-2014;
-	if (nTime >= 1410307200 && nTime <= 1410393600) INTEREST =  15 * CENT; // 15% between 09-10-2014 and 09-11-2014;
-	// Back to Standard Schedule
+	int64_t INTEREST = 9;
+   	if (nTime >= 1410393600 && nTime <= 1414627200) INTEREST = 	 9 * CENT; // 9% between inception and 10-30-2014
+	if (nTime >= 1414627200 && nTime <= 1417305600) INTEREST = 	 8 * CENT; // 09% between 10-30-2014 and 11-30-2014
+	if (nTime >= 1417305600 && nTime <= 1419897600) INTEREST = 	 7 * CENT; // 08% between 11-30-2014 and 12-30-2014
+	if (nTime >= 1419897600 && nTime <= 1422576000) INTEREST = 	 6 * CENT; // 07% between 12-30-2014 and 01-30-2015
+	if (nTime >= 1422576000 && nTime <= 1425254400) INTEREST = 	 5 * CENT; // 06% between 01-30-2015 and 02-30-2015
+	if (nTime >= 1425254400 && nTime <= 1427673600) INTEREST = 	 4 * CENT; // 05% between 02-30-2015 and 03-30-2015
+	if (nTime >= 1427673600 && nTime <= 1430352000) INTEREST = 	 3 * CENT; // 04% between 03-30-2015 and 04-30-2015
+	if (nTime >= 1430352000 && nTime <= 1432944000) INTEREST = 	 2 * CENT; // 03% between 04-30-2015 and 05-30-2015
+	if (nTime > 1432944000) INTEREST = 	 1 * CENT; // 02% from 05-30-2015 forever
 
-	if (nTime >= 1410393600 && nTime <= 1412035200) INTEREST = 	11 * CENT; // 11% between 09-11-2014 and 09-30-2014
-	if (nTime >= 1412035200 && nTime <= 1414627200) INTEREST = 	10 * CENT; // 10% between 09-30-2014 and 10-30-2014
-	if (nTime >= 1414627200 && nTime <= 1417305600) INTEREST = 	 9 * CENT; // 09% between 10-30-2014 and 11-30-2014
-	if (nTime >= 1417305600 && nTime <= 1419897600) INTEREST = 	 8 * CENT; // 08% between 11-30-2014 and 12-30-2014
-	if (nTime >= 1419897600 && nTime <= 1422576000) INTEREST = 	 7 * CENT; // 07% between 12-30-2014 and 01-30-2015
-	if (nTime >= 1422576000 && nTime <= 1425254400) INTEREST = 	 6 * CENT; // 06% between 01-30-2015 and 02-30-2015
-	if (nTime >= 1425254400 && nTime <= 1427673600) INTEREST = 	 5 * CENT; // 05% between 02-30-2015 and 03-30-2015
-	if (nTime >= 1427673600 && nTime <= 1430352000) INTEREST = 	 4 * CENT; // 04% between 03-30-2015 and 04-30-2015
-	if (nTime >= 1430352000 && nTime <= 1432944000) INTEREST = 	 3 * CENT; // 03% between 04-30-2015 and 05-30-2015
-	if (nTime >= 1432944000 && nTime <= 1435622400) INTEREST = 	 2 * CENT; // 02% between 05-30-2015 and 06-30-2015
-	if (nTime >  1435622400)                        INTEREST = 	 1 * CENT; // 01% after   06-30-2015
 	return INTEREST;
 }
 
 double GetMagnitudeMultiplier(int64_t nTime)
 {
 	// Gridcoin Global Resarch Subsidy Multiplier Schedule
-	double magnitude_multiplier=0;
-	if (nTime <  1409421299)                        magnitude_multiplier =  5; //  5* before  08-30-2014
-	//Between 9-4-2014 and 9-12-2014:
-	if (nTime >= 1409421299 && nTime <= 1409788800) magnitude_multiplier =  11; // 11* between 09-04-2014 and 09-05-2014;
-	if (nTime >= 1409788800 && nTime <= 1409875200) magnitude_multiplier =  10; // 10* between 09-05-2014 and 09-06-2014;
-	if (nTime >= 1409875200 && nTime <= 1409961600) magnitude_multiplier =   9; // 09* between 09-06-2014 and 09-07-2014;
-	if (nTime >= 1409961600 && nTime <= 1410048000) magnitude_multiplier =   8; // 08* between 09-07-2014 and 09-08-2014;
-	if (nTime >= 1410048000 && nTime <= 1410134400) magnitude_multiplier =   7; // 07* between 09-08-2014 and 09-09-2014;
-	if (nTime >= 1410134400 && nTime <= 1410307200) magnitude_multiplier =   6; // 06* between 09-09-2014 and 09-10-2014;
-	if (nTime >= 1410307200 && nTime <= 1410393600) magnitude_multiplier =   5; // 05* between 09-10-2014 and 09-11-2014;
-	// Back to Standard Schedule
-
-	if (nTime >= 1410393600 && nTime <= 1412035200) magnitude_multiplier =  4; //  4* between 09-01-2014 and 09-30-2014
-	if (nTime >= 1412035200 && nTime <= 1414627200) magnitude_multiplier =  3; //  3* between 09-30-2014 and 10-30-2014
-	if (nTime >= 1414627200 && nTime <= 1417305600) magnitude_multiplier =  2; //  2* between 10-30-2014 and 11-30-2014
-	if (nTime >= 1417305600 && nTime <= 1419897600) magnitude_multiplier =  1; //  1* between 11-30-2014 and 12-30-2014
-	if (nTime >= 1419897600 && nTime <= 1422576000) magnitude_multiplier = .9; // .9* between 12-30-2014 and 01-30-2015
-	if (nTime >= 1422576000 && nTime <= 1425254400) magnitude_multiplier = .8; // .8* between 01-30-2015 and 02-30-2015
-	if (nTime >= 1425254400 && nTime <= 1427673600) magnitude_multiplier = .7; // .7* between 02-30-2015 and 03-30-2015
-	if (nTime >= 1427673600 && nTime <= 1430352000) magnitude_multiplier = .6; // .6* between 03-30-2015 and 04-30-2015
-	if (nTime >= 1430352000 && nTime <= 1432944000) magnitude_multiplier = .5; // .5* between 04-30-2015 and 05-30-2015
-	if (nTime >= 1432944000 && nTime <= 1435622400) magnitude_multiplier = .4; // .4* between 05-30-2015 and 06-30-2015
-	if (nTime >  1435622400)                        magnitude_multiplier = .3; // .3* after   06-30-2015
+	double magnitude_multiplier = 2; 
+	if (nTime >= 1410393600 && nTime <= 1414627200) magnitude_multiplier =  2;   //  between inception and 10-30-2014
+	if (nTime >= 1414627200 && nTime <= 1417305600) magnitude_multiplier =  1.5; //  between 10-30-2014 and 11-30-2014
+	if (nTime >= 1417305600 && nTime <= 1419897600) magnitude_multiplier =  1;   //   between 11-30-2014 and 12-30-2014
+	if (nTime >= 1419897600 && nTime <= 1422576000) magnitude_multiplier = .9;   // .9* between 12-30-2014 and 01-30-2015
+	if (nTime >= 1422576000 && nTime <= 1425254400) magnitude_multiplier = .8;   // .8* between 01-30-2015 and 02-30-2015
+	if (nTime >= 1425254400 && nTime <= 1427673600) magnitude_multiplier = .7;   // .7* between 02-30-2015 and 03-30-2015
+	if (nTime >= 1427673600 && nTime <= 1430352000) magnitude_multiplier = .6;   // .6* between 03-30-2015 and 04-30-2015
+	if (nTime >= 1430352000 && nTime <= 1432944000) magnitude_multiplier = .45;  // .45* between 04-30-2015 and 05-30-2015
+	if (nTime > 1432944000) magnitude_multiplier = .3; // .3* from  05-30-2015 forever
 	return magnitude_multiplier;
 }
 
@@ -2570,7 +2534,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	//Grandfather
 
 	double mint = pindex->nMint/COIN;
-	if (pindex->nHeight > 4800 && IsProofOfStake())
+	if (pindex->nHeight > 5000 && IsProofOfStake())
 	{
 		if (IsLockTimeVeryRecent(nTime))
 		{
@@ -3323,7 +3287,10 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock)
     // Limited duplicity on stake: prevents block flood attack
     // Duplicate stake allowed only when there is orphan child block
     if (pblock->IsProofOfStake() && setStakeSeen.count(pblock->GetProofOfStake()) && !mapOrphanBlocksByPrev.count(hash) && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
+	{
+		MilliSleep(1);
         return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for block %s", pblock->GetProofOfStake().first.ToString().c_str(), pblock->GetProofOfStake().second, hash.ToString().c_str());
+	}
 
     CBlockIndex* pcheckpoint = Checkpoints::GetLastSyncCheckpoint();
     if (pcheckpoint && pblock->hashPrevBlock != hashBestChain && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
@@ -3375,9 +3342,14 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock)
             // Limited duplicity on stake: prevents block flood attack
             // Duplicate stake allowed only when there is orphan child block
             if (setStakeSeenOrphan.count(pblock->GetProofOfStake()) && !mapOrphanBlocksByPrev.count(hash) && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
+			{
+				MilliSleep(1);
                 return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for orphan block %s", pblock->GetProofOfStake().first.ToString().c_str(), pblock->GetProofOfStake().second, hash.ToString().c_str());
+			}
             else
+			{
                 setStakeSeenOrphan.insert(pblock->GetProofOfStake());
+			}
         }
         CBlock* pblock2 = new CBlock(*pblock);
         mapOrphanBlocks.insert(make_pair(hash, pblock2));

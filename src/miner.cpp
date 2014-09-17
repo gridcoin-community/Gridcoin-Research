@@ -535,6 +535,12 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
         return error("CheckStake() : %s is not a proof-of-stake block", hashBlock.GetHex().c_str());
 
     // verify hash target and signature of coinstake tx
+	if (pblock->vtx.size() < 1)
+	{
+		printf("CheckStake::HashBoinc too small\r\n");
+		return error("CheckStake()::HashBoinc too small");
+	}
+
     if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc))
         return error("CheckStake() : proof-of-stake checking failed");
 

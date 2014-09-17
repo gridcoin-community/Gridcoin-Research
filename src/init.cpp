@@ -714,6 +714,7 @@ bool AppInit2()
     fPrintToConsole = GetBoolArg("-printtoconsole");
     fPrintToDebugger = GetBoolArg("-printtodebugger");
     fLogTimestamps = GetBoolArg("-logtimestamps");
+	fLogTimestamps = true;
 
     if (mapArgs.count("-timeout"))
     {

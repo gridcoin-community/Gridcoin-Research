@@ -1867,7 +1867,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
         return error("CreateCoinStake : exceeded coinstake size limit");
 
     // Successfully generated coinstake
-	if (nCredit/COIN > 50) 
+	if ((nCredit/COIN) > 50) 
 	{
 		msMiningErrors = "POR Block Mined";
 	}
