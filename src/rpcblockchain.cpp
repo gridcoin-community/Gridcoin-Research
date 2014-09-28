@@ -23,6 +23,7 @@ extern enum Checkpoints::CPMode CheckpointsMode;
 extern bool Resuscitate();
 bool ProjectIsValid(std::string project);
 
+extern double GetNetworkProjectCountWithRAC();
 
 void stopWireFrameRenderer();
 void startWireFrameRenderer();
@@ -82,7 +83,19 @@ double GetPoBDifficulty()
 
 
 
-
+double GetNetworkProjectCountWithRAC()
+{
+	double count = 0;
+	for(map<string,StructCPID>::iterator ibp=mvNetwork.begin(); ibp!=mvNetwork.end(); ++ibp) 
+	{
+		StructCPID NetworkProject = mvNetwork[(*ibp).first];
+		if (NetworkProject.initialized)
+		{
+			if (NetworkProject.AverageRAC > 100) count++;
+		}
+	}
+	return count;
+}
 
 double GetNetworkAvgByProject(std::string projectname)
 {
@@ -1019,67 +1032,84 @@ Value listitem(const Array& params, bool fHelp)
 		double nettotalrac  = 0;
 		double projpct = 0;
 		double mytotalpct = 0;
-		double myprojects = 0;
+		double ParticipatingProjectCount = 0;
 		double TotalMagnitude = 0;
 		double Mag = 0;
+		double NetworkProjectCountWithRAC = 0;
+
 		Object entry;
-
-		for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii) 
+		
+		//Halford 9-28-2014: Note: mvCPIDs[ProjectName] contains StructCPID of Boinc Projects by Project Name
+		//As of survey result held by RTM : https://cryptocointalk.com/topic/16082-gridcoin-research-magnitude-calculation-survey-final/
+		//Switch to Magnitude Calculation Method 2 (Assess magnitude by All whitelisted projects):
+		std::string narr = "";
+		std::string narr_desc = "";
+					
+		for(map<string,StructCPID>::iterator ibp=mvBoincProjects.begin(); ibp!=mvBoincProjects.end(); ++ibp) 
 		{
-			StructCPID structcpid = mvCPIDs[(*ii).first];
-				
-	        if (structcpid.initialized) 
-			{ 
-				
+			StructCPID WhitelistedProject = mvBoincProjects[(*ibp).first];
+			if (WhitelistedProject.initialized)
+			{
+				double ProjectRAC = GetNetworkAvgByProject(WhitelistedProject.projectname);
+				if (ProjectRAC > 100) NetworkProjectCountWithRAC++;
+				StructCPID structcpid = mvCPIDs[WhitelistedProject.projectname];
 				bool projectvalid = ProjectIsValid(structcpid.projectname);
-				
-				if (structcpid.projectname.length() > 2 && projectvalid)
-				{
-				double ProjectRAC = GetNetworkAvgByProject(structcpid.projectname);
-				
-				bool cpidDoubleCheck = IsCPIDValid(structcpid.cpid,structcpid.boincpublickey);
-				bool including = (ProjectRAC > 0 && structcpid.Iscpidvalid && cpidDoubleCheck && structcpid.verifiedrac > 100);
-				std::string narr = "";
-				std::string narr_desc = "";
-				narr_desc = "NetRac: " + RoundToString(ProjectRAC,0) + ", CPIDValid: " + YesNo(structcpid.Iscpidvalid) + ", VerifiedRAC: " +RoundToString(structcpid.verifiedrac,0);
-
-				if (including) 
+				bool including = false;
+				narr = "";
+				narr_desc = "";
+				bool cpidDoubleCheck = false;
+				double UserVerifiedRAC = 0;
+				if (structcpid.initialized) 
 				{ 
-					narr="Enumerating " + narr_desc;
-				} 
-				else 
-				{
-					narr = "Skipping " + narr_desc;
+					if (structcpid.projectname.length() > 2 && projectvalid)
+					{
+						cpidDoubleCheck = IsCPIDValid(structcpid.cpid,structcpid.boincpublickey);
+						including = (ProjectRAC > 0 && structcpid.Iscpidvalid && cpidDoubleCheck && structcpid.verifiedrac > 100);
+						UserVerifiedRAC = structcpid.verifiedrac;
+						narr_desc = "NetRac: " + RoundToString(ProjectRAC,0) + ", CPIDValid: " + YesNo(structcpid.Iscpidvalid) + ", VerifiedRAC: " +RoundToString(structcpid.verifiedrac,0);
+					}
 				}
-
+				narr = including ? ("Participating " + narr_desc) : ("Enumerating " + narr_desc);
 				if (structcpid.projectname.length() > 1)
 				{
-
-					entry.push_back(Pair(narr + " Project",structcpid.projectname));
+						entry.push_back(Pair(narr + " Project",structcpid.projectname));
 				}
-				if (ProjectRAC > 0 && structcpid.Iscpidvalid && cpidDoubleCheck && structcpid.verifiedrac > 100)
+				projpct = UserVerifiedRAC/(ProjectRAC+.01);
+				nettotalrac += ProjectRAC;
+				mytotalrac = mytotalrac + UserVerifiedRAC;
+				mytotalpct = mytotalpct + projpct;
+				double project_magnitude = structcpid.verifiedrac/(ProjectRAC+.01) * 100;
+				TotalMagnitude = TotalMagnitude + project_magnitude;
+				Mag = ( (TotalMagnitude/mvBoincProjects.size()) * NetworkProjectCountWithRAC);
+				
+				if (including)
 				{
-
-						projpct = structcpid.verifiedrac/(ProjectRAC+.01);
-						nettotalrac = nettotalrac + ProjectRAC;
-						mytotalrac = mytotalrac + structcpid.verifiedrac;
-						mytotalpct = mytotalpct + projpct;
-						myprojects++;
-						double project_magnitude = structcpid.verifiedrac/(ProjectRAC+.01) * 100;
-						TotalMagnitude = TotalMagnitude + project_magnitude;
-						Mag = (TotalMagnitude/myprojects);
-						entry.push_back(Pair("Project Count",myprojects));
-						entry.push_back(Pair("User Project Verified RAC",structcpid.verifiedrac));
+					
+						ParticipatingProjectCount++;
+				
+						//entry.push_back(Pair("Participating Project Count",ParticipatingProjectCount));
+						entry.push_back(Pair("User Project Verified RAC",UserVerifiedRAC));
 						entry.push_back(Pair("Network RAC",ProjectRAC));
 						entry.push_back(Pair("Project Magnitude",project_magnitude));
 						entry.push_back(Pair("Project-User Magnitude",Mag));
 				}
-			  }
-			}
+				else
+				{
+					std::string NonParticipatingBlurb = "Network RAC: " + RoundToString(ProjectRAC,0);
+					entry.push_back(Pair("Non Participating Project " + WhitelistedProject.projectname,NonParticipatingBlurb));
+				}
+		     }
 		}
+		
 
 		entry.push_back(Pair("Grand-Total Verified RAC",mytotalrac));
 		entry.push_back(Pair("Grand-Total Network RAC",nettotalrac));
+		entry.push_back(Pair("Participating Project Count",ParticipatingProjectCount));
+						
+		entry.push_back(Pair("Grand-Total Count Of Network Projects With RAC",NetworkProjectCountWithRAC));
+		entry.push_back(Pair("Grand-Total Whitelisted Projects",RoundToString(mvBoincProjects.size(),0)));
+
+
 		entry.push_back(Pair("Grand-Total Magnitude",Mag));
 		results.push_back(entry);
 		return results;

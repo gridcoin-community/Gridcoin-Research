@@ -57,6 +57,8 @@ int64_t GetMaximumBoincSubsidy(int64_t nTime);
 extern bool IsLockTimeVeryRecent(double locktime);
 
 
+double GetNetworkProjectCountWithRAC();
+
 extern double CalculatedMagnitude(int64_t locktime);
 
 
@@ -1688,20 +1690,28 @@ double CalculatedMagnitude(int64_t locktime)
 }
 
 // miner's coin base reward
-int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime)
+int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height)
 {
     int64_t nSubsidy = CalculatedMagnitude(locktime) * COIN;
     if (fDebug && GetBoolArg("-printcreation"))
         printf("GetProofOfWorkReward() : create=%s nSubsidy=%"PRId64"\n", FormatMoney(nSubsidy).c_str(), nSubsidy);
-
+	if (nSubsidy < (5*COIN)) nSubsidy=5*COIN;
+	if (height==30)
+	{
+		nSubsidy = 300000000 * COIN;
+	}
     return nSubsidy + nFees;
 }
 
 
-int64_t GetProofOfWorkMaxReward(int64_t nFees, int64_t locktime)
+int64_t GetProofOfWorkMaxReward(int64_t nFees, int64_t locktime, int64_t height)
 {
 	int64_t nSubsidy = (GetMaximumBoincSubsidy(locktime)+1) * COIN;
-	
+	if (height==30) 
+	{
+		//R.Halford: 9-22-2014: Classic Conversion to PoR Block:
+		nSubsidy = 300000000 * COIN;
+	}
     return nSubsidy + nFees;
 }
 
@@ -1775,17 +1785,15 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 	    	
 		StructCPID mag = mvMagnitudes[cpid];
 		double owed = mag.owed;
-		//double magnitude = mag.Magnitude;
 		if (owed < 0) owed = 0;
 		//Coarse Payment Rule (helps prevent sync problems):
 		if (!VerifyingBlock)
 		{
-			if (owed < 50) owed = 0;
+			if (owed < (GetMaximumBoincSubsidy(GetTime())/10)) owed = 0;
 			owed = owed/2;
 		}
 		//End of Coarse Payment Rule
-		return owed * COIN;
-		
+		return owed * COIN;	
 }
 
 
@@ -2491,7 +2499,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
     if (IsProofOfWork())
     {
-        int64_t nReward = GetProofOfWorkMaxReward(nFees,nTime);
+        int64_t nReward = GetProofOfWorkMaxReward(nFees,nTime,pindex->nHeight);
         // Check coinbase reward
         if (vtx[0].GetValueOut() > nReward)
             return DoS(50, error("ConnectBlock() : coinbase reward exceeded (actual=%"PRId64" vs calculated=%"PRId64")",
@@ -3589,41 +3597,16 @@ bool LoadBlockIndex(bool fAllowNew)
         if (!fAllowNew)
             return false;
 
-        // Genesis block
-
+        // Genesis block - Genesis2
         // MainNet:
-
-		//=====================================  Gridcoin Genesis Without HashBoinc:
-
-		/*
-		block.nTime = 1406674534 
-		block.nNonce = 696187 
-		block.GetHash = 0000042f4f3c6e9d56919a409f385b83bb4bec0e66244a4467af796c682218d9
-		CBlock(hash=0000042f4f3c6e9d56919a409f385b83bb4bec0e66244a4467af796c682218d9, ver=1, hashPrevBlock=0000000000000000000000000000000000000000000000000000000000000000, hashMerkleRoot=d545585a66567c06805bb9aa8bd6753145e925256a49644eea88df878a30d716, nTime=1406674534, nBits=1e0fffff, nNonce=696187, vtx=1, vchBlockSig=)
-			Coinbase(hash=d545585a66, nTime=1406674534, ver=1, vin.size=1, vout.size=1, nLockTime=0)
-			CTxIn(COutPoint(0000000000, 4294967295), coinbase 00012a2f372f32392f31342049737261656c20737472696b65732073796d626f6c73206f662048616d617320696e2047617a61)
-			CTxOut(empty)
-			vMerkleTree: d545585a66 
-
-
-		//Genesis With Hash Boinc in TX
-			
-		block.nTime = 1406674534 
-		block.nNonce = 696410 
-		block.GetHash = 0000026925f360c804a9b8410e656de447714d1fe39ff0de1002dcc2e457963b
-			CBlock(hash=0000026925f360c804a9b8410e656de447714d1fe39ff0de1002dcc2e457963b, ver=1, hashPrevBlock=0000000000000000000000000000000000000000000000000000000000000000, hashMerkleRoot=e795f6655a0589a9fcabb48ba5210e85674074e3043568c4574eac0d6496c1cc, nTime=1406674534, nBits=1e0fffff, nNonce=696410, vtx=1, vchBlockSig=)
-			Coinbase(hash=e795f6655a, nTime=1406674534, ver=1, vin.size=1, vout.size=1, nLockTime=0)
-				CTxIn(COutPoint(0000000000, 4294967295), coinbase 00012a2f372f32392f31342049737261656c20737472696b65732073796d626f6c73206f662048616d617320696e2047617a61)
-				CTxOut(empty)
-				vMerkleTree: e795f6655a 
-				
-		*/
-
 
         const char* pszTimestamp = "7/29/14 Israel strikes symbols of Hamas in Gaza";
         CTransaction txNew;
-		//GENESIS TIME:
+		//GENESIS TIME (R&D - TESTERS WANTED THREAD):
 		txNew.nTime = 1406674534;
+		//Official Time: 10-20-2014 launch
+		//txNew.nTime = 1411437770?;
+
         txNew.vin.resize(1);
         txNew.vout.resize(1);
         txNew.vin[0].scriptSig = CScript() << 0 << CBigNum(42) << vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp));
@@ -3633,14 +3616,17 @@ bool LoadBlockIndex(bool fAllowNew)
         block.hashPrevBlock = 0;
         block.hashMerkleRoot = block.BuildMerkleTree();
         block.nVersion = 1;
-		block.nTime    = 1406674534;
-        block.nBits    = bnProofOfWorkLimit.GetCompact();
-		//Nonce with HashBoinc removed:
-        block.nNonce   = !fTestNet ? 696187 : 216178;
-		//Nonce with HashBoinc in TX :
-		block.nNonce = !fTestNet ? 696410 : 216178;
-    
+		//R&D - Testers Wanted Thread:
+		block.nTime    = !fTestNet ? 1406674534 : 1406674534;
+		//Official Launch time:
+		//block.nTime    = !fTestNet ? 1411437770 : 1411437770;
 
+        block.nBits    = bnProofOfWorkLimit.GetCompact();
+		//Nonce in R&D Testers wanted thread:
+		block.nNonce = !fTestNet ? 696410 : 231645;
+		//Nonce as of 10-20-2014:
+		//block.nNonce = !fTestNet ? 106586 : 66704;
+   
     	printf("starting Genesis Check...");
 	    // If genesis block hash does not match, then generate new genesis hash.
         if (block.GetHash() != hashGenesisBlock)  
@@ -3674,17 +3660,18 @@ bool LoadBlockIndex(bool fAllowNew)
             printf("block.GetHash = %s\n", block.GetHash().ToString().c_str());
         }
 
-        
-
-
 
         block.print();
 		
 	    //// debug print
 	
-		//GENESIS: MERKLE-ROOT Without BoincHash:
-   	    assert(block.hashMerkleRoot == uint256("0xe795f6655a0589a9fcabb48ba5210e85674074e3043568c4574eac0d6496c1cc"));
+		//GENESIS: MERKLE-ROOT: R&D:
+		uint256 merkle_root = uint256("0xe795f6655a0589a9fcabb48ba5210e85674074e3043568c4574eac0d6496c1cc");
 
+		//Genesis: Official Merkle-Root:
+		//uint256 merkle_root = uint256("0x313aaf64f19d27ec26e59373e418151ca49393a8bab5409a7a40a5cd86f5e1dc");
+		assert(block.hashMerkleRoot == merkle_root);
+		   	    
         assert(block.GetHash() == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
         assert(block.CheckBlock());
 
@@ -4040,9 +4027,7 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 			structMagnitude.payments = structMagnitude.payments + mint;
 		}
 		structMagnitude.cpid = cpid;
-		//structMagnitude.AverageRAC = structnetcpidproject.rac/structnetcpidproject.entries;
 		//Since this function can be called more than once per block (once for the solver, once for the voucher), the avg changes here:
-
 		if (bb.Magnitude > 0)
 		{
 			//printf("Adding magnitude %f for %s",bb.Magnitude,bb.cpid.c_str());
@@ -4052,14 +4037,9 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 		structMagnitude.AverageRAC = structMagnitude.rac / (structMagnitude.entries+.01);
 		if (LockTime < globalMag.LowLockTime)  globalMag.LowLockTime=LockTime;
 		if (LockTime > globalMag.HighLockTime) globalMag.HighLockTime = LockTime;
-		//mvMagnitudes[cpid] = structMagnitude;
-		//8-16-2014
-
 		structMagnitude.owed = GetOutstandingAmountOwed(cpid,LockTime);
-		
 		mvMagnitudes[cpid] = structMagnitude;
 		mvMagnitudes["global"] = globalMag;
-	
 }
 
 
@@ -4188,7 +4168,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 	}
     catch(...)
 	{
-		printf("Error while tallying network averages.\r\n");
+		printf("Error while tallying network averages. [1]\r\n");
 	}
 	return false;
 
@@ -5684,6 +5664,18 @@ void CreditCheck(std::string cpid, bool clearcache)
 						
 			int iRow = 0;
 			std::vector<std::string> vCC = split(cc.c_str(),"<project>");
+
+
+			//Clear current magnitude
+			StructCPID structMag = mvCreditNodeCPID[cpid];
+			if (structMag.initialized)
+			{
+				structMag.TotalMagnitude = 0;
+				structMag.MagnitudeCount=0;
+				structMag.Magnitude = 0;
+				mvCreditNodeCPID[cpid]=structMag;
+			}
+
 			if (vCC.size() > 1)
 			{
 				for (unsigned int i = 0; i < vCC.size(); i++)
@@ -5761,6 +5753,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 						if (!structc.initialized)
 						{
 							structc.initialized = true;
+							structc.TotalMagnitude = 0;
 							mvCreditNodeCPID.insert(map<string,StructCPID>::value_type(cpid,structc));
 						}
 						structc.cpid = cpid;
@@ -5769,7 +5762,6 @@ void CreditCheck(std::string cpid, bool clearcache)
 						structc.verifiedrac = cdbl(rac,0);
 						boost::to_lower(team);
 						structc.team = team;
-
 						structc.verifiedteam = team;
 						structc.verifiedrectime = cdbl(rectime,0);
 						structc.verifiedage = nActualTimespan;
@@ -5778,15 +5770,17 @@ void CreditCheck(std::string cpid, bool clearcache)
 
 						//	bool including = (ProjectRAC > 1 && structcpid.rac > 100 && structcpid.Iscpidvalid && cpidDoubleCheck && structcpid.verifiedrac > 100);
 			
-						if (projavg > 99 && structc.verifiedrac > 100 && structc.team == "gridcoin")
+						if (projavg > 100 && structc.verifiedrac > 100 && structc.team == "gridcoin")
 						{
-							
 							structc.verifiedTotalNetworkRAC = structc.verifiedTotalNetworkRAC + projavg;
 							double project_magnitude = 0;
 							project_magnitude=structc.verifiedrac/(projavg) * 100;
 							structc.TotalMagnitude = structc.TotalMagnitude + project_magnitude;
 							structc.MagnitudeCount++;
 							structc.Magnitude = (structc.TotalMagnitude/(structc.MagnitudeCount+.01));
+							//Halford 9-28-2014: Per Survey results, use Magnitude Calculation v2: Assess Magnitude based on all whitelisted projects
+							double WhitelistedWithRAC = GetNetworkProjectCountWithRAC();
+							structc.Magnitude = (structc.TotalMagnitude/mvBoincProjects.size()) * WhitelistedWithRAC;
 							mvCreditNodeCPID[cpid]=structc;
 							if (fDebug) printf("Adding magnitude for project %s : ProjectAvgRAC %f, User RAC %f, new Magnitude %f\r\n",
 								sProj.c_str(),

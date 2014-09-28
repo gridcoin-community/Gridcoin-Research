@@ -1533,12 +1533,11 @@ bool NewbieCompliesWithFirstTimeStakeWeightRule()
 				{
 					if (UntrustedHost.Accuracy > 9) 
 					{	
-						printf("User has a history (createPORStake) \r\n");
+						printf("UHH(createPORStake) \r\n");
 						return false; //User has a history
 					}
 				}
 			}
-			//if (GlobalCPUMiningCPID.Magnitude < 1.1) return false; //Block magnitude too low
 			printf("Newbie complies with first time stakeweight rule.\r\n");
 			return true;
 		}
@@ -1685,8 +1684,29 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     int64_t nCredit = 0;
     CScript scriptPubKeyKernel;
     CTxDB txdb("r");
-	MiningCPID miningcpid = GetNextProject();
-	std::string hashBoinc = SerializeBoincBlock(miningcpid);
+	MiningCPID miningcpid;
+	std::string hashBoinc = "";
+
+	try
+	{
+		 miningcpid = GetNextProject();
+		 hashBoinc = SerializeBoincBlock(miningcpid);
+	}
+	catch (std::exception &e) 
+	{
+	    printf("Error while retrieving next project\r\n");
+		MilliSleep(500);
+		return false;
+	}
+    catch(...)
+	{
+		printf("Error while retrieving next project[1].\r\n");
+		MilliSleep(500);
+		return false;
+	}
+
+
+
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
     {
         CTxIndex txindex;

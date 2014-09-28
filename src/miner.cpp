@@ -403,7 +403,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		pblock->vtx[0].hashBoinc = hashBoinc;
 
         if (!fProofOfStake)
-            pblock->vtx[0].vout[0].nValue = GetProofOfWorkReward(nFees,GetTime());
+            pblock->vtx[0].vout[0].nValue = GetProofOfWorkReward(nFees,GetTime(),nHeight);
 
         if (pFees)
             *pFees = nFees;

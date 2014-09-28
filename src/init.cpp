@@ -240,7 +240,6 @@ void InitializeBoincProjects()
 				std::vector<std::string> vProject = split(proj,"|");
 				std::string mainProject = vProject[1];
 				boost::to_lower(mainProject);
-
 				StructCPID structcpid;
 				mvBoincProjects.insert(map<string,StructCPID>::value_type(mainProject,structcpid));
 				structcpid = mvBoincProjects[mainProject];

@@ -53,16 +53,15 @@ inline bool MoneyRange(int64_t nValue) { return (nValue >= 0 && nValue <= MAX_MO
 static const unsigned int LOCKTIME_THRESHOLD = 500000000; // Tue Nov  5 00:53:20 1985 UTC
 
 
-//Gridcoin:  Genesis1 with HashBoinc Removed:
-//static const uint256 hashGenesisBlock("0x0000042f4f3c6e9d56919a409f385b83bb4bec0e66244a4467af796c682218d9");
-//Genesis with HashBoinc in TX:
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Gridcoin - Genesis1 - MainNet - Used for R&D until 10-20-2014:
 static const uint256 hashGenesisBlock("0x0000026925f360c804a9b8410e656de447714d1fe39ff0de1002dcc2e457963b");
-
+//Genesis - MainNet - Production Genesis: as of 10-20-2014:
+//static const uint256 hashGenesisBlock("0x");
 //TestNet Genesis:
-static const uint256 hashGenesisBlockTestNet("0x0000724595fb3b9609d441cbfb9577615c292abf07d996d3edabc48de843642d");
-
-inline bool IsProtocolV2(int nHeight) { return nHeight > 350000; }
-
+static const uint256 hashGenesisBlockTestNet("0x");
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+inline bool IsProtocolV2(int nHeight) { return nHeight > 3500000; }
 
 inline int64_t PastDrift(int64_t nTime, int nHeight)   { return IsProtocolV2(nHeight) ? nTime      : nTime - 10 * 60; }
 inline int64_t FutureDrift(int64_t nTime, int nHeight) { return IsProtocolV2(nHeight) ? nTime + 15 : nTime + 10 * 60; }
@@ -152,7 +151,7 @@ bool LoadExternalBlockFile(FILE* fileIn);
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfStake);
-int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime);
+int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height);
 int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, bool VerifyingBlock,int64_t locktime);
 
 unsigned int ComputeMinWork(unsigned int nBase, int64_t nTime);
