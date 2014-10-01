@@ -1066,6 +1066,7 @@ Value listitem(const Array& params, bool fHelp)
 						cpidDoubleCheck = IsCPIDValid(structcpid.cpid,structcpid.boincpublickey);
 						including = (ProjectRAC > 0 && structcpid.Iscpidvalid && cpidDoubleCheck && structcpid.verifiedrac > 100);
 						UserVerifiedRAC = structcpid.verifiedrac;
+						if (UserVerifiedRAC < 0) UserVerifiedRAC=0;
 						narr_desc = "NetRac: " + RoundToString(ProjectRAC,0) + ", CPIDValid: " + YesNo(structcpid.Iscpidvalid) + ", VerifiedRAC: " +RoundToString(structcpid.verifiedrac,0);
 					}
 				}
@@ -1078,7 +1079,7 @@ Value listitem(const Array& params, bool fHelp)
 				nettotalrac += ProjectRAC;
 				mytotalrac = mytotalrac + UserVerifiedRAC;
 				mytotalpct = mytotalpct + projpct;
-				double project_magnitude = structcpid.verifiedrac/(ProjectRAC+.01) * 100;
+				double project_magnitude = UserVerifiedRAC/(ProjectRAC+.01) * 100;
 				TotalMagnitude = TotalMagnitude + project_magnitude;
 				Mag = ( (TotalMagnitude/mvBoincProjects.size()) * NetworkProjectCountWithRAC);
 				

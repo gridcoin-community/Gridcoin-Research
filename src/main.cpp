@@ -5673,6 +5673,8 @@ void CreditCheck(std::string cpid, bool clearcache)
 				structMag.TotalMagnitude = 0;
 				structMag.MagnitudeCount=0;
 				structMag.Magnitude = 0;
+				structMag.verifiedTotalRAC = 0;
+					
 				mvCreditNodeCPID[cpid]=structMag;
 			}
 
@@ -5765,7 +5767,10 @@ void CreditCheck(std::string cpid, bool clearcache)
 						structc.verifiedteam = team;
 						structc.verifiedrectime = cdbl(rectime,0);
 						structc.verifiedage = nActualTimespan;
-						structc.verifiedTotalRAC = structc.verifiedTotalRAC + cdbl(rac,0);
+						if (cdbl(rac,0) > 0)
+						{
+							structc.verifiedTotalRAC = structc.verifiedTotalRAC + cdbl(rac,0);
+						}
 						projavg=GetNetworkAvgByProject(sProj);
 
 						//	bool including = (ProjectRAC > 1 && structcpid.rac > 100 && structcpid.Iscpidvalid && cpidDoubleCheck && structcpid.verifiedrac > 100);
@@ -5774,7 +5779,9 @@ void CreditCheck(std::string cpid, bool clearcache)
 						{
 							structc.verifiedTotalNetworkRAC = structc.verifiedTotalNetworkRAC + projavg;
 							double project_magnitude = 0;
-							project_magnitude=structc.verifiedrac/(projavg) * 100;
+							double UserVerifiedRAC = structc.verifiedrac;
+							if (UserVerifiedRAC < 0) UserVerifiedRAC = 0;
+							project_magnitude = UserVerifiedRAC/(projavg+.01) * 100;
 							structc.TotalMagnitude = structc.TotalMagnitude + project_magnitude;
 							structc.MagnitudeCount++;
 							structc.Magnitude = (structc.TotalMagnitude/(structc.MagnitudeCount+.01));
