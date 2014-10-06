@@ -87,12 +87,12 @@ CBigNum bnProofOfStakeLimit(~uint256(0) >> 20);
 CBigNum bnProofOfStakeLimitV2(~uint256(0) >> 48);
 CBigNum bnProofOfWorkLimitTestNet(~uint256(0) >> 16);
 
-unsigned int nStakeMinAge = 8 * 60 * 60; // 8 hours
+unsigned int nStakeMinAge = 4 * 60 * 60; // 4 hours
 unsigned int nStakeMaxAge = -1; // unlimited
 unsigned int nModifierInterval = 10 * 60; // time to elapse before new modifier is computed
 
 // Gridcoin:
-int nCoinbaseMaturity = 10;
+int nCoinbaseMaturity = 100;
 CBlockIndex* pindexGenesisBlock = NULL;
 int nBestHeight = -1;
 
@@ -115,7 +115,7 @@ map<uint256, set<uint256> > mapOrphanTransactionsByPrev;
 // Constant stuff for coinbase transactions we create:
 CScript COINBASE_FLAGS;
 
-const string strMessageMagic = "GridCoin Signed Message:\n";
+const string strMessageMagic = "Gridcoin Signed Message:\n";
 
 // Settings
 int64_t nTransactionFee = MIN_TX_FEE;
@@ -1695,10 +1695,11 @@ int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height)
     int64_t nSubsidy = CalculatedMagnitude(locktime) * COIN;
     if (fDebug && GetBoolArg("-printcreation"))
         printf("GetProofOfWorkReward() : create=%s nSubsidy=%"PRId64"\n", FormatMoney(nSubsidy).c_str(), nSubsidy);
-	if (nSubsidy < (5*COIN)) nSubsidy=5*COIN;
-	if (height==30)
+	if (nSubsidy < (30*COIN)) nSubsidy=30*COIN;
+	//Gridcoin PoW to PoR conversion block:
+	if (height==10)
 	{
-		nSubsidy = 300000000 * COIN;
+		nSubsidy = 310000000 * COIN;
 	}
     return nSubsidy + nFees;
 }
@@ -1707,10 +1708,10 @@ int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height)
 int64_t GetProofOfWorkMaxReward(int64_t nFees, int64_t locktime, int64_t height)
 {
 	int64_t nSubsidy = (GetMaximumBoincSubsidy(locktime)+1) * COIN;
-	if (height==30) 
+	if (height==10) 
 	{
 		//R.Halford: 9-22-2014: Classic Conversion to PoR Block:
-		nSubsidy = 300000000 * COIN;
+		nSubsidy = 310000000 * COIN;
 	}
     return nSubsidy + nFees;
 }

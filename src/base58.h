@@ -277,7 +277,7 @@ public:
     enum
     {
 		//Base58Gridcoin:
-        PUBKEY_ADDRESS = 37, // Gridcoin addresses start with G  37
+        PUBKEY_ADDRESS = 62, // Gridcoin Research addresses start with R - 62,  (Classic Starts with G: 37)
         SCRIPT_ADDRESS = 85,
         PUBKEY_ADDRESS_TEST = 111,
         SCRIPT_ADDRESS_TEST = 196,

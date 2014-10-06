@@ -224,7 +224,7 @@ void InitializeBoincProjects()
 		boinc_projects[74] = "http://lhcathome2.cern.ch/test4theory|Test4Theory";
 		boinc_projects[75] = "http://mindmodeling.org/|MindModeling@Home";
         boinc_projects[76] = "http://www.gridcoin.us/|INVESTOR"; //This is a general project Used for Inflation Only Subsidies
-
+		boinc_projects[77] = "http://qcn.stanford.edu/sensor/|Quake-Catcher Network Sensor Monitoring";
 
 
 
