@@ -439,7 +439,9 @@ std::string GetGlobalStatus()
 	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
 	status = "Blocks: " + RoundToString((double)nBestHeight,0) + "; PoR Difficulty: " + RoundToString(PORDiff,6) + "; Net Hp/s: " + RoundToString(GetPoSKernelPS2(),6)  
 		+ "<br>Stake Weight: " +  RoundToString(weight,0) + "; Status: " + msMiningErrors + "; Boinc Magnitude: " + RoundToString(boincmagnitude,3) 
-		+ "<br>CPU Project: " + msMiningProject;
+		+ "<br>CPU Project: " + msMiningProject 
+		+ "<br>&nbsp;";
+	//The last line break is for Windows 8.1 Huge Toolbar
 
 	msGlobalStatus = status;
 	return status;
@@ -1696,10 +1698,10 @@ int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height)
     if (fDebug && GetBoolArg("-printcreation"))
         printf("GetProofOfWorkReward() : create=%s nSubsidy=%"PRId64"\n", FormatMoney(nSubsidy).c_str(), nSubsidy);
 	if (nSubsidy < (30*COIN)) nSubsidy=30*COIN;
-	//Gridcoin PoW to PoR conversion block:
+	//Gridcoin Foundation Block:
 	if (height==10)
 	{
-		nSubsidy = 310000000 * COIN;
+		nSubsidy =340569880 * COIN;
 	}
     return nSubsidy + nFees;
 }
@@ -1710,8 +1712,8 @@ int64_t GetProofOfWorkMaxReward(int64_t nFees, int64_t locktime, int64_t height)
 	int64_t nSubsidy = (GetMaximumBoincSubsidy(locktime)+1) * COIN;
 	if (height==10) 
 	{
-		//R.Halford: 9-22-2014: Classic Conversion to PoR Block:
-		nSubsidy = 310000000 * COIN;
+		//R.Halford: 10-11-2014: Gridcoin Foundation Block:
+		nSubsidy = 340569880 * COIN;
 	}
     return nSubsidy + nFees;
 }
@@ -2543,7 +2545,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	//Grandfather
 
 	double mint = pindex->nMint/COIN;
-	if (pindex->nHeight > 5000 && IsProofOfStake())
+	if (pindex->nHeight > 2000 && IsProofOfStake())
 	{
 		if (IsLockTimeVeryRecent(nTime))
 		{
@@ -3163,7 +3165,7 @@ bool CBlock::AcceptBlock()
         return DoS(100, error("AcceptBlock() : reject proof-of-work at height %d", nHeight));
 
 	//Grandfather
-	if (nHeight > 1)
+	if (nHeight > 2000)
 	{
 		// Check timestamp
 		if (GetBlockTime() > FutureDrift(GetAdjustedTime(), nHeight))
@@ -3599,12 +3601,28 @@ bool LoadBlockIndex(bool fAllowNew)
             return false;
 
         // Genesis block - Genesis2
-        // MainNet:
+        // MainNet - Official New Genesis Block:
+		////////////////////////////////////////
+		/*
+		10/11/14 13:40:20 block.nTime = 1413033777 
+	    10/11/14 13:40:20 block.nNonce = 130208 
+        10/11/14 13:40:20 block.GetHash = 000005a247b397eadfefa58e872bc967c2614797bdc8d4d0e6b09fea5c191599
+        10/11/14 13:40:20 CBlock(hash=000005a247b397eadfefa58e872bc967c2614797bdc8d4d0e6b09fea5c191599, ver=1,
+		hashPrevBlock=0000000000000000000000000000000000000000000000000000000000000000, 
+		hashMerkleRoot=5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f, nTime=1413033777, nBits=1e0fffff, nNonce=130208, vtx=1, vchBlockSig=)
+        10/11/14 13:40:20   Coinbase(hash=5109d5782a, nTime=1413033777, ver=1, vin.size=1, vout.size=1, nLockTime=0)
+        CTxIn(COutPoint(0000000000, 4294967295), coinbase 00012a4531302f31312f313420416e6472656120526f73736920496e647573747269616c20486561742076696e646963617465642077697468204c454e522076616c69646174696f6e)
+        CTxOut(empty)
+        vMerkleTree: 5109d5782a 
+        */
 
-        const char* pszTimestamp = "7/29/14 Israel strikes symbols of Hamas in Gaza";
+//        const char* pszTimestamp = "7/29/14 Israel strikes symbols of Hamas in Gaza";
+
+		const char* pszTimestamp = "10/11/14 Andrea Rossi Industrial Heat vindicated with LENR validation";
+
         CTransaction txNew;
 		//GENESIS TIME (R&D - TESTERS WANTED THREAD):
-		txNew.nTime = 1406674534;
+		txNew.nTime = 1413033777;
 		//Official Time: 10-20-2014 launch
 		//txNew.nTime = 1411437770?;
 
@@ -3618,16 +3636,14 @@ bool LoadBlockIndex(bool fAllowNew)
         block.hashMerkleRoot = block.BuildMerkleTree();
         block.nVersion = 1;
 		//R&D - Testers Wanted Thread:
-		block.nTime    = !fTestNet ? 1406674534 : 1406674534;
+		block.nTime    = !fTestNet ? 1413033777 : 1406674534;
 		//Official Launch time:
 		//block.nTime    = !fTestNet ? 1411437770 : 1411437770;
 
         block.nBits    = bnProofOfWorkLimit.GetCompact();
 		//Nonce in R&D Testers wanted thread:
-		block.nNonce = !fTestNet ? 696410 : 231645;
-		//Nonce as of 10-20-2014:
-		//block.nNonce = !fTestNet ? 106586 : 66704;
-   
+		block.nNonce = !fTestNet ? 130208 : 1;
+		
     	printf("starting Genesis Check...");
 	    // If genesis block hash does not match, then generate new genesis hash.
         if (block.GetHash() != hashGenesisBlock)  
@@ -3666,13 +3682,9 @@ bool LoadBlockIndex(bool fAllowNew)
 		
 	    //// debug print
 	
-		//GENESIS: MERKLE-ROOT: R&D:
-		uint256 merkle_root = uint256("0xe795f6655a0589a9fcabb48ba5210e85674074e3043568c4574eac0d6496c1cc");
-
-		//Genesis: Official Merkle-Root:
-		//uint256 merkle_root = uint256("0x313aaf64f19d27ec26e59373e418151ca49393a8bab5409a7a40a5cd86f5e1dc");
+		//GENESIS3: Official Merkle Root
+		uint256 merkle_root = uint256("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f");
 		assert(block.hashMerkleRoot == merkle_root);
-		   	    
         assert(block.GetHash() == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
         assert(block.CheckBlock());
 

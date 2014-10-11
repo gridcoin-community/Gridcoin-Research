@@ -226,18 +226,14 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
         }
        
 
-		//8-12-2014
 		std::string samt = FormatMoney(wtx.vout[0].nValue);
 		double dblAmt = dblFromAmount(wtx.vout[0].nValue);
-		/*
+		/* Reserved for smart contracts.
 		printf("tx creation %s real %f  val  %f" ,samt.c_str(),wtx.vout[0].nValue,dblAmt);
-
 		if (dblAmt == .12315 || dblAmt == .12325 || dblAmt == .12335 || dblAmt == .12335 || dblAmt == .12345 || (dblAmt <  0.122980  && dblAmt >  0.122050) || dblAmt < 5)
 		{
-
 			wtx.hashBoinc="code";
 			printf("Setting hashboinc to code\r\n");
-
 		}
 		*/
 

@@ -27,7 +27,7 @@ class CRequestTracker;
 class CNode;
 class CTxMemPool;
 
-static const int LAST_POW_BLOCK = 1999;
+static const int LAST_POW_BLOCK = 2050;
 
 /** The maximum allowed size for a serialized block, in bytes (network rule) */
 static const unsigned int MAX_BLOCK_SIZE = 1000000;
@@ -55,9 +55,11 @@ static const unsigned int LOCKTIME_THRESHOLD = 500000000; // Tue Nov  5 00:53:20
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //Gridcoin - Genesis1 - MainNet - Used for R&D until 10-20-2014:
-static const uint256 hashGenesisBlock("0x0000026925f360c804a9b8410e656de447714d1fe39ff0de1002dcc2e457963b");
+//static const uint256 hashGenesisBlock("0x0000026925f360c804a9b8410e656de447714d1fe39ff0de1002dcc2e457963b");
+
 //Genesis - MainNet - Production Genesis: as of 10-20-2014:
-//static const uint256 hashGenesisBlock("0x");
+static const uint256 hashGenesisBlock("0x000005a247b397eadfefa58e872bc967c2614797bdc8d4d0e6b09fea5c191599");
+
 //TestNet Genesis:
 static const uint256 hashGenesisBlockTestNet("0x");
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
