@@ -437,10 +437,19 @@ std::string GetGlobalStatus()
 	nBoincUtilization = boincmagnitude; //Legacy Support for the about screen
 	double weight = nWeight;
 	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+	std::string boost_version = "";
+	std::ostringstream sBoost;
+	sBoost << boost_version  << "Using Boost "     
+          << BOOST_VERSION / 100000     << "."  // major version
+          << BOOST_VERSION / 100 % 1000 << "."  // minior version
+          << BOOST_VERSION % 100                // patch level
+          << "";
+
 	status = "Blocks: " + RoundToString((double)nBestHeight,0) + "; PoR Difficulty: " + RoundToString(PORDiff,6) + "; Net Hp/s: " + RoundToString(GetPoSKernelPS2(),6)  
-		+ "<br>Stake Weight: " +  RoundToString(weight,0) + "; Status: " + msMiningErrors + "; Boinc Magnitude: " + RoundToString(boincmagnitude,3) 
-		+ "<br>CPU Project: " + msMiningProject 
-		+ "<br>&nbsp;";
+		+ "<br>Stake Weight: " +  RoundToString(weight,0) + "; Status: " + msMiningErrors 
+		+ "<br>Magnitude: " + RoundToString(boincmagnitude,3) + ";CPU Project: " + msMiningProject
+		+ "<br>" + sBoost.str();
+
 	//The last line break is for Windows 8.1 Huge Toolbar
 
 	msGlobalStatus = status;
@@ -3604,28 +3613,25 @@ bool LoadBlockIndex(bool fAllowNew)
         // MainNet - Official New Genesis Block:
 		////////////////////////////////////////
 		/*
-		10/11/14 13:40:20 block.nTime = 1413033777 
-	    10/11/14 13:40:20 block.nNonce = 130208 
-        10/11/14 13:40:20 block.GetHash = 000005a247b397eadfefa58e872bc967c2614797bdc8d4d0e6b09fea5c191599
-        10/11/14 13:40:20 CBlock(hash=000005a247b397eadfefa58e872bc967c2614797bdc8d4d0e6b09fea5c191599, ver=1,
-		hashPrevBlock=0000000000000000000000000000000000000000000000000000000000000000, 
-		hashMerkleRoot=5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f, nTime=1413033777, nBits=1e0fffff, nNonce=130208, vtx=1, vchBlockSig=)
-        10/11/14 13:40:20   Coinbase(hash=5109d5782a, nTime=1413033777, ver=1, vin.size=1, vout.size=1, nLockTime=0)
-        CTxIn(COutPoint(0000000000, 4294967295), coinbase 00012a4531302f31312f313420416e6472656120526f73736920496e647573747269616c20486561742076696e646963617465642077697468204c454e522076616c69646174696f6e)
-        CTxOut(empty)
-        vMerkleTree: 5109d5782a 
-        */
+	 21:58:24 block.nTime = 1413149999 
+	10/12/14 21:58:24 block.nNonce = 1572771 
+	10/12/14 21:58:24 block.GetHash = 00000f762f698b5962aa81e38926c3a3f1f03e0b384850caed34cd9164b7f990
+	10/12/14 21:58:24 CBlock(hash=00000f762f698b5962aa81e38926c3a3f1f03e0b384850caed34cd9164b7f990, ver=1, 
+	hashPrevBlock=0000000000000000000000000000000000000000000000000000000000000000,
+	hashMerkleRoot=0bd65ac9501e8079a38b5c6f558a99aea0c1bcff478b8b3023d09451948fe841, nTime=1413149999, nBits=1e0fffff, nNonce=1572771, vtx=1, vchBlockSig=)
+	10/12/14 21:58:24   Coinbase(hash=0bd65ac950, nTime=1413149999, ver=1, vin.size=1, vout.size=1, nLockTime=0)
+    CTxIn(COutPoint(0000000000, 4294967295), coinbase 00012a4531302f31312f313420416e6472656120526f73736920496e647573747269616c20486561742076696e646963617465642077697468204c454e522076616c69646174696f6e)
+    CTxOut(empty)
+	vMerkleTree: 0bd65ac950 
 
-//        const char* pszTimestamp = "7/29/14 Israel strikes symbols of Hamas in Gaza";
+		*/
 
 		const char* pszTimestamp = "10/11/14 Andrea Rossi Industrial Heat vindicated with LENR validation";
 
         CTransaction txNew;
-		//GENESIS TIME (R&D - TESTERS WANTED THREAD):
-		txNew.nTime = 1413033777;
-		//Official Time: 10-20-2014 launch
-		//txNew.nTime = 1411437770?;
+		//GENESIS TIME
 
+		txNew.nTime = 1413033777;
         txNew.vin.resize(1);
         txNew.vout.resize(1);
         txNew.vin[0].scriptSig = CScript() << 0 << CBigNum(42) << vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp));
@@ -3638,12 +3644,8 @@ bool LoadBlockIndex(bool fAllowNew)
 		//R&D - Testers Wanted Thread:
 		block.nTime    = !fTestNet ? 1413033777 : 1406674534;
 		//Official Launch time:
-		//block.nTime    = !fTestNet ? 1411437770 : 1411437770;
-
         block.nBits    = bnProofOfWorkLimit.GetCompact();
-		//Nonce in R&D Testers wanted thread:
 		block.nNonce = !fTestNet ? 130208 : 1;
-		
     	printf("starting Genesis Check...");
 	    // If genesis block hash does not match, then generate new genesis hash.
         if (block.GetHash() != hashGenesisBlock)  

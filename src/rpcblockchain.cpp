@@ -611,6 +611,8 @@ bool xCreateNewConfigFile(std::string boinc_email)
 std::string BackupGridcoinWallet()
 {
 
+	printf("Staring Wallet Backup\r\n");
+
 	std::string filename = "grc_" + DateTimeStrFormat("%m-%d-%Y", GetTime()) + ".dat";
 	std::string filename_backup = "backup.dat";
 	
