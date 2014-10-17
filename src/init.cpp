@@ -622,9 +622,9 @@ bool AppInit2()
 
 	printf("Starting CPID thread...");
 
-	
 	LoadCPIDsInBackground();
 
+	
     nNodeLifespan = GetArg("-addrlifespan", 7);
     
 	
@@ -785,7 +785,7 @@ bool AppInit2()
 	ShrinkDebugFile();
 
     printf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
-    printf("GridCoin version %s (%s)\n", FormatFullVersion().c_str(), CLIENT_DATE.c_str());
+    printf("Gridcoin version %s (%s)\n", FormatFullVersion().c_str(), CLIENT_DATE.c_str());
     printf("Using OpenSSL version %s\n", SSLeay_version(SSLEAY_VERSION));
     if (!fLogTimestamps)
         printf("Startup time: %s\n", DateTimeStrFormat("%x %H:%M:%S", GetTime()).c_str());
@@ -794,7 +794,7 @@ bool AppInit2()
     std::ostringstream strErrors;
 
     if (fDaemon)
-        fprintf(stdout, "GridCoin server starting\n");
+        fprintf(stdout, "Gridcoin server starting\n");
 
     int64_t nStart;
 

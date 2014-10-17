@@ -45,6 +45,7 @@ namespace Checkpoints
         ( 0,      hashGenesisBlock )
 		( 40,     uint256("0x0000002c305541bceb763e6f7fce2f111cb752acf9777e64c6f02fab5ef4778c") )
 		( 50,     uint256("0x000000415ff618b8e72eda69e87dc2f2ff8798a5032babbef36b089da0ae2278") )
+		( 6000,   uint256("0x5976ff9d0da7626badf301a9e038ec05d776e5e50839e2505357512945d53b04") )
     ;
 
     // TestNet has no checkpoints
@@ -307,6 +308,8 @@ namespace Checkpoints
     {
         // Test signing a sync-checkpoint with genesis block
         CSyncCheckpoint checkpoint;
+		printf("Signing Genesis....");
+
         checkpoint.hashCheckpoint = !fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet;
         CDataStream sMsg(SER_NETWORK, PROTOCOL_VERSION);
         sMsg << (CUnsignedSyncCheckpoint)checkpoint;
@@ -320,6 +323,7 @@ namespace Checkpoints
 
         // Test signing successful, proceed
         CSyncCheckpoint::strMasterPrivKey = strPrivKey;
+		printf("Signing succeeded\r\n");
         return true;
     }
 
@@ -332,7 +336,10 @@ namespace Checkpoints
         checkpoint.vchMsg = std::vector<unsigned char>(sMsg.begin(), sMsg.end());
 
         if (CSyncCheckpoint::strMasterPrivKey.empty())
+		{
+			printf("SendSyncCheckpoint: Checkpoint Key Unavailable");
             return error("SendSyncCheckpoint: Checkpoint master key unavailable.");
+		}
         std::vector<unsigned char> vchPrivKey = ParseHex(CSyncCheckpoint::strMasterPrivKey);
         CKey key;
         key.SetPrivKey(CPrivKey(vchPrivKey.begin(), vchPrivKey.end())); // if key is not correct openssl may crash
@@ -366,10 +373,10 @@ namespace Checkpoints
     }
 }
 
-// ppcoin: sync-checkpoint master key
-const std::string CSyncCheckpoint::strMasterPubKey = "04a18357665ed7a802dcf252ef528d3dc786da38653b51d1ab8e9f4820b55aca807892a056781967315908ac205940ec9d6f2fd0a85941966971eac7e475a27826";
+  // Gridcoin: sync-checkpoint master key
 
-std::string CSyncCheckpoint::strMasterPrivKey = "";
+  const std::string CSyncCheckpoint::strMasterPubKey = "04c858f58b8231219db37e0f714e9884e78ad996ea9ac5d9f72ea969a53e37701374b6348956f3df36fdc10c1e5e4a2a6bded85894ac2f7494700a2d63a4fff772";
+  std::string CSyncCheckpoint::strMasterPrivKey = "";
 
 // ppcoin: verify signature of sync-checkpoint message
 bool CSyncCheckpoint::CheckSignature()

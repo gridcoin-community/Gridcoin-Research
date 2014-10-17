@@ -24,6 +24,7 @@ extern bool Resuscitate();
 bool ProjectIsValid(std::string project);
 
 extern double GetNetworkProjectCountWithRAC();
+int ReindexWallet();
 
 void stopWireFrameRenderer();
 void startWireFrameRenderer();
@@ -815,17 +816,29 @@ Value execute(const Array& params, bool fHelp)
 			//We must stop the node before we can do this
 			r = CreateRestorePoint();
 			//RestartGridcoin();
-
 			#endif 
 			entry.push_back(Pair("Restore Point",r));
 			results.push_back(entry);
 	}
-	else if (sItem == "resuscitate")
+	else if (sItem == "reindex")
 	{
-			bool response = Resuscitate();
-			entry.push_back(Pair("Resuscitate Result",response));
-			results.push_back(entry);
+			int r=-1;
+			#if defined(WIN32) && defined(QT_GUI)
+			
+		    ReindexWallet();
 
+			r = CreateRestorePoint();
+			#endif 
+			entry.push_back(Pair("Reindex Chain",r));
+			results.push_back(entry);
+	}
+
+	else if (sItem == "restartnetlayer")
+	{
+		    bool response=true;
+		    RestartGridcoin10();
+		 	entry.push_back(Pair("Restartnetlayer Result",response));
+			results.push_back(entry);
 	}
 	else if (sItem == "downloadblocks")
 	{
@@ -907,8 +920,7 @@ Value execute(const Array& params, bool fHelp)
 	{
 				entry.push_back(Pair("Restarting Net Layer",1));
 				RestartGridcoin10();
-
-		
+			    LoadBlockIndex(true);
 	}
 	else if (sItem == "postcpid")
 	{
@@ -926,7 +938,7 @@ Value execute(const Array& params, bool fHelp)
 			entry.push_back(Pair("Execute Encrypt result3",s1out));
 			results.push_back(entry);
 	}
-	else if (sItem == "restartnet")
+	else if (sItem == "restartnet_old")
 	{
 			printf("Restarting gridcoin's network layer;");
 			RestartGridcoin10();

@@ -602,7 +602,7 @@ void StakeMiner(CWallet *pwallet)
         {
             nLastCoinStakeSearchInterval = 0;
             fTryToSync = true;
-            MilliSleep(1000);
+            MilliSleep(5000);
             if (fShutdown)
 			{
 				printf("StakeMiner:Exiting(InitialBlockDownload)");
@@ -643,7 +643,9 @@ Begin:
 			if (Staked)
 			{
 				printf("Stake block accepted!\r\n");
-				//TallyNetworkAverages(false);
+				//Prevent Rapid Fire block creation (large investor nodes):
+		  	    SetThreadPriority(THREAD_PRIORITY_LOWEST);
+        		MilliSleep(90000);
 			}
             SetThreadPriority(THREAD_PRIORITY_LOWEST);
             MilliSleep(500);

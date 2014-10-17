@@ -81,6 +81,9 @@
 extern CWallet* pwalletMain;
 extern int64_t nLastCoinStakeSearchInterval;
 double GetPoSKernelPS();
+int ReindexWallet();
+
+double cdbl(std::string s, int place);
 
 
 std::string BackupGridcoinWallet();
@@ -122,6 +125,7 @@ void RestartGridcoin10();
 
 void HarvestCPIDs(bool cleardata);
 extern int RestartClient();
+
 extern int ReindexWallet();
 #ifdef WIN32
 QAxObject *globalcom = NULL;
@@ -1720,6 +1724,20 @@ void BitcoinGUI::timerfire()
 			}
 		}
 		}
+
+
+		if (mapArgs["-resync"] != "")
+		{
+			double resync = cdbl(mapArgs["-resync"],0);
+			if (Timer("resync", resync*6))
+			{
+				printf("Resyncing...\r\n");
+				RestartGridcoin10();
+				LoadBlockIndex(true);
+			}
+		}
+
+
 
 
         if (true)

@@ -168,6 +168,7 @@ extern bool GetTransactionFromMemPool(const uint256 &hash, CTransaction &txOut);
 extern unsigned int DiffBytes(double PoBDiff);
 extern int Races(int iMax1000);
 int ReindexWallet();
+
 std::string cached_getblocks_args = "";
 extern bool AESSkeinHash(unsigned int diffbytes, double rac, uint256 scrypthash, std::string& out_skein, std::string& out_aes512);
 std::string DefaultGetblocksCommand();
@@ -2552,9 +2553,10 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	//Gridcoin: Maintain network consensus for Magnitude & Outstanding Amount Owed by CPID  
 	
 	//Grandfather
+	int nGrandfather = 6000;
 
 	double mint = pindex->nMint/COIN;
-	if (pindex->nHeight > 2000 && IsProofOfStake())
+	if (pindex->nHeight > nGrandfather && IsProofOfStake())
 	{
 		if (IsLockTimeVeryRecent(nTime))
 		{
@@ -3149,6 +3151,8 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
 bool CBlock::AcceptBlock()
 {
     AssertLockHeld(cs_main);
+	//Grandfather:
+	int nGrandfather = 6000;
 
     if (nVersion > CURRENT_VERSION)
         return DoS(100, error("AcceptBlock() : reject unknown block version %d", nVersion));
@@ -3174,7 +3178,7 @@ bool CBlock::AcceptBlock()
         return DoS(100, error("AcceptBlock() : reject proof-of-work at height %d", nHeight));
 
 	//Grandfather
-	if (nHeight > 2000)
+	if (nHeight > nGrandfather)
 	{
 		// Check timestamp
 		if (GetBlockTime() > FutureDrift(GetAdjustedTime(), nHeight))
@@ -3230,12 +3234,17 @@ bool CBlock::AcceptBlock()
 
     bool cpSatisfies = Checkpoints::CheckSync(hash, pindexPrev);
 
-    // Check that the block satisfies synchronized checkpoint
-    if (CheckpointsMode == Checkpoints::STRICT && !cpSatisfies)
-        return error("AcceptBlock() : rejected by synchronized checkpoint");
+	//Grandfather
+	if (nHeight > nGrandfather)
+	{
+		// Check that the block satisfies synchronized checkpoint
+		if (CheckpointsMode == Checkpoints::STRICT && !cpSatisfies)
+			return error("AcceptBlock() : rejected by synchronized checkpoint");
+		if (CheckpointsMode == Checkpoints::ADVISORY && !cpSatisfies)
+			strMiscWarning = _("WARNING: synchronized checkpoint violation detected, but skipped!");
 
-    if (CheckpointsMode == Checkpoints::ADVISORY && !cpSatisfies)
-        strMiscWarning = _("WARNING: synchronized checkpoint violation detected, but skipped!");
+	}
+
 
     // Enforce rule that the coinbase starts with serialized block height
     CScript expect = CScript() << nHeight;
@@ -3416,7 +3425,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock)
     // ppcoin: if responsible for sync-checkpoint send it
     if (pfrom && !CSyncCheckpoint::strMasterPrivKey.empty())
         Checkpoints::SendSyncCheckpoint(Checkpoints::AutoSelectSyncCheckpoint());
-
+	
     return true;
 }
 

@@ -253,7 +253,7 @@ Public Class GridcoinUpgrader
         For x = 1 To 10
             Dim sDataDir As String = GRCDataDir()
             Dim sBlocks = sDataDir + "blocks"
-            Dim sChain = sDataDir + "chainstate"
+            Dim sChain = sDataDir + "txleveldb"
             Dim sDatabase = sDataDir + "database"
             Dim dBlock As New System.IO.DirectoryInfo(sBlocks)
             RemoveBlocksDir(dBlock)
@@ -261,7 +261,19 @@ Public Class GridcoinUpgrader
             RemoveBlocksDir(dChain)
             Dim dDatabase As New System.IO.DirectoryInfo(sDatabase)
             RemoveBlocksDir(dDatabase)
+            Dim y As Integer
+            'Delete the blocks File:
+            For y = 1 To 5
+                Dim sFile As String = "blk000" + Trim(y) + ".dat"
+                Dim fi As New System.IO.FileInfo(sDataDir + sFile)
+                Try
+                    fi.Delete()
 
+                Catch ex As Exception
+                    Log("Unable to delete " + ex.Message)
+                End Try
+
+            Next
 
             Dim sSnapshotBlocks = sDataDir + "snapshot\blocks"
             Dim sSnapshotChain = sDataDir + "snapshot\chainstate"
