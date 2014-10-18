@@ -119,6 +119,10 @@ Public Class Utilization
     Public Sub ReindexWallet()
         Call RestartWallet1("reindex")
     End Sub
+    Public Sub RebootClient()
+        Call RestartWallet1("reboot")
+    End Sub
+
     Public Sub DownloadBlocks()
         Log("Downloading blocks")
 

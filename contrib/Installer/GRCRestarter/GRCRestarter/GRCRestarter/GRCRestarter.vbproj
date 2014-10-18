@@ -84,6 +84,7 @@
       <DependentUpon>GridcoinUpgrader.vb</DependentUpon>
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="modGridcoin.vb" />
     <Compile Include="My Project\AssemblyInfo.vb" />
     <Compile Include="My Project\Application.Designer.vb">
       <AutoGen>True</AutoGen>
@@ -99,6 +100,12 @@
       <DependentUpon>Settings.settings</DependentUpon>
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
+    <Compile Include="WatchDog.Designer.vb">
+      <DependentUpon>WatchDog.vb</DependentUpon>
+    </Compile>
+    <Compile Include="WatchDog.vb">
+      <SubType>Form</SubType>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="GridcoinUpgrader.resx">
@@ -109,6 +116,9 @@
       <LastGenOutput>Resources.Designer.vb</LastGenOutput>
       <CustomToolNamespace>My.Resources</CustomToolNamespace>
       <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="WatchDog.resx">
+      <DependentUpon>WatchDog.vb</DependentUpon>
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>

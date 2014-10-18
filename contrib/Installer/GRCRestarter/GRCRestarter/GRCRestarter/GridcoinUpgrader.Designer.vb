@@ -104,7 +104,7 @@ Partial Class GridcoinUpgrader
         Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)
         Me.Margin = New System.Windows.Forms.Padding(4)
         Me.Name = "GridcoinUpgrader"
-        Me.Text = "Gridcoin Research - Maintenance 3.4"
+        Me.Text = "Gridcoin Research - Maintenance 3.6"
         Me.TransparencyKey = System.Drawing.Color.FromArgb(CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer))
         CType(Me.PictureBox1, System.ComponentModel.ISupportInitialize).EndInit()
         Me.ResumeLayout(False)

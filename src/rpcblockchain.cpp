@@ -22,6 +22,7 @@ extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spiri
 extern enum Checkpoints::CPMode CheckpointsMode;
 extern bool Resuscitate();
 bool ProjectIsValid(std::string project);
+int RebootClient();
 
 extern double GetNetworkProjectCountWithRAC();
 int ReindexWallet();
@@ -819,6 +820,16 @@ Value execute(const Array& params, bool fHelp)
 			#endif 
 			entry.push_back(Pair("Restore Point",r));
 			results.push_back(entry);
+	}
+	else if (sItem == "reboot")
+	{
+			int r=1;
+			#if defined(WIN32) && defined(QT_GUI)
+		    RebootClient();
+			#endif 
+			entry.push_back(Pair("RebootClient",r));
+			results.push_back(entry);
+	
 	}
 	else if (sItem == "reindex")
 	{

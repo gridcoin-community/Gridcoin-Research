@@ -82,6 +82,8 @@ extern CWallet* pwalletMain;
 extern int64_t nLastCoinStakeSearchInterval;
 double GetPoSKernelPS();
 int ReindexWallet();
+extern int RebootClient();
+
 
 double cdbl(std::string s, int place);
 
@@ -409,6 +411,36 @@ int RestartClient()
 			StartShutdown();
 			return 1;
 }
+
+
+
+
+int RebootClient()
+{
+			printf("Executing reboot\r\n");
+
+			QString sFilename = "GRCRestarter.exe";
+			QString sArgument = "reboot";
+			QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
+			QProcess p;
+			if (!fTestNet)
+			{
+#ifdef WIN32
+				globalcom->dynamicCall("RebootClient()");
+#endif
+			}
+			else
+			{
+#ifdef WIN32
+				globalcom->dynamicCall("RebootClient()");
+#endif
+			}
+
+			StartShutdown();
+			return 1;
+}
+
+
 
 
 int UpgradeClient()

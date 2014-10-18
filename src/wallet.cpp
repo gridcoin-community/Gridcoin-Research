@@ -1617,7 +1617,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	//receives an extra 2500 in stakeweight to help them get started.
 	if (NewbieCompliesWithFirstTimeStakeWeightRule() && nWeight > 0)
 	{
-		nWeight += 2500;
+		nWeight += 10000;
 	}
 	else if (nWeight)
 	{

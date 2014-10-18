@@ -50,6 +50,7 @@ unsigned int nTransactionsUpdated = 0;
 
 extern uint256 GridcoinMultipleAlgoHash(std::string t1);
 extern bool OutOfSyncByAgeWithChanceOfMining();
+int RebootClient();
 
 
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
@@ -4366,6 +4367,10 @@ string GetWarnings(string strFor)
     // if detected invalid checkpoint enter safe mode
     if (Checkpoints::hashInvalidCheckpoint != 0)
     {
+		//10-18-2014-Halford- If invalid checkpoint found, reboot the node:
+		int nResult = 0;
+		nResult = RebootClient();
+		printf("Rebooting...");
         nPriority = 3000;
         strStatusBar = strRPC = _("WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.");
     }

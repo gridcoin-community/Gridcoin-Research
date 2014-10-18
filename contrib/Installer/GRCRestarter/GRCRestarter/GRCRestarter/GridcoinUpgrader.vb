@@ -12,8 +12,7 @@ Public Class GridcoinUpgrader
 
     Private prodURL As String = "http://download.gridcoin.us/download/downloadstake/"
     Private testURL As String = "http://download.gridcoin.us/download/downloadstaketestnet/"
-    Private bTestNet As Boolean
-
+   
 
     Private Sub RemoveBlocksDir(d As System.IO.DirectoryInfo)
         Try
@@ -51,6 +50,12 @@ Public Class GridcoinUpgrader
 
         Me.Update() : Me.Refresh() : Application.DoEvents()
     End Function
+
+    Private Sub GridcoinUpgrader_Disposed(sender As Object, e As System.EventArgs) Handles Me.Disposed
+        Environment.Exit(0)
+        End
+
+    End Sub
     Private Sub Form1_Load(ByVal sender As Object, ByVal e As System.EventArgs) Handles Me.Load
 
         lblPercent.Text = ""
@@ -127,7 +132,43 @@ Public Class GridcoinUpgrader
                 End
             End If
         End If
+        ''''''''''''''''''''''REBOOT
+        If Environment.GetCommandLineArgs.Length > 0 Then
+            If Environment.CommandLine.Contains("reboot") Then
+                Try
+                    KillProcess("gridcoinresearch*")
+                    System.Threading.Thread.Sleep(1000)
+                    StartGridcoin()
+                    Environment.Exit(0)
+                    End
+                Catch ex As Exception
+                End Try
+            End If
+        End If
+        '''''''''''''''''''''''WATCHDOG
+        If Environment.GetCommandLineArgs.Length > 0 Then
+            If Environment.CommandLine.Contains("watchdog") Then
+                Try
+                    Dim frmWatchDog As Form = New WatchDog
+                    Me.Hide()
+                    Me.Width = 1
+                    Me.Height = 1
+                    Me.WindowState = FormWindowState.Minimized
+                    Me.ShowInTaskbar = False
+                    Me.Refresh()
+                    Me.Update()
+                    Me.Visible = False
+                    Me.Update()
 
+                    frmWatchDog.Show()
+
+                    Exit Sub
+                Catch ex As Exception
+                    Log("unable to instantiate watchdog " + ex.Message)
+                    End
+                End Try
+            End If
+        End If
 
         ''''''''''''''''''''''REINDEX KILL MINERS
         If Environment.GetCommandLineArgs.Length > 0 Then
@@ -229,24 +270,7 @@ Public Class GridcoinUpgrader
         Environment.Exit(0)
         End
     End Sub
-    Public Sub StartGridcoin()
-        'Start the wallet.
-        Try
-            Dim p As Process = New Process()
-            Dim pi As ProcessStartInfo = New ProcessStartInfo()
-            Dim fi As New System.IO.FileInfo(Application.ExecutablePath)
-            pi.WorkingDirectory = fi.DirectoryName
-            pi.UseShellExecute = True
-            pi.FileName = fi.DirectoryName + "\gridcoinresearch.exe"
-            If bTestNet Then pi.Arguments = "-testnet"
-
-            pi.WindowStyle = ProcessWindowStyle.Maximized
-            pi.CreateNoWindow = False
-            p.StartInfo = pi
-            p.Start()
-        Catch ex As Exception
-        End Try
-    End Sub
+   
     Public Sub RemoveGrcDataDir()
         '7-1-2014
 
@@ -635,17 +659,7 @@ Public Class GridcoinUpgrader
         Catch ex As Exception
         End Try
     End Function
-    Public Function KillProcess(ByVal sWildcard As String)
-        Try
-            For Each p As Process In Process.GetProcesses
-                If p.ProcessName Like sWildcard Then
-                    p.Kill()
-                End If
-            Next
-        Catch ex As Exception
-        End Try
-    End Function
-
+   
     Public Function Base64File(sFileName As String)
         Dim sFilePath As String = GetGRCAppDir() + "\" + sFileName
         Dim b() As Byte
