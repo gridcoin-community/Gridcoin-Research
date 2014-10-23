@@ -29,6 +29,7 @@
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
 #include <boost/algorithm/string/join.hpp>
+#include "cpid.h"
 
 //Resend Unsent Tx
 
@@ -47,10 +48,12 @@ CCriticalSection cs_main;
 
 CTxMemPool mempool;
 unsigned int nTransactionsUpdated = 0;
-
+extern std::string RetrieveCPID5(std::string s1);
 extern uint256 GridcoinMultipleAlgoHash(std::string t1);
 extern bool OutOfSyncByAgeWithChanceOfMining();
 int RebootClient();
+
+std::string YesNo(bool bin);
 
 
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
@@ -390,6 +393,21 @@ bool GetBlockNew(uint256 blockhash, int& out_height, CBlock& blk, bool bForceDis
 
 
 }
+
+
+
+
+bool TimerMain(std::string timer_name, int max_ms)
+{
+	mvTimers[timer_name] = mvTimers[timer_name] + 1;
+	if (mvTimers[timer_name] > max_ms)
+	{
+		mvTimers[timer_name]=0;
+		return true;
+	}
+	return false;
+}
+
 
 
 double GetPoSKernelPS2()
@@ -3764,6 +3782,26 @@ std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end
 }
 
 
+
+std::string RetrieveCPID5(std::string s1)
+{
+	//std::string mymd5 = cpid("grape");
+	//printf("grape %s",mymd5.c_str());
+	//32
+	std::string me = cpid_hash("grape@yahoo.com","23456234",123456789012);
+
+	bool result = false;
+	std::string shortcpid = me.substr(0,32);
+
+	result =  IsCPIDValid(shortcpid, me, 123456789012);
+
+	printf("result %s",YesNo(result).c_str());
+
+	return me;
+	//10-19-2014
+
+}
+
 std::string RetrieveMd5(std::string s1)
 {
 	try 
@@ -4074,8 +4112,8 @@ bool TallyNetworkAverages(bool ColdBoot)
 {
 	//Iterate throught last 14 days, tally network averages
     if (nBestHeight < 15) return false;
-	printf("Gathering network avgs\r\n");
-
+	printf("Gathering network avgs (begin)\r\n");
+	LOCK(cs_main);
 	try 
 	{
 		
@@ -4088,7 +4126,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 					if (mvMagnitudes.size() > 1) 	mvMagnitudes.clear();
 						
 					CBlock block;
-					printf("Gathering network avgs\r\n");
+					printf("Gathering network avgs [2]\r\n");
 
 					int iRow = 0;
 					double NetworkRAC = 0;
@@ -4369,10 +4407,20 @@ string GetWarnings(string strFor)
     {
 		//10-18-2014-Halford- If invalid checkpoint found, reboot the node:
 		int nResult = 0;
-		nResult = RebootClient();
+		#if defined(WIN32) && defined(QT_GUI)
+		if (TimerMain("Reboot",5))
+		{
+			nResult = RebootClient();
+		}
+		#endif
 		printf("Rebooting...");
-        nPriority = 3000;
+		/* 
+	    nPriority = 3000;
         strStatusBar = strRPC = _("WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.");
+		*/
+		printf("WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.");
+		
+
     }
 
     // Alerts
@@ -5653,7 +5701,13 @@ void AddProjectFromNetSoft(StructCPID& netsoft)
 	std::string cpid_non = GlobalCPUMiningCPID.cpidhash+email;
 	to_lower(cpid_non);
 	std::string cpid = RetrieveMd5(cpid_non.c_str());
-		
+	if (cpid != GlobalCPUMiningCPID.cpid) 
+	{
+		//Dont add it
+		return;
+	}
+	
+
 	NewProject.initialized = true;
 	mvCPIDs.insert(map<string,StructCPID>::value_type(NewProject.projectname,NewProject));
     NewProject.emailhash = netsoft.emailhash;
@@ -6119,7 +6173,7 @@ try
 				{
 					if (structcpid.verifiedrac == 0 && structcpid.rac > 100)
 					{
-								structcpid.Iscpidvalid = false;
+							
 								structcpid.errors = "Unable to verify project RAC online: Project missing in credit verification node.";
 					}
 

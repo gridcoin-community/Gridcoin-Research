@@ -17,6 +17,7 @@
 
 using namespace json_spirit;
 using namespace std;
+extern std::string YesNo(bool bin);
 
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spirit::Object& entry);
 extern enum Checkpoints::CPMode CheckpointsMode;
@@ -41,6 +42,8 @@ bool AESSkeinHash(unsigned int diffbytes, double rac, uint256 scrypthash, std::s
 std::vector<std::string> split(std::string s, std::string delim);
 double Lederstrumpf(double RAC, double NetworkRAC);
 double LederstrumpfMagnitude(double mag,int64_t locktime);
+
+std::string RetrieveCPID5(std::string s1);
 
 int TestAESHash(double rac, unsigned int diffbytes, uint256 scrypt_hash, std::string aeshash);
 std::string TxToString(const CTransaction& tx, const uint256 hashBlock, int64_t& out_amount, int64_t& out_locktime, int64_t& out_projectid, 
@@ -646,36 +649,30 @@ std::string BackupGridcoinWallet()
 		 if (fMine) 
 		 {
 			std::string strAddress=CBitcoinAddress(address).ToString();
-			//CBitcoinAddress address;
 
 			CKeyID keyID;
 			if (!address.GetKeyID(keyID))   
 			{
 				errors = errors + "During wallet backup, Address does not refer to a key"+ "\r\n";
-
 			}
 			else
 			{
-
 				 bool IsCompressed;
 	  			 CKey vchSecret;
-	
-				if (!pwalletMain->GetKey(keyID, vchSecret))
-				{
+ 				 if (!pwalletMain->GetKey(keyID, vchSecret))
+				 {
 					errors = errors + "During Wallet Backup, Private key for address is not known\r\n";
-				}
-				else
-				{
-					 CSecret secret = vchSecret.GetSecret(IsCompressed);
+				 }
+				 else
+				 {
+				    CSecret secret = vchSecret.GetSecret(IsCompressed);
               		std::string private_key = CBitcoinSecret(secret,IsCompressed).ToString();
-				
 					//Append to file
 					std::string strAddr = CBitcoinAddress(keyID).ToString();
 					std::string record = private_key + "<|>" + strAddr + "<KEY>";
 					myBackup << record;
-
 				}
-			}
+  			}
 
 		 }
     }
@@ -831,13 +828,22 @@ Value execute(const Array& params, bool fHelp)
 			results.push_back(entry);
 	
 	}
+	else if (sItem == "testcpid")
+	{
+		std::string hi = RetrieveCPID5("cpid1");
+		entry.push_back(Pair("cpid1",hi));
+
+		
+		std::string hello = RetrieveMd5("23456234grape@yahoo.com");
+
+		entry.push_back(Pair("cpid1",hello));	
+		results.push_back(entry);
+	}
 	else if (sItem == "reindex")
 	{
 			int r=-1;
 			#if defined(WIN32) && defined(QT_GUI)
-			
 		    ReindexWallet();
-
 			r = CreateRestorePoint();
 			#endif 
 			entry.push_back(Pair("Reindex Chain",r));

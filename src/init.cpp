@@ -612,7 +612,7 @@ bool AppInit2()
 	printf("Boost Version: %s",s.str().c_str());
 	
 	#if defined(WIN32) && defined(QT_GUI)
-	startWireFrameRenderer();
+			//startWireFrameRenderer();
 	#endif
 
 
@@ -1150,7 +1150,7 @@ bool AppInit2()
 	
 
 	#if defined(WIN32) && defined(QT_GUI)
-	stopWireFrameRenderer();
+		//stopWireFrameRenderer();
 	#endif
 
     if (!CheckDiskSpace())

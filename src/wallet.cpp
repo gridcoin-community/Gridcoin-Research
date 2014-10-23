@@ -1614,10 +1614,19 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	
 	//HALFORD: 9-6-2014 (Blended Stake Weight feature for Newbies):
 	//WEIGHT SECTION 1: When a new CPID enters the ecosystem, and is seen on less than 9 blocks, this newbie
-	//receives an extra 2500 in stakeweight to help them get started.
+	//receives an extra X in stakeweight to help them get started.
+	//10-22-2014
 	if (NewbieCompliesWithFirstTimeStakeWeightRule() && nWeight > 0)
 	{
-		nWeight += 10000;
+		if (GetTime() < 1414028435)
+		{
+			nWeight += 10000;
+		}
+		else if (GetTime() > 1414028435)
+		{
+		
+			nWeight += 100000;
+		}
 	}
 	else if (nWeight)
 	{

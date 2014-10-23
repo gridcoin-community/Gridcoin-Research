@@ -96,8 +96,10 @@ int nTick2 = 0;
 int nRegVersion;
 int nNeedsUpgrade = 0;
 double GetPoBDifficulty();
+
 extern int CreateRestorePoint();
 extern int DownloadBlocks();
+
 void StopGridcoin3();
 bool OutOfSyncByAge();
 bool bCheckedForUpgrade = false;
@@ -1705,7 +1707,7 @@ void BitcoinGUI::timerfire()
 		}
 
 		//Backup the wallet once per day:
-		if (Timer("backupwallet", 6*60*20))
+		if (Timer("backupwallet", 6*60*10))
 		{
 
 			std::string backup_results = BackupGridcoinWallet();
@@ -1741,7 +1743,6 @@ void BitcoinGUI::timerfire()
 				//double POB = GetPoBDifficulty();
 				TallyNetworkAverages(false);
 		}
-
 
 
 

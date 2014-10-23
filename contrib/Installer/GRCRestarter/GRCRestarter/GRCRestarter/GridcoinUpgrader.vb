@@ -136,12 +136,22 @@ Public Class GridcoinUpgrader
         If Environment.GetCommandLineArgs.Length > 0 Then
             If Environment.CommandLine.Contains("reboot") Then
                 Try
+                    Log("restarting")
+                    Me.Show()
+
                     KillProcess("gridcoinresearch*")
-                    System.Threading.Thread.Sleep(1000)
+
+                    txtStatus.Text = "Waiting for Gridcoin Wallet to exit..."
+                    System.Threading.Thread.Sleep(9500)
+                    KillProcess("gridcoinresearch*")
+
+                    
                     StartGridcoin()
                     Environment.Exit(0)
                     End
                 Catch ex As Exception
+                    Log("Cant restart " + ex.Message)
+
                 End Try
             End If
         End If
