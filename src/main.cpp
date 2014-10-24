@@ -4408,10 +4408,10 @@ string GetWarnings(string strFor)
 		//10-18-2014-Halford- If invalid checkpoint found, reboot the node:
 		int nResult = 0;
 		#if defined(WIN32) && defined(QT_GUI)
-		if (TimerMain("Reboot",5))
-		{
+		//if (TimerMain("Reboot",5))
+		//{
 			nResult = RebootClient();
-		}
+		//}
 		#endif
 		printf("Rebooting...");
 		/* 
