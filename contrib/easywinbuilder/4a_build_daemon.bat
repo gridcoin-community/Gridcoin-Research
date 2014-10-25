@@ -41,7 +41,6 @@
 @echo.
 @strip %COINNAME%d.exe
 @if errorlevel 1 goto error
-copy gridcoinh.bak gridcoin.h
 @echo !!!!!!! %COINNAME% daemon DONE: Find %COINNAME%d.exe in ./src :)
 @echo.
 @echo.

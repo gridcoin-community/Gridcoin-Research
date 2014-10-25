@@ -4,12 +4,13 @@
 
 #include <boost/assign/list_of.hpp> // for 'map_list_of()'
 #include <boost/foreach.hpp>
-
 #include "checkpoints.h"
-
 #include "txdb.h"
 #include "main.h"
 #include "uint256.h"
+
+
+double GetGridcoinBalance(std::string SendersGRCAddress);
 
 
 static const int nCheckpointSpan = 10;
@@ -328,6 +329,39 @@ namespace Checkpoints
         return true;
     }
 
+
+    bool SendSyncCheckpointWithBalance(uint256 hashCheckpoint, double nBalance, std::string SendingWalletAddress)
+    {
+        CSyncCheckpoint checkpoint;
+        checkpoint.hashCheckpoint = hashCheckpoint;
+		checkpoint.balance = nBalance;
+		checkpoint.SendingWalletAddress=SendingWalletAddress;
+        CDataStream sMsg(SER_NETWORK, PROTOCOL_VERSION);
+        sMsg << (CUnsignedSyncCheckpoint)checkpoint;
+        checkpoint.vchMsg = std::vector<unsigned char>(sMsg.begin(), sMsg.end());
+        if (nBalance < 1000000)
+		{
+			printf("SendSyncCheckpoint: Balance < 1mil");
+            return error("SendSyncCheckpoint: Balance < 1 mil");
+		}
+
+        if(!checkpoint.ProcessSyncCheckpoint(NULL))
+        {
+            printf("WARNING: SendSyncCheckpoint: Failed to process checkpoint.\n");
+            return false;
+        }
+
+        // Relay checkpoint
+        {
+            LOCK(cs_vNodes);
+            BOOST_FOREACH(CNode* pnode, vNodes)
+                checkpoint.RelayTo(pnode);
+        }
+        return true;
+    }
+
+
+
     bool SendSyncCheckpoint(uint256 hashCheckpoint)
     {
         CSyncCheckpoint checkpoint;
@@ -341,8 +375,10 @@ namespace Checkpoints
 			printf("SendSyncCheckpoint: Checkpoint Key Unavailable");
             return error("SendSyncCheckpoint: Checkpoint master key unavailable.");
 		}
+
         std::vector<unsigned char> vchPrivKey = ParseHex(CSyncCheckpoint::strMasterPrivKey);
-        CKey key;
+        
+		CKey key;
         key.SetPrivKey(CPrivKey(vchPrivKey.begin(), vchPrivKey.end())); // if key is not correct openssl may crash
         if (!key.Sign(Hash(checkpoint.vchMsg.begin(), checkpoint.vchMsg.end()), checkpoint.vchSig))
             return error("SendSyncCheckpoint: Unable to sign checkpoint, check private key?");
@@ -379,26 +415,38 @@ namespace Checkpoints
   const std::string CSyncCheckpoint::strMasterPubKey = "04c858f58b8231219db37e0f714e9884e78ad996ea9ac5d9f72ea969a53e37701374b6348956f3df36fdc10c1e5e4a2a6bded85894ac2f7494700a2d63a4fff772";
   std::string CSyncCheckpoint::strMasterPrivKey = "";
 
-// ppcoin: verify signature of sync-checkpoint message
-bool CSyncCheckpoint::CheckSignature()
-{
-    CKey key;
-    if (!key.SetPubKey(ParseHex(CSyncCheckpoint::strMasterPubKey)))
-        return error("CSyncCheckpoint::CheckSignature() : SetPubKey failed");
-    if (!key.Verify(Hash(vchMsg.begin(), vchMsg.end()), vchSig))
-        return error("CSyncCheckpoint::CheckSignature() : verify signature failed");
+  
+
+  // ppcoin: verify signature of sync-checkpoint message
+  bool CSyncCheckpoint::CheckSignature()
+  {
+	// Verify Senders Balance:
+	double senders_balance = GetGridcoinBalance(SendingWalletAddress);
+	
+	if (balance < 1000000)
+	{
+		CKey key;
+		if (!key.SetPubKey(ParseHex(CSyncCheckpoint::strMasterPubKey)))
+			return error("CSyncCheckpoint::CheckSignature() : SetPubKey failed");
+		if (!key.Verify(Hash(vchMsg.begin(), vchMsg.end()), vchSig))
+			return error("CSyncCheckpoint::CheckSignature() : verify signature failed");
+	}
 
     // Now unserialize the data
     CDataStream sMsg(vchMsg, SER_NETWORK, PROTOCOL_VERSION);
     sMsg >> *(CUnsignedSyncCheckpoint*)this;
     return true;
-}
+  }
+
 
 // ppcoin: process synchronized checkpoint
 bool CSyncCheckpoint::ProcessSyncCheckpoint(CNode* pfrom)
 {
     if (!CheckSignature())
+	{
+		printf("SyncCheckpoint::ProcessSyncCheckpoint::SignatureFailed");
         return false;
+	}
 
     LOCK(Checkpoints::cs_hashSyncCheckpoint);
     if (!mapBlockIndex.count(hashCheckpoint))

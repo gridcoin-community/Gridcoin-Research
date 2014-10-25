@@ -830,8 +830,9 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "testcpid")
 	{
-		std::string hi = RetrieveCPID5("cpid1");
-		entry.push_back(Pair("cpid1",hi));
+		//std::string hi = RetrieveCPID5("cpid1");
+		//entry.push_back(Pair("cpid1",hi));
+		/*
 		std::string hello = RetrieveMd5("123@yahoo.com");
 		entry.push_back(Pair("cpid1",hello));	
 		results.push_back(entry);
@@ -843,7 +844,7 @@ Value execute(const Array& params, bool fHelp)
 		hi = RetrieveCPID5("cpid3@yahoo.com");
 		entry.push_back(Pair("2",hi));
 		results.push_back(entry);
-
+		*/
 	}
 	else if (sItem == "reindex")
 	{
@@ -1008,8 +1009,8 @@ Array MagnitudeReport(bool bMine)
 				StructCPID structMag = mvMagnitudes[(*ii).first];
 				if (structMag.initialized && structMag.cpid.length() > 2) 
 				{ 
-								if (!bMine || (bMine && structMag.cpid == GlobalCPUMiningCPID.cpid))
-								{
+						if (!bMine || (bMine && structMag.cpid == GlobalCPUMiningCPID.cpid))
+						{
 									Object entry;
 									entry.push_back(Pair("CPID",structMag.cpid));
 									entry.push_back(Pair("Magnitude",structMag.ConsensusMagnitude));
@@ -1018,8 +1019,7 @@ Array MagnitudeReport(bool bMine)
 									entry.push_back(Pair("Owed",structMag.owed));
 									entry.push_back(Pair("Avg Daily Payments",structMag.payments/14));
 									results.push_back(entry);
-								}
-
+						}
 				}
 
 			}
@@ -1243,7 +1243,7 @@ Value listitem(const Array& params, bool fHelp)
 
 	}
 
-
+	/*
 	if (sitem=="validcpids") 
 	{
 		//Dump vectors:
@@ -1253,7 +1253,6 @@ Value listitem(const Array& params, bool fHelp)
 			HarvestCPIDs(false);
 		}
 		printf ("generating cpid report %s",sitem.c_str());
-
 
 		for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii) 
 		{
@@ -1268,7 +1267,6 @@ Value listitem(const Array& params, bool fHelp)
 					if (structcpid.verifiedrac > 100 && structcpid.verifiedteam=="gridcoin")
 					{
 						Object entry;
-	
 						entry.push_back(Pair("Project",structcpid.projectname));
 						entry.push_back(Pair("CPID",structcpid.cpid));
 						entry.push_back(Pair("CPIDhash",structcpid.cpidhash));
@@ -1286,7 +1284,6 @@ Value listitem(const Array& params, bool fHelp)
 						entry.push_back(Pair("Is my CPID Valid?",structcpid.Iscpidvalid));
 						entry.push_back(Pair("CPID Link",structcpid.link));
 						entry.push_back(Pair("Errors",structcpid.errors));
-
 						results.push_back(entry);
 					}
 				}
@@ -1296,6 +1293,9 @@ Value listitem(const Array& params, bool fHelp)
 
 
     }
+	*/
+
+
 
 	if (sitem=="cpids") 
 	{
@@ -1335,11 +1335,8 @@ Value listitem(const Array& params, bool fHelp)
 					entry.push_back(Pair("Verified RecTime",structcpid.verifiedrectime));
 					entry.push_back(Pair("Verified RAC Age",structcpid.verifiedage));
 					entry.push_back(Pair("Is my CPID Valid?",structcpid.Iscpidvalid));
-				
 					entry.push_back(Pair("CPID Link",structcpid.link));
 					entry.push_back(Pair("Errors",structcpid.errors));
-
-
 					results.push_back(entry);
 				}
 
@@ -1354,14 +1351,6 @@ Value listitem(const Array& params, bool fHelp)
 
 		
 }
-
-
-
-
-
-
-
-
 
 
 

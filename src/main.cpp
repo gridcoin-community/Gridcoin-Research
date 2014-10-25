@@ -51,9 +51,12 @@ unsigned int nTransactionsUpdated = 0;
 extern std::string RetrieveCPID5(std::string s1);
 extern uint256 GridcoinMultipleAlgoHash(std::string t1);
 extern bool OutOfSyncByAgeWithChanceOfMining();
+
 int RebootClient();
 
 std::string YesNo(bool bin);
+
+extern  double GetGridcoinBalance(std::string SendersGRCAddress);
 
 
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
@@ -393,6 +396,49 @@ bool GetBlockNew(uint256 blockhash, int& out_height, CBlock& blk, bool bForceDis
 
 
 }
+
+
+
+
+
+  double GetGridcoinBalance(std::string SendersGRCAddress)
+  {
+    int nMinDepth = 1;
+    int nMaxDepth = 9999999;
+	if (SendersGRCAddress=="") return 0;
+    set<CBitcoinAddress> setAddress;
+    CBitcoinAddress address(SendersGRCAddress);
+	if (!address.IsValid())
+	{
+		printf("Checkpoints::GetGridcoinBalance::InvalidAddress");
+        return 0;
+	}
+	setAddress.insert(address);
+    vector<COutput> vecOutputs;
+    pwalletMain->AvailableCoins(vecOutputs, false);
+	double global_total = 0;
+    BOOST_FOREACH(const COutput& out, vecOutputs)
+    {
+        if (out.nDepth < nMinDepth || out.nDepth > nMaxDepth)
+            continue;
+        if(setAddress.size())
+        {
+            CTxDestination address;
+            if(!ExtractDestination(out.tx->vout[out.i].scriptPubKey, address))
+                continue;
+            if (!setAddress.count(address))
+                continue;
+        }
+        int64_t nValue = out.tx->vout[out.i].nValue;
+        const CScript& pk = out.tx->vout[out.i].scriptPubKey;
+        CTxDestination address;
+		global_total += nValue;
+    }
+
+    return global_total/COIN;
+}
+
+  
 
 
 
@@ -835,9 +881,9 @@ double GetTotalBalance()
 	{
         total = total + pwallet->GetBalance();
 		std::string audit = RoundToString(total,8);
-		printf("MyUserBalance: %s",audit.c_str());
+		//printf("MyUserBalance: %s",audit.c_str());
 	}
-	return total;
+	return total/COIN;
 }
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -908,11 +954,10 @@ unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans)
 
 
 
-
 std::string DefaultWalletAddress() 
 {
 	try {
-	//Gridcoin - Find the default public GRC address (not used anymore)
+	//Gridcoin - Find the default public GRC address
 	if (sDefaultWalletAddress.length() > 0) return sDefaultWalletAddress;
 
     string strAccount;
@@ -3438,13 +3483,17 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock)
         }
         mapOrphanBlocksByPrev.erase(hashPrev);
     }
-
-    printf("ProcessBlock: ACCEPTED\n");
-
+	double nBalance = GetTotalBalance();
+	std::string SendingWalletAddress = DefaultWalletAddress();
+    printf("ProcessBlock: ACCEPTED, Current Balance %f \r\n",nBalance);
+	//10-25-2014 Gridcoin - Include node balance and GRC Sending Address in sync checkpoint
     // ppcoin: if responsible for sync-checkpoint send it
-    if (pfrom && !CSyncCheckpoint::strMasterPrivKey.empty())
-        Checkpoints::SendSyncCheckpoint(Checkpoints::AutoSelectSyncCheckpoint());
-	
+    // if (pfrom && !CSyncCheckpoint::strMasterPrivKey.empty())        Checkpoints::SendSyncCheckpoint(Checkpoints::AutoSelectSyncCheckpoint());
+	if (pfrom && nBalance > 1000000)
+	{
+			Checkpoints::SendSyncCheckpointWithBalance(Checkpoints::AutoSelectSyncCheckpoint(),nBalance,SendingWalletAddress);
+	}
+
     return true;
 }
 
@@ -3785,22 +3834,15 @@ std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end
 
 std::string RetrieveCPID5(std::string s1)
 {
-	//std::string mymd5 = cpid("grape");
-	//printf("grape %s",mymd5.c_str());
-	//32
-	//10-24-2014
-
+	/*
 	std::string me = cpid_hash(s1,"23456234",123456789012);
-
 	bool result = false;
 	std::string shortcpid = me.substr(0,32);
-
 	result =  IsCPIDValid(shortcpid, me, 123456789012);
-
 	printf("result %s",YesNo(result).c_str());
-
 	return me;
-	//10-19-2014
+	*/
+
 
 }
 
@@ -4869,10 +4911,13 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
         }
     }
-    else if (strCommand == "checkpoint")
+    else if (strCommand == "checkpoint2" || strCommand=="checkpoint")
     {
+		//10-25-2014 - Receive Checkpoint from other nodes:
         CSyncCheckpoint checkpoint;
         vRecv >> checkpoint;
+		//Checkpoint received from node with more than 1 Million GRC:
+		printf("Received checkpoint: Node balance %f, GRC Address %s",checkpoint.balance,checkpoint.SendingWalletAddress.c_str());
 
         if (checkpoint.ProcessSyncCheckpoint(pfrom))
         {

@@ -3,17 +3,9 @@
 @echo Ensure Qt installer has finished.
 @pause
 :continue
-
-
 @bash patch_files.sh
-
-
 @cd %ROOTPATH%
-
-
-
 @echo building qt - qmake...
-
 @set COINNAME=Gridcoin
 
 @set QMPS=BOOST_INCLUDE_PATH=%EWBLIBS%/%BOOST%^

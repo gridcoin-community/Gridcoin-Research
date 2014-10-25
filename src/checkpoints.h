@@ -58,6 +58,9 @@ namespace Checkpoints
     void AskForPendingSyncCheckpoint(CNode* pfrom);
     bool SetCheckpointPrivKey(std::string strPrivKey);
     bool SendSyncCheckpoint(uint256 hashCheckpoint);
+	bool SendSyncCheckpointWithBalance(uint256 hashCheckpoint, double nBalance, std::string SendingWalletAddress);
+
+
     bool IsMatureSyncCheckpoint();
 }
 
@@ -67,12 +70,16 @@ class CUnsignedSyncCheckpoint
 public:
     int nVersion;
     uint256 hashCheckpoint;      // checkpoint block
+    double balance;
+	std::string SendingWalletAddress;
 
     IMPLEMENT_SERIALIZE
     (
         READWRITE(this->nVersion);
         nVersion = this->nVersion;
         READWRITE(hashCheckpoint);
+		READWRITE(balance);
+		READWRITE(SendingWalletAddress);
     )
 
     void SetNull()
@@ -85,9 +92,9 @@ public:
     {
         return strprintf(
                 "CSyncCheckpoint(\n"
-                "    nVersion       = %d\n"
-                "    hashCheckpoint = %s\n"
-                ")\n",
+                "    nVersion            = %d\n"
+                "    hashCheckpoint      = %s\n"
+			    ")\n",
             nVersion,
             hashCheckpoint.ToString().c_str());
     }
@@ -103,7 +110,7 @@ class CSyncCheckpoint : public CUnsignedSyncCheckpoint
 public:
     static const std::string strMasterPubKey;
     static std::string strMasterPrivKey;
-
+	
     std::vector<unsigned char> vchMsg;
     std::vector<unsigned char> vchSig;
 
@@ -116,6 +123,8 @@ public:
     (
         READWRITE(vchMsg);
         READWRITE(vchSig);
+		READWRITE(balance);
+		READWRITE(SendingWalletAddress);
     )
 
     void SetNull()

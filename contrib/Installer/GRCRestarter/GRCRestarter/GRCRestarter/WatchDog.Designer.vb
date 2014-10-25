@@ -41,7 +41,7 @@ Partial Class WatchDog
         'Timer1
         '
         Me.Timer1.Enabled = True
-        Me.Timer1.Interval = 30000
+        Me.Timer1.Interval = 90000
         '
         'WatchDog
         '
@@ -49,7 +49,7 @@ Partial Class WatchDog
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.BackgroundImage = CType(resources.GetObject("$this.BackgroundImage"), System.Drawing.Image)
         Me.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch
-        Me.ClientSize = New System.Drawing.Size(577, 511)
+        Me.ClientSize = New System.Drawing.Size(577, 213)
         Me.Controls.Add(Me.DoggieBox)
         Me.DoubleBuffered = True
         Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)

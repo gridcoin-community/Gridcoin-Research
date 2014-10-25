@@ -1,17 +1,23 @@
 /* 
-
 CPID
- 
 */
- 
+
+
+
+/*
+
 #ifndef BZF_CPID_H
 #define BZF_CPID_H
  
+
+
 #include <cstring>
 #include <iostream>
- #include "util.h"
+#include "util.h"
+
 
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
+
 
 class CPID
 {
@@ -21,7 +27,7 @@ public:
   CPID();
   CPID(const std::string& text);
   CPID(std::string email, std::string bpk, uint256 blockhash);
-  CPID(int buf[],int iBufLen);
+
   CPID(const std::string &text,int entropybit,uint256 blockhash);
 
   void update(const unsigned char *buf, size_type length);
@@ -80,3 +86,10 @@ std::string cpid_hash(std::string email, std::string bpk, uint256 blockhash);
 bool IsCPIDValid(std::string cpid, std::string longcpid, uint256 blockhash);
 
 #endif
+
+
+
+*/
+
+
+
