@@ -832,12 +832,26 @@ Value execute(const Array& params, bool fHelp)
 	{
 		std::string hi = RetrieveCPID5("cpid1");
 		entry.push_back(Pair("cpid1",hi));
-
-		
 		std::string hello = RetrieveMd5("23456234grape@yahoo.com");
 
 		entry.push_back(Pair("cpid1",hello));	
+		
 		results.push_back(entry);
+
+		//
+
+		hi = RetrieveCPID5("");
+		entry.push_back(Pair("Empty",hi));
+		hi = RetrieveCPID5("a@yahoo.com");
+		entry.push_back(Pair("1",hi));
+		
+		results.push_back(entry);
+		hi = RetrieveCPID5("rachalupsdfsdflsdfjsdlkfjsdjlkfsdljkfskldjfslkjdflkjsdflkjsdfljksdfkjlsdflk sdf jsdfjklsdfjklsdfjksdfj ksdfkjl sdjf klsdkfj lsdkjfl sdjkf a@yahoo.com");
+		entry.push_back(Pair("2",hi));
+
+		results.push_back(entry);
+
+
 	}
 	else if (sItem == "reindex")
 	{
@@ -1231,8 +1245,6 @@ Value listitem(const Array& params, bool fHelp)
 
 
 
-
-
 	if (sitem=="cpids") {
 		//Dump vectors:
 		
@@ -1250,29 +1262,33 @@ Value listitem(const Array& params, bool fHelp)
 
 	        if (structcpid.initialized) 
 			{ 
-				Object entry;
+			
+				if (structcpid.cpid == GlobalCPUMiningCPID.cpid || structcpid.cpid=="INVESTOR")
+				{
+					Object entry;
 	
-				entry.push_back(Pair("Project",structcpid.projectname));
-				entry.push_back(Pair("CPID",structcpid.cpid));
-				entry.push_back(Pair("CPIDhash",structcpid.cpidhash));
-				entry.push_back(Pair("Email",structcpid.emailhash));
-				entry.push_back(Pair("UTC",structcpid.utc));
-				entry.push_back(Pair("RAC",structcpid.rac));
-				entry.push_back(Pair("Team",structcpid.team));
-				entry.push_back(Pair("RecTime",structcpid.rectime));
-				entry.push_back(Pair("Age",structcpid.age));
-				entry.push_back(Pair("Verified UTC",structcpid.verifiedutc));
-				entry.push_back(Pair("Verified RAC",structcpid.verifiedrac));
-				entry.push_back(Pair("Verified Team",structcpid.verifiedteam));
-				entry.push_back(Pair("Verified RecTime",structcpid.verifiedrectime));
-				entry.push_back(Pair("Verified RAC Age",structcpid.verifiedage));
-				entry.push_back(Pair("Is my CPID Valid?",structcpid.Iscpidvalid));
+					entry.push_back(Pair("Project",structcpid.projectname));
+					entry.push_back(Pair("CPID",structcpid.cpid));
+					entry.push_back(Pair("CPIDhash",structcpid.cpidhash));
+					entry.push_back(Pair("Email",structcpid.emailhash));
+					entry.push_back(Pair("UTC",structcpid.utc));
+					entry.push_back(Pair("RAC",structcpid.rac));
+					entry.push_back(Pair("Team",structcpid.team));
+					entry.push_back(Pair("RecTime",structcpid.rectime));
+					entry.push_back(Pair("Age",structcpid.age));
+					entry.push_back(Pair("Verified UTC",structcpid.verifiedutc));
+					entry.push_back(Pair("Verified RAC",structcpid.verifiedrac));
+					entry.push_back(Pair("Verified Team",structcpid.verifiedteam));
+					entry.push_back(Pair("Verified RecTime",structcpid.verifiedrectime));
+					entry.push_back(Pair("Verified RAC Age",structcpid.verifiedage));
+					entry.push_back(Pair("Is my CPID Valid?",structcpid.Iscpidvalid));
 				
-				entry.push_back(Pair("CPID Link",structcpid.link));
-				entry.push_back(Pair("Errors",structcpid.errors));
+					entry.push_back(Pair("CPID Link",structcpid.link));
+					entry.push_back(Pair("Errors",structcpid.errors));
 
 
-				results.push_back(entry);
+					results.push_back(entry);
+				}
 
 			}
 		}

@@ -351,7 +351,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	int64_t NewbieStakeWeightModifier = 0;
 	if (NewbieCompliesWithFirstTimeStakeWeightRule(blockFrom,hashBoinc)) 
 	{
-			NewbieStakeWeightModifier = 150*COIN;
+			NewbieStakeWeightModifier = 15000*COIN;
 	}
 	else
 	{

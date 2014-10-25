@@ -465,7 +465,7 @@ std::string GetGlobalStatus()
           << BOOST_VERSION % 100                // patch level
           << "";
 
-	status = "Blocks: " + RoundToString((double)nBestHeight,0) + "; PoR Difficulty: " + RoundToString(PORDiff,6) + "; Net Hp/s: " + RoundToString(GetPoSKernelPS2(),6)  
+	status = "Blocks: " + RoundToString((double)nBestHeight,0) + "; PoR Difficulty: " + RoundToString(PORDiff,6) + "; Net Weight: " + RoundToString(GetPoSKernelPS2(),6)  
 		+ "<br>Stake Weight: " +  RoundToString(weight,0) + "; Status: " + msMiningErrors 
 		+ "<br>Magnitude: " + RoundToString(boincmagnitude,3) + ";CPU Project: " + msMiningProject
 		+ "<br>" + sBoost.str();
@@ -3788,7 +3788,9 @@ std::string RetrieveCPID5(std::string s1)
 	//std::string mymd5 = cpid("grape");
 	//printf("grape %s",mymd5.c_str());
 	//32
-	std::string me = cpid_hash("grape@yahoo.com","23456234",123456789012);
+	//10-24-2014
+
+	std::string me = cpid_hash(s1,"23456234",123456789012);
 
 	bool result = false;
 	std::string shortcpid = me.substr(0,32);

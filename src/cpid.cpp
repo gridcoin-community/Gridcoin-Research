@@ -113,6 +113,15 @@ CPID::CPID(const std::string &text)
   finalize();
 }
 
+CPID::CPID(const std::string &text,int entropybit,uint256 blockhash)
+{
+  init();
+  entropybit++;
+  update5(text, blockhash);
+  finalize();
+}
+
+
 
 CPID::CPID(int buf[], int iBufLen)
 {
@@ -320,6 +329,135 @@ void CPID::update(const char input[], size_type length)
 {
   update((const unsigned char*)input, length);
 }
+
+
+
+
+int BitwiseCount(std::string str, int pos)
+{
+	char ch;
+	if (pos < str.length())
+	{
+		ch = str.at(pos);
+		int asc = (int)ch;
+		if (asc > 47 && asc < 71) asc=asc-47;
+		return asc;
+	}
+	return 1;
+}
+
+
+int HexToByte(std::string hex)
+{
+	int x = 0;
+	std::stringstream ss;
+	ss << std::hex << hex;
+	ss >> x;
+	return x;
+
+}
+
+
+
+void CPID::update5(std::string longcpid, uint256 blockhash)
+{
+	std::string shash = blockhash.GetHex();
+
+    
+	std::string entropy = "";
+	/*
+	for (int z = 0; z < length; z++)
+	{
+		char c  = input[z];
+		//int rorcount = BitwiseCount(shash,hexpos);
+		int ic = (int)c;
+		//ic = (char)rotate_right(b,rorcount+1);
+		//char cc1 = (char)rotate_left(ic,1);
+		char cc1 = (char)ic;
+		input[z] = cc1;
+		entropy += cc1;
+
+	}
+	printf("Entropy class %s",entropy.c_str());
+	*/
+	
+
+ //  std::string cpid3 = "";
+   int hexpos = 0;
+   unsigned char* input = new unsigned char[(longcpid.length()/2)+1];
+	
+   for (int z = 0; z < longcpid.length(); z=z+2)
+   {
+	    //char c1 = input[i];
+		std::string hex = longcpid.substr(z,2);
+    	//std::string hex = cpid2.substr(i,2);
+		int b  = HexToByte(hex);
+		int rorcount = BitwiseCount(shash,hexpos);
+		entropy += (char)rotate_right(b,rorcount);
+		//cpid3 += (char)rotate_right(b,rorcount+1);
+		input[hexpos]=(unsigned char)rotate_right(b,rorcount);
+		hexpos++;
+    }
+    printf("Entropy length %u class %s",longcpid.length(),entropy.c_str());
+	//	har *path = new char[pathSize];
+	////////////////////////////////////////////////const unsigned char* input = (const unsigned char*)entropy.c_str(); 
+
+
+	//	unsigned char* input = (unsigned char*)entropy.c_str();
+	unsigned char* input2 = new unsigned char[entropy.size()+1];
+	memcpy(input2, entropy.c_str(), entropy.size());
+	input2[entropy.size()]=0;
+	//unsigned char *input[] = (unsigned char*)entropy.c_str();
+	input[entropy.size()]=0;
+
+
+	 size_type length = entropy.length();
+
+
+  // compute number of bytes mod 64
+  size_type index = count[0] / 8 % blocksize;
+ 
+  // Update number of bits
+  if ((count[0] += (length << 3)) < (length << 3))
+    count[1]++;
+  count[1] += (length >> 29);
+ 
+  // number of bytes we need to fill in buffer
+  size_type firstpart = 64 - index;
+ 
+  size_type i;
+ 
+  // transform as many times as possible.
+  if (length >= firstpart)
+  {
+    // fill buffer first, transform
+    memcpy(&buffer[index], input, firstpart);
+    transform(buffer);
+ 
+    // transform chunks of blocksize (64 bytes)
+    for (i = firstpart; i + blocksize <= length; i += blocksize)
+      transform(&input[i]);
+ 
+    index = 0;
+  }
+  else
+    i = 0;
+ 
+  // buffer remaining input
+  memcpy(&buffer[index], &input[i], length-i);
+}
+
+
+
+
+
+
+
+
+
+
+
+
  
 //////////////////////////////
  
@@ -376,18 +514,6 @@ std::string CPID::hexdigest() const
 }
  
 //////////////////////////////
-int BitwiseCount(std::string str, int pos)
-{
-	char ch;
-	if (pos < str.length())
-	{
-		ch = str.at(pos);
-		int asc = (int)ch;
-		if (asc > 47 && asc < 71) asc=asc-47;
-		return asc;
-	}
-	return 1;
-}
 
 
 template< typename T >
@@ -407,17 +533,6 @@ std::string ByteToHex( T i )
   stream << std::setfill ('0') << std::setw(2) 
          << std::hex << i;
   return stream.str();
-}
-
-
-int HexToByte(std::string hex)
-{
-	int x = 0;
-	std::stringstream ss;
-	ss << std::hex << hex;
-	ss >> x;
-	return x;
-
 }
 
 
@@ -469,9 +584,12 @@ bool CPID::Compare(std::string usercpid, std::string longcpid, uint256 blockhash
 		int b  = HexToByte(hex);
 		int rorcount = BitwiseCount(shash,hexpos);
 		cpid3 += (char)rotate_right(b,rorcount);
+		//cpid3 += (char)rotate_right(b,rorcount+1);
 		hexpos++;
     }
-    CPID c = CPID(cpid3);
+   printf("Comparing %s",cpid2.c_str());
+
+    CPID c = CPID(cpid2,0,blockhash);
 	std::string shortcpid = c.hexdigest();
 	if (shortcpid == cpid1 && cpid1==usercpid && shortcpid == usercpid) return true;
 	return false;

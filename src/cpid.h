@@ -22,10 +22,14 @@ public:
   CPID(const std::string& text);
   CPID(std::string email, std::string bpk, uint256 blockhash);
   CPID(int buf[],int iBufLen);
-
+  CPID(const std::string &text,int entropybit,uint256 blockhash);
 
   void update(const unsigned char *buf, size_type length);
   void update(const char *buf, size_type length);
+  
+  void update5(std::string inp,uint256 blockhash);
+  
+
   CPID& finalize();
   std::string hexdigest() const;
   std::string boincdigest() const;
