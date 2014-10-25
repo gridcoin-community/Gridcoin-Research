@@ -832,25 +832,17 @@ Value execute(const Array& params, bool fHelp)
 	{
 		std::string hi = RetrieveCPID5("cpid1");
 		entry.push_back(Pair("cpid1",hi));
-		std::string hello = RetrieveMd5("23456234grape@yahoo.com");
-
+		std::string hello = RetrieveMd5("123@yahoo.com");
 		entry.push_back(Pair("cpid1",hello));	
-		
 		results.push_back(entry);
-
-		//
-
 		hi = RetrieveCPID5("");
 		entry.push_back(Pair("Empty",hi));
 		hi = RetrieveCPID5("a@yahoo.com");
 		entry.push_back(Pair("1",hi));
-		
 		results.push_back(entry);
-		hi = RetrieveCPID5("rachalupsdfsdflsdfjsdlkfjsdjlkfsdljkfskldjfslkjdflkjsdflkjsdfljksdfkjlsdflk sdf jsdfjklsdfjklsdfjksdfj ksdfkjl sdjf klsdkfj lsdkjfl sdjkf a@yahoo.com");
+		hi = RetrieveCPID5("cpid3@yahoo.com");
 		entry.push_back(Pair("2",hi));
-
 		results.push_back(entry);
-
 
 	}
 	else if (sItem == "reindex")
@@ -998,7 +990,7 @@ Value execute(const Array& params, bool fHelp)
 
 
 
-Array MagnitudeReport()
+Array MagnitudeReport(bool bMine)
 {
 	       Array results;
 		   Object c;
@@ -1016,15 +1008,17 @@ Array MagnitudeReport()
 				StructCPID structMag = mvMagnitudes[(*ii).first];
 				if (structMag.initialized && structMag.cpid.length() > 2) 
 				{ 
-								
-								Object entry;
-								entry.push_back(Pair("CPID",structMag.cpid));
-								entry.push_back(Pair("Magnitude",structMag.ConsensusMagnitude));
-								entry.push_back(Pair("Magnitude Accuracy",structMag.Accuracy));
-								entry.push_back(Pair("Payments",structMag.payments));
-								entry.push_back(Pair("Owed",structMag.owed));
-								entry.push_back(Pair("Avg Daily Payments",structMag.payments/14));
-								results.push_back(entry);
+								if (!bMine || (bMine && structMag.cpid == GlobalCPUMiningCPID.cpid))
+								{
+									Object entry;
+									entry.push_back(Pair("CPID",structMag.cpid));
+									entry.push_back(Pair("Magnitude",structMag.ConsensusMagnitude));
+									entry.push_back(Pair("Magnitude Accuracy",structMag.Accuracy));
+									entry.push_back(Pair("Payments",structMag.payments));
+									entry.push_back(Pair("Owed",structMag.owed));
+									entry.push_back(Pair("Avg Daily Payments",structMag.payments/14));
+									results.push_back(entry);
+								}
 
 				}
 
@@ -1165,11 +1159,18 @@ Value listitem(const Array& params, bool fHelp)
 
 	if (sitem == "magnitude")
 	{
-			results = MagnitudeReport();
+			results = MagnitudeReport(false);
 			return results;
 
 	}
 
+	if (sitem == "mymagnitude")
+	{
+			results = MagnitudeReport(true);
+			return results;
+
+
+	}
 
 	if (sitem == "projects") 
 	{
@@ -1243,9 +1244,8 @@ Value listitem(const Array& params, bool fHelp)
 	}
 
 
-
-
-	if (sitem=="cpids") {
+	if (sitem=="validcpids") 
+	{
 		//Dump vectors:
 		
 		if (mvCPIDs.size() < 1) 
@@ -1263,7 +1263,60 @@ Value listitem(const Array& params, bool fHelp)
 	        if (structcpid.initialized) 
 			{ 
 			
-				if (structcpid.cpid == GlobalCPUMiningCPID.cpid || structcpid.cpid=="INVESTOR")
+				if (structcpid.cpid == GlobalCPUMiningCPID.cpid || structcpid.cpid=="INVESTOR" || structcpid.cpid=="investor")
+				{
+					if (structcpid.verifiedrac > 100 && structcpid.verifiedteam=="gridcoin")
+					{
+						Object entry;
+	
+						entry.push_back(Pair("Project",structcpid.projectname));
+						entry.push_back(Pair("CPID",structcpid.cpid));
+						entry.push_back(Pair("CPIDhash",structcpid.cpidhash));
+						entry.push_back(Pair("Email",structcpid.emailhash));
+						entry.push_back(Pair("UTC",structcpid.utc));
+						entry.push_back(Pair("RAC",structcpid.rac));
+						entry.push_back(Pair("Team",structcpid.team));
+						entry.push_back(Pair("RecTime",structcpid.rectime));
+						entry.push_back(Pair("Age",structcpid.age));
+						entry.push_back(Pair("Verified UTC",structcpid.verifiedutc));
+						entry.push_back(Pair("Verified RAC",structcpid.verifiedrac));
+						entry.push_back(Pair("Verified Team",structcpid.verifiedteam));
+						entry.push_back(Pair("Verified RecTime",structcpid.verifiedrectime));
+						entry.push_back(Pair("Verified RAC Age",structcpid.verifiedage));
+						entry.push_back(Pair("Is my CPID Valid?",structcpid.Iscpidvalid));
+						entry.push_back(Pair("CPID Link",structcpid.link));
+						entry.push_back(Pair("Errors",structcpid.errors));
+
+						results.push_back(entry);
+					}
+				}
+
+			}
+		}
+
+
+    }
+
+	if (sitem=="cpids") 
+	{
+		//Dump vectors:
+		
+		if (mvCPIDs.size() < 1) 
+		{
+			HarvestCPIDs(false);
+		}
+		printf ("generating cpid report %s",sitem.c_str());
+
+
+		for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii) 
+		{
+
+			StructCPID structcpid = mvCPIDs[(*ii).first];
+
+	        if (structcpid.initialized) 
+			{ 
+			
+				if (structcpid.cpid == GlobalCPUMiningCPID.cpid || structcpid.cpid=="INVESTOR" || structcpid.cpid=="investor")
 				{
 					Object entry;
 	
