@@ -1,4 +1,4 @@
-########################### Linux Instructions: #####################################################################
+########################## Linux Instructions: #####################################################################
 # 	
 #	Released 1-25-2014 - Gridcoin
 #
@@ -11,9 +11,11 @@
 # 
 # Section 1: Compiling Gridcoind
 #
-# -Tested on Ubuntu 12.04
+# -Tested on Ubuntu 12.04, Ubuntu 13.10
 #
+# Section 2: Compiling frontend
 #
+# - Tested on Ubuntu 13.10
 #
 #####################################################################################################################
 
@@ -25,36 +27,34 @@
 
 #### (Tested with #boost 1_5_5_0, Berkeley db 4.8.30, miniupnpc 1.8, openssl 1.0.1e
 #### Step 1: Building the headless daemon:
-If you have trouble updating source from git:
-git config --global http.sslverify false
+#If you have trouble updating source from git:
+#git config --global http.sslverify false
 
 
 sudo apt-get install ntp git build-essential libssl-dev libdb-dev libdb++-dev libboost-all-dev libqrencode-dev
-sudo apt-get install qt-sdk
+sudo apt-get install qt-sdk qt4-default
  
 cd ~
-sudo git clone https://github.com/gridcoin/Gridcoin-Research
-NOTE: If you already have Gridcoin, do this:
+git clone https://github.com/gridcoin/Gridcoin-Research
+#NOTE: If you already have Gridcoin, do this:
 #git fetch --all
 #git reset --hard origin/master
 
-cd ~/Gridcoin-research/src
+cd ~/Gridcoin-Research/src
 
-sudo chmod 755 leveldb/build_detect_platform 
-
-sudo make -f makefile.unix USE_UPNP=- 
+chmod 755 leveldb/build_detect_platform 
+make -f makefile.unix USE_UPNP=- 
 
 
 ##### End of Step 1: gridcoind will be found in /src directory
 
 
 
-sudo strip gridcoinresearchd
-sudo chmod 755 gridcoinresearchd
-sudo cp gridcoinresearchd /usr/bin/gridcoinresearchd 
-sudo mkdir ~/.gridcoinresearch
-cd ~/.gridcoinresearch
+strip gridcoinresearchd
+sudo install -m 755 gridcoinresearchd /usr/bin/gridcoinresearchd
 
+mkdir ~/.GridcoinResearch
+cd ~/.GridcoinResearch
 
 #### SSL: ###################################################################
 #Optional: Setting up gridcoinresearchd for ssl 
@@ -62,7 +62,9 @@ cd ~/.gridcoinresearch
 #openssl req -new -x509 -nodes -sha1 -days 3650 -key server.pem > server.cert 
 #############################################################################
 
-sudo nano ~/.gridcoinresearch/gridcoinresearch.conf 
+nano gridcoinresearch.conf 
+
+#copy the following into the editor:
 server=1 
 daemon=1 
 rpcport=9332 
@@ -72,30 +74,32 @@ rpcpassword=yourpassword
 rpcallowip=external IP 
 addnode=node.gridcoin.us
 #rpcssl=1
+
 #save and exit.  Leave the lines with ssl in them out if you don't need ssl.
 
 ####### Testing Gridcoin gridcoind :
-./gridcoinresearchd
 #Let server start
-./gridcoinresearchd getmininginfo
-#Should return current difficulty
+gridcoinresearchd
+#Should return current difficulty:
+gridcoinresearchd getmininginfo
 
 
 #Step 2:
 ############################################### Building Gridcoin-QT: ##########################################
 
-cd /src
+#cd to the directory where gridcoinstake.pro is
+cd ~/Gridcoin-Research
 
-
-cd ..     #cd to the directory where gridcoinstake.pro is 
-sudo rm build/o.*
-sudo qmake "USE_UPNP=-"
-sudo make
-sudo strip gridcoinresearch
-sudo chmod 755 gridcoindresearch
-sudo cp gridcoinresearch /usr/bin/gridcoinresearch
+#IMPORTANT: now edit gridcoinstake.pro and remove the entries "QT += qaxcontainer" and "CONFIG += qaxcontainer"
+#nano gridcoinstake.pro
+ 
+rm -f build/*.o
+qmake "USE_UPNP=-"
+make
+strip gridcoinresearch
+sudo install -m 755 gridcoinresearch /usr/bin/gridcoinresearch
 #look for gridcoinresearch
-sudo ./gridcoinresearch
+gridcoinresearch
 #Verify wallet finds nodes and starts syncing
 
 
