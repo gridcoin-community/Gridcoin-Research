@@ -4,13 +4,6 @@ CPID HASHING ALGORITHM - GRIDCOIN - ROB HALFORD - 10-21-2014
 
 */
  
-/* interface header */
-/* system implementation headers */
-
-
-/*
-
-
 
 #include "cpid.h"
 
@@ -37,16 +30,18 @@ CPID HASHING ALGORITHM - GRIDCOIN - ROB HALFORD - 10-21-2014
 ///////////////////////////////////////////////
  
 // F, G, H and I are basic CPID functions.
-inline CPID::uint4 CPID::F(uint4 x, uint4 y, uint4 z) {
-  return x&y | ~x&z;
+inline CPID::uint4 CPID::F(uint4 x, uint4 y, uint4 z) 
+{
+  return ((x&y) | (~x&z));
 }
  
-inline CPID::uint4 CPID::G(uint4 x, uint4 y, uint4 z) {
-  return x&z | y&~z;
+inline CPID::uint4 CPID::G(uint4 x, uint4 y, uint4 z) 
+{
+  return ((x&z) | (y&~z));
 }
  
 inline CPID::uint4 CPID::H(uint4 x, uint4 y, uint4 z) {
-  return x^y^z;
+  return (x^y^z);
 }
  
 inline CPID::uint4 CPID::I(uint4 x, uint4 y, uint4 z) {
@@ -320,7 +315,7 @@ void CPID::update(const char input[], size_type length)
 
 
 
-int BitwiseCount(std::string str, int pos)
+int BitwiseCount(std::string str, unsigned int pos)
 {
 	char ch;
 	if (pos < str.length())
@@ -349,9 +344,9 @@ int HexToByte(std::string hex)
 void CPID::update5(std::string longcpid, uint256 blockhash)
 {
 	std::string shash = blockhash.GetHex();
-
-    
 	std::string entropy = "";
+
+    /*
 	for (int z = 0; z < length; z++)
 	{
 		char c  = input[z];
@@ -365,13 +360,15 @@ void CPID::update5(std::string longcpid, uint256 blockhash)
 
 	}
 	printf("Entropy class %s",entropy.c_str());
-	
+	*/
+
+
 
   //  std::string cpid3 = "";
    int hexpos = 0;
    unsigned char* input = new unsigned char[(longcpid.length()/2)+1];
 	
-   for (int z = 0; z < longcpid.length(); z=z+2)
+   for (unsigned int z = 0; z < longcpid.length(); z=z+2)
    {
 	    //char c1 = input[i];
 		std::string hex = longcpid.substr(z,2);
@@ -384,9 +381,7 @@ void CPID::update5(std::string longcpid, uint256 blockhash)
 		hexpos++;
     }
     printf("Entropy length %u class %s",longcpid.length(),entropy.c_str());
-	//	har *path = new char[pathSize];
-	////////////////////////////////////////////////const unsigned char* input = (const unsigned char*)entropy.c_str(); 
-
+	
 
 	//	unsigned char* input = (unsigned char*)entropy.c_str();
 	unsigned char* input2 = new unsigned char[entropy.size()+1];
@@ -545,10 +540,8 @@ std::string CPID::boincdigest() const
 		non_finalized = non_finalized + ByteToHex(asc2);
   }
 
- 
   return non_finalized;
 }
-
 
 
 
@@ -611,7 +604,13 @@ std::string cpid_hash(std::string email, std::string bpk, uint256 blockhash)
 }
 
 
-bool IsCPIDValid(std::string cpid, std::string longcpid, uint256 blockhash)
+std::string boinc_hash(std::string email, std::string bpk, uint256 blockhash)
+{
+	  CPID c = CPID(email,bpk,blockhash);
+      return c.hexdigest();
+}
+
+bool CPID_IsCPIDValid(std::string cpid, std::string longcpid, uint256 blockhash)
 {
 	CPID c = CPID(cpid);
 	bool compared = c.Compare(cpid,longcpid,blockhash);
@@ -619,6 +618,4 @@ bool IsCPIDValid(std::string cpid, std::string longcpid, uint256 blockhash)
 }
 
 
-
-*/
 

@@ -43,7 +43,9 @@ std::vector<std::string> split(std::string s, std::string delim);
 double Lederstrumpf(double RAC, double NetworkRAC);
 double LederstrumpfMagnitude(double mag,int64_t locktime);
 
-std::string RetrieveCPID5(std::string s1);
+
+std::string RetrieveCPID5(std::string email,std::string bpk,uint256 blockhash);
+std::string RetrieveCPID6(std::string email,std::string bpk,uint256 blockhash);
 
 int TestAESHash(double rac, unsigned int diffbytes, uint256 scrypt_hash, std::string aeshash);
 std::string TxToString(const CTransaction& tx, const uint256 hashBlock, int64_t& out_amount, int64_t& out_locktime, int64_t& out_projectid, 
@@ -789,7 +791,21 @@ uint256 Skein(std::string sInput)
 }	
 
 
+void WriteCPIDToRPC(std::string email, std::string bpk, uint256 block, Array &results)
+{
+	std::string output = "";
+	output = RetrieveCPID5(email,bpk,block);
 
+	Object entry;
+	entry.push_back(Pair("Long CPID for " + email + " " + bpk+ block.GetHex(),output));
+	output = RetrieveCPID6(email,bpk,block);
+	entry.push_back(Pair("Shortended CPID", output));
+	//std
+	output = RetrieveMd5(bpk + email);
+	entry.push_back(Pair("std_md5",output));
+	results.push_back(entry);
+	
+}
 Value execute(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
@@ -830,21 +846,28 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "testcpid")
 	{
-		//std::string hi = RetrieveCPID5("cpid1");
-		//entry.push_back(Pair("cpid1",hi));
-		/*
-		std::string hello = RetrieveMd5("123@yahoo.com");
-		entry.push_back(Pair("cpid1",hello));	
-		results.push_back(entry);
-		hi = RetrieveCPID5("");
-		entry.push_back(Pair("Empty",hi));
-		hi = RetrieveCPID5("a@yahoo.com");
-		entry.push_back(Pair("1",hi));
-		results.push_back(entry);
-		hi = RetrieveCPID5("cpid3@yahoo.com");
-		entry.push_back(Pair("2",hi));
-		results.push_back(entry);
-		*/
+		std::string bpk = "29dbf4a4f2e2baaff5f5e89e2df98bc8";
+		std::string email = "ebola@gridcoin.us";
+		uint256 block = 123456789;
+		std::string hi = "";
+
+		//1
+		WriteCPIDToRPC(email,bpk,block,results);
+		//2
+		email = "ebol349324923849023908429084892098023423432423423424332a@gridcoin.us";
+		WriteCPIDToRPC(email,bpk,block,results);
+		email="ha";
+		WriteCPIDToRPC(email,bpk,block,results);
+
+		//Empty
+		email="";
+		WriteCPIDToRPC(email,bpk,block,results);
+		//Wrong Block
+		email="ebola@gridcoin.us";
+		WriteCPIDToRPC(email,bpk,0,results);
+		WriteCPIDToRPC(email,bpk,1,results);
+		WriteCPIDToRPC(email,bpk,123499934534,results);
+
 	}
 	else if (sItem == "reindex")
 	{
@@ -1307,7 +1330,8 @@ Value listitem(const Array& params, bool fHelp)
 		}
 		printf ("generating cpid report %s",sitem.c_str());
 
-
+		//if (structcpid.cpid == GlobalCPUMiningCPID.cpid || structcpid.cpid=="INVESTOR" || structcpid.cpid=="investor")
+				
 		for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii) 
 		{
 
@@ -1316,7 +1340,7 @@ Value listitem(const Array& params, bool fHelp)
 	        if (structcpid.initialized) 
 			{ 
 			
-				if (structcpid.cpid == GlobalCPUMiningCPID.cpid || structcpid.cpid=="INVESTOR" || structcpid.cpid=="investor")
+				if (true)
 				{
 					Object entry;
 	

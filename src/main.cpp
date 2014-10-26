@@ -48,7 +48,13 @@ CCriticalSection cs_main;
 
 CTxMemPool mempool;
 unsigned int nTransactionsUpdated = 0;
-extern std::string RetrieveCPID5(std::string s1);
+
+
+extern std::string RetrieveCPID5(std::string email,std::string bpk,uint256 blockhash);
+
+extern std::string RetrieveCPID6(std::string email,std::string bpk,uint256 blockhash);
+
+
 extern uint256 GridcoinMultipleAlgoHash(std::string t1);
 extern bool OutOfSyncByAgeWithChanceOfMining();
 
@@ -3833,18 +3839,21 @@ std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end
 
 
 
-std::string RetrieveCPID5(std::string s1)
+std::string RetrieveCPID5(std::string email,std::string bpk,uint256 blockhash)
 {
-	/*
-	std::string me = cpid_hash(s1,"23456234",123456789012);
+	
+	std::string me = cpid_hash(email,bpk,blockhash);
+	std::string bh = boinc_hash(email,bpk,blockhash);
 	bool result = false;
-	std::string shortcpid = me.substr(0,32);
-	result =  IsCPIDValid(shortcpid, me, 123456789012);
-	printf("result %s",YesNo(result).c_str());
+	result =  CPID_IsCPIDValid(bh, me,blockhash);
+	printf("Short CPID %s, Long CPID %s, result %s",bh.c_str(),me.c_str(),YesNo(result).c_str());
 	return me;
-	*/
+}
 
-
+std::string RetrieveCPID6(std::string email,std::string bpk,uint256 blockhash)
+{
+	std::string bh = boinc_hash(email,bpk,blockhash);
+	return bh;
 }
 
 std::string RetrieveMd5(std::string s1)
