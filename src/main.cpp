@@ -2626,7 +2626,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	//Gridcoin: Maintain network consensus for Magnitude & Outstanding Amount Owed by CPID  
 	
 	//Grandfather
-	int nGrandfather = 18550;
+	int nGrandfather = 22000;
 
 
 	double mint = pindex->nMint/COIN;
@@ -3226,7 +3226,7 @@ bool CBlock::AcceptBlock()
 {
     AssertLockHeld(cs_main);
 	//Grandfather:
-	int nGrandfather = 18550;
+	int nGrandfather = 22000;
 
     if (nVersion > CURRENT_VERSION)
         return DoS(100, error("AcceptBlock() : reject unknown block version %d", nVersion));
