@@ -51,6 +51,8 @@ static const int64_t MAX_MONEY = 2000000000 * COIN;
 inline bool MoneyRange(int64_t nValue) { return (nValue >= 0 && nValue <= MAX_MONEY); }
 /** Threshold for nLockTime: below this value it is interpreted as block number, otherwise as UNIX timestamp. */
 static const unsigned int LOCKTIME_THRESHOLD = 500000000; // Tue Nov  5 00:53:20 1985 UTC
+static const unsigned int MINIMUM_CHECKPOINT_TRANSMISSION_BALANCE = 2000000;
+
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

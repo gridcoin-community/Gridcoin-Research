@@ -21,6 +21,8 @@ static int64_t GetStakeCombineThreshold() { return IsProtocolV2(nBestHeight) ? (
 bool OutOfSyncByAgeWithChanceOfMining();
 
 std::string SerializeBoincBlock(MiningCPID mcpid);
+double GetPoSKernelPS2();
+
 
 
 MiningCPID GetNextProject();
@@ -1109,6 +1111,8 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
 
 void CWallet::AvailableCoinsForStaking(vector<COutput>& vCoins, unsigned int nSpendTime) const
 {
+
+	//10-27-2014
     vCoins.clear();
 
     {
@@ -1616,7 +1620,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	//WEIGHT SECTION 1: When a new CPID enters the ecosystem, and is seen on less than 9 blocks, this newbie
 	//receives an extra X in stakeweight to help them get started.
 	//10-22-2014
-	if (NewbieCompliesWithFirstTimeStakeWeightRule() && nWeight > 0)
+	if (NewbieCompliesWithFirstTimeStakeWeightRule())
 	{
 		if (GetTime() < 1414028435)
 		{
@@ -1624,8 +1628,9 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 		}
 		else if (GetTime() > 1414028435)
 		{
-		
-			nWeight += 1000000;
+			int64_t NetworkWeight = GetPoSKernelPS2();
+			nWeight += (NetworkWeight*.01);
+			printf("Newbie Network Weight=%f",nWeight);
 		}
 	}
 	else if (nWeight)
@@ -1644,6 +1649,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     CBigNum bnTargetPerCoinDay;
     bnTargetPerCoinDay.SetCompact(nBits);
 
+	printf("1.");
+
     txNew.vin.clear();
     txNew.vout.clear();
 
@@ -1654,6 +1661,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
     // Choose coins to use
     int64_t nBalance = GetBalance();
+	printf("2.");
 
     if (nBalance <= nReserveBalance)
         return false;
@@ -1682,13 +1690,20 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
     set<pair<const CWalletTx*,unsigned int> > setCoins;
     int64_t nValueIn = 0;
+	printf("3.");
 
     // Select coins with suitable depth
     if (!SelectCoinsForStaking(nBalance - nReserveBalance, txNew.nTime, setCoins, nValueIn))
+	{
+		printf("No coins to stake.");
         return false;
+	}
 
     if (setCoins.empty())
+	{
+		printf("Coins empty.");
         return false;
+	}
 
     int64_t nCredit = 0;
     CScript scriptPubKeyKernel;
@@ -1855,6 +1870,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
         }
     }
 
+	printf("4.");
     // Calculate coin age reward
     {
         uint64_t nCoinAge;

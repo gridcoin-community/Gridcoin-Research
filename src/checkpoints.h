@@ -72,6 +72,7 @@ public:
     uint256 hashCheckpoint;      // checkpoint block
     double balance;
 	std::string SendingWalletAddress;
+	std::string SendersWalletAddress;
 
     IMPLEMENT_SERIALIZE
     (

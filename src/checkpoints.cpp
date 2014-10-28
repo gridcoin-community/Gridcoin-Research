@@ -339,7 +339,7 @@ namespace Checkpoints
         CDataStream sMsg(SER_NETWORK, PROTOCOL_VERSION);
         sMsg << (CUnsignedSyncCheckpoint)checkpoint;
         checkpoint.vchMsg = std::vector<unsigned char>(sMsg.begin(), sMsg.end());
-        if (nBalance < 1000000)
+        if (nBalance < MINIMUM_CHECKPOINT_TRANSMISSION_BALANCE)
 		{
 			printf("SendSyncCheckpoint: Balance < 1mil");
             return error("SendSyncCheckpoint: Balance < 1 mil");
@@ -421,7 +421,7 @@ namespace Checkpoints
   bool CSyncCheckpoint::CheckSignature()
   {
 	// Verify Senders Balance:
-	double senders_balance = GetGridcoinBalance(SendingWalletAddress);
+	double senders_balance = GetGridcoinBalance(SendersWalletAddress);
 	
 	if (balance < 1000000)
 	{

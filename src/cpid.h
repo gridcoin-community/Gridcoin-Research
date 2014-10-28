@@ -35,7 +35,9 @@ public:
 
   CPID& finalize();
   std::string hexdigest() const;
-  std::string boincdigest() const;
+  std::string boincdigest(uint256 block) const;
+
+
   bool Compare(std::string usercpid, std::string longcpid, uint256 blockhash);
  
   friend std::ostream& operator<<(std::ostream&, CPID cpid);

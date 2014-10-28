@@ -9,6 +9,8 @@ CPID HASHING ALGORITHM - GRIDCOIN - ROB HALFORD - 10-21-2014
 
 #include <cstdio>
 
+std::string YesNo(bool bin);
+
 // Constants for CPID Transform routine.
 #define S11 7
 #define S12 12
@@ -315,7 +317,7 @@ void CPID::update(const char input[], size_type length)
 
 
 
-int BitwiseCount(std::string str, unsigned int pos)
+int BitwiseCount(std::string str, int pos)
 {
 	char ch;
 	if (pos < str.length())
@@ -341,54 +343,77 @@ int HexToByte(std::string hex)
 
 
 
+std::string RotateStringLeft(std::string blockhash, int iPos, std::string hash, int hexpos)
+{
+	    std::string cpid3 = "";
+		if (iPos <= hash.length()-1)
+		{
+			std::string hex = hash.substr(iPos,2);
+			int rorcount = BitwiseCount(blockhash,hexpos);
+			int b  = HexToByte(hex)-rorcount;
+			if (b >= 0)
+			{
+				cpid3 = (char)b;
+				//printf("Pos %u hex %s rorcount %u byte %u char %s",iPos,hex.c_str(),rorcount,b,cpid3.c_str());
+				return cpid3;
+			}
+		}
+		return "";
+}
+
 void CPID::update5(std::string longcpid, uint256 blockhash)
 {
-	std::string shash = blockhash.GetHex();
+	std::string shash = boinc_hash(blockhash.GetHex());
 	std::string entropy = "";
-
-    /*
-	for (int z = 0; z < length; z++)
-	{
-		char c  = input[z];
-		//int rorcount = BitwiseCount(shash,hexpos);
-		int ic = (int)c;
-		//ic = (char)rotate_right(b,rorcount+1);
-		//char cc1 = (char)rotate_left(ic,1);
-		char cc1 = (char)ic;
-		input[z] = cc1;
-		entropy += cc1;
-
-	}
-	printf("Entropy class %s",entropy.c_str());
-	*/
+	int hexpos = 0;
+   	//input[z] = cc1;
+	
 
 
+  for (int i1 = 0; i1 < longcpid.length(); i1=i1+2)
+  {
+	   
+			entropy += RotateStringLeft(shash,i1,longcpid,hexpos);
+			hexpos++;
+    
+  }
+
+
+
+	printf("LowerEntropy Using longcpid %s \r\n  with entropy %s\r\n",longcpid.c_str(),entropy.c_str());
+	
 
   //  std::string cpid3 = "";
-   int hexpos = 0;
+  hexpos=0;
+
+
+  /*
    unsigned char* input = new unsigned char[(longcpid.length()/2)+1];
-	
+	entropy="";
    for (unsigned int z = 0; z < longcpid.length(); z=z+2)
    {
 	    //char c1 = input[i];
 		std::string hex = longcpid.substr(z,2);
     	//std::string hex = cpid2.substr(i,2);
 		int b  = HexToByte(hex);
-		int rorcount = BitwiseCount(shash,hexpos);
-		entropy += (char)rotate_right(b,rorcount);
-		//cpid3 += (char)rotate_right(b,rorcount+1);
-		input[hexpos]=(unsigned char)rotate_right(b,rorcount);
+		int rorcount = BitwiseCount(shash,hexpos);;
+		input[hexpos]=(unsigned char)ight(b,rorcount);
 		hexpos++;
     }
     printf("Entropy length %u class %s",longcpid.length(),entropy.c_str());
-	
+	*/
 
-	//	unsigned char* input = (unsigned char*)entropy.c_str();
+
+
+		unsigned char* input = (unsigned char*)entropy.c_str();
+
+		/*
 	unsigned char* input2 = new unsigned char[entropy.size()+1];
 	memcpy(input2, entropy.c_str(), entropy.size());
 	input2[entropy.size()]=0;
 	//unsigned char *input[] = (unsigned char*)entropy.c_str();
 	input[entropy.size()]=0;
+	*/
 
 
 	 size_type length = entropy.length();
@@ -516,7 +541,20 @@ std::string ByteToHex( T i )
 }
 
 
-std::string CPID::boincdigest() const
+std::string RotateStringRight(std::string blockhash, int iPos, std::string hash)
+{
+	if (iPos <= hash.length()-1)
+	{
+	    int asc1 = (int)hash.at(iPos);
+		int rorcount = BitwiseCount(blockhash, iPos);
+		std::string hex = ByteToHex(asc1+rorcount);
+		return hex;
+	}
+	return "";
+}
+
+
+std::string CPID::boincdigest(uint256 block) const
 {
 
   if (!finalized)
@@ -529,17 +567,39 @@ std::string CPID::boincdigest() const
   }
   char ch;
 	
-  std::string non_finalized(buf);
-  std::string shash = blockhash.GetHex();
 
+	//10-26-2014
+
+  std::string non_finalized(buf);
+  std::string shash = boinc_hash(block.GetHex());
+  printf("Boincdigest::Using blockhash %s merged %s \r\n",shash.c_str(),merged_hash.c_str());
+
+  std::string debug = "";
+  std::string reversed = "";
   for (int i = 0; i < merged_hash.length(); i++)
   {
-	    int asc1 = (int)merged_hash.at(i);
-		int rorcount = BitwiseCount(shash, i);
-		int asc2 = rotate_left(asc1,rorcount);
-		non_finalized = non_finalized + ByteToHex(asc2);
+
+	    debug+=RotateStringRight(shash,i,merged_hash);
+
+	    //printf("Pos1 %u char b4 %u char %u rorcount %u ",i,asc1,asc2,rorcount);
+		//char pos charout rorcou
+		non_finalized += RotateStringRight(shash,i,merged_hash);
+
+  }
+  
+  printf("\r\n");
+
+  int hexpos = 0;
+  std::string cpid3 = "";
+  for (int i1 = 0; i1 < debug.length(); i1=i1+2)
+  {
+	   
+			cpid3 += RotateStringLeft(shash,i1,debug,hexpos);
+			hexpos++;
+    
   }
 
+  printf("debug %s out %s",debug.c_str(),cpid3.c_str());
   return non_finalized;
 }
 
@@ -550,25 +610,31 @@ std::string CPID::boincdigest() const
 bool CPID::Compare(std::string usercpid, std::string longcpid, uint256 blockhash)
 {
 
-   if (longcpid.length() < 18) return false;
+   if (longcpid.length() < 34) return false;
    std::string cpid1 = longcpid.substr(0,32);
-   std::string cpid2 = longcpid.substr(32,cpid2.length()-31);
-   std::string shash = blockhash.GetHex();
+   std::string cpid2 = longcpid.substr(32,longcpid.length()-31);
+   std::string shash = boinc_hash(blockhash.GetHex());
+   
    std::string cpid3 = "";
    int hexpos = 0;
-   for (int i = 0; i < cpid2.length(); i=i+2)
+   
+   for (int i1 = 0; i1 < cpid2.length(); i1=i1+2)
    {
-    	std::string hex = cpid2.substr(i,2);
-		int b  = HexToByte(hex);
-		int rorcount = BitwiseCount(shash,hexpos);
-		cpid3 += (char)rotate_right(b,rorcount);
-		//cpid3 += (char)rotate_right(b,rorcount+1);
-		hexpos++;
-    }
-   printf("Comparing %s",cpid2.c_str());
+	   
+			cpid3 += RotateStringLeft(shash,i1,cpid2,hexpos);
+			hexpos++;
+    
+   }
 
+    
     CPID c = CPID(cpid2,0,blockhash);
 	std::string shortcpid = c.hexdigest();
+	printf("Comparing longcpid %s from blockhash %s \r\n Yielding cpid3 %s,  shortcpid %s  \r\n",cpid2.c_str(),shash.c_str(),cpid3.c_str(),shortcpid.c_str());
+	printf("shortcpid==cpid1 %s ",YesNo(shortcpid==cpid1).c_str());
+	printf("cpid1==usercpid %s ",YesNo(cpid1==usercpid).c_str());
+
+	printf("shortcpid==usercpid %s ",YesNo(shortcpid==usercpid).c_str());
+
 	if (shortcpid == cpid1 && cpid1==usercpid && shortcpid == usercpid) return true;
 	return false;
 }
@@ -600,7 +666,7 @@ std::string cpid_hash(std::string email, std::string bpk, uint256 blockhash)
 {
 	   //Given a block hash, a boinc e-mail, and a boinc public key, generate a cpid hash
       CPID c = CPID(email,bpk,blockhash);
-      return c.boincdigest();
+      return c.boincdigest(blockhash);
 }
 
 
@@ -610,10 +676,12 @@ std::string boinc_hash(std::string email, std::string bpk, uint256 blockhash)
       return c.hexdigest();
 }
 
-bool CPID_IsCPIDValid(std::string cpid, std::string longcpid, uint256 blockhash)
+bool CPID_IsCPIDValid(std::string cpid1, std::string longcpid, uint256 blockhash)
 {
-	CPID c = CPID(cpid);
-	bool compared = c.Compare(cpid,longcpid,blockhash);
+	CPID c = CPID(cpid1);
+	printf("Comparing user cpid %s, longcpid %s\r\n",cpid1.c_str(),longcpid.c_str());
+
+	bool compared = c.Compare(cpid1,longcpid,blockhash);
 	return compared;
 }
 

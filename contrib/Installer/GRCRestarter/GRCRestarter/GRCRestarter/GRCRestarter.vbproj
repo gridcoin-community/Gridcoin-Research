@@ -119,6 +119,7 @@
     </EmbeddedResource>
     <EmbeddedResource Include="WatchDog.resx">
       <DependentUpon>WatchDog.vb</DependentUpon>
+      <SubType>Designer</SubType>
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>

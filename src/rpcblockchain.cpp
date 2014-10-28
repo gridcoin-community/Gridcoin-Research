@@ -6,6 +6,7 @@
 #include "main.h"
 #include "bitcoinrpc.h"
 #include <fstream>
+#include "cpid.h"
 
 #include "kernel.h"
 
@@ -797,12 +798,26 @@ void WriteCPIDToRPC(std::string email, std::string bpk, uint256 block, Array &re
 	output = RetrieveCPID5(email,bpk,block);
 
 	Object entry;
-	entry.push_back(Pair("Long CPID for " + email + " " + bpk+ block.GetHex(),output));
+	entry.push_back(Pair("Long CPID for " + email + " " + block.GetHex(),output));
 	output = RetrieveCPID6(email,bpk,block);
 	entry.push_back(Pair("Shortended CPID", output));
 	//std
 	output = RetrieveMd5(bpk + email);
 	entry.push_back(Pair("std_md5",output));
+	//Stress test
+	std::string me = cpid_hash(email,bpk,block);
+	std::string bh = boinc_hash(email,bpk,block);
+	entry.push_back(Pair("LongCPID2",me));
+	entry.push_back(Pair("stdCPID2",bh));
+
+	bool result;
+	result =  CPID_IsCPIDValid(bh, me,block);
+	
+	entry.push_back(Pair("Stress Test 1",result));
+
+	result =  CPID_IsCPIDValid(bh, me,block+1);
+	entry.push_back(Pair("Stress Test 2",result));
+
 	results.push_back(entry);
 	
 }
@@ -848,7 +863,7 @@ Value execute(const Array& params, bool fHelp)
 	{
 		std::string bpk = "29dbf4a4f2e2baaff5f5e89e2df98bc8";
 		std::string email = "ebola@gridcoin.us";
-		uint256 block = 123456789;
+		uint256 block("0x000005a247b397eadfefa58e872bc967c2614797bdc8d4d0e6b09fea5c191599");
 		std::string hi = "";
 
 		//1
@@ -1266,7 +1281,6 @@ Value listitem(const Array& params, bool fHelp)
 
 	}
 
-	/*
 	if (sitem=="validcpids") 
 	{
 		//Dump vectors:
@@ -1316,8 +1330,6 @@ Value listitem(const Array& params, bool fHelp)
 
 
     }
-	*/
-
 
 
 	if (sitem=="cpids") 

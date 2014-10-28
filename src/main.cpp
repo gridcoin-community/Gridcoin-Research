@@ -49,6 +49,8 @@ CCriticalSection cs_main;
 CTxMemPool mempool;
 unsigned int nTransactionsUpdated = 0;
 
+extern double GetPoSKernelPS2();
+
 
 extern std::string RetrieveCPID5(std::string email,std::string bpk,uint256 blockhash);
 
@@ -100,6 +102,7 @@ CBigNum bnProofOfStakeLimit(~uint256(0) >> 20);
 CBigNum bnProofOfStakeLimitV2(~uint256(0) >> 48);
 CBigNum bnProofOfWorkLimitTestNet(~uint256(0) >> 16);
 
+//Gridcoin Minimum Stake Age (4 Hours)
 unsigned int nStakeMinAge = 4 * 60 * 60; // 4 hours
 unsigned int nStakeMaxAge = -1; // unlimited
 unsigned int nModifierInterval = 10 * 60; // time to elapse before new modifier is computed
@@ -2329,7 +2332,7 @@ bool OutOfSyncByAgeWithChanceOfMining()
 	{
 		bool oosbyage = OutOfSyncByAge();
 		if (!oosbyage) return oosbyage;
-		bool com = LessVerbose(100);
+		bool com = LessVerbose(50);
 		if (com) return false;
 		return true;
 	}
@@ -3493,10 +3496,10 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock)
 	double nBalance = GetTotalBalance();
 	std::string SendingWalletAddress = DefaultWalletAddress();
     printf("ProcessBlock: ACCEPTED, Current Balance %f \r\n",nBalance);
-	//10-25-2014 Gridcoin - Include node balance and GRC Sending Address in sync checkpoint
+	//10-26-2014 Gridcoin - Include node balance and GRC Sending Address in sync checkpoint
     // ppcoin: if responsible for sync-checkpoint send it
     // if (pfrom && !CSyncCheckpoint::strMasterPrivKey.empty())        Checkpoints::SendSyncCheckpoint(Checkpoints::AutoSelectSyncCheckpoint());
-	if (pfrom && nBalance > 1000000)
+	if (pfrom && (nBalance > MINIMUM_CHECKPOINT_TRANSMISSION_BALANCE))
 	{
 			Checkpoints::SendSyncCheckpointWithBalance(Checkpoints::AutoSelectSyncCheckpoint(),nBalance,SendingWalletAddress);
 	}
@@ -3525,12 +3528,14 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
         txCoinStake.nTime &= ~STAKE_TIMESTAMP_MASK;
 
     int64_t nSearchTime = txCoinStake.nTime; // search to current time
+	printf("6.");
 
     if (nSearchTime > nLastCoinStakeSearchTime)
     {
         int64_t nSearchInterval = IsProtocolV2(nBestHeight+1) ? 1 : nSearchTime - nLastCoinStakeSearchTime;
         if (wallet.CreateCoinStake(wallet, nBits, nSearchInterval, nFees, txCoinStake, key))
         {
+			printf("7.");
             if (txCoinStake.nTime >= max(pindexBest->GetPastTimeLimit()+1, PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1)))
             {
                 // make sure coinstake would meet timestamp protocol
@@ -3843,10 +3848,6 @@ std::string RetrieveCPID5(std::string email,std::string bpk,uint256 blockhash)
 {
 	
 	std::string me = cpid_hash(email,bpk,blockhash);
-	std::string bh = boinc_hash(email,bpk,blockhash);
-	bool result = false;
-	result =  CPID_IsCPIDValid(bh, me,blockhash);
-	printf("Short CPID %s, Long CPID %s, result %s",bh.c_str(),me.c_str(),YesNo(result).c_str());
 	return me;
 }
 
@@ -4921,13 +4922,16 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
         }
     }
-    else if (strCommand == "checkpoint2" || strCommand=="checkpoint")
+    else if (strCommand == "checkpoint")
     {
-		//10-25-2014 - Receive Checkpoint from other nodes:
+		//10-26-2014 - Receive Checkpoint from other nodes:
         CSyncCheckpoint checkpoint;
         vRecv >> checkpoint;
 		//Checkpoint received from node with more than 1 Million GRC:
-		printf("Received checkpoint: Node balance %f, GRC Address %s",checkpoint.balance,checkpoint.SendingWalletAddress.c_str());
+		if (LessVerbose(100))
+		{
+			printf("Received checkpoint: Node balance %f, GRC Address %s",checkpoint.balance,checkpoint.SendingWalletAddress.c_str());
+		}
 
         if (checkpoint.ProcessSyncCheckpoint(pfrom))
         {

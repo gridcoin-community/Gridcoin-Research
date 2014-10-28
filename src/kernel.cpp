@@ -8,6 +8,9 @@
 #include "kernel.h"
 #include "txdb.h"
 
+
+double GetPoSKernelPS2();
+
 using namespace std;
 MiningCPID DeserializeBoincBlock(std::string block);
 bool IsCPIDValid(std::string cpid, std::string ENCboincpubkey);
@@ -291,7 +294,7 @@ bool NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::st
 					StructCPID UntrustedHost = mvMagnitudes[boincblock.cpid]; //Contains Consensus Magnitude
 					if (UntrustedHost.initialized)
 					{
-						if (UntrustedHost.Accuracy > 9) 
+						if (UntrustedHost.Accuracy > 25) 
 						{	
 							return false; 
 						}
@@ -349,9 +352,15 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	
 	//CBigNum bnCoinDayWeight = CBigNum(nValueIn + (5*COIN) ) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
 	int64_t NewbieStakeWeightModifier = 0;
+
+	
 	if (NewbieCompliesWithFirstTimeStakeWeightRule(blockFrom,hashBoinc)) 
 	{
-			NewbieStakeWeightModifier = 15000*COIN;
+		    //10-27-2014 Dynamic Newbie Weight
+		    uint64_t nNetworkWeight = GetPoSKernelPS2();
+			NewbieStakeWeightModifier = nNetworkWeight*.0009*COIN;
+			//printf("NewbieStakeWeightModifier %" PRIu64 " \r\n ", NewbieStakeWeightModifier);
+
 	}
 	else
 	{
@@ -367,7 +376,10 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
     int64_t nStakeModifierTime = 0;
 
     if (!GetKernelStakeModifier(hashBlockFrom, nStakeModifier, nStakeModifierHeight, nStakeModifierTime, fPrintProofOfStake))
-        return false;
+    {
+		printf("{NoStkMod}");
+		return false;
+	}
     ss << nStakeModifier;
 
     ss << nTimeBlockFrom << nTxPrevOffset << txPrev.nTime << prevout.n << nTimeTx;
@@ -388,7 +400,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
     // Now check if proof-of-stake hash meets target protocol
     if (CBigNum(hashProofOfStake) > bnCoinDayWeight * bnTargetPerCoinDay)
 	{   
-		//printf(".PORDiffTooLow.");
+		printf("~");
         return false;
 	}
     if (fDebug && !fPrintProofOfStake)
