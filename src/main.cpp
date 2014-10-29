@@ -1810,15 +1810,15 @@ int64_t GetMaximumBoincSubsidy(int64_t nTime)
 {
 	// Gridcoin Global Daily Maximum Researcher Subsidy Schedule
 	int MaxSubsidy = 500;
-    if (nTime >= 1410393600 && nTime <= 1414627200) MaxSubsidy = 	500; // between inception and  10-30-2014
-	if (nTime >= 1414627200 && nTime <= 1417305600) MaxSubsidy = 	400; // between 10-30-2014 and 11-30-2014
-	if (nTime >= 1417305600 && nTime <= 1419897600) MaxSubsidy = 	300; // between 11-30-2014 and 12-30-2014
-	if (nTime >= 1419897600 && nTime <= 1422576000) MaxSubsidy = 	250; // between 12-30-2014 and 01-30-2015
-	if (nTime >= 1422576000 && nTime <= 1425254400) MaxSubsidy = 	200; // between 01-30-2015 and 02-28-2015
-	if (nTime >= 1425254400 && nTime <= 1427673600) MaxSubsidy = 	150; // between 02-28-2015 and 03-30-2015
-	if (nTime >= 1427673600 && nTime <= 1430352000) MaxSubsidy = 	100; // between 03-30-2015 and 04-30-2015
-	if (nTime >= 1430352000 && nTime <= 1432944000) MaxSubsidy = 	50;  // between 04-30-2015 and 05-30-2015
-	if (nTime > 1432944000) MaxSubsidy = 	5; // from  05-30-2015 forever
+    if (nTime >= 1410393600 && nTime <= 1417305600) MaxSubsidy = 	500; // between inception  and 11-30-2014
+	if (nTime >= 1417305600 && nTime <= 1419897600) MaxSubsidy = 	400; // between 11-30-2014 and 12-30-2014
+	if (nTime >= 1419897600 && nTime <= 1422576000) MaxSubsidy = 	300; // between 12-30-2014 and 01-30-2015
+	if (nTime >= 1422576000 && nTime <= 1425254400) MaxSubsidy = 	250; // between 01-30-2015 and 02-28-2015
+	if (nTime >= 1425254400 && nTime <= 1427673600) MaxSubsidy = 	200; // between 02-28-2015 and 03-30-2015
+	if (nTime >= 1427673600 && nTime <= 1430352000) MaxSubsidy = 	150; // between 03-30-2015 and 04-30-2015
+	if (nTime >= 1430352000 && nTime <= 1438310876) MaxSubsidy = 	100; // between 05-01-2015 and 07-31-2015
+	if (nTime >= 1438310876 && nTime <= 1445309276) MaxSubsidy = 	 75; // between 08-01-2015 and 10-20-2015
+	if (nTime > 1445309276)                         MaxSubsidy =   	 50; // from  10-21-2015 forever
     return MaxSubsidy;
 
 }
@@ -1827,16 +1827,15 @@ int64_t GetCoinYearReward(int64_t nTime)
 {
 	// Gridcoin Global Interest Rate Schedule
 	int64_t INTEREST = 9;
-   	if (nTime >= 1410393600 && nTime <= 1414627200) INTEREST = 	 9 * CENT; // 9% between inception and 10-30-2014
-	if (nTime >= 1414627200 && nTime <= 1417305600) INTEREST = 	 8 * CENT; // 09% between 10-30-2014 and 11-30-2014
-	if (nTime >= 1417305600 && nTime <= 1419897600) INTEREST = 	 7 * CENT; // 08% between 11-30-2014 and 12-30-2014
-	if (nTime >= 1419897600 && nTime <= 1422576000) INTEREST = 	 6 * CENT; // 07% between 12-30-2014 and 01-30-2015
-	if (nTime >= 1422576000 && nTime <= 1425254400) INTEREST = 	 5 * CENT; // 06% between 01-30-2015 and 02-30-2015
-	if (nTime >= 1425254400 && nTime <= 1427673600) INTEREST = 	 4 * CENT; // 05% between 02-30-2015 and 03-30-2015
-	if (nTime >= 1427673600 && nTime <= 1430352000) INTEREST = 	 3 * CENT; // 04% between 03-30-2015 and 04-30-2015
-	if (nTime >= 1430352000 && nTime <= 1432944000) INTEREST = 	 2 * CENT; // 03% between 04-30-2015 and 05-30-2015
-	if (nTime > 1432944000) INTEREST = 	 1 * CENT; // 02% from 05-30-2015 forever
-
+   	if (nTime >= 1410393600 && nTime <= 1417305600) INTEREST = 	 9 * CENT; // 09% between inception  and 11-30-2014
+	if (nTime >= 1417305600 && nTime <= 1419897600) INTEREST = 	 8 * CENT; // 08% between 11-30-2014 and 12-30-2014
+	if (nTime >= 1419897600 && nTime <= 1422576000) INTEREST = 	 7 * CENT; // 07% between 12-30-2014 and 01-30-2015
+	if (nTime >= 1422576000 && nTime <= 1425254400) INTEREST = 	 6 * CENT; // 06% between 01-30-2015 and 02-30-2015
+	if (nTime >= 1425254400 && nTime <= 1427673600) INTEREST = 	 5 * CENT; // 05% between 02-30-2015 and 03-30-2015
+	if (nTime >= 1427673600 && nTime <= 1430352000) INTEREST = 	 4 * CENT; // 04% between 03-30-2015 and 04-30-2015
+	if (nTime >= 1430352000 && nTime <= 1438310876) INTEREST =   3 * CENT; // 03% between 05-01-2015 and 07-31-2015
+	if (nTime >= 1438310876 && nTime <= 1445309276) INTEREST = 2.5 * CENT; //2.5% between 08-01-2015 and 10-20-2015
+	if (nTime > 1445309276)                         INTEREST = 1.5 * CENT; //1.5% from 10-21-2015 forever
 	return INTEREST;
 }
 
@@ -1844,15 +1843,15 @@ double GetMagnitudeMultiplier(int64_t nTime)
 {
 	// Gridcoin Global Resarch Subsidy Multiplier Schedule
 	double magnitude_multiplier = 2; 
-	if (nTime >= 1410393600 && nTime <= 1414627200) magnitude_multiplier =  2;   //  between inception and 10-30-2014
-	if (nTime >= 1414627200 && nTime <= 1417305600) magnitude_multiplier =  1.5; //  between 10-30-2014 and 11-30-2014
-	if (nTime >= 1417305600 && nTime <= 1419897600) magnitude_multiplier =  1;   //   between 11-30-2014 and 12-30-2014
-	if (nTime >= 1419897600 && nTime <= 1422576000) magnitude_multiplier = .9;   // .9* between 12-30-2014 and 01-30-2015
-	if (nTime >= 1422576000 && nTime <= 1425254400) magnitude_multiplier = .8;   // .8* between 01-30-2015 and 02-30-2015
-	if (nTime >= 1425254400 && nTime <= 1427673600) magnitude_multiplier = .7;   // .7* between 02-30-2015 and 03-30-2015
-	if (nTime >= 1427673600 && nTime <= 1430352000) magnitude_multiplier = .6;   // .6* between 03-30-2015 and 04-30-2015
-	if (nTime >= 1430352000 && nTime <= 1432944000) magnitude_multiplier = .45;  // .45* between 04-30-2015 and 05-30-2015
-	if (nTime > 1432944000) magnitude_multiplier = .3; // .3* from  05-30-2015 forever
+	if (nTime >= 1410393600 && nTime <= 1417305600) magnitude_multiplier =    2;  // between inception and 11-30-2014
+	if (nTime >= 1417305600 && nTime <= 1419897600) magnitude_multiplier =  1.5;  // between 11-30-2014 and 12-30-2014
+	if (nTime >= 1419897600 && nTime <= 1422576000) magnitude_multiplier =    1;  // between 12-30-2014 and 01-30-2015
+	if (nTime >= 1422576000 && nTime <= 1425254400) magnitude_multiplier =   .9;  // between 01-30-2015 and 02-30-2015
+	if (nTime >= 1425254400 && nTime <= 1427673600) magnitude_multiplier =   .8;  // between 02-30-2015 and 03-30-2015
+	if (nTime >= 1427673600 && nTime <= 1430352000) magnitude_multiplier =   .7;  // between 03-30-2015 and 04-30-2015
+    if (nTime >= 1430352000 && nTime <= 1438310876) magnitude_multiplier =   .6;  // between 05-01-2015 and 07-31-2015
+	if (nTime >= 1438310876 && nTime <= 1445309276) magnitude_multiplier =  .55;  // between 08-01-2015 and 10-20-2015
+	if (nTime > 1445309276)                         magnitude_multiplier =  .50;  // from 10-21-2015  forever
 	return magnitude_multiplier;
 }
 
