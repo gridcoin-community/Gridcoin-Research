@@ -28,6 +28,7 @@ class CNode;
 class CTxMemPool;
 
 static const int LAST_POW_BLOCK = 2050;
+extern unsigned int REORGANIZE_FAILED;
 
 /** The maximum allowed size for a serialized block, in bytes (network rule) */
 static const unsigned int MAX_BLOCK_SIZE = 1000000;
@@ -89,6 +90,7 @@ extern uint256 nBestInvalidTrust;
 extern uint256 hashBestChain;
 extern CBlockIndex* pindexBest;
 extern unsigned int nTransactionsUpdated;
+
 extern uint64_t nLastBlockTx;
 extern uint64_t nLastBlockSize;
 extern int64_t nLastCoinStakeSearchInterval;

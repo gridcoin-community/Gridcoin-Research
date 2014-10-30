@@ -48,6 +48,8 @@ CCriticalSection cs_main;
 
 CTxMemPool mempool;
 unsigned int nTransactionsUpdated = 0;
+unsigned int REORGANIZE_FAILED = 0;
+
 
 extern double GetPoSKernelPS2();
 
@@ -2871,6 +2873,16 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
         {
             txdb.TxnAbort();
             InvalidChainFound(pindexNew);
+			//10-30-2014 - Halford - Reboot when reorganize fails 3 times
+			REORGANIZE_FAILED++;
+			if (REORGANIZE_FAILED==3)
+			{
+				    int nResult = 0;
+					#if defined(WIN32) && defined(QT_GUI)
+						nResult = RebootClient();
+					#endif
+					printf("Rebooting...");
+			}
             return error("SetBestChain() : Reorganize failed");
         }
 
