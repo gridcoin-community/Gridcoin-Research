@@ -2337,6 +2337,23 @@ bool OutOfSyncByAgeWithChanceOfMining()
 {
 	try
 	{
+
+			bool oosbyage = OutOfSyncByAge();
+			//Rule 1: If  Last Block Out of sync by Age:
+			if (oosbyage)
+			{
+				//Return Out of Sync most of the time
+				bool com = LessVerbose(15);
+				if (!com) 
+				{
+					printf("{XZ1}");
+					return true; //Return Out OF Sync most of the time
+				}
+	
+			}
+			//////////////////////////////////////////////////////////
+
+		// Rule 2 : Dont mine on Fork Rule:
 		//10-31-2014 - R Halford
 		//If the diff is < .01 in Prod, Most likely the client is mining on a fork:
 		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
@@ -2346,15 +2363,11 @@ bool OutOfSyncByAgeWithChanceOfMining()
 		if (!fTestNet && PORDiff < .01 && nTime > 1414775728000)
 		{
 			printf("Most likely you are mining on a fork! Diff %f",PORDiff);
-			bool com = LessVerbose(25);
+			bool com = LessVerbose(100);
 			if (!com) return true;  //Return Out Of Sync Most of the time in this case
 
 		}
-		bool oosbyage = OutOfSyncByAge();
-		if (!oosbyage) return oosbyage;
-
-		bool com = LessVerbose(25);
-		if (!com) return true; //Return Out OF Sync most of the time
+		
 		return false;
 	}
 	catch (std::exception &e) 
