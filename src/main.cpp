@@ -2634,6 +2634,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		
 		if (IsLockTimeVeryRecent(nTime) && bb.cpid=="INVESTOR" && nStakeReward > 1)
 		{
+			//10-31-2014
 			int64_t nCalculatedResearchReward = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime);
 			if (nStakeReward > nCalculatedResearchReward*TOLERANCE_PERCENT)
             return DoS(1, error("ConnectBlock() : Investor Reward pays too much : cpid %s (actual=%"PRId64" vs calculated=%"PRId64")",
@@ -3540,12 +3541,18 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock)
 	double nBalance = GetTotalBalance();
 	std::string SendingWalletAddress = DefaultWalletAddress();
     printf("ProcessBlock: ACCEPTED, Current Balance %f \r\n",nBalance);
-	//10-26-2014 Gridcoin - Include node balance and GRC Sending Address in sync checkpoint
+	//10-31-2014 Gridcoin - Include node balance and GRC Sending Address in sync checkpoint
     // ppcoin: if responsible for sync-checkpoint send it
     // if (pfrom && !CSyncCheckpoint::strMasterPrivKey.empty())        Checkpoints::SendSyncCheckpoint(Checkpoints::AutoSelectSyncCheckpoint());
 	bool bUserQualified = IsUserQualifiedToSendCheckpoint();
+	//mapBlockIndex[hash]->nHeight
 
-	if (pfrom && (nBalance > MINIMUM_CHECKPOINT_TRANSMISSION_BALANCE) && bUserQualified)
+	
+	//CBlockIndex* pindex = pblock->ReadFromDisk(pindex);
+    double mint = mapBlockIndex[hash]->nMint/COIN;
+	printf("Staking amount %f \r\n",mint);
+
+	if (pfrom && (nBalance > MINIMUM_CHECKPOINT_TRANSMISSION_BALANCE) && bUserQualified && mint < 50)
 	{
 			Checkpoints::SendSyncCheckpointWithBalance(Checkpoints::AutoSelectSyncCheckpoint(),nBalance,SendingWalletAddress);
 	}
