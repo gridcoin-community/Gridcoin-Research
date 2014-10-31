@@ -2337,11 +2337,13 @@ bool OutOfSyncByAgeWithChanceOfMining()
 {
 	try
 	{
-		//10-30-2014 - R Halford
+		//10-31-2014 - R Halford
 		//If the diff is < .01 in Prod, Most likely the client is mining on a fork:
 		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
 		//printf("OOS_With_Diff %f",PORDiff);
-		if (!fTestNet && PORDiff < .01)
+		int64_t	nTime = GetTime();
+        //If nTime > 10-31-2014 13:00 CST 
+		if (!fTestNet && PORDiff < .01 && nTime > 1414775728000)
 		{
 			printf("Most likely you are mining on a fork! Diff %f",PORDiff);
 			bool com = LessVerbose(25);
