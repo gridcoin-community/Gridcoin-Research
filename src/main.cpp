@@ -52,6 +52,7 @@ unsigned int REORGANIZE_FAILED = 0;
 
 
 extern double GetPoSKernelPS2();
+extern void TallyInBackground();
 
 
 extern std::string RetrieveCPID5(std::string email,std::string bpk,uint256 blockhash);
@@ -237,6 +238,7 @@ std::string msCurrentRAC = "";
 
 //static boost::thread_group* minerThreads = NULL;
 static boost::thread_group* cpidThreads = NULL;
+static boost::thread_group* tallyThreads = NULL;
 extern void FlushGridcoinBlockFile(bool fFinalize);
 
 
@@ -2046,7 +2048,7 @@ int GetNumBlocksOfPeers()
 bool IsInitialBlockDownload()
 {
     LOCK(cs_main);
-    if (pindexBest == NULL || nBestHeight < Checkpoints::GetTotalBlocksEstimate())
+    if (pindexBest == NULL || nBestHeight < GetNumBlocksOfPeers())
         return true;
     static int64_t nLastUpdate;
     static CBlockIndex* pindexLastBest;
@@ -2323,6 +2325,7 @@ bool OutOfSyncByAge()
 
 bool LessVerbose(int iMax1000)
 {
+	 //Returns True when RND() level is lower than the number presented
 	 int iVerbosityLevel = rand() % 1000; 
 	 if (iVerbosityLevel < iMax1000) return true;
 	 return false;
@@ -2331,11 +2334,23 @@ bool OutOfSyncByAgeWithChanceOfMining()
 {
 	try
 	{
+		//10-30-2014 - R Halford
+		//If the diff is < 1 in Prod, Most likely the client is mining on a fork:
+		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+		//printf("OOS_With_Diff %f",PORDiff);
+		if (!fTestNet && PORDiff < .40)
+		{
+			printf("Most likely you are mining on a fork! Diff %f",PORDiff);
+			bool com = LessVerbose(10);
+			if (!com) return true;  //Return Out Of Sync Most of the time in this case
+
+		}
 		bool oosbyage = OutOfSyncByAge();
 		if (!oosbyage) return oosbyage;
-		bool com = LessVerbose(50);
-		if (com) return false;
-		return true;
+
+		bool com = LessVerbose(10);
+		if (!com) return true; //Return Out OF Sync most of the time
+		return false;
 	}
 	catch (std::exception &e) 
 	{
@@ -2434,7 +2449,10 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
             // Skip ECDSA signature verification when connecting blocks (fBlock=true)
             // before the last blockchain checkpoint. This is safe because block merkle hashes are
             // still computed and checked, and any change will be caught at the next checkpoint.
-            if (!(fBlock && (nBestHeight < Checkpoints::GetTotalBlocksEstimate())))
+			
+			//if (!(fBlock && (nBestHeight < Checkpoints::GetTotalBlocksEstimate())))
+            
+            if (!(fBlock && (nBestHeight < GetNumBlocksOfPeers() ) ))
             {
                 // Verify signature
                 if (!VerifySignature(txPrev, *this, i, 0))
@@ -2647,8 +2665,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 				nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime);
 				if (nStakeReward > (nCalculatedResearch*TOLERANCE_PERCENT))
 				{
-					TallyNetworkAverages(false);
-					//9-9-2014
+					//TallyNetworkAverages(false);
+					
 					nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime);
 					if (nStakeReward > (nCalculatedResearch*TOLERANCE_PERCENT))
 					{
@@ -3113,12 +3131,16 @@ bool Resuscitate()
 	CBlockIndex* pblockindex = FindBlockByHeight(ii);
 	block.ReadFromDisk(pblockindex);
 	pindexBest = pblockindex;
-    const CBlockLocator locator(pindexBest);
-	::SetBestChain(locator);
+
+	 InvalidChainFound(pindexBest);
+			
+
+//    const CBlockLocator locator(pindexBest);
+//	::SetBestChain(locator);
     // Notify UI to display prev block's coinbase if it was ours
-    static uint256 hashPrevBestCoinBase;
-    UpdatedTransaction(hashPrevBestCoinBase);
-    hashPrevBestCoinBase = block.vtx[0].GetHash();
+//    static uint256 hashPrevBestCoinBase;
+ //   UpdatedTransaction(hashPrevBestCoinBase);
+  //  hashPrevBestCoinBase = block.vtx[0].GetHash();
     uiInterface.NotifyBlocksChanged();
     return true;
 }
@@ -3262,25 +3284,28 @@ bool CBlock::AcceptBlock()
     if (IsProofOfWork() && nHeight > LAST_POW_BLOCK)
         return DoS(100, error("AcceptBlock() : reject proof-of-work at height %d", nHeight));
 
-	//Grandfather
+	//Grandfather 10-30-2014 
 	if (nHeight > nGrandfather)
 	{
-		// Check timestamp
-		if (GetBlockTime() > FutureDrift(GetAdjustedTime(), nHeight))
-			return error("AcceptBlock() : block timestamp too far in the future");
+	  	if (IsLockTimeVeryRecent(GetBlockTime()))
+		{	
+			// Check timestamp
+			if (GetBlockTime() > FutureDrift(GetAdjustedTime(), nHeight))
+				return error("AcceptBlock() : block timestamp too far in the future");
 
-		// Check coinbase timestamp
-		if (GetBlockTime() > FutureDrift((int64_t)vtx[0].nTime, nHeight))
-			return DoS(50, error("AcceptBlock() : coinbase timestamp is too early"));
+			// Check coinbase timestamp
+			if (GetBlockTime() > FutureDrift((int64_t)vtx[0].nTime, nHeight))
+				return DoS(50, error("AcceptBlock() : coinbase timestamp is too early"));
 
 	
-		// Check coinstake timestamp
-		if (IsProofOfStake() && !CheckCoinStakeTimestamp(nHeight, GetBlockTime(), (int64_t)vtx[1].nTime))
-			return DoS(50, error("AcceptBlock() : coinstake timestamp violation nTimeBlock=%"PRId64" nTimeTx=%u", GetBlockTime(), vtx[1].nTime));
+			// Check coinstake timestamp
+			if (IsProofOfStake() && !CheckCoinStakeTimestamp(nHeight, GetBlockTime(), (int64_t)vtx[1].nTime))
+				return DoS(50, error("AcceptBlock() : coinstake timestamp violation nTimeBlock=%"PRId64" nTimeTx=%u", GetBlockTime(), vtx[1].nTime));
 
-		// Check timestamp against prev
-		if (GetBlockTime() <= pindexPrev->GetPastTimeLimit() || FutureDrift(GetBlockTime(), nHeight) < pindexPrev->GetBlockTime())
-			return error("AcceptBlock() : block's timestamp is too early");
+			// Check timestamp against prev
+			if (GetBlockTime() <= pindexPrev->GetPastTimeLimit() || FutureDrift(GetBlockTime(), nHeight) < pindexPrev->GetBlockTime())
+				return error("AcceptBlock() : block's timestamp is too early");
+		}
 
 	}
 
@@ -3317,25 +3342,26 @@ bool CBlock::AcceptBlock()
         hashProof = GetPoWHash();
     }
 
-    bool cpSatisfies = Checkpoints::CheckSync(hash, pindexPrev);
-
+   
 	//Grandfather
 	if (nHeight > nGrandfather)
 	{
+		 bool cpSatisfies = Checkpoints::CheckSync(hash, pindexPrev);
+
 		// Check that the block satisfies synchronized checkpoint
 		if (CheckpointsMode == Checkpoints::STRICT && !cpSatisfies)
 			return error("AcceptBlock() : rejected by synchronized checkpoint");
 		if (CheckpointsMode == Checkpoints::ADVISORY && !cpSatisfies)
 			strMiscWarning = _("WARNING: synchronized checkpoint violation detected, but skipped!");
 
+
+
+		// Enforce rule that the coinbase starts with serialized block height
+		CScript expect = CScript() << nHeight;
+		if (vtx[0].vin[0].scriptSig.size() < expect.size() ||
+			!std::equal(expect.begin(), expect.end(), vtx[0].vin[0].scriptSig.begin()))
+			return DoS(100, error("AcceptBlock() : block height mismatch in coinbase"));
 	}
-
-
-    // Enforce rule that the coinbase starts with serialized block height
-    CScript expect = CScript() << nHeight;
-    if (vtx[0].vin[0].scriptSig.size() < expect.size() ||
-        !std::equal(expect.begin(), expect.end(), vtx[0].vin[0].scriptSig.begin()))
-        return DoS(100, error("AcceptBlock() : block height mismatch in coinbase"));
 
     // Write block to history file
     if (!CheckDiskSpace(::GetSerializeSize(*this, SER_DISK, CLIENT_VERSION)))
@@ -4906,7 +4932,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // Send the rest of the chain
         if (pindex)
             pindex = pindex->pnext;
-        int nLimit = 1000;
+        int nLimit = 2000;
 		
 
         if (fDebug)    printf("getblocks %d to %s limit %d\n", (pindex ? pindex->nHeight : -1), hashStop.ToString().substr(0,20).c_str(), nLimit);
@@ -4915,7 +4941,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             if (pindex->GetBlockHash() == hashStop)
             {
-                printf("  getblocks stopping at %d %s\n", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20).c_str());
+                printf("getblocks stopping at %d %s\n", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20).c_str());
                 // ppcoin: tell downloading node about the latest block if it's
                 // without risk being rejected due to stake connection check
                 if (hashStop != hashBestChain && pindex->GetBlockTime() + nStakeMinAge > pindexBest->GetBlockTime())
@@ -6290,7 +6316,13 @@ try
 
 
 
+void ThreadTally()
+{
+	printf("Tallying in background thread...");
+	TallyNetworkAverages(false);
+	printf("Completed with Tallying()");
 
+}
 
 
 void ThreadCPIDs()
@@ -6315,6 +6347,14 @@ void LoadCPIDsInBackground()
 {
 	  cpidThreads = new boost::thread_group();
 	  cpidThreads->create_thread(boost::bind(&ThreadCPIDs));
+}
+
+void TallyInBackground()
+{
+
+	//10-30-2014
+	tallyThreads = new boost::thread_group();
+	tallyThreads->create_thread(boost::bind(&ThreadTally));
 }
 
 

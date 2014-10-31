@@ -84,6 +84,7 @@ double GetPoSKernelPS();
 int ReindexWallet();
 extern int RebootClient();
 
+void TallyInBackground();
 
 double cdbl(std::string s, int place);
 
@@ -1741,7 +1742,8 @@ void BitcoinGUI::timerfire()
 		if (Timer("update_boinc_magnitude", 6*10))
 		{
 				//double POB = GetPoBDifficulty();
-				TallyNetworkAverages(false);
+			    TallyInBackground();
+				//TallyNetworkAverages(false);
 		}
 
 

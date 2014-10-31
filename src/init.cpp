@@ -23,6 +23,8 @@
 
 std::vector<std::string> split(std::string s, std::string delim);
 
+extern void ReloadBlockChain1();
+
 
 void startWireFrameRenderer();
 void stopWireFrameRenderer();
@@ -156,7 +158,13 @@ void RestartGridcoin3()
 		StartNodeNetworkOnly();
 }
 
-
+void ReloadBlockChain1()
+{
+	CTxDB txdb("r");
+    txdb.LoadBlockIndex();
+    //PrintBlockTree();
+        
+}
 
 void InitializeBoincProjects()
 {

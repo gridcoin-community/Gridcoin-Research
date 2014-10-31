@@ -19,6 +19,7 @@
 using namespace json_spirit;
 using namespace std;
 extern std::string YesNo(bool bin);
+void ReloadBlockChain1();
 
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spirit::Object& entry);
 extern enum Checkpoints::CPMode CheckpointsMode;
@@ -859,6 +860,13 @@ Value execute(const Array& params, bool fHelp)
 			results.push_back(entry);
 	
 	}
+	else if (sItem == "unfork")
+	{
+			Resuscitate();
+			entry.push_back(Pair("Unfork",1));
+			results.push_back(entry);
+	}
+
 	else if (sItem == "testcpid")
 	{
 		std::string bpk = "29dbf4a4f2e2baaff5f5e89e2df98bc8";
@@ -952,6 +960,17 @@ Value execute(const Array& params, bool fHelp)
 			testhash = Skein("test1234");
 			entry.push_back(Pair("GMAH",testhash.GetHex()));
     		results.push_back(entry);
+	}
+	else if (sItem == "fork")
+	{
+		
+ 	      ReloadBlockChain1();
+		  //	CTxDB txdb("r");
+          //  txdb.LoadBlockIndex();
+         // PrintBlockTree();
+    	entry.push_back(Pair("Fork",1));
+    	results.push_back(entry);
+	  
 	}
 	else if (sItem == "resetcpids")
 	{
