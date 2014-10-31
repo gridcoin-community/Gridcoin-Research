@@ -2672,8 +2672,11 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 					{
 						double user_magnitude = GetMagnitude(bb.cpid,1,false);
 						
-						return DoS(1, error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f", 
-						bb.cpid.c_str(), nStakeReward/COIN, nCalculatedResearch/COIN, user_magnitude));
+						//return DoS(1, error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f", 						bb.cpid.c_str(), nStakeReward/COIN, nCalculatedResearch/COIN, user_magnitude));
+
+						return error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f",
+							bb.cpid.c_str(), nStakeReward/COIN, nCalculatedResearch/COIN, user_magnitude);
+
 					}
 				}
 			}
@@ -2897,9 +2900,9 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 			{
 				    int nResult = 0;
 					#if defined(WIN32) && defined(QT_GUI)
-						nResult = RebootClient();
+						//nResult = RebootClient();
 					#endif
-					printf("Rebooting...");
+					//printf("Rebooting...");
 			}
             return error("SetBestChain() : Reorganize failed");
         }
