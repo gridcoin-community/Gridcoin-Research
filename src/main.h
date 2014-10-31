@@ -32,7 +32,7 @@ extern unsigned int REORGANIZE_FAILED;
 
 /** The maximum allowed size for a serialized block, in bytes (network rule) */
 static const unsigned int MAX_BLOCK_SIZE = 1000000;
-static const double TOLERANCE_PERCENT = 1.20;  // The amount a network consensus magnitude can be skewed by before calling Netsoft
+static const double TOLERANCE_PERCENT = 1.30;  // The amount a network consensus magnitude can be skewed by before calling Netsoft
 /** The maximum size for mined blocks */
 static const unsigned int MAX_BLOCK_SIZE_GEN = MAX_BLOCK_SIZE/2;
 /** The maximum size for transactions we're willing to relay/mine **/

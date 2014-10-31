@@ -51,6 +51,9 @@ unsigned int nTransactionsUpdated = 0;
 unsigned int REORGANIZE_FAILED = 0;
 
 
+bool IsUserQualifiedToSendCheckpoint();
+
+
 extern double GetPoSKernelPS2();
 extern void TallyInBackground();
 
@@ -2335,20 +2338,20 @@ bool OutOfSyncByAgeWithChanceOfMining()
 	try
 	{
 		//10-30-2014 - R Halford
-		//If the diff is < 1 in Prod, Most likely the client is mining on a fork:
+		//If the diff is < .01 in Prod, Most likely the client is mining on a fork:
 		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
 		//printf("OOS_With_Diff %f",PORDiff);
-		if (!fTestNet && PORDiff < .40)
+		if (!fTestNet && PORDiff < .01)
 		{
 			printf("Most likely you are mining on a fork! Diff %f",PORDiff);
-			bool com = LessVerbose(10);
+			bool com = LessVerbose(25);
 			if (!com) return true;  //Return Out Of Sync Most of the time in this case
 
 		}
 		bool oosbyage = OutOfSyncByAge();
 		if (!oosbyage) return oosbyage;
 
-		bool com = LessVerbose(10);
+		bool com = LessVerbose(25);
 		if (!com) return true; //Return Out OF Sync most of the time
 		return false;
 	}
@@ -2671,7 +2674,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 					if (nStakeReward > (nCalculatedResearch*TOLERANCE_PERCENT))
 					{
 						double user_magnitude = GetMagnitude(bb.cpid,1,false);
-						
 						//return DoS(1, error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f", 						bb.cpid.c_str(), nStakeReward/COIN, nCalculatedResearch/COIN, user_magnitude));
 
 						return error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f",
@@ -3539,7 +3541,9 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock)
 	//10-26-2014 Gridcoin - Include node balance and GRC Sending Address in sync checkpoint
     // ppcoin: if responsible for sync-checkpoint send it
     // if (pfrom && !CSyncCheckpoint::strMasterPrivKey.empty())        Checkpoints::SendSyncCheckpoint(Checkpoints::AutoSelectSyncCheckpoint());
-	if (pfrom && (nBalance > MINIMUM_CHECKPOINT_TRANSMISSION_BALANCE))
+	bool bUserQualified = IsUserQualifiedToSendCheckpoint();
+
+	if (pfrom && (nBalance > MINIMUM_CHECKPOINT_TRANSMISSION_BALANCE) && bUserQualified)
 	{
 			Checkpoints::SendSyncCheckpointWithBalance(Checkpoints::AutoSelectSyncCheckpoint(),nBalance,SendingWalletAddress);
 	}
@@ -5720,6 +5724,26 @@ double GetMagnitude(std::string cpid, double purported, bool UseNetSoft)
 }
 
 
+bool IsUserQualifiedToSendCheckpoint()
+{
+	std::string cpid = GlobalCPUMiningCPID.cpid;
+	//The User must have a boinc mining record with an accuracy > 20 to send checkpoints:
+	if (cpid=="INVESTOR") return false;
+	// Check the magnitude report
+	StructCPID mag = mvMagnitudes[cpid];
+	if (mag.initialized) 
+	{
+			if (mag.Accuracy > 20)
+			{
+				if (mag.ConsensusMagnitude > 50)
+				{
+					return true;
+				}
+	
+			}
+	}
+	return false;
+}
 
 bool CreditCheckOnline(std::string cpid, double purported_magnitude, double mint, uint64_t nCoinAge, uint64_t nFees, int64_t locktime)
 {
