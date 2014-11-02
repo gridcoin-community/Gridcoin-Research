@@ -29,6 +29,8 @@ class CTxMemPool;
 
 static const int LAST_POW_BLOCK = 2050;
 extern unsigned int REORGANIZE_FAILED;
+extern bool bNewUserWizardNotified;
+
 
 /** The maximum allowed size for a serialized block, in bytes (network rule) */
 static const unsigned int MAX_BLOCK_SIZE = 1000000;

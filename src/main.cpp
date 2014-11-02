@@ -49,9 +49,13 @@ CCriticalSection cs_main;
 CTxMemPool mempool;
 unsigned int nTransactionsUpdated = 0;
 unsigned int REORGANIZE_FAILED = 0;
+bool bNewUserWizardNotified = false;
+
 
 
 bool IsUserQualifiedToSendCheckpoint();
+
+std::string BackupGridcoinWallet();
 
 
 extern double GetPoSKernelPS2();
@@ -3433,6 +3437,49 @@ bool CBlockIndex::IsSuperMajority(int minVersion, const CBlockIndex* pstart, uns
     return (nFound >= nRequired);
 }
 
+
+void GridcoinServices()
+{
+	//Called once for every block accepted
+	if (OutOfSyncByAge()) return;
+
+	/*
+	if (TimerMain("Debug1",2))
+	{
+		printf("DEBUG1\r\n");
+	}
+
+	if (TimerMain("Debug2",6))
+	{
+		printf("DEBUG2\r\n");
+	}
+	*/
+
+
+	//Backup the wallet once per 900 blocks:
+	if (TimerMain("backupwallet", 900))
+	{
+		std::string backup_results = BackupGridcoinWallet();
+		printf("Daily backup results: %s\r\n",backup_results.c_str());
+	}
+	//Every 15 blocks, tally consensus mags:
+	if (TimerMain("update_boinc_magnitude", 15))
+	{
+			    TallyInBackground();
+	}
+
+
+	if (TimerMain("gather_cpids",45))
+	{
+				printf("\r\nReharvesting cpids in background thread...\r\n");
+				LoadCPIDsInBackground();
+	}
+
+
+}
+
+
+
 bool ProcessBlock(CNode* pfrom, CBlock* pblock)
 {
     AssertLockHeld(cs_main);
@@ -3569,6 +3616,9 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock)
 	{
 			Checkpoints::SendSyncCheckpointWithBalance(Checkpoints::AutoSelectSyncCheckpoint(),nBalance,SendingWalletAddress);
 	}
+
+	//Gridcoin - R Halford - 11-2-2014 - Initiative to move critical processes from Timer to main:
+	GridcoinServices();
 
     return true;
 }

@@ -21,7 +21,7 @@ Public Class GridcoinUpgrader
         End Try
     End Sub
    
-    Private Function GetURL() As String
+    Public Function GetURL() As String
         If bTestNet Then
             Return testURL
         Else
@@ -139,13 +139,18 @@ Public Class GridcoinUpgrader
                     Log("restarting")
                     Me.Show()
 
+                    txtStatus.Text = "Waiting for Gridcoin Wallet to exit..."
+                    Me.Update()
+                    Me.Refresh()
+
+                    System.Threading.Thread.Sleep(9500) 'wait for grc to exit first
+
                     KillProcess("gridcoinresearch*")
 
                     txtStatus.Text = "Waiting for Gridcoin Wallet to exit..."
-                    System.Threading.Thread.Sleep(9500)
+                    System.Threading.Thread.Sleep(2500)
                     KillProcess("gridcoinresearch*")
 
-                    
                     StartGridcoin()
                     Environment.Exit(0)
                     End

@@ -1087,6 +1087,8 @@ bool CreateNewConfigFile(std::string boinc_email)
 	myConfig << row;
 	row = "email=" + boinc_email + "\r\n";
 	myConfig << row;
+	row = "addnode=node.gridcoin.us \r\n";
+	myConfig << row;
 	myConfig.close();
 	return true;
 }
@@ -1656,9 +1658,7 @@ void ReinstantiateGlobalcom()
 
 			}
 
-		    //	globalcom->dynamicCall("ShowMiningConsole()");
-			//printf("Showing Mining Console");
-			if (false && bCheckedForUpgrade == false && !fTestNet)
+		    if (bCheckedForUpgrade == false && !fTestNet)
 			{
 						int nNeedsUpgrade = 0;
 						bool bCheckedForUpgrade = true;
@@ -1695,34 +1695,16 @@ void BitcoinGUI::timerfire()
 	try {
 
 
-		std::string time1 =  DateTimeStrFormat("%m-%d-%Y %H:%M:%S", GetTime());
-		if (Timer("timestamp",6*5))
-		{
-			printf("Timestamp: %s\r\n",time1.c_str());
-		}
-
-		if (bExecuteCode)
-		{
-			bExecuteCode = false;
-			ExecuteCode();
-		}
-
-		//Backup the wallet once per day:
-		if (Timer("backupwallet", 6*60*10))
-		{
-
-			std::string backup_results = BackupGridcoinWallet();
-			printf("Daily backup results: %s\r\n",backup_results.c_str());
-			//Create a restore point once per day
-			//int r = CreateRestorePoint();
-			//printf("Created restore point : %i",r);
-		}
-
+		
 		if (nRegVersion==0 || Timer("start",10))
 		{
 			printf("Starting globalcom...\r\n");
 			nRegVersion=9999;
-			NewUserWizard();
+			if (!bNewUserWizardNotified)
+			{
+				bNewUserWizardNotified=true;
+				NewUserWizard();
+			}
 			#ifdef WIN32
 			if (globalcom==NULL) ReinstantiateGlobalcom();
 			nRegVersion = globalcom->dynamicCall("Version()").toInt();
@@ -1731,6 +1713,7 @@ void BitcoinGUI::timerfire()
 		}
 
 
+		
 
 		if (Timer("status_update",2))
 		{
@@ -1739,74 +1722,96 @@ void BitcoinGUI::timerfire()
     		bForceUpdate=true;
 		}
 
-		if (Timer("update_boinc_magnitude", 6*10))
-		{
-				//double POB = GetPoBDifficulty();
-			    TallyInBackground();
-				//TallyNetworkAverages(false);
-		}
 
 
+
+		// RETIRING ALL OF THIS:
 
 		if (false)
 		{
-		if (mapArgs["-restartnetlayer"] != "false")
-		{
-			if (Timer("restart_network",6*25))
-			{
-				printf("\r\nRestarting gridcoin's network layer @ %s\r\n",time1.c_str());
-				RestartGridcoin10();
-			}
-		}
-		}
 
-
-		if (mapArgs["-resync"] != "")
-		{
-			double resync = cdbl(mapArgs["-resync"],0);
-			if (Timer("resync", resync*6))
-			{
-				printf("Resyncing...\r\n");
-				RestartGridcoin10();
-				LoadBlockIndex(true);
-			}
-		}
-
-
-
-
-        if (true)
-		{
-			if (Timer("gather_cpids",6*30))
-			{
-				printf("\r\nReharvesting cpids in background thread...\r\n");
-				LoadCPIDsInBackground();
-			}
-		}
-
-		if (false)
-		{
-				if (Timer("sql",2))
+				//		std::string time1 =  DateTimeStrFormat("%m-%d-%Y %H:%M:%S", GetTime());
+				//Backup the wallet once per day:
+				if (Timer("backupwallet", 6*60*10))
 				{
-
-					#ifdef WIN32
-					//Upload the current block to the GVM
-					//printf("Ready to sync SQL...\r\n");
-     				//QString lbh = QString::fromUtf8(hashBestChain.ToString().c_str());
-	  			    //Retrieve SQL high block number:
-					int iSqlBlock = 0;
-					iSqlBlock = globalcom->dynamicCall("RetrieveSqlHighBlock()").toInt();
-     				//Send Gridcoin block to SQL:
-					QString qsblock = QString::fromUtf8(RetrieveBlocksAsString(iSqlBlock).c_str());
-					globalcom->dynamicCall("SetSqlBlock(Qstring)",qsblock);
-	    			//Set Public Wallet Address
-     				//QString pwa = QString::fromUtf8(DefaultWalletAddress().c_str());
-					//globalcom->dynamicCall("SetPublicWalletAddress(QString)",pwa);
-	    			//Set Best Block
-	    			globalcom->dynamicCall("SetBestBlock(int)", nBestHeight);
-					#endif
+					std::string backup_results = BackupGridcoinWallet();
+					printf("Daily backup results: %s\r\n",backup_results.c_str());
+					//Create a restore point once per day
+					//int r = CreateRestorePoint();
+					//printf("Created restore point : %i",r);
 				}
-		}
+
+
+				if (Timer("update_boinc_magnitude", 6*10))
+				{
+						//double POB = GetPoBDifficulty();
+						TallyInBackground();
+						//TallyNetworkAverages(false);
+				}
+
+
+
+							if (false)
+							{
+							if (mapArgs["-restartnetlayer"] != "false")
+							{
+								if (Timer("restart_network",6*25))
+								{
+									//printf("\r\nRestarting gridcoin's network layer @ %s\r\n",time1.c_str());
+									//RestartGridcoin10();
+								}
+							}
+							}
+
+
+								if (mapArgs["-resync"] != "")
+								{
+									double resync = cdbl(mapArgs["-resync"],0);
+									if (Timer("resync", resync*6))
+									{   //TODO: Test if this is even necessary...
+
+										//printf("Resyncing...\r\n");
+										//RestartGridcoin10();
+										//LoadBlockIndex(true);
+									}
+								}
+
+
+
+
+							if (true)
+							{
+								if (Timer("gather_cpids",6*30))
+								{
+									printf("\r\nReharvesting cpids in background thread...\r\n");
+									LoadCPIDsInBackground();
+								}
+							}
+
+									if (false)
+									{
+											if (Timer("sql",2))
+											{
+
+												#ifdef WIN32
+												//Upload the current block to the GVM
+												//printf("Ready to sync SQL...\r\n");
+     											//QString lbh = QString::fromUtf8(hashBestChain.ToString().c_str());
+	  											//Retrieve SQL high block number:
+												int iSqlBlock = 0;
+												iSqlBlock = globalcom->dynamicCall("RetrieveSqlHighBlock()").toInt();
+     											//Send Gridcoin block to SQL:
+												QString qsblock = QString::fromUtf8(RetrieveBlocksAsString(iSqlBlock).c_str());
+												globalcom->dynamicCall("SetSqlBlock(Qstring)",qsblock);
+	    										//Set Public Wallet Address
+     											//QString pwa = QString::fromUtf8(DefaultWalletAddress().c_str());
+												//globalcom->dynamicCall("SetPublicWalletAddress(QString)",pwa);
+	    										//Set Best Block
+	    										globalcom->dynamicCall("SetBestBlock(int)", nBestHeight);
+												#endif
+											}
+									}
+				}
 		}
 		catch(std::runtime_error &e)
 		{

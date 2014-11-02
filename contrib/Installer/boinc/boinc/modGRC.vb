@@ -417,6 +417,7 @@ Module modGRC
 
             Dim sMsg As String
             Dim sURL As String = "http://download.gridcoin.us/download/downloadstake/"
+
             Dim w As New MyWebClient
             Dim sFiles As String
             sFiles = w.DownloadString(sURL)
@@ -430,7 +431,7 @@ Module modGRC
                 Dim sRow As String = vFiles(iRow)
                 Dim sFile As String = ExtractFilename("<a", "</a>", sRow, 5)
                 If Len(sFile) > 1 Then
-                    If sFile = "boinc.dll" Then
+                    If sFile = "boincstake.dll" Then
                         Dim sDT As String
                         sDT = Mid(sRow, 1, 20)
                         sDT = Trim(sDT)
