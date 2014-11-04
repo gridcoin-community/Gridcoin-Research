@@ -49,6 +49,13 @@ CCriticalSection cs_main;
 CTxMemPool mempool;
 unsigned int nTransactionsUpdated = 0;
 unsigned int REORGANIZE_FAILED = 0;
+
+unsigned int WHITELISTED_PROJECTS = 0;
+
+unsigned int CHECKPOINT_VIOLATIONS = 0;
+
+
+
 bool bNewUserWizardNotified = false;
 
 
@@ -3375,11 +3382,28 @@ bool CBlock::AcceptBlock()
 
 		// Check that the block satisfies synchronized checkpoint
 		if (CheckpointsMode == Checkpoints::STRICT && !cpSatisfies)
+		{
+			CHECKPOINT_VIOLATIONS++;
+			if (CHECKPOINT_VIOLATIONS > 3)
+			{
+				//For stability, move the client into ADVISORY MODE:
+				printf("Moving Gridcoin into Checkpoint ADVISORY mode.\r\n");
+				CheckpointsMode = Checkpoints::ADVISORY;
+			}
 			return error("AcceptBlock() : rejected by synchronized checkpoint");
+		}
+		
 		if (CheckpointsMode == Checkpoints::ADVISORY && !cpSatisfies)
 			strMiscWarning = _("WARNING: synchronized checkpoint violation detected, but skipped!");
-
-
+		
+		if (CheckpointsMode == Checkpoints::ADVISORY && cpSatisfies)
+		{
+			///Move the client back into STRICT mode
+			CHECKPOINT_VIOLATIONS = 0;
+			printf("Moving Gridcoin into Checkpoint STRICT mode.\r\n");
+			strMiscWarning = "";
+			CheckpointsMode = Checkpoints::STRICT;
+		}
 
 		// Enforce rule that the coinbase starts with serialized block height
 		CScript expect = CScript() << nHeight;
@@ -6067,7 +6091,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 							structc.Magnitude = (structc.TotalMagnitude/(structc.MagnitudeCount+.01));
 							//Halford 9-28-2014: Per Survey results, use Magnitude Calculation v2: Assess Magnitude based on all whitelisted projects
 							double WhitelistedWithRAC = GetNetworkProjectCountWithRAC();
-							structc.Magnitude = (structc.TotalMagnitude/mvBoincProjects.size()) * WhitelistedWithRAC;
+							structc.Magnitude = (structc.TotalMagnitude/WHITELISTED_PROJECTS) * WhitelistedWithRAC;
 							mvCreditNodeCPID[cpid]=structc;
 							if (fDebug) printf("Adding magnitude for project %s : ProjectAvgRAC %f, User RAC %f, new Magnitude %f\r\n",
 								sProj.c_str(),

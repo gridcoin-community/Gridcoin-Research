@@ -29,6 +29,10 @@ class CTxMemPool;
 
 static const int LAST_POW_BLOCK = 2050;
 extern unsigned int REORGANIZE_FAILED;
+extern unsigned int WHITELISTED_PROJECTS;
+extern unsigned int CHECKPOINT_VIOLATIONS;
+static const int MAX_NEWBIE_BLOCKS = 100;
+
 extern bool bNewUserWizardNotified;
 
 

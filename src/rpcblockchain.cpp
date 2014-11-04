@@ -1177,7 +1177,7 @@ Value listitem(const Array& params, bool fHelp)
 				mytotalpct = mytotalpct + projpct;
 				double project_magnitude = UserVerifiedRAC/(ProjectRAC+.01) * 100;
 				TotalMagnitude = TotalMagnitude + project_magnitude;
-				Mag = ( (TotalMagnitude/mvBoincProjects.size()) * NetworkProjectCountWithRAC);
+				Mag = ( (TotalMagnitude/WHITELISTED_PROJECTS) * NetworkProjectCountWithRAC);
 				
 				if (including)
 				{
@@ -1204,7 +1204,7 @@ Value listitem(const Array& params, bool fHelp)
 		entry.push_back(Pair("Participating Project Count",ParticipatingProjectCount));
 						
 		entry.push_back(Pair("Grand-Total Count Of Network Projects With RAC",NetworkProjectCountWithRAC));
-		entry.push_back(Pair("Grand-Total Whitelisted Projects",RoundToString(mvBoincProjects.size(),0)));
+		entry.push_back(Pair("Grand-Total Whitelisted Projects",RoundToString(WHITELISTED_PROJECTS,0)));
 
 
 		entry.push_back(Pair("Grand-Total Magnitude",Mag));

@@ -1535,7 +1535,7 @@ bool NewbieCompliesWithFirstTimeStakeWeightRule()
 				StructCPID UntrustedHost = mvMagnitudes[GlobalCPUMiningCPID.cpid]; //Contains Consensus Magnitude
 				if (UntrustedHost.initialized)
 				{
-					if (UntrustedHost.Accuracy > 30) 
+					if (UntrustedHost.Accuracy > MAX_NEWBIE_BLOCKS) 
 					{	
 						printf("UHH(createPORStake) \r\n");
 						return false; //User has a history
@@ -1633,12 +1633,11 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 			printf("Newbie Network Weight=%f",nWeight);
 		}
 	}
-	else if (nWeight)
+	else if (nWeight > 0)
 	{
-		nWeight += 1000;
+		nWeight += 100000;
 	}
-
-	
+		
 	
     return true;
 }
