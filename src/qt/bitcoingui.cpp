@@ -1884,6 +1884,7 @@ void BitcoinGUI::updateStakingIcon()
     }
     else
     {
+		//11-5-2014
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
         if (pwalletMain && pwalletMain->IsLocked())
             labelStakingIcon->setToolTip(tr("Not staking because wallet is locked"));

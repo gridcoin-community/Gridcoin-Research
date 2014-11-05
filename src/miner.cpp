@@ -18,6 +18,11 @@ using namespace std;
 extern unsigned int nMinerSleep;
 MiningCPID GetNextProject();
 
+void ThreadCleanWalletPassphrase(void* parg);
+
+void ThreadTopUpKeyPool(void* parg);
+
+
 bool OutOfSyncByAgeWithChanceOfMining();
 
 bool TallyNetworkAverages(bool ColdBoot);
@@ -570,6 +575,9 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
     return true;
 }
 
+
+
+
 void StakeMiner(CWallet *pwallet)
 {
     SetThreadPriority(THREAD_PRIORITY_LOWEST);
@@ -586,6 +594,41 @@ void StakeMiner(CWallet *pwallet)
 			printf("StakeMiner:ShuttingDown..");
             return;
 		}
+
+		if (pwallet->IsLocked())
+		{
+			//11-5-2014 R Halford - If wallet is locked - see if user has an encrypted password stored:
+			std::string passphrase = "";
+			if (mapArgs.count("-autounlock"))
+			{
+				passphrase = GetArg("-autounlock", "");
+			}
+			if (passphrase.length() > 1)
+			{
+				std::string decrypted = AdvancedDecrypt(passphrase);
+				//Unlock the wallet for 10 days (Equivalent to: walletpassphrase mylongpass 999999)
+				int64_t nSleepTime = 9999999;
+				SecureString strWalletPass;
+				strWalletPass.reserve(100);
+				strWalletPass = decrypted.c_str();
+			    if (strWalletPass.length() > 0)
+			    {
+					if (!pwallet->Unlock(strWalletPass))
+					{
+						printf("GridcoinStakeMiner:AutoUnlock:Error: The wallet passphrase entered was incorrect.");
+					}
+					else
+					{
+						NewThread(ThreadTopUpKeyPool,NULL);
+						int64_t* pnSleepTime = new int64_t(nSleepTime);
+						NewThread(ThreadCleanWalletPassphrase, pnSleepTime);
+					}
+   
+				}
+			}
+		}
+	
+		// End of encrypted pass feature
 
         while (pwallet->IsLocked())
         {

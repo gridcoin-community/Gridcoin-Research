@@ -4212,6 +4212,10 @@ double GetOutstandingAmountOwed(std::string cpid, int64_t locktime, double& tota
 	double owed = payment_timespan * Cap(research_magnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime));
 	double paid = mag.payments;
 	double outstanding = Cap(owed-paid, GetMaximumBoincSubsidy(locktime));
+
+	//Calculate long term totals:
+	total_owed = payment_timespan * Cap(research_magnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime));
+	
 	//printf("Getting payment_timespan %f for outstanding amount for %s; owed %f paid %f Research Magnitude %f \r\n",		payment_timespan,cpid.c_str(),owed,paid,mag.ConsensusMagnitude);
 	if (outstanding < 0) outstanding=0;
 	return outstanding;

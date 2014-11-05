@@ -15,6 +15,11 @@ using namespace std;
 int64_t nWalletUnlockTime;
 static CCriticalSection cs_nWalletUnlockTime;
 
+extern void ThreadTopUpKeyPool(void* parg);
+
+
+extern void ThreadCleanWalletPassphrase(void* parg);
+
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spirit::Object& entry);
 
 static void accountingDeprecationCheck()

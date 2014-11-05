@@ -1516,50 +1516,54 @@ bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx&
 }
 
 
-bool NewbieCompliesWithFirstTimeStakeWeightRule()
+int NewbieCompliesWithFirstTimeStakeWeightRule()
 {
 
 	try 
 	{
-	  if (!GlobalCPUMiningCPID.initialized) return false;
+	  if (!GlobalCPUMiningCPID.initialized) return 0;
 			
 		//CPID <> INVESTOR:
 	
 		if (GlobalCPUMiningCPID.cpid != "INVESTOR") 
 		{
-    		if (GlobalCPUMiningCPID.projectname == "") 	return false;
-	    	if (GlobalCPUMiningCPID.rac < 100) 			return false;
+    		if (GlobalCPUMiningCPID.projectname == "") 	return 0;
+	    	if (GlobalCPUMiningCPID.rac < 100) 			return 0;
 		    //If we already have a consensus on the node, the cpid does not qualify
 			if (mvMagnitudes.size() > 0)
 			{
 				StructCPID UntrustedHost = mvMagnitudes[GlobalCPUMiningCPID.cpid]; //Contains Consensus Magnitude
 				if (UntrustedHost.initialized)
 				{
-					if (UntrustedHost.Accuracy > MAX_NEWBIE_BLOCKS) 
-					{	
-						printf("UHH(createPORStake) \r\n");
-						return false; //User has a history
-					}
+						if (UntrustedHost.Accuracy > MAX_NEWBIE_BLOCKS && UntrustedHost.Accuracy < MAX_NEWBIE_BLOCKS_LEVEL2)
+						{
+							return 2;
+						}
+						if (UntrustedHost.Accuracy > MAX_NEWBIE_BLOCKS_LEVEL2) 
+						{	
+							return 0;
+						}
+			
 				}
 			}
-			printf("Newbie complies with first time stakeweight rule.\r\n");
-			return true;
+			printf("{NC}"); //Newbie complies with first time stakeweight rule
+			return 1;
 		}
 
-	return false;
+	return 0;
 	}
 	catch (std::exception &e) 
 	{
 	    printf("Error while assessing Newbie Rule 1.\r\n");
-		return false;
+		return 0;
 	}
     catch(...)
 	{
 		printf("Error while assessing Newbie Rule 1[1].\r\n");
-		return false;
+		return 0;
 	}
 
-	return false;
+	return 0;
 }
 
 
@@ -1620,7 +1624,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	//WEIGHT SECTION 1: When a new CPID enters the ecosystem, and is seen on less than 9 blocks, this newbie
 	//receives an extra X in stakeweight to help them get started.
 	//10-22-2014
-	if (NewbieCompliesWithFirstTimeStakeWeightRule())
+	if (NewbieCompliesWithFirstTimeStakeWeightRule() > 0)
 	{
 		if (GetTime() < 1414028435)
 		{
@@ -1630,14 +1634,13 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 		{
 			int64_t NetworkWeight = GetPoSKernelPS2();
 			nWeight += (NetworkWeight*.01);
-			printf("Newbie Network Weight=%f",nWeight);
+			//printf("Newbie Network Weight=%f",nWeight);
 		}
 	}
 	else if (nWeight > 0)
 	{
 		nWeight += 100000;
 	}
-		
 	
     return true;
 }

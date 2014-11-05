@@ -824,9 +824,9 @@ void WriteCPIDToRPC(std::string email, std::string bpk, uint256 block, Array &re
 }
 Value execute(const Array& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
+    if (fHelp || (params.size() != 1 && params.size() != 2))
         throw runtime_error(
-		"execute <string::itemname>\n"
+		"execute <string::itemname> <string::parameter> \r\n"
         "Executes an arbitrary command by name.");
 
     std::string sItem = params[0].get_str();
@@ -858,6 +858,26 @@ Value execute(const Array& params, bool fHelp)
 			#endif 
 			entry.push_back(Pair("RebootClient",r));
 			results.push_back(entry);
+	
+	}
+	else if (sItem == "encrypt")
+	{
+		//11-5-2014 Gridcoin - R Halford - Encrypt a phrase
+		if (params.size() != 2)
+		{
+			entry.push_back(Pair("Error","You must also specify a wallet passphrase."));
+			results.push_back(entry);
+		
+		}
+		else
+		{
+			std::string sParam = params[1].get_str();
+			std::string encrypted = AdvancedCrypt(sParam);
+			entry.push_back(Pair("Passphrase",encrypted));
+			entry.push_back(Pair("[Specify in config file] autounlock=",encrypted));
+
+			results.push_back(entry);
+		}
 	
 	}
 	else if (sItem == "unfork")
@@ -1009,7 +1029,7 @@ Value execute(const Array& params, bool fHelp)
 			entry.push_back(Pair("POST Result",result));
 	        results.push_back(entry);
 	}
-	else if (sItem == "encrypt")
+	else if (sItem == "encrypt_deprecated")
 	{
 			std::string s1 = "1234";
 			std::string s1dec = AdvancedCrypt(s1);
@@ -1072,10 +1092,13 @@ Array MagnitudeReport(bool bMine)
 									entry.push_back(Pair("CPID",structMag.cpid));
 									entry.push_back(Pair("Magnitude",structMag.ConsensusMagnitude));
 									entry.push_back(Pair("Magnitude Accuracy",structMag.Accuracy));
+									
+									entry.push_back(Pair("Long Term Owed (14 day projection)",structMag.totalowed));
+									entry.push_back(Pair("Long Term Daily Owed (1 day projection)",structMag.totalowed/14));
 									entry.push_back(Pair("Payments",structMag.payments));
-									entry.push_back(Pair("Total Owed (14 day projection)",structMag.totalowed));
 
-									entry.push_back(Pair("Daily Projection",structMag.owed));
+									entry.push_back(Pair("Current Daily Projection",structMag.owed));
+
 									entry.push_back(Pair("Next Expected Payment",structMag.owed/2));
 
 									entry.push_back(Pair("Avg Daily Payments",structMag.payments/14));
@@ -1395,18 +1418,18 @@ Value listitem(const Array& params, bool fHelp)
 	
 					entry.push_back(Pair("Project",structcpid.projectname));
 					entry.push_back(Pair("CPID",structcpid.cpid));
-					entry.push_back(Pair("CPIDhash",structcpid.cpidhash));
-					entry.push_back(Pair("Email",structcpid.emailhash));
-					entry.push_back(Pair("UTC",structcpid.utc));
+					//entry.push_back(Pair("CPIDhash",structcpid.cpidhash));
+					//entry.push_back(Pair("Email",structcpid.emailhash));
+					//entry.push_back(Pair("UTC",structcpid.utc));
 					entry.push_back(Pair("RAC",structcpid.rac));
 					entry.push_back(Pair("Team",structcpid.team));
-					entry.push_back(Pair("RecTime",structcpid.rectime));
-					entry.push_back(Pair("Age",structcpid.age));
-					entry.push_back(Pair("Verified UTC",structcpid.verifiedutc));
+					//entry.push_back(Pair("RecTime",structcpid.rectime));
+					//entry.push_back(Pair("Age",structcpid.age));
+					//entry.push_back(Pair("Verified UTC",structcpid.verifiedutc));
 					entry.push_back(Pair("Verified RAC",structcpid.verifiedrac));
 					entry.push_back(Pair("Verified Team",structcpid.verifiedteam));
-					entry.push_back(Pair("Verified RecTime",structcpid.verifiedrectime));
-					entry.push_back(Pair("Verified RAC Age",structcpid.verifiedage));
+					//entry.push_back(Pair("Verified RecTime",structcpid.verifiedrectime));
+					//entry.push_back(Pair("Verified RAC Age",structcpid.verifiedage));
 					entry.push_back(Pair("Is my CPID Valid?",structcpid.Iscpidvalid));
 					entry.push_back(Pair("CPID Link",structcpid.link));
 					entry.push_back(Pair("Errors",structcpid.errors));

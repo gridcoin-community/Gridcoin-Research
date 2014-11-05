@@ -274,49 +274,53 @@ static bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64_t& nStakeModifi
 //   quantities so as to generate blocks faster, degrading the system back into
 //   a proof-of-work situation.
 //
-bool NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::string hashBoinc)
+int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::string hashBoinc)
 {
 	try
 	{
 		if (hashBoinc.length() > 1)
 		{
 			MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
-			if (boincblock.cpid == "" || boincblock.cpid.length() < 6) return false;  //Block has no CPID
+			if (boincblock.cpid == "" || boincblock.cpid.length() < 6) return 0;  //Block has no CPID
 			//CPID <> INVESTOR:
 			if (boincblock.cpid != "INVESTOR") 
 			{
-    			if (boincblock.projectname == "") 	return false;
-	    		if (boincblock.rac < 100) 			return false;
-				if (!IsCPIDValid(boincblock.cpid,boincblock.enccpid)) return false;
+    			if (boincblock.projectname == "") 	return 0;
+	    		if (boincblock.rac < 100) 			return 0;
+				if (!IsCPIDValid(boincblock.cpid,boincblock.enccpid)) return 0;
 				//If we already have a consensus on the node, the cpid does not qualify
 				if (mvMagnitudes.size() > 0)
 				{
 					StructCPID UntrustedHost = mvMagnitudes[boincblock.cpid]; //Contains Consensus Magnitude
 					if (UntrustedHost.initialized)
 					{
-						if (UntrustedHost.Accuracy > 25) 
+						if (UntrustedHost.Accuracy > MAX_NEWBIE_BLOCKS && UntrustedHost.Accuracy < MAX_NEWBIE_BLOCKS_LEVEL2)
+						{
+							return 2;
+						}
+						if (UntrustedHost.Accuracy > MAX_NEWBIE_BLOCKS_LEVEL2) 
 						{	
-							return false; 
+							return 0;
 						}
 					}
 				}
 				//printf("Newbie complies with first time stakeweight rule.[BlockFound]\r\n");
-				return true;
+				return 1;
 			}
 		}
-		return false;
+		return 0;
 	}
     catch (std::exception &e) 
 	{
 	    printf("Error while assessing Newbie Rule 1.\r\n");
-		return false;
+		return 0;
 	}
     catch(...)
 	{
 		printf("Error while assessing Newbie Rule 1[1].\r\n");
-		return false;
+		return 0;
 	}
-	return false;
+	return 0;
 }
 
 
@@ -353,14 +357,21 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	//CBigNum bnCoinDayWeight = CBigNum(nValueIn + (5*COIN) ) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
 	int64_t NewbieStakeWeightModifier = 0;
 
-	
-	if (NewbieCompliesWithFirstTimeStakeWeightRule(blockFrom,hashBoinc)) 
+	int NC = NewbieCompliesWithFirstTimeStakeWeightRule(blockFrom,hashBoinc);
+
+	if (NC > 0)
 	{
 		    //10-27-2014 Dynamic Newbie Weight
 		    uint64_t nNetworkWeight = GetPoSKernelPS2();
-			NewbieStakeWeightModifier = nNetworkWeight*.0009*COIN;
-			//printf("NewbieStakeWeightModifier %" PRIu64 " \r\n ", NewbieStakeWeightModifier);
-
+			if (NC == 1)
+			{
+				NewbieStakeWeightModifier = nNetworkWeight*.0009*COIN;
+			}
+			else if (NC==2)
+			{
+				NewbieStakeWeightModifier = nNetworkWeight*.0003*COIN;
+				//printf("NewbieStakeWeightModifier %" PRIu64 " \r\n ", NewbieStakeWeightModifier);
+			}
 	}
 	else
 	{
