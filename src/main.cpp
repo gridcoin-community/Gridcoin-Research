@@ -2366,12 +2366,12 @@ bool OutOfSyncByAgeWithChanceOfMining()
 
 		// Rule 2 : Dont mine on Fork Rule:
 		//10-31-2014 - R Halford
-		//If the diff is < .01 in Prod, Most likely the client is mining on a fork:
+		//If the diff is < .01 in Prod, Most likely the client is mining on a fork: (Make it exceedingly hard):
 		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
 		//printf("OOS_With_Diff %f",PORDiff);
 		int64_t	nTime = GetTime();
         //If nTime > 10-31-2014 13:00 CST 
-		if (!fTestNet && PORDiff < .01 && nTime > 1414775728000)
+		if (!fTestNet && PORDiff < .01 && nTime > 1415228997)
 		{
 			printf("Most likely you are mining on a fork! Diff %f",PORDiff);
 			bool com = LessVerbose(100);
