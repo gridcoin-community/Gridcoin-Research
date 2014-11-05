@@ -186,6 +186,7 @@ void InitializeBoincProjects()
         boinc_projects[16] = "http://aerospaceresearch.net/constellation/|Constellation";
         boinc_projects[17] = "http://www.cosmologyathome.org/     |Cosmology@Home";
         boinc_projects[18] = "http://boinc.freerainbowtables.com/ |DistrRTgen";
+
         boinc_projects[19] = "http://einstein.phys.uwm.edu/       |Einstein@Home";
         boinc_projects[20] = "http://www.enigmaathome.net/        |Enigma@Home";
         boinc_projects[22] = "http://registro.ibercivis.es/       |ibercivis";
@@ -217,19 +218,16 @@ void InitializeBoincProjects()
 		boinc_projects[54]="http://boinc.med.usherbrooke.ca/nrg/|Najmanovich Research";
 		boinc_projects[57]="http://boinc.riojascience.com/|Rioja Science";
 		boinc_projects[58]="http://szdg.lpds.sztaki.hu/szdg/|SZTAKI Desktop Grid";
-		boinc_projects[59]="http://sat.isa.ru/pdsat/|SAT@home";
 		boinc_projects[61]="http://dg.imp.kiev.ua/slinca/|SLinCA";
 		boinc_projects[63]="http://wuprop.boinc-af.org/|WUProp@Home";
 		boinc_projects[64]="http://boinc.almeregrid.nl/|almeregrid boinc grid";
 		boinc_projects[65]="http://burp.renderfarming.net/|BURP";
 		boinc_projects[67]="http://boinc.umiacs.umd.edu/|The Lattice Project";
 		boinc_projects[68]="http://www.volpex.net/|volpex";
-		boinc_projects[69]="http://www.distrrtgen.com/|distrrtgen";
 		boinc_projects[70]="http://www.distrrtgen.com/|Distributed Rainbow Table Generator";
 		boinc_projects[71]="http://slinca.com/|slinca@home";
 		boinc_projects[72]="http://finance.gridcoin.us/|Gridcoin Finance";
 		boinc_projects[73]="http://supernode.gridcoin.us/|Gridcoin Supernode";
-		boinc_projects[74] = "http://lhcathome2.cern.ch/test4theory|Test4Theory";
 		boinc_projects[75] = "http://mindmodeling.org/|MindModeling@Home";
         boinc_projects[76] = "http://www.gridcoin.us/|INVESTOR"; //This is a general project Used for Inflation Only Subsidies
 		boinc_projects[77] = "http://qcn.stanford.edu/sensor/|Quake-Catcher Network Sensor Monitoring";

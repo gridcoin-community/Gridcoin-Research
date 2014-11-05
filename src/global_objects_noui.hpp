@@ -125,7 +125,7 @@ struct MiningEntry {
 		double ConsensusMagnitudeCount;
 		double Accuracy;
 		double ConsensusMagnitude;
-		
+		double totalowed;
 
 	};
 

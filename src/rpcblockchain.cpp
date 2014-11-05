@@ -1052,7 +1052,7 @@ Array MagnitudeReport(bool bMine)
 {
 	       Array results;
 		   Object c;
-		   c.push_back(Pair("Report","Magnitude Report"));
+		   c.push_back(Pair("RSA Report","Research Savings Account Report"));
 		   results.push_back(c);
 		   StructCPID globalmag = mvMagnitudes["global"];
 		   double payment_timespan = (globalmag.HighLockTime-globalmag.LowLockTime)/86400;  //Lock time window in days
@@ -1073,7 +1073,11 @@ Array MagnitudeReport(bool bMine)
 									entry.push_back(Pair("Magnitude",structMag.ConsensusMagnitude));
 									entry.push_back(Pair("Magnitude Accuracy",structMag.Accuracy));
 									entry.push_back(Pair("Payments",structMag.payments));
-									entry.push_back(Pair("Owed",structMag.owed));
+									entry.push_back(Pair("Total Owed (14 day projection)",structMag.totalowed));
+
+									entry.push_back(Pair("Daily Projection",structMag.owed));
+									entry.push_back(Pair("Next Expected Payment",structMag.owed/2));
+
 									entry.push_back(Pair("Avg Daily Payments",structMag.payments/14));
 									results.push_back(entry);
 						}
@@ -1094,7 +1098,7 @@ Value listitem(const Array& params, bool fHelp)
 {
     if (fHelp || (params.size() != 1  && params.size() != 2))
         throw runtime_error(
-		"listitem <string::itemname>\n"
+		"list <string::itemname>\n"
         "Returns details of a given item by name.");
 
     std::string sitem = params[0].get_str();
@@ -1167,47 +1171,56 @@ Value listitem(const Array& params, bool fHelp)
 					}
 				}
 				narr = including ? ("Participating " + narr_desc) : ("Enumerating " + narr_desc);
-				if (structcpid.projectname.length() > 1)
+				if (structcpid.projectname.length() > 1 && including)
 				{
 						entry.push_back(Pair(narr + " Project",structcpid.projectname));
 				}
+
 				projpct = UserVerifiedRAC/(ProjectRAC+.01);
 				nettotalrac += ProjectRAC;
 				mytotalrac = mytotalrac + UserVerifiedRAC;
 				mytotalpct = mytotalpct + projpct;
+				
 				double project_magnitude = UserVerifiedRAC/(ProjectRAC+.01) * 100;
-				TotalMagnitude = TotalMagnitude + project_magnitude;
-				Mag = ( (TotalMagnitude/WHITELISTED_PROJECTS) * NetworkProjectCountWithRAC);
+				
 				
 				if (including)
 				{
+						TotalMagnitude += project_magnitude;
 					
 						ParticipatingProjectCount++;
 				
 						//entry.push_back(Pair("Participating Project Count",ParticipatingProjectCount));
-						entry.push_back(Pair("User Project Verified RAC",UserVerifiedRAC));
-						entry.push_back(Pair("Network RAC",ProjectRAC));
-						entry.push_back(Pair("Project Magnitude",project_magnitude));
-						entry.push_back(Pair("Project-User Magnitude",Mag));
+						entry.push_back(Pair("User " + structcpid.projectname + " Verified RAC",UserVerifiedRAC));
+						entry.push_back(Pair(structcpid.projectname + " Network RAC",ProjectRAC));
+						entry.push_back(Pair("Your Project Magnitude",project_magnitude));
 				}
 				else
 				{
-					std::string NonParticipatingBlurb = "Network RAC: " + RoundToString(ProjectRAC,0);
-					entry.push_back(Pair("Non Participating Project " + WhitelistedProject.projectname,NonParticipatingBlurb));
+					//std::string NonParticipatingBlurb = "Network RAC: " + RoundToString(ProjectRAC,0);
+					//entry.push_back(Pair("Non Participating Project " + WhitelistedProject.projectname,NonParticipatingBlurb));
 				}
+
+				Mag = ( (TotalMagnitude/WHITELISTED_PROJECTS) * NetworkProjectCountWithRAC);
+				
 		     }
 		}
 		
 
 		entry.push_back(Pair("Grand-Total Verified RAC",mytotalrac));
 		entry.push_back(Pair("Grand-Total Network RAC",nettotalrac));
+
+		entry.push_back(Pair("Total Magnitude for All Projects",TotalMagnitude));
+		entry.push_back(Pair("Grand-Total Whitelisted Projects",RoundToString(WHITELISTED_PROJECTS,0)));
+
 		entry.push_back(Pair("Participating Project Count",ParticipatingProjectCount));
 						
 		entry.push_back(Pair("Grand-Total Count Of Network Projects With RAC",NetworkProjectCountWithRAC));
-		entry.push_back(Pair("Grand-Total Whitelisted Projects",RoundToString(WHITELISTED_PROJECTS,0)));
+		Mag = (TotalMagnitude/WHITELISTED_PROJECTS) * NetworkProjectCountWithRAC;
+			
+		std::string babyNarr = RoundToString(TotalMagnitude,2) + "/" + RoundToString(WHITELISTED_PROJECTS,0) + "*" + RoundToString(NetworkProjectCountWithRAC,0) + "=";
 
-
-		entry.push_back(Pair("Grand-Total Magnitude",Mag));
+		entry.push_back(Pair(babyNarr,Mag));
 		results.push_back(entry);
 		return results;
 
@@ -1225,8 +1238,13 @@ Value listitem(const Array& params, bool fHelp)
 	{
 			results = MagnitudeReport(true);
 			return results;
+	}
 
-
+	if (sitem == "rsa")
+	{
+	    	results = MagnitudeReport(true);
+			return results;
+	
 	}
 
 	if (sitem == "projects") 

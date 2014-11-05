@@ -4196,7 +4196,7 @@ double Cap(double dAmt, double Ceiling)
 }
 
 
-double GetOutstandingAmountOwed(std::string cpid, int64_t locktime)
+double GetOutstandingAmountOwed(std::string cpid, int64_t locktime, double& total_owed)
 {
 	
 	StructCPID mag = mvMagnitudes[cpid];
@@ -4295,7 +4295,9 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 		structMagnitude.AverageRAC = structMagnitude.rac / (structMagnitude.entries+.01);
 		if (LockTime < globalMag.LowLockTime)  globalMag.LowLockTime=LockTime;
 		if (LockTime > globalMag.HighLockTime) globalMag.HighLockTime = LockTime;
-		structMagnitude.owed = GetOutstandingAmountOwed(cpid,LockTime);
+		double total_owed = 0;
+		structMagnitude.owed = GetOutstandingAmountOwed(cpid,LockTime,total_owed);
+		structMagnitude.totalowed = total_owed;
 		mvMagnitudes[cpid] = structMagnitude;
 		mvMagnitudes["global"] = globalMag;
 }
@@ -5919,9 +5921,12 @@ void AddProjectFromNetSoft(StructCPID& netsoft)
 	if (NewProject.verifiedteam != "gridcoin") NewProject.verifiedrac = -1;
 	NewProject.verifiedrectime = netsoft.verifiedrectime;
 	NewProject.verifiedage = netsoft.verifiedage;
+	//Replace Old CPID hashing algorithm with new 
+	//R Halford - 11/4/2014 
+	std::string cpid = boinc_hash(email,GlobalCPUMiningCPID.cpidhash,nBestHeight);
 	std::string cpid_non = GlobalCPUMiningCPID.cpidhash+email;
-	to_lower(cpid_non);
-	std::string cpid = RetrieveMd5(cpid_non.c_str());
+			
+
 	if (cpid != GlobalCPUMiningCPID.cpid) 
 	{
 		//Dont add it
@@ -6092,6 +6097,10 @@ void CreditCheck(std::string cpid, bool clearcache)
 							//Halford 9-28-2014: Per Survey results, use Magnitude Calculation v2: Assess Magnitude based on all whitelisted projects
 							double WhitelistedWithRAC = GetNetworkProjectCountWithRAC();
 							structc.Magnitude = (structc.TotalMagnitude/WHITELISTED_PROJECTS) * WhitelistedWithRAC;
+
+			
+
+
 							mvCreditNodeCPID[cpid]=structc;
 							if (fDebug) printf("Adding magnitude for project %s : ProjectAvgRAC %f, User RAC %f, new Magnitude %f\r\n",
 								sProj.c_str(),
@@ -6271,7 +6280,7 @@ try
 		for (unsigned int i = 0; i < vCPID.size(); i++)
 		{
 			std::string email_hash = ExtractXML(vCPID[i],"<email_hash>","</email_hash>");
-			std::string cpid_hash = ExtractXML(vCPID[i],"<cross_project_id>","</cross_project_id>");
+			std::string cpidhash = ExtractXML(vCPID[i],"<cross_project_id>","</cross_project_id>");
 			std::string utc=ExtractXML(vCPID[i],"<user_total_credit>","</user_total_credit>");
 			std::string rac=ExtractXML(vCPID[i],"<user_expavg_credit>","</user_expavg_credit>");
 			std::string proj=ExtractXML(vCPID[i],"<project_name>","</project_name>");
@@ -6285,12 +6294,13 @@ try
 
 			bool projectvalid = ProjectIsValid(proj);
 			
-			if (cpid_hash.length() > 5 && proj.length() > 3) 
+			if (cpidhash.length() > 5 && proj.length() > 3) 
 			{
-				std::string cpid_non = cpid_hash+email;
+				std::string cpid_non = cpidhash+email;
 				to_lower(cpid_non);
+				//Replace old CPID Hash with new:
+				std::string cpid = boinc_hash(email,cpidhash,nBestHeight);
 
-				std::string cpid = RetrieveMd5(cpid_non.c_str());
 				StructCPID structcpid;
 				structcpid = mvCPIDs[proj];
 				iRow++;
@@ -6302,7 +6312,7 @@ try
 											
 				structcpid.cpid = cpid;
 				structcpid.emailhash = email_hash;
-				structcpid.cpidhash = cpid_hash;
+				structcpid.cpidhash = cpidhash;
 
 				structcpid.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + cpid;
 				std::string ENCbpk = AdvancedCrypt(cpid_non);
@@ -6314,7 +6324,7 @@ try
 				}
 				else
 				{
-						GlobalCPUMiningCPID.cpidhash = cpid_hash;
+						GlobalCPUMiningCPID.cpidhash = cpidhash;
 				}
 				structcpid.projectname = proj;
 				structcpid.utc = cdbl(utc,0);
@@ -6410,7 +6420,7 @@ try
 			   {
 
 				   structcpid.Iscpidvalid = false;
-				   structcpid.errors = "Not an official boinc whitelisted project.  Please see 'listitem projects'.";
+				   structcpid.errors = "Not an official boinc whitelisted project.  Please see 'list projects'.";
 			   }
 
 
