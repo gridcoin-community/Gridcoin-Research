@@ -54,6 +54,8 @@ unsigned int WHITELISTED_PROJECTS = 0;
 
 unsigned int CHECKPOINT_VIOLATIONS = 0;
 
+extern void SetAdvisory();
+
 
 
 bool bNewUserWizardNotified = false;
@@ -2371,7 +2373,7 @@ bool OutOfSyncByAgeWithChanceOfMining()
 		//printf("OOS_With_Diff %f",PORDiff);
 		int64_t	nTime = GetTime();
         //If nTime > 10-31-2014 13:00 CST 
-		if (!fTestNet && PORDiff < .01 && nTime > 1415228997)
+		if (!fTestNet && PORDiff < .0002 && nTime > 1415228997)
 		{
 			printf("Most likely you are mining on a fork! Diff %f",PORDiff);
 			bool com = LessVerbose(100);
@@ -2855,6 +2857,12 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
 }
 
 
+void SetAdvisory()
+{
+	CheckpointsMode = Checkpoints::ADVISORY;
+			
+}
+
 // Called from inside SetBestChain: attaches a block to the new best chain being built
 bool CBlock::SetBestChainInner(CTxDB& txdb, CBlockIndex *pindexNew)
 {
@@ -2921,19 +2929,29 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
         // Switch to new best branch
         if (!Reorganize(txdb, pindexIntermediate))
         {
-            txdb.TxnAbort();
-            InvalidChainFound(pindexNew);
-			//10-30-2014 - Halford - Reboot when reorganize fails 3 times
-			REORGANIZE_FAILED++;
-			if (REORGANIZE_FAILED==3)
+			//If reorganize fails, move client into advisory mode, and try one more time:
+			CheckpointsMode = Checkpoints::ADVISORY;
+			printf("entering advisory mode...\r\n");
+			if (!Reorganize(txdb,pindexIntermediate))
 			{
-				    int nResult = 0;
-					#if defined(WIN32) && defined(QT_GUI)
-						//nResult = RebootClient();
-					#endif
-					//printf("Rebooting...");
+
+				txdb.TxnAbort();
+				InvalidChainFound(pindexNew);
+				//10-30-2014 - Halford - Reboot when reorganize fails 3 times
+				REORGANIZE_FAILED++;
+				/*
+				if (REORGANIZE_FAILED==3)
+				{
+						int nResult = 0;
+						#if defined(WIN32) && defined(QT_GUI)
+							//nResult = RebootClient();
+						#endif
+						//printf("Rebooting...");
+				}
+				*/
+
+				return error("SetBestChain() : Reorganize failed");
 			}
-            return error("SetBestChain() : Reorganize failed");
         }
 
         // Connect further blocks
@@ -4609,17 +4627,21 @@ string GetWarnings(string strFor)
 		//10-18-2014-Halford- If invalid checkpoint found, reboot the node:
 		int nResult = 0;
 		#if defined(WIN32) && defined(QT_GUI)
+		//11-6-2014
 		//if (TimerMain("Reboot",5))
 		//{
-			nResult = RebootClient();
+			//nResult = RebootClient();
 		//}
 		#endif
-		printf("Rebooting...");
+		//printf("Rebooting...");
 		/* 
 	    nPriority = 3000;
         strStatusBar = strRPC = _("WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.");
 		*/
 		printf("WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.");
+		printf("Moving Gridcoin into Checkpoint ADVISORY mode.\r\n");
+		CheckpointsMode = Checkpoints::ADVISORY;
+
 		
 
     }

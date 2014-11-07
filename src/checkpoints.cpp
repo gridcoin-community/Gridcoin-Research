@@ -11,6 +11,7 @@
 
 
 double GetGridcoinBalance(std::string SendersGRCAddress);
+void SetAdvisory();
 
 
 static const int nCheckpointSpan = 10;
@@ -144,7 +145,9 @@ namespace Checkpoints
         if (pindex->GetBlockHash() != hashSyncCheckpoint)
         {
             hashInvalidCheckpoint = hashCheckpoint;
-            return error("ValidateSyncCheckpoint: new sync-checkpoint %s is not a descendant of current sync-checkpoint %s", hashCheckpoint.ToString().c_str(), hashSyncCheckpoint.ToString().c_str());
+			//11-6-2014 - R HALFORD - Move client into Advisory mode for one block
+			SetAdvisory();
+		    return error("ValidateSyncCheckpoint: new sync-checkpoint %s is not a descendant of current sync-checkpoint %s", hashCheckpoint.ToString().c_str(), hashSyncCheckpoint.ToString().c_str());
         }
         return true;
     }

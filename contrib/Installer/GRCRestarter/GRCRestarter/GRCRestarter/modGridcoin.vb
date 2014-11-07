@@ -29,4 +29,23 @@
         Catch ex As Exception
         End Try
     End Sub
+
+
+    Public Function IsRunning(ByVal sWildcard As String)
+        Try
+            For Each p As Process In Process.GetProcesses
+                If p.ProcessName Like sWildcard Then
+                    Dim sMetrics As String
+                    sMetrics = Trim(p.ProcessName) + ";" + Trim(p.StartTime) + ";" + Trim(p.Handle)
+                    'ToDo:Log Memory use here
+                    Return True
+                End If
+            Next
+        Catch ex As Exception
+        End Try
+        Return False
+    End Function
+
+
+
 End Module

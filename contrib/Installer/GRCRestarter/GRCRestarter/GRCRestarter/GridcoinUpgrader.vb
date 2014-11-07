@@ -106,8 +106,7 @@ Public Class GridcoinUpgrader
                     System.Threading.Thread.Sleep(800)
 
                     Dim p As Double = 0
-                    p = Math.Round(GetFilePercent("snapshot.zip", 135993000) * 100, 2)
-
+                    p = Math.Round(GetFilePercent("snapshot.zip", 23993000) * 100, 2)
 
                     lblPercent.Text = Trim(p) + "%"
                     RefreshScreen()
@@ -232,8 +231,16 @@ Public Class GridcoinUpgrader
                 RefreshScreen()
                 txtStatus.Text = "Waiting for Gridcoin Wallet to exit..."
                 RefreshScreen()
-                System.Threading.Thread.Sleep(8000)
-                KillProcess("gridcoinresearch*")
+                System.Threading.Thread.Sleep(5000)
+                '11-6-2014
+                For x = 1 To 20
+                    If IsRunning("gridcoinresearch*") Then
+                        KillProcess("gridcoinresearch*")
+                    Else
+                        Exit For
+                    End If
+                    System.Threading.Thread.Sleep(1000)
+                Next
                 'Test permissions in target folder first
                 Try
                     Dim sLocalPath As String = GetGRCAppDir() + "\permissiontest.dat"
@@ -288,24 +295,33 @@ Public Class GridcoinUpgrader
    
     Public Sub RemoveGrcDataDir()
         '7-1-2014
+        Try
 
         For x = 1 To 10
             Dim sDataDir As String = GRCDataDir()
-            Dim sBlocks = sDataDir + "blocks"
+            Dim sChainstate = sDataDir + "chainstate"
             Dim sChain = sDataDir + "txleveldb"
             Dim sDatabase = sDataDir + "database"
-            Dim dBlock As New System.IO.DirectoryInfo(sBlocks)
+            Dim dBlock As New System.IO.DirectoryInfo(sChainstate)
             RemoveBlocksDir(dBlock)
             Dim dChain As New System.IO.DirectoryInfo(sChain)
             RemoveBlocksDir(dChain)
             Dim dDatabase As New System.IO.DirectoryInfo(sDatabase)
             RemoveBlocksDir(dDatabase)
             Dim y As Integer
-            'Delete the blocks File:
+                'Delete the blocks File:
+                Try
+                    Dim fi2 As New System.IO.FileInfo(sDataDir + "\blk0001.dat")
+                    fi2.Delete()
+
+                Catch ex As Exception
+
+                End Try
             For y = 1 To 5
                 Dim sFile As String = "blk000" + Trim(y) + ".dat"
-                Dim fi As New System.IO.FileInfo(sDataDir + sFile)
                 Try
+
+                        Dim fi As New System.IO.FileInfo(sDataDir + "\" + sFile)
                     fi.Delete()
 
                 Catch ex As Exception
@@ -314,20 +330,26 @@ Public Class GridcoinUpgrader
 
             Next
 
-            Dim sSnapshotBlocks = sDataDir + "snapshot\blocks"
-            Dim sSnapshotChain = sDataDir + "snapshot\chainstate"
-            Dim sSnapshotDatabase = sDataDir + "snapshot\database"
-            Dim sSnapshotBlocksIndex = sDataDir + "snapshot\blocks\index"
-            Dim dSBlock As New System.IO.DirectoryInfo(sSnapshotBlocks)
-            RemoveBlocksDir(dSBlock)
-            Dim dsChain As New System.IO.DirectoryInfo(sSnapshotChain)
-            RemoveBlocksDir(dsChain)
-            Dim dsDatabase As New System.IO.DirectoryInfo(sSnapshotDatabase)
-            RemoveBlocksDir(dsDatabase)
+            'Dim sSnapshotBlocks = sDataDir + "snapshot\blocks"
+            'Dim sSnapshotChain = sDataDir + "snapshot\chainstate"
+            'Dim sSnapshotDatabase = sDataDir + "snapshot\database"
+            'Dim sSnapshotBlocksIndex = sDataDir + "snapshot\blocks\index"
+            'Dim dSBlock As New System.IO.DirectoryInfo(sSnapshotBlocks)
+            'RemoveBlocksDir(dSBlock)
+            'Dim dsChain As New System.IO.DirectoryInfo(sSnapshotChain)
+            'RemoveBlocksDir(dsChain)
+            'Dim dsDatabase As New System.IO.DirectoryInfo(sSnapshotDatabase)
+            'RemoveBlocksDir(dsDatabase)
 
-            If dSBlock.Exists = False And dsChain.Exists = False And dsDatabase.Exists = False And dDatabase.Exists = False And dChain.Exists = False And dBlock.Exists = False Then Exit For
+            If dChain.Exists = False And dBlock.Exists = False And dDatabase.Exists = False Then Exit For
+
             Threading.Thread.Sleep(1000)
-        Next
+            Next
+        Catch ex As Exception
+            Log("Error while removing grc data dir " + ex.Message)
+
+        End Try
+
     End Sub
 
     Public Sub Snapshot()
@@ -378,11 +400,11 @@ Public Class GridcoinUpgrader
 
         End Try
         Try
-            DirectorySnapshot(sSnapshotBlocks, sBlocks, True)
+            'DirectorySnapshot(sSnapshotBlocks, sBlocks, True)
         Catch ex As Exception
         End Try
         Try
-            DirectorySnapshot(sSnapshotChain, sChain, True)
+            'DirectorySnapshot(sSnapshotChain, sChain, True)
         Catch ex As Exception
         End Try
         Try
@@ -394,14 +416,11 @@ Public Class GridcoinUpgrader
 
         Try
 
-            Dim di As New DirectoryInfo(outFolder)
+            'Dim di As New DirectoryInfo(outFolder)
 
-            di.Create()
-
+            
             Try
-                'create blocks
-                Dim di2 As New DirectoryInfo(outFolder & "blocks")
-                di2.Create()
+                'di.Create()
 
 
                 'create chainstate
@@ -410,16 +429,19 @@ Public Class GridcoinUpgrader
             Catch ex As Exception
 
             End Try
+
             Try
-                Dim di2 As New DirectoryInfo(outFolder & "chainstate")
+                Dim di2 As New DirectoryInfo(outFolder & "\chainstate")
                 di2.Create()
 
             Catch ex As Exception
 
             End Try
             Try
-                Dim di2 As New DirectoryInfo(outFolder & "database")
+                Dim di2 As New DirectoryInfo(outFolder & "\database")
                 di2.Create()
+                Dim di3 As New DirectoryInfo(outFolder & "\txleveldb")
+                di3.Create()
 
             Catch ex As Exception
 
@@ -461,61 +483,37 @@ Public Class GridcoinUpgrader
 
         Dim sDataDir As String = GRCDataDir()
 
-        Dim sBlocks = sDataDir + "blocks"
-        Dim sBlocksIndex = sDataDir + "blocks\index"
+        Dim sTxLevelDb = sDataDir + "txleveldb"
         Dim sChain = sDataDir + "chainstate"
         Dim sDatabase = sDataDir + "database"
         Dim sAppDir As String = GetGRCAppDir()
 
-        Dim sSnapshotBlocks = sDataDir + "snapshot\blocks"
-        Dim sSnapshotChain = sDataDir + "snapshot\chainstate"
-        Dim sSnapshotDatabase = sDataDir + "snapshot\database"
-        Dim sSnapshotBlocksIndex = sDataDir + "snapshot\blocks\index"
-
+     
         Try
             RemoveGrcDataDir()
         Catch ex As Exception
 
         End Try
         Try
-            System.IO.Directory.CreateDirectory(sBlocksIndex)
+            System.IO.Directory.CreateDirectory(sTxLevelDb)
 
-        Catch ex As Exception
-
-        End Try
-        Try
-            System.IO.Directory.CreateDirectory(sSnapshotBlocksIndex)
-
-        Catch ex As Exception
-
-        End Try
-        Try
-            System.IO.Directory.CreateDirectory(sBlocks)
-
-        Catch ex As Exception
-
-        End Try
-        Try
-            System.IO.Directory.CreateDirectory(sSnapshotBlocks)
 
         Catch ex As Exception
 
         End Try
 
         Try
-            System.IO.Directory.CreateDirectory(sSnapshotChain)
-
+            System.IO.Directory.CreateDirectory(sChain)
         Catch ex As Exception
 
         End Try
+
+
         Try
-            System.IO.Directory.CreateDirectory(sSnapshotDatabase)
-
+            System.IO.Directory.CreateDirectory(sDatabase)
         Catch ex As Exception
 
         End Try
-
-
 
 
         Try
@@ -524,22 +522,9 @@ Public Class GridcoinUpgrader
         Catch ex As Exception
 
         End Try
-        Try
-            ' DirectorySnapshot(sSnapshotBlocks, sBlocks, True)
-        Catch ex As Exception
-        End Try
-        Try
-            ' DirectorySnapshot(sSnapshotChain, sChain, True)
-        Catch ex As Exception
-        End Try
 
-        Try
-            ' DirectorySnapshot(sSnapshotDatabase, sDatabase, True)
 
-        Catch ex As Exception
-
-        End Try
-    End Sub
+      End Sub
 
     Private Sub DirectorySnapshot( _
         ByVal sourceDirName As String, _
