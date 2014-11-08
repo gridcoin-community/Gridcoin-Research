@@ -560,7 +560,7 @@ std::string boinc_hash(const std::string str)
 
 std::string cpid_hash(std::string email, std::string bpk, uint256 blockhash)
 {
-      //Given a block hash, a boinc e-mail, and a boinc public key, generate a Netsoft CPID
+      //Given a block hash, a boinc e-mail, and a boinc public key, generate a Block CPID
       CPID c = CPID(email,bpk,blockhash);
       return c.boincdigest(blockhash);
 }
@@ -568,7 +568,7 @@ std::string cpid_hash(std::string email, std::string bpk, uint256 blockhash)
 
 std::string boinc_hash(std::string email, std::string bpk, uint256 blockhash)
 {    
-	  //Given a block hash, boinc e-mail, and boinc public key, generate a Block CPID
+	  //Given a block hash, boinc e-mail, and boinc public key, generate a Netsoft CPID
 	  CPID c = CPID(email,bpk,blockhash);
       return c.hexdigest();
 }

@@ -365,11 +365,11 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 		    uint64_t nNetworkWeight = GetPoSKernelPS2();
 			if (NC == 1)
 			{
-				NewbieStakeWeightModifier = nNetworkWeight*.0009*COIN;
+				NewbieStakeWeightModifier = nNetworkWeight*.0015*COIN;
 			}
 			else if (NC==2)
 			{
-				NewbieStakeWeightModifier = nNetworkWeight*.0003*COIN;
+				NewbieStakeWeightModifier = nNetworkWeight*.0010*COIN;
 				//printf("NewbieStakeWeightModifier %" PRIu64 " \r\n ", NewbieStakeWeightModifier);
 			}
 	}

@@ -128,6 +128,9 @@ struct MiningEntry {
 		double totalowed;
 		double longtermtotalowed;
 		double longtermowed;
+		std::string email;
+		std::string boincruntimepublickey;
+	
 		
 	};
 
@@ -184,7 +187,10 @@ struct MiningEntry {
 		double ConsensusMagnitudeCount;
 		double Accuracy;
 		double ConsensusMagnitude;
-		
+		std::string cpidv2;
+		std::string email;
+		std::string boincruntimepublickey;
+	
 	};
 
 	

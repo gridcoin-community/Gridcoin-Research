@@ -55,7 +55,7 @@ unsigned int WHITELISTED_PROJECTS = 0;
 unsigned int CHECKPOINT_VIOLATIONS = 0;
 
 extern void SetAdvisory();
-
+extern bool InAdvisory();
 
 
 bool bNewUserWizardNotified = false;
@@ -680,6 +680,7 @@ MiningCPID GetNextProject()
 
 	GlobalCPUMiningCPID.initialized=true;
 	GlobalCPUMiningCPID.cpid="";
+	GlobalCPUMiningCPID.cpidv2 = "";
 	GlobalCPUMiningCPID.projectname ="";
 	GlobalCPUMiningCPID.rac=0;
 	GlobalCPUMiningCPID.encboincpublickey = "";
@@ -2697,7 +2698,13 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 				nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime);
 				if (nStakeReward > (nCalculatedResearch*TOLERANCE_PERCENT))
 				{
-					//TallyNetworkAverages(false);
+					//Do not reject the block until Net Averages are finished loading
+					while (!bNetAveragesLoaded)
+					{
+						//11-8-2014
+						MilliSleep(333);
+						printf("#.");
+					}
 					
 					nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime);
 					if (nStakeReward > (nCalculatedResearch*TOLERANCE_PERCENT))
@@ -2861,6 +2868,11 @@ void SetAdvisory()
 {
 	CheckpointsMode = Checkpoints::ADVISORY;
 			
+}
+
+bool InAdvisory()
+{
+	return (CheckpointsMode == Checkpoints::ADVISORY);
 }
 
 // Called from inside SetBestChain: attaches a block to the new best chain being built
@@ -3505,7 +3517,7 @@ void GridcoinServices()
 		printf("Daily backup results: %s\r\n",backup_results.c_str());
 	}
 	//Every 15 blocks, tally consensus mags:
-	if (TimerMain("update_boinc_magnitude", 15))
+	if (TimerMain("update_boinc_magnitude", 30))
 	{
 			    TallyInBackground();
 	}
@@ -4332,6 +4344,8 @@ bool TallyNetworkAverages(bool ColdBoot)
 	//Iterate throught last 14 days, tally network averages
     if (nBestHeight < 15) return false;
 	printf("Gathering network avgs (begin)\r\n");
+	bNetAveragesLoaded = false;
+	
 	LOCK(cs_main);
 	try 
 	{
@@ -4447,11 +4461,14 @@ bool TallyNetworkAverages(bool ColdBoot)
 	catch (std::exception &e) 
 	{
 	    printf("Error while tallying network averages.\r\n");
+		bNetAveragesLoaded=true;
 	}
     catch(...)
 	{
 		printf("Error while tallying network averages. [1]\r\n");
+		bNetAveragesLoaded=true;
 	}
+	bNetAveragesLoaded=true;
 	return false;
 
 }
@@ -5677,7 +5694,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 					+ delim + mcpid.encaes + delim + RoundToString(mcpid.nonce,0) + delim + RoundToString(mcpid.NetworkRAC,0) + delim + version 
 					+ delim + mcpid.VouchedCPID + delim + RoundToString(mcpid.VouchedMagnitude,0) 
 					+ delim + RoundToString(mcpid.VouchedRAC,0) 
-					+ delim + RoundToString(mcpid.VouchedNetworkRAC,0) 
+					+ delim + mcpid.cpidv2
 					+ delim + RoundToString(mcpid.Magnitude,0)
 					+ delim + RoundToString(mcpid.rac,0);
 
@@ -5723,6 +5740,7 @@ MiningCPID DeserializeBoincBlock(std::string block)
     surrogate.VouchedMagnitude=0;
 	surrogate.VouchedCPID = "";
 	surrogate.Magnitude=0;
+	surrogate.cpidv2 = "";
 
 	std::vector<std::string> s = split(block,"<|>");
 	if (s.size() > 7)
@@ -5760,7 +5778,7 @@ MiningCPID DeserializeBoincBlock(std::string block)
 		}
 		if (s.size() > 14)
 		{
-			surrogate.VouchedNetworkRAC = cdbl(s[14],0);
+			surrogate.cpidv2 = s[14];
 		}
 		if (s.size() > 15)
 		{
@@ -5966,6 +5984,9 @@ void AddProjectFromNetSoft(StructCPID& netsoft)
 	NewProject.cpidhash = GlobalCPUMiningCPID.cpidhash;
 	NewProject.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + cpid;
 	std::string ENCbpk = AdvancedCrypt(cpid_non);
+	NewProject.email = GlobalCPUMiningCPID.email;
+	NewProject.boincruntimepublickey = GlobalCPUMiningCPID.boincruntimepublickey;
+
 	NewProject.boincpublickey = ENCbpk;
 	NewProject.Iscpidvalid = IsCPIDValid(cpid,ENCbpk);
 	if (!NewProject.Iscpidvalid)
@@ -6235,7 +6256,7 @@ std::string RacStringFromDiff(double RAC,unsigned int diffbytes)
 std::string GetBoincDataDir2()
 {
 	std::string path = "";
-
+	//Default setting: boincdatadir=c:\\programdata\\boinc\\
     if (mapArgs.count("-boincdatadir")) 
 	{
         path = mapArgs["-boincdatadir"];
@@ -6339,6 +6360,8 @@ try
 				structcpid.cpid = cpid;
 				structcpid.emailhash = email_hash;
 				structcpid.cpidhash = cpidhash;
+				structcpid.email = email;
+				structcpid.boincruntimepublickey = cpidhash;
 
 				structcpid.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + cpid;
 				std::string ENCbpk = AdvancedCrypt(cpid_non);
@@ -6351,6 +6374,8 @@ try
 				else
 				{
 						GlobalCPUMiningCPID.cpidhash = cpidhash;
+						GlobalCPUMiningCPID.email = email;
+						GlobalCPUMiningCPID.boincruntimepublickey = cpidhash;
 				}
 				structcpid.projectname = proj;
 				structcpid.utc = cdbl(utc,0);

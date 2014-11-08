@@ -12,6 +12,7 @@
 
 double GetGridcoinBalance(std::string SendersGRCAddress);
 void SetAdvisory();
+bool InAdvisory();
 
 
 static const int nCheckpointSpan = 10;
@@ -50,6 +51,7 @@ namespace Checkpoints
 		( 6000,   uint256("0x5976ff9d0da7626badf301a9e038ec05d776e5e50839e2505357512945d53b04") )
 		( 17000,   uint256("0x92fe9bafd6c9c1acbe8565ade79460505a70180ac5c3b360489037ef7a4aed42" ) )
 		( 27000,   uint256("0x1521cd45d0564cb016e816581dd6e2d030f6333a1dac5b79bea71ca8b0186e8d" ) )
+		( 36500,   uint256("0xcf26a63e66ca95bc7c0189a5239128fd983ef978088f187bd30817aebb2c8424") )
     ;
 
     // TestNet has no checkpoints
@@ -129,7 +131,10 @@ namespace Checkpoints
                     return error("ValidateSyncCheckpoint: pprev null - block index structure failure");
             if (pindex->GetBlockHash() != hashCheckpoint)
             {
+				if (InAdvisory()) return false; //Ignore Older Checkpoint (GRC):
                 hashInvalidCheckpoint = hashCheckpoint;
+				//Gridcoin:
+				SetAdvisory();
                 return error("ValidateSyncCheckpoint: new sync-checkpoint %s is conflicting with current sync-checkpoint %s", hashCheckpoint.ToString().c_str(), hashSyncCheckpoint.ToString().c_str());
             }
             return false; // ignore older checkpoint
@@ -144,6 +149,7 @@ namespace Checkpoints
                 return error("ValidateSyncCheckpoint: pprev2 null - block index structure failure");
         if (pindex->GetBlockHash() != hashSyncCheckpoint)
         {
+			if (InAdvisory()) return true; //Ignore descendant checkpoint (GRC)
             hashInvalidCheckpoint = hashCheckpoint;
 			//11-6-2014 - R HALFORD - Move client into Advisory mode for one block
 			SetAdvisory();

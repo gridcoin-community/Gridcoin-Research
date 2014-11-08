@@ -12,6 +12,7 @@
 #include "kernel.h"
 #include "coincontrol.h"
 #include <boost/algorithm/string/replace.hpp>
+#include "cpid.h"
 
 using namespace std;
 
@@ -1626,16 +1627,9 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	//10-22-2014
 	if (NewbieCompliesWithFirstTimeStakeWeightRule() > 0)
 	{
-		if (GetTime() < 1414028435)
-		{
-			nWeight += 10000;
-		}
-		else if (GetTime() > 1414028435)
-		{
 			int64_t NetworkWeight = GetPoSKernelPS2();
 			nWeight += (NetworkWeight*.01);
 			//printf("Newbie Network Weight=%f",nWeight);
-		}
 	}
 	else if (nWeight > 0)
 	{
@@ -1716,7 +1710,15 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	try
 	{
 		 miningcpid = GetNextProject();
-		 hashBoinc = SerializeBoincBlock(miningcpid);
+		 printf("Grabbing Prior blockhash for Cpidv2");
+		 miningcpid.cpidv2 = cpid_hash(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pindexPrev->GetBlockHash());
+
+		// miningcpid.cpidv2 = cpid_hash(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pblock->pprev->GetBlockHash());
+		hashBoinc = SerializeBoincBlock(miningcpid);
+		
+		printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
+
+
 	}
 	catch (std::exception &e) 
 	{

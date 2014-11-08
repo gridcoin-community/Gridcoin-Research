@@ -416,6 +416,16 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	bool IsCpidValid = IsCPIDValid(bb.cpid, bb.enccpid);
 	result.push_back(Pair("CPIDValid",IsCpidValid));
 
+	result.push_back(Pair("CPIDv2",bb.cpidv2));
+	//pblock->hashPrevBlock
+	bool IsCPIDValid2 = CPID_IsCPIDValid(bb.cpid, bb.cpidv2, blockindex->pprev->GetBlockHash());
+	result.push_back(Pair("CPIDValidv2",IsCPIDValid2));
+	//Write the correct cpid value:
+	std::string me = cpid_hash(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey,blockindex->pprev->GetBlockHash());
+	result.push_back(Pair("CorrectCPID",me));
+	//11-8-2014
+	
+
     return result;
 }
 

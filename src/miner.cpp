@@ -7,6 +7,7 @@
 #include "txdb.h"
 #include "miner.h"
 #include "kernel.h"
+#include "cpid.h"
 
 using namespace std;
 
@@ -130,6 +131,14 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 	if (!bCPIDsLoaded)
 	{
 		printf("CPIDs not yet loaded...");
+		MilliSleep(500);
+		return NULL;
+	}
+
+	if (!bNetAveragesLoaded)
+	{
+
+		printf("Net averages not yet loaded...");
 		MilliSleep(500);
 		return NULL;
 	}
@@ -399,9 +408,21 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 
         if (fDebug && GetBoolArg("-printpriority"))
             printf("CreateNewBlock(): total size %"PRIu64"\n", nBlockSize);
-		//Add Boinc Hash
+		//Add Boinc Hash - R HALFORD - 11-7-2014 - Add CPID v2
 		MiningCPID miningcpid = GetNextProject();
+		//ToDo:Test CPID v2 IsCpidValid from RPC
+
+//		miningcpid.cpidv2 = cpid_hash(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pblock->hashPrevBlock);
+		//	 miningcpid.cpidv2 = cpid_hash(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pindexPrev->GetBlockHash());
+		//pindexPrev
+
+		miningcpid.cpidv2 = cpid_hash(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pindexPrev->GetBlockHash());
+		
 		std::string hashBoinc = SerializeBoincBlock(miningcpid);
+		printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
+
+		//		std::string me = cpid_hash(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincpublickeyruntime,blockindex->pprev->GetBlockHash());
+
 		
 	    if (LessVerbose(10)) printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
 
@@ -640,6 +661,14 @@ void StakeMiner(CWallet *pwallet)
                 return;
 			}
         }
+
+		while (!bNetAveragesLoaded)
+		{
+
+			MilliSleep(1000);
+			printf("StakeMiner:Net averages not yet loaded...");
+		}
+	
 
         while (vNodes.empty() || IsInitialBlockDownload())
         {

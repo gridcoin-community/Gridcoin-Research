@@ -101,12 +101,17 @@ Public Class GridcoinUpgrader
                 ProgressBar1.Maximum = 100
                 TimerUE.Enabled = True
 
+                Dim sz As Long
+                sz = GetWebFileSize("snapshot.zip", "signed")
+               
+                If sz = 0 Then sz = 23993000
+
                 DownloadBlocks("snapshot.zip", "signed/")
                 While Not mbFinished
                     System.Threading.Thread.Sleep(800)
 
                     Dim p As Double = 0
-                    p = Math.Round(GetFilePercent("snapshot.zip", 23993000) * 100, 2)
+                    p = Math.Round(GetFilePercent("snapshot.zip", sz) * 100, 2)
 
                     lblPercent.Text = Trim(p) + "%"
                     RefreshScreen()
@@ -747,6 +752,52 @@ Public Class GridcoinUpgrader
         End Try
 
     End Function
+
+    Public Function GetWebFileSize(sName As String, sDir As String) As Long
+
+
+        Try
+
+            Dim sMsg As String
+            Dim sURL As String = GetURL() + sDir + "/"
+
+
+
+            Dim w As New MyWebClient
+            Dim ww As New WebClient
+
+            Dim sFiles As String
+            sFiles = ww.DownloadString(sURL)
+            Dim vFiles() As String = Split(sFiles, "<br>")
+            If UBound(vFiles) < 3 Then
+                Return 0
+            End If
+
+            sMsg = ""
+            For iRow As Integer = 0 To UBound(vFiles)
+                Dim sRow As String = vFiles(iRow)
+                Dim sFile As String = ExtractFilename("<a", "</a>", sRow, 5)
+                If Len(sFile) > 1 Then
+                    If LCase(sFile) = LCase(sName) Then
+
+                        Dim sSz As String
+                        sSz = Trim(Mid(sRow, 22, 12)) 'size portion
+
+                        Return Val(sSz)
+
+                    End If
+                End If
+            Next iRow
+        Catch ex As Exception
+            Return 0
+
+        End Try
+        Return 0
+
+    End Function
+
+
+
     Public Function ParseDate(sDate As String)
         'parses microsofts IIS date to a date, globally
         Dim vDate() As String

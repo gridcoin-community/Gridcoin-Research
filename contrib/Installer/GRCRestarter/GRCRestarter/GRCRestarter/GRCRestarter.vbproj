@@ -20,11 +20,12 @@
     <PlatformTarget>x86</PlatformTarget>
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
-    <DefineDebug>true</DefineDebug>
-    <DefineTrace>true</DefineTrace>
-    <OutputPath>..\..\..\..\..\..\release\</OutputPath>
+    <DefineDebug>false</DefineDebug>
+    <DefineTrace>false</DefineTrace>
+    <OutputPath>.\</OutputPath>
     <DocumentationFile>GRCRestarter.xml</DocumentationFile>
     <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
+    <DefineConstants>downloadblocks</DefineConstants>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
     <PlatformTarget>x86</PlatformTarget>
@@ -35,7 +36,7 @@
     <OutputPath>..\..\..\..\..\release\</OutputPath>
     <DocumentationFile>GRCRestarter.xml</DocumentationFile>
     <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
-    <DefineConstants>upgrade</DefineConstants>
+    <DefineConstants>downloadblocks</DefineConstants>
   </PropertyGroup>
   <PropertyGroup>
     <OptionExplicit>On</OptionExplicit>
@@ -50,9 +51,9 @@
     <OptionInfer>On</OptionInfer>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="icsharpcode.sharpziplibstake, Version=0.86.0.518, Culture=neutral, PublicKeyToken=1b03e6acf1164f73">
+    <Reference Include="icsharpcode.sharpziplib, Version=0.86.0.518, Culture=neutral, PublicKeyToken=1b03e6acf1164f73">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\..\release\icsharpcode.sharpziplibstake.dll</HintPath>
+      <HintPath>..\..\..\..\..\release\icsharpcode.sharpziplib.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Data" />
@@ -85,11 +86,11 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="modGridcoin.vb" />
-    <Compile Include="My Project\AssemblyInfo.vb" />
     <Compile Include="My Project\Application.Designer.vb">
       <AutoGen>True</AutoGen>
       <DependentUpon>Application.myapp</DependentUpon>
     </Compile>
+    <Compile Include="My Project\AssemblyInfo.vb" />
     <Compile Include="My Project\Resources.Designer.vb">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
@@ -135,12 +136,6 @@
       <CustomToolNamespace>My</CustomToolNamespace>
       <LastGenOutput>Settings.Designer.vb</LastGenOutput>
     </None>
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\..\..\boinc\boinc\boincstake.vbproj">
-      <Project>{359913F7-DF2D-4632-9A0C-52E9FD0D4ED9}</Project>
-      <Name>boincstake</Name>
-    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\gridcoin horizontal.png" />
