@@ -2678,7 +2678,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	//Gridcoin: Maintain network consensus for Magnitude & Outstanding Amount Owed by CPID  
 	
 	//Grandfather
-	int nGrandfather = 22000;
+	int nGrandfather = 37000;
 
 
 	double mint = pindex->nMint/COIN;
@@ -3321,7 +3321,7 @@ bool CBlock::AcceptBlock()
 {
     AssertLockHeld(cs_main);
 	//Grandfather:
-	int nGrandfather = 22000;
+	int nGrandfather = 37000;
 
     if (nVersion > CURRENT_VERSION)
         return DoS(100, error("AcceptBlock() : reject unknown block version %d", nVersion));
@@ -3389,15 +3389,24 @@ bool CBlock::AcceptBlock()
 
     uint256 hashProof;
     // Verify hash target and signature of coinstake tx
-    if (IsProofOfStake())
-    {
-        uint256 targetProofOfStake;
-        if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc))
-        {
-            printf("WARNING: AcceptBlock(): check proof-of-stake failed for block %s\n", hash.ToString().c_str());
-            return false; // do not error here as we expect this during initial block download
-        }
-    }
+	if (nHeight > nGrandfather)
+	{
+		if (IsLockTimeVeryRecent(GetBlockTime()))
+		{	
+
+				if (IsProofOfStake())
+				{
+					uint256 targetProofOfStake;
+					if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc))
+					{
+						printf("WARNING: AcceptBlock(): check proof-of-stake failed for block %s\n", hash.ToString().c_str());
+						return false; // do not error here as we expect this during initial block download
+					}
+				}
+
+		}
+	}
+
     // PoW is checked in CheckBlock()
     if (IsProofOfWork())
     {
