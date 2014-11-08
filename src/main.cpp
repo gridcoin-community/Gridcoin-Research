@@ -4643,6 +4643,7 @@ string GetWarnings(string strFor)
     {
 		//10-18-2014-Halford- If invalid checkpoint found, reboot the node:
 		int nResult = 0;
+		/*
 		#if defined(WIN32) && defined(QT_GUI)
 		//11-6-2014
 		//if (TimerMain("Reboot",5))
@@ -4650,6 +4651,8 @@ string GetWarnings(string strFor)
 			//nResult = RebootClient();
 		//}
 		#endif
+		*/
+
 		//printf("Rebooting...");
 		/* 
 	    nPriority = 3000;

@@ -132,7 +132,7 @@ namespace Checkpoints
             if (pindex->GetBlockHash() != hashCheckpoint)
             {
 				if (InAdvisory()) return false; //Ignore Older Checkpoint (GRC):
-                hashInvalidCheckpoint = hashCheckpoint;
+                //hashInvalidCheckpoint = hashCheckpoint;
 				//Gridcoin:
 				SetAdvisory();
                 return error("ValidateSyncCheckpoint: new sync-checkpoint %s is conflicting with current sync-checkpoint %s", hashCheckpoint.ToString().c_str(), hashSyncCheckpoint.ToString().c_str());
@@ -150,7 +150,7 @@ namespace Checkpoints
         if (pindex->GetBlockHash() != hashSyncCheckpoint)
         {
 			if (InAdvisory()) return true; //Ignore descendant checkpoint (GRC)
-            hashInvalidCheckpoint = hashCheckpoint;
+            //hashInvalidCheckpoint = hashCheckpoint;
 			//11-6-2014 - R HALFORD - Move client into Advisory mode for one block
 			SetAdvisory();
 		    return error("ValidateSyncCheckpoint: new sync-checkpoint %s is not a descendant of current sync-checkpoint %s", hashCheckpoint.ToString().c_str(), hashSyncCheckpoint.ToString().c_str());
@@ -195,8 +195,12 @@ namespace Checkpoints
                     return error("AcceptPendingSyncCheckpoint: ReadFromDisk failed for sync checkpoint %s", hashPendingCheckpoint.ToString().c_str());
                 if (!block.SetBestChain(txdb, pindexCheckpoint))
                 {
-                    hashInvalidCheckpoint = hashPendingCheckpoint;
-                    return error("AcceptPendingSyncCheckpoint: SetBestChain failed for sync checkpoint %s", hashPendingCheckpoint.ToString().c_str());
+                    //hashInvalidCheckpoint = hashPendingCheckpoint;
+					SetAdvisory();
+					if (!InAdvisory())
+					{
+						return error("AcceptPendingSyncCheckpoint: SetBestChain failed for sync checkpoint %s", hashPendingCheckpoint.ToString().c_str());
+					}
                 }
             }
 
@@ -489,8 +493,15 @@ bool CSyncCheckpoint::ProcessSyncCheckpoint(CNode* pfrom)
             return error("ProcessSyncCheckpoint: ReadFromDisk failed for sync checkpoint %s", hashCheckpoint.ToString().c_str());
         if (!block.SetBestChain(txdb, pindexCheckpoint))
         {
-            Checkpoints::hashInvalidCheckpoint = hashCheckpoint;
-            return error("ProcessSyncCheckpoint: SetBestChain failed for sync checkpoint %s", hashCheckpoint.ToString().c_str());
+            //Checkpoints::hashInvalidCheckpoint = hashCheckpoint;
+			if (!InAdvisory())
+			{
+				SetAdvisory();
+			
+				return error("ProcessSyncCheckpoint: SetBestChain failed for sync checkpoint %s", hashCheckpoint.ToString().c_str());
+			}
+			SetAdvisory();
+			
         }
     }
 
