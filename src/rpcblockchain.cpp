@@ -412,10 +412,14 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	//int iav  = TestAESHash(bb.rac, (unsigned int)bb.diffbytes, boincpowhash, bb.aesskein);
     //	result.push_back(Pair("AES512Valid",iav));
 	result.push_back(Pair("ClientVersion",bb.clientversion));	
+
 	std::string hbd = AdvancedDecrypt(bb.enccpid);
 	bool IsCpidValid = IsCPIDValid(bb.cpid, bb.enccpid);
 	result.push_back(Pair("CPIDValid",IsCpidValid));
 
+
+	//Put this section on hold
+	/*
 	result.push_back(Pair("CPIDv2",bb.cpidv2));
 	//pblock->hashPrevBlock
 	bool IsCPIDValid2 = CPID_IsCPIDValid(bb.cpid, bb.cpidv2, blockindex->pprev->GetBlockHash());
@@ -424,7 +428,10 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	std::string me = cpid_hash(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey,blockindex->pprev->GetBlockHash());
 	result.push_back(Pair("CorrectCPID",me));
 	//11-8-2014
-	
+	*/
+
+
+
 
     return result;
 }

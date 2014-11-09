@@ -411,19 +411,11 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		//Add Boinc Hash - R HALFORD - 11-7-2014 - Add CPID v2
 		MiningCPID miningcpid = GetNextProject();
 		//ToDo:Test CPID v2 IsCpidValid from RPC
-
-//		miningcpid.cpidv2 = cpid_hash(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pblock->hashPrevBlock);
-		//	 miningcpid.cpidv2 = cpid_hash(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pindexPrev->GetBlockHash());
-		//pindexPrev
-
-		miningcpid.cpidv2 = cpid_hash(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pindexPrev->GetBlockHash());
+	    //miningcpid.cpidv2 = cpid_hash(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pindexPrev->GetBlockHash());
 		
 		std::string hashBoinc = SerializeBoincBlock(miningcpid);
 		printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
-
-		//		std::string me = cpid_hash(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincpublickeyruntime,blockindex->pprev->GetBlockHash());
-
-		
+				
 	    if (LessVerbose(10)) printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
 
 		pblock->vtx[0].hashBoinc = hashBoinc;

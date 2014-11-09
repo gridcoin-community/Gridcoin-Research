@@ -1779,14 +1779,7 @@ void BitcoinGUI::timerfire()
 
 
 
-							if (true)
-							{
-								if (Timer("gather_cpids",6*30))
-								{
-									printf("\r\nReharvesting cpids in background thread...\r\n");
-									LoadCPIDsInBackground();
-								}
-							}
+					
 
 									if (false)
 									{
