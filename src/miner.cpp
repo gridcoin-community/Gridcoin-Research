@@ -662,10 +662,12 @@ void StakeMiner(CWallet *pwallet)
 			}
         }
 
+		int iFutile=0;
 		while (!bNetAveragesLoaded)
 		{
-
-			MilliSleep(1000);
+			iFutile++;
+			if (iFutile > 50) break;
+			MilliSleep(100);
 			printf("StakeMiner:Net averages not yet loaded...");
 		}
 	

@@ -2699,11 +2699,14 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 				if (nStakeReward > (nCalculatedResearch*TOLERANCE_PERCENT))
 				{
 					//Do not reject the block until Net Averages are finished loading
+					int iFutile=0;
 					while (!bNetAveragesLoaded)
 					{
 						//11-8-2014
-						MilliSleep(333);
+						MilliSleep(100);
 						printf("#.");
+						iFutile++;
+						if (iFutile > 50) break;
 					}
 					
 					nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime);
