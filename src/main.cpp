@@ -655,16 +655,12 @@ unsigned int DiffBytes(double PoBDiff)
 
 MiningCPID GetNextProject()
 {
-		
+	
 
 	StructCPID lastcpid;
-	if (GlobalCPUMiningCPID.initialized)
-	{
-		//printf("GlobalCPID initialized\r\n");
-			if (GlobalCPUMiningCPID.projectname.length() > 3)
+	if (GlobalCPUMiningCPID.projectname.length() > 3)
 			{
-				//printf("Projectname initialized\r\n");
-
+	
 				if (!Timer_Main("globalcpuminingcpid",20))
 				{
 					//Prevent Thrashing
@@ -672,13 +668,11 @@ MiningCPID GetNextProject()
 				}
 		
 			}
-	}
 	msMiningProject = "";
 	msMiningCPID = "";
 	mdMiningRAC = 0;
 	msENCboincpublickey = "";
 
-	GlobalCPUMiningCPID.initialized=true;
 	GlobalCPUMiningCPID.cpid="";
 	GlobalCPUMiningCPID.cpidv2 = "";
 	GlobalCPUMiningCPID.projectname ="";
@@ -704,8 +698,6 @@ MiningCPID GetNextProject()
 		if (mvCPIDs.size() < 1)
 		{
 			printf("Gridcoin has no CPIDs...");
-
-			//	return GlobalCPUMiningCPID;
 			//Let control reach the investor area
 
 		}
@@ -797,8 +789,7 @@ MiningCPID GetNextProject()
 		GlobalCPUMiningCPID.rac=0;
 		GlobalCPUMiningCPID.encboincpublickey = "";
 		GlobalCPUMiningCPID.enccpid = "";
-		//double ProjectRAC = 0;
-		GlobalCPUMiningCPID.NetworkRAC =0;
+		GlobalCPUMiningCPID.NetworkRAC = 0;
 		GlobalCPUMiningCPID.Magnitude = 0;
 		mdMiningNetworkRAC = 0;
 	  	}
@@ -2945,26 +2936,32 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
         if (!Reorganize(txdb, pindexIntermediate))
         {
 			//If reorganize fails, move client into advisory mode, and try one more time:
-			CheckpointsMode = Checkpoints::ADVISORY;
-			printf("entering advisory mode...\r\n");
-			if (!Reorganize(txdb,pindexIntermediate))
+			if (CHECKPOINT_DISTRIBUTED_MODE==1)
 			{
-
-				txdb.TxnAbort();
-				InvalidChainFound(pindexNew);
-				//10-30-2014 - Halford - Reboot when reorganize fails 3 times
-				REORGANIZE_FAILED++;
-				/*
-				if (REORGANIZE_FAILED==3)
+				CheckpointsMode = Checkpoints::ADVISORY;
+				printf("entering advisory mode...\r\n");
+				if (!Reorganize(txdb,pindexIntermediate))
 				{
+					txdb.TxnAbort();
+					InvalidChainFound(pindexNew);
+					//10-30-2014 - Halford - Reboot when reorganize fails 3 times
+					REORGANIZE_FAILED++;
+					/*
+					if (REORGANIZE_FAILED==3)
+					{
 						int nResult = 0;
 						#if defined(WIN32) && defined(QT_GUI)
 							//nResult = RebootClient();
 						#endif
 						//printf("Rebooting...");
+					}
+					*/
 				}
-				*/
-
+			}
+			else
+			{
+				txdb.TxnAbort();
+				InvalidChainFound(pindexNew);
 				return error("SetBestChain() : Reorganize failed");
 			}
         }
@@ -3425,12 +3422,15 @@ bool CBlock::AcceptBlock()
 		// Check that the block satisfies synchronized checkpoint
 		if (CheckpointsMode == Checkpoints::STRICT && !cpSatisfies)
 		{
-			CHECKPOINT_VIOLATIONS++;
-			if (CHECKPOINT_VIOLATIONS > 3)
+			if (CHECKPOINT_DISTRIBUTED_MODE==1)
 			{
-				//For stability, move the client into ADVISORY MODE:
-				printf("Moving Gridcoin into Checkpoint ADVISORY mode.\r\n");
-				CheckpointsMode = Checkpoints::ADVISORY;
+				CHECKPOINT_VIOLATIONS++;
+				if (CHECKPOINT_VIOLATIONS > 3)
+				{
+					//For stability, move the client into ADVISORY MODE:
+					printf("Moving Gridcoin into Checkpoint ADVISORY mode.\r\n");
+					CheckpointsMode = Checkpoints::ADVISORY;
+				}
 			}
 			return error("AcceptBlock() : rejected by synchronized checkpoint");
 		}
@@ -3438,7 +3438,7 @@ bool CBlock::AcceptBlock()
 		if (CheckpointsMode == Checkpoints::ADVISORY && !cpSatisfies)
 			strMiscWarning = _("WARNING: synchronized checkpoint violation detected, but skipped!");
 		
-		if (CheckpointsMode == Checkpoints::ADVISORY && cpSatisfies)
+		if (CheckpointsMode == Checkpoints::ADVISORY && cpSatisfies && CHECKPOINT_DISTRIBUTED_MODE==1)
 		{
 			///Move the client back into STRICT mode
 			CHECKPOINT_VIOLATIONS = 0;
@@ -3667,22 +3667,29 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock)
 	double nBalance = GetTotalBalance();
 	std::string SendingWalletAddress = DefaultWalletAddress();
     printf("ProcessBlock: ACCEPTED, Current Balance %f \r\n",nBalance);
-	//10-31-2014 Gridcoin - Include node balance and GRC Sending Address in sync checkpoint
-    // ppcoin: if responsible for sync-checkpoint send it
-    // if (pfrom && !CSyncCheckpoint::strMasterPrivKey.empty())        Checkpoints::SendSyncCheckpoint(Checkpoints::AutoSelectSyncCheckpoint());
-	bool bUserQualified = IsUserQualifiedToSendCheckpoint();
-	//mapBlockIndex[hash]->nHeight
-
+	double mint = mapBlockIndex[hash]->nMint/COIN;
 	
-	//CBlockIndex* pindex = pblock->ReadFromDisk(pindex);
-    double mint = mapBlockIndex[hash]->nMint/COIN;
-	printf("Staking amount %f \r\n",mint);
-
-	if (pfrom && (nBalance > MINIMUM_CHECKPOINT_TRANSMISSION_BALANCE) && bUserQualified && mint < 50)
+	if (CHECKPOINT_DISTRIBUTED_MODE==0)
 	{
-			Checkpoints::SendSyncCheckpointWithBalance(Checkpoints::AutoSelectSyncCheckpoint(),nBalance,SendingWalletAddress);
+		// If we are in centralized mode, follow peercoins model: if responsible for sync-checkpoint send it
+		if (pfrom && !CSyncCheckpoint::strMasterPrivKey.empty())        
+		{
+				Checkpoints::SendSyncCheckpoint(Checkpoints::AutoSelectSyncCheckpoint());
+		}
 	}
+	else if (CHECKPOINT_DISTRIBUTED_MODE==1)
+	{
+		//If we are in decentralized mode, follow Gridcoins model:
+		//Include node balance and GRC Sending Address in sync checkpoint
+		bool bUserQualified = IsUserQualifiedToSendCheckpoint();
+		printf("Checkpoint Staking amount %f \r\n",mint);
+		if (pfrom && (nBalance > MINIMUM_CHECKPOINT_TRANSMISSION_BALANCE) && bUserQualified && mint < 50)
+		{
+			Checkpoints::SendSyncCheckpointWithBalance(Checkpoints::AutoSelectSyncCheckpoint(),nBalance,SendingWalletAddress);
+		}
 
+	}
+	
 	//Gridcoin - R Halford - 11-2-2014 - Initiative to move critical processes from Timer to main:
 	GridcoinServices();
 
@@ -4653,27 +4660,30 @@ string GetWarnings(string strFor)
     // if detected invalid checkpoint enter safe mode
     if (Checkpoints::hashInvalidCheckpoint != 0)
     {
-		//10-18-2014-Halford- If invalid checkpoint found, reboot the node:
-		int nResult = 0;
-		/*
-		#if defined(WIN32) && defined(QT_GUI)
-		//11-6-2014
-		//if (TimerMain("Reboot",5))
-		//{
+
+		if (CHECKPOINT_DISTRIBUTED_MODE==1)
+		{	
+			//10-18-2014-Halford- If invalid checkpoint found, reboot the node:
+			int nResult = 0;
+			/*
+			#if defined(WIN32) && defined(QT_GUI)
+			//{
 			//nResult = RebootClient();
-		//}
-		#endif
-		*/
+			//}
+			#endif
+			*/
 
-		//printf("Rebooting...");
-		/* 
-	    nPriority = 3000;
-        strStatusBar = strRPC = _("WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.");
-		*/
-		printf("WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.");
-		printf("Moving Gridcoin into Checkpoint ADVISORY mode.\r\n");
-		CheckpointsMode = Checkpoints::ADVISORY;
-
+			//printf("Rebooting...");
+			printf("Moving Gridcoin into Checkpoint ADVISORY mode.\r\n");
+			CheckpointsMode = Checkpoints::ADVISORY;
+	
+		}
+		else
+		{
+			nPriority = 3000;
+			strStatusBar = strRPC = _("WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.");
+			printf("WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.");
+		}
 		
 
     }
@@ -6271,7 +6281,10 @@ std::string RacStringFromDiff(double RAC,unsigned int diffbytes)
 std::string GetBoincDataDir2()
 {
 	std::string path = "";
-	//Default setting: boincdatadir=c:\\programdata\\boinc\\
+	/*       Default setting: boincdatadir=c:\\programdata\\boinc\\   */
+
+
+
     if (mapArgs.count("-boincdatadir")) 
 	{
         path = mapArgs["-boincdatadir"];
@@ -6534,6 +6547,7 @@ void ThreadCPIDs()
 	bCPIDsLoaded = true;
 	//Reloads maglevel:
 	printf("Performing 1st credit check");
+	//11-9-2014 Stack Smashing
 	CreditCheck(GlobalCPUMiningCPID.cpid,true);
 	printf("Getting first project");
 	GetNextProject();
@@ -6550,8 +6564,6 @@ void LoadCPIDsInBackground()
 
 void TallyInBackground()
 {
-
-	//10-30-2014
 	tallyThreads = new boost::thread_group();
 	tallyThreads->create_thread(boost::bind(&ThreadTally));
 }

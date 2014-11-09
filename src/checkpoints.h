@@ -158,6 +158,7 @@ public:
     }
 
     bool CheckSignature();
+	bool CheckSignatureWithBalance();
     bool ProcessSyncCheckpoint(CNode* pfrom);
 };
 

@@ -28,19 +28,6 @@ namespace Checkpoints
     //    timestamp before)
     // + Contains no strange transactions
     //
-	/*
-	   boost::assign::map_list_of
-        ( 0,      hashGenesisBlock )
-        ( 1500,   uint256("0x000000000079987db951032e017b8e337016296bffdb83ae87dd7fc79c26668d") )
-        ( 5001,   uint256("0x2fac9021be0c311e7b6dc0933a72047c70f817e2eb1e01bede011193ad1b28bc") )
-        ( 5500,   uint256("0x00000000001636e6cb9747abc92354385f43d6580ecf7326269aa92bd5b2beac") )
-        ( 14000,  uint256("0xa82c673016dcb5ebf6dad3e772a22848454e4a32568b02a994a60612ba68a3b1") )
-        ( 37000,  uint256("0xa36f0013842adeb27aa70d20541925364879fdec25e84d6b4c4b256b71e48791") )
-        ( 38424,  uint256("0x8d82bf5332ea5540ae7aae53b77c4bde6ce96f00a30358b755ba3f15ee01096f") )
-        ( 61100,  uint256("0xdbb6934ec506b0c6d96f3c1ab36cd8831c966446a15c128486361399a8fdc4c2") )
-        ( 80000,  uint256("0xa47cec53d42bc095b7b6e10d96a221bd85c0796f8cdcf157d96cf0d91e6a52b2") )
-        ( 254348, uint256("0x9bf8d9bd757d3ef23d5906d70567e5f0da93f1e0376588c8d421a95e2421838b") )
-		*/
 
 
     static MapCheckpoints mapCheckpoints =
@@ -131,10 +118,8 @@ namespace Checkpoints
                     return error("ValidateSyncCheckpoint: pprev null - block index structure failure");
             if (pindex->GetBlockHash() != hashCheckpoint)
             {
-				//if (InAdvisory()) return false; //Ignore Older Checkpoint (GRC):
+				if (CHECKPOINT_DISTRIBUTED_MODE==1)  SetAdvisory();
                 hashInvalidCheckpoint = hashCheckpoint;
-				//Gridcoin:
-				SetAdvisory();
                 return error("ValidateSyncCheckpoint: new sync-checkpoint %s is conflicting with current sync-checkpoint %s", hashCheckpoint.ToString().c_str(), hashSyncCheckpoint.ToString().c_str());
             }
             return false; // ignore older checkpoint
@@ -150,8 +135,7 @@ namespace Checkpoints
         if (pindex->GetBlockHash() != hashSyncCheckpoint)
         {
 		    hashInvalidCheckpoint = hashCheckpoint;
-			//11-6-2014 - R HALFORD - Move client into Advisory mode for one block
-			SetAdvisory();
+			if (CHECKPOINT_DISTRIBUTED_MODE==1)  SetAdvisory();
 		    return error("ValidateSyncCheckpoint: new sync-checkpoint %s is not a descendant of current sync-checkpoint %s", hashCheckpoint.ToString().c_str(), hashSyncCheckpoint.ToString().c_str());
         }
         return true;
@@ -195,7 +179,7 @@ namespace Checkpoints
                 if (!block.SetBestChain(txdb, pindexCheckpoint))
                 {
                     hashInvalidCheckpoint = hashPendingCheckpoint;
-					SetAdvisory();
+					//SetAdvisory();
 					//if (!InAdvisory())
 					//{
 					return error("AcceptPendingSyncCheckpoint: SetBestChain failed for sync checkpoint %s", hashPendingCheckpoint.ToString().c_str());
@@ -427,15 +411,30 @@ namespace Checkpoints
 
   const std::string CSyncCheckpoint::strMasterPubKey = "04c858f58b8231219db37e0f714e9884e78ad996ea9ac5d9f72ea969a53e37701374b6348956f3df36fdc10c1e5e4a2a6bded85894ac2f7494700a2d63a4fff772";
   std::string CSyncCheckpoint::strMasterPrivKey = "";
+    
 
   
+// ppcoin: verify signature of sync-checkpoint message
+bool CSyncCheckpoint::CheckSignature()
+{
+	CKey key;
+	if (!key.SetPubKey(ParseHex(CSyncCheckpoint::strMasterPubKey)))
+			return error("CSyncCheckpoint::CheckSignature() : SetPubKey failed");
+	if (!key.Verify(Hash(vchMsg.begin(), vchMsg.end()), vchSig))
+			return error("CSyncCheckpoint::CheckSignature() : verify signature failed");
 
-  // ppcoin: verify signature of sync-checkpoint message
-  bool CSyncCheckpoint::CheckSignature()
+    // Now unserialize the data
+    CDataStream sMsg(vchMsg, SER_NETWORK, PROTOCOL_VERSION);
+    sMsg >> *(CUnsignedSyncCheckpoint*)this;
+    return true;
+}
+
+
+  // Gridcoin: verify signature of sync-checkpoint message by balance
+  bool CSyncCheckpoint::CheckSignatureWithBalance()
   {
 	// Verify Senders Balance:
 	double senders_balance = GetGridcoinBalance(SendersWalletAddress);
-	
 	if (balance < 1000000)
 	{
 		CKey key;
@@ -492,14 +491,9 @@ bool CSyncCheckpoint::ProcessSyncCheckpoint(CNode* pfrom)
             return error("ProcessSyncCheckpoint: ReadFromDisk failed for sync checkpoint %s", hashCheckpoint.ToString().c_str());
         if (!block.SetBestChain(txdb, pindexCheckpoint))
         {
-            //Checkpoints::hashInvalidCheckpoint = hashCheckpoint;
-			if (!InAdvisory())
-			{
-				SetAdvisory();
-			
-				return error("ProcessSyncCheckpoint: SetBestChain failed for sync checkpoint %s", hashCheckpoint.ToString().c_str());
-			}
-			SetAdvisory();
+            Checkpoints::hashInvalidCheckpoint = hashCheckpoint;
+			if (CHECKPOINT_DISTRIBUTED_MODE==1)  SetAdvisory();
+			return error("ProcessSyncCheckpoint: SetBestChain failed for sync checkpoint %s", hashCheckpoint.ToString().c_str());
 			
         }
     }

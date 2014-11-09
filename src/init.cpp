@@ -169,6 +169,19 @@ void ReloadBlockChain1()
 void InitializeBoincProjects()
 {
 
+		//Initialize GlobalCPUMiningCPID
+	    GlobalCPUMiningCPID.initialized = true;
+
+		GlobalCPUMiningCPID.cpid="";
+		GlobalCPUMiningCPID.cpidv2 = "";
+		GlobalCPUMiningCPID.projectname ="";
+		GlobalCPUMiningCPID.rac=0;
+		GlobalCPUMiningCPID.encboincpublickey = "";
+		GlobalCPUMiningCPID.boincruntimepublickey = "";
+		GlobalCPUMiningCPID.pobdifficulty = 0;
+		GlobalCPUMiningCPID.diffbytes = 0;
+		GlobalCPUMiningCPID.email = "";
+
 		std::string boinc_projects[100];
 	       
         boinc_projects[0] = "http://boinc.bakerlab.org/rosetta/   |rosetta@home";

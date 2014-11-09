@@ -536,6 +536,7 @@ bool CPID::Compare(std::string usercpid, std::string longcpid, uint256 blockhash
    std::string shash = boinc_hash(blockhash.GetHex());
    CPID c = CPID(cpid2,0,blockhash);
    std::string shortcpid = c.hexdigest();
+   printf("shortcpid %s, cpid1 %s, usercpid %s \r\n",shortcpid.c_str(),cpid1.c_str(),usercpid.c_str());
    if (shortcpid == cpid1 && cpid1==usercpid && shortcpid == usercpid) return true;
    return false;
 }
