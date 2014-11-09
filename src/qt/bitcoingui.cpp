@@ -1730,7 +1730,7 @@ void BitcoinGUI::timerfire()
 		if (false)
 		{
 
-				//		std::string time1 =  DateTimeStrFormat("%m-%d-%Y %H:%M:%S", GetTime());
+				//		std::string time1 =  DateTimeStrFormat("%m-%d-%Y %H:%M:%S", tTime());
 				//Backup the wallet once per day:
 				if (Timer("backupwallet", 6*60*10))
 				{

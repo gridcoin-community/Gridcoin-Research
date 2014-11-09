@@ -526,7 +526,7 @@ std::string GetGlobalStatus()
 	try
 	{
 	std::string status = "";
-	double boincmagnitude = CalculatedMagnitude(GetTime());
+	double boincmagnitude = CalculatedMagnitude( GetAdjustedTime());
 	uint64_t nWeight = 0;
 	pwalletMain->GetStakeWeight(nWeight);
 	nBoincUtilization = boincmagnitude; //Legacy Support for the about screen
@@ -655,9 +655,7 @@ unsigned int DiffBytes(double PoBDiff)
 
 MiningCPID GetNextProject()
 {
-	
 
-	StructCPID lastcpid;
 	if (GlobalCPUMiningCPID.projectname.length() > 3)
 			{
 	
@@ -751,7 +749,6 @@ MiningCPID GetNextProject()
 								if (LessVerbose(50)) printf("Ready to CPU Mine project %s     RAC(%f)  enc %s\r\n",
 									structcpid.projectname.c_str(),structcpid.rac, msENCboincpublickey.c_str());
 								//Required for project to be mined in a block:
-								GlobalCPUMiningCPID.initialized = true;
 								GlobalCPUMiningCPID.cpid=structcpid.cpid;
 								GlobalCPUMiningCPID.projectname = structcpid.projectname;
 								GlobalCPUMiningCPID.rac=structcpid.verifiedrac;
@@ -786,6 +783,10 @@ MiningCPID GetNextProject()
 		GlobalCPUMiningCPID.initialized = true;
 		GlobalCPUMiningCPID.cpid="INVESTOR";
 		GlobalCPUMiningCPID.projectname = "INVESTOR";
+		GlobalCPUMiningCPID.cpidv2="INVESTOR";
+		GlobalCPUMiningCPID.cpidhash = "";
+		GlobalCPUMiningCPID.email = "INVESTOR";
+		GlobalCPUMiningCPID.boincruntimepublickey = "INVESTOR";
 		GlobalCPUMiningCPID.rac=0;
 		GlobalCPUMiningCPID.encboincpublickey = "";
 		GlobalCPUMiningCPID.enccpid = "";
@@ -1463,7 +1464,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
             static CCriticalSection cs;
             static double dFreeCount;
             static int64_t nLastTime;
-            int64_t nNow = GetTime();
+            int64_t nNow =  GetAdjustedTime();
 
             {
                 LOCK(pool.cs);
@@ -1773,7 +1774,6 @@ static CBigNum GetProofOfStakeLimit(int nHeight)
 double CalculatedMagnitude(int64_t locktime)
 {
 	
-	//StructCPID mag = mvMagnitudes[GlobalCPUMiningCPID.cpid];
 	StructCPID mag = mvCreditNodeCPID[GlobalCPUMiningCPID.cpid];
 	if (GlobalCPUMiningCPID.cpid != "INVESTOR" && mag.Magnitude==0) 
 	{
@@ -1883,10 +1883,10 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 		StructCPID mag = mvMagnitudes[cpid];
 		double owed = mag.owed;
 		if (owed < 0) owed = 0;
-		//Coarse Payment Rule (helps prevent sync problems):
+		// Coarse Payment Rule (helps prevent sync problems):
 		if (!VerifyingBlock)
 		{
-			if (owed < (GetMaximumBoincSubsidy(GetTime())/10)) owed = 0;
+			if (owed < (GetMaximumBoincSubsidy(GetAdjustedTime())/10)) owed = 0;
 			owed = owed/2;
 		}
 		//End of Coarse Payment Rule
@@ -2063,10 +2063,10 @@ bool IsInitialBlockDownload()
     if (pindexBest != pindexLastBest)
     {
         pindexLastBest = pindexBest;
-        nLastUpdate = GetTime();
+        nLastUpdate =  GetAdjustedTime();
     }
-    return (GetTime() - nLastUpdate < 15 &&
-            pindexBest->GetBlockTime() < GetTime() - 8 * 60 * 60);
+    return ( GetAdjustedTime() - nLastUpdate < 15 &&
+            pindexBest->GetBlockTime() <  GetAdjustedTime() - 8 * 60 * 60);
 }
 
 void static InvalidChainFound(CBlockIndex* pindexNew)
@@ -2342,6 +2342,12 @@ bool OutOfSyncByAgeWithChanceOfMining()
 {
 	try
 	{
+			int64_t	nTime =  GetAdjustedTime();
+			if (nTime < 1419648379)
+			{
+				return false;
+			}
+
 
 			bool oosbyage = OutOfSyncByAge();
 			//Rule 1: If  Last Block Out of sync by Age:
@@ -2363,7 +2369,7 @@ bool OutOfSyncByAgeWithChanceOfMining()
 		//If the diff is < .01 in Prod, Most likely the client is mining on a fork: (Make it exceedingly hard):
 		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
 		//printf("OOS_With_Diff %f",PORDiff);
-		int64_t	nTime = GetTime();
+	
         //If nTime > 10-31-2014 13:00 CST 
 		if (!fTestNet && PORDiff < .0002 && nTime > 1415228997)
 		{
@@ -2999,7 +3005,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
     pblockindexFBBHLast = NULL;
     nBestHeight = pindexBest->nHeight;
     nBestChainTrust = pindexNew->nChainTrust;
-    nTimeBestReceived = GetTime();
+    nTimeBestReceived =  GetAdjustedTime();
     nTransactionsUpdated++;
 
     uint256 nBestBlockTrust = pindexBest->nHeight != 0 ? (pindexBest->nChainTrust - pindexBest->pprev->nChainTrust) : pindexBest->nChainTrust;
@@ -3535,7 +3541,8 @@ void GridcoinServices()
 	}
 
 
-	if (TimerMain("gather_cpids",45))
+	//Stack Overflow Error (Pallas): calling this every 5 minutes should cause linux to fail- TEST 11-9-2014
+	if (TimerMain("gather_cpids",5))
 	{
 				printf("\r\nReharvesting cpids in background thread...\r\n");
 				LoadCPIDsInBackground();
@@ -3674,6 +3681,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock)
 		// If we are in centralized mode, follow peercoins model: if responsible for sync-checkpoint send it
 		if (pfrom && !CSyncCheckpoint::strMasterPrivKey.empty())        
 		{
+			printf("Sending sync checkpoint...\r\n");
 				Checkpoints::SendSyncCheckpoint(Checkpoints::AutoSelectSyncCheckpoint());
 		}
 	}
@@ -4272,21 +4280,21 @@ double GetOutstandingAmountOwed(std::string cpid, int64_t locktime, double& tota
 
 bool IsLockTimeRecent(double locktime)
 {
-	double nCutoff = GetTime() - (60*60*24*14);
+	double nCutoff =  GetAdjustedTime() - (60*60*24*14);
 	if (locktime < nCutoff) return false;
 	return true;
 }
 
 bool IsLockTimeVeryRecent(double locktime)
 {
-	double nCutoff = GetTime() - (60*60*.4);
+	double nCutoff =  GetAdjustedTime() - (60*60*.4);
 	if (locktime < nCutoff) return false;
 	return true;
 }
 
 double GetMagnitudeWeight(double LockTime)
 {
-	double age = (GetTime() - LockTime)/86400;
+	double age = ( GetAdjustedTime() - LockTime)/86400;
 	double inverse = 14-age;
 	if (inverse < 1) inverse=1;
 	return inverse*inverse;
@@ -4942,7 +4950,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     if (hashSalt == 0)
                         hashSalt = GetRandHash();
                     uint64_t hashAddr = addr.GetHash();
-                    uint256 hashRand = hashSalt ^ (hashAddr<<32) ^ ((GetTime()+hashAddr)/(24*60*60));
+                    uint256 hashRand = hashSalt ^ (hashAddr<<32) ^ (( GetAdjustedTime() +hashAddr)/(24*60*60));
                     hashRand = Hash(BEGIN(hashRand), END(hashRand));
                     multimap<uint256, CNode*> mapMix;
                     BOOST_FOREACH(CNode* pnode, vNodes)
@@ -5284,7 +5292,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     else if (strCommand == "getaddr")
     {
         // Don't return addresses older than nCutOff timestamp
-        int64_t nCutOff = GetTime() - (nNodeLifespan * 24 * 60 * 60);
+        int64_t nCutOff =  GetAdjustedTime() - (nNodeLifespan * 24 * 60 * 60);
         pfrom->vAddrToSend.clear();
         vector<CAddress> vAddr = addrman.GetAddr();
         BOOST_FOREACH(const CAddress &addr, vAddr)
@@ -5766,6 +5774,8 @@ MiningCPID DeserializeBoincBlock(std::string block)
 	surrogate.VouchedCPID = "";
 	surrogate.Magnitude=0;
 	surrogate.cpidv2 = "";
+	surrogate.email = "";
+	surrogate.boincruntimepublickey = "";
 
 	std::vector<std::string> s = split(block,"<|>");
 	if (s.size() > 7)
@@ -6098,7 +6108,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 						structcc.verifiedteam = team;
 						if (structcc.verifiedteam != "gridcoin") structcc.verifiedrac = -1;
 						structcc.verifiedrectime = cdbl(rectime,0);
-						double currenttime = GetTime();
+						double currenttime =  GetAdjustedTime();
 						double nActualTimespan = currenttime - structcc.verifiedrectime;
 						structcc.verifiedage = nActualTimespan;
 						mvCreditNode[sProj] = structcc;	
@@ -6419,7 +6429,7 @@ try
 
 				structcpid.rectime = cdbl(rectime,0);
 
-				double currenttime = GetTime();
+				double currenttime =  GetAdjustedTime();
 				double nActualTimespan = currenttime - structcpid.rectime;
 				structcpid.age = nActualTimespan;
 
@@ -6614,7 +6624,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
 
         // Address refresh broadcast
         static int64_t nLastRebroadcast;
-        if (!IsInitialBlockDownload() && (GetTime() - nLastRebroadcast > 24 * 60 * 60))
+        if (!IsInitialBlockDownload() && ( GetAdjustedTime() - nLastRebroadcast > 24 * 60 * 60))
         {
             {
                 LOCK(cs_vNodes);
@@ -6633,7 +6643,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                     }
                 }
             }
-            nLastRebroadcast = GetTime();
+            nLastRebroadcast =  GetAdjustedTime();
         }
 
         //
@@ -6725,7 +6735,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         // Message: getdata
         //
         vector<CInv> vGetData;
-        int64_t nNow = GetTime() * 1000000;
+        int64_t nNow =  GetAdjustedTime() * 1000000;
         CTxDB txdb("r");
         while (!pto->mapAskFor.empty() && (*pto->mapAskFor.begin()).first <= nNow)
         {

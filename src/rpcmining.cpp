@@ -28,7 +28,7 @@ Value getsubsidy(const Array& params, bool fHelp)
             "getsubsidy [nTarget]\n"
             "Returns proof-of-work subsidy value for the specified value of target.");
 
-    return (uint64_t)GetProofOfWorkReward(0,GetTime(),0);
+    return (uint64_t)GetProofOfWorkReward(0, GetAdjustedTime(),0);
 }
 
 Value getmininginfo(const Array& params, bool fHelp)
@@ -53,7 +53,7 @@ Value getmininginfo(const Array& params, bool fHelp)
     diff.push_back(Pair("search-interval",      (int)nLastCoinStakeSearchInterval));
     obj.push_back(Pair("difficulty",    diff));
 
-    obj.push_back(Pair("blockvalue",    (uint64_t)GetProofOfWorkReward(0,GetTime(),1)));
+    obj.push_back(Pair("blockvalue",    (uint64_t)GetProofOfWorkReward(0,  GetAdjustedTime(),1)));
     obj.push_back(Pair("netmhashps",     GetPoWMHashPS()));
     obj.push_back(Pair("netstakeweight", GetPoSKernelPS()));
     obj.push_back(Pair("errors",        GetWarnings("statusbar")));
@@ -63,9 +63,9 @@ Value getmininginfo(const Array& params, bool fHelp)
     weight.push_back(Pair("maximum",    (uint64_t)0));
     weight.push_back(Pair("combined",  (uint64_t)nWeight));
     obj.push_back(Pair("stakeweight", weight));
-		double nCutoff = GetTime() - (60*60*24*14);
+		double nCutoff =  GetAdjustedTime() - (60*60*24*14);
 
-    obj.push_back(Pair("stakeinterest",    (uint64_t)GetCoinYearReward(GetTime())));
+    obj.push_back(Pair("stakeinterest",    (uint64_t)GetCoinYearReward( GetAdjustedTime())));
     obj.push_back(Pair("testnet",       fTestNet));
     return obj;
 }
@@ -135,7 +135,7 @@ Value getworkex(const Array& params, bool fHelp)
         static int64_t nStart;
         static CBlock* pblock;
         if (pindexPrev != pindexBest ||
-            (nTransactionsUpdated != nTransactionsUpdatedLast && GetTime() - nStart > 60))
+            (nTransactionsUpdated != nTransactionsUpdatedLast &&  GetAdjustedTime() - nStart > 60))
         {
             if (pindexPrev != pindexBest)
             {
@@ -147,7 +147,7 @@ Value getworkex(const Array& params, bool fHelp)
             }
             nTransactionsUpdatedLast = nTransactionsUpdated;
             pindexPrev = pindexBest;
-            nStart = GetTime();
+            nStart =  GetAdjustedTime();
 
             // Create new block
             pblock = CreateNewBlock(pwalletMain);
@@ -269,7 +269,7 @@ Value getwork(const Array& params, bool fHelp)
         static int64_t nStart;
         static CBlock* pblock;
         if (pindexPrev != pindexBest ||
-            (nTransactionsUpdated != nTransactionsUpdatedLast && GetTime() - nStart > 60))
+            (nTransactionsUpdated != nTransactionsUpdatedLast &&  GetAdjustedTime() - nStart > 60))
         {
             if (pindexPrev != pindexBest)
             {
@@ -286,7 +286,7 @@ Value getwork(const Array& params, bool fHelp)
             // Store the pindexBest used before CreateNewBlock, to avoid races
             nTransactionsUpdatedLast = nTransactionsUpdated;
             CBlockIndex* pindexPrevNew = pindexBest;
-            nStart = GetTime();
+            nStart =  GetAdjustedTime();
 
             // Create new block
             pblock = CreateNewBlock(pwalletMain);
@@ -409,7 +409,7 @@ Value getblocktemplate(const Array& params, bool fHelp)
     static int64_t nStart;
     static CBlock* pblock;
     if (pindexPrev != pindexBest ||
-        (nTransactionsUpdated != nTransactionsUpdatedLast && GetTime() - nStart > 5))
+        (nTransactionsUpdated != nTransactionsUpdatedLast &&  GetAdjustedTime() - nStart > 5))
     {
         // Clear pindexPrev so future calls make a new block, despite any failures from here on
         pindexPrev = NULL;
@@ -417,7 +417,7 @@ Value getblocktemplate(const Array& params, bool fHelp)
         // Store the pindexBest used before CreateNewBlock, to avoid races
         nTransactionsUpdatedLast = nTransactionsUpdated;
         CBlockIndex* pindexPrevNew = pindexBest;
-        nStart = GetTime();
+        nStart =  GetAdjustedTime();
 
         // Create new block
         if(pblock)

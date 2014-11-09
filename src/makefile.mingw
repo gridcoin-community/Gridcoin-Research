@@ -21,19 +21,30 @@ UNIX_LIBPATHS?= \
 #BOOST_SUFFIX?=-mgw46-mt-sd-1_55
  BOOST_SUFFIX?=-mgw46-mt-1_55
  
+ 
+ 
+  INCLUDEPATHS_OLD?= \
+   -I"$(CURDIR)" \
+   -I"$(DEPSDIR)/include" \
+   -I"$(DEPSDIR)/include/boost" \
+  -I"$(DEPSDIR)/boost_1_55_0/boost"
+ 
+ 
 
  INCLUDEPATHS?= \
   -I"$(CURDIR)" \
-  -I"$(DEPSDIR)/include" \
-  -I"$(DEPSDIR)/include/boost" \
-  -I"$(DEPSDIR)/boost_1_55_0/boost"
+  -I"a:\deps-master\ssl" \
+  -I"a:\deps-master\db" \
+  -I"a:\deps-master\include\boost" \
+  -I"a:\deps-master\boost" \
+  -I"a:\deps-master\boost_1_55_0"
  
  LIBPATHS?= \
   -L"$(CURDIR)/leveldb" \
   -L"$(DEPSDIR)/lib"
 
 
-LIBS= \
+LIBS_OLD= \
  -l leveldb \
  -l memenv \
  -l boost_system$(BOOST_SUFFIX) \
@@ -44,6 +55,20 @@ LIBS= \
  -l db_cxx \
  -l ssl \
  -l crypto
+
+
+LIBS= \
+ -l leveldb \
+ -l boost_system-mgw46-mt-1_55 \
+ -l boost_filesystem-mgw46-mt-1_55 \
+ -l boost_program_options-mgw46-mt-1_55 \
+ -l boost_thread-mgw46-mt-1_55 \
+ -l boost_chrono-mgw46-mt-1_55 \
+ -l db_cxx \
+ -l ssl \
+ -l crypto
+
+
 
 DEFS=-DWIN32 -D_WINDOWS -DBOOST_THREAD_USE_LIB -DBOOST_SPIRIT_THREADSAFE
 DEBUGFLAGS=-g

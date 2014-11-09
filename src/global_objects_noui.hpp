@@ -106,6 +106,9 @@ struct MiningEntry {
 		bool Iscpidvalid;
 		std::string link;
 		std::string errors;
+		std::string email;
+		std::string boincruntimepublickey;
+	
 		double NetworkRAC;
 		double TotalRAC;
 		double TotalNetworkRAC;
@@ -128,9 +131,7 @@ struct MiningEntry {
 		double totalowed;
 		double longtermtotalowed;
 		double longtermowed;
-		std::string email;
-		std::string boincruntimepublickey;
-	
+		
 		
 	};
 
@@ -179,6 +180,9 @@ struct MiningEntry {
 		int prevBlockType;
 		std::string clientversion;
 		std::string VouchedCPID;
+		std::string cpidv2;
+		std::string email;
+		std::string boincruntimepublickey;
 		double VouchedMagnitude;
 		double VouchedRAC;
 		double VouchedNetworkRAC;
@@ -187,9 +191,7 @@ struct MiningEntry {
 		double ConsensusMagnitudeCount;
 		double Accuracy;
 		double ConsensusMagnitude;
-		std::string cpidv2;
-		std::string email;
-		std::string boincruntimepublickey;
+	
 	
 	};
 

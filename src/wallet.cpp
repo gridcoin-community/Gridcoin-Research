@@ -58,7 +58,7 @@ CPubKey CWallet::GenerateNewKey()
     CPubKey pubkey = key.GetPubKey();
 
     // Create new metadata
-    int64_t nCreationTime = GetTime();
+    int64_t nCreationTime =  GetAdjustedTime();
     mapKeyMetadata[pubkey.GetID()] = CKeyMetadata(nCreationTime);
     if (!nTimeFirstKey || nCreationTime < nTimeFirstKey)
         nTimeFirstKey = nCreationTime;
@@ -977,10 +977,10 @@ void CWallet::ResendWalletTransactions(bool fForce)
         // Do this infrequently and randomly to avoid giving away
         // that these are our transactions.
         static int64_t nNextTime;
-        if (GetTime() < nNextTime)
+        if ( GetAdjustedTime() < nNextTime)
             return;
         bool fFirst = (nNextTime == 0);
-        nNextTime = GetTime() + GetRand(30 * 60);
+        nNextTime =  GetAdjustedTime() + GetRand(30 * 60);
         if (fFirst)
             return;
 
@@ -988,7 +988,7 @@ void CWallet::ResendWalletTransactions(bool fForce)
         static int64_t nLastTime;
         if (nTimeBestReceived < nLastTime)
             return;
-        nLastTime = GetTime();
+        nLastTime =  GetAdjustedTime();
     }
 
     // Rebroadcast any of our txes that aren't in a block yet
@@ -1583,7 +1583,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
     set<pair<const CWalletTx*,unsigned int> > setCoins;
     int64_t nValueIn = 0;
 
-    if (!SelectCoinsForStaking(nBalance - nReserveBalance, GetTime(), setCoins, nValueIn))
+    if (!SelectCoinsForStaking(nBalance - nReserveBalance,  GetAdjustedTime(), setCoins, nValueIn))
         return false;
 
     if (setCoins.empty())
@@ -1591,7 +1591,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 
     nWeight = 0;
 
-    int64_t nCurrentTime = GetTime();
+    int64_t nCurrentTime =  GetAdjustedTime();
     CTxDB txdb("r");
 
     LOCK2(cs_main, cs_wallet);
@@ -1883,7 +1883,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             return error("CreateCoinStake : failed to calculate coin age");
 		//9-1-2014 Halford: Use current time since we are creating a new stake
 
-        int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,  GetTime());
+        int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,  GetAdjustedTime());
 
     
 		printf("Creating POS Reward for %s  amt  %"PRId64"  \r\n",GlobalCPUMiningCPID.cpid.c_str(),nReward/COIN);
@@ -2303,7 +2303,7 @@ int64_t CWallet::GetOldestKeyPoolTime()
     CKeyPool keypool;
     ReserveKeyFromKeyPool(nIndex, keypool);
     if (nIndex == -1)
-        return GetTime();
+        return  GetAdjustedTime();
     ReturnKey(nIndex);
     return keypool.nTime;
 }

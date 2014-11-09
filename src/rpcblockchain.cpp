@@ -632,10 +632,10 @@ std::string BackupGridcoinWallet()
 
 	printf("Staring Wallet Backup\r\n");
 
-	std::string filename = "grc_" + DateTimeStrFormat("%m-%d-%Y", GetTime()) + ".dat";
+	std::string filename = "grc_" + DateTimeStrFormat("%m-%d-%Y",  GetAdjustedTime()) + ".dat";
 	std::string filename_backup = "backup.dat";
 	
-	std::string standard_filename = "std_" + DateTimeStrFormat("%m-%d-%Y", GetTime()) + ".dat";
+	std::string standard_filename = "std_" + DateTimeStrFormat("%m-%d-%Y",  GetAdjustedTime()) + ".dat";
 	std::string source_filename   = "wallet.dat";
 
 	boost::filesystem::path path = GetDataDir() / "walletbackups" / filename;
@@ -1154,7 +1154,7 @@ Value listitem(const Array& params, bool fHelp)
 			Object entry;
 	
 			CreditCheck(GlobalCPUMiningCPID.cpid,true);
-			double boincmagnitude = CalculatedMagnitude(GetTime());
+			double boincmagnitude = CalculatedMagnitude( GetAdjustedTime());
 			entry.push_back(Pair("Magnitude",boincmagnitude));
 			results.push_back(entry);
 	}
@@ -1304,13 +1304,13 @@ Value listitem(const Array& params, bool fHelp)
 	if (sitem == "leder")
 	{
 		
-		double subsidy = LederstrumpfMagnitude(450,GetTime());
+		double subsidy = LederstrumpfMagnitude(450, GetAdjustedTime());
 		Object entry;
 		entry.push_back(Pair("Mag Out For 450",subsidy));
 		if (args.length() > 1)
 		{
 			double myrac=cdbl(args,0);
-			subsidy = LederstrumpfMagnitude(myrac,GetTime());
+			subsidy = LederstrumpfMagnitude(myrac, GetAdjustedTime());
 			entry.push_back(Pair("Mag Out",subsidy));
 		}
 		results.push_back(entry);
