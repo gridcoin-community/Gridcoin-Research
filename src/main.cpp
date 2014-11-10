@@ -2660,11 +2660,17 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		
 		if (IsLockTimeVeryRecent(nTime) && bb.cpid=="INVESTOR" && nStakeReward > 1)
 		{
-			//10-31-2014
+			//11-9-2014
 			int64_t nCalculatedResearchReward = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime);
 			if (nStakeReward > nCalculatedResearchReward*TOLERANCE_PERCENT)
-            return DoS(1, error("ConnectBlock() : Investor Reward pays too much : cpid %s (actual=%"PRId64" vs calculated=%"PRId64")",
-			  bb.cpid.c_str(), nStakeReward, nCalculatedResearchReward));
+			{
+				TallyNetworkAverages(false);
+				int64_t nCalculatedResearchReward2 = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime);
+				if (nStakeReward > nCalculatedResearchReward*TOLERANCE_PERCENT)
+				{
+							return DoS(1, error("ConnectBlock() : Investor Reward pays too much : cpid %s (actual=%"PRId64" vs calculated=%"PRId64")",  bb.cpid.c_str(), nStakeReward, nCalculatedResearchReward2));
+				}
+			}
 		}
     }
 
