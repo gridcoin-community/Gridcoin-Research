@@ -2666,7 +2666,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			{
 				TallyNetworkAverages(false);
 				int64_t nCalculatedResearchReward2 = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime);
-				if (nStakeReward > nCalculatedResearchReward*TOLERANCE_PERCENT)
+				if (nStakeReward > nCalculatedResearchReward2*TOLERANCE_PERCENT)
 				{
 							return DoS(1, error("ConnectBlock() : Investor Reward pays too much : cpid %s (actual=%"PRId64" vs calculated=%"PRId64")",  bb.cpid.c_str(), nStakeReward, nCalculatedResearchReward2));
 				}
