@@ -792,6 +792,8 @@ MiningCPID GetNextProject()
 		GlobalCPUMiningCPID.enccpid = "";
 		GlobalCPUMiningCPID.NetworkRAC = 0;
 		GlobalCPUMiningCPID.Magnitude = 0;
+        GlobalCPUMiningCPID.clientversion = "";
+
 		mdMiningNetworkRAC = 0;
 	  	}
 		catch (std::exception& e)
@@ -3394,10 +3396,13 @@ bool CBlock::AcceptBlock()
         return DoS(100, error("AcceptBlock() : rejected by hardened checkpoint lock-in at %d", nHeight));
 
     uint256 hashProof;
+	//bool bExcused = false;
+	//if (nHeight == 36882) bExcused=true;
     // Verify hash target and signature of coinstake tx
 	if (nHeight > nGrandfather)
 	{
-	
+	  // if (!bExcused)
+	   //{
 				if (IsProofOfStake())
 				{
 					uint256 targetProofOfStake;
@@ -3407,6 +3412,7 @@ bool CBlock::AcceptBlock()
 						return false; // do not error here as we expect this during initial block download
 					}
 				}
+	   //}
 	}
 
 	if (nHeight > nGrandfather)
@@ -5781,6 +5787,8 @@ MiningCPID DeserializeBoincBlock(std::string block)
 	surrogate.cpidv2 = "";
 	surrogate.email = "";
 	surrogate.boincruntimepublickey = "";
+	surrogate.clientversion = "";
+	
 
 	std::vector<std::string> s = split(block,"<|>");
 	if (s.size() > 7)
@@ -5828,6 +5836,7 @@ MiningCPID DeserializeBoincBlock(std::string block)
 		{
 			//surrogate.verifiedrac = cdbl(s[16],0);
 		}
+		
 	}
 	}
 	catch (std::exception &e) 
