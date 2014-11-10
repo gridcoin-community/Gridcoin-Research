@@ -33,7 +33,6 @@ cd ~
 git clone https://github.com/gridcoin/Gridcoin-Research
 
 #### Step 3: Prepare and compile
-mkdir ~/Gridcoin-Research/src/obj/zerocoin
 cd ~/Gridcoin-Research/src
 chmod 755 leveldb/build_detect_platform 
 make -f makefile.unix USE_UPNP=- 
