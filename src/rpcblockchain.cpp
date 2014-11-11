@@ -1089,7 +1089,8 @@ Array MagnitudeReport(bool bMine)
 {
 	       Array results;
 		   Object c;
-		   c.push_back(Pair("RSA Report","Research Savings Account Report"));
+		   std::string Narr = "Research Savings Account Report - Generated " + RoundToString(GetAdjustedTime(),0);
+		   c.push_back(Pair("RSA Report",Narr));
 		   results.push_back(c);
 		   StructCPID globalmag = mvMagnitudes["global"];
 		   double payment_timespan = (globalmag.HighLockTime-globalmag.LowLockTime)/86400;  //Lock time window in days
@@ -1109,15 +1110,12 @@ Array MagnitudeReport(bool bMine)
 									entry.push_back(Pair("CPID",structMag.cpid));
 									entry.push_back(Pair("Magnitude",structMag.ConsensusMagnitude));
 									entry.push_back(Pair("Magnitude Accuracy",structMag.Accuracy));
-									
 									entry.push_back(Pair("Long Term Owed (14 day projection)",structMag.totalowed));
 									entry.push_back(Pair("Long Term Daily Owed (1 day projection)",structMag.totalowed/14));
 									entry.push_back(Pair("Payments",structMag.payments));
-
+									entry.push_back(Pair("Last Payment Time",structMag.LastPaymentTime));
 									entry.push_back(Pair("Current Daily Projection",structMag.owed));
-
 									entry.push_back(Pair("Next Expected Payment",structMag.owed/2));
-
 									entry.push_back(Pair("Avg Daily Payments",structMag.payments/14));
 									results.push_back(entry);
 						}

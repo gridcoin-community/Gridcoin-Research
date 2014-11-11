@@ -580,6 +580,11 @@ void BitcoinGUI::createActions()
 	downloadAction->setMenuRole(QAction::TextHeuristicRole);
 
 
+	rebootAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Reboot Client"), this);
+	rebootAction->setStatusTip(tr("Reboot Gridcoin"));
+	rebootAction->setMenuRole(QAction::TextHeuristicRole);
+
+
 
 	upgradeAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Upgrade Client"), this);
 	upgradeAction->setStatusTip(tr("Upgrade Client"));
@@ -656,6 +661,8 @@ void BitcoinGUI::createActions()
 	connect(upgradeAction, SIGNAL(triggered()), this, SLOT(upgradeClicked()));
 	connect(downloadAction, SIGNAL(triggered()), this, SLOT(downloadClicked()));
 
+	connect(rebootAction, SIGNAL(triggered()), this, SLOT(rebootClicked()));
+
 	//connect(sqlAction, SIGNAL(triggered()), this, SLOT(sqlClicked()));
 	//connect(leaderboardAction, SIGNAL(triggered()), this, SLOT(leaderboardClicked()));
 
@@ -712,6 +719,8 @@ void BitcoinGUI::createMenuBar()
 	rebuild->addAction(rebuildAction);
 	rebuild->addSeparator();
 	rebuild->addAction(downloadAction);
+	rebuild->addSeparator();
+	rebuild->addAction(rebootAction);
 	rebuild->addSeparator();
 
 //	QMenu *sql = appMenuBar->addMenu(tr("&SQL Query Analyzer"));
@@ -1273,6 +1282,12 @@ void BitcoinGUI::downloadClicked()
 {
 	DownloadBlocks();
 
+}
+
+void BitcoinGUI::rebootClicked()
+{
+
+	RebootClient();
 }
 
 /*

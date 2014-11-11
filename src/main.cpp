@@ -53,6 +53,9 @@ unsigned int REORGANIZE_FAILED = 0;
 unsigned int WHITELISTED_PROJECTS = 0;
 
 unsigned int CHECKPOINT_VIOLATIONS = 0;
+int64_t nLastTallied = 0;
+int64_t nCPIDsLoaded = 0;
+
 
 extern void SetAdvisory();
 extern bool InAdvisory();
@@ -89,6 +92,9 @@ extern  double GetGridcoinBalance(std::string SendersGRCAddress);
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 
 extern bool IsLockTimeVeryRecent(double locktime);
+
+extern bool IsLockTimeWithinTwoHours(double locktime);
+
 
 
 double GetNetworkProjectCountWithRAC();
@@ -1883,7 +1889,8 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 {
 	    	
 		StructCPID mag = mvMagnitudes[cpid];
-		double owed = mag.owed;
+		//Help prevent sync problems by assessing owed @ 90%
+		double owed = (mag.owed*.90);
 		if (owed < 0) owed = 0;
 		// Coarse Payment Rule (helps prevent sync problems):
 		if (!VerifyingBlock)
@@ -1892,6 +1899,13 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 			owed = owed/2;
 		}
 		//End of Coarse Payment Rule
+
+		//Halford - Ensure researcher was not paid in the last 2 hours:
+		if (IsLockTimeWithinTwoHours(mag.LastPaymentTime))
+		{
+			owed = 0;
+		}
+	
 		return owed * COIN;	
 }
 
@@ -2664,12 +2678,13 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			int64_t nCalculatedResearchReward = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime);
 			if (nStakeReward > nCalculatedResearchReward*TOLERANCE_PERCENT)
 			{
-				TallyNetworkAverages(false);
-				int64_t nCalculatedResearchReward2 = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime);
-				if (nStakeReward > nCalculatedResearchReward2*TOLERANCE_PERCENT)
-				{
-							return DoS(1, error("ConnectBlock() : Investor Reward pays too much : cpid %s (actual=%"PRId64" vs calculated=%"PRId64")",  bb.cpid.c_str(), nStakeReward, nCalculatedResearchReward2));
-				}
+				//TallyNetworkAverages(false);
+				//int64_t nCalculatedResearchReward2 = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime);
+				//if (nStakeReward > nCalculatedResearchReward2*TOLERANCE_PERCENT)
+				//{
+							return DoS(1, error("ConnectBlock() : Investor Reward pays too much : cpid %s (actual=%"PRId64" vs calculated=%"PRId64")",
+								bb.cpid.c_str(), nStakeReward, nCalculatedResearchReward));
+				//}
 			}
 		}
     }
@@ -2717,11 +2732,17 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 					nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime);
 					if (nStakeReward > (nCalculatedResearch*TOLERANCE_PERCENT))
 					{
-						double user_magnitude = GetMagnitude(bb.cpid,1,false);
-						//return DoS(1, error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f", 						bb.cpid.c_str(), nStakeReward/COIN, nCalculatedResearch/COIN, user_magnitude));
+							TallyNetworkAverages(false);
+							int64_t nCalculatedResearch2 = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime);
+							if (nStakeReward > (nCalculatedResearch2*TOLERANCE_PERCENT))
+							{
 
-						return error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f",
-							bb.cpid.c_str(), nStakeReward/COIN, nCalculatedResearch/COIN, user_magnitude);
+								double user_magnitude = GetMagnitude(bb.cpid,1,false);
+								//return DoS(1, error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f", 						bb.cpid.c_str(), nStakeReward/COIN, nCalculatedResearch/COIN, user_magnitude));
+
+								return error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f",
+										bb.cpid.c_str(), nStakeReward/COIN, nCalculatedResearch2/COIN, user_magnitude);
+							}
 
 					}
 				}
@@ -3402,13 +3423,12 @@ bool CBlock::AcceptBlock()
         return DoS(100, error("AcceptBlock() : rejected by hardened checkpoint lock-in at %d", nHeight));
 
     uint256 hashProof;
-	//bool bExcused = false;
-	//if (nHeight == 36882) bExcused=true;
+
     // Verify hash target and signature of coinstake tx
 	if (nHeight > nGrandfather)
 	{
-	  // if (!bExcused)
-	   //{
+		if (IsLockTimeVeryRecent(GetBlockTime()))
+		{	
 				if (IsProofOfStake())
 				{
 					uint256 targetProofOfStake;
@@ -3418,17 +3438,10 @@ bool CBlock::AcceptBlock()
 						return false; // do not error here as we expect this during initial block download
 					}
 				}
-	   //}
-	}
-
-	if (nHeight > nGrandfather)
-	{
-		if (IsLockTimeVeryRecent(GetBlockTime()))
-		{	
-			//
-
 		}
 	}
+
+
 
     // PoW is checked in CheckBlock()
     if (IsProofOfWork())
@@ -3559,10 +3572,11 @@ void GridcoinServices()
 
 
 	//Stack Overflow Error (Pallas): calling this every 5 minutes should cause linux to fail- TEST 11-9-2014
-	if (TimerMain("gather_cpids",5))
+	if (TimerMain("gather_cpids",45))
 	{
 				printf("\r\nReharvesting cpids in background thread...\r\n");
-				//LoadCPIDsInBackground();
+				LoadCPIDsInBackground();
+
 	}
 
 
@@ -4302,12 +4316,28 @@ bool IsLockTimeRecent(double locktime)
 	return true;
 }
 
+bool IsLockTimeWithinTwoHours(double locktime)
+{
+	double nCutoff =  GetAdjustedTime() - (60*60*24*2);
+	if (locktime < nCutoff) return false;
+	return true;
+}
+
 bool IsLockTimeVeryRecent(double locktime)
 {
 	double nCutoff =  GetAdjustedTime() - (60*60*.4);
 	if (locktime < nCutoff) return false;
 	return true;
 }
+
+
+bool IsLockTimeWithinMinutes(int64_t locktime, int minutes)
+{
+	double nCutoff = GetAdjustedTime() - (60*minutes);
+	if (locktime < nCutoff) return false;
+	return true;
+}
+
 
 double GetMagnitudeWeight(double LockTime)
 {
@@ -4361,6 +4391,7 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 		if (IsStake)
 		{
 			structMagnitude.payments = structMagnitude.payments + mint;
+			if (LockTime > structMagnitude.LastPaymentTime) structMagnitude.LastPaymentTime = LockTime;
 		}
 		structMagnitude.cpid = cpid;
 		//Since this function can be called more than once per block (once for the solver, once for the voucher), the avg changes here:
@@ -4388,6 +4419,10 @@ bool TallyNetworkAverages(bool ColdBoot)
 	//Iterate throught last 14 days, tally network averages
     if (nBestHeight < 15) return false;
 	printf("Gathering network avgs (begin)\r\n");
+	//If we did this within the last 5 mins, we are fine:
+	if (IsLockTimeWithinMinutes(nLastTallied,5)) return true;
+	nLastTallied = GetAdjustedTime();
+
 	bNetAveragesLoaded = false;
 	
 	LOCK(cs_main);
@@ -4685,19 +4720,11 @@ string GetWarnings(string strFor)
     // if detected invalid checkpoint enter safe mode
     if (Checkpoints::hashInvalidCheckpoint != 0)
     {
+			
 
 		if (CHECKPOINT_DISTRIBUTED_MODE==1)
 		{	
 			//10-18-2014-Halford- If invalid checkpoint found, reboot the node:
-			int nResult = 0;
-			/*
-			#if defined(WIN32) && defined(QT_GUI)
-			//{
-			//nResult = RebootClient();
-			//}
-			#endif
-			*/
-
 			//printf("Rebooting...");
 			printf("Moving Gridcoin into Checkpoint ADVISORY mode.\r\n");
 			CheckpointsMode = Checkpoints::ADVISORY;
@@ -4705,6 +4732,20 @@ string GetWarnings(string strFor)
 		}
 		else
 		{
+
+			int nResult = 0;
+	    	#if defined(WIN32) && defined(QT_GUI)
+				std::string rebootme = "";
+				if (mapArgs.count("-reboot"))
+				{
+					rebootme = GetArg("-reboot", "false");
+				}
+				if (rebootme == "true")
+				{
+						nResult = RebootClient();
+				}
+			#endif
+	
 			nPriority = 3000;
 			strStatusBar = strRPC = _("WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.");
 			printf("WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.");
@@ -6588,6 +6629,8 @@ void ThreadCPIDs()
 
 void LoadCPIDsInBackground()
 {
+	  if (IsLockTimeWithinMinutes(nCPIDsLoaded,10)) return;
+	  nCPIDsLoaded = GetAdjustedTime();
 	  cpidThreads = new boost::thread_group();
 	  cpidThreads->create_thread(boost::bind(&ThreadCPIDs));
 }

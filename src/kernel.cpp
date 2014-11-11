@@ -254,7 +254,7 @@ static bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64_t& nStakeModifi
 }
 
 // ppcoin kernel protocol
-// coinstake must meet hash target according to the protocol:
+// cfoinstake must meet hash target according to the protocol:
 // kernel (input 0) must meet the formula
 //     hash(nStakeModifier + txPrev.block.nTime + txPrev.offset + txPrev.nTime + txPrev.vout.n + nTime) < bnTarget * nCoinDayWeight
 // this ensures that the chance of getting a coinstake is proportional to the
@@ -323,6 +323,23 @@ int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::str
 	return 0;
 }
 
+double GetMagnitudeByHashBoinc(std::string hashBoinc)
+{
+	if (hashBoinc.length() > 1)
+		{
+			MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
+			if (boincblock.cpid == "" || boincblock.cpid.length() < 6) return 0;  //Block has no CPID
+			if (boincblock.cpid == "INVESTOR")  return 0;
+   			if (boincblock.projectname == "") 	return 0;
+    		if (boincblock.rac < 100) 			return 0;
+			if (!IsCPIDValid(boincblock.cpid,boincblock.enccpid)) return 0;
+			return boincblock.Magnitude;
+			//StructCPID UntrustedHost = mvMagnitudes[boincblock.cpid]; //Contains Consensus Magnitude
+			//return UntrustedHost.Magnitude;
+		}
+		return 0;
+}
+
 
 static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, unsigned int nTxPrevOffset, 
 	const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, 
@@ -362,15 +379,19 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	if (NC > 0)
 	{
 		    //10-27-2014 Dynamic Newbie Weight
-		    uint64_t nNetworkWeight = GetPoSKernelPS2();
+		
+			double newbie_magnitude = GetMagnitudeByHashBoinc(hashBoinc);
+
+		    //uint64_t nNetworkWeight = GetPoSKernelPS2();
 			if (NC == 1)
 			{
-				NewbieStakeWeightModifier = nNetworkWeight*.0015*COIN;
+				NewbieStakeWeightModifier = newbie_magnitude*3000*COIN;
+				printf("NewbieStakeWeightModifier %" PRIu64 " \r\n ", NewbieStakeWeightModifier);
 			}
 			else if (NC==2)
 			{
-				NewbieStakeWeightModifier = nNetworkWeight*.0010*COIN;
-				//printf("NewbieStakeWeightModifier %" PRIu64 " \r\n ", NewbieStakeWeightModifier);
+				NewbieStakeWeightModifier = newbie_magnitude*1500*COIN;
+				printf("NewbieStakeWeightModifier %" PRIu64 " \r\n ", NewbieStakeWeightModifier);
 			}
 	}
 	else
