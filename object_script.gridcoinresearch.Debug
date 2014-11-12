@@ -80,6 +80,7 @@ INPUT(
 ./build/SpendMetaData.o
 ./build/ZeroTest.o
 ./build/cpid.o
+./build/sql.o
 ./build/qrcodedialog.o
 ./build/moc_bitcoingui.o
 ./build/moc_transactiontablemodel.o

@@ -368,30 +368,29 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 
 	//Testing Magnitude Modifier Here (08-21-2014):
 	//WEIGHT MODIFICATION SECTION 2: Testing newbie stake allowance
-	//ToDo: Change this to be related to magnitude before go-live - investors can get started automatically
 	//This is primarily to allow a newbie researcher to get started with a low balance.
 	
 	//CBigNum bnCoinDayWeight = CBigNum(nValueIn + (5*COIN) ) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
-	int64_t NewbieStakeWeightModifier = 0;
+    //	int64_t NewbieStakeWeightModifier = 0;
+	uint256 NewbieStakeWeightModifier = 0;
 
 	int NC = NewbieCompliesWithFirstTimeStakeWeightRule(blockFrom,hashBoinc);
 
 	if (NC > 0)
 	{
 		    //10-27-2014 Dynamic Newbie Weight
-		
 			double newbie_magnitude = GetMagnitudeByHashBoinc(hashBoinc);
 
 		    //uint64_t nNetworkWeight = GetPoSKernelPS2();
 			if (NC == 1)
 			{
-				NewbieStakeWeightModifier = newbie_magnitude*3000*COIN;
-				printf("NewbieStakeWeightModifier %" PRIu64 " \r\n ", NewbieStakeWeightModifier);
+				NewbieStakeWeightModifier = newbie_magnitude*30000*COIN;
+				printf("NewbieStakeWeightModifierL1: Mag %f, %" PRIu64 " \r\n ", newbie_magnitude,NewbieStakeWeightModifier);
 			}
 			else if (NC==2)
 			{
-				NewbieStakeWeightModifier = newbie_magnitude*1500*COIN;
-				printf("NewbieStakeWeightModifier %" PRIu64 " \r\n ", NewbieStakeWeightModifier);
+				NewbieStakeWeightModifier = newbie_magnitude*15000*COIN;
+				printf("NewbieStakeWeightModifierL2: Mag %f, %" PRIu64 " \r\n ", NewbieStakeWeightModifier);
 			}
 	}
 	else
@@ -409,7 +408,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 
     if (!GetKernelStakeModifier(hashBlockFrom, nStakeModifier, nStakeModifierHeight, nStakeModifierTime, fPrintProofOfStake))
     {
-		printf("{NoStkMod}");
+		printf("{!");
 		return false;
 	}
     ss << nStakeModifier;
@@ -569,7 +568,13 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
         return fDebug? error("CheckProofOfStake() : read block failed") : false; // unable to read block of previous transaction
 
     if (!CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, txPrev, txin.prevout, tx.nTime, hashProofOfStake, targetProofOfStake, hashBoinc, fDebug))
-        return tx.DoS(1, error("CheckProofOfStake() : INFO: check kernel failed on coinstake %s, hashProof=%s", tx.GetHash().ToString().c_str(), hashProofOfStake.ToString().c_str())); // may occur during initial download or if behind on block chain sync
+	{
+		uint256 diff1 = hashProofOfStake - targetProofOfStake;
+		uint256 diff2 = targetProofOfStake - hashProofOfStake;
+        return tx.DoS(1, error("CheckProofOfStake() : INFO: check kernel failed on coinstake %s, hashProof=%s, target=%s, offby1: %s, OffBy2: %s", tx.GetHash().ToString().c_str(), hashProofOfStake.ToString().c_str(), targetProofOfStake.ToString().c_str(), diff1.ToString().c_str(), diff2.ToString().c_str())); // may occur during initial download or if behind on block chain sync
+
+
+	}
 
     return true;
 }

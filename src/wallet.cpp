@@ -1625,11 +1625,22 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	//WEIGHT SECTION 1: When a new CPID enters the ecosystem, and is seen on less than 9 blocks, this newbie
 	//receives an extra X in stakeweight to help them get started.
 	//10-22-2014
-	if (NewbieCompliesWithFirstTimeStakeWeightRule() > 0)
+	int NC = NewbieCompliesWithFirstTimeStakeWeightRule();
+	if (NC > 0)
 	{
 			int64_t NetworkWeight = GetPoSKernelPS2();
-			nWeight += (NetworkWeight*.01);
-			//printf("Newbie Network Weight=%f",nWeight);
+			//11-12-2014 - Gridcoin - Prevent Orphans
+			double NewbieStakeWeightModifier = 0;
+			if (NC == 1)
+			{
+				NewbieStakeWeightModifier =	GlobalCPUMiningCPID.Magnitude*30000;
+			}
+			else if (NC==2)
+			{
+				NewbieStakeWeightModifier = GlobalCPUMiningCPID.Magnitude*15000;
+			}
+
+			nWeight += NewbieStakeWeightModifier;
 	}
 	else if (nWeight > 0)
 	{

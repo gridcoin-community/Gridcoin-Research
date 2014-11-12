@@ -562,6 +562,15 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
     if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc))
         return error("CheckStake() : proof-of-stake checking failed");
 
+	//11-12-2014 Prevent orphans
+	//double mint = (pblock.nValueOut - pblock->nValueIn + pblock->nFees)/COIN;
+	double mint = (pblock->vtx[1].GetValueOut())/COIN;
+		if (mint < .75 && LessVerbose(650)) 
+	{
+		return error("CheckStake()::Mint too small");
+	}
+	
+
     //// debug print
 	
     printf("CheckStake() : new proof-of-stake block found  \n  hash: %s \nproofhash: %s  \ntarget: %s\n", hashBlock.GetHex().c_str(), proofHash.GetHex().c_str(), hashTarget.GetHex().c_str());

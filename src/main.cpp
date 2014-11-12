@@ -1824,8 +1824,6 @@ int64_t GetProofOfWorkMaxReward(int64_t nFees, int64_t locktime, int64_t height)
 //Survey Results: Start inflation rate: 9%, end=1%, 30 day steps, 9 steps, mag multiplier start: 2, mag end .3, 9 steps
 
 
-//static const int MAXIMUM_BOINC_SUBSIDY = 500;
-
 int64_t GetMaximumBoincSubsidy(int64_t nTime)
 {
 	// Gridcoin Global Daily Maximum Researcher Subsidy Schedule
@@ -3544,18 +3542,6 @@ void GridcoinServices()
 {
 	//Called once for every block accepted
 	if (OutOfSyncByAge()) return;
-
-	/*
-	if (TimerMain("Debug1",2))
-	{
-		printf("DEBUG1\r\n");
-	}
-
-	if (TimerMain("Debug2",6))
-	{
-		printf("DEBUG2\r\n");
-	}
-	*/
 
 
 	//Backup the wallet once per 900 blocks:
