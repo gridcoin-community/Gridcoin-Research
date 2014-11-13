@@ -1721,7 +1721,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	try
 	{
 		 miningcpid = GetNextProject();
-		 printf("Grabbing Prior blockhash for Cpidv2");
+		 //printf("Grabbing Prior blockhash for Cpidv2");
 		 //miningcpid.cpidv2 = cpid_hash(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pindexPrev->GetBlockHash());
 
 		 // miningcpid.cpidv2 = cpid_hash(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pblock->pprev->GetBlockHash());

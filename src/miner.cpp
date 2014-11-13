@@ -24,6 +24,8 @@ void ThreadCleanWalletPassphrase(void* parg);
 void ThreadTopUpKeyPool(void* parg);
 
 
+std::string RoundToString(double d, int place);
+
 bool OutOfSyncByAgeWithChanceOfMining();
 
 bool TallyNetworkAverages(bool ColdBoot);
@@ -559,21 +561,29 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 		return error("CheckStake()::HashBoinc too small");
 	}
 
-    if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc))
-        return error("CheckStake() : proof-of-stake checking failed");
-
+    
 	//11-12-2014 Prevent orphans
 	//double mint = (pblock.nValueOut - pblock->nValueIn + pblock->nFees)/COIN;
 	double mint = (pblock->vtx[1].GetValueOut())/COIN;
-		if (mint < .75 && LessVerbose(650)) 
+	if (mint < .75 && LessVerbose(750)) 
 	{
 		return error("CheckStake()::Mint too small");
 	}
+
+	if (mint < .24)
+	{
+		return false;
+	}
 	
+	if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc))
+	{	
+		printf("original hash boinc %s",pblock->vtx[0].hashBoinc.c_str());
+        return error("CheckStake() : proof-of-stake checking failed");
+	}
 
     //// debug print
-	
-    printf("CheckStake() : new proof-of-stake block found  \n  hash: %s \nproofhash: %s  \ntarget: %s\n", hashBlock.GetHex().c_str(), proofHash.GetHex().c_str(), hashTarget.GetHex().c_str());
+	std::string sMint = RoundToString(mint,4);	
+    printf("CheckStake() : new proof-of-stake block found  - Amount %s, \r\n hash: %s \nproofhash: %s  \ntarget: %s\n",sMint.c_str(), hashBlock.GetHex().c_str(), proofHash.GetHex().c_str(), hashTarget.GetHex().c_str());
 	if (fDebug)     pblock->print();
     printf("out %s\n", FormatMoney(pblock->vtx[1].GetValueOut()).c_str());
 

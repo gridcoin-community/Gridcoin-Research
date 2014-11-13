@@ -372,13 +372,13 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	
 	//CBigNum bnCoinDayWeight = CBigNum(nValueIn + (5*COIN) ) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
     //	int64_t NewbieStakeWeightModifier = 0;
-	uint256 NewbieStakeWeightModifier = 0;
+	int64_t NewbieStakeWeightModifier = 0;
 
 	int NC = NewbieCompliesWithFirstTimeStakeWeightRule(blockFrom,hashBoinc);
 
 	if (NC > 0)
 	{
-		    //10-27-2014 Dynamic Newbie Weight
+		    //11-12-2014 Dynamic Newbie Weight
 			double newbie_magnitude = GetMagnitudeByHashBoinc(hashBoinc);
 
 		    //uint64_t nNetworkWeight = GetPoSKernelPS2();
