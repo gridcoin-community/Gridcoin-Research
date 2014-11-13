@@ -375,11 +375,11 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	//This is primarily to allow a newbie researcher to get started with a low balance.
 	//CBigNum bnCoinDayWeight = CBigNum(nValueIn + (5*COIN) ) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
 	int64_t NewbieStakeWeightModifier = 0;
-	double mint = (blockFrom.vtx[1].GetValueOut())/COIN;
+	//double mint = (blockFrom.vtx[1].GetValueOut())/COIN;
 	int NC = NewbieCompliesWithFirstTimeStakeWeightRule(blockFrom,hashBoinc);
 	int oNC = 0;
 	
-	if ( (NC == 2 || NC == 3 && mint > 1)   ||  (NC == 1))
+	if ( (NC == 2 || NC == 3)   ||  (NC == 1))
 	{
 		    //11-12-2014 Dynamic Newbie Weight
 			double newbie_magnitude = GetMagnitudeByHashBoinc(hashBoinc);
@@ -388,19 +388,19 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 			if (NC == 1)
 			{
 				NewbieStakeWeightModifier = newbie_magnitude*25000*COIN;
-				printf("NewbieModifierL1: Mint %f, Mag %f, %u \r\n ", mint, newbie_magnitude,NewbieStakeWeightModifier);
+				printf("NewbieModifierL1: Mag %f, %u \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
 				oNC = NC;
 			}
 			else if (NC == 2)
 			{
 				NewbieStakeWeightModifier = newbie_magnitude*15000*COIN;
-				printf("NewbieModifierL2: Mint %f, Mag %f, %u \r\n ", mint, newbie_magnitude,NewbieStakeWeightModifier);
+				printf("NewbieModifierL2:  Mag %f, %u \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
 				oNC = NC;
 		    }
 			else if (NC == 3)
 			{
 				NewbieStakeWeightModifier = newbie_magnitude*1000*COIN;
-				printf("NewbieModifierL3: Mint %f, Mag %f, %u \r\n ", mint, newbie_magnitude,NewbieStakeWeightModifier);
+				printf("NewbieModifierL3: Mag %f, %u \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
 				oNC = NC;
 			}
 	}
