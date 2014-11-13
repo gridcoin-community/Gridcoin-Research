@@ -294,13 +294,18 @@ int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::str
 					StructCPID UntrustedHost = mvMagnitudes[boincblock.cpid]; //Contains Consensus Magnitude
 					if (UntrustedHost.initialized)
 					{
-						if (UntrustedHost.Accuracy > MAX_NEWBIE_BLOCKS && UntrustedHost.Accuracy < MAX_NEWBIE_BLOCKS_LEVEL2)
-						{
-							return 2;
-						}
 						if (UntrustedHost.Accuracy > MAX_NEWBIE_BLOCKS_LEVEL2) 
 						{	
 							return 0;
+						}
+						if (UntrustedHost.Accuracy > 0 && UntrustedHost.Accuracy < 4) 
+						{	
+							return 2;
+						}
+			
+						if (UntrustedHost.Accuracy > MAX_NEWBIE_BLOCKS && UntrustedHost.Accuracy < MAX_NEWBIE_BLOCKS_LEVEL2)
+						{
+							return 3;
 						}
 					}
 				}
@@ -366,19 +371,15 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 
     uint256 hashBlockFrom = blockFrom.GetHash();
 
-	//Testing Magnitude Modifier Here (08-21-2014):
-	//WEIGHT MODIFICATION SECTION 2: Testing newbie stake allowance
+	//WEIGHT MODIFICATION SECTION 2: Newbie stake allowance (11-13-2014)
 	//This is primarily to allow a newbie researcher to get started with a low balance.
-	
 	//CBigNum bnCoinDayWeight = CBigNum(nValueIn + (5*COIN) ) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
-    //	int64_t NewbieStakeWeightModifier = 0;
-
-	
 	int64_t NewbieStakeWeightModifier = 0;
-
+	double mint = (blockFrom.vtx[1].GetValueOut())/COIN;
 	int NC = NewbieCompliesWithFirstTimeStakeWeightRule(blockFrom,hashBoinc);
-	//11-12-2014
-	if (NC > 0)
+	int oNC = 0;
+	
+	if ( (NC == 2 || NC == 3 && mint > 1)   ||  (NC == 1))
 	{
 		    //11-12-2014 Dynamic Newbie Weight
 			double newbie_magnitude = GetMagnitudeByHashBoinc(hashBoinc);
@@ -386,13 +387,21 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 		    //uint64_t nNetworkWeight = GetPoSKernelPS2();
 			if (NC == 1)
 			{
-				NewbieStakeWeightModifier = newbie_magnitude*3000*COIN;
-				printf("NewbieStakeWeightModifierL1: Mag %f, %u \r\n ", newbie_magnitude,NewbieStakeWeightModifier);
+				NewbieStakeWeightModifier = newbie_magnitude*25000*COIN;
+				printf("NewbieModifierL1: Mint %f, Mag %f, %u \r\n ", mint, newbie_magnitude,NewbieStakeWeightModifier);
+				oNC = NC;
 			}
-			else if (NC==2)
+			else if (NC == 2)
 			{
-				NewbieStakeWeightModifier = newbie_magnitude*1500*COIN;
-				printf("NewbieStakeWeightModifierL2: Mag %f, %u \r\n ", newbie_magnitude,NewbieStakeWeightModifier);
+				NewbieStakeWeightModifier = newbie_magnitude*15000*COIN;
+				printf("NewbieModifierL2: Mint %f, Mag %f, %u \r\n ", mint, newbie_magnitude,NewbieStakeWeightModifier);
+				oNC = NC;
+		    }
+			else if (NC == 3)
+			{
+				NewbieStakeWeightModifier = newbie_magnitude*1000*COIN;
+				printf("NewbieModifierL3: Mint %f, Mag %f, %u \r\n ", mint, newbie_magnitude,NewbieStakeWeightModifier);
+				oNC = NC;
 			}
 	}
 	else
@@ -433,8 +442,11 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
     // Now check if proof-of-stake hash meets target protocol
     if (CBigNum(hashProofOfStake) > bnCoinDayWeight * bnTargetPerCoinDay)
 	{   
-		printf("!#");
-        return false;
+		if (oNC==0)
+		{
+			printf("!#");
+			return false;
+		}
 	}
     if (fDebug && !fPrintProofOfStake)
     {

@@ -25,6 +25,8 @@ std::string SerializeBoincBlock(MiningCPID mcpid);
 double GetPoSKernelPS2();
 
 
+extern int NewbieCompliesWithFirstTimeStakeWeightRule();
+
 
 MiningCPID GetNextProject();
 
@@ -1536,13 +1538,18 @@ int NewbieCompliesWithFirstTimeStakeWeightRule()
 				StructCPID UntrustedHost = mvMagnitudes[GlobalCPUMiningCPID.cpid]; //Contains Consensus Magnitude
 				if (UntrustedHost.initialized)
 				{
-						if (UntrustedHost.Accuracy > MAX_NEWBIE_BLOCKS && UntrustedHost.Accuracy < MAX_NEWBIE_BLOCKS_LEVEL2)
-						{
-							return 2;
-						}
 						if (UntrustedHost.Accuracy > MAX_NEWBIE_BLOCKS_LEVEL2) 
 						{	
 							return 0;
+						}
+						if (UntrustedHost.Accuracy > 0 && UntrustedHost.Accuracy < 4) 
+						{	
+							return 2;
+						}
+			
+						if (UntrustedHost.Accuracy > MAX_NEWBIE_BLOCKS && UntrustedHost.Accuracy < MAX_NEWBIE_BLOCKS_LEVEL2)
+						{
+							return 3;
 						}
 			
 				}
@@ -1633,11 +1640,15 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 			double NewbieStakeWeightModifier = 0;
 			if (NC == 1)
 			{
-				NewbieStakeWeightModifier =	GlobalCPUMiningCPID.Magnitude*3000;
+				NewbieStakeWeightModifier =	GlobalCPUMiningCPID.Magnitude*20000;
 			}
-			else if (NC==2)
+			else if (NC == 2)
 			{
-				NewbieStakeWeightModifier = GlobalCPUMiningCPID.Magnitude*1500;
+				NewbieStakeWeightModifier =	GlobalCPUMiningCPID.Magnitude*10000;
+			}
+			else if (NC == 3)
+			{
+				NewbieStakeWeightModifier = GlobalCPUMiningCPID.Magnitude*5000;
 			}
 
 			nWeight += NewbieStakeWeightModifier;

@@ -23,6 +23,7 @@ void ThreadCleanWalletPassphrase(void* parg);
 
 void ThreadTopUpKeyPool(void* parg);
 
+int NewbieCompliesWithFirstTimeStakeWeightRule();
 
 std::string RoundToString(double d, int place);
 
@@ -560,19 +561,22 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 		printf("CheckStake::HashBoinc too small\r\n");
 		return error("CheckStake()::HashBoinc too small");
 	}
-
-    
-	//11-12-2014 Prevent orphans
-	//double mint = (pblock.nValueOut - pblock->nValueIn + pblock->nFees)/COIN;
+	//std::string hashBoinc = pblock->vtx[0].hashBoinc;
+	int NC  =  NewbieCompliesWithFirstTimeStakeWeightRule();
 	double mint = (pblock->vtx[1].GetValueOut())/COIN;
-	if (mint < .75 && LessVerbose(750)) 
+	
+	// Gridcoin - R Halford - For Investors (NC Level 0, or Veterans, Level 0) - Prevent tiny payments
+	if (NC == 0)
 	{
-		return error("CheckStake()::Mint too small");
-	}
+  	if (mint < .50 && LessVerbose(700)) 
+		{
+			return error("CheckStake()::Mint too small");
+		}
 
-	if (mint < .24)
-	{
-		return false;
+		if (mint < .20)
+		{
+			return false;
+		}
 	}
 	
 	if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc))
