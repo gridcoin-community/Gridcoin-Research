@@ -1633,11 +1633,11 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 			double NewbieStakeWeightModifier = 0;
 			if (NC == 1)
 			{
-				NewbieStakeWeightModifier =	GlobalCPUMiningCPID.Magnitude*30000;
+				NewbieStakeWeightModifier =	GlobalCPUMiningCPID.Magnitude*3000;
 			}
 			else if (NC==2)
 			{
-				NewbieStakeWeightModifier = GlobalCPUMiningCPID.Magnitude*15000;
+				NewbieStakeWeightModifier = GlobalCPUMiningCPID.Magnitude*1500;
 			}
 
 			nWeight += NewbieStakeWeightModifier;

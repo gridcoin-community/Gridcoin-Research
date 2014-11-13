@@ -372,10 +372,12 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	
 	//CBigNum bnCoinDayWeight = CBigNum(nValueIn + (5*COIN) ) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
     //	int64_t NewbieStakeWeightModifier = 0;
-	double NewbieStakeWeightModifier = 0;
+
+	
+	int64_t NewbieStakeWeightModifier = 0;
 
 	int NC = NewbieCompliesWithFirstTimeStakeWeightRule(blockFrom,hashBoinc);
-
+	//11-12-2014
 	if (NC > 0)
 	{
 		    //11-12-2014 Dynamic Newbie Weight
@@ -384,20 +386,20 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 		    //uint64_t nNetworkWeight = GetPoSKernelPS2();
 			if (NC == 1)
 			{
-				NewbieStakeWeightModifier = newbie_magnitude*300000*COIN;
-				printf("NewbieStakeWeightModifierL1: Mag %f, %f \r\n ", newbie_magnitude,NewbieStakeWeightModifier);
+				NewbieStakeWeightModifier = newbie_magnitude*3000*COIN;
+				printf("NewbieStakeWeightModifierL1: Mag %f, %u \r\n ", newbie_magnitude,NewbieStakeWeightModifier);
 			}
 			else if (NC==2)
 			{
-				NewbieStakeWeightModifier = newbie_magnitude*150000*COIN;
-				printf("NewbieStakeWeightModifierL2: Mag %f, %f \r\n ", newbie_magnitude,NewbieStakeWeightModifier);
+				NewbieStakeWeightModifier = newbie_magnitude*1500*COIN;
+				printf("NewbieStakeWeightModifierL2: Mag %f, %u \r\n ", newbie_magnitude,NewbieStakeWeightModifier);
 			}
 	}
 	else
 	{
 			NewbieStakeWeightModifier = 1*COIN;
 	}
-	CBigNum bnCoinDayWeight = CBigNum(nValueIn + (NewbieStakeWeightModifier)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
+	CBigNum bnCoinDayWeight = CBigNum(nValueIn + NewbieStakeWeightModifier) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
     targetProofOfStake = (bnCoinDayWeight * bnTargetPerCoinDay).getuint256();
 
     // Calculate hash
@@ -431,7 +433,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
     // Now check if proof-of-stake hash meets target protocol
     if (CBigNum(hashProofOfStake) > bnCoinDayWeight * bnTargetPerCoinDay)
 	{   
-		//printf("~");
+		printf("!#");
         return false;
 	}
     if (fDebug && !fPrintProofOfStake)
