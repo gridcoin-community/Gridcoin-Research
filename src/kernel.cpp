@@ -372,7 +372,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	
 	//CBigNum bnCoinDayWeight = CBigNum(nValueIn + (5*COIN) ) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
     //	int64_t NewbieStakeWeightModifier = 0;
-	int64_t NewbieStakeWeightModifier = 0;
+	double NewbieStakeWeightModifier = 0;
 
 	int NC = NewbieCompliesWithFirstTimeStakeWeightRule(blockFrom,hashBoinc);
 
@@ -384,13 +384,13 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 		    //uint64_t nNetworkWeight = GetPoSKernelPS2();
 			if (NC == 1)
 			{
-				NewbieStakeWeightModifier = newbie_magnitude*30000*COIN;
-				printf("NewbieStakeWeightModifierL1: Mag %f, %" PRIu64 " \r\n ", newbie_magnitude,NewbieStakeWeightModifier);
+				NewbieStakeWeightModifier = newbie_magnitude*300000*COIN;
+				printf("NewbieStakeWeightModifierL1: Mag %f, %f \r\n ", newbie_magnitude,NewbieStakeWeightModifier);
 			}
 			else if (NC==2)
 			{
-				NewbieStakeWeightModifier = newbie_magnitude*15000*COIN;
-				printf("NewbieStakeWeightModifierL2: Mag %f, %" PRIu64 " \r\n ", NewbieStakeWeightModifier);
+				NewbieStakeWeightModifier = newbie_magnitude*150000*COIN;
+				printf("NewbieStakeWeightModifierL2: Mag %f, %f \r\n ", newbie_magnitude,NewbieStakeWeightModifier);
 			}
 	}
 	else
