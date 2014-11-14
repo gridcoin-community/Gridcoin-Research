@@ -23,7 +23,7 @@ void ThreadCleanWalletPassphrase(void* parg);
 
 void ThreadTopUpKeyPool(void* parg);
 
-int NewbieCompliesWithFirstTimeStakeWeightRule();
+int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude);
 
 std::string RoundToString(double d, int place);
 
@@ -561,33 +561,40 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 		printf("CheckStake::HashBoinc too small\r\n");
 		return error("CheckStake()::HashBoinc too small");
 	}
-	//std::string hashBoinc = pblock->vtx[0].hashBoinc;
-	int NC  =  NewbieCompliesWithFirstTimeStakeWeightRule();
-	double mint = (pblock->vtx[1].GetValueOut())/COIN;
-	
-	// Gridcoin - R Halford - For Investors (NC Level 0, or Veterans, Level 0) - Prevent tiny payments
-	if (NC == 0)
-	{
-  	if (mint < .50 && LessVerbose(700)) 
-		{
-			return error("CheckStake()::Mint too small");
-		}
 
-		if (mint < .20)
+	if (false)
+	{
+		double out_magnitude = 0;
+		int NC  =  NewbieCompliesWithLocalStakeWeightRule(out_magnitude);
+		double mint = (pblock->vtx[1].GetValueOut())/COIN;
+		std::string sMint = RoundToString(mint,4);	
+
+		// Gridcoin - R Halford - For Investors (NC Level 0, or Veterans, Level 0) - Prevent tiny payments
+		if (false && NC == 0)
 		{
-			return false;
+  			if (mint < .50 && LessVerbose(700)) 
+			{
+				return error("CheckStake()::Mint too small");
+			}
+			else if (mint < .20)
+			{
+				return false;
+			}
 		}
 	}
-	
-	if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc))
+	//11-14-2014
+	if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc, true))
 	{	
 		printf("original hash boinc %s",pblock->vtx[0].hashBoinc.c_str());
         return error("CheckStake() : proof-of-stake checking failed");
 	}
 
     //// debug print
-	std::string sMint = RoundToString(mint,4);	
-    printf("CheckStake() : new proof-of-stake block found  - Amount %s, \r\n hash: %s \nproofhash: %s  \ntarget: %s\n",sMint.c_str(), hashBlock.GetHex().c_str(), proofHash.GetHex().c_str(), hashTarget.GetHex().c_str());
+	double mint2 = (pblock->vtx[1].GetValueOut())/COIN;
+	std::string sMint2 = RoundToString(mint2,4);	
+
+    printf("CheckStake() : new proof-of-stake block found  - Amount %s, \r\n hash: %s \nproofhash: %s  \ntarget: %s\n",
+		sMint2.c_str(), hashBlock.GetHex().c_str(), proofHash.GetHex().c_str(), hashTarget.GetHex().c_str());
 	if (fDebug)     pblock->print();
     printf("out %s\n", FormatMoney(pblock->vtx[1].GetValueOut()).c_str());
 

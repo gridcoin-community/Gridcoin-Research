@@ -132,6 +132,7 @@ struct MiningEntry {
 		double longtermtotalowed;
 		double longtermowed;
 		double LastPaymentTime;
+		double NewbieLevel;
 		
 	};
 
@@ -191,7 +192,7 @@ struct MiningEntry {
 		double ConsensusMagnitudeCount;
 		double Accuracy;
 		double ConsensusMagnitude;
-	
+		double NewbieLevel;
 	
 	};
 

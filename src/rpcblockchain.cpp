@@ -407,6 +407,8 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("NetworkRAC", bb.NetworkRAC));
 	result.push_back(Pair("Magnitude", bb.Magnitude));
 	result.push_back(Pair("BoincHash",block.vtx[0].hashBoinc));
+	result.push_back(Pair("NewbieLevel",bb.NewbieLevel));
+
 	std::string skein2 = aes_complex_hash(blockhash);
 	//uint256 boincpowhash = block.hashMerkleRoot + bb.nonce;
 	//int iav  = TestAESHash(bb.rac, (unsigned int)bb.diffbytes, boincpowhash, bb.aesskein);

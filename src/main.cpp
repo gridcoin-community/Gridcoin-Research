@@ -59,6 +59,7 @@ int64_t nCPIDsLoaded = 0;
 
 extern void SetAdvisory();
 extern bool InAdvisory();
+int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude);
 
 
 bool bNewUserWizardNotified = false;
@@ -769,6 +770,10 @@ MiningCPID GetNextProject()
 								GlobalCPUMiningCPID.Magnitude = GetMagnitude(GlobalCPUMiningCPID.cpid,purported,true);
 								printf("For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
 								msMiningErrors = "Boinc Mining";
+								double out_magnitude = 0;
+	
+								GlobalCPUMiningCPID.NewbieLevel = NewbieCompliesWithLocalStakeWeightRule(out_magnitude);
+
 								return GlobalCPUMiningCPID;
 							}
 						
@@ -799,7 +804,9 @@ MiningCPID GetNextProject()
 		GlobalCPUMiningCPID.NetworkRAC = 0;
 		GlobalCPUMiningCPID.Magnitude = 0;
         GlobalCPUMiningCPID.clientversion = "";
-
+		double out_magnitude2 = 0;
+	
+		GlobalCPUMiningCPID.NewbieLevel = NewbieCompliesWithLocalStakeWeightRule(out_magnitude2);
 		mdMiningNetworkRAC = 0;
 	  	}
 		catch (std::exception& e)
@@ -3430,7 +3437,7 @@ bool CBlock::AcceptBlock()
 				if (IsProofOfStake())
 				{
 					uint256 targetProofOfStake;
-					if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc))
+					if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, false))
 					{
 						printf("WARNING: AcceptBlock(): check proof-of-stake failed for block %s\n", hash.ToString().c_str());
 						return false; // do not error here as we expect this during initial block download
@@ -4304,7 +4311,7 @@ bool IsLockTimeRecent(double locktime)
 
 bool IsLockTimeWithinTwoHours(double locktime)
 {
-	double nCutoff =  GetAdjustedTime() - (60*60*24*2);
+	double nCutoff =  GetAdjustedTime() - (60*60*2);
 	if (locktime < nCutoff) return false;
 	return true;
 }
@@ -5770,7 +5777,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 					+ delim + mcpid.enccpid 
 					+ delim + mcpid.encaes + delim + RoundToString(mcpid.nonce,0) + delim + RoundToString(mcpid.NetworkRAC,0) + delim + version 
 					+ delim + mcpid.VouchedCPID + delim + RoundToString(mcpid.VouchedMagnitude,0) 
-					+ delim + RoundToString(mcpid.VouchedRAC,0) 
+					+ delim + RoundToString(mcpid.NewbieLevel,0) 
 					+ delim + mcpid.cpidv2
 					+ delim + RoundToString(mcpid.Magnitude,0)
 					+ delim + RoundToString(mcpid.rac,0);
@@ -5821,7 +5828,7 @@ MiningCPID DeserializeBoincBlock(std::string block)
 	surrogate.email = "";
 	surrogate.boincruntimepublickey = "";
 	surrogate.clientversion = "";
-	
+	surrogate.NewbieLevel=0;
 
 	std::vector<std::string> s = split(block,"<|>");
 	if (s.size() > 7)
@@ -5855,7 +5862,7 @@ MiningCPID DeserializeBoincBlock(std::string block)
 		}
 		if (s.size() > 13)
 		{
-			surrogate.VouchedRAC = cdbl(s[13],0);
+			surrogate.NewbieLevel = cdbl(s[13],0);
 		}
 		if (s.size() > 14)
 		{

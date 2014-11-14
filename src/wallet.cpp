@@ -25,7 +25,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid);
 double GetPoSKernelPS2();
 
 
-extern int NewbieCompliesWithFirstTimeStakeWeightRule();
+extern int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude);
 
 
 MiningCPID GetNextProject();
@@ -1519,17 +1519,26 @@ bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx&
 }
 
 
-int NewbieCompliesWithFirstTimeStakeWeightRule()
+int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude)
 {
+	// If newbie is not boincing, return 0
+	// If newbie is a veteran, return 0
+	// if newbie is an Investor, return 1
 
+	// If newbie is boincing and not in the chain, Uninitialized Newbie, return 2
+	// If newbie solved between 1-5 blocks, return 3
+	// If newbie has reached level1, return 4
+	// If newbie has reached level2, return 5
+	out_magnitude = 0;
 	try 
 	{
 	  if (!GlobalCPUMiningCPID.initialized) return 0;
+	  if (GlobalCPUMiningCPID.cpid == "INVESTOR") return 1;
 			
-		//CPID <> INVESTOR:
+	  //CPID <> INVESTOR:
 	
-		if (GlobalCPUMiningCPID.cpid != "INVESTOR") 
-		{
+	  if (GlobalCPUMiningCPID.cpid != "INVESTOR") 
+	  {
     		if (GlobalCPUMiningCPID.projectname == "") 	return 0;
 	    	if (GlobalCPUMiningCPID.rac < 100) 			return 0;
 		    //If we already have a consensus on the node, the cpid does not qualify
@@ -1538,24 +1547,38 @@ int NewbieCompliesWithFirstTimeStakeWeightRule()
 				StructCPID UntrustedHost = mvMagnitudes[GlobalCPUMiningCPID.cpid]; //Contains Consensus Magnitude
 				if (UntrustedHost.initialized)
 				{
+						out_magnitude = UntrustedHost.Magnitude;
+						
 						if (UntrustedHost.Accuracy > MAX_NEWBIE_BLOCKS_LEVEL2) 
 						{	
+							//Veteran
 							return 0;
 						}
+
 						if (UntrustedHost.Accuracy > 0 && UntrustedHost.Accuracy < 4) 
-						{	
-							return 2;
-						}
-			
-						if (UntrustedHost.Accuracy > MAX_NEWBIE_BLOCKS && UntrustedHost.Accuracy < MAX_NEWBIE_BLOCKS_LEVEL2)
 						{
+							//Newbie
 							return 3;
 						}
+						if (UntrustedHost.Accuracy >= 4 && UntrustedHost.Accuracy < MAX_NEWBIE_BLOCKS)
+						{
+							//Newbie Level 1
+							return 4;
+						}
+						if (UntrustedHost.Accuracy >= MAX_NEWBIE_BLOCKS && UntrustedHost.Accuracy < MAX_NEWBIE_BLOCKS_LEVEL2)
+						{
+							//Newbie Level 2
+							return 5;
+						}
 			
+				
 				}
 			}
 			printf("{NC}"); //Newbie complies with first time stakeweight rule
-			return 1;
+			//Uninitialized newbie (use globalcpumining magnitude)
+			out_magnitude = GlobalCPUMiningCPID.Magnitude;
+
+			return 2;
 		}
 
 	return 0;
@@ -1632,31 +1655,53 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	//WEIGHT SECTION 1: When a new CPID enters the ecosystem, and is seen on less than 9 blocks, this newbie
 	//receives an extra X in stakeweight to help them get started.
 	//10-22-2014
-	int NC = NewbieCompliesWithFirstTimeStakeWeightRule();
-	if (NC > 0)
+	double out_magnitude = 0;
+	int NC = NewbieCompliesWithLocalStakeWeightRule(out_magnitude);
+	// If newbie is not boincing, return 0
+	// If newbie is a veteran, return 0
+	// if newbie is an Investor, return 1
+	// If newbie is boincing and not in the chain, Uninitialized Newbie, return 2
+	// If newbie solved between 1-5 blocks, return 3
+	// If newbie has reached level1, return 4
+	// If newbie has reached level2, return 5
+	int64_t NetworkWeight = GetPoSKernelPS2();
+	double NewbieStakeWeightModifier = 0;
+	if (NC == 0)
 	{
-			int64_t NetworkWeight = GetPoSKernelPS2();
-			//11-12-2014 - Gridcoin - Prevent Orphans
-			double NewbieStakeWeightModifier = 0;
-			if (NC == 1)
-			{
-				NewbieStakeWeightModifier =	GlobalCPUMiningCPID.Magnitude*20000;
-			}
-			else if (NC == 2)
-			{
-				NewbieStakeWeightModifier =	GlobalCPUMiningCPID.Magnitude*10000;
-			}
-			else if (NC == 3)
-			{
-				NewbieStakeWeightModifier = GlobalCPUMiningCPID.Magnitude*5000;
-			}
-
-			nWeight += NewbieStakeWeightModifier;
+					NewbieStakeWeightModifier = 0;
+	
 	}
-	else if (nWeight > 0)
+	else if (NC==1)
 	{
-		nWeight += 100000;
+					NewbieStakeWeightModifier =	0;
+	
 	}
+	else if (NC == 2)
+	{
+					NewbieStakeWeightModifier =	1000000+(out_magnitude*200000);
+	
+	}
+	else if (NC == 3)
+	{
+					NewbieStakeWeightModifier =	out_magnitude*200000;
+	
+	}
+	else if (NC == 4)
+	{
+					NewbieStakeWeightModifier =	out_magnitude*100000;
+	
+	}
+	else if (NC == 5)
+	{
+					NewbieStakeWeightModifier =	out_magnitude*50000;
+	
+	}
+	else
+	{
+					NewbieStakeWeightModifier =	out_magnitude*20000;
+	
+	}
+	nWeight += NewbieStakeWeightModifier;
 	
     return true;
 }
@@ -1734,7 +1779,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		 miningcpid = GetNextProject();
 		 //printf("Grabbing Prior blockhash for Cpidv2");
 		 //miningcpid.cpidv2 = cpid_hash(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pindexPrev->GetBlockHash());
-
+		 
 		 // miningcpid.cpidv2 = cpid_hash(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pblock->pprev->GetBlockHash());
 		 hashBoinc = SerializeBoincBlock(miningcpid);
 	//	 printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
@@ -1788,7 +1833,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);
 			//Note: At this point block.vtx[0] is still null, so we send the hashBoinc in separately
             if (CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, 
-				*pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, targetProofOfStake, hashBoinc, false))
+				*pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, targetProofOfStake, hashBoinc, false, true))
             {
                 // Found a kernel
                 if (fDebug && GetBoolArg("-printcoinstake"))
