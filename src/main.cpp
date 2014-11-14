@@ -1895,22 +1895,26 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 	    	
 		StructCPID mag = mvMagnitudes[cpid];
 		//Help prevent sync problems by assessing owed @ 90%
-		double owed = (mag.owed*.90);
+		double owed = (mag.owed*1.0);
 		if (owed < 0) owed = 0;
 		// Coarse Payment Rule (helps prevent sync problems):
 		if (!VerifyingBlock)
 		{
 			if (owed < (GetMaximumBoincSubsidy(GetAdjustedTime())/10)) owed = 0;
 			owed = owed/2;
+
+			//Halford - Ensure researcher was not paid in the last 2 hours:
+			if (IsLockTimeWithinTwoHours(mag.LastPaymentTime))
+			{
+				owed = 0;
+			}
+
+            owed = (owed*.90);
+
 		}
 		//End of Coarse Payment Rule
 
-		//Halford - Ensure researcher was not paid in the last 2 hours:
-		if (IsLockTimeWithinTwoHours(mag.LastPaymentTime))
-		{
-			owed = 0;
-		}
-	
+		
 		return owed * COIN;	
 }
 

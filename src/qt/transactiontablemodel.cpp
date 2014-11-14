@@ -380,7 +380,8 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
 	   		}
 			else if (reward >= 200)
 			{
-				return QIcon(":/icons/gold_cpumined");
+			   //	return QIcon(":/icons/gold_cpumined");
+				return QIcon(":/icons/tx_mined");
 	   		}
 	   		else
 	   		{
