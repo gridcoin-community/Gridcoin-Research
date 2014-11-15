@@ -285,6 +285,7 @@ int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::str
 	// If newbie solved between 1-5 blocks, return 3
 	// If newbie has reached level1, return 4
 	// If newbie has reached level2, return 5
+	//11-14-2014
 
 	try
 	{
@@ -292,7 +293,7 @@ int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::str
 		{
 			MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
 			if (boincblock.cpid == "" || boincblock.cpid.length() < 6) return 0;  //Block has no CPID
-	   	    if (GlobalCPUMiningCPID.cpid == "INVESTOR") return 1;
+	   	    if (boincblock.cpid == "INVESTOR") return 1;
 	
 			//CPID <> INVESTOR:
 			if (boincblock.cpid != "INVESTOR") 
@@ -402,8 +403,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	// Deserialize boinc hash for detailed logging - 11-14-2014 /////////////////
 	MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
 	std::string cpid = boincblock.cpid;
-    //boincblock.projectname == ""
-	//boincblock.rac
+    
 	double mag_accuracy = 0;
 	std::string cpidvalid = YesNo(IsCPIDValid(boincblock.cpid,boincblock.enccpid));
 	if (mvMagnitudes.size() > 0)
@@ -414,9 +414,8 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 						mag_accuracy = UntrustedHost.Accuracy;
 			}
 	}
-	/////////////////////////////////////////////////////////////////////////////
 	
-
+	
 
 	//WEIGHT MODIFICATION SECTION 2: Newbie stake allowance (11-13-2014)
 	//This is primarily to allow a newbie researcher to get started with a low balance.
@@ -469,6 +468,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	else
 	{
 			NewbieStakeWeightModifier = 1*COIN;
+			printf("NewbieL0: %u",NC);
 	}
 	CBigNum bnCoinDayWeight = CBigNum(nValueIn + NewbieStakeWeightModifier) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
     targetProofOfStake = (bnCoinDayWeight * bnTargetPerCoinDay).getuint256();
@@ -512,7 +512,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 			{
 				//Dont print all this crap in the log if we are running a local miner:
 				printf("Block does not meet target: hashboinc %s \r\n",hashBoinc.c_str());
-				printf("Researcher vitals: cpid %s, project %s, accuracy %f \r\n",cpid.c_str(),boincblock.projectname.c_str(),mag_accuracy);
+				printf("Researcher vitals: NC %u, cpid %s, project %s, accuracy %f \r\n",NC,cpid.c_str(),boincblock.projectname.c_str(),mag_accuracy);
 			}
 			return false;
 		}

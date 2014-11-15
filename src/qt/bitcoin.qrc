@@ -44,10 +44,11 @@
         <file alias="debugwindow">res/icons/debugwindow.png</file>
         <file alias="staking_off">res/icons/staking_off.png</file>
         <file alias="staking_on">res/icons/staking_on.png</file>
-		<file alias="block">res/icons/block.png</file>
+	<file alias="block">res/icons/block.png</file>
         <file alias="ex">res/icons/ex.png</file>
-		<file alias="www">res/icons/www.png</file>
+	<file alias="www">res/icons/www.png</file>
         <file alias="boinc">res/icons/boinc.png</file>
+        <file alias="gold_cpumined">res/icons/gold_cpumined.png</file>
     </qresource>
     <qresource prefix="/images">
         <file alias="about">res/images/about.png</file>

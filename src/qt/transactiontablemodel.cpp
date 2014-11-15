@@ -369,7 +369,7 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
 
 QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx) const
 {
-	double reward = (wtx->credit + wtx->debit)*COIN;
+	double reward = (wtx->credit + wtx->debit)/COIN;
 
     switch(wtx->type)
     {
@@ -381,7 +381,7 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
 			else if (reward >= 200)
 			{
 			   //	return QIcon(":/icons/gold_cpumined");
-				return QIcon(":/icons/tx_mined");
+				return QIcon(":/icons/gold_cpumined");
 	   		}
 	   		else
 	   		{
