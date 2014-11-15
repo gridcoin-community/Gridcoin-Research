@@ -1128,6 +1128,75 @@ Array MagnitudeReport(bool bMine)
 			return results;
 }
 
+
+
+void CSVToFile(std::string filename, std::string data)
+{
+	boost::filesystem::path path = GetDataDir() / "reports" / filename;
+    boost::filesystem::create_directories(path.parent_path());
+	ofstream myCSV;
+	myCSV.open (path.string().c_str());
+	myCSV << data;
+    myCSV.close();
+}
+
+
+
+
+Array MagnitudeReportCSV()
+{
+	       Array results;
+		   Object c;
+		   StructCPID globalmag = mvMagnitudes["global"];
+		   double payment_timespan = (globalmag.HighLockTime-globalmag.LowLockTime)/86400;  //Lock time window in days
+		   std::string Narr = "Research Savings Account Report - Generated " + RoundToString(GetAdjustedTime(),0) + " - Timespan: " + RoundToString(payment_timespan,0);
+		   c.push_back(Pair("RSA Report",Narr));
+		   results.push_back(c);
+		   double totalpaid = 0;
+		   double lto  = 0;
+		   double rows = 0;
+		   double outstanding = 0;
+		   double totaloutstanding = 0;
+		   std::string header = "CPID,Magnitude,Accuracy,LongTermOwed14day,LongTermOwedDaily,Payments,LastPaymentTime,CurrentDailyOwed,NextExpectedPayment,AvgDailyPayments,Outstanding\r\n";
+		   std::string row = "";
+		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
+		   {
+				// For each CPID on the network, report:
+				StructCPID structMag = mvMagnitudes[(*ii).first];
+				if (structMag.initialized && structMag.cpid.length() > 2) 
+				{ 
+					if (structMag.cpid != "INVESTOR")
+					{
+						outstanding = structMag.totalowed - structMag.payments;
+						if (outstanding < 0) outstanding = 0;
+  						row = structMag.cpid + "," + RoundToString(structMag.ConsensusMagnitude,2) + "," + RoundToString(structMag.Accuracy,0) + "," + RoundToString(structMag.totalowed,2) 
+							+ "," + RoundToString(structMag.totalowed/14,2)
+							+ "," + RoundToString(structMag.payments,2) + "," + RoundToString(structMag.LastPaymentTime,0) + "," + RoundToString(structMag.owed,2) 
+							+ "," + RoundToString(structMag.owed/2,2)
+							+ "," + RoundToString(structMag.payments/14,2) + "," + RoundToString(outstanding,2) + "\n";
+						header += row;
+						rows++;
+						totalpaid += structMag.payments;
+						lto += structMag.totalowed;
+						totaloutstanding += outstanding;
+					}
+
+				}
+
+		   }
+		   std::string footer = RoundToString(rows,0) + ", , ," + RoundToString(lto,2) + ", ," + RoundToString(totalpaid,2) + ", , , , ," + RoundToString(totaloutstanding,2) + "\n";
+		   header += footer;
+		   Object entry;
+		   entry.push_back(Pair("CSV Complete","\reports\magnitude.csv"));
+		   results.push_back(entry);
+     	   CSVToFile("magnitude.csv",header);
+		   return results;
+}
+
+
+
+
+
 std::string YesNo(bool bin)
 {
 	if (bin) return "Yes";
@@ -1272,6 +1341,12 @@ Value listitem(const Array& params, bool fHelp)
 			results = MagnitudeReport(false);
 			return results;
 
+	}
+
+	if (sitem == "magnitudecsv")
+	{
+		results = MagnitudeReportCSV();
+		return results;
 	}
 
 	if (sitem == "mymagnitude")

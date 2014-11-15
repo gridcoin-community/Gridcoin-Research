@@ -18,6 +18,10 @@
 #include <QDateTime>
 #include <QtAlgorithms>
 
+
+int64_t GetMaximumBoincSubsidy(int64_t nTime);
+
+
 // Amount column is right-aligned it contains numbers
 static int column_alignments[] = {
         Qt::AlignLeft|Qt::AlignVCenter,
@@ -370,6 +374,7 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
 QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx) const
 {
 	double reward = (wtx->credit + wtx->debit)/COIN;
+	double max = GetMaximumBoincSubsidy(GetAdjustedTime());
 
     switch(wtx->type)
     {
@@ -378,9 +383,8 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
 	   		{
 	   			return QIcon(":/icons/tx_cpumined");
 	   		}
-			else if (reward >= 200)
+			else if (reward >= max*.90)
 			{
-			   //	return QIcon(":/icons/gold_cpumined");
 				return QIcon(":/icons/gold_cpumined");
 	   		}
 	   		else
