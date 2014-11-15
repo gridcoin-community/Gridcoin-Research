@@ -1892,7 +1892,8 @@ int64_t GetProofOfStakeMaxReward(int64_t nCoinAge, int64_t nFees, int64_t lockti
 
 double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 {
-	    	
+	    //11-15-2014
+
 		StructCPID mag = mvMagnitudes[cpid];
 		//Help prevent sync problems by assessing owed @ 90%
 		double owed = (mag.owed*1.0);
@@ -1900,8 +1901,19 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 		// Coarse Payment Rule (helps prevent sync problems):
 		if (!VerifyingBlock)
 		{
+			//If owed less than 10% of max subsidy, assess at 0:
 			if (owed < (GetMaximumBoincSubsidy(GetAdjustedTime())/10)) owed = 0;
-			owed = owed/2;
+
+			//Coarse payment rule:
+			if (mag.totalowed > (GetMaximumBoincSubsidy(GetAdjustedTime())*2))
+			{
+				//If owed more than 2* Max Block, pay normal amount
+	            owed = (owed*.90);
+			}
+			else
+			{
+				owed = owed/2;
+			}
 
 			//Halford - Ensure researcher was not paid in the last 2 hours:
 			if (IsLockTimeWithinTwoHours(mag.LastPaymentTime))
@@ -1909,7 +1921,6 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 				owed = 0;
 			}
 
-            owed = (owed*.90);
 
 		}
 		//End of Coarse Payment Rule

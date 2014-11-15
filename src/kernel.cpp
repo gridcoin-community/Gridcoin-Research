@@ -442,33 +442,33 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 		    //uint64_t nNetworkWeight = GetPoSKernelPS2();
 			if (NC == 2)
 			{
-				NewbieStakeWeightModifier = newbie_magnitude*25000*COIN;
-				printf("NewbieModifierL1: Mag %f, Mod %"PRId64" \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
+				NewbieStakeWeightModifier = newbie_magnitude*2500*COIN;
+				//printf("NewbieModifierL1: Mag %f, Mod %"PRId64" \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
 				oNC = NC;
 			}
 			else if (NC == 3)
 			{
-				NewbieStakeWeightModifier = newbie_magnitude*15000*COIN;
-				printf("NewbieModifierL2:  Mag %f, Mod  %"PRId64"  \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
+				NewbieStakeWeightModifier = newbie_magnitude*1500*COIN;
+				//printf("NewbieModifierL2:  Mag %f, Mod  %"PRId64"  \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
 				oNC = NC;
 		    }
 			else if (NC == 4)
 			{
-				NewbieStakeWeightModifier = newbie_magnitude*10000*COIN;
-				printf("NewbieModifierL3: Mag %f, Mod  %"PRId64" \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
+				NewbieStakeWeightModifier = newbie_magnitude*1000*COIN;
+				//printf("NewbieModifierL3: Mag %f, Mod  %"PRId64" \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
 				oNC = NC;
 			}
 			else if (NC == 5)
 			{
-				NewbieStakeWeightModifier = newbie_magnitude*5000*COIN;
-				printf("NewbieModifierL3: Mag %f, Mod  %"PRId64" \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
+				NewbieStakeWeightModifier = newbie_magnitude*500*COIN;
+				//printf("NewbieModifierL3: Mag %f, Mod  %"PRId64" \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
 				oNC = NC;
 			}
 	}
 	else
 	{
 			NewbieStakeWeightModifier = 1*COIN;
-			printf("NewbieL0: %u",NC);
+			//printf("NewbieL0: %u",NC);
 	}
 	CBigNum bnCoinDayWeight = CBigNum(nValueIn + NewbieStakeWeightModifier) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
     targetProofOfStake = (bnCoinDayWeight * bnTargetPerCoinDay).getuint256();

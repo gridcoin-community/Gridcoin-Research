@@ -1651,19 +1651,18 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	
 
 	
-	//HALFORD: 9-6-2014 (Blended Stake Weight feature for Newbies):
+	//HALFORD: (Blended Stake Weight feature for Newbies):
 	//WEIGHT SECTION 1: When a new CPID enters the ecosystem, and is seen on less than 9 blocks, this newbie
 	//receives an extra X in stakeweight to help them get started.
-	//10-22-2014
 	double out_magnitude = 0;
 	int NC = NewbieCompliesWithLocalStakeWeightRule(out_magnitude);
 	// If newbie is not boincing, return 0
-	// If newbie is a veteran, return 0
-	// if newbie is an Investor, return 1
+	// If newbie is a veteran,    return 0
+	// if newbie is an Investor,  return 1
 	// If newbie is boincing and not in the chain, Uninitialized Newbie, return 2
 	// If newbie solved between 1-5 blocks, return 3
-	// If newbie has reached level1, return 4
-	// If newbie has reached level2, return 5
+	// If newbie has reached level1,        return 4
+	// If newbie has reached level2,        return 5
 	int64_t NetworkWeight = GetPoSKernelPS2();
 	double NewbieStakeWeightModifier = 0;
 	if (NC == 0)
@@ -1678,27 +1677,27 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	}
 	else if (NC == 2)
 	{
-					NewbieStakeWeightModifier =	1000000+(out_magnitude*200000);
+					NewbieStakeWeightModifier =	1000000+(out_magnitude*10000);
 	
 	}
 	else if (NC == 3)
 	{
-					NewbieStakeWeightModifier =	out_magnitude*200000;
+					NewbieStakeWeightModifier =	out_magnitude*5000;
 	
 	}
 	else if (NC == 4)
 	{
-					NewbieStakeWeightModifier =	out_magnitude*100000;
+					NewbieStakeWeightModifier =	out_magnitude*2500;
 	
 	}
 	else if (NC == 5)
 	{
-					NewbieStakeWeightModifier =	out_magnitude*50000;
+					NewbieStakeWeightModifier =	out_magnitude*1000;
 	
 	}
 	else
 	{
-					NewbieStakeWeightModifier =	out_magnitude*20000;
+					NewbieStakeWeightModifier =	0;
 	
 	}
 	nWeight += NewbieStakeWeightModifier;
