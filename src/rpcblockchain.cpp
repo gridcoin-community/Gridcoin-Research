@@ -1509,8 +1509,6 @@ Value listitem(const Array& params, bool fHelp)
 		}
 		printf ("generating cpid report %s",sitem.c_str());
 
-		//if (structcpid.cpid == GlobalCPUMiningCPID.cpid || structcpid.cpid=="INVESTOR" || structcpid.cpid=="investor")
-				
 		for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii) 
 		{
 
@@ -1519,24 +1517,20 @@ Value listitem(const Array& params, bool fHelp)
 	        if (structcpid.initialized) 
 			{ 
 			
-				if (true)
+				if (structcpid.cpid == GlobalCPUMiningCPID.cpid || structcpid.cpid=="INVESTOR" || structcpid.cpid=="investor")
 				{
 					Object entry;
 	
 					entry.push_back(Pair("Project",structcpid.projectname));
 					entry.push_back(Pair("CPID",structcpid.cpid));
 					//entry.push_back(Pair("CPIDhash",structcpid.cpidhash));
-					//entry.push_back(Pair("Email",structcpid.emailhash));
-					//entry.push_back(Pair("UTC",structcpid.utc));
 					entry.push_back(Pair("RAC",structcpid.rac));
 					entry.push_back(Pair("Team",structcpid.team));
 					//entry.push_back(Pair("RecTime",structcpid.rectime));
 					//entry.push_back(Pair("Age",structcpid.age));
-					//entry.push_back(Pair("Verified UTC",structcpid.verifiedutc));
 					entry.push_back(Pair("Verified RAC",structcpid.verifiedrac));
 					entry.push_back(Pair("Verified Team",structcpid.verifiedteam));
 					//entry.push_back(Pair("Verified RecTime",structcpid.verifiedrectime));
-					//entry.push_back(Pair("Verified RAC Age",structcpid.verifiedage));
 					entry.push_back(Pair("Is my CPID Valid?",structcpid.Iscpidvalid));
 					entry.push_back(Pair("CPID Link",structcpid.link));
 					entry.push_back(Pair("Errors",structcpid.errors));
@@ -1545,7 +1539,6 @@ Value listitem(const Array& params, bool fHelp)
 
 			}
 		}
-
 
     }
 
