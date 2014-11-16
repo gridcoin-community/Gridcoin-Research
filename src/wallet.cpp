@@ -1953,7 +1953,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     
 		printf("Creating POS Reward for %s  amt  %"PRId64"  \r\n",GlobalCPUMiningCPID.cpid.c_str(),nReward/COIN);
 
-        if (nReward/COIN <= .25)       return false;
+        //if (nReward/COIN <= .25)       return false;
 
         nCredit += nReward;
     }
