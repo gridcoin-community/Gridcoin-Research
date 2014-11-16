@@ -1677,22 +1677,22 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	}
 	else if (NC == 2)
 	{
-					NewbieStakeWeightModifier =	1000000+(out_magnitude*10000);
+					NewbieStakeWeightModifier =	1000000+(out_magnitude*5000);
 	
 	}
 	else if (NC == 3)
 	{
-					NewbieStakeWeightModifier =	out_magnitude*5000;
+					NewbieStakeWeightModifier =	out_magnitude*2500;
 	
 	}
 	else if (NC == 4)
 	{
-					NewbieStakeWeightModifier =	out_magnitude*2500;
+					NewbieStakeWeightModifier =	out_magnitude*1250;
 	
 	}
 	else if (NC == 5)
 	{
-					NewbieStakeWeightModifier =	out_magnitude*1000;
+					NewbieStakeWeightModifier =	out_magnitude*500;
 	
 	}
 	else

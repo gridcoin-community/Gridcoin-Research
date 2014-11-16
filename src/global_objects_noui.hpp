@@ -114,6 +114,7 @@ struct MiningEntry {
 		double TotalNetworkRAC;
 		double Magnitude;
 		double LastMagnitude;
+		double PaymentMagnitude;
 		double owed;
 		double payments;
 		double outstanding;

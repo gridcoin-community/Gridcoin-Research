@@ -29,6 +29,9 @@ int RebootClient();
 
 extern double GetNetworkProjectCountWithRAC();
 int ReindexWallet();
+extern Array MagnitudeReportCSV();
+int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude);
+
 
 void stopWireFrameRenderer();
 void startWireFrameRenderer();
@@ -42,8 +45,7 @@ bool GetBlockNew(uint256 blockhash, int& out_height, CBlock& blk, bool bForceDis
 bool AESSkeinHash(unsigned int diffbytes, double rac, uint256 scrypthash, std::string& out_skein, std::string& out_aes512);
 				  std::string aes_complex_hash(uint256 scrypt_hash);
 std::vector<std::string> split(std::string s, std::string delim);
-double Lederstrumpf(double RAC, double NetworkRAC);
-double LederstrumpfMagnitude(double mag,int64_t locktime);
+double LederstrumpfMagnitude2(double mag,int64_t locktime);
 
 
 std::string RetrieveCPID5(std::string email,std::string bpk,uint256 blockhash);
@@ -1095,10 +1097,10 @@ Array MagnitudeReport(bool bMine)
 		   c.push_back(Pair("RSA Report",Narr));
 		   results.push_back(c);
 		   StructCPID globalmag = mvMagnitudes["global"];
-		   double payment_timespan = (globalmag.HighLockTime-globalmag.LowLockTime)/86400;  //Lock time window in days
-		   			Object entry;
-					entry.push_back(Pair("Payment Window",payment_timespan));
-								results.push_back(entry);
+		   double payment_timespan = 14; //(globalmag.HighLockTime-globalmag.LowLockTime)/86400;  //Lock time window in days
+		   Object entry;
+		   entry.push_back(Pair("Payment Window",payment_timespan));
+		   results.push_back(entry);
 
 		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
 		   {
@@ -1111,6 +1113,8 @@ Array MagnitudeReport(bool bMine)
 									Object entry;
 									entry.push_back(Pair("CPID",structMag.cpid));
 									entry.push_back(Pair("Magnitude",structMag.ConsensusMagnitude));
+									entry.push_back(Pair("Payment Magnitude",structMag.PaymentMagnitude));
+					
 									entry.push_back(Pair("Magnitude Accuracy",structMag.Accuracy));
 									entry.push_back(Pair("Long Term Owed (14 day projection)",structMag.totalowed));
 									entry.push_back(Pair("Long Term Daily Owed (1 day projection)",structMag.totalowed/14));
@@ -1148,7 +1152,7 @@ Array MagnitudeReportCSV()
 	       Array results;
 		   Object c;
 		   StructCPID globalmag = mvMagnitudes["global"];
-		   double payment_timespan = (globalmag.HighLockTime-globalmag.LowLockTime)/86400;  //Lock time window in days
+		   double payment_timespan = 14; //(globalmag.HighLockTime-globalmag.LowLockTime)/86400;  //Lock time window in days
 		   std::string Narr = "Research Savings Account Report - Generated " + RoundToString(GetAdjustedTime(),0) + " - Timespan: " + RoundToString(payment_timespan,0);
 		   c.push_back(Pair("RSA Report",Narr));
 		   results.push_back(c);
@@ -1157,7 +1161,7 @@ Array MagnitudeReportCSV()
 		   double rows = 0;
 		   double outstanding = 0;
 		   double totaloutstanding = 0;
-		   std::string header = "CPID,Magnitude,Accuracy,LongTermOwed14day,LongTermOwedDaily,Payments,LastPaymentTime,CurrentDailyOwed,NextExpectedPayment,AvgDailyPayments,Outstanding\r\n";
+		   std::string header = "CPID,Magnitude,PaymentMagnitude,Accuracy,LongTermOwed14day,LongTermOwedDaily,Payments,LastPaymentTime,CurrentDailyOwed,NextExpectedPayment,AvgDailyPayments,Outstanding\r\n";
 		   std::string row = "";
 		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
 		   {
@@ -1169,7 +1173,8 @@ Array MagnitudeReportCSV()
 					{
 						outstanding = structMag.totalowed - structMag.payments;
 						if (outstanding < 0) outstanding = 0;
-  						row = structMag.cpid + "," + RoundToString(structMag.ConsensusMagnitude,2) + "," + RoundToString(structMag.Accuracy,0) + "," + RoundToString(structMag.totalowed,2) 
+  						row = structMag.cpid + "," + RoundToString(structMag.ConsensusMagnitude,2) + "," 
+							+ RoundToString(structMag.PaymentMagnitude,0) + "," + RoundToString(structMag.Accuracy,0) + "," + RoundToString(structMag.totalowed,2) 
 							+ "," + RoundToString(structMag.totalowed/14,2)
 							+ "," + RoundToString(structMag.payments,2) + "," + RoundToString(structMag.LastPaymentTime,0) + "," + RoundToString(structMag.owed,2) 
 							+ "," + RoundToString(structMag.owed/2,2)
@@ -1184,10 +1189,10 @@ Array MagnitudeReportCSV()
 				}
 
 		   }
-		   std::string footer = RoundToString(rows,0) + ", , ," + RoundToString(lto,2) + ", ," + RoundToString(totalpaid,2) + ", , , , ," + RoundToString(totaloutstanding,2) + "\n";
+		   std::string footer = RoundToString(rows,0) + ", , , ," + RoundToString(lto,2) + ", ," + RoundToString(totalpaid,2) + ", , , , ," + RoundToString(totaloutstanding,2) + "\n";
 		   header += footer;
 		   Object entry;
-		   entry.push_back(Pair("CSV Complete","\reports\magnitude.csv"));
+		   entry.push_back(Pair("CSV Complete","\\reports\\magnitude.csv"));
 		   results.push_back(entry);
      	   CSVToFile("magnitude.csv",header);
 		   return results;
@@ -1233,6 +1238,16 @@ Value listitem(const Array& params, bool fHelp)
 			double boincmagnitude = CalculatedMagnitude( GetAdjustedTime());
 			entry.push_back(Pair("Magnitude",boincmagnitude));
 			results.push_back(entry);
+	}
+	if (sitem == "nc")
+	{
+		double out_magnitude = 0;
+		int NC = NewbieCompliesWithLocalStakeWeightRule(out_magnitude);
+		Object entry;
+		entry.push_back(Pair("NCWithLocalStakeWeight",NC));
+		entry.push_back(Pair("StakeWeightMagnitude",out_magnitude));
+		results.push_back(entry);
+
 	}
 	if (sitem == "explainmagnitude")
 	{
@@ -1386,13 +1401,13 @@ Value listitem(const Array& params, bool fHelp)
 	if (sitem == "leder")
 	{
 		
-		double subsidy = LederstrumpfMagnitude(450, GetAdjustedTime());
+		double subsidy = LederstrumpfMagnitude2(450, GetAdjustedTime());
 		Object entry;
 		entry.push_back(Pair("Mag Out For 450",subsidy));
 		if (args.length() > 1)
 		{
 			double myrac=cdbl(args,0);
-			subsidy = LederstrumpfMagnitude(myrac, GetAdjustedTime());
+			subsidy = LederstrumpfMagnitude2(myrac, GetAdjustedTime());
 			entry.push_back(Pair("Mag Out",subsidy));
 		}
 		results.push_back(entry);

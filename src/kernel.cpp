@@ -12,6 +12,8 @@
 std::string YesNo(bool bin);
 double GetPoSKernelPS2();
 
+std::string RoundToString(double d, int place);
+
 using namespace std;
 MiningCPID DeserializeBoincBlock(std::string block);
 bool IsCPIDValid(std::string cpid, std::string ENCboincpubkey);
@@ -292,15 +294,15 @@ int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::str
 		if (hashBoinc.length() > 1)
 		{
 			MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
-			if (boincblock.cpid == "" || boincblock.cpid.length() < 6) return 0;  //Block has no CPID
+			if (boincblock.cpid == "" || boincblock.cpid.length() < 6) return 100;  //Block has no CPID
 	   	    if (boincblock.cpid == "INVESTOR") return 1;
 	
 			//CPID <> INVESTOR:
 			if (boincblock.cpid != "INVESTOR") 
 			{
-    			if (boincblock.projectname == "") 	return 0;
-	    		if (boincblock.rac < 100) 			return 0;
-				if (!IsCPIDValid(boincblock.cpid,boincblock.enccpid)) return 0;
+    			if (boincblock.projectname == "") 	return 101;
+	    		if (boincblock.rac < 100) 			return 102;
+				if (!IsCPIDValid(boincblock.cpid,boincblock.enccpid)) return 103;
 				//If we already have a consensus on the node, the cpid does not qualify
 				if (mvMagnitudes.size() > 0)
 				{
@@ -423,11 +425,11 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	int64_t NewbieStakeWeightModifier = 0;
 	//double mint = (blockFrom.vtx[1].GetValueOut())/COIN;
 	int NC = NewbieCompliesWithFirstTimeStakeWeightRule(blockFrom,hashBoinc);
+	msMiningErrors2 = RoundToString(NC,0);
 	int oNC = 0;
 	// If newbie is not boincing, return 0
 	// If newbie is a veteran, return 0
 	// if newbie is an Investor, return 1
-
 	// If newbie is boincing and not in the chain, Uninitialized Newbie, return 2
 	// If newbie solved between 1-5 blocks, return 3
 	// If newbie has reached level1, return 4
@@ -655,7 +657,6 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
 		uint256 diff1 = hashProofOfStake - targetProofOfStake;
 		uint256 diff2 = targetProofOfStake - hashProofOfStake;
         return tx.DoS(1, error("CheckProofOfStake() : INFO: check kernel failed on coinstake %s, hashProof=%s, target=%s, offby1: %s, OffBy2: %s", tx.GetHash().ToString().c_str(), hashProofOfStake.ToString().c_str(), targetProofOfStake.ToString().c_str(), diff1.ToString().c_str(), diff2.ToString().c_str())); // may occur during initial download or if behind on block chain sync
-
 
 	}
 

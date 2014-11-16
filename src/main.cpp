@@ -61,6 +61,7 @@ extern void SetAdvisory();
 extern bool InAdvisory();
 int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude);
 
+json_spirit::Array MagnitudeReportCSV();
 
 bool bNewUserWizardNotified = false;
 
@@ -189,10 +190,8 @@ volatile bool bExecuteCode;
 
 extern void PobSleep(int milliseconds);
 extern bool CheckWorkCPU(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey);
-extern double Lederstrumpf(double RAC, double NetworkRAC);
 
-extern double LederstrumpfMagnitude(double Magnitude, int64_t locktime);
-
+extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
 
 
 extern double cdbl(std::string s, int place);
@@ -282,6 +281,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  double      	mdMiningRAC =0;
  double         mdMiningNetworkRAC = 0;
  std::string    msMiningErrors = "";
+ std::string    msMiningErrors2 = "";
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
  std::string 	msGPUMiningCPID = "";
@@ -529,33 +529,37 @@ double GetPoSKernelPS2()
 std::string GetGlobalStatus()
 {
 	
-
 	try
 	{
-	std::string status = "";
-	double boincmagnitude = CalculatedMagnitude( GetAdjustedTime());
-	uint64_t nWeight = 0;
-	pwalletMain->GetStakeWeight(nWeight);
-	nBoincUtilization = boincmagnitude; //Legacy Support for the about screen
-	double weight = nWeight;
-	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-	std::string boost_version = "";
-	std::ostringstream sBoost;
-	sBoost << boost_version  << "Using Boost "     
-          << BOOST_VERSION / 100000     << "."  // major version
-          << BOOST_VERSION / 100 % 1000 << "."  // minior version
-          << BOOST_VERSION % 100                // patch level
-          << "";
+		std::string status = "";
+		double boincmagnitude = CalculatedMagnitude( GetAdjustedTime());
+		uint64_t nWeight = 0;
+		pwalletMain->GetStakeWeight(nWeight);
+		nBoincUtilization = boincmagnitude; //Legacy Support for the about screen
+		//11-16-2014 : Vlad : Request to make overview page magnitude consistent:
+		double out_magnitude = 0;
+		int NC = NewbieCompliesWithLocalStakeWeightRule(out_magnitude);
+		// End of Boinc Magnitude update
 
-	status = "Blocks: " + RoundToString((double)nBestHeight,0) + "; PoR Difficulty: " + RoundToString(PORDiff,6) + "; Net Weight: " + RoundToString(GetPoSKernelPS2(),6)  
-		+ "<br>Stake Weight: " +  RoundToString(weight,0) + "; Status: " + msMiningErrors 
-		+ "<br>Magnitude: " + RoundToString(boincmagnitude,3) + ";CPU Project: " + msMiningProject
-		+ "<br>" + sBoost.str();
+		double weight = nWeight;
+		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+		std::string boost_version = "";
+		std::ostringstream sBoost;
+		sBoost << boost_version  << "Using Boost "     
+			  << BOOST_VERSION / 100000     << "."  // major version
+			  << BOOST_VERSION / 100 % 1000 << "."  // minior version
+			  << BOOST_VERSION % 100                // patch level
+			  << "";
 
-	//The last line break is for Windows 8.1 Huge Toolbar
+		status = "Blocks: " + RoundToString((double)nBestHeight,0) + "; PoR Difficulty: " + RoundToString(PORDiff,3) + "; Net Weight: " + RoundToString(GetPoSKernelPS2(),2)  
+			+ "<br>Stake Weight: " +  RoundToString(weight,0) + "; Status: " + msMiningErrors + msMiningErrors2
+			+ "<br>Magnitude: " + RoundToString(out_magnitude,3) + ";Project: " + msMiningProject
+			+ "<br>" + sBoost.str();
 
-	msGlobalStatus = status;
-	return status;
+		//The last line break is for Windows 8.1 Huge Toolbar
+
+		msGlobalStatus = status;
+		return status;
 	}
 	catch (std::exception& e)
 	{
@@ -1790,7 +1794,7 @@ double CalculatedMagnitude(int64_t locktime)
 {
 	
 	StructCPID mag = mvCreditNodeCPID[GlobalCPUMiningCPID.cpid];
-	if (GlobalCPUMiningCPID.cpid != "INVESTOR" && mag.Magnitude==0) 
+	if (GlobalCPUMiningCPID.cpid != "INVESTOR" && mag.ConsensusMagnitude==0) 
 	{
 		CreditCheck(GlobalCPUMiningCPID.cpid,false);
 		mag = mvCreditNodeCPID[GlobalCPUMiningCPID.cpid];
@@ -3560,6 +3564,17 @@ bool CBlockIndex::IsSuperMajority(int minVersion, const CBlockIndex* pstart, uns
 }
 
 
+bool KeyEnabled(std::string key)
+{
+	if (mapArgs.count("-" + key))
+	{
+			std::string sBool = GetArg("-" + key, "false");
+			if (sBool == "true") return true;
+	}
+	return false;
+		
+}
+
 void GridcoinServices()
 {
 	//Called once for every block accepted
@@ -3578,6 +3593,15 @@ void GridcoinServices()
 			    TallyInBackground();
 	}
 
+	if (KeyEnabled("exportmagnitude"))
+	{
+		if (TimerMain("export_magnitude",900))
+		{
+			json_spirit::Array results;
+		    results = MagnitudeReportCSV();
+
+		}
+	}
 
 	//Stack Overflow Error (Pallas): calling this every 5 minutes should cause linux to fail- TEST 11-9-2014
 	if (TimerMain("gather_cpids",45))
@@ -4291,21 +4315,31 @@ double Cap(double dAmt, double Ceiling)
 	return dAmt;
 }
 
-
-double GetOutstandingAmountOwed(std::string cpid, int64_t locktime, double& total_owed)
+double coalesce(double mag1, double mag2)
 {
-	
-	StructCPID mag = mvMagnitudes[cpid];
-	if (!mag.initialized)
-	{
-		return 0;
-	}
+	if (mag1 > 0) return mag1;
+	return mag2;
+}
+
+double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude)
+{
+
 	
 	//Gridcoin - 8-10-2014 ; payment range is stored in HighLockTime-LowLockTime
-	StructCPID globalmag = mvMagnitudes["global"];
-	double payment_timespan = (globalmag.HighLockTime-globalmag.LowLockTime)/86400;  //Lock time window in days
-	double research_magnitude = LederstrumpfMagnitude(mag.ConsensusMagnitude,locktime);
+	double payment_timespan = 14;       //Lock time window in days
+	double research_magnitude = LederstrumpfMagnitude2(coalesce(mag.ConsensusMagnitude,block_magnitude),locktime);
 	double owed = payment_timespan * Cap(research_magnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime));
+
+	//Eyes: Debug Area
+	/*
+	double c1 = Cap(research_magnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime));
+	double c2 = research_magnitude*GetMagnitudeMultiplier(locktime);
+	double c3 = GetMaximumBoincSubsidy(locktime);
+	double c4 = GetMagnitudeMultiplier(locktime);
+	printf("CPID: %s, Timespan %f, Multiplier %f, Mag*multiplier %f, only mag*multiplier %f, MaxSubsidy %f \r\n",cpid.c_str(),payment_timespan,c4,c1,c2,c3);
+	// End of Eyes Debug Area
+	*/
+
 	double paid = mag.payments;
 	double outstanding = Cap(owed-paid, GetMaximumBoincSubsidy(locktime));
 
@@ -4362,6 +4396,9 @@ void AddWeightedMagnitude(double LockTime,StructCPID &structMagnitude,double mag
 	structMagnitude.ConsensusMagnitudeCount=structMagnitude.ConsensusMagnitudeCount + weight;
 	structMagnitude.Accuracy++;
 	structMagnitude.ConsensusMagnitude = (structMagnitude.ConsensusTotalMagnitude/(structMagnitude.ConsensusMagnitudeCount+.01));
+	structMagnitude.Magnitude = structMagnitude.ConsensusMagnitude;
+	structMagnitude.PaymentMagnitude = LederstrumpfMagnitude2(structMagnitude.Magnitude,LockTime);
+
 }
 
 void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, double mint, bool IsStake)
@@ -4413,7 +4450,8 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 		if (LockTime < globalMag.LowLockTime)  globalMag.LowLockTime=LockTime;
 		if (LockTime > globalMag.HighLockTime) globalMag.HighLockTime = LockTime;
 		double total_owed = 0;
-		structMagnitude.owed = GetOutstandingAmountOwed(cpid,LockTime,total_owed);
+		mvMagnitudes[cpid] = structMagnitude;
+		structMagnitude.owed = GetOutstandingAmountOwed(structMagnitude,cpid,LockTime,total_owed,bb.Magnitude);
 		structMagnitude.totalowed = total_owed;
 		mvMagnitudes[cpid] = structMagnitude;
 		mvMagnitudes["global"] = globalMag;
@@ -4750,7 +4788,8 @@ string GetWarnings(string strFor)
 				}
 				if (rebootme == "true")
 				{
-						nResult = RebootClient();
+					nResult = RebootClient();
+					printf("Rebooting %u",nResult);
 				}
 			#endif
 	
@@ -5750,7 +5789,7 @@ int TestAESHash(double rac, unsigned int diffbytes, uint256 scrypt_hash, std::st
 }
 
 
-double LederstrumpfMagnitude(double Magnitude, int64_t locktime)
+double LederstrumpfMagnitude_Retired(double Magnitude, int64_t locktime)
 {
    // Establish constants
     double e = 2.718;
@@ -5768,6 +5807,26 @@ double LederstrumpfMagnitude(double Magnitude, int64_t locktime)
 	if (new_magnitude < MagnitudeCap_LowSide) new_magnitude=MagnitudeCap_LowSide;
 	if (new_magnitude > GetMaximumBoincSubsidy(locktime)) new_magnitude=GetMaximumBoincSubsidy(locktime);
 	return new_magnitude;
+}
+
+
+double LederstrumpfMagnitude2(double Magnitude, int64_t locktime)
+{
+	double Mag1 = GetMaximumBoincSubsidy(locktime);
+	double out_mag = Magnitude;
+	if (Magnitude >= Mag1*.90 && Magnitude <= Mag1*1.0) out_mag = Mag1*.90;
+	if (Magnitude >= Mag1*1.0 && Magnitude <= Mag1*1.1) out_mag = Mag1*.91;
+	if (Magnitude >= Mag1*1.1 && Magnitude <= Mag1*1.2) out_mag = Mag1*.92;
+	if (Magnitude >= Mag1*1.2 && Magnitude <= Mag1*1.3) out_mag = Mag1*.93;
+	if (Magnitude >= Mag1*1.3 && Magnitude <= Mag1*1.4) out_mag = Mag1*.94;
+	if (Magnitude >= Mag1*1.4 && Magnitude <= Mag1*1.5) out_mag = Mag1*.95;
+	if (Magnitude >= Mag1*1.5 && Magnitude <= Mag1*1.6) out_mag = Mag1*.96;
+	if (Magnitude >= Mag1*1.6 && Magnitude <= Mag1*1.7) out_mag = Mag1*.97;
+	if (Magnitude >= Mag1*1.7 && Magnitude <= Mag1*1.8) out_mag = Mag1*.98;
+	if (Magnitude >= Mag1*1.8 && Magnitude <= Mag1*1.9) out_mag = Mag1*.99;
+	if (Magnitude > Mag1*2.0) out_mag = Mag1*1.0;
+	return out_mag;
+
 }
 
 
