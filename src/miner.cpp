@@ -562,27 +562,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 		return error("CheckStake()::HashBoinc too small");
 	}
 
-	if (false)
-	{
-		double out_magnitude = 0;
-		int NC  =  NewbieCompliesWithLocalStakeWeightRule(out_magnitude);
-		double mint = (pblock->vtx[1].GetValueOut())/COIN;
-		std::string sMint = RoundToString(mint,4);	
 
-		// Gridcoin - R Halford - For Investors (NC Level 0, or Veterans, Level 0) - Prevent tiny payments
-		if (false && NC == 0)
-		{
-  			if (mint < .50 && LessVerbose(700)) 
-			{
-				return error("CheckStake()::Mint too small");
-			}
-			else if (mint < .20)
-			{
-				return false;
-			}
-		}
-	}
-	//11-14-2014
 	if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc, true))
 	{	
 		printf("original hash boinc %s",pblock->vtx[0].hashBoinc.c_str());

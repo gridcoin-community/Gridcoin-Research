@@ -24,9 +24,11 @@ bool OutOfSyncByAgeWithChanceOfMining();
 std::string SerializeBoincBlock(MiningCPID mcpid);
 double GetPoSKernelPS2();
 
+double coalesce(double mag1, double mag2);
 
 extern int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude);
 
+bool LessVerbose(int iMax1000);
 
 MiningCPID GetNextProject();
 
@@ -1532,22 +1534,22 @@ int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude)
 	out_magnitude = 0;
 	try 
 	{
-	  if (!GlobalCPUMiningCPID.initialized) return 0;
+	  if (!GlobalCPUMiningCPID.initialized) return 100;
 	  if (GlobalCPUMiningCPID.cpid == "INVESTOR") return 1;
 			
 	  //CPID <> INVESTOR:
 	
 	  if (GlobalCPUMiningCPID.cpid != "INVESTOR") 
 	  {
-    		if (GlobalCPUMiningCPID.projectname == "") 	return 0;
-	    	if (GlobalCPUMiningCPID.rac < 100) 			return 0;
+    		if (GlobalCPUMiningCPID.projectname == "") 	return 101;
+	    	if (GlobalCPUMiningCPID.rac < 100) 			return 102;
 		    //If we already have a consensus on the node, the cpid does not qualify
 			if (mvMagnitudes.size() > 0)
 			{
 				StructCPID UntrustedHost = mvMagnitudes[GlobalCPUMiningCPID.cpid]; //Contains Consensus Magnitude
 				if (UntrustedHost.initialized)
 				{
-						out_magnitude = UntrustedHost.Magnitude;
+						out_magnitude = UntrustedHost.ConsensusMagnitude;
 						
 						if (UntrustedHost.Accuracy > MAX_NEWBIE_BLOCKS_LEVEL2) 
 						{	
@@ -1558,11 +1560,16 @@ int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude)
 						if (UntrustedHost.Accuracy > 0 && UntrustedHost.Accuracy < 4) 
 						{
 							//Newbie
+							out_magnitude = coalesce(UntrustedHost.ConsensusMagnitude,GlobalCPUMiningCPID.Magnitude);
+							printf("NL3::mag %f",out_magnitude);
+
 							return 3;
 						}
 						if (UntrustedHost.Accuracy >= 4 && UntrustedHost.Accuracy < MAX_NEWBIE_BLOCKS)
 						{
 							//Newbie Level 1
+							printf("NL4::mag %f",out_magnitude);
+
 							return 4;
 						}
 						if (UntrustedHost.Accuracy >= MAX_NEWBIE_BLOCKS && UntrustedHost.Accuracy < MAX_NEWBIE_BLOCKS_LEVEL2)
@@ -1668,38 +1675,46 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	if (NC == 0)
 	{
 					NewbieStakeWeightModifier = 0;
+					printf("NL0::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
+
 	
 	}
 	else if (NC==1)
 	{
 					NewbieStakeWeightModifier =	0;
+					printf("NL1::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
+
 	
 	}
 	else if (NC == 2)
 	{
-					NewbieStakeWeightModifier =	1000000+(out_magnitude*5000);
+					NewbieStakeWeightModifier =	500000+(out_magnitude*2500);
+					printf("NL2::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
+
 	
 	}
 	else if (NC == 3)
 	{
-					NewbieStakeWeightModifier =	out_magnitude*2500;
+					NewbieStakeWeightModifier =	out_magnitude*1250;
+					printf("NL3::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
+
 	
 	}
 	else if (NC == 4)
 	{
-					NewbieStakeWeightModifier =	out_magnitude*1250;
+					NewbieStakeWeightModifier =	out_magnitude*500;
+					printf("NL4::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
+
 	
 	}
 	else if (NC == 5)
 	{
-					NewbieStakeWeightModifier =	out_magnitude*500;
+					NewbieStakeWeightModifier =	out_magnitude*250;
+					printf("NL5::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
+
 	
 	}
-	else
-	{
-					NewbieStakeWeightModifier =	0;
 	
-	}
 	nWeight += NewbieStakeWeightModifier;
 	
     return true;
@@ -1817,8 +1832,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
                 continue;
         }
 
-			
-
+	
         static int nMaxStakeSearchInterval = 60;
         if (block.GetBlockTime() + nStakeMinAge > txNew.nTime - nMaxStakeSearchInterval)
             continue; // only count coins meeting min age requirement
@@ -1946,16 +1960,43 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
         CTxDB txdb("r");
         if (!txNew.GetCoinAge(txdb, nCoinAge))
             return error("CreateCoinStake : failed to calculate coin age");
-		//9-1-2014 Halford: Use current time since we are creating a new stake
-
+		//Halford: Use current time since we are creating a new stake
         int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,  GetAdjustedTime());
-
-    
 		printf("Creating POS Reward for %s  amt  %"PRId64"  \r\n",GlobalCPUMiningCPID.cpid.c_str(),nReward/COIN);
+	
+		double out_magnitude = 0;
+		int NC  =  NewbieCompliesWithLocalStakeWeightRule(out_magnitude);
+		double mint = nReward/COIN;
+		//11-16-2014			
+		// Gridcoin - R Halford - For Investors (NC Level 0, or Veterans, Level 0) - Prevent tiny payments & Prevent astronomical diff levels
+		// Enforce: Investor (1), Veteran (0), Newbie (4), Newbie (5)
+		// Do not enforce: Uninitialized Newbie (2), or Level 0 Newbie (3)
+		// BOINC MINERS:
+		if (NC == 0 || NC == 4 || NC == 5)
+		{
+  			if (mint < 3 && LessVerbose(800)) 
+			{
+				printf("CreateBlock::Boinc Miners Mint too small");
+				return false; 
+			}
+		}
+		else if (NC == 1)
+		{
+			//INVESTORS
+			if (mint < .50 && LessVerbose(800)) 
+			{
+				printf("CreateBlock::Investors Mint is too small");
+				return false; 
+			}
 
-        //if (nReward/COIN <= .25)       return false;
+		}
 
-        nCredit += nReward;
+		if (mint == 0)
+		{
+			printf("CreateBlock():Mint is zero");
+			return false;   
+		}
+	    nCredit += nReward;
     }
 
     // Set output amount

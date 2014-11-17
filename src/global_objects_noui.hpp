@@ -133,8 +133,9 @@ struct MiningEntry {
 		double longtermtotalowed;
 		double longtermowed;
 		double LastPaymentTime;
+		double EarliestPaymentTime;
 		double NewbieLevel;
-		
+		double PaymentTimespan;
 	};
 
 

@@ -56,6 +56,8 @@ unsigned int CHECKPOINT_VIOLATIONS = 0;
 int64_t nLastTallied = 0;
 int64_t nCPIDsLoaded = 0;
 
+extern double coalesce(double mag1, double mag2);
+
 
 extern void SetAdvisory();
 extern bool InAdvisory();
@@ -94,9 +96,9 @@ extern  double GetGridcoinBalance(std::string SendersGRCAddress);
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 
 extern bool IsLockTimeVeryRecent(double locktime);
+extern bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 
-extern bool IsLockTimeWithinTwoHours(double locktime);
-
+extern bool IsLockTimeWithinMinutes(double locktime, int minutes);
 
 
 double GetNetworkProjectCountWithRAC();
@@ -536,7 +538,7 @@ std::string GetGlobalStatus()
 		uint64_t nWeight = 0;
 		pwalletMain->GetStakeWeight(nWeight);
 		nBoincUtilization = boincmagnitude; //Legacy Support for the about screen
-		//11-16-2014 : Vlad : Request to make overview page magnitude consistent:
+		//Vlad : Request to make overview page magnitude consistent:
 		double out_magnitude = 0;
 		int NC = NewbieCompliesWithLocalStakeWeightRule(out_magnitude);
 		// End of Boinc Magnitude update
@@ -1919,8 +1921,8 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 				owed = owed/2;
 			}
 
-			//Halford - Ensure researcher was not paid in the last 2 hours:
-			if (IsLockTimeWithinTwoHours(mag.LastPaymentTime))
+			//Halford - Ensure researcher was not paid in the last 4 hours:
+			if (IsLockTimeWithinMinutes(mag.LastPaymentTime,240))
 			{
 				owed = 0;
 			}
@@ -4325,8 +4327,15 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
 {
 
 	
-	//Gridcoin - 8-10-2014 ; payment range is stored in HighLockTime-LowLockTime
-	double payment_timespan = 14;       //Lock time window in days
+	//Gridcoin - payment range is stored in HighLockTime-LowLockTime
+	// If newbie has not participated for 14 days, use earliest payment in chain to assess payment window
+	// (Important to prevent e-mail change attacks) - Calculate payment timespan window in days
+
+	double payment_timespan = (GetAdjustedTime() - mag.EarliestPaymentTime)/86400;
+	if (payment_timespan < 1) payment_timespan = 1;
+	if (payment_timespan > 14) payment_timespan = 14;
+	mag.PaymentTimespan = payment_timespan;
+
 	double research_magnitude = LederstrumpfMagnitude2(coalesce(mag.ConsensusMagnitude,block_magnitude),locktime);
 	double owed = payment_timespan * Cap(research_magnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime));
 
@@ -4353,20 +4362,22 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
 
 bool IsLockTimeRecent(double locktime)
 {
+	//Within 14 days
 	double nCutoff =  GetAdjustedTime() - (60*60*24*14);
 	if (locktime < nCutoff) return false;
 	return true;
 }
 
-bool IsLockTimeWithinTwoHours(double locktime)
+bool IsLockTimeWithinMinutes(double locktime, int minutes)
 {
-	double nCutoff =  GetAdjustedTime() - (60*60*2);
+	double nCutoff =  GetAdjustedTime() - (60*minutes);
 	if (locktime < nCutoff) return false;
 	return true;
 }
 
 bool IsLockTimeVeryRecent(double locktime)
 {
+	//Within 24 minutes
 	double nCutoff =  GetAdjustedTime() - (60*60*.4);
 	if (locktime < nCutoff) return false;
 	return true;
@@ -4425,6 +4436,8 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 								structMagnitude.TotalMagnitude=0;
 								structMagnitude.ConsensusMagnitudeCount=0;
 								structMagnitude.ConsensusMagnitude=0;
+								structMagnitude.LastPaymentTime = 0;
+								structMagnitude.EarliestPaymentTime = 99999999999;
 								mvMagnitudes.insert(map<string,StructCPID>::value_type(cpid,structMagnitude));
 								
 		}
@@ -4437,6 +4450,7 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 		{
 			structMagnitude.payments = structMagnitude.payments + mint;
 			if (LockTime > structMagnitude.LastPaymentTime) structMagnitude.LastPaymentTime = LockTime;
+			if (LockTime < structMagnitude.EarliestPaymentTime) structMagnitude.EarliestPaymentTime = LockTime;
 		}
 		structMagnitude.cpid = cpid;
 		//Since this function can be called more than once per block (once for the solver, once for the voucher), the avg changes here:

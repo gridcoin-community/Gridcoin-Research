@@ -1114,7 +1114,7 @@ Array MagnitudeReport(bool bMine)
 									entry.push_back(Pair("CPID",structMag.cpid));
 									entry.push_back(Pair("Magnitude",structMag.ConsensusMagnitude));
 									entry.push_back(Pair("Payment Magnitude",structMag.PaymentMagnitude));
-					
+									entry.push_back(Pair("Payment Timespan (Days)",structMag.PaymentTimespan));
 									entry.push_back(Pair("Magnitude Accuracy",structMag.Accuracy));
 									entry.push_back(Pair("Long Term Owed (14 day projection)",structMag.totalowed));
 									entry.push_back(Pair("Long Term Daily Owed (1 day projection)",structMag.totalowed/14));
