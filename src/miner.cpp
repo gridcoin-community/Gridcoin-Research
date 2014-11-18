@@ -573,8 +573,8 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 
     double subsidy = (pblock->vtx[0].GetValueOut())/COIN;
 	std::string sSubsidy = RoundToString(subsidy,4);
-
-	if (subsidy < 1 && LessVerbose(500))
+	//Halford::ToDo: Refine this - This helps limit minting small blocks
+	if (subsidy < 2 && LessVerbose(500))
 	{
 		printf("Block Rejected - Subsidy too small.\r\n");
 		return false;
