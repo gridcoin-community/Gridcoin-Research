@@ -61,7 +61,7 @@ extern double coalesce(double mag1, double mag2);
 
 extern void SetAdvisory();
 extern bool InAdvisory();
-int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude);
+int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& out_owed);
 
 json_spirit::Array MagnitudeReportCSV();
 
@@ -540,7 +540,8 @@ std::string GetGlobalStatus()
 		nBoincUtilization = boincmagnitude; //Legacy Support for the about screen
 		//Vlad : Request to make overview page magnitude consistent:
 		double out_magnitude = 0;
-		int NC = NewbieCompliesWithLocalStakeWeightRule(out_magnitude);
+		double out_owed = 0;
+		int NC = NewbieCompliesWithLocalStakeWeightRule(out_magnitude,out_owed);
 		// End of Boinc Magnitude update
 
 		double weight = nWeight;
@@ -777,8 +778,8 @@ MiningCPID GetNextProject()
 								printf("For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
 								msMiningErrors = "Boinc Mining";
 								double out_magnitude = 0;
-	
-								GlobalCPUMiningCPID.NewbieLevel = NewbieCompliesWithLocalStakeWeightRule(out_magnitude);
+								double out_owed = 0;
+								GlobalCPUMiningCPID.NewbieLevel = NewbieCompliesWithLocalStakeWeightRule(out_magnitude,out_owed);
 
 								return GlobalCPUMiningCPID;
 							}
@@ -811,8 +812,8 @@ MiningCPID GetNextProject()
 		GlobalCPUMiningCPID.Magnitude = 0;
         GlobalCPUMiningCPID.clientversion = "";
 		double out_magnitude2 = 0;
-	
-		GlobalCPUMiningCPID.NewbieLevel = NewbieCompliesWithLocalStakeWeightRule(out_magnitude2);
+	    double out_owed2 = 0;
+		GlobalCPUMiningCPID.NewbieLevel = NewbieCompliesWithLocalStakeWeightRule(out_magnitude2,out_owed2);
 		mdMiningNetworkRAC = 0;
 	  	}
 		catch (std::exception& e)

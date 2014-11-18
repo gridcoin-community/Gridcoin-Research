@@ -1678,10 +1678,6 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	double NewbieStakeWeightModifier = 0;
 
 	//11-17-2014 - Halford - Pre-assess reward level
-	StructCPID UntrustedHost = mvCreditNodeCPID[cpid]; //Contains Mag across entire CPID
-	double magnitude_consensus = UntrustedHost.ConsensusMagnitude;
-
-	
 
 	if (NC == 0)
 	{
@@ -1692,7 +1688,6 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	else if (NC==1)
 	{
 					NewbieStakeWeightModifier =	0;
-			//		printf("NL1::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
 	
 	}
 	else if (NC == 2)

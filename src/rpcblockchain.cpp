@@ -30,7 +30,8 @@ int RebootClient();
 extern double GetNetworkProjectCountWithRAC();
 int ReindexWallet();
 extern Array MagnitudeReportCSV();
-int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude);
+int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& out_owed);
+
 
 
 void stopWireFrameRenderer();
@@ -1242,10 +1243,12 @@ Value listitem(const Array& params, bool fHelp)
 	if (sitem == "nc")
 	{
 		double out_magnitude = 0;
-		int NC = NewbieCompliesWithLocalStakeWeightRule(out_magnitude);
+		double out_owed = 0;
+		int NC = NewbieCompliesWithLocalStakeWeightRule(out_magnitude,out_owed);
 		Object entry;
 		entry.push_back(Pair("NCWithLocalStakeWeight",NC));
 		entry.push_back(Pair("StakeWeightMagnitude",out_magnitude));
+		entry.push_back(Pair("Owed",out_owed));
 		results.push_back(entry);
 
 	}
