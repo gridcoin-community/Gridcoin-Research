@@ -23,7 +23,9 @@ void ThreadCleanWalletPassphrase(void* parg);
 
 void ThreadTopUpKeyPool(void* parg);
 
-int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude);
+int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& owed);
+
+
 
 std::string RoundToString(double d, int place);
 
@@ -569,12 +571,21 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
         return error("CheckStake() : proof-of-stake checking failed");
 	}
 
-    //// debug print
-	double mint2 = (pblock->vtx[1].GetValueOut())/COIN;
-	std::string sMint2 = RoundToString(mint2,4);	
+    double subsidy = (pblock->vtx[0].GetValueOut())/COIN;
+	std::string sSubsidy = RoundToString(subsidy,4);
 
-    printf("CheckStake() : new proof-of-stake block found  - Amount %s, \r\n hash: %s \nproofhash: %s  \ntarget: %s\n",
-		sMint2.c_str(), hashBlock.GetHex().c_str(), proofHash.GetHex().c_str(), hashTarget.GetHex().c_str());
+	if (subsidy < 1 && LessVerbose(500))
+	{
+		printf("Block Rejected - Subsidy too small.\r\n");
+		return false;
+	}
+
+    //// debug print
+	double block_value = (pblock->vtx[1].GetValueOut())/COIN;
+	std::string sBlockValue = RoundToString(block_value,4);	
+
+    printf("CheckStake() : new proof-of-stake block found - Subsidy %s, BlockValue %s, \r\n hash: %s \nproofhash: %s  \ntarget: %s\n",
+		sSubsidy.c_str(), sBlockValue.c_str(), hashBlock.GetHex().c_str(), proofHash.GetHex().c_str(), hashTarget.GetHex().c_str());
 	if (fDebug)     pblock->print();
     printf("out %s\n", FormatMoney(pblock->vtx[1].GetValueOut()).c_str());
 

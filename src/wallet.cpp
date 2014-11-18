@@ -26,7 +26,8 @@ double GetPoSKernelPS2();
 
 double coalesce(double mag1, double mag2);
 
-extern int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude);
+extern int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& owed);
+
 
 bool LessVerbose(int iMax1000);
 
@@ -1521,7 +1522,7 @@ bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx&
 }
 
 
-int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude)
+int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& owed)
 {
 	// If newbie is not boincing, return 0
 	// If newbie is a veteran, return 0
@@ -1547,6 +1548,8 @@ int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude)
 			if (mvMagnitudes.size() > 0)
 			{
 				StructCPID UntrustedHost = mvMagnitudes[GlobalCPUMiningCPID.cpid]; //Contains Consensus Magnitude
+				owed = UntrustedHost.owed;
+
 				if (UntrustedHost.initialized)
 				{
 						out_magnitude = UntrustedHost.ConsensusMagnitude;
@@ -1662,7 +1665,8 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	//WEIGHT SECTION 1: When a new CPID enters the ecosystem, and is seen on less than 9 blocks, this newbie
 	//receives an extra X in stakeweight to help them get started.
 	double out_magnitude = 0;
-	int NC = NewbieCompliesWithLocalStakeWeightRule(out_magnitude);
+	double out_owed = 0;
+	int NC = NewbieCompliesWithLocalStakeWeightRule(out_magnitude,out_owed);
 	// If newbie is not boincing, return 0
 	// If newbie is a veteran,    return 0
 	// if newbie is an Investor,  return 1
@@ -1672,47 +1676,50 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	// If newbie has reached level2,        return 5
 	int64_t NetworkWeight = GetPoSKernelPS2();
 	double NewbieStakeWeightModifier = 0;
+
+	//11-17-2014 - Halford - Pre-assess reward level
+	StructCPID UntrustedHost = mvCreditNodeCPID[cpid]; //Contains Mag across entire CPID
+	double magnitude_consensus = UntrustedHost.ConsensusMagnitude;
+
+	
+
 	if (NC == 0)
 	{
 					NewbieStakeWeightModifier = 0;
 					printf("NL0::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
-
 	
 	}
 	else if (NC==1)
 	{
 					NewbieStakeWeightModifier =	0;
-					printf("NL1::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
-
+			//		printf("NL1::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
 	
 	}
 	else if (NC == 2)
 	{
 					NewbieStakeWeightModifier =	500000+(out_magnitude*2500);
 					printf("NL2::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
-
+					//Uninitialized Newbie
 	
 	}
-	else if (NC == 3)
+	else if (NC == 3 && out_owed > 25)
 	{
 					NewbieStakeWeightModifier =	out_magnitude*1250;
 					printf("NL3::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
-
-	
+					//1 - 5 blocks
 	}
-	else if (NC == 4)
+	else if (NC == 4 && out_owed > 50)
 	{
 					NewbieStakeWeightModifier =	out_magnitude*500;
 					printf("NL4::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
 
 	
 	}
-	else if (NC == 5)
+	else if (NC == 5 && out_owed > 100)
 	{
 					NewbieStakeWeightModifier =	out_magnitude*250;
 					printf("NL5::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
 
-	
 	}
 	
 	nWeight += NewbieStakeWeightModifier;
@@ -1965,7 +1972,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		printf("Creating POS Reward for %s  amt  %"PRId64"  \r\n",GlobalCPUMiningCPID.cpid.c_str(),nReward/COIN);
 	
 		double out_magnitude = 0;
-		int NC  =  NewbieCompliesWithLocalStakeWeightRule(out_magnitude);
+		double out_owed = 0;
+		int NC  =  NewbieCompliesWithLocalStakeWeightRule(out_magnitude,out_owed);
 		double mint = nReward/COIN;
 		//11-16-2014			
 		// Gridcoin - R Halford - For Investors (NC Level 0, or Veterans, Level 0) - Prevent tiny payments & Prevent astronomical diff levels
