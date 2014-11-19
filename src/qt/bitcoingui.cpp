@@ -87,6 +87,7 @@ extern int RebootClient();
 void TallyInBackground();
 
 double cdbl(std::string s, int place);
+std::string getfilecontents(std::string filename);
 
 
 std::string BackupGridcoinWallet();
@@ -98,6 +99,7 @@ int nRegVersion;
 int nNeedsUpgrade = 0;
 double GetPoBDifficulty();
 
+std::string GetBoincDataDir2();
 extern int CreateRestorePoint();
 extern int DownloadBlocks();
 
@@ -1106,6 +1108,21 @@ void BitcoinGUI::NewUserWizard()
 {
 	if (!IsConfigFileEmpty()) return;
 	    QString boincemail = "";
+		//Typhoon- Check to see if boinc exists in default path - 11-19-2014
+
+		std::string sourcefile = GetBoincDataDir2() + "client_state.xml";
+		std::string sout = "";
+		sout = getfilecontents(sourcefile);
+		bool BoincInstalled = true;
+		std::string sBoincNarr = "";
+		if (sout == "-1") 
+		{
+			printf("Boinc not installed in default location! \r\n");
+			BoincInstalled=false;
+			std::string nicePath = GetBoincDataDir2();
+			sBoincNarr = "Boinc is not installed in default location " + nicePath + "!  Please set boincdatadir=c:\\programdata\\boinc\\    to the correct path where Boincs programdata directory resides.";
+		}
+
 		bool ok;
 		boincemail = QInputDialog::getText(this, tr("New User Wizard"),
                                           tr("Please enter your boinc E-mail address, or click <Cancel> to skip for now:"),
@@ -1119,6 +1136,7 @@ void BitcoinGUI::NewUserWizard()
 			CreateNewConfigFile(new_email);
  		    QString strMessage = tr("Created new Configuration File Successfully. ");
 			QMessageBox::warning(this, tr("New Account Created - Welcome Aboard!"), strMessage);
+
 			//Load CPIDs:
 			HarvestCPIDs(true);
  		}
@@ -1127,6 +1145,13 @@ void BitcoinGUI::NewUserWizard()
 		    QString strMessage = tr("To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. ");
 			QMessageBox::warning(this, tr("New User Wizard - Skipped"), strMessage);
 		}
+		
+		if (sBoincNarr != "")
+		{
+				QString qsMessage = tr(sBoincNarr.c_str());
+				QMessageBox::warning(this, tr("Attention! - Boinc Path Error!"), qsMessage);
+		}
+
 
 }
 

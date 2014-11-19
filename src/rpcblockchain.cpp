@@ -31,6 +31,7 @@ extern double GetNetworkProjectCountWithRAC();
 int ReindexWallet();
 extern Array MagnitudeReportCSV();
 int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& out_owed);
+std::string getfilecontents(std::string filename);
 
 
 
@@ -59,6 +60,7 @@ extern double GetPoBDifficulty();
 bool IsCPIDValid(std::string cpid, std::string ENCboincpubkey);
 std::string RetrieveMd5(std::string s1);
 std::string getfilecontents(std::string filename);
+
 MiningCPID DeserializeBoincBlock(std::string block);
 void StopGridcoin3();
 std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string urlPage, bool bUseDNS);

@@ -76,6 +76,8 @@ std::string BackupGridcoinWallet();
 
 extern double GetPoSKernelPS2();
 extern void TallyInBackground();
+extern std::string GetBoincDataDir2();
+
 
 
 extern std::string RetrieveCPID5(std::string email,std::string bpk,uint256 blockhash);
@@ -1908,8 +1910,8 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 		// Coarse Payment Rule (helps prevent sync problems):
 		if (!VerifyingBlock)
 		{
-			//If owed less than 10% of max subsidy, assess at 0:
-			if (owed < (GetMaximumBoincSubsidy(GetAdjustedTime())/10)) owed = 0;
+			//If owed less than 15% of max subsidy, assess at 0:
+			if (owed < (GetMaximumBoincSubsidy(GetAdjustedTime())/15)) owed = 0;
 
 			//Coarse payment rule:
 			if (mag.totalowed > (GetMaximumBoincSubsidy(GetAdjustedTime())*2))
@@ -4334,7 +4336,7 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
 
 	double payment_timespan = (GetAdjustedTime() - mag.EarliestPaymentTime)/86400;
 	if (payment_timespan < 1) payment_timespan = 1;
-	if (payment_timespan > 14) payment_timespan = 14;
+	if (payment_timespan > 10) payment_timespan = 14;
 	mag.PaymentTimespan = payment_timespan;
 
 	double research_magnitude = LederstrumpfMagnitude2(coalesce(mag.ConsensusMagnitude,block_magnitude),locktime);
@@ -6437,7 +6439,6 @@ std::string GetBoincDataDir2()
 	/*       Default setting: boincdatadir=c:\\programdata\\boinc\\   */
 
 
-
     if (mapArgs.count("-boincdatadir")) 
 	{
         path = mapArgs["-boincdatadir"];
@@ -6557,6 +6558,11 @@ try
 						GlobalCPUMiningCPID.cpidhash = cpidhash;
 						GlobalCPUMiningCPID.email = email;
 						GlobalCPUMiningCPID.boincruntimepublickey = cpidhash;
+						//Halford (Store the verified rec time to help RSA assess accurate backpayments)
+						//GlobalCPUMiningCPID.verifiedrectime = structcpid.verifiedrectime;
+						//GlobalCPUMiningCPID.rectime = structcpid.rectime;
+
+						
 				}
 				structcpid.projectname = proj;
 				structcpid.utc = cdbl(utc,0);

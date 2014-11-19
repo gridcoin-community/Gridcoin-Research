@@ -1564,15 +1564,13 @@ int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& owed)
 						{
 							//Newbie
 							out_magnitude = coalesce(UntrustedHost.ConsensusMagnitude,GlobalCPUMiningCPID.Magnitude);
-							//printf("NL3::mag %f",out_magnitude);
-
+						
 							return 3;
 						}
 						if (UntrustedHost.Accuracy >= 4 && UntrustedHost.Accuracy < MAX_NEWBIE_BLOCKS)
 						{
 							//Newbie Level 1
-							//printf("NL4::mag %f",out_magnitude);
-
+						
 							return 4;
 						}
 						if (UntrustedHost.Accuracy >= MAX_NEWBIE_BLOCKS && UntrustedHost.Accuracy < MAX_NEWBIE_BLOCKS_LEVEL2)
@@ -1682,7 +1680,6 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	if (NC == 0)
 	{
 					NewbieStakeWeightModifier = 0;
-					//printf("NL0::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
 	
 	}
 	else if (NC==1)
@@ -1692,28 +1689,28 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	}
 	else if (NC == 2)
 	{
-					NewbieStakeWeightModifier =	500000+(out_magnitude*2500);
+					NewbieStakeWeightModifier =	300000+(out_magnitude*500);
 					printf("NL2::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
 					//Uninitialized Newbie
 	
 	}
-	else if (NC == 3 && out_owed > 100)
+	else if (NC == 3 && out_owed > 250)
 	{
-					NewbieStakeWeightModifier =	out_magnitude*500;
+					NewbieStakeWeightModifier =	out_magnitude*200;
 					printf("NL3::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
 					//1 - 5 blocks
 	}
-	else if (NC == 4 && out_owed > 250)
+	else if (NC == 4 && out_owed > 500)
 	{
-					NewbieStakeWeightModifier =	out_magnitude*250;
-					printf("NL4::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
+					NewbieStakeWeightModifier =	out_magnitude*100;
+				//	printf("NL4::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
 
 	
 	}
-	else if (NC == 5 && out_owed > 400)
+	else if (NC == 5 && out_owed > 1000)
 	{
-					NewbieStakeWeightModifier =	out_magnitude*125;
-					printf("NL5::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
+					NewbieStakeWeightModifier =	out_magnitude*50;
+					//printf("NL5::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
 
 	}
 	
@@ -1970,14 +1967,13 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		double out_owed = 0;
 		int NC  =  NewbieCompliesWithLocalStakeWeightRule(out_magnitude,out_owed);
 		double mint = nReward/COIN;
-		//11-16-2014			
 		// Gridcoin - R Halford - For Investors (NC Level 0, or Veterans, Level 0) - Prevent tiny payments & Prevent astronomical diff levels
 		// Enforce: Investor (1), Veteran (0), Newbie (4), Newbie (5)
 		// Do not enforce: Uninitialized Newbie (2), or Level 0 Newbie (3)
 		// BOINC MINERS:
 		if (NC == 0 || NC == 4 || NC == 5)
 		{
-  			if (mint < 10 && LessVerbose(800)) 
+  			if (mint < 25 && LessVerbose(800)) 
 			{
 				printf("CreateBlock::Boinc Miners Mint too small");
 				return false; 
@@ -1986,7 +1982,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		else if (NC == 1)
 		{
 			//INVESTORS
-			if (mint < 1 && LessVerbose(800)) 
+			if (mint < 2 && LessVerbose(800)) 
 			{
 				printf("CreateBlock::Investors Mint is too small");
 				return false; 
