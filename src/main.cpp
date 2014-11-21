@@ -66,7 +66,7 @@ int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& out_ow
 json_spirit::Array MagnitudeReportCSV();
 
 bool bNewUserWizardNotified = false;
-int64_t nLastBlockSolved = 9416577671;  //Future timestamp
+int64_t nLastBlockSolved = 0;  //Future timestamp
 
 bool IsUserQualifiedToSendCheckpoint();
 

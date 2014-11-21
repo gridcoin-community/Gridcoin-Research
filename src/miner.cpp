@@ -785,7 +785,12 @@ Begin:
 			goto Begin;
 		}
 
-		if (IsLockTimeWithinMinutes(nLastBlockSolved,5)) goto Begin;
+		if (IsLockTimeWithinMinutes(nLastBlockSolved,5)) 
+		{
+				printf("=");
+				MilliSleep(1000);
+				goto Begin;
+		}
 
         // Trying to sign a block
         if (pblock->SignBlock(*pwallet, nFees))
