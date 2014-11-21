@@ -108,6 +108,24 @@ public:
 
             // Determine whether to show transaction or not
             bool showTransaction = (inWallet && TransactionRecord::showTransaction(mi->second));
+			//11-20-2014 - Remove the Orphan Mined Generated and not Accepted TX
+
+			if (showTransaction)
+            {
+                    QList<TransactionRecord> qlDummy = TransactionRecord::decomposeTransaction(wallet, mi->second);
+    	 	  	    if(!qlDummy.isEmpty()) 
+					{
+						    foreach(const TransactionRecord &trDummy, qlDummy)
+							{
+                     				if (trDummy.status.status == TransactionStatus::NotAccepted)
+									{
+										showTransaction = false;
+									}
+							}
+					 }
+			}
+             
+
 
             if(status == CT_UPDATED)
             {
@@ -276,6 +294,9 @@ int TransactionTableModel::columnCount(const QModelIndex &parent) const
 QString TransactionTableModel::formatTxStatus(const TransactionRecord *wtx) const
 {
     QString status;
+
+	// case TransactionStatus::NotAccepted:
+       
 
     switch(wtx->status.status)
     {

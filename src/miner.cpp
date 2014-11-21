@@ -8,6 +8,7 @@
 #include "miner.h"
 #include "kernel.h"
 #include "cpid.h"
+#include <boost/lexical_cast.hpp>
 
 using namespace std;
 
@@ -549,6 +550,38 @@ bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
     return true;
 }
 
+
+double Round_Legacy(double d, int place)
+{
+    std::ostringstream ss;
+    ss << std::fixed << std::setprecision(place) << d ;
+	double r = boost::lexical_cast<double>(ss.str());
+	return r;
+}
+
+	
+int SecondFromGRCAddress()
+{
+	std::string sAddress = DefaultWalletAddress();
+	//GRC Classic: Convert a public GRC address to its corresponding payment hour
+	if (sAddress.length() == 0) return 0;
+	char ch = *sAddress.rbegin();
+	char ch2=tolower(ch);
+	int asc = ch2; //Ascii value 0-9 = 48-57, a-z = 97 - 122
+	if (asc > 96) asc=asc-39;	
+	int lookup = asc-47;	
+	double hour = Round_Legacy(lookup/1.5,0);  //convert to 24 hour format, hour now equals 1-24
+	if (hour > 24) hour=24;
+	if (hour < 1) hour = 1;
+	int clockhour = hour-1; //Return 0-23 (Military Clock hours)
+	int sec = clockhour * 2.5;
+	if (sec < 0) sec = 0;
+	if (sec > 59) sec = 59;
+	return sec;
+}
+
+
+
 bool CheckStake(CBlock* pblock, CWallet& wallet)
 {
     uint256 proofHash = 0, hashTarget = 0;
@@ -573,8 +606,8 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 
     double subsidy = (pblock->vtx[0].GetValueOut())/COIN;
 	std::string sSubsidy = RoundToString(subsidy,4);
-	//Halford::ToDo: Refine this - This helps limit minting small blocks
-	if (subsidy < 6 && LessVerbose(700))
+	//Halford::ToDo: Refine this - This helps limit minting small blocks (mint < ?)
+	if (subsidy < 15 && LessVerbose(900))
 	{
 		printf("Block Rejected - Subsidy too small.\r\n");
 		return false;
@@ -583,6 +616,24 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
     //// debug print
 	double block_value = (pblock->vtx[1].GetValueOut())/COIN;
 	std::string sBlockValue = RoundToString(block_value,4);	
+	//Submit the block during the public key address second
+	int wallet_second = SecondFromGRCAddress();
+	printf("Submitting block %d for %s",wallet_second,sBlockValue.c_str());
+	// Create a raw time_t variable and a tm structure  
+    time_t rawtime;  
+	struct tm * timeinfo;  
+	time ( &rawtime );  
+	for (int i = 0; i < 590; i++)
+	{
+		timeinfo = localtime(&rawtime);  
+	    //	timeinfo = GetAdjustedTime()(&rawtime);
+		//	int cur_hour = timeinfo->tm_hour;  
+		//	int cur_min = timeinfo->tm_min;  
+		int cur_sec = timeinfo->tm_sec;
+		if (wallet_second == cur_sec) break;
+		MilliSleep(100);
+		printf("$");
+	}
 
     printf("CheckStake() : new proof-of-stake block found - Subsidy %s, BlockValue %s, \r\n hash: %s \nproofhash: %s  \ntarget: %s\n",
 		sSubsidy.c_str(), sBlockValue.c_str(), hashBlock.GetHex().c_str(), proofHash.GetHex().c_str(), hashTarget.GetHex().c_str());
