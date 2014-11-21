@@ -66,8 +66,7 @@ int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& out_ow
 json_spirit::Array MagnitudeReportCSV();
 
 bool bNewUserWizardNotified = false;
-
-
+int64_t nLastBlockSolved = 9416577671;  //Future timestamp
 
 bool IsUserQualifiedToSendCheckpoint();
 
@@ -98,6 +97,7 @@ extern  double GetGridcoinBalance(std::string SendersGRCAddress);
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 
 extern bool IsLockTimeVeryRecent(double locktime);
+
 extern bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 
 extern bool IsLockTimeWithinMinutes(double locktime, int minutes);
@@ -2383,48 +2383,38 @@ bool LessVerbose(int iMax1000)
 	 if (iVerbosityLevel < iMax1000) return true;
 	 return false;
 }
+
+
+bool KeyEnabled(std::string key)
+{
+	if (mapArgs.count("-" + key))
+	{
+			std::string sBool = GetArg("-" + key, "false");
+			if (sBool == "true") return true;
+	}
+	return false;
+		
+}
+
+
 bool OutOfSyncByAgeWithChanceOfMining()
 {
 	try
 	{
-			int64_t	nTime =  GetAdjustedTime();
-			if (nTime < 1419648379)
-			{
-				return false;
-			}
-
-
+		    //11-21-2014 R Halford - Refactor - Reported by Pallas
+		    if (KeyEnabled("overrideoutofsyncrule")) return false;
 			bool oosbyage = OutOfSyncByAge();
-			//Rule 1: If  Last Block Out of sync by Age:
-			if (oosbyage)
+			//Rule 1: If  Last Block Out of sync by Age - Return Out of Sync 95% of the time:
+			if (oosbyage) if (LessVerbose(950)) return true;
+			// Rule 2 : Dont mine on Fork Rule:
+	     	//If the diff is < .00015 in Prod, Most likely the client is mining on a fork: (Make it exceedingly hard):
+			double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+			if (!fTestNet && PORDiff < .00015)
 			{
-				//Return Out of Sync most of the time
-				bool com = LessVerbose(15);
-				if (!com) 
-				{
-					printf("{XZ1}");
-					return true; //Return Out OF Sync most of the time
-				}
-	
+				printf("Most likely you are mining on a fork! Diff %f",PORDiff);
+				if (LessVerbose(950)) return true;
 			}
-			//////////////////////////////////////////////////////////
-
-		// Rule 2 : Dont mine on Fork Rule:
-		//10-31-2014 - R Halford
-		//If the diff is < .01 in Prod, Most likely the client is mining on a fork: (Make it exceedingly hard):
-		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-		//printf("OOS_With_Diff %f",PORDiff);
-	
-        //If nTime > 10-31-2014 13:00 CST 
-		if (!fTestNet && PORDiff < .0002 && nTime > 1415228997)
-		{
-			printf("Most likely you are mining on a fork! Diff %f",PORDiff);
-			bool com = LessVerbose(100);
-			if (!com) return true;  //Return Out Of Sync Most of the time in this case
-
-		}
-		
-		return false;
+			return false;
 	}
 	catch (std::exception &e) 
 	{
@@ -3568,17 +3558,6 @@ bool CBlockIndex::IsSuperMajority(int minVersion, const CBlockIndex* pstart, uns
     return (nFound >= nRequired);
 }
 
-
-bool KeyEnabled(std::string key)
-{
-	if (mapArgs.count("-" + key))
-	{
-			std::string sBool = GetArg("-" + key, "false");
-			if (sBool == "true") return true;
-	}
-	return false;
-		
-}
 
 void GridcoinServices()
 {

@@ -9,12 +9,26 @@ std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype,
 std::string RoundToString(double d, int place);
 double DoubleFromAmount(int64_t amount);
 
+bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 
 
 /* Return positive answer if transaction should be shown in list.
  */
 bool TransactionRecord::showTransaction(const CWalletTx &wtx)
 {
+	//11-21-2014 R Halford - Discard Orphans after Y mins:
+	if (wtx.IsCoinStake())
+	{
+		if (!wtx.IsInMainChain())
+		{
+			//Orphaned tx
+			if (!IsLockTimeWithinMinutes(wtx.nTimeReceived,240))
+			{
+				return false; //Remove it
+			}
+		}
+    }
+
     if (wtx.IsCoinBase())
     {
         // Ensures we show generated coins / mined transactions at depth 1

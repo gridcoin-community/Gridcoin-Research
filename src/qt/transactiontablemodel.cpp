@@ -112,6 +112,7 @@ public:
 
 			if (showTransaction)
             {
+				/*
                     QList<TransactionRecord> qlDummy = TransactionRecord::decomposeTransaction(wallet, mi->second);
     	 	  	    if(!qlDummy.isEmpty()) 
 					{
@@ -123,6 +124,7 @@ public:
 									}
 							}
 					 }
+					 */
 			}
              
 

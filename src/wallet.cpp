@@ -1691,7 +1691,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	}
 	else if (NC == 2)
 	{
-					NewbieStakeWeightModifier =	250000+(out_magnitude*MaxReward);
+					NewbieStakeWeightModifier =	300000+(out_magnitude*MaxReward);
 					//printf("NL2::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
 					//Uninitialized Newbie
 	
@@ -1702,14 +1702,14 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 					printf("NL3::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
 					//1 - 5 blocks
 	}
-	else if (NC == 4 && out_owed > (MaxReward*2))
+	else if (NC == 4 && out_owed > (MaxReward*1.5))
 	{
-					NewbieStakeWeightModifier =	out_magnitude*(MaxReward/10);
+					NewbieStakeWeightModifier =	out_magnitude*(MaxReward/3);
 		
 	}
-	else if (NC == 5 && out_owed > (MaxReward*3))
+	else if (NC == 5 && out_owed > (MaxReward*2))
 	{
-					NewbieStakeWeightModifier =	out_magnitude*(MaxReward/20);
+					NewbieStakeWeightModifier =	out_magnitude*(MaxReward/4);
 	}
 	
 	nWeight += NewbieStakeWeightModifier;

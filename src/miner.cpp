@@ -26,6 +26,7 @@ void ThreadTopUpKeyPool(void* parg);
 
 int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& owed);
 
+bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 
 
 std::string RoundToString(double d, int place);
@@ -607,7 +608,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
     double subsidy = (pblock->vtx[0].GetValueOut())/COIN;
 	std::string sSubsidy = RoundToString(subsidy,4);
 	//Halford::ToDo: Refine this - This helps limit minting small blocks (mint < ?)
-	if (subsidy < 15 && LessVerbose(900))
+	if (subsidy < 7 && LessVerbose(850))
 	{
 		printf("Block Rejected - Subsidy too small.\r\n");
 		return false;
@@ -617,8 +618,10 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	double block_value = (pblock->vtx[1].GetValueOut())/COIN;
 	std::string sBlockValue = RoundToString(block_value,4);	
 	//Submit the block during the public key address second
-	int wallet_second = SecondFromGRCAddress();
+	int wallet_second = 0;
 	printf("Submitting block %d for %s",wallet_second,sBlockValue.c_str());
+
+	/*
 	// Create a raw time_t variable and a tm structure  
     time_t rawtime;  
 	struct tm * timeinfo;  
@@ -626,14 +629,12 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	for (int i = 0; i < 590; i++)
 	{
 		timeinfo = localtime(&rawtime);  
-	    //	timeinfo = GetAdjustedTime()(&rawtime);
-		//	int cur_hour = timeinfo->tm_hour;  
-		//	int cur_min = timeinfo->tm_min;  
-		int cur_sec = timeinfo->tm_sec;
+	    int cur_sec = timeinfo->tm_sec;
 		if (wallet_second == cur_sec) break;
 		MilliSleep(100);
-		printf("$");
 	}
+	*/
+
 
     printf("CheckStake() : new proof-of-stake block found - Subsidy %s, BlockValue %s, \r\n hash: %s \nproofhash: %s  \ntarget: %s\n",
 		sSubsidy.c_str(), sBlockValue.c_str(), hashBlock.GetHex().c_str(), proofHash.GetHex().c_str(), hashTarget.GetHex().c_str());
@@ -656,8 +657,11 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
         if (!ProcessBlock(NULL, pblock))
             return error("CheckStake() : ProcessBlock, block not accepted");
     }
-
+	nLastBlockSolved = GetAdjustedTime();
+	
     return true;
+
+
 }
 
 
@@ -759,7 +763,7 @@ void StakeMiner(CWallet *pwallet)
             }
         }
 Begin:
-
+		MilliSleep(500);
         //
         // Create new block
         //
@@ -768,10 +772,20 @@ Begin:
         if (!pblock.get())
 		{
 			//This can happen after reharvesting CPIDs... Because CreateNewBlock() requires a valid CPID..  Start Over.
-			MilliSleep(1000);
 			printf("a1.");
+			MilliSleep(1000);
 			goto Begin;
 		}
+
+		//11-21-2014 Verify we are still on the main chain
+   	    if (pblock->hashPrevBlock != hashBestChain)
+		{
+    		printf ("StakeMiner() : generated block is stale");
+			MilliSleep(1000);
+			goto Begin;
+		}
+
+		if (IsLockTimeWithinMinutes(nLastBlockSolved,5)) goto Begin;
 
         // Trying to sign a block
         if (pblock->SignBlock(*pwallet, nFees))
@@ -783,8 +797,7 @@ Begin:
 				printf("Stake block accepted!\r\n");
 				//Prevent Rapid Fire block creation (large investor nodes):
 		  	    SetThreadPriority(THREAD_PRIORITY_LOWEST);
-        		MilliSleep(300000);  //Preventing sync problems
-
+        		MilliSleep(275000);  //Preventing sync problems
 			}
             SetThreadPriority(THREAD_PRIORITY_LOWEST);
             MilliSleep(500);
