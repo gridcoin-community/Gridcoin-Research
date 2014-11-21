@@ -80,7 +80,7 @@ font-family:'Open Sans,sans-serif';</string>
           <item>
            <widget class="QLabel" name="labelTransactionsStatus">
             <property name="toolTip">
-             <string>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</string>
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; color:#ffffff;&quot;&gt;The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
             </property>
             <property name="styleSheet">
              <string notr="true">QLabel { color: red; }</string>
@@ -213,7 +213,7 @@ font-family:'Open Sans,sans-serif';</string>
           <item>
            <widget class="QLabel" name="labelWalletStatus">
             <property name="toolTip">
-             <string>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</string>
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; color:#ffffff;&quot;&gt;The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
             </property>
             <property name="styleSheet">
              <string notr="true">QLabel { color: red; }</string>
@@ -270,7 +270,7 @@ font-family:'Open Sans,sans-serif';</string>
              <cursorShape>IBeamCursor</cursorShape>
             </property>
             <property name="toolTip">
-             <string>Your current balance</string>
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; color:#ffffff;&quot;&gt;Your current balance.&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
             </property>
             <property name="text">
              <string notr="true">0 GRC</string>
@@ -298,7 +298,7 @@ font-family:'Open Sans,sans-serif';</string>
              <cursorShape>IBeamCursor</cursorShape>
             </property>
             <property name="toolTip">
-             <string>Total of coins that was staked, and do not yet count toward the current balance</string>
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; color:#ffffff;&quot;&gt;Total number of coins that are staking, and do not yet count toward the current balance&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
             </property>
             <property name="text">
              <string notr="true">0 GRC</string>
@@ -326,7 +326,7 @@ font-family:'Open Sans,sans-serif';</string>
              <cursorShape>IBeamCursor</cursorShape>
             </property>
             <property name="toolTip">
-             <string>Total of transactions that have yet to be confirmed, and do not yet count toward the current balance</string>
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; color:#ffffff;&quot;&gt;Total of transactions that have yet to be confirmed, and do not yet count toward the current balance&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
             </property>
             <property name="text">
              <string notr="true">0 GRC</string>
@@ -351,7 +351,7 @@ font-family:'Open Sans,sans-serif';</string>
              </font>
             </property>
             <property name="toolTip">
-             <string>Mined balance that has not yet matured</string>
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; color:#ffffff;&quot;&gt;Total mined coins that have not yet matured&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
             </property>
             <property name="text">
              <string notr="true">0 GRC</string>
@@ -390,7 +390,7 @@ font-family:'Open Sans,sans-serif';</string>
           <item row="5" column="1">
            <widget class="QLabel" name="labelTotal">
             <property name="toolTip">
-             <string>Total number of transactions in wallet</string>
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; color:#ffffff;&quot;&gt;Total number of Gridcoins in wallet&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
             </property>
             <property name="text">
              <string notr="true">0</string>
@@ -407,7 +407,7 @@ font-family:'Open Sans,sans-serif';</string>
           <item row="6" column="1">
            <widget class="QLabel" name="labelNumTransactions">
             <property name="toolTip">
-             <string>Total number of transactions in wallet</string>
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; color:#ffffff;&quot;&gt;Total number of transactions in wallet&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
             </property>
             <property name="text">
              <string notr="true">0</string>
