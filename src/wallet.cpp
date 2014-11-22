@@ -27,6 +27,8 @@ double GetPoSKernelPS2();
 double coalesce(double mag1, double mag2);
 
 extern int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& owed);
+extern std::string NewbieLevelToString(int newbie_level);
+
 
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 
@@ -1524,6 +1526,20 @@ bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx&
 }
 
 
+
+std::string NewbieLevelToString(int newbie_level)
+{
+	if (newbie_level==1) return "INVESTOR";
+	if (newbie_level==100 || newbie_level==101 || newbie_level==102) return "BOINC_ERROR";
+	if (newbie_level==0) return "VETERAN";
+	if (newbie_level==3) return "NEWBIE_1";
+	if (newbie_level==4) return "NEWBIE_2";
+	if (newbie_level==5) return "NEWBIE_3";
+	if (newbie_level==2) return "NEWBIE_0"; //UNINITIALIZED NEWBIE
+	return "NOT_DEFINED";
+}
+
+
 int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& owed)
 {
 	// If newbie is not boincing, return 0
@@ -1990,7 +2006,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 		if (mint == 0)
 		{
-			printf("CreateBlock():Mint is zero");
+			//printf("CreateBlock():Mint is zero");
 			return false;   
 		}
 	    nCredit += nReward;

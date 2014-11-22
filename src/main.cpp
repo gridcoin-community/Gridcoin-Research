@@ -57,6 +57,8 @@ int64_t nLastTallied = 0;
 int64_t nCPIDsLoaded = 0;
 
 extern double coalesce(double mag1, double mag2);
+extern bool AmIGeneratingBackToBackBlocks();
+
 
 
 extern void SetAdvisory();
@@ -2345,10 +2347,10 @@ double PreviousBlockAge()
 {
 	try 
 	{
-	if (nBestHeight < 30) return 99999;
-    double nTime = max(pindexBest->GetMedianTimePast()+1, GetAdjustedTime());
-	double nActualTimespan = nTime - pindexBest->pprev->GetBlockTime();
-	return nActualTimespan;
+		if (nBestHeight < 30) return 99999;
+		double nTime = max(pindexBest->GetMedianTimePast()+1, GetAdjustedTime());
+		double nActualTimespan = nTime - pindexBest->pprev->GetBlockTime();
+		return nActualTimespan;
 	}
 	catch (std::exception &e) 
 	{
@@ -2401,7 +2403,7 @@ bool OutOfSyncByAgeWithChanceOfMining()
 {
 	try
 	{
-		    //11-21-2014 R Halford - Refactor - Reported by Pallas
+		    //R Halford - Refactor - Reported by Pallas
 		    if (KeyEnabled("overrideoutofsyncrule")) return false;
 			bool oosbyage = OutOfSyncByAge();
 			//Rule 1: If  Last Block Out of sync by Age - Return Out of Sync 95% of the time:
@@ -2409,7 +2411,7 @@ bool OutOfSyncByAgeWithChanceOfMining()
 			// Rule 2 : Dont mine on Fork Rule:
 	     	//If the diff is < .00015 in Prod, Most likely the client is mining on a fork: (Make it exceedingly hard):
 			double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-			if (!fTestNet && PORDiff < .00015)
+			if (!fTestNet && PORDiff < .00010)
 			{
 				printf("Most likely you are mining on a fork! Diff %f",PORDiff);
 				if (LessVerbose(950)) return true;
@@ -3247,17 +3249,8 @@ bool Resuscitate()
 	CBlockIndex* pblockindex = FindBlockByHeight(ii);
 	block.ReadFromDisk(pblockindex);
 	pindexBest = pblockindex;
-
-	 InvalidChainFound(pindexBest);
-			
-
-//    const CBlockLocator locator(pindexBest);
-//	::SetBestChain(locator);
-    // Notify UI to display prev block's coinbase if it was ours
-//    static uint256 hashPrevBestCoinBase;
- //   UpdatedTransaction(hashPrevBestCoinBase);
-  //  hashPrevBestCoinBase = block.vtx[0].GetHash();
-    uiInterface.NotifyBlocksChanged();
+	InvalidChainFound(pindexBest);
+	uiInterface.NotifyBlocksChanged();
     return true;
 }
 
@@ -4857,6 +4850,28 @@ bool static AlreadyHave(CTxDB& txdb, const CInv& inv)
 
 
 
+std::string GetLastBlockGRCAddress()
+{
+	// const CBlockIndex* pindexPrev = GetLastBlockIndex(pindexLast, fProofOfStake);
+    CBlock block;
+    const CBlockIndex* pindexPrev = GetLastBlockIndex(pindexBest, true);
+	block.ReadFromDisk(pindexPrev);
+	std::string hashboinc = "";
+	if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
+	MiningCPID bb = DeserializeBoincBlock(hashboinc);
+	return bb.GRCAddress;
+}
+
+bool AmIGeneratingBackToBackBlocks()
+{
+	std::string wallet1 = GetLastBlockGRCAddress();
+	std::string mywallet = DefaultWalletAddress();
+	if (wallet1.length() > 3 && mywallet.length() > 3)
+	{
+			if (wallet1==mywallet) return true;
+	}
+	return false;
+}
 
 // The message start string is designed to be unlikely to occur in normal data.
 // The characters are rarely used upper ASCII, not valid as UTF-8, and produce
@@ -5842,6 +5857,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 {
 	std::string delim = "<|>";
 	std::string version = FormatFullVersion();
+	mcpid.GRCAddress = DefaultWalletAddress();
 	std::string bb = mcpid.cpid + delim + mcpid.projectname + delim + mcpid.aesskein + delim + RoundToString(mcpid.rac,0)
 					+ delim + RoundToString(mcpid.pobdifficulty,5) + delim + RoundToString((double)mcpid.diffbytes,0) 
 					+ delim + mcpid.enccpid 
@@ -5850,8 +5866,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 					+ delim + RoundToString(mcpid.NewbieLevel,0) 
 					+ delim + mcpid.cpidv2
 					+ delim + RoundToString(mcpid.Magnitude,0)
-					+ delim + RoundToString(mcpid.rac,0);
-
+					+ delim + mcpid.GRCAddress;
 
 	return bb;
 }
@@ -5899,6 +5914,7 @@ MiningCPID DeserializeBoincBlock(std::string block)
 	surrogate.boincruntimepublickey = "";
 	surrogate.clientversion = "";
 	surrogate.NewbieLevel=0;
+	surrogate.GRCAddress = "";
 
 	std::vector<std::string> s = split(block,"<|>");
 	if (s.size() > 7)
@@ -5944,7 +5960,7 @@ MiningCPID DeserializeBoincBlock(std::string block)
 		}
 		if (s.size() > 16)
 		{
-			//surrogate.verifiedrac = cdbl(s[16],0);
+			surrogate.GRCAddress = s[16];
 		}
 		
 	}
@@ -6130,7 +6146,7 @@ void AddProjectFromNetSoft(StructCPID& netsoft)
 	std::string cpid_non = GlobalCPUMiningCPID.cpidhash+email;
 			
 
-	if (cpid != GlobalCPUMiningCPID.cpid) 
+	if (cpid != GlobalCPUMiningCPID.cpid && GlobalCPUMiningCPID.cpid.length() > 3) 
 	{
 		//Dont add it
 		return;

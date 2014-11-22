@@ -7,7 +7,6 @@ A:\Gridcoin-Research\contrib\Installer\GridcoinSQL\GridcoinSQL\bin\Debug\Gridcoi
 A:\Gridcoin-Research\contrib\Installer\GridcoinSQL\GridcoinSQL\bin\Debug\GridcoinSQL.pdb
 A:\Gridcoin-Research\contrib\Installer\GridcoinSQL\GridcoinSQL\bin\Debug\GridcoinSQL.xml
 A:\Gridcoin-Research\contrib\Installer\GridcoinSQL\GridcoinSQL\bin\Debug\Newtonsoft.Json.dll
-A:\Gridcoin-Research\contrib\Installer\GridcoinSQL\GridcoinSQL\bin\Debug\OpenCL.Net.dll
 A:\Gridcoin-Research\contrib\Installer\GridcoinSQL\GridcoinSQL\obj\x86\Debug\GridcoinSQL.exe
 A:\Gridcoin-Research\contrib\Installer\GridcoinSQL\GridcoinSQL\obj\x86\Debug\GridcoinSQL.xml
 A:\Gridcoin-Research\contrib\Installer\GridcoinSQL\GridcoinSQL\obj\x86\Debug\GridcoinSQL.pdb

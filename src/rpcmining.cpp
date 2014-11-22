@@ -229,8 +229,16 @@ Value getworkex(const Array& params, bool fHelp)
             CDataStream(coinbase, SER_NETWORK, PROTOCOL_VERSION) >> pblock->vtx[0]; // FIXME - HACK!
 
         pblock->hashMerkleRoot = pblock->BuildMerkleTree();
-
-        return CheckWork(pblock, *pwalletMain, reservekey);
+		if (CheckWork(pblock, *pwalletMain, reservekey))
+		{
+				MilliSleep(275000);  //Preventing sync problems
+				return true;
+		}
+		else
+		{
+				printf("generated Block Is Stale");
+				return false;
+		}
     }
 }
 
@@ -346,7 +354,11 @@ Value getwork(const Array& params, bool fHelp)
         pblock->vtx[0].vin[0].scriptSig = mapNewBlock[pdata->hashMerkleRoot].second;
         pblock->hashMerkleRoot = pblock->BuildMerkleTree();
 		bool response = CheckWork(pblock, *pwalletMain, reservekey);
-		if (response) msMiningErrors = "POW Block Mined";
+		if (response) 
+		{
+				msMiningErrors = "POW Block Mined";
+				MilliSleep(200000);  //Preventing sync problems
+		}
 		return response;
     }
 }

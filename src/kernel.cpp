@@ -651,7 +651,25 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
     CBlock block;
     if (!block.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
         return fDebug? error("CheckProofOfStake() : read block failed") : false; // unable to read block of previous transaction
-
+	//Verify solver did not solve back to back blocks:
+	MiningCPID NewStakeBlock = DeserializeBoincBlock(hashBoinc);
+	int nGrandfather = 55000;
+	if (NewStakeBlock.GRCAddress.length() > 3  && pindexPrev->nHeight > nGrandfather)
+	{
+		CBlock prior_block;
+		if (!prior_block.ReadFromDisk(pindexPrev))    return error("CheckProofOfStake() : read Prior block failed!");
+		
+		//11-21-2014
+		if (prior_block.vtx.size() > 0)
+		{
+			MiningCPID PriorStakeBlock = DeserializeBoincBlock(prior_block.vtx[0].hashBoinc);
+			if (PriorStakeBlock.GRCAddress == NewStakeBlock.GRCAddress)
+			{
+				return error("CheckProofOfStake() : Back To Back GRC Address found on two blocks in a row.  Rejected!\r\n");
+			}
+		}
+	
+	}
     if (!CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, txPrev, txin.prevout, tx.nTime, hashProofOfStake, targetProofOfStake, hashBoinc, fDebug, checking_local))
 	{
 		uint256 diff1 = hashProofOfStake - targetProofOfStake;

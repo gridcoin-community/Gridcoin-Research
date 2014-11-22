@@ -33,7 +33,7 @@ extern Array MagnitudeReportCSV();
 int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& out_owed);
 std::string getfilecontents(std::string filename);
 
-
+std::string NewbieLevelToString(int newbie_level);
 
 void stopWireFrameRenderer();
 void startWireFrameRenderer();
@@ -412,8 +412,8 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("NetworkRAC", bb.NetworkRAC));
 	result.push_back(Pair("Magnitude", bb.Magnitude));
 	result.push_back(Pair("BoincHash",block.vtx[0].hashBoinc));
-	result.push_back(Pair("NewbieLevel",bb.NewbieLevel));
-
+	result.push_back(Pair("NewbieLevel",NewbieLevelToString(bb.NewbieLevel)));
+	result.push_back(Pair("GRCAddress",bb.GRCAddress));
 	std::string skein2 = aes_complex_hash(blockhash);
 	//uint256 boincpowhash = block.hashMerkleRoot + bb.nonce;
 	//int iav  = TestAESHash(bb.rac, (unsigned int)bb.diffbytes, boincpowhash, bb.aesskein);
@@ -1522,7 +1522,7 @@ Value listitem(const Array& params, bool fHelp)
 	        if (structcpid.initialized) 
 			{ 
 			
-				if (structcpid.cpid == GlobalCPUMiningCPID.cpid || structcpid.cpid=="INVESTOR" || structcpid.cpid=="investor")
+				if ((GlobalCPUMiningCPID.cpid.length() > 3 && structcpid.cpid == GlobalCPUMiningCPID.cpid) || structcpid.cpid=="INVESTOR" || GlobalCPUMiningCPID.cpid=="INVESTOR" || GlobalCPUMiningCPID.cpid.length()==0)
 				{
 					Object entry;
 	

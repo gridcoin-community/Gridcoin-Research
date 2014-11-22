@@ -7,11 +7,13 @@ Imports System.IO
 Imports System.Data
 Imports System.Object
 Imports System.Security.Cryptography
+Imports System.Data.SqlClient
 
 
 Imports System.Net
 
 Public Class Form1
+    Dim oSql As New SQLBase
 
   
     Public night As Boolean
@@ -75,17 +77,43 @@ Public Class Form1
     End Sub
 
     Private Sub Button1_Click(sender As System.Object, e As System.EventArgs) Handles Button1.Click
-        Dim oSql As New Sql
         Dim sql As String
-        sql = "Select * from system"
-        Dim gr As New GridcoinReader 'Row is 1 based
 
-        gr = oSql.GetGridcoinReader(sql)
+
+
+
+        sql = "Select * from grid1"
+        'Dim gr As New SqlDataReader
+        Dim dt As New DataTable
+
+
+        dt = oSql.GetDataTable(sql)
+
+
+        Dim ws As New WebServer
+
+        Dim sData As String
+        sData = oSql.TableToData("node")
+        oSql.DataToFile(sData, "node.txt")
+
+        'Add test records
+        oSql.InsertRecord("Confirm", "GRCFrom,GRCTo,txid,amount,Confirmed", "'a','b','123','100','0'")
 
 
         Stop
 
 
+
+    End Sub
+
+    Private Sub Button2_Click_1(sender As System.Object, e As System.EventArgs) Handles Button2.Click
+        
+        oSql.DropBaseTables() : End
+
+    End Sub
+
+    Private Sub Button3_Click(sender As System.Object, e As System.EventArgs) Handles Button3.Click
+        oSql.StartConsensusRound()
 
     End Sub
 End Class

@@ -16,13 +16,13 @@ bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
  */
 bool TransactionRecord::showTransaction(const CWalletTx &wtx)
 {
-	//11-21-2014 R Halford - Discard Orphans after Y mins:
+	//R Halford - Discard Orphans after Y mins:
 	if (wtx.IsCoinStake())
 	{
 		if (!wtx.IsInMainChain())
 		{
 			//Orphaned tx
-			if (!IsLockTimeWithinMinutes(wtx.nTimeReceived,240))
+			if (!IsLockTimeWithinMinutes(wtx.nTimeReceived,60))
 			{
 				return false; //Remove it
 			}
