@@ -5296,13 +5296,14 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 		else if (CHECKPOINT_DISTRIBUTED_MODE == 2)
 		{
 			// R HALFORD: One of our global GRC nodes solved a PoR block, store the last blockhash in memory
-			printf("Received Global Checkpoint: GRC Address %s, Last Block Hash %s",checkpoint.SendingWalletAddress.c_str(), checkpoint.hashCheckpoint.GetHex().c_str());
-			muGlobalCheckpointHash = checkpoint.hashCheckpoint;
+			printf("Received Global Checkpoint: GRC Address %s, Last Block Hash %s",
+				checkpoint.SendingWalletAddress.c_str(), checkpoint.hashCheckpointGlobal.GetHex().c_str());
+			muGlobalCheckpointHash = checkpoint.hashCheckpointGlobal;
 			muGlobalCheckpointHashCounter=0;
 			// Relay
-			pfrom->hashCheckpointKnown = checkpoint.hashCheckpoint;
+			pfrom->hashCheckpointKnown = checkpoint.hashCheckpointGlobal;
 			//Prevent broadcast storm: If not broadcast yet, relay the checkpoint globally:
-			if (muGlobalCheckpointHashRelayed != checkpoint.hashCheckpoint)
+			if (muGlobalCheckpointHashRelayed != checkpoint.hashCheckpointGlobal && checkpoint.hashCheckpointGlobal != 0)
 			{
 				LOCK(cs_vNodes);
 				BOOST_FOREACH(CNode* pnode, vNodes)

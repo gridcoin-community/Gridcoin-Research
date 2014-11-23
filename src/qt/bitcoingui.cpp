@@ -1837,8 +1837,7 @@ void BitcoinGUI::timerfire()
 												QString qsblock = QString::fromUtf8(RetrieveBlocksAsString(iSqlBlock).c_str());
 												globalcom->dynamicCall("SetSqlBlock(Qstring)",qsblock);
 	    										//Set Public Wallet Address
-     											//QString pwa = QString::fromUtf8(DefaultWalletAddress().c_str());
-												//globalcom->dynamicCall("SetPublicWalletAddress(QString)",pwa);
+     											//globalcom->dynamicCall("SetPublicWalletAddress(QString)",pwa);
 	    										//Set Best Block
 	    										globalcom->dynamicCall("SetBestBlock(int)", nBestHeight);
 												#endif

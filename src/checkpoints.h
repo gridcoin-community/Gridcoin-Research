@@ -59,7 +59,7 @@ namespace Checkpoints
     bool SetCheckpointPrivKey(std::string strPrivKey);
     bool SendSyncCheckpoint(uint256 hashCheckpoint);
 	bool SendSyncCheckpointWithBalance(uint256 hashCheckpoint, double nBalance, std::string SendingWalletAddress);
-    bool SendSyncHashCheckpoint(uint256 hashCheckpoint, std::string SendingWalletAddress);
+    bool SendSyncHashCheckpoint(uint256 hash1, std::string SendingWalletAddress);
     
     bool IsMatureSyncCheckpoint();
 }
@@ -73,6 +73,7 @@ public:
     double balance;
 	std::string SendingWalletAddress;
 	std::string SendersWalletAddress;
+	uint256 hashCheckpointGlobal;
 
     IMPLEMENT_SERIALIZE
     (
@@ -81,6 +82,7 @@ public:
         READWRITE(hashCheckpoint);
 		READWRITE(balance);
 		READWRITE(SendingWalletAddress);
+		READWRITE(hashCheckpointGlobal);
     )
 
     void SetNull()
@@ -126,6 +128,7 @@ public:
         READWRITE(vchSig);
 		READWRITE(balance);
 		READWRITE(SendingWalletAddress);
+		READWRITE(hashCheckpointGlobal);
     )
 
     void SetNull()
