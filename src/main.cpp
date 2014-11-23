@@ -3744,7 +3744,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock)
 	else if (CHECKPOINT_DISTRIBUTED_MODE==2)
 	{
 		//11-23-2014: If we are in decentralized individual hash checkpoint mode - send a hash checkpoint
-		printf("Broadcasting hash Checkpoint for amount %f \r\n",mint);
+		printf("Broadcasting hash Checkpoint for block %s \r\n",pblock->hashPrevBlock.GetHex().c_str());
 		if (pfrom)
 		{
 			Checkpoints::SendSyncHashCheckpoint(pblock->hashPrevBlock,SendingWalletAddress);
@@ -5277,11 +5277,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         CSyncCheckpoint checkpoint;
         vRecv >> checkpoint;
 		//Checkpoint received from node with more than 1 Million GRC:
-		if (LessVerbose(100))
-		{
-			printf("Received checkpoint: Node balance %f, GRC Address %s",checkpoint.balance,checkpoint.SendingWalletAddress.c_str());
-		}
-
+		
 		if (CHECKPOINT_DISTRIBUTED_MODE==0 || CHECKPOINT_DISTRIBUTED_MODE==1)
 		{
 			if (checkpoint.ProcessSyncCheckpoint(pfrom))
@@ -5296,8 +5292,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 		else if (CHECKPOINT_DISTRIBUTED_MODE == 2)
 		{
 			// R HALFORD: One of our global GRC nodes solved a PoR block, store the last blockhash in memory
-			printf("Received Global Checkpoint: GRC Address %s, Last Block Hash %s",
-				checkpoint.SendingWalletAddress.c_str(), checkpoint.hashCheckpointGlobal.GetHex().c_str());
 			muGlobalCheckpointHash = checkpoint.hashCheckpointGlobal;
 			muGlobalCheckpointHashCounter=0;
 			// Relay
@@ -5309,6 +5303,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 				BOOST_FOREACH(CNode* pnode, vNodes)
 				{
 					checkpoint.RelayTo(pnode);
+				}
+				if (LessVerbose(50))
+				{
+						printf("RX-GlobCk:LBH %s\r\n",	checkpoint.SendingWalletAddress.c_str(), checkpoint.hashCheckpointGlobal.GetHex().c_str());
 				}
 			}
 		}
