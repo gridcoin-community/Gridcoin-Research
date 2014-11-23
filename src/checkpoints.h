@@ -59,8 +59,8 @@ namespace Checkpoints
     bool SetCheckpointPrivKey(std::string strPrivKey);
     bool SendSyncCheckpoint(uint256 hashCheckpoint);
 	bool SendSyncCheckpointWithBalance(uint256 hashCheckpoint, double nBalance, std::string SendingWalletAddress);
-
-
+    bool SendSyncHashCheckpoint(uint256 hashCheckpoint, std::string SendingWalletAddress);
+    
     bool IsMatureSyncCheckpoint();
 }
 

@@ -69,7 +69,11 @@ json_spirit::Array MagnitudeReportCSV();
 
 bool bNewUserWizardNotified = false;
 int64_t nLastBlockSolved = 0;  //Future timestamp
+uint256 muGlobalCheckpointHash = 0;
+uint256 muGlobalCheckpointHashRelayed = 0;
+int muGlobalCheckpointHashCounter = 0;
 
+			
 bool IsUserQualifiedToSendCheckpoint();
 
 std::string BackupGridcoinWallet();
@@ -558,7 +562,8 @@ std::string GetGlobalStatus()
 			  << BOOST_VERSION % 100                // patch level
 			  << "";
 
-		status = "Blocks: " + RoundToString((double)nBestHeight,0) + "; PoR Difficulty: " + RoundToString(PORDiff,3) + "; Net Weight: " + RoundToString(GetPoSKernelPS2(),2)  
+		status = "Blocks: " + RoundToString((double)nBestHeight,0) + "; PoR Difficulty: " 
+			+ RoundToString(PORDiff,3) + "; Net Weight: " + RoundToString(GetPoSKernelPS2(),2)  
 			+ "<br>Stake Weight: " +  RoundToString(weight,0) + "; Status: " + msMiningErrors + msMiningErrors2
 			+ "<br>Magnitude: " + RoundToString(out_magnitude,3) + ";Project: " + msMiningProject
 			+ "<br>" + sBoost.str();
@@ -3735,9 +3740,19 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock)
 		{
 			Checkpoints::SendSyncCheckpointWithBalance(Checkpoints::AutoSelectSyncCheckpoint(),nBalance,SendingWalletAddress);
 		}
+	}
+	else if (CHECKPOINT_DISTRIBUTED_MODE==2)
+	{
+		//11-23-2014: If we are in decentralized individual hash checkpoint mode - send a hash checkpoint
+		printf("Broadcasting hash Checkpoint for amount %f \r\n",mint);
+		if (pfrom)
+		{
+			Checkpoints::SendSyncHashCheckpoint(pblock->hashPrevBlock,SendingWalletAddress);
+		}
 
 	}
 	
+
 	//Gridcoin - R Halford - 11-2-2014 - Initiative to move critical processes from Timer to main:
 	GridcoinServices();
 
@@ -5258,7 +5273,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
     else if (strCommand == "checkpoint")
     {
-		//10-26-2014 - Receive Checkpoint from other nodes:
+		//11-23-2014 - Receive Checkpoint from other nodes:
         CSyncCheckpoint checkpoint;
         vRecv >> checkpoint;
 		//Checkpoint received from node with more than 1 Million GRC:
@@ -5267,14 +5282,35 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 			printf("Received checkpoint: Node balance %f, GRC Address %s",checkpoint.balance,checkpoint.SendingWalletAddress.c_str());
 		}
 
-        if (checkpoint.ProcessSyncCheckpoint(pfrom))
-        {
-            // Relay
-            pfrom->hashCheckpointKnown = checkpoint.hashCheckpoint;
-            LOCK(cs_vNodes);
-            BOOST_FOREACH(CNode* pnode, vNodes)
-                checkpoint.RelayTo(pnode);
-        }
+		if (CHECKPOINT_DISTRIBUTED_MODE==0 || CHECKPOINT_DISTRIBUTED_MODE==1)
+		{
+			if (checkpoint.ProcessSyncCheckpoint(pfrom))
+			{
+				// Relay
+				pfrom->hashCheckpointKnown = checkpoint.hashCheckpoint;
+				LOCK(cs_vNodes);
+				BOOST_FOREACH(CNode* pnode, vNodes)
+					checkpoint.RelayTo(pnode);
+			}
+		}
+		else if (CHECKPOINT_DISTRIBUTED_MODE == 2)
+		{
+			// R HALFORD: One of our global GRC nodes solved a PoR block, store the last blockhash in memory
+			printf("Received Global Checkpoint: GRC Address %s, Last Block Hash %s",checkpoint.SendingWalletAddress.c_str(), checkpoint.hashCheckpoint.GetHex().c_str());
+			muGlobalCheckpointHash = checkpoint.hashCheckpoint;
+			muGlobalCheckpointHashCounter=0;
+			// Relay
+			pfrom->hashCheckpointKnown = checkpoint.hashCheckpoint;
+			//Prevent broadcast storm: If not broadcast yet, relay the checkpoint globally:
+			if (muGlobalCheckpointHashRelayed != checkpoint.hashCheckpoint)
+			{
+				LOCK(cs_vNodes);
+				BOOST_FOREACH(CNode* pnode, vNodes)
+				{
+					checkpoint.RelayTo(pnode);
+				}
+			}
+		}
     }
 
     else if (strCommand == "getheaders")

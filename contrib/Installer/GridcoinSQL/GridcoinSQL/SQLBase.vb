@@ -11,9 +11,8 @@ Imports System.Security.Cryptography
 
 Public Module SqlBasePublicVar
     Public db As SQLBase
-    Public sql As String = ""
     Public dr As SqlDataReader
-    Public x As Long
+    
     Public str As String
     Public sOut As String
     Public cr As String = vbCrLf
@@ -24,12 +23,17 @@ Public Module SqlBasePublicVar
 End Module
 
 Public Class SQLBase
+    Public x As Long = 0
+    Public sql As String = ""
 
-    Public sSQLConn = "Server=" + AppSettings("DatabaseHost").ToString() + ";" & _
-                   "Database=" + AppSettings("DatabaseName").ToString() + ";MultipleActiveResultSets=true;" & _
-                   "Uid=" + AppSettings("DatabaseUser") + "; pwd=" + AppSettings("DatabasePass")
+    Public sSQLConn As String
+    Dim dtConsensusStartDate As Date
+    Dim dtConsensusEndDate As Date
+
+
 
     Private bIsDisposed As Boolean = False
+
     Public Sub OpenNewConnection()
         If SqlConnection Is Nothing Then
             SqlConnection = New SqlConnection(sSQLConn)
@@ -52,11 +56,21 @@ Public Class SQLBase
 
     End Sub
     Public Sub New()
+        sSQLConn = "Server=" + AppSettings("DatabaseHost").ToString() + ";" & _
+                   "Database=" + AppSettings("DatabaseName").ToString() + ";MultipleActiveResultSets=true;" & _
+                   "Uid=" + AppSettings("DatabaseUser") + ";pwd=" + AppSettings("DatabasePass")
         OpenNewConnection()
         'Add base tables
         AddBaseTables()
+    End Sub
 
-
+    Public Sub New(sDBServer As String)
+        sSQLConn = "Server=" + AppSettings("DatabaseHost").ToString() + ";" & _
+                   "Database=" + sDBServer + ";MultipleActiveResultSets=true;" & _
+                   "Uid=" + AppSettings("DatabaseUser") + ";pwd=" + AppSettings("DatabasePass")
+        OpenNewConnection()
+        'Add base tables
+        AddBaseTables()
     End Sub
     Public Sub close()
         SqlConnection.Close()
@@ -230,9 +244,9 @@ Public Class SQLBase
         objWriter.Close()
     End Function
 
-    Public Function TableToData(sTable As String) As String
+    Public Function TableToData(sTable As String, sStart As String, sEnd As String) As String
 
-        mSql = "Select * from " + sTable + " Order by added"
+        mSql = "Select * from " + sTable + " WHERE ADDED between '" + Trim(sStart) + "' and '" + Trim(sEnd) + "' Order by added"
 
         dr = Me.Read(mSql)
         If dr.HasRows = False Then Exit Function
@@ -321,6 +335,13 @@ Public Class SQLBase
         Exec(mSql)
 
     End Function
+    Public Function GetConsensusDatePair()
+        mSql = "Select max(ConsensusEndDate) from Consensus "
+        Dim sConsStart
+        sConsStart = Me.ReadFirstRow(mSql, 0)
+        If sConsStart = "-1" Then dtConsensusStartDate = CDate("1-1-2000")
+        dtConsensusEndDate = Now
+    End Function
     'Start a new consensus Round
     Public Function StartConsensusRound()
         'Add a row to consensus
@@ -330,17 +351,11 @@ Public Class SQLBase
         Dim gConsensusRound As String
 
         gConsensusRound = Guid.NewGuid.ToString()
-        Dim dtConsensusStartDate As Date
-        Dim dtConsensusEndDAte As Date
-        mSql = "Select max(ConsensusEndDate) from Consensus "
-        Dim sConsStart
+        GetConsensusDatePair()
 
-        sConsStart = Me.ReadFirstRow(mSql, 0)
-        If sConsStart = "-1" Then dtConsensusStartDate = CDate("1-1-2000")
 
         mSql = "Select sValue from System where scategory='table' and sKey = 'sysTables' order by sValue"
         dr = Read(mSql)
-        dtConsensusEndDAte = Now
         Dim sConsensusHash As String
         Dim dHash As Double = 0
         Dim sTable As String = ""
@@ -395,5 +410,96 @@ Public Class SQLBase
         Next
         Return strOutput.ToString().ToLower
     End Function
+    'Ask for Consensus between Last consensus and Now
+    Public Function GetConsensusFromMaster()
+        GetConsensusDatePair()
+        'HTTP Request from Master
+        Dim sData As String = GetData("Consensus")
+        Replicate(sData, "Consensus")
 
+
+    End Function
+    Public Function Snip(sData As String)
+        If Len(sData) > 0 Then
+            sData = Left(sData, Len(sData) - 1)
+        End If
+
+
+        Return sData
+
+    End Function
+    Public Function Replicate(data As String, sTable As String)
+        'Insert rows if they meet the spec and are missing
+        Dim fields As String = ""
+
+        Dim vData() As String
+        vData = Split(data, vbCrLf)
+        Dim vRow() As String
+        vRow = Split(vData(0), "<|>")
+
+        x = 0
+
+        For x = 0 To UBound(vRow) - 1
+
+            Dim sCol As String
+            Dim sType As String
+            Dim vCol() As String
+            vCol = Split(vRow(x), "<~>")
+            sCol = vCol(0)
+            sType = vCol(1)
+
+            fields = fields + sCol + ","
+        Next
+        fields = Snip(fields)
+        Dim sInsert As String
+
+        For x = 1 To vData.Length - 1
+
+
+            Dim sRow As String
+            sRow = vData(x)
+            vRow = Split(sRow, "<|>")
+            sInsert = ""
+
+            For y = 0 To UBound(vRow) - 1
+                Dim sValue As String
+                sValue = "'" + Trim(vRow(y)) + "'"
+                If sValue = "''" Then sValue = "null"
+                sInsert = sInsert + sValue + ","
+
+            Next
+            sInsert = Snip(sInsert)
+
+            Dim sSql As String
+            sSql = "Insert into " + sTable + " (" + fields + " ) values (" + sInsert + ")"
+
+            If Len(sInsert) > 1 Then
+                Me.Exec(sSql)
+            End If
+
+
+        Next x
+    End Function
+    Public Function GetData(sTable As String)
+
+        Dim sURL As String = "http://grid10:8080?table=" + Trim(sTable) + "&startdate=" + Trim(dtConsensusStartDate) + "&enddate=" + Trim(dtConsensusEndDate)
+
+        Dim w As New MyWebClient
+        Dim sData As String
+        sData = w.DownloadString(sURL)
+
+        Return sData
+
+    End Function
+
+
+End Class
+
+Public Class MyWebClient
+    Inherits System.Net.WebClient
+    Protected Overrides Function GetWebRequest(ByVal uri As Uri) As System.Net.WebRequest
+        Dim w As System.Net.WebRequest = MyBase.GetWebRequest(uri)
+        w.Timeout = 47000
+        Return w
+    End Function
 End Class

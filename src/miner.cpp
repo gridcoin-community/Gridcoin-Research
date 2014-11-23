@@ -609,12 +609,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 
     double subsidy = (pblock->vtx[0].GetValueOut())/COIN;
 	std::string sSubsidy = RoundToString(subsidy,4);
-	//Halford::ToDo: Refine this - This helps limit minting small blocks (mint < ?)
-	//if (subsidy < 5 && LessVerbose(850))
-	//{
-	//	printf("Block Rejected - Subsidy too small: %s\r\n",sSubsidy.c_str());
-	//	return false;
-	//}
+
 	if (AmIGeneratingBackToBackBlocks()) 
 	{
 		    return error("CheckStake() : Block Rejected: Generating back-to-back blocks\r\n");
@@ -659,6 +654,8 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
             LOCK(wallet.cs_wallet);
             wallet.mapRequestCount[hashBlock] = 0;
         }
+
+
 
         // Process this block the same as if we had received it from another node
         if (!ProcessBlock(NULL, pblock))
@@ -780,7 +777,6 @@ Begin:
 			goto Inception;
 		}
 
-
         //
         // Create new block
         //
@@ -808,6 +804,24 @@ Begin:
 				MilliSleep(1000);
 				goto Begin;
 		}
+
+		//11-23-2014 - R HALFORD - If we received a global hash checkpoint containing the solved hash for the block we are currently staking, accept the block and start over
+		if (muGlobalCheckpointHash == pblock->hashPrevBlock)
+		{
+			//A Gridcoiner solved the block we are working on..Start over
+			printf("!GlobalSolutionFound!\r\n");
+			MilliSleep(15000);
+			muGlobalCheckpointHashCounter++;
+			if (muGlobalCheckpointHashCounter > 3)
+			{
+				//Give up after waiting for 60 seconds for the solved block; erase the checkpoint hash
+				muGlobalCheckpointHashCounter=0;
+				muGlobalCheckpointHash = 0;
+				printf("Never received global solution block.. Purging.\r\n");
+			}
+			goto Begin;
+		}
+			
 
         // Trying to sign a block
         if (pblock->SignBlock(*pwallet, nFees))

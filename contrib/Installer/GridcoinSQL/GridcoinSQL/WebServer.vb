@@ -105,9 +105,49 @@ Public Class HTTPSession
                     strRequest = strRequest & defaultPage
                 End If
 
-                strRequest = rootPath & strRequest
+                If InStr(1, strRequest, "?") > 0 Then
 
-                sendHTMLResponse(strRequest)
+                    Dim sQS() As String
+                    sQS = Split(strRequest, "?")
+                    Dim qs1 As String
+                    qs1 = sQS(1)
+                    Dim qs2() As String
+                    Dim QSDecoded As String
+                    ' Dim w As System.Web.HttpServerUtility
+
+                    QSDecoded = Replace(qs1, "%20", " ")
+
+                    qs2 = Split(QSDecoded, "&")
+                    Dim p1 As String
+                    Dim p2 As String
+                    Dim p3 As String
+
+
+                    Dim DictQS As New Dictionary(Of String, String)
+
+                    For x = 0 To qs2.Length - 1
+
+                        Dim vRow() As String
+                        vRow = Split(qs2(x), "=")
+                        p1 = vRow(0)
+                        p2 = vRow(1)
+                        DictQS.Add(p1, p2)
+                    Next
+                    Dim sData As String
+                    sData = GetHttpData(DictQS("table"), DictQS("startdate"), DictQS("enddate"))
+
+                    sendHTMLResponseFromData(strRequest, sData)
+
+
+
+                Else
+
+                    strRequest = rootPath & strRequest
+
+                    sendHTMLResponse(strRequest)
+                    Stop
+                End If
+
 
             Else ' Not HTTP GET method
                 strRequest = rootPath & "Error\" & "400.html"
@@ -123,6 +163,67 @@ Public Class HTTPSession
             End If
         End Try
     End Sub
+    Public Function GetHttpData(sTable As String, sStart As String, sEnd As String)
+        Dim oSql As New SQLBase("gridcoinsql")
+        Dim sData As String
+
+        sData = oSql.TableToData(sTable, sStart, sEnd)
+
+        Return sData
+
+
+    End Function
+
+
+
+    ' Send HTTP Response
+    Private Sub sendHTMLResponseFromData(ByVal httpRequest As String, sData As String)
+
+        Try
+            ' Get the file content of HTTP Request 
+            '    Dim streamReader As StreamReader = New StreamReader(httpRequest)
+            '   Dim strBuff As String = streamReader.ReadToEnd()
+            '  streamReader.Close()
+            ' streamReader = Nothing
+
+            ' The content Length of HTTP Request
+            Dim respByte() As Byte = Encoding.ASCII.GetBytes(sData)
+
+
+            ' Set HTML Header
+            Dim htmlHeader As String = _
+                "HTTP/1.0 200 OK" & ControlChars.CrLf & _
+                "Server: WebServer 1.0" & ControlChars.CrLf & _
+                "Content-Length: " & respByte.Length & ControlChars.CrLf & _
+                "Content-Type: " & getContentType(httpRequest) & _
+                ControlChars.CrLf & ControlChars.CrLf
+
+            ' The content Length of HTML Header
+            Dim headerByte() As Byte = Encoding.ASCII.GetBytes(htmlHeader)
+
+            Console.WriteLine("HTML Header: " & ControlChars.CrLf & htmlHeader)
+
+            ' Send HTML Header back to Web Browser
+            clientSocket.Send(headerByte, 0, headerByte.Length, SocketFlags.None)
+
+            ' Send HTML Content back to Web Browser
+            clientSocket.Send(respByte, 0, respByte.Length, SocketFlags.None)
+
+            ' Close HTTP Socket connection
+            clientSocket.Shutdown(SocketShutdown.Both)
+            clientSocket.Close()
+
+        Catch ex As Exception
+            Console.WriteLine(ex.StackTrace.ToString())
+
+            If clientSocket.Connected Then
+                clientSocket.Close()
+            End If
+        End Try
+    End Sub
+
+
+
 
     ' Send HTTP Response
     Private Sub sendHTMLResponse(ByVal httpRequest As String)

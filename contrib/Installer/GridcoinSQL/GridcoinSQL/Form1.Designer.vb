@@ -25,6 +25,7 @@ Partial Class Form1
         Me.Button1 = New System.Windows.Forms.Button()
         Me.Button2 = New System.Windows.Forms.Button()
         Me.Button3 = New System.Windows.Forms.Button()
+        Me.Button4 = New System.Windows.Forms.Button()
         Me.SuspendLayout()
         '
         'Button1
@@ -38,7 +39,7 @@ Partial Class Form1
         '
         'Button2
         '
-        Me.Button2.Location = New System.Drawing.Point(97, 194)
+        Me.Button2.Location = New System.Drawing.Point(500, 12)
         Me.Button2.Name = "Button2"
         Me.Button2.Size = New System.Drawing.Size(193, 59)
         Me.Button2.TabIndex = 1
@@ -47,18 +48,28 @@ Partial Class Form1
         '
         'Button3
         '
-        Me.Button3.Location = New System.Drawing.Point(131, 114)
+        Me.Button3.Location = New System.Drawing.Point(158, 84)
         Me.Button3.Name = "Button3"
-        Me.Button3.Size = New System.Drawing.Size(50, 30)
+        Me.Button3.Size = New System.Drawing.Size(111, 30)
         Me.Button3.TabIndex = 2
         Me.Button3.Text = "consensus round"
         Me.Button3.UseVisualStyleBackColor = True
+        '
+        'Button4
+        '
+        Me.Button4.Location = New System.Drawing.Point(44, 138)
+        Me.Button4.Name = "Button4"
+        Me.Button4.Size = New System.Drawing.Size(192, 44)
+        Me.Button4.TabIndex = 3
+        Me.Button4.Text = "Replicate to Slave"
+        Me.Button4.UseVisualStyleBackColor = True
         '
         'Form1
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
-        Me.ClientSize = New System.Drawing.Size(284, 262)
+        Me.ClientSize = New System.Drawing.Size(696, 420)
+        Me.Controls.Add(Me.Button4)
         Me.Controls.Add(Me.Button3)
         Me.Controls.Add(Me.Button2)
         Me.Controls.Add(Me.Button1)
@@ -70,5 +81,6 @@ Partial Class Form1
     Friend WithEvents Button1 As System.Windows.Forms.Button
     Friend WithEvents Button2 As System.Windows.Forms.Button
     Friend WithEvents Button3 As System.Windows.Forms.Button
+    Friend WithEvents Button4 As System.Windows.Forms.Button
 
 End Class

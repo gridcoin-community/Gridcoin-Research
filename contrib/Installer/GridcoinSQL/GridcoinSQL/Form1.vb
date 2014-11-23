@@ -79,22 +79,11 @@ Public Class Form1
     Private Sub Button1_Click(sender As System.Object, e As System.EventArgs) Handles Button1.Click
         Dim sql As String
 
-
-
-
-        sql = "Select * from grid1"
-        'Dim gr As New SqlDataReader
-        Dim dt As New DataTable
-
-
-        dt = oSql.GetDataTable(sql)
-
-
         Dim ws As New WebServer
 
         Dim sData As String
-        sData = oSql.TableToData("node")
-        oSql.DataToFile(sData, "node.txt")
+        'sData = oSql.TableToData("node")
+        'oSql.DataToFile(sData, "node.txt")
 
         'Add test records
         oSql.InsertRecord("Confirm", "GRCFrom,GRCTo,txid,amount,Confirmed", "'a','b','123','100','0'")
@@ -114,6 +103,17 @@ Public Class Form1
 
     Private Sub Button3_Click(sender As System.Object, e As System.EventArgs) Handles Button3.Click
         oSql.StartConsensusRound()
+
+    End Sub
+
+    Private Sub Button4_Click(sender As System.Object, e As System.EventArgs) Handles Button4.Click
+        Dim oMaster As New SQLBase
+        Dim oSlave As New SQLBase
+
+        Dim ws As New WebServer
+
+        oSlave.GetConsensusFromMaster()
+        Stop
 
     End Sub
 End Class

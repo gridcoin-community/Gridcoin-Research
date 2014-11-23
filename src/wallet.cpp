@@ -23,6 +23,7 @@ bool OutOfSyncByAgeWithChanceOfMining();
 
 std::string SerializeBoincBlock(MiningCPID mcpid);
 double GetPoSKernelPS2();
+double GetDifficulty(const CBlockIndex* blockindex = NULL);
 
 double coalesce(double mag1, double mag2);
 
@@ -1625,6 +1626,20 @@ int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& owed)
 
 
 
+double MintLimiter()
+{
+	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
+	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+	if (PORDiff >= 0  && PORDiff < .5) return .0001;
+	if (PORDiff >= .5 && PORDiff < 1)  return .25;
+	if (PORDiff >= 1  && PORDiff < 5)  return 1;
+	if (PORDiff >= 5  && PORDiff < 10) return 5;
+	if (PORDiff >= 10 && PORDiff < 50) return 7;
+	if (PORDiff >= 50) return 10;
+	return .001;
+}
+	
+
 
 bool CWallet::GetStakeWeight(uint64_t& nWeight)
 {
@@ -1718,12 +1733,12 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 					printf("NL3::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
 					//1 - 5 blocks
 	}
-	else if (NC == 4 && out_owed > (MaxReward*1.5))
+	else if (NC == 4 && out_owed > (MaxReward*1))
 	{
 					NewbieStakeWeightModifier =	out_magnitude*(MaxReward/3);
 		
 	}
-	else if (NC == 5 && out_owed > (MaxReward*2))
+	else if (NC == 5 && out_owed > (MaxReward*1.5))
 	{
 					NewbieStakeWeightModifier =	out_magnitude*(MaxReward/4);
 	}
@@ -1981,13 +1996,16 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		double out_owed = 0;
 		int NC  =  NewbieCompliesWithLocalStakeWeightRule(out_magnitude,out_owed);
 		double mint = nReward/COIN;
+		
+		double MaxSubsidy = GetMaximumBoincSubsidy(GetAdjustedTime());
+
 		// Gridcoin - R Halford - For Investors (NC Level 0, or Veterans, Level 0) - Prevent tiny payments & Prevent astronomical diff levels
 		// Enforce: Investor (1), Veteran (0), Newbie (4), Newbie (5)
 		// Do not enforce: Uninitialized Newbie (2), or Level 0 Newbie (3)
 		// BOINC MINERS:
 		if (NC == 0 || NC == 4 || NC == 5)
 		{
-  			if (mint < 30 && LessVerbose(900)) 
+  			if (mint < (MaxSubsidy/20) && LessVerbose(900)) 
 			{
 				printf("CreateBlock::Boinc Miners Mint too small");
 				return false; 
@@ -1996,7 +2014,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		else if (NC == 1)
 		{
 			//INVESTORS
-			if (mint < 5 && LessVerbose(900)) 
+			if (mint < MintLimiter() && LessVerbose(900)) 
 			{
 				printf("CreateBlock::Investors Mint is too small");
 				return false; 
