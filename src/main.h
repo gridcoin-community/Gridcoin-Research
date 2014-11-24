@@ -33,7 +33,7 @@ extern unsigned int WHITELISTED_PROJECTS;
 extern unsigned int CHECKPOINT_VIOLATIONS;
 static const int MAX_NEWBIE_BLOCKS = 200;
 static const int MAX_NEWBIE_BLOCKS_LEVEL2 = 500;
-static const int CHECKPOINT_DISTRIBUTED_MODE = 2;
+static const int CHECKPOINT_DISTRIBUTED_MODE = 3;
 extern int64_t nLastBlockSolved;
 extern uint256 muGlobalCheckpointHash;
 extern uint256 muGlobalCheckpointHashRelayed;

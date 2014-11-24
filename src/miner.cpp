@@ -610,10 +610,13 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
     double subsidy = (pblock->vtx[0].GetValueOut())/COIN;
 	std::string sSubsidy = RoundToString(subsidy,4);
 
+	/*
 	if (AmIGeneratingBackToBackBlocks()) 
 	{
 		    return error("CheckStake() : Block Rejected: Generating back-to-back blocks\r\n");
 	}
+	*/
+
 
 
     //// debug print
@@ -806,7 +809,7 @@ Begin:
 		}
 
 		//11-23-2014 - R HALFORD - If we received a global hash checkpoint containing the solved hash for the block we are currently staking, accept the block and start over
-		if (muGlobalCheckpointHash == pblock->hashPrevBlock)
+		if (false && muGlobalCheckpointHash == pblock->hashPrevBlock)
 		{
 			//A Gridcoiner solved the block we are working on..Start over
 			printf("!GlobalSolutionFound!\r\n");
@@ -833,7 +836,7 @@ Begin:
 				printf("Stake block accepted!\r\n");
 				//Prevent Rapid Fire block creation (large investor nodes):
 		  	    SetThreadPriority(THREAD_PRIORITY_LOWEST);
-        		MilliSleep(275000);  //Preventing sync problems
+        		//MilliSleep(275000);  //Preventing sync problems
 			}
             SetThreadPriority(THREAD_PRIORITY_LOWEST);
             MilliSleep(500);

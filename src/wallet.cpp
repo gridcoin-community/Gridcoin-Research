@@ -1722,23 +1722,23 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	}
 	else if (NC == 2)
 	{
-					NewbieStakeWeightModifier =	300000+(out_magnitude*MaxReward);
+					NewbieStakeWeightModifier =	500000+(out_magnitude*MaxReward);
 					//printf("NL2::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
 					//Uninitialized Newbie
 	
 	}
-	else if (NC == 3 && out_owed > (MaxReward/2))
+	else if (NC == 3 && out_owed > (MaxReward/5))
 	{
 					NewbieStakeWeightModifier =	out_magnitude*(MaxReward/2);
 					printf("NL3::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
 					//1 - 5 blocks
 	}
-	else if (NC == 4 && out_owed > (MaxReward*1))
+	else if (NC == 4 && out_owed > (MaxReward/2))
 	{
 					NewbieStakeWeightModifier =	out_magnitude*(MaxReward/3);
 		
 	}
-	else if (NC == 5 && out_owed > (MaxReward*1.5))
+	else if (NC == 5 && out_owed > (MaxReward/2))
 	{
 					NewbieStakeWeightModifier =	out_magnitude*(MaxReward/4);
 	}
@@ -2005,7 +2005,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		// BOINC MINERS:
 		if (NC == 0 || NC == 4 || NC == 5)
 		{
-  			if (mint < (MaxSubsidy/20) && LessVerbose(900)) 
+  			if (mint < (MaxSubsidy/50) && LessVerbose(800)) 
 			{
 				printf("CreateBlock::Boinc Miners Mint too small");
 				return false; 
@@ -2014,7 +2014,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		else if (NC == 1)
 		{
 			//INVESTORS
-			if (mint < MintLimiter() && LessVerbose(900)) 
+			if (mint < MintLimiter() && LessVerbose(800)) 
 			{
 				printf("CreateBlock::Investors Mint is too small");
 				return false; 
