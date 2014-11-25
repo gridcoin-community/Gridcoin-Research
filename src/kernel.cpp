@@ -402,7 +402,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
     int64_t nValueIn = txPrev.vout[prevout.n].nValue;
 
     uint256 hashBlockFrom = blockFrom.GetHash();
-	// Deserialize boinc hash for detailed logging - 11-14-2014 /////////////////
+	// Deserialize boinc hash for detailed logging //
 	MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
 	std::string cpid = boincblock.cpid;
     
@@ -469,10 +469,24 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	}
 	else
 	{
-			NewbieStakeWeightModifier = 1*COIN;
-			//printf("NewbieL0: %u",NC);
+			NewbieStakeWeightModifier = 0*COIN;
+			
 	}
-	CBigNum bnCoinDayWeight = CBigNum(nValueIn + NewbieStakeWeightModifier) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
+
+	int64_t boinc_seconds = 0;
+	if (checking_local)
+	{
+		boinc_seconds = (24 * 60 * 48);
+			
+	}
+	else
+	{
+		boinc_seconds = (24 * 60 * 60);
+	}
+		
+
+	CBigNum bnCoinDayWeight = CBigNum(nValueIn + NewbieStakeWeightModifier) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (boinc_seconds);
+
     targetProofOfStake = (bnCoinDayWeight * bnTargetPerCoinDay).getuint256();
 
     // Calculate hash
@@ -504,7 +518,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
     }
 
     // Now check if proof-of-stake hash meets target protocol
-    if (CBigNum(hashProofOfStake) > bnCoinDayWeight * bnTargetPerCoinDay)
+    if (CBigNum(hashProofOfStake) > (bnCoinDayWeight * bnTargetPerCoinDay))
 	{   
 		if (oNC==0)
 		{

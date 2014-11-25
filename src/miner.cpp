@@ -801,7 +801,7 @@ Begin:
 			goto Begin;
 		}
 
-		if (IsLockTimeWithinMinutes(nLastBlockSolved,5)) 
+		if (IsLockTimeWithinMinutes(nLastBlockSolved,4)) 
 		{
 				printf("=");
 				MilliSleep(1000);
@@ -836,7 +836,7 @@ Begin:
 				printf("Stake block accepted!\r\n");
 				//Prevent Rapid Fire block creation (large investor nodes):
 		  	    SetThreadPriority(THREAD_PRIORITY_LOWEST);
-        		//MilliSleep(275000);  //Preventing sync problems
+        		
 			}
             SetThreadPriority(THREAD_PRIORITY_LOWEST);
             MilliSleep(500);
