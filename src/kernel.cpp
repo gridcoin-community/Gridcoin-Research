@@ -445,7 +445,6 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 			if (NC == 2)
 			{
 				NewbieStakeWeightModifier = newbie_magnitude*2500*COIN;
-				//printf("NewbieModifierL1: Mag %f, Mod %"PRId64" \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
 				oNC = NC;
 			}
 			else if (NC == 3)
@@ -476,7 +475,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	int64_t boinc_seconds = 0;
 	if (checking_local)
 	{
-		boinc_seconds = (24 * 60 * 48);
+		boinc_seconds = (24 * 60 * 30);
 			
 	}
 	else

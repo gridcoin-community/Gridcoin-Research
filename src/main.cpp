@@ -1954,9 +1954,11 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 	int64_t nBoinc    = GetProofOfResearchReward(cpid,VerifyingBlock);
 	int64_t nSubsidy  = nInterest + nBoinc;
 
-    if (true || (fDebug && GetBoolArg("-printcreation")))
+    if (fDebug || GetBoolArg("-printcreation"))
+	{
         printf("GetProofOfStakeReward(): create=%s nCoinAge=%"PRId64" nBoinc=%"PRId64"   \n",
 		FormatMoney(nSubsidy).c_str(), nCoinAge, nBoinc);
+	}
 
     return nSubsidy + nFees;
 }
@@ -4922,7 +4924,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (pfrom->nVersion < MIN_PEER_PROTO_VERSION)
         {
             // disconnect from peers older than this proto version
-            printf("partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
+            if (fDebug) printf("partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
             pfrom->fDisconnect = true;
             return false;
         }
@@ -5020,7 +5022,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         pfrom->fSuccessfullyConnected = true;
 
-        printf("receive version message: version %d, blocks=%d, us=%s, them=%s, peer=%s\n", pfrom->nVersion, pfrom->nStartingHeight, addrMe.ToString().c_str(), addrFrom.ToString().c_str(), pfrom->addr.ToString().c_str());
+        if (fDebug) printf("receive version message: version %d, blocks=%d, us=%s, them=%s, peer=%s\n", pfrom->nVersion, pfrom->nStartingHeight, addrMe.ToString().c_str(), addrFrom.ToString().c_str(), pfrom->addr.ToString().c_str());
 
         cPeerBlockCounts.input(pfrom->nStartingHeight);
 
@@ -5171,14 +5173,18 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         if (fDebugNet || (vInv.size() != 1))
-            printf("received getdata (%"PRIszu" invsz)\n", vInv.size());
+		{
+            if (fDebug)  printf("received getdata (%"PRIszu" invsz)\n", vInv.size());
+		}
 
         BOOST_FOREACH(const CInv& inv, vInv)
         {
             if (fShutdown)
                 return true;
             if (fDebugNet || (vInv.size() == 1))
-                printf("received getdata for: %s\n", inv.ToString().c_str());
+			{
+              if (fDebug)   printf("received getdata for: %s\n", inv.ToString().c_str());
+			}
 
             if (inv.type == MSG_BLOCK)
             {
@@ -5743,7 +5749,9 @@ bool ProcessMessages(CNode* pfrom)
         }
 
         if (!fRet)
-            printf("ProcessMessage(%s, %u bytes) FAILED\n", strCommand.c_str(), nMessageSize);
+		{
+           if (fDebug)   printf("ProcessMessage(%s, %u bytes) FAILED\n", strCommand.c_str(), nMessageSize);
+		}
     }
 
     // In case the connection got shut down, its receive buffer was wiped
@@ -6043,15 +6051,14 @@ double GetMagnitude(std::string cpid, double purported, bool UseNetSoft)
 		double magnitude_consensus = UntrustedHost.ConsensusMagnitude;
 		if (magnitude_consensus >= purported) 
 		{
-				printf("For cpid %s, using Consensus mag of %f\r\n",cpid.c_str(),magnitude_consensus);
-	
+				if (fDebug) printf("For cpid %s, using Consensus mag of %f\r\n",cpid.c_str(),magnitude_consensus);
 				return magnitude_consensus;
 		}
 		//Try clearing the cache; call Netsoft
 		CreditCheck(cpid,true);
 		UntrustedHost = mvCreditNodeCPID[cpid]; //Contains Mag across entire CPID
 		magnitude_consensus = UntrustedHost.Magnitude;
-		printf("For cpid %s, using Netsoft mag of %f\r\n",cpid.c_str(),magnitude_consensus);
+	    if (fDebug) printf("For cpid %s, using Netsoft mag of %f\r\n",cpid.c_str(),magnitude_consensus);
 		return magnitude_consensus;
 	}
 	else

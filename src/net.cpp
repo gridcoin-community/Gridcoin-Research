@@ -926,7 +926,7 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
         addrman.Attempt(addrConnect);
 
         /// debug print
-        printf("connected %s\n", pszDest ? pszDest : addrConnect.ToString().c_str());
+        if (fDebug) printf("connected %s\n", pszDest ? pszDest : addrConnect.ToString().c_str());
 
         // Set to non-blocking
 #ifdef WIN32
@@ -961,7 +961,7 @@ void CNode::CloseSocketDisconnect()
     fDisconnect = true;
     if (hSocket != INVALID_SOCKET)
     {
-        printf("disconnecting node %s\n", addrName.c_str());
+        if (fDebug) printf("disconnecting node %s\n", addrName.c_str());
         closesocket(hSocket);
         hSocket = INVALID_SOCKET;
 
@@ -979,7 +979,7 @@ void CNode::PushVersion()
     CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(CService("0.0.0.0",0)));
     CAddress addrMe = GetLocalAddress(&addr);
     RAND_bytes((unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce));
-    printf("send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s\n", PROTOCOL_VERSION, nBestHeight, addrMe.ToString().c_str(), addrYou.ToString().c_str(), addr.ToString().c_str());
+    if (fDebug) printf("send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s\n", PROTOCOL_VERSION, nBestHeight, addrMe.ToString().c_str(), addrYou.ToString().c_str(), addr.ToString().c_str());
     PushMessage("version", PROTOCOL_VERSION, nLocalServices, nTime, addrYou, addrMe,
                 nLocalHostNonce, FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()), nBestHeight);
 }
@@ -1492,7 +1492,7 @@ void ThreadSocketHandler2(void* parg)
             {
                 if (pnode->nLastRecv == 0 || pnode->nLastSend == 0)
                 {
-                    printf("socket no message in first 60 seconds, %d %d\n", pnode->nLastRecv != 0, pnode->nLastSend != 0);
+                    if (fDebug) printf("socket no message in first 60 seconds, %d %d\n", pnode->nLastRecv != 0, pnode->nLastSend != 0);
                     pnode->fDisconnect = true;
                 }
                 else if (nTime - pnode->nLastSend > TIMEOUT_INTERVAL)
@@ -1775,8 +1775,8 @@ void DumpAddresses()
     CAddrDB adb;
     adb.Write(addrman);
 
-    printf("Flushed %d addresses to peers.dat  %"PRId64"ms\n",
-           addrman.size(), GetTimeMillis() - nStart);
+    if (fDebug) printf("Flushed %d addresses to peers.dat  %"PRId64"ms\n",           addrman.size(), GetTimeMillis() - nStart);
+
 }
 
 void ThreadDumpAddress2(void* parg)

@@ -1876,6 +1876,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             if (CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, 
 				*pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, targetProofOfStake, hashBoinc, false, true))
             {
+			
                 // Found a kernel
                 if (fDebug && GetBoolArg("-printcoinstake"))
                     printf("CreateCoinStake : kernel found\n");

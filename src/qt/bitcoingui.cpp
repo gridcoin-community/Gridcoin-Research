@@ -1738,7 +1738,7 @@ void BitcoinGUI::timerfire()
 		
 		if (nRegVersion==0 || Timer("start",10))
 		{
-			printf("Starting globalcom...\r\n");
+			if (fDebug) printf("Starting globalcom...\r\n");
 			nRegVersion=9999;
 			if (!bNewUserWizardNotified)
 			{
@@ -1757,7 +1757,6 @@ void BitcoinGUI::timerfire()
 
 		if (Timer("status_update",2))
 		{
-			printf("Status Update");
 			std::string status = GetGlobalStatus();
     		bForceUpdate=true;
 		}
