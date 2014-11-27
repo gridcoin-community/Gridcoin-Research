@@ -2023,7 +2023,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 		}
 
-		if (mint == 0 && NC != 2)
+		if (mint == 0)
 		{
 			//printf("CreateBlock():Mint is zero");
 			return false;   

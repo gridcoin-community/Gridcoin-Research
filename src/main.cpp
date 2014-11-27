@@ -5259,7 +5259,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             if (pindex->GetBlockHash() == hashStop)
             {
-                printf("getblocks stopping at %d %s\n", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20).c_str());
+                if (fDebug) printf("getblocks stopping at %d %s\n", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20).c_str());
                 // ppcoin: tell downloading node about the latest block if it's
                 // without risk being rejected due to stake connection check
                 if (hashStop != hashBestChain && pindex->GetBlockTime() + nStakeMinAge > pindexBest->GetBlockTime())
@@ -5271,7 +5271,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             {
                 // When this block is requested, we'll send an inv that'll make them
                 // getblocks the next batch of inventory.
-                printf("  getblocks stopping at limit %d %s\n", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20).c_str());
+                if (fDebug) printf("  getblocks stopping at limit %d %s\n", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20).c_str());
                 pfrom->hashContinue = pindex->GetBlockHash();
                 break;
             }
@@ -6216,8 +6216,11 @@ void AddProjectFromNetSoft(StructCPID& netsoft)
 						NewProject.errors = "Team invalid";
 	}
 
-	mvCPIDs[netsoft.projectname] = NewProject;
-	printf("Adding local project missing - from Netsoft %s %s\r\n",NewProject.projectname.c_str(),cpid.c_str());
+	if (NewProject.rac > 100 && NewProject.Iscpidvalid)
+	{
+		mvCPIDs[netsoft.projectname] = NewProject;
+		printf("Adding local project missing - from Netsoft %s %s\r\n",NewProject.projectname.c_str(),cpid.c_str());
+	}
 
 }
 
@@ -6726,9 +6729,9 @@ try
 
 void ThreadTally()
 {
-	printf("Tallying in background thread...");
+	printf("Tallying..");
 	TallyNetworkAverages(false);
-	printf("Completed with Tallying()");
+	if (fDebug) printf("Completed with Tallying()");
 
 }
 

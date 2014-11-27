@@ -317,7 +317,7 @@ int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::str
 							return 0;
 						}
 
-						if (UntrustedHost.Accuracy > 0 && UntrustedHost.Accuracy < 4) 
+						if (UntrustedHost.Accuracy >= 0 && UntrustedHost.Accuracy < 4) 
 						{
 							//Newbie
 							return 3;
@@ -424,6 +424,9 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	//CBigNum bnCoinDayWeight = CBigNum(nValueIn + (5*COIN) ) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
 	int64_t NewbieStakeWeightModifier = 0;
 	//double mint = (blockFrom.vtx[1].GetValueOut())/COIN;
+	double subsidy = (blockFrom.vtx[0].GetValueOut())/COIN;
+	std::string sSubsidy = RoundToString(subsidy,4);
+
 	int NC = NewbieCompliesWithFirstTimeStakeWeightRule(blockFrom,hashBoinc);
 	msMiningErrors2 = RoundToString(NC,0);
 	int oNC = 0;
@@ -480,10 +483,9 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	//return min(nIntervalEnd - nIntervalBeginning - nStakeMinAge, (int64_t)nStakeMaxAge);
 	
 
-
 	if (checking_local)
 	{
-		boinc_seconds = (24 * 60 * 90);
+		boinc_seconds = (24 * 60 * 60);
 	}
 	else
 	{
@@ -517,7 +519,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
             DateTimeStrFormat(nStakeModifierTime).c_str(),
             mapBlockIndex[hashBlockFrom]->nHeight,
             DateTimeStrFormat(blockFrom.GetBlockTime()).c_str());
-        printf("CheckStakeKernelHash() : check modifier=0x%016"PRIx64" nTimeBlockFrom=%u nTxPrevOffset=%u nTimeTxPrev=%u nPrevout=%u nTimeTx=%u hashProof=%s\n",
+            printf("CheckStakeKernelHash() : check modifier=0x%016"PRIx64" nTimeBlockFrom=%u nTxPrevOffset=%u nTimeTxPrev=%u nPrevout=%u nTimeTx=%u hashProof=%s\n",
             nStakeModifier,
             nTimeBlockFrom, nTxPrevOffset, txPrev.nTime, prevout.n, nTimeTx,
             hashProofOfStake.ToString().c_str());
@@ -533,7 +535,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 			if (!checking_local)
 			{
 				//Dont print all this crap in the log if we are running a local miner:
-				printf("Block does not meet target: hashboinc %s \r\n",hashBoinc.c_str());
+				printf("Block does not meet target: hashboinc %s Subsidy: %s\r\n",hashBoinc.c_str(), sSubsidy.c_str());
 				printf("Researcher vitals: NC %u, cpid %s, project %s, accuracy %f \r\n",NC,cpid.c_str(),boincblock.projectname.c_str(),mag_accuracy);
 			}
 			return false;

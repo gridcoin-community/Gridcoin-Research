@@ -71,12 +71,25 @@ Public Class Utilization
             Dim bNeedsUp As Boolean = NeedsUpgrade()
             If bNeedsUp Then
                 Log("Client outdated; needs upgraded.")
+                Dim sLastUpgraded As String = KeyValue("AutoUpgrade")
+                If Len(sLastUpgraded) > 0 Then
+                    If IsDate(sLastUpgraded) Then
+                        Dim dDiff As Long
+                        dDiff = DateDiff(DateInterval.Day, Now, CDate(sLastUpgraded))
+                        If Math.Abs(dDiff) < 1 Then
+                            Log("Upgraded too recently. Aborting.")
+                            Return 0
+                        End If
+                    End If
+                End If
 
                 If KeyValue("suppressupgrade") = "true" Then
                     Log("Client needs upgraded; Not upgrading due to key.")
-
                     Return 0
                 End If
+                '11-27-2014 Set a key to prevent multiple upgrades
+                UpdateKey("AutoUpgrade", Trim(Now))
+
                 Return 1
             End If
             Log("Client up to date")
