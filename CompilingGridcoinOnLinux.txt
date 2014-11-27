@@ -1,60 +1,45 @@
 ########################## Linux Instructions: #####################################################################
 # 	
-#	Released 1-25-2014 - Gridcoin
+#	Released 1-25-2014 - GridcoinResearch
 #
-# This guide is broken up into 3 versions.
+# This guide is broken up into 3 sections.
 #   
-# 1. Gridcoind - headless daemon 
-# 2. Gridcoin-qt 
-# 3. Wine version of Gridcoin-qt
-#
+# 1. gridcoinresearchd (headless daemon - fresh build)
+# 2. gridcoinresearchd (headless daemon - upgrade)
+# 3. gridcoinresearch (GUI for desktop users)
 # 
-# Section 1: Compiling Gridcoind
+# Section 1 & 2: Compiling gridcoinresearchd (fresh/upgrade)
+# -Tested on Ubuntu 12.04, Ubuntu 13.10, Ubuntu 14.04, Ubuntu 14.10
 #
-# -Tested on Ubuntu 12.04, Ubuntu 13.10
-#
-# Section 2: Compiling frontend
-#
-# - Tested on Ubuntu 13.10
+# Section 3: Compiling GUI
+# - Tested on Ubuntu 13.10, Ubuntu 14.04
 #
 #####################################################################################################################
 
+#### Updated 11-11-2014 by Winston Tew ####
+#### Compiling gridcoinresearchd ####
+#### (Tested with #boost 1_5_5_0, Berkeley db 4.8.30, miniupnpc 1.8, openssl 1.0.1e ####
 
+#### Section 1: Compiling gridcoinresearchd (headless daemon - fresh build) ###
 
-#### Building Gridcoind ####
+#### Step 1: Get dependencies
+sudo apt-get update
+sudo apt-get install ntp git build-essential libssl-dev libdb-dev libdb++-dev libboost1.55-all-dev libqrencode-dev
 
-
-
-#### (Tested with #boost 1_5_5_0, Berkeley db 4.8.30, miniupnpc 1.8, openssl 1.0.1e
-#### Step 1: Building the headless daemon:
-#If you have trouble updating source from git:
-#git config --global http.sslverify false
-
-
-sudo apt-get install ntp git build-essential libssl-dev libdb-dev libdb++-dev libboost-all-dev libqrencode-dev
-sudo apt-get install qt-sdk qt4-default
- 
+#### Step 2: Get source from GitHub
+## If you have trouble getting source from GitHub
+## git config --global http.sslverify false
 cd ~
 git clone https://github.com/gridcoin/Gridcoin-Research
-#NOTE: If you already have Gridcoin, do this:
-#git fetch --all
-#git reset --hard origin/master
 
+#### Step 3: Prepare and compile
 cd ~/Gridcoin-Research/src
-
 chmod 755 leveldb/build_detect_platform 
 make -f makefile.unix USE_UPNP=- 
 
-
-##### End of Step 1: gridcoind will be found in /src directory
-
-
-
+#### Step 4: Installing
 strip gridcoinresearchd
 sudo install -m 755 gridcoinresearchd /usr/bin/gridcoinresearchd
-
-mkdir ~/.GridcoinResearch
-cd ~/.GridcoinResearch
 
 #### SSL: ###################################################################
 #Optional: Setting up gridcoinresearchd for ssl 
@@ -62,52 +47,112 @@ cd ~/.GridcoinResearch
 #openssl req -new -x509 -nodes -sha1 -days 3650 -key server.pem > server.cert 
 #############################################################################
 
-nano gridcoinresearch.conf 
+##### Step 5: Create config file needed to run gridcoinresearchd
+mkdir ~/.GridcoinResearch
+cd ~/.GridcoinResearch
+nano gridcoinresearch.conf (or any of your favourite editor)
 
 #copy the following into the editor:
-server=1 
+
 daemon=1 
-rpcport=9332 
-rpcallowip=127.0.0.1 
-rpcuser=username
-rpcpassword=yourpassword
-rpcallowip=external IP 
+rpcuser=anyname
+rpcpassword=anypassword
+email=yourboincemail
 addnode=node.gridcoin.us
+addnode=gridcoin.asia
 #rpcssl=1
 
-#save and exit.  Leave the lines with ssl in them out if you don't need ssl.
+#save/exit
+#Uncomment #rpcssl=1 if you're using SSL
 
-####### Testing Gridcoin gridcoind :
-#Let server start
+#### Step 6: Starting gridcoinresearchd
 gridcoinresearchd
-#Should return current difficulty:
-gridcoinresearchd getmininginfo
 
+# You should see "Gridcoin server starting"
+# Wait a few mins and use this command: gridcoinresearchd getinfo
+# It should output results of current version, block info, etcetera.
+# Use command: gridcoinresearchd help
+# to get a list of commands available for gridcoinresearchd
 
-#Step 2:
-############################################### Building Gridcoin-QT: ##########################################
+#####################################################################################################################
 
-#cd to the directory where gridcoinstake.pro is
+#### Section 2: Compiling gridcoinresearchd (headless daemon - upgrade) ###
+
+#### Step 1: Pull from GitHub
+## If you have trouble updating source from GitHub
+## git config --global http.sslverify false
 cd ~/Gridcoin-Research
+git pull
+cd src
+make -f makefile.unix clean
+make -f makefile.unix USE_UPNP=-
 
-#IMPORTANT: now edit gridcoinstake.pro and remove the entries "QT += qaxcontainer" and "CONFIG += qaxcontainer"
-#nano gridcoinstake.pro
- 
-rm -f build/*.o
+#### Step 2: Installing
+strip gridcoinresearchd
+sudo install -m 755 gridcoinresearchd /usr/bin/gridcoinresearchd
+
+##### Step 3: Stop/Restart gridcoindresearchd
+gridcoinresearchd stop
+gridcoinresearchd
+
+# You should see "Gridcoin server starting"
+# Wait a few mins and use this command: gridcoinresearchd getinfo
+# It should output results of current version, block info, etcetera.
+
+##################################################################################################################### 
+
+#### Section 3: Compiling gridcoinresearch (GUI for desktop users) ###
+#### Follow instructions below using your favourite terminal program
+
+#### Step 1: Get dependencies
+sudo apt-get update
+sudo apt-get install ntp git build-essential libssl-dev libdb-dev libdb++-dev libboost1.55-all-dev libqrencode-dev qt-sdk qt4-default
+
+#### Step 2: Get source from GitHub
+## If you have trouble getting source from GitHub
+## git config --global http.sslverify false
+cd ~
+git clone https://github.com/gridcoin/Gridcoin-Research
+
+#### Step 3: Prepare and compile
+cd ~/Gridcoin-Research
+chmod 755 src/leveldb/build_detect_platform 
+nano gridcoinstake.pro
+#Comment out "QT += qaxcontainer" and "CONFIG += qaxcontainer"
+#save/exit
 qmake "USE_UPNP=-"
 make
+
+#### Step 4: Installing
 strip gridcoinresearch
-sudo install -m 755 gridcoinresearch /usr/bin/gridcoinresearch
-#look for gridcoinresearch
-gridcoinresearch
-#Verify wallet finds nodes and starts syncing
+install -m 755 gridcoinresearch ~/Desktop/gridcoinresearch
+
+##### Step 5: Create config file needed to run gridcoinresearch
+mkdir ~/.GridcoinResearch
+cd ~/.GridcoinResearch
+nano gridcoinresearch.conf (or any of your favourite editor)
+
+#copy the following into the editor:
+
+email=yourboincemail
+addnode=node.gridcoin.us
+addnode=gridcoin.asia
+
+#save/exit
+
+#### Step 6: Starting gridcoinresearchd
+Go to your Desktop and doubleclick on gridcoinresearch
+
+#####################################################################################################################
 
 
-###############################################################################################################
 
 
 
-##############################################################################################################################################
+
+
+
+#####################################################################################################################
 # Updated 6-18-2014 by Rob Halford
 # Use this section to upgrade Ubuntu to Boost 1_55_0
 # Adjust the libdir, includedir, and exec-prefix if you do not want Boost 1_55_0 upgraded system wide.
@@ -116,7 +161,6 @@ cd /
 sudo mkdir boost
 cd boost
 sudo wget http://sourceforge.net/projects/boost/files/boost/1.55.0/boost_1_55_0.zip/download
-
 
 sudo unzip boost_1_55_0.zip
 cd boost_1_55_0
@@ -129,17 +173,3 @@ sudo ./bjam install
 #
 # End of Boost Upgrade Commands
 #
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
