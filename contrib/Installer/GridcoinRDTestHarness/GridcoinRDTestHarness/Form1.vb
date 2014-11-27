@@ -99,7 +99,33 @@ Public Class Form1
 
     Public bu As New BoincStake.Utilization
 
+    Public Function ParseDate(sDate As String)
+        'parses microsofts IIS date to a date, globally
+        Dim vDate() As String
+        vDate = Split(sDate, " ")
+        If UBound(vDate) > 0 Then
+            Dim sEle1 As String = vDate(0)
+            Dim vEle() As String
+            vEle = Split(sEle1, "/")
+            If UBound(vEle) > 1 Then
+                'Handle mm-dd-yyyy or dd-mm-yyyy or web server PST or web server UST:
+                Dim sTr As String
+                Dim sTime1 As String
+                Dim sTime2 As String
+                sTime1 = vDate(UBound(vDate) - 1)
+                sTime2 = vDate(UBound(vDate) - 0)
+                sTr = Trim(DateSerial(vEle(2), vEle(0), vEle(1))) + " " + Trim(sTime1) + " " + Trim(sTime2)
+                If IsDate(sTr) Then Return CDate(sTr) Else Return CDate("1-1-2031")
+            End If
+        End If
+        Return CDate("1-1-2031")
+
+    End Function
     Private Sub Button1_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles Button1.Click
+        Dim dtHeinousDate As Date
+        dtHeinousDate = ParseDate("11/26/2014  5:26 AM")
+        Debug.Print(Trim(dtHeinousDate))
+
 
         Dim vv As Integer
         vv = bu.Version

@@ -795,9 +795,6 @@ Public Class GridcoinUpgrader
         Return 0
 
     End Function
-
-
-
     Public Function ParseDate(sDate As String)
         'parses microsofts IIS date to a date, globally
         Dim vDate() As String
@@ -807,14 +804,17 @@ Public Class GridcoinUpgrader
             Dim vEle() As String
             vEle = Split(sEle1, "/")
             If UBound(vEle) > 1 Then
-                Dim dt1 As Date
-                dt1 = DateSerial(vEle(2), vEle(0), vEle(1))
-                Return dt1
-
+                'Handle mm-dd-yyyy or dd-mm-yyyy or web server PST or web server UST:
+                Dim sTr As String
+                Dim sTime1 As String
+                Dim sTime2 As String
+                sTime1 = vDate(UBound(vDate) - 1)
+                sTime2 = vDate(UBound(vDate) - 0)
+                sTr = Trim(DateSerial(vEle(2), vEle(0), vEle(1))) + " " + Trim(sTime1) + " " + Trim(sTime2)
+                If IsDate(sTr) Then Return CDate(sTr) Else Return CDate("1-1-2031")
             End If
         End If
         Return CDate("1-1-2031")
-
     End Function
     Public Sub Log(sData As String)
         Try

@@ -545,7 +545,7 @@ bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
         }
 
         // Process this block the same as if we had received it from another node
-        if (!ProcessBlock(NULL, pblock))
+        if (!ProcessBlock(NULL, pblock, true))
             return error("CheckWork() : ProcessBlock, block not accepted");
     }
 	MilliSleep(275000);  //Preventing sync problems
@@ -659,10 +659,11 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
         }
 
 
-
         // Process this block the same as if we had received it from another node
-        if (!ProcessBlock(NULL, pblock))
-            return error("CheckStake() : ProcessBlock, block not accepted");
+        if (!ProcessBlock(NULL, pblock, true))
+		{
+            return error("CheckStake() : ProcessBlock (by me), but block not accepted");
+		}
     }
 	nLastBlockSolved = GetAdjustedTime();
 	

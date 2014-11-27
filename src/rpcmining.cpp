@@ -543,7 +543,7 @@ Value submitblock(const Array& params, bool fHelp)
         throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Block decode failed");
     }
 
-    bool fAccepted = ProcessBlock(NULL, &block);
+    bool fAccepted = ProcessBlock(NULL, &block,false);
     if (!fAccepted)
         return "rejected";
 

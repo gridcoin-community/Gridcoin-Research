@@ -473,10 +473,17 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	}
 
 	int64_t boinc_seconds = 0;
+	//int64_t Weight(int64_t nIntervalBeginning, int64_t nIntervalEnd)
+    // Kernel hash weight starts from 0 at the min age
+    // this change increases active coins participating the hash and helps
+    // to secure the network when proof-of-stake difficulty is low
+	//return min(nIntervalEnd - nIntervalBeginning - nStakeMinAge, (int64_t)nStakeMaxAge);
+	
+
+
 	if (checking_local)
 	{
-		boinc_seconds = (24 * 60 * 30);
-			
+		boinc_seconds = (24 * 60 * 90);
 	}
 	else
 	{
