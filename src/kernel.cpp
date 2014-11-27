@@ -483,18 +483,16 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	//return min(nIntervalEnd - nIntervalBeginning - nStakeMinAge, (int64_t)nStakeMaxAge);
 	
 
+	CBigNum bnCoinDayWeight = 0;
 	if (checking_local)
 	{
-		boinc_seconds = (24 * 60 * 60);
+		bnCoinDayWeight = CBigNum(nValueIn + NewbieStakeWeightModifier) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60) / 2;
 	}
 	else
 	{
-		boinc_seconds = (24 * 60 * 60);
+		bnCoinDayWeight = CBigNum(nValueIn + NewbieStakeWeightModifier) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
 	}
-		
-
-	CBigNum bnCoinDayWeight = CBigNum(nValueIn + NewbieStakeWeightModifier) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (boinc_seconds);
-
+	
     targetProofOfStake = (bnCoinDayWeight * bnTargetPerCoinDay).getuint256();
 
     // Calculate hash
@@ -642,10 +640,10 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 bool CheckStakeKernelHash(CBlockIndex* pindexPrev, unsigned int nBits, const CBlock& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, 
 	uint256& targetProofOfStake, std::string hashBoinc, bool fPrintProofOfStake, bool checking_local)
 {
-    if (IsProtocolV2(pindexPrev->nHeight+1))
-        return CheckStakeKernelHashV2(pindexPrev, nBits, blockFrom.GetBlockTime(), txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake, hashBoinc, checking_local);
-    else
-        return CheckStakeKernelHashV1(nBits, blockFrom, nTxPrevOffset, txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake, hashBoinc, checking_local);
+    //if (IsProtocolV2(pindexPrev->nHeight+1))
+    //    return CheckStakeKernelHashV2(pindexPrev, nBits, blockFrom.GetBlockTime(), txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake, hashBoinc, checking_local);
+    //else
+    return CheckStakeKernelHashV1(nBits, blockFrom, nTxPrevOffset, txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake, hashBoinc, checking_local);
 }
 
 // Check kernel hash target and coinstake signature
@@ -673,25 +671,32 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
     CBlock block;
     if (!block.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
         return fDebug? error("CheckProofOfStake() : read block failed") : false; // unable to read block of previous transaction
-	//Verify solver did not solve back to back blocks:
-	MiningCPID NewStakeBlock = DeserializeBoincBlock(hashBoinc);
-	int nGrandfather = 55000;
-	if (NewStakeBlock.GRCAddress.length() > 3  && pindexPrev->nHeight > nGrandfather)
+
+
+	if (false)
 	{
-		CBlock prior_block;
-		if (!prior_block.ReadFromDisk(pindexPrev))    return error("CheckProofOfStake() : read Prior block failed!");
-		
-		//11-21-2014
-		if (prior_block.vtx.size() > 0)
+		//Verify solver did not solve back to back blocks:
+		MiningCPID NewStakeBlock = DeserializeBoincBlock(hashBoinc);
+		int nGrandfather = 55000;
+		if (NewStakeBlock.GRCAddress.length() > 3  && pindexPrev->nHeight > nGrandfather)
 		{
-			MiningCPID PriorStakeBlock = DeserializeBoincBlock(prior_block.vtx[0].hashBoinc);
-			if (PriorStakeBlock.GRCAddress == NewStakeBlock.GRCAddress)
+			CBlock prior_block;
+			if (!prior_block.ReadFromDisk(pindexPrev))    return error("CheckProofOfStake() : read Prior block failed!");
+		
+			//11-21-2014
+			if (prior_block.vtx.size() > 0)
 			{
-				return error("CheckProofOfStake() : Back To Back GRC Address found on two blocks in a row.  Rejected!\r\n");
+				MiningCPID PriorStakeBlock = DeserializeBoincBlock(prior_block.vtx[0].hashBoinc);
+				if (PriorStakeBlock.GRCAddress == NewStakeBlock.GRCAddress)
+				{
+					return error("CheckProofOfStake() : Back To Back GRC Address found on two blocks in a row.  Rejected!\r\n");
+				}
 			}
-		}
 	
+		}
 	}
+
+
     if (!CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, txPrev, txin.prevout, tx.nTime, hashProofOfStake, targetProofOfStake, hashBoinc, fDebug, checking_local))
 	{
 		uint256 diff1 = hashProofOfStake - targetProofOfStake;

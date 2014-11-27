@@ -221,7 +221,7 @@ Public Class SQLBase
         'Ensure System, Consensus, Nodes exist:
         CreateTable("System", "sCategory,sKey,sValue", "varchar(100),varchar(100),varchar(100)")
 
-        CreateTable("Node", "host,LastSeen", "varchar(50),datetime")
+        CreateTable("Node", "host,LastSeen,Master", "varchar(50),datetime,numeric(1,0)")
         CreateTable("Consensus", "Round,Started,Ended,ConsensusHash,Tables", "uniqueidentifier,datetime,datetime,varchar(100),varchar(1500)")
         CreateTable("Organization", "Name,City", "varchar(100),varchar(100)")
         CreateTable("Confirm", "GRCFrom,GRCTo,txid,amount,confirmed", "varchar(100),varchar(100),varchar(100),money,numeric(1,0)")
@@ -480,9 +480,23 @@ Public Class SQLBase
 
         Next x
     End Function
-    Public Function GetData(sTable As String)
+    Public Function GetMasterNode()
+        sql = "Select Host From Node where master=-1 and deleted = 0"
+        Dim sHost As String
+        sHost = ReadFirstRow(sql, "Host")
+        If sHost = "" Then
+            'No master is known, use the seed node
+            sHost = "grid10:8080"
+        End If
+        Return sHost
 
-        Dim sURL As String = "http://grid10:8080?table=" + Trim(sTable) + "&startdate=" + Trim(dtConsensusStartDate) + "&enddate=" + Trim(dtConsensusEndDate)
+    End Function
+    Public Function GetData(sTable As String)
+        'ToDo; ask for data from the Master - once a new master is chosen - master will be updated automatically
+        Dim sMasterHost As String
+        sMasterHost = GetMasterNode()
+
+        Dim sURL As String = "http://" + sMasterHost + "?table=" + Trim(sTable) + "&startdate=" + Trim(dtConsensusStartDate) + "&enddate=" + Trim(dtConsensusEndDate)
 
         Dim w As New MyWebClient
         Dim sData As String

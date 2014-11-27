@@ -116,4 +116,9 @@ Public Class Form1
         Stop
 
     End Sub
+
+    Private Sub Button5_Click(sender As System.Object, e As System.EventArgs) Handles Button5.Click
+        'Ask master for Nodes list ; During Post identify yourself
+
+    End Sub
 End Class

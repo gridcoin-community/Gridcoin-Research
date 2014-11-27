@@ -68,7 +68,14 @@ Public Class HTTPSession
             End Try
         End While
     End Sub
+    Private Sub AddNode(sNode As String)
+        Dim oSql As New SQLBase("gridcoinsql")
+        Dim sData As String
+        oSql.InsertRecord("node", "Host,LastSeen,Master", "'" + Trim(sNode) + "',getdate(),0")
+        Stop
 
+
+    End Sub
     Protected Sub ProcessRequest()
         Dim recvBytes(1024) As Byte
         Dim htmlReq As String = Nothing
@@ -113,8 +120,7 @@ Public Class HTTPSession
                     qs1 = sQS(1)
                     Dim qs2() As String
                     Dim QSDecoded As String
-                    ' Dim w As System.Web.HttpServerUtility
-
+                    
                     QSDecoded = Replace(qs1, "%20", " ")
 
                     qs2 = Split(QSDecoded, "&")
@@ -133,6 +139,14 @@ Public Class HTTPSession
                         p2 = vRow(1)
                         DictQS.Add(p1, p2)
                     Next
+
+                    Dim clientInfo As IPEndPoint = CType(clientSocket.RemoteEndPoint, IPEndPoint)
+                    Console.WriteLine("Client: " + clientInfo.Address.ToString() + ":" + clientInfo.Port.ToString())
+                    Dim sClient As String
+                    sClient = clientInfo.Address.ToString() + ":" + clientInfo.Port.ToString()
+                    'Insert the node into Nodes
+                    AddNode(sClient)
+
                     Dim sData As String
                     sData = GetHttpData(DictQS("table"), DictQS("startdate"), DictQS("enddate"))
 

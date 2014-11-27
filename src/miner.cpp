@@ -603,12 +603,13 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 
 	if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc, true))
 	{	
-		printf("original hash boinc %s",pblock->vtx[0].hashBoinc.c_str());
+		printf("Hash boinc %s",pblock->vtx[0].hashBoinc.c_str());
         return error("CheckStake() : proof-of-stake checking failed");
 	}
 
-    double subsidy = (pblock->vtx[0].GetValueOut())/COIN;
-	std::string sSubsidy = RoundToString(subsidy,4);
+	//
+    //double subsidy = (pblock->vtx[0].GetValueOut())/COIN;
+	//std::string sSubsidy = RoundToString(subsidy,4);
 
 	/*
 	if (AmIGeneratingBackToBackBlocks()) 
@@ -641,8 +642,8 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	*/
 
 
-    printf("CheckStake() : new proof-of-stake block found - Subsidy %s, BlockValue %s, \r\n hash: %s \nproofhash: %s  \ntarget: %s\n",
-		sSubsidy.c_str(), sBlockValue.c_str(), hashBlock.GetHex().c_str(), proofHash.GetHex().c_str(), hashTarget.GetHex().c_str());
+    printf("CheckStake() : new proof-of-stake block found, BlockValue %s, \r\n hash: %s \nproofhash: %s  \ntarget: %s\n",
+		sBlockValue.c_str(), hashBlock.GetHex().c_str(), proofHash.GetHex().c_str(), hashTarget.GetHex().c_str());
 	if (fDebug)     pblock->print();
     printf("out %s\n", FormatMoney(pblock->vtx[1].GetValueOut()).c_str());
 
