@@ -1633,9 +1633,9 @@ double MintLimiter()
 	if (PORDiff >= 0  && PORDiff < .5) return .0001;
 	if (PORDiff >= .5 && PORDiff < 1)  return .25;
 	if (PORDiff >= 1  && PORDiff < 5)  return 1;
-	if (PORDiff >= 5  && PORDiff < 10) return 5;
-	if (PORDiff >= 10 && PORDiff < 50) return 7;
-	if (PORDiff >= 50) return 10;
+	if (PORDiff >= 5  && PORDiff < 10) return 10;
+	if (PORDiff >= 10 && PORDiff < 50) return 20;
+	if (PORDiff >= 50) return 50;
 	return .001;
 }
 	
@@ -1722,25 +1722,25 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	}
 	else if (NC == 2)
 	{
-					NewbieStakeWeightModifier =	500000+(out_magnitude*MaxReward);
+					NewbieStakeWeightModifier =	250000+(out_magnitude*MaxReward);
 					//printf("NL2::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
 					//Uninitialized Newbie
 	
 	}
 	else if (NC == 3 && out_owed > (MaxReward/5))
 	{
-					NewbieStakeWeightModifier =	out_magnitude*(MaxReward/2);
+					NewbieStakeWeightModifier =	out_magnitude*(MaxReward/3);
 					printf("NL3::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
 					//1 - 5 blocks
 	}
 	else if (NC == 4 && out_owed > (MaxReward/2))
 	{
-					NewbieStakeWeightModifier =	out_magnitude*(MaxReward/3);
+					NewbieStakeWeightModifier =	out_magnitude*(MaxReward/6);
 		
 	}
 	else if (NC == 5 && out_owed > (MaxReward/1.5))
 	{
-					NewbieStakeWeightModifier =	out_magnitude*(MaxReward/5);
+					NewbieStakeWeightModifier =	out_magnitude*(MaxReward/9);
 	}
 	
 	nWeight += NewbieStakeWeightModifier;
@@ -1819,14 +1819,10 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	try
 	{
 		 miningcpid = GetNextProject();
-		 //printf("Grabbing Prior blockhash for Cpidv2");
-		 //miningcpid.cpidv2 = cpid_hash(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pindexPrev->GetBlockHash());
-		 
-		 // miningcpid.cpidv2 = cpid_hash(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pblock->pprev->GetBlockHash());
+		 miningcpid.cpidv2 = CPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pindexPrev->GetBlockHash());
+		 // miningcpid.cpidv2 = CPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pblock->pprev->GetBlockHash());
 		 hashBoinc = SerializeBoincBlock(miningcpid);
-	//	 printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
-
-
+       	 //printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
 	}
 	catch (std::exception &e) 
 	{

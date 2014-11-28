@@ -108,7 +108,7 @@ struct MiningEntry {
 		std::string errors;
 		std::string email;
 		std::string boincruntimepublickey;
-	
+	    std::string cpidv2;
 		double NetworkRAC;
 		double TotalRAC;
 		double TotalNetworkRAC;

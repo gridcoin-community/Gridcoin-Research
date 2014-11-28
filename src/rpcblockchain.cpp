@@ -57,7 +57,10 @@ int TestAESHash(double rac, unsigned int diffbytes, uint256 scrypt_hash, std::st
 std::string TxToString(const CTransaction& tx, const uint256 hashBlock, int64_t& out_amount, int64_t& out_locktime, int64_t& out_projectid, 
 	std::string& out_projectaddress, std::string& comments, std::string& out_grcaddress);
 extern double GetPoBDifficulty();
-bool IsCPIDValid(std::string cpid, std::string ENCboincpubkey);
+bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
+
+bool IsCPIDValidv2(std::string cpid, std::string ENCboincpubkey, std::string cpidv2, uint256 blockhash);
+
 std::string RetrieveMd5(std::string s1);
 std::string getfilecontents(std::string filename);
 
@@ -284,6 +287,14 @@ double GetDifficulty(const CBlockIndex* blockindex)
         nShift--;
     }
 
+	//Prevent Exploding Diff - Fix the root cause of the issue asap
+	if (dDiff > 1000    && dDiff < 10000)          dDiff = (dDiff/100)  + 1000;
+	if (dDiff >= 10000  && dDiff < 100000)         dDiff = (dDiff/1000) + 2000;
+	if (dDiff >= 100000 && dDiff < 1000000)        dDiff = (dDiff/10000) + 3000;
+	if (dDiff >= 1000000 && dDiff < 100000000)     dDiff = (dDiff/100000) + 4000;
+	if (dDiff >= 10000000 && dDiff < 100000000000) dDiff = (dDiff/10000000) + 5000;
+	if (dDiff >= 100000000000) dDiff = (dDiff/100000000000) + 7000;
+
     return dDiff;
 }
 
@@ -415,31 +426,27 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("NewbieLevel",NewbieLevelToString(bb.NewbieLevel)));
 	result.push_back(Pair("GRCAddress",bb.GRCAddress));
 	std::string skein2 = aes_complex_hash(blockhash);
-	//uint256 boincpowhash = block.hashMerkleRoot + bb.nonce;
-	//int iav  = TestAESHash(bb.rac, (unsigned int)bb.diffbytes, boincpowhash, bb.aesskein);
-    //	result.push_back(Pair("AES512Valid",iav));
+	//	result.push_back(Pair("AES512Valid",iav));
 	result.push_back(Pair("ClientVersion",bb.clientversion));	
-
 	std::string hbd = AdvancedDecrypt(bb.enccpid);
-	bool IsCpidValid = IsCPIDValid(bb.cpid, bb.enccpid);
+	bool IsCpidValid = IsCPIDValid_Retired(bb.cpid, bb.enccpid);
 	result.push_back(Pair("CPIDValid",IsCpidValid));
+	result.push_back(Pair("Version2",block.nVersion));
 
-
-	//Put this section on hold
-	/*
-	result.push_back(Pair("CPIDv2",bb.cpidv2));
 	//pblock->hashPrevBlock
 	bool IsCPIDValid2 = CPID_IsCPIDValid(bb.cpid, bb.cpidv2, blockindex->pprev->GetBlockHash());
+	bool IsCPIDValid3 = CPID_IsCPIDValid(bb.cpid, bb.cpidv2, block.hashPrevBlock);
+	
 	result.push_back(Pair("CPIDValidv2",IsCPIDValid2));
+	result.push_back(Pair("CPIDValidv3",IsCPIDValid3));
+
 	//Write the correct cpid value:
-	std::string me = cpid_hash(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey,blockindex->pprev->GetBlockHash());
-	result.push_back(Pair("CorrectCPID",me));
-	//11-8-2014
-	*/
-
-
-
-
+	std::string me = CPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey,blockindex->pprev->GetBlockHash());
+	//Halford - CPID Algorithm v2 - 11-28-2014
+	result.push_back(Pair("CPIDv2",bb.cpidv2));
+	
+	result.push_back(Pair("MyCPID",me));
+	
     return result;
 }
 
@@ -830,11 +837,10 @@ void WriteCPIDToRPC(std::string email, std::string bpk, uint256 block, Array &re
 	output = RetrieveMd5(bpk + email);
 	entry.push_back(Pair("std_md5",output));
 	//Stress test
-	std::string me = cpid_hash(email,bpk,block);
+	std::string me = CPIDv2(email,bpk,block);
 	std::string bh = boinc_hash(email,bpk,block);
 	entry.push_back(Pair("LongCPID2",me));
 	entry.push_back(Pair("stdCPID2",bh));
-
 	bool result;
 	result =  CPID_IsCPIDValid(bh, me,block);
 	
@@ -1292,7 +1298,7 @@ Value listitem(const Array& params, bool fHelp)
 				{ 
 					if (structcpid.projectname.length() > 2 && projectvalid)
 					{
-						cpidDoubleCheck = IsCPIDValid(structcpid.cpid,structcpid.boincpublickey);
+						cpidDoubleCheck = IsCPIDValidv2(structcpid.cpid,structcpid.boincpublickey,structcpid.cpidv2,0);
 						including = (ProjectRAC > 0 && structcpid.Iscpidvalid && cpidDoubleCheck && structcpid.verifiedrac > 100);
 						UserVerifiedRAC = structcpid.verifiedrac;
 						if (UserVerifiedRAC < 0) UserVerifiedRAC=0;

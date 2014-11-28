@@ -321,7 +321,7 @@ void CPID::update(const char input[], size_type length)
 int BitwiseCount(std::string str, int pos)
 {
 	char ch;
-	if (pos < str.length())
+	if (pos < (int)str.length())
 	{
 		ch = str.at(pos);
 		int asc = (int)ch;
@@ -347,7 +347,7 @@ int HexToByte(std::string hex)
 int ROL(std::string blockhash, int iPos, std::string hash, int hexpos)
 {
 	    std::string cpid3 = "";
-		if (iPos <= hash.length()-1)
+		if (iPos <= (int)hash.length()-1)
 		{
 			std::string hex = hash.substr(iPos,2);
 			int rorcount = BitwiseCount(blockhash,hexpos);
@@ -368,7 +368,7 @@ void CPID::update5(std::string longcpid, uint256 blockhash)
     std::string shash = boinc_hash(blockhash.GetHex());
 	int hexpos = 0;
 	unsigned char* input = new unsigned char[(longcpid.length()/2)+1];
-    for (int i1 = 0; i1 < longcpid.length(); i1 = i1 + 2)
+    for (int i1 = 0; i1 < (int)longcpid.length(); i1 = i1 + 2)
     {
 			input[hexpos]  = ROL(shash,i1,longcpid,hexpos);
 			hexpos++;
@@ -490,7 +490,7 @@ std::string ByteToHex( T i )
 
 std::string ROR(std::string blockhash, int iPos, std::string hash)
 {
-	if (iPos <= hash.length()-1)
+	if (iPos <= (int)hash.length()-1)
 	{
 	    int asc1 = (int)hash.at(iPos);
 		int rorcount = BitwiseCount(blockhash, iPos);
@@ -516,7 +516,7 @@ std::string CPID::boincdigest(uint256 block) const
   std::string non_finalized(buf);
   std::string shash = boinc_hash(block.GetHex());
   std::string debug = "";
-  for (int i = 0; i < merged_hash.length(); i++)
+  for (int i = 0; i < (int)merged_hash.length(); i++)
   {
 		non_finalized += ROR(shash,i,merged_hash);
   }
@@ -559,11 +559,25 @@ std::string boinc_hash(const std::string str)
 }
 
 
-std::string cpid_hash(std::string email, std::string bpk, uint256 blockhash)
+std::string CPIDv2(std::string email, std::string bpk, uint256 blockhash)
 {
+	try
+	{
       //Given a block hash, a boinc e-mail, and a boinc public key, generate a Block CPID
       CPID c = CPID(email,bpk,blockhash);
       return c.boincdigest(blockhash);
+	}
+	catch (std::exception &e) 
+	{
+	    printf("Error while calculating CPIDv2\r\n");
+		return "0000000000000000000000000000000000000000";
+	}
+    catch(...)
+	{
+	    printf("Error while calculating CPIDv2 [2]\r\n");
+		return "0000000000000000000000000000000000000000";
+	}
+	
 }
 
 
@@ -576,11 +590,26 @@ std::string boinc_hash(std::string email, std::string bpk, uint256 blockhash)
 
 bool CPID_IsCPIDValid(std::string cpid1, std::string longcpid, uint256 blockhash)
 {
-	//Given a Block CPID, a Netsoft CPID, and a blockhash, return validity of Block CPID (t/f)
-	CPID c = CPID(cpid1);
-	//printf("Comparing user cpid %s, longcpid %s\r\n",cpid1.c_str(),longcpid.c_str());
-	bool compared = c.Compare(cpid1,longcpid,blockhash);
-	return compared;
+	try
+	{
+		//Given a Block CPID, a Netsoft CPID, and a blockhash, return validity of Block CPID (t/f)
+		CPID c = CPID(cpid1);
+		//printf("Comparing user cpid %s, longcpid %s\r\n",cpid1.c_str(),longcpid.c_str());
+		bool compared = c.Compare(cpid1,longcpid,blockhash);
+		return compared;
+	}
+	catch (std::exception& e)
+	{
+		printf("Error while comparing cpids %s, %s, %s\r\n",cpid1.c_str(),longcpid.c_str(),blockhash.GetHex().c_str());
+		return false;
+	}
+	catch(...)
+	{
+		printf("Error while comparing cpids %s, %s, %s [2]\r\n",cpid1.c_str(),longcpid.c_str(),blockhash.GetHex().c_str());
+		return false;
+	}
+
+
 }
 
 

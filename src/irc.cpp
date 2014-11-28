@@ -200,7 +200,7 @@ void ThreadIRCSeed(void* parg)
     } catch (...) {
         PrintExceptionContinue(NULL, "ThreadIRCSeed()");
     }
-    printf("ThreadIRCSeed exited\n");
+    if (fDebug) printf("ThreadIRCSeed exited\n");
 }
 
 void ThreadIRCSeed2(void* parg)

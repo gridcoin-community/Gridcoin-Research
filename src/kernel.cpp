@@ -13,10 +13,10 @@ std::string YesNo(bool bin);
 double GetPoSKernelPS2();
 
 std::string RoundToString(double d, int place);
-
+bool IsCPIDValidv2(std::string cpid, std::string ENCboincpubkey, std::string cpidv2, uint256 blockhash);
 using namespace std;
 MiningCPID DeserializeBoincBlock(std::string block);
-bool IsCPIDValid(std::string cpid, std::string ENCboincpubkey);
+bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 
 typedef std::map<int, unsigned int> MapModifierCheckpoints;
 /*
@@ -302,7 +302,8 @@ int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::str
 			{
     			if (boincblock.projectname == "") 	return 101;
 	    		if (boincblock.rac < 100) 			return 102;
-				if (!IsCPIDValid(boincblock.cpid,boincblock.enccpid)) return 103;
+				//11-28-2014 CPIDV2->hashPrevBlock
+				if (!IsCPIDValidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,blockFrom.hashPrevBlock)) return 103;
 				//If we already have a consensus on the node, the cpid does not qualify
 				if (mvMagnitudes.size() > 0)
 				{
@@ -356,7 +357,7 @@ int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::str
 	return 0;
 }
 
-double GetMagnitudeByHashBoinc(std::string hashBoinc)
+double GetMagnitudeByHashBoinc(std::string hashBoinc,uint256 blockhash)
 {
 	if (hashBoinc.length() > 1)
 		{
@@ -365,7 +366,7 @@ double GetMagnitudeByHashBoinc(std::string hashBoinc)
 			if (boincblock.cpid == "INVESTOR")  return 0;
    			if (boincblock.projectname == "") 	return 0;
     		if (boincblock.rac < 100) 			return 0;
-			if (!IsCPIDValid(boincblock.cpid,boincblock.enccpid)) return 0;
+			if (!IsCPIDValidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,blockhash)) return 0;
 			return boincblock.Magnitude;
 			//StructCPID UntrustedHost = mvMagnitudes[boincblock.cpid]; //Contains Consensus Magnitude
 			//return UntrustedHost.Magnitude;
@@ -407,7 +408,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	std::string cpid = boincblock.cpid;
     
 	double mag_accuracy = 0;
-	std::string cpidvalid = YesNo(IsCPIDValid(boincblock.cpid,boincblock.enccpid));
+	std::string cpidvalid = YesNo(IsCPIDValidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,blockFrom.hashPrevBlock));
 	if (mvMagnitudes.size() > 0)
 	{
 			StructCPID UntrustedHost = mvMagnitudes[boincblock.cpid]; //Contains Consensus Magnitude
@@ -437,12 +438,12 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	// If newbie solved between 1-5 blocks, return 3
 	// If newbie has reached level1, return 4
 	// If newbie has reached level2, return 5
-
+	//CPID v2 11-28-2014
 
 	if (NC >= 2 && NC <= 5)
 	{
 		    //11-12-2014 Dynamic Newbie Weight
-			double newbie_magnitude = GetMagnitudeByHashBoinc(hashBoinc);
+			double newbie_magnitude = GetMagnitudeByHashBoinc(hashBoinc,blockFrom.hashPrevBlock);
 
 		    //uint64_t nNetworkWeight = GetPoSKernelPS2();
 			if (NC == 2)
@@ -482,11 +483,10 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
     // to secure the network when proof-of-stake difficulty is low
 	//return min(nIntervalEnd - nIntervalBeginning - nStakeMinAge, (int64_t)nStakeMaxAge);
 	
-
 	CBigNum bnCoinDayWeight = 0;
 	if (checking_local)
 	{
-		bnCoinDayWeight = CBigNum(nValueIn + NewbieStakeWeightModifier) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60) / 2;
+		bnCoinDayWeight = CBigNum(nValueIn + NewbieStakeWeightModifier) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60) / 3;
 	}
 	else
 	{
@@ -503,7 +503,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 
     if (!GetKernelStakeModifier(hashBlockFrom, nStakeModifier, nStakeModifierHeight, nStakeModifierTime, fPrintProofOfStake))
     {
-		printf("{!");
+		printf("`");
 		return false;
 	}
     ss << nStakeModifier;

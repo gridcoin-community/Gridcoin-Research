@@ -390,7 +390,7 @@ font-family:'Open Sans,sans-serif';</string>
           <item row="5" column="1">
            <widget class="QLabel" name="labelTotal">
             <property name="toolTip">
-             <string>Total number of transactions in wallet</string>
+             <string>Total Balance</string>
             </property>
             <property name="text">
              <string notr="true">0</string>

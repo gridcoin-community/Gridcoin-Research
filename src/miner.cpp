@@ -416,13 +416,12 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 
         if (fDebug && GetBoolArg("-printpriority"))
             printf("CreateNewBlock(): total size %"PRIu64"\n", nBlockSize);
-		//Add Boinc Hash - R HALFORD - 11-7-2014 - Add CPID v2
+		//Add Boinc Hash - R HALFORD - 11-28-2014 - Add CPID v2
 		MiningCPID miningcpid = GetNextProject();
 		//ToDo:Test CPID v2 IsCpidValid from RPC
-	    //miningcpid.cpidv2 = cpid_hash(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pindexPrev->GetBlockHash());
-		
+	    miningcpid.cpidv2 = CPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pindexPrev->GetBlockHash());
 		std::string hashBoinc = SerializeBoincBlock(miningcpid);
-//		printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
+		//printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
 				
 	    if (LessVerbose(10)) printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
 
@@ -746,7 +745,7 @@ Inception:
 			iFutile++;
 			if (iFutile > 50) break;
 			MilliSleep(100);
-			printf("StakeMiner:Net averages not yet loaded...");
+			if (LessVerbose(100)) printf("StakeMiner:Net averages not yet loaded...");
 		}
 	
 

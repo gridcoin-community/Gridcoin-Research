@@ -2455,18 +2455,11 @@ void StartNodeNetworkOnly()
 
 
 
-
-
-
-
-
 void RestartGridcoin10()
 {
 	bool OK = StopNode();
-	void* parg;
-	StartNode(parg);
-
-
+	//void* parg;
+	StartNode(NULL);
 }
 
 
