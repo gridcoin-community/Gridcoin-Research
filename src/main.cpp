@@ -3618,7 +3618,7 @@ void GridcoinServices()
 	}
 
 	//Stack Overflow Error (Pallas): calling this every 5 minutes should cause linux to fail- TEST 11-9-2014- 11-29-2014 (45)
-	if (TimerMain("gather_cpids",4))
+	if (TimerMain("gather_cpids",45))
 	{
 			printf("\r\nReharvesting cpids in background thread...\r\n");
 			LoadCPIDsInBackground();

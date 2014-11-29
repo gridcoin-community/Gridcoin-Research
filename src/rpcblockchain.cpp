@@ -439,7 +439,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("CPIDv2",bb.cpidv2));
 
 	//pblock->hashPrevBlock
-	if (true)
+	if (false)
 	{
 		bool IsCPIDValid2 = CPID_IsCPIDValid(bb.cpid, bb.cpidv2, (uint256)bb.lastblockhash);
 		result.push_back(Pair("CPIDValidV2",IsCPIDValid2));
