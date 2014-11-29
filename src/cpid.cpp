@@ -602,6 +602,7 @@ bool CPID_IsCPIDValid(std::string cpid1, std::string longcpid, uint256 blockhash
 
 		//if (fDebug) printf("Comparing user cpid %s, longcpid %s\r\n",cpid1.c_str(),longcpid.c_str());
 		printf("?6");
+		//Definite: Problem here:
 		bool compared = c.Compare(cpid1,longcpid,blockhash);
 		return compared;
 	}

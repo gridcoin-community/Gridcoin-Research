@@ -3593,7 +3593,7 @@ void GridcoinServices()
 		printf("Daily backup results: %s\r\n",backup_results.c_str());
 	}
 	//Every 30 blocks, tally consensus mags:
-	if (TimerMain("update_boinc_magnitude", 16))
+	if (TimerMain("update_boinc_magnitude", 40))
 	{
 			    TallyInBackground();
 	}
@@ -4288,6 +4288,11 @@ std::string getfilecontents(std::string filename)
 
 bool IsCPIDValidv2(std::string cpid, std::string ENCboincpubkey, std::string cpidv2, std::string blockhash)
 {
+	//Due to massive problems, go back to the old algorithm:
+	bool result1 = IsCPIDValid_Retired(cpid,ENCboincpubkey);
+	return result1;
+	
+
 	//First use the new algorithm
 	printf("?3");
 	//if (fDebug) printf("IsCPIDValid4: %s, %s, bh %s",cpid.c_str(),cpidv2.c_str(),blockhash.c_str());
