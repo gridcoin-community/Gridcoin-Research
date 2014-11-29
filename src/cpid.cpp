@@ -563,9 +563,17 @@ std::string boinc_hash(const std::string str)
 
 std::string CPIDv2(std::string email, std::string bpk, uint256 blockhash)
 {
-      CPID c = CPID(email,bpk,blockhash);
-	  std::string sCPID = c.boincdigest(blockhash);
-	  return sCPID;
+	//11-29-2014
+	//////
+	
+	CPID c = CPID(email,bpk,blockhash);
+    return c.hexdigest();
+
+
+	//ToDO: Fix this:
+    //  CPID c = CPID(email,bpk,blockhash);
+	 // std::string sCPID = c.boincdigest(blockhash);
+	//  return sCPID;
 }
 
 
