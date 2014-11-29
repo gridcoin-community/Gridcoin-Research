@@ -59,7 +59,7 @@ std::string TxToString(const CTransaction& tx, const uint256 hashBlock, int64_t&
 extern double GetPoBDifficulty();
 bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 
-bool IsCPIDValidv2(std::string cpid, std::string ENCboincpubkey, std::string cpidv2, uint256 blockhash);
+bool IsCPIDValidv2(std::string cpid, std::string ENCboincpubkey, std::string cpidv2, std::string blockhash);
 
 std::string RetrieveMd5(std::string s1);
 std::string getfilecontents(std::string filename);

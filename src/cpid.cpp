@@ -584,13 +584,14 @@ std::string boinc_hash(std::string email, std::string bpk, uint256 blockhash)
 
 bool CPID_IsCPIDValid(std::string cpid1, std::string longcpid, uint256 blockhash)
 {
+	try
+	{
 		if (cpid1.empty()) return false;
 		if (longcpid.empty()) return false;
 		if (longcpid.length() < 32) return false;
-		if (cpid1=="") return false;
+		
 		if (cpid1.length() < 5) return false;
 		if (cpid1=="INVESTOR" || longcpid=="INVESTOR") return true;
-		if (longcpid=="") return false;
 		if (cpid1.length() == 0 || longcpid.length() == 0)
 		{
 			printf("NULL Cpid received\r\n");
@@ -598,10 +599,17 @@ bool CPID_IsCPIDValid(std::string cpid1, std::string longcpid, uint256 blockhash
 		}
 		if (longcpid.length() < 5) return false;
 		CPID c = CPID(cpid1);
-		if (fDebug) printf("Comparing user cpid %s, longcpid %s\r\n",cpid1.c_str(),longcpid.c_str());
+
+		//if (fDebug) printf("Comparing user cpid %s, longcpid %s\r\n",cpid1.c_str(),longcpid.c_str());
+		printf("?6");
 		bool compared = c.Compare(cpid1,longcpid,blockhash);
 		return compared;
-	
+	}
+	catch(...)
+	{
+		printf("Error in CPID comparison v2");
+		return false;
+	}
 }
 
 

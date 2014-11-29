@@ -253,7 +253,7 @@ double GetNetworkAvgByProject(std::string projectname);
 extern bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 
 
-extern bool IsCPIDValidv2(std::string cpid, std::string ENCboincpubkey, std::string cpidv2, uint256 blockhash);
+extern bool IsCPIDValidv2(std::string cpid, std::string ENCboincpubkey, std::string cpidv2,std::string blockhash);
 
 extern void FindMultiAlgorithmSolution(CBlock* pblock, uint256 hash, uint256 hashTaget, double miningrac);
 
@@ -705,6 +705,7 @@ MiningCPID GetNextProject()
 	GlobalCPUMiningCPID.encboincpublickey = "";
 	GlobalCPUMiningCPID.pobdifficulty = 0;
 	GlobalCPUMiningCPID.diffbytes = 0;
+	GlobalCPUMiningCPID.lastblockhash = "0";
 
 	printf("qq0.");
 
@@ -1045,7 +1046,7 @@ std::string DefaultWalletAddress()
 	 }
        
 
-	return "?";
+	return "NA";
 }
 
 
@@ -3307,21 +3308,29 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
 	//ProofOfResearch
 	if (true)
 	{
-		MiningCPID boincblock = DeserializeBoincBlock(vtx[0].hashBoinc);
-		if (boincblock.cpid != "INVESTOR")
+		if (vtx.size() > 0)
 		{
-    		if (boincblock.projectname == "") 	return DoS(1,error("PoR Project Name invalid"));
-	    	if (boincblock.rac < 100) 			return DoS(1,error("RAC too low"));
-			//	cpidv2: CPID_(bb.cpid, bb.cpidv2, blockindex->pprev->GetBlockHash());
-			//Problem is here: 11-29-2014
-		    //if (!IsCPIDlidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,hashPrevBlock)) return DoS(1,error("Bad CPID"));
-			//Block CPID 
-		    if (!IsCPIDValid_Retired(boincblock.cpid,boincblock.enccpid))
+			MiningCPID boincblock = DeserializeBoincBlock(vtx[0].hashBoinc);
+			if (boincblock.cpid != "INVESTOR")
 			{
-					return DoS(1,error("Bad CPID"));
+    			if (boincblock.projectname == "") 	return DoS(1,error("PoR Project Name invalid"));
+	    		if (boincblock.rac < 100) 			return DoS(1,error("RAC too low"));
+				//	cpidv2: CPID_(bb.cpid, bb.cpidv2, blockindex->pprev->GetBlockHash());
+				//Problem is here: 11-29-2014
+				//if (!IsCPIDlidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,hashPrevBlock)) return DoS(1,error("Bad CPID"));
+				//Block CPID 
+				printf("^a");
+				if (!IsCPIDValid_Retired(boincblock.cpid,boincblock.enccpid))
+				{
+						return DoS(1,error("Bad CPID"));
+				}
+
+
 			}
-
-
+		}
+		else
+		{
+			return false;
 		}
 
 	}
@@ -3583,8 +3592,8 @@ void GridcoinServices()
 		std::string backup_results = BackupGridcoinWallet();
 		printf("Daily backup results: %s\r\n",backup_results.c_str());
 	}
-	//Every 15 blocks, tally consensus mags:
-	if (TimerMain("update_boinc_magnitude", 30))
+	//Every 30 blocks, tally consensus mags:
+	if (TimerMain("update_boinc_magnitude", 16))
 	{
 			    TallyInBackground();
 	}
@@ -4277,19 +4286,57 @@ std::string getfilecontents(std::string filename)
 }
 
 
-bool IsCPIDValidv2(std::string cpid, std::string ENCboincpubkey, std::string cpidv2, uint256 blockhash)
+bool IsCPIDValidv2(std::string cpid, std::string ENCboincpubkey, std::string cpidv2, std::string blockhash)
 {
 	//First use the new algorithm
-	if (fDebug) printf("IsCPIDValid4: %s, %s, bh %s",cpid.c_str(),cpidv2.c_str(),blockhash.GetHex().c_str());
-	bool new_result = CPID_IsCPIDValid(cpid,cpidv2,blockhash);
+	printf("?3");
+	//if (fDebug) printf("IsCPIDValid4: %s, %s, bh %s",cpid.c_str(),cpidv2.c_str(),blockhash.c_str());
+	if (cpid.length() == 0) printf("CPID is null");
+	if (ENCboincpubkey.length() ==0) printf("bpk is null");
+	if (cpidv2.length() == 0) printf("cpidv2 is null");
+	if (blockhash.length()==0) printf("bh is null");
+	printf("?4a");
+
+	uint256 lbh = 0;
+	try
+	{
+		if (blockhash.length() > 10)
+		{
+				
+			lbh = uint256(blockhash);
+		}
+	}
+	catch(...)
+	{
+		printf("Error while converting %s",blockhash.c_str());
+	}
+	bool new_result = false;
+
+	try
+	{
+		printf("?5");
+		new_result = CPID_IsCPIDValid(cpid,cpidv2,lbh);
+	}
+	catch(...)
+	{
+		try 
+		{
+			printf("Error while comparing %s %s %s",cpid.c_str(),cpidv2.c_str(),blockhash.c_str());
+		}
+		catch(...)
+		{
+
+		}
+	}
 	if (!new_result)
 	{
 		//Next Defer to the old algorithm
+		printf("?4");
 		if (cpid=="") return false;
 		if (cpid.length() < 5) return false;
 		if (cpid == "INVESTOR") return true;
 		bool old_result = IsCPIDValid_Retired(cpid,ENCboincpubkey);
-		if (fDebug) printf("IsCPIDValidv2 %s, %s, bh %s, OldResult: %s;",cpid.c_str(),cpidv2.c_str(),blockhash.GetHex().c_str(),YesNo(old_result).c_str());
+		if (fDebug) printf("IsCPIDValidv2 %s, %s, bh %s, OldResult: %s;",cpid.c_str(),cpidv2.c_str(),blockhash.c_str(),YesNo(old_result).c_str());
 		return old_result;
 	}
 	return new_result;
@@ -4556,6 +4603,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 						MiningCPID bb;
 						bb.Magnitude=0;
 						bb.cpid="";
+						bb.lastblockhash = "0";
 						bb =  DeserializeBoincBlock(hashboinc);
 						//Verify validity of project
 						bool piv = ProjectIsValid(bb.projectname);
@@ -4565,6 +4613,8 @@ bool TallyNetworkAverages(bool ColdBoot)
 							std::string proj= bb.projectname;
 							std::string projcpid = bb.cpid + ":" + bb.projectname;
 							std::string cpid = bb.cpid;
+							std::string cpidv2 = bb.cpidv2;
+							std::string lbh = bb.lastblockhash;
 
 							StructCPID structcpid;
 							structcpid = mvNetwork[proj];
@@ -4573,6 +4623,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 							{
 								    structcpid.cpidv2 = "";
 									structcpid.initialized = true;
+											
 									mvNetwork.insert(map<string,StructCPID>::value_type(proj,structcpid));
 							} 
 
@@ -4602,7 +4653,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 							}
 							structnetcpidproject.projectname = proj;
 							structnetcpidproject.cpid = cpid;
-							structnetcpidproject.cpidv2 = cpid;
+							structnetcpidproject.cpidv2 = cpidv2;
 							structnetcpidproject.rac = structnetcpidproject.rac + bb.rac;
 							structnetcpidproject.entries++;
 							if (structnetcpidproject.entries > 0)
@@ -5860,7 +5911,7 @@ uint256 GridcoinMultipleAlgoHash(std::string t1)
 
 std::string aes_complex_hash(uint256 scrypt_hash)
 {
-	  if (scrypt_hash==0) return "?";
+	  if (scrypt_hash==0) return "0";
 	  
 			std::string	sScryptHash = scrypt_hash.GetHex();
 			std::string	sENCAES512 = AdvancedCrypt(sScryptHash);
@@ -5955,6 +6006,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 	std::string delim = "<|>";
 	std::string version = FormatFullVersion();
 	mcpid.GRCAddress = DefaultWalletAddress();
+	if (mcpid.lastblockhash.length()==0) mcpid.lastblockhash = "0";
 	std::string bb = mcpid.cpid + delim + mcpid.projectname + delim + mcpid.aesskein + delim + RoundToString(mcpid.rac,0)
 					+ delim + RoundToString(mcpid.pobdifficulty,5) + delim + RoundToString((double)mcpid.diffbytes,0) 
 					+ delim + mcpid.enccpid 
@@ -5991,6 +6043,8 @@ MiningCPID DeserializeBoincBlock(std::string block)
 	MiningCPID surrogate;
 	try 
 	{
+
+		
 	surrogate.cpid = "";
 	surrogate.projectname="";
 	surrogate.aesskein = "";
@@ -6012,7 +6066,7 @@ MiningCPID DeserializeBoincBlock(std::string block)
 	surrogate.clientversion = "";
 	surrogate.NewbieLevel=0;
 	surrogate.GRCAddress = "";
-	surrogate.lastblockhash = "";
+	surrogate.lastblockhash = "0";
 
 	std::vector<std::string> s = split(block,"<|>");
 	if (s.size() > 7)
@@ -6067,10 +6121,6 @@ MiningCPID DeserializeBoincBlock(std::string block)
 		
 	}
 	}
-	catch (std::exception &e) 
-	{
-			printf("Deserialize ended with an error\r\n");
-    }
 	catch (...)
 	{
 		    printf("Deserialize ended with an error (06182014) \r\n");
@@ -6232,7 +6282,7 @@ void InitializeProjectStruct(StructCPID& project)
 	//Local CPID with struct
 	//Must contain cpidv2, cpid, boincpublickey
 	project.Iscpidvalid = IsLocalCPIDValid(project);
-	printf("Assimilating local project %s, Valid %s",project.projectname.c_str(),YesNo(project.Iscpidvalid).c_str());
+	if (fDebug) printf("Assimilating local project %s, Valid %s",project.projectname.c_str(),YesNo(project.Iscpidvalid).c_str());
  	if (project.team != "gridcoin") 
 	{
 				project.Iscpidvalid = false;

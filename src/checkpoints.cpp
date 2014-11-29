@@ -458,7 +458,7 @@ bool CSyncCheckpoint::CheckSignature()
   bool CSyncCheckpoint::CheckSignatureWithBalance()
   {
 	// Verify Senders Balance:
-	double senders_balance = GetGridcoinBalance(SendersWalletAddress);
+	//double senders_balance = GetGridcoinBalance(SendersWalletAddress);
 	if (balance < 1000000)
 	{
 		CKey key;

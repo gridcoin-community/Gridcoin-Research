@@ -13,7 +13,7 @@ std::string YesNo(bool bin);
 double GetPoSKernelPS2();
 
 std::string RoundToString(double d, int place);
-bool IsCPIDValidv2(std::string cpid, std::string ENCboincpubkey, std::string cpidv2, uint256 blockhash);
+bool IsCPIDValidv2(std::string cpid, std::string ENCboincpubkey, std::string cpidv2,std::string blockhash);
 using namespace std;
 MiningCPID DeserializeBoincBlock(std::string block);
 bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
@@ -305,7 +305,7 @@ int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::str
 				//11-28-2014 CPIDV2->hashPrevBlock
 				//Heinous Problem is Here:
 				
-				if (!IsCPIDValidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,(uint256)boincblock.lastblockhash)) return 103;
+				if (!IsCPIDValidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,boincblock.lastblockhash)) return 103;
 				//Block CPID:11-29-2014
 				//if (IsCPIDValid_Retired(boincblock.cpid,boincblock.enccpid)) return 136;
 
@@ -371,9 +371,17 @@ double GetMagnitudeByHashBoinc(std::string hashBoinc,uint256 blockhash)
 			if (boincblock.cpid == "INVESTOR")  return 0;
    			if (boincblock.projectname == "") 	return 0;
     		if (boincblock.rac < 100) 			return 0;
-			printf("?");
-			uint256 lbh = (uint256)boincblock.lastblockhash;
-			if (!IsCPIDValidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,lbh)) return 0;
+			printf("?a");
+			//11-29-2014
+			try
+			{
+			if (!IsCPIDValidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,boincblock.lastblockhash)) return 0;
+			}
+			catch(...)
+			{
+				printf("Error 11292014");
+				return 0;
+			}
 			//if (IsCPIDValid_Retired(boincblock.cpid,boincblock.enccpid)) return 0;
 			return boincblock.Magnitude;
 			//StructCPID UntrustedHost = mvMagnitudes[boincblock.cpid]; //Contains Consensus Magnitude

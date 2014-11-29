@@ -1692,9 +1692,15 @@ void ReinstantiateGlobalcom()
 			else
 			{
 					printf("Instantiating globalcom for Windows");
-
-					globalcom = new QAxObject("BoincStake.Utilization");
-								printf("Instantiated globalcom for Windows");
+					try
+					{
+						globalcom = new QAxObject("BoincStake.Utilization");
+					}
+					catch(...)
+					{
+						printf("Failed to instantiate globalcom.");
+					}
+					printf("Instantiated globalcom for Windows");
 
 			}
 
@@ -1780,7 +1786,7 @@ void BitcoinGUI::timerfire()
 					//printf("Created restore point : %i",r);
 				}
 
-
+				//6*10
 				if (Timer("update_boinc_magnitude", 6*10))
 				{
 						//double POB = GetPoBDifficulty();
