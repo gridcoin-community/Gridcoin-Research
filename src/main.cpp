@@ -737,6 +737,7 @@ MiningCPID GetNextProject()
 					printf("@o9.");
 
 					bool cpidDoubleCheck = IsCPIDValidv2(structcpid.cpid,structcpid.boincpublickey,structcpid.cpidv2,0);
+
 					if (structcpid.Iscpidvalid && cpidDoubleCheck && structcpid.verifiedrac > 100)
 					{
 						iValidProjects++;
@@ -3275,6 +3276,8 @@ bool Resuscitate()
 bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) const
 {
     
+	printf("#cb0");
+
 	if (GetHash()==hashGenesisBlock || GetHash()==hashGenesisBlockTestNet) return true;
 	
 	// These are checks that are independent of context
