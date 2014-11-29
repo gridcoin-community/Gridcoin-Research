@@ -84,33 +84,22 @@ struct MiningEntry {
 	
     struct StructCPID 
 	{
-		std::string cpid;
-		std::string emailhash;
-		std::string cpidhash;
-		std::string projectname;
 		bool initialized;
 		bool isvoucher;
+		bool activeproject;
+		bool Iscpidvalid;
+
 		double rac;
 		double utc;
 	    double rectime;
 		double age;
-		std::string team;
-		bool activeproject;
 		double verifiedrac;
 		double verifiedutc;
-		std::string verifiedteam;
 		double verifiedrectime;
 		double verifiedage;
 		double entries;
 		double AverageRAC;
 		double NetworkProjects;
-		std::string boincpublickey;
-		bool Iscpidvalid;
-		std::string link;
-		std::string errors;
-		std::string email;
-		std::string boincruntimepublickey;
-	    std::string cpidv2;
 		double NetworkRAC;
 		double TotalRAC;
 		double TotalNetworkRAC;
@@ -138,11 +127,28 @@ struct MiningEntry {
 		double EarliestPaymentTime;
 		double NewbieLevel;
 		double PaymentTimespan;
+
+
+		std::string cpid;
+		std::string emailhash;
+		std::string cpidhash;
+		std::string projectname;
+		std::string team;
+		std::string verifiedteam;
+		std::string boincpublickey;
+		std::string link;
+		std::string errors;
+		std::string email;
+		std::string boincruntimepublickey;
+	    std::string cpidv2;
+		
+		
 	};
 
 
 
-    struct StructCPIDCache {
+    struct StructCPIDCache 
+	{
 		std::string cpid;
 		std::string cpidproject;
 		std::string xml;

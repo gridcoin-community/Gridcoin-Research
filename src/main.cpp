@@ -557,7 +557,7 @@ std::string GetGlobalStatus()
 		//Vlad : Request to make overview page magnitude consistent:
 		double out_magnitude = 0;
 		double out_owed = 0;
-		int NC = NewbieCompliesWithLocalStakeWeightRule(out_magnitude,out_owed);
+		NewbieCompliesWithLocalStakeWeightRule(out_magnitude,out_owed);
 		// End of Boinc Magnitude update
 
 		double weight = nWeight;
@@ -6594,6 +6594,7 @@ try
 		mvCPIDs.clear();
 		mvCreditNode.clear();
 		mvCreditNodeCPID.clear();
+		mvCreditNodeCPIDProject.clear();
 		mvCPIDCache.clear();
 	}
 	printf("@3");
@@ -6633,10 +6634,13 @@ try
 				printf("@4");
 				if (!structcpid.initialized) 
 				{
+					printf("@!");
 					structcpid = GetStructCPID();
 					structcpid.initialized = true;
 					structcpid.cpidv2 = "";
+					printf("@a5");
 					mvCPIDs.insert(map<string,StructCPID>::value_type(proj,structcpid));
+					printf("@a6");
 				} 
 				
 				structcpid.cpidhash = cpidhash;
@@ -6644,7 +6648,10 @@ try
 				boost::to_lower(team);
 				structcpid.team = team;
 
+				printf("@55");
+
 				InitializeProjectStruct(structcpid);
+				printf("@6");
 
 				printf("Harvested new project %s cpid %s valid %s",structcpid.projectname.c_str(),structcpid.cpid.c_str(),YesNo(structcpid.Iscpidvalid).c_str());
 
@@ -6755,9 +6762,11 @@ try
 				   structcpid.Iscpidvalid = false;
 				   structcpid.errors = "Not an official boinc whitelisted project.  Please see 'list projects'.";
 			   }
-
+			   printf("@11");
 
 				mvCPIDs[proj] = structcpid;						
+				printf("@12");
+
 				if (fDebug) printf("Adding %s",structcpid.cpid.c_str());
 			}
 
