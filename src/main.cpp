@@ -3269,7 +3269,7 @@ bool Resuscitate()
 bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) const
 {
     
-	printf("#cb0");
+	//printf("#cb0");
 
 	if (GetHash()==hashGenesisBlock || GetHash()==hashGenesisBlockTestNet) return true;
 	
@@ -3319,7 +3319,7 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
 				//Problem is here: 11-29-2014
 				//if (!IsCPIDlidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,hashPrevBlock)) return DoS(1,error("Bad CPID"));
 				//Block CPID 
-				printf("^a");
+				//printf("^a");
 				if (!IsCPIDValid_Retired(boincblock.cpid,boincblock.enccpid))
 				{
 						return DoS(1,error("Bad CPID"));
@@ -4355,6 +4355,11 @@ bool IsCPIDValidv2(std::string cpid, std::string ENCboincpubkey, std::string cpi
 
 bool IsLocalCPIDValid(StructCPID &structcpid)
 {
+	// Debugging Stack smashing:
+	bool old_result1 = IsCPIDValid_Retired(structcpid.cpid,structcpid.boincpublickey);
+	return old_result1;
+
+
 	//	std::string ENCbpk = AdvancedCrypt(cpid_non); stored -> 				structcpid.boincpublickey = ENCbpk;
 	//Must contain cpidv2, cpid, boincpublickey
 
