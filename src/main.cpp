@@ -3616,12 +3616,12 @@ void GridcoinServices()
 		}
 	}
 
-	//Stack Overflow Error (Pallas): calling this every 5 minutes should cause linux to fail- TEST 11-9-2014
-	if (TimerMain("gather_cpids",45))
+	//Stack Overflow Error (Pallas): calling this every 5 minutes should cause linux to fail- TEST 11-9-2014- 11-29-2014 (45)
+	if (TimerMain("gather_cpids",7))
 	{
-				printf("\r\nReharvesting cpids in background thread...\r\n");
-				LoadCPIDsInBackground();
-
+			printf("\r\nReharvesting cpids in background thread...\r\n");
+			LoadCPIDsInBackground();
+			printf("Loaded");
 	}
 
 
@@ -4476,10 +4476,11 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 		globalMag = mvMagnitudes["global"];
 		if (!globalMag.initialized)
 		{
-								globalMag.initialized=true;
-								globalMag.LowLockTime = 99999999999;
-								globalMag.HighLockTime = 0;
-								mvMagnitudes.insert(map<string,StructCPID>::value_type(cpid,globalMag));
+				globalMag = GetStructCPID();
+				globalMag.initialized=true;
+				globalMag.LowLockTime = 99999999999;
+				globalMag.HighLockTime = 0;
+				mvMagnitudes.insert(map<string,StructCPID>::value_type(cpid,globalMag));
 		}
 
 		
@@ -4489,10 +4490,11 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 
 		if (!structMagnitude.initialized)
 		{
-								structMagnitude.initialized=true;
-								structMagnitude.LastPaymentTime = 0;
-								structMagnitude.EarliestPaymentTime = 99999999999;
-								mvMagnitudes.insert(map<string,StructCPID>::value_type(cpid,structMagnitude));
+			structMagnitude = GetStructCPID();
+			structMagnitude.initialized=true;
+			structMagnitude.LastPaymentTime = 0;
+			structMagnitude.EarliestPaymentTime = 99999999999;
+			mvMagnitudes.insert(map<string,StructCPID>::value_type(cpid,structMagnitude));
 								
 		}
 
@@ -4583,10 +4585,10 @@ bool TallyNetworkAverages(bool ColdBoot)
 							iRow++;
 							if (!structcpid.initialized) 
 							{
-								    structcpid.cpidv2 = "";
-									structcpid.initialized = true;
-											
-									mvNetwork.insert(map<string,StructCPID>::value_type(proj,structcpid));
+								structcpid = GetStructCPID();
+								structcpid.cpidv2 = "";
+								structcpid.initialized = true;
+								mvNetwork.insert(map<string,StructCPID>::value_type(proj,structcpid));
 							} 
 
 							//Insert Global Network Project Stats:
@@ -4607,6 +4609,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 
 							if (!structnetcpidproject.initialized)
 							{
+								structnetcpidproject = GetStructCPID();
 								structnetcpidproject.cpidv2 = "";
 								structnetcpidproject.initialized = true;
 								mvNetworkCPIDs.insert(map<string,StructCPID>::value_type(projcpid,structnetcpidproject));
@@ -6223,12 +6226,13 @@ void InitializeProjectStruct(StructCPID& project)
 	project.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + project.cpid;
 	//Local CPID with struct
 	//Must contain cpidv2, cpid, boincpublickey
+	project.Iscpidvalid = false;
 	project.Iscpidvalid = IsLocalCPIDValid(project);
 	if (fDebug) printf("Assimilating local project %s, Valid %s",project.projectname.c_str(),YesNo(project.Iscpidvalid).c_str());
  	if (project.team != "gridcoin") 
 	{
-				project.Iscpidvalid = false;
-				project.errors = "Team invalid";
+			project.Iscpidvalid = false;
+			project.errors = "Team invalid";
 	}
 
 	
@@ -6329,6 +6333,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 						iRow++;
 						if (!structcc.initialized) 
 						{
+							structcc = GetStructCPID();
 							structcc.cpidv2 = "";
 							structcc.initialized = true;
 							mvCreditNode.insert(map<string,StructCPID>::value_type(sProj,structcc));
@@ -6352,6 +6357,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 						structClientProject = mvCPIDs[sProj];
 						if (!structClientProject.initialized)
 						{
+							structClientProject = GetStructCPID();
 							AddProjectFromNetSoft(structcc);
 						}
 						//End of Adding to Client Project List
@@ -6365,6 +6371,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 						structverify = mvCreditNodeCPIDProject[sKey]; //Contains verified CPID+Projects;
 						if (!structverify.initialized)
 						{
+							structverify = GetStructCPID();
 							structverify.cpidv2 = "";
 							structverify.initialized = true;
 							mvCreditNodeCPIDProject.insert(map<string,StructCPID>::value_type(sKey,structverify));
@@ -6382,6 +6389,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 						structc = mvCreditNodeCPID[cpid]; //Contains verified total RAC for the entire CPID
 						if (!structc.initialized)
 						{
+							structc = GetStructCPID();
 							structc.initialized = true;
 							structc.TotalMagnitude = 0;
 							mvCreditNodeCPID.insert(map<string,StructCPID>::value_type(cpid,structc));
@@ -6458,11 +6466,13 @@ double CreditCheck(std::string cpid, std::string projectname)
 	structverify = mvCreditNodeCPIDProject[sKey]; //Contains verified CPID+Projects;
 	if (!structverify.initialized)
 	{
+		structverify = GetStructCPID();
 		CreditCheck(cpid,false);
 	}
 	structverify = mvCreditNodeCPIDProject[sKey]; //Contains verified CPID+Projects;
 	if (!structverify.initialized) 
 	{
+		structverify = GetStructCPID();
 		//Defer to the chain, as internet may be down:
 		printf("Cannot reach credit check node... Checking main chain\r\n");
 		std::string out_errors = "";
@@ -6577,25 +6587,22 @@ try
 
 		return;
 	}
+
+	printf("@2");
 	if (cleardata)
 	{
 		mvCPIDs.clear();
 		mvCreditNode.clear();
 		mvCreditNodeCPID.clear();
 		mvCPIDCache.clear();
-	  		
 	}
+	printf("@3");
 
-	std::string email = "";
-
-	if (mapArgs.count("-email"))
-    {
-        email = GetArg("-email", "");
-	}
-   
+	std::string email = email = GetArg("-email", "");
+	   
 	int iRow = 0;
 	std::vector<std::string> vCPID = split(sout.c_str(),"<project>");
-	if (vCPID.size() > 1)
+	if (vCPID.size() > 0)
 	{
 	
 		for (unsigned int i = 0; i < vCPID.size(); i++)
@@ -6619,13 +6626,14 @@ try
 			{
 				std::string cpid_non = cpidhash+email;
 				to_lower(cpid_non);
-
-				
+								
 				StructCPID structcpid = GetStructCPID();
 				structcpid = mvCPIDs[proj];
 				iRow++;
+				printf("@4");
 				if (!structcpid.initialized) 
 				{
+					structcpid = GetStructCPID();
 					structcpid.initialized = true;
 					structcpid.cpidv2 = "";
 					mvCPIDs.insert(map<string,StructCPID>::value_type(proj,structcpid));
@@ -6672,7 +6680,11 @@ try
 				std::string sKey = structcpid.cpid + ":" + proj;
 							
 				structverify = mvCreditNodeCPIDProject[sKey]; //Contains verified CPID+Projects;
-				if (!structverify.initialized  && projectvalid)
+				if (!structverify.initialized)
+				{
+					structverify = GetStructCPID();
+				}
+				if (projectvalid)
  				{
 					structverify.cpidv2 = "";
 					CreditCheck(structcpid.cpid,cleardata);
@@ -6790,6 +6802,7 @@ void ThreadCPIDs()
 	//Reloads maglevel:
 	printf("Performing 1st credit check (%s)",GlobalCPUMiningCPID.cpid.c_str());
 	//11-9-2014 Stack Smashing
+	printf("@ss1");
 	CreditCheck(GlobalCPUMiningCPID.cpid,true);
 	printf("Getting first project");
 	GetNextProject();
