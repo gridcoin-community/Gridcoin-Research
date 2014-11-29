@@ -1822,8 +1822,9 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		 miningcpid = GetNextProject();
 		 printf("45.");
 		 //11-29-2014
-		 miningcpid.cpidv2 = CPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pindexPrev->GetBlockHash());
-		 // miningcpid.cpidv2 = CPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pblock->pprev->GetBlockHash());
+		 miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pindexPrev->GetBlockHash());
+		 miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
+		 // miningcpid.cpidv2 = CIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pblock->pprev->GetBlockHash());
 		 hashBoinc = SerializeBoincBlock(miningcpid);
        	 //printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
 	}

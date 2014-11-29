@@ -56,10 +56,21 @@
         Return False
     End Function
 
+    Private Sub WatchDog_FormClosed(sender As Object, e As System.Windows.Forms.FormClosedEventArgs) Handles Me.FormClosed
+        Environment.Exit(0)
+
+        End
+
+    End Sub
+
 
     Private Sub WatchDog_Load(sender As Object, e As System.EventArgs) Handles Me.Load
         DoggieBox.Items.Clear()
         DoggieBox.Items.Add("Starting WatchDog...")
+
+    End Sub
+
+    Private Sub DoggieBox_SelectedIndexChanged(sender As System.Object, e As System.EventArgs) Handles DoggieBox.SelectedIndexChanged
 
     End Sub
 End Class

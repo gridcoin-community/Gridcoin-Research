@@ -435,17 +435,17 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("CPIDv2",bb.cpidv2));
 
 	//pblock->hashPrevBlock
-	if (false)
+	if (true)
 	{
-		bool IsCPIDValid2 = CPID_IsCPIDValid(bb.cpid, bb.cpidv2, blockindex->pprev->GetBlockHash());
-		result.push_back(Pair("CPIDValidv2",IsCPIDValid2));
+		bool IsCPIDValid2 = CPID_IsCPIDValid(bb.cpid, bb.cpidv2, (uint256)bb.lastblockhash);
+		result.push_back(Pair("CPIDValidV2",IsCPIDValid2));
 	}
 
 	//Write the correct cpid value (heinous error here:)//Halford - CPID Algorithm v2 - 11-28-2014
 	
 	if (false)
 	{
-		std::string me = CPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey,blockindex->pprev->GetBlockHash());
+		std::string me = ComputeCPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey,blockindex->pprev->GetBlockHash());
 		result.push_back(Pair("MyCPID",me));
 	}
     return result;
@@ -838,7 +838,7 @@ void WriteCPIDToRPC(std::string email, std::string bpk, uint256 block, Array &re
 	output = RetrieveMd5(bpk + email);
 	entry.push_back(Pair("std_md5",output));
 	//Stress test
-	std::string me = CPIDv2(email,bpk,block);
+	std::string me = ComputeCPIDv2(email,bpk,block);
 	std::string bh = boinc_hash(email,bpk,block);
 	entry.push_back(Pair("LongCPID2",me));
 	entry.push_back(Pair("stdCPID2",bh));
@@ -1293,14 +1293,12 @@ Value listitem(const Array& params, bool fHelp)
 				bool including = false;
 				narr = "";
 				narr_desc = "";
-				bool cpidDoubleCheck = false;
 				double UserVerifiedRAC = 0;
 				if (structcpid.initialized) 
 				{ 
 					if (structcpid.projectname.length() > 2 && projectvalid)
 					{
-						cpidDoubleCheck = IsCPIDValidv2(structcpid.cpid,structcpid.boincpublickey,structcpid.cpidv2,0);
-						including = (ProjectRAC > 0 && structcpid.Iscpidvalid && cpidDoubleCheck && structcpid.verifiedrac > 100);
+						including = (ProjectRAC > 0 && structcpid.Iscpidvalid && structcpid.verifiedrac > 100);
 						UserVerifiedRAC = structcpid.verifiedrac;
 						if (UserVerifiedRAC < 0) UserVerifiedRAC=0;
 						narr_desc = "NetRac: " + RoundToString(ProjectRAC,0) + ", CPIDValid: " + YesNo(structcpid.Iscpidvalid) + ", VerifiedRAC: " +RoundToString(structcpid.verifiedrac,0);

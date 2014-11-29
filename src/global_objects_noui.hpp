@@ -187,6 +187,7 @@ struct MiningEntry {
 		std::string email;
 		std::string boincruntimepublickey;
 		std::string GRCAddress;
+		std::string lastblockhash;
 		double VouchedMagnitude;
 		double VouchedRAC;
 		double VouchedNetworkRAC;

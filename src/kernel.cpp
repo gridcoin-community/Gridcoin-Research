@@ -305,9 +305,9 @@ int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::str
 				//11-28-2014 CPIDV2->hashPrevBlock
 				//Heinous Problem is Here:
 				
-				//if (!IsCPIDValidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,hashPrvBlock)) return 103;
-				if (IsCPIDValid_Retired(boincblock.cpid,boincblock.enccpid)) return 103;
-
+				if (!IsCPIDValidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,(uint256)boincblock.lastblockhash)) return 103;
+				//Block CPID:11-29-2014
+				//if (IsCPIDValid_Retired(boincblock.cpid,boincblock.enccpid)) return 136;
 
 				//If we already have a consensus on the node, the cpid does not qualify
 				if (mvMagnitudes.size() > 0)
@@ -371,9 +371,10 @@ double GetMagnitudeByHashBoinc(std::string hashBoinc,uint256 blockhash)
 			if (boincblock.cpid == "INVESTOR")  return 0;
    			if (boincblock.projectname == "") 	return 0;
     		if (boincblock.rac < 100) 			return 0;
-			//if (!IsCPIDValidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,blockhash)) return 0;
-			if (IsCPIDValid_Retired(boincblock.cpid,boincblock.enccpid)) return 0;
-
+			printf("?");
+			uint256 lbh = (uint256)boincblock.lastblockhash;
+			if (!IsCPIDValidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,lbh)) return 0;
+			//if (IsCPIDValid_Retired(boincblock.cpid,boincblock.enccpid)) return 0;
 			return boincblock.Magnitude;
 			//StructCPID UntrustedHost = mvMagnitudes[boincblock.cpid]; //Contains Consensus Magnitude
 			//return UntrustedHost.Magnitude;
@@ -415,8 +416,6 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	std::string cpid = boincblock.cpid;
     
 	double mag_accuracy = 0;
-
-	//std::string cpidvalid = YesNo(IsCPIDValidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,hashPrvBlock));
 	if (mvMagnitudes.size() > 0)
 	{
 			StructCPID UntrustedHost = mvMagnitudes[boincblock.cpid]; //Contains Consensus Magnitude

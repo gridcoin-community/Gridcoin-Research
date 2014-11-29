@@ -1113,12 +1113,12 @@ void BitcoinGUI::NewUserWizard()
 		std::string sourcefile = GetBoincDataDir2() + "client_state.xml";
 		std::string sout = "";
 		sout = getfilecontents(sourcefile);
-		bool BoincInstalled = true;
+		//bool BoincInstalled = true;
 		std::string sBoincNarr = "";
 		if (sout == "-1") 
 		{
 			printf("Boinc not installed in default location! \r\n");
-			BoincInstalled=false;
+			//BoincInstalled=false;
 			std::string nicePath = GetBoincDataDir2();
 			sBoincNarr = "Boinc is not installed in default location " + nicePath + "!  Please set boincdatadir=c:\\programdata\\boinc\\    to the correct path where Boincs programdata directory resides.";
 		}
