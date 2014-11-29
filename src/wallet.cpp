@@ -1874,7 +1874,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);
 			//Note: At this point block.vtx[0] is still null, so we send the hashBoinc in separately
             if (CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, 
-				*pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, targetProofOfStake, hashBoinc, false, true, pindexPrev->GetBlockHash()))
+				*pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, targetProofOfStake, hashBoinc, false, true))
             {
 			
                 // Found a kernel

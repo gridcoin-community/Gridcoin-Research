@@ -13,7 +13,7 @@ std::string YesNo(bool bin);
 double GetPoSKernelPS2();
 
 std::string RoundToString(double d, int place);
-bool IsCPIDValidv2(std::string cpid, std::string ENCboincpubkey, std::string cpidv2,std::string blockhash);
+bool IsCPIDValidv2(MiningCPID& mc);
 using namespace std;
 MiningCPID DeserializeBoincBlock(std::string block);
 bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
@@ -277,7 +277,7 @@ static bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64_t& nStakeModifi
 //   quantities so as to generate blocks faster, degrading the system back into
 //   a proof-of-work situation.
 //
-int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::string hashBoinc, uint256 hashPrvBlock)
+int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::string hashBoinc)
 {
 	// If newbie is not boincing, return 0
 	// If newbie is a veteran, return 0
@@ -302,10 +302,10 @@ int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::str
 			{
     			if (boincblock.projectname == "") 	return 101;
 	    		if (boincblock.rac < 100) 			return 102;
-				//11-28-2014 CPIDV2->hashPrevBlock
+				//11-28-2014 CPIDV2->PrevBlock
 				//Heinous Problem is Here:
 				
-				if (!IsCPIDValidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,boincblock.lastblockhash)) return 103;
+				if (!IsCPIDValidv2(boincblock)) return 103;
 				//Block CPID:11-29-2014
 				//if (IsCPIDValid_Retired(boincblock.cpid,boincblock.enccpid)) return 136;
 
@@ -362,7 +362,7 @@ int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::str
 	return 0;
 }
 
-double GetMagnitudeByHashBoinc(std::string hashBoinc,uint256 blockhash)
+double GetMagnitudeByHashBoinc(std::string hashBoinc)
 {
 	if (hashBoinc.length() > 1)
 		{
@@ -373,15 +373,17 @@ double GetMagnitudeByHashBoinc(std::string hashBoinc,uint256 blockhash)
     		if (boincblock.rac < 100) 			return 0;
 			printf("?a");
 			//11-29-2014
-			try
-			{
-			if (!IsCPIDValidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,boincblock.lastblockhash)) return 0;
-			}
-			catch(...)
-			{
-				printf("Error 11292014");
-				return 0;
-			}
+			//try
+			//{
+			//Linux problem here (.cpidv2, or boincblock.lastblockhash):
+			//11-29-2014
+			if (!IsCPIDValidv2(boincblock)) return 0;
+			//}
+			//catch(...)
+			//{
+			//	printf("Error 11292014");
+			//	return 0;
+			//}
 			//if (IsCPIDValid_Retired(boincblock.cpid,boincblock.enccpid)) return 0;
 			return boincblock.Magnitude;
 			//StructCPID UntrustedHost = mvMagnitudes[boincblock.cpid]; //Contains Consensus Magnitude
@@ -393,7 +395,7 @@ double GetMagnitudeByHashBoinc(std::string hashBoinc,uint256 blockhash)
 
 static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, unsigned int nTxPrevOffset, 
 	const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, 
-	uint256& targetProofOfStake, bool fPrintProofOfStake, std::string hashBoinc, bool checking_local, uint256 hashPrvBlock)
+	uint256& targetProofOfStake, bool fPrintProofOfStake, std::string hashBoinc, bool checking_local)
 {
 
 	//Note: When client is checking locally for a good kernelhash, block.vtx[0] is still null, and block.vtx[1].GetValueOut() is null (for mint) so hashBoinc is provided separately
@@ -443,7 +445,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	//	double subsidy = (blockFrom.vtx[0].GetValueOut())/COIN;
 	//	std::string sSubsidy = RoundToString(subsidy,4);
 
-	int NC = NewbieCompliesWithFirstTimeStakeWeightRule(blockFrom,hashBoinc,hashPrvBlock);
+	int NC = NewbieCompliesWithFirstTimeStakeWeightRule(blockFrom,hashBoinc);
 	msMiningErrors2 = RoundToString(NC,0);
 	int oNC = 0;
 	// If newbie is not boincing, return 0
@@ -458,7 +460,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	if (NC >= 2 && NC <= 5)
 	{
 		    //11-12-2014 Dynamic Newbie Weight
-			double newbie_magnitude = GetMagnitudeByHashBoinc(hashBoinc,hashPrvBlock);
+			double newbie_magnitude = GetMagnitudeByHashBoinc(hashBoinc);
 
 		    //uint64_t nNetworkWeight = GetPoSKernelPS2();
 			if (NC == 2)
@@ -653,12 +655,12 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 }
 
 bool CheckStakeKernelHash(CBlockIndex* pindexPrev, unsigned int nBits, const CBlock& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, 
-	uint256& targetProofOfStake, std::string hashBoinc, bool fPrintProofOfStake, bool checking_local, uint256 hashPrvBlock)
+	uint256& targetProofOfStake, std::string hashBoinc, bool fPrintProofOfStake, bool checking_local)
 {
     //if (IsProtocolV2(pindexPrev->nHeight+1))
-    //    return CheckStakeKernelHashV2(pindexPrev, nBits, blockFrom.GetBlockTime(), txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake, hashBoinc, checking_local);
+    //    return ashV2(pindexPrev, nBits, blockFrom.GetBlockTime(), txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake, hashBoinc, checking_local);
     //else
-    return CheckStakeKernelHashV1(nBits, blockFrom, nTxPrevOffset, txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake, hashBoinc, checking_local, hashPrvBlock);
+    return CheckStakeKernelHashV1(nBits, blockFrom, nTxPrevOffset, txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake, hashBoinc, checking_local);
 }
 
 // Check kernel hash target and coinstake signature
@@ -714,7 +716,7 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
 	printf("-");
 
     if (!CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, txPrev, txin.prevout, tx.nTime, hashProofOfStake, 
-		targetProofOfStake, hashBoinc, fDebug, checking_local, pindexPrev->GetBlockHash()))
+		targetProofOfStake, hashBoinc, fDebug, checking_local))
 	{
 		uint256 diff1 = hashProofOfStake - targetProofOfStake;
 		uint256 diff2 = targetProofOfStake - hashProofOfStake;

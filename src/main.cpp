@@ -253,7 +253,7 @@ double GetNetworkAvgByProject(std::string projectname);
 extern bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 
 
-extern bool IsCPIDValidv2(std::string cpid, std::string ENCboincpubkey, std::string cpidv2,std::string blockhash);
+extern bool IsCPIDValidv2(MiningCPID& mc);
 
 extern void FindMultiAlgorithmSolution(CBlock* pblock, uint256 hash, uint256 hashTaget, double miningrac);
 
@@ -4286,66 +4286,15 @@ std::string getfilecontents(std::string filename)
 }
 
 
-bool IsCPIDValidv2(std::string cpid, std::string ENCboincpubkey, std::string cpidv2, std::string blockhash)
+bool IsCPIDValidv2(MiningCPID& mc)
 {
-	//Due to massive problems, go back to the old algorithm:
-	bool result1 = IsCPIDValid_Retired(cpid,ENCboincpubkey);
+	//Due to massive problems, go back to the old algorithm: structcpid.boincpublickey
+	bool result1 = IsCPIDValid_Retired(mc.cpid,mc.enccpid);
 	return result1;
 	
-
 	//First use the new algorithm
-	printf("?3");
-	//if (fDebug) printf("IsCPIDValid4: %s, %s, bh %s",cpid.c_str(),cpidv2.c_str(),blockhash.c_str());
-	if (cpid.length() == 0) printf("CPID is null");
-	if (ENCboincpubkey.length() ==0) printf("bpk is null");
-	if (cpidv2.length() == 0) printf("cpidv2 is null");
-	if (blockhash.length()==0) printf("bh is null");
-	printf("?4a");
-
-	uint256 lbh = 0;
-	try
-	{
-		if (blockhash.length() > 10)
-		{
-				
-			lbh = uint256(blockhash);
-		}
-	}
-	catch(...)
-	{
-		printf("Error while converting %s",blockhash.c_str());
-	}
-	bool new_result = false;
-
-	try
-	{
-		printf("?5");
-		new_result = CPID_IsCPIDValid(cpid,cpidv2,lbh);
-	}
-	catch(...)
-	{
-		try 
-		{
-			printf("Error while comparing %s %s %s",cpid.c_str(),cpidv2.c_str(),blockhash.c_str());
-		}
-		catch(...)
-		{
-
-		}
-	}
-	if (!new_result)
-	{
-		//Next Defer to the old algorithm
-		printf("?4");
-		if (cpid=="") return false;
-		if (cpid.length() < 5) return false;
-		if (cpid == "INVESTOR") return true;
-		bool old_result = IsCPIDValid_Retired(cpid,ENCboincpubkey);
-		if (fDebug) printf("IsCPIDValidv2 %s, %s, bh %s, OldResult: %s;",cpid.c_str(),cpidv2.c_str(),blockhash.c_str(),YesNo(old_result).c_str());
-		return old_result;
-	}
-	return new_result;
-
+//		new_result = CPID_IsCPIDValid(cpid,cpidv2,lbh);
+	
 }
 
 
@@ -4900,9 +4849,9 @@ string GetWarnings(string strFor)
 		else
 		{
 
-			int nResult = 0;
-	    	#if defined(WIN32) && defined(QT_GUI)
-				std::string rebootme = "";
+			#if defined(WIN32) && defined(QT_GUI)
+				int nResult = 0;
+	    		std::string rebootme = "";
 				if (mapArgs.count("-reboot"))
 				{
 					rebootme = GetArg("-reboot", "false");
