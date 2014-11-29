@@ -357,7 +357,7 @@ int ROL(std::string blockhash, int iPos, std::string hash, int hexpos)
 				return b;
 			}
 		}
-		return 0;
+		return HexToByte("00");
 }
 
 
@@ -368,17 +368,17 @@ void CPID::update5(std::string longcpid, uint256 blockhash)
     std::string shash = boinc_hash(blockhash.GetHex());
 	int hexpos = 0;
 	unsigned char* input = new unsigned char[(longcpid.length()/2)+1];
-    for (int i1 = 0; i1 < (int)longcpid.length(); i1 = i1 + 2)
+	for (int i1 = 0; i1 < (int)longcpid.length(); i1 = i1 + 2)
     {
 			input[hexpos]  = ROL(shash,i1,longcpid,hexpos);
 			hexpos++;
     }
+	
     input[longcpid.length()/2+1]=0;
     size_type length = longcpid.length()/2;
 
     // compute number of bytes mod 64
     size_type index = count[0] / 8 % blocksize;
- 
     // Update number of bits
     if ((count[0] += (length << 3)) < (length << 3))
       count[1]++;
@@ -455,13 +455,15 @@ CPID& CPID::finalize()
 std::string CPID::hexdigest() const
 {
   if (!finalized)
-    return "";
+  {
+    return "00000000000000000000000000000000";
+  }
  
+  
   char buf[33];
   for (int i=0; i<16; i++)
     sprintf(buf+i*2, "%02x", digest[i]);
   buf[32]=0;
- 
   return std::string(buf);
 }
  
@@ -497,7 +499,7 @@ std::string ROR(std::string blockhash, int iPos, std::string hash)
 		std::string hex = ByteToHex(asc1+rorcount);
 		return hex;
 	}
-	return "";
+	return "00";
 }
 
 
@@ -518,7 +520,7 @@ std::string CPID::boincdigest(uint256 block) const
   std::string debug = "";
   for (int i = 0; i < (int)merged_hash.length(); i++)
   {
-		non_finalized += ROR(shash,i,merged_hash);
+	 	non_finalized += ROR(shash,i,merged_hash);
   }
   
   return non_finalized;
@@ -528,17 +530,17 @@ std::string CPID::boincdigest(uint256 block) const
 
 bool CPID::Compare(std::string usercpid, std::string longcpid, uint256 blockhash)
 {
-   // Given a Purported CPID from the block, a Netsoft CPID from the user, and a blockhash,
-   // Test to see if the purported CPID is valid - return true or false:
-   if (longcpid.length() < 34) return false;
-   std::string cpid1 = longcpid.substr(0,32);
-   std::string cpid2 = longcpid.substr(32,longcpid.length()-31);
-   std::string shash = boinc_hash(blockhash.GetHex());
-   CPID c = CPID(cpid2,0,blockhash);
-   std::string shortcpid = c.hexdigest();
-   printf("shortcpid %s, cpid1 %s, usercpid %s \r\n",shortcpid.c_str(),cpid1.c_str(),usercpid.c_str());
-   if (shortcpid == cpid1 && cpid1==usercpid && shortcpid == usercpid) return true;
-   return false;
+	   if (longcpid.length() < 34) return false;
+	   std::string cpid1 = longcpid.substr(0,32);
+	   std::string cpid2 = longcpid.substr(32,longcpid.length()-31);
+	   std::string shash = boinc_hash(blockhash.GetHex());
+	   CPID c = CPID(cpid2,0,blockhash);
+	   std::string shortcpid = c.hexdigest();
+	   if (shortcpid=="") return false;
+	   if (fDebug) printf("shortcpid %s, cpid1 %s, usercpid %s \r\n",shortcpid.c_str(),cpid1.c_str(),usercpid.c_str());
+	   if (shortcpid == cpid1 && cpid1==usercpid && shortcpid == usercpid) return true;
+	   if (fDebug) printf("shortcpid %s, cpid1 %s, usercpid %s \r\n",shortcpid.c_str(),cpid1.c_str(),usercpid.c_str());
+	   return false;
 }
 
 
@@ -561,23 +563,9 @@ std::string boinc_hash(const std::string str)
 
 std::string CPIDv2(std::string email, std::string bpk, uint256 blockhash)
 {
-	try
-	{
-      //Given a block hash, a boinc e-mail, and a boinc public key, generate a Block CPID
       CPID c = CPID(email,bpk,blockhash);
-      return c.boincdigest(blockhash);
-	}
-	catch (std::exception &e) 
-	{
-	    printf("Error while calculating CPIDv2\r\n");
-		return "0000000000000000000000000000000000000000";
-	}
-    catch(...)
-	{
-	    printf("Error while calculating CPIDv2 [2]\r\n");
-		return "0000000000000000000000000000000000000000";
-	}
-	
+	  std::string sCPID = c.boincdigest(blockhash);
+	  return sCPID;
 }
 
 
@@ -590,26 +578,24 @@ std::string boinc_hash(std::string email, std::string bpk, uint256 blockhash)
 
 bool CPID_IsCPIDValid(std::string cpid1, std::string longcpid, uint256 blockhash)
 {
-	try
-	{
-		//Given a Block CPID, a Netsoft CPID, and a blockhash, return validity of Block CPID (t/f)
+		if (cpid1.empty()) return false;
+		if (longcpid.empty()) return false;
+		if (longcpid.length() < 32) return false;
+		if (cpid1=="") return false;
+		if (cpid1.length() < 5) return false;
+		if (cpid1=="INVESTOR" || longcpid=="INVESTOR") return true;
+		if (longcpid=="") return false;
+		if (cpid1.length() == 0 || longcpid.length() == 0)
+		{
+			printf("NULL Cpid received\r\n");
+			return false;
+		}
+		if (longcpid.length() < 5) return false;
 		CPID c = CPID(cpid1);
-		//printf("Comparing user cpid %s, longcpid %s\r\n",cpid1.c_str(),longcpid.c_str());
+		if (fDebug) printf("Comparing user cpid %s, longcpid %s\r\n",cpid1.c_str(),longcpid.c_str());
 		bool compared = c.Compare(cpid1,longcpid,blockhash);
 		return compared;
-	}
-	catch (std::exception& e)
-	{
-		printf("Error while comparing cpids %s, %s, %s\r\n",cpid1.c_str(),longcpid.c_str(),blockhash.GetHex().c_str());
-		return false;
-	}
-	catch(...)
-	{
-		printf("Error while comparing cpids %s, %s, %s [2]\r\n",cpid1.c_str(),longcpid.c_str(),blockhash.GetHex().c_str());
-		return false;
-	}
-
-
+	
 }
 
 

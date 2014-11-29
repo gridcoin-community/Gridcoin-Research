@@ -734,6 +734,8 @@ MiningCPID GetNextProject()
 				StructCPID structcpid = mvCPIDs[(*ii).first];
 				if (structcpid.initialized) 
 				{ 
+					printf("@o9.");
+
 					bool cpidDoubleCheck = IsCPIDValidv2(structcpid.cpid,structcpid.boincpublickey,structcpid.cpidv2,0);
 					if (structcpid.Iscpidvalid && cpidDoubleCheck && structcpid.verifiedrac > 100)
 					{
@@ -761,6 +763,8 @@ MiningCPID GetNextProject()
 				StructCPID structcpid = mvCPIDs[(*ii).first];
 				if (structcpid.initialized) 
 				{ 
+
+					printf("@o7.");
 
 					bool cpidDoubleCheck = IsCPIDValidv2(structcpid.cpid,structcpid.boincpublickey,structcpid.cpidv2,0);
 					if (structcpid.Iscpidvalid && cpidDoubleCheck && structcpid.verifiedrac > 100)
@@ -3314,8 +3318,14 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
     		if (boincblock.projectname == "") 	return DoS(1,error("PoR Project Name invalid"));
 	    	if (boincblock.rac < 100) 			return DoS(1,error("RAC too low"));
 			//	cpidv2: CPID_(bb.cpid, bb.cpidv2, blockindex->pprev->GetBlockHash());
+			//Problem is here:
+		    //if (!IsCPIDValidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,hashPrevBlock)) return DoS(1,error("Bad CPID"));
+		    if (!IsCPIDValid_Retired(boincblock.cpid,boincblock.enccpid))
+			{
+					return DoS(1,error("Bad CPID"));
+			}
 
-		    if (!IsCPIDValidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,hashPrevBlock)) return DoS(1,error("Bad CPID"));
+
 		}
 
 	}
@@ -4273,12 +4283,16 @@ std::string getfilecontents(std::string filename)
 bool IsCPIDValidv2(std::string cpid, std::string ENCboincpubkey, std::string cpidv2, uint256 blockhash)
 {
 	//First use the new algorithm
+	if (fDebug) printf("IsCPIDValid4: %s, %s, bh %s",cpid.c_str(),cpidv2.c_str(),blockhash.GetHex().c_str());
 	bool new_result = CPID_IsCPIDValid(cpid,cpidv2,blockhash);
 	if (!new_result)
 	{
 		//Next Defer to the old algorithm
+		if (cpid=="") return false;
+		if (cpid.length() < 5) return false;
+		if (cpid == "INVESTOR") return true;
 		bool old_result = IsCPIDValid_Retired(cpid,ENCboincpubkey);
-		printf("IsCPIDValidv2 %s, %s, bh %s, OldResult: %s;",cpid.c_str(),cpidv2.c_str(),blockhash.GetHex().c_str(),YesNo(old_result).c_str());
+		if (fDebug) printf("IsCPIDValidv2 %s, %s, bh %s, OldResult: %s;",cpid.c_str(),cpidv2.c_str(),blockhash.GetHex().c_str(),YesNo(old_result).c_str());
 		return old_result;
 	}
 	return new_result;
@@ -4341,31 +4355,16 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
 	//Gridcoin - payment range is stored in HighLockTime-LowLockTime
 	// If newbie has not participated for 14 days, use earliest payment in chain to assess payment window
 	// (Important to prevent e-mail change attacks) - Calculate payment timespan window in days
-
 	double payment_timespan = (GetAdjustedTime() - mag.EarliestPaymentTime)/86400;
 	if (payment_timespan < 1) payment_timespan = 1;
 	if (payment_timespan > 10) payment_timespan = 14;
 	mag.PaymentTimespan = payment_timespan;
-
 	double research_magnitude = LederstrumpfMagnitude2(coalesce(mag.ConsensusMagnitude,block_magnitude),locktime);
 	double owed = payment_timespan * Cap(research_magnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime));
-
-	//Eyes: Debug Area
-	/*
-	double c1 = Cap(research_magnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime));
-	double c2 = research_magnitude*GetMagnitudeMultiplier(locktime);
-	double c3 = GetMaximumBoincSubsidy(locktime);
-	double c4 = GetMagnitudeMultiplier(locktime);
-	printf("CPID: %s, Timespan %f, Multiplier %f, Mag*multiplier %f, only mag*multiplier %f, MaxSubsidy %f \r\n",cpid.c_str(),payment_timespan,c4,c1,c2,c3);
-	// End of Eyes Debug Area
-	*/
-
 	double paid = mag.payments;
 	double outstanding = Cap(owed-paid, GetMaximumBoincSubsidy(locktime));
-
 	//Calculate long term totals:
 	total_owed = payment_timespan * Cap(research_magnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime));
-	
 	//printf("Getting payment_timespan %f for outstanding amount for %s; owed %f paid %f Research Magnitude %f \r\n",		payment_timespan,cpid.c_str(),owed,paid,mag.ConsensusMagnitude);
 	if (outstanding < 0) outstanding=0;
 	return outstanding;
@@ -6205,8 +6204,9 @@ void AddProjectFromNetSoft(StructCPID& netsoft)
 	std::string cpid = boinc_hash(email,GlobalCPUMiningCPID.cpidhash,nBestHeight);
 	std::string cpid_non = GlobalCPUMiningCPID.cpidhash+email;
 			
+	printf("! %s",cpid.c_str());
 
-	if (cpid != GlobalCPUMiningCPID.cpid && GlobalCPUMiningCPID.cpid.length() > 3) 
+	if (cpid != GlobalCPUMiningCPID.cpid && GlobalCPUMiningCPID.cpid.length() > 3 && GlobalCPUMiningCPID.cpid != "INVESTOR") 
 	{
 		//Dont add it
 		return;
@@ -6223,9 +6223,22 @@ void AddProjectFromNetSoft(StructCPID& netsoft)
 	NewProject.boincruntimepublickey = GlobalCPUMiningCPID.boincruntimepublickey;
 	//11-28-2014 New CPIDv2
 	NewProject.boincpublickey = ENCbpk;
+	printf("@------------------------------------------------o3.");
+
+	if (GlobalCPUMiningCPID.email=="" || GlobalCPUMiningCPID.boincruntimepublickey == "")
+	{
+		printf("Truncated pubkey\r\n");
+		return;
+	}
 	NewProject.cpidv2 = CPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, 0);
-		 
+	
+	if (cpid == "" || ENCbpk=="" || NewProject.cpidv2=="")
+	{
+		printf("Truncated cpidv2\r\n");
+		return;
+	}
 	NewProject.Iscpidvalid = IsCPIDValidv2(cpid,ENCbpk,NewProject.cpidv2,0);
+
 	if (!NewProject.Iscpidvalid)
 	{
 					NewProject.errors = "CPID calculation invalid.  Check e-mail + reset project.";
@@ -6596,6 +6609,7 @@ try
 				if (!structcpid.initialized) 
 				{
 					structcpid.initialized = true;
+					structcpid.cpidv2 = "";
 					mvCPIDs.insert(map<string,StructCPID>::value_type(proj,structcpid));
 				} 
 											
@@ -6608,11 +6622,18 @@ try
 				structcpid.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + cpid;
 				std::string ENCbpk = AdvancedCrypt(cpid_non);
 				structcpid.boincpublickey = ENCbpk;
+				printf("@o2.");
 
 				//11-28-2014 cpidv2			
-				structcpid.cpidv2 = CPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, 0);
+				//Most likely the problem is here (11-28-2014): (uninitialized cpidhash)
+				structcpid.cpidv2 = CPIDv2(email, cpidhash, 0);
 	
-				structcpid.Iscpidvalid = IsCPIDValidv2(cpid,ENCbpk,structcpid.cpidv2,0);
+				//structcpid.Iscpidvalid = IsCPIDValidv2(cpid,ENCbpk,structcpid.cpidv2,0);
+				//Most likely the problem is here (11-28-2014):
+				structcpid.Iscpidvalid = IsCPIDValid_Retired(cpid,ENCbpk);
+
+				printf("@o3.");
+
 				if (!structcpid.Iscpidvalid)
 				{
 					structcpid.errors = "CPID calculation invalid.  Check e-mail + reset project.";

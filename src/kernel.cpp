@@ -303,6 +303,8 @@ int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::str
     			if (boincblock.projectname == "") 	return 101;
 	    		if (boincblock.rac < 100) 			return 102;
 				//11-28-2014 CPIDV2->hashPrevBlock
+				//Heinous Problem is Here:
+				
 				if (!IsCPIDValidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,blockFrom.hashPrevBlock)) return 103;
 				//If we already have a consensus on the node, the cpid does not qualify
 				if (mvMagnitudes.size() > 0)
@@ -377,7 +379,7 @@ double GetMagnitudeByHashBoinc(std::string hashBoinc,uint256 blockhash)
 
 static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, unsigned int nTxPrevOffset, 
 	const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, 
-	uint256& targetProofOfStake, bool fPrintProofOfStake, std::string hashBoinc, bool checking_local)
+	uint256& targetProofOfStake, bool fPrintProofOfStake, std::string hashBoinc, bool checking_local, uint256 hashPrvBlock)
 {
 
 	//Note: When client is checking locally for a good kernelhash, block.vtx[0] is still null, and block.vtx[1].GetValueOut() is null (for mint) so hashBoinc is provided separately
@@ -408,7 +410,8 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	std::string cpid = boincblock.cpid;
     
 	double mag_accuracy = 0;
-	std::string cpidvalid = YesNo(IsCPIDValidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,blockFrom.hashPrevBlock));
+
+	std::string cpidvalid = YesNo(IsCPIDValidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,hashPrvBlock));
 	if (mvMagnitudes.size() > 0)
 	{
 			StructCPID UntrustedHost = mvMagnitudes[boincblock.cpid]; //Contains Consensus Magnitude
@@ -443,7 +446,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	if (NC >= 2 && NC <= 5)
 	{
 		    //11-12-2014 Dynamic Newbie Weight
-			double newbie_magnitude = GetMagnitudeByHashBoinc(hashBoinc,blockFrom.hashPrevBlock);
+			double newbie_magnitude = GetMagnitudeByHashBoinc(hashBoinc,hashPrvBlock);
 
 		    //uint64_t nNetworkWeight = GetPoSKernelPS2();
 			if (NC == 2)
@@ -638,12 +641,12 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 }
 
 bool CheckStakeKernelHash(CBlockIndex* pindexPrev, unsigned int nBits, const CBlock& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, 
-	uint256& targetProofOfStake, std::string hashBoinc, bool fPrintProofOfStake, bool checking_local)
+	uint256& targetProofOfStake, std::string hashBoinc, bool fPrintProofOfStake, bool checking_local, uint256 hashPrvBlock)
 {
     //if (IsProtocolV2(pindexPrev->nHeight+1))
     //    return CheckStakeKernelHashV2(pindexPrev, nBits, blockFrom.GetBlockTime(), txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake, hashBoinc, checking_local);
     //else
-    return CheckStakeKernelHashV1(nBits, blockFrom, nTxPrevOffset, txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake, hashBoinc, checking_local);
+    return CheckStakeKernelHashV1(nBits, blockFrom, nTxPrevOffset, txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake, hashBoinc, checking_local, hashPrvBlock);
 }
 
 // Check kernel hash target and coinstake signature
@@ -697,7 +700,8 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
 	}
 
 
-    if (!CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, txPrev, txin.prevout, tx.nTime, hashProofOfStake, targetProofOfStake, hashBoinc, fDebug, checking_local))
+    if (!CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, txPrev, txin.prevout, tx.nTime, hashProofOfStake, 
+		targetProofOfStake, hashBoinc, fDebug, checking_local, pindexPrev->GetBlockHash()))
 	{
 		uint256 diff1 = hashProofOfStake - targetProofOfStake;
 		uint256 diff2 = targetProofOfStake - hashProofOfStake;

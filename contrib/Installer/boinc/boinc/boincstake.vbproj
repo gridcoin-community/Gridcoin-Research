@@ -167,6 +167,7 @@
     </EmbeddedResource>
     <EmbeddedResource Include="frmLeaderboard.resx">
       <DependentUpon>frmLeaderboard.vb</DependentUpon>
+      <SubType>Designer</SubType>
     </EmbeddedResource>
     <EmbeddedResource Include="frmMail.resx">
       <DependentUpon>frmMail.vb</DependentUpon>
