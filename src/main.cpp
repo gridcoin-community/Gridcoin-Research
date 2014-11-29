@@ -4310,7 +4310,7 @@ bool IsCPIDValidv2(MiningCPID& mc)
 
 //std::string cpid, std::string ENCboincpubkey, std::string cpidv2)
 
-bool IsLocalCPIDValid(StructCPID &structcpid)
+bool IsLocalCPIDValid(StructCPID& structcpid)
 {
 	// Debugging Stack smashing:
 	bool old_result1 = IsCPIDValid_Retired(structcpid.cpid,structcpid.boincpublickey);
@@ -6214,28 +6214,38 @@ void ClearCPID(std::string cpid)
 void InitializeProjectStruct(StructCPID& project)
 {
 	//11-29-2014
-	std::string email = GetArg("-email", "");
+	std::string email = GetArg("-email", "NA");
 	project.email = email;
+	printf("@70");
 	std::string cpid_non = project.cpidhash+email;
-	project.boincruntimepublickey = project.cpidhash;
-	project.cpid = boinc_hash(project.email,project.cpidhash,0);
+	printf("@71");
 
+	project.boincruntimepublickey = project.cpidhash;
+	printf("@711");
+	project.cpid = boinc_hash(email,project.cpidhash,0);
+	printf("@722");
 	std::string ENCbpk = AdvancedCrypt(cpid_non);
 	project.boincpublickey = ENCbpk;
-	project.cpidv2 = ComputeCPIDv2(project.email, project.boincruntimepublickey, 0);
+	
+	printf("@72");
+
+	project.cpidv2 = ComputeCPIDv2(email, project.cpidhash, 0);
 	project.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + project.cpid;
 	//Local CPID with struct
 	//Must contain cpidv2, cpid, boincpublickey
 	project.Iscpidvalid = false;
+	printf("@73");
+	//		bool old_result1 = IsCPIDValid_Retired(structcpid.cpid,structcpid.boincpublickey);
+	//2nd arg is ENC bpk
 	project.Iscpidvalid = IsLocalCPIDValid(project);
-	if (fDebug) printf("Assimilating local project %s, Valid %s",project.projectname.c_str(),YesNo(project.Iscpidvalid).c_str());
+	//if (fDebug) printf("Assimilating local project %s, Valid %s",project.projectname.c_str(),YesNo(project.Iscpidvalid).c_str());
  	if (project.team != "gridcoin") 
 	{
 			project.Iscpidvalid = false;
 			project.errors = "Team invalid";
 	}
 
-	
+	printf("@74");
 }
 
 void AddProjectFromNetSoft(StructCPID& netsoft)
@@ -6653,7 +6663,7 @@ try
 				InitializeProjectStruct(structcpid);
 				printf("@6");
 
-				printf("Harvested new project %s cpid %s valid %s",structcpid.projectname.c_str(),structcpid.cpid.c_str(),YesNo(structcpid.Iscpidvalid).c_str());
+				printf("Harv new project %s cpid %s valid %s",structcpid.projectname.c_str(),structcpid.cpid.c_str(),YesNo(structcpid.Iscpidvalid).c_str());
 
 
 				if (!structcpid.Iscpidvalid)
