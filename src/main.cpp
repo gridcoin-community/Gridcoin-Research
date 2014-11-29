@@ -62,6 +62,7 @@ extern bool AmIGeneratingBackToBackBlocks();
 extern MiningCPID GetMiningCPID();
 extern StructCPID GetStructCPID();
 
+extern std::string GetArgument(std::string arg, std::string defaultvalue);
 
 
 extern void SetAdvisory();
@@ -3617,7 +3618,7 @@ void GridcoinServices()
 	}
 
 	//Stack Overflow Error (Pallas): calling this every 5 minutes should cause linux to fail- TEST 11-9-2014- 11-29-2014 (45)
-	if (TimerMain("gather_cpids",7))
+	if (TimerMain("gather_cpids",4))
 	{
 			printf("\r\nReharvesting cpids in background thread...\r\n");
 			LoadCPIDsInBackground();
@@ -6214,7 +6215,7 @@ void ClearCPID(std::string cpid)
 void InitializeProjectStruct(StructCPID& project)
 {
 	//11-29-2014
-	std::string email = GetArg("-email", "NA");
+	std::string email = GetArgument("email", "NA");
 	project.email = email;
 	printf("@70");
 	std::string cpid_non = project.cpidhash+email;
@@ -6229,7 +6230,10 @@ void InitializeProjectStruct(StructCPID& project)
 	
 	printf("@72");
 
-	project.cpidv2 = ComputeCPIDv2(email, project.cpidhash, 0);
+	//Crashes in linux:
+	//project.cpidv2 = ComputeCPIDv2(email, project.cpidhash, 0);
+	project.cpidv2 = project.cpid;
+
 	project.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + project.cpid;
 	//Local CPID with struct
 	//Must contain cpidv2, cpid, boincpublickey
@@ -6573,6 +6577,18 @@ std::string GetBoincDataDir2()
 }
 
 
+std::string GetArgument(std::string arg, std::string defaultvalue)
+{
+	std::string result = defaultvalue;
+	if (mapArgs.count("-" + arg))
+	{
+		result = GetArg("-" + arg, defaultvalue);
+	}
+	return result;
+
+}
+	   
+
 
 
 void HarvestCPIDs(bool cleardata)
@@ -6609,7 +6625,8 @@ try
 	}
 	printf("@3");
 
-	std::string email = email = GetArg("-email", "");
+	std::string email = GetArgument("email","");
+
 	   
 	int iRow = 0;
 	std::vector<std::string> vCPID = split(sout.c_str(),"<project>");
