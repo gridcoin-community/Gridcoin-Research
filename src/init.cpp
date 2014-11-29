@@ -25,6 +25,8 @@ std::vector<std::string> split(std::string s, std::string delim);
 
 extern void ReloadBlockChain1();
 
+MiningCPID GetMiningCPID();
+StructCPID GetStructCPID();
 
 void startWireFrameRenderer();
 void stopWireFrameRenderer();
@@ -261,7 +263,8 @@ void InitializeBoincProjects()
 				std::vector<std::string> vProject = split(proj,"|");
 				std::string mainProject = vProject[1];
 				boost::to_lower(mainProject);
-				StructCPID structcpid;
+				StructCPID structcpid = GetStructCPID();
+
 				mvBoincProjects.insert(map<string,StructCPID>::value_type(mainProject,structcpid));
 				structcpid = mvBoincProjects[mainProject];
 				structcpid.initialized = true;

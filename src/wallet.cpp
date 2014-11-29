@@ -30,6 +30,8 @@ double coalesce(double mag1, double mag2);
 extern int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& owed);
 extern std::string NewbieLevelToString(int newbie_level);
 
+MiningCPID GetMiningCPID();
+StructCPID GetStructCPID();
 
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 
@@ -1566,7 +1568,8 @@ int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& owed)
 		    //If we already have a consensus on the node, the cpid does not qualify
 			if (mvMagnitudes.size() > 0)
 			{
-				StructCPID UntrustedHost = mvMagnitudes[GlobalCPUMiningCPID.cpid]; //Contains Consensus Magnitude
+				StructCPID UntrustedHost = GetStructCPID();
+				UntrustedHost = mvMagnitudes[GlobalCPUMiningCPID.cpid]; //Contains Consensus Magnitude
 				owed = UntrustedHost.owed;
 
 				if (UntrustedHost.initialized)
@@ -1813,7 +1816,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     int64_t nCredit = 0;
     CScript scriptPubKeyKernel;
     CTxDB txdb("r");
-	MiningCPID miningcpid;
+	MiningCPID miningcpid = GetMiningCPID();
 	std::string hashBoinc = "";
 
 	try

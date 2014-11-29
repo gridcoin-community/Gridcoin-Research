@@ -32,7 +32,7 @@ extern volatile double nGlobalSolutionNonce;
 extern int miningthreadcount;
 
 
-
+/*
 struct MiningEntry {
         double shares;
 		std::string strComment;
@@ -77,11 +77,13 @@ struct MiningEntry {
 
 
     };
+	*/
 
 
 
 	
-    struct StructCPID {
+    struct StructCPID 
+	{
 		std::string cpid;
 		std::string emailhash;
 		std::string cpidhash;
@@ -188,7 +190,6 @@ struct MiningEntry {
 		std::string boincruntimepublickey;
 		std::string GRCAddress;
 		std::string lastblockhash;
-		double VouchedMagnitude;
 		double VouchedRAC;
 		double VouchedNetworkRAC;
 		double Magnitude;

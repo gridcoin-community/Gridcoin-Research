@@ -17,6 +17,8 @@ bool IsCPIDValidv2(MiningCPID& mc);
 using namespace std;
 MiningCPID DeserializeBoincBlock(std::string block);
 bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
+MiningCPID GetMiningCPID();
+StructCPID GetStructCPID();
 
 typedef std::map<int, unsigned int> MapModifierCheckpoints;
 /*
@@ -312,7 +314,8 @@ int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::str
 				//If we already have a consensus on the node, the cpid does not qualify
 				if (mvMagnitudes.size() > 0)
 				{
-					StructCPID UntrustedHost = mvMagnitudes[boincblock.cpid]; //Contains Consensus Magnitude
+					StructCPID UntrustedHost = GetStructCPID();
+					UntrustedHost = mvMagnitudes[boincblock.cpid]; //Contains Consensus Magnitude
 					if (UntrustedHost.initialized)
 					{
 				
@@ -428,7 +431,8 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	double mag_accuracy = 0;
 	if (mvMagnitudes.size() > 0)
 	{
-			StructCPID UntrustedHost = mvMagnitudes[boincblock.cpid]; //Contains Consensus Magnitude
+			StructCPID UntrustedHost = GetStructCPID();
+			UntrustedHost = mvMagnitudes[boincblock.cpid]; //Contains Consensus Magnitude
 			if (UntrustedHost.initialized)
 			{
 						mag_accuracy = UntrustedHost.Accuracy;

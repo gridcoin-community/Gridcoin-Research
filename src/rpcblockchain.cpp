@@ -20,6 +20,8 @@ using namespace json_spirit;
 using namespace std;
 extern std::string YesNo(bool bin);
 void ReloadBlockChain1();
+MiningCPID GetMiningCPID();
+StructCPID GetStructCPID();
 
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spirit::Object& entry);
 extern enum Checkpoints::CPMode CheckpointsMode;
@@ -105,7 +107,8 @@ double GetNetworkProjectCountWithRAC()
 	double count = 0;
 	for(map<string,StructCPID>::iterator ibp=mvNetwork.begin(); ibp!=mvNetwork.end(); ++ibp) 
 	{
-		StructCPID NetworkProject = mvNetwork[(*ibp).first];
+		StructCPID NetworkProject = GetStructCPID();
+		NetworkProject = mvNetwork[(*ibp).first];
 		if (NetworkProject.initialized)
 		{
 			if (NetworkProject.AverageRAC > 100) count++;
@@ -123,7 +126,8 @@ double GetNetworkAvgByProject(std::string projectname)
 			return 0;
 		}
 	
-		StructCPID structcpid = mvNetwork[projectname];
+		StructCPID structcpid = GetStructCPID();
+		structcpid = mvNetwork[projectname];
 		if (!structcpid.initialized) return 0;
 		double networkavgrac = structcpid.AverageRAC;
 		return networkavgrac;
@@ -1106,7 +1110,8 @@ Array MagnitudeReport(bool bMine)
 		   std::string Narr = "Research Savings Account Report - Generated " + RoundToString(GetAdjustedTime(),0);
 		   c.push_back(Pair("RSA Report",Narr));
 		   results.push_back(c);
-		   StructCPID globalmag = mvMagnitudes["global"];
+		   StructCPID globalmag = GetStructCPID();
+		   globalmag = mvMagnitudes["global"];
 		   double payment_timespan = 14; //(globalmag.HighLockTime-globalmag.LowLockTime)/86400;  //Lock time window in days
 		   Object entry;
 		   entry.push_back(Pair("Payment Window",payment_timespan));
@@ -1115,7 +1120,8 @@ Array MagnitudeReport(bool bMine)
 		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
 		   {
 				// For each CPID on the network, report:
-				StructCPID structMag = mvMagnitudes[(*ii).first];
+				StructCPID structMag = GetStructCPID();
+				structMag = mvMagnitudes[(*ii).first];
 				if (structMag.initialized && structMag.cpid.length() > 2) 
 				{ 
 						if (!bMine || (bMine && structMag.cpid == GlobalCPUMiningCPID.cpid))
@@ -1161,7 +1167,8 @@ Array MagnitudeReportCSV()
 {
 	       Array results;
 		   Object c;
-		   StructCPID globalmag = mvMagnitudes["global"];
+		   StructCPID globalmag = GetStructCPID();
+		   globalmag = mvMagnitudes["global"];
 		   double payment_timespan = 14; //(globalmag.HighLockTime-globalmag.LowLockTime)/86400;  //Lock time window in days
 		   std::string Narr = "Research Savings Account Report - Generated " + RoundToString(GetAdjustedTime(),0) + " - Timespan: " + RoundToString(payment_timespan,0);
 		   c.push_back(Pair("RSA Report",Narr));
@@ -1176,7 +1183,8 @@ Array MagnitudeReportCSV()
 		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
 		   {
 				// For each CPID on the network, report:
-				StructCPID structMag = mvMagnitudes[(*ii).first];
+				StructCPID structMag = GetStructCPID();
+				structMag = mvMagnitudes[(*ii).first];
 				if (structMag.initialized && structMag.cpid.length() > 2) 
 				{ 
 					if (structMag.cpid != "INVESTOR")
@@ -1283,12 +1291,14 @@ Value listitem(const Array& params, bool fHelp)
 					
 		for(map<string,StructCPID>::iterator ibp=mvBoincProjects.begin(); ibp!=mvBoincProjects.end(); ++ibp) 
 		{
-			StructCPID WhitelistedProject = mvBoincProjects[(*ibp).first];
+			StructCPID WhitelistedProject = GetStructCPID();
+			WhitelistedProject = mvBoincProjects[(*ibp).first];
 			if (WhitelistedProject.initialized)
 			{
 				double ProjectRAC = GetNetworkAvgByProject(WhitelistedProject.projectname);
 				if (ProjectRAC > 100) NetworkProjectCountWithRAC++;
-				StructCPID structcpid = mvCPIDs[WhitelistedProject.projectname];
+				StructCPID structcpid = GetStructCPID();
+				structcpid = mvCPIDs[WhitelistedProject.projectname];
 				bool projectvalid = ProjectIsValid(structcpid.projectname);
 				bool including = false;
 				narr = "";
@@ -1393,7 +1403,8 @@ Value listitem(const Array& params, bool fHelp)
 		for(map<string,StructCPID>::iterator ii=mvBoincProjects.begin(); ii!=mvBoincProjects.end(); ++ii) 
 		{
 
-			StructCPID structcpid = mvBoincProjects[(*ii).first];
+			StructCPID structcpid = GetStructCPID();
+			structcpid = mvBoincProjects[(*ii).first];
 
 	        if (structcpid.initialized) 
 			{ 
@@ -1433,7 +1444,8 @@ Value listitem(const Array& params, bool fHelp)
 		for(map<string,StructCPID>::iterator ii=mvNetwork.begin(); ii!=mvNetwork.end(); ++ii) 
 		{
 
-			StructCPID structcpid = mvNetwork[(*ii).first];
+			StructCPID structcpid = GetStructCPID();
+			structcpid = mvNetwork[(*ii).first];
 
 	        if (structcpid.initialized) 
 			{ 
@@ -1471,7 +1483,8 @@ Value listitem(const Array& params, bool fHelp)
 		for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii) 
 		{
 
-			StructCPID structcpid = mvCPIDs[(*ii).first];
+			StructCPID structcpid = GetStructCPID();
+			structcpid = mvCPIDs[(*ii).first];
 
 	        if (structcpid.initialized) 
 			{ 
@@ -1522,7 +1535,8 @@ Value listitem(const Array& params, bool fHelp)
 		for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii) 
 		{
 
-			StructCPID structcpid = mvCPIDs[(*ii).first];
+			StructCPID structcpid = GetStructCPID();
+			structcpid = mvCPIDs[(*ii).first];
 
 	        if (structcpid.initialized) 
 			{ 

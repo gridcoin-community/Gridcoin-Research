@@ -59,6 +59,9 @@ int64_t nCPIDsLoaded = 0;
 extern double coalesce(double mag1, double mag2);
 extern bool AmIGeneratingBackToBackBlocks();
 
+extern MiningCPID GetMiningCPID();
+extern StructCPID GetStructCPID();
+
 
 
 extern void SetAdvisory();
@@ -334,7 +337,7 @@ uint256 GlobalSolutionPowHash = 0;
 				
 
 // Gridcoin status    *************
-MiningCPID GlobalCPUMiningCPID;
+MiningCPID GlobalCPUMiningCPID = GetMiningCPID();
 int nBoincUtilization = 0;
 double nMinerPaymentCount = 0;
 int nPrint = 0;
@@ -346,10 +349,11 @@ std::string sMinedHash = "";
 std::string sSourceBlock = "";
 std::string sDefaultWalletAddress = "";
 
-std::map<std::string, MiningEntry> minerpayments;
-std::map<std::string, MiningEntry> cpuminerpayments;
-std::map<std::string, MiningEntry> cpupow;
-std::map<std::string, MiningEntry> cpuminerpaymentsconsolidated;
+
+//std::map<std::string, MiningEntry> minerpayments;
+//std::map<std::string, MiningEntry> cpuminerpayments;
+//std::map<std::string, MiningEntry> cpupow;
+//std::map<std::string, MiningEntry> cpuminerpaymentsconsolidated;
 
 std::map<std::string, StructCPID> mvCPIDs;        //Contains the project stats at the user level
 std::map<std::string, StructCPID> mvCreditNode;   //Contains the verified stats at the user level
@@ -732,7 +736,8 @@ MiningCPID GetNextProject()
 		//Count valid projects:
 		for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii) 
 		{
-				StructCPID structcpid = mvCPIDs[(*ii).first];
+				StructCPID structcpid = GetStructCPID();
+				structcpid = mvCPIDs[(*ii).first];
 				if (structcpid.initialized) 
 				{ 
 					if (structcpid.Iscpidvalid && structcpid.verifiedrac > 100)
@@ -758,7 +763,8 @@ MiningCPID GetNextProject()
 			for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii) 
 			{
 
-				StructCPID structcpid = mvCPIDs[(*ii).first];
+				StructCPID structcpid = GetStructCPID();
+				structcpid = mvCPIDs[(*ii).first];
 				if (structcpid.initialized) 
 				{ 
 					if (structcpid.Iscpidvalid && structcpid.projectname.length() > 2 && structcpid.verifiedrac > 100)
@@ -1807,7 +1813,8 @@ static CBigNum GetProofOfStakeLimit(int nHeight)
 double CalculatedMagnitude(int64_t locktime)
 {
 	
-	StructCPID mag = mvCreditNodeCPID[GlobalCPUMiningCPID.cpid];
+	StructCPID mag = GetStructCPID();
+	mag = mvCreditNodeCPID[GlobalCPUMiningCPID.cpid];
 	if (GlobalCPUMiningCPID.cpid != "INVESTOR" && mag.ConsensusMagnitude==0) 
 	{
 		CreditCheck(GlobalCPUMiningCPID.cpid,false);
@@ -1912,7 +1919,8 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 {
 	    //11-15-2014
 
-		StructCPID mag = mvMagnitudes[cpid];
+		StructCPID mag = GetStructCPID();
+		mag = mvMagnitudes[cpid];
 		//Help prevent sync problems by assessing owed @ 90%
 		double owed = (mag.owed*1.0);
 		if (owed < 0) owed = 0;
@@ -4464,7 +4472,8 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 
 	    if (!IsLockTimeRecent(LockTime)) return;
 
-		StructCPID globalMag = mvMagnitudes["global"];
+		StructCPID globalMag = GetStructCPID();
+		globalMag = mvMagnitudes["global"];
 		if (!globalMag.initialized)
 		{
 								globalMag.initialized=true;
@@ -4474,16 +4483,13 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 		}
 
 		
-		StructCPID structMagnitude;
+		StructCPID structMagnitude = GetStructCPID();
+
 		structMagnitude = mvMagnitudes[cpid];
 
 		if (!structMagnitude.initialized)
 		{
-			                    structMagnitude.cpidv2 = "";
 								structMagnitude.initialized=true;
-								structMagnitude.TotalMagnitude=0;
-								structMagnitude.ConsensusMagnitudeCount=0;
-								structMagnitude.ConsensusMagnitude=0;
 								structMagnitude.LastPaymentTime = 0;
 								structMagnitude.EarliestPaymentTime = 99999999999;
 								mvMagnitudes.insert(map<string,StructCPID>::value_type(cpid,structMagnitude));
@@ -4559,11 +4565,8 @@ bool TallyNetworkAverages(bool ColdBoot)
 						std::string hashboinc = "";
 						double mint = pblockindex->nMint/COIN;
 						if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
-						MiningCPID bb;
-						bb.Magnitude=0;
-						bb.cpid="";
-						bb.lastblockhash = "0";
-						bb =  DeserializeBoincBlock(hashboinc);
+						MiningCPID bb = DeserializeBoincBlock(hashboinc);
+
 						//Verify validity of project
 						bool piv = ProjectIsValid(bb.projectname);
 						if ( (piv && bb.rac > 100 && bb.projectname.length() > 2 && bb.cpid.length() > 5)  || bb.cpid=="INVESTOR" ) 
@@ -4575,7 +4578,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 							std::string cpidv2 = bb.cpidv2;
 							std::string lbh = bb.lastblockhash;
 
-							StructCPID structcpid;
+							StructCPID structcpid = GetStructCPID();
 							structcpid = mvNetwork[proj];
 							iRow++;
 							if (!structcpid.initialized) 
@@ -4599,7 +4602,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 							mvNetwork[proj] = structcpid;
 
 							//Insert Global Project+CPID Stats:
-							StructCPID structnetcpidproject;
+							StructCPID structnetcpidproject = GetStructCPID();
 							structnetcpidproject = mvNetworkCPIDs[projcpid];
 
 							if (!structnetcpidproject.initialized)
@@ -4635,7 +4638,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 	
 					printf("Assimilating network consensus..");
 
-					StructCPID structcpid;
+					StructCPID structcpid = GetStructCPID();
 					structcpid = mvNetwork["NETWORK"];
 					structcpid.projectname="NETWORK";
 					structcpid.rac = NetworkRAC;
@@ -5965,13 +5968,13 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 	std::string delim = "<|>";
 	std::string version = FormatFullVersion();
 	mcpid.GRCAddress = DefaultWalletAddress();
-	if (mcpid.lastblockhash.length()==0) mcpid.lastblockhash = "0";
+	if (mcpid.lastblockhash.empty()) mcpid.lastblockhash = "0";
 	std::string bb = mcpid.cpid + delim + mcpid.projectname + delim + mcpid.aesskein + delim + RoundToString(mcpid.rac,0)
 					+ delim + RoundToString(mcpid.pobdifficulty,5) + delim + RoundToString((double)mcpid.diffbytes,0) 
 					+ delim + mcpid.enccpid 
 					+ delim + mcpid.encaes + delim + RoundToString(mcpid.nonce,0) + delim + RoundToString(mcpid.NetworkRAC,0) + delim + version 
-					+ delim + mcpid.VouchedCPID + delim + RoundToString(mcpid.VouchedMagnitude,0) 
-					+ delim + RoundToString(mcpid.NewbieLevel,0) 
+					+ delim + mcpid.VouchedCPID + delim 
+					+ "0" + delim + RoundToString(mcpid.NewbieLevel,0) 
 					+ delim + mcpid.cpidv2
 					+ delim + RoundToString(mcpid.Magnitude,0)
 					+ delim + mcpid.GRCAddress + delim + mcpid.lastblockhash;
@@ -5999,33 +6002,9 @@ std::string SerializeBoincBlock_Old(std::string cpid, std::string projectname, s
 
 MiningCPID DeserializeBoincBlock(std::string block)
 {
-	MiningCPID surrogate;
+	MiningCPID surrogate = GetMiningCPID();
 	try 
 	{
-
-		
-	surrogate.cpid = "";
-	surrogate.projectname="";
-	surrogate.aesskein = "";
-	surrogate.rac = 0;
-	surrogate.pobdifficulty = 0;
-	surrogate.diffbytes = 0;
-	surrogate.enccpid = "";
-	surrogate.encaes = "";
-	surrogate.nonce = 0;
-	surrogate.NetworkRAC = 0;
-	surrogate.VouchedNetworkRAC=0;
-	surrogate.VouchedRAC=0;
-    surrogate.VouchedMagnitude=0;
-	surrogate.VouchedCPID = "";
-	surrogate.Magnitude=0;
-	surrogate.cpidv2 = "";
-	surrogate.email = "";
-	surrogate.boincruntimepublickey = "";
-	surrogate.clientversion = "";
-	surrogate.NewbieLevel=0;
-	surrogate.GRCAddress = "";
-	surrogate.lastblockhash = "0";
 
 	std::vector<std::string> s = split(block,"<|>");
 	if (s.size() > 7)
@@ -6055,7 +6034,7 @@ MiningCPID DeserializeBoincBlock(std::string block)
 		}
 		if (s.size() > 12)
 		{
-			surrogate.VouchedMagnitude = cdbl(s[12],0);
+			//surrogate = cdbl(s[12],0);
 		}
 		if (s.size() > 13)
 		{
@@ -6115,7 +6094,8 @@ double GetMagnitude(std::string cpid, double purported, bool UseNetSoft)
 	{
 		//First try the consensus:
 		CreditCheck(cpid,false);
-		StructCPID UntrustedHost = mvCreditNodeCPID[cpid]; //Contains Mag across entire CPID
+		StructCPID UntrustedHost = GetStructCPID();
+		UntrustedHost = mvCreditNodeCPID[cpid]; //Contains Mag across entire CPID
 		double magnitude_consensus = UntrustedHost.ConsensusMagnitude;
 		if (magnitude_consensus >= purported) 
 		{
@@ -6132,7 +6112,8 @@ double GetMagnitude(std::string cpid, double purported, bool UseNetSoft)
 	else
 	{
 		CreditCheck(cpid,false);
-		StructCPID UntrustedHost = mvCreditNodeCPID[cpid]; //Contains Mag across entire CPID
+		StructCPID UntrustedHost = GetStructCPID();
+		UntrustedHost = mvCreditNodeCPID[cpid]; //Contains Mag across entire CPID
 		double mag = UntrustedHost.Magnitude;
 		if (mag >= purported) 
 		{
@@ -6157,7 +6138,8 @@ bool IsUserQualifiedToSendCheckpoint()
 	//The User must have a boinc mining record with an accuracy > 20 to send checkpoints:
 	if (cpid=="INVESTOR") return false;
 	// Check the magnitude report
-	StructCPID mag = mvMagnitudes[cpid];
+	StructCPID mag = GetStructCPID();
+	mag = mvMagnitudes[cpid];
 	if (mag.initialized) 
 	{
 			if (mag.Accuracy > 20)
@@ -6176,7 +6158,8 @@ bool CreditCheckOnline(std::string cpid, double purported_magnitude, double mint
 {
 	if (cpid=="INVESTOR" && purported_magnitude==0) return true;
 	// First, check the magnitude report
-	StructCPID mag = mvMagnitudes[cpid];
+	StructCPID mag = GetStructCPID();
+	mag = mvMagnitudes[cpid];
 	bool consensus_passed = false;
 	if (mag.initialized && purported_magnitude > 0) 
 	{
@@ -6260,7 +6243,7 @@ void AddProjectFromNetSoft(StructCPID& netsoft)
 	}
 
 	
-	StructCPID NewProject;
+	StructCPID NewProject = GetStructCPID();
 	NewProject.cpid = netsoft.cpid;
 	NewProject.projectname = netsoft.projectname;
 	NewProject.verifiedutc = netsoft.verifiedutc;
@@ -6306,7 +6289,8 @@ void CreditCheck(std::string cpid, bool clearcache)
 
 
 			//Clear current magnitude
-			StructCPID structMag = mvCreditNodeCPID[cpid];
+			StructCPID structMag = GetStructCPID();
+			structMag = mvCreditNodeCPID[cpid];
 			if (structMag.initialized)
 			{
 				structMag.TotalMagnitude = 0;
@@ -6340,7 +6324,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 					{
 
 
-						StructCPID structcc;
+						StructCPID structcc = GetStructCPID();
 						structcc = mvCreditNode[sProj];
 						iRow++;
 						if (!structcc.initialized) 
@@ -6364,7 +6348,8 @@ void CreditCheck(std::string cpid, bool clearcache)
 						mvCreditNode[sProj] = structcc;	
 						// Halford 8-17-2014
 						// We found a project can exist in Netsoft and not in the client - ensure client has them all:
-						StructCPID structClientProject = mvCPIDs[sProj];
+						StructCPID structClientProject = GetStructCPID();
+						structClientProject = mvCPIDs[sProj];
 						if (!structClientProject.initialized)
 						{
 							AddProjectFromNetSoft(structcc);
@@ -6374,7 +6359,8 @@ void CreditCheck(std::string cpid, bool clearcache)
 
 						//////////////////////////// Store this information by CPID+Project also:
 
-						StructCPID structverify;
+						StructCPID structverify = GetStructCPID();
+
 						std::string sKey = cpid + ":" + sProj;
 						structverify = mvCreditNodeCPIDProject[sKey]; //Contains verified CPID+Projects;
 						if (!structverify.initialized)
@@ -6392,7 +6378,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 						structverify.verifiedage = nActualTimespan;
 						mvCreditNodeCPIDProject[sKey]=structverify;
 						//Store this information by CPID also:
-						StructCPID structc;
+						StructCPID structc = GetStructCPID();
 						structc = mvCreditNodeCPID[cpid]; //Contains verified total RAC for the entire CPID
 						if (!structc.initialized)
 						{
@@ -6468,7 +6454,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 double CreditCheck(std::string cpid, std::string projectname)
 {
 	std::string sKey = cpid + ":" + projectname;
-	StructCPID structverify;
+	StructCPID structverify = GetStructCPID();
 	structverify = mvCreditNodeCPIDProject[sKey]; //Contains verified CPID+Projects;
 	if (!structverify.initialized)
 	{
@@ -6497,7 +6483,7 @@ double CreditCheck(std::string cpid, std::string projectname)
 
 bool ProjectIsValid(std::string project)
 {
-	StructCPID structcpid;
+	StructCPID structcpid = GetStructCPID();
 	boost::to_lower(project);
 	structcpid = mvBoincProjects[project];
 	return structcpid.initialized;
@@ -6635,7 +6621,7 @@ try
 				to_lower(cpid_non);
 
 				
-				StructCPID structcpid;
+				StructCPID structcpid = GetStructCPID();
 				structcpid = mvCPIDs[proj];
 				iRow++;
 				if (!structcpid.initialized) 
@@ -6682,7 +6668,7 @@ try
 
 				//Have credits been verified yet?
 				//If not, Call out to credit check node:
-	            StructCPID structverify;
+	            StructCPID structverify = GetStructCPID();
 				std::string sKey = structcpid.cpid + ":" + proj;
 							
 				structverify = mvCreditNodeCPIDProject[sKey]; //Contains verified CPID+Projects;
@@ -6826,8 +6812,101 @@ void TallyInBackground()
 	tallyThreads->create_thread(boost::bind(&ThreadTally));
 }
 
+StructCPID GetStructCPID()
+{
+	StructCPID c;
+	c.cpid = "";
+	c.emailhash="";
+	c.cpidhash="";
+	c.projectname="";
+	c.initialized=false;
+	c.isvoucher=false;
+	c.rac = 0;
+	c.utc=0;
+	c.rectime=0;
+	c.age = 0;
+	c.team="";
+	c.activeproject=false;
+	c.verifiedrac=0;
+	c.verifiedutc=0;
+	c.verifiedteam="";
+	c.verifiedrectime=0;
+	c.verifiedage=0;
+	c.entries=0;
+	c. AverageRAC=0;
+	c.NetworkProjects=0;
+	c.boincpublickey="";
+	c.Iscpidvalid=false;
+	c.link="";
+	c.errors="";
+	c.email="";
+	c.boincruntimepublickey="";
+	c.cpidv2="";
+	c.NetworkRAC=0;
+	c.TotalRAC=0;
+	c.TotalNetworkRAC=0;
+	c.Magnitude=0;
+	c.LastMagnitude=0;
+	c.PaymentMagnitude=0;
+	c.owed=0;
+	c.payments=0;
+	c.outstanding=0;
+	c.verifiedTotalRAC=0;
+	c.verifiedTotalNetworkRAC=0;
+	c.verifiedMagnitude=0;
+	c.TotalMagnitude=0;
+	c.MagnitudeCount=0;
+	c.LowLockTime=0;
+	c.HighLockTime=0;
+	c.ConsensusTotalMagnitude=0;
+	c.ConsensusMagnitudeCount=0;
+	c.Accuracy=0;
+	c.ConsensusMagnitude=0;
+	c.totalowed=0;
+	c.longtermtotalowed=0;
+	c.longtermowed=0;
+	c.LastPaymentTime=0;
+	c.EarliestPaymentTime=0;
+	c.NewbieLevel=0;
+	c.PaymentTimespan=0;
+	return c;
 
+}
 
+MiningCPID GetMiningCPID()
+{
+	MiningCPID mc;
+	mc.projectname = "";
+	mc.rac = 0;
+	mc.encboincpublickey = "";
+	mc.cpid = "";
+	mc.cpidhash = "";
+	mc.pobdifficulty = 0;
+	mc.diffbytes = 0;
+	mc.initialized = false;
+	mc.enccpid = "";
+	mc.aesskein = "";
+	mc.encaes = "";
+	mc.nonce = 0;
+	mc.NetworkRAC=0;
+	mc.prevBlockType = 0;
+	mc.clientversion = "";
+	mc.VouchedCPID = "";
+	mc.cpidv2 = "";
+	mc.email = "";
+	mc.boincruntimepublickey = "";
+	mc.GRCAddress = "";
+	mc.lastblockhash = "0";
+	mc.VouchedRAC = 0;
+	mc.VouchedNetworkRAC  = 0;
+	mc.Magnitude = 0;
+	mc.ConsensusTotalMagnitude = 0;
+	mc.ConsensusMagnitudeCount  = 0;
+	mc.Accuracy = 0;
+	mc.ConsensusMagnitude = 0;
+	mc.NewbieLevel = 0;
+	return mc;
+}
 
 
 bool SendMessages(CNode* pto, bool fSendTrickle)
