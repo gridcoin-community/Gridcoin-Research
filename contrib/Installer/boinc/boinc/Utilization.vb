@@ -12,7 +12,7 @@ Public Class Utilization
    
     Public ReadOnly Property Version As Double
         Get
-            Return 318
+            Return 319
         End Get
     End Property
 
@@ -70,18 +70,19 @@ Public Class Utilization
         Get
             Dim bNeedsUp As Boolean = NeedsUpgrade()
             If bNeedsUp Then
-                Log("Client outdated; needs upgraded.")
+                Log("Client outdated; needs upgraded[2].")
                 Dim sLastUpgraded As String = KeyValue("AutoUpgrade")
                 If Len(sLastUpgraded) > 0 Then
-                    If IsDate(sLastUpgraded) Then
+                    Log("Found key AutoUpgrade " + Trim(sLastUpgraded))
+
                         Dim dDiff As Long
                         dDiff = DateDiff(DateInterval.Day, Now, CDate(sLastUpgraded))
                         If Math.Abs(dDiff) < 1 Then
-                            Log("Upgraded too recently. Aborting.")
+                        Log("Upgraded too recently. Aborting. " + Trim(dDiff))
                             Return 0
                         End If
-                    End If
                 End If
+                Log("Ready for upgrade")
 
                 If KeyValue("suppressupgrade") = "true" Then
                     Log("Client needs upgraded; Not upgrading due to key.")

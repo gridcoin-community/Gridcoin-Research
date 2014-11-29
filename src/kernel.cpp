@@ -277,7 +277,7 @@ static bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64_t& nStakeModifi
 //   quantities so as to generate blocks faster, degrading the system back into
 //   a proof-of-work situation.
 //
-int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::string hashBoinc)
+int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::string hashBoinc, uint256 hashPrvBlock)
 {
 	// If newbie is not boincing, return 0
 	// If newbie is a veteran, return 0
@@ -305,7 +305,7 @@ int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::str
 				//11-28-2014 CPIDV2->hashPrevBlock
 				//Heinous Problem is Here:
 				
-				if (!IsCPIDValidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,blockFrom.hashPrevBlock)) return 103;
+				if (!IsCPIDValidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,hashPrvBlock)) return 103;
 				//If we already have a consensus on the node, the cpid does not qualify
 				if (mvMagnitudes.size() > 0)
 				{
@@ -411,7 +411,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
     
 	double mag_accuracy = 0;
 
-	std::string cpidvalid = YesNo(IsCPIDValidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,hashPrvBlock));
+	//std::string cpidvalid = YesNo(IsCPIDValidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,hashPrvBlock));
 	if (mvMagnitudes.size() > 0)
 	{
 			StructCPID UntrustedHost = mvMagnitudes[boincblock.cpid]; //Contains Consensus Magnitude
@@ -431,7 +431,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	//	double subsidy = (blockFrom.vtx[0].GetValueOut())/COIN;
 	//	std::string sSubsidy = RoundToString(subsidy,4);
 
-	int NC = NewbieCompliesWithFirstTimeStakeWeightRule(blockFrom,hashBoinc);
+	int NC = NewbieCompliesWithFirstTimeStakeWeightRule(blockFrom,hashBoinc,hashPrvBlock);
 	msMiningErrors2 = RoundToString(NC,0);
 	int oNC = 0;
 	// If newbie is not boincing, return 0
@@ -699,6 +699,7 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
 		}
 	}
 
+	printf("-");
 
     if (!CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, txPrev, txin.prevout, tx.nTime, hashProofOfStake, 
 		targetProofOfStake, hashBoinc, fDebug, checking_local, pindexPrev->GetBlockHash()))

@@ -809,7 +809,7 @@ MiningCPID GetNextProject()
 		}
 		}
 
-		msMiningErrors = "All CPU projects exhausted.";
+		msMiningErrors = "All BOINC projects exhausted.";
 		msMiningProject = "INVESTOR";
 		msMiningCPID = "INVESTOR";
 		mdMiningRAC = 0;
@@ -3619,6 +3619,7 @@ void GridcoinServices()
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 {
     AssertLockHeld(cs_main);
+	printf("+");
 
     // Check for duplicate
     uint256 hash = pblock->GetHash();
@@ -5453,7 +5454,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         uint256 hashBlock = block.GetHash();
 
         printf("Received block %s\n", hashBlock.ToString().c_str());
-        // block.print();
+        if (fDebug) block.print();
 
         CInv inv(MSG_BLOCK, hashBlock);
         pfrom->AddInventoryKnown(inv);

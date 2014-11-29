@@ -431,22 +431,23 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	std::string hbd = AdvancedDecrypt(bb.enccpid);
 	bool IsCpidValid = IsCPIDValid_Retired(bb.cpid, bb.enccpid);
 	result.push_back(Pair("CPIDValid",IsCpidValid));
-	result.push_back(Pair("Version2",block.nVersion));
+	//result.push_back(Pair("Version2",block.nVersion));
+	result.push_back(Pair("CPIDv2",bb.cpidv2));
 
 	//pblock->hashPrevBlock
-	bool IsCPIDValid2 = CPID_IsCPIDValid(bb.cpid, bb.cpidv2, blockindex->pprev->GetBlockHash());
-	bool IsCPIDValid3 = CPID_IsCPIDValid(bb.cpid, bb.cpidv2, block.hashPrevBlock);
-	
-	result.push_back(Pair("CPIDValidv2",IsCPIDValid2));
-	result.push_back(Pair("CPIDValidv3",IsCPIDValid3));
+	if (false)
+	{
+		bool IsCPIDValid2 = CPID_IsCPIDValid(bb.cpid, bb.cpidv2, blockindex->pprev->GetBlockHash());
+		result.push_back(Pair("CPIDValidv2",IsCPIDValid2));
+	}
 
-	//Write the correct cpid value:
-	std::string me = CPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey,blockindex->pprev->GetBlockHash());
-	//Halford - CPID Algorithm v2 - 11-28-2014
-	result.push_back(Pair("CPIDv2",bb.cpidv2));
+	//Write the correct cpid value (heinous error here:)//Halford - CPID Algorithm v2 - 11-28-2014
 	
-	result.push_back(Pair("MyCPID",me));
-	
+	if (false)
+	{
+		std::string me = CPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey,blockindex->pprev->GetBlockHash());
+		result.push_back(Pair("MyCPID",me));
+	}
     return result;
 }
 
