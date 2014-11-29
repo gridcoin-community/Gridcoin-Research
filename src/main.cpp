@@ -4443,6 +4443,7 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 
 		if (!structMagnitude.initialized)
 		{
+			                    structMagnitude.cpidv2 = "";
 								structMagnitude.initialized=true;
 								structMagnitude.TotalMagnitude=0;
 								structMagnitude.ConsensusMagnitudeCount=0;
@@ -4540,6 +4541,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 							iRow++;
 							if (!structcpid.initialized) 
 							{
+								    structcpid.cpidv2 = "";
 									structcpid.initialized = true;
 									mvNetwork.insert(map<string,StructCPID>::value_type(proj,structcpid));
 							} 
@@ -4562,6 +4564,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 
 							if (!structnetcpidproject.initialized)
 							{
+								structnetcpidproject.cpidv2 = "";
 								structnetcpidproject.initialized = true;
 								mvNetworkCPIDs.insert(map<string,StructCPID>::value_type(projcpid,structnetcpidproject));
 								NetworkProjects++;
@@ -4569,6 +4572,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 							}
 							structnetcpidproject.projectname = proj;
 							structnetcpidproject.cpid = cpid;
+							structnetcpidproject.cpidv2 = cpid;
 							structnetcpidproject.rac = structnetcpidproject.rac + bb.rac;
 							structnetcpidproject.entries++;
 							if (structnetcpidproject.entries > 0)
@@ -4596,6 +4600,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 					structcpid.projectname="NETWORK";
 					structcpid.rac = NetworkRAC;
 					structcpid.entries = 1;
+					structcpid.cpidv2 = "";
 					structcpid.initialized = true;
 					structcpid.AverageRAC = NetworkAvg;
 					structcpid.NetworkProjects = NetworkProjects;
@@ -6197,6 +6202,8 @@ void AddProjectFromNetSoft(StructCPID& netsoft)
 	NewProject.rac = netsoft.rac;
 	NewProject.team = netsoft.verifiedteam;
 	NewProject.verifiedteam = netsoft.verifiedteam;
+	NewProject.cpidv2 = "";
+
 	if (NewProject.verifiedteam != "gridcoin") NewProject.verifiedrac = -1;
 	NewProject.verifiedrectime = netsoft.verifiedrectime;
 	NewProject.verifiedage = netsoft.verifiedage;
@@ -6316,10 +6323,12 @@ void CreditCheck(std::string cpid, bool clearcache)
 						iRow++;
 						if (!structcc.initialized) 
 						{
+							structcc.cpidv2 = "";
 							structcc.initialized = true;
 							mvCreditNode.insert(map<string,StructCPID>::value_type(sProj,structcc));
 						} 
 						structcc.cpid = cpid;
+						structcc.cpidv2 = "";
 						structcc.projectname = sProj;
 						structcc.verifiedutc = cdbl(utc,0);
 						structcc.verifiedrac = cdbl(rac,0);
@@ -6348,6 +6357,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 						structverify = mvCreditNodeCPIDProject[sKey]; //Contains verified CPID+Projects;
 						if (!structverify.initialized)
 						{
+							structverify.cpidv2 = "";
 							structverify.initialized = true;
 							mvCreditNodeCPIDProject.insert(map<string,StructCPID>::value_type(sKey,structverify));
 						}
@@ -6613,7 +6623,7 @@ try
 					structcpid.cpidv2 = "";
 					mvCPIDs.insert(map<string,StructCPID>::value_type(proj,structcpid));
 				} 
-											
+				structcpid.cpidv2 = "";				
 				structcpid.cpid = cpid;
 				structcpid.emailhash = email_hash;
 				structcpid.cpidhash = cpidhash;
@@ -6676,6 +6686,7 @@ try
 				structverify = mvCreditNodeCPIDProject[sKey]; //Contains verified CPID+Projects;
 				if (!structverify.initialized  && projectvalid)
  				{
+					structverify.cpidv2 = "";
 					CreditCheck(cpid,cleardata);
 					structverify=mvCreditNodeCPIDProject[sKey];
 				}
