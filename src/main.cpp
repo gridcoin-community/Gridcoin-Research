@@ -58,6 +58,8 @@ int64_t nCPIDsLoaded = 0;
 
 extern double coalesce(double mag1, double mag2);
 extern bool AmIGeneratingBackToBackBlocks();
+extern int64_t Floor(int64_t iAmt1, int64_t iAmt2);
+
 
 extern MiningCPID GetMiningCPID();
 extern StructCPID GetStructCPID();
@@ -1972,10 +1974,11 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 	}
 
 	//Pallas 11-30-2014
-	int64_t maxStakeReward = GetProofOfStakeMaxReward(nCoinAge, nFees, locktime);
+	int64_t maxStakeReward1 = GetProofOfStakeMaxReward(nCoinAge, nFees, locktime);
+	int64_t maxStakeReward2 = GetProofOfStakeMaxReward(nCoinAge, nFees, GetAdjustedTime());
+	int64_t maxStakeReward = Floor(maxStakeReward1,maxStakeReward2);
 	if ((nSubsidy+nFees) > maxStakeReward) nSubsidy = maxStakeReward-nFees;
-
-
+	
     return nSubsidy + nFees;
 }
 
@@ -4391,6 +4394,21 @@ double Cap(double dAmt, double Ceiling)
 {
 	if (dAmt > Ceiling) dAmt = Ceiling;
 	return dAmt;
+}
+
+int64_t Floor(int64_t iAmt1, int64_t iAmt2)
+{
+	int64_t iOut = 0;
+	if (iAmt1 <= iAmt2) 
+	{
+		iOut = iAmt1;
+	}
+	else
+	{
+		iOut = iAmt2;
+	}
+	return iOut;
+	
 }
 
 double coalesce(double mag1, double mag2)
