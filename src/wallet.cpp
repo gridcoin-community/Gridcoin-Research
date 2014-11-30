@@ -25,6 +25,8 @@ std::string SerializeBoincBlock(MiningCPID mcpid);
 double GetPoSKernelPS2();
 double GetDifficulty(const CBlockIndex* blockindex = NULL);
 
+std::string RoundToString(double d, int place);
+
 double coalesce(double mag1, double mag2);
 
 extern int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& owed);
@@ -1996,8 +1998,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             return error("CreateCoinStake : failed to calculate coin age");
 		//Halford: Use current time since we are creating a new stake
         int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,  GetAdjustedTime());
-		printf("Creating POS Reward for %s  amt  %"PRId64"  \r\n",GlobalCPUMiningCPID.cpid.c_str(),nReward/COIN);
-	
+		std::string sReward = RoundToString(nReward/COIN,4);
+
 		double out_magnitude = 0;
 		double out_owed = 0;
 		int NC  =  NewbieCompliesWithLocalStakeWeightRule(out_magnitude,out_owed);
@@ -2005,6 +2007,9 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		
 		double MaxSubsidy = GetMaximumBoincSubsidy(GetAdjustedTime());
 
+		
+		printf("Creating POS Reward for %s  amt  %s  {BoincLevel %s} \r\n",GlobalCPUMiningCPID.cpid.c_str(),sReward.c_str(),RoundToString(NC,0).c_str());
+	
 		// Gridcoin - R Halford - For Investors (NC Level 0, or Veterans, Level 0) - Prevent tiny payments & Prevent astronomical diff levels
 		// Enforce: Investor (1), Veteran (0), Newbie (4), Newbie (5)
 		// Do not enforce: Uninitialized Newbie (2), or Level 0 Newbie (3)
@@ -2028,7 +2033,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 		}
 
-		if (mint == 0)
+		if (nReward == 0)
 		{
 			//printf("CreateBlock():Mint is zero");
 			return false;   

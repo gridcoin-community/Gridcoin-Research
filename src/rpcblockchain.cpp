@@ -292,10 +292,10 @@ double GetDifficulty(const CBlockIndex* blockindex)
     }
 
 	//Prevent Exploding Diff - Fix the root cause of the issue asap
-	if (dDiff > 1000    && dDiff < 10000)          dDiff = (dDiff/100)  + 1000;
-	if (dDiff >= 10000  && dDiff < 100000)         dDiff = (dDiff/1000) + 2000;
-	if (dDiff >= 100000 && dDiff < 1000000)        dDiff = (dDiff/10000) + 3000;
-	if (dDiff >= 1000000 && dDiff < 100000000)     dDiff = (dDiff/100000) + 4000;
+	if (dDiff > 1000      && dDiff < 10000)        dDiff = (dDiff/100)      + 1000;
+	if (dDiff >= 10000    && dDiff < 100000)       dDiff = (dDiff/1000)     + 2000;
+	if (dDiff >= 100000   && dDiff < 1000000)      dDiff = (dDiff/10000)    + 3000;
+	if (dDiff >= 1000000  && dDiff < 100000000)    dDiff = (dDiff/100000)   + 4000;
 	if (dDiff >= 10000000 && dDiff < 100000000000) dDiff = (dDiff/10000000) + 5000;
 	if (dDiff >= 100000000000) dDiff = (dDiff/100000000000) + 7000;
 

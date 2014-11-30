@@ -18,6 +18,8 @@ static CCriticalSection cs_nWalletUnlockTime;
 extern void ThreadTopUpKeyPool(void* parg);
 
 
+std::string RoundToString(double d, int place);
+
 extern void ThreadCleanWalletPassphrase(void* parg);
 
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spirit::Object& entry);

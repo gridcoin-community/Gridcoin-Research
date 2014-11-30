@@ -1971,6 +1971,11 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 		FormatMoney(nSubsidy).c_str(), nCoinAge, nBoinc);
 	}
 
+	//Pallas 11-30-2014
+	int64_t maxStakeReward = GetProofOfStakeMaxReward(nCoinAge, nFees, locktime);
+	if ((nSubsidy+nFees) > maxStakeReward) nSubsidy = maxStakeReward-nFees;
+
+
     return nSubsidy + nFees;
 }
 
