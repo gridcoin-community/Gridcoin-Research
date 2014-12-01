@@ -2767,16 +2767,13 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		if (IsLockTimeVeryRecent(nTime))
 		{
 			double PORDiff = GetDifficulty(GetLastBlockIndex(pindex, true));
-			//During periods of high difficulty new block must have a higher magnitude than last block until block > 10 mins old:
-			//12-1-2014
-			//int64_t LastBlockTime = pindexBest->GetBlockTime();
-
+			//Halford: During periods of high difficulty new block must have a higher magnitude than last block until block > 10 mins old:
 
 			if (true)
 			{
 			double LastBlockAge = PreviousBlockAge();
 	
-			if ((PORDiff > 10) && LastBlockAge < (6*60))
+			if ((PORDiff > 10) && LastBlockAge < (7*60))
 			{
 				double current_magnitude = bb.Magnitude;
 				CBlock prior_block;
@@ -3352,7 +3349,7 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
     if (fCheckPOW && IsProofOfWork() && !CheckProofOfWork(GetPoWHash(), nBits))
         return DoS(50, error("CheckBlock() : proof of work failed"));
 
-	//Reject blocks with diff > 10000000
+	//Reject blocks with diff > 10000000000000000
 	
 	double blockdiff = GetBlockDifficulty(nBits);
 	if (nBestHeight > 62000 && blockdiff > 10000000000000000 && !IsLockTimeWithinMinutes(GetBlockTime(),480))

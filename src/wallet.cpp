@@ -1648,9 +1648,21 @@ double MintLimiter()
 	if (PORDiff >= 5  && PORDiff < 10) return 10;
 	if (PORDiff >= 10 && PORDiff < 50) return 20;
 	if (PORDiff >= 50) return 50;
-	return .001;
+	return 0;
 }
 	
+
+
+double MintLimiterPOR()
+{
+	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
+	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+	if (PORDiff >= 10   && PORDiff < 20) return 0;
+	if (PORDiff >= 20   && PORDiff < 100)  return 20;
+	if (PORDiff >= 100  && PORDiff < 500)  return 50;
+	if (PORDiff >= 500) return 100;
+	return 0;
+}
 
 
 bool CWallet::GetStakeWeight(uint64_t& nWeight)
@@ -1766,8 +1778,6 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     CBigNum bnTargetPerCoinDay;
     bnTargetPerCoinDay.SetCompact(nBits);
 
-	printf("1.");
-
     txNew.vin.clear();
     txNew.vout.clear();
 
@@ -1778,8 +1788,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
     // Choose coins to use
     int64_t nBalance = GetBalance();
-	printf("2.");
-
+	
     if (nBalance <= nReserveBalance)
         return false;
 
@@ -1830,10 +1839,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 	try
 	{
-		 printf("44.");
 		 miningcpid = GetNextProject();
-		 printf("45.");
-		 //11-29-2014- Stack Smashing
+		 //Stack Smashing
 		 //miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pindexPrev->GetBlockHash());
 		 miningcpid.cpidv2="";
 
@@ -2025,24 +2032,24 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		// BOINC MINERS:
 		if (NC == 0 || NC == 4 || NC == 5)
 		{
-  			if (mint < (MaxSubsidy/25) && LessVerbose(500)) 
+  			if (mint < (MaxSubsidy/25) && LessVerbose(750)) 
 			{
 				if (LessVerbose(100)) printf("CreateBlock::Boinc Miners Mint too small");
 				return false; 
 			}
 
-			if (false)
+			if (true)
 			{
-			if (OUT_POR < MintLimiter() && LessVerbose(100))
-			{
-				return false;
-			}
+				if (OUT_POR < MintLimiterPOR() && LessVerbose(800))
+				{
+					return false;
+				}
 			}
 		}
 		else if (NC == 1)
 		{
 			//INVESTORS
-			if (mint < MintLimiter() && LessVerbose(100)) 
+			if (mint < MintLimiter() && LessVerbose(700)) 
 			{
 				if (LessVerbose(100)) printf("CreateBlock::Investors Mint is too small");
 				return false; 
@@ -2051,12 +2058,12 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		}
 		if (NC == 3)
 		{
-			if (false)
+			if (true)
 			{
-			if (OUT_POR < MintLimiter() && LessVerbose(50))
-			{
-				return false;
-			}
+				if (OUT_POR < MintLimiterPOR() && LessVerbose(750))
+				{
+					return false;
+				}
 			}
 		}
 		if (nReward == 0)
@@ -2082,7 +2089,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	//int64_t LastBlockTime = pindexBest->GetBlockTime();
 	double LastBlockAge = PreviousBlockAge();
 			
-	if (PORDiff > 10 && miningcpid.cpid != "INVESTOR" && miningcpid.cpid.length() > 3 && LastBlockAge < (6*60) )
+	if (PORDiff > 10 && miningcpid.cpid != "INVESTOR" && miningcpid.cpid.length() > 3 && LastBlockAge < (7*60) )
 	{
 		double current_magnitude = miningcpid.Magnitude;
 		CBlock prior_block;
