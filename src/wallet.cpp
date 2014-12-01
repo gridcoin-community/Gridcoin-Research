@@ -22,6 +22,7 @@ bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 
 bool IsLockTimeWithinMinutes(double locktime, int minutes);
 
+double GetBlockDifficulty(unsigned int nBits);
 
 bool OutOfSyncByAgeWithChanceOfMining();
 
@@ -2066,6 +2067,13 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	    nCredit += nReward;
     }
 
+	//12-1-2014 - Halford - Prevent blocks from forming > 10 million diff:
+	double blockdiff = GetBlockDifficulty(nBits);
+	if (nBestHeight > 62000 && blockdiff > 10000000)
+	{
+		printf("CreateBlock() : Failed to create block with Bits larger than 10,000,000.\r\n");
+		return false;
+	}
 
 	if (true)
 	{
