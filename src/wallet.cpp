@@ -2059,7 +2059,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexPrev, true));
 	if (PORDiff > 10 && miningcpid.cpid != "INVESTOR" && miningcpid.cpid.length() > 3)
 	{
-		double last_magnitude = miningcpid.Magnitude;
+		double current_magnitude = miningcpid.Magnitude;
 		CBlock prior_block;
 		if (!prior_block.ReadFromDisk(pindexBest))   
 		{
@@ -2069,10 +2069,10 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		if (prior_block.vtx.size() > 0)
 		{
 			MiningCPID PriorStakeBlock = DeserializeBoincBlock(prior_block.vtx[0].hashBoinc);
-			double new_magnitude = PriorStakeBlock.Magnitude;
-			if (last_magnitude > 0 && new_magnitude > 0)
+			double prior_magnitude = PriorStakeBlock.Magnitude;
+			if (prior_magnitude > 0 && current_magnitude > 0)
 			{
-					if (new_magnitude < last_magnitude)
+					if (current_magnitude < prior_magnitude)
 					{
 							printf("Last Mag Too High; ");
 							MilliSleep(2500);

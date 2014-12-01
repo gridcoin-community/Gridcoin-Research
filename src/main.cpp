@@ -2758,16 +2758,16 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			//11-30-2014(2)
 			if ((PORDiff > 10) && IsLockTimeWithinMinutes((int64_t)nTime,9))
 			{
-				double last_magnitude = bb.Magnitude;
+				double current_magnitude = bb.Magnitude;
 				CBlock prior_block;
 				if (!prior_block.ReadFromDisk(pindex->pprev)) return error("CheckProofOfStake() : read Prior block failed!");
 				if (prior_block.vtx.size() > 0)
 				{
 					MiningCPID PriorStakeBlock = DeserializeBoincBlock(prior_block.vtx[0].hashBoinc);
-					double new_magnitude = PriorStakeBlock.Magnitude;
-					if (new_magnitude > 0 && last_magnitude > 0)
+					double prior_magnitude = PriorStakeBlock.Magnitude;
+					if (current_magnitude > 0 && prior_magnitude > 0)
 					{
-						if (new_magnitude < last_magnitude)
+						if (current_magnitude < prior_magnitude)
 						{
 							return error("ConnectBlock(): POR Block with lower magnitude than last block submitted.  \r\n");
 						}
