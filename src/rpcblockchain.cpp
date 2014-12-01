@@ -297,7 +297,7 @@ double GetDifficulty(const CBlockIndex* blockindex)
 	if (dDiff >= 100000   && dDiff < 1000000)      dDiff = (dDiff/10000)    + 3000;
 	if (dDiff >= 1000000  && dDiff < 100000000)    dDiff = (dDiff/100000)   + 4000;
 	if (dDiff >= 10000000 && dDiff < 100000000000) dDiff = (dDiff/10000000) + 5000;
-	if (dDiff >= 100000000000) dDiff = (dDiff/100000000000) + 7000;
+	if (dDiff >= 100000000000) dDiff = (blockindex->nBits/454722531) + 7000;
 
     return dDiff;
 }
@@ -427,7 +427,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("NetworkRAC", bb.NetworkRAC));
 	result.push_back(Pair("Magnitude", bb.Magnitude));
 	result.push_back(Pair("BoincHash",block.vtx[0].hashBoinc));
-	result.push_back(Pair("NewbieLevel",NewbieLevelToString(bb.NewbieLevel)));
+	result.push_back(Pair("Seniority",NewbieLevelToString(bb.NewbieLevel)));
 	result.push_back(Pair("GRCAddress",bb.GRCAddress));
 	std::string skein2 = aes_complex_hash(blockhash);
 	//	result.push_back(Pair("AES512Valid",iav));

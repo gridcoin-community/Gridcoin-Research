@@ -696,7 +696,7 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
 
 	if (false)
 	{
-		//Verify solver did not solve back to back blocks:
+		//Verify solver did not solve back-to-back blocks:
 		MiningCPID NewStakeBlock = DeserializeBoincBlock(hashBoinc);
 		int nGrandfather = 55000;
 		if (NewStakeBlock.GRCAddress.length() > 3  && pindexPrev->nHeight > nGrandfather)
