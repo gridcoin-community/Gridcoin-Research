@@ -1962,7 +1962,8 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 
 
 // miner's coin stake reward based on coin age spent (coin-days)
-int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, bool VerifyingBlock, int64_t locktime, double& OUT_POR)
+int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, 
+	bool VerifyingBlock, int64_t locktime, double& OUT_POR)
 {
     
 	int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
@@ -2757,8 +2758,12 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		{
 			double PORDiff = GetDifficulty(GetLastBlockIndex(pindex, true));
 			//During periods of high difficulty new block must have a higher magnitude than last block until block > 10 mins old:
-			//11-30-2014(2)
+			//12-1-2014
 			//int64_t LastBlockTime = pindexBest->GetBlockTime();
+
+
+			if (true)
+			{
 			double LastBlockAge = PreviousBlockAge();
 	
 			if ((PORDiff > 10) && LastBlockAge < (6*60))
@@ -2774,13 +2779,18 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 					{
 						if (current_magnitude < prior_magnitude)
 						{
+							printf("Block Age %f,Prior Mag %f, Current Mag %f Diff %f",LastBlockAge,prior_magnitude,current_magnitude,PORDiff);
+
 							return error("ConnectBlock(): POR Block with lower magnitude than last block submitted.  \r\n");
 						}
 					}
 				}
 			}
 	
-		
+			}
+
+
+
 			//Block being accepted within the last hour: Check with Netsoft - AND Verify User will not be overpaid:
 			bool outcome = CreditCheckOnline(bb.cpid,bb.Magnitude,mint,nCoinAge,nFees,nTime);
 			if (!outcome) return DoS(1,error("ConnectBlock(): Netsoft online check failed\r\n"));

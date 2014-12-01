@@ -2005,7 +2005,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		//Halford: Use current time since we are creating a new stake
 		double OUT_POR = 0;
         int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),OUT_POR);
-		
+		//12-1-2014
 		std::string sReward = RoundToString(nReward/COIN,4);
 
 		double out_magnitude = 0;
@@ -2024,15 +2024,18 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		// BOINC MINERS:
 		if (NC == 0 || NC == 4 || NC == 5)
 		{
-  			if (mint < (MaxSubsidy/25) && LessVerbose(200)) 
+  			if (mint < (MaxSubsidy/25) && LessVerbose(500)) 
 			{
 				if (LessVerbose(100)) printf("CreateBlock::Boinc Miners Mint too small");
 				return false; 
 			}
 
+			if (false)
+			{
 			if (OUT_POR < MintLimiter() && LessVerbose(100))
 			{
 				return false;
+			}
 			}
 		}
 		else if (NC == 1)
@@ -2047,9 +2050,12 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		}
 		if (NC == 3)
 		{
+			if (false)
+			{
 			if (OUT_POR < MintLimiter() && LessVerbose(50))
 			{
 				return false;
+			}
 			}
 		}
 		if (nReward == 0)
@@ -2060,7 +2066,10 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	    nCredit += nReward;
     }
 
-	//11-30-2014 - During periods of high difficulty new block must have a higher magnitude than last block until block > 10 mins old:
+
+	if (true)
+	{
+	//12-1-2014 - During periods of high difficulty new block must have a higher magnitude than last block until block > 10 mins old:
 	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexPrev, true));
 	//int64_t LastBlockTime = pindexBest->GetBlockTime();
 	double LastBlockAge = PreviousBlockAge();
@@ -2082,13 +2091,14 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 			{
 					if (current_magnitude < prior_magnitude)
 					{
-							printf("Last Mag Too High; ");
+							printf("Last Mag Too High; Block age %f, Prior mag %f, Current Mag %f",LastBlockAge,prior_magnitude,current_magnitude);
 							MilliSleep(2500);
 							return false;
 					}
 			}
 		}
 		
+	}
 	}
 
     // Set output amount
