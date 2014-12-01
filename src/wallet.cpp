@@ -18,6 +18,10 @@ using namespace std;
 
 static unsigned int GetStakeSplitAge() { return IsProtocolV2(nBestHeight) ? (10 * 24 * 60 * 60) : (1 * 24 * 60 * 60); }
 static int64_t GetStakeCombineThreshold() { return IsProtocolV2(nBestHeight) ? (50 * COIN) : (1000 * COIN); }
+bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
+
+bool IsLockTimeWithinMinutes(double locktime, int minutes);
+
 
 bool OutOfSyncByAgeWithChanceOfMining();
 
@@ -27,6 +31,7 @@ double GetDifficulty(const CBlockIndex* blockindex = NULL);
 
 MiningCPID DeserializeBoincBlock(std::string block);
 std::string RoundToString(double d, int place);
+double PreviousBlockAge();
 
 double coalesce(double mag1, double mag2);
 
@@ -2057,7 +2062,10 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 	//11-30-2014 - During periods of high difficulty new block must have a higher magnitude than last block until block > 10 mins old:
 	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexPrev, true));
-	if (PORDiff > 10 && miningcpid.cpid != "INVESTOR" && miningcpid.cpid.length() > 3)
+	//int64_t LastBlockTime = pindexBest->GetBlockTime();
+	double LastBlockAge = PreviousBlockAge();
+			
+	if (PORDiff > 10 && miningcpid.cpid != "INVESTOR" && miningcpid.cpid.length() > 3 && LastBlockAge < (6*60) )
 	{
 		double current_magnitude = miningcpid.Magnitude;
 		CBlock prior_block;

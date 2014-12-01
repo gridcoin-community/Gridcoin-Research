@@ -59,6 +59,8 @@ int64_t nCPIDsLoaded = 0;
 extern double coalesce(double mag1, double mag2);
 extern bool AmIGeneratingBackToBackBlocks();
 extern int64_t Floor(int64_t iAmt1, int64_t iAmt2);
+extern double PreviousBlockAge();
+
 
 
 extern MiningCPID GetMiningCPID();
@@ -2756,7 +2758,10 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			double PORDiff = GetDifficulty(GetLastBlockIndex(pindex, true));
 			//During periods of high difficulty new block must have a higher magnitude than last block until block > 10 mins old:
 			//11-30-2014(2)
-			if ((PORDiff > 10) && IsLockTimeWithinMinutes((int64_t)nTime,9))
+			//int64_t LastBlockTime = pindexBest->GetBlockTime();
+			double LastBlockAge = PreviousBlockAge();
+	
+			if ((PORDiff > 10) && LastBlockAge < (6*60))
 			{
 				double current_magnitude = bb.Magnitude;
 				CBlock prior_block;
