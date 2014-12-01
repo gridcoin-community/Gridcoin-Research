@@ -83,7 +83,7 @@ uint256 muGlobalCheckpointHash = 0;
 uint256 muGlobalCheckpointHashRelayed = 0;
 int muGlobalCheckpointHashCounter = 0;
 ///////////////////////MINOR VERSION////////////////////////////////
-int MINOR_VERSION = 102;
+int MINOR_VERSION = 104;
 
 			
 bool IsUserQualifiedToSendCheckpoint();
@@ -3355,9 +3355,9 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
 	//Reject blocks with diff > 10000000
 	
 	double blockdiff = GetBlockDifficulty(nBits);
-	if (nBestHeight > 62000 && blockdiff > 10000000)
+	if (nBestHeight > 62000 && blockdiff > 10000000000000000 && !IsLockTimeWithinMinutes(GetBlockTime(),480))
 	{
-		   return DoS(1, error("CheckBlock() : Bits larger than 10,000,000.\r\n"));
+		   return DoS(1, error("CheckBlock() : Bits larger than 10000000000000000.\r\n"));
 	}
 
 

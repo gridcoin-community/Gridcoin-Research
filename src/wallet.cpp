@@ -2069,9 +2069,9 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 	//12-1-2014 - Halford - Prevent blocks from forming > 10 million diff:
 	double blockdiff = GetBlockDifficulty(nBits);
-	if (nBestHeight > 62000 && blockdiff > 10000000)
+	if (nBestHeight > 62000 && blockdiff > 10000000000000000 && GetAdjustedTime() > 1417564800)
 	{
-		printf("CreateBlock() : Failed to create block with Bits larger than 10,000,000.\r\n");
+		printf("CreateBlock() : Failed to create block with Bits larger than 10000000000000000.\r\n");
 		return false;
 	}
 
