@@ -632,20 +632,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	int wallet_second = 0;
 	printf("Submitting block %d for %s",wallet_second,sBlockValue.c_str());
 
-	/*
-	// Create a raw time_t variable and a tm structure  
-    time_t rawtime;  
-	struct tm * timeinfo;  
-	time ( &rawtime );  
-	for (int i = 0; i < 590; i++)
-	{
-		timeinfo = localtime(&rawtime);  
-	    int cur_sec = timeinfo->tm_sec;
-		if (wallet_second == cur_sec) break;
-		MilliSleep(100);
-	}
-	*/
-
+	
 
     printf("CheckStake() : new proof-of-stake block found, BlockValue %s, \r\n hash: %s \nproofhash: %s  \ntarget: %s\n",
 		sBlockValue.c_str(), hashBlock.GetHex().c_str(), proofHash.GetHex().c_str(), hashTarget.GetHex().c_str());

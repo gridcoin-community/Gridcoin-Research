@@ -38,6 +38,7 @@ extern int64_t nLastBlockSolved;
 extern uint256 muGlobalCheckpointHash;
 extern uint256 muGlobalCheckpointHashRelayed;
 extern int muGlobalCheckpointHashCounter;
+extern int MINOR_VERSION;
 
 extern bool bNewUserWizardNotified;
 

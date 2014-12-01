@@ -1763,8 +1763,11 @@ void BitcoinGUI::timerfire()
 
 		if (Timer("status_update",2))
 		{
+			printf("@s4");
 			std::string status = GetGlobalStatus();
-    		bForceUpdate=true;
+    		printf("@s5");
+
+			bForceUpdate=true;
 		}
 
 

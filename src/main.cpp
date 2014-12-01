@@ -56,6 +56,8 @@ unsigned int CHECKPOINT_VIOLATIONS = 0;
 int64_t nLastTallied = 0;
 int64_t nCPIDsLoaded = 0;
 
+extern double GetBlockDifficulty(unsigned int nBits);
+
 extern double coalesce(double mag1, double mag2);
 extern bool AmIGeneratingBackToBackBlocks();
 extern int64_t Floor(int64_t iAmt1, int64_t iAmt2);
@@ -80,6 +82,8 @@ int64_t nLastBlockSolved = 0;  //Future timestamp
 uint256 muGlobalCheckpointHash = 0;
 uint256 muGlobalCheckpointHashRelayed = 0;
 int muGlobalCheckpointHashCounter = 0;
+///////////////////////MINOR VERSION////////////////////////////////
+int MINOR_VERSION = 102;
 
 			
 bool IsUserQualifiedToSendCheckpoint();
@@ -544,6 +548,7 @@ double GetPoSKernelPS2()
 
     if (IsProtocolV2(nBestHeight))
         result *= STAKE_TIMESTAMP_MASK + 1;
+	if (result > 350000000123) result = 350000000123;
 
     return result;
 }
@@ -557,6 +562,7 @@ std::string GetGlobalStatus()
 		std::string status = "";
 		double boincmagnitude = CalculatedMagnitude( GetAdjustedTime());
 		uint64_t nWeight = 0;
+		printf("@s1");
 		pwalletMain->GetStakeWeight(nWeight);
 		nBoincUtilization = boincmagnitude; //Legacy Support for the about screen
 		//Vlad : Request to make overview page magnitude consistent:
@@ -564,9 +570,12 @@ std::string GetGlobalStatus()
 		double out_owed = 0;
 		NewbieCompliesWithLocalStakeWeightRule(out_magnitude,out_owed);
 		// End of Boinc Magnitude update
+		printf("@s2");
 
 		double weight = nWeight;
 		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+		printf("@s3");
+
 		std::string boost_version = "";
 		std::ostringstream sBoost;
 		sBoost << boost_version  << "Using Boost "     
@@ -582,6 +591,7 @@ std::string GetGlobalStatus()
 			+ "<br>" + sBoost.str();
 
 		//The last line break is for Windows 8.1 Huge Toolbar
+		printf("@s9");
 
 		msGlobalStatus = status;
 		return status;
@@ -2754,7 +2764,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	double mint = pindex->nMint/COIN;
 	if (pindex->nHeight > nGrandfather && IsProofOfStake())
 	{
-		if (IsLockTimeVeryRecent(nTime) && bb.cpid !="INVESTOR" && bb.cpid.length() > 3)
+		if (IsLockTimeVeryRecent(nTime))
 		{
 			double PORDiff = GetDifficulty(GetLastBlockIndex(pindex, true));
 			//During periods of high difficulty new block must have a higher magnitude than last block until block > 10 mins old:
@@ -2815,12 +2825,12 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 						iFutile++;
 						if (iFutile > 50) break;
 					}
-					double OUT_POR3;
+					double OUT_POR3 = 0;
 					nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime,OUT_POR3);
 					if (nStakeReward > (nCalculatedResearch*TOLERANCE_PERCENT))
 					{
 							TallyNetworkAverages(false);
-							double OUT_POR4;
+							double OUT_POR4 = 0;
 							int64_t nCalculatedResearch2 = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime,OUT_POR4);
 							if (nStakeReward > (nCalculatedResearch2*TOLERANCE_PERCENT))
 							{
@@ -3341,6 +3351,15 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
     // Check proof of work matches claimed amount
     if (fCheckPOW && IsProofOfWork() && !CheckProofOfWork(GetPoWHash(), nBits))
         return DoS(50, error("CheckBlock() : proof of work failed"));
+
+	//Reject blocks with diff > 10000000
+	
+	double blockdiff = GetBlockDifficulty(nBits);
+	if (nBestHeight > 62000 && blockdiff > 10000000)
+	{
+		   return DoS(1, error("CheckBlock() : Bits larger than 10,000,000.\r\n"));
+	}
+
 
     // First transaction must be coinbase, the rest must not be
     if (vtx.empty() || !vtx[0].IsCoinBase())

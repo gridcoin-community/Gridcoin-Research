@@ -4,6 +4,7 @@
 #include "clientmodel.h"
 #include "bitcoinrpc.h"
 #include "guiutil.h"
+#include "main.h"
 
 #include <QTime>
 #include <QTimer>
@@ -17,6 +18,9 @@
 
 // TODO: make it possible to filter out categories (esp debug messages when implemented)
 // TODO: receive errors and debug messages through ClientModel
+
+std::string RoundToString(double d, int place);
+
 
 const int CONSOLE_SCROLLBACK = 50;
 const int CONSOLE_HISTORY = 50;
@@ -52,6 +56,18 @@ void RPCExecutor::start()
 {
    // Nothing to do
 }
+
+
+
+QString toqstring(int o)
+{
+	std::string pre="";
+	pre=strprintf("%d",o);
+	QString str1 = QString::fromUtf8(pre.c_str());
+	return str1;
+}
+
+
 
 /**
  * Split shell command line into a list of arguments. Aims to emulate \c bash and friends.
@@ -267,7 +283,13 @@ void RPCConsole::setClientModel(ClientModel *model)
         connect(model, SIGNAL(numBlocksChanged(int,int)), this, SLOT(setNumBlocks(int,int)));
 
         // Provide initial values
-        ui->clientVersion->setText(model->formatFullVersion());
+		QString cvi = model->formatFullVersion() + "-" + toqstring(MINOR_VERSION);
+
+		//std::string client_version = cvi.toUtf8() + "-" + RoundToString(MINOR_VERSION,0);
+
+		//QString qsClientVersion = QString::fromUtf8(client_version.c_str());
+
+        ui->clientVersion->setText(cvi);
         ui->clientName->setText(model->clientName());
         ui->buildDate->setText(model->formatBuildDate());
         ui->startupTime->setText(model->formatClientStartupTime());

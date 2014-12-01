@@ -23,6 +23,9 @@ void ReloadBlockChain1();
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
 
+
+
+
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spirit::Object& entry);
 extern enum Checkpoints::CPMode CheckpointsMode;
 extern bool Resuscitate();
@@ -298,9 +301,48 @@ double GetDifficulty(const CBlockIndex* blockindex)
 	if (dDiff >= 1000000  && dDiff < 100000000)    dDiff = (dDiff/100000)   + 4000;
 	if (dDiff >= 10000000 && dDiff < 100000000000) dDiff = (dDiff/10000000) + 5000;
 	if (dDiff >= 100000000000) dDiff = (dDiff/10000000000000) + 7000;
-
+	if (dDiff > 10000000) dDiff = 10000000;
     return dDiff;
 }
+
+
+
+
+double GetBlockDifficulty(unsigned int nBits)
+{
+    // Floating point number that is a multiple of the minimum difficulty,
+    // minimum difficulty = 1.0.
+    int nShift = (nBits >> 24) & 0xff;
+
+    double dDiff =
+        (double)0x0000ffff / (double)(nBits & 0x00ffffff);
+
+    while (nShift < 29)
+    {
+        dDiff *= 256.0;
+        nShift++;
+    }
+    while (nShift > 29)
+    {
+        dDiff /= 256.0;
+        nShift--;
+    }
+
+	return dDiff;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 double GetPoWMHashPS()
 {
@@ -359,6 +401,7 @@ double GetPoSKernelPS()
     if (IsProtocolV2(nBestHeight))
         result *= STAKE_TIMESTAMP_MASK + 1;
 
+	if (result > 350000000123) result = 350000000123;
     return result;
 }
 
