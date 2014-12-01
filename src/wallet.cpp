@@ -2030,7 +2030,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 				return false; 
 			}
 
-			if (OUT_POR < MintLimiter() && LessVerbose(950))
+			if (OUT_POR < MintLimiter() && LessVerbose(500))
 			{
 				return false;
 			}
@@ -2038,7 +2038,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		else if (NC == 1)
 		{
 			//INVESTORS
-			if (mint < MintLimiter() && LessVerbose(900)) 
+			if (mint < MintLimiter() && LessVerbose(800)) 
 			{
 				if (LessVerbose(100)) printf("CreateBlock::Investors Mint is too small");
 				return false; 
@@ -2047,7 +2047,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		}
 		if (NC == 3)
 		{
-			if (OUT_POR < MintLimiter() && LessVerbose(950))
+			if (OUT_POR < MintLimiter() && LessVerbose(500))
 			{
 				return false;
 			}

@@ -2435,7 +2435,7 @@ bool OutOfSyncByAgeWithChanceOfMining()
 		    if (KeyEnabled("overrideoutofsyncrule")) return false;
 			bool oosbyage = OutOfSyncByAge();
 			//Rule 1: If  Last Block Out of sync by Age - Return Out of Sync 95% of the time:
-			if (oosbyage) if (LessVerbose(950)) return true;
+			if (oosbyage) if (LessVerbose(500)) return true;
 			// Rule 2 : Dont mine on Fork Rule:
 	     	//If the diff is < .00015 in Prod, Most likely the client is mining on a fork: (Make it exceedingly hard):
 			double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
