@@ -44,7 +44,7 @@ public:
     QString formatClientStartupTime() const;
 
     QString formatBoostVersion()  const;
-
+    QString getDifficulty() const;
 private:
     OptionsModel *optionsModel;
 

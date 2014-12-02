@@ -1789,14 +1789,7 @@ void BitcoinGUI::timerfire()
 					//printf("Created restore point : %i",r);
 				}
 
-				//6*10
-				if (Timer("update_boinc_magnitude", 6*10))
-				{
-						//double POB = GetPoBDifficulty();
-						TallyInBackground();
-						//TallyNetworkAverages(false);
-				}
-
+		
 
 
 							if (false)

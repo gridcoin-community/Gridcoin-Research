@@ -3368,7 +3368,7 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
 	{
 		   return DoS(1, error("CheckBlock() : Block Bits larger than 10000000000000000.\r\n"));
 	}
-	//Bad block at 66408
+	//Bad block at 66408,66807
 
 
     // First transaction must be coinbase, the rest must not be

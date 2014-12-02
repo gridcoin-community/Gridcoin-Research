@@ -12,6 +12,8 @@
 #include <QTimer>
 
 static const int64_t nClientStartupTime = GetTime();
+std::string RoundToString(double d, int place);
+double GetDifficulty(const CBlockIndex* blockindex = NULL);
 
 ClientModel::ClientModel(OptionsModel *optionsModel, QObject *parent) :
     QObject(parent), optionsModel(optionsModel),
@@ -159,6 +161,14 @@ QString ClientModel::formatBoostVersion()  const
           << BOOST_VERSION % 100                // patch level
           << "\r\n";
 		return QString::fromStdString(s.str());
+}
+
+QString ClientModel::getDifficulty() const
+{
+	//12-2-2014;R Halford; Display POR Diff on RPC Console
+	std::string diff = RoundToString(GetDifficulty(NULL),4);
+	return QString::fromStdString(diff);
+
 }
 
 

@@ -300,7 +300,7 @@ void RPCConsole::setClientModel(ClientModel *model)
         setNumBlocks(model->getNumBlocks(), model->getNumBlocksOfPeers());
 
 		ui->boostVersion->setText(model->formatBoostVersion());
-
+		ui->porDiff->setText(model->getDifficulty());
 
     }
 }
