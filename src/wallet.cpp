@@ -2032,7 +2032,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		// BOINC MINERS:
 		if (NC == 0 || NC == 4 || NC == 5)
 		{
-  			if (mint < (MaxSubsidy/25) && LessVerbose(750)) 
+  			if (mint < (MaxSubsidy/25) && LessVerbose(950)) 
 			{
 				if (LessVerbose(100)) printf("CreateBlock::Boinc Miners Mint too small");
 				return false; 
@@ -2040,7 +2040,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 			if (true)
 			{
-				if (OUT_POR < MintLimiterPOR() && LessVerbose(800))
+				if (OUT_POR < MintLimiterPOR() && LessVerbose(950))
 				{
 					return false;
 				}
@@ -2049,7 +2049,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		else if (NC == 1)
 		{
 			//INVESTORS
-			if (mint < MintLimiter() && LessVerbose(700)) 
+			if (mint < MintLimiter() && LessVerbose(950)) 
 			{
 				if (LessVerbose(100)) printf("CreateBlock::Investors Mint is too small");
 				return false; 
@@ -2060,7 +2060,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		{
 			if (true)
 			{
-				if (OUT_POR < MintLimiterPOR() && LessVerbose(750))
+				if (OUT_POR < MintLimiterPOR() && LessVerbose(950))
 				{
 					return false;
 				}
@@ -2076,7 +2076,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 	//12-1-2014 - Halford - Prevent blocks from forming > 10 million diff:
 	double blockdiff = GetBlockDifficulty(nBits);
-	if (nBestHeight > 62000 && blockdiff > 10000000000000000 && GetAdjustedTime() > 1417564800)
+	if (nBestHeight > 67000 && blockdiff > 10000000000000000 && GetAdjustedTime() > 1417564800)
 	{
 		printf("CreateBlock() : Failed to create block with Bits larger than 10000000000000000.\r\n");
 		return false;

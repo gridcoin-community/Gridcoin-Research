@@ -2446,7 +2446,7 @@ bool OutOfSyncByAgeWithChanceOfMining()
 		    if (KeyEnabled("overrideoutofsyncrule")) return false;
 			bool oosbyage = OutOfSyncByAge();
 			//Rule 1: If  Last Block Out of sync by Age - Return Out of Sync 95% of the time:
-			if (oosbyage) if (LessVerbose(200)) return true;
+			if (oosbyage) if (LessVerbose(900)) return true;
 			// Rule 2 : Dont mine on Fork Rule:
 	     	//If the diff is < .00015 in Prod, Most likely the client is mining on a fork: (Make it exceedingly hard):
 			double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
@@ -3352,10 +3352,11 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
 	//Reject blocks with diff > 10000000000000000
 	
 	double blockdiff = GetBlockDifficulty(nBits);
-	if (nBestHeight > 62000 && blockdiff > 10000000000000000 && !IsLockTimeWithinMinutes(GetBlockTime(),480))
+	if (nBestHeight > 67400 && blockdiff > 10000000000000000 && !IsLockTimeWithinMinutes(GetBlockTime(),480))
 	{
-		   return DoS(1, error("CheckBlock() : Bits larger than 10000000000000000.\r\n"));
+		   return DoS(1, error("CheckBlock() : Block Bits larger than 10000000000000000.\r\n"));
 	}
+	//Bad block at 66408
 
 
     // First transaction must be coinbase, the rest must not be
