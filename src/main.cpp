@@ -3329,7 +3329,18 @@ bool Resuscitate()
 }
 
 
-
+int BlockHeight(uint256 bh)
+{
+	int nGridHeight=0;
+	map<uint256, CBlockIndex*>::iterator iMapIndex = mapBlockIndex.find(bh);
+    if (iMapIndex != mapBlockIndex.end())
+	{
+		 CBlockIndex* pPrev = (*iMapIndex).second;
+		 nGridHeight = pPrev->nHeight+1;
+	}
+	return nGridHeight;
+}
+	
 
 bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) const
 {
@@ -3350,9 +3361,10 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
         return DoS(50, error("CheckBlock() : proof of work failed"));
 
 	//Reject blocks with diff > 10000000000000000
-	
+	//12-2-2014
 	double blockdiff = GetBlockDifficulty(nBits);
-	if (nBestHeight > 67400 && blockdiff > 10000000000000000 && !IsLockTimeWithinMinutes(GetBlockTime(),480))
+	int lastheight = BlockHeight(hashPrevBlock);
+	if (lastheight > 67400 && blockdiff > 10000000000000000 && !IsLockTimeWithinMinutes(GetBlockTime(),480))
 	{
 		   return DoS(1, error("CheckBlock() : Block Bits larger than 10000000000000000.\r\n"));
 	}
