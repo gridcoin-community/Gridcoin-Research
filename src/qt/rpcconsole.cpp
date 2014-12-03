@@ -366,6 +366,8 @@ void RPCConsole::message(int category, const QString &message, bool html)
 void RPCConsole::setNumConnections(int count)
 {
     ui->numberOfConnections->setText(QString::number(count));
+	if (clientModel)	ui->porDiff->setText(clientModel->getDifficulty());
+
 }
 
 void RPCConsole::setNumBlocks(int count, int countOfPeers)

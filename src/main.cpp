@@ -3705,6 +3705,10 @@ void GridcoinServices()
 	}
 
 
+	GetGlobalStatus();
+	bForceUpdate=true;
+
+
 }
 
 

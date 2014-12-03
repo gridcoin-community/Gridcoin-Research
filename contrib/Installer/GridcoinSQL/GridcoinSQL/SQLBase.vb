@@ -247,37 +247,48 @@ Public Class SQLBase
     Public Function TableToData(sTable As String, sStart As String, sEnd As String) As String
 
         mSql = "Select * from " + sTable + " WHERE ADDED between '" + Trim(sStart) + "' and '" + Trim(sEnd) + "' Order by added"
+        Return SqlToData(mSql)
 
-        dr = Me.Read(mSql)
+
+    End Function
+    Public Function TableToData(Sql As String)
+        Return SqlToData(Sql)
+
+    End Function
+    Public Function SqlToData(sSql As String)
+        dr = Me.Read(sSql)
         If dr.HasRows = False Then Exit Function
         Dim sHeader As String
         For x = 0 To dr.FieldCount - 1
             'Dim dc As DataColumn
             ' dc = dr.GetSchemaTable.Columns(CInt(x))
             Dim sCol As String
-            sCol = dr.GetName(x) + "<~>" + dr.GetFieldType(x).ToString
+            sCol = dr.GetName(x) + "<TYPE>" + dr.GetFieldType(x).ToString
 
-            sHeader += sCol + "<|>"
+            sHeader += sCol + "<COL>"
         Next
         Dim sRow As String
 
         Dim sOut As String
-        sOut += sHeader + vbCrLf
+        sOut += sHeader + "<ROW>"
 
         While dr.Read
             sRow = ""
             For x = 0 To dr.FieldCount - 1
                 Dim sData As String
                 sData = dr(CInt(x)).ToString()
-                sRow += sData + "<|>"
+                sRow += sData + "<COL>"
 
             Next x
-            sRow += vbCrLf
+            sRow += "<ROW>"
             sOut += sRow
         End While
         Return sOut
 
     End Function
+
+
+
     Public Function GetLastHash(sTable As String) As String
         mSql = "Select top 1 hash from " + sTable + " where added < getdate() order by added desc"
 
@@ -513,7 +524,7 @@ Public Class MyWebClient
     Inherits System.Net.WebClient
     Protected Overrides Function GetWebRequest(ByVal uri As Uri) As System.Net.WebRequest
         Dim w As System.Net.WebRequest = MyBase.GetWebRequest(uri)
-        w.Timeout = 47000
+        w.Timeout = 7000
         Return w
     End Function
 End Class

@@ -84,6 +84,12 @@
       <DependentUpon>Form1.vb</DependentUpon>
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="frmSQL.Designer.vb">
+      <DependentUpon>frmSQL.vb</DependentUpon>
+    </Compile>
+    <Compile Include="frmSQL.vb">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="GridcoinReader.vb" />
     <Compile Include="modUtils.vb" />
     <Compile Include="My Project\AssemblyInfo.vb" />
@@ -109,6 +115,9 @@
   <ItemGroup>
     <EmbeddedResource Include="Form1.resx">
       <DependentUpon>Form1.vb</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="frmSQL.resx">
+      <DependentUpon>frmSQL.vb</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="My Project\Resources.resx">
       <Generator>VbMyResourcesResXFileCodeGenerator</Generator>

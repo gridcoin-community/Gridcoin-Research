@@ -166,7 +166,9 @@ QString ClientModel::formatBoostVersion()  const
 QString ClientModel::getDifficulty() const
 {
 	//12-2-2014;R Halford; Display POR Diff on RPC Console
-	std::string diff = RoundToString(GetDifficulty(NULL),4);
+	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+	
+	std::string diff = RoundToString(PORDiff,4);
 	return QString::fromStdString(diff);
 
 }

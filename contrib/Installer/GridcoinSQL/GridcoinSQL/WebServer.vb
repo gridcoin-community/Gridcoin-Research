@@ -38,6 +38,7 @@ End Class
 Public Class HTTPSession
     Private tcpListener As System.Net.Sockets.TcpListener
     Private clientSocket As System.Net.Sockets.Socket
+    Dim DictQS As New Dictionary(Of String, String)
 
     Public Sub New(ByVal tcpListener As System.Net.Sockets.TcpListener)
         Me.tcpListener = tcpListener
@@ -71,11 +72,84 @@ Public Class HTTPSession
     Private Sub AddNode(sNode As String)
         Dim oSql As New SQLBase("gridcoinsql")
         Dim sData As String
-        oSql.InsertRecord("node", "Host,LastSeen,Master", "'" + Trim(sNode) + "',getdate(),0")
-        Stop
-
+        oSql.InsertRecord("node", "Host,LastSeen", "'" + Trim(sNode) + "',getdate()")
 
     End Sub
+
+    Public Function ExtractXML(sData As String, sStartKey As String, sEndKey As String)
+        Dim iPos1 As Integer = InStr(1, sData, sStartKey)
+        iPos1 = iPos1 + Len(sStartKey)
+        Dim iPos2 As Integer = InStr(iPos1, sData, sEndKey)
+        iPos2 = iPos2
+        If iPos2 = 0 Then Return ""
+
+        Dim sOut As String = Mid(sData, iPos1, iPos2 - iPos1)
+        Return sOut
+
+    End Function
+
+    Public Function DetermineHtmlRequest(htmlReq As String)
+        ' Set default page
+        Dim defaultPage As String = "index.html"
+
+        Dim strArray() As String
+        Dim strRequest As String
+
+        strArray = htmlReq.Trim.Split(" ")
+
+        ' Determine the HTTP method (GET only)
+        If strArray(0).Trim().ToUpper.Equals("GET") Then
+            strRequest = strArray(1).Trim
+
+            If (strRequest.StartsWith("/")) Then
+                strRequest = strRequest.Substring(1)
+            End If
+
+            If (strRequest.EndsWith("/") Or strRequest.Equals("")) Then
+                strRequest = strRequest & defaultPage
+            End If
+
+            If InStr(1, strRequest, "?") > 0 Then
+
+                Dim sQS() As String
+                sQS = Split(strRequest, "?")
+                Dim qs1 As String
+                qs1 = sQS(1)
+                Dim qs2() As String
+                Dim QSDecoded As String
+
+                QSDecoded = Replace(qs1, "%20", " ")
+
+                qs2 = Split(QSDecoded, "&")
+                Dim p1 As String
+                Dim p2 As String
+                Dim p3 As String
+
+
+
+                For x = 0 To qs2.Length - 1
+
+                    Dim vRow() As String
+                    vRow = Split(qs2(x), "=")
+                    p1 = vRow(0)
+                    p2 = vRow(1)
+                    DictQS.Add(p1, p2)
+                Next
+
+                '      Dim clientInfo As IPEndPoint = CType(clientSocket.RemoteEndPoint, IPEndPoint)
+                '     Console.WriteLine("Client: " + clientInfo.Address.ToString() + ":" + clientInfo.Port.ToString())
+                '    Dim sClient As String
+                '   sClient = clientInfo.Address.ToString() + ":" + clientInfo.Port.ToString()
+                'Insert the node into Nodes
+                ' AddNode(sClient)
+
+            End If
+        End If
+
+        Return strRequest
+
+    End Function
+
     Protected Sub ProcessRequest()
         Dim recvBytes(1024) As Byte
         Dim htmlReq As String = Nothing
@@ -92,83 +166,52 @@ Public Class HTTPSession
             ' Set WWW Root Path
             Dim rootPath As String = Directory.GetCurrentDirectory() & "\WWWRoot\"
 
-            ' Set default page
-            Dim defaultPage As String = "index.html"
-
-            Dim strArray() As String
+          
             Dim strRequest As String
-
-            strArray = htmlReq.Trim.Split(" ")
-
-            ' Determine the HTTP method (GET only)
-            If strArray(0).Trim().ToUpper.Equals("GET") Then
-                strRequest = strArray(1).Trim
-
-                If (strRequest.StartsWith("/")) Then
-                    strRequest = strRequest.Substring(1)
-                End If
-
-                If (strRequest.EndsWith("/") Or strRequest.Equals("")) Then
-                    strRequest = strRequest & defaultPage
-                End If
-
-                If InStr(1, strRequest, "?") > 0 Then
-
-                    Dim sQS() As String
-                    sQS = Split(strRequest, "?")
-                    Dim qs1 As String
-                    qs1 = sQS(1)
-                    Dim qs2() As String
-                    Dim QSDecoded As String
-                    
-                    QSDecoded = Replace(qs1, "%20", " ")
-
-                    qs2 = Split(QSDecoded, "&")
-                    Dim p1 As String
-                    Dim p2 As String
-                    Dim p3 As String
+            Dim sSQL As String
+            sSQL = ExtractXML(htmlReq, "<QUERY>", "</QUERY>")
 
 
-                    Dim DictQS As New Dictionary(Of String, String)
+            Dim sFromNode As String
+            sFromNode = ExtractXML(htmlReq, "<FROMNODE>", "</FROMNODE>")
 
-                    For x = 0 To qs2.Length - 1
 
-                        Dim vRow() As String
-                        vRow = Split(qs2(x), "=")
-                        p1 = vRow(0)
-                        p2 = vRow(1)
-                        DictQS.Add(p1, p2)
-                    Next
+            Dim clientInfo As IPEndPoint = CType(clientSocket.RemoteEndPoint, IPEndPoint)
+            Dim sClient As String
+            sClient = clientInfo.Address.ToString() + ":" + clientInfo.Port.ToString()
+            'Insert the node into Nodes
+            AddNode(sClient)
 
-                    Dim clientInfo As IPEndPoint = CType(clientSocket.RemoteEndPoint, IPEndPoint)
-                    Console.WriteLine("Client: " + clientInfo.Address.ToString() + ":" + clientInfo.Port.ToString())
-                    Dim sClient As String
-                    sClient = clientInfo.Address.ToString() + ":" + clientInfo.Port.ToString()
-                    'Insert the node into Nodes
-                    AddNode(sClient)
+            Dim sData As String
+            If Len(sSQL) > 0 Then
+                sData = GetHttpData(sSQL)
+                strRequest = DetermineHtmlRequest(htmlReq)
 
-                    Dim sData As String
+                sendHTMLResponseFromData(strRequest, sData)
+
+
+                Exit Sub
+            End If
+
+            If htmlReq = "" Then Exit Sub
+
+
                     sData = GetHttpData(DictQS("table"), DictQS("startdate"), DictQS("enddate"))
 
                     sendHTMLResponseFromData(strRequest, sData)
 
 
-
-                Else
-
                     strRequest = rootPath & strRequest
 
                     sendHTMLResponse(strRequest)
                     Stop
-                End If
+            
 
-
-            Else ' Not HTTP GET method
+            'Else ' Not HTTP GET method
                 strRequest = rootPath & "Error\" & "400.html"
 
                 sendHTMLResponse(strRequest)
-            End If
-
+           
         Catch ex As Exception
             Console.WriteLine(ex.StackTrace.ToString())
 
@@ -182,6 +225,16 @@ Public Class HTTPSession
         Dim sData As String
 
         sData = oSql.TableToData(sTable, sStart, sEnd)
+
+        Return sData
+
+
+    End Function
+    Public Function GetHttpData(sSql As String)
+        Dim oSql As New SQLBase("gridcoinsql")
+        Dim sData As String
+
+        sData = oSql.TableToData(sSql)
 
         Return sData
 

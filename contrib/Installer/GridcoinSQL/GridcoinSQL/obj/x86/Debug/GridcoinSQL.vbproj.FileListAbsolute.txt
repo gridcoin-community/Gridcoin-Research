@@ -11,3 +11,4 @@ A:\Gridcoin-Research\contrib\Installer\GridcoinSQL\GridcoinSQL\obj\x86\Debug\Gri
 A:\Gridcoin-Research\contrib\Installer\GridcoinSQL\GridcoinSQL\obj\x86\Debug\GridcoinSQL.xml
 A:\Gridcoin-Research\contrib\Installer\GridcoinSQL\GridcoinSQL\obj\x86\Debug\GridcoinSQL.pdb
 A:\Gridcoin-Research\contrib\Installer\GridcoinSQL\GridcoinSQL\bin\Debug\SQLite.NET.dll
+A:\Gridcoin-Research\contrib\Installer\GridcoinSQL\GridcoinSQL\obj\x86\Debug\GridcoinSQL.frmSQL.resources

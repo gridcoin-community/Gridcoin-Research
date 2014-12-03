@@ -1760,17 +1760,20 @@ void BitcoinGUI::timerfire()
 
 
 		
-
-		if (Timer("status_update",2))
+		if (Timer("status_update",1))
 		{
-			printf("@s4");
 			std::string status = GetGlobalStatus();
-    		printf("@s5");
-
 			bForceUpdate=true;
 		}
 
-
+		if (bForceUpdate)
+		{
+				bForceUpdate=false;
+				overviewPage->updateglobalstatus();
+				setNumConnections(clientModel->getNumConnections());
+       
+		}
+ 
 
 
 		// RETIRING ALL OF THIS:
