@@ -214,17 +214,28 @@ Public Class SQLBase
 
     Public Function DropTable(sTable As String)
         mSql = "DROP TABLE " + sTable
-        Exec(mSql)
 
+        Try
+            Exec(mSql)
+
+        Catch ex As Exception
+
+        End Try
+       
     End Function
     Public Sub AddBaseTables()
         'Ensure System, Consensus, Nodes exist:
+
+        DropBaseTables()
+
         CreateTable("System", "sCategory,sKey,sValue", "varchar(100),varchar(100),varchar(100)")
 
         CreateTable("Node", "host,LastSeen,Master", "varchar(50),datetime,numeric(1,0)")
         CreateTable("Consensus", "Round,Started,Ended,ConsensusHash,Tables", "uniqueidentifier,datetime,datetime,varchar(100),varchar(1500)")
-        CreateTable("Organization", "Name,City", "varchar(100),varchar(100)")
+        CreateTable("Organization", "OrgId,Name,City,State", "uniqueidentifier,varchar(100),varchar(100),varchar(50)")
         CreateTable("Confirm", "GRCFrom,GRCTo,txid,amount,confirmed", "varchar(100),varchar(100),varchar(100),money,numeric(1,0)")
+        'addthe Gridcoin Org
+        InsertRecord("Organization", "OrgId,Name,City,State", "'F0FB9E21-0EDE-4AD4-8F88-EFE3BB917481','Gridcoin','Phoenix','AZ'")
 
     End Sub
     Public Sub DropBaseTables()
@@ -251,13 +262,48 @@ Public Class SQLBase
 
 
     End Function
-    Public Function TableToData(Sql As String)
-        Return SqlToData(Sql)
 
+    Public Function CCINT(s As Object) As Double
+        Debug.Print(TypeName(s))
+
+        If TypeName(s) = "DBNULL" Then Return 0
+        Return Val(s)
+
+    End Function
+
+    Public Function GetInternalTables()
+        mSql = "SELECT * FROM information_schema.tables"
+        dr = Me.Read(mSql)
+        Dim sRow As String
+        Dim sOut As String
+        sOut = "TABLE<TYPE>system.string<COL>COUNT<TYPE>system.string<COL><ROW>"
+
+        While dr.Read
+            Dim sTable As String = dr("Table_Name")
+            Dim sCount As String
+            Dim sql As String
+            sql = "Select count(*) from " + sTable
+            Dim dr2 As SqlDataReader
+            dr2 = Me.Read(sql)
+            If dr2.HasRows Then
+                dr2.Read()
+
+                sCount = Trim(CCINT(dr2(0)))
+
+            Else
+                sCount = "0"
+            End If
+
+            sRow = sTable + "<COL>" + Trim(sCount) + "<COL><ROW>"
+
+            sOut += sRow
+
+        End While
+        Return sOut
     End Function
     Public Function SqlToData(sSql As String)
         dr = Me.Read(sSql)
-        If dr.HasRows = False Then Exit Function
+        ' If dr.HasRows = False Then Exit Function
         Dim sHeader As String
         For x = 0 To dr.FieldCount - 1
             'Dim dc As DataColumn
@@ -271,7 +317,6 @@ Public Class SQLBase
 
         Dim sOut As String
         sOut += sHeader + "<ROW>"
-
         While dr.Read
             sRow = ""
             For x = 0 To dr.FieldCount - 1

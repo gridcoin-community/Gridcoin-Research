@@ -2769,7 +2769,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			double PORDiff = GetDifficulty(GetLastBlockIndex(pindex, true));
 			//Halford: During periods of high difficulty new block must have a higher magnitude than last block until block > 10 mins old:
 
-			if (true)
+			if (false)
 			{
 			double LastBlockAge = PreviousBlockAge();
 	
@@ -3364,9 +3364,12 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
 	//12-2-2014
 	double blockdiff = GetBlockDifficulty(nBits);
 	int lastheight = BlockHeight(hashPrevBlock);
-	if (lastheight > 67400 && blockdiff > 10000000000000000 && !IsLockTimeWithinMinutes(GetBlockTime(),480))
+	if(false)
+	{
+	if (lastheight > 74400 && blockdiff > 10000000000000000 && !IsLockTimeWithinMinutes(GetBlockTime(),480))
 	{
 		   return DoS(1, error("CheckBlock() : Block Bits larger than 10000000000000000.\r\n"));
+	}
 	}
 	//Bad block at 66408,66807
 

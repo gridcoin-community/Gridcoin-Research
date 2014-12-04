@@ -5,7 +5,7 @@ Public Module utils
     Public bSqlHouseCleaningComplete As Boolean = False
     Public mlSqlBestBlock As Long = 0
     Public nBestBlock As Long = 0
-    Public mWebServer As New WebServer
+    Public mWebServer As WebServer
 
     Public Sub Log(sData As String)
         Try

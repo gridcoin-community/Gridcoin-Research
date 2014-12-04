@@ -1746,25 +1746,28 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	}
 	else if (NC == 2)
 	{
-					NewbieStakeWeightModifier =	250000+(out_magnitude*MaxReward);
+					NewbieStakeWeightModifier =	25000;
+					//+(out_magnitude*MaxReward);
 					//printf("NL2::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
 					//Uninitialized Newbie
 	
 	}
 	else if (NC == 3 && out_owed > (MaxReward/5))
 	{
-					NewbieStakeWeightModifier =	out_magnitude*(MaxReward/3);
-					printf("NL3::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
+					NewbieStakeWeightModifier =	10000;
+					//out_magnitude*(MaxReward/3);
+					//printf("NL3::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
 					//1 - 5 blocks
 	}
 	else if (NC == 4 && out_owed > (MaxReward/2))
 	{
-					NewbieStakeWeightModifier =	out_magnitude*(MaxReward/6);
+					//NewbieStakeWeightModifier =	out_magnitude*(MaxReward/6);
+
 		
 	}
 	else if (NC == 5 && out_owed > (MaxReward/1.5))
 	{
-					NewbieStakeWeightModifier =	out_magnitude*(MaxReward/9);
+					//NewbieStakeWeightModifier =	out_magnitude*(MaxReward/9);
 	}
 	
 	nWeight += NewbieStakeWeightModifier;
@@ -2024,7 +2027,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		double MaxSubsidy = GetMaximumBoincSubsidy(GetAdjustedTime());
 
 		
-		printf("Creating POS Reward for %s  amt  %s  {BoincLevel %s} \r\n",GlobalCPUMiningCPID.cpid.c_str(),sReward.c_str(),RoundToString(NC,0).c_str());
+		if (fDebug) printf("Creating POS Reward for %s  amt  %s  {BoincLevel %s} \r\n",GlobalCPUMiningCPID.cpid.c_str(),sReward.c_str(),RoundToString(NC,0).c_str());
 	
 		// Gridcoin - R Halford - For Investors (NC Level 0, or Veterans, Level 0) - Prevent tiny payments & Prevent astronomical diff levels
 		// Enforce: Investor (1), Veteran (0), Newbie (4), Newbie (5)
@@ -2032,7 +2035,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		// BOINC MINERS:
 		if (NC == 0 || NC == 4 || NC == 5)
 		{
-  			if (mint < (MaxSubsidy/25) && LessVerbose(950)) 
+  			if (mint < (MaxSubsidy/25)) 
 			{
 				if (LessVerbose(100)) printf("CreateBlock::Boinc Miners Mint too small");
 				return false; 
@@ -2040,7 +2043,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 			if (true)
 			{
-				if (OUT_POR < MintLimiterPOR() && LessVerbose(950))
+				if (OUT_POR < MintLimiterPOR())
 				{
 					return false;
 				}
@@ -2049,7 +2052,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		else if (NC == 1)
 		{
 			//INVESTORS
-			if (mint < MintLimiter() && LessVerbose(950)) 
+			if (mint < MintLimiter()) 
 			{
 				if (LessVerbose(100)) printf("CreateBlock::Investors Mint is too small");
 				return false; 
@@ -2060,10 +2063,18 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		{
 			if (true)
 			{
-				if (OUT_POR < MintLimiterPOR() && LessVerbose(950))
+				if (OUT_POR < MintLimiterPOR())
 				{
 					return false;
 				}
+			}
+		}
+		if (NC==2)
+		{
+
+			if (nReward/COIN < .02 && LessVerbose(750))
+			{
+				return false;
 			}
 		}
 		if (nReward == 0)
@@ -2076,13 +2087,13 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 	//12-1-2014 - Halford - Prevent blocks from forming > 10 million diff:
 	double blockdiff = GetBlockDifficulty(nBits);
-	if (nBestHeight > 67000 && blockdiff > 10000000000000000 && GetAdjustedTime() > 1417564800)
+	if (nBestHeight > 73000 && blockdiff > 10000000000000000 && GetAdjustedTime() > 1417564800)
 	{
 		printf("CreateBlock() : Failed to create block with Bits larger than 10000000000000000.\r\n");
 		return false;
 	}
 
-	if (true)
+	if (false)
 	{
 	//12-1-2014 - During periods of high difficulty new block must have a higher magnitude than last block until block > 10 mins old:
 	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexPrev, true));

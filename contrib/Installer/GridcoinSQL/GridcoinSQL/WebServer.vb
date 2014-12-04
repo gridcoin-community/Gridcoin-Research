@@ -70,9 +70,15 @@ Public Class HTTPSession
         End While
     End Sub
     Private Sub AddNode(sNode As String)
+
+        Try
+
         Dim oSql As New SQLBase("gridcoinsql")
         Dim sData As String
         oSql.InsertRecord("node", "Host,LastSeen", "'" + Trim(sNode) + "',getdate()")
+        Catch ex As Exception
+
+        End Try
 
     End Sub
 
@@ -133,6 +139,8 @@ Public Class HTTPSession
                     vRow = Split(qs2(x), "=")
                     p1 = vRow(0)
                     p2 = vRow(1)
+                    DictQS.Remove(p1)
+
                     DictQS.Add(p1, p2)
                 Next
 
@@ -171,6 +179,7 @@ Public Class HTTPSession
             Dim sSQL As String
             sSQL = ExtractXML(htmlReq, "<QUERY>", "</QUERY>")
 
+            Debug.Print(sSQL)
 
             Dim sFromNode As String
             sFromNode = ExtractXML(htmlReq, "<FROMNODE>", "</FROMNODE>")
@@ -184,7 +193,14 @@ Public Class HTTPSession
 
             Dim sData As String
             If Len(sSQL) > 0 Then
-                sData = GetHttpData(sSQL)
+
+                Try
+                    sData = GetHttpData(sSQL)
+
+                Catch ex As Exception
+                    sData = ex.Message
+
+                End Try
                 strRequest = DetermineHtmlRequest(htmlReq)
 
                 sendHTMLResponseFromData(strRequest, sData)
@@ -213,6 +229,7 @@ Public Class HTTPSession
                 sendHTMLResponse(strRequest)
            
         Catch ex As Exception
+            
             Console.WriteLine(ex.StackTrace.ToString())
 
             If clientSocket.Connected Then
@@ -221,7 +238,15 @@ Public Class HTTPSession
         End Try
     End Sub
     Public Function GetHttpData(sTable As String, sStart As String, sEnd As String)
-        Dim oSql As New SQLBase("gridcoinsql")
+        Dim oSql As SQLBase
+
+        Try
+            oSql = New SQLBase("gridcoinsql")
+
+        Catch ex As Exception
+            Debug.Print(ex.Message)
+
+        End Try
         Dim sData As String
 
         sData = oSql.TableToData(sTable, sStart, sEnd)
@@ -234,7 +259,10 @@ Public Class HTTPSession
         Dim oSql As New SQLBase("gridcoinsql")
         Dim sData As String
 
-        sData = oSql.TableToData(sSql)
+        If sSql = "SELECT * FROM INTERNALTABLES" Then Return oSql.GetInternalTables()
+
+
+        sData = oSql.SqlToData(sSql)
 
         Return sData
 

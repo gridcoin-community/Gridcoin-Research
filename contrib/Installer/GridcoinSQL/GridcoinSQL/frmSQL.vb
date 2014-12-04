@@ -11,20 +11,30 @@ Public Class frmSQL
     End Sub
 
     Private Sub frmSQL_Load(sender As System.Object, e As System.EventArgs) Handles MyBase.Load
-        ' ReplicateDatabase("gridcoin_ro")
 
-        mData = New Sql("gridcoin_ro")
+
+
+        mWebServer = New WebServer
+
+        mData = New Sql()
+
+        'Dim x1 As New SQLBase()
+        'x1.DropBaseTables()
+        'x1.AddBaseTables()
+        'Dim x2 As New SQLBase("GridcoinSql")
+        'x2.DropBaseTables()
+        'x2.AddBaseTables()
+
 
 
         'Query available tables
-        Dim dr As GridcoinReader
+        Dim dr As New GridcoinReader
 
         lvTables.View = Windows.Forms.View.Details
         Dim h1 As New System.Windows.Forms.ColumnHeader
 
-        dr = mData.GetGridcoinReader("SELECT * FROM sqlite_master WHERE type='table';")
+        dr = mData.GetGridcoinReader("SELECT * FROM INTERNALTABLES")
 
-        'dr = mData.Query(".tables;")
         lvTables.Columns.Clear()
         lvTables.Columns.Add("Table")
         lvTables.Columns.Add("Rows")
@@ -42,12 +52,12 @@ Public Class frmSQL
 
         For y = 1 To dr.Rows
             grr = dr.GetRow(y)
-            Dim sTable As String = grr.Values(1)
+            Dim sTable As String = grr.Values(0)
             Dim lvItem As New System.Windows.Forms.ListViewItem(sTable)
-            Dim sql As String
-            sql = "Select count(*) as Count1 from " + Trim(sTable) + ";"
-            lRC = Val(mData.QueryFirstRow(sql, "Count1"))
-            lvItem.SubItems.Add(Trim(lRC))
+            Dim rc As String
+            rc = grr.Values(1)
+            lvItem.SubItems.Add(Trim(rc))
+
             lvItem.BackColor = Drawing.Color.Black
             lvItem.ForeColor = Drawing.Color.Lime
             lvTables.Items.Add(lvItem)
@@ -78,7 +88,7 @@ Public Class frmSQL
             MsgBox(ex.Message, vbCritical, "Gridcoin Query Analayzer")
             Exit Sub
         End Try
-        If dr Is Nothing Then Exit Sub
+        'If dr Is Nothing Then Exit Sub
         dgv.Rows.Clear()
         dgv.Columns.Clear()
         dgv.BackgroundColor = Drawing.Color.Black
@@ -230,4 +240,8 @@ Public Class frmSQL
 
 
     End Function
+
+    Private Sub rtbQuery_TextChanged(sender As System.Object, e As System.EventArgs) Handles rtbQuery.TextChanged
+
+    End Sub
 End Class

@@ -374,7 +374,6 @@ double GetMagnitudeByHashBoinc(std::string hashBoinc)
 			if (boincblock.cpid == "INVESTOR")  return 0;
    			if (boincblock.projectname == "") 	return 0;
     		if (boincblock.rac < 100) 			return 0;
-			printf("?a");
 			//11-29-2014
 			//try
 			//{
@@ -469,26 +468,23 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 		    //uint64_t nNetworkWeight = GetPoSKernelPS2();
 			if (NC == 2)
 			{
-				NewbieStakeWeightModifier = newbie_magnitude*2500*COIN;
+				NewbieStakeWeightModifier = newbie_magnitude*500*COIN;
 				oNC = NC;
 			}
 			else if (NC == 3)
 			{
-				NewbieStakeWeightModifier = newbie_magnitude*1500*COIN;
-				//printf("NewbieModifierL2:  Mag %f, Mod  %"PRId64"  \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
+				NewbieStakeWeightModifier = 500*COIN;
 				oNC = NC;
 		    }
 			else if (NC == 4)
 			{
-				NewbieStakeWeightModifier = newbie_magnitude*1000*COIN;
+				NewbieStakeWeightModifier = 100*COIN;
 				//printf("NewbieModifierL3: Mag %f, Mod  %"PRId64" \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
-				oNC = NC;
 			}
 			else if (NC == 5)
 			{
-				NewbieStakeWeightModifier = newbie_magnitude*500*COIN;
+				NewbieStakeWeightModifier = 25*COIN;
 				//printf("NewbieModifierL3: Mag %f, Mod  %"PRId64" \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
-				oNC = NC;
 			}
 	}
 	else

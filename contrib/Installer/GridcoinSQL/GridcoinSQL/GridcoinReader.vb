@@ -153,7 +153,7 @@ Public Class Sql
             Dim vHeader() As String
             vHeader = Split(vData(0), "<COL>")
 
-            For z = 1 To UBound(vData)
+            For z = 1 To UBound(vData) - 1
                 Dim gr As New GridcoinReader.GridcoinRow
                 Dim sRow As String
                 sRow = vData(z)
@@ -176,6 +176,9 @@ Public Class Sql
                         oValue = CInt(vRow(y))
                     ElseIf sType = "SYSTEM.DATETIME" Then
                         oValue = CDate(vRow(y))
+                    ElseIf sType = "SYSTEM.DECIMAL" Then
+                        oValue = CDbl(vRow(y))
+
                     ElseIf sType = "SYSTEM.GUID" Then
                         oValue = Trim(vRow(y).ToString())
 
