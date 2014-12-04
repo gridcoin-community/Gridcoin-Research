@@ -1877,13 +1877,14 @@ int64_t GetMaximumBoincSubsidy(int64_t nTime)
 	int MaxSubsidy = 500;
     if (nTime >= 1410393600 && nTime <= 1417305600) MaxSubsidy = 	500; // between inception  and 11-30-2014
 	if (nTime >= 1417305600 && nTime <= 1419897600) MaxSubsidy = 	400; // between 11-30-2014 and 12-30-2014
-	if (nTime >= 1419897600 && nTime <= 1422576000) MaxSubsidy = 	300; // between 12-30-2014 and 01-30-2015
-	if (nTime >= 1422576000 && nTime <= 1425254400) MaxSubsidy = 	250; // between 01-30-2015 and 02-28-2015
+	if (nTime >= 1419897600 && nTime <= 1422576000) MaxSubsidy = 	400; // between 12-30-2014 and 01-30-2015
+	if (nTime >= 1422576000 && nTime <= 1425254400) MaxSubsidy = 	300; // between 01-30-2015 and 02-28-2015
 	if (nTime >= 1425254400 && nTime <= 1427673600) MaxSubsidy = 	200; // between 02-28-2015 and 03-30-2015
-	if (nTime >= 1427673600 && nTime <= 1430352000) MaxSubsidy = 	150; // between 03-30-2015 and 04-30-2015
-	if (nTime >= 1430352000 && nTime <= 1438310876) MaxSubsidy = 	100; // between 05-01-2015 and 07-31-2015
-	if (nTime >= 1438310876 && nTime <= 1445309276) MaxSubsidy = 	 75; // between 08-01-2015 and 10-20-2015
-	if (nTime > 1445309276)                         MaxSubsidy =   	 50; // from  10-21-2015 forever
+	if (nTime >= 1427673600 && nTime <= 1430352000) MaxSubsidy = 	200; // between 03-30-2015 and 04-30-2015
+	if (nTime >= 1430352000 && nTime <= 1438310876) MaxSubsidy = 	150; // between 05-01-2015 and 07-31-2015
+	if (nTime >= 1438310876 && nTime <= 1445309276) MaxSubsidy = 	100; // between 08-01-2015 and 10-20-2015
+	if (nTime >= 1445309276 && nTime <= 1447977700) MaxSubsidy = 	 75; // between 10-20-2015 and 11-20-2015
+	if (nTime > 1447977700)                         MaxSubsidy =   	 50; // from  11-20-2015 forever
     return MaxSubsidy;
 
 }
@@ -1894,13 +1895,13 @@ int64_t GetCoinYearReward(int64_t nTime)
 	int64_t INTEREST = 9;
    	if (nTime >= 1410393600 && nTime <= 1417305600) INTEREST = 	 9 * CENT; // 09% between inception  and 11-30-2014
 	if (nTime >= 1417305600 && nTime <= 1419897600) INTEREST = 	 8 * CENT; // 08% between 11-30-2014 and 12-30-2014
-	if (nTime >= 1419897600 && nTime <= 1422576000) INTEREST = 	 7 * CENT; // 07% between 12-30-2014 and 01-30-2015
-	if (nTime >= 1422576000 && nTime <= 1425254400) INTEREST = 	 6 * CENT; // 06% between 01-30-2015 and 02-30-2015
-	if (nTime >= 1425254400 && nTime <= 1427673600) INTEREST = 	 5 * CENT; // 05% between 02-30-2015 and 03-30-2015
-	if (nTime >= 1427673600 && nTime <= 1430352000) INTEREST = 	 4 * CENT; // 04% between 03-30-2015 and 04-30-2015
-	if (nTime >= 1430352000 && nTime <= 1438310876) INTEREST =   3 * CENT; // 03% between 05-01-2015 and 07-31-2015
-	if (nTime >= 1438310876 && nTime <= 1445309276) INTEREST = 2.5 * CENT; //2.5% between 08-01-2015 and 10-20-2015
-	if (nTime > 1445309276)                         INTEREST = 1.5 * CENT; //1.5% from 10-21-2015 forever
+	if (nTime >= 1419897600 && nTime <= 1422576000) INTEREST = 	 8 * CENT; // 08% between 12-30-2014 and 01-30-2015
+	if (nTime >= 1422576000 && nTime <= 1425254400) INTEREST = 	 7 * CENT; // 07% between 01-30-2015 and 02-30-2015
+	if (nTime >= 1425254400 && nTime <= 1427673600) INTEREST = 	 6 * CENT; // 06% between 02-30-2015 and 03-30-2015
+	if (nTime >= 1427673600 && nTime <= 1430352000) INTEREST = 	 5 * CENT; // 05% between 03-30-2015 and 04-30-2015
+	if (nTime >= 1430352000 && nTime <= 1438310876) INTEREST =   4 * CENT; // 04% between 05-01-2015 and 07-31-2015
+	if (nTime >= 1438310876 && nTime <= 1447977700) INTEREST =   3 * CENT; // 03% between 08-01-2015 and 11-20-2015
+	if (nTime > 1447977700)                         INTEREST = 1.5 * CENT; //1.5% from 11-21-2015 forever
 	return INTEREST;
 }
 
@@ -1910,13 +1911,13 @@ double GetMagnitudeMultiplier(int64_t nTime)
 	double magnitude_multiplier = 2; 
 	if (nTime >= 1410393600 && nTime <= 1417305600) magnitude_multiplier =    2;  // between inception and 11-30-2014
 	if (nTime >= 1417305600 && nTime <= 1419897600) magnitude_multiplier =  1.5;  // between 11-30-2014 and 12-30-2014
-	if (nTime >= 1419897600 && nTime <= 1422576000) magnitude_multiplier =    1;  // between 12-30-2014 and 01-30-2015
-	if (nTime >= 1422576000 && nTime <= 1425254400) magnitude_multiplier =   .9;  // between 01-30-2015 and 02-30-2015
-	if (nTime >= 1425254400 && nTime <= 1427673600) magnitude_multiplier =   .8;  // between 02-30-2015 and 03-30-2015
-	if (nTime >= 1427673600 && nTime <= 1430352000) magnitude_multiplier =   .7;  // between 03-30-2015 and 04-30-2015
-    if (nTime >= 1430352000 && nTime <= 1438310876) magnitude_multiplier =   .6;  // between 05-01-2015 and 07-31-2015
-	if (nTime >= 1438310876 && nTime <= 1445309276) magnitude_multiplier =  .55;  // between 08-01-2015 and 10-20-2015
-	if (nTime > 1445309276)                         magnitude_multiplier =  .50;  // from 10-21-2015  forever
+	if (nTime >= 1419897600 && nTime <= 1422576000) magnitude_multiplier =  1.5;  // between 12-30-2014 and 01-30-2015
+	if (nTime >= 1422576000 && nTime <= 1425254400) magnitude_multiplier =    1;  // between 01-30-2015 and 02-30-2015
+	if (nTime >= 1425254400 && nTime <= 1427673600) magnitude_multiplier =   .9;  // between 02-30-2015 and 03-30-2015
+	if (nTime >= 1427673600 && nTime <= 1430352000) magnitude_multiplier =   .8;  // between 03-30-2015 and 04-30-2015
+    if (nTime >= 1430352000 && nTime <= 1438310876) magnitude_multiplier =   .7;  // between 05-01-2015 and 07-31-2015
+	if (nTime >= 1438310876 && nTime <= 1447977700) magnitude_multiplier =  .60;  // between 08-01-2015 and 11-20-2015
+	if (nTime > 1447977700)                         magnitude_multiplier =  .50;  // from 11-21-2015  forever
 	return magnitude_multiplier;
 }
 
@@ -1949,7 +1950,7 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 			if (mag.totalowed > (GetMaximumBoincSubsidy(GetAdjustedTime())*2))
 			{
 				//If owed more than 2* Max Block, pay normal amount
-	            owed = (owed*.90);
+	            owed = (owed*1);
 			}
 			else
 			{
@@ -3707,9 +3708,11 @@ void GridcoinServices()
 			printf("Loaded");
 	}
 
-
+	//Dont do this on headless-SePulcher 12-4-2014 (Halford)
+	#if defined(QT_GUI)
 	GetGlobalStatus();
 	bForceUpdate=true;
+	#endif
 
 
 }
