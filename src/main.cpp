@@ -3372,7 +3372,9 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
 	int lastheight = BlockHeight(hashPrevBlock);
 	if(true)
 	{
-	if (lastheight > 67400 && blockdiff > 10000000000000000 && !IsLockTimeWithinMinutes(GetBlockTime(),480))
+		//	if (lastheight > 67400 && blockdiff > 10000000000000000 && !IsLockTimeWithinMinutes(GetBlockTime(),480))
+	
+	if (lastheight > 67000 && blockdiff > 10000000000000000)
 	{
 		   return DoS(1, error("CheckBlock() : Block Bits larger than 10000000000000000.\r\n"));
 	}
