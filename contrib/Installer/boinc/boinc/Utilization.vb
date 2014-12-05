@@ -12,7 +12,7 @@ Public Class Utilization
    
     Public ReadOnly Property Version As Double
         Get
-            Return 322
+            Return 325
         End Get
     End Property
 
@@ -253,7 +253,17 @@ Public Class Utilization
         Call UpdateKey(sKey, sValue)
     End Function
     Public Sub ExecuteCode(ByVal sCode As String)
-        End Sub
+    End Sub
+    Public Sub SpeakSentence(sSentence As String)
+        Dim S As New SpeechSynthesis
+        S.Speak(sSentence)
+    End Sub
+    Public Function AddressUser(sMagnitude As String) As Double
+        Log("Addressing User with Magnitude " + Trim(sMagnitude))
+        Dim s As New SpeechSynthesis
+        s.AddressUserBySurname(Val(sMagnitude))
+        Return 1
+    End Function
     Public Sub SetSqlBlock(ByVal data As String)
         Exit Sub
        

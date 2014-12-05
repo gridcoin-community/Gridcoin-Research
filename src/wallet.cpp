@@ -507,9 +507,11 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
                     wtx.nTimeSmart = std::max(latestEntry, std::min(blocktime, latestNow));
                 }
                 else
-                    printf("AddToWallet() : found %s in block %s not in index\n",
+                {
+					if (fDebug) printf("AddToWallet() : found %s in block %s not in index\n",
                            wtxIn.GetHash().ToString().substr(0,10).c_str(),
                            wtxIn.hashBlock.ToString().c_str());
+				}
             }
         }
 
@@ -1552,7 +1554,7 @@ std::string NewbieLevelToString(int newbie_level)
 }
 
 
-int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& owed)
+int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& out_owed)
 {
 	// If newbie is not boincing, return 0
 	// If newbie is a veteran, return 0
@@ -1579,7 +1581,7 @@ int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& owed)
 			{
 				StructCPID UntrustedHost = GetStructCPID();
 				UntrustedHost = mvMagnitudes[GlobalCPUMiningCPID.cpid]; //Contains Consensus Magnitude
-				owed = UntrustedHost.owed;
+				out_owed = UntrustedHost.owed;
 
 				if (UntrustedHost.initialized)
 				{
@@ -1642,9 +1644,8 @@ double MintLimiter()
 {
 	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
 	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-	if (PORDiff >= 0  && PORDiff < .5) return .0001;
-	if (PORDiff >= .5 && PORDiff < 1)  return .25;
-	if (PORDiff >= 1  && PORDiff < 5)  return 1;
+	if (PORDiff > 0  && PORDiff < 1) return 0;
+	if (PORDiff > 1  && PORDiff < 5)  return 1;
 	if (PORDiff >= 5  && PORDiff < 10) return 10;
 	if (PORDiff >= 10 && PORDiff < 50) return 20;
 	if (PORDiff >= 50) return 50;
@@ -1762,6 +1763,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	else if (NC == 4 && out_owed > (MaxReward/2))
 	{
 					//NewbieStakeWeightModifier =	out_magnitude*(MaxReward/6);
+			printf("NL4::mag %f swm %f  owed %f",out_magnitude,NewbieStakeWeightModifier,out_owed);
 
 		
 	}
@@ -1769,8 +1771,13 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	{
 					//NewbieStakeWeightModifier =	out_magnitude*(MaxReward/9);
 	}
-	
-	nWeight += NewbieStakeWeightModifier;
+
+	//////////////////////////////////////////////////////////////////////
+	//R Halford 12-4-2014: Add Stakeweight boost based on POR Owed Balance
+	double RSA_BOOST = 0;
+	RSA_BOOST = out_owed * 100; // Each GRC owed gives 100 stakeweight 
+
+	nWeight += (NewbieStakeWeightModifier+RSA_BOOST);
 	
     return true;
 }
@@ -2025,7 +2032,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		double mint = nReward/COIN;
 		
 		double MaxSubsidy = GetMaximumBoincSubsidy(GetAdjustedTime());
-
+		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
 		
 		if (fDebug) printf("Creating POS Reward for %s  amt  %s  {BoincLevel %s} \r\n",GlobalCPUMiningCPID.cpid.c_str(),sReward.c_str(),RoundToString(NC,0).c_str());
 	
@@ -2035,17 +2042,24 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		// BOINC MINERS:
 		if (NC == 0 || NC == 4 || NC == 5)
 		{
-  			if (mint < (MaxSubsidy/25)) 
+			if (PORDiff > 10)
 			{
-				if (LessVerbose(100)) printf("CreateBlock::Boinc Miners Mint too small");
-				return false; 
-			}
-
-			if (true)
-			{
-				if (OUT_POR < MintLimiterPOR())
+				if (false)
 				{
-					return false;
+  				if (mint < (MaxSubsidy/25)) 
+				{
+					if (LessVerbose(100)) printf("CreateBlock::Boinc Miners Mint too small");
+					return false; 
+				}
+				}
+
+				if (true)
+				{
+					if (OUT_POR < MintLimiterPOR())
+					{
+						printf("Owed %f < MintLimitLevel %f",OUT_POR,MintLimiterPOR());
+						return false;
+					}
 				}
 			}
 		}
@@ -2072,7 +2086,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		if (NC==2)
 		{
 
-			if (nReward/COIN < .02 && LessVerbose(750))
+			if (nReward/COIN < .02 && LessVerbose(500))
 			{
 				return false;
 			}
@@ -2702,7 +2716,7 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
             }
             else if (IsMine(pcoin->vout[n]) && !pcoin->IsSpent(n) && (txindex.vSpent.size() > n && !txindex.vSpent[n].IsNull()))
             {
-                printf("FixSpentCoins found spent coin %s gC %s[%d], %s\n",
+                if (fDebug) printf("FixSpentCoins found spent coin %s gC %s[%d], %s\n",
                     FormatMoney(pcoin->vout[n].nValue).c_str(), pcoin->GetHash().ToString().c_str(), n, fCheckOnly? "repair not attempted" : "repairing");
                 nMismatchFound++;
                 nBalanceInQuestion += pcoin->vout[n].nValue;

@@ -7,6 +7,7 @@ Imports System.IO
 Imports System.Data
 Imports System.Object
 Imports System.Security.Cryptography
+Imports System.Speech.Synthesis
 
 
 Imports System.Net
@@ -122,24 +123,21 @@ Public Class Form1
 
     End Function
     Private Sub Button1_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles Button1.Click
-        Dim dtHeinousDate As Date
-        dtHeinousDate = ParseDate("11/26/2014  5:26 AM")
-        Debug.Print(Trim(dtHeinousDate))
 
 
-        Dim vv As Integer
-        vv = bu.Version
-        bu.StartWireFrameRenderer()
-
-
-        Exit Sub
-
-        Stop
-
-       
-   
+        
+        Dim synth As New SpeechSynthesizer()
+        synth.SetOutputToDefaultAudioDevice()
+        Dim cInstalledVoice As System.Collections.ObjectModel.ReadOnlyCollection(Of System.Speech.Synthesis.InstalledVoice) = synth.GetInstalledVoices()
+        If cInstalledVoice.Count > 0 Then
+            Dim sVoiceName As String = cInstalledVoice(0).VoiceInfo.Name
+            synth.Speak("Good Morning Mister Halford, Your magnitude is 200")
+        End If
+        
 
     End Sub
+
+
 
 
     Public Sub RewriteSourceFile(sPATHH As String, sSFileIn As String)
@@ -319,7 +317,7 @@ Public Class Form1
     End Sub
 
     Private Sub Button2_Click(sender As System.Object, e As System.EventArgs) Handles Button2.Click
-        bu.stopWireFrameRenderer()
+        bu.StopWireFrameRenderer()
 
 
     End Sub

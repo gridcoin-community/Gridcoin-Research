@@ -347,23 +347,18 @@ bool AddLocal(const CService& addr, int nScore)
 	try
 	{
     printf("AddLocal(%s,%i)\n", addr.ToString().c_str(), nScore);
-	printf("2..");
 
     {
-		printf("3..");
-        LOCK(cs_mapLocalHost);
+	    LOCK(cs_mapLocalHost);
         bool fAlready = mapLocalHost.count(addr) > 0;
         LocalServiceInfo &info = mapLocalHost[addr];
         if (!fAlready || nScore >= info.nScore) {
             info.nScore = nScore + (fAlready ? 1 : 0);
             info.nPort = addr.GetPort();
         }
-		printf("4..");
         SetReachable(addr.GetNetwork());
-		printf("5..");
     }
 
-	printf("6..");
     AdvertizeLocal();
 	}
 	catch(...)
@@ -642,7 +637,7 @@ std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache)
 	
 		 if (cpid=="" || cpid.length() < 5)
 		 {
-				printf("Blank cpid supplied");
+				if (fDebug) printf("Blank cpid supplied");
 				return "";
 		 }
 

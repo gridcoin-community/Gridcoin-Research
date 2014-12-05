@@ -89,6 +89,8 @@ void TallyInBackground();
 double cdbl(std::string s, int place);
 std::string getfilecontents(std::string filename);
 
+int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& owed);
+
 
 std::string BackupGridcoinWallet();
 int nTick = 0;
@@ -105,7 +107,6 @@ extern int DownloadBlocks();
 
 void StopGridcoin3();
 bool OutOfSyncByAge();
-bool bCheckedForUpgrade = false;
 void ThreadCPIDs();
 int Races(int iMax1000);
 std::string GetGlobalStatus();
@@ -116,6 +117,8 @@ void InitializeCPIDs();
 void RestartGridcoinMiner();
 extern int UpgradeClient();
 extern int CloseGuiMiner();
+extern int AddressUser();
+
 bool IsConfigFileEmpty();
 
 extern void ExecuteCode();
@@ -473,6 +476,28 @@ int UpgradeClient()
 			return 1;
 }
 
+QString IntToQstring(int o)
+{
+	std::string pre="";
+	pre=strprintf("%d",o);
+	QString str1 = QString::fromUtf8(pre.c_str());
+	return str1;
+}
+
+
+int AddressUser()
+{
+		int result = 0;
+		#if defined(WIN32) && defined(QT_GUI)
+		double out_magnitude = 0;
+		double out_owed = 0;
+		NewbieCompliesWithLocalStakeWeightRule(out_magnitude,out_owed);
+	    printf("Boinc Magnitude %f \r\n",out_magnitude);
+		result = globalcom->dynamicCall("AddressUser(Qstring)",IntToQstring((int)out_magnitude)).toInt();
+		#endif
+		return result;
+}
+
 int CloseGuiMiner()
 {
 	try
@@ -485,14 +510,6 @@ int CloseGuiMiner()
 
 	return 1;
 }
-
-
-
-
-
-
-
-
 
 
 
@@ -1704,13 +1721,24 @@ void ReinstantiateGlobalcom()
 
 			}
 
-		    if (bCheckedForUpgrade == false && !fTestNet)
+		    if (bCheckedForUpgrade == false && !fTestNet && bProjectsInitialized)
 			{
 						int nNeedsUpgrade = 0;
 						bool bCheckedForUpgrade = true;
 						printf("Checking to see if Gridcoin needs upgraded\r\n");
 						nNeedsUpgrade = globalcom->dynamicCall("ClientNeedsUpgrade()").toInt();
 						if (nNeedsUpgrade) UpgradeClient();
+
+						if (!bAddressUser)
+						{
+									bAddressUser = true;
+									#if defined(WIN32) && defined(QT_GUI)
+									int result = 0;
+									result = AddressUser();
+									#endif
+						}
+					
+
 			}
 #endif
 }
@@ -1856,8 +1884,6 @@ void BitcoinGUI::timerfire()
 
 
 }
-
-
 
 
 

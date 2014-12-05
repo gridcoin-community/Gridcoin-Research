@@ -19,6 +19,7 @@ int64_t GetCoinYearReward(int64_t nTime);
 static boost::thread_group* postThreads = NULL;
 
 volatile bool bCPIDsLoaded;
+volatile bool bProjectsInitialized;
 
 
 Value getsubsidy(const Array& params, bool fHelp)

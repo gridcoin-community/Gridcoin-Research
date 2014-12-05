@@ -794,7 +794,7 @@ Begin:
 			goto Begin;
 		}
 
-		if (IsLockTimeWithinMinutes(nLastBlockSolved,4)) 
+		if (IsLockTimeWithinMinutes(nLastBlockSolved,3)) 
 		{
 				printf("=");
 				MilliSleep(1000);

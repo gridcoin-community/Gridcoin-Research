@@ -63,6 +63,7 @@ extern bool AmIGeneratingBackToBackBlocks();
 extern int64_t Floor(int64_t iAmt1, int64_t iAmt2);
 extern double PreviousBlockAge();
 
+int AddressUser();
 
 
 extern MiningCPID GetMiningCPID();
@@ -209,6 +210,8 @@ volatile bool bNetAveragesLoaded;
 volatile bool bRestartGridcoinMiner;
 volatile bool bForceUpdate;
 volatile bool bExecuteCode;
+volatile bool bAddressUser;
+volatile bool bCheckedForUpgrade;
 
 extern void PobSleep(int milliseconds);
 extern bool CheckWorkCPU(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey);
@@ -562,7 +565,6 @@ std::string GetGlobalStatus()
 		std::string status = "";
 		double boincmagnitude = CalculatedMagnitude( GetAdjustedTime());
 		uint64_t nWeight = 0;
-		printf("@s1");
 		pwalletMain->GetStakeWeight(nWeight);
 		nBoincUtilization = boincmagnitude; //Legacy Support for the about screen
 		//Vlad : Request to make overview page magnitude consistent:
@@ -570,12 +572,8 @@ std::string GetGlobalStatus()
 		double out_owed = 0;
 		NewbieCompliesWithLocalStakeWeightRule(out_magnitude,out_owed);
 		// End of Boinc Magnitude update
-		printf("@s2");
-
 		double weight = nWeight;
 		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-		printf("@s3");
-
 		std::string boost_version = "";
 		std::ostringstream sBoost;
 		sBoost << boost_version  << "Using Boost "     
@@ -591,8 +589,6 @@ std::string GetGlobalStatus()
 			+ "<br>" + sBoost.str();
 
 		//The last line break is for Windows 8.1 Huge Toolbar
-		printf("@s9");
-
 		msGlobalStatus = status;
 		return status;
 	}
@@ -808,6 +804,7 @@ MiningCPID GetNextProject()
 								if (GlobalCPUMiningCPID.rac > 0) purported=1;
 								GlobalCPUMiningCPID.Magnitude = GetMagnitude(GlobalCPUMiningCPID.cpid,purported,true);
 								if (fDebug) printf("For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
+								//Reserved for GRC Speech Synthesis
 								msMiningErrors = "Boinc Mining";
 								double out_magnitude = 0;
 								double out_owed = 0;
@@ -3135,11 +3132,19 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 
     uint256 nBestBlockTrust = pindexBest->nHeight != 0 ? (pindexBest->nChainTrust - pindexBest->pprev->nChainTrust) : pindexBest->nChainTrust;
 
-    printf("SetBestChain: new best=%s  height=%d  trust=%s  blocktrust=%"PRId64"  date=%s\n",
-      hashBestChain.ToString().substr(0,20).c_str(), nBestHeight,
-      CBigNum(nBestChainTrust).ToString().c_str(),
-      nBestBlockTrust.Get64(),
-      DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()).c_str());
+	if (fDebug)
+	{
+	    printf("SetBestChain: new best=%s  height=%d  trust=%s  blocktrust=%"PRId64"  date=%s\n",
+		  hashBestChain.ToString().substr(0,20).c_str(), nBestHeight,
+		  CBigNum(nBestChainTrust).ToString().c_str(),
+          nBestBlockTrust.Get64(),
+          DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()).c_str());
+	}
+	else
+	{
+		printf("{SBC} new best=%s  height=%d \r\n",hashBestChain.ToString().c_str(), nBestHeight);
+
+	}
 
     // Check the version of the last 100 blocks to see if we need to upgrade:
     if (!fIsInitialDownload)
@@ -3365,9 +3370,9 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
 	//12-2-2014
 	double blockdiff = GetBlockDifficulty(nBits);
 	int lastheight = BlockHeight(hashPrevBlock);
-	if(false)
+	if(true)
 	{
-	if (lastheight > 74400 && blockdiff > 10000000000000000 && !IsLockTimeWithinMinutes(GetBlockTime(),480))
+	if (lastheight > 67400 && blockdiff > 10000000000000000 && !IsLockTimeWithinMinutes(GetBlockTime(),480))
 	{
 		   return DoS(1, error("CheckBlock() : Block Bits larger than 10000000000000000.\r\n"));
 	}
@@ -3840,7 +3845,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     }
 	double nBalance = GetTotalBalance();
 	std::string SendingWalletAddress = DefaultWalletAddress();
-    printf("ProcessBlock: ACCEPTED\r\n");
+	printf("{PB}: ACC; ");
 	double mint = mapBlockIndex[hash]->nMint/COIN;
 	
 	if (CHECKPOINT_DISTRIBUTED_MODE==0)
@@ -3902,8 +3907,7 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
         txCoinStake.nTime &= ~STAKE_TIMESTAMP_MASK;
 
     int64_t nSearchTime = txCoinStake.nTime; // search to current time
-	printf("6.");
-
+	
     if (nSearchTime > nLastCoinStakeSearchTime)
     {
         int64_t nSearchInterval = IsProtocolV2(nBestHeight+1) ? 1 : nSearchTime - nLastCoinStakeSearchTime;
@@ -6322,19 +6326,13 @@ void InitializeProjectStruct(StructCPID& project)
 	//11-29-2014
 	std::string email = GetArgument("email", "NA");
 	project.email = email;
-	printf("@70");
 	std::string cpid_non = project.cpidhash+email;
-	printf("@71");
 
 	project.boincruntimepublickey = project.cpidhash;
-	printf("@711");
 	project.cpid = boinc_hash(email,project.cpidhash,0);
-	printf("@722");
 	std::string ENCbpk = AdvancedCrypt(cpid_non);
 	project.boincpublickey = ENCbpk;
 	
-	printf("@72");
-
 	//Crashes in linux:
 	//project.cpidv2 = ComputeCPIDv2(email, project.cpidhash, 0);
 	project.cpidv2 = project.cpid;
@@ -6343,7 +6341,6 @@ void InitializeProjectStruct(StructCPID& project)
 	//Local CPID with struct
 	//Must contain cpidv2, cpid, boincpublickey
 	project.Iscpidvalid = false;
-	printf("@73");
 	//		bool old_result1 = IsCPIDValid_Retired(structcpid.cpid,structcpid.boincpublickey);
 	//2nd arg is ENC bpk
 	project.Iscpidvalid = IsLocalCPIDValid(project);
@@ -6354,7 +6351,6 @@ void InitializeProjectStruct(StructCPID& project)
 			project.errors = "Team invalid";
 	}
 
-	printf("@74");
 }
 
 void AddProjectFromNetSoft(StructCPID& netsoft)
@@ -6401,8 +6397,8 @@ void CreditCheck(std::string cpid, bool clearcache)
 			std::string cc = GetHttpPage(cpid,true,clearcache);
 			if (cc.length() < 50) 
 			{
-				printf("Note: HTTP Page returned blank from netsoft for %s\r\n",cpid.c_str());
-					return;
+				if (fDebug) printf("Note: HTTP Page returned blank from netsoft for %s\r\n",cpid.c_str());
+				return;
 			}
 
 			double projavg = 0;
@@ -6719,7 +6715,6 @@ try
 		return;
 	}
 
-	printf("@2");
 	if (cleardata)
 	{
 		mvCPIDs.clear();
@@ -6728,11 +6723,8 @@ try
 		mvCreditNodeCPIDProject.clear();
 		mvCPIDCache.clear();
 	}
-	printf("@3");
-
 	std::string email = GetArgument("email","");
-
-	   
+   
 	int iRow = 0;
 	std::vector<std::string> vCPID = split(sout.c_str(),"<project>");
 	if (vCPID.size() > 0)
@@ -6763,30 +6755,20 @@ try
 				StructCPID structcpid = GetStructCPID();
 				structcpid = mvCPIDs[proj];
 				iRow++;
-				printf("@4");
 				if (!structcpid.initialized) 
 				{
-					printf("@!");
 					structcpid = GetStructCPID();
 					structcpid.initialized = true;
 					structcpid.cpidv2 = "";
-					printf("@a5");
 					mvCPIDs.insert(map<string,StructCPID>::value_type(proj,structcpid));
-					printf("@a6");
 				} 
 				
 				structcpid.cpidhash = cpidhash;
 				structcpid.projectname = proj;
 				boost::to_lower(team);
 				structcpid.team = team;
-
-				printf("@55");
-
 				InitializeProjectStruct(structcpid);
-				printf("@6");
-
 				printf("Harv new project %s cpid %s valid %s",structcpid.projectname.c_str(),structcpid.cpid.c_str(),YesNo(structcpid.Iscpidvalid).c_str());
-
 
 				if (!structcpid.Iscpidvalid)
 				{
@@ -6887,19 +6869,17 @@ try
 					}
 				
 
-				}
+			   }
                if (!projectvalid) 
 			   {
 
 				   structcpid.Iscpidvalid = false;
 				   structcpid.errors = "Not an official boinc whitelisted project.  Please see 'list projects'.";
 			   }
-			   printf("@11");
 
-				mvCPIDs[proj] = structcpid;						
-				printf("@12");
+    	  	   mvCPIDs[proj] = structcpid;						
+    	  	   if (fDebug) printf("Adding %s",structcpid.cpid.c_str());
 
-				if (fDebug) printf("Adding %s",structcpid.cpid.c_str());
 			}
 
 		}
@@ -6943,12 +6923,11 @@ void ThreadCPIDs()
 	//Reloads maglevel:
 	printf("Performing 1st credit check (%s)",GlobalCPUMiningCPID.cpid.c_str());
 	//11-9-2014 Stack Smashing
-	printf("@ss1");
 	CreditCheck(GlobalCPUMiningCPID.cpid,true);
 	printf("Getting first project");
 	GetNextProject();
 	printf("Finished getting first project");
-
+	bProjectsInitialized = true;
 }
 
 

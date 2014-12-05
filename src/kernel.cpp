@@ -279,17 +279,16 @@ static bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64_t& nStakeModifi
 //   quantities so as to generate blocks faster, degrading the system back into
 //   a proof-of-work situation.
 //
-int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::string hashBoinc)
+int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::string hashBoinc, double& out_owed)
 {
 	// If newbie is not boincing, return 0
 	// If newbie is a veteran, return 0
 	// if newbie is an Investor, return 1
-
 	// If newbie is boincing and not in the chain, Uninitialized Newbie, return 2
 	// If newbie solved between 1-5 blocks, return 3
 	// If newbie has reached level1, return 4
 	// If newbie has reached level2, return 5
-	//11-14-2014
+	//12-4-2014
 
 	try
 	{
@@ -319,7 +318,8 @@ int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::str
 					if (UntrustedHost.initialized)
 					{
 				
-												
+						out_owed = UntrustedHost.owed;
+						
 						if (UntrustedHost.Accuracy > MAX_NEWBIE_BLOCKS_LEVEL2) 
 						{	
 							//Veteran
@@ -447,8 +447,8 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	//double mint = (blockFrom.vtx[1].GetValueOut())/COIN;
 	//	double subsidy = (blockFrom.vtx[0].GetValueOut())/COIN;
 	//	std::string sSubsidy = RoundToString(subsidy,4);
-
-	int NC = NewbieCompliesWithFirstTimeStakeWeightRule(blockFrom,hashBoinc);
+	double out_owed = 0;
+	int NC = NewbieCompliesWithFirstTimeStakeWeightRule(blockFrom,hashBoinc,out_owed);
 	msMiningErrors2 = RoundToString(NC,0);
 	int oNC = 0;
 	// If newbie is not boincing, return 0
@@ -458,7 +458,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	// If newbie solved between 1-5 blocks, return 3
 	// If newbie has reached level1, return 4
 	// If newbie has reached level2, return 5
-	//CPID v2 11-28-2014
+
 
 	if (NC >= 2 && NC <= 5)
 	{
@@ -478,12 +478,12 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 		    }
 			else if (NC == 4)
 			{
-				NewbieStakeWeightModifier = 100*COIN;
+				NewbieStakeWeightModifier = 250*COIN;
 				//printf("NewbieModifierL3: Mag %f, Mod  %"PRId64" \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
 			}
 			else if (NC == 5)
 			{
-				NewbieStakeWeightModifier = 25*COIN;
+				NewbieStakeWeightModifier = 50*COIN;
 				//printf("NewbieModifierL3: Mag %f, Mod  %"PRId64" \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
 			}
 	}
@@ -493,6 +493,12 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 			
 	}
 
+	///////////////////////////////////////////////////////////////////////////
+	// RSA Boost Feature - 12-4-2014
+	double RSA_BOOST = 0;
+	RSA_BOOST = out_owed * COIN;
+	NewbieStakeWeightModifier += RSA_BOOST;
+    ///////// End of RSA Boost
 	int64_t boinc_seconds = 0;
 	//int64_t Weight(int64_t nIntervalBeginning, int64_t nIntervalEnd)
     // Kernel hash weight starts from 0 at the min age
@@ -503,7 +509,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	CBigNum bnCoinDayWeight = 0;
 	if (checking_local)
 	{
-		bnCoinDayWeight = CBigNum(nValueIn + NewbieStakeWeightModifier) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60) / 3;
+		bnCoinDayWeight = CBigNum(nValueIn + NewbieStakeWeightModifier) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60) / 2;
 	}
 	else
 	{
