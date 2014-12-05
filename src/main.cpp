@@ -3374,10 +3374,10 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
 	{
 		//	if (lastheight > 67400 && blockdiff > 10000000000000000 && !IsLockTimeWithinMinutes(GetBlockTime(),480))
 	
-	if (lastheight > 66400 && blockdiff > 10000000000000000)
-	{
-		   return DoS(1, error("CheckBlock() : Block Bits larger than 10000000000000000.\r\n"));
-	}
+		if (lastheight > 71000 && blockdiff > 10000000000000000)
+		{
+			   return DoS(1, error("CheckBlock() : Block Bits larger than 10000000000000000.\r\n"));
+		}
 	}
 	//Bad block at 66408,66807
 
