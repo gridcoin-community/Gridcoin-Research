@@ -19,6 +19,12 @@ MiningCPID DeserializeBoincBlock(std::string block);
 bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
+extern int64_t GetRSAWeightByCPID(std::string cpid);
+
+
+extern double GetUntrustedMagnitude(std::string cpid, double& out_owed);
+
+
 
 typedef std::map<int, unsigned int> MapModifierCheckpoints;
 /*
@@ -279,91 +285,6 @@ static bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64_t& nStakeModifi
 //   quantities so as to generate blocks faster, degrading the system back into
 //   a proof-of-work situation.
 //
-int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::string hashBoinc, double& out_owed)
-{
-	// If newbie is not boincing, return 0
-	// If newbie is a veteran, return 0
-	// if newbie is an Investor, return 1
-	// If newbie is boincing and not in the chain, Uninitialized Newbie, return 2
-	// If newbie solved between 1-5 blocks, return 3
-	// If newbie has reached level1, return 4
-	// If newbie has reached level2, return 5
-	//12-4-2014
-
-	try
-	{
-		if (hashBoinc.length() > 1)
-		{
-			MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
-			if (boincblock.cpid == "" || boincblock.cpid.length() < 6) return 100;  //Block has no CPID
-	   	    if (boincblock.cpid == "INVESTOR") return 1;
-	
-			//CPID <> INVESTOR:
-			if (boincblock.cpid != "INVESTOR") 
-			{
-    			if (boincblock.projectname == "") 	return 101;
-	    		if (boincblock.rac < 100) 			return 102;
-				//11-28-2014 CPIDV2->PrevBlock
-				//Heinous Problem is Here:
-				
-				if (!IsCPIDValidv2(boincblock)) return 103;
-				//Block CPID:11-29-2014
-				//if (IsCPIDValid_Retired(boincblock.cpid,boincblock.enccpid)) return 136;
-
-				//If we already have a consensus on the node, the cpid does not qualify
-				if (mvMagnitudes.size() > 0)
-				{
-					StructCPID UntrustedHost = GetStructCPID();
-					UntrustedHost = mvMagnitudes[boincblock.cpid]; //Contains Consensus Magnitude
-					if (UntrustedHost.initialized)
-					{
-				
-						out_owed = UntrustedHost.owed;
-						
-						if (UntrustedHost.Accuracy > MAX_NEWBIE_BLOCKS_LEVEL2) 
-						{	
-							//Veteran
-							return 0;
-						}
-
-						if (UntrustedHost.Accuracy >= 0 && UntrustedHost.Accuracy < 4) 
-						{
-							//Newbie
-							return 3;
-						}
-						if (UntrustedHost.Accuracy >= 4 && UntrustedHost.Accuracy < MAX_NEWBIE_BLOCKS)
-						{
-							//Newbie Level 1
-							return 4;
-						}
-						if (UntrustedHost.Accuracy >= MAX_NEWBIE_BLOCKS && UntrustedHost.Accuracy < MAX_NEWBIE_BLOCKS_LEVEL2)
-						{
-							//Newbie Level 2
-							return 5;
-						}
-
-
-					}
-				}
-				//printf("Newbie complies with first time stakeweight rule.[BlockFound]\r\n");
-				//Uninitialized Newbie
-				return 2;
-			}
-		}
-		return 0;
-	}
-    catch (std::exception &e) 
-	{
-	    printf("Error while assessing Newbie Rule 1.\r\n");
-		return 0;
-	}
-    catch(...)
-	{
-		printf("Error while assessing Newbie Rule 1[1].\r\n");
-		return 0;
-	}
-	return 0;
-}
 
 double GetMagnitudeByHashBoinc(std::string hashBoinc)
 {
@@ -374,25 +295,78 @@ double GetMagnitudeByHashBoinc(std::string hashBoinc)
 			if (boincblock.cpid == "INVESTOR")  return 0;
    			if (boincblock.projectname == "") 	return 0;
     		if (boincblock.rac < 100) 			return 0;
-			//11-29-2014
-			//try
-			//{
-			//Linux problem here (.cpidv2, or boincblock.lastblockhash):
-			//11-29-2014
 			if (!IsCPIDValidv2(boincblock)) return 0;
-			//}
-			//catch(...)
-			//{
-			//	printf("Error 11292014");
-			//	return 0;
-			//}
-			//if (IsCPIDValid_Retired(boincblock.cpid,boincblock.enccpid)) return 0;
 			return boincblock.Magnitude;
-			//StructCPID UntrustedHost = mvMagnitudes[boincblock.cpid]; //Contains Consensus Magnitude
-			//return UntrustedHost.Magnitude;
 		}
 		return 0;
 }
+
+int64_t GetRSAWeightByCPID(std::string cpid)
+{
+	double owed = 0;
+	if (mvMagnitudes.size() > 0)
+	{
+			StructCPID UntrustedHost = GetStructCPID();
+			UntrustedHost = mvMagnitudes[cpid]; //Contains Consensus Magnitude
+			if (UntrustedHost.initialized)
+			{
+						double mag_accuracy = UntrustedHost.Accuracy;
+						if (mag_accuracy > 0) owed = UntrustedHost.owed;
+			}
+			else
+			{
+				if (cpid.length() > 5 && cpid != "INVESTOR")
+				{
+						owed = 1000;
+				}
+			}
+	}
+	else
+	{
+		if (cpid.length() > 5 && cpid != "INVESTOR")
+		{
+				owed = 1000;
+		}
+	}
+	int64_t RSA_WEIGHT = owed*100*COIN;
+	return RSA_WEIGHT;
+}
+
+
+
+double GetUntrustedMagnitude(std::string cpid, double& out_owed)
+{
+	out_owed = 0;
+	double mag = 0;
+	if (mvMagnitudes.size() > 0)
+	{
+			StructCPID UntrustedHost = GetStructCPID();
+			UntrustedHost = mvMagnitudes[cpid]; //Contains Consensus Magnitude
+			if (UntrustedHost.initialized)
+			{
+						double mag_accuracy = UntrustedHost.Accuracy;
+						if (mag_accuracy > 0) out_owed = UntrustedHost.owed;
+						mag = UntrustedHost.Magnitude;
+			}
+			else
+			{
+				if (cpid.length() > 5 && cpid != "INVESTOR")
+				{
+						out_owed = 0;
+				}
+			}
+	}
+	else
+	{
+		if (cpid.length() > 5 && cpid != "INVESTOR")
+		{
+				out_owed = 0;
+		}
+	}
+	return mag;
+}
+
+
 
 
 static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, unsigned int nTxPrevOffset, 
@@ -421,85 +395,30 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
     CBigNum bnTargetPerCoinDay;
     bnTargetPerCoinDay.SetCompact(nBits);
     int64_t nValueIn = txPrev.vout[prevout.n].nValue;
-
     uint256 hashBlockFrom = blockFrom.GetHash();
-	// Deserialize boinc hash for detailed logging //
 	MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
 	std::string cpid = boincblock.cpid;
     
-	double mag_accuracy = 0;
-	if (mvMagnitudes.size() > 0)
+	int64_t RSA_WEIGHT = 0;
+	int oNC = 0;
+	
+	RSA_WEIGHT = GetRSAWeightByCPID(cpid);
+	msMiningErrors2 = "RRSA: " + RoundToString(RSA_WEIGHT/COIN,0);
+
+	if (RSA_WEIGHT > 0) if (!IsCPIDValidv2(boincblock)) 
 	{
-			StructCPID UntrustedHost = GetStructCPID();
-			UntrustedHost = mvMagnitudes[boincblock.cpid]; //Contains Consensus Magnitude
-			if (UntrustedHost.initialized)
-			{
-						mag_accuracy = UntrustedHost.Accuracy;
-			}
+		printf("Check stake kernelhash: CPID Invalid: RSA Weight = 0");
+		msMiningErrors2="CPID_INVALID";
 	}
-	
-	
 
 	//WEIGHT MODIFICATION SECTION 2: Newbie stake allowance (11-13-2014)
 	//This is primarily to allow a newbie researcher to get started with a low balance.
 	//CBigNum bnCoinDayWeight = CBigNum(nValueIn + (5*COIN) ) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
-	int64_t NewbieStakeWeightModifier = 0;
 	//double mint = (blockFrom.vtx[1].GetValueOut())/COIN;
-	//	double subsidy = (blockFrom.vtx[0].GetValueOut())/COIN;
-	//	std::string sSubsidy = RoundToString(subsidy,4);
-	double out_owed = 0;
-	int NC = NewbieCompliesWithFirstTimeStakeWeightRule(blockFrom,hashBoinc,out_owed);
-	msMiningErrors2 = RoundToString(NC,0);
-	int oNC = 0;
-	// If newbie is not boincing, return 0
-	// If newbie is a veteran, return 0
-	// if newbie is an Investor, return 1
-	// If newbie is boincing and not in the chain, Uninitialized Newbie, return 2
-	// If newbie solved between 1-5 blocks, return 3
-	// If newbie has reached level1, return 4
-	// If newbie has reached level2, return 5
-
-
-	if (NC >= 2 && NC <= 5)
-	{
-		    //11-12-2014 Dynamic Newbie Weight
-			double newbie_magnitude = GetMagnitudeByHashBoinc(hashBoinc);
-
-		    //uint64_t nNetworkWeight = GetPoSKernelPS2();
-			if (NC == 2)
-			{
-				NewbieStakeWeightModifier = newbie_magnitude*5000*COIN;
-				oNC = NC;
-			}
-			else if (NC == 3)
-			{
-				NewbieStakeWeightModifier = 20000*COIN;
-				oNC = NC;
-		    }
-			else if (NC == 4)
-			{
-				NewbieStakeWeightModifier = 10000*COIN;
-				//printf("NewbieModifierL3: Mag %f, Mod  %"PRId64" \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
-			}
-			else if (NC == 5)
-			{
-				NewbieStakeWeightModifier = 5000*COIN;
-				//printf("NewbieModifierL3: Mag %f, Mod  %"PRId64" \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
-			}
-	}
-	else
-	{
-			NewbieStakeWeightModifier = 0*COIN;
-			
-	}
-
-	///////////////////////////////////////////////////////////////////////////
-	// RSA Boost Feature - 12-4-2014
-	double RSA_BOOST = 0;
-	RSA_BOOST = out_owed * 100 * COIN;
-	NewbieStakeWeightModifier += RSA_BOOST;
-    ///////// End of RSA Boost
-	int64_t boinc_seconds = 0;
+	//double subsidy = (blockFrom.vtx[0].GetValueOut())/COIN;
+	//std::string sSubsidy = RoundToString(subsidy,4);
+	//uint64_t nNetworkWeight = GetPoSKernelPS2();
+	
 	//int64_t Weight(int64_t nIntervalBeginning, int64_t nIntervalEnd)
     // Kernel hash weight starts from 0 at the min age
     // this change increases active coins participating the hash and helps
@@ -509,11 +428,11 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	CBigNum bnCoinDayWeight = 0;
 	if (checking_local)
 	{
-		bnCoinDayWeight = CBigNum(nValueIn + NewbieStakeWeightModifier) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60) / 3;
+		bnCoinDayWeight = CBigNum(nValueIn + RSA_WEIGHT) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60) / 3;
 	}
 	else
 	{
-		bnCoinDayWeight = CBigNum(nValueIn + NewbieStakeWeightModifier) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
+		bnCoinDayWeight = CBigNum(nValueIn + RSA_WEIGHT) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
 	}
 	
     targetProofOfStake = (bnCoinDayWeight * bnTargetPerCoinDay).getuint256();
@@ -553,11 +472,11 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 		{
 			//Use this area to log the submitters cpid and mint amount:
 			//printf("!#"
-			if (!checking_local)
+			if (!checking_local || fDebug)
 			{
 				//Dont print all this crap in the log if we are running a local miner:
-				printf("Block does not meet target: hashboinc %s\r\n",hashBoinc.c_str());
-				printf("Researcher vitals: NC %u, cpid %s, project %s, accuracy %f \r\n",NC,cpid.c_str(),boincblock.projectname.c_str(),mag_accuracy);
+				//printf("Block does not meet target: hashboinc %s\r\n",hashBoinc.c_str());
+				printf("{Vitals}: cpid %s, project %s, RSA_WEIGHT=0x%016"PRIx64" \r\n",cpid.c_str(),boincblock.projectname.c_str(),RSA_WEIGHT);
 			}
 			return false;
 		}

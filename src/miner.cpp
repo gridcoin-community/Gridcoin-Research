@@ -24,8 +24,6 @@ void ThreadCleanWalletPassphrase(void* parg);
 
 void ThreadTopUpKeyPool(void* parg);
 
-int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& owed);
-
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 bool AmIGeneratingBackToBackBlocks();
 

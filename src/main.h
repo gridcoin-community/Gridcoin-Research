@@ -140,6 +140,7 @@ extern double       mdMiningNetworkRAC;
 extern std::string  msENCboincpublickey;
 extern std::string  msMiningErrors;
 extern std::string  msMiningErrors2;
+extern std::string  msMiningErrors3;
 // PoB GPU Miner Global Vars:
 extern std::string 	msGPUMiningProject;
 extern std::string 	msGPUMiningCPID;

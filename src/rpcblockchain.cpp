@@ -23,8 +23,9 @@ void ReloadBlockChain1();
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
 
-
-
+int64_t GetRSAWeightByCPID(std::string cpid);
+	
+double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spirit::Object& entry);
 extern enum Checkpoints::CPMode CheckpointsMode;
@@ -35,7 +36,6 @@ int RebootClient();
 extern double GetNetworkProjectCountWithRAC();
 int ReindexWallet();
 extern Array MagnitudeReportCSV();
-int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& out_owed);
 std::string getfilecontents(std::string filename);
 
 std::string NewbieLevelToString(int newbie_level);
@@ -470,7 +470,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("NetworkRAC", bb.NetworkRAC));
 	result.push_back(Pair("Magnitude", bb.Magnitude));
 	result.push_back(Pair("BoincHash",block.vtx[0].hashBoinc));
-	result.push_back(Pair("Seniority",NewbieLevelToString(bb.NewbieLevel)));
+	result.push_back(Pair("RSAWeight",bb.NewbieLevel));
 	result.push_back(Pair("GRCAddress",bb.GRCAddress));
 	std::string skein2 = aes_complex_hash(blockhash);
 	//	result.push_back(Pair("AES512Valid",iav));
@@ -1300,15 +1300,16 @@ Value listitem(const Array& params, bool fHelp)
 			entry.push_back(Pair("Magnitude",boincmagnitude));
 			results.push_back(entry);
 	}
-	if (sitem == "nc")
+	if (sitem == "rsaweight")
 	{
 		double out_magnitude = 0;
 		double out_owed = 0;
-		int NC = NewbieCompliesWithLocalStakeWeightRule(out_magnitude,out_owed);
+		int64_t RSAWEIGHT =	GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
+		out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid,out_owed);
 		Object entry;
-		entry.push_back(Pair("NCWithLocalStakeWeight",NC));
-		entry.push_back(Pair("StakeWeightMagnitude",out_magnitude));
-		entry.push_back(Pair("Owed",out_owed));
+		entry.push_back(Pair("RSA Weight",RSAWEIGHT/COIN));
+		entry.push_back(Pair("Remote Magnitude",out_magnitude));
+		entry.push_back(Pair("RSA Owed",out_owed));
 		results.push_back(entry);
 
 	}

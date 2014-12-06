@@ -65,6 +65,7 @@ extern double PreviousBlockAge();
 
 int AddressUser();
 
+int64_t GetRSAWeightByCPID(std::string cpid);
 
 extern MiningCPID GetMiningCPID();
 extern StructCPID GetStructCPID();
@@ -74,7 +75,6 @@ extern std::string GetArgument(std::string arg, std::string defaultvalue);
 
 extern void SetAdvisory();
 extern bool InAdvisory();
-int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& out_owed);
 
 json_spirit::Array MagnitudeReportCSV();
 
@@ -96,6 +96,8 @@ extern double GetPoSKernelPS2();
 extern void TallyInBackground();
 extern std::string GetBoincDataDir2();
 
+
+double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 
 
 extern std::string RetrieveCPID5(std::string email,std::string bpk,uint256 blockhash);
@@ -311,6 +313,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  double         mdMiningNetworkRAC = 0;
  std::string    msMiningErrors = "";
  std::string    msMiningErrors2 = "";
+ std::string    msMiningErrors3 = "";
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
  std::string 	msGPUMiningCPID = "";
@@ -570,7 +573,7 @@ std::string GetGlobalStatus()
 		//Vlad : Request to make overview page magnitude consistent:
 		double out_magnitude = 0;
 		double out_owed = 0;
-		NewbieCompliesWithLocalStakeWeightRule(out_magnitude,out_owed);
+		out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid,out_owed);
 		// End of Boinc Magnitude update
 		double weight = nWeight;
 		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
@@ -584,7 +587,7 @@ std::string GetGlobalStatus()
 
 		status = "Blocks: " + RoundToString((double)nBestHeight,0) + "; PoR Difficulty: " 
 			+ RoundToString(PORDiff,3) + "; Net Weight: " + RoundToString(GetPoSKernelPS2(),2)  
-			+ "<br>Stake Weight: " +  RoundToString(weight,0) + "; Status: " + msMiningErrors + msMiningErrors2
+			+ "<br>Stake Weight: " +  RoundToString(weight,0) + "; Status: " + msMiningErrors + " "  + msMiningErrors2 + " " + msMiningErrors3
 			+ "<br>Magnitude: " + RoundToString(out_magnitude,3) + ";Project: " + msMiningProject
 			+ "<br>" + sBoost.str();
 
@@ -806,10 +809,7 @@ MiningCPID GetNextProject()
 								if (fDebug) printf("For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
 								//Reserved for GRC Speech Synthesis
 								msMiningErrors = "Boinc Mining";
-								double out_magnitude = 0;
-								double out_owed = 0;
-								GlobalCPUMiningCPID.NewbieLevel = NewbieCompliesWithLocalStakeWeightRule(out_magnitude,out_owed);
-
+								GlobalCPUMiningCPID.NewbieLevel = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 								return GlobalCPUMiningCPID;
 							}
 						
@@ -840,9 +840,7 @@ MiningCPID GetNextProject()
 		GlobalCPUMiningCPID.NetworkRAC = 0;
 		GlobalCPUMiningCPID.Magnitude = 0;
         GlobalCPUMiningCPID.clientversion = "";
-		double out_magnitude2 = 0;
-	    double out_owed2 = 0;
-		GlobalCPUMiningCPID.NewbieLevel = NewbieCompliesWithLocalStakeWeightRule(out_magnitude2,out_owed2);
+		GlobalCPUMiningCPID.NewbieLevel= GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 		mdMiningNetworkRAC = 0;
 	  	}
 		catch (std::exception& e)
@@ -1930,8 +1928,6 @@ int64_t GetProofOfStakeMaxReward(int64_t nCoinAge, int64_t nFees, int64_t lockti
 
 double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 {
-	    //11-15-2014
-
 		StructCPID mag = GetStructCPID();
 		mag = mvMagnitudes[cpid];
 		//Help prevent sync problems by assessing owed @ 90%
@@ -3664,18 +3660,20 @@ uint256 CBlockIndex::GetBlockTrust() const
 
     if (bnTarget <= 0)
         return 0;
-	// R Halford - Add Magnitude to Block Trust 12-5-2014
-	// Subtract 1 million from chain trust for each magnitude (higher mag = more trust = lower bits = higher total chain trust)
+	// R Halford - Add Magnitude to Block Trust - Subtract 1 million from chain trust for each magnitude (higher mag = more trust = lower bits = higher total chain trust)
 			
-	CBlock mag_block;
 	int64_t block_mag = 0;
-	//CBlockIndex* pblockindex = mapBlockIndex[blockhash];
-	bool result = mag_block.ReadFromDisk(this);
-	if (!result)  return 0;
-	if (mag_block.vtx.size() > 0)
+
+	if (false)
 	{
-			MiningCPID MagBlock = DeserializeBoincBlock(mag_block.vtx[0].hashBoinc);
-			block_mag=MagBlock.Magnitude * 1000000;
+		CBlock mag_block;
+		bool result = mag_block.ReadFromDisk(this);
+		if (!result)  return 0;
+		if (mag_block.vtx.size() > 0)
+		{
+				MiningCPID MagBlock = DeserializeBoincBlock(mag_block.vtx[0].hashBoinc);
+				block_mag=MagBlock.Magnitude * 1000000;
+		}
 	}
 
 	uint256 chaintrust = (((CBigNum(1)<<256) / (bnTarget+1)) - (block_mag)).getuint256();

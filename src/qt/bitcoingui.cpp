@@ -89,7 +89,7 @@ void TallyInBackground();
 double cdbl(std::string s, int place);
 std::string getfilecontents(std::string filename);
 
-int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& owed);
+double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 
 
 std::string BackupGridcoinWallet();
@@ -491,7 +491,7 @@ int AddressUser()
 		#if defined(WIN32) && defined(QT_GUI)
 		double out_magnitude = 0;
 		double out_owed = 0;
-		NewbieCompliesWithLocalStakeWeightRule(out_magnitude,out_owed);
+		out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid,out_owed);
 	    printf("Boinc Magnitude %f \r\n",out_magnitude);
 		result = globalcom->dynamicCall("AddressUser(Qstring)",IntToQstring((int)out_magnitude)).toInt();
 		#endif
