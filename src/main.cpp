@@ -592,9 +592,9 @@ std::string GetGlobalStatus()
 		}
 		status = "Blocks: " + RoundToString((double)nBestHeight,0) + "; PoR Difficulty: " 
 			+ RoundToString(PORDiff,3) + "; Net Weight: " + RoundToString(GetPoSKernelPS2(),2)  
-			+ "<br>Stake Weight: " +  sWeight + "; Status: " + msMiningErrors + " "  + msMiningErrors2 + " " + msMiningErrors3
+			+ "<br>Stake Weight: " +  sWeight + "; Status: " + msMiningErrors 
 			+ "<br>Magnitude: " + RoundToString(out_magnitude,3) + ";Project: " + msMiningProject
-			+ "<br>" + sBoost.str();
+			+ "<br>"  + msMiningErrors2 + " " + msMiningErrors3 +"; " +  sBoost.str();
 
 		//The last line break is for Windows 8.1 Huge Toolbar
 		msGlobalStatus = status;
@@ -3881,7 +3881,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 	double nBalance = GetTotalBalance();
 	std::string SendingWalletAddress = DefaultWalletAddress();
 	printf("{PB}: ACC; ");
-	double mint = mapBlockIndex[hash]->nMint/COIN;
+	//	double mint = mapBlockIndex[hash]->nMint/COIN;
 	
 	if (CHECKPOINT_DISTRIBUTED_MODE==0)
 	{
@@ -3897,8 +3897,8 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 		//If we are in decentralized mode, follow Gridcoins model:
 		//Include node balance and GRC Sending Address in sync checkpoint
 		bool bUserQualified = IsUserQualifiedToSendCheckpoint();
-		printf("Checkpoint Staking amount %f \r\n",mint);
-		if (pfrom && (nBalance > MINIMUM_CHECKPOINT_TRANSMISSION_BALANCE) && bUserQualified && mint < 50)
+		//printf("Checkpoint Staking amount %f \r\n",mint);
+		if (pfrom && (nBalance > MINIMUM_CHECKPOINT_TRANSMISSION_BALANCE) && bUserQualified)
 		{
 			Checkpoints::SendSyncCheckpointWithBalance(Checkpoints::AutoSelectSyncCheckpoint(),nBalance,SendingWalletAddress);
 		}
@@ -3916,8 +3916,9 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 	
 
 	//Gridcoin - R Halford - 11-2-2014 - Initiative to move critical processes from Timer to main:
+	printf("$1");
 	GridcoinServices();
-
+	printf("$2");
     return true;
 }
 
