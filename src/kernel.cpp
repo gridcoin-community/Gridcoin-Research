@@ -402,14 +402,16 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	int64_t RSA_WEIGHT = 0;
 	int oNC = 0;
 	
-	RSA_WEIGHT = GetRSAWeightByCPID(cpid);
-	if (checking_local) msMiningErrors2 = "RRSA: " + RoundToString(RSA_WEIGHT/COIN,0);
+	RSA_WEIGHT = GetRSAWeightByCPID(cpid)*50;
+	if (checking_local) msMiningErrors2 = "RRSA: " + RoundToString(RSA_WEIGHT/COIN/50,0);
 
 	if (RSA_WEIGHT > 0) if (!IsCPIDValidv2(boincblock)) 
 	{
 		printf("Check stake kernelhash: CPID Invalid: RSA Weight = 0");
 		if (checking_local) msMiningErrors2="CPID_INVALID";
 	}
+	if (fDebug) printf("RSA_WEIGHT %f; ",(double)RSA_WEIGHT);
+
 
 	//WEIGHT MODIFICATION SECTION 2: Newbie stake allowance (11-13-2014)
 	//This is primarily to allow a newbie researcher to get started with a low balance.
@@ -476,7 +478,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 			{
 				//Dont print all this crap in the log if we are running a local miner:
 				//printf("Block does not meet target: hashboinc %s\r\n",hashBoinc.c_str());
-				printf("{Vitals}: cpid %s, project %s, RSA_WEIGHT=0x%016"PRIx64" \r\n",cpid.c_str(),boincblock.projectname.c_str(),RSA_WEIGHT);
+				printf("{Vitals}: cpid %s, project %s, RSA_WEIGHT: %f \r\n",cpid.c_str(),boincblock.projectname.c_str(),(double)RSA_WEIGHT);
 			}
 			return false;
 		}

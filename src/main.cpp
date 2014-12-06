@@ -3915,11 +3915,8 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 
 	}
 	
-
 	//Gridcoin - R Halford - 11-2-2014 - Initiative to move critical processes from Timer to main:
-	printf("$1");
 	GridcoinServices();
-	printf("$2");
     return true;
 }
 

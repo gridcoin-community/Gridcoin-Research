@@ -722,6 +722,15 @@ bool AppInit2()
     else
         fDebugNet = GetBoolArg("-debugnet");
 
+	if (mapArgs.count("-debug"))
+	{
+		if (GetArg("-debug", "false")=="true")
+		{
+			fDebug = true;
+		}
+	}
+				
+
 #if !defined(WIN32) && !defined(QT_GUI)
     fDaemon = GetBoolArg("-daemon");
 #else
