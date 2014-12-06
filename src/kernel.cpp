@@ -434,7 +434,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	}
 	else
 	{
-		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN*200))) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
+		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN*200)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
 	}
 	
     targetProofOfStake = (bnCoinDayWeight * bnTargetPerCoinDay).getuint256();
