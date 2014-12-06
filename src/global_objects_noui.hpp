@@ -23,6 +23,7 @@ extern volatile bool bForceUpdate;
 extern volatile bool bExecuteCode;
 extern volatile bool bAddressUser;
 extern volatile bool bCheckedForUpgrade;
+extern volatile bool bGlobalcomInitialized;
 
 
 extern volatile bool bAllowBackToBack;

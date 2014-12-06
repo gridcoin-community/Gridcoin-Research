@@ -1730,6 +1730,7 @@ void ReinstantiateGlobalcom()
 
 			}
 
+			bGlobalcomInitialized = true;
 		    if (bCheckedForUpgrade == false && !fTestNet && bProjectsInitialized)
 			{
 						int nNeedsUpgrade = 0;

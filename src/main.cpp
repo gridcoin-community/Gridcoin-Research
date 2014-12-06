@@ -209,12 +209,13 @@ extern std::string aes_complex_hash(uint256 scrypt_hash);
 extern  bool TallyNetworkAverages(bool ColdBoot);
 bool FindRAC(bool CheckingWork,std::string TargetCPID, std::string TargetProjectName, double pobdiff,
 	bool bCreditNodeVerification, std::string& out_errors, int& out_position);
-volatile bool bNetAveragesLoaded;
-volatile bool bRestartGridcoinMiner;
-volatile bool bForceUpdate;
-volatile bool bExecuteCode;
-volatile bool bAddressUser;
-volatile bool bCheckedForUpgrade;
+volatile bool bNetAveragesLoaded = false;
+volatile bool bRestartGridcoinMiner = false;
+volatile bool bForceUpdate = false;
+volatile bool bExecuteCode = false;
+volatile bool bAddressUser = false;
+volatile bool bCheckedForUpgrade = false;
+volatile bool bGlobalcomInitialized = false;
 
 extern void PobSleep(int milliseconds);
 extern bool CheckWorkCPU(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey);
@@ -3748,7 +3749,7 @@ void GridcoinServices()
     #endif
 
 	#if defined(WIN32) && defined(QT_GUI)
-	if (bCheckedForUpgrade == false && !fTestNet && bProjectsInitialized)
+	if (bCheckedForUpgrade == false && !fTestNet && bProjectsInitialized && bGlobalcomInitialized)
 	{
 		CheckForUpgrade();
 	}
