@@ -328,7 +328,7 @@ int64_t GetRSAWeightByCPID(std::string cpid)
 				owed = 1000;
 		}
 	}
-	int64_t RSA_WEIGHT = owed*100*COIN;
+	int64_t RSA_WEIGHT = owed*200*COIN;
 	return RSA_WEIGHT;
 }
 
@@ -403,12 +403,12 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	int oNC = 0;
 	
 	RSA_WEIGHT = GetRSAWeightByCPID(cpid);
-	msMiningErrors2 = "RRSA: " + RoundToString(RSA_WEIGHT/COIN,0);
+	if (checking_local) msMiningErrors2 = "RRSA: " + RoundToString(RSA_WEIGHT/COIN,0);
 
 	if (RSA_WEIGHT > 0) if (!IsCPIDValidv2(boincblock)) 
 	{
 		printf("Check stake kernelhash: CPID Invalid: RSA Weight = 0");
-		msMiningErrors2="CPID_INVALID";
+		if (checking_local) msMiningErrors2="CPID_INVALID";
 	}
 
 	//WEIGHT MODIFICATION SECTION 2: Newbie stake allowance (11-13-2014)

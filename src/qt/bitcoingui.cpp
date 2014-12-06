@@ -116,6 +116,7 @@ void LoadCPIDsInBackground();
 void InitializeCPIDs();
 void RestartGridcoinMiner();
 extern int UpgradeClient();
+extern void CheckForUpgrade();
 extern int CloseGuiMiner();
 extern int AddressUser();
 
@@ -449,6 +450,13 @@ int RebootClient()
 }
 
 
+void CheckForUpgrade()
+{
+				int nNeedsUpgrade = 0;
+				bCheckedForUpgrade = true;
+				nNeedsUpgrade = globalcom->dynamicCall("ClientNeedsUpgrade()").toInt();
+				if (nNeedsUpgrade) UpgradeClient();
+}
 
 
 int UpgradeClient()
@@ -1313,6 +1321,7 @@ void BitcoinGUI::rebuildClicked()
 }
 
 
+
 void BitcoinGUI::upgradeClicked()
 {
 	printf("Upgrading Gridcoin...");
@@ -1724,7 +1733,7 @@ void ReinstantiateGlobalcom()
 		    if (bCheckedForUpgrade == false && !fTestNet && bProjectsInitialized)
 			{
 						int nNeedsUpgrade = 0;
-						bool bCheckedForUpgrade = true;
+						bCheckedForUpgrade = true;
 						printf("Checking to see if Gridcoin needs upgraded\r\n");
 						nNeedsUpgrade = globalcom->dynamicCall("ClientNeedsUpgrade()").toInt();
 						if (nNeedsUpgrade) UpgradeClient();

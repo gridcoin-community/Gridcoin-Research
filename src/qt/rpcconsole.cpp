@@ -285,11 +285,7 @@ void RPCConsole::setClientModel(ClientModel *model)
         // Provide initial values
 		QString cvi = model->formatFullVersion() + "-" + toqstring(MINOR_VERSION);
 
-		//std::string client_version = cvi.toUtf8() + "-" + RoundToString(MINOR_VERSION,0);
-
-		//QString qsClientVersion = QString::fromUtf8(client_version.c_str());
-
-        ui->clientVersion->setText(cvi);
+	    ui->clientVersion->setText(cvi);
         ui->clientName->setText(model->clientName());
         ui->buildDate->setText(model->formatBuildDate());
         ui->startupTime->setText(model->formatClientStartupTime());
@@ -379,6 +375,7 @@ void RPCConsole::setNumBlocks(int count, int countOfPeers)
         // If there is no current number available display N/A instead of 0, which can't ever be true
         ui->totalBlocks->setText(clientModel->getNumBlocksOfPeers() == 0 ? tr("N/A") : QString::number(clientModel->getNumBlocksOfPeers()));
         ui->lastBlockTime->setText(clientModel->getLastBlockDate().toString());
+		ui->porDiff->setText(model->getDifficulty());
     }
 }
 

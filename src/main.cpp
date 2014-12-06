@@ -62,6 +62,7 @@ extern double coalesce(double mag1, double mag2);
 extern bool AmIGeneratingBackToBackBlocks();
 extern int64_t Floor(int64_t iAmt1, int64_t iAmt2);
 extern double PreviousBlockAge();
+void CheckForUpgrade();
 
 int AddressUser();
 
@@ -584,10 +585,14 @@ std::string GetGlobalStatus()
 			  << BOOST_VERSION / 100 % 1000 << "."  // minior version
 			  << BOOST_VERSION % 100                // patch level
 			  << "";
-
+		std::string sWeight = RoundToString(weight,0);
+		if (weight > 100000000000000) 
+		{
+				sWeight = sWeight.substr(0,13) + "E" + RoundToString((double)sWeight.length()-13,0);
+		}
 		status = "Blocks: " + RoundToString((double)nBestHeight,0) + "; PoR Difficulty: " 
 			+ RoundToString(PORDiff,3) + "; Net Weight: " + RoundToString(GetPoSKernelPS2(),2)  
-			+ "<br>Stake Weight: " +  RoundToString(weight,0) + "; Status: " + msMiningErrors + " "  + msMiningErrors2 + " " + msMiningErrors3
+			+ "<br>Stake Weight: " +  sWeight + "; Status: " + msMiningErrors + " "  + msMiningErrors2 + " " + msMiningErrors3
 			+ "<br>Magnitude: " + RoundToString(out_magnitude,3) + ";Project: " + msMiningProject
 			+ "<br>" + sBoost.str();
 
@@ -3730,10 +3735,23 @@ void GridcoinServices()
 			printf("Loaded");
 	}
 
+	if (TimerMain("check_for_autoupgrade",90))
+	{
+		bCheckedForUpgrade=false;
+	}
+
 	//Dont do this on headless-SePulcher 12-4-2014 (Halford)
 	#if defined(QT_GUI)
 	GetGlobalStatus();
 	bForceUpdate=true;
+	uiInterface.NotifyBlocksChanged();
+    #endif
+
+	#if defined(WIN32) && defined(QT_GUI)
+	if (bCheckedForUpgrade == false && !fTestNet && bProjectsInitialized)
+	{
+		CheckForUpgrade();
+	}
 	#endif
 
 
@@ -6246,7 +6264,7 @@ double GetMagnitude(std::string cpid, double purported, bool UseNetSoft)
 		double mag = UntrustedHost.Magnitude;
 		if (mag >= purported) 
 		{
-			printf("For cpid %s, using NetSoft cached mag of %f\r\n",cpid.c_str(),mag);
+			if (fDebug) printf("For cpid %s, using NetSoft cached mag of %f\r\n",cpid.c_str(),mag);
 			return mag;
 		}
 		//Try clearing the cache; call Netsoft

@@ -1684,7 +1684,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
     set<pair<const CWalletTx*,unsigned int> > setCoins;
     int64_t nValueIn = 0;
-	printf("3.");
+	printf("*");
 
     // Select coins with suitable depth
     if (!SelectCoinsForStaking(nBalance - nReserveBalance, txNew.nTime, setCoins, nValueIn))

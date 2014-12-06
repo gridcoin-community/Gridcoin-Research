@@ -785,11 +785,14 @@ Begin:
 		}
 
 		//Verify we are still on the main chain
+		if (false)
+		{
    	    if (pblock->hashPrevBlock != hashBestChain)
 		{
     		printf ("StakeMiner() : generated block is stale");
 			MilliSleep(1000);
 			goto Begin;
+		}
 		}
 
 		if (IsLockTimeWithinMinutes(nLastBlockSolved,3)) 
