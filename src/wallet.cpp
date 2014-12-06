@@ -1603,6 +1603,8 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 
     int64_t nCurrentTime =  GetAdjustedTime();
     CTxDB txdb("r");
+	//Retrieve CPID RSA_WEIGHT  12-6-2014
+	int64_t RSA_WEIGHT = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 
     LOCK2(cs_main, cs_wallet);
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
@@ -1619,7 +1621,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
         else
         {
             int64_t nTimeWeight = GetWeight((int64_t)pcoin.first->nTime, nCurrentTime);
-            CBigNum bnWeight = CBigNum(pcoin.first->vout[pcoin.second].nValue) * nTimeWeight / COIN / (24 * 60 * 60);
+            CBigNum bnWeight = CBigNum(pcoin.first->vout[pcoin.second].nValue + (RSA_WEIGHT*COIN*100)) * nTimeWeight / COIN / (24 * 60 * 60);
 
             // Weight is greater than zero
             if (nTimeWeight > 0)
@@ -1632,11 +1634,9 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	
 	//HALFORD: (Blended Stake Weight includes RSA_WEIGHT):
 	//WEIGHT SECTION 1: When a new CPID enters the ecosystem, and is seen on less than 9 blocks, this newbie
-	//Retrieve CPID RSA_WEIGHT
-	int64_t RSA_WEIGHT = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 	//int64_t NetworkWeight = GetPoSKernelPS2();
-	nWeight += RSA_WEIGHT;
-	msMiningErrors3 = "LRSA: " + RoundToString(RSA_WEIGHT/COIN,0);
+	//nWeight += RSA_WEIGHT*100*COIN;
+	msMiningErrors3 = "LRSA: " + RoundToString(RSA_WEIGHT,0);
     return true;
 }
 
@@ -1908,7 +1908,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 			else
 			{
 				//BOINC MINERS
-				if (RSA_WEIGHT/100/COIN < MintLimiterPOR())
+				if (RSA_WEIGHT < MintLimiterPOR())
 				{
 						printf("Owed %f < MintLimitLevel %f",OUT_POR,MintLimiterPOR());
 						return false;

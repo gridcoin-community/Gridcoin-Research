@@ -454,7 +454,9 @@ void CheckForUpgrade()
 {
 				int nNeedsUpgrade = 0;
 				bCheckedForUpgrade = true;
+				#ifdef WIN32
 				nNeedsUpgrade = globalcom->dynamicCall("ClientNeedsUpgrade()").toInt();
+				#endif
 				if (nNeedsUpgrade) UpgradeClient();
 }
 

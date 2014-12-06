@@ -328,7 +328,7 @@ int64_t GetRSAWeightByCPID(std::string cpid)
 				owed = 1000;
 		}
 	}
-	int64_t RSA_WEIGHT = owed*200*COIN;
+	int64_t RSA_WEIGHT = owed;
 	return RSA_WEIGHT;
 }
 
@@ -402,8 +402,8 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	int64_t RSA_WEIGHT = 0;
 	int oNC = 0;
 	
-	RSA_WEIGHT = GetRSAWeightByCPID(cpid)*50;
-	if (checking_local) msMiningErrors2 = "RRSA: " + RoundToString(RSA_WEIGHT/COIN/50,0);
+	RSA_WEIGHT = GetRSAWeightByCPID(cpid);
+	if (checking_local) msMiningErrors2 = "RRSA: " + RoundToString(RSA_WEIGHT,0);
 
 	if (RSA_WEIGHT > 0) if (!IsCPIDValidv2(boincblock)) 
 	{
@@ -430,11 +430,11 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	CBigNum bnCoinDayWeight = 0;
 	if (checking_local)
 	{
-		bnCoinDayWeight = CBigNum(nValueIn + RSA_WEIGHT) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60) / 3;
+		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN*100)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
 	}
 	else
 	{
-		bnCoinDayWeight = CBigNum(nValueIn + RSA_WEIGHT) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
+		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN*200))) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
 	}
 	
     targetProofOfStake = (bnCoinDayWeight * bnTargetPerCoinDay).getuint256();
