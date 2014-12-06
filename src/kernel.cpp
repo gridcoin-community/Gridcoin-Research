@@ -412,7 +412,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	}
 	if (fDebug) printf("RSA_WEIGHT %f; ",(double)RSA_WEIGHT);
 
-
+	RSA_WEIGHT = boincblock.Magnitude;
 	//WEIGHT MODIFICATION SECTION 2: Newbie stake allowance (11-13-2014)
 	//This is primarily to allow a newbie researcher to get started with a low balance.
 	//CBigNum bnCoinDayWeight = CBigNum(nValueIn + (5*COIN) ) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
@@ -430,11 +430,11 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	CBigNum bnCoinDayWeight = 0;
 	if (checking_local)
 	{
-		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN*100)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
+		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN*1000)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
 	}
 	else
 	{
-		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN*200)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
+		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN*2000)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
 	}
 	
     targetProofOfStake = (bnCoinDayWeight * bnTargetPerCoinDay).getuint256();

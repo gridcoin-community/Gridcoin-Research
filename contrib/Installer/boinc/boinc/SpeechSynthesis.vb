@@ -41,7 +41,9 @@ Public Class SpeechSynthesis
     End Function
     Public Function Speak(sSentence As String) As Boolean
         Try
-
+            If KeyValue("suppressvoice") = "true" Then
+                Exit Function
+            End If
             Dim synth As New SpeechSynthesizer()
             synth.SetOutputToDefaultAudioDevice()
             Dim cInstalledVoice As ReadOnlyCollection(Of System.Speech.Synthesis.InstalledVoice) = synth.GetInstalledVoices()

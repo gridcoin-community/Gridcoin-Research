@@ -26,6 +26,8 @@ double GetBlockDifficulty(unsigned int nBits);
 
 bool OutOfSyncByAgeWithChanceOfMining();
 int64_t GetRSAWeightByCPID(std::string cpid);
+
+double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 	
 std::string SerializeBoincBlock(MiningCPID mcpid);
 double GetPoSKernelPS2();
@@ -1603,9 +1605,12 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 
     int64_t nCurrentTime =  GetAdjustedTime();
     CTxDB txdb("r");
-	//Retrieve CPID RSA_WEIGHT  12-6-2014
+	//Retrieve CPID RSA_WEIGHT  12-6-2014 2
 	int64_t RSA_WEIGHT = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-
+	msMiningErrors3 = "LRSA: " + RoundToString(RSA_WEIGHT,0);
+	double out_owed = 0;
+    RSA_WEIGHT = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid,out_owed);
+	
     LOCK2(cs_main, cs_wallet);
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
     {
@@ -1621,7 +1626,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
         else
         {
             int64_t nTimeWeight = GetWeight((int64_t)pcoin.first->nTime, nCurrentTime);
-            CBigNum bnWeight = CBigNum(pcoin.first->vout[pcoin.second].nValue + (RSA_WEIGHT*COIN*100)) * nTimeWeight / COIN / (24 * 60 * 60);
+            CBigNum bnWeight = CBigNum(pcoin.first->vout[pcoin.second].nValue + (RSA_WEIGHT*COIN*1000)) * nTimeWeight / COIN / (24 * 60 * 60);
 
             // Weight is greater than zero
             if (nTimeWeight > 0)
@@ -1635,9 +1640,8 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	//HALFORD: (Blended Stake Weight includes RSA_WEIGHT):
 	//WEIGHT SECTION 1: When a new CPID enters the ecosystem, and is seen on less than 9 blocks, this newbie
 	//int64_t NetworkWeight = GetPoSKernelPS2();
-	//nWeight += RSA_WEIGHT*100*COIN;
-	msMiningErrors3 = "LRSA: " + RoundToString(RSA_WEIGHT,0);
-    return true;
+	nWeight += RSA_WEIGHT*10*COIN;
+	return true;
 }
 
 bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int64_t nSearchInterval, int64_t nFees, CTransaction& txNew, CKey& key)
@@ -1755,7 +1759,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             continue; // only count coins meeting min age requirement
 
         bool fKernelFound = false;
-		printf("%1");
+		printf("@1");
 
         for (unsigned int n=0; n<min(nSearchInterval,(int64_t)nMaxStakeSearchInterval) && !fKernelFound && !fShutdown && pindexPrev == pindexBest; n++)
         {
