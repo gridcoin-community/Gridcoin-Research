@@ -28,6 +28,8 @@ SendCoinsEntry::SendCoinsEntry(QWidget *parent) :
     setFocusPolicy(Qt::TabFocus);
     setFocusProxy(ui->payTo);
 
+	connect(ui->cbTrack, SIGNAL(stateChanged(int)), this, SLOT(trackChangeChecked(int)));
+    
     GUIUtil::setupAddressWidget(ui->payTo, this);
 }
 
@@ -55,12 +57,44 @@ void SendCoinsEntry::on_addressBookButton_clicked()
     }
 }
 
+
+
+void SendCoinsEntry::trackChangeChecked(int state)
+{
+	int high_level_model = 0;
+    if (model)
+    {
+        if (state == Qt::Checked)
+		{
+       		//printf("Track transaction");
+			high_level_model = state;
+			trackChecked = true;
+		}
+        else
+		{
+			//        	printf("Not Tracking transaction");
+			high_level_model = state;
+			trackChecked=false;
+		}
+
+    }
+  
+}
+
 void SendCoinsEntry::on_payTo_textChanged(const QString &address)
 {
     if(!model)
         return;
     // Fill in label from address book, if address has an associated label
     QString associatedLabel = model->getAddressTableModel()->labelForAddress(address);
+	if (trackChecked == true)
+	{
+		//printf("Track transaction");
+	}
+	else
+	{
+		//printf("Tracking disabled");
+	}
     if(!associatedLabel.isEmpty())
         ui->addAsLabel->setText(associatedLabel);
 }

@@ -468,22 +468,22 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 		    //uint64_t nNetworkWeight = GetPoSKernelPS2();
 			if (NC == 2)
 			{
-				NewbieStakeWeightModifier = newbie_magnitude*500*COIN;
+				NewbieStakeWeightModifier = newbie_magnitude*5000*COIN;
 				oNC = NC;
 			}
 			else if (NC == 3)
 			{
-				NewbieStakeWeightModifier = 500*COIN;
+				NewbieStakeWeightModifier = 20000*COIN;
 				oNC = NC;
 		    }
 			else if (NC == 4)
 			{
-				NewbieStakeWeightModifier = 250*COIN;
+				NewbieStakeWeightModifier = 10000*COIN;
 				//printf("NewbieModifierL3: Mag %f, Mod  %"PRId64" \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
 			}
 			else if (NC == 5)
 			{
-				NewbieStakeWeightModifier = 50*COIN;
+				NewbieStakeWeightModifier = 5000*COIN;
 				//printf("NewbieModifierL3: Mag %f, Mod  %"PRId64" \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
 			}
 	}
@@ -496,7 +496,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	///////////////////////////////////////////////////////////////////////////
 	// RSA Boost Feature - 12-4-2014
 	double RSA_BOOST = 0;
-	RSA_BOOST = out_owed * COIN;
+	RSA_BOOST = out_owed * 100 * COIN;
 	NewbieStakeWeightModifier += RSA_BOOST;
     ///////// End of RSA Boost
 	int64_t boinc_seconds = 0;
@@ -509,7 +509,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	CBigNum bnCoinDayWeight = 0;
 	if (checking_local)
 	{
-		bnCoinDayWeight = CBigNum(nValueIn + NewbieStakeWeightModifier) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60) / 2;
+		bnCoinDayWeight = CBigNum(nValueIn + NewbieStakeWeightModifier) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60) / 3;
 	}
 	else
 	{

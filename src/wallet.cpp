@@ -414,7 +414,7 @@ void CWallet::WalletUpdateSpent(const CTransaction &tx, bool fBlock)
                     printf("WalletUpdateSpent: bad wtx %s\n", wtx.GetHash().ToString().c_str());
                 else if (!wtx.IsSpent(txin.prevout.n) && IsMine(wtx.vout[txin.prevout.n]))
                 {
-                    printf("WalletUpdateSpent found spent coin %s gC %s\n", FormatMoney(wtx.GetCredit()).c_str(), wtx.GetHash().ToString().c_str());
+                    if (fDebug) printf("WalletUpdateSpent found spent coin %s gC %s\n", FormatMoney(wtx.GetCredit()).c_str(), wtx.GetHash().ToString().c_str());
                     wtx.MarkSpent(txin.prevout.n);
                     wtx.WriteToDisk();
                     NotifyTransactionChanged(this, txin.prevout.hash, CT_UPDATED);
@@ -1763,13 +1763,15 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	else if (NC == 4 && out_owed > (MaxReward/2))
 	{
 					//NewbieStakeWeightModifier =	out_magnitude*(MaxReward/6);
-			printf("NL4::mag %f swm %f  owed %f",out_magnitude,NewbieStakeWeightModifier,out_owed);
+		            NewbieStakeWeightModifier = 10000;
+			        printf("NL4::mag %f swm %f  owed %f",out_magnitude,NewbieStakeWeightModifier,out_owed);
 
 		
 	}
 	else if (NC == 5 && out_owed > (MaxReward/1.5))
 	{
 					//NewbieStakeWeightModifier =	out_magnitude*(MaxReward/9);
+		            NewbieStakeWeightModifier = 5000;
 	}
 
 	//////////////////////////////////////////////////////////////////////

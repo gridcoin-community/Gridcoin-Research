@@ -12,7 +12,8 @@ Public Class GridcoinUpgrader
 
     Private prodURL As String = "http://download.gridcoin.us/download/downloadstake/"
     Private testURL As String = "http://download.gridcoin.us/download/downloadstaketestnet/"
-   
+    Private b404 As Integer = 0
+
 
     Private Sub RemoveBlocksDir(d As System.IO.DirectoryInfo)
         Try
@@ -22,11 +23,40 @@ Public Class GridcoinUpgrader
     End Sub
    
     Public Function GetURL() As String
-        If bTestNet Then
-            Return testURL
-        Else
-            Return prodURL
+        If b404 = 0 Then
+            'Unchecked - Check state of Anti-DDOS host:
+            Try
+                Dim sFile As String = "openpopstake.dll"
+                Dim sData As String = ""
+                Dim myWebClient As New MyWebClient()
+                sData = myWebClient.DownloadString(prodURL + sFile)
+                Log("Downloaded openpop " + Trim(Len(sData)))
+                If Len(sData) > 30000 Then
+                    b404 = 1
+                Else
+                    b404 = -1
+                End If
+
+            Catch ex As Exception
+                Log("Download error " + Trim(ex.Message))
+                b404 = -1
+            End Try
         End If
+
+        If b404 = 1 Then
+            If bTestNet Then
+                Return testURL
+            Else
+                Return prodURL
+            End If
+        Else
+            If bTestNet Then
+                Return testURL
+            Else
+                Return "http://finance.gridcoin.us/downloads/"
+            End If
+        End If
+
     End Function
     Private Function GetFilePercent(sName As String, Sz As Double) As Double
         Dim sPath As String

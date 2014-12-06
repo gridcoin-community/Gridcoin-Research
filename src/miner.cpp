@@ -146,7 +146,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 	if (!bNetAveragesLoaded)
 	{
 
-		printf("Net averages not yet loaded...");
+		if (fDebug) printf("Net averages not yet loaded...");
 		MilliSleep(500);
 		return NULL;
 	}
@@ -796,7 +796,7 @@ Begin:
 
 		if (IsLockTimeWithinMinutes(nLastBlockSolved,3)) 
 		{
-				printf("=");
+				if (fDebug) printf("=");
 				MilliSleep(1000);
 				goto Begin;
 		}

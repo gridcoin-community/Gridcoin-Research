@@ -3655,6 +3655,8 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     return true;
 }
 
+
+
 uint256 CBlockIndex::GetBlockTrust() const
 {
     CBigNum bnTarget;
@@ -3662,8 +3664,23 @@ uint256 CBlockIndex::GetBlockTrust() const
 
     if (bnTarget <= 0)
         return 0;
+	// R Halford - Add Magnitude to Block Trust 12-5-2014
+	// Subtract 1 million from chain trust for each magnitude (higher mag = more trust = lower bits = higher total chain trust)
+			
+	CBlock mag_block;
+	int64_t block_mag = 0;
+	//CBlockIndex* pblockindex = mapBlockIndex[blockhash];
+	bool result = mag_block.ReadFromDisk(this);
+	if (!result)  return 0;
+	if (mag_block.vtx.size() > 0)
+	{
+			MiningCPID MagBlock = DeserializeBoincBlock(mag_block.vtx[0].hashBoinc);
+			block_mag=MagBlock.Magnitude * 1000000;
+	}
 
-    return ((CBigNum(1)<<256) / (bnTarget+1)).getuint256();
+	uint256 chaintrust = (((CBigNum(1)<<256) / (bnTarget+1)) - (block_mag)).getuint256();
+
+	return chaintrust;
 }
 
 bool CBlockIndex::IsSuperMajority(int minVersion, const CBlockIndex* pstart, unsigned int nRequired, unsigned int nToCheck)
