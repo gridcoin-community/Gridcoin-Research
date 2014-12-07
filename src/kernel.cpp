@@ -342,7 +342,7 @@ int64_t GetRSAWeightByBlock(MiningCPID boincblock)
 	{
 		rsa_weight = boincblock.RSAWeight;
 	}
-	return rsa_weight;
+	return rsa_weight*100;
 }
 
 double GetUntrustedMagnitude(std::string cpid, double& out_owed)
@@ -413,7 +413,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	int oNC = 0;
 	//12-7-2014 R Halford 
 	RSA_WEIGHT = GetRSAWeightByBlock(boincblock);
-	if (checking_local) msMiningErrors2 = "RRSA: " + RoundToString(RSA_WEIGHT,0);
+	if (checking_local) msMiningErrors2 = "RRSA: " + RoundToString(RSA_WEIGHT/100,0);
 
 	if (RSA_WEIGHT > 0) if (!IsCPIDValidv2(boincblock)) 
 	{
@@ -443,7 +443,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	}
 	else
 	{
-		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN*200000)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
+		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN*125000)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
 	}
 	
     targetProofOfStake = (bnCoinDayWeight * bnTargetPerCoinDay).getuint256();
