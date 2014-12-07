@@ -413,7 +413,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	int oNC = 0;
 	//12-7-2014 R Halford 
 	RSA_WEIGHT = GetRSAWeightByBlock(boincblock);
-	if (checking_local) msMiningErrors2 = "RRSA: " + RoundToString(RSA_WEIGHT/100,0);
+	if (checking_local) msMiningErrors2 = "RRSA: " + RoundToString(RSA_WEIGHT,0);
 
 	if (RSA_WEIGHT > 0) if (!IsCPIDValidv2(boincblock)) 
 	{
