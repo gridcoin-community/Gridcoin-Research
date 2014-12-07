@@ -311,13 +311,16 @@ int64_t GetRSAWeightByCPID(std::string cpid)
 			if (UntrustedHost.initialized)
 			{
 						double mag_accuracy = UntrustedHost.Accuracy;
-						if (mag_accuracy > 0) owed = UntrustedHost.owed;
+						if (mag_accuracy > 0) 
+						{
+								owed = (UntrustedHost.owed*14*10) + UntrustedHost.Magnitude;
+						}
 			}
 			else
 			{
 				if (cpid.length() > 5 && cpid != "INVESTOR")
 				{
-						owed = 1000;
+						owed = 5000;
 				}
 			}
 	}
@@ -325,14 +328,22 @@ int64_t GetRSAWeightByCPID(std::string cpid)
 	{
 		if (cpid.length() > 5 && cpid != "INVESTOR")
 		{
-				owed = 1000;
+				owed = 5000;
 		}
 	}
 	int64_t RSA_WEIGHT = owed;
 	return RSA_WEIGHT;
 }
 
-
+int64_t GetRSAWeightByBlock(MiningCPID boincblock)
+{
+	int64_t rsa_weight = 0;
+	if (boincblock.cpid != "INVESTOR")
+	{
+		rsa_weight = boincblock.RSAWeight;
+	}
+	return rsa_weight;
+}
 
 double GetUntrustedMagnitude(std::string cpid, double& out_owed)
 {
@@ -398,11 +409,10 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
     uint256 hashBlockFrom = blockFrom.GetHash();
 	MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
 	std::string cpid = boincblock.cpid;
-    
-	int64_t RSA_WEIGHT = 0;
+    int64_t RSA_WEIGHT = 0;
 	int oNC = 0;
-	
-	RSA_WEIGHT = GetRSAWeightByCPID(cpid);
+	//12-7-2014 R Halford 
+	RSA_WEIGHT = GetRSAWeightByBlock(boincblock);
 	if (checking_local) msMiningErrors2 = "RRSA: " + RoundToString(RSA_WEIGHT,0);
 
 	if (RSA_WEIGHT > 0) if (!IsCPIDValidv2(boincblock)) 
@@ -412,7 +422,6 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	}
 	if (fDebug) printf("RSA_WEIGHT %f; ",(double)RSA_WEIGHT);
 
-	RSA_WEIGHT = boincblock.Magnitude;
 	//WEIGHT MODIFICATION SECTION 2: Newbie stake allowance (11-13-2014)
 	//This is primarily to allow a newbie researcher to get started with a low balance.
 	//CBigNum bnCoinDayWeight = CBigNum(nValueIn + (5*COIN) ) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
@@ -430,11 +439,11 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	CBigNum bnCoinDayWeight = 0;
 	if (checking_local)
 	{
-		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN*1000)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
+		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN*100000)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
 	}
 	else
 	{
-		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN*2000)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
+		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN*200000)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
 	}
 	
     targetProofOfStake = (bnCoinDayWeight * bnTargetPerCoinDay).getuint256();

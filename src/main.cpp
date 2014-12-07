@@ -155,8 +155,8 @@ CBigNum bnProofOfStakeLimit(~uint256(0) >> 20);
 CBigNum bnProofOfStakeLimitV2(~uint256(0) >> 48);
 CBigNum bnProofOfWorkLimitTestNet(~uint256(0) >> 16);
 
-//Gridcoin Minimum Stake Age (4 Hours)
-unsigned int nStakeMinAge = 4 * 60 * 60; // 4 hours
+//Gridcoin Minimum Stake Age (1 Hours)
+unsigned int nStakeMinAge = 1 * 60 * 60; // 1 hour
 unsigned int nStakeMaxAge = -1; // unlimited
 unsigned int nModifierInterval = 10 * 60; // time to elapse before new modifier is computed
 
@@ -593,9 +593,9 @@ std::string GetGlobalStatus()
 		}
 		status = "Blocks: " + RoundToString((double)nBestHeight,0) + "; PoR Difficulty: " 
 			+ RoundToString(PORDiff,3) + "; Net Weight: " + RoundToString(GetPoSKernelPS2(),2)  
-			+ "<br>Stake Weight: " +  sWeight + "; Status: " + msMiningErrors 
+			+ "<br>Boinc Weight: " +  sWeight + "; Status: " + msMiningErrors 
 			+ "<br>Magnitude: " + RoundToString(out_magnitude,3) + ";Project: " + msMiningProject
-			+ "<br>"  + msMiningErrors2 + " " + msMiningErrors3 +"; " +  sBoost.str();
+			+ "<br>"  + msMiningErrors2 + " " + msMiningErrors3 +" " +  sBoost.str();
 
 		//The last line break is for Windows 8.1 Huge Toolbar
 		msGlobalStatus = status;
@@ -815,7 +815,7 @@ MiningCPID GetNextProject()
 								if (fDebug) printf("For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
 								//Reserved for GRC Speech Synthesis
 								msMiningErrors = "Boinc Mining";
-								GlobalCPUMiningCPID.NewbieLevel = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
+								GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 								return GlobalCPUMiningCPID;
 							}
 						
@@ -846,7 +846,7 @@ MiningCPID GetNextProject()
 		GlobalCPUMiningCPID.NetworkRAC = 0;
 		GlobalCPUMiningCPID.Magnitude = 0;
         GlobalCPUMiningCPID.clientversion = "";
-		GlobalCPUMiningCPID.NewbieLevel= GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
+		GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 		mdMiningNetworkRAC = 0;
 	  	}
 		catch (std::exception& e)
@@ -5142,6 +5142,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return false;
         }
 
+		
+
         if (pfrom->nVersion == 10300)
             pfrom->nVersion = 300;
         if (!vRecv.empty())
@@ -5151,7 +5153,22 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (!vRecv.empty())
             vRecv >> pfrom->nStartingHeight;
 
-        if (pfrom->fInbound && addrMe.IsRoutable())
+		//Pallas 12-6-2014
+
+	
+		if (GetArgument("suppressban","false") != "true")
+		{
+			if (pfrom->nStartingHeight < 1000) 
+			{
+				printf("Node with low height");
+				pfrom->Misbehaving(1);
+				return false;
+			}
+		}
+
+		
+		
+		if (pfrom->fInbound && addrMe.IsRoutable())
         {
             pfrom->addrLocal = addrMe;
             SeenLocal(addrMe);
@@ -6120,7 +6137,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 					+ delim + mcpid.enccpid 
 					+ delim + mcpid.encaes + delim + RoundToString(mcpid.nonce,0) + delim + RoundToString(mcpid.NetworkRAC,0) + delim + version 
 					+ delim + mcpid.VouchedCPID + delim 
-					+ "0" + delim + RoundToString(mcpid.NewbieLevel,0) 
+					+ "0" + delim + RoundToString(mcpid.RSAWeight,0) 
 					+ delim + mcpid.cpidv2
 					+ delim + RoundToString(mcpid.Magnitude,0)
 					+ delim + mcpid.GRCAddress + delim + mcpid.lastblockhash;
@@ -6184,7 +6201,7 @@ MiningCPID DeserializeBoincBlock(std::string block)
 		}
 		if (s.size() > 13)
 		{
-			surrogate.NewbieLevel = cdbl(s[13],0);
+			surrogate.RSAWeight = cdbl(s[13],0);
 		}
 		if (s.size() > 14)
 		{
@@ -7034,7 +7051,7 @@ StructCPID GetStructCPID()
 	c.longtermowed=0;
 	c.LastPaymentTime=0;
 	c.EarliestPaymentTime=0;
-	c.NewbieLevel=0;
+	c.RSAWeight=0;
 	c.PaymentTimespan=0;
 	return c;
 
@@ -7071,7 +7088,7 @@ MiningCPID GetMiningCPID()
 	mc.ConsensusMagnitudeCount  = 0;
 	mc.Accuracy = 0;
 	mc.ConsensusMagnitude = 0;
-	mc.NewbieLevel = 0;
+	mc.RSAWeight = 0;
 	return mc;
 }
 

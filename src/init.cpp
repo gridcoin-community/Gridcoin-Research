@@ -183,7 +183,7 @@ void InitializeBoincProjects()
 		GlobalCPUMiningCPID.pobdifficulty = 0;
 		GlobalCPUMiningCPID.diffbytes = 0;
 		GlobalCPUMiningCPID.email = "";
-		GlobalCPUMiningCPID.NewbieLevel = 0;
+		GlobalCPUMiningCPID.RSAWeight = 0;
 
 
 		std::string boinc_projects[100];

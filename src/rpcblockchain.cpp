@@ -470,7 +470,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("NetworkRAC", bb.NetworkRAC));
 	result.push_back(Pair("Magnitude", bb.Magnitude));
 	result.push_back(Pair("BoincHash",block.vtx[0].hashBoinc));
-	result.push_back(Pair("RSAWeight",bb.NewbieLevel));
+	result.push_back(Pair("RSAWeight",bb.RSAWeight));
 	result.push_back(Pair("GRCAddress",bb.GRCAddress));
 	std::string skein2 = aes_complex_hash(blockhash);
 	//	result.push_back(Pair("AES512Valid",iav));
@@ -1307,7 +1307,7 @@ Value listitem(const Array& params, bool fHelp)
 		int64_t RSAWEIGHT =	GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 		out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid,out_owed);
 		Object entry;
-		entry.push_back(Pair("RSA Weight",RSAWEIGHT/COIN));
+		entry.push_back(Pair("RSA Weight",RSAWEIGHT));
 		entry.push_back(Pair("Remote Magnitude",out_magnitude));
 		entry.push_back(Pair("RSA Owed",out_owed));
 		results.push_back(entry);

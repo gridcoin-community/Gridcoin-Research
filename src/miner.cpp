@@ -418,16 +418,12 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		MiningCPID miningcpid = GetNextProject();
 		//ToDo:Test CPID v2 IsCpidValid from RPC
 		//Crashes in Linux
-
 	    //miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pindexPrev->GetBlockHash());
 		miningcpid.cpidv2="";
-
 		miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
 		std::string hashBoinc = SerializeBoincBlock(miningcpid);
 		//printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
-				
 	    if (LessVerbose(10)) printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
-
 		pblock->vtx[0].hashBoinc = hashBoinc;
 
         if (!fProofOfStake)

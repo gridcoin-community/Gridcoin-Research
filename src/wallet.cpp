@@ -1603,14 +1603,13 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 
     nWeight = 0;
 
-    int64_t nCurrentTime =  GetAdjustedTime();
+    int64_t nCurrentTime = GetAdjustedTime();
     CTxDB txdb("r");
-	//Retrieve CPID RSA_WEIGHT  12-6-2014 2
+	//Retrieve CPID RSA_WEIGHT
 	int64_t RSA_WEIGHT = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 	msMiningErrors3 = "LRSA: " + RoundToString(RSA_WEIGHT,0);
 	double out_owed = 0;
-    RSA_WEIGHT = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid,out_owed);
-	
+
     LOCK2(cs_main, cs_wallet);
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
     {
@@ -1626,7 +1625,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
         else
         {
             int64_t nTimeWeight = GetWeight((int64_t)pcoin.first->nTime, nCurrentTime);
-            CBigNum bnWeight = CBigNum(pcoin.first->vout[pcoin.second].nValue + (RSA_WEIGHT*COIN*1000)) * nTimeWeight / COIN / (24 * 60 * 60);
+            CBigNum bnWeight = CBigNum(pcoin.first->vout[pcoin.second].nValue + (RSA_WEIGHT*COIN*100000)) * nTimeWeight / COIN / (24 * 60 * 60);
 
             // Weight is greater than zero
             if (nTimeWeight > 0)
@@ -1638,7 +1637,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	
 	
 	//HALFORD: (Blended Stake Weight includes RSA_WEIGHT):
-	//WEIGHT SECTION 1: When a new CPID enters the ecosystem, and is seen on less than 9 blocks, this newbie
+	//WEIGHT SECTION 1: When a new CPID enters the ecosystem
 	//int64_t NetworkWeight = GetPoSKernelPS2();
 	nWeight += RSA_WEIGHT*10*COIN;
 	return true;
@@ -1898,7 +1897,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		if (fDebug) printf("Creating POS Reward for %s  amt  %s  {RSAWeight %s} \r\n",
 			GlobalCPUMiningCPID.cpid.c_str(),sReward.c_str(),RoundToString((double)RSA_WEIGHT,0).c_str());
 	
-		if (PORDiff > 10)
+		if (PORDiff > 100)
 		{
 			if (RSA_WEIGHT == 0)
 			{

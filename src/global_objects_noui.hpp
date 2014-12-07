@@ -130,7 +130,7 @@ struct MiningEntry {
 		double longtermowed;
 		double LastPaymentTime;
 		double EarliestPaymentTime;
-		double NewbieLevel;
+		double RSAWeight;
 		double PaymentTimespan;
 
 
@@ -208,7 +208,7 @@ struct MiningEntry {
 		double ConsensusMagnitudeCount;
 		double Accuracy;
 		double ConsensusMagnitude;
-		double NewbieLevel;
+		double RSAWeight;
 	
 	};
 

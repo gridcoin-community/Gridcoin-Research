@@ -252,9 +252,9 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
     //
     // Debug view
     //
-    if (fDebug)
+    if (fDebug || true)
     {
-        strHTML += "<hr><br>" + tr("Debug information") + "<br><br>";
+        strHTML += "<hr><br><color=blue><bold>" + tr("Information") + "</bold><br><br><color=green>";
         BOOST_FOREACH(const CTxIn& txin, wtx.vin)
             if(wallet->IsMine(txin))
                 strHTML += "<b>" + tr("Debit") + ":</b> " + BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, -wallet->GetDebit(txin)) + "<br>";
