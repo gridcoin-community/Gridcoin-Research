@@ -317,6 +317,8 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msENCboincpublickey = "";
  double      	mdMiningRAC =0;
  double         mdMiningNetworkRAC = 0;
+
+ std::string    msHashBoinc    = "";
  std::string    msMiningErrors = "";
  std::string    msMiningErrors2 = "";
  std::string    msMiningErrors3 = "";
@@ -1962,8 +1964,8 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 				owed = owed/2;
 			}
 
-			//Halford - Ensure researcher was not paid in the last 4 hours:
-			if (IsLockTimeWithinMinutes(mag.LastPaymentTime,240))
+			//Halford - Ensure researcher was not paid in the last 2 hours:
+			if (IsLockTimeWithinMinutes(mag.LastPaymentTime,120))
 			{
 				owed = 0;
 			}
@@ -3374,13 +3376,10 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
         return DoS(50, error("CheckBlock() : proof of work failed"));
 
 	//Reject blocks with diff > 10000000000000000
-	//12-2-2014
 	double blockdiff = GetBlockDifficulty(nBits);
 	int lastheight = BlockHeight(hashPrevBlock);
 	if(true)
 	{
-		//	if (lastheight > 67400 && blockdiff > 10000000000000000 && !IsLockTimeWithinMinutes(GetBlockTime(),480))
-	
 		if (lastheight > 71000 && blockdiff > 10000000000000000)
 		{
 			   return DoS(1, error("CheckBlock() : Block Bits larger than 10000000000000000.\r\n"));
@@ -3745,6 +3744,7 @@ void GridcoinServices()
 	{
 		bCheckedForUpgradeLive = true;
 	}
+
 
 	//Dont do this on headless-SePulcher 12-4-2014 (Halford)
 	#if defined(QT_GUI)
@@ -6983,12 +6983,11 @@ void ThreadCPIDs()
 	//SetThreadPriority(THREAD_PRIORITY_LOWEST);
     RenameThread("gridcoin-cpids");
     bCPIDsLoaded = false;
-	if (mvCPIDCache.size() > 1) mvCPIDCache.clear();
+	
 	HarvestCPIDs(true);
 	bCPIDsLoaded = true;
 	//Reloads maglevel:
 	printf("Performing 1st credit check (%s)",GlobalCPUMiningCPID.cpid.c_str());
-	//11-9-2014 Stack Smashing
 	CreditCheck(GlobalCPUMiningCPID.cpid,true);
 	printf("Getting first project");
 	GetNextProject();

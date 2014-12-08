@@ -473,13 +473,15 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	{
 		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
 	}
-	
-	double coin_age = GetAdjustedTime() - (double)txPrev.nTime;
-	double payment_age = GetAdjustedTime() - boincblock.LastPaymentTime;
+	//12-8-2014
+	double nTime = max(pindexBest->GetMedianTimePast()+1, GetAdjustedTime());
+
+	double coin_age = nTime - (double)txPrev.nTime;
+	double payment_age = nTime - boincblock.LastPaymentTime;
 	if (boincblock.LastPaymentTime > GetAdjustedTime()+15) payment_age=0;  //Do not allow future timestamps
 
 	if (coin_age < 0) coin_age = 0;
-	if ((payment_age > 60*60) && boincblock.Magnitude > 1 && boincblock.cpid != "INVESTOR" && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT*60) && RSA_WEIGHT > 10)
+	if ((payment_age > 45*60) && boincblock.Magnitude > 1 && boincblock.cpid != "INVESTOR" && (coin_age > 3*60*60) && (coin_age > RSA_WEIGHT*60) && RSA_WEIGHT > 5)
 	{
 		//Coins are older than RSA balance in minutes
 		oNC=1;
@@ -505,7 +507,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
     if (!GetKernelStakeModifier(hashBlockFrom, nStakeModifier, nStakeModifierHeight, nStakeModifierTime, fPrintProofOfStake))
     {
 		printf("`");
-		return false;
+		//return false;
 	}
     ss << nStakeModifier;
 

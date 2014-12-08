@@ -1879,7 +1879,6 @@ void BitcoinGUI::timerfire()
 									if (Timer("resync", resync*6))
 									{   //TODO: Test if this is even necessary...
 
-										//printf("Resyncing...\r\n");
 										//RestartGridcoin10();
 										//LoadBlockIndex(true);
 									}

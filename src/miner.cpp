@@ -794,32 +794,14 @@ Begin:
 		}
 		}
 
-		if (IsLockTimeWithinMinutes(nLastBlockSolved,3)) 
+		if (IsLockTimeWithinMinutes(nLastBlockSolved,2)) 
 		{
 				if (fDebug) printf("=");
 				MilliSleep(1000);
 				goto Begin;
 		}
 
-		//11-23-2014 - R HALFORD - If we received a global hash checkpoint containing the solved hash for the block we are currently staking, accept the block and start over
-		if (false && muGlobalCheckpointHash == pblock->hashPrevBlock)
-		{
-			//A Gridcoiner solved the block we are working on..Start over
-			printf("!GlobalSolutionFound!\r\n");
-			MilliSleep(15000);
-			muGlobalCheckpointHashCounter++;
-			if (muGlobalCheckpointHashCounter > 3)
-			{
-				//Give up after waiting for 60 seconds for the solved block; erase the checkpoint hash
-				muGlobalCheckpointHashCounter=0;
-				muGlobalCheckpointHash = 0;
-				printf("Never received global solution block.. Purging.\r\n");
-			}
-			goto Begin;
-		}
-			
-
-        // Trying to sign a block
+	    // Trying to sign a block
         if (pblock->SignBlock(*pwallet, nFees))
         {
             SetThreadPriority(THREAD_PRIORITY_NORMAL);

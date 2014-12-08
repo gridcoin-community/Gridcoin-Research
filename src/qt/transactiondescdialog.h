@@ -21,6 +21,11 @@ public:
 
 private:
     Ui::TransactionDescDialog *ui;
+	void askQuestion(std::string caption, std::string body, bool *result);
+
+private slots:
+	void on_btnExecute_clicked();
+
 };
 
 #endif // TRANSACTIONDESCDIALOG_H

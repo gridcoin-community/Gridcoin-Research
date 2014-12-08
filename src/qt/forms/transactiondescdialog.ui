@@ -75,6 +75,19 @@
        <set>QDialogButtonBox::Close</set>
       </property>
      </widget>
+     <widget class="QPushButton" name="btnExecute">
+      <property name="geometry">
+       <rect>
+        <x>520</x>
+        <y>10</y>
+        <width>111</width>
+        <height>23</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Execute Contract</string>
+      </property>
+     </widget>
     </widget>
    </item>
   </layout>

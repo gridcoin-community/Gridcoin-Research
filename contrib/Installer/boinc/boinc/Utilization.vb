@@ -12,7 +12,7 @@ Public Class Utilization
    
     Public ReadOnly Property Version As Double
         Get
-            Return 327
+            Return 328
         End Get
     End Property
 
@@ -253,6 +253,10 @@ Public Class Utilization
         Call UpdateKey(sKey, sValue)
     End Function
     Public Sub ExecuteCode(ByVal sCode As String)
+        Log("Executing smart contract " + sCode)
+        Dim classSmartContract As New GridcoinSmartContract
+        classSmartContract.ExecuteContract(sCode)
+
     End Sub
     Public Sub SpeakSentence(sSentence As String)
         Dim S As New SpeechSynthesis

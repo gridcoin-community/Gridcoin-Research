@@ -1,6 +1,10 @@
 #include "transactiondesc.h"
 #include "clientmodel.h"
 #include "guiutil.h"
+
+#include "ui_transactiondescdialog.h"
+
+
 #include "bitcoinunits.h"
 #include "main.h"
 #include "wallet.h"
@@ -16,7 +20,37 @@ std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype,
 std::string RoundToString(double d, int place);
 std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, int& out_rac);
 void ExecuteCode();
+std::string hashBoinc = "";
 extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
+
+
+TransactionDescDialog::TransactionDescDialog(QWidget *parent) :
+    QDialog(parent),
+    ui(new Ui::TransactionDescDialog)
+{
+    ui->setupUi(this);
+ 
+}
+
+	
+	/*
+TransactionDescDialog::~TransactionDescDialog()
+{
+    delete ui;
+}
+*/
+
+
+void TransactionDescDialog::setModel(ClientModel *model)
+{
+    if(model)
+    {
+        //ui->versionLabel->setText(model->formatFullVersion());
+    }
+}
+
+
+
 
 
 QString ToQString(std::string s)
@@ -26,8 +60,24 @@ QString ToQString(std::string s)
 }
 
 
+void TransactionDescDialog::on_btnExecute_clicked()
+{
+    printf("Executing code... %s",hashBoinc.c_str());
+	std::string code = ExtractXML(hashBoinc,"<CODE>","</CODE>");
+	std::string narr2 = "Are you sure you want to execute this smart contract: " + code;
+	//bool result = askQuestion("Confirm Smart Contract Execution",narr2);
+	bool result = false;
+    result = uiInterface.ThreadSafeAskQuestion("Confirm Smart Contract Execution",narr2);
+	//QMessageBox::StandardButton retval = QMessageBox::question(uiInterface, tr("Confirm transaction fee"), narr1,         QMessageBox::Yes|QMessageBox::Cancel, QMessageBox::Yes);
+	if (result)
+    {
+		ExecuteCode();
+    }
 
-QString TransactionDesc::FormatTxStatus(const CWalletTx& wtx)
+
+}
+
+QString TransactionDescDialog::FormatTxStatus(const CWalletTx& wtx)
 {
     AssertLockHeld(cs_main);
 	//connect(btnExecute, SIGNAL(clicked()), this, SLOT(on_btnExecute_clicked()));
@@ -80,7 +130,7 @@ std::string PubKeyToGRCAddress(const CScript& scriptPubKey)
 
 
 
-QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
+QString TransactionDescDialog::toHTML(CWallet *wallet, CWalletTx &wtx,  std::string type)
 {
 
 	//	walletModel(parent);
@@ -295,13 +345,6 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
     //
     // Debug view 12-7-2014 - Halford
     //
-
-	// Smart Contracts
-
-	msHashBoinc = "";
-
-
-
     if (fDebug || true)
     {
         strHTML += "<hr><br><color=blue><bold><span color=blue>" + tr("Information") + "</span></bold><br><br><color=green>";
@@ -318,7 +361,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
         CTxDB txdb("r"); // To fetch source txouts
 
 		strHTML += "<br><b>Notes: " + QString::fromStdString(wtx.hashBoinc) + "</b>";
-		msHashBoinc += wtx.hashBoinc;
+		hashBoinc += wtx.hashBoinc;
 
         strHTML += "<br><b>" + tr("Inputs") + ":</b>";
         strHTML += "<ul>";

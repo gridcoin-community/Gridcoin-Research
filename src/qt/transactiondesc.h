@@ -14,26 +14,9 @@ class TransactionDesc: public QObject
 {
     Q_OBJECT
 public:
-	// explicit TransactionDesc(QWidget *parent = 0);
-    //~TransactionDesc();
-    static QString toHTML(CWallet *wallet, CWalletTx &wtx, std::string type);
-
-	public slots:
-		 void on_btnExecute_clicked();
-
-
-private slots:
-   
-	//   WalletModel *walletModel;
-
+    static QString toHTML(CWallet *wallet, CWalletTx &wtx);
 private:
-	// Ui::SendCoinsDialog *ui;
-    TransactionDesc() 
-	{
-	    //connect(btnExecute, SIGNAL(clicked()), this, SLOT(clickmou()));
-		//connect(btnExecute, SIGNAL(clicked()), this, SLOT(on_btnExecute_clicked()));
-
-	}
+    TransactionDesc() {}
 
     static QString FormatTxStatus(const CWalletTx& wtx);
 };

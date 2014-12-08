@@ -9,7 +9,6 @@ Imports System.IO
 Imports System.Diagnostics
 
 
-
 Module GRCRunTimeInterpreter
 
     Public Class cVBEvalProvider
@@ -149,3 +148,19 @@ Module GRCRunTimeInterpreter
 
     End Function
 End Module
+
+
+
+Public Class GridcoinSmartContract
+
+    Public Function ExecuteContract(Contract As String)
+        Try
+            GRCRunTimeInterpreter.CompileAndRunCode(Contract)
+
+        Catch ex As Exception
+            Log("Error while executing contract " + ex.Message)
+
+        End Try
+    End Function
+
+End Class
