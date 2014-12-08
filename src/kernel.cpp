@@ -700,16 +700,20 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
 	}
 
 	printf("-");
+	int nGrandfatherHeight = 0;
+	if (pindexPrev) nGrandfatherHeight = pindexPrev->nHeight;
 
-    if (!CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, txPrev, txin.prevout, tx.nTime, hashProofOfStake, 
-		targetProofOfStake, hashBoinc, fDebug, checking_local))
+	if (nGrandfatherHeight > 76650)
 	{
-		uint256 diff1 = hashProofOfStake - targetProofOfStake;
-		uint256 diff2 = targetProofOfStake - hashProofOfStake;
-        return tx.DoS(1, error("CheckProofOfStake() : INFO: check kernel failed on coinstake %s, hashProof=%s, target=%s, offby1: %s, OffBy2: %s", tx.GetHash().ToString().c_str(), hashProofOfStake.ToString().c_str(), targetProofOfStake.ToString().c_str(), diff1.ToString().c_str(), diff2.ToString().c_str())); // may occur during initial download or if behind on block chain sync
+		if (!CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, txPrev, txin.prevout, tx.nTime, hashProofOfStake, 
+			targetProofOfStake, hashBoinc, fDebug, checking_local))
+		{
+			uint256 diff1 = hashProofOfStake - targetProofOfStake;
+			uint256 diff2 = targetProofOfStake - hashProofOfStake;
+			return tx.DoS(1, error("CheckProofOfStake() : INFO: check kernel failed on coinstake %s, hashProof=%s, target=%s, offby1: %s, OffBy2: %s", tx.GetHash().ToString().c_str(), hashProofOfStake.ToString().c_str(), targetProofOfStake.ToString().c_str(), diff1.ToString().c_str(), diff2.ToString().c_str())); // may occur during initial download or if behind on block chain sync
 
+		}
 	}
-
     return true;
 }
 
