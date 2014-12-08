@@ -107,7 +107,7 @@ Module GRCRunTimeInterpreter
 
     Private Function SampleRoutine() As StringBuilder
         Dim oRetSB As New StringBuilder
-        Dim sText As String = "July 30, 2006"
+        Dim sText As String = "December 7, 2014"
         oRetSB.Append("If Date.Parse(""" & sText & """) < System.DateTime.Now() Then " & vbCrLf)
         oRetSB.Append(" Return ""OLD"" " & vbCrLf)
         oRetSB.Append("Else " & vbCrLf)

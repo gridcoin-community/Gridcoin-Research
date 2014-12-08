@@ -21,6 +21,7 @@ MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
 extern int64_t GetRSAWeightByCPID(std::string cpid);
 
+extern double GetLastPaymentTimeByCPID(std::string cpid);
 
 extern double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 
@@ -313,7 +314,7 @@ int64_t GetRSAWeightByCPID(std::string cpid)
 						double mag_accuracy = UntrustedHost.Accuracy;
 						if (mag_accuracy > 0) 
 						{
-								owed = (UntrustedHost.owed*14*10) + UntrustedHost.Magnitude;
+								owed = (UntrustedHost.owed*14);
 						}
 			}
 			else
@@ -333,6 +334,40 @@ int64_t GetRSAWeightByCPID(std::string cpid)
 	}
 	int64_t RSA_WEIGHT = owed;
 	return RSA_WEIGHT;
+}
+
+
+double GetLastPaymentTimeByCPID(std::string cpid)
+{
+	double lpt = 0;
+	if (mvMagnitudes.size() > 0)
+	{
+			StructCPID UntrustedHost = GetStructCPID();
+			UntrustedHost = mvMagnitudes[cpid]; //Contains Consensus Magnitude
+			if (UntrustedHost.initialized)
+			{
+						double mag_accuracy = UntrustedHost.Accuracy;
+						if (mag_accuracy > 0) 
+						{
+								lpt = UntrustedHost.LastPaymentTime;
+						}
+			}
+			else
+			{
+				if (cpid.length() > 5 && cpid != "INVESTOR")
+				{
+						lpt = 0;
+				}
+			}
+	}
+	else
+	{
+		if (cpid.length() > 5 && cpid != "INVESTOR")
+		{
+				lpt=0;
+		}
+	}
+	return lpt;
 }
 
 int64_t GetRSAWeightByBlock(MiningCPID boincblock)
@@ -415,13 +450,6 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	RSA_WEIGHT = GetRSAWeightByBlock(boincblock);
 	if (checking_local) msMiningErrors2 = "RRSA: " + RoundToString(RSA_WEIGHT,0);
 
-	if (RSA_WEIGHT > 0) if (!IsCPIDValidv2(boincblock)) 
-	{
-		printf("Check stake kernelhash: CPID Invalid: RSA Weight = 0");
-		if (checking_local) msMiningErrors2="CPID_INVALID";
-	}
-	if (fDebug) printf("RSA_WEIGHT %f; ",(double)RSA_WEIGHT);
-
 	//WEIGHT MODIFICATION SECTION 2: Newbie stake allowance (11-13-2014)
 	//This is primarily to allow a newbie researcher to get started with a low balance.
 	//CBigNum bnCoinDayWeight = CBigNum(nValueIn + (5*COIN) ) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
@@ -439,13 +467,33 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	CBigNum bnCoinDayWeight = 0;
 	if (checking_local)
 	{
-		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN*1000000)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
+		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
 	}
 	else
 	{
-		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN*1000000)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
+		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
 	}
 	
+	double coin_age = GetAdjustedTime() - (double)txPrev.nTime;
+	double payment_age = GetAdjustedTime() - boincblock.LastPaymentTime;
+	if (boincblock.LastPaymentTime > GetAdjustedTime()+15) payment_age=0;  //Do not allow future timestamps
+
+	if (coin_age < 0) coin_age = 0;
+	if ((payment_age > 60*60) && boincblock.Magnitude > 1 && boincblock.cpid != "INVESTOR" && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT*60) && RSA_WEIGHT > 10)
+	{
+		//Coins are older than RSA balance in minutes
+		oNC=1;
+	}
+	if (fDebug) printf("LPT %f, Coin age %f, NC %f, RSA %f, Mag %f; ",payment_age,coin_age,(double)oNC,(double)RSA_WEIGHT,(double)boincblock.Magnitude);
+
+	if (RSA_WEIGHT > 0) if (!IsCPIDValidv2(boincblock)) 
+	{
+		printf("Check stake kernelhash: CPID Invalid: RSA Weight = 0");
+		oNC=0;
+		if (checking_local) msMiningErrors2="CPID_INVALID";
+	}
+	if (fDebug) printf("RSA_WEIGHT %f; ",(double)RSA_WEIGHT);
+
     targetProofOfStake = (bnCoinDayWeight * bnTargetPerCoinDay).getuint256();
 
     // Calculate hash

@@ -84,6 +84,20 @@ static bool ThreadSafeAskFee(int64_t nFeeRequired, const std::string& strCaption
     return payFee;
 }
 
+
+static bool ThreadSafeAskQuestion(std::string strCaption, std::string Body)
+{
+    if(!guiref) return false;
+    bool result = false;
+    QMetaObject::invokeMethod(guiref, "askQuestion", GUIUtil::blockingGUIThreadConnection(),
+                               Q_ARG(std::string, strCaption), Q_ARG(std::string, Body),
+                               Q_ARG(bool*, &result));
+    return result;
+}
+
+
+
+
 static void ThreadSafeHandleURI(const std::string& strURI)
 {
     if(!guiref)
@@ -207,6 +221,8 @@ int main(int argc, char *argv[])
     // Subscribe to global signals from core
     uiInterface.ThreadSafeMessageBox.connect(ThreadSafeMessageBox);
     uiInterface.ThreadSafeAskFee.connect(ThreadSafeAskFee);
+	uiInterface.ThreadSafeAskQuestion.connect(ThreadSafeAskQuestion);
+
     uiInterface.ThreadSafeHandleURI.connect(ThreadSafeHandleURI);
     uiInterface.InitMessage.connect(InitMessage);
     uiInterface.QueueShutdown.connect(QueueShutdown);

@@ -1629,7 +1629,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
         else
         {
             int64_t nTimeWeight = GetWeight((int64_t)pcoin.first->nTime, nCurrentTime);
-            CBigNum bnWeight = CBigNum(pcoin.first->vout[pcoin.second].nValue + (RSA_WEIGHT*COIN*1000000)) * nTimeWeight / COIN / (24 * 60 * 60);
+            CBigNum bnWeight = CBigNum(pcoin.first->vout[pcoin.second].nValue + (RSA_WEIGHT*COIN)) * nTimeWeight / COIN / (24 * 60 * 60);
 
             // Weight is greater than zero
             if (nTimeWeight > 0)
@@ -1643,7 +1643,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	//HALFORD: (Blended Stake Weight includes RSA_WEIGHT):
 	//WEIGHT SECTION 1: When a new CPID enters the ecosystem
 	//int64_t NetworkWeight = GetPoSKernelPS2();
-	nWeight += RSA_WEIGHT*10*COIN;
+	nWeight += RSA_WEIGHT*COIN;
 	return true;
 }
 

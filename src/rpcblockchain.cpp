@@ -471,6 +471,8 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("Magnitude", bb.Magnitude));
 	result.push_back(Pair("BoincHash",block.vtx[0].hashBoinc));
 	result.push_back(Pair("RSAWeight",bb.RSAWeight));
+	result.push_back(Pair("LastPaymentTime",bb.LastPaymentTime));
+
 	result.push_back(Pair("GRCAddress",bb.GRCAddress));
 	std::string skein2 = aes_complex_hash(blockhash);
 	//	result.push_back(Pair("AES512Valid",iav));

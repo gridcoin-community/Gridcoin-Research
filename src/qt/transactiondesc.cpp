@@ -8,8 +8,11 @@
 #include "txdb.h"
 #include "ui_interface.h"
 #include "base58.h"
+#include "bitcoingui.h"
 
-
+#include <QInputDialog>
+#include <QPushButton>
+#include <QMessageBox>
 
 
 #include <string>
@@ -17,12 +20,59 @@
 
 std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, double& out_rac);
 std::string RoundToString(double d, int place);
-
 std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, int& out_rac);
+void ExecuteCode();
+std::string hashBoinc = "";
+extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
+
+
+
+/*
+TransactionDesc::TransactionDesc(QWidget *parent) :
+    QDialog(parent),
+    ui(new Ui::TransactionDesc),
+    model(0)
+{
+	//    ui->setupUi(this);
+   
+}
+
+*/
+
+
+
+
+
+
+QString ToQString(std::string s)
+{
+	QString str1 = QString::fromUtf8(s.c_str());
+	return str1;
+}
+
+
+void TransactionDesc::on_btnExecute_clicked()
+{
+    printf("Executing code... %s",hashBoinc.c_str());
+	std::string code = ExtractXML(hashBoinc,"<CODE>","</CODE>");
+	std::string narr2 = "Are you sure you want to execute this smart contract: " + code;
+	//bool result = askQuestion("Confirm Smart Contract Execution",narr2);
+	bool result = false;
+    result = uiInterface.ThreadSafeAskQuestion("Confirm Smart Contract Execution",narr2);
+	//QMessageBox::StandardButton retval = QMessageBox::question(uiInterface, tr("Confirm transaction fee"), narr1,         QMessageBox::Yes|QMessageBox::Cancel, QMessageBox::Yes);
+	if (result)
+    {
+		ExecuteCode();
+    }
+
+
+}
 
 QString TransactionDesc::FormatTxStatus(const CWalletTx& wtx)
 {
     AssertLockHeld(cs_main);
+	//connect(btnExecute, SIGNAL(clicked()), this, SLOT(on_btnExecute_clicked()));
+
     if (!IsFinalTx(wtx, nBestHeight + 1))
     {
         if (wtx.nLockTime < LOCKTIME_THRESHOLD)
@@ -71,9 +121,14 @@ std::string PubKeyToGRCAddress(const CScript& scriptPubKey)
 
 
 
-QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
+QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx,  std::string type)
 {
+
+	//	walletModel(parent);
+
     QString strHTML;
+	//    connect(walletModel->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
+	
 
     LOCK2(cs_main, wallet->cs_wallet);
     strHTML.reserve(4000);
@@ -295,6 +350,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
         CTxDB txdb("r"); // To fetch source txouts
 
 		strHTML += "<br><b>Notes: " + QString::fromStdString(wtx.hashBoinc) + "</b>";
+		hashBoinc += wtx.hashBoinc;
 
         strHTML += "<br><b>" + tr("Inputs") + ":</b>";
         strHTML += "<ul>";

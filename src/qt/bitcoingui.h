@@ -58,6 +58,7 @@ public:
     */
     void setWalletModel(WalletModel *walletModel);
 
+	
 protected:
     void changeEvent(QEvent *e);
     void closeEvent(QCloseEvent *event);
@@ -161,8 +162,12 @@ public slots:
       @param[out] payFee            true to pay the fee, false to not pay the fee
     */
     void askFee(qint64 nFeeRequired, bool *payFee);
+	
+	void askQuestion(std::string caption, std::string body, bool *result);
+
 	void NewUserWizard();
     void handleURI(QString strURI);
+
 
 private slots:
     /** Switch to overview (home) page */

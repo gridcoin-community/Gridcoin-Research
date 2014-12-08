@@ -23,6 +23,8 @@ extern volatile bool bForceUpdate;
 extern volatile bool bExecuteCode;
 extern volatile bool bAddressUser;
 extern volatile bool bCheckedForUpgrade;
+extern volatile bool bCheckedForUpgradeLive;
+
 extern volatile bool bGlobalcomInitialized;
 
 
@@ -209,7 +211,8 @@ struct MiningEntry {
 		double Accuracy;
 		double ConsensusMagnitude;
 		double RSAWeight;
-	
+		double LastPaymentTime;
+
 	};
 
 	

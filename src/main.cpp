@@ -57,6 +57,7 @@ int64_t nLastTallied = 0;
 int64_t nCPIDsLoaded = 0;
 
 extern double GetBlockDifficulty(unsigned int nBits);
+double GetLastPaymentTimeByCPID(std::string cpid);
 
 extern double coalesce(double mag1, double mag2);
 extern bool AmIGeneratingBackToBackBlocks();
@@ -215,6 +216,8 @@ volatile bool bForceUpdate = false;
 volatile bool bExecuteCode = false;
 volatile bool bAddressUser = false;
 volatile bool bCheckedForUpgrade = false;
+volatile bool bCheckedForUpgradeLive = false;
+
 volatile bool bGlobalcomInitialized = false;
 
 extern void PobSleep(int milliseconds);
@@ -281,6 +284,7 @@ extern std::string ToOfficialName(std::string proj);
 extern bool LessVerbose(int iMax1000);
 extern bool GetBlockNew(uint256 blockhash, int& out_height, CBlock& blk, bool bForceDiskRead);
 extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
+
 extern void ShutdownGridcoinMiner();
 extern bool OutOfSync();
 extern MiningCPID GetNextProject();
@@ -816,6 +820,7 @@ MiningCPID GetNextProject()
 								//Reserved for GRC Speech Synthesis
 								msMiningErrors = "Boinc Mining";
 								GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
+								GlobalCPUMiningCPID.LastPaymentTime = GetLastPaymentTimeByCPID(GlobalCPUMiningCPID.cpid);
 								return GlobalCPUMiningCPID;
 							}
 						
@@ -847,6 +852,7 @@ MiningCPID GetNextProject()
 		GlobalCPUMiningCPID.Magnitude = 0;
         GlobalCPUMiningCPID.clientversion = "";
 		GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
+		GlobalCPUMiningCPID.LastPaymentTime = GetLastPaymentTimeByCPID(GlobalCPUMiningCPID.cpid);
 		mdMiningNetworkRAC = 0;
 	  	}
 		catch (std::exception& e)
@@ -1966,7 +1972,6 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 		}
 		//End of Coarse Payment Rule
 
-		
 		return owed * COIN;	
 }
 
@@ -3738,7 +3743,7 @@ void GridcoinServices()
 
 	if (TimerMain("check_for_autoupgrade",90))
 	{
-		bCheckedForUpgrade=false;
+		bCheckedForUpgradeLive = true;
 	}
 
 	//Dont do this on headless-SePulcher 12-4-2014 (Halford)
@@ -3749,8 +3754,9 @@ void GridcoinServices()
     #endif
 
 	#if defined(WIN32) && defined(QT_GUI)
-	if (bCheckedForUpgrade == false && !fTestNet && bProjectsInitialized && bGlobalcomInitialized)
+	if (bCheckedForUpgradeLive == true && !fTestNet && bProjectsInitialized && bGlobalcomInitialized)
 	{
+		bCheckedForUpgradeLive=false;
 		CheckForUpgrade();
 	}
 	#endif
@@ -5155,15 +5161,24 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 		//Pallas 12-6-2014
 
-	
-		if (GetArgument("suppressban","false") != "true")
+	    try
 		{
-			if (pfrom->nStartingHeight < 1000) 
+			if (GetArgument("autoban","false") == "true")
 			{
-				printf("Node with low height");
-				pfrom->Misbehaving(1);
-				return false;
+				if (pfrom->nStartingHeight)
+				{
+				if (pfrom->nStartingHeight < 1000) 
+				{
+					printf("Node with low height");
+					pfrom->Misbehaving(1);
+					return false;
+				}
+				}
 			}
+		}
+		catch(...)
+		{
+
 		}
 
 		
@@ -6137,7 +6152,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 					+ delim + mcpid.enccpid 
 					+ delim + mcpid.encaes + delim + RoundToString(mcpid.nonce,0) + delim + RoundToString(mcpid.NetworkRAC,0) + delim + version 
 					+ delim + mcpid.VouchedCPID + delim 
-					+ "0" + delim + RoundToString(mcpid.RSAWeight,0) 
+					+ RoundToString(mcpid.LastPaymentTime,0) + delim + RoundToString(mcpid.RSAWeight,0) 
 					+ delim + mcpid.cpidv2
 					+ delim + RoundToString(mcpid.Magnitude,0)
 					+ delim + mcpid.GRCAddress + delim + mcpid.lastblockhash;
@@ -6197,7 +6212,7 @@ MiningCPID DeserializeBoincBlock(std::string block)
 		}
 		if (s.size() > 12)
 		{
-			//surrogate = cdbl(s[12],0);
+			surrogate.LastPaymentTime = cdbl(s[12],0);
 		}
 		if (s.size() > 13)
 		{
@@ -7089,6 +7104,7 @@ MiningCPID GetMiningCPID()
 	mc.Accuracy = 0;
 	mc.ConsensusMagnitude = 0;
 	mc.RSAWeight = 0;
+	mc.LastPaymentTime=0;
 	return mc;
 }
 

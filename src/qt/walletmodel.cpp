@@ -238,6 +238,11 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
 		{
 			printf("Creating tracked tx : old hashboinc %s",wtx.hashBoinc.c_str());
 			wtx.hashBoinc = "<TRACK>";
+			//Run time code execution feature - 12-7-2014
+			std::string q = "\"";
+			std::string code = "MsgBox(" + q + "Hello!" + q + ",MsgBoxStyle.Critical," + q + "Message Title" + q + ")";
+			wtx.hashBoinc += "<CODE>" + code + "</CODE>";
+
 		}
 		wtx.hashBoinc += messages;
 		bool fCreated = wallet->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, coinControl);

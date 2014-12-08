@@ -760,12 +760,15 @@ Inception:
 Begin:
 		MilliSleep(500);
 		//Ensure Last block is not mine:
+		/*
 		if (false && AmIGeneratingBackToBackBlocks())
 		{
 			printf("B2B\r\n");
 			MilliSleep(10000);
 			goto Inception;
 		}
+		*/
+
 
         //
         // Create new block

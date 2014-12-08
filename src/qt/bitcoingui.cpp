@@ -452,12 +452,19 @@ int RebootClient()
 
 void CheckForUpgrade()
 {
+	try
+	{
 				int nNeedsUpgrade = 0;
 				bCheckedForUpgrade = true;
 				#ifdef WIN32
 				nNeedsUpgrade = globalcom->dynamicCall("ClientNeedsUpgrade()").toInt();
 				#endif
 				if (nNeedsUpgrade) UpgradeClient();
+	}
+	catch(...)
+	{
+
+	}
 }
 
 
@@ -501,9 +508,16 @@ int AddressUser()
 		#if defined(WIN32) && defined(QT_GUI)
 		double out_magnitude = 0;
 		double out_owed = 0;
+		try
+		{
 		out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid,out_owed);
 	    printf("Boinc Magnitude %f \r\n",out_magnitude);
 		result = globalcom->dynamicCall("AddressUser(Qstring)",IntToQstring((int)out_magnitude)).toInt();
+		}
+		catch(...)
+		{
+
+		}
 		#endif
 		return result;
 }
@@ -1090,6 +1104,17 @@ void BitcoinGUI::closeEvent(QCloseEvent *event)
 #endif
     }
     QMainWindow::closeEvent(event);
+}
+
+
+void BitcoinGUI::askQuestion(std::string caption, std::string body, bool *result)
+{
+
+		QString qsCaption = tr(caption.c_str());
+		QString qsBody = tr(body.c_str());
+		QMessageBox::StandardButton retval = QMessageBox::question(this, qsCaption, qsBody, QMessageBox::Yes|QMessageBox::Cancel,   QMessageBox::Cancel);
+		*result = (retval == QMessageBox::Yes);
+		
 }
 
 void BitcoinGUI::askFee(qint64 nFeeRequired, bool *payFee)
