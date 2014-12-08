@@ -220,9 +220,9 @@ Public Class frmSQL
 
     Private Sub tSync_Tick(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles tSync.Tick
       
-            lblSync.Visible = True
-            pbSync.Visible = True
-            SetPb(pbSync, nBestBlock, mlSqlBestBlock)
+        ' lblSync.Visible = True
+        ' pbSync.Visible = True
+        ' SetPb(pbSync, nBestBlock, mlSqlBestBlock)
 
     End Sub
     Private Function SetPb(ByVal pb As ProgressBar, ByVal valMax As Long, ByVal valActual As Long)

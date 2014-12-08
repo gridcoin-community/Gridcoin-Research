@@ -44,6 +44,33 @@ QString TransactionDesc::FormatTxStatus(const CWalletTx& wtx)
     }
 }
 
+
+
+
+std::string PubKeyToGRCAddress(const CScript& scriptPubKey)
+{
+    txnouttype type;
+    vector<CTxDestination> addresses;
+    int nRequired;
+
+    if (!ExtractDestinations(scriptPubKey, type, addresses, nRequired))
+    {
+        return "";
+    }
+
+    //Array a;
+	std::string grcaddress = "";
+    BOOST_FOREACH(const CTxDestination& addr, addresses)
+	{
+		grcaddress = CBitcoinAddress(addr).ToString();
+	}
+	return grcaddress;
+}
+
+
+
+
+
 QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
 {
     QString strHTML;
@@ -250,11 +277,11 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
 	}
 
     //
-    // Debug view
+    // Debug view 12-7-2014 - Halford
     //
     if (fDebug || true)
     {
-        strHTML += "<hr><br><color=blue><bold>" + tr("Information") + "</bold><br><br><color=green>";
+        strHTML += "<hr><br><color=blue><bold><span color=blue>" + tr("Information") + "</span></bold><br><br><color=green>";
         BOOST_FOREACH(const CTxIn& txin, wtx.vin)
             if(wallet->IsMine(txin))
                 strHTML += "<b>" + tr("Debit") + ":</b> " + BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, -wallet->GetDebit(txin)) + "<br>";
@@ -266,6 +293,8 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
         strHTML += GUIUtil::HtmlEscape(wtx.ToString(), true);
 
         CTxDB txdb("r"); // To fetch source txouts
+
+		strHTML += "<br><b>Notes: " + QString::fromStdString(wtx.hashBoinc) + "</b>";
 
         strHTML += "<br><b>" + tr("Inputs") + ":</b>";
         strHTML += "<ul>";
@@ -280,7 +309,13 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
                 if (prevout.n < prev.vout.size())
                 {
                     strHTML += "<li>";
+					//					const CTxOut& txDesc = vout;
+
+					
                     const CTxOut &vout = prev.vout[prevout.n];
+					std::string grcFrom = PubKeyToGRCAddress(vout.scriptPubKey);
+					strHTML=strHTML + " " + QString::fromStdString(grcFrom) + " ";
+
                     CTxDestination address;
                     if (ExtractDestination(vout.scriptPubKey, address))
                     {

@@ -28,6 +28,8 @@ public:
     QString address;
     QString label;
     qint64 amount;
+	bool CoinTracking;
+	QString Message;
 };
 
 /** Interface to Bitcoin wallet from Qt view code. */

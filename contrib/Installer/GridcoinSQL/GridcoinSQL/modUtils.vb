@@ -19,6 +19,18 @@ Public Module utils
 
     End Sub
 
+    Public Function ExtractXML(sData As String, sStartKey As String, sEndKey As String)
+        Dim iPos1 As Integer = InStr(1, sData, sStartKey)
+        iPos1 = iPos1 + Len(sStartKey)
+        Dim iPos2 As Integer = InStr(iPos1, sData, sEndKey)
+        iPos2 = iPos2
+        If iPos2 = 0 Then Return ""
+
+        Dim sOut As String = Mid(sData, iPos1, iPos2 - iPos1)
+        Return sOut
+
+    End Function
+
     Public Function GetGridFolder() As String
         Dim sTemp As String
         sTemp = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\gridcoinresearch\"

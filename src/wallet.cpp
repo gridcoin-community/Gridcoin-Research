@@ -539,9 +539,13 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
             fUpdated |= wtx.UpdateSpent(wtxIn.vfSpent);
         }
 
-        //// debug print
-        printf("AddToWallet %s  %s%s\n", wtxIn.GetHash().ToString().substr(0,10).c_str(), (fInsertedNew ? "new" : ""), (fUpdated ? "update" : ""));
+        //// debug print 12-7-2014 (received coins)
+        printf("AddToWallet %s  %s%s\n", wtxIn.GetHash().ToString().c_str(), (fInsertedNew ? "new" : ""), (fUpdated ? "update" : ""));
+		if (fInsertedNew)
+		{
+			// If this is a tracked tx, update via SQL:
 
+		}
         // Write to disk
         if (fInsertedNew || fUpdated)
             if (!wtx.WriteToDisk())
@@ -1698,7 +1702,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
     if (setCoins.empty())
 	{
-		printf("Coins empty.");
+		if (fDebug) printf("Coins empty.");
         return false;
 	}
 

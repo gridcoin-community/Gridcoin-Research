@@ -12,6 +12,12 @@
 #include <QSet>
 #include <QTimer>
 
+
+std::string RoundToString(double d, int place);
+
+std::string YesNo(bool bin);
+
+
 WalletModel::WalletModel(CWallet *wallet, OptionsModel *optionsModel, QObject *parent) :
     QObject(parent), wallet(wallet), optionsModel(optionsModel), addressTableModel(0),
     transactionTableModel(0),
@@ -149,6 +155,11 @@ double dblFromAmount(int64_t amount)
     return (double)amount / (double)COIN;
 }
 
+std::string FromQString(QString qs)
+{
+	std::string sOut = qs.toUtf8().constData();
+	return sOut;
+}
 
 WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipient> &recipients, const CCoinControl *coinControl)
 {
@@ -199,22 +210,37 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
         return SendCoinsReturn(AmountWithFeeExceedsBalance, nTransactionFee);
     }
 
+	std::string txid = "";
+	std::string messages = "";
+	std::string hashBoinc = "";
+
     {
         LOCK2(cs_main, wallet->cs_wallet);
 
         // Sendmany
         std::vector<std::pair<CScript, int64_t> > vecSend;
+		bool coinTracking = false;
+
         foreach(const SendCoinsRecipient &rcp, recipients)
         {
             CScript scriptPubKey;
             scriptPubKey.SetDestination(CBitcoinAddress(rcp.address.toStdString()).Get());
             vecSend.push_back(make_pair(scriptPubKey, rcp.amount));
+			if (rcp.CoinTracking) coinTracking=true;
+			messages += FromQString(rcp.Message);
+        
         }
 
         CWalletTx wtx;
         CReserveKey keyChange(wallet);
         int64_t nFeeRequired = 0;
-        bool fCreated = wallet->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, coinControl);
+		if (coinTracking)
+		{
+			printf("Creating tracked tx : old hashboinc %s",wtx.hashBoinc.c_str());
+			wtx.hashBoinc = "<TRACK>";
+		}
+		wtx.hashBoinc += messages;
+		bool fCreated = wallet->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, coinControl);
 
         if(!fCreated)
         {
@@ -225,7 +251,12 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
             return TransactionCreationFailed;
         }
        
-
+		if (coinTracking)
+		{
+			printf("Tracking hashBoinc %s",wtx.hashBoinc.c_str());
+		}
+		
+		
 		std::string samt = FormatMoney(wtx.vout[0].nValue);
 		double dblAmt = dblFromAmount(wtx.vout[0].nValue);
 		/* Reserved for smart contracts.
@@ -248,6 +279,8 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
             return TransactionCommitFailed;
         }
         hex = QString::fromStdString(wtx.GetHash().GetHex());
+		txid = wtx.GetHash().GetHex();
+		hashBoinc = wtx.hashBoinc;
     }
 
     // Add addresses / update labels that we've sent to to the address book
@@ -267,6 +300,19 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
                 wallet->SetAddressBookName(dest, strLabel);
             }
         }
+		//12-7-2014 :: R Halford :: Implement SQL Coin Confirm
+		std::string sFrom = DefaultWalletAddress();
+		//wtxIn.GetHash().ToString().c_str()
+		if (txid.length() > 3 && rcp.CoinTracking)
+		{
+			//If Coin tracking enabled:
+			std::string Narr = "Sending " + RoundToString(rcp.amount,4) + "GRC from " + sFrom + " to " + strAddress + " with tracking " 
+				+ YesNo(rcp.CoinTracking) + " for TXID " + txid + " with hashBoinc " 
+				+ hashBoinc + ".";
+			printf("%s",Narr.c_str());
+		}
+
+
     }
 
     return SendCoinsReturn(OK, 0, hex);

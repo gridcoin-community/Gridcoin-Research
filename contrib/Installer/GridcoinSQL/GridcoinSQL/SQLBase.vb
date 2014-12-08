@@ -226,7 +226,7 @@ Public Class SQLBase
     Public Sub AddBaseTables()
         'Ensure System, Consensus, Nodes exist:
 
-        DropBaseTables()
+        'DropBaseTables()
 
         CreateTable("System", "sCategory,sKey,sValue", "varchar(100),varchar(100),varchar(100)")
 
@@ -235,7 +235,7 @@ Public Class SQLBase
         CreateTable("Organization", "OrgId,Name,City,State", "uniqueidentifier,varchar(100),varchar(100),varchar(50)")
         CreateTable("Confirm", "GRCFrom,GRCTo,txid,amount,confirmed", "varchar(100),varchar(100),varchar(100),money,numeric(1,0)")
         'addthe Gridcoin Org
-        InsertRecord("Organization", "OrgId,Name,City,State", "'F0FB9E21-0EDE-4AD4-8F88-EFE3BB917481','Gridcoin','Phoenix','AZ'")
+        ' InsertRecord("Organization", "OrgId,Name,City,State", "'F0FB9E21-0EDE-4AD4-8F88-EFE3BB917481','Gridcoin','Phoenix','AZ'")
 
     End Sub
     Public Sub DropBaseTables()
@@ -302,6 +302,12 @@ Public Class SQLBase
         Return sOut
     End Function
     Public Function SqlToData(sSql As String)
+        sSql = Replace(sSql, "<CR>", vbCr)
+
+        sSql = Replace(sSql, "<LF>", vbLf)
+
+        Try
+
         dr = Me.Read(sSql)
         ' If dr.HasRows = False Then Exit Function
         Dim sHeader As String
@@ -329,6 +335,13 @@ Public Class SQLBase
             sOut += sRow
         End While
         Return sOut
+
+        Catch ex As Exception
+            Return "<ERROR>" + ex.Message + "</ERROR>"
+
+
+
+        End Try
 
     End Function
 
@@ -569,7 +582,7 @@ Public Class MyWebClient
     Inherits System.Net.WebClient
     Protected Overrides Function GetWebRequest(ByVal uri As Uri) As System.Net.WebRequest
         Dim w As System.Net.WebRequest = MyBase.GetWebRequest(uri)
-        w.Timeout = 7000
+        w.Timeout = 3000
         Return w
     End Function
 End Class

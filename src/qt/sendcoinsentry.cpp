@@ -167,7 +167,8 @@ SendCoinsRecipient SendCoinsEntry::getValue()
     rv.address = ui->payTo->text();
     rv.label = ui->addAsLabel->text();
     rv.amount = ui->payAmount->value();
-
+	rv.CoinTracking = ui->cbTrack->isChecked();
+	rv.Message = ui->txtMessage->text();
     return rv;
 }
 
@@ -186,6 +187,8 @@ void SendCoinsEntry::setValue(const SendCoinsRecipient &value)
     ui->payTo->setText(value.address);
     ui->addAsLabel->setText(value.label);
     ui->payAmount->setValue(value.amount);
+	ui->cbTrack->setChecked(value.CoinTracking);
+	ui->txtMessage->setText(value.Message);
 }
 
 bool SendCoinsEntry::isClear()

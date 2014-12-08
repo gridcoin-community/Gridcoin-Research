@@ -113,26 +113,42 @@ Public Class Sql
     End Function
     Public Function SQLQuery(sHost As String, sSQL As String) As String
         Dim sURL As String
-        sURL = "http://" + sHost + "/index.html?query=hi"
+        sURL = "http://" + sHost + "/index.html?query="
+        sSQL = Replace(sSQL, vbCr, "<CR>")
 
-        Dim wc As New MyWebClient
-
-        Using wc
-
-            'wc.Headers(HttpRequestHeader.ContentType) = "application/x-www-form-urlencoded"
-
-            wc.Headers.Add("ContentType:application/x-www-form-urlencoded")
-            wc.Headers.Add("Query:<QUERY>" + sSQL + "</QUERY>")
-
-            Dim result As String
-            'result = wc.UploadString(sURL, myParameters)
-            result = wc.DownloadString(sURL)
-
-            Return result
+        sSQL = Replace(sSQL, vbLf, "<LF>")
 
 
-        End Using
+        For x = 1 To 9
+            Try
 
+                Dim wc As New MyWebClient
+
+                Using wc
+
+                    'wc.Headers(HttpRequestHeader.ContentType) = "application/x-www-form-urlencoded"
+
+                    wc.Headers.Add("ContentType:application/x-www-form-urlencoded")
+
+                    wc.Headers.Add("Query:<QUERY>" + sSQL + "</QUERY>")
+
+                    Dim result As String
+                    'result = wc.UploadString(sURL, myParameters)
+                    result = wc.DownloadString(sURL)
+                    Dim sErr As String
+                    sErr = ExtractXML(result, "<ERROR>", "</ERROR>")
+                    If Len(sErr) > 0 Then MsgBox(sErr)
+
+                    Return result
+
+
+                End Using
+            Catch ex As Exception
+                If x = 9 Then Throw ex
+
+            End Try
+
+        Next
 
 
     End Function
@@ -177,7 +193,7 @@ Public Class Sql
                     ElseIf sType = "SYSTEM.DATETIME" Then
                         oValue = CDate(vRow(y))
                     ElseIf sType = "SYSTEM.DECIMAL" Then
-                        oValue = CDbl(vRow(y))
+                        oValue = CDbl("0" & vRow(y))
 
                     ElseIf sType = "SYSTEM.GUID" Then
                         oValue = Trim(vRow(y).ToString())
@@ -360,14 +376,6 @@ Public Class Sql
         Exec(mSql)
 
     End Sub
-
-
-
-
-
-
-
-
 
 
 

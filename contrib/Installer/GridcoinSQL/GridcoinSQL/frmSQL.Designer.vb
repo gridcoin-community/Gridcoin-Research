@@ -133,12 +133,12 @@ Partial Class frmSQL
         '
         'btnExec
         '
-        Me.btnExec.ForeColor = System.Drawing.Color.Lime
-        Me.btnExec.Location = New System.Drawing.Point(890, 5)
+        Me.btnExec.ForeColor = System.Drawing.Color.DarkGreen
+        Me.btnExec.Location = New System.Drawing.Point(548, 7)
         Me.btnExec.Name = "btnExec"
         Me.btnExec.Size = New System.Drawing.Size(76, 20)
         Me.btnExec.TabIndex = 3
-        Me.btnExec.Text = "Execute"
+        Me.btnExec.Text = "Execute (F5)"
         Me.btnExec.UseVisualStyleBackColor = True
         '
         'pbSync
@@ -147,10 +147,11 @@ Partial Class frmSQL
         Me.pbSync.Location = New System.Drawing.Point(74, 7)
         Me.pbSync.Maximum = 40000
         Me.pbSync.Name = "pbSync"
-        Me.pbSync.Size = New System.Drawing.Size(794, 12)
+        Me.pbSync.Size = New System.Drawing.Size(455, 12)
         Me.pbSync.Step = 1
         Me.pbSync.Style = System.Windows.Forms.ProgressBarStyle.Continuous
         Me.pbSync.TabIndex = 4
+        Me.pbSync.Visible = False
         '
         'lblSync
         '
@@ -161,6 +162,7 @@ Partial Class frmSQL
         Me.lblSync.Size = New System.Drawing.Size(34, 13)
         Me.lblSync.TabIndex = 5
         Me.lblSync.Text = "Sync:"
+        Me.lblSync.Visible = False
         '
         'frmSQL
         '
