@@ -473,19 +473,19 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	{
 		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
 	}
-	//12-8-2014
 	double nTime = max(pindexBest->GetMedianTimePast()+1, GetAdjustedTime());
-
 	double coin_age = nTime - (double)txPrev.nTime;
 	double payment_age = nTime - boincblock.LastPaymentTime;
-	if (boincblock.LastPaymentTime > GetAdjustedTime()+15) payment_age=0;  //Do not allow future timestamps
+	if (boincblock.LastPaymentTime > (GetAdjustedTime()+(60*60))) payment_age=0;  //Do not allow future timestamps
 
 	if (coin_age < 0) coin_age = 0;
-	if ((payment_age > 45*60) && boincblock.Magnitude > 1 && boincblock.cpid != "INVESTOR" && (coin_age > 3*60*60) && (coin_age > RSA_WEIGHT*60) && RSA_WEIGHT > 5)
+	if ((payment_age > 60*60) && boincblock.Magnitude > 1 && boincblock.cpid != "INVESTOR" && (coin_age > 3*60*60) && (coin_age > RSA_WEIGHT) && RSA_WEIGHT > 5)
 	{
-		//Coins are older than RSA balance in minutes
+		//Coins are older than RSA balance
 		oNC=1;
 	}
+
+	
 	if (fDebug) printf("LPT %f, Coin age %f, NC %f, RSA %f, Mag %f; ",payment_age,coin_age,(double)oNC,(double)RSA_WEIGHT,(double)boincblock.Magnitude);
 
 	if (RSA_WEIGHT > 0) if (!IsCPIDValidv2(boincblock)) 
