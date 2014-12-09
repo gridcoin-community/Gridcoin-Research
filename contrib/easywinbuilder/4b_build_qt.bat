@@ -5,6 +5,12 @@
 :continue
 @bash patch_files.sh
 @cd %ROOTPATH%
+
+
+
+copy A:\deps-master\extras\gridcoin_good.h src\gridcoin.h
+
+
 @echo building qt - qmake...
 @set COINNAME=Gridcoin
 
@@ -31,6 +37,11 @@
 mingw32-make -f Makefile.Release
 @if errorlevel 1 goto continue
 @cd %ROOTPATH%
+
+
+copy A:\deps-master\extras\gridcoin_bad.h a:\gridcoin-research\src\gridcoin.h
+
+
 
 @echo !!!!!!! %COINNAME%-qt DONE: Find %COINNAME%-qt.exe in ./release :)
 :continue

@@ -1,5 +1,5 @@
 
-static const std::string BoincHashMerkleRootNew = "PUrMgXr9kgcqiuehEJ2Tq1dovW";
+static const std::string BoincHashMerkleRootNew = "1234567890";
 static const std::string GetBlocksCommand = "gridblocks";
 
 

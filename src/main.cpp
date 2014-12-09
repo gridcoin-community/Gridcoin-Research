@@ -36,6 +36,7 @@
 
 using namespace std;
 using namespace boost;
+std::string DefaultBoincHashArgs();
 
 //
 // Global state
@@ -5135,6 +5136,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (pfrom->nVersion != 0)
         {
             pfrom->Misbehaving(1);
+		    pfrom->fDisconnect = true;
             return false;
         }
 
@@ -5142,7 +5144,24 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         CAddress addrMe;
         CAddress addrFrom;
         uint64_t nNonce = 1;
-        vRecv >> pfrom->nVersion >> pfrom->nServices >> nTime >> addrMe;
+
+		vRecv >> pfrom->nVersion >> pfrom->boinchashnonce >> pfrom->boinchashpw >> pfrom->nServices >> nTime >> addrMe;
+		
+		std::string sdefaultboinchashargs = DefaultBoincHashArgs();
+	 	std::string pw1 = RetrieveMd5(pfrom->boinchashnonce+","+sdefaultboinchashargs);
+	
+		bool unauthorized = false;
+		if (sdefaultboinchashargs.length() < 5 || pw1 != pfrom->boinchashpw) unauthorized=true;
+
+		
+		if (unauthorized)
+		{
+			printf("Disconnected unauthorized peer.         ");
+		    pfrom->fDisconnect = true;
+            return false;
+        }
+
+
         if (pfrom->nVersion < MIN_PEER_PROTO_VERSION)
         {
             // disconnect from peers older than this proto version
@@ -5159,6 +5178,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             vRecv >> addrFrom >> nNonce;
         if (!vRecv.empty())
             vRecv >> pfrom->strSubVer;
+
+		
         if (!vRecv.empty())
             vRecv >> pfrom->nStartingHeight;
 

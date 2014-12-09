@@ -37,7 +37,6 @@ extern std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache);
 
 
 
-
 extern void RestartGridcoin10();
 
 
@@ -967,6 +966,25 @@ void CNode::CloseSocketDisconnect()
     }
 }
 
+
+
+std::string DefaultBoincHashArgs()
+{
+	// (Gridcoin), add support for ProofOfBoinc Node Relay support:
+	if (cached_boinchash_args != "") return cached_boinchash_args;
+	std::string boinc1 = GetArg("-boinchash", "boinchashargs");
+    std::string boinc2 = BoincHashMerkleRootNew;
+	if (boinc1 != "boinchashargs")
+	{
+		cached_boinchash_args = boinc1;
+		return boinc1;
+	}
+	cached_boinchash_args = boinc2;
+	return boinc2;
+}
+
+
+
 void CNode::PushVersion()
 {
     /// when NTP implemented, change to just nTime = GetAdjustedTime()
@@ -975,7 +993,13 @@ void CNode::PushVersion()
     CAddress addrMe = GetLocalAddress(&addr);
     RAND_bytes((unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce));
     if (fDebug) printf("send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s\n", PROTOCOL_VERSION, nBestHeight, addrMe.ToString().c_str(), addrYou.ToString().c_str(), addr.ToString().c_str());
-    PushMessage("version", PROTOCOL_VERSION, nLocalServices, nTime, addrYou, addrMe,
+
+	std::string sboinchashargs = DefaultBoincHashArgs();
+	uint256 boincHashRandNonce = GetRandHash();
+	std::string nonce = boincHashRandNonce.GetHex();
+	std::string pw1 = RetrieveMd5(nonce+","+sboinchashargs);
+
+    PushMessage("version", PROTOCOL_VERSION, nonce, pw1, nLocalServices, nTime, addrYou, addrMe,
                 nLocalHostNonce, FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()), nBestHeight);
 }
 
