@@ -322,6 +322,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors = "";
  std::string    msMiningErrors2 = "";
  std::string    msMiningErrors3 = "";
+ std::string    msMiningErrors4 = "";
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
  std::string 	msGPUMiningCPID = "";
@@ -601,7 +602,7 @@ std::string GetGlobalStatus()
 			+ RoundToString(PORDiff,3) + "; Net Weight: " + RoundToString(GetPoSKernelPS2(),2)  
 			+ "<br>Boinc Weight: " +  sWeight + "; Status: " + msMiningErrors 
 			+ "<br>Magnitude: " + RoundToString(out_magnitude,3) + ";Project: " + msMiningProject
-			+ "<br>"  + msMiningErrors2 + " " + msMiningErrors3 +" " +  sBoost.str();
+			+ "<br>"  + msMiningErrors2 + " " + msMiningErrors3 +" " + msMiningErrors4 + " " + sBoost.str();
 
 		//The last line break is for Windows 8.1 Huge Toolbar
 		msGlobalStatus = status;
@@ -2990,7 +2991,9 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
     }
 
     printf("REORGANIZE: done\n");
-
+	//12-9-2014  - Halford - Reload network averages after a reorg since user now has orphans
+	TallyNetworkAverages(true);
+	printf("Finished Retally");		
     return true;
 }
 

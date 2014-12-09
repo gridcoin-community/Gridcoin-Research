@@ -360,7 +360,50 @@ Public Class SQLBase
         Return sLast
 
     End Function
-    Public Function InsertRecord(sTable As String, sFields As String, sValues As String) As Boolean
+    Public Function UpdateRecord(sTable As String, sFields As String, sValues As String, sWhereFields As String, sWhereValues As String) As String
+
+        Try
+            Dim sAddedby As String
+            Dim sUpdatedBy As String
+            sAddedby = "SYS" : sUpdatedBy = "SYS"
+            Dim sOrg As String
+            sOrg = "F0FB9E21-0EDE-4AD4-8F88-EFE3BB917481"
+            Dim sStandardFields As String
+            Dim vValues() As String
+            vValues = Split(sValues, ",")
+            Dim vFields() As String
+            vFields = Split(sFields, ",")
+            Dim sWhereValues As String = ""
+
+            Dim dHash As Double
+            Dim sSqlValues As String
+            Dim sId As String
+            Dim sFieldValues As String
+
+            For x = 0 To UBound(vValues)
+                sFieldValues += vFields(x) + "=" + vValues(x) + ","
+            Next
+            sFieldValues = Left(sFieldValues, Len(sFieldValues) - 1)
+            Dim vWhereValues() As String = Split(sWhereValues, ",")
+            Dim vWhereFields() As String = Split(sWhereFields, ",")
+            For x = 0 To UBound(vWhereValues)
+                sWhereValues += vWhereFields(x) + "=" + vWhereValues(x) + " AND "
+            Next
+            sWhereValues = Left(sWhereValues, Len(sWhereValues) - 5)
+
+            mSql = "UPDATE " + sTable + " SET " + sFieldValues + " WHERE " + sWhereValues
+            Exec(mSql)
+            Return ""
+        Catch ex As Exception
+            Return ex.Message
+
+        End Try
+
+    End Function
+    Public Function InsertRecord(sTable As String, sFields As String, sValues As String) As String
+
+        Try
+
         'Get the last hash inserted before this record
         Dim sLastHash As String = GetLastHash(sTable)
 
@@ -382,7 +425,7 @@ Public Class SQLBase
 
         Dim dHash As Double
         Dim sSqlValues As String
-        
+
         Dim sId As String
         sId = Guid.NewGuid().ToString()
         dHash += sId.ToString().GetHashCode
@@ -401,7 +444,12 @@ Public Class SQLBase
 
         mSql = "INSERT INTO " + sTable + "(" + sFields + "," + sStandardFields + ") values (" + sSqlValues + "," + sStandardValues + ")"
 
-        Exec(mSql)
+            Exec(mSql)
+            Return ""
+        Catch ex As Exception
+            Return ex.Message
+
+        End Try
 
     End Function
     Public Function GetConsensusDatePair()

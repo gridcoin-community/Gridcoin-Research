@@ -27,6 +27,7 @@ void ThreadTopUpKeyPool(void* parg);
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 bool AmIGeneratingBackToBackBlocks();
 
+int64_t GetRSAWeightByCPID(std::string cpid);
 
 std::string RoundToString(double d, int place);
 
@@ -421,6 +422,10 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 	    //miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pindexPrev->GetBlockHash());
 		miningcpid.cpidv2="";
 		miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
+		//12-9-2014 Verify RSA Weight is actually in the block
+		miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
+		msMiningErrors4 = "BRSA: " + RoundToString(miningcpid.RSAWeight,0);
+
 		std::string hashBoinc = SerializeBoincBlock(miningcpid);
 		//printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
 	    if (LessVerbose(10)) printf("Current hashboinc: %s\r\n",hashBoinc.c_str());

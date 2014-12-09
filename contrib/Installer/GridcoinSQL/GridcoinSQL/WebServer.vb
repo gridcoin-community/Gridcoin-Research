@@ -248,6 +248,7 @@ Public Class HTTPSession
 
         End Try
         Dim sData As String
+        Dim sInsert As String
 
         sData = oSql.TableToData(sTable, sStart, sEnd)
 
@@ -256,10 +257,39 @@ Public Class HTTPSession
 
     End Function
     Public Function GetHttpData(sSql As String)
+        'Main SQL Receiver
         Dim oSql As New SQLBase("gridcoinsql")
         Dim sData As String
+        Dim sInsert As String
+        sInsert = ExtractXML(sSql, "<INSERT>", "</INSERT>")
+        Dim sUpdate As String = ExtractXML(sSql, "<UPDATE>", "</UPDATE>")
 
-        If sSql = "SELECT * FROM INTERNALTABLES" Then Return oSql.GetInternalTables()
+        If Len(sInsert) > 0 Then
+            Dim sTable As String = ExtractXML(sInsert, "<TABLE>", "</TABLE>")
+            Dim sFields As String = ExtractXML(sInsert, "<FIELDS>", "</FIELDS>")
+            Dim sValues As String = ExtractXML(sInsert, "<VALUES>", "</VALUES>")
+            Dim sResult As String = oSql.InsertRecord(sTable, sFields, sValues)
+            Return sResult
+
+
+            Stop
+        ElseIf sSql = "SELECT * FROM INTERNALTABLES" Then
+            Return oSql.GetInternalTables()
+        ElseIf Len(sUpdate) > 0 Then
+            Dim sTable As String = ExtractXML(sUpdate, "<TABLE>", "</TABLE>")
+            Dim sFields As String = ExtractXML(sUpdate, "<FIELDS>", "</FIELDS>")
+            Dim sValues As String = ExtractXML(sUpdate, "<VALUES>", "</VALUES>")
+            Dim sWhereFields As String = ExtractXML(sUpdate, "<WHEREFIELDS>", "</WHEREFIELDS>")
+            Dim sWhereValues As String = ExtractXML(sUpdate, "<WHEREVALUES>", "</WHEREVALUES>")
+
+            Dim sResult As String = oSql.UpdateRecord(sTable, sFields, sValues, sWhereFields, sWhereValues)
+
+            Return sResult
+
+            '            sUpdate = "<UPDATE><TABLE>Confirm</TABLE><FIELDS>Confirmed</FIELDS><VALUES>'" + Trim(iStatus) + "'</VALUES><WHEREFIELDS>txid</WHEREFIELDS><WHEREVALUES>'" + sTXID + "'</WHEREVALUES></UPDATE>"
+
+        End If
+
 
 
         sData = oSql.SqlToData(sSql)

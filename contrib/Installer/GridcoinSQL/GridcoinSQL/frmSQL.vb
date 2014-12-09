@@ -78,7 +78,34 @@ Public Class frmSQL
         e.Graphics.FillRectangle(Drawing.Brushes.Black, e.Bounds)
         e.DrawText()
     End Sub
+    Public Function InsertConfirm(dAmt As Double, sFrom As String, sTo As String, sTXID As String) As String
+        Dim sInsert As String
+        sInsert = "<INSERT><TABLE>Confirm</TABLE><FIELDS>GRCFrom,GRCTo,txid,amount,Confirmed</FIELDS><VALUES>'" + Trim(sFrom) + "','" + Trim(sTo) + "','" + Trim(sTXID) + "','" + Trim(dAmt) + "','0'</VALUES></INSERT>"
+        Dim sErr As String
+        sErr = mData.ExecuteP2P(sInsert)
+        Return sErr
+    End Function
+    Public Function UpdateConfirm(sTXID As String, iStatus As Long) As String
+        Dim sUpdate As String
+        sUpdate = "<UPDATE><TABLE>Confirm</TABLE><FIELDS>Confirmed</FIELDS><VALUES>'" + Trim(iStatus) + "'</VALUES><WHEREFIELDS>txid</WHEREFIELDS><WHEREVALUES>'" + sTXID + "'</WHEREVALUES></UPDATE>"
+        Dim sErr As String
+        sErr = mData.ExecuteP2P(sUpdate)
+        Return sErr
+
+
+    End Function
+
     Private Sub btnExec_Click(sender As System.Object, e As System.EventArgs) Handles btnExec.Click
+
+        For x = 1 To 10
+            Dim sResult As String = InsertConfirm(100, "ee", "b", "abc123")
+            sResult = UpdateConfirm("abc123", "1")
+
+            Stop
+
+        Next
+       
+
         Dim dr As GridcoinReader
         mData.bThrowUIErrors = True
 
@@ -119,7 +146,7 @@ Public Class frmSQL
                 dgv.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.None
             Next
 
-            
+
             For y = 1 To dr.Rows
                 grr = dr.GetRow(y)
                 dgv.Rows.Add()
@@ -200,7 +227,7 @@ Public Class frmSQL
         Return sbManifest
 
     End Function
-    
+
     Private Sub Button1_Click(sender As System.Object, e As System.EventArgs)
         Dim s As New StringBuilder
         s = CreateManifest()
@@ -214,12 +241,12 @@ Public Class frmSQL
     End Sub
 
     Private Sub btnRefreshLeaderboard_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
-      
+
 
     End Sub
 
     Private Sub tSync_Tick(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles tSync.Tick
-      
+
         ' lblSync.Visible = True
         ' pbSync.Visible = True
         ' SetPb(pbSync, nBestBlock, mlSqlBestBlock)

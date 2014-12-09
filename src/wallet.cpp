@@ -539,7 +539,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
             fUpdated |= wtx.UpdateSpent(wtxIn.vfSpent);
         }
 
-        //// debug print 12-7-2014 (received coins)
+        //// debug print 12-8-2014 (received coins)
         printf("AddToWallet %s  %s%s\n", wtxIn.GetHash().ToString().c_str(), (fInsertedNew ? "new" : ""), (fUpdated ? "update" : ""));
 		if (fInsertedNew)
 		{
@@ -1564,8 +1564,8 @@ double MintLimiter()
 {
 	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
 	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-	if (PORDiff > 0  && PORDiff < 1) return 0;
-	if (PORDiff > 1  && PORDiff < 5)  return 1;
+	if (PORDiff > 0   && PORDiff < 1)  return 0;
+	if (PORDiff > 1   && PORDiff < 5)  return 1;
 	if (PORDiff >= 5  && PORDiff < 10) return 10;
 	if (PORDiff >= 10 && PORDiff < 50) return 20;
 	if (PORDiff >= 50) return 50;
@@ -1578,7 +1578,7 @@ double MintLimiterPOR()
 {
 	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
 	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-	if (PORDiff >= 10   && PORDiff < 20) return 0;
+	if (PORDiff >= 10   && PORDiff < 20)   return 0;
 	if (PORDiff >= 20   && PORDiff < 100)  return 20;
 	if (PORDiff >= 100  && PORDiff < 500)  return 50;
 	if (PORDiff >= 500) return 100;
@@ -1720,6 +1720,9 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		 miningcpid.cpidv2="";
 
 		 miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
+	     miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
+		 msMiningErrors4 = "BRSA: " + RoundToString(miningcpid.RSAWeight,0);
+
 		 // miningcpid.cpidv2 = CIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pblock->pprev->GetBlockHash());
 		 hashBoinc = SerializeBoincBlock(miningcpid);
        	 //printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());

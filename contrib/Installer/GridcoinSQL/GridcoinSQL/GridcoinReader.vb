@@ -153,6 +153,23 @@ Public Class Sql
 
     End Function
 
+    Public Function ExecuteP2P(sCommand As String) As String
+        Dim sHost As String
+        Dim sData As String = ""
+        For x = 1 To 9
+            Try
+                sHost = GetMasterNodeURL()
+                sData = SQLQuery(sHost, sCommand)
+                If sData = "" Then Return sData
+
+            Catch ex As Exception
+                Log(ex.Message)
+                'Throw ex
+                If x = 9 Then Return ex.Message
+            End Try
+        Next x
+
+    End Function
     Public Function GetGridcoinReader(Sql As String) As GridcoinReader
 
         Try

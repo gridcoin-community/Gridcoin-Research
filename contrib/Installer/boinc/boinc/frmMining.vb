@@ -273,4 +273,7 @@ Public Class frmMining
  
     End Sub
 
+    Private Sub btnRefresh_Click(sender As System.Object, e As System.EventArgs) Handles btnRefresh.Click
+
+    End Sub
 End Class

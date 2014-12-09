@@ -264,16 +264,7 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
 		
 		std::string samt = FormatMoney(wtx.vout[0].nValue);
 		double dblAmt = dblFromAmount(wtx.vout[0].nValue);
-		/* Reserved for smart contracts.
-		printf("tx creation %s real %f  val  %f" ,samt.c_str(),wtx.vout[0].nValue,dblAmt);
-		if (dblAmt == .12315 || dblAmt == .12325 || dblAmt == .12335 || dblAmt == .12335 || dblAmt == .12345 || (dblAmt <  0.122980  && dblAmt >  0.122050) || dblAmt < 5)
-		{
-			wtx.hashBoinc="code";
-			printf("Setting hashboinc to code\r\n");
-		}
-		*/
-
-
+	
 
         if(!uiInterface.ThreadSafeAskFee(nFeeRequired, tr("Sending...").toStdString()))
         {
@@ -305,16 +296,18 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
                 wallet->SetAddressBookName(dest, strLabel);
             }
         }
-		//12-7-2014 :: R Halford :: Implement SQL Coin Confirm
+		//12-8-2014 :: R Halford :: Implement SQL Coin Confirm
 		std::string sFrom = DefaultWalletAddress();
 		//wtxIn.GetHash().ToString().c_str()
 		if (txid.length() > 3 && rcp.CoinTracking)
 		{
-			//If Coin tracking enabled:
+			//If Coin tracking enabled, Insert the SQL record into the P2P SQL Database
 			std::string Narr = "Sending " + RoundToString(rcp.amount,4) + "GRC from " + sFrom + " to " + strAddress + " with tracking " 
 				+ YesNo(rcp.CoinTracking) + " for TXID " + txid + " with hashBoinc " 
 				+ hashBoinc + ".";
 			printf("%s",Narr.c_str());
+
+
 		}
 
 
