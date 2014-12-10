@@ -550,7 +550,10 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
 			if (Contains(wtxIn.hashBoinc,"<TRACK>"))
 			{
 				printf("Updating tx id %s",wtxIn.GetHash().ToString().c_str());
+				#if defined(WIN32) && defined(QT_GUI)
 				UpdateConfirm(wtxIn.GetHash().ToString());
+				#endif
+
 			}
 		}
         // Write to disk
