@@ -11,6 +11,10 @@ void ExecuteCode();
 extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 QString ToQString(std::string s);
 
+bool Contains(std::string data, std::string instring);
+
+int TrackConfirm(std::string txid);
+
 
 TransactionDescDialog::TransactionDescDialog(const QModelIndex &idx, QWidget *parent) :
     QDialog(parent),
@@ -19,13 +23,24 @@ TransactionDescDialog::TransactionDescDialog(const QModelIndex &idx, QWidget *pa
     ui->setupUi(this);
     QString desc = idx.data(TransactionTableModel::LongDescriptionRole).toString();
     ui->detailText->setHtml(desc);
-	if (msHashBoinc.length() > 1)
+	//If smart contract is populated
+	if (Contains(msHashBoinc,"<CODE>"))
 	{
 		ui->btnExecute->setVisible(true);
 	}
 	else
 	{
-		ui->btnExecute->setVisible(false);
+			ui->btnExecute->setVisible(false);
+	}
+
+	if (Contains(msHashBoinc,"<TRACK>"))
+	{
+		ui->btnTrack->setVisible(true);
+
+	}
+	else
+	{
+		ui->btnTrack->setVisible(false);
 	}
 
 }
@@ -45,6 +60,34 @@ void TransactionDescDialog::askQuestion(std::string caption, std::string body, b
 }
 
 
+
+void TransactionDescDialog::on_btnTrack_clicked()
+{
+    //Tracking Coins
+	std::string sTXID = ExtractXML(msHashBoinc,"<TRACK>","</TRACK>");
+	if (sTXID.length() > 1)
+	{
+		int result = 0;
+		result = TrackConfirm(sTXID);
+		std::string body = "";
+		bool received = false;
+		if (result==1)
+		{
+			body = "Coins were received by the recipient.";
+		}
+		else
+		{
+			body = "Coins were not received by the recipient.";
+		}
+		QString qsCaption = tr("Gridcoin Coin Tracking System");
+		QString qsBody = tr(body.c_str());
+	    QMessageBox::critical(this, qsCaption, qsBody, QMessageBox::Ok, QMessageBox::Ok);
+  
+	}
+
+}
+
+
 void TransactionDescDialog::on_btnExecute_clicked()
 {
     //printf("Executing code... %s",hashBoinc.c_str());
@@ -55,7 +98,6 @@ void TransactionDescDialog::on_btnExecute_clicked()
 		//bool result = askQuestion("Confirm Smart Contract Execution",narr2);
 		bool result = false;
 		askQuestion("Confirm Smart Contract Execution",narr2,&result);
-		//QMessageBox::StandardButton retval = QMessageBox::question(uiInterface, tr("Confirm transaction fee"), narr1,         QMessageBox::Yes|QMessageBox::Cancel, QMessageBox::Yes);
 		if (result)
 		{
 			ExecuteCode();

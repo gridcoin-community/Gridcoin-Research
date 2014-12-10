@@ -262,6 +262,26 @@ Public Class Utilization
         Dim S As New SpeechSynthesis
         S.Speak(sSentence)
     End Sub
+    Public Function UpdateConfirm(sTxId As String) As Double
+
+
+    End Function
+
+    Public Function TrackConfirm(sTXID As String) As Double
+
+        'return a 0 or 1
+
+    End Function
+    Public Function InsertConfirm(sConfirm As String) As Double
+        Dim vConfirm() As String
+        vConfirm = Split(sConfirm, "<COL>")
+        Dim dAmt As Double = vConfirm(0)
+        Dim sFrom As String = vConfirm(1)
+        Dim sTo As String = vConfirm(2)
+        Dim sTXID As String = vConfirm(3)
+
+    End Function
+    
     Public Function AddressUser(sMagnitude As String) As Double
         Log("Addressing User with Magnitude " + Trim(sMagnitude))
         Dim s As New SpeechSynthesis
@@ -270,7 +290,7 @@ Public Class Utilization
     End Function
     Public Sub SetSqlBlock(ByVal data As String)
         Exit Sub
-       
+
     End Sub
     Public Sub UpdateLeaderBoard()
         Exit Sub
@@ -288,7 +308,7 @@ Public Class Utilization
     End Sub
     Public Sub SetBestBlock(ByVal nBlock As Integer)
 
-     
+
     End Sub
 
 
@@ -300,13 +320,13 @@ Public Class Utilization
         Get
         End Get
     End Property
-   
+
     Public Sub ShowEmailModule()
         Dim e As New frmMail
         e.Show()
         e.RetrievePop3Emails()
     End Sub
-  
+
 
     Protected Overrides Sub Finalize()
         If Not mfrmMining Is Nothing Then

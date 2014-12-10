@@ -468,25 +468,25 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	CBigNum bnCoinDayWeight = 0;
 	if (checking_local)
 	{
-		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60) / 2;
+		bnCoinDayWeight = CBigNum(nValueIn) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
 	}
 	else
 	{
-		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
+		bnCoinDayWeight = CBigNum(nValueIn) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
 	}
-	//double nTime = max(pindexBest->GetMedianTimePast()+1, GetAdjustedTime());
 	double dTxTimeBlockFrom = blockFrom.GetBlockTime();
-	double coin_age = std::abs((double)nTimeTx - dTxTimeBlockFrom);
-	double payment_age = std::abs((double)nTimeTx - (double)boincblock.LastPaymentTime);
+	double coin_age = std::abs((double)nTimeTx-(double)txPrev.nTime);
+	double payment_age = std::abs((double)nTimeTx-(double)boincblock.LastPaymentTime);
 
 	if (coin_age < 0) coin_age = 0;
-	if ((payment_age > 30*60) && boincblock.Magnitude > 1 && boincblock.cpid != "INVESTOR" && (coin_age > 3*60*60) && (coin_age > RSA_WEIGHT) && RSA_WEIGHT > 5)
+	if ((payment_age > 60*60) && boincblock.Magnitude > 1 && boincblock.cpid != "INVESTOR" && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT) && RSA_WEIGHT > 5)
 	{
 		//Coins are older than RSA balance
 		oNC=1;
 	}
 
-	if (fDebug) if (LessVerbose(75)) printf("TBF %f TTN %f LPT %f, Coin age %f, NC %f, RSA %f, Mag %f; ",dTxTimeBlockFrom,(double)nTimeTx,payment_age,coin_age,(double)oNC,(double)RSA_WEIGHT,(double)boincblock.Magnitude);
+	if (fDebug) if (LessVerbose(75)) printf("TBF %f TTN %f LPA %f, Coin age %f, NC %f, RSA %f, Mag %f; ",dTxTimeBlockFrom,(double)txPrev.nTime,
+		payment_age,coin_age,(double)oNC,(double)RSA_WEIGHT,(double)boincblock.Magnitude);
 
 	if (RSA_WEIGHT > 0) if (!IsCPIDValidv2(boincblock)) 
 	{
@@ -502,11 +502,13 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
     uint64_t nStakeModifier = 0;
     int nStakeModifierHeight = 0;
     int64_t nStakeModifierTime = 0;
-
-    if (!GetKernelStakeModifier(hashBlockFrom, nStakeModifier, nStakeModifierHeight, nStakeModifierTime, fPrintProofOfStake))
-    {
-		printf("`");
-		//return false;
+	if (boincblock.cpid=="INVESTOR")
+	{
+		if (!GetKernelStakeModifier(hashBlockFrom, nStakeModifier, nStakeModifierHeight, nStakeModifierTime, fPrintProofOfStake))
+		{
+			printf("`");
+			return false;
+		}
 	}
     ss << nStakeModifier;
 
@@ -536,7 +538,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 			{
 				//Dont print all this crap in the log if we are running a local miner:
 				//printf("Block does not meet target: hashboinc %s\r\n",hashBoinc.c_str());
-				printf("{Vitals}: cpid %s, project %s, RSA_WEIGHT: %f \r\n",cpid.c_str(),boincblock.projectname.c_str(),(double)RSA_WEIGHT);
+				if (LessVerbose(75)) printf("{Vitals}: cpid %s, project %s, RSA_WEIGHT: %f \r\n",cpid.c_str(),boincblock.projectname.c_str(),(double)RSA_WEIGHT);
 			}
 			return false;
 		}
@@ -639,7 +641,8 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
     return true;
 }
 
-bool CheckStakeKernelHash(CBlockIndex* pindexPrev, unsigned int nBits, const CBlock& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, 
+bool CheckStakeKernelHash(CBlockIndex* pindexPrev, unsigned int nBits, const CBlock& blockFrom, unsigned int nTxPrevOffset, 
+	const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, 
 	uint256& targetProofOfStake, std::string hashBoinc, bool fPrintProofOfStake, bool checking_local)
 {
     //if (IsProtocolV2(pindexPrev->nHeight+1))

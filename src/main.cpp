@@ -59,6 +59,8 @@ int64_t nCPIDsLoaded = 0;
 
 extern double GetBlockDifficulty(unsigned int nBits);
 double GetLastPaymentTimeByCPID(std::string cpid);
+extern bool Contains(std::string data, std::string instring);
+
 
 extern double coalesce(double mag1, double mag2);
 extern bool AmIGeneratingBackToBackBlocks();

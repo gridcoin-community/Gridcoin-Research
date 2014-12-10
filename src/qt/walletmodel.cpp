@@ -237,7 +237,7 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
 		if (coinTracking)
 		{
 			printf("Creating tracked tx : old hashboinc %s",wtx.hashBoinc.c_str());
-			wtx.hashBoinc = "<TRACK>";
+			wtx.hashBoinc = "<TRACK>" + wtx.GetHash().ToString() + "</TRACK>";
 			//Run time code execution feature - 12-7-2014
 			std::string q = "\"";
 			std::string code = "MsgBox(" + q + "Hello!" + q + ",MsgBoxStyle.Critical," + q + "Message Title" + q + ")";

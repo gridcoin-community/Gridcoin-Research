@@ -83,6 +83,13 @@ extern int64_t nLastCoinStakeSearchInterval;
 double GetPoSKernelPS();
 int ReindexWallet();
 extern int RebootClient();
+extern QString ToQstring(std::string s);
+extern int TrackConfirm(std::string txid);
+
+
+extern void UpdateConfirm(std::string txid);
+
+
 
 void TallyInBackground();
 
@@ -403,6 +410,12 @@ int DownloadBlocks()
 
 
 
+QString ToQstring(std::string s)
+{
+	QString str1 = QString::fromUtf8(s.c_str());
+	return str1;
+}
+
 
 
 int RestartClient()
@@ -421,6 +434,62 @@ int RestartClient()
 			return 1;
 }
 
+void UpdateConfirm(std::string txid)
+{
+	#if defined(WIN32) && defined(QT_GUI)
+	try
+	{
+		int result = 0;
+		QString qsTxid = ToQstring(txid);
+	 	result = globalcom->dynamicCall("UpdateConfirm(Qstring)",qsTxid).toInt();
+	}
+	catch(...)
+	{
+
+	}
+	#endif
+		
+}
+
+
+void InsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string txid)
+{
+
+	//Public Function InsertConfirm(dAmt As Double, sFrom As String, sTo As String, sTXID As String) As String
+    
+	#if defined(WIN32) && defined(QT_GUI)
+	try
+	{  
+		int result = 0;
+	 	std::string Confirm = RoundToString(dAmt,4) + "<COL>" + sFrom + "<COL>" + sTo + "<COL>" + txid;
+		QString qsConfirm = ToQstring(Confirm);
+		result = globalcom->dynamicCall("InsertConfirm(Qstring)",qsConfirm).toInt();
+	}
+	catch(...)
+	{
+
+	}
+	#endif
+}
+
+
+int TrackConfirm(std::string txid)
+{
+	int result = 0;
+	#if defined(WIN32) && defined(QT_GUI)
+	try
+	{  
+		int result = 0;
+		QString qsConfirm = ToQstring(txid);
+		result = globalcom->dynamicCall("TrackConfirm(Qstring)",qsConfirm).toInt();
+	}
+	catch(...)
+	{
+
+	}
+	#endif
+	return result;
+}
 
 
 
@@ -500,6 +569,8 @@ QString IntToQstring(int o)
 	QString str1 = QString::fromUtf8(pre.c_str());
 	return str1;
 }
+
+
 
 
 int AddressUser()

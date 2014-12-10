@@ -88,6 +88,19 @@
        <string>Execute Contract</string>
       </property>
      </widget>
+     <widget class="QPushButton" name="btnTrack">
+      <property name="geometry">
+       <rect>
+        <x>420</x>
+        <y>10</y>
+        <width>75</width>
+        <height>23</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Track Coins</string>
+      </property>
+     </widget>
     </widget>
    </item>
   </layout>

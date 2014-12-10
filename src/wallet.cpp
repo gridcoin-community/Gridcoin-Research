@@ -20,6 +20,9 @@ static unsigned int GetStakeSplitAge() { return IsProtocolV2(nBestHeight) ? (10 
 static int64_t GetStakeCombineThreshold() { return IsProtocolV2(nBestHeight) ? (50 * COIN) : (1000 * COIN); }
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 
+void UpdateConfirm(std::string txid);
+bool Contains(std::string data, std::string instring);
+
 bool IsLockTimeWithinMinutes(double locktime, int minutes);
 
 double GetBlockDifficulty(unsigned int nBits);
@@ -539,12 +542,16 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
             fUpdated |= wtx.UpdateSpent(wtxIn.vfSpent);
         }
 
-        //// debug print 12-8-2014 (received coins)
+        //// debug print 12-9-2014 (received coins)
         printf("AddToWallet %s  %s%s\n", wtxIn.GetHash().ToString().c_str(), (fInsertedNew ? "new" : ""), (fUpdated ? "update" : ""));
 		if (fInsertedNew)
 		{
 			// If this is a tracked tx, update via SQL:
-
+			if (Contains(wtxIn.hashBoinc,"<TRACK>"))
+			{
+				printf("Updating tx id %s",wtxIn.GetHash().ToString().c_str());
+				UpdateConfirm(wtxIn.GetHash().ToString());
+			}
 		}
         // Write to disk
         if (fInsertedNew || fUpdated)
@@ -969,6 +976,7 @@ void CWallet::ReacceptWalletTransactions()
         }
     }
 }
+	
 
 void CWalletTx::RelayWalletTransaction(CTxDB& txdb)
 {
@@ -1628,8 +1636,8 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
         }
         else
         {
-            int64_t nTimeWeight = GetWeight((int64_t)pcoin.first->nTime, nCurrentTime);
-            CBigNum bnWeight = CBigNum(pcoin.first->vout[pcoin.second].nValue + (RSA_WEIGHT*COIN)) * nTimeWeight / COIN / (24 * 60 * 60);
+            int64_t nTimeWeight = GetWeight((int64_t)pcoin.first->nTime, nCurrentTime); //StakeKernelHashV1
+            CBigNum bnWeight = CBigNum(pcoin.first->vout[pcoin.second].nValue) * nTimeWeight / COIN / (24 * 60 * 60);
 
             // Weight is greater than zero
             if (nTimeWeight > 0)
@@ -1702,7 +1710,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
     if (setCoins.empty())
 	{
-		if (fDebug) printf("Coins empty.");
+		if (fDebug) if (LessVerbose(100)) printf("Coins empty.");
         return false;
 	}
 
@@ -1773,6 +1781,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             uint256 hashProofOfStake = 0, targetProofOfStake = 0;
             COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);
 			//Note: At this point block.vtx[0] is still null, so we send the hashBoinc in separately
+			//KernelHashV1
             if (CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, 
 				*pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, targetProofOfStake, hashBoinc, false, true))
             {

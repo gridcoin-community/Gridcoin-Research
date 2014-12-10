@@ -83,6 +83,23 @@ Public Class frmSQL
         sErr = mData.ExecuteP2P(sUpdate)
         Return sErr
 
+    End Function
+    Public Function TrackConfirm(sTXID As String) As Integer
+
+        Dim dr As GridcoinReader
+        Dim sql As String
+        sql = "Select Confirmed from Confirm where TXID='" + sTXID + "'"
+        Try
+            dr = mData.GetGridcoinReader(sql)
+
+        Catch ex As Exception
+            Return -1
+        End Try
+
+        Dim grr As New GridcoinReader.GridcoinRow
+        grr = dr.GetRow(1)
+        If grr.Values(0) = "1" Then Return 1
+        Return 0
 
     End Function
 
@@ -91,6 +108,10 @@ Public Class frmSQL
         'Dim sResult As String = InsertConfirm(100, "ee", "b", "abc12a")
         'sResult = UpdateConfirm("abc12a", "1")
 
+        Dim iResult As Long
+        iResult = TrackConfirm("abc12a")
+
+        Stop
 
         Dim dr As GridcoinReader
         mData.bThrowUIErrors = True

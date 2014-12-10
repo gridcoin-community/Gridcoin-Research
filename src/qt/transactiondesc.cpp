@@ -30,7 +30,6 @@ QString ToQString(std::string s)
 QString TransactionDesc::FormatTxStatus(const CWalletTx& wtx)
 {
     AssertLockHeld(cs_main);
-	//connect(btnExecute, SIGNAL(clicked()), this, SLOT(on_btnExecute_clicked()));
 
     if (!IsFinalTx(wtx, nBestHeight + 1))
     {
