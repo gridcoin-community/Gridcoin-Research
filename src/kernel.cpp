@@ -25,6 +25,7 @@ extern double GetLastPaymentTimeByCPID(std::string cpid);
 
 extern double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 
+bool LessVerbose(int iMax1000);
 
 
 typedef std::map<int, unsigned int> MapModifierCheckpoints;
@@ -467,26 +468,25 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	CBigNum bnCoinDayWeight = 0;
 	if (checking_local)
 	{
-		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
+		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60) / 2;
 	}
 	else
 	{
 		bnCoinDayWeight = CBigNum(nValueIn + (RSA_WEIGHT*COIN)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
 	}
-	double nTime = max(pindexBest->GetMedianTimePast()+1, GetAdjustedTime());
-	double coin_age = nTime - (double)txPrev.nTime;
-	double payment_age = nTime - boincblock.LastPaymentTime;
-	if (boincblock.LastPaymentTime > (GetAdjustedTime()+(60*60))) payment_age=0;  //Do not allow future timestamps
+	//double nTime = max(pindexBest->GetMedianTimePast()+1, GetAdjustedTime());
+	double dTxTimeBlockFrom = blockFrom.GetBlockTime();
+	double coin_age = std::abs((double)nTimeTx - dTxTimeBlockFrom);
+	double payment_age = std::abs((double)nTimeTx - (double)boincblock.LastPaymentTime);
 
 	if (coin_age < 0) coin_age = 0;
-	if ((payment_age > 60*60) && boincblock.Magnitude > 1 && boincblock.cpid != "INVESTOR" && (coin_age > 3*60*60) && (coin_age > RSA_WEIGHT) && RSA_WEIGHT > 5)
+	if ((payment_age > 30*60) && boincblock.Magnitude > 1 && boincblock.cpid != "INVESTOR" && (coin_age > 3*60*60) && (coin_age > RSA_WEIGHT) && RSA_WEIGHT > 5)
 	{
 		//Coins are older than RSA balance
 		oNC=1;
 	}
 
-	
-	if (fDebug) printf("LPT %f, Coin age %f, NC %f, RSA %f, Mag %f; ",payment_age,coin_age,(double)oNC,(double)RSA_WEIGHT,(double)boincblock.Magnitude);
+	if (fDebug) if (LessVerbose(75)) printf("TBF %f TTN %f LPT %f, Coin age %f, NC %f, RSA %f, Mag %f; ",dTxTimeBlockFrom,(double)nTimeTx,payment_age,coin_age,(double)oNC,(double)RSA_WEIGHT,(double)boincblock.Magnitude);
 
 	if (RSA_WEIGHT > 0) if (!IsCPIDValidv2(boincblock)) 
 	{
@@ -494,7 +494,6 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 		oNC=0;
 		if (checking_local) msMiningErrors2="CPID_INVALID";
 	}
-	if (fDebug) printf("RSA_WEIGHT %f; ",(double)RSA_WEIGHT);
 
     targetProofOfStake = (bnCoinDayWeight * bnTargetPerCoinDay).getuint256();
 
@@ -680,7 +679,6 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
 	{
 		//Verify solver did not solve back-to-back blocks:
 		MiningCPID NewStakeBlock = DeserializeBoincBlock(hashBoinc);
-		int nGrandfather = 55000;
 		if (NewStakeBlock.GRCAddress.length() > 3  && pindexPrev->nHeight > nGrandfather)
 		{
 			CBlock prior_block;
@@ -703,7 +701,7 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
 	int nGrandfatherHeight = 0;
 	if (pindexPrev) nGrandfatherHeight = pindexPrev->nHeight;
 
-	if (nGrandfatherHeight > 76650)
+	if (nGrandfatherHeight > nGrandfather)
 	{
 		if (!CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, txPrev, txin.prevout, tx.nTime, hashProofOfStake, 
 			targetProofOfStake, hashBoinc, fDebug, checking_local))

@@ -345,7 +345,15 @@ Public Class SQLBase
 
     End Function
 
+    Public Function Snip(sData As String, iAmt As Long) As String
+        Dim sOut As String
+        If iAmt > Len(sData) Then Return sData
 
+        sOut = Left(sData, Len(sData) - iAmt)
+        Return sOut
+
+
+    End Function
 
     Public Function GetLastHash(sTable As String) As String
         mSql = "Select top 1 hash from " + sTable + " where added < getdate() order by added desc"
@@ -373,7 +381,7 @@ Public Class SQLBase
             vValues = Split(sValues, ",")
             Dim vFields() As String
             vFields = Split(sFields, ",")
-            Dim sWhereValues As String = ""
+            Dim sWhereValsOut As String
 
             Dim dHash As Double
             Dim sSqlValues As String
@@ -387,11 +395,13 @@ Public Class SQLBase
             Dim vWhereValues() As String = Split(sWhereValues, ",")
             Dim vWhereFields() As String = Split(sWhereFields, ",")
             For x = 0 To UBound(vWhereValues)
-                sWhereValues += vWhereFields(x) + "=" + vWhereValues(x) + " AND "
+                sWhereValsOut += vWhereFields(x) + "=" + vWhereValues(x) + " AND "
             Next
-            sWhereValues = Left(sWhereValues, Len(sWhereValues) - 5)
+            sWhereValsOut = Left(sWhereValsOut, Len(sWhereValsOut) - 5)
 
-            mSql = "UPDATE " + sTable + " SET " + sFieldValues + " WHERE " + sWhereValues
+
+            mSql = "UPDATE " + sTable + " SET " + sFieldValues + " WHERE " + sWhereValsOut
+
             Exec(mSql)
             Return ""
         Catch ex As Exception

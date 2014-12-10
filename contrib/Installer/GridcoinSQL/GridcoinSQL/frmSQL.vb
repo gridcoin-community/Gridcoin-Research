@@ -13,20 +13,11 @@ Public Class frmSQL
     Private Sub frmSQL_Load(sender As System.Object, e As System.EventArgs) Handles MyBase.Load
 
 
-
         mWebServer = New WebServer
 
         mData = New Sql()
 
-        'Dim x1 As New SQLBase()
-        'x1.DropBaseTables()
-        'x1.AddBaseTables()
-        'Dim x2 As New SQLBase("GridcoinSql")
-        'x2.DropBaseTables()
-        'x2.AddBaseTables()
-
-
-
+        
         'Query available tables
         Dim dr As New GridcoinReader
 
@@ -97,14 +88,9 @@ Public Class frmSQL
 
     Private Sub btnExec_Click(sender As System.Object, e As System.EventArgs) Handles btnExec.Click
 
-        For x = 1 To 10
-            Dim sResult As String = InsertConfirm(100, "ee", "b", "abc123")
-            sResult = UpdateConfirm("abc123", "1")
+        'Dim sResult As String = InsertConfirm(100, "ee", "b", "abc12a")
+        'sResult = UpdateConfirm("abc12a", "1")
 
-            Stop
-
-        Next
-       
 
         Dim dr As GridcoinReader
         mData.bThrowUIErrors = True
@@ -115,7 +101,6 @@ Public Class frmSQL
             MsgBox(ex.Message, vbCritical, "Gridcoin Query Analayzer")
             Exit Sub
         End Try
-        'If dr Is Nothing Then Exit Sub
         dgv.Rows.Clear()
         dgv.Columns.Clear()
         dgv.BackgroundColor = Drawing.Color.Black

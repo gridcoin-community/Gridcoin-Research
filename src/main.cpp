@@ -324,6 +324,8 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors2 = "";
  std::string    msMiningErrors3 = "";
  std::string    msMiningErrors4 = "";
+ int nGrandfather = 78556;
+
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
  std::string 	msGPUMiningCPID = "";
@@ -2767,9 +2769,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 	//Gridcoin: Maintain network consensus for Magnitude & Outstanding Amount Owed by CPID  
 	
-	//Grandfather
-	int nGrandfather = 68125;
-
+	
 	double mint = pindex->nMint/COIN;
 	if (pindex->nHeight > nGrandfather && IsProofOfStake())
 	{
@@ -3503,9 +3503,7 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
 bool CBlock::AcceptBlock(bool generated_by_me)
 {
     AssertLockHeld(cs_main);
-	//Grandfather:
-	int nGrandfather = 37500;
-
+	
     if (nVersion > CURRENT_VERSION)
         return DoS(100, error("AcceptBlock() : reject unknown block version %d", nVersion));
 
@@ -3529,7 +3527,6 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     if (IsProofOfWork() && nHeight > LAST_POW_BLOCK)
         return DoS(100, error("AcceptBlock() : reject proof-of-work at height %d", nHeight));
 
-	//Grandfather 10-30-2014 
 	if (nHeight > nGrandfather)
 	{
 	  	if (IsLockTimeVeryRecent(GetBlockTime()))
