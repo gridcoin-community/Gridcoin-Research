@@ -2777,11 +2777,13 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	{
 		if (IsLockTimeVeryRecent(nTime))
 		{
-			double PORDiff = GetDifficulty(GetLastBlockIndex(pindex, true));
+
 			//Halford: During periods of high difficulty new block must have a higher magnitude than last block until block > 10 mins old:
 
 			if (false)
 			{
+			double PORDiff = GetDifficulty(GetLastBlockIndex(pindex, true));
+
 			double LastBlockAge = PreviousBlockAge();
 	
 			if ((PORDiff > 10) && LastBlockAge < (7*60))
@@ -3579,6 +3581,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 				if (IsProofOfStake())
 				{
 					uint256 targetProofOfStake;
+					
 					if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me))
 					{
 						printf("WARNING: AcceptBlock(): check proof-of-stake failed for block %s\n", hash.ToString().c_str());
@@ -3720,7 +3723,7 @@ void GridcoinServices()
 		printf("Daily backup results: %s\r\n",backup_results.c_str());
 	}
 	//Every 30 blocks, tally consensus mags:
-	if (TimerMain("update_boinc_magnitude", 40))
+	if (TimerMain("update_boinc_magnitude", 30))
 	{
 			    TallyInBackground();
 	}
@@ -5144,14 +5147,24 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         CAddress addrFrom;
         uint64_t nNonce = 1;
 
-		vRecv >> pfrom->nVersion >> pfrom->boinchashnonce >> pfrom->boinchashpw >> pfrom->nServices >> nTime >> addrMe;
-		
+		//vRecv >> pfrom->nVersion >> pfrom->boinchashnonce >> pfrom->boinchashpw >> pfrom->nServices >> nTime >> addrMe;
+		vRecv >> pfrom->nVersion >> pfrom->boinchashnonce >> pfrom->boinchashpw >> pfrom->cpid >> pfrom->enccpid >> pfrom->nServices >> nTime >> addrMe;
+				
+
 		std::string sdefaultboinchashargs = DefaultBoincHashArgs();
 	 	std::string pw1 = RetrieveMd5(pfrom->boinchashnonce+","+sdefaultboinchashargs);
 	
 		bool unauthorized = false;
 		if (sdefaultboinchashargs.length() < 5 || pw1 != pfrom->boinchashpw) unauthorized=true;
-
+		//12-10-2014
+		if (unauthorized)
+		{
+			//Test the untrusted nodes cpid
+			if (IsCPIDValid_Retired(pfrom->cpid,pfrom->enccpid))
+			{
+				unauthorized=false;
+			}
+		}
 		
 		if (unauthorized)
 		{
@@ -6995,7 +7008,21 @@ try
 void ThreadTally()
 {
 	printf("Tallying..");
+	//Erase miners last payment time 12-10-2014
+	if (GlobalCPUMiningCPID.cpid != "INVESTOR")
+	{
+		StructCPID Host = mvMagnitudes[GlobalCPUMiningCPID.cpid]; 
+		if (Host.initialized)
+		{
+				Host.LastPaymentTime = 0;
+				Host.Magnitude = 0;
+				mvMagnitudes[GlobalCPUMiningCPID.cpid]=Host;
+		}	
+	}
+	printf(".T2.");
 	TallyNetworkAverages(false);
+	GetNextProject();
+	printf(".T3.");
 	if (fDebug) printf("Completed with Tallying()");
 
 }

@@ -21,6 +21,10 @@ MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
 extern int64_t GetRSAWeightByCPID(std::string cpid);
 
+double MintLimiterPOR(double PORDiff,int64_t locktime);
+
+double GetBlockDifficulty(unsigned int nBits);
+
 extern double GetLastPaymentTimeByCPID(std::string cpid);
 
 extern double GetUntrustedMagnitude(std::string cpid, double& out_owed);
@@ -422,8 +426,8 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 {
 
 	//Note: When client is checking locally for a good kernelhash, block.vtx[0] is still null, and block.vtx[1].GetValueOut() is null (for mint) so hashBoinc is provided separately
-		
-
+	double PORDiff = GetBlockDifficulty(nBits);
+	
     if (nTimeTx < txPrev.nTime)  
 	{
 		// Transaction timestamp violation
@@ -474,18 +478,23 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	{
 		bnCoinDayWeight = CBigNum(nValueIn) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24*60*60);
 	}
-	double dTxTimeBlockFrom = blockFrom.GetBlockTime();
+
 	double coin_age = std::abs((double)nTimeTx-(double)txPrev.nTime);
 	double payment_age = std::abs((double)nTimeTx-(double)boincblock.LastPaymentTime);
 
 	if (coin_age < 0) coin_age = 0;
-	if ((payment_age > 60*60) && boincblock.Magnitude > 1 && boincblock.cpid != "INVESTOR" && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT) && RSA_WEIGHT > 5)
+	
+	//When diff is high ensure RSA Weight is a minimum of PORLimiter
+	//12-10-2014
+
+	if ((payment_age > 60*60) && boincblock.Magnitude > 1 && boincblock.cpid != "INVESTOR" && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT) 
+		&& (RSA_WEIGHT/14 > MintLimiterPOR(PORDiff,blockFrom.GetBlockTime())) )
 	{
 		//Coins are older than RSA balance
 		oNC=1;
 	}
 
-	if (fDebug) if (LessVerbose(75)) printf("TBF %f TTN %f LPA %f, Coin age %f, NC %f, RSA %f, Mag %f; ",dTxTimeBlockFrom,(double)txPrev.nTime,
+	if (fDebug) if (LessVerbose(75)) printf("TBF %f TTN %f LPA %f, Coin age %f, NC %f, RSA %f, Mag %f; ",(double)blockFrom.GetBlockTime(),(double)txPrev.nTime,
 		payment_age,coin_age,(double)oNC,(double)RSA_WEIGHT,(double)boincblock.Magnitude);
 
 	if (RSA_WEIGHT > 0) if (!IsCPIDValidv2(boincblock)) 
@@ -703,6 +712,8 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
 	printf("-");
 	int nGrandfatherHeight = 0;
 	if (pindexPrev) nGrandfatherHeight = pindexPrev->nHeight;
+
+		
 
 	if (nGrandfatherHeight > nGrandfather)
 	{

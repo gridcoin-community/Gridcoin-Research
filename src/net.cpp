@@ -30,8 +30,9 @@ using namespace boost;
  boost::thread_group threadGroup;
 #endif
 
- extern int nMaxConnections;
+extern int nMaxConnections;
 
+bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 
 extern std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache);
 
@@ -998,8 +999,28 @@ void CNode::PushVersion()
 	uint256 boincHashRandNonce = GetRandHash();
 	std::string nonce = boincHashRandNonce.GetHex();
 	std::string pw1 = RetrieveMd5(nonce+","+sboinchashargs);
+	
+	std::string encbpk = 	GlobalCPUMiningCPID.encboincpublickey;
+	std::string mycpid =    GlobalCPUMiningCPID.cpid;
 
-    PushMessage("version", PROTOCOL_VERSION, nonce, pw1, nLocalServices, nTime, addrYou, addrMe,
+	bool checksum = false;
+	if (sboinchashargs.length() > 5)
+	{
+		if (sboinchashargs.substr(0,4) == "Elim") checksum=true;
+	}
+
+	if (!checksum)
+	{
+		printf("^x.");
+		if (mycpid == "INVESTOR" || !IsCPIDValid_Retired(mycpid,encbpk))
+		{
+			printf("To run a compiled version of gridcoin you must have a valid cpid, rac > 100, join team Gridcoin and set your email address properly.\r\n");
+			MilliSleep(5000);
+		}
+	}
+
+    PushMessage("version", PROTOCOL_VERSION, nonce, pw1, 
+				mycpid, encbpk, nLocalServices, nTime, addrYou, addrMe,
                 nLocalHostNonce, FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()), nBestHeight);
 }
 

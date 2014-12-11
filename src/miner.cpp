@@ -26,6 +26,7 @@ void ThreadTopUpKeyPool(void* parg);
 
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 bool AmIGeneratingBackToBackBlocks();
+double GetDifficulty(const CBlockIndex* blockindex = NULL);
 
 int64_t GetRSAWeightByCPID(std::string cpid);
 
@@ -807,6 +808,7 @@ Begin:
 		}
 
 	    // Trying to sign a block
+			
         if (pblock->SignBlock(*pwallet, nFees))
         {
             SetThreadPriority(THREAD_PRIORITY_NORMAL);
