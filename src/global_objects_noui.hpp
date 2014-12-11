@@ -134,7 +134,9 @@ struct MiningEntry {
 		double EarliestPaymentTime;
 		double RSAWeight;
 		double PaymentTimespan;
+		double ResearchSubsidy;
 
+	
 
 		std::string cpid;
 		std::string emailhash;
@@ -212,6 +214,7 @@ struct MiningEntry {
 		double ConsensusMagnitude;
 		double RSAWeight;
 		double LastPaymentTime;
+		double ResearchSubsidy;
 
 	};
 

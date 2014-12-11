@@ -488,7 +488,8 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	//12-10-2014
 
 	if ((payment_age > 60*60) && boincblock.Magnitude > 1 && boincblock.cpid != "INVESTOR" && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT) 
-		&& (RSA_WEIGHT/14 > MintLimiterPOR(PORDiff,blockFrom.GetBlockTime())) )
+		&& (RSA_WEIGHT/14 > MintLimiterPOR(PORDiff,blockFrom.GetBlockTime())) 
+		&& (boincblock.ResearchSubsidy > MintLimiterPOR(PORDiff,blockFrom.GetBlockTime())) )
 	{
 		//Coins are older than RSA balance
 		oNC=1;

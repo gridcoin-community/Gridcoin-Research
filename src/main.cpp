@@ -6187,7 +6187,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 					+ delim + RoundToString(mcpid.pobdifficulty,5) + delim + RoundToString((double)mcpid.diffbytes,0) 
 					+ delim + mcpid.enccpid 
 					+ delim + mcpid.encaes + delim + RoundToString(mcpid.nonce,0) + delim + RoundToString(mcpid.NetworkRAC,0) + delim + version 
-					+ delim + mcpid.VouchedCPID + delim 
+					+ delim + RoundToString(mcpid.ResearchSubsidy,2) + delim 
 					+ RoundToString(mcpid.LastPaymentTime,0) + delim + RoundToString(mcpid.RSAWeight,0) 
 					+ delim + mcpid.cpidv2
 					+ delim + RoundToString(mcpid.Magnitude,0)
@@ -6199,7 +6199,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 
 std::string SerializeBoincBlock_Old(std::string cpid, std::string projectname, std::string AESSkein, double RAC,
 	double PoBDifficulty, unsigned int diffbytes, std::string enccpid, std::string encaes, double nonce, double NetworkRAC, 
-	std::string vouched_cpid, double vouched_magnitude, double vouched_rac, double vouched_network_rac)
+	double ResearchSubsidy, double vouched_magnitude, double vouched_rac, double vouched_network_rac)
 {
 	std::string delim = "<|>";
 
@@ -6208,7 +6208,7 @@ std::string SerializeBoincBlock_Old(std::string cpid, std::string projectname, s
 	std::string bb = cpid + delim + projectname + delim + AESSkein + delim + RoundToString(RAC,0)
 					+ delim + RoundToString(PoBDifficulty,5) + delim + RoundToString((double)diffbytes,0) + delim + enccpid 
 					+ delim + encaes + delim + RoundToString(nonce,0) + delim + RoundToString(NetworkRAC,0) + delim + version 
-					+ delim + vouched_cpid + delim + RoundToString(vouched_magnitude,0) + delim + RoundToString(vouched_rac,0) 
+					+ delim + RoundToString(ResearchSubsidy,2) + delim + RoundToString(vouched_magnitude,0) + delim + RoundToString(vouched_rac,0) 
 					+ delim + RoundToString(vouched_network_rac,0);
 
 	return bb;
@@ -6244,7 +6244,7 @@ MiningCPID DeserializeBoincBlock(std::string block)
 		}
 		if (s.size() > 11)
 		{
-			surrogate.VouchedCPID = s[11];
+			surrogate.ResearchSubsidy = cdbl(s[11],0);
 		}
 		if (s.size() > 12)
 		{
@@ -7117,6 +7117,7 @@ StructCPID GetStructCPID()
 	c.EarliestPaymentTime=0;
 	c.RSAWeight=0;
 	c.PaymentTimespan=0;
+	c.ResearchSubsidy = 0;
 	return c;
 
 }
@@ -7154,6 +7155,7 @@ MiningCPID GetMiningCPID()
 	mc.ConsensusMagnitude = 0;
 	mc.RSAWeight = 0;
 	mc.LastPaymentTime=0;
+	mc.ResearchSubsidy = 0;
 	return mc;
 }
 

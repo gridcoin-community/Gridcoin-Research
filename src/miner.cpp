@@ -425,6 +425,9 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
 		//12-9-2014 Verify RSA Weight is actually in the block
 		miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
+		double out_por = 0;
+		miningcpid.ResearchSubsidy = (double)(GetProofOfStakeReward(1,0,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),out_por)/COIN);
+
 		msMiningErrors4 = "BRSA: " + RoundToString(miningcpid.RSAWeight,0);
 
 		std::string hashBoinc = SerializeBoincBlock(miningcpid);

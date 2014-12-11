@@ -1733,6 +1733,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 		 miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
 	     miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
+		 miningcpid.ResearchSubsidy = 0;
 		 msMiningErrors4 = "BRSA: " + RoundToString(miningcpid.RSAWeight,0);
 
 		 // miningcpid.cpidv2 = CIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pblock->pprev->GetBlockHash());
@@ -1918,25 +1919,19 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	
 		if (PORDiff > 100)
 		{
-			if (RSA_WEIGHT == 0)
-			{
 				//INVESTORS
 				if (mint < MintLimiter(PORDiff)) 
 				{
 					if (LessVerbose(100)) printf("CreateBlock::Investors Mint is too small");
 					return false; 
 				}
-			}
-			else
-			{
 				//BOINC MINERS
-				if ((RSA_WEIGHT/14) < MintLimiterPOR(PORDiff,GetAdjustedTime()))
+				if (RSA_WEIGHT > 0 && ((RSA_WEIGHT/14) < MintLimiterPOR(PORDiff,GetAdjustedTime()))  )
 				{
 						if (fDebug) if (LessVerbose(100)) printf("Owed %f < MintLimitLevel %f",OUT_POR,MintLimiterPOR(PORDiff,GetAdjustedTime()));
 						return false;
 				}
 	
-			}
 		}
 		if (nReward == 0)
 		{
