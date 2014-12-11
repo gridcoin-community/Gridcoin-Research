@@ -1733,7 +1733,10 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 		 miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
 	     miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-		 miningcpid.ResearchSubsidy = 0;
+		 //12-11-2014
+		 double out_por = 0;
+         miningcpid.ResearchSubsidy = (double)(GetProofOfStakeReward(1,0,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),out_por)/COIN);
+
 		 msMiningErrors4 = "BRSA: " + RoundToString(miningcpid.RSAWeight,0);
 
 		 // miningcpid.cpidv2 = CIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pblock->pprev->GetBlockHash());
