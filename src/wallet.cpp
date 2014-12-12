@@ -1576,10 +1576,10 @@ double MintLimiter(double PORDiff)
 {
 	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
 	if (PORDiff > 0   && PORDiff < 1)  return 0;
-	if (PORDiff > 1   && PORDiff < 5)  return 1;
-	if (PORDiff >= 5  && PORDiff < 10) return 10;
-	if (PORDiff >= 10 && PORDiff < 50) return 20;
-	if (PORDiff >= 50) return 50;
+	if (PORDiff > 1   && PORDiff < 5)  return .15;
+	if (PORDiff >= 5  && PORDiff < 10) return 5;
+	if (PORDiff >= 10 && PORDiff < 50) return 10;
+	if (PORDiff >= 50) return 25;
 	return 0;
 }
 	
@@ -1590,10 +1590,11 @@ double MintLimiterPOR(double PORDiff,int64_t locktime)
 	//12-10-2014
 	double MaxSubsidy = GetMaximumBoincSubsidy(locktime);
 	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
-	if (PORDiff >= 10   && PORDiff < 25)   return 0;
-	if (PORDiff >= 25   && PORDiff < 100)  return MaxSubsidy/30;
-	if (PORDiff >= 100  && PORDiff < 500)  return MaxSubsidy/20;
-	if (PORDiff >= 500) return MaxSubsidy/10;
+	if (PORDiff >= 0   && PORDiff < 1)   return 0;
+	if (PORDiff >= 1   && PORDiff < 5)   return .15;
+	if (PORDiff >= 5   && PORDiff < 50)  return MaxSubsidy/40;
+	if (PORDiff >= 50  && PORDiff < 100)  return MaxSubsidy/20;
+	if (PORDiff >= 100) return MaxSubsidy/10;
 	return 0;
 }
 
@@ -1723,6 +1724,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     CTxDB txdb("r");
 	MiningCPID miningcpid = GetMiningCPID();
 	std::string hashBoinc = "";
+	//12-11-2014
 
 	try
 	{
@@ -1757,6 +1759,48 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	}
 
 
+
+
+	//Verify last block is an investor or vice versa - Halford - 12-11-2014
+	MiningCPID CurrentStake = DeserializeBoincBlock(hashBoinc);
+	CBlock prior_block;
+	if (!prior_block.ReadFromDisk(pindexPrev))   
+	{
+					printf("StakeMiner: read Prior block failed!");
+					return false;
+	}
+	if (prior_block.vtx.size() > 0)
+	{
+			MiningCPID PriorStake = DeserializeBoincBlock(prior_block.vtx[0].hashBoinc);
+			if (PriorStake.RSAWeight > 0 && CurrentStake.RSAWeight > 0)
+			{
+					if (LessVerbose(50)) printf("$h.");
+					msMiningErrors = "Last block is POR (sleeping).";
+					MilliSleep(1000);
+					return false;
+			}
+			else
+			{
+				msMiningErrors = "Boinc mining.";
+			}
+
+			if (PriorStake.RSAWeight==0 && CurrentStake.RSAWeight == 0)
+			{
+					if (LessVerbose(50)) printf("$i.");
+					msMiningErrors = "Last block is an Investor (sleeping).";
+					MilliSleep(1000);
+					return false;
+			}
+			else
+			{
+				msMiningErrors = "Staking interest.";
+			}
+	}
+	
+	
+	//Search
+
+	
 
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
     {
@@ -1868,6 +1912,9 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     if (nCredit == 0 || nCredit > nBalance - nReserveBalance)
         return false;
 
+
+
+
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
     {
         // Attempt to add more inputs
@@ -1920,21 +1967,17 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		if (fDebug) printf("Creating POS Reward for %s  amt  %s  {RSAWeight %s} \r\n",
 			GlobalCPUMiningCPID.cpid.c_str(),sReward.c_str(),RoundToString((double)RSA_WEIGHT,0).c_str());
 	
-		if (PORDiff > 100)
+		//INVESTORS
+		if (mint < MintLimiter(PORDiff)) 
 		{
-				//INVESTORS
-				if (mint < MintLimiter(PORDiff)) 
-				{
-					if (LessVerbose(100)) printf("CreateBlock::Investors Mint is too small");
-					return false; 
-				}
-				//BOINC MINERS
-				if (RSA_WEIGHT > 0 && ((RSA_WEIGHT/14) < MintLimiterPOR(PORDiff,GetAdjustedTime()))  )
-				{
-						if (fDebug) if (LessVerbose(100)) printf("Owed %f < MintLimitLevel %f",OUT_POR,MintLimiterPOR(PORDiff,GetAdjustedTime()));
-						return false;
-				}
-	
+				if (LessVerbose(100)) printf("CreateBlock::Investors Mint is too small");
+				return false; 
+		}
+		//BOINC MINERS
+		if (RSA_WEIGHT > 0 && ((RSA_WEIGHT/14) < MintLimiterPOR(PORDiff,GetAdjustedTime()))  )
+		{
+				if (fDebug) if (LessVerbose(100)) printf("Owed %f < MintLimitLevel %f",OUT_POR,MintLimiterPOR(PORDiff,GetAdjustedTime()));
+				return false;
 		}
 		if (nReward == 0)
 		{

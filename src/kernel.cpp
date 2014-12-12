@@ -16,6 +16,7 @@ std::string RoundToString(double d, int place);
 bool IsCPIDValidv2(MiningCPID& mc);
 using namespace std;
 MiningCPID DeserializeBoincBlock(std::string block);
+
 bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
@@ -686,30 +687,31 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
     CBlock block;
     if (!block.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
         return fDebug? error("CheckProofOfStake() : read block failed") : false; // unable to read block of previous transaction
-
-
-	if (false)
+    // Verify last block was an investory if this block is a researcher and vice-versa:
+	//(TODO: Change 81430 to nGrandfather after next Grandfather update) 12-11-2014
+	if (pindexPrev->nHeight > 81430)
 	{
-		//Verify solver did not solve back-to-back blocks:
-		MiningCPID NewStakeBlock = DeserializeBoincBlock(hashBoinc);
-		if (NewStakeBlock.GRCAddress.length() > 3  && pindexPrev->nHeight > nGrandfather)
-		{
-			CBlock prior_block;
-			if (!prior_block.ReadFromDisk(pindexPrev))    return error("CheckProofOfStake() : read Prior block failed!");
-		
-			//11-21-2014
-			if (prior_block.vtx.size() > 0)
-			{
-				MiningCPID PriorStakeBlock = DeserializeBoincBlock(prior_block.vtx[0].hashBoinc);
-				if (PriorStakeBlock.GRCAddress == NewStakeBlock.GRCAddress)
-				{
-					return error("CheckProofOfStake() : Back To Back GRC Address found on two blocks in a row.  Rejected!\r\n");
-				}
-			}
 	
-		}
-	}
+		MiningCPID CurrentStake = DeserializeBoincBlock(hashBoinc);
+		CBlock prior_block;
+		if (!prior_block.ReadFromDisk(pindexPrev))    return error("CheckProofOfStake(POR/INVESTOR) : read Prior block failed!");
+		if (prior_block.vtx.size() > 0)
+		{
+				MiningCPID PriorStake = DeserializeBoincBlock(prior_block.vtx[0].hashBoinc);
+				if (PriorStake.RSAWeight > 0 && CurrentStake.RSAWeight > 0)
+				{
+					return error("CheckProofOfStake(): Researcher block suubmitted with RSA Weight while last block is a researcher block (rejected).   \r\n");
+				}
 
+				if (PriorStake.RSAWeight==0 && CurrentStake.RSAWeight == 0)
+				{
+					return error("CheckProofOfStake(): Investor block submitted after prior investor block (rejected).   \r\n");
+				}
+
+		}
+	
+	}
+	
 	printf("-");
 	int nGrandfatherHeight = 0;
 	if (pindexPrev) nGrandfatherHeight = pindexPrev->nHeight;

@@ -35,6 +35,7 @@ std::string RoundToString(double d, int place);
 bool OutOfSyncByAgeWithChanceOfMining();
 
 bool TallyNetworkAverages(bool ColdBoot);
+MiningCPID DeserializeBoincBlock(std::string block);
 
 std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
@@ -791,6 +792,7 @@ Begin:
 			MilliSleep(1000);
 			goto Begin;
 		}
+		
 
 		//Verify we are still on the main chain
 		if (false)
@@ -818,6 +820,7 @@ Begin:
 			bool Staked = CheckStake(pblock.get(), *pwallet);
 			if (Staked)
 			{
+				msMiningErrors = "Stake block accepted!";
 				printf("Stake block accepted!\r\n");
 				//Prevent Rapid Fire block creation (large investor nodes):
 		  	    SetThreadPriority(THREAD_PRIORITY_LOWEST);
