@@ -1779,11 +1779,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 					MilliSleep(1000);
 					return false;
 			}
-			else
-			{
-				msMiningErrors = "Boinc mining.";
-			}
-
+	
 			if (PriorStake.RSAWeight==0 && CurrentStake.RSAWeight == 0)
 			{
 					if (LessVerbose(50)) printf("$i.");
@@ -1791,10 +1787,16 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 					MilliSleep(1000);
 					return false;
 			}
+
+			if (CurrentStake.RSAWeight > 0)
+			{
+					msMiningErrors = "Boinc mining.";
+			}
 			else
 			{
-				msMiningErrors = "Staking interest.";
+					msMiningErrors = "Staking interest.";
 			}
+	
 	}
 	
 	
