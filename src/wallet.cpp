@@ -1724,7 +1724,6 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     CTxDB txdb("r");
 	MiningCPID miningcpid = GetMiningCPID();
 	std::string hashBoinc = "";
-	//12-11-2014
 
 	try
 	{
@@ -1735,7 +1734,6 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 		 miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
 	     miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-		 //12-11-2014
 		 double out_por = 0;
          miningcpid.ResearchSubsidy = (double)(GetProofOfStakeReward(1,0,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),out_por)/COIN);
 
@@ -1759,9 +1757,14 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	}
 
 
+	MiningCPID CurrentStake = DeserializeBoincBlock(hashBoinc);
+	msMiningErrors = CurrentStake.RSAWeight > 0 ? "Boinc mining." : "Staking interest.";
 
 
-	//Verify last block is an investor or vice versa - Halford - 12-11-2014
+
+	if (false)
+	{
+	//Verify last block is an investor or vice versa - Halford
 	MiningCPID CurrentStake = DeserializeBoincBlock(hashBoinc);
 	CBlock prior_block;
 	if (!prior_block.ReadFromDisk(pindexPrev))   
@@ -1788,17 +1791,9 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 					return false;
 			}
 
-			if (CurrentStake.RSAWeight > 0)
-			{
-					msMiningErrors = "Boinc mining.";
-			}
-			else
-			{
-					msMiningErrors = "Staking interest.";
-			}
 	
 	}
-	
+	}
 	
 	//Search
 

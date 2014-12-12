@@ -326,7 +326,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors2 = "";
  std::string    msMiningErrors3 = "";
  std::string    msMiningErrors4 = "";
- int nGrandfather = 78556;
+ int nGrandfather = 82000;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2816,7 +2816,16 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			if (!outcome) return DoS(1,error("ConnectBlock(): Netsoft online check failed\r\n"));
 			double OUT_POR = 0;
 			int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR);
-
+			//12-12-2014
+			if (bb.cpid != "INVESTOR" && mint > 1 && OUT_POR > 1)
+			{
+				if (bb.ResearchSubsidy*TOLERANCE_PERCENT < OUT_POR)
+				{
+						return error("ConnectBlock() : Researchers Reward of amount %f and calculated reward of %f for CPID %s does not match calculated research subsidy",
+							(double)bb.ResearchSubsidy,(double)OUT_POR,	bb.cpid.c_str());
+				
+				}
+			}
 			if (nStakeReward > (nCalculatedResearch*TOLERANCE_PERCENT))
 			{
 				//One last chance...clear cache and retrieve magnitude from netsoft:
@@ -4659,7 +4668,17 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 
 		if (IsStake)
 		{
-			structMagnitude.payments = structMagnitude.payments + mint;
+			double interest = mint-bb.ResearchSubsidy;
+			if (GetAdjustedTime() > 1418169600)
+			{
+				//After 12-10-2014, research payments are broken out
+				structMagnitude.payments += bb.ResearchSubsidy;
+			}
+			else
+			{
+				structMagnitude.payments += mint;
+			}
+			structMagnitude.interestPayments += interest;
 			if (LockTime > structMagnitude.LastPaymentTime) structMagnitude.LastPaymentTime = LockTime;
 			if (LockTime < structMagnitude.EarliestPaymentTime) structMagnitude.EarliestPaymentTime = LockTime;
 		}

@@ -39,55 +39,6 @@ extern volatile double nGlobalSolutionNonce;
 extern int miningthreadcount;
 
 
-/*
-struct MiningEntry {
-        double shares;
-		std::string strComment;
-        std::string strAccount;
-		double payout;
-		double rbpps;
-		double totalutilization;
-		double totalrows;
-		double avgboinc;
-		bool   paid;
-		double payments;
-		double lookback;
-		double difficulty;
-		int blockhour;
-		int wallethour;
-		std::string boinchash;
-		int projectid;
-		std::string projectuserid;
-		std::string transactionid;
-		double blocknumber;
-		double locktime;
-		std::string projectaddress;
-		double cpupowverificationtime;
-		double cpupowverificationresult;
-		double cpupowverificationtries;
-		std::string homogenizedkey;
-		std::string cpupowhash;
-		double credits;
-		double lastpaid;
-		double lastpaiddate;
-		double totalpayments;
-		double networkcredits;
-		double compensation;
-	    double owed;
-	    double approvedtransactions;
-	    double nextpaymentamount;
-		double cputotalpayments;
-		double dummy1;
-		double dummy2;
-		double dummy3;
-		bool approved;
-
-
-    };
-	*/
-
-
-
 	
     struct StructCPID 
 	{
@@ -115,6 +66,7 @@ struct MiningEntry {
 		double PaymentMagnitude;
 		double owed;
 		double payments;
+		double interestPayments;
 		double outstanding;
 		double verifiedTotalRAC;
 		double verifiedTotalNetworkRAC;

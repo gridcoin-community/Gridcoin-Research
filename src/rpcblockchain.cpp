@@ -416,7 +416,9 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
     result.push_back(Pair("height", blockindex->nHeight));
     result.push_back(Pair("version", block.nVersion));
     result.push_back(Pair("merkleroot", block.hashMerkleRoot.GetHex()));
-    result.push_back(Pair("mint", ValueFromAmount(blockindex->nMint)));
+	double mint = blockindex->nMint/COIN;
+
+    result.push_back(Pair("mint", mint));
     result.push_back(Pair("time", (int64_t)block.GetBlockTime()));
     result.push_back(Pair("nonce", (uint64_t)block.nNonce));
     result.push_back(Pair("bits", strprintf("%08x", block.nBits)));
@@ -472,6 +474,9 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("BoincHash",block.vtx[0].hashBoinc));
 	result.push_back(Pair("RSAWeight",bb.RSAWeight));
 	result.push_back(Pair("LastPaymentTime",bb.LastPaymentTime));
+	result.push_back(Pair("PORAmount",bb.ResearchSubsidy));
+	double interest = mint-bb.ResearchSubsidy;
+	result.push_back(Pair("Interest",interest));
 
 	result.push_back(Pair("GRCAddress",bb.GRCAddress));
 	std::string skein2 = aes_complex_hash(blockhash);
@@ -1180,6 +1185,8 @@ Array MagnitudeReport(bool bMine)
 									entry.push_back(Pair("Long Term Owed (14 day projection)",structMag.totalowed));
 									entry.push_back(Pair("Long Term Daily Owed (1 day projection)",structMag.totalowed/14));
 									entry.push_back(Pair("Payments",structMag.payments));
+									entry.push_back(Pair("InterestPayments",structMag.interestPayments));
+
 									entry.push_back(Pair("Last Payment Time",structMag.LastPaymentTime));
 									entry.push_back(Pair("Current Daily Projection",structMag.owed));
 									entry.push_back(Pair("Next Expected Payment",structMag.owed/2));
@@ -1207,7 +1214,6 @@ void CSVToFile(std::string filename, std::string data)
 
 
 
-
 Array MagnitudeReportCSV()
 {
 	       Array results;
@@ -1223,7 +1229,7 @@ Array MagnitudeReportCSV()
 		   double rows = 0;
 		   double outstanding = 0;
 		   double totaloutstanding = 0;
-		   std::string header = "CPID,Magnitude,PaymentMagnitude,Accuracy,LongTermOwed14day,LongTermOwedDaily,Payments,LastPaymentTime,CurrentDailyOwed,NextExpectedPayment,AvgDailyPayments,Outstanding\r\n";
+		   std::string header = "CPID,Magnitude,PaymentMagnitude,Accuracy,LongTermOwed14day,LongTermOwedDaily,Payments,InterestPayments,LastPaymentTime,CurrentDailyOwed,NextExpectedPayment,AvgDailyPayments,Outstanding\r\n";
 		   std::string row = "";
 		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
 		   {
@@ -1239,7 +1245,9 @@ Array MagnitudeReportCSV()
   						row = structMag.cpid + "," + RoundToString(structMag.ConsensusMagnitude,2) + "," 
 							+ RoundToString(structMag.PaymentMagnitude,0) + "," + RoundToString(structMag.Accuracy,0) + "," + RoundToString(structMag.totalowed,2) 
 							+ "," + RoundToString(structMag.totalowed/14,2)
-							+ "," + RoundToString(structMag.payments,2) + "," + RoundToString(structMag.LastPaymentTime,0) + "," + RoundToString(structMag.owed,2) 
+							+ "," + RoundToString(structMag.payments,2) + "," 
+							+ RoundToString(structMag.interestPayments,2) + "," + RoundToString(structMag.LastPaymentTime,0) 
+							+ "," + RoundToString(structMag.owed,2) 
 							+ "," + RoundToString(structMag.owed/2,2)
 							+ "," + RoundToString(structMag.payments/14,2) + "," + RoundToString(outstanding,2) + "\n";
 						header += row;
