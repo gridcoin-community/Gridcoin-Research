@@ -2409,7 +2409,7 @@ double PreviousBlockAge()
 bool ClientOutOfSync() 
 {
 	double lastblockage = PreviousBlockAge();
-	if (lastblockage > (60*60)) return true;
+	if (lastblockage > (30*60)) return true;
 	if (fReindex || fImporting ) return true;
 	return false;
 }
@@ -3151,10 +3151,10 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 				txdb.TxnAbort();
 				InvalidChainFound(pindexNew);
 				printf("Reorganize failed... Chopping off end of block chain...");
-				if (!ReorganizeWithHatchet(txdb))
-				{
-					printf("Reorganize with hatchet failed...");
-				}
+				//if (!ReorganizeWithHatchet(txdb))
+				//{
+				//	printf("Reorganize with hatchet failed...");
+				//}
 
 				return error("SetBestChain() : Reorganize failed");
 			}
@@ -3795,7 +3795,7 @@ void GridcoinServices()
 			printf("Loaded");
 	}
 
-	if (TimerMain("check_for_autoupgrade",90))
+	if (TimerMain("check_for_autoupgrade",60))
 	{
 		bCheckedForUpgradeLive = true;
 	}
