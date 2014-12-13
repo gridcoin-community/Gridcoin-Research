@@ -5256,26 +5256,16 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 		//Pallas 12-6-2014
 
-	    try
-		{
-			if (GetArgument("autoban","false") == "true")
+	 		if (GetArgument("autoban","false") == "true")
 			{
-				if (pfrom->nStartingHeight)
-				{
 				if (pfrom->nStartingHeight < 1000) 
 				{
 					printf("Node with low height");
-					pfrom->Misbehaving(1);
+					pfrom->Misbehaving(100);
 					return false;
 				}
-				}
 			}
-		}
-		catch(...)
-		{
-
-		}
-
+	
 		
 		
 		if (pfrom->fInbound && addrMe.IsRoutable())
