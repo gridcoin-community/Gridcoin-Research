@@ -420,6 +420,9 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	double mint = CoinToDouble(blockindex->nMint);
 
     result.push_back(Pair("mint", mint));
+	//	result.push_back(Pair("mint2", ValueFromAmount(blockindex->nMint)));
+
+
     result.push_back(Pair("time", (int64_t)block.GetBlockTime()));
     result.push_back(Pair("nonce", (uint64_t)block.nNonce));
     result.push_back(Pair("bits", strprintf("%08x", block.nBits)));
@@ -477,7 +480,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("LastPaymentTime",bb.LastPaymentTime));
 	result.push_back(Pair("ResearchSubsidy",bb.ResearchSubsidy));
 	double interest = mint-bb.ResearchSubsidy;
-	result.push_back(Pair("Interest",interest));
+	result.push_back(Pair("Interest",ValueFromAmount(interest*COIN)));
 
 	result.push_back(Pair("GRCAddress",bb.GRCAddress));
 	std::string skein2 = aes_complex_hash(blockhash);
