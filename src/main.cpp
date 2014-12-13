@@ -122,8 +122,6 @@ extern  double GetGridcoinBalance(std::string SendersGRCAddress);
 
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 
-extern bool IsLockTimeVeryRecent(double locktime);
-
 extern bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 
 extern bool IsLockTimeWithinMinutes(double locktime, int minutes);
@@ -2397,24 +2395,23 @@ int64_t CTransaction::GetValueIn(const MapPrevTx& inputs) const
 
 double PreviousBlockAge()
 {
-	try 
-	{
 		if (nBestHeight < 30) return 99999;
 		double nTime = max(pindexBest->GetMedianTimePast()+1, GetAdjustedTime());
 		double nActualTimespan = nTime - pindexBest->pprev->GetBlockTime();
 		return nActualTimespan;
-	}
-	catch (std::exception &e) 
-	{
-			 printf("Error while calculating previous block age (06182014).\r\n");
-			 return 99999;
-	}
-    catch(...)
-	{
-			printf("Error While calculating previous block age (16182014).\r\n");
-			return 99999;
-	}
+}
 
+
+
+
+
+
+bool ClientOutOfSync() 
+{
+	double lastblockage = PreviousBlockAge();
+	if (lastblockage > (60*60)) return true;
+	if (fReindex || fImporting ) return true;
+	return false;
 }
 
 
@@ -2426,7 +2423,6 @@ bool OutOfSyncByAge()
 	if (lastblockage > (60*30)) return true;
 	if (fReindex || fImporting ) return true;
 	return false;
-
 }
 
 
@@ -2745,7 +2741,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		if (nStakeReward > nCalculatedStakeReward)
             return DoS(1, error("ConnectBlock() : coinstake pays above maximum (actual=%"PRId64" vs calculated=%"PRId64")", nStakeReward, nCalculatedStakeReward));
 		
-		if (IsLockTimeVeryRecent(nTime) && bb.cpid=="INVESTOR" && nStakeReward > 1)
+		if (!ClientOutOfSync() && bb.cpid=="INVESTOR" && nStakeReward > 1)
 		{
 			//11-9-2014
 			double OUT_POR = 0;
@@ -2775,7 +2771,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	double mint = pindex->nMint/COIN;
 	if (pindex->nHeight > nGrandfather && IsProofOfStake())
 	{
-		if (IsLockTimeVeryRecent(nTime))
+		if (!ClientOutOfSync())
 		{
 
 			//Halford: During periods of high difficulty new block must have a higher magnitude than last block until block > 10 mins old:
@@ -2816,7 +2812,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			if (!outcome) return DoS(1,error("ConnectBlock(): Netsoft online check failed\r\n"));
 			double OUT_POR = 0;
 			int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR);
-			//12-12-2014
 			if (bb.cpid != "INVESTOR" && mint > 1 && OUT_POR > 1)
 			{
 				if (bb.ResearchSubsidy*TOLERANCE_PERCENT < OUT_POR)
@@ -2856,9 +2851,18 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 								double user_magnitude = GetMagnitude(bb.cpid,1,false);
 								//return DoS(1, error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f", 						bb.cpid.c_str(), nStakeReward/COIN, nCalculatedResearch/COIN, user_magnitude));
+								//12-12-2014
+								StructCPID UntrustedHost = mvMagnitudes[bb.cpid]; //Contains Mag across entire CPID
 
-								return error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f",
+								double owed_advanced = UntrustedHost.totalowed - UntrustedHost.payments;
+								bool complete_failure = true;
+								if (owed_advanced > -100 && UntrustedHost.Accuracy > 50) complete_failure=false;
+								if (owed_advanced < -300 || UntrustedHost.Accuracy <= 50) complete_failure=true;
+								if (complete_failure)
+								{
+									return error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f",
 										bb.cpid.c_str(), nStakeReward/COIN, nCalculatedResearch2/COIN, user_magnitude);
+								}
 							}
 
 					}
@@ -2904,6 +2908,27 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 
 
+bool static ReorganizeWithHatchet(CTxDB& txdb)
+{
+    printf("REORGANIZE with hatchet \n");
+    // Find the fork
+	int nMaxDepth = nBestHeight;
+	int nLookback = 200; 
+	int nMinDepth = nMaxDepth - nLookback;
+	if (nMinDepth < 2) nMinDepth = 2;
+	CBlock block;
+	int iRow = 0;
+	for (int ii = nMaxDepth; ii > nMinDepth; ii--)
+	{
+				CBlockIndex* pblockindex = FindBlockByHeight(ii);
+			    if (!block.ReadFromDisk(pblockindex))	return error("ReorganizeWithHatchet() : ReadFromDisk for disconnect failed");
+                if (!block.DisconnectBlock(txdb, pblockindex))
+							return error("ReorganizeWithHatchet() : DisconnectBlock %s failed", pblockindex->GetBlockHash().ToString().c_str());
+	}
+
+    printf("REORGANIZE With Hatchet: done\n");
+	return true;
+}
 
 
 
@@ -3065,7 +3090,16 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
     else if (hashPrevBlock == hashBestChain)
     {
         if (!SetBestChainInner(txdb, pindexNew))
+		{
+			//12-12-2014
+			int nResult = 0;
+	    	#if defined(WIN32) && defined(QT_GUI)
+		    //nResult = RebootClient();
+			#endif
+			
             return error("SetBestChain() : SetBestChainInner failed");
+
+		}
     }
     else
     {
@@ -3116,6 +3150,12 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 			{
 				txdb.TxnAbort();
 				InvalidChainFound(pindexNew);
+				printf("Reorganize failed... Chopping off end of block chain...");
+				if (!ReorganizeWithHatchet(txdb))
+				{
+					printf("Reorganize with hatchet failed...");
+				}
+
 				return error("SetBestChain() : Reorganize failed");
 			}
         }
@@ -3542,7 +3582,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 
 	if (nHeight > nGrandfather)
 	{
-	  	if (IsLockTimeVeryRecent(GetBlockTime()))
+	  	if (!ClientOutOfSync())
 		{	
 			// Check timestamp
 			if (GetBlockTime() > FutureDrift(GetAdjustedTime(), nHeight))
@@ -3585,7 +3625,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     // Verify hash target and signature of coinstake tx
 	if (nHeight > nGrandfather)
 	{
-		if (IsLockTimeVeryRecent(GetBlockTime()))
+		if (!ClientOutOfSync())
 		{	
 				if (IsProofOfStake())
 				{
@@ -3593,7 +3633,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 					
 					if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me))
 					{
-						printf("WARNING: AcceptBlock(): check proof-of-stake failed for block %s\n", hash.ToString().c_str());
+						if (!generated_by_me) printf("WARNING: AcceptBlock(): check proof-of-stake failed for block %s\n", hash.ToString().c_str());
 						return false; // do not error here as we expect this during initial block download
 					}
 					//11-30-2014
@@ -4593,15 +4633,6 @@ bool IsLockTimeWithinMinutes(double locktime, int minutes)
 	if (locktime < nCutoff) return false;
 	return true;
 }
-
-bool IsLockTimeVeryRecent(double locktime)
-{
-	//Within 24 minutes
-	double nCutoff =  GetAdjustedTime() - (60*60*.4);
-	if (locktime < nCutoff) return false;
-	return true;
-}
-
 
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes)
 {
@@ -6263,7 +6294,7 @@ MiningCPID DeserializeBoincBlock(std::string block)
 		}
 		if (s.size() > 11)
 		{
-			surrogate.ResearchSubsidy = cdbl(s[11],0);
+			surrogate.ResearchSubsidy = cdbl(s[11],2);
 		}
 		if (s.size() > 12)
 		{

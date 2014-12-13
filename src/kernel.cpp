@@ -729,7 +729,10 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
 		{
 			uint256 diff1 = hashProofOfStake - targetProofOfStake;
 			uint256 diff2 = targetProofOfStake - hashProofOfStake;
-			return tx.DoS(1, error("CheckProofOfStake() : INFO: check kernel failed on coinstake %s, hashProof=%s, target=%s, offby1: %s, OffBy2: %s", tx.GetHash().ToString().c_str(), hashProofOfStake.ToString().c_str(), targetProofOfStake.ToString().c_str(), diff1.ToString().c_str(), diff2.ToString().c_str())); // may occur during initial download or if behind on block chain sync
+			return error("CheckProofOfStake() : INFO: check kernel failed on coinstake %s, hashProof=%s, target=%s, offby1: %s, OffBy2: %s",
+				tx.GetHash().ToString().c_str(), hashProofOfStake.ToString().c_str(), targetProofOfStake.ToString().c_str(), 
+				diff1.ToString().c_str(), diff2.ToString().c_str()); 
+			// may occur during initial download or if behind on block chain sync
 
 		}
 	}
