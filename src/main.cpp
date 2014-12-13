@@ -61,6 +61,9 @@ extern double GetBlockDifficulty(unsigned int nBits);
 double GetLastPaymentTimeByCPID(std::string cpid);
 extern bool Contains(std::string data, std::string instring);
 
+extern bool LockTimeRecent(double locktime);
+
+
 
 extern double coalesce(double mag1, double mag2);
 extern bool AmIGeneratingBackToBackBlocks();
@@ -2740,8 +2743,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 		if (nStakeReward > nCalculatedStakeReward)
             return DoS(1, error("ConnectBlock() : coinstake pays above maximum (actual=%"PRId64" vs calculated=%"PRId64")", nStakeReward, nCalculatedStakeReward));
-		
-		if (!ClientOutOfSync() && bb.cpid=="INVESTOR" && nStakeReward > 1)
+		//nTime
+		if (LockTimeRecent(GetBlockTime()) && bb.cpid=="INVESTOR" && nStakeReward > 1)
 		{
 			//11-9-2014
 			double OUT_POR = 0;
@@ -2771,7 +2774,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	double mint = pindex->nMint/COIN;
 	if (pindex->nHeight > nGrandfather && IsProofOfStake())
 	{
-		if (!ClientOutOfSync())
+		if (LockTimeRecent(GetBlockTime()))
 		{
 
 			//Halford: During periods of high difficulty new block must have a higher magnitude than last block until block > 10 mins old:
@@ -2908,9 +2911,9 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 
 
-bool static ReorganizeWithHatchet(CTxDB& txdb)
+bool static Reorganize_testnet(CTxDB& txdb)
 {
-    printf("REORGANIZE with hatchet \n");
+    printf("REORGANIZE testnet \n");
     // Find the fork
 	int nMaxDepth = nBestHeight;
 	int nLookback = 200; 
@@ -2925,8 +2928,6 @@ bool static ReorganizeWithHatchet(CTxDB& txdb)
                 if (!block.DisconnectBlock(txdb, pblockindex))
 							return error("ReorganizeWithHatchet() : DisconnectBlock %s failed", pblockindex->GetBlockHash().ToString().c_str());
 	}
-
-    printf("REORGANIZE With Hatchet: done\n");
 	return true;
 }
 
@@ -3582,7 +3583,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 
 	if (nHeight > nGrandfather)
 	{
-	  	if (!ClientOutOfSync())
+	  	if (LockTimeRecent(GetBlockTime()))
 		{	
 			// Check timestamp
 			if (GetBlockTime() > FutureDrift(GetAdjustedTime(), nHeight))
@@ -3625,7 +3626,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     // Verify hash target and signature of coinstake tx
 	if (nHeight > nGrandfather)
 	{
-		if (!ClientOutOfSync())
+		if (LockTimeRecent(GetBlockTime()))
 		{	
 				if (IsProofOfStake())
 				{
@@ -4619,10 +4620,18 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
 	return outstanding;
 }
 
-bool IsLockTimeRecent(double locktime)
+bool IsLockTimeWithin14days(double locktime)
 {
 	//Within 14 days
 	double nCutoff =  GetAdjustedTime() - (60*60*24*14);
+	if (locktime < nCutoff) return false;
+	return true;
+}
+
+bool LockTimeRecent(double locktime)
+{
+	//Returns true if adjusted time is within 45 minutes
+	double nCutoff =  GetAdjustedTime() - (60*45);
 	if (locktime < nCutoff) return false;
 	return true;
 }
@@ -4665,7 +4674,7 @@ void AddWeightedMagnitude(double LockTime,StructCPID &structMagnitude,double mag
 void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, double mint, bool IsStake)
 {
 
-	    if (!IsLockTimeRecent(LockTime)) return;
+	    if (!IsLockTimeWithin14days(LockTime)) return;
 
 		StructCPID globalMag = GetStructCPID();
 		globalMag = mvMagnitudes["global"];
