@@ -722,12 +722,9 @@ bool AppInit2()
     else
         fDebugNet = GetBoolArg("-debugnet");
 
-	if (mapArgs.count("-debug"))
+	if (GetArg("-debug", "false")=="true")
 	{
-		if (GetArg("-debug", "false")=="true")
-		{
 			fDebug = true;
-		}
 	}
 				
 

@@ -22,6 +22,9 @@ MiningCPID GetNextProject();
 
 void ThreadCleanWalletPassphrase(void* parg);
 
+
+double CoinToDouble(double surrogate);
+
 void ThreadTopUpKeyPool(void* parg);
 
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
@@ -427,7 +430,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		//12-9-2014 Verify RSA Weight is actually in the block
 		miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 		double out_por = 0;
-		miningcpid.ResearchSubsidy = (double)(GetProofOfStakeReward(1,0,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),out_por))/COIN;
+		miningcpid.ResearchSubsidy = CoinToDouble(GetProofOfStakeReward(1,0,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),out_por));
 
 		msMiningErrors4 = "BRSA: " + RoundToString(miningcpid.RSAWeight,0);
 
@@ -616,7 +619,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	}
 
 	//
-    //double subsidy = (pblock->vtx[0].GetValueOut())/COIN;
+    //double subsidy = (pblock->vtx[0].GetValueOut())/C-OIN;
 	//std::string sSubsidy = RoundToString(subsidy,4);
 
 	/*
@@ -629,7 +632,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 
 
     //// debug print
-	double block_value = (pblock->vtx[1].GetValueOut())/COIN;
+	double block_value = CoinToDouble(pblock->vtx[1].GetValueOut());
 	std::string sBlockValue = RoundToString(block_value,4);	
 	//Submit the block during the public key address second
 	int wallet_second = 0;

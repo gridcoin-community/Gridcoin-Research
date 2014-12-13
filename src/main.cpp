@@ -63,6 +63,7 @@ extern bool Contains(std::string data, std::string instring);
 
 extern bool LockTimeRecent(double locktime);
 
+extern double CoinToDouble(double surrogate);
 
 
 extern double coalesce(double mag1, double mag2);
@@ -519,7 +520,7 @@ bool GetBlockNew(uint256 blockhash, int& out_height, CBlock& blk, bool bForceDis
 		global_total += nValue;
     }
 
-    return global_total/COIN;
+    return CoinToDouble(global_total);
 }
 
   
@@ -964,6 +965,13 @@ void ResendWalletTransactions(bool fForce)
         pwallet->ResendWalletTransactions(fForce);
 }
 
+
+double CoinToDouble(double surrogate)
+{
+	
+	double coin = (double)surrogate/(double)COIN;
+	return coin;
+}
 
 
 double GetTotalBalance()
@@ -2005,7 +2013,7 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 	int64_t maxStakeReward2 = GetProofOfStakeMaxReward(nCoinAge, nFees, GetAdjustedTime());
 	int64_t maxStakeReward = Floor(maxStakeReward1,maxStakeReward2);
 	if ((nSubsidy+nFees) > maxStakeReward) nSubsidy = maxStakeReward-nFees;
-	OUT_POR = nBoinc/COIN;
+	OUT_POR = CoinToDouble(nBoinc);
     return nSubsidy + nFees;
 }
 
@@ -2769,9 +2777,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
     pindex->nMoneySupply = (pindex->pprev? pindex->pprev->nMoneySupply : 0) + nValueOut - nValueIn;
 
 	//Gridcoin: Maintain network consensus for Magnitude & Outstanding Amount Owed by CPID  
-	
-	
-	double mint = pindex->nMint/COIN;
+		
+	double mint = CoinToDouble(pindex->nMint);
 	if (pindex->nHeight > nGrandfather && IsProofOfStake())
 	{
 		if (LockTimeRecent(GetBlockTime()))
@@ -2853,7 +2860,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 							{
 
 								double user_magnitude = GetMagnitude(bb.cpid,1,false);
-								//return DoS(1, error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f", 						bb.cpid.c_str(), nStakeReward/COIN, nCalculatedResearch/COIN, user_magnitude));
+								//return DoS(1, error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f", 						bb.cpid.c_str(), nStakeReward/C-o-IN, nCalculatedResearch/C-OIN, user_magnitude));
 								//12-12-2014
 								StructCPID UntrustedHost = mvMagnitudes[bb.cpid]; //Contains Mag across entire CPID
 
@@ -4779,7 +4786,8 @@ bool TallyNetworkAverages(bool ColdBoot)
      					CBlockIndex* pblockindex = FindBlockByHeight(ii);
 						block.ReadFromDisk(pblockindex);
 						std::string hashboinc = "";
-						double mint = pblockindex->nMint/COIN;
+						double mint = CoinToDouble(pblockindex->nMint);
+
 						if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
 						MiningCPID bb = DeserializeBoincBlock(hashboinc);
 

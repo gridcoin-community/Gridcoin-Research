@@ -23,6 +23,8 @@ void ReloadBlockChain1();
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
 
+double CoinToDouble(double surrogate);
+
 int64_t GetRSAWeightByCPID(std::string cpid);
 	
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
@@ -404,7 +406,6 @@ double GetPoSKernelPS()
 	if (result > 350000000123) result = 350000000123;
     return result;
 }
-
 Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPrintTransactionDetail)
 {
     Object result;
@@ -416,7 +417,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
     result.push_back(Pair("height", blockindex->nHeight));
     result.push_back(Pair("version", block.nVersion));
     result.push_back(Pair("merkleroot", block.hashMerkleRoot.GetHex()));
-	double mint = (blockindex->nMint)/COIN;
+	double mint = CoinToDouble(blockindex->nMint);
 
     result.push_back(Pair("mint", mint));
     result.push_back(Pair("time", (int64_t)block.GetBlockTime()));

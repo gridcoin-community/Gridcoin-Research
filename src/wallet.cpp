@@ -25,6 +25,8 @@ bool Contains(std::string data, std::string instring);
 
 bool IsLockTimeWithinMinutes(double locktime, int minutes);
 
+
+double CoinToDouble(double surrogate);
 double GetBlockDifficulty(unsigned int nBits);
 extern double MintLimiterPOR(double PORDiff,int64_t locktime);
 
@@ -1735,7 +1737,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		 miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
 	     miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 		 double out_por = 0;
-         miningcpid.ResearchSubsidy = (double)(GetProofOfStakeReward(1,0,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),out_por))/COIN;
+         miningcpid.ResearchSubsidy = CoinToDouble(GetProofOfStakeReward(1,0,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),out_por));
 
 		 msMiningErrors4 = "BRSA: " + RoundToString(miningcpid.RSAWeight,0);
 
@@ -1955,11 +1957,11 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		//Halford: Use current time since we are creating a new stake
 		double OUT_POR = 0;
         int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),OUT_POR);
-		std::string sReward = RoundToString(nReward/COIN,4);
+		std::string sReward = RoundToString(CoinToDouble(nReward),4);
 		double out_magnitude = 0;
 		double out_owed = 0;
 		int64_t RSA_WEIGHT  = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-		double mint = nReward/COIN;
+		double mint = CoinToDouble(nReward);
 		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
 		if (fDebug) printf("Creating POS Reward for %s  amt  %s  {RSAWeight %s} \r\n",
 			GlobalCPUMiningCPID.cpid.c_str(),sReward.c_str(),RoundToString((double)RSA_WEIGHT,0).c_str());
@@ -2049,7 +2051,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
         return error("CreateCoinStake : exceeded coinstake size limit");
 
     // Successfully generated coinstake
-	if ((nCredit/COIN) > (MaxSubsidy/10)) 
+	if (CoinToDouble(nCredit) > (MaxSubsidy/10)) 
 	{
 		msMiningErrors = "POR Block Mined";
 	}

@@ -459,8 +459,8 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	//WEIGHT MODIFICATION SECTION 2: Newbie stake allowance (11-13-2014)
 	//This is primarily to allow a newbie researcher to get started with a low balance.
 	//CBigNum bnCoinDayWeight = CBigNum(nValueIn + (5*COIN) ) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
-	//double mint = (blockFrom.vtx[1].GetValueOut())/COIN;
-	//double subsidy = (blockFrom.vtx[0].GetValueOut())/COIN;
+	//double mint = (blockFrom.vtx[1].GetValueOut())/C-OIN;
+	//double subsidy = (blockFrom.vtx[0].GetValueOut())/C-OIN;
 	//std::string sSubsidy = RoundToString(subsidy,4);
 	//uint64_t nNetworkWeight = GetPoSKernelPS2();
 	
