@@ -613,7 +613,7 @@ Public Class SQLBase
         sHost = ReadFirstRow(sql, "Host")
         If sHost = "" Then
             'No master is known, use the seed node
-            sHost = "grid10:8080"
+            sHost = "gridsql.gridcoin.us:32500"
         End If
         Return sHost
 

@@ -542,6 +542,15 @@ Module modGRC
 
 End Module
 
+Public Class GRCWebClient
+    Inherits System.Net.WebClient
+    Protected Overrides Function GetWebRequest(ByVal uri As Uri) As System.Net.WebRequest
+        Dim w As System.Net.WebRequest = MyBase.GetWebRequest(uri)
+        w.Timeout = 3000
+        Return w
+    End Function
+End Class
+
 Public Class MyWebClient
     Inherits System.Net.WebClient
     Protected Overrides Function GetWebRequest(ByVal uri As Uri) As System.Net.WebRequest

@@ -22,7 +22,6 @@ Partial Class frmSQL
     'Do not modify it using the code editor.
     <System.Diagnostics.DebuggerStepThrough()> _
     Private Sub InitializeComponent()
-        Me.components = New System.ComponentModel.Container()
         Dim DataGridViewCellStyle1 As System.Windows.Forms.DataGridViewCellStyle = New System.Windows.Forms.DataGridViewCellStyle()
         Dim DataGridViewCellStyle2 As System.Windows.Forms.DataGridViewCellStyle = New System.Windows.Forms.DataGridViewCellStyle()
         Dim DataGridViewCellStyle3 As System.Windows.Forms.DataGridViewCellStyle = New System.Windows.Forms.DataGridViewCellStyle()
@@ -38,7 +37,6 @@ Partial Class frmSQL
         Me.btnExec = New System.Windows.Forms.Button()
         Me.pbSync = New System.Windows.Forms.ProgressBar()
         Me.lblSync = New System.Windows.Forms.Label()
-        Me.tSync = New System.Windows.Forms.Timer(Me.components)
         Me.gbQueryAnalyzer.SuspendLayout()
         Me.gbResultsPane.SuspendLayout()
         CType(Me.dgv, System.ComponentModel.ISupportInitialize).BeginInit()
@@ -51,7 +49,7 @@ Partial Class frmSQL
         Me.gbQueryAnalyzer.ForeColor = System.Drawing.Color.Lime
         Me.gbQueryAnalyzer.Location = New System.Drawing.Point(28, 22)
         Me.gbQueryAnalyzer.Name = "gbQueryAnalyzer"
-        Me.gbQueryAnalyzer.Size = New System.Drawing.Size(938, 334)
+        Me.gbQueryAnalyzer.Size = New System.Drawing.Size(1317, 334)
         Me.gbQueryAnalyzer.TabIndex = 1
         Me.gbQueryAnalyzer.TabStop = False
         Me.gbQueryAnalyzer.Text = "Query Analyzer"
@@ -63,7 +61,7 @@ Partial Class frmSQL
         Me.rtbQuery.ForeColor = System.Drawing.Color.Lime
         Me.rtbQuery.Location = New System.Drawing.Point(170, 15)
         Me.rtbQuery.Name = "rtbQuery"
-        Me.rtbQuery.Size = New System.Drawing.Size(762, 313)
+        Me.rtbQuery.Size = New System.Drawing.Size(1141, 313)
         Me.rtbQuery.TabIndex = 2
         Me.rtbQuery.Text = ""
         '
@@ -85,7 +83,7 @@ Partial Class frmSQL
         Me.gbResultsPane.ForeColor = System.Drawing.Color.Lime
         Me.gbResultsPane.Location = New System.Drawing.Point(28, 362)
         Me.gbResultsPane.Name = "gbResultsPane"
-        Me.gbResultsPane.Size = New System.Drawing.Size(938, 339)
+        Me.gbResultsPane.Size = New System.Drawing.Size(1317, 339)
         Me.gbResultsPane.TabIndex = 2
         Me.gbResultsPane.TabStop = False
         Me.gbResultsPane.Text = "Results"
@@ -130,18 +128,17 @@ Partial Class frmSQL
         DataGridViewCellStyle5.BackColor = System.Drawing.Color.Black
         DataGridViewCellStyle5.ForeColor = System.Drawing.Color.Lime
         Me.dgv.RowsDefaultCellStyle = DataGridViewCellStyle5
-        Me.dgv.Size = New System.Drawing.Size(891, 314)
+        Me.dgv.Size = New System.Drawing.Size(1305, 314)
         Me.dgv.TabIndex = 0
         '
         'btnExec
         '
-        Me.btnExec.BackgroundImage = Global.BoincStake.My.Resources.Resources.gradient75
-        Me.btnExec.ForeColor = System.Drawing.Color.Lime
-        Me.btnExec.Location = New System.Drawing.Point(890, 5)
+        Me.btnExec.ForeColor = System.Drawing.Color.DarkGreen
+        Me.btnExec.Location = New System.Drawing.Point(548, 7)
         Me.btnExec.Name = "btnExec"
         Me.btnExec.Size = New System.Drawing.Size(76, 20)
         Me.btnExec.TabIndex = 3
-        Me.btnExec.Text = "Execute"
+        Me.btnExec.Text = "Execute (F5)"
         Me.btnExec.UseVisualStyleBackColor = True
         '
         'pbSync
@@ -150,10 +147,11 @@ Partial Class frmSQL
         Me.pbSync.Location = New System.Drawing.Point(74, 7)
         Me.pbSync.Maximum = 40000
         Me.pbSync.Name = "pbSync"
-        Me.pbSync.Size = New System.Drawing.Size(794, 12)
+        Me.pbSync.Size = New System.Drawing.Size(455, 12)
         Me.pbSync.Step = 1
         Me.pbSync.Style = System.Windows.Forms.ProgressBarStyle.Continuous
         Me.pbSync.TabIndex = 4
+        Me.pbSync.Visible = False
         '
         'lblSync
         '
@@ -164,18 +162,14 @@ Partial Class frmSQL
         Me.lblSync.Size = New System.Drawing.Size(34, 13)
         Me.lblSync.TabIndex = 5
         Me.lblSync.Text = "Sync:"
-        '
-        'tSync
-        '
-        Me.tSync.Enabled = True
-        Me.tSync.Interval = 20000
+        Me.lblSync.Visible = False
         '
         'frmSQL
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.BackColor = System.Drawing.Color.Black
-        Me.ClientSize = New System.Drawing.Size(978, 713)
+        Me.ClientSize = New System.Drawing.Size(1357, 713)
         Me.Controls.Add(Me.lblSync)
         Me.Controls.Add(Me.pbSync)
         Me.Controls.Add(Me.btnExec)

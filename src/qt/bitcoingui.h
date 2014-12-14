@@ -200,7 +200,7 @@ private slots:
 	void upgradeClicked();
 	void downloadClicked();
 	void rebootClicked();
-	//void sqlClicked();
+	void sqlClicked();
 	//void leaderboardClicked();
 	//void miningClicked();
 

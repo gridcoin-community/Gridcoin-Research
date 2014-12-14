@@ -12,7 +12,7 @@ Public Class Utilization
    
     Public ReadOnly Property Version As Double
         Get
-            Return 329
+            Return 331
         End Get
     End Property
 
@@ -204,8 +204,16 @@ Public Class Utilization
     Public Function ShowProjects()
     End Function
     Public Function ShowSql()
-        mfrmSql = New frmSQL
-        mfrmSql.Show()
+        Try
+            mfrmSql = New frmSQL
+            mfrmSql.Show()
+
+        Catch ex As Exception
+            Log("Error while transitioning to frmSQL" + ex.Message)
+
+
+
+        End Try
     End Function
     Public Function ShowLeaderboard()
         mfrmLeaderboard = New frmLeaderboard

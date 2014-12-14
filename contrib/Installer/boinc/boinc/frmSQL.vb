@@ -11,24 +11,35 @@ Public Class frmSQL
     End Sub
 
     Private Sub frmSQL_Load(sender As System.Object, e As System.EventArgs) Handles MyBase.Load
-        ReplicateDatabase("gridcoin_ro")
 
-        mData = New Sql("gridcoin_ro")
+        Try
+            mData = New Sql()
 
+        Catch ex As Exception
+            Log("Error while creating sql " + ex.Message)
+
+        End Try
+        
 
         'Query available tables
-        Dim dr As GridcoinReader
+        Dim dr As New GridcoinReader
 
         lvTables.View = Windows.Forms.View.Details
         Dim h1 As New System.Windows.Forms.ColumnHeader
 
-        dr = mData.GetGridcoinReader("SELECT * FROM sqlite_master WHERE type='table';")
+        Try
+            dr = mData.GetGridcoinReader("SELECT * FROM INTERNALTABLES")
 
-        'dr = mData.Query(".tables;")
+        Catch ex As Exception
+            Log("Error while select internaltables " + ex.Message)
+            Exit Sub
+
+        End Try
+        
         lvTables.Columns.Clear()
         lvTables.Columns.Add("Table")
         lvTables.Columns.Add("Rows")
-       
+
         lvTables.Columns(0).Width = (lvTables.Width * 0.59) - 3
         lvTables.Columns(1).Width = (lvTables.Width * 0.41) - 3
 
@@ -39,21 +50,25 @@ Public Class frmSQL
         AddHandler lvTables.DrawSubItem, AddressOf lvTables_DrawSubItem
         Dim lRC As Long
         Dim grr As GridcoinReader.GridcoinRow
+        If dr Is Nothing Then
+            MsgBox("Error while retrieving data from InternalTables", MsgBoxStyle.Critical)
+            Exit Sub
 
+        End If
         For y = 1 To dr.Rows
             grr = dr.GetRow(y)
-            Dim sTable As String = grr.Values(1)
+            Dim sTable As String = grr.Values(0)
             Dim lvItem As New System.Windows.Forms.ListViewItem(sTable)
-            Dim sql As String
-            sql = "Select count(*) as Count1 from " + Trim(sTable) + ";"
-            lRC = Val(mData.QueryFirstRow(sql, "Count1"))
-            lvItem.SubItems.Add(Trim(lRC))
+            Dim rc As String
+            rc = grr.Values(1)
+            lvItem.SubItems.Add(Trim(rc))
+
             lvItem.BackColor = Drawing.Color.Black
             lvItem.ForeColor = Drawing.Color.Lime
             lvTables.Items.Add(lvItem)
             iRow = iRow + 1
         Next y
-  
+
         lvTables.BackColor = Drawing.Color.Black
         lvTables.ForeColor = Drawing.Color.Lime
 
@@ -68,7 +83,49 @@ Public Class frmSQL
         e.Graphics.FillRectangle(Drawing.Brushes.Black, e.Bounds)
         e.DrawText()
     End Sub
+    Public Function InsertConfirm(dAmt As Double, sFrom As String, sTo As String, sTXID As String) As String
+        Dim sInsert As String
+        sInsert = "<INSERT><TABLE>Confirm</TABLE><FIELDS>GRCFrom,GRCTo,txid,amount,Confirmed</FIELDS><VALUES>'" + Trim(sFrom) + "','" + Trim(sTo) + "','" + Trim(sTXID) + "','" + Trim(dAmt) + "','0'</VALUES></INSERT>"
+        Dim sErr As String
+        sErr = mData.ExecuteP2P(sInsert)
+        Return sErr
+    End Function
+    Public Function UpdateConfirm(sTXID As String, iStatus As Long) As String
+        Dim sUpdate As String
+        sUpdate = "<UPDATE><TABLE>Confirm</TABLE><FIELDS>Confirmed</FIELDS><VALUES>'" + Trim(iStatus) + "'</VALUES><WHEREFIELDS>txid</WHEREFIELDS><WHEREVALUES>'" + sTXID + "'</WHEREVALUES></UPDATE>"
+        Dim sErr As String
+        sErr = mData.ExecuteP2P(sUpdate)
+        Return sErr
+
+    End Function
+    Public Function TrackConfirm(sTXID As String) As Integer
+
+        Dim dr As GridcoinReader
+        Dim sql As String
+        sql = "Select Confirmed from Confirm where TXID='" + sTXID + "'"
+        Try
+            dr = mData.GetGridcoinReader(sql)
+
+        Catch ex As Exception
+            Return -1
+        End Try
+
+        Dim grr As New GridcoinReader.GridcoinRow
+        grr = dr.GetRow(1)
+        If grr.Values(0) = "1" Then Return 1
+        Return 0
+
+    End Function
+
     Private Sub btnExec_Click(sender As System.Object, e As System.EventArgs) Handles btnExec.Click
+
+        'Dim sResult As String = InsertConfirm(100, "ee", "b", "abc12a")
+        'sResult = UpdateConfirm("abc12a", "1")
+
+        Dim iResult As Long
+        iResult = TrackConfirm("abc12a")
+
+
         Dim dr As GridcoinReader
         mData.bThrowUIErrors = True
 
@@ -78,7 +135,6 @@ Public Class frmSQL
             MsgBox(ex.Message, vbCritical, "Gridcoin Query Analayzer")
             Exit Sub
         End Try
-        If dr Is Nothing Then Exit Sub
         dgv.Rows.Clear()
         dgv.Columns.Clear()
         dgv.BackgroundColor = Drawing.Color.Black
@@ -109,7 +165,7 @@ Public Class frmSQL
                 dgv.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.None
             Next
 
-            
+
             For y = 1 To dr.Rows
                 grr = dr.GetRow(y)
                 dgv.Rows.Add()
@@ -190,7 +246,7 @@ Public Class frmSQL
         Return sbManifest
 
     End Function
-    
+
     Private Sub Button1_Click(sender As System.Object, e As System.EventArgs)
         Dim s As New StringBuilder
         s = CreateManifest()
@@ -204,28 +260,16 @@ Public Class frmSQL
     End Sub
 
     Private Sub btnRefreshLeaderboard_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
-        Try
-            Dim thUpdateLeaderboard As New System.Threading.Thread(AddressOf modBoincLeaderboard.RefreshLeaderboard)
-            Log("Starting background update leaderboard thread.")
-            thUpdateLeaderboard.IsBackground = False
-            thUpdateLeaderboard.Start()
-        Catch ex As Exception
-            Log("UpdateLeaderboard:" + ex.Message)
-        End Try
+
 
     End Sub
 
     Private Sub tSync_Tick(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles tSync.Tick
-        If modBoincLeaderboard.SQLInSync Then
-            lblSync.Visible = False
-            pbSync.Visible = False
 
-        Else
-            lblSync.Visible = True
-            pbSync.Visible = True
-            SetPb(pbSync, nBestBlock, mlSqlBestBlock)
+        ' lblSync.Visible = True
+        ' pbSync.Visible = True
+        ' SetPb(pbSync, nBestBlock, mlSqlBestBlock)
 
-        End If
     End Sub
     Private Function SetPb(ByVal pb As ProgressBar, ByVal valMax As Long, ByVal valActual As Long)
         Dim max As Long
@@ -242,4 +286,8 @@ Public Class frmSQL
 
 
     End Function
+
+    Private Sub rtbQuery_TextChanged(sender As System.Object, e As System.EventArgs) Handles rtbQuery.TextChanged
+
+    End Sub
 End Class

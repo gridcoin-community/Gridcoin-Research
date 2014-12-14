@@ -111,8 +111,7 @@ Public Class frmSQL
         Dim iResult As Long
         iResult = TrackConfirm("abc12a")
 
-        Stop
-
+     
         Dim dr As GridcoinReader
         mData.bThrowUIErrors = True
 

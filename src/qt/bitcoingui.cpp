@@ -582,7 +582,7 @@ int AddressUser()
 		try
 		{
 		out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid,out_owed);
-	    printf("Boinc Magnitude %f \r\n",out_magnitude);
+	    if (fDebug) printf("Boinc Magnitude %f \r\n",out_magnitude);
 		result = globalcom->dynamicCall("AddressUser(Qstring)",IntToQstring((int)out_magnitude)).toInt();
 		}
 		catch(...)
@@ -720,9 +720,9 @@ void BitcoinGUI::createActions()
 //	emailAction->setStatusTip(tr("Go to the E-Mail center"));
 //	emailAction->setMenuRole(QAction::TextHeuristicRole);
 
-//	sqlAction = new QAction(QIcon(":/icons/bitcoin"), tr("&SQL Query Analyzer"), this);
-//	sqlAction->setStatusTip(tr("SQL Query Analyzer"));
-//	sqlAction->setMenuRole(QAction::TextHeuristicRole);
+	sqlAction = new QAction(QIcon(":/icons/bitcoin"), tr("&SQL Query Analyzer"), this);
+	sqlAction->setStatusTip(tr("SQL Query Analyzer"));
+	sqlAction->setMenuRole(QAction::TextHeuristicRole);
 
 //	leaderboardAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Leaderboard"), this);
 //	leaderboardAction->setStatusTip(tr("Leaderboard"));
@@ -767,17 +767,13 @@ void BitcoinGUI::createActions()
     connect(lockWalletAction, SIGNAL(triggered()), this, SLOT(lockWallet()));
     connect(signMessageAction, SIGNAL(triggered()), this, SLOT(gotoSignMessageTab()));
     connect(verifyMessageAction, SIGNAL(triggered()), this, SLOT(gotoVerifyMessageTab()));
-
 	//	connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
 	//	connect(emailAction, SIGNAL(triggered()), this, SLOT(emailClicked()));
-
 	connect(rebuildAction, SIGNAL(triggered()), this, SLOT(rebuildClicked()));
 	connect(upgradeAction, SIGNAL(triggered()), this, SLOT(upgradeClicked()));
 	connect(downloadAction, SIGNAL(triggered()), this, SLOT(downloadClicked()));
-
 	connect(rebootAction, SIGNAL(triggered()), this, SLOT(rebootClicked()));
-
-	//connect(sqlAction, SIGNAL(triggered()), this, SLOT(sqlClicked()));
+	connect(sqlAction, SIGNAL(triggered()), this, SLOT(sqlClicked()));
 	//connect(leaderboardAction, SIGNAL(triggered()), this, SLOT(leaderboardClicked()));
 
 }
@@ -837,9 +833,9 @@ void BitcoinGUI::createMenuBar()
 	rebuild->addAction(rebootAction);
 	rebuild->addSeparator();
 
-//	QMenu *sql = appMenuBar->addMenu(tr("&SQL Query Analyzer"));
-//	sql->addSeparator();
-//	sql->addAction(sqlAction);
+	QMenu *sql = appMenuBar->addMenu(tr("&SQL Query Analyzer"));
+	sql->addSeparator();
+	sql->addAction(sqlAction);
 
 //	QMenu *leaderboard = appMenuBar->addMenu(tr("&Leaderboard"));
 //	leaderboard->addSeparator();
@@ -1439,22 +1435,20 @@ void BitcoinGUI::rebootClicked()
 	RebootClient();
 }
 
-/*
+
 void BitcoinGUI::sqlClicked()
 {
 #ifdef WIN32
-
 	if (!globalcom)
 	{
 		globalcom = new QAxObject("BoincStake.Utilization");
 	}
-
     globalcom->dynamicCall("ShowSql()");
-
 #endif
 
 }
 
+/*
 void BitcoinGUI::leaderboardClicked()
 {
 	#ifdef WIN32

@@ -108,7 +108,7 @@ Public Class Sql
     Public Function GetMasterNodeURL()
         'Find the node that is currently the leader, with a synced consensus:
         Dim sHost As String
-        sHost = "grid10:8080"
+        sHost = "gridsql.gridcoin.us:32500"
         Return sHost
     End Function
     Public Function SQLQuery(sHost As String, sSQL As String) As String
@@ -117,40 +117,24 @@ Public Class Sql
         sSQL = Replace(sSQL, vbCr, "<CR>")
 
         sSQL = Replace(sSQL, vbLf, "<LF>")
-
-
         For x = 1 To 9
             Try
-
                 Dim wc As New MyWebClient
-
                 Using wc
-
-                    'wc.Headers(HttpRequestHeader.ContentType) = "application/x-www-form-urlencoded"
-
                     wc.Headers.Add("ContentType:application/x-www-form-urlencoded")
-
                     wc.Headers.Add("Query:<QUERY>" + sSQL + "</QUERY>")
-
                     Dim result As String
-                    'result = wc.UploadString(sURL, myParameters)
                     result = wc.DownloadString(sURL)
                     Dim sErr As String
                     sErr = ExtractXML(result, "<ERROR>", "</ERROR>")
                     If Len(sErr) > 0 Then MsgBox(sErr)
-
                     Return result
-
 
                 End Using
             Catch ex As Exception
                 If x = 9 Then Throw ex
-
             End Try
-
         Next
-
-
     End Function
 
     Public Function ExecuteP2P(sCommand As String) As String
@@ -237,8 +221,6 @@ Public Class Sql
             Dim o As Object
             o = Me.QueryFirstRow(mSql, "Value")
             Return o.ToString()
-
-
         Catch ex As Exception
 
         End Try
@@ -273,10 +255,7 @@ Public Class Sql
         Exec(mSql)
 
         Try
-            'mSql = "Create Table UserSummary (id integer primary key, ProjectCount integer,Address varchar(100), Host varchar(50), Credits numeric(12,2))"
-            'Exec(mSql)
         Catch ex As Exception
-
         End Try
 
     End Function
@@ -393,8 +372,6 @@ Public Class Sql
         Exec(mSql)
 
     End Sub
-
-
 
 
 End Class

@@ -7,4 +7,4 @@ static const std::string GetBlocksCommand = "gridblocks";
 
 //addnode=supernode.gridcoin.us
 //boincblocks=gridblocks
-//boinchash=PUrMgXr9kgcqiuehEJ2Tq1dovW 
+//boinchash=PUrMgXr9kgcqiuehEJ2Tq1dovW

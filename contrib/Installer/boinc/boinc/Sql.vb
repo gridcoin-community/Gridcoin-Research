@@ -2,6 +2,8 @@
 Imports System.Text
 Imports System.IO
 Imports Microsoft.VisualBasic
+Imports System.Net
+
 Public Class GridcoinReader
     Public Rows As Long
 
@@ -19,6 +21,7 @@ Public Class GridcoinReader
     End Sub
     Public Function GetRow(iRow As Integer) As GridcoinRow
         Dim gr As New GridcoinRow
+
         gr = dReader(iRow)
         Return gr
     End Function
@@ -58,20 +61,7 @@ Public Class Sql
 
         Return s
     End Function
-    Private Function DatabaseExists() As Boolean
-        Try
-            Dim sql As String
-            sql = "Select Value From System where id='1';"
-            Dim gr As New GridcoinReader
-            gr = GetGridcoinReader(sql)
-            If gr.Rows = 0 Then Return False
-            mStr = CStr(gr.Value(1, "Value"))
-        Catch ex As Exception
-            If LCase(ex.Message) Like "*locked*" Then Return True
-            Return False
-        End Try
-        If Val(mStr) > 0 Then Return True
-    End Function
+
     Public Sub ExecHugeQuery(sbSql As System.Text.StringBuilder)
         Dim vSql As String()
         Try
@@ -88,19 +78,7 @@ Public Class Sql
         End Try
 
     End Sub
-    Public Function UpdateUserSummary()
-        Dim sql As String
-        sql = "Delete from UserSummary"
-        Exec(sql)
 
-        sql = "Insert Into UserSummary (ProjectCount,Address)"
-        sql += "select count(Project) as ProjectCount,Address from ("
-        sql += "select distinct project,address"
-        sql += " from leaderboard "
-        sql += "group by project,address) group by address"
-        Exec(sql)
-
-    End Function
 
     Public Sub Exec(Sql As String)
         Try
@@ -127,32 +105,106 @@ Public Class Sql
         Catch ex As Exception
         End Try
     End Sub
+    Public Function GetMasterNodeURL()
+        'Find the node that is currently the leader, with a synced consensus:
+        Dim sHost As String
+        sHost = "gridsql.gridcoin.us:32500"
+        Return sHost
+    End Function
+    Public Function SQLQuery(sHost As String, sSQL As String) As String
+        Dim sURL As String
+        sURL = "http://" + sHost + "/index.html?query="
+        sSQL = Replace(sSQL, vbCr, "<CR>")
+
+        sSQL = Replace(sSQL, vbLf, "<LF>")
+        For x = 1 To 9
+            Try
+                Dim wc As New GRCWebClient
+                Using wc
+                    wc.Headers.Add("ContentType:application/x-www-form-urlencoded")
+                    wc.Headers.Add("Query:<QUERY>" + sSQL + "</QUERY>")
+                    Dim result As String
+                    result = wc.DownloadString(sURL)
+                    Dim sErr As String
+                    sErr = ExtractXML(result, "<ERROR>", "</ERROR>")
+                    If Len(sErr) > 0 Then MsgBox(sErr)
+                    Return result
+
+                End Using
+            Catch ex As Exception
+                If x = 9 Then Throw ex
+            End Try
+        Next
+    End Function
+
+    Public Function ExecuteP2P(sCommand As String) As String
+        Dim sHost As String
+        Dim sData As String = ""
+        For x = 1 To 9
+            Try
+                sHost = GetMasterNodeURL()
+                sData = SQLQuery(sHost, sCommand)
+                If sData = "" Then Return sData
+
+            Catch ex As Exception
+                Log(ex.Message)
+                'Throw ex
+                If x = 9 Then Return ex.Message
+            End Try
+        Next x
+
+    End Function
     Public Function GetGridcoinReader(Sql As String) As GridcoinReader
 
         Try
 
             Dim g As New GridcoinReader
 
-            Using c As New SQLiteConnection(CONNECTION_STR)
-                c.Open()
-                Using cmd As New SQLiteCommand(Sql, c)
-                    Using rdr As SQLiteDataReader = cmd.ExecuteReader()
-                        While rdr.Read
-                            Dim gr As New GridcoinReader.GridcoinRow
-                            For y = 0 To rdr.FieldCount - 1
-                                If gr.FieldNames Is Nothing Then gr.FieldNames = New Dictionary(Of Integer, Object)
+            Dim sData As String
+            Dim sHost As String
+            sHost = GetMasterNodeURL()
 
+            sData = SQLQuery(sHost, Sql)
+            Dim vData() As String
+            vData = Split(sData, "<ROW>")
+            Dim vHeader() As String
+            vHeader = Split(vData(0), "<COL>")
 
-                                gr.FieldNames.Add(y, rdr.GetName(y))
-                                If gr.Values Is Nothing Then gr.Values = New Dictionary(Of Integer, Object)
+            For z = 1 To UBound(vData) - 1
+                Dim gr As New GridcoinReader.GridcoinRow
+                Dim sRow As String
+                sRow = vData(z)
+                Dim vRow() As String
+                vRow = Split(sRow, "<COL>")
 
-                                gr.Values.Add(y, rdr(y))
-                            Next
-                            g.AddRow(gr)
-                        End While
-                    End Using
-                End Using
-            End Using
+                For y = 0 To UBound(vRow) - 1
+                    If gr.FieldNames Is Nothing Then gr.FieldNames = New Dictionary(Of Integer, Object)
+                    Dim vDataType() As String
+                    vDataType = Split(vHeader(y), "<TYPE>")
+                    Dim sType As String = UCase(vDataType(1))
+                    Dim sFieldName As String = vDataType(0)
+                    gr.FieldNames.Add(y, sFieldName)
+                    If gr.Values Is Nothing Then gr.Values = New Dictionary(Of Integer, Object)
+                    'Cast string back to type
+                    Dim oValue As Object
+                    If sType = "SYSTEM.STRING" Then
+                        oValue = vRow(y).ToString()
+                    ElseIf sType = "SYSTEM.INTEGER" Then
+                        oValue = CInt(vRow(y))
+                    ElseIf sType = "SYSTEM.DATETIME" Then
+                        oValue = CDate(vRow(y))
+                    ElseIf sType = "SYSTEM.DECIMAL" Then
+                        oValue = CDbl("0" & vRow(y))
+
+                    ElseIf sType = "SYSTEM.GUID" Then
+                        oValue = Trim(vRow(y).ToString())
+
+                    End If
+                    gr.Values.Add(y, oValue)
+                Next
+                g.AddRow(gr)
+            Next z
+
             Return g
         Catch ex As Exception
             Log("GetGridcoinReader:" + Sql + ":" + ex.Message)
@@ -169,8 +221,6 @@ Public Class Sql
             Dim o As Object
             o = Me.QueryFirstRow(mSql, "Value")
             Return o.ToString()
-
-
         Catch ex As Exception
 
         End Try
@@ -180,49 +230,16 @@ Public Class Sql
     Public Sub SQLKey(ByVal sKey As String, ByVal sValue As String)
         Try
 
-      
-        mSql = "Delete from System where key='" + sKey + "'" + vbCrLf
-        mSql += "Insert into System (key,value,added) values ('" + sKey + "','" + sValue + "',date('now'));"
-        Me.Exec(mSql)
+
+            mSql = "Delete from System where key='" + sKey + "'" + vbCrLf
+            mSql += "Insert into System (key,value,added) values ('" + sKey + "','" + sValue + "',date('now'));"
+            Me.Exec(mSql)
         Catch ex As Exception
 
         End Try
 
     End Sub
-    Private Sub CreateDatabase()
-        If DatabaseExists() = True Then
-            Exit Sub
-        End If
 
-        Try
-            sOptDatabaseOptions = "New=True" ''New=True to create a new database
-
-            mSql = "create table System (id integer primary key, key varchar(30),value varchar(30),Added datetime);"
-            Exec(mSql)
-            sOptDatabaseOptions = ""
-
-            mSql = "Insert into System (id,key,value,added) values (1,'Gridcoin_Version','1.0',date('now'));"
-            Exec(mSql)
-            mSql = "CREATE TABLE Peers (id integer primary key, ip varchar(30), version varchar(40), Added datetime);"
-            Exec(mSql)
-            mSql = "INSERT INTO Peers (id, ip, version, Added) VALUES (1,'127.0.0.1','71002',date('now'));"
-            Exec(mSql)
-            mSql = "INSERT INTO Peers (id, ip, version, Added) VALUES (2,'127.0.0.1','71002',date('now','start of month','+1 month','-2 day'));"
-            Exec(mSql)
-            CreateLeaderboardTable()
-
-            mSql = "CREATE TABLE Blocks (height integer primary key,hash varchar(100),confirmations varchar(30)," _
-            & "blocksize varchar(10),version varchar(10), merkleroot varchar(200), tx varchar(900), " _
-            & "blocktime varchar(12), nonce varchar(15), bits varchar(15), difficulty varchar(20), boinchash varchar(900), previousblockhash varchar(200), nextblockhash varchar(200)); "
-            Exec(mSql)
-            sOptDatabaseOptions = ""
-
-            Exit Sub
-        Catch ex As Exception
-            sOptDatabaseOptions = ""
-            MsgBox(ex.Message)
-        End Try
-    End Sub
     Public Function CreateLeaderboardTable()
 
         mSql = "Drop table Leaderboard"
@@ -238,10 +255,7 @@ Public Class Sql
         Exec(mSql)
 
         Try
-            'mSql = "Create Table UserSummary (id integer primary key, ProjectCount integer,Address varchar(100), Host varchar(50), Credits numeric(12,2))"
-            'Exec(mSql)
         Catch ex As Exception
-
         End Try
 
     End Function
@@ -323,13 +337,12 @@ Public Class Sql
     End Function
     Public Sub New()
         sDatabaseName = "gridcoin"
-        CreateDatabase()
-        If bClean = False Then SqlHousecleaning()
+
     End Sub
 
     Public Sub New(strDatabaseName As String)
         sDatabaseName = strDatabaseName
-        CreateDatabase()
+
         If bClean = False Then SqlHousecleaning()
     End Sub
 
@@ -340,4 +353,25 @@ Public Class Sql
         Close()
         MyBase.Finalize()
     End Sub
+
+
+    Public Sub CreateTable(sTableName As String, sFields As String, sFieldTypes As String)
+        'Add on the Added,Updated,AddedBy, UpdatedBy, Id, Hash, LastHash fields
+        Dim sAdhoc As String = ""
+        mSql = "Create table " + sTableName + " (id integer primary key, Added datetime,AddedBy varchar(100), Updated datetime, UpdatedBy varchar(100),"
+        Dim vFields() As String
+        vFields = Split(sFields, ",")
+        Dim vFieldTypes() As String
+        vFieldTypes = Split(sFieldTypes, ",")
+        For x = 0 To UBound(vFields)
+            sAdhoc += vFields(x) + " " + vFieldTypes(x) + ", "
+
+        Next x
+        sAdhoc = Left(sAdhoc, Len(sAdhoc) - 1)
+        mSql += sAdhoc
+        Exec(mSql)
+
+    End Sub
+
+
 End Class

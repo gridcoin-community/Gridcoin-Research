@@ -12,7 +12,7 @@ Public Class WebServer
             Dim hostName As String = Dns.GetHostName()
             Dim serverIP As IPAddress = Dns.Resolve(hostName).AddressList(0)
 
-            Dim Port As String = "8080"
+            Dim Port As String = "32500"
 
             Dim tcpListener As New TcpListener(serverIP, Int32.Parse(Port))
 
