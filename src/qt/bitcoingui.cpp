@@ -1376,7 +1376,7 @@ std::string RetrieveBlockAsString(int lSqlBlock)
 		if (lSqlBlock==0) lSqlBlock=1;
 		if (lSqlBlock > nBestHeight-2) return "";
 		CBlock block;
-		CBlockIndex* blockindex = FindBlockByHeight(lSqlBlock);
+		CBlockIndex* blockindex = MainFindBlockByHeight(lSqlBlock);
 		block.ReadFromDisk(blockindex);
 
 		std::string s = "";

@@ -520,7 +520,7 @@ Value showblock(const Array& params, bool fHelp)
     int nHeight = params[0].get_int();
     if (nHeight < 0 || nHeight > nBestHeight)
         throw runtime_error("Block number out of range.");
-    CBlockIndex* pblockindex = FindBlockByHeight(nHeight);
+    CBlockIndex* pblockindex = RPCFindBlockByHeight(nHeight);
 
     if (pblockindex==NULL)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
@@ -609,9 +609,10 @@ Value getblockhash(const Array& params, bool fHelp)
     int nHeight = params[0].get_int();
     if (nHeight < 0 || nHeight > nBestHeight)
         throw runtime_error("Block number out of range.");
-
-    CBlockIndex* pblockindex = FindBlockByHeight(nHeight);
-    return pblockindex->phashBlock->GetHex();
+		printf("Getblockhash %f",(double)nHeight);
+		CBlockIndex* RPCpblockindex = RPCFindBlockByHeight(nHeight);
+		printf("@r");
+		return RPCpblockindex->phashBlock->GetHex();
 }
 
 Value getblock(const Array& params, bool fHelp)

@@ -1809,6 +1809,45 @@ CBlockIndex* FindBlockByHeight(int nHeight)
     return pblockindex;
 }
 
+
+CBlockIndex* RPCFindBlockByHeight(int nHeight)
+{
+    CBlockIndex *RPCpblockindex;
+    if (nHeight < nBestHeight / 2)
+        RPCpblockindex = pindexGenesisBlock;
+    else
+        RPCpblockindex = pindexBest;
+    while (RPCpblockindex->nHeight > nHeight)
+	{
+        RPCpblockindex = RPCpblockindex->pprev;
+	}
+    while (RPCpblockindex->nHeight < nHeight)
+	{
+        RPCpblockindex = RPCpblockindex->pnext;
+	}
+    return RPCpblockindex;
+}
+
+CBlockIndex* MainFindBlockByHeight(int nHeight)
+{
+    CBlockIndex *Mainpblockindex;
+    if (nHeight < nBestHeight / 2)
+        Mainpblockindex = pindexGenesisBlock;
+    else
+        Mainpblockindex = pindexBest;
+    while (Mainpblockindex->nHeight > nHeight)
+	{
+        Mainpblockindex = Mainpblockindex->pprev;
+	}
+    while (Mainpblockindex->nHeight < nHeight)
+	{
+        Mainpblockindex = Mainpblockindex->pnext;
+	}
+    return Mainpblockindex;
+}
+
+
+
 bool CBlock::ReadFromDisk(const CBlockIndex* pindex, bool fReadTransactions)
 {
     if (!fReadTransactions)
@@ -2930,10 +2969,10 @@ bool static Reorganize_testnet(CTxDB& txdb)
 	int iRow = 0;
 	for (int ii = nMaxDepth; ii > nMinDepth; ii--)
 	{
-				CBlockIndex* pblockindex = FindBlockByHeight(ii);
-			    if (!block.ReadFromDisk(pblockindex))	return error("ReorganizeWithHatchet() : ReadFromDisk for disconnect failed");
+				CBlockIndex* pblockindex = MainFindBlockByHeight(ii);
+			    if (!block.ReadFromDisk(pblockindex))	return error("ReorganizeTestnet() : ReadFromDisk for disconnect failed");
                 if (!block.DisconnectBlock(txdb, pblockindex))
-							return error("ReorganizeWithHatchet() : DisconnectBlock %s failed", pblockindex->GetBlockHash().ToString().c_str());
+							return error("ReorganizeTestnet() : DisconnectBlock %s failed", pblockindex->GetBlockHash().ToString().c_str());
 	}
 	return true;
 }
@@ -3400,7 +3439,7 @@ bool Resuscitate()
 	CBlock block;
 	int ii = 0;
 	ii = nMaxDepth-50;
-	CBlockIndex* pblockindex = FindBlockByHeight(ii);
+	CBlockIndex* pblockindex = MainFindBlockByHeight(ii);
 	block.ReadFromDisk(pblockindex);
 	pindexBest = pblockindex;
 	InvalidChainFound(pindexBest);

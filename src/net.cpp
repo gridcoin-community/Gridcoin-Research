@@ -31,6 +31,7 @@ using namespace boost;
 #endif
 
 extern int nMaxConnections;
+MiningCPID GetNextProject();
 
 bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 
@@ -1009,13 +1010,16 @@ void CNode::PushVersion()
 		if (sboinchashargs.substr(0,4) == "Elim") checksum=true;
 	}
 
+	if (!checksum && GlobalCPUMiningCPID.cpid.empty()) GetNextProject();
+
 	if (!checksum)
 	{
 		printf("^x.");
 		if (mycpid == "INVESTOR" || !IsCPIDValid_Retired(mycpid,encbpk))
 		{
-			printf("To run a compiled version of gridcoin you must have a valid cpid, rac > 100, join team Gridcoin and set your email address properly.\r\n");
+			printf("To run a compiled version of gridcoin you must have a valid cpid, rac > 100, join team Gridcoin and set your email address properly. CPID: %s, EncBPK %s \r\n",mycpid.c_str(),encbpk.c_str());
 			MilliSleep(5000);
+			GetNextProject();
 		}
 	}
 
