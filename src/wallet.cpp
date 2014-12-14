@@ -20,7 +20,7 @@ static unsigned int GetStakeSplitAge() { return IsProtocolV2(nBestHeight) ? (10 
 static int64_t GetStakeCombineThreshold() { return IsProtocolV2(nBestHeight) ? (50 * COIN) : (1000 * COIN); }
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 
-void UpdateConfirm(std::string txid);
+void qtUpdateConfirm(std::string txid);
 bool Contains(std::string data, std::string instring);
 
 bool IsLockTimeWithinMinutes(double locktime, int minutes);
@@ -546,7 +546,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
         }
 
         //// debug print 12-9-2014 (received coins)
-        printf("AddToWallet %s  %s%s\n", wtxIn.GetHash().ToString().c_str(), (fInsertedNew ? "new" : ""), (fUpdated ? "update" : ""));
+        if (fDebug) printf("AddToWallet %s  %s%s\n", wtxIn.GetHash().ToString().c_str(), (fInsertedNew ? "new" : ""), (fUpdated ? "update" : ""));
 		if (fInsertedNew)
 		{
 			// If this is a tracked tx, update via SQL:
@@ -554,7 +554,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
 			{
 				printf("Updating tx id %s",wtxIn.GetHash().ToString().c_str());
 				#if defined(WIN32) && defined(QT_GUI)
-				UpdateConfirm(wtxIn.GetHash().ToString());
+					qtUpdateConfirm(wtxIn.GetHash().ToString());
 				#endif
 
 			}
@@ -1735,9 +1735,10 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 		 miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
 	     miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-		 double out_por = 0;
-         miningcpid.ResearchSubsidy = CoinToDouble(GetProofOfStakeReward(1,0,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),out_por));
-
+		 //double out_por = 0;
+		 //double out_interest=0;
+         //miningcpid.ResearchSubsidy = CoinToDouble(GetProofOfStakeReward(1,0,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),out_por,out_interest));
+		 
 		 msMiningErrors4 = "BRSA: " + RoundToString(miningcpid.RSAWeight,0);
 
 		 // miningcpid.cpidv2 = CIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pblock->pprev->GetBlockHash());
@@ -1955,7 +1956,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             return error("CreateCoinStake : failed to calculate coin age");
 		//Halford: Use current time since we are creating a new stake
 		double OUT_POR = 0;
-        int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),OUT_POR);
+		double out_interest = 0;
+        int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),OUT_POR,out_interest);
 		std::string sReward = RoundToString(CoinToDouble(nReward),4);
 		double out_magnitude = 0;
 		double out_owed = 0;

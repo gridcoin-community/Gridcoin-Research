@@ -6,7 +6,11 @@ Public Class frmSQL
     Private mData As Sql
 
     Private Sub frmSQL_Activated(ByVal sender As Object, ByVal e As System.EventArgs) Handles Me.Activated
-        Call tSync_Tick(Nothing, Nothing)
+        'Call tSync_Tick(Nothing, Nothing)
+
+        Me.Hide()
+        Me.Visible = False
+
 
     End Sub
 
@@ -16,6 +20,7 @@ Public Class frmSQL
         mWebServer = New WebServer
 
         mData = New Sql()
+
 
         
         'Query available tables
@@ -57,6 +62,9 @@ Public Class frmSQL
   
         lvTables.BackColor = Drawing.Color.Black
         lvTables.ForeColor = Drawing.Color.Lime
+
+        Me.Hide()
+        Me.Visible = False
 
     End Sub
 

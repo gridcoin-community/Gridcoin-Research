@@ -35,7 +35,13 @@ Public Class frmSQL
             Exit Sub
 
         End Try
-        
+
+        Dim lRC As Long
+        Dim grr As GridcoinReader.GridcoinRow
+        Dim iRow As Long
+
+        Try
+
         lvTables.Columns.Clear()
         lvTables.Columns.Add("Table")
         lvTables.Columns.Add("Rows")
@@ -45,11 +51,16 @@ Public Class frmSQL
 
         lvTables.FullRowSelect = True
         lvTables.HeaderStyle = Windows.Forms.ColumnHeaderStyle.Nonclickable
-        Dim iRow As Long
-        AddHandler lvTables.DrawColumnHeader, AddressOf lvTables_DrawColumnHeader
+            AddHandler lvTables.DrawColumnHeader, AddressOf lvTables_DrawColumnHeader
         AddHandler lvTables.DrawSubItem, AddressOf lvTables_DrawSubItem
-        Dim lRC As Long
-        Dim grr As GridcoinReader.GridcoinRow
+       
+        Catch ex As Exception
+            MsgBox("Error while retrieving data from InternalTables", MsgBoxStyle.Critical)
+            Exit Sub
+
+        End Try
+
+
         If dr Is Nothing Then
             MsgBox("Error while retrieving data from InternalTables", MsgBoxStyle.Critical)
             Exit Sub
@@ -120,11 +131,10 @@ Public Class frmSQL
     Private Sub btnExec_Click(sender As System.Object, e As System.EventArgs) Handles btnExec.Click
 
         'Dim sResult As String = InsertConfirm(100, "ee", "b", "abc12a")
-        'sResult = UpdateConfirm("abc12a", "1")
-
-        Dim iResult As Long
-        iResult = TrackConfirm("abc12a")
-
+       
+        'Dim iResult As Long
+        'iResult = TrackConfirm("abc12a")
+        If mData Is Nothing Then mData = New Sql
 
         Dim dr As GridcoinReader
         mData.bThrowUIErrors = True

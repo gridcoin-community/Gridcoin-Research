@@ -84,10 +84,9 @@ double GetPoSKernelPS();
 int ReindexWallet();
 extern int RebootClient();
 extern QString ToQstring(std::string s);
-extern int TrackConfirm(std::string txid);
-
-
-extern void UpdateConfirm(std::string txid);
+extern int qtTrackConfirm(std::string txid);
+extern void qtUpdateConfirm(std::string txid);
+extern void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string txid);
 
 
 
@@ -434,7 +433,7 @@ int RestartClient()
 			return 1;
 }
 
-void UpdateConfirm(std::string txid)
+void qtUpdateConfirm(std::string txid)
 {
 	#if defined(WIN32) && defined(QT_GUI)
 	try
@@ -452,7 +451,7 @@ void UpdateConfirm(std::string txid)
 }
 
 
-void InsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string txid)
+void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string txid)
 {
 
 	//Public Function InsertConfirm(dAmt As Double, sFrom As String, sTo As String, sTXID As String) As String
@@ -462,6 +461,8 @@ void InsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string 
 	{  
 		int result = 0;
 	 	std::string Confirm = RoundToString(dAmt,4) + "<COL>" + sFrom + "<COL>" + sTo + "<COL>" + txid;
+		printf("Inserting confirm %s",Confirm.c_str());
+
 		QString qsConfirm = ToQstring(Confirm);
 		result = globalcom->dynamicCall("InsertConfirm(Qstring)",qsConfirm).toInt();
 	}
@@ -473,7 +474,7 @@ void InsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string 
 }
 
 
-int TrackConfirm(std::string txid)
+int qtTrackConfirm(std::string txid)
 {
 	int result = 0;
 	#if defined(WIN32) && defined(QT_GUI)

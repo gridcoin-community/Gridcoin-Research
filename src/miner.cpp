@@ -430,13 +430,20 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		//12-9-2014 Verify RSA Weight is actually in the block
 		miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 		double out_por = 0;
-		miningcpid.ResearchSubsidy = CoinToDouble(GetProofOfStakeReward(1,0,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),out_por));
+		double out_interest=0;
+
+		//12-14-2014
+
+		//Halford: Use current time since we are creating a new stake
+		int64_t nNewBlockReward = GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),out_por,out_interest);
+		miningcpid.ResearchSubsidy = out_por;
+		miningcpid.InterestSubsidy = out_interest;
 
 		msMiningErrors4 = "BRSA: " + RoundToString(miningcpid.RSAWeight,0);
 
 		std::string hashBoinc = SerializeBoincBlock(miningcpid);
 		//printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
-	    if (LessVerbose(10)) printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
+	    if (LessVerbose(5)) printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
 		pblock->vtx[0].hashBoinc = hashBoinc;
 
         if (!fProofOfStake)
@@ -614,36 +621,25 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 
 	if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc, true))
 	{	
-		printf("Hash boinc %s",pblock->vtx[0].hashBoinc.c_str());
+		if (fDebug) printf("Hash boinc %s",pblock->vtx[0].hashBoinc.c_str());
         return error("CheckStake() : proof-of-stake checking failed");
 	}
 
 	//
     //double subsidy = (pblock->vtx[0].GetValueOut())/C-OIN;
 	//std::string sSubsidy = RoundToString(subsidy,4);
-
-	/*
-	if (AmIGeneratingBackToBackBlocks()) 
-	{
-		    return error("CheckStake() : Block Rejected: Generating back-to-back blocks\r\n");
-	}
-	*/
-
-
+	
 
     //// debug print
 	double block_value = CoinToDouble(pblock->vtx[1].GetValueOut());
 	std::string sBlockValue = RoundToString(block_value,4);	
 	//Submit the block during the public key address second
 	int wallet_second = 0;
-	printf("Submitting block %d for %s",wallet_second,sBlockValue.c_str());
 
-	
-
-    printf("CheckStake() : new proof-of-stake block found, BlockValue %s, \r\n hash: %s \nproofhash: %s  \ntarget: %s\n",
-		sBlockValue.c_str(), hashBlock.GetHex().c_str(), proofHash.GetHex().c_str(), hashTarget.GetHex().c_str());
+    if (fDebug) printf("CheckStake() : new proof-of-stake block found, BlockValue %s, \r\n hash: %s \nproofhash: %s  \ntarget: %s\n",
+					sBlockValue.c_str(), hashBlock.GetHex().c_str(), proofHash.GetHex().c_str(), hashTarget.GetHex().c_str());
 	if (fDebug)     pblock->print();
-    printf("out %s\n", FormatMoney(pblock->vtx[1].GetValueOut()).c_str());
+    if (fDebug) printf("out %s\n", FormatMoney(pblock->vtx[1].GetValueOut()).c_str());
 
     // Found a solution
     {

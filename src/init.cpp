@@ -715,16 +715,18 @@ bool AppInit2()
 
     // ********************************************************* Step 3: parameter-to-internal-flags
 
-    fDebug = GetBoolArg("-debug");
-    // -debug implies fDebug*
+    //fDebug = GetBoolArg("-debug");
+	fDebug=false;
+
     if (fDebug)
         fDebugNet = true;
     else
         fDebugNet = GetBoolArg("-debugnet");
 
-	if (GetArg("-debug", "false")=="true")
+	if (GetArg("debug", "false")=="true")
 	{
 			fDebug = true;
+			printf("Entering debug mode.\r\n");
 	}
 				
 
@@ -1162,7 +1164,7 @@ bool AppInit2()
     // ********************************************************* Step 10: load peers
 
     uiInterface.InitMessage(_("Loading addresses..."));
-    printf("Loading addresses...\n");
+    if (fDebug) printf("Loading addresses...\n");
     nStart = GetTimeMillis();
 
     {

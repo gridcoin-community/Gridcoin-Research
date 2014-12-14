@@ -347,7 +347,7 @@ bool AddLocal(const CService& addr, int nScore)
 
 	try
 	{
-    printf("AddLocal(%s,%i)\n", addr.ToString().c_str(), nScore);
+    if (fDebug) printf("AddLocal(%s,%i)\n", addr.ToString().c_str(), nScore);
 
     {
 	    LOCK(cs_mapLocalHost);
@@ -765,7 +765,7 @@ bool GetMyExternalIP2(const CService& addrConnect, const char* pszGet, const cha
             while (strLine.size() > 0 && isspace(strLine[strLine.size()-1]))
                 strLine.resize(strLine.size()-1);
             CService addr(strLine,0,true);
-            printf("GetMyExternalIP() received [%s] %s\n", strLine.c_str(), addr.ToString().c_str());
+            if (fDebug) printf("GetMyExternalIP() received [%s] %s\n", strLine.c_str(), addr.ToString().c_str());
             if (!addr.IsValid() || !addr.IsRoutable())
                 return false;
             ipRet.SetIP(addr);
@@ -1233,7 +1233,7 @@ void SocketSendData(CNode *pnode)
                 int nErr = WSAGetLastError();
                 if (nErr != WSAEWOULDBLOCK && nErr != WSAEMSGSIZE && nErr != WSAEINTR && nErr != WSAEINPROGRESS)
                 {
-                    printf("socket send error %d\n", nErr);
+                    if (fDebug) printf("socket send error %d\n", nErr);
                     pnode->CloseSocketDisconnect();
                 }
             }
@@ -1272,7 +1272,7 @@ void ThreadSocketHandler(void* parg)
 
 void ThreadSocketHandler2(void* parg)
 {
-    printf("ThreadSocketHandler started\n");
+    if (fDebug) printf("ThreadSocketHandler started\n");
     list<CNode*> vNodesDisconnected;
     unsigned int nPrevNodeCount = 0;
 
@@ -1450,7 +1450,7 @@ void ThreadSocketHandler2(void* parg)
             }
             else
             {
-                printf("accepted connection %s\n", addr.ToString().c_str());
+                if (fDebug) printf("accepted connection %s\n", addr.ToString().c_str());
                 CNode* pnode = new CNode(hSocket, addr, "", true);
                 pnode->AddRef();
                 {
@@ -1695,7 +1695,7 @@ void ThreadMapPort2(void* parg)
             i++;
         }
     } else {
-        printf("No valid UPnP IGDs found\n");
+        if (fDebug) printf("No valid UPnP IGDs found\n");
         freeUPNPDevlist(devlist); devlist = 0;
         if (r != 0)
             FreeUPNPUrls(&urls);
@@ -1764,12 +1764,12 @@ void ThreadDNSAddressSeed(void* parg)
 
 void ThreadDNSAddressSeed2(void* parg)
 {
-    printf("ThreadDNSAddressSeed started\n");
+    if (fDebug) printf("ThreadDNSAddressSeed started\n");
     int found = 0;
 
     if (!fTestNet)
     {
-        printf("Loading addresses from DNS seeds (could take a while)\n");
+        if (fDebug) printf("Loading addresses from DNS seeds (could take a while)\n");
 
         for (unsigned int seed_idx = 0; seed_idx < ARRAYLEN(strDNSSeed); seed_idx++) {
             if (HaveNameProxy()) {
@@ -1793,7 +1793,7 @@ void ThreadDNSAddressSeed2(void* parg)
         }
     }
 
-    printf("%d addresses found from DNS seeds\n", found);
+    if (fDebug) printf("%d addresses found from DNS seeds\n", found);
 }
 
 
@@ -1899,9 +1899,8 @@ void static ProcessOneShot()
 
 void static ThreadStakeMiner(void* parg)
 {
-	//8-22-2014
-
-    printf("ThreadStakeMiner started\n");
+	
+    if (fDebug) printf("ThreadStakeMiner started\n");
     CWallet* pwallet = (CWallet*)parg;
 	while (!bCPIDsLoaded)
 	{

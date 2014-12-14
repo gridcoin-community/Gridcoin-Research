@@ -13,7 +13,7 @@ QString ToQString(std::string s);
 
 bool Contains(std::string data, std::string instring);
 
-int TrackConfirm(std::string txid);
+int qtTrackConfirm(std::string txid);
 
 
 TransactionDescDialog::TransactionDescDialog(const QModelIndex &idx, QWidget *parent) :
@@ -68,7 +68,9 @@ void TransactionDescDialog::on_btnTrack_clicked()
 	if (sTXID.length() > 1)
 	{
 		int result = 0;
-		result = TrackConfirm(sTXID);
+		#if defined(WIN32) && defined(QT_GUI)
+		result = qtTrackConfirm(sTXID);
+		#endif
 		std::string body = "";
 		bool received = false;
 		if (result==1)

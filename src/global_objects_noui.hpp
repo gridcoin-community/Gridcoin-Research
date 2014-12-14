@@ -87,7 +87,7 @@ extern int miningthreadcount;
 		double RSAWeight;
 		double PaymentTimespan;
 		double ResearchSubsidy;
-
+		double InterestSubsidy;
 	
 
 		std::string cpid;
@@ -167,7 +167,7 @@ extern int miningthreadcount;
 		double RSAWeight;
 		double LastPaymentTime;
 		double ResearchSubsidy;
-
+		double InterestSubsidy;
 	};
 
 	

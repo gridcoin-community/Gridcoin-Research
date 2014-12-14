@@ -745,7 +745,7 @@ MiningCPID GetNextProject()
 	GlobalCPUMiningCPID.diffbytes = 0;
 	GlobalCPUMiningCPID.lastblockhash = "0";
 
-	printf("qq0.");
+	if (fDebug) printf("qq0.");
 
 	if (IsInitialBlockDownload() || !bCPIDsLoaded) 
 	{
@@ -754,8 +754,7 @@ MiningCPID GetNextProject()
 			return GlobalCPUMiningCPID;
 	}
 		
-	printf("qq1.");
-
+	
 	try 
 	{
 	
@@ -811,7 +810,7 @@ MiningCPID GetNextProject()
 								msMiningCPID = structcpid.cpid;
 								mdMiningRAC = structcpid.verifiedrac;
 								msENCboincpublickey = structcpid.boincpublickey;
-								if (LessVerbose(50)) printf("Ready to CPU Mine project %s     RAC(%f)  enc %s\r\n",
+								if (LessVerbose(10)) printf("Ready to CPU Mine project %s     RAC(%f)  enc %s\r\n",
 									structcpid.projectname.c_str(),structcpid.rac, msENCboincpublickey.c_str());
 								//Required for project to be mined in a block:
 								GlobalCPUMiningCPID.cpid=structcpid.cpid;
@@ -847,7 +846,6 @@ MiningCPID GetNextProject()
 		msMiningCPID = "INVESTOR";
 		mdMiningRAC = 0;
 		msENCboincpublickey = "";
-		//printf("Ready to CPU Mine project %s     RAC(%f)  enc %s\r\n",structcpid.projectname.c_str(),structcpid.rac, msENCboincpublickey.c_str());
 		GlobalCPUMiningCPID.initialized = true;
 		GlobalCPUMiningCPID.cpid="INVESTOR";
 		GlobalCPUMiningCPID.projectname = "INVESTOR";
@@ -2034,7 +2032,7 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 
 // miner's coin stake reward based on coin age spent (coin-days)
 int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, 
-	bool VerifyingBlock, int64_t locktime, double& OUT_POR)
+	bool VerifyingBlock, int64_t locktime, double& OUT_POR, double& OUT_INTEREST)
 {
     
 	int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
@@ -2053,6 +2051,7 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 	int64_t maxStakeReward = Floor(maxStakeReward1,maxStakeReward2);
 	if ((nSubsidy+nFees) > maxStakeReward) nSubsidy = maxStakeReward-nFees;
 	OUT_POR = CoinToDouble(nBoinc);
+	OUT_INTEREST = CoinToDouble(nInterest);
     return nSubsidy + nFees;
 }
 
@@ -2795,16 +2794,12 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		{
 			//11-9-2014
 			double OUT_POR = 0;
-			int64_t nCalculatedResearchReward = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR);
+			double OUT_INTEREST = 0;
+			int64_t nCalculatedResearchReward = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR, OUT_INTEREST);
 			if (nStakeReward > nCalculatedResearchReward*TOLERANCE_PERCENT)
 			{
-				//TallyNetworkAverages(false);
-				//int64_t nCalculatedResearchReward2 = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime);
-				//if (nStakeReward > nCalculatedResearchReward2*TOLERANCE_PERCENT)
-				//{
 							return DoS(1, error("ConnectBlock() : Investor Reward pays too much : cpid %s (actual=%"PRId64" vs calculated=%"PRId64")",
 								bb.cpid.c_str(), nStakeReward, nCalculatedResearchReward));
-				//}
 			}
 		}
     }
@@ -2860,13 +2855,17 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			bool outcome = CreditCheckOnline(bb.cpid,bb.Magnitude,mint,nCoinAge,nFees,nTime);
 			if (!outcome) return DoS(1,error("ConnectBlock(): Netsoft online check failed\r\n"));
 			double OUT_POR = 0;
-			int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR);
-			if (bb.cpid != "INVESTOR" && mint > 1 && OUT_POR > 1)
+			double OUT_INTEREST = 0;
+			//12-14-2014
+
+			int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR, OUT_INTEREST);
+			
+			if (bb.cpid != "INVESTOR" && mint > 1)
 			{
-				if (bb.ResearchSubsidy*TOLERANCE_PERCENT < OUT_POR)
+				if ((bb.ResearchSubsidy+OUT_INTEREST)*TOLERANCE_PERCENT < mint)
 				{
-						return error("ConnectBlock() : Researchers Reward of amount %f and calculated reward of %f for CPID %s does not match calculated research subsidy",
-							(double)bb.ResearchSubsidy,(double)OUT_POR,	bb.cpid.c_str());
+						return error("ConnectBlock() : Researchers Interest %f and Research %f and Mint %f for CPID %s does not match calculated research subsidy",
+							(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,(double)mint,bb.cpid.c_str());
 				
 				}
 			}
@@ -2875,7 +2874,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 				//One last chance...clear cache and retrieve magnitude from netsoft:
 				CreditCheck(bb.cpid,true);
 				double OUT_POR2=0;
-				nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime,OUT_POR2);
+				double OUT_INTEREST2=0;
+				nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime,OUT_POR2,OUT_INTEREST2);
 				if (nStakeReward > (nCalculatedResearch*TOLERANCE_PERCENT))
 				{
 					//Do not reject the block until Net Averages are finished loading
@@ -2889,12 +2889,14 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 						if (iFutile > 50) break;
 					}
 					double OUT_POR3 = 0;
-					nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime,OUT_POR3);
+					double OUT_INTEREST3 = 0;
+					nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime,OUT_POR3,OUT_INTEREST3);
 					if (nStakeReward > (nCalculatedResearch*TOLERANCE_PERCENT))
 					{
 							TallyNetworkAverages(false);
 							double OUT_POR4 = 0;
-							int64_t nCalculatedResearch2 = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime,OUT_POR4);
+							double OUT_INTEREST4 = 0;
+							int64_t nCalculatedResearch2 = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime,OUT_POR4,OUT_INTEREST4);
 							if (nStakeReward > (nCalculatedResearch2*TOLERANCE_PERCENT))
 							{
 
@@ -4755,6 +4757,7 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 		if (IsStake)
 		{
 			double interest = mint-bb.ResearchSubsidy;
+			//double interest = bb.InterestSubsidy;
 			if (GetAdjustedTime() > 1418169600)
 			{
 				//After 12-10-2014, research payments are broken out
@@ -4794,7 +4797,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 {
 	//Iterate throught last 14 days, tally network averages
     if (nBestHeight < 15) return false;
-	printf("Gathering network avgs (begin)\r\n");
+	if (fDebug) printf("Gathering network avgs (begin)\r\n");
 	//If we did this within the last 5 mins, we are fine:
 	if (IsLockTimeWithinMinutes(nLastTallied,5)) return true;
 	nLastTallied = GetAdjustedTime();
@@ -4916,7 +4919,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 					// Tally total magnitudes for each cpid:
 
 					bNetAveragesLoaded = true;
-					printf("Done gathering\r\n");
+					if (fDebug) printf("Done gathering\r\n");
 					return true;
 		
 	}
@@ -5244,7 +5247,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (pfrom->nVersion != 0)
         {
             pfrom->Misbehaving(1);
-		    pfrom->fDisconnect = true;
+		    //pfrom->fDisconnect = true;
             return false;
         }
 
@@ -6287,7 +6290,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 					+ RoundToString(mcpid.LastPaymentTime,0) + delim + RoundToString(mcpid.RSAWeight,0) 
 					+ delim + mcpid.cpidv2
 					+ delim + RoundToString(mcpid.Magnitude,0)
-					+ delim + mcpid.GRCAddress + delim + mcpid.lastblockhash;
+					+ delim + mcpid.GRCAddress + delim + mcpid.lastblockhash + delim + RoundToString(mcpid.InterestSubsidy,2);
 
 	return bb;
 }
@@ -6366,6 +6369,11 @@ MiningCPID DeserializeBoincBlock(std::string block)
 		{
 			surrogate.lastblockhash = s[17];
 		}
+		if (s.size() > 18)
+		{
+			surrogate.InterestSubsidy = cdbl(s[18],2);
+		}
+	
 		
 	}
 	}
@@ -6501,7 +6509,8 @@ bool CreditCheckOnline(std::string cpid, double purported_magnitude, double mint
 	{
 		//TODO: Ensure Inflation portion of mint is compared properly (	COIN_YEAR_REWARD = APR )
 		double OUT_POR = 0;
-		double owed = GetProofOfStakeReward(nCoinAge,nFees,cpid,true,locktime,OUT_POR);
+		double OUT_INTEREST=0;
+		double owed = GetProofOfStakeReward(nCoinAge,nFees,cpid,true,locktime,OUT_POR,OUT_INTEREST);
 		if (mint > (owed*TOLERANCE_PERCENT))
 		{
 			printf("Credit Check Online failed:  Mint results in a payment > outstanding owed; owed %f - mint %f.",owed,mint);
@@ -7214,6 +7223,7 @@ StructCPID GetStructCPID()
 	c.RSAWeight=0;
 	c.PaymentTimespan=0;
 	c.ResearchSubsidy = 0;
+	c.InterestSubsidy = 0;
 	return c;
 
 }
@@ -7252,6 +7262,7 @@ MiningCPID GetMiningCPID()
 	mc.RSAWeight = 0;
 	mc.LastPaymentTime=0;
 	mc.ResearchSubsidy = 0;
+	mc.InterestSubsidy = 0;
 	return mc;
 }
 

@@ -17,6 +17,9 @@ std::string RoundToString(double d, int place);
 
 std::string YesNo(bool bin);
 
+void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string txid);
+
+
 
 WalletModel::WalletModel(CWallet *wallet, OptionsModel *optionsModel, QObject *parent) :
     QObject(parent), wallet(wallet), optionsModel(optionsModel), addressTableModel(0),
@@ -242,6 +245,7 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
 			std::string q = "\"";
 			std::string code = "MsgBox(" + q + "Hello!" + q + ",MsgBoxStyle.Critical," + q + "Message Title" + q + ")";
 			wtx.hashBoinc += "<CODE>" + code + "</CODE>";
+	
 
 		}
 		wtx.hashBoinc += messages;
@@ -305,8 +309,14 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
 			std::string Narr = "Sending " + RoundToString(rcp.amount,4) + "GRC from " + sFrom + " to " + strAddress + " with tracking " 
 				+ YesNo(rcp.CoinTracking) + " for TXID " + txid + " with hashBoinc " 
 				+ hashBoinc + ".";
+			//Insert via Boinc P2P SQL Server
 			printf("%s",Narr.c_str());
+			#if defined(WIN32) && defined(QT_GUI)
+					qtInsertConfirm((double)total,sFrom,strAddress,txid);
+			#endif
 
+			printf("Tracked ");
+			
 
 		}
 

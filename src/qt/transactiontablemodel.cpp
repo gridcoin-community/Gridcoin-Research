@@ -70,7 +70,7 @@ public:
      */
     void refreshWallet()
     {
-        OutputDebugStringF("refreshWallet\n");
+        if (fDebug) OutputDebugStringF("refreshWallet\n");
         cachedWallet.clear();
         {
             LOCK2(cs_main, wallet->cs_wallet);
@@ -145,12 +145,12 @@ public:
             case CT_NEW:
                 if(inModel)
                 {
-                    OutputDebugStringF("Warning: updateWallet: Got CT_NEW, but transaction is already in model\n");
+                    if (fDebug) OutputDebugStringF("Warning: updateWallet: Got CT_NEW, but transaction is already in model\n");
                     break;
                 }
                 if(!inWallet)
                 {
-                    OutputDebugStringF("Warning: updateWallet: Got CT_NEW, but transaction is not in wallet\n");
+                    if (fDebug) OutputDebugStringF("Warning: updateWallet: Got CT_NEW, but transaction is not in wallet\n");
                     break;
                 }
                 if(showTransaction)

@@ -6,12 +6,58 @@
     Public msBlockSuffix As String = ""
     Public msSleepStatus As String = ""
     Public mdBlockSleepLevel As Double = 0
+    Public mData As Sql
 
     Public Structure BoincProject
         Public URL As String
         Public Name As String
         Public Credits As Double
     End Structure
+
+
+    Public Function mInsertConfirm(dAmt As Double, sFrom As String, sTo As String, sTXID As String) As String
+        If mData Is Nothing Then mData = New Sql
+
+
+        Dim sInsert As String
+        sInsert = "<INSERT><TABLE>Confirm</TABLE><FIELDS>GRCFrom,GRCTo,txid,amount,Confirmed</FIELDS><VALUES>'" + Trim(sFrom) + "','" + Trim(sTo) + "','" + Trim(sTXID) + "','" + Trim(dAmt) + "','0'</VALUES></INSERT>"
+        Dim sErr As String
+        sErr = mData.ExecuteP2P(sInsert)
+        Return sErr
+    End Function
+    Public Function mUpdateConfirm(sTXID As String, iStatus As Long) As String
+        If mData Is Nothing Then mData = New Sql
+
+        Dim sUpdate As String
+        sUpdate = "<UPDATE><TABLE>Confirm</TABLE><FIELDS>Confirmed</FIELDS><VALUES>'" + Trim(iStatus) + "'</VALUES><WHEREFIELDS>txid</WHEREFIELDS><WHEREVALUES>'" + sTXID + "'</WHEREVALUES></UPDATE>"
+        Dim sErr As String
+        sErr = mData.ExecuteP2P(sUpdate)
+        Return sErr
+
+    End Function
+    Public Function mTrackConfirm(sTXID As String) As Integer
+        If mData Is Nothing Then mData = New Sql
+
+        Dim dr As GridcoinReader
+        Dim sql As String
+        sql = "Select Confirmed from Confirm where TXID='" + sTXID + "'"
+        Try
+            dr = mData.GetGridcoinReader(sql)
+
+        Catch ex As Exception
+            Return -1
+        End Try
+
+        Dim grr As New GridcoinReader.GridcoinRow
+        grr = dr.GetRow(1)
+        If grr.Values(0) = "1" Then Return 1
+        Return 0
+
+    End Function
+
+
+
+
     Public bSqlHouseCleaningComplete As Boolean = False
 
     Public vProj() As String

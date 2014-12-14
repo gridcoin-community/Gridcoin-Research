@@ -12,7 +12,7 @@ Public Class Utilization
    
     Public ReadOnly Property Version As Double
         Get
-            Return 331
+            Return 334
         End Get
     End Property
 
@@ -271,22 +271,34 @@ Public Class Utilization
         S.Speak(sSentence)
     End Sub
     Public Function UpdateConfirm(sTxId As String) As Double
-
+        mUpdateConfirm(sTxId, 1)
+        Return 1
 
     End Function
 
     Public Function TrackConfirm(sTXID As String) As Double
+        Log("Tracking " + Trim(sTXID))
+
+        Dim lOut As Long = mTrackConfirm(sTXID)
+        Return lOut
 
         'return a 0 or 1
 
     End Function
     Public Function InsertConfirm(sConfirm As String) As Double
+
+        Log(sConfirm)
+
         Dim vConfirm() As String
         vConfirm = Split(sConfirm, "<COL>")
         Dim dAmt As Double = vConfirm(0)
         Dim sFrom As String = vConfirm(1)
         Dim sTo As String = vConfirm(2)
         Dim sTXID As String = vConfirm(3)
+        Dim lOut As Long = mInsertConfirm(dAmt, sFrom, sTo, sTXID)
+
+        Log("Inserted " + Trim(lOut))
+        Return 1
 
     End Function
     

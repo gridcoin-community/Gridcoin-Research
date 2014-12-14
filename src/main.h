@@ -186,7 +186,7 @@ bool LoadExternalBlockFile(FILE* fileIn);
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfStake);
 int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height);
-int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, bool VerifyingBlock,int64_t locktime,double& OUT_POR);
+int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, bool VerifyingBlock,int64_t locktime,double& OUT_POR, double& OUT_INTEREST);
 
 unsigned int ComputeMinWork(unsigned int nBase, int64_t nTime);
 unsigned int ComputeMinStake(unsigned int nBase, int64_t nTime, unsigned int nBlockTime);

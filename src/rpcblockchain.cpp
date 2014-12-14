@@ -480,7 +480,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("LastPaymentTime",bb.LastPaymentTime));
 	result.push_back(Pair("ResearchSubsidy",bb.ResearchSubsidy));
 	double interest = mint-bb.ResearchSubsidy;
-	result.push_back(Pair("Interest",ValueFromAmount(interest*COIN)));
+	result.push_back(Pair("Interest",bb.InterestSubsidy));
 
 	result.push_back(Pair("GRCAddress",bb.GRCAddress));
 	std::string skein2 = aes_complex_hash(blockhash);
