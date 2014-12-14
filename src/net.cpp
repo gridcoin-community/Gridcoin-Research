@@ -998,11 +998,6 @@ void CNode::PushVersion()
 
 	std::string sboinchashargs = DefaultBoincHashArgs();
 	uint256 boincHashRandNonce = GetRandHash();
-	std::string nonce = boincHashRandNonce.GetHex();
-	std::string pw1 = RetrieveMd5(nonce+","+sboinchashargs);
-	
-	std::string encbpk = 	GlobalCPUMiningCPID.encboincpublickey;
-	std::string mycpid =    GlobalCPUMiningCPID.cpid;
 
 	bool checksum = false;
 	if (sboinchashargs.length() > 5)
@@ -1010,8 +1005,18 @@ void CNode::PushVersion()
 		if (sboinchashargs.substr(0,4) == "Elim") checksum=true;
 	}
 
+
 	if (!checksum && GlobalCPUMiningCPID.cpid.empty()) GetNextProject();
 
+
+	std::string nonce = boincHashRandNonce.GetHex();
+	std::string pw1 = RetrieveMd5(nonce+","+sboinchashargs);
+	
+	std::string encbpk = 	GlobalCPUMiningCPID.encboincpublickey;
+	std::string mycpid =    GlobalCPUMiningCPID.cpid;
+
+
+	
 	if (!checksum)
 	{
 		printf("^x.");
@@ -1020,6 +1025,8 @@ void CNode::PushVersion()
 			printf("To run a compiled version of gridcoin you must have a valid cpid, rac > 100, join team Gridcoin and set your email address properly. CPID: %s, EncBPK %s \r\n",mycpid.c_str(),encbpk.c_str());
 			MilliSleep(5000);
 			GetNextProject();
+			encbpk = 	GlobalCPUMiningCPID.encboincpublickey;
+			mycpid =    GlobalCPUMiningCPID.cpid;
 		}
 	}
 
