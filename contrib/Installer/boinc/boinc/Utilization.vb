@@ -12,7 +12,7 @@ Public Class Utilization
    
     Public ReadOnly Property Version As Double
         Get
-            Return 334
+            Return 337
         End Get
     End Property
 
@@ -270,17 +270,27 @@ Public Class Utilization
         Dim S As New SpeechSynthesis
         S.Speak(sSentence)
     End Sub
-    Public Function UpdateConfirm(sTxId As String) As Double
-        mUpdateConfirm(sTxId, 1)
-        Return 1
-
+    Public Function UpdateConfirm(sTxId As String) As String
+        msTxId = sTxId
+        Dim thUpdate As New System.Threading.Thread(AddressOf mUpdateConfirmAsync)
+        thUpdate.Start()
+        Return "1"
     End Function
+   
+    Public Function TrackConfirm(sTXID As String) As String
 
-    Public Function TrackConfirm(sTXID As String) As Double
         Log("Tracking " + Trim(sTXID))
+        Try
 
-        Dim lOut As Long = mTrackConfirm(sTXID)
-        Return lOut
+            Dim lOut As Double = mTrackConfirm(sTXID)
+            Log("Returning " + Trim(lOut))
+
+            Return Trim(lOut)
+        Catch ex As Exception
+            Log("HEINOUS ERROR" + ex.Message)
+            Return "0"
+
+        End Try
 
         'return a 0 or 1
 

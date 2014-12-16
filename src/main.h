@@ -139,6 +139,7 @@ extern double    	mdMiningRAC;
 extern double       mdMiningNetworkRAC;
 extern std::string  msENCboincpublickey;
 extern std::string  msHashBoinc;
+extern std::string  msHashBoincTxId;
 extern std::string  msMiningErrors;
 extern std::string  msMiningErrors2;
 extern std::string  msMiningErrors3;

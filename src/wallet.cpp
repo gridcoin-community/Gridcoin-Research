@@ -546,17 +546,18 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
         }
 
         //// debug print 12-9-2014 (received coins)
-        if (fDebug) printf("AddToWallet %s  %s%s\n", wtxIn.GetHash().ToString().c_str(), (fInsertedNew ? "new" : ""), (fUpdated ? "update" : ""));
+        if (fDebug) printf("AddToWallet %s  %s %s \n", wtxIn.GetHash().ToString().c_str(), (fInsertedNew ? "new" : ""), (fUpdated ? "update" : ""));
 		if (fInsertedNew)
 		{
 			// If this is a tracked tx, update via SQL:
 			if (Contains(wtxIn.hashBoinc,"<TRACK>"))
 			{
+				//wtx.GetHash().ToString()
 				printf("Updating tx id %s",wtxIn.GetHash().ToString().c_str());
 				#if defined(WIN32) && defined(QT_GUI)
 					qtUpdateConfirm(wtxIn.GetHash().ToString());
 				#endif
-
+				printf("Updated.");
 			}
 		}
         // Write to disk

@@ -126,6 +126,11 @@ Public Class Form1
         Dim x As New Utilization
         x.ShowSql()
 
+        x.UpdateConfirm("085e0b60fd229e1ce8a28c8d32a17b081e9810793ab4879dfbe34beda454dc5d")
+        Dim l As Long = x.TrackConfirm("085e0b60fd229e1ce8a28c8d32a17b081e9810793ab4879dfbe34beda454dc5d")
+        l = x.TrackConfirm("085e0b60fd229e1ce8a28c8d32a17b081e9810793ab4879dfbe34beda454dc5d")
+
+        Stop
 
     End Sub
 

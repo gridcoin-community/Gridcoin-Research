@@ -225,7 +225,8 @@ bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeMod
             // 'W' indicates selected proof-of-work blocks
             strSelectionMap.replace(item.second->nHeight - nHeightFirstCandidate, 1, item.second->IsProofOfStake()? "S" : "W");
         }
-        printf("ComputeNextStakeModifier: selection height [%d, %d] map %s\n", nHeightFirstCandidate, pindexPrev->nHeight, strSelectionMap.c_str());
+        printf("ComputeNextStakeModifier: selection height [%d, %d] map %s\n", nHeightFirstCandidate, 
+			pindexPrev->nHeight, strSelectionMap.c_str());
     }
     if (fDebug)
     {
@@ -632,14 +633,19 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
     bnTarget *= bnWeight;
 
     targetProofOfStake = bnTarget.getuint256();
+	uint64_t nStakeModifier = 0;
+	nStakeModifier = pindexPrev->nHeight <= 86330 ? pindexPrev->nStakeModifier : pindexPrev->nBits;
+	//uint64_t nStakeModifier = pindexPrev->nStakeModifier;
 
-    uint64_t nStakeModifier = pindexPrev->nStakeModifier;
     int nStakeModifierHeight = pindexPrev->nHeight;
     int64_t nStakeModifierTime = pindexPrev->nTime;
 
     // Calculate hash
     CDataStream ss(SER_GETHASH, 0);
-    ss << nStakeModifier << nTimeBlockFrom << txPrev.nTime << prevout.hash << prevout.n << nTimeTx;
+
+	ss << nStakeModifier << nTimeBlockFrom << txPrev.nTime << prevout.hash << prevout.n << nTimeTx;
+	
+
     hashProofOfStake = Hash(ss.begin(), ss.end());
 
 	//V2 excludes nTxPrevOffset (after TimeBlockFrom), includes prevout.hash, excludes prevout.n 

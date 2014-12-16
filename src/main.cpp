@@ -47,6 +47,7 @@ set<CWallet*> setpwalletRegistered;
 
 CCriticalSection cs_main;
 
+
 CTxMemPool mempool;
 unsigned int nTransactionsUpdated = 0;
 unsigned int REORGANIZE_FAILED = 0;
@@ -324,11 +325,12 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  double         mdMiningNetworkRAC = 0;
 
  std::string    msHashBoinc    = "";
+ std::string    msHashBoincTxId= "";
  std::string    msMiningErrors = "";
  std::string    msMiningErrors2 = "";
  std::string    msMiningErrors3 = "";
  std::string    msMiningErrors4 = "";
- int nGrandfather = 82000;
+ int nGrandfather = 86300;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -413,14 +415,6 @@ bool bDebugMode = false;
 bool bPoolMiningMode = false;
 bool bBoincSubsidyEligible = false;
 bool bCPUMiningMode = false;
-
-
-
-
-
-
-
-
 
 
 
@@ -570,7 +564,7 @@ double GetPoSKernelPS2()
 
     if (IsProtocolV2(nBestHeight))
         result *= STAKE_TIMESTAMP_MASK + 1;
-	if (result > 350000000123) result = 350000000123;
+	//if (result > 350000000123) result = 350000000123;
 
     return result;
 }
@@ -3199,12 +3193,6 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 			{
 				txdb.TxnAbort();
 				InvalidChainFound(pindexNew);
-				printf("Reorganize failed... Chopping off end of block chain...");
-				//if (!ReorganizeWithHatchet(txdb))
-				//{
-				//	printf("Reorganize with hatchet failed...");
-				//}
-
 				return error("SetBestChain() : Reorganize failed");
 			}
         }
@@ -3391,11 +3379,15 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
     uint64_t nStakeModifier = 0;
     bool fGeneratedStakeModifier = false;
     if (!ComputeNextStakeModifier(pindexNew->pprev, nStakeModifier, fGeneratedStakeModifier))
+	{
         return error("AddToBlockIndex() : ComputeNextStakeModifier() failed");
+	}
     pindexNew->SetStakeModifier(nStakeModifier, fGeneratedStakeModifier);
     pindexNew->nStakeModifierChecksum = GetStakeModifierChecksum(pindexNew);
-    if (!CheckStakeModifierCheckpoints(pindexNew->nHeight, pindexNew->nStakeModifierChecksum))
-        return error("AddToBlockIndex() : Rejected by stake modifier checkpoint height=%d, modifier=0x%016"PRIx64, pindexNew->nHeight, nStakeModifier);
+
+    //if (!CheckStakeModifierCheckpoints(pindexNew->nHeight, pindexNew->nStakeModifierChecksum))
+    //   return error("AddToBlockIndex() : Rejected by stake modifier checkpoint height=%d, modifier=0x%016"PRIx64, pindexNew->nHeight, nStakeModifier);
+
 
     // Add to mapBlockIndex
     map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.insert(make_pair(hash, pindexNew)).first;
@@ -3486,11 +3478,12 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
 	int lastheight = BlockHeight(hashPrevBlock);
 	if(true)
 	{
-		if (lastheight > 71000 && blockdiff > 10000000000000000)
+		if (lastheight > nGrandfather && blockdiff > 10000000000000000)
 		{
 			   return DoS(1, error("CheckBlock() : Block Bits larger than 10000000000000000.\r\n"));
 		}
 	}
+
 	//Bad block at 66408,66807
 
 
@@ -3526,10 +3519,8 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
     			if (boincblock.projectname == "") 	return DoS(1,error("PoR Project Name invalid"));
 	    		if (boincblock.rac < 100) 			return DoS(1,error("RAC too low"));
 				//	cpidv2: CPID_(bb.cpid, bb.cpidv2, blockindex->pprev->GetBlockHash());
-				//Problem is here: 11-29-2014
 				//if (!IsCPIDlidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,hashPrevBlock)) return DoS(1,error("Bad CPID"));
 				//Block CPID 
-				//printf("^a");
 				if (!IsCPIDValid_Retired(boincblock.cpid,boincblock.enccpid))
 				{
 						return DoS(1,error("Bad CPID"));
@@ -3685,7 +3676,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 						if (!generated_by_me) printf("WARNING: AcceptBlock(): check proof-of-stake failed for block %s\n", hash.ToString().c_str());
 						return false; // do not error here as we expect this during initial block download
 					}
-					//11-30-2014
+					
 				}
 		}
 	}
@@ -4799,7 +4790,7 @@ bool TallyNetworkAverages(bool ColdBoot)
     if (nBestHeight < 15) return false;
 	if (fDebug) printf("Gathering network avgs (begin)\r\n");
 	//If we did this within the last 5 mins, we are fine:
-	if (IsLockTimeWithinMinutes(nLastTallied,5)) return true;
+	if (IsLockTimeWithinMinutes(nLastTallied,30)) return true;
 	nLastTallied = GetAdjustedTime();
 
 	bNetAveragesLoaded = false;

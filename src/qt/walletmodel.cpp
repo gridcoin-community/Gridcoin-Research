@@ -55,6 +55,14 @@ qint64 WalletModel::getUnconfirmedBalance() const
     return wallet->GetUnconfirmedBalance();
 }
 
+
+std::string FromQStringW(QString qs)
+{
+	std::string sOut = qs.toUtf8().constData();
+	return sOut;
+}
+
+
 qint64 WalletModel::getStake() const
 {
     return wallet->GetStake();
@@ -158,11 +166,6 @@ double dblFromAmount(int64_t amount)
     return (double)amount / (double)COIN;
 }
 
-std::string FromQString(QString qs)
-{
-	std::string sOut = qs.toUtf8().constData();
-	return sOut;
-}
 
 WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipient> &recipients, const CCoinControl *coinControl)
 {
@@ -230,7 +233,7 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
             scriptPubKey.SetDestination(CBitcoinAddress(rcp.address.toStdString()).Get());
             vecSend.push_back(make_pair(scriptPubKey, rcp.amount));
 			if (rcp.CoinTracking) coinTracking=true;
-			messages += FromQString(rcp.Message);
+			messages += FromQStringW(rcp.Message);
         
         }
 
@@ -245,8 +248,6 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
 			std::string q = "\"";
 			std::string code = "MsgBox(" + q + "Hello!" + q + ",MsgBoxStyle.Critical," + q + "Message Title" + q + ")";
 			wtx.hashBoinc += "<CODE>" + code + "</CODE>";
-	
-
 		}
 		wtx.hashBoinc += messages;
 		bool fCreated = wallet->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, coinControl);
@@ -317,9 +318,7 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
 
 			printf("Tracked ");
 			
-
 		}
-
 
     }
 

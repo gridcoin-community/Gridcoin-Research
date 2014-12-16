@@ -18,6 +18,8 @@ int64_t GetCoinYearReward(int64_t nTime);
 //CCriticalSection cs_main;
 static boost::thread_group* postThreads = NULL;
 
+double GetPoSKernelPS2();
+
 volatile bool bCPIDsLoaded;
 volatile bool bProjectsInitialized;
 
@@ -57,6 +59,8 @@ Value getmininginfo(const Array& params, bool fHelp)
     obj.push_back(Pair("blockvalue",    (uint64_t)GetProofOfWorkReward(0,  GetAdjustedTime(),1)));
     obj.push_back(Pair("netmhashps",     GetPoWMHashPS()));
     obj.push_back(Pair("netstakeweight", GetPoSKernelPS()));
+	obj.push_back(Pair("netstakeweight2", GetPoSKernelPS2()));
+
     obj.push_back(Pair("errors",        GetWarnings("statusbar")));
     obj.push_back(Pair("pooledtx",      (uint64_t)mempool.size()));
 

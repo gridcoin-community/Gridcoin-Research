@@ -65,12 +65,12 @@ void TransactionDescDialog::on_btnTrack_clicked()
 {
     //Tracking Coins
 	std::string sTXID = ExtractXML(msHashBoinc,"<TRACK>","</TRACK>");
+	sTXID = msHashBoincTxId;
+
 	if (sTXID.length() > 1)
 	{
 		int result = 0;
-		#if defined(WIN32) && defined(QT_GUI)
 		result = qtTrackConfirm(sTXID);
-		#endif
 		std::string body = "";
 		bool received = false;
 		if (result==1)

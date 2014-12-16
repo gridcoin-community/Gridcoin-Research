@@ -403,7 +403,7 @@ double GetPoSKernelPS()
     if (IsProtocolV2(nBestHeight))
         result *= STAKE_TIMESTAMP_MASK + 1;
 
-	if (result > 350000000123) result = 350000000123;
+	//if (result > 350000000123) result = 350000000123;
     return result;
 }
 Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPrintTransactionDetail)

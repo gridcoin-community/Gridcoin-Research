@@ -17,30 +17,48 @@
 
     Public Function mInsertConfirm(dAmt As Double, sFrom As String, sTo As String, sTXID As String) As String
         If mData Is Nothing Then mData = New Sql
-
-
         Dim sInsert As String
         sInsert = "<INSERT><TABLE>Confirm</TABLE><FIELDS>GRCFrom,GRCTo,txid,amount,Confirmed</FIELDS><VALUES>'" + Trim(sFrom) + "','" + Trim(sTo) + "','" + Trim(sTXID) + "','" + Trim(dAmt) + "','0'</VALUES></INSERT>"
         Dim sErr As String
         sErr = mData.ExecuteP2P(sInsert)
         Return sErr
     End Function
-    Public Function mUpdateConfirm(sTXID As String, iStatus As Long) As String
-        If mData Is Nothing Then mData = New Sql
+    Public msTXID As String = ""
 
-        Dim sUpdate As String
-        sUpdate = "<UPDATE><TABLE>Confirm</TABLE><FIELDS>Confirmed</FIELDS><VALUES>'" + Trim(iStatus) + "'</VALUES><WHEREFIELDS>txid</WHEREFIELDS><WHEREVALUES>'" + sTXID + "'</WHEREVALUES></UPDATE>"
-        Dim sErr As String
-        sErr = mData.ExecuteP2P(sUpdate)
-        Return sErr
-
+    Public Function mUpdateConfirmAsync()
+        Dim sTxId As String = msTXID
+        Threading.Thread.Sleep(9000) 'Wait 9 seconds asynchronously in case user sent coins to themself
+        mUpdateConfirm(sTxId, 1)
     End Function
-    Public Function mTrackConfirm(sTXID As String) As Integer
+    Public Function mUpdateConfirm(sTXID As String, iStatus As Long) As String
+        sTXID = Replace(sTXID, Chr(0), "")
+
+        If mData Is Nothing Then mData = New Sql
+        Dim sUpdate As String
+        ' sUpdate "<UPDATE><TABLE>Confirm</TABLE><FIELDS>Confirmed</FIELDS><VALUES>'" + Trim(iStatus) + "'</VALUES><WHEREFIELDS>txid</WHEREFIELDS><WHEREVALUES>'" + sTXID + "'</WHEREVALUES></UPDATE>"
+        'sUpdate = "<UPDATE><TABLE>Confirm</TABLE><FIELDS>Confirmed</FIELDS><VALUES>'" + Trim(iStatus) + "'</VALUES><WHEREFIELDS>txid</WHEREFIELDS><WHEREVALUES>'" + Trim(sTXID) + "'</WHEREVALUES></UPDATE>"
+        sUpdate = "<UPDATE><TABLE>Confirm</TABLE><FIELDS>Confirmed</FIELDS><VALUES>'1'</VALUES><WHEREFIELDS>TXID</WHEREFIELDS><WHEREVALUES>'" + Trim(sTXID) + "'</WHEREVALUES></UPDATE>"
+
+        Dim sErr As String
+        Log("Updating " + sUpdate)
+        sErr = mData.ExecuteP2P(sUpdate)
+        Log("Done " + Trim(sErr))
+
+        'Update Dummy
+
+        Return sErr
+    End Function
+    Public Function mTrackConfirm(sTXID As String) As Double
+
+
+
         If mData Is Nothing Then mData = New Sql
 
         Dim dr As GridcoinReader
         Dim sql As String
         sql = "Select Confirmed from Confirm where TXID='" + sTXID + "'"
+        Log("Tracking " + sql)
+
         Try
             dr = mData.GetGridcoinReader(sql)
 
@@ -48,18 +66,23 @@
             Return -1
         End Try
 
-        Dim grr As New GridcoinReader.GridcoinRow
-        grr = dr.GetRow(1)
-        If grr.Values(0) = "1" Then Return 1
-        Return 0
+        Try
+            Dim grr As New GridcoinReader.GridcoinRow
+            grr = dr.GetRow(1)
+            Log("Data returned " + Trim(grr.Values(0).ToString))
+
+            Return Val(grr.Values(0).ToString())
+
+        Catch ex As Exception
+            Log("HEINOUS 2:" + ex.Message)
+            Return 0
+        End Try
+      
 
     End Function
 
 
-
-
     Public bSqlHouseCleaningComplete As Boolean = False
-
     Public vProj() As String
     Public Function SQLInSync() As Boolean
         If mlSqlBestBlock < 800 Then Return False

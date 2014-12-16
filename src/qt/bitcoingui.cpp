@@ -89,7 +89,6 @@ extern void qtUpdateConfirm(std::string txid);
 extern void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string txid);
 
 
-
 void TallyInBackground();
 
 double cdbl(std::string s, int place);
@@ -435,17 +434,11 @@ int RestartClient()
 
 void qtUpdateConfirm(std::string txid)
 {
+	int result = 0;
+		
 	#if defined(WIN32) && defined(QT_GUI)
-	try
-	{
-		int result = 0;
 		QString qsTxid = ToQstring(txid);
-	 	result = globalcom->dynamicCall("UpdateConfirm(Qstring)",qsTxid).toInt();
-	}
-	catch(...)
-	{
-
-	}
+		QString sResult = globalcom->dynamicCall("UpdateConfirm(Qstring)",qsTxid).toString();
 	#endif
 		
 }
@@ -474,22 +467,28 @@ void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::strin
 }
 
 
+
+
+std::string FromQString(QString qs)
+{
+	std::string sOut = qs.toUtf8().constData();
+	return sOut;
+}
+
+
+
 int qtTrackConfirm(std::string txid)
 {
-	int result = 0;
+	double result = 0;
 	#if defined(WIN32) && defined(QT_GUI)
-	try
-	{  
-		int result = 0;
 		QString qsConfirm = ToQstring(txid);
-		result = globalcom->dynamicCall("TrackConfirm(Qstring)",qsConfirm).toInt();
-	}
-	catch(...)
-	{
-
-	}
+		printf("@t1");
+		QString qsResult = globalcom->dynamicCall("TrackConfirm(Qstring)",qsConfirm).toString();
+		std::string sResult = FromQString(qsResult);
+		result = cdbl(sResult,0);
+		printf("@t2 returned %f",(double)result);
 	#endif
-	return result;
+	return (int)result;
 }
 
 
