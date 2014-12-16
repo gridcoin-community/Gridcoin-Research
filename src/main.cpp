@@ -7105,16 +7105,22 @@ void ThreadTally()
 {
 	printf("Tallying..");
 	//Erase miners last payment time 12-10-2014
+	if (false)
+	{
 	if (GlobalCPUMiningCPID.cpid != "INVESTOR")
 	{
 		StructCPID Host = mvMagnitudes[GlobalCPUMiningCPID.cpid]; 
 		if (Host.initialized)
 		{
-				Host.LastPaymentTime = 0;
-				Host.Magnitude = 0;
+				//ToDo: Should we set this to zero where orphans occur?
+				//Host.LastPaymentTime = 0;
+				//Host.Magnitude = 0;
 				mvMagnitudes[GlobalCPUMiningCPID.cpid]=Host;
 		}	
 	}
+	}
+
+
 	printf(".T2.");
 	TallyNetworkAverages(false);
 	GetNextProject();
