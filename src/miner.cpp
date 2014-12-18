@@ -794,7 +794,7 @@ Begin:
 		}
 		}
 
-		if (IsLockTimeWithinMinutes(nLastBlockSolved,3)) 
+		if (IsLockTimeWithinMinutes(nLastBlockSolved,5)) 
 		{
 				if (fDebug) printf("=");
 				MilliSleep(1000);

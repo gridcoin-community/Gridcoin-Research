@@ -1602,7 +1602,9 @@ double MintLimiter(double PORDiff)
 	if (PORDiff > 1   && PORDiff < 5)  return .15;
 	if (PORDiff >= 5  && PORDiff < 10) return 5;
 	if (PORDiff >= 10 && PORDiff < 50) return 10;
-	if (PORDiff >= 50) return 25;
+	if (PORDiff >= 50 && PORDiff < 100) return 10;
+	if (PORDiff >= 100 && PORDiff < 500) return 30;
+	if (PORDiff >= 500) return 75;
 	return 0;
 }
 	
@@ -1617,7 +1619,8 @@ double MintLimiterPOR(double PORDiff,int64_t locktime)
 	if (PORDiff >= 1   && PORDiff < 5)   return .15;
 	if (PORDiff >= 5   && PORDiff < 50)  return MaxSubsidy/40;
 	if (PORDiff >= 50  && PORDiff < 100)  return MaxSubsidy/20;
-	if (PORDiff >= 100) return MaxSubsidy/10;
+	if (PORDiff >= 100 && PORDiff < 500)  return MaxSubsidy/10;
+	if (PORDiff >= 500)  return MaxSubsidy/5;
 	return 0;
 }
 
