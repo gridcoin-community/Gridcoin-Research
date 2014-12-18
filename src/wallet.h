@@ -401,6 +401,10 @@ public:
     std::string strFromAccount;
     std::vector<char> vfSpent; // which outputs are already spent
     int64_t nOrderPos;  // position in ordered transaction list
+	//Add two fields to CWalletTx
+	//int64_t nResearchSubsidy;
+	//int64_t nInterestSubsidy;
+
 
     // memory only
     mutable bool fDebitCached;
@@ -489,6 +493,11 @@ public:
         READWRITE(nTimeReceived);
         READWRITE(fFromMe);
         READWRITE(fSpent);
+
+		//Serialize two additional fields for Gridcoin
+		//READWRITE(nResearchSubsidy);
+		//READWRITE(nInterestSubsidy);
+
 
         if (fRead)
         {

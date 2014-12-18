@@ -445,8 +445,8 @@ bool GetBlockNew(uint256 blockhash, int& out_height, CBlock& blk, bool bForceDis
 				 txNew.hashBoinc = cache.hashBoinc;
 				 blk.vtx.resize(1);
 				 blk.vtx[0] = txNew;
-				blk.nVersion  = cache.nVersion;
-				if (!bForceDiskRead) return true;
+				 blk.nVersion  = cache.nVersion;
+				 if (!bForceDiskRead) return true;
 			}
 		
 			CBlockIndex* pblockindex = mapBlockIndex[blockhash];

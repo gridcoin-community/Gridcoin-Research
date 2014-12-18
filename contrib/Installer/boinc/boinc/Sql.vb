@@ -192,7 +192,11 @@ Public Class Sql
                     ElseIf sType = "SYSTEM.INTEGER" Then
                         oValue = CInt(vRow(y))
                     ElseIf sType = "SYSTEM.DATETIME" Then
-                        oValue = CDate(vRow(y))
+                        '12-17-2014 - Add support for dd-mm-yyyy date format for global cultures
+                        Dim global_date_style As System.Globalization.DateTimeStyles
+                        Dim culture As Globalization.CultureInfo = Globalization.CultureInfo.CreateSpecificCulture("en-US")
+                        oValue = Now
+                        Dim good_date As Boolean = DateTime.TryParseExact(vRow(y), "MM/dd/yyyy hh:mm:ss tt", culture, Globalization.DateTimeStyles.None, oValue)
                     ElseIf sType = "SYSTEM.DECIMAL" Then
                         oValue = CDbl("0" & vRow(y))
 

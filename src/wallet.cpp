@@ -550,6 +550,8 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
 		if (fInsertedNew)
 		{
 			// If this is a tracked tx, update via SQL:
+			if (!wtxIn.hashBoinc.empty() && bGlobalcomInitialized)
+			{
 			if (Contains(wtxIn.hashBoinc,"<TRACK>"))
 			{
 				//wtx.GetHash().ToString()
@@ -559,6 +561,24 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
 				#endif
 				printf("Updated.");
 			}
+			}
+
+			//If this is a coinbase, update the interest and the researchsubsidy on the tx: (12-17-2014 Halford):
+			if (false)
+			{
+	 			CBlockIndex* pboincblockindex = mapBlockIndex[wtxIn.hashBlock];
+				CBlock blk;
+    			bool h = blk.ReadFromDisk(pboincblockindex);
+				if (h) 
+				{
+					//MiningCPID mcpidWalletTx = DeserializeBoincBlock(blk.vtx[0].hashBoinc);
+					//wtx.nResearchSubsidy = mcpidWalletTx.ResearchSubsidy;
+					//wtx.nInterestSubsidy = mcpidWalletTx.InterestSubsidy;
+					//printf("Logging coinbase tx in Research %f, Interest %f",(double)wtx.nResearchSubsidy,(double)wtx.nInterestSubsidy);
+				}
+			}
+	
+
 		}
         // Write to disk
         if (fInsertedNew || fUpdated)
