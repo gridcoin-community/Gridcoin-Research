@@ -635,7 +635,6 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
     targetProofOfStake = bnTarget.getuint256();
 	uint64_t nStakeModifier = 0;
 	nStakeModifier = pindexPrev->nHeight <= 86330 ? pindexPrev->nStakeModifier : pindexPrev->nBits;
-	//uint64_t nStakeModifier = pindexPrev->nStakeModifier;
 
     int nStakeModifierHeight = pindexPrev->nHeight;
     int64_t nStakeModifierTime = pindexPrev->nTime;
@@ -644,7 +643,6 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
     CDataStream ss(SER_GETHASH, 0);
 
 	ss << nStakeModifier << nTimeBlockFrom << txPrev.nTime << prevout.hash << prevout.n << nTimeTx;
-	
 
     hashProofOfStake = Hash(ss.begin(), ss.end());
 

@@ -1678,7 +1678,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	
 	//HALFORD: (Blended Stake Weight includes RSA_WEIGHT):
 	//WEIGHT SECTION 1: When a new CPID enters the ecosystem
-	nWeight += RSA_WEIGHT*100;
+	nWeight += (RSA_WEIGHT*10);
 	return true;
 }
 
