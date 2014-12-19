@@ -28,7 +28,7 @@ bool IsLockTimeWithinMinutes(double locktime, int minutes);
 
 double CoinToDouble(double surrogate);
 double GetBlockDifficulty(unsigned int nBits);
-extern double MintLimiterPOR(double PORDiff,int64_t locktime);
+extern double MintLimiterPOR(double PORDiff,int64_t locktime,int64_t RSA_WEIGHT);
 
 bool OutOfSyncByAgeWithChanceOfMining();
 int64_t GetRSAWeightByCPID(std::string cpid);
@@ -1610,9 +1610,9 @@ double MintLimiter(double PORDiff)
 	
 
 
-double MintLimiterPOR(double PORDiff,int64_t locktime)
+double MintLimiterPOR(double PORDiff,int64_t locktime,int64_t RSA_WEIGHT)
 {
-	//12-10-2014
+	if (RSA_WEIGHT==25000) return 0; //Uninitialized Newbie
 	double MaxSubsidy = GetMaximumBoincSubsidy(locktime);
 	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
 	if (PORDiff >= 0   && PORDiff < 1)   return 0;
@@ -1992,15 +1992,15 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 			GlobalCPUMiningCPID.cpid.c_str(),sReward.c_str(),RoundToString((double)RSA_WEIGHT,0).c_str());
 	
 		//INVESTORS
-		if (mint < MintLimiter(PORDiff)) 
+		if (GlobalCPUMiningCPID.cpid == "INVESTOR" && mint < MintLimiter(PORDiff)) 
 		{
-				if (LessVerbose(100)) printf("CreateBlock::Investors Mint is too small");
+				if (LessVerbose(20)) printf("CreateBlock::Investors Mint is too small");
 				return false; 
 		}
 		//BOINC MINERS
-		if (RSA_WEIGHT > 0 && ((RSA_WEIGHT/14) < MintLimiterPOR(PORDiff,GetAdjustedTime()))  )
+		if (RSA_WEIGHT > 0 && ((RSA_WEIGHT/14) < MintLimiterPOR(PORDiff,GetAdjustedTime(),RSA_WEIGHT))  )
 		{
-				if (fDebug) if (LessVerbose(100)) printf("Owed %f < MintLimitLevel %f",OUT_POR,MintLimiterPOR(PORDiff,GetAdjustedTime()));
+				if (fDebug) if (LessVerbose(100)) printf("Owed %f < MintLimitLevel %f",OUT_POR,MintLimiterPOR(PORDiff,GetAdjustedTime(),RSA_WEIGHT));
 				return false;
 		}
 		if (nReward == 0)
@@ -2019,40 +2019,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		return false;
 	}
 
-	if (false)
-	{
-														//12-1-2014 - During periods of high difficulty new block must have a higher magnitude than last block until block > 10 mins old:
-														double PORDiff = GetDifficulty(GetLastBlockIndex(pindexPrev, true));
-														//int64_t LastBlockTime = pindexBest->GetBlockTime();
-														double LastBlockAge = PreviousBlockAge();
-			
-														if (PORDiff > 10 && miningcpid.cpid != "INVESTOR" && miningcpid.cpid.length() > 3 && LastBlockAge < (7*60) )
-														{
-															double current_magnitude = miningcpid.Magnitude;
-															CBlock prior_block;
-															if (!prior_block.ReadFromDisk(pindexBest))   
-															{
-																printf("CreateNewBlock() : read Prior block failed!");
-																return false;
-															}
-															if (prior_block.vtx.size() > 0)
-															{
-																MiningCPID PriorStakeBlock = DeserializeBoincBlock(prior_block.vtx[0].hashBoinc);
-																double prior_magnitude = PriorStakeBlock.Magnitude;
-																if (prior_magnitude > 0 && current_magnitude > 0)
-																{
-																		if (current_magnitude < prior_magnitude)
-																		{
-																				printf("Last Mag Too High; Block age %f, Prior mag %f, Current Mag %f",LastBlockAge,prior_magnitude,current_magnitude);
-																				MilliSleep(2500);
-																				return false;
-																		}
-																}
-															}
-		
-														}
-	}
-
+	
     // Set output amount
     if (txNew.vout.size() == 3)
     {

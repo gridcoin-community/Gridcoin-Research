@@ -528,7 +528,7 @@ std::string CPID::boincdigest(uint256 block) const
 }
 
 
-bool CPID::Compare(std::string usercpid, std::string longcpid, uint256 blockhash)
+bool CompareCPID(std::string usercpid, std::string longcpid, uint256 blockhash)
 {
 	   if (longcpid.length() < 34) return false;
 	   std::string cpid1 = longcpid.substr(0,32);
@@ -563,23 +563,14 @@ std::string boinc_hash(const std::string str)
 
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash)
 {
-	//11-29-2014
 	
-	//CPID c = CPID(email,bpk,blockhash);
-    //return c.hexdigest();
+		//CPID c = CPID(email,bpk,blockhash);
+		//return c.hexdigest();
 
-	//ToDO: Fix this:
-	try
-	{
+		//ToDO: Fix this:
 		CPID c = CPID(email,bpk,blockhash);
 		std::string sCPID = c.boincdigest(blockhash);
 		return sCPID;
-	}
-	catch(...)
-	{
-		return "";
-	}
-
 }
 
 
@@ -592,8 +583,6 @@ std::string boinc_hash(std::string email, std::string bpk, uint256 blockhash)
 
 bool CPID_IsCPIDValid(std::string cpid1, std::string longcpid, uint256 blockhash)
 {
-	try
-	{
 		if (cpid1.empty()) return false;
 		if (longcpid.empty()) return false;
 		if (longcpid.length() < 32) return false;
@@ -611,14 +600,9 @@ bool CPID_IsCPIDValid(std::string cpid1, std::string longcpid, uint256 blockhash
 		//if (fDebug) printf("Comparing user cpid %s, longcpid %s\r\n",cpid1.c_str(),longcpid.c_str());
 		printf("?6");
 		//Definite: Problem here:
-		bool compared = c.Compare(cpid1,longcpid,blockhash);
+		bool compared = CompareCPID(cpid1,longcpid,blockhash);
+		printf("?6a");
 		return compared;
-	}
-	catch(...)
-	{
-		printf("Error in CPID comparison v2");
-		return false;
-	}
 }
 
 

@@ -32,6 +32,7 @@ using namespace boost;
 
 extern int nMaxConnections;
 MiningCPID GetNextProject();
+void HarvestCPIDs(bool cleardata);
 
 bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 
@@ -1006,7 +1007,11 @@ void CNode::PushVersion()
 	}
 
 
-	if (!checksum && GlobalCPUMiningCPID.cpid.empty()) GetNextProject();
+	if (!checksum && (GlobalCPUMiningCPID.cpid.empty() || GlobalCPUMiningCPID.encboincpublickey.empty()))
+	{
+		    HarvestCPIDs(false);
+			GetNextProject();
+	}
 
 
 	std::string nonce = boincHashRandNonce.GetHex();

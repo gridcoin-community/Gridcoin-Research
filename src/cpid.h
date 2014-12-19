@@ -38,7 +38,7 @@ public:
   std::string boincdigest(uint256 block) const;
 
 
-  bool Compare(std::string usercpid, std::string longcpid, uint256 blockhash);
+//  bool Compare(std::string usercpid, std::string longcpid, uint256 blockhash);
  
   friend std::ostream& operator<<(std::ostream&, CPID cpid);
  
@@ -81,7 +81,6 @@ private:
  
 std::string cpid(const std::string str);
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
- 
 std::string boinc_hash(std::string email, std::string bpk, uint256 blockhash);
 std::string boinc_hash(const std::string str);
 

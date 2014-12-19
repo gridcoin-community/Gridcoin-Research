@@ -22,7 +22,7 @@ MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
 extern int64_t GetRSAWeightByCPID(std::string cpid);
 
-double MintLimiterPOR(double PORDiff,int64_t locktime);
+double MintLimiterPOR(double PORDiff,int64_t locktime,int64_t rsaweight);
 
 double GetBlockDifficulty(unsigned int nBits);
 
@@ -328,7 +328,7 @@ int64_t GetRSAWeightByCPID(std::string cpid)
 			{
 				if (cpid.length() > 5 && cpid != "INVESTOR")
 				{
-						owed = 5000;
+						owed = 25000;
 				}
 			}
 	}
@@ -483,8 +483,8 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	double coin_age = std::abs((double)nTimeTx-(double)txPrev.nTime);
 	double payment_age = std::abs((double)nTimeTx-(double)boincblock.LastPaymentTime);
 	if ((payment_age > 60*60) && boincblock.Magnitude > 1 && boincblock.cpid != "INVESTOR" && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT) 
-		&& (RSA_WEIGHT/14 > MintLimiterPOR(PORDiff,blockFrom.GetBlockTime())) 
-		&& (boincblock.ResearchSubsidy > MintLimiterPOR(PORDiff,blockFrom.GetBlockTime())) )
+		&& (RSA_WEIGHT/14 > MintLimiterPOR(PORDiff,blockFrom.GetBlockTime(),RSA_WEIGHT)) 
+		&& (boincblock.ResearchSubsidy > MintLimiterPOR(PORDiff,blockFrom.GetBlockTime(),RSA_WEIGHT)) )
 	{
 		//Coins are older than RSA balance
 		oNC=1;
@@ -597,8 +597,8 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
  	double coin_age = std::abs((double)nTimeTx-(double)txPrev.nTime);
 	double payment_age = std::abs((double)nTimeTx-(double)boincblock.LastPaymentTime);
 	if ((payment_age > 60*60) && boincblock.Magnitude > 1 && boincblock.cpid != "INVESTOR" && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT) 
-		&& (RSA_WEIGHT/14 > MintLimiterPOR(PORDiff,nTimeBlockFrom)) 
-		&& (boincblock.ResearchSubsidy > MintLimiterPOR(PORDiff,nTimeBlockFrom)) )
+		&& (RSA_WEIGHT/14 > MintLimiterPOR(PORDiff,nTimeBlockFrom,RSA_WEIGHT)) 
+		&& (boincblock.ResearchSubsidy > MintLimiterPOR(PORDiff,nTimeBlockFrom,RSA_WEIGHT)) )
 	{
 		//Coins are older than RSA balance
 		oNC=1;
