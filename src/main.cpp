@@ -293,7 +293,7 @@ extern std::string ExtractXML(std::string XMLdata, std::string key, std::string 
 
 extern void ShutdownGridcoinMiner();
 extern bool OutOfSync();
-extern MiningCPID GetNextProject();
+extern MiningCPID GetNextProject(bool bForce);
 extern void HarvestCPIDs(bool cleardata);
 extern  bool TallyNetworkAverages(bool ColdBoot);
 bool FindRAC(bool CheckingWork,std::string TargetCPID, std::string TargetProjectName, double pobdiff,
@@ -712,11 +712,11 @@ unsigned int DiffBytes(double PoBDiff)
 
 
 
-MiningCPID GetNextProject()
+MiningCPID GetNextProject(bool bForce)
 {
 
-	if (GlobalCPUMiningCPID.projectname.length() > 3)
-			{
+	if (GlobalCPUMiningCPID.projectname.length() > 3 && !bForce)
+	{
 	
 				if (!Timer_Main("globalcpuminingcpid",20))
 				{
@@ -724,7 +724,7 @@ MiningCPID GetNextProject()
 					return GlobalCPUMiningCPID;
 				}
 		
-			}
+	}
 	msMiningProject = "";
 	msMiningCPID = "";
 	mdMiningRAC = 0;
@@ -741,7 +741,7 @@ MiningCPID GetNextProject()
 
 	if (fDebug) printf("qq0.");
 
-	if (IsInitialBlockDownload() || !bCPIDsLoaded) 
+	if ( (IsInitialBlockDownload() || !bCPIDsLoaded) && !bForce) 
 	{
 		    printf("CPUMiner: Gridcoin is downloading blocks Or CPIDs are not yet loaded...");
 			MilliSleep(200);
@@ -7126,7 +7126,7 @@ void ThreadTally()
 
 	printf(".T2.");
 	TallyNetworkAverages(false);
-	GetNextProject();
+	GetNextProject(false);
 	printf(".T3.");
 	if (fDebug) printf("Completed with Tallying()");
 
@@ -7145,7 +7145,7 @@ void ThreadCPIDs()
 	printf("Performing 1st credit check (%s)",GlobalCPUMiningCPID.cpid.c_str());
 	CreditCheck(GlobalCPUMiningCPID.cpid,true);
 	printf("Getting first project");
-	GetNextProject();
+	GetNextProject(false);
 	printf("Finished getting first project");
 	bProjectsInitialized = true;
 }

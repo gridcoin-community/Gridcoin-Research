@@ -18,7 +18,7 @@ using namespace std;
 //
 
 extern unsigned int nMinerSleep;
-MiningCPID GetNextProject();
+MiningCPID GetNextProject(bool bForce);
 
 void ThreadCleanWalletPassphrase(void* parg);
 
@@ -421,7 +421,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
         if (fDebug && GetBoolArg("-printpriority"))
             printf("CreateNewBlock(): total size %"PRIu64"\n", nBlockSize);
 		//Add Boinc Hash - R HALFORD - 11-28-2014 - Add CPID v2
-		MiningCPID miningcpid = GetNextProject();
+		MiningCPID miningcpid = GetNextProject(false);
 		//ToDo:Test CPID v2 IsCpidValid from RPC
 		//Crashes in Linux
 	    //miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pindexPrev->GetBlockHash());

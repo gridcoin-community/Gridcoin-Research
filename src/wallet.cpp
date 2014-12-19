@@ -54,7 +54,7 @@ int64_t GetMaximumBoincSubsidy(int64_t nTime);
 
 bool LessVerbose(int iMax1000);
 
-MiningCPID GetNextProject();
+MiningCPID GetNextProject(bool bForce);
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -1752,7 +1752,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 	try
 	{
-		 miningcpid = GetNextProject();
+		 miningcpid = GetNextProject(false);
 		 //Stack Smashing
 		 //miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pindexPrev->GetBlockHash());
 		 miningcpid.cpidv2="";

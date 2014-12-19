@@ -46,7 +46,7 @@ extern void InitializeBoincProjects();
 
 bool IsConfigFileEmpty();
 
-void GetNextProject();
+void GetNextProject(bool bForce);
 void HarvestCPIDs(bool cleardata);
 std::string ToOfficialName(std::string proj);
 bool TallyNetworkAverages(bool ColdBoot);
