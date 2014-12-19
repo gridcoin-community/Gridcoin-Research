@@ -330,7 +330,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors2 = "";
  std::string    msMiningErrors3 = "";
  std::string    msMiningErrors4 = "";
- int nGrandfather = 86300;
+ int nGrandfather = 90500;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
