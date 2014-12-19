@@ -5259,6 +5259,14 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 	
 		bool unauthorized = false;
 		if (sdefaultboinchashargs.length() < 5 || pw1 != pfrom->boinchashpw) unauthorized=true;
+
+		bool checksum = false;
+		if (sdefaultboinchashargs.length() > 5)
+		{
+			if (sdefaultboinchashargs.substr(0,4) == "Elim") checksum=true;
+		}
+
+
 		//12-10-2014
 		if (unauthorized)
 		{
@@ -5269,7 +5277,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 			}
 		}
 		
-		if (unauthorized)
+		if (unauthorized && checksum)
 		{
 			printf("Disconnected unauthorized peer.         ");
 		    pfrom->fDisconnect = true;
