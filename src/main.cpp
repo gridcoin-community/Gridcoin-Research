@@ -3643,13 +3643,15 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 				return error("AcceptBlock() : block's timestamp is too early");
 		}
 
+		
+	    // Check proof-of-work or proof-of-stake
+		if (nBits != GetNextTargetRequired(pindexPrev, IsProofOfStake()))
+				return DoS(100, error("AcceptBlock() : incorrect %s", IsProofOfWork() ? "proof-of-work" : "proof-of-stake"));
+
+
 	}
 
 
-
-    // Check proof-of-work or proof-of-stake
-    if (nBits != GetNextTargetRequired(pindexPrev, IsProofOfStake()))
-        return DoS(100, error("AcceptBlock() : incorrect %s", IsProofOfWork() ? "proof-of-work" : "proof-of-stake"));
 
     
     // Check that all transactions are finalized
