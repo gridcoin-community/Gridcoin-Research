@@ -4790,7 +4790,11 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 bool TallyNetworkAverages(bool ColdBoot)
 {
 	//Iterate throught last 14 days, tally network averages
-    if (nBestHeight < 15) return false;
+    if (nBestHeight < 15) 
+	{
+		bNetAveragesLoaded = true;
+		return true;
+	}
 	if (fDebug) printf("Gathering network avgs (begin)\r\n");
 	//If we did this within the last 5 mins, we are fine:
 	if (IsLockTimeWithinMinutes(nLastTallied,30)) return true;
