@@ -367,7 +367,13 @@ int ROL(std::string blockhash, int iPos, std::string hash, int hexpos)
 
 void CPID::update5(std::string longcpid, uint256 blockhash)
 {
-    std::string shash = boinc_hash(blockhash.GetHex());
+  //  std::string shash = boinc_hash(blockhash.GetHex());
+
+
+	CPID c2 = CPID(blockhash.GetHex());
+	std::string shash =  c2.hexdigest();
+  
+
 	int hexpos = 0;
 	unsigned char* input = new unsigned char[(longcpid.length()/2)+1];
 	for (int i1 = 0; i1 < (int)longcpid.length(); i1 = i1 + 2)
@@ -521,7 +527,13 @@ std::string CPID::boincdigest(std::string email, std::string bpk, uint256 block)
   }
   char ch;
   std::string non_finalized(buf);
-  std::string shash = boinc_hash(block.GetHex());
+
+
+
+  CPID c2 = CPID(block.GetHex());
+  std::string shash =  c2.hexdigest();
+  //  std::string shash = boinc_hash(block.GetHex());
+
   std::string debug = "";
 
 
@@ -536,7 +548,7 @@ std::string CPID::boincdigest(std::string email, std::string bpk, uint256 block)
   {
 	 	non_finalized += ROR(shash,i,mh);
   }
-  printf(".4 em %s bpk %s",email.c_str(),bpk.c_str());
+  printf(".4 em %s bpk %s out %s",email.c_str(),bpk.c_str(),non_finalized.c_str());
   return non_finalized;
 
 }
@@ -547,7 +559,13 @@ bool CompareCPID(std::string usercpid, std::string longcpid, uint256 blockhash)
 	   if (longcpid.length() < 34) return false;
 	   std::string cpid1 = longcpid.substr(0,32);
 	   std::string cpid2 = longcpid.substr(32,longcpid.length()-31);
-	   std::string shash = boinc_hash(blockhash.GetHex());
+	   //std::string shash = boinc_hash(blockhash.GetHex());
+
+	   CPID c2 = CPID(blockhash.GetHex());
+	   std::string shash =  c2.hexdigest();
+  
+
+
 	   CPID c = CPID(cpid2,0,blockhash);
 	   std::string shortcpid = c.hexdigest();
 	   if (shortcpid=="") return false;
