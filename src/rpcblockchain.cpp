@@ -1265,12 +1265,13 @@ Array MagnitudeReportCSV()
 				}
 
 		   }
+		   int64_t timestamp = GetTime();
 		   std::string footer = RoundToString(rows,0) + ", , , ," + RoundToString(lto,2) + ", ," + RoundToString(totalpaid,2) + ", , , , ," + RoundToString(totaloutstanding,2) + "\n";
 		   header += footer;
 		   Object entry;
-		   entry.push_back(Pair("CSV Complete","\\reports\\magnitude.csv"));
+		   entry.push_back(Pair("CSV Complete",strprintf("\\reports\\magnitude_%"PRId64".csv",timestamp)));
 		   results.push_back(entry);
-     	   CSVToFile("magnitude.csv",header);
+		   CSVToFile(strprintf("magnitude_%"PRId64".csv",timestamp), header);
 		   return results;
 }
 
