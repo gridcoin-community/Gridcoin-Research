@@ -586,7 +586,6 @@ std::ostream& operator<<(std::ostream& out, CPID CPID)
 std::string computecpidv2retired(std::string email, std::string bpk, uint256 blockhash)
 {
 	
-		//12-20-2014
 		if (GetBoolArg("-disablecpidv2")) return "";
 		              
 		//ToDO: Fix this:
