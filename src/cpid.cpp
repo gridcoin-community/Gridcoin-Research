@@ -532,11 +532,11 @@ std::string CPID::boincdigest(std::string email, std::string bpk, uint256 block)
 
 
 
-  for (int i = 0; i < (int)merged_hash.length(); i++)
+  for (int i = 0; i < (int)mh.length(); i++)
   {
 	 	non_finalized += ROR(shash,i,mh);
   }
-  printf(".4");
+  printf(".4 em %s bpk %s",email.c_str(),bpk.c_str());
   return non_finalized;
 
 }
