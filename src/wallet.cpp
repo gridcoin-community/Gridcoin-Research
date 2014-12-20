@@ -1755,7 +1755,9 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	{
 		 miningcpid = GetNextProject(false);
 		 //Stack Smashing
-		 miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, GetBlockHash256(pindexPrev));
+		 uint256 pbh = 0;
+		 if (pindexPrev) pbh=pindexPrev->GetBlockHash();
+		 miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pbh);
 		 //miningcpid.cpidv2="";
 
 		 miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();

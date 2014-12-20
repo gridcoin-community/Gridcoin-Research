@@ -510,8 +510,9 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	if (true)
 	{
 		//uint256 GetBlockHash256(const CBlockIndex* pindex_hash)
-		//std::string me = ComputeCPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey,blockindex->pprev->GetBlockHash());
-		std::string me = ComputeCPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey,GetBlockHash256(blockindex->pprev));
+		uint256 pbh = 0;
+		if (blockindex->pprev) pbh = blockindex->pprev->GetBlockHash();
+		std::string me = ComputeCPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey,pbh);
 		result.push_back(Pair("MyCPID",me));
 	}
     return result;

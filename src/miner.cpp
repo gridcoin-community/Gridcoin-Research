@@ -425,7 +425,9 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		MiningCPID miningcpid = GetNextProject(false);
 		//ToDo:Test CPID v2 IsCpidValid from RPC
 		//Crashes in Linux
-	    miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, GetBlockHash256(pindexPrev));
+		uint256 pbh = 0;
+		if (pindexPrev) pbh=pindexPrev->GetBlockHash();
+	    miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pbh);
 				
 
 		//miningcpid.cpidv2="";
