@@ -35,7 +35,8 @@ public:
 
   CPID& finalize();
   std::string hexdigest() const;
-  std::string boincdigest(uint256 block) const;
+  std::string boincdigest(std::string email, std::string bpk, uint256 block) const;
+
 
 
 //  bool Compare(std::string usercpid, std::string longcpid, uint256 blockhash);

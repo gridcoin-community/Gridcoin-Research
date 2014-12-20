@@ -505,15 +505,14 @@ std::string ROR(std::string blockhash, int iPos, std::string hash)
 }
 
 
-std::string CPID::boincdigest(uint256 block) const
+
+std::string CPID::boincdigest(std::string email, std::string bpk, uint256 block) const
 {
   //Provides the 16 byte Boinc CPID (Netsoft compatible) contained in hash buffer
-printf(".1");
 
   if (!finalized)
     return "";
 
-  printf(".2");
 
   char buf[16];
   for (int i=0; i<16; i++)
@@ -524,10 +523,18 @@ printf(".1");
   std::string non_finalized(buf);
   std::string shash = boinc_hash(block.GetHex());
   std::string debug = "";
-  printf(".3");
+
+
+  boost::algorithm::to_lower(bpk);
+  boost::algorithm::to_lower(email);
+  std::string cpid_non = bpk+email;
+  std::string mh = cpid_non;
+
+
+
   for (int i = 0; i < (int)merged_hash.length(); i++)
   {
-	 	non_finalized += ROR(shash,i,merged_hash);
+	 	non_finalized += ROR(shash,i,mh);
   }
   printf(".4");
   return non_finalized;
@@ -576,7 +583,7 @@ std::string computecpidv2retired(std::string email, std::string bpk, uint256 blo
 		              
 		//ToDO: Fix this:
 		CPID c = CPID(email,bpk,blockhash);
-		std::string sCPID = c.boincdigest(blockhash);
+		std::string sCPID = c.boincdigest(email,bpk,blockhash);
 		return sCPID;
 }
 
