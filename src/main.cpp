@@ -6564,7 +6564,7 @@ std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash)
 		//ToDO: Fix this:
 		//uint256 pbh  = 0;
 		CPID c = CPID(email,bpk,pbh);
-		std::string sCPID = c.boincdigest(email,bpk,pbh);
+		std::string sCPID = c.boincdigest(email,bpk,0);
 	
 		return sCPID;
 }
