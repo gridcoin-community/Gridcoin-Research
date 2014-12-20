@@ -23,20 +23,19 @@ public:
  
   CPID();
   CPID(std::string text);
-  CPID(std::string email, std::string bpk, uint256 blockhash);
+  CPID(std::string email, std::string bpk);
 
-  CPID(std::string text,int entropybit,uint256 blockhash);
+  CPID(std::string text,int entropybit);
 
   void update(const unsigned char *buf, size_type length);
   void update(const char *buf, size_type length);
   
-  void update5(std::string inp,uint256 blockhash);
+  void update5(std::string inp);
   
 
   CPID& finalize();
   std::string hexdigest() const;
-  std::string boincdigest(std::string email, std::string bpk, uint256 block);
-
+  std::string boincdigest(std::string email, std::string bpk);
 
 
 //  bool Compare(std::string usercpid, std::string longcpid, uint256 blockhash);
@@ -54,10 +53,10 @@ private:
   static void encode(uint1 output[], const uint4 input[], size_type len);
   std::string boinc_public_key;
   std::string email_hash;
-  std::string merged_hash;
+  std::string merged_hash_old;
 
   
-  uint256 blockhash;
+  uint256 blockhash_old;
   bool finalized;
   uint1 buffer[blocksize]; // bytes that didn't fit in last 64 byte chunk
   uint4 count[2];   // 64bit counter for number of bits (lo, hi)
