@@ -63,7 +63,6 @@ extern std::string boinc_hash(const std::string str);
 
 extern std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 
-extern std::string boinc_hash(std::string email, std::string bpk, uint256 blockhash);
 
 
 extern double GetBlockDifficulty(unsigned int nBits);
@@ -121,7 +120,6 @@ double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 
 extern std::string RetrieveCPID5(std::string email,std::string bpk,uint256 blockhash);
 
-extern std::string RetrieveCPID6(std::string email,std::string bpk,uint256 blockhash);
 
 
 extern uint256 GridcoinMultipleAlgoHash(std::string t1);
@@ -4384,12 +4382,6 @@ std::string RetrieveCPID5(std::string email,std::string bpk,uint256 blockhash)
 	return me;
 }
 
-std::string RetrieveCPID6(std::string email,std::string bpk,uint256 blockhash)
-{
-	std::string bh = boinc_hash(email,bpk,blockhash);
-	return bh;
-}
-
 std::string RetrieveMd5(std::string s1)
 {
 	try 
@@ -6576,7 +6568,6 @@ std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash)
 
 
 
-
 std::string boinc_hash(const std::string str)
 {
 	// Return the boinc hash of a string:
@@ -6593,7 +6584,7 @@ void InitializeProjectStruct(StructCPID& project)
 	project.email = email;
 	std::string cpid_non = project.cpidhash+email;
 	project.boincruntimepublickey = project.cpidhash;
-	project.cpid = boinc_hash(email,project.cpidhash,0);
+	project.cpid = ComputeCPIDv2(email,project.cpidhash,0);
 	std::string ENCbpk = AdvancedCrypt(cpid_non);
 	project.boincpublickey = ENCbpk;
 	

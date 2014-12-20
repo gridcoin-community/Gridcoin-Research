@@ -23,7 +23,6 @@ void ReloadBlockChain1();
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
 MiningCPID GetNextProject(bool bForce);
-std::string boinc_hash(std::string email, std::string bpk, uint256 blockhash);
 
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 
@@ -65,7 +64,6 @@ double LederstrumpfMagnitude2(double mag,int64_t locktime);
 
 
 std::string RetrieveCPID5(std::string email,std::string bpk,uint256 blockhash);
-std::string RetrieveCPID6(std::string email,std::string bpk,uint256 blockhash);
 
 int TestAESHash(double rac, unsigned int diffbytes, uint256 scrypt_hash, std::string aeshash);
 std::string TxToString(const CTransaction& tx, const uint256 hashBlock, int64_t& out_amount, int64_t& out_locktime, int64_t& out_projectid, 
@@ -902,22 +900,18 @@ void WriteCPIDToRPC(std::string email, std::string bpk, uint256 block, Array &re
 
 	Object entry;
 	entry.push_back(Pair("Long CPID for " + email + " " + block.GetHex(),output));
-	output = RetrieveCPID6(email,bpk,block);
-	entry.push_back(Pair("Shortended CPID", output));
 	//std
 	output = RetrieveMd5(bpk + email);
 	entry.push_back(Pair("std_md5",output));
 	//Stress test
 	std::string me = ComputeCPIDv2(email,bpk,block);
-	std::string bh = boinc_hash(email,bpk,block);
 	entry.push_back(Pair("LongCPID2",me));
-	entry.push_back(Pair("stdCPID2",bh));
 	bool result;
-	result =  CPID_IsCPIDValid(bh, me,block);
+	result =  CPID_IsCPIDValid(me, me,block);
 	
 	entry.push_back(Pair("Stress Test 1",result));
 
-	result =  CPID_IsCPIDValid(bh, me,block+1);
+	result =  CPID_IsCPIDValid(me, me,block+1);
 	entry.push_back(Pair("Stress Test 2",result));
 
 	results.push_back(entry);
