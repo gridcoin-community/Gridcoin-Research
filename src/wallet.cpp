@@ -22,6 +22,7 @@ bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 
 void qtUpdateConfirm(std::string txid);
 bool Contains(std::string data, std::string instring);
+std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 
 bool IsLockTimeWithinMinutes(double locktime, int minutes);
 

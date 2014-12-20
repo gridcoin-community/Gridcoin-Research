@@ -24,6 +24,7 @@ MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
 MiningCPID GetNextProject(bool bForce);
 
+std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 
 uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
 std::string SerializeBoincBlock(MiningCPID mcpid);

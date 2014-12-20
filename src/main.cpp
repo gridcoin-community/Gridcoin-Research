@@ -58,6 +58,11 @@ unsigned int CHECKPOINT_VIOLATIONS = 0;
 int64_t nLastTallied = 0;
 int64_t nCPIDsLoaded = 0;
 
+
+extern std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
+
+
+
 extern double GetBlockDifficulty(unsigned int nBits);
 double GetLastPaymentTimeByCPID(std::string cpid);
 extern bool Contains(std::string data, std::string instring);
@@ -6545,6 +6550,22 @@ void ClearCPID(std::string cpid)
     mvCreditNodeCPID[cpid].initialized=false;
 							
 }
+
+
+
+std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash)
+{
+	
+		//12-20-2014
+		if (GetBoolArg("-disablecpidv2")) return "";
+		//ToDO: Fix this:
+		CPID c = CPID(email,bpk,blockhash);
+		std::string sCPID = c.boincdigest(blockhash);
+		return sCPID;
+}
+
+
+
 
 void InitializeProjectStruct(StructCPID& project)
 {

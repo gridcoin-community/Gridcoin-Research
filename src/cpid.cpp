@@ -561,7 +561,7 @@ std::string boinc_hash(const std::string str)
 }
 
 
-std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash)
+std::string ComputeCPIDv2_Retired(std::string email, std::string bpk, uint256 blockhash)
 {
 	
 		//12-20-2014

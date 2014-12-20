@@ -22,6 +22,7 @@ MiningCPID GetNextProject(bool bForce);
 
 void ThreadCleanWalletPassphrase(void* parg);
 
+std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 
 double CoinToDouble(double surrogate);
 
