@@ -6555,14 +6555,13 @@ std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash)
 		if (GetBoolArg("-disablecpidv2")) return "";
 		//ToDO: Fix this:
 		//uint256 pbh  = 0;
+		CPID c = CPID();
 
 		std::string cpid_non = bpk+email;
-
-		CPID c = CPID(email,bpk);
-		return c.boincdigest(email,bpk);
+		std::string digest = c.CPID_V2(email,bpk);
+		return digest;
 	    //CPID c = CPID(cpid_non);
 		//return c.hexdigest();
-
 		//return sCPID;
 }
 
@@ -6584,7 +6583,8 @@ void InitializeProjectStruct(StructCPID& project)
 	project.email = email;
 	std::string cpid_non = project.cpidhash+email;
 	project.boincruntimepublickey = project.cpidhash;
-	project.cpid = ComputeCPIDv2(email,project.cpidhash,0);
+	project.cpid = boinc_hash(cpid_non);
+
 	std::string ENCbpk = AdvancedCrypt(cpid_non);
 	project.boincpublickey = ENCbpk;
 	

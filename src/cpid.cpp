@@ -127,7 +127,16 @@ CPID::CPID(std::string text, int entropybit)
   printf("a10.");
 }
 
+template< typename T >
+std::string ByteToHex( T i )
+{
+  std::stringstream stream;
+  stream << std::setfill ('0') << std::setw(2) 
+         << std::hex << i;
+  return stream.str();
+}
 
+/*
 //Generate a CPID given a boinc email, boinc client public key, and blockhash
 CPID::CPID(std::string email, std::string bpk)
 {
@@ -144,7 +153,142 @@ CPID::CPID(std::string email, std::string bpk)
 	printf(".6");
     finalize();
 }
+*/
+
+
+int BitwiseCount(std::string str, int pos)
+{
+	char ch;
+	if (pos < (int)str.length())
+	{
+		ch = str.at(pos);
+		int asc = (int)ch;
+		if (asc > 47 && asc < 71) asc=asc-47;
+		return asc;
+	}
+	return 1;
+}
+
+std::string HashHex(uint256 blockhash)
+{
+	//CPID c2 = CPID(blockhash.GetHex());
+	//std::string shash =  c2.hexdigest();
+	std::string shash = blockhash.GetHex();
+	return shash;
+	//ToDo: Hash the Hex before returning blockhash
+
+}
+
+
+std::string ROR(std::string blockhash, int iPos, std::string hash)
+{
+	if (iPos <= (int)hash.length()-1)
+	{
+	    int asc1 = (int)hash.at(iPos);
+		int rorcount = BitwiseCount(blockhash, iPos);
+		std::string hex = ByteToHex(asc1+rorcount);
+		return hex;
+	}
+	return "00";
+}
+
+std::string CPID::CPID_V2(std::string email1, std::string bpk1)
+{
+
+  count[0] = 0;
+  count[1] = 0;
+  // load magic initialization constants.
+  state[0] = 0x67452301;
+  state[1] = 0xefcdab89;
+  state[2] = 0x98badcfe;
+  state[3] = 0x10325476;
+  boost::algorithm::to_lower(bpk1);
+  boost::algorithm::to_lower(email1);
+  std::string cpidnon1 = bpk1+email1;
+
+  const unsigned char *input = new unsigned char[cpidnon1.length()];
+
+
+  //const unsigned char input[] = (const unsigned char*)cpidnon1.c_str();
+  size_type length = cpidnon1.length();
+  // compute number of bytes mod 64
+  size_type index = count[0] / 8 % blocksize;
+  // Update number of bits
+  if ((count[0] += (length << 3)) < (length << 3))
+    count[1]++;
+  count[1] += (length >> 29);
  
+  // number of bytes we need to fill in buffer
+  size_type firstpart = 64 - index;
+  size_type i;
+ 
+  // transform as many times as possible.
+  if (length >= firstpart)
+  {
+    // fill buffer first, transform
+    memcpy(&buffer[index], input, firstpart);
+    transform(buffer);
+ 
+    // transform chunks of blocksize (64 bytes)
+    for (i = firstpart; i + blocksize <= length; i += blocksize)
+      transform(&input[i]);
+ 
+    index = 0;
+  }
+  else
+    i = 0;
+ 
+  // buffer remaining input
+  memcpy(&buffer[index], &input[i], length-i);
+  printf(".6");
+  static unsigned char padding[64] = {
+    0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+  };
+ 
+   // Save number of bits
+   unsigned char bits[8];
+   encode(bits, count, 8);
+ 
+    // pad out to 56 mod 64.
+    index = count[0] / 8 % 64;
+    size_type padLen = (index < 56) ? (56 - index) : (120 - index);
+    update(padding, padLen);
+ 
+    // Append length (before padding)
+    update(bits, 8);
+ 
+    // Store state in digest
+    encode(digest, state, 16);
+ 
+    // Zeroize sensitive information.
+    memset(buffer, 0, sizeof buffer);
+    memset(count, 0, sizeof count);
+ 
+  char buf[16];
+  for (int i=0; i<16; i++)
+  {
+		sprintf(buf+i*2, "%02x", digest[i]);
+  }
+  char ch;
+  std::string non_finalized(buf);
+  uint256 pbh = 0; //ToDO: Pass in prior block hash after testing occurs
+  std::string shash = HashHex(pbh);
+
+  for (int i = 0; i < (int)cpidnon1.length(); i++)
+  {
+	 	non_finalized += ROR(shash,i,cpidnon1);
+  }
+  printf(".4 em %s bpk %s out %s",email1.c_str(),bpk1.c_str(),non_finalized.c_str());
+  return non_finalized;
+
+}
+
+
+
+
+
 //////////////////////////////
  
 void CPID::init()
@@ -323,19 +467,6 @@ void CPID::update(const char input[], size_type length)
 
 
 
-int BitwiseCount(std::string str, int pos)
-{
-	char ch;
-	if (pos < (int)str.length())
-	{
-		ch = str.at(pos);
-		int asc = (int)ch;
-		if (asc > 47 && asc < 71) asc=asc-47;
-		return asc;
-	}
-	return 1;
-}
-
 
 int HexToByte(std::string hex)
 {
@@ -365,16 +496,6 @@ int ROL(std::string blockhash, int iPos, std::string hash, int hexpos)
 		return HexToByte("00");
 }
 
-
-std::string HashHex(uint256 blockhash)
-{
-	//CPID c2 = CPID(blockhash.GetHex());
-	//std::string shash =  c2.hexdigest();
-	std::string shash = blockhash.GetHex();
-	return shash;
-	//ToDo: Hash the Hex before returning blockhash
-
-}
 
 void CPID::update5(std::string longcpid)
 {
@@ -496,27 +617,7 @@ std::string LongToHex( T i )
   return stream.str();
 }
 
-template< typename T >
-std::string ByteToHex( T i )
-{
-  std::stringstream stream;
-  stream << std::setfill ('0') << std::setw(2) 
-         << std::hex << i;
-  return stream.str();
-}
 
-
-std::string ROR(std::string blockhash, int iPos, std::string hash)
-{
-	if (iPos <= (int)hash.length()-1)
-	{
-	    int asc1 = (int)hash.at(iPos);
-		int rorcount = BitwiseCount(blockhash, iPos);
-		std::string hex = ByteToHex(asc1+rorcount);
-		return hex;
-	}
-	return "00";
-}
 
 
 
@@ -579,17 +680,6 @@ std::ostream& operator<<(std::ostream& out, CPID CPID)
 //////////////////////////////
 
 
-
-std::string computecpidv2retired(std::string email, std::string bpk, uint256 blockhash)
-{
-	
-		if (GetBoolArg("-disablecpidv2")) return "";
-		              
-		//ToDO: Fix this:
-		CPID c = CPID(email,bpk);
-		std::string sCPID = c.boincdigest(email,bpk);
-		return sCPID;
-}
 
 
 bool CPID_IsCPIDValid(std::string cpid1, std::string longcpid, uint256 blockhash)

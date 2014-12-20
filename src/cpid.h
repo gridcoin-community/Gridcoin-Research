@@ -23,8 +23,6 @@ public:
  
   CPID();
   CPID(std::string text);
-  CPID(std::string email, std::string bpk);
-
   CPID(std::string text,int entropybit);
 
   void update(const unsigned char *buf, size_type length);
@@ -32,6 +30,7 @@ public:
   
   void update5(std::string inp);
   
+  std::string CPID_V2(std::string email, std::string bpk);
 
   CPID& finalize();
   std::string hexdigest() const;
