@@ -35,7 +35,7 @@ public:
 
   CPID& finalize();
   std::string hexdigest() const;
-  std::string boincdigest(std::string email, std::string bpk, uint256 block) const;
+  std::string boincdigest(std::string email, std::string bpk, uint256 block);
 
 
 

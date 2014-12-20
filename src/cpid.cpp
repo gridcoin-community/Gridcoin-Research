@@ -516,7 +516,7 @@ std::string ROR(std::string blockhash, int iPos, std::string hash)
 
 
 
-std::string CPID::boincdigest(std::string email, std::string bpk, uint256 block) const
+std::string CPID::boincdigest(std::string email, std::string bpk, uint256 block)
 {
   //Provides the 16 byte Boinc CPID (Netsoft compatible) contained in hash buffer
 
