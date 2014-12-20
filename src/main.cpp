@@ -58,9 +58,12 @@ unsigned int CHECKPOINT_VIOLATIONS = 0;
 int64_t nLastTallied = 0;
 int64_t nCPIDsLoaded = 0;
 
+extern std::string boinc_hash(const std::string str);
+
 
 extern std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 
+extern std::string boinc_hash(std::string email, std::string bpk, uint256 blockhash);
 
 
 extern double GetBlockDifficulty(unsigned int nBits);
@@ -6567,6 +6570,23 @@ std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash)
 }
 
 
+
+
+std::string boinc_hash(const std::string str)
+{
+	// Return the boinc hash of a string:
+    CPID c = CPID(str);
+    return c.hexdigest();
+}
+
+
+
+std::string boinc_hash(std::string email, std::string bpk, uint256 blockhash)
+{    
+	  //Given a block hash, boinc e-mail, and boinc public key, generate a Netsoft CPID
+	  CPID c = CPID(email,bpk,blockhash);
+      return c.hexdigest();
+}
 
 
 void InitializeProjectStruct(StructCPID& project)

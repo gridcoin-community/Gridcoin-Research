@@ -23,6 +23,7 @@ void ReloadBlockChain1();
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
 MiningCPID GetNextProject(bool bForce);
+std::string boinc_hash(std::string email, std::string bpk, uint256 blockhash);
 
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 

@@ -363,17 +363,21 @@ int ROL(std::string blockhash, int iPos, std::string hash, int hexpos)
 }
 
 
+std::string HashHex(uint256 blockhash)
+{
+	//CPID c2 = CPID(blockhash.GetHex());
+	//std::string shash =  c2.hexdigest();
+	std::string shash = blockhash.GetHex();
+	return shash;
+	//ToDo: Hash the Hex before returning blockhash
 
+}
 
 void CPID::update5(std::string longcpid, uint256 blockhash)
 {
-  //  std::string shash = boinc_hash(blockhash.GetHex());
-
-
-	CPID c2 = CPID(blockhash.GetHex());
-	std::string shash =  c2.hexdigest();
-  
-
+   //CPID c2 = CPID(blockhash.GetHex());
+	std::string shash = HashHex(blockhash);
+	
 	int hexpos = 0;
 	unsigned char* input = new unsigned char[(longcpid.length()/2)+1];
 	for (int i1 = 0; i1 < (int)longcpid.length(); i1 = i1 + 2)
@@ -527,13 +531,9 @@ std::string CPID::boincdigest(std::string email, std::string bpk, uint256 block)
   }
   char ch;
   std::string non_finalized(buf);
-
-
-
-  CPID c2 = CPID(block.GetHex());
-  std::string shash =  c2.hexdigest();
-  //  std::string shash = boinc_hash(block.GetHex());
-
+  
+  std::string shash =  HashHex(block);
+  
   std::string debug = "";
 
 
@@ -559,12 +559,10 @@ bool CompareCPID(std::string usercpid, std::string longcpid, uint256 blockhash)
 	   if (longcpid.length() < 34) return false;
 	   std::string cpid1 = longcpid.substr(0,32);
 	   std::string cpid2 = longcpid.substr(32,longcpid.length()-31);
-	   //std::string shash = boinc_hash(blockhash.GetHex());
-
-	   CPID c2 = CPID(blockhash.GetHex());
-	   std::string shash =  c2.hexdigest();
-  
-
+	   
+	   //CPID c2 = CPID(blockhash.GetHex());
+	   std::string shash =  HashHex(blockhash);
+	   
 
 	   CPID c = CPID(cpid2,0,blockhash);
 	   std::string shortcpid = c.hexdigest();
@@ -585,14 +583,6 @@ std::ostream& operator<<(std::ostream& out, CPID CPID)
 
 
 
-std::string boinc_hash(const std::string str)
-{
-	// Return the boinc hash of a string:
-    CPID c = CPID(str);
-    return c.hexdigest();
-}
-
-
 std::string computecpidv2retired(std::string email, std::string bpk, uint256 blockhash)
 {
 	
@@ -605,13 +595,6 @@ std::string computecpidv2retired(std::string email, std::string bpk, uint256 blo
 		return sCPID;
 }
 
-
-std::string boinc_hash(std::string email, std::string bpk, uint256 blockhash)
-{    
-	  //Given a block hash, boinc e-mail, and boinc public key, generate a Netsoft CPID
-	  CPID c = CPID(email,bpk,blockhash);
-      return c.hexdigest();
-}
 
 bool CPID_IsCPIDValid(std::string cpid1, std::string longcpid, uint256 blockhash)
 {
