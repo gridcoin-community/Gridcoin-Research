@@ -564,9 +564,9 @@ std::string boinc_hash(const std::string str)
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash)
 {
 	
-		//CPID c = CPID(email,bpk,blockhash);
-		//return c.hexdigest();
-
+		//12-20-2014
+		if (GetBoolArg("-disablecpidv2")) return "";
+		              
 		//ToDO: Fix this:
 		CPID c = CPID(email,bpk,blockhash);
 		std::string sCPID = c.boincdigest(blockhash);

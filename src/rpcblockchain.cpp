@@ -22,6 +22,11 @@ extern std::string YesNo(bool bin);
 void ReloadBlockChain1();
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
+MiningCPID GetNextProject(bool bForce);
+
+
+uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
+std::string SerializeBoincBlock(MiningCPID mcpid);
 
 double CoinToDouble(double surrogate);
 
@@ -476,6 +481,8 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("NetworkRAC", bb.NetworkRAC));
 	result.push_back(Pair("Magnitude", bb.Magnitude));
 	result.push_back(Pair("BoincHash",block.vtx[0].hashBoinc));
+	result.push_back(Pair("Seniority",bb.Accuracy));
+
 	result.push_back(Pair("RSAWeight",bb.RSAWeight));
 	result.push_back(Pair("LastPaymentTime",bb.LastPaymentTime));
 	result.push_back(Pair("ResearchSubsidy",bb.ResearchSubsidy));
@@ -484,7 +491,6 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 
 	result.push_back(Pair("GRCAddress",bb.GRCAddress));
 	std::string skein2 = aes_complex_hash(blockhash);
-	//	result.push_back(Pair("AES512Valid",iav));
 	result.push_back(Pair("ClientVersion",bb.clientversion));	
 	std::string hbd = AdvancedDecrypt(bb.enccpid);
 	bool IsCpidValid = IsCPIDValid_Retired(bb.cpid, bb.enccpid);
@@ -501,9 +507,11 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 
 	//Write the correct cpid value (heinous error here:)//Halford - CPID Algorithm v2 - 11-28-2014
 	
-	if (false)
+	if (true)
 	{
-		std::string me = ComputeCPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey,blockindex->pprev->GetBlockHash());
+		//uint256 GetBlockHash256(const CBlockIndex* pindex_hash)
+		//std::string me = ComputeCPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey,blockindex->pprev->GetBlockHash());
+		std::string me = ComputeCPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey,GetBlockHash256(blockindex->pprev));
 		result.push_back(Pair("MyCPID",me));
 	}
     return result;
@@ -969,6 +977,18 @@ Value execute(const Array& params, bool fHelp)
 			results.push_back(entry);
 		}
 	
+	}
+	else if (sItem == "genboinckey")
+	{
+		//Gridcoin - R Halford - Generate Boinc Mining Key
+		GetNextProject(false);
+		std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID);
+		if (fDebug) printf("Utilizing %s",sParam.c_str());
+
+		std::string sBase = EncodeBase64(sParam);
+		
+		entry.push_back(Pair("[Specify in config file without quotes] boinckey=",sBase));
+		results.push_back(entry);
 	}
 	else if (sItem == "unfork")
 	{
