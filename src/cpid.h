@@ -22,10 +22,10 @@ public:
   typedef unsigned int size_type; // must be 32bit
  
   CPID();
-  CPID(const std::string& text);
+  CPID(std::string text);
   CPID(std::string email, std::string bpk, uint256 blockhash);
 
-  CPID(const std::string &text,int entropybit,uint256 blockhash);
+  CPID(std::string text,int entropybit,uint256 blockhash);
 
   void update(const unsigned char *buf, size_type length);
   void update(const char *buf, size_type length);
