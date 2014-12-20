@@ -80,7 +80,6 @@ private:
 };
  
 std::string cpid(const std::string str);
-std::string ComputeCPIDv2_Retired(std::string email, std::string bpk, uint256 blockhash);
 
 std::string boinc_hash(std::string email, std::string bpk, uint256 blockhash);
 std::string boinc_hash(const std::string str);

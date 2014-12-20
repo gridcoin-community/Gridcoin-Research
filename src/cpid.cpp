@@ -136,7 +136,9 @@ CPID::CPID(std::string email, std::string bpk, uint256 block_hash)
 	blockhash = block_hash;
 	std::string cpid_non = bpk+email;
 	merged_hash = cpid_non;
+	printf(".5");
 	update(cpid_non.c_str(), cpid_non.length());
+	printf(".6");
     finalize();
 }
  
@@ -506,9 +508,13 @@ std::string ROR(std::string blockhash, int iPos, std::string hash)
 std::string CPID::boincdigest(uint256 block) const
 {
   //Provides the 16 byte Boinc CPID (Netsoft compatible) contained in hash buffer
+printf(".1");
+
   if (!finalized)
     return "";
-    
+
+  printf(".2");
+
   char buf[16];
   for (int i=0; i<16; i++)
   {
@@ -518,11 +524,12 @@ std::string CPID::boincdigest(uint256 block) const
   std::string non_finalized(buf);
   std::string shash = boinc_hash(block.GetHex());
   std::string debug = "";
+  printf(".3");
   for (int i = 0; i < (int)merged_hash.length(); i++)
   {
 	 	non_finalized += ROR(shash,i,merged_hash);
   }
-  
+  printf(".4");
   return non_finalized;
 
 }
@@ -561,7 +568,7 @@ std::string boinc_hash(const std::string str)
 }
 
 
-std::string ComputeCPIDv2_Retired(std::string email, std::string bpk, uint256 blockhash)
+std::string computecpidv2retired(std::string email, std::string bpk, uint256 blockhash)
 {
 	
 		//12-20-2014
