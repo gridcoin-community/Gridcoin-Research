@@ -22,9 +22,11 @@ bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 
 void qtUpdateConfirm(std::string txid);
 bool Contains(std::string data, std::string instring);
+std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 
 bool IsLockTimeWithinMinutes(double locktime, int minutes);
 
+uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
 
 double CoinToDouble(double surrogate);
 double GetBlockDifficulty(unsigned int nBits);
@@ -1754,8 +1756,10 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	{
 		 miningcpid = GetNextProject(false);
 		 //Stack Smashing
-		 //miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pindexPrev->GetBlockHash());
-		 miningcpid.cpidv2="";
+		 uint256 pbh = 0;
+		 if (pindexPrev) pbh=pindexPrev->GetBlockHash();
+		 miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pbh);
+		 //miningcpid.cpidv2="";
 
 		 miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
 	     miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
@@ -2003,6 +2007,16 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 				if (fDebug) if (LessVerbose(100)) printf("Owed %f < MintLimitLevel %f",OUT_POR,MintLimiterPOR(PORDiff,GetAdjustedTime(),RSA_WEIGHT));
 				return false;
 		}
+		//BOINC MINERS WITH LOW INTEREST PAYMENT DUE AND LOW POR DUE
+		if (GlobalCPUMiningCPID.cpid != "INVESTOR" && mint < MintLimiter(PORDiff) && RSA_WEIGHT < 20000) 
+		{
+			if 	(OUT_POR < MintLimiterPOR(PORDiff,GetAdjustedTime(),RSA_WEIGHT))
+			{	
+				if (LessVerbose(20)) printf("CreateBlock::BoincMiners Mint too small with low interest");
+				return false; 
+			}
+		}
+		
 		if (nReward == 0)
 		{
 			if (fDebug) printf("CreateBlock():Mint is zero");

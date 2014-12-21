@@ -22,6 +22,7 @@ MiningCPID GetNextProject(bool bForce);
 
 void ThreadCleanWalletPassphrase(void* parg);
 
+std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 
 double CoinToDouble(double surrogate);
 
@@ -30,6 +31,7 @@ void ThreadTopUpKeyPool(void* parg);
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 bool AmIGeneratingBackToBackBlocks();
 double GetDifficulty(const CBlockIndex* blockindex = NULL);
+uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
 
 int64_t GetRSAWeightByCPID(std::string cpid);
 
@@ -424,8 +426,12 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		MiningCPID miningcpid = GetNextProject(false);
 		//ToDo:Test CPID v2 IsCpidValid from RPC
 		//Crashes in Linux
-	    //miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pindexPrev->GetBlockHash());
-		miningcpid.cpidv2="";
+		uint256 pbh = 0;
+		if (pindexPrev) pbh=pindexPrev->GetBlockHash();
+	    miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pbh);
+				
+
+		//miningcpid.cpidv2="";
 		miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
 		//12-9-2014 Verify RSA Weight is actually in the block
 		miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);

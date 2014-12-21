@@ -58,10 +58,18 @@ unsigned int CHECKPOINT_VIOLATIONS = 0;
 int64_t nLastTallied = 0;
 int64_t nCPIDsLoaded = 0;
 
+extern std::string boinc_hash(const std::string str);
+
+
+extern std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
+
+
+
 extern double GetBlockDifficulty(unsigned int nBits);
 double GetLastPaymentTimeByCPID(std::string cpid);
 extern bool Contains(std::string data, std::string instring);
 
+extern uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
 extern bool LockTimeRecent(double locktime);
 
 extern double CoinToDouble(double surrogate);
@@ -112,7 +120,6 @@ double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 
 extern std::string RetrieveCPID5(std::string email,std::string bpk,uint256 blockhash);
 
-extern std::string RetrieveCPID6(std::string email,std::string bpk,uint256 blockhash);
 
 
 extern uint256 GridcoinMultipleAlgoHash(std::string t1);
@@ -812,6 +819,7 @@ MiningCPID GetNextProject(bool bForce)
 								GlobalCPUMiningCPID.rac=structcpid.verifiedrac;
 								GlobalCPUMiningCPID.encboincpublickey = structcpid.boincpublickey;
 								GlobalCPUMiningCPID.enccpid = structcpid.boincpublickey;
+								GlobalCPUMiningCPID.encaes = structcpid.boincpublickey;
 								GlobalCPUMiningCPID.pobdifficulty = GetPoBDifficulty();
 		    					double ProjectRAC = GetNetworkAvgByProject(GlobalCPUMiningCPID.projectname);
 								GlobalCPUMiningCPID.NetworkRAC = ProjectRAC;
@@ -2099,6 +2107,15 @@ const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfSta
     return pindex;
 }
 
+
+//Find prior block hash
+uint256 GetBlockHash256(const CBlockIndex* pindex_hash)
+{
+	if (pindex_hash == NULL) return 0;
+	if (!pindex_hash) return 0;
+	return pindex_hash->GetBlockHash();
+}
+
 static unsigned int GetNextTargetRequiredV1(const CBlockIndex* pindexLast, bool fProofOfStake)
 {
     CBigNum bnTargetLimit = fProofOfStake ? bnProofOfStakeLimit : bnProofOfWorkLimit;
@@ -2897,7 +2914,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 								double user_magnitude = GetMagnitude(bb.cpid,1,false);
 								//return DoS(1, error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f", 						bb.cpid.c_str(), nStakeReward/C-o-IN, nCalculatedResearch/C-OIN, user_magnitude));
-								//12-12-2014
 								StructCPID UntrustedHost = mvMagnitudes[bb.cpid]; //Contains Mag across entire CPID
 
 								double owed_advanced = UntrustedHost.totalowed - UntrustedHost.payments;
@@ -3135,7 +3151,6 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
     {
         if (!SetBestChainInner(txdb, pindexNew))
 		{
-			//12-12-2014
 			int nResult = 0;
 	    	#if defined(WIN32) && defined(QT_GUI)
 		    //nResult = RebootClient();
@@ -4367,12 +4382,6 @@ std::string RetrieveCPID5(std::string email,std::string bpk,uint256 blockhash)
 	return me;
 }
 
-std::string RetrieveCPID6(std::string email,std::string bpk,uint256 blockhash)
-{
-	std::string bh = boinc_hash(email,bpk,blockhash);
-	return bh;
-}
-
 std::string RetrieveMd5(std::string s1)
 {
 	try 
@@ -4848,7 +4857,6 @@ bool TallyNetworkAverages(bool ColdBoot)
 							if (!structcpid.initialized) 
 							{
 								structcpid = GetStructCPID();
-								structcpid.cpidv2 = "";
 								structcpid.initialized = true;
 								mvNetwork.insert(map<string,StructCPID>::value_type(proj,structcpid));
 							} 
@@ -4872,7 +4880,6 @@ bool TallyNetworkAverages(bool ColdBoot)
 							if (!structnetcpidproject.initialized)
 							{
 								structnetcpidproject = GetStructCPID();
-								structnetcpidproject.cpidv2 = "";
 								structnetcpidproject.initialized = true;
 								mvNetworkCPIDs.insert(map<string,StructCPID>::value_type(projcpid,structnetcpidproject));
 								NetworkProjects++;
@@ -6280,7 +6287,10 @@ bool Contains(std::string data, std::string instring)
 }
 
 
-
+std::string NN(std::string value)
+{
+	return value.empty() ? "" : value;
+}
 
 std::string SerializeBoincBlock(MiningCPID mcpid)
 {
@@ -6290,14 +6300,16 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 	if (mcpid.lastblockhash.empty()) mcpid.lastblockhash = "0";
 	std::string bb = mcpid.cpid + delim + mcpid.projectname + delim + mcpid.aesskein + delim + RoundToString(mcpid.rac,0)
 					+ delim + RoundToString(mcpid.pobdifficulty,5) + delim + RoundToString((double)mcpid.diffbytes,0) 
-					+ delim + mcpid.enccpid 
-					+ delim + mcpid.encaes + delim + RoundToString(mcpid.nonce,0) + delim + RoundToString(mcpid.NetworkRAC,0) + delim + version 
+					+ delim + NN(mcpid.enccpid) 
+					+ delim + NN(mcpid.encaes) + delim + RoundToString(mcpid.nonce,0) + delim + RoundToString(mcpid.NetworkRAC,0) 
+					+ delim + NN(version)
 					+ delim + RoundToString(mcpid.ResearchSubsidy,2) + delim 
-					+ RoundToString(mcpid.LastPaymentTime,0) + delim + RoundToString(mcpid.RSAWeight,0) 
-					+ delim + mcpid.cpidv2
+					+ RoundToString(mcpid.LastPaymentTime,0) + 
+					delim + RoundToString(mcpid.RSAWeight,0) 
+					+ delim + NN(mcpid.cpidv2)
 					+ delim + RoundToString(mcpid.Magnitude,0)
-					+ delim + mcpid.GRCAddress + delim + mcpid.lastblockhash + delim + RoundToString(mcpid.InterestSubsidy,2);
-
+					+ delim + NN(mcpid.GRCAddress) + delim + NN(mcpid.lastblockhash)
+					+ delim + RoundToString(mcpid.InterestSubsidy,2);
 	return bb;
 }
 
@@ -6534,21 +6546,47 @@ void ClearCPID(std::string cpid)
 							
 }
 
+  
+
+std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash)
+{
+	
+		//12-20-2014
+		if (GetBoolArg("-disablecpidv2")) return "";
+		//ToDO: Fix this:
+		CPID c = CPID();
+		std::string cpid_non = bpk+email;
+		std::string digest = c.CPID_V2(email,bpk,blockhash);
+		return digest;
+	    //return sCPID;
+}
+
+
+
+std::string boinc_hash(const std::string str)
+{
+	// Return the boinc hash of a string:
+    CPID c = CPID(str);
+    return c.hexdigest();
+}
+
+
+
+
 void InitializeProjectStruct(StructCPID& project)
 {
-	//11-29-2014
 	std::string email = GetArgument("email", "NA");
 	project.email = email;
 	std::string cpid_non = project.cpidhash+email;
-
 	project.boincruntimepublickey = project.cpidhash;
-	project.cpid = boinc_hash(email,project.cpidhash,0);
+	project.cpid = boinc_hash(cpid_non);
+
 	std::string ENCbpk = AdvancedCrypt(cpid_non);
 	project.boincpublickey = ENCbpk;
 	
-	//Crashes in linux:
-	//project.cpidv2 = ComputeCPIDv2(email, project.cpidhash, 0);
-	project.cpidv2 = project.cpid;
+	//Crashes in linux: 12-20-2014
+	project.cpidv2 = ComputeCPIDv2(email, project.cpidhash, 0);
+	//project.cpidv2 = project.cpid;
 
 	project.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + project.cpid;
 	//Local CPID with struct
@@ -6557,12 +6595,13 @@ void InitializeProjectStruct(StructCPID& project)
 	//		bool old_result1 = IsCPIDValid_Retired(structcpid.cpid,structcpid.boincpublickey);
 	//2nd arg is ENC bpk
 	project.Iscpidvalid = IsLocalCPIDValid(project);
-	//if (fDebug) printf("Assimilating local project %s, Valid %s",project.projectname.c_str(),YesNo(project.Iscpidvalid).c_str());
  	if (project.team != "gridcoin") 
 	{
 			project.Iscpidvalid = false;
 			project.errors = "Team invalid";
 	}
+	printf("Assimilating local project %s, Valid %s",project.projectname.c_str(),YesNo(project.Iscpidvalid).c_str());
+
 
 }
 
@@ -6619,6 +6658,8 @@ void CreditCheck(std::string cpid, bool clearcache)
 			int iRow = 0;
 			std::vector<std::string> vCC = split(cc.c_str(),"<project>");
 
+			printf("Performing credit check for %s",cpid.c_str());
+
 
 			//Clear current magnitude
 			StructCPID structMag = GetStructCPID();
@@ -6650,7 +6691,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 					//Is project Valid
 					bool projectvalid = ProjectIsValid(sProj);
 					if (!projectvalid) sProj = "";
-					if (fDebug) printf("CreditCheck:Enumerating %s;",sProj.c_str());
+					printf("CreditCheck:Enumerating %s;",sProj.c_str());
 
 					if (sProj.length() > 3) 
 					{
@@ -6662,12 +6703,10 @@ void CreditCheck(std::string cpid, bool clearcache)
 						if (!structcc.initialized) 
 						{
 							structcc = GetStructCPID();
-							structcc.cpidv2 = "";
 							structcc.initialized = true;
 							mvCreditNode.insert(map<string,StructCPID>::value_type(sProj,structcc));
 						} 
 						structcc.cpid = cpid;
-						structcc.cpidv2 = "";
 						structcc.projectname = sProj;
 						structcc.verifiedutc = cdbl(utc,0);
 						structcc.verifiedrac = cdbl(rac,0);
@@ -6686,6 +6725,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 						if (!structClientProject.initialized)
 						{
 							structClientProject = GetStructCPID();
+							printf("Calling netsoft for %s",sProj.c_str());
 							AddProjectFromNetSoft(structcc);
 						}
 						//End of Adding to Client Project List
@@ -6700,8 +6740,8 @@ void CreditCheck(std::string cpid, bool clearcache)
 						if (!structverify.initialized)
 						{
 							structverify = GetStructCPID();
-							structverify.cpidv2 = "";
 							structverify.initialized = true;
+							printf("inserting Credit Node CPID Project %s",sKey.c_str());
 							mvCreditNodeCPIDProject.insert(map<string,StructCPID>::value_type(sKey,structverify));
 						}
 						structverify.cpid = cpid;
@@ -6767,7 +6807,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 						mvCreditNodeCPID[cpid]=structc;
 						
 						/////////////////////////////
-						//printf("Adding Credit Node Result %s",cpid.c_str());
+						printf("Adding Credit Node Result %s",cpid.c_str());
 					}
 				}
 			}
@@ -6908,9 +6948,66 @@ std::string GetArgument(std::string arg, std::string defaultvalue)
 void HarvestCPIDs(bool cleardata)
 {
 	
-try 
-{
-	printf("loading cpids...");
+	printf("loading BOINC cpids ...\r\n");
+
+	//12-20-2014 - Remote Boinc Feature - R Halford
+	
+	std::string sBoincKey = GetArgument("boinckey","");
+   
+	if (!sBoincKey.empty())
+	{
+		//Deserialize key into Global CPU Mining CPID
+		printf("Using key %s \r\n",sBoincKey.c_str());
+	
+		std::string sDec=DecodeBase64(sBoincKey);
+		printf("Using key %s \r\n",sDec.c_str());
+	
+	    if (sDec.empty()) printf("Error while deserializing boinc key!  Please use execute genboinckey to generate a boinc key from the host with boinc installed.\r\n");
+		GlobalCPUMiningCPID = DeserializeBoincBlock(sDec);
+		if (GlobalCPUMiningCPID.cpid.empty()) 
+		{
+				 printf("Error while deserializing boinc key!  Please use execute genboinckey to generate a boinc key from the host with boinc installed.\r\n");
+		}
+		printf("Using Serialized Boinc CPID %s",GlobalCPUMiningCPID.cpid.c_str());
+
+			StructCPID structcpid = GetStructCPID();
+			structcpid.initialized = true;
+			structcpid.cpidhash = GlobalCPUMiningCPID.cpidhash;
+			structcpid.projectname = GlobalCPUMiningCPID.projectname;
+			structcpid.team = "gridcoin"; //Will be verified later during Netsoft Call
+			structcpid.verifiedteam = "gridcoin";
+			structcpid.rac = GlobalCPUMiningCPID.rac;
+			structcpid.cpid = GlobalCPUMiningCPID.cpid;
+			structcpid.verifiedrac = GlobalCPUMiningCPID.rac; //Will be re-verified later
+			structcpid.boincpublickey = GlobalCPUMiningCPID.encboincpublickey;
+			structcpid.boincruntimepublickey = structcpid.cpidhash;
+			structcpid.initialized = true;
+			structcpid.NetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
+			
+			structcpid.email = GlobalCPUMiningCPID.email;
+			structcpid.cpidv2 = structcpid.cpid;
+
+			structcpid.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + structcpid.cpid;
+			structcpid.Iscpidvalid = true;
+			mvCPIDs.insert(map<string,StructCPID>::value_type(structcpid.projectname,structcpid));
+
+						   
+			StructCPID structverify = GetStructCPID();
+			std::string sKey = structcpid.cpid + ":" + structcpid.projectname;
+			structverify = GetStructCPID();
+			CreditCheck(structcpid.cpid,false);
+			
+	
+			GetNextProject(false);
+			printf("GCMCPI %s",GlobalCPUMiningCPID.cpid.c_str());
+
+			printf("Finished getting first remote boinc project\r\n");
+		return;
+  }
+       
+ try 
+ {
+
 	std::string sourcefile = GetBoincDataDir2() + "client_state.xml";
     std::string sout = "";
     sout = getfilecontents(sourcefile);
@@ -6972,7 +7069,6 @@ try
 				{
 					structcpid = GetStructCPID();
 					structcpid.initialized = true;
-					structcpid.cpidv2 = "";
 					mvCPIDs.insert(map<string,StructCPID>::value_type(proj,structcpid));
 				} 
 				
@@ -7020,7 +7116,6 @@ try
 				}
 				if (projectvalid)
  				{
-					structverify.cpidv2 = "";
 					CreditCheck(structcpid.cpid,cleardata);
 					structverify=mvCreditNodeCPIDProject[sKey];
 				}

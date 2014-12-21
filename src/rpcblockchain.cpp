@@ -22,6 +22,12 @@ extern std::string YesNo(bool bin);
 void ReloadBlockChain1();
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
+MiningCPID GetNextProject(bool bForce);
+
+std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
+
+uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
+std::string SerializeBoincBlock(MiningCPID mcpid);
 
 double CoinToDouble(double surrogate);
 
@@ -58,7 +64,6 @@ double LederstrumpfMagnitude2(double mag,int64_t locktime);
 
 
 std::string RetrieveCPID5(std::string email,std::string bpk,uint256 blockhash);
-std::string RetrieveCPID6(std::string email,std::string bpk,uint256 blockhash);
 
 int TestAESHash(double rac, unsigned int diffbytes, uint256 scrypt_hash, std::string aeshash);
 std::string TxToString(const CTransaction& tx, const uint256 hashBlock, int64_t& out_amount, int64_t& out_locktime, int64_t& out_projectid, 
@@ -476,6 +481,8 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("NetworkRAC", bb.NetworkRAC));
 	result.push_back(Pair("Magnitude", bb.Magnitude));
 	result.push_back(Pair("BoincHash",block.vtx[0].hashBoinc));
+	result.push_back(Pair("Seniority",bb.Accuracy));
+
 	result.push_back(Pair("RSAWeight",bb.RSAWeight));
 	result.push_back(Pair("LastPaymentTime",bb.LastPaymentTime));
 	result.push_back(Pair("ResearchSubsidy",bb.ResearchSubsidy));
@@ -484,7 +491,6 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 
 	result.push_back(Pair("GRCAddress",bb.GRCAddress));
 	std::string skein2 = aes_complex_hash(blockhash);
-	//	result.push_back(Pair("AES512Valid",iav));
 	result.push_back(Pair("ClientVersion",bb.clientversion));	
 	std::string hbd = AdvancedDecrypt(bb.enccpid);
 	bool IsCpidValid = IsCPIDValid_Retired(bb.cpid, bb.enccpid);
@@ -501,9 +507,12 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 
 	//Write the correct cpid value (heinous error here:)//Halford - CPID Algorithm v2 - 11-28-2014
 	
-	if (false)
+	if (true)
 	{
-		std::string me = ComputeCPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey,blockindex->pprev->GetBlockHash());
+		//uint256 GetBlockHash256(const CBlockIndex* pindex_hash)
+		uint256 pbh = 0;
+		if (blockindex->pprev) pbh = blockindex->pprev->GetBlockHash();
+		std::string me = ComputeCPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey,pbh);
 		result.push_back(Pair("MyCPID",me));
 	}
     return result;
@@ -891,22 +900,21 @@ void WriteCPIDToRPC(std::string email, std::string bpk, uint256 block, Array &re
 
 	Object entry;
 	entry.push_back(Pair("Long CPID for " + email + " " + block.GetHex(),output));
-	output = RetrieveCPID6(email,bpk,block);
-	entry.push_back(Pair("Shortended CPID", output));
 	//std
 	output = RetrieveMd5(bpk + email);
+
+	std::string shortcpid = RetrieveMd5(bpk + email);
+	
 	entry.push_back(Pair("std_md5",output));
 	//Stress test
 	std::string me = ComputeCPIDv2(email,bpk,block);
-	std::string bh = boinc_hash(email,bpk,block);
 	entry.push_back(Pair("LongCPID2",me));
-	entry.push_back(Pair("stdCPID2",bh));
 	bool result;
-	result =  CPID_IsCPIDValid(bh, me,block);
+	result =  CPID_IsCPIDValid(shortcpid, me,block);
 	
 	entry.push_back(Pair("Stress Test 1",result));
 
-	result =  CPID_IsCPIDValid(bh, me,block+1);
+	result =  CPID_IsCPIDValid(shortcpid, me,block+1);
 	entry.push_back(Pair("Stress Test 2",result));
 
 	results.push_back(entry);
@@ -969,6 +977,18 @@ Value execute(const Array& params, bool fHelp)
 			results.push_back(entry);
 		}
 	
+	}
+	else if (sItem == "genboinckey")
+	{
+		//Gridcoin - R Halford - Generate Boinc Mining Key
+		GetNextProject(false);
+		std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID);
+		if (fDebug) printf("Utilizing %s",sParam.c_str());
+
+		std::string sBase = EncodeBase64(sParam);
+		
+		entry.push_back(Pair("[Specify in config file without quotes] boinckey=",sBase));
+		results.push_back(entry);
 	}
 	else if (sItem == "unfork")
 	{
@@ -1271,7 +1291,7 @@ Array MagnitudeReportCSV()
 		   Object entry;
 		   entry.push_back(Pair("CSV Complete",strprintf("\\reports\\magnitude_%"PRId64".csv",timestamp)));
 		   results.push_back(entry);
-		   CSVToFile(strprintf("magnitude_%"PRId64".csv",timestamp), header);
+     	   CSVToFile(strprintf("magnitude_%"PRId64".csv",timestamp), header);
 		   return results;
 }
 

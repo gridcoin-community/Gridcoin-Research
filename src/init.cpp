@@ -647,11 +647,8 @@ bool AppInit2()
 
 	InitializeBoincProjects();
 
-	printf("Starting CPID thread...");
+    //Placeholder: Load Remote CPIDs Here
 
-	LoadCPIDsInBackground();
-
-	
     nNodeLifespan = GetArg("-addrlifespan", 7);
     
 	
@@ -715,7 +712,6 @@ bool AppInit2()
 
     // ********************************************************* Step 3: parameter-to-internal-flags
 
-    //fDebug = GetBoolArg("-debug");
 	fDebug=false;
 
     if (fDebug)
@@ -830,6 +826,12 @@ bool AppInit2()
 
     if (fDaemon)
         fprintf(stdout, "Gridcoin server starting\n");
+
+
+	printf("Starting CPID thread...");
+
+	LoadCPIDsInBackground();
+
 
     int64_t nStart;
 
