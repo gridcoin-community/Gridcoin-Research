@@ -118,8 +118,6 @@ extern std::string GetBoincDataDir2();
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 
 
-extern std::string RetrieveCPID5(std::string email,std::string bpk,uint256 blockhash);
-
 
 
 extern uint256 GridcoinMultipleAlgoHash(std::string t1);
@@ -337,7 +335,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors2 = "";
  std::string    msMiningErrors3 = "";
  std::string    msMiningErrors4 = "";
- int nGrandfather = 90500;
+ int nGrandfather = 91000;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2170,6 +2168,13 @@ static unsigned int GetNextTargetRequiredV2(const CBlockIndex* pindexLast, bool 
     // ppcoin: retarget with exponential moving toward target spacing
     CBigNum bnNew;
     bnNew.SetCompact(pindexPrev->nBits);
+
+	//Gridcoin - Reset Diff to 1 on 12-21-2014 (R Halford) - Diff sticking at 2065 due to many incompatible features
+	if (pindexLast->nHeight >= 91277 && pindexLast->nHeight <= 91327)
+	{
+		bnNew.SetCompact(485833777);  //Diff of 1.0
+	}
+
     int64_t nInterval = nTargetTimespan / nTargetSpacing;
     bnNew *= ((nInterval - 1) * nTargetSpacing + nActualSpacing + nActualSpacing);
     bnNew /= ((nInterval + 1) * nTargetSpacing);
@@ -4375,13 +4380,6 @@ std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end
 
 
 
-std::string RetrieveCPID5(std::string email,std::string bpk,uint256 blockhash)
-{
-	
-	std::string me = ComputeCPIDv2(email,bpk,blockhash);
-	return me;
-}
-
 std::string RetrieveMd5(std::string s1)
 {
 	try 
@@ -6551,7 +6549,6 @@ void ClearCPID(std::string cpid)
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash)
 {
 	
-		//12-20-2014
 		if (GetBoolArg("-disablecpidv2")) return "";
 		//ToDO: Fix this:
 		CPID c = CPID();

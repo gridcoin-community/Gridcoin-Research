@@ -63,7 +63,6 @@ inline CPID::uint4 CPID::rotate_right(uint4 x, int n)
 }
 
 
-
 // rotate_left rotates x left n bits.
 inline CPID::uint4 CPID::rotate_left8(int x, int n) 
 {
@@ -136,24 +135,17 @@ std::string ByteToHex( T i )
   return stream.str();
 }
 
-/*
-//Generate a CPID given a boinc email, boinc client public key, and blockhash
-CPID::CPID(std::string email, std::string bpk)
+
+std::string CPID::HashKey(std::string email1, std::string bpk1)
 {
-	init();
-	boost::algorithm::to_lower(bpk);
-	boost::algorithm::to_lower(email);
-	//boinc_public_key = bpk;
-	//email_hash = email;
-	//blockhash = block_hash;
-	std::string cpid_non = bpk+email;
-	//merged_hash = cpid_non;
-	printf(".5");
-	update(cpid_non.c_str(), cpid_non.length());
-	printf(".6");
-    finalize();
+	 boost::algorithm::to_lower(bpk1);
+	 boost::algorithm::to_lower(email1);
+	 boinc_hash_new = bpk1+email1;
+	 CPID c = CPID(boinc_hash_new);
+	 std::string non_finalized = "";
+	 non_finalized = c.hexdigest();
+	 return non_finalized;
 }
-*/
 
 
 int BitwiseCount(std::string str, int pos)
@@ -173,10 +165,7 @@ std::string HashHex(uint256 blockhash)
 {
 	CPID c2 = CPID(blockhash.GetHex());
 	std::string shash = c2.hexdigest();
-	//std::string shash = blockhash.GetHex();
 	return shash;
-	//ToDo: Hash the Hex before returning blockhash
-
 }
 
 
@@ -195,22 +184,11 @@ std::string ROR(std::string blockhash, int iPos, std::string hash)
 
 std::string CPID::CPID_V2(std::string email1, std::string bpk1, uint256 block_hash)
 {
-
-  boost::algorithm::to_lower(bpk1);
-  boost::algorithm::to_lower(email1);
-  std::string cpidnon1 = bpk1+email1;
-  CPID c = CPID(cpidnon1);
-  std::string non_finalized = "";
-  non_finalized = c.hexdigest();
-  std::string shash = HashHex(block_hash);
-  for (int i = 0; i < (int)cpidnon1.length(); i++)
-  {
-	 	non_finalized += ROR(shash,i,cpidnon1);
-  }
-  printf(".4 em %s bpk %s out %s",email1.c_str(),bpk1.c_str(),non_finalized.c_str());
-  return non_finalized;
+	std::string non_finalized = HashKey(email1,bpk1);
+	std::string digest = Update6(non_finalized, block_hash);
+    //printf(".4 em %s bpk %s out %s",email1.c_str(),bpk1.c_str(),non_finalized.c_str());
+    return digest;
 }
-
 
 
 
@@ -423,6 +401,16 @@ int ROL(std::string blockhash, int iPos, std::string hash, int hexpos)
 }
 
 
+std::string CPID::Update6(std::string non_finalized, uint256 block_hash)
+{
+    std::string shash = HashHex(block_hash);
+    for (int i = 0; i < (int)boinc_hash_new.length(); i++)
+    {
+	 	non_finalized += ROR(shash,i,boinc_hash_new);
+    }
+	return non_finalized;
+}
+
 void CPID::update5(std::string longcpid,uint256 hash_block)
 {
 	std::string shash = HashHex(hash_block);
@@ -566,6 +554,8 @@ std::string CPID::boincdigest(std::string email, std::string bpk, uint256 hash_b
   std::string shash =  HashHex(hash_block);
   
   std::string debug = "";
+
+  
   boost::algorithm::to_lower(bpk);
   boost::algorithm::to_lower(email);
   std::string cpid_non = bpk+email;
@@ -611,7 +601,6 @@ bool CPID_IsCPIDValid(std::string cpid1, std::string longcpid, uint256 blockhash
 		if (cpid1.empty()) return false;
 		if (longcpid.empty()) return false;
 		if (longcpid.length() < 32) return false;
-		
 		if (cpid1.length() < 5) return false;
 		if (cpid1=="INVESTOR" || longcpid=="INVESTOR") return true;
 		if (cpid1.length() == 0 || longcpid.length() == 0)
@@ -620,10 +609,7 @@ bool CPID_IsCPIDValid(std::string cpid1, std::string longcpid, uint256 blockhash
 			return false;
 		}
 		if (longcpid.length() < 5) return false;
-	
 		//if (fDebug) printf("Comparing user cpid %s, longcpid %s\r\n",cpid1.c_str(),longcpid.c_str());
-		printf("?6");
-		//Definite: Problem here:
 		bool compared = CompareCPID(cpid1,longcpid,blockhash);
 		printf("?6a");
 		return compared;

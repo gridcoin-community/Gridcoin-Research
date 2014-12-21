@@ -63,8 +63,6 @@ std::vector<std::string> split(std::string s, std::string delim);
 double LederstrumpfMagnitude2(double mag,int64_t locktime);
 
 
-std::string RetrieveCPID5(std::string email,std::string bpk,uint256 blockhash);
-
 int TestAESHash(double rac, unsigned int diffbytes, uint256 scrypt_hash, std::string aeshash);
 std::string TxToString(const CTransaction& tx, const uint256 hashBlock, int64_t& out_amount, int64_t& out_locktime, int64_t& out_projectid, 
 	std::string& out_projectaddress, std::string& comments, std::string& out_grcaddress);
@@ -896,7 +894,7 @@ uint256 Skein(std::string sInput)
 void WriteCPIDToRPC(std::string email, std::string bpk, uint256 block, Array &results)
 {
 	std::string output = "";
-	output = RetrieveCPID5(email,bpk,block);
+	output = ComputeCPIDv2(email,bpk,block);
 
 	Object entry;
 	entry.push_back(Pair("Long CPID for " + email + " " + block.GetHex(),output));

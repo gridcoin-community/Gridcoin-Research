@@ -1599,12 +1599,15 @@ std::string NewbieLevelToString(int newbie_level)
 
 double MintLimiter(double PORDiff)
 {
+	// Unstick network temporary rule:
+	if (GetAdjustedTime() > 1419161730 && GetAdjustedTime() < 1419179832 && PORDiff > 1000) return 0;
+
 	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
-	if (PORDiff > 0   && PORDiff < 1)  return 0;
-	if (PORDiff > 1   && PORDiff < 5)  return .15;
-	if (PORDiff >= 5  && PORDiff < 10) return 5;
-	if (PORDiff >= 10 && PORDiff < 50) return 10;
-	if (PORDiff >= 50 && PORDiff < 100) return 10;
+	if (PORDiff > 0    && PORDiff < 1)  return 0;
+	if (PORDiff > 1    && PORDiff < 5)  return .15;
+	if (PORDiff >= 5   && PORDiff < 10) return 5;
+	if (PORDiff >= 10  && PORDiff < 50) return 10;
+	if (PORDiff >= 50  && PORDiff < 100) return 10;
 	if (PORDiff >= 100 && PORDiff < 500) return 30;
 	if (PORDiff >= 500) return 75;
 	return 0;
@@ -1615,6 +1618,8 @@ double MintLimiter(double PORDiff)
 double MintLimiterPOR(double PORDiff,int64_t locktime,int64_t RSA_WEIGHT)
 {
 	if (RSA_WEIGHT==25000) return 0; //Uninitialized Newbie
+	if (GetAdjustedTime() > 1419161730 && GetAdjustedTime() < 1419179832 && PORDiff > 1000) return 0;
+
 	double MaxSubsidy = GetMaximumBoincSubsidy(locktime);
 	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
 	if (PORDiff >= 0   && PORDiff < 1)   return 0;
@@ -1973,7 +1978,6 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
         }
     }
 
-	printf("4.");
 	double MaxSubsidy = GetMaximumBoincSubsidy(GetAdjustedTime());
 		
     // Calculate coin age reward
@@ -1998,7 +2002,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		//INVESTORS
 		if (GlobalCPUMiningCPID.cpid == "INVESTOR" && mint < MintLimiter(PORDiff)) 
 		{
-				if (LessVerbose(20)) printf("CreateBlock::Investors Mint is too small");
+				if (LessVerbose(10)) printf("CreateBlock::Investors Mint is too small");
 				return false; 
 		}
 		//BOINC MINERS
@@ -2012,7 +2016,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		{
 			if 	(OUT_POR < MintLimiterPOR(PORDiff,GetAdjustedTime(),RSA_WEIGHT))
 			{	
-				if (LessVerbose(20)) printf("CreateBlock::BoincMiners Mint too small with low interest");
+				if (LessVerbose(10)) printf("CreateBlock::BoincMiners Mint too small with low interest");
 				return false; 
 			}
 		}

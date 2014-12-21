@@ -44,15 +44,20 @@ public:
 private:
   void init();
   typedef unsigned char uint1; //  8bit
-  typedef unsigned int uint4;  // 32bit
-  enum {blocksize = 64}; // VC6 won't eat a const static int here
+  typedef unsigned int  uint4;  // 32bit
+  enum {blocksize = 64};       // VC6 requires const static int here
  
   void transform(const uint1 block[blocksize]);
   static void decode(uint4 output[], const uint1 input[], size_type len);
   static void encode(uint1 output[], const uint4 input[], size_type len);
+  std::string HashKey(std::string email1, std::string bpk1);
+  
+  std::string Update6(std::string non_finalized, uint256 block_hash);
+
   std::string boinc_public_key;
   std::string email_hash;
   std::string merged_hash_old;
+  std::string boinc_hash_new;
 
   
   uint256 blockhash_old;
@@ -81,6 +86,7 @@ private:
 std::string cpid(const std::string str);
 
 bool CPID_IsCPIDValid(std::string cpid, std::string longcpid, uint256 blockhash);
+
 
 #endif
 
