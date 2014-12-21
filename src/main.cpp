@@ -335,7 +335,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors2 = "";
  std::string    msMiningErrors3 = "";
  std::string    msMiningErrors4 = "";
- int nGrandfather = 91345;
+ int nGrandfather = 91375;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2173,7 +2173,7 @@ static unsigned int GetNextTargetRequiredV2(const CBlockIndex* pindexLast, bool 
 	printf(".@V2 %f",(double)pindexLast->nHeight);
 
 	//Gridcoin - Reset Diff to 1 on 12-21-2014 (R Halford) - Diff sticking at 2065 due to many incompatible features
-	if (pindexLast->nHeight >= 91345 && pindexLast->nHeight <= 91445)
+	if (pindexLast->nHeight >= 91375 && pindexLast->nHeight <= 91475)
 	{
 		    return bnTargetLimit.GetCompact(); 
 	}
