@@ -6546,7 +6546,7 @@ void ClearCPID(std::string cpid)
 							
 }
 
-
+  
 
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash)
 {
@@ -6558,9 +6558,7 @@ std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash)
 		std::string cpid_non = bpk+email;
 		std::string digest = c.CPID_V2(email,bpk,blockhash);
 		return digest;
-	    //CPID c = CPID(cpid_non);
-		//return c.hexdigest();
-		//return sCPID;
+	    //return sCPID;
 }
 
 
