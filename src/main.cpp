@@ -164,7 +164,7 @@ libzerocoin::Params* ZCParams;
 
 CBigNum bnProofOfWorkLimit(~uint256(0) >> 20); // "standard" scrypt target limit for proof of work, results with 0,000244140625 proof-of-work difficulty
 CBigNum bnProofOfStakeLimit(~uint256(0) >> 20);
-CBigNum bnProofOfStakeLimitV2(~uint256(0) >> 48);
+CBigNum bnProofOfStakeLimitV2(~uint256(0) >> 20);
 CBigNum bnProofOfWorkLimitTestNet(~uint256(0) >> 16);
 
 //Gridcoin Minimum Stake Age (4 Hours)
@@ -335,7 +335,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors2 = "";
  std::string    msMiningErrors3 = "";
  std::string    msMiningErrors4 = "";
- int nGrandfather = 91375;
+ int nGrandfather = 91400;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2173,7 +2173,7 @@ static unsigned int GetNextTargetRequiredV2(const CBlockIndex* pindexLast, bool 
 	printf(".@V2 %f",(double)pindexLast->nHeight);
 
 	//Gridcoin - Reset Diff to 1 on 12-21-2014 (R Halford) - Diff sticking at 2065 due to many incompatible features
-	if (pindexLast->nHeight >= 91375 && pindexLast->nHeight <= 91475)
+	if (pindexLast->nHeight >= 91387 && pindexLast->nHeight <= 91500)
 	{
 		    return bnTargetLimit.GetCompact(); 
 	}
@@ -6698,7 +6698,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 					//Is project Valid
 					bool projectvalid = ProjectIsValid(sProj);
 					if (!projectvalid) sProj = "";
-					printf("CreditCheck:Enumerating %s;",sProj.c_str());
+					//printf("CreditCheck:Enumerating %s;",sProj.c_str());
 
 					if (sProj.length() > 3) 
 					{

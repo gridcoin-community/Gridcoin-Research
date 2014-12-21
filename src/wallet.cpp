@@ -1600,7 +1600,7 @@ std::string NewbieLevelToString(int newbie_level)
 double MintLimiter(double PORDiff)
 {
 	// Unstick network temporary rule:
-	if (GetAdjustedTime() > 1419161730 && GetAdjustedTime() < 1419179832 && PORDiff > 1000) return 0;
+	if (GetAdjustedTime() > 1419161730 && GetAdjustedTime() < 1419192729 && PORDiff > 1000) return 0;
 
 	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
 	if (PORDiff > 0    && PORDiff < 1)  return 0;

@@ -24,9 +24,9 @@ extern const std::string CLIENT_DATE;
 ///////////////////////////////////////////////////////////
 // network protocol versioning                           //
 //                                                       //
-static const int PROTOCOL_VERSION =       180183;        //
+static const int PROTOCOL_VERSION =       180184;        //
 // disconnect from peers older than this proto version   //
-static const int MIN_PEER_PROTO_VERSION = 180183;        // 
+static const int MIN_PEER_PROTO_VERSION = 180184;        // 
 ///////////////////////////////////////////////////////////
 
 //
