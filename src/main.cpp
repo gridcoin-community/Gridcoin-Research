@@ -6554,11 +6554,9 @@ std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash)
 		//12-20-2014
 		if (GetBoolArg("-disablecpidv2")) return "";
 		//ToDO: Fix this:
-		//uint256 pbh  = 0;
 		CPID c = CPID();
-
 		std::string cpid_non = bpk+email;
-		std::string digest = c.CPID_V2(email,bpk);
+		std::string digest = c.CPID_V2(email,bpk,blockhash);
 		return digest;
 	    //CPID c = CPID(cpid_non);
 		//return c.hexdigest();

@@ -511,8 +511,8 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	{
 		//uint256 GetBlockHash256(const CBlockIndex* pindex_hash)
 		uint256 pbh = 0;
-		//if (blockindex->pprev) pbh = blockindex->pprev->GetBlockHash();
-		std::string me = ComputeCPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey,0);
+		if (blockindex->pprev) pbh = blockindex->pprev->GetBlockHash();
+		std::string me = ComputeCPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey,pbh);
 		result.push_back(Pair("MyCPID",me));
 	}
     return result;
@@ -902,16 +902,19 @@ void WriteCPIDToRPC(std::string email, std::string bpk, uint256 block, Array &re
 	entry.push_back(Pair("Long CPID for " + email + " " + block.GetHex(),output));
 	//std
 	output = RetrieveMd5(bpk + email);
+
+	std::string shortcpid = RetrieveMd5(bpk + email);
+	
 	entry.push_back(Pair("std_md5",output));
 	//Stress test
 	std::string me = ComputeCPIDv2(email,bpk,block);
 	entry.push_back(Pair("LongCPID2",me));
 	bool result;
-	result =  CPID_IsCPIDValid(me, me,block);
+	result =  CPID_IsCPIDValid(shortcpid, me,block);
 	
 	entry.push_back(Pair("Stress Test 1",result));
 
-	result =  CPID_IsCPIDValid(me, me,block+1);
+	result =  CPID_IsCPIDValid(shortcpid, me,block+1);
 	entry.push_back(Pair("Stress Test 2",result));
 
 	results.push_back(entry);

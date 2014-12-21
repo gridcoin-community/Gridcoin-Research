@@ -23,18 +23,18 @@ public:
  
   CPID();
   CPID(std::string text);
-  CPID(std::string text,int entropybit);
+  CPID(std::string text,int entropybit,uint256 block_hash);
 
   void update(const unsigned char *buf, size_type length);
   void update(const char *buf, size_type length);
   
-  void update5(std::string inp);
+  void update5(std::string inp,uint256 hash_block);
   
-  std::string CPID_V2(std::string email, std::string bpk);
+  std::string CPID_V2(std::string email, std::string bpk,uint256 block_hash);
 
   CPID& finalize();
   std::string hexdigest() const;
-  std::string boincdigest(std::string email, std::string bpk);
+  std::string boincdigest(std::string email, std::string bpk,uint256 hash_block);
 
 
 //  bool Compare(std::string usercpid, std::string longcpid, uint256 blockhash);
