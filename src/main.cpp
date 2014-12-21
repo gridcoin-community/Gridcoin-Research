@@ -335,7 +335,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors2 = "";
  std::string    msMiningErrors3 = "";
  std::string    msMiningErrors4 = "";
- int nGrandfather = 91000;
+ int nGrandfather = 91345;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2135,6 +2135,8 @@ static unsigned int GetNextTargetRequiredV1(const CBlockIndex* pindexLast, bool 
     // ppcoin: retarget with exponential moving toward target spacing
     CBigNum bnNew;
     bnNew.SetCompact(pindexPrev->nBits);
+	
+
     int64_t nInterval = nTargetTimespan / nTargetSpacing;
     bnNew *= ((nInterval - 1) * nTargetSpacing + nActualSpacing + nActualSpacing);
     bnNew /= ((nInterval + 1) * nTargetSpacing);
@@ -2168,19 +2170,27 @@ static unsigned int GetNextTargetRequiredV2(const CBlockIndex* pindexLast, bool 
     // ppcoin: retarget with exponential moving toward target spacing
     CBigNum bnNew;
     bnNew.SetCompact(pindexPrev->nBits);
+	printf(".@V2 %f",(double)pindexLast->nHeight);
 
 	//Gridcoin - Reset Diff to 1 on 12-21-2014 (R Halford) - Diff sticking at 2065 due to many incompatible features
-	if (pindexLast->nHeight >= 91277 && pindexLast->nHeight <= 91327)
+	if (pindexLast->nHeight >= 91345 && pindexLast->nHeight <= 91445)
 	{
-		bnNew.SetCompact(485833777);  //Diff of 1.0
+		    return bnTargetLimit.GetCompact(); 
 	}
+
+
+	//nTargetTimespan = 16 * 60;  // 16 mins  (TargetSpacing = 64)
+	//(nInterval = 15 min)
 
     int64_t nInterval = nTargetTimespan / nTargetSpacing;
     bnNew *= ((nInterval - 1) * nTargetSpacing + nActualSpacing + nActualSpacing);
     bnNew /= ((nInterval + 1) * nTargetSpacing);
 
     if (bnNew <= 0 || bnNew > bnTargetLimit)
+	{
+		printf("@v2.2");
         bnNew = bnTargetLimit;
+	}
 
     return bnNew.GetCompact();
 }
@@ -6655,7 +6665,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 			int iRow = 0;
 			std::vector<std::string> vCC = split(cc.c_str(),"<project>");
 
-			printf("Performing credit check for %s",cpid.c_str());
+			//printf("Performing credit check for %s",cpid.c_str());
 
 
 			//Clear current magnitude
@@ -6804,7 +6814,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 						mvCreditNodeCPID[cpid]=structc;
 						
 						/////////////////////////////
-						printf("Adding Credit Node Result %s",cpid.c_str());
+						//printf("Adding Credit Node Result %s",cpid.c_str());
 					}
 				}
 			}

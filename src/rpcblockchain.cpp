@@ -346,9 +346,6 @@ double GetBlockDifficulty(unsigned int nBits)
 
 
 
-
-
-
 double GetPoWMHashPS()
 {
     if (pindexBest->nHeight >= LAST_POW_BLOCK)
@@ -511,7 +508,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 		uint256 pbh = 0;
 		if (blockindex->pprev) pbh = blockindex->pprev->GetBlockHash();
 		std::string me = ComputeCPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey,pbh);
-		result.push_back(Pair("MyCPID",me));
+		//result.push_back(Pair("MyCPID",me));
 	}
     return result;
 }
