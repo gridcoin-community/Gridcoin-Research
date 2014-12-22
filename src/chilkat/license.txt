@@ -1,0 +1,248 @@
+Chilkat Software License
+
+PLEASE READ THIS AGREEMENT BEFORE OPENING THIS SOFTWARE 
+PACKAGE. IF YOU OPEN THIS PACKAGE OR KEEP IT FOR MORE THAN 
+THIRTY (30) DAYS, YOU ACCEPT ALL THE TERMS AND CONDITIONS OF 
+THIS AGREEMENT. IF YOU DO NOT AGREE TO THESE TERMS AND 
+CONDITIONS, DO NOT OPEN THIS SOFTWARE PACKAGE. YOU MAY ONLY 
+UNLOCK AND/OR USE THE SOFTWARE FOR WHICH YOU HAVE A PAID- UP 
+LICENSE OR FOR WHICH YOU HAVE LEGALLY RECEIVED AN UNLOCK 
+KEY.
+
+(1) DEFINITION OF TERMS
+
+"Documentation": any explanatory written or on- line 
+material including, but not limited to, user guides, 
+reference manuals and HTML files.
+
+"Licensee": shall refer to the individual licensee, whether 
+as an individual programmer, company, or other organization.
+
+"Software": All material in this distribution including, but 
+not limited to, one or more of the following: source code, 
+object code, byte code, dynamic-link libraries, shared 
+libraries, static libraries, header files, executables, 
+scripts, sample programs, utility programs, makefiles and 
+Documentation.
+
+"Licensed Software": the Software for which Licensee has 
+paid the applicable license fee and received an authorized 
+unlock key.
+
+"Software Application Programming Interface ("API")": the 
+set of access methods, whether provided by Chilkat Software, 
+third parties, or developed by Licensee, through which the 
+programmatic services provided by the Licensed Software are 
+made available.
+
+"End-User Software Product": an application developed by 
+Licensee intended for execution on a computer, that makes 
+use of the Licensed Software in its implementation.
+
+The Licensed Software contains certain runtime libraries and 
+files intended for duplication and distribution by Licensee 
+within End User Software Products to the user(s) of the End 
+User Software Product(s) (the "Redistributable Components"). 
+The Redistributable Components are those files specifically 
+designated as being distributable as part of the Licensed 
+Software.
+
+SPECIAL LIMITED TERM EVALUATION LICENSE
+
+If  Licensee has been provided with a copy of the Software 
+for evaluation purposes, Chilkat Software, Inc. ("Chilkat") 
+grants to Licensee, subject to the terms of this Single User 
+License Agreement (excluding Section 3, under which Licensee 
+has no rights) a non-exclusive, non- transferable, non-
+concurrent limited internal use license for evaluation 
+purposes only. This license is for a period of thirty (30) 
+days, commencing upon receipt of the Software, or, if 
+received electronically, from Licensee's initial downloading 
+date, to evaluate the Software. If the Software is 
+acceptable, Licensee agrees to promptly notify his Chilkat 
+Sales Representative. Otherwise, Licensee shall immediately 
+cease any further use of the Software and destroy all copies 
+of the Software (including the original) and related 
+Documentation provided to Licensee by Chilkat.
+
+(2) GENERAL
+
+The Software is owned by Chilkat Software, Inc. ("Chilkat") 
+and is protected by U.S. copyright laws and other laws and 
+by international treaties. It is intended for use by a 
+software programmer who has experience using development 
+tools and class libraries.
+
+(3) LICENSE GRANTS
+
+(a) Per-developer license. Subject to the terms and conditions of this Agreement , 
+Chilkat grants to Licensee the perpetual, non-exclusive, non-transferable, world-wide 
+license for one (1) developer to (i) install and use the Licensed Software on any 
+number of computers, and (ii) use the associated user documentation and online help.
+
+(b) Site-wide license. If you have purchased a site-wide license, the following rights 
+apply notwithstanding section 3(a): Subject to the terms and conditions of this Agreement 
+, Chilkat grants to Licensee the perpetual, non-exclusive, non-transferable, world-wide 
+license for any number of developers at a single Licensee's office location to (i) 
+install the Licensed Software on any number of computers across Licensee's enterprise, 
+and (ii) use the associated user documentation and online help.
+
+(c) Licensee may also:
+
+(i) Make one backup copy of the Licensed Software solely for archival and 
+disaster-recovery purposes, or transfer the Licensed Software to a hard disk and 
+keep the original copy solely for archival and disaster-recovery purposes; and
+
+(ii) Reproduce and distribute the Redistributable Components directly or indirectly for 
+any number of applications to any number of end users and Licensee's Authorized OEMs, 
+VARs and Distributors, through customary distribution channels, world wide, on a royalty 
+free basis provided that such distribution is (i) in conjunction with an End User 
+Software Product developed by Licensee using the Licensed Software and (ii) the Licensed 
+Software is not the sole or primary component of such End User Software Product.
+(iii) The license rights granted under this Agreement do not apply to development and 
+distribution of software development products or toolkits of any kind that are destined 
+to be used by software developers other than Licensee(s) that are Authorized.
+
+Licensee has no rights to use the Licensed Software beyond those specifically granted 
+in this section.
+
+(4) LICENSE RESTRICTIONS
+
+EXPORT CONTROLS: If the Software is for use outside the 
+United States of America, Licensee agrees to comply with all 
+relevant regulations of the United States Department of 
+Commerce and with the United States Export Administration 
+Act to insure that the Software is not exported in violation 
+of United States law.
+
+Notwithstanding any provisions in this Agreement to the 
+contrary, Licensee may not distribute any portion of the 
+Software other than the Redistributable Components.
+
+In addition, Licensee  may not decompile, disassemble, or 
+reverse engineer any object code form of any portion of the 
+Software.
+
+(5) TITLE
+
+Licensee acknowledges and agrees that all right, title and 
+interest in and to the Software, including all intellectual 
+property rights therein, are the property of Chilkat, 
+subject only to the licenses granted to Licensee under this 
+Agreement. This Agreement is not a sale and does not 
+transfer to the Licensee any title or ownership in or to the 
+Software or any patent, copyright, trade secret, trade name, 
+trademark or other proprietary or intellectual property 
+rights related thereto.
+
+(6) NON-TRANSFERABILITY
+
+Except for Licensee's rights to distribute the 
+Redistributable Components, Licensee may not rent, transfer, 
+assign, sublicense or grant any rights in the Software, in 
+full or in part, to any other person or entity without 
+Chilkat's written consent, except that this agreement may be 
+assigned to a successor of Licensee in the case that all or 
+substantially all of the assets or equity of Licensee are 
+acquired by the successor.
+
+(7) LIMITED WARRANTIES
+
+Chilkat warrants to Licensee that the Licensed Software will 
+substantially perform the functions described in the 
+Documentation for a period of thirty (30) days after the 
+date of delivery of the Licensed Software to Licensee. 
+Chilkat's sole and exclusive obligation, and Licensee's sole 
+and exclusive remedy, under this warranty is limited to 
+Chilkat's using reasonable efforts to correct material, 
+documented, reproducible defects in the Licensed Software 
+that Licensee describes and documents to Chilkat during the 
+thirty (30) day warranty period. In the event that Chilkat 
+fails to correct a material, documented, reproducible defect 
+during this period, Chilkat may, at Chilkat's discretion, 
+replace the defective Licensed Software or refund to 
+Licensee the amount that Licensee paid Chilkat for the 
+defective Licensed Software and cancel this Agreement and 
+the licenses granted herein. In such event, Licensee agrees 
+to return to Chilkat all copies of the Licensed Software 
+(including the original).
+
+EXCEPT AS EXPRESSLY SET FORTH ABOVE, CHILKAT EXPRESSLY DISCLAIMS ALL OTHER WARRANTIES, 
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF TITLE, NON-INFRINGEMENT, 
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, RESULTS, OR OTHERWISE
+
+(8) LIMITATION OF LIABILITY
+
+IN NO EVENT SHALL CHILKAT BE LIABLE FOR ANY DIRECT, INDIRECT, PUNITIVE, SPECIAL, 
+INCIDENTAL, OR CONSEQUENTIAL DAMAGES (INCLUDING LOST PROFITS, REVENUES, 
+DATA OR OTHER ECONOMIC ADVANTAGE) WHETHER BASED ON CONTRACT, TORT, OR ANY OTHER LEGAL THEORY, 
+EVEN IF CHILKAT WAS ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.  NOTWITHSTANDING THE FOREGOING, 
+THE TOTAL AMOUNT OF CHILKAT’S LIABILITY TO LICENSEE SHALL BE LIMITED TO THE AMOUNT USER PAID 
+FOR THE USE OF THE SOFTWARE, IF ANY. 
+
+(9) TERMINATION
+
+Chilkat reserves the right, at its sole discretion, to 
+terminate this Agreement upon written notice if Licensee has 
+breached the terms and conditions hereof. Licensee may 
+terminate this Agreement at any time by ceasing to use the 
+Licensed Software and by destroying all copies of the 
+Licensed Software (including the original). Sections 4, 5, 
+6, 7, 8, 9 and 10 survive any termination of this Agreement 
+and apply fully to any termination. Unless terminated as 
+provided herein by either party, this Agreement shall remain 
+in effect. Termination will not affect end user licenses of 
+the End User Software Product which contain the 
+Redistributable Components which were distributed by 
+Licensee prior to termination.
+
+(10) MISCELLANEOUS
+
+Applicable Law and Jurisdiction. This Agreement will be 
+governed by and construed in accordance with the laws of the 
+State of Illinois without regard to conflict of laws 
+principles and without regard to the 1980 U.N. Convention on 
+Contracts for the International Sale of Goods. The federal 
+and state courts of Illinois shall have exclusive 
+jurisdiction and venue to adjudicate any dispute arising out 
+of this Agreement, and Licensee expressly consents to (i) 
+the personal jurisdiction of the state and federal courts of 
+Illinois, and (ii) service of process being effected upon 
+Licensee by registered mail.
+
+Limitation of Actions. No action, regardless of form, may be 
+brought by  either party more than twelve (12) months after 
+the cause of action has arisen.  No such claim may be brought unless 
+Chilkat has first been given commercially reasonable notice, 
+a full written explanation of all pertinent details 
+(including copies of all materials), and a good faith 
+opportunity to resolve the matter.
+
+Invalidity and Waiver. Should any provision of this 
+Agreement be held by a court of law to be illegal, invalid, 
+or unenforceable, the legality, validity, and enforceability 
+of the remaining provisions of this Agreement will not be 
+affected or impaired thereby. The failure of any party to 
+enforce any of the terms or conditions of this Agreement, 
+unless waived in writing, will not constitute a waiver of 
+that party's right to enforce each and every term and 
+condition of this Agreement.
+
+U.S. Government Restricted Rights. The Licensed Software is 
+provided with Restricted Rights. Use, duplication, or 
+disclosure by the Government is subject to restrictions as 
+set forth in subparagraph (c) (1) (ii) of The Rights in 
+Technical Data and Computer Software clause at DFARS 
+252.227-7013 or subparagraphs (c) (1) and (2) of the 
+Commercial Computer Software Restricted Rights at 48 CFR 
+52.227- 19, as applicable. Manufacturer is Chilkat Software, 
+Inc., 1719 E Forest Ave, Wheaton, Illinois 60187 USA.
+
+LICENSEE ACKNOWLEDGES THAT HE HAS READ THIS AGREEMENT, 
+UNDERSTANDS IT AND AGREES TO BE BOUND BY ITS TERMS AND 
+CONDITIONS. LICENSEE FURTHER AGREES THAT IT IS THE COMPLETE 
+AND EXCLUSIVE STATEMENT OF THE AGREEMENT BETWEEN LICENSEE 
+AND CHILKAT WHICH SUPERSEDES ANY PROPOSAL OR PRIOR OR 
+CONTEMPORANEOUS AGREEMENT, ORAL OR WRITTEN, AND ANY OTHER 
+COMMUNICATIONS RELATING TO THE SUBJECT MATTER OF THIS 
+AGREEMENT

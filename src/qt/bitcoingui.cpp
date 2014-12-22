@@ -25,6 +25,7 @@
 #include "signverifymessagedialog.h"
 #include "optionsdialog.h"
 #include "aboutdialog.h"
+#include "upgradedialog.h"
 #include "clientmodel.h"
 #include "walletmodel.h"
 #include "editaddressdialog.h"
@@ -41,6 +42,7 @@
 #include "rpcconsole.h"
 #include "wallet.h"
 #include "init.h"
+#include "upgrader.h"
 
 #ifdef Q_OS_MAC
 #include "macdockiconhandler.h"
@@ -549,6 +551,7 @@ int UpgradeClient()
 			{
 #ifdef WIN32
 				globalcom->dynamicCall("UpgradeWallet()");
+#else
 #endif
 			}
 			else
@@ -1414,13 +1417,30 @@ void BitcoinGUI::rebuildClicked()
 	ReindexBlocks();
 }
 
-
+void Imker(void *kippel)
+{
+    Upgrader upgrader;
+	std::string target = "snapshot.zip";
+	std::string source = "signed/snapshot.zip";
+	UpgradeDialog *kipp = (UpgradeDialog*)kippel;
+	upgrader.downloader(target, DATA, source, kipp);
+	upgrader.unzipper(target, DATA);
+}
 
 void BitcoinGUI::upgradeClicked()
 {
 	printf("Upgrading Gridcoin...");
+#ifdef WIN32
 	UpgradeClient();
-
+#else
+	UpgradeDialog dlg;
+	dlg.setPerc(50);
+	void *alf = &dlg;
+	NewThread(Imker, alf);
+    dlg.exec();
+	MilliSleep(5000);
+	printf("No Sleep");
+#endif
 }
 
 void BitcoinGUI::downloadClicked()
