@@ -4790,7 +4790,9 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 			double interest = mint-bb.ResearchSubsidy;
 			//double interest = bb.InterestSubsidy;
 			structMagnitude.payments += bb.ResearchSubsidy;
-			structMagnitude.interestPayments += interest;
+			structMagnitude.interestPayments += cdbl(RoundToString(interest,3),3);
+
+
 			if (LockTime > structMagnitude.LastPaymentTime) structMagnitude.LastPaymentTime = LockTime;
 			if (LockTime < structMagnitude.EarliestPaymentTime) structMagnitude.EarliestPaymentTime = LockTime;
 			// Per RTM 12-24-2014 (Halford) Track detailed payments made to each CPID
