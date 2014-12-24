@@ -724,7 +724,15 @@ bool AppInit2()
 			fDebug = true;
 			printf("Entering debug mode.\r\n");
 	}
-				
+	
+	fDebug2 = false;
+	
+	if (GetArg("debug2", "false")=="true")
+	{
+			fDebug2 = true;
+			printf("Entering GRC debug mode.\r\n");
+	}
+	
 
 #if !defined(WIN32) && !defined(QT_GUI)
     fDaemon = GetBoolArg("-daemon");
@@ -1196,11 +1204,15 @@ bool AppInit2()
     RandAddSeedPerfmon();
 
     //// debug print
-    printf("mapBlockIndex.size() = %"PRIszu"\n",   mapBlockIndex.size());
-    printf("nBestHeight = %d\n",            nBestHeight);
-    printf("setKeyPool.size() = %"PRIszu"\n",      pwalletMain->setKeyPool.size());
-    printf("mapWallet.size() = %"PRIszu"\n",       pwalletMain->mapWallet.size());
-    printf("mapAddressBook.size() = %"PRIszu"\n",  pwalletMain->mapAddressBook.size());
+	if (fDebug)
+	{
+		printf("mapBlockIndex.size() = %"PRIszu"\n",   mapBlockIndex.size());
+		printf("nBestHeight = %d\n",            nBestHeight);
+		printf("setKeyPool.size() = %"PRIszu"\n",      pwalletMain->setKeyPool.size());
+		printf("mapWallet.size() = %"PRIszu"\n",       pwalletMain->mapWallet.size());
+		printf("mapAddressBook.size() = %"PRIszu"\n",  pwalletMain->mapAddressBook.size());
+	}
+
 
     if (!NewThread(StartNode, NULL))
         InitError(_("Error: could not start node"));

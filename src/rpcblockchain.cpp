@@ -496,7 +496,9 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	bool IsCpidValid = IsCPIDValid_Retired(bb.cpid, bb.enccpid);
 	result.push_back(Pair("CPIDValid",IsCpidValid));
 	//result.push_back(Pair("Version2",block.nVersion));
-	result.push_back(Pair("CPIDv2",bb.cpidv2));
+	if (bb.cpidv2.length() > 10) 	result.push_back(Pair("CPIDv2",bb.cpidv2.substr(0,32)));
+
+	if (fDebug2)		result.push_back(Pair("CPIDv2",bb.cpidv2));
 
 	//pblock->hashPrevBlock
 	if (false)
@@ -1333,6 +1335,12 @@ Value listitem(const Array& params, bool fHelp)
 			CreditCheck(GlobalCPUMiningCPID.cpid,true);
 			double boincmagnitude = CalculatedMagnitude( GetAdjustedTime());
 			entry.push_back(Pair("Magnitude",boincmagnitude));
+			results.push_back(entry);
+	}
+	if (sitem == "networktime")
+	{
+			Object entry;
+			entry.push_back(Pair("Network Time",GetAdjustedTime()));
 			results.push_back(entry);
 	}
 	if (sitem == "rsaweight")

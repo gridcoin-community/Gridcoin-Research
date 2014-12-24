@@ -590,7 +590,7 @@ std::string GetGlobalStatus()
 		double out_owed = 0;
 		out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid,out_owed);
 		// End of Boinc Magnitude update
-		double weight = nWeight;
+		double weight = nWeight/COIN;
 		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
 		std::string boost_version = "";
 		std::ostringstream sBoost;
@@ -599,8 +599,8 @@ std::string GetGlobalStatus()
 			  << BOOST_VERSION / 100 % 1000 << "."  // minior version
 			  << BOOST_VERSION % 100                // patch level
 			  << "";
-		std::string sWeight = RoundToString(weight,0);
-		if (weight > 100000000000000) 
+		std::string sWeight = RoundToString((double)weight,0);
+		if ((double)weight > 100000000000000) 
 		{
 				sWeight = sWeight.substr(0,13) + "E" + RoundToString((double)sWeight.length()-13,0);
 		}
@@ -2170,7 +2170,6 @@ static unsigned int GetNextTargetRequiredV2(const CBlockIndex* pindexLast, bool 
     // ppcoin: retarget with exponential moving toward target spacing
     CBigNum bnNew;
     bnNew.SetCompact(pindexPrev->nBits);
-	printf(".@V2 %f",(double)pindexLast->nHeight);
 
 	//Gridcoin - Reset Diff to 1 on 12-21-2014 (R Halford) - Diff sticking at 2065 due to many incompatible features
 	if (pindexLast->nHeight >= 91387 && pindexLast->nHeight <= 91500)
@@ -2178,9 +2177,7 @@ static unsigned int GetNextTargetRequiredV2(const CBlockIndex* pindexLast, bool 
 		    return bnTargetLimit.GetCompact(); 
 	}
 
-
-	//nTargetTimespan = 16 * 60;  // 16 mins  (TargetSpacing = 64)
-	//(nInterval = 15 min)
+	//nTargetTimespan = 16 * 60;  // 16 mins  (TargetSpacing = 64);  nInterval = 15 min
 
     int64_t nInterval = nTargetTimespan / nTargetSpacing;
     bnNew *= ((nInterval - 1) * nTargetSpacing + nActualSpacing + nActualSpacing);
@@ -3106,8 +3103,8 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
 
     printf("REORGANIZE: done\n");
 	//12-9-2014  - Halford - Reload network averages after a reorg since user now has orphans
-	TallyNetworkAverages(true);
-	printf("Finished Retally");		
+	//TallyNetworkAverages(true);
+	//printf("Finished Retally");		
     return true;
 }
 
@@ -3411,7 +3408,7 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
     bool fGeneratedStakeModifier = false;
     if (!ComputeNextStakeModifier(pindexNew->pprev, nStakeModifier, fGeneratedStakeModifier))
 	{
-        return error("AddToBlockIndex() : ComputeNextStakeModifier() failed");
+        printf("AddToBlockIndex() : ComputeNextStakeModifier() failed");
 	}
     pindexNew->SetStakeModifier(nStakeModifier, fGeneratedStakeModifier);
     pindexNew->nStakeModifierChecksum = GetStakeModifierChecksum(pindexNew);
@@ -3657,20 +3654,20 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 		{	
 			// Check timestamp
 			if (GetBlockTime() > FutureDrift(GetAdjustedTime(), nHeight))
-				return error("AcceptBlock() : block timestamp too far in the future");
+				return DoS(60,error("AcceptBlock() : block timestamp too far in the future"));
 
 			// Check coinbase timestamp
 			if (GetBlockTime() > FutureDrift((int64_t)vtx[0].nTime, nHeight))
-				return DoS(50, error("AcceptBlock() : coinbase timestamp is too early"));
+				return DoS(60, error("AcceptBlock() : coinbase timestamp is too early"));
 
 	
 			// Check coinstake timestamp
 			if (IsProofOfStake() && !CheckCoinStakeTimestamp(nHeight, GetBlockTime(), (int64_t)vtx[1].nTime))
-				return DoS(50, error("AcceptBlock() : coinstake timestamp violation nTimeBlock=%"PRId64" nTimeTx=%u", GetBlockTime(), vtx[1].nTime));
+				return DoS(60, error("AcceptBlock() : coinstake timestamp violation nTimeBlock=%"PRId64" nTimeTx=%u", GetBlockTime(), vtx[1].nTime));
 
 			// Check timestamp against prev
 			if (GetBlockTime() <= pindexPrev->GetPastTimeLimit() || FutureDrift(GetBlockTime(), nHeight) < pindexPrev->GetBlockTime())
-				return error("AcceptBlock() : block's timestamp is too early");
+				return DoS(60, error("AcceptBlock() : block's timestamp is too early"));
 		}
 
 		
@@ -5271,7 +5268,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 		//vRecv >> pfrom->nVersion >> pfrom->boinchashnonce >> pfrom->boinchashpw >> pfrom->nServices >> nTime >> addrMe;
 		vRecv >> pfrom->nVersion >> pfrom->boinchashnonce >> pfrom->boinchashpw >> pfrom->cpid >> pfrom->enccpid >> pfrom->nServices >> nTime >> addrMe;
-				
+
+		int cpid_authorization_level = 1;
 
 		std::string sdefaultboinchashargs = DefaultBoincHashArgs();
 	 	std::string pw1 = RetrieveMd5(pfrom->boinchashnonce+","+sdefaultboinchashargs);
@@ -5285,18 +5283,37 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 			if (sdefaultboinchashargs.substr(0,4) == "Elim") checksum=true;
 		}
 
-
-		//12-10-2014
+		if (!unauthorized) cpid_authorization_level = 1;
 		if (unauthorized)
 		{
+			cpid_authorization_level = 0;
 			//Test the untrusted nodes cpid
 			if (IsCPIDValid_Retired(pfrom->cpid,pfrom->enccpid))
 			{
-				unauthorized=false;
+				unauthorized=false;  //Do Not set cpid_authorization_level to 1 here since they are still not trusted
 			}
 		}
+		//12-23-2014
+		double timedrift = std::abs(GetAdjustedTime() - nTime);
 		
-		if (unauthorized && checksum)
+		if (cpid_authorization_level=0)
+		{
+			if (timedrift > (5*60))
+			{
+				printf("Disconnecting unauthorized peer with Network Time so far off by %f seconds!\r\n",(double)timedrift);
+				unauthorized = true;
+			}
+		}
+		else
+		{
+			if (timedrift > (10*60) && LessVerbose(500))
+			{
+				printf("Disconnecting authorized peer with Network Time so far off by %f seconds!\r\n",(double)timedrift);
+				unauthorized = true;
+			}
+		}
+
+		if (unauthorized)
 		{
 			printf("Disconnected unauthorized peer.         ");
 		    pfrom->fDisconnect = true;
@@ -5325,18 +5342,31 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (!vRecv.empty())
             vRecv >> pfrom->nStartingHeight;
 
-		//Pallas 12-6-2014
-
+	
 	 		if (GetArgument("autoban","false") == "true")
 			{
 				if (pfrom->nStartingHeight < 1000) 
 				{
 					printf("Node with low height");
 					pfrom->Misbehaving(100);
+					pfrom->fDisconnect=true;
 					return false;
 				}
 			}
 	
+			if (pfrom->nStartingHeight < 1 && LessVerbose(700)) 
+			{
+					pfrom->Misbehaving(100);
+			    	pfrom->fDisconnect=true;
+					return false;
+			}
+
+			if (pfrom->nStartingHeight < 1 && pfrom->nServices == 0)
+			{
+					pfrom->Misbehaving(100);
+			    	pfrom->fDisconnect=true;
+					return false;
+			}
 		
 		
 		if (pfrom->fInbound && addrMe.IsRoutable())
@@ -6465,10 +6495,14 @@ double GetMagnitude(std::string cpid, double purported, bool UseNetSoft)
 			return mag;
 		}
 		//Try clearing the cache; call Netsoft
-		CreditCheck(cpid,true);
-		UntrustedHost = mvCreditNodeCPID[cpid]; //Contains Mag across entire CPID
-		mag = UntrustedHost.Magnitude;
-		printf("For cpid %s, using NetSoft actual mag of %f\r\n",cpid.c_str(),mag);
+		for (int i = 0; i <= 3;i++)
+		{
+			CreditCheck(cpid,true);
+			UntrustedHost = mvCreditNodeCPID[cpid]; //Contains Mag across entire CPID
+			mag = UntrustedHost.Magnitude;
+			printf("Attempt #%f ; For cpid %s, using NetSoft actual mag of %f\r\n",(double)i,cpid.c_str(),mag);
+			if (mag >= purported) return mag;
+		}
 		return mag;
 	
 	}
@@ -6607,7 +6641,7 @@ void InitializeProjectStruct(StructCPID& project)
 			project.Iscpidvalid = false;
 			project.errors = "Team invalid";
 	}
-	printf("Assimilating local project %s, Valid %s",project.projectname.c_str(),YesNo(project.Iscpidvalid).c_str());
+	if (fDebug) printf("Assimilating local project %s, Valid %s",project.projectname.c_str(),YesNo(project.Iscpidvalid).c_str());
 
 
 }
@@ -6955,9 +6989,9 @@ std::string GetArgument(std::string arg, std::string defaultvalue)
 void HarvestCPIDs(bool cleardata)
 {
 	
-	printf("loading BOINC cpids ...\r\n");
+	if (fDebug) printf("loading BOINC cpids ...\r\n");
 
-	//12-20-2014 - Remote Boinc Feature - R Halford
+	//Remote Boinc Feature - R Halford
 	
 	std::string sBoincKey = GetArgument("boinckey","");
    
@@ -7006,9 +7040,8 @@ void HarvestCPIDs(bool cleardata)
 			
 	
 			GetNextProject(false);
-			printf("GCMCPI %s",GlobalCPUMiningCPID.cpid.c_str());
-
-			printf("Finished getting first remote boinc project\r\n");
+			if (fDebug) printf("GCMCPI %s",GlobalCPUMiningCPID.cpid.c_str());
+			if (fDebug) 			printf("Finished getting first remote boinc project\r\n");
 		return;
   }
        
