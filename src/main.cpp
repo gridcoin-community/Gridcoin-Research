@@ -2842,21 +2842,24 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	// Block Spamming (Halford) 12-23-2014
     double PORDiff = GetBlockDifficulty(nBits);
 
-
-	if (bb.cpid == "INVESTOR" && mint < MintLimiter(PORDiff)) 
+	if (pindex->nHeight > nGrandfather)
 	{
-		return error("CheckProofOfStake() : Investor Mint too Small");
-				
-	}
-	else
-	{
-		if (bb.cpid != "INVESTOR" && mint < MintLimiter(PORDiff)) 
+		if (bb.cpid == "INVESTOR" && mint < MintLimiter(PORDiff)) 
 		{
-			return error("CheckProofOfStake() : Researcher Mint too small");
+			return error("CheckProofOfStake() : Investor Mint too Small");
 				
 		}
+		else
+		{
+			if (bb.cpid != "INVESTOR" && mint < MintLimiter(PORDiff)) 
+			{
+				return error("CheckProofOfStake() : Researcher Mint too small");
+				
+			}
 
+		}
 	}
+
 		
 	if (pindex->nHeight > nGrandfather && IsProofOfStake())
 	{
