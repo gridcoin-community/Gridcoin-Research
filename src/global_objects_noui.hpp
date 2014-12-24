@@ -102,7 +102,10 @@ extern int miningthreadcount;
 		std::string email;
 		std::string boincruntimepublickey;
 	    std::string cpidv2;
-		
+		std::string PaymentTimestamps;
+		std::string PaymentAmountsResearch;
+		std::string PaymentAmountsInterest;
+
 		
 	};
 

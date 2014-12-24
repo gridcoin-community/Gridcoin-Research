@@ -312,8 +312,11 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
         strHTML += GUIUtil::HtmlEscape(wtx.ToString(), true);
 
         CTxDB txdb("r"); // To fetch source txouts
+		//Decrypt any embedded messages
+		std::string eGRCMessage = ExtractXML(wtx.hashBoinc,"<MESSAGE>","</MESSAGE>");
+		std::string sGRCMessage = AdvancedDecrypt(eGRCMessage);
 
-		strHTML += "<br><b>Notes: " + QString::fromStdString(wtx.hashBoinc) + "</b>";
+		strHTML += "<br><b>Notes: " + QString::fromStdString(sGRCMessage) + "</b><p><br>";
 		msHashBoinc += wtx.hashBoinc;
 
         strHTML += "<br><b>" + tr("Inputs") + ":</b>";

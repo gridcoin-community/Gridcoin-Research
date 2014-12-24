@@ -1240,6 +1240,13 @@ void CSVToFile(std::string filename, std::string data)
 }
 
 
+std::string TimestampToHRDate(double dtm)
+{
+	std::string sDt = DateTimeStrFormat("%m-%d-%Y %H:%M:%S",dtm);
+	return sDt;
+}
+
+
 
 Array MagnitudeReportCSV()
 {
@@ -1256,7 +1263,8 @@ Array MagnitudeReportCSV()
 		   double rows = 0;
 		   double outstanding = 0;
 		   double totaloutstanding = 0;
-		   std::string header = "CPID,Magnitude,PaymentMagnitude,Accuracy,LongTermOwed14day,LongTermOwedDaily,Payments,InterestPayments,LastPaymentTime,CurrentDailyOwed,NextExpectedPayment,AvgDailyPayments,Outstanding\r\n";
+		   std::string header = "CPID,Magnitude,PaymentMagnitude,Accuracy,LongTermOwed14day,LongTermOwedDaily,Payments,InterestPayments,LastPaymentTime,CurrentDailyOwed,NextExpectedPayment,AvgDailyPayments,Outstanding,PaymentDate,ResearchPaymentAmount,InterestPaymentAmount\r\n";
+
 		   std::string row = "";
 		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
 		   {
@@ -1273,11 +1281,30 @@ Array MagnitudeReportCSV()
 							+ RoundToString(structMag.PaymentMagnitude,0) + "," + RoundToString(structMag.Accuracy,0) + "," + RoundToString(structMag.totalowed,2) 
 							+ "," + RoundToString(structMag.totalowed/14,2)
 							+ "," + RoundToString(structMag.payments,2) + "," 
-							+ RoundToString(structMag.interestPayments,2) + "," + RoundToString(structMag.LastPaymentTime,0) 
+							+ RoundToString(structMag.interestPayments,2) + "," + TimestampToHRDate(structMag.LastPaymentTime) 
 							+ "," + RoundToString(structMag.owed,2) 
 							+ "," + RoundToString(structMag.owed/2,2)
 							+ "," + RoundToString(structMag.payments/14,2) + "," + RoundToString(outstanding,2) + "\n";
 						header += row;
+						//Add payment detail - Halford - Christmas Eve 2014
+	   					std::vector<std::string> vCPIDTimestamps = split(structMag.PaymentTimestamps.c_str(),",");
+						std::vector<std::string> vCPIDPayments   = split(structMag.PaymentAmountsResearch.c_str(),",");
+						std::vector<std::string> vCPIDInterestPayments = split(structMag.PaymentAmountsInterest.c_str(),",");
+					    for (unsigned int i = 0; i < vCPIDTimestamps.size(); i++)
+						{
+								double dTime = cdbl(vCPIDTimestamps[i],0);
+								std::string sResearchAmount = vCPIDPayments[i];
+								std::string sPaymentDate = DateTimeStrFormat("%m-%d-%Y %H:%M:%S", dTime);
+								std::string sInterestAmount = vCPIDInterestPayments[i];
+								
+								if (dTime > 0)
+								{
+									row = " , , , , , , , , , , , , ," + sPaymentDate + "," + sResearchAmount + "," + sInterestAmount + "\n";
+									header += row;
+									
+								}
+						}
+
 						rows++;
 						totalpaid += structMag.payments;
 						lto += structMag.totalowed;

@@ -1222,6 +1222,8 @@ bool CreateNewConfigFile(std::string boinc_email)
 	myConfig << row;
 	row = "addnode=node.gridcoin.us \r\n";
 	myConfig << row;
+	row = "addnode=gridcoin.asia \r\n";
+	myConfig << row;
 	myConfig.close();
 	return true;
 }

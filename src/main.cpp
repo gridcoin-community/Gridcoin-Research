@@ -4789,18 +4789,16 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 		{
 			double interest = mint-bb.ResearchSubsidy;
 			//double interest = bb.InterestSubsidy;
-			if (GetAdjustedTime() > 1418169600)
-			{
-				//After 12-10-2014, research payments are broken out
-				structMagnitude.payments += bb.ResearchSubsidy;
-			}
-			else
-			{
-				structMagnitude.payments += mint;
-			}
-			structMagnitude.interestPayments += interest;
+			structMagnitude.payments += bb.ResearchSubsidy;
+			structMagnitude.interestPayments += cdbl(RoundToString(interest,3),3);
+
+
 			if (LockTime > structMagnitude.LastPaymentTime) structMagnitude.LastPaymentTime = LockTime;
 			if (LockTime < structMagnitude.EarliestPaymentTime) structMagnitude.EarliestPaymentTime = LockTime;
+			// Per RTM 12-24-2014 (Halford) Track detailed payments made to each CPID
+			structMagnitude.PaymentTimestamps += RoundToString(LockTime,0)+",";
+			structMagnitude.PaymentAmountsResearch    += RoundToString(bb.ResearchSubsidy,2) + ",";
+			structMagnitude.PaymentAmountsInterest    += RoundToString(interest,2) + ",";
 		}
 		structMagnitude.cpid = cpid;
 		//Since this function can be called more than once per block (once for the solver, once for the voucher), the avg changes here:
@@ -5319,7 +5317,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 		//12-23-2014
 		double timedrift = std::abs(GetAdjustedTime() - nTime);
 		
-		if (cpid_authorization_level=0)
+		if (cpid_authorization_level==0)
 		{
 			if (timedrift > (5*60))
 			{
@@ -7394,6 +7392,9 @@ StructCPID GetStructCPID()
 	c.PaymentTimespan=0;
 	c.ResearchSubsidy = 0;
 	c.InterestSubsidy = 0;
+	c.PaymentTimestamps = "";
+	c.PaymentAmountsResearch = "";
+	c.PaymentAmountsInterest = "";
 	return c;
 
 }
