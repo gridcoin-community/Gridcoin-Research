@@ -60,6 +60,7 @@ int64_t nCPIDsLoaded = 0;
 
 extern std::string boinc_hash(const std::string str);
 
+double MintLimiter(double PORDiff);
 
 extern std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 
@@ -335,7 +336,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors2 = "";
  std::string    msMiningErrors3 = "";
  std::string    msMiningErrors4 = "";
- int nGrandfather = 91400;
+ int nGrandfather = 94525;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2837,6 +2838,26 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	//Gridcoin: Maintain network consensus for Magnitude & Outstanding Amount Owed by CPID  
 		
 	double mint = CoinToDouble(pindex->nMint);
+
+	// Block Spamming (Halford) 12-23-2014
+    double PORDiff = GetBlockDifficulty(nBits);
+
+
+	if (bb.cpid == "INVESTOR" && mint < MintLimiter(PORDiff)) 
+	{
+		return error("CheckProofOfStake() : Investor Mint too Small");
+				
+	}
+	else
+	{
+		if (bb.cpid != "INVESTOR" && mint < MintLimiter(PORDiff)) 
+		{
+			return error("CheckProofOfStake() : Researcher Mint too small");
+				
+		}
+
+	}
+		
 	if (pindex->nHeight > nGrandfather && IsProofOfStake())
 	{
 		if (LockTimeRecent(GetBlockTime()))
@@ -2846,8 +2867,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 			if (false)
 			{
-			double PORDiff = GetDifficulty(GetLastBlockIndex(pindex, true));
-
+			
 			double LastBlockAge = PreviousBlockAge();
 	
 			if ((PORDiff > 10) && LastBlockAge < (7*60))
