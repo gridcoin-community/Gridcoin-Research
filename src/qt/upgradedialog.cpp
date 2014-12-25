@@ -21,6 +21,16 @@ UpgradeDialog::UpgradeDialog(QWidget *parent) :
     ui(new Ui::UpgradeDialog)
 {
     ui->setupUi(this);
+
+    // retrieve information about download
+    long int size = 0;
+    int perc = 0;
+    
+    // while (perc < 50)
+    // {
+    size = upgrader->getFileDone();
+    // setPerc(upgrader->getFilePerc(size));
+    // }
 }
 
 // void UpgradeDialog::connectR(Upgrader *upgrader)
@@ -28,9 +38,9 @@ UpgradeDialog::UpgradeDialog(QWidget *parent) :
 //     // connect(upgrader,SIGNAL(updatePerc(percentage)),this,SLOT(setPerc(percentage)));
 // }
 
-void UpgradeDialog::setPerc(int percentage)
+void UpgradeDialog::setPerc(long int percentage)
 {
-    ui->progressBar->setValue(percentage);
+    ui->progressBar->setValue((int)percentage);
 }
 
 UpgradeDialog::~UpgradeDialog()

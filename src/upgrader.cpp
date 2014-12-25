@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
 }
 #endif
 
-bool Upgrader::downloader(std::string targetfile, int pf, std::string source, UpgradeDialog *kuppak)
+bool Upgrader::downloader(std::string targetfile, int pf, std::string source)
 {
 	std::string urlstring = geturl() + source;
 	const char *url = urlstring.c_str();
@@ -124,6 +124,7 @@ bool Upgrader::downloader(std::string targetfile, int pf, std::string source, Up
 	curlhandle.done=0;
 
 	file=fopen(target.c_str(), "wb");
+	fileInitialized=true;
 
 	curl_easy_setopt(curlhandle.handle, CURLOPT_URL, url);
 	curl_easy_setopt(curlhandle.handle, CURLOPT_WRITEFUNCTION, write_data);
@@ -140,28 +141,31 @@ bool Upgrader::downloader(std::string targetfile, int pf, std::string source, Up
 		{
 			usleep(800*1000);
 			int sz = getFileDone();
-			printf("\r%i\tKB", sz/1024);
-			printf("\t%i%%", getFilePerc(sz));
+			printf("\r%li\tKB", sz/1024);
+			printf("\t%li\%", getFilePerc(sz));
 			fflush( stdout );
-#ifdef QT_GUI
-			kuppak->setPerc(getFilePerc(sz));
-#endif
 		}
 
 	curl_easy_cleanup(curlhandle.handle);
 	fclose(file);
+	fileInitialized=false;
 
 	printf("\nfile downloaded successfully\n");
 	return true;
 }
 
-int Upgrader::getFileDone()
+long int Upgrader::getFileDone()
 {
-	fseek(file, 0L, SEEK_END);
-	return (int)ftell(file);
+	if (fileInitialized)
+	{
+		fseek(file, 0L, SEEK_END);
+		return ftell(file);
+	}
+
+	return 0;
 }
 
-int Upgrader::getFilePerc(int sz)
+long int Upgrader::getFilePerc(long int sz)
 {
 	if(!filesizeRetrieved)
 			{
@@ -172,7 +176,7 @@ int Upgrader::getFilePerc(int sz)
 						return 0;
 					}
 			}
-	return sz*100/filesize;
+	return sz*100/(long int)filesize;
 }
 
 bool Upgrader::unzipper(std::string targetfile, int pf)

@@ -304,6 +304,9 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     rpcConsole = new RPCConsole(this);
     connect(openRPCConsoleAction, SIGNAL(triggered()), rpcConsole, SLOT(show()));
 
+    // upgrader = new UpgradeDialog(this);
+    connect(openRPCConsoleAction, SIGNAL(triggered()), rpcConsole, SLOT(show()));
+
     // Clicking on "Verify Message" in the address book sends you to the verify message tab
     connect(addressBookPage, SIGNAL(verifyMessage(QString)), this, SLOT(gotoVerifyMessageTab(QString)));
     // Clicking on "Sign Message" in the receive coins page sends you to the sign message tab
@@ -1421,12 +1424,11 @@ void BitcoinGUI::rebuildClicked()
 
 void Imker(void *kippel)
 {
-    Upgrader upgrader;
-	std::string target = "snapshot.zip";
+    std::string target = "snapshot.zip";
 	std::string source = "signed/snapshot.zip";
-	UpgradeDialog *kipp = (UpgradeDialog*)kippel;
-	upgrader.downloader(target, DATA, source, kipp);
-	upgrader.unzipper(target, DATA);
+	Upgrader *upgrader = (Upgrader*)kippel;
+	upgrader->downloader(target, DATA, source);
+	upgrader->unzipper(target, DATA);
 }
 
 void BitcoinGUI::upgradeClicked()
@@ -1436,12 +1438,15 @@ void BitcoinGUI::upgradeClicked()
 	UpgradeClient();
 #else
 	UpgradeDialog dlg;
-	dlg.setPerc(50);
-	void *alf = &dlg;
-	NewThread(Imker, alf);
+	Upgrader upgrader;
+	dlg.upgrader = &upgrader;
+	// dlg.getPerc(&upgrader);
+	void *alf = &upgrader;
+	boost::thread j(Imker, alf);
+	// usleep(8000*1000);
+	printf("File done: %li", upgrader.getFileDone());
     dlg.exec();
-	MilliSleep(5000);
-	printf("No Sleep");
+    j.join();
 #endif
 }
 
