@@ -1562,7 +1562,9 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
         // This is done last to help prevent CPU exhaustion denial-of-service attacks.
         if (!tx.ConnectInputs(txdb, mapInputs, mapUnused, CDiskTxPos(1,1,1), pindexBest, false, false))
         {
-            return error("AcceptToMemoryPool : ConnectInputs failed %s", hash.ToString().substr(0,10).c_str());
+			if (fDebug) printf("AcceptToMemoryPool : ConnectInputs failed %s", hash.ToString().c_str());
+			return false;
+
         }
     }
 
@@ -1581,10 +1583,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
     // If updated, erase old tx from wallet
     if (ptxOld)
         EraseFromWallets(ptxOld->GetHash());
-
-    printf("AcceptToMemoryPool : accepted %s (poolsz %"PRIszu")\n",
-           hash.ToString().substr(0,10).c_str(),
-           pool.mapTx.size());
+	if (fDebug)     printf("AcceptToMemoryPool : accepted %s (poolsz %"PRIszu")\n",           hash.ToString().c_str(),           pool.mapTx.size());
     return true;
 }
 

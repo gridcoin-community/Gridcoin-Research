@@ -500,7 +500,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 
 	if (fDebug2)		result.push_back(Pair("CPIDv2",bb.cpidv2));
 
-	//pblock->hashPrevBlock
+	//pblock->hashPrevBlock 12-24-2014
 	if (true)
 	{
 		bool IsCPIDValid2 = CPID_IsCPIDValid(bb.cpid, bb.cpidv2, (uint256)bb.lastblockhash);

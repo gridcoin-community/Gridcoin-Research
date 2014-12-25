@@ -411,6 +411,27 @@ std::string CPID::Update6(std::string non_finalized, uint256 block_hash)
 	return non_finalized;
 }
 
+std::string Update7(std::string longcpid,uint256 hash_block)
+{
+	std::string shash = HashHex(hash_block);
+	int hexpos = 0;
+	std::string non_finalized = "";
+
+	//unsigned char* input = new unsigned char[(longcpid.length()/2)+1];
+	for (int i1 = 0; i1 < (int)longcpid.length(); i1 = i1 + 2)
+    {
+     		non_finalized +=  ROL(shash,i1,longcpid,hexpos);
+			hexpos++;
+    }
+
+	CPID c7 = 	  CPID(non_finalized);
+	std::string hexstring = c7.hexdigest();
+
+	return hexstring;
+
+}
+
+
 void CPID::update5(std::string longcpid,uint256 hash_block)
 {
 	std::string shash = HashHex(hash_block);
@@ -576,8 +597,8 @@ bool CompareCPID(std::string usercpid, std::string longcpid, uint256 blockhash)
 	   std::string cpid1 = longcpid.substr(0,32);
 	   std::string cpid2 = longcpid.substr(32,longcpid.length()-31);
 	   std::string shash =  HashHex(blockhash);
-	   CPID c = CPID(cpid2,0,blockhash);
-	   std::string shortcpid = c.hexdigest();
+	   //	   CPID c = CPID(cpid2,0,blockhash);
+	   std::string shortcpid = Update7(cpid2,blockhash);
 	   if (shortcpid=="") return false;
 	   if (fDebug) printf("shortcpid %s, cpid1 %s, usercpid %s \r\n",shortcpid.c_str(),cpid1.c_str(),usercpid.c_str());
 	   if (shortcpid == cpid1 && cpid1==usercpid && shortcpid == usercpid) return true;
