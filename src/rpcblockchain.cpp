@@ -28,6 +28,8 @@ std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash)
 
 uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
 std::string SerializeBoincBlock(MiningCPID mcpid);
+extern std::string TimestampToHRDate(double dtm);
+
 
 double CoinToDouble(double surrogate);
 
@@ -69,7 +71,7 @@ std::string TxToString(const CTransaction& tx, const uint256 hashBlock, int64_t&
 extern double GetPoBDifficulty();
 bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 
-bool IsCPIDValidv2(MiningCPID& mc);
+bool IsCPIDValidv2(MiningCPID& mc, int height);
 
 std::string RetrieveMd5(std::string s1);
 std::string getfilecontents(std::string filename);
@@ -420,11 +422,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
     result.push_back(Pair("version", block.nVersion));
     result.push_back(Pair("merkleroot", block.hashMerkleRoot.GetHex()));
 	double mint = CoinToDouble(blockindex->nMint);
-
     result.push_back(Pair("mint", mint));
-	//	result.push_back(Pair("mint2", ValueFromAmount(blockindex->nMint)));
-
-
     result.push_back(Pair("time", (int64_t)block.GetBlockTime()));
     result.push_back(Pair("nonce", (uint64_t)block.nNonce));
     result.push_back(Pair("bits", strprintf("%08x", block.nBits)));
@@ -438,12 +436,10 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
 	uint256 blockhash = block.GetPoWHash();
 	std::string sblockhash = blockhash.GetHex();
-	
 	bool IsPoR = false;
 	IsPoR = (bb.Magnitude > 0 && bb.cpid != "INVESTOR" && blockindex->IsProofOfStake());
 	std::string PoRNarr = "";
 	if (IsPoR) PoRNarr = "proof-of-research";
-
     result.push_back(Pair("flags", 
 		strprintf("%s%s", blockindex->IsProofOfStake()? "proof-of-stake" : "proof-of-work", blockindex->GeneratedStakeModifier()? " stake-modifier": "") + " " + PoRNarr		)		);
     result.push_back(Pair("proofhash", blockindex->hashProof.GetHex()));
@@ -467,55 +463,38 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
     }
 
     result.push_back(Pair("tx", txinfo));
-
     if (block.IsProofOfStake())
         result.push_back(Pair("signature", HexStr(block.vchBlockSig.begin(), block.vchBlockSig.end())));
-	
 	result.push_back(Pair("CPID", bb.cpid));
 	result.push_back(Pair("ProjectName", bb.projectname));
-	//result.push_back(Pair("BlockDiffBytes", (double)bb.diffbytes));
 	result.push_back(Pair("RAC", bb.rac));
 	result.push_back(Pair("NetworkRAC", bb.NetworkRAC));
 	result.push_back(Pair("Magnitude", bb.Magnitude));
-	result.push_back(Pair("BoincHash",block.vtx[0].hashBoinc));
-	result.push_back(Pair("Seniority",bb.Accuracy));
-
+	//result.push_back(Pair("BoincHash",block.vtx[0].hashBoinc));
 	result.push_back(Pair("RSAWeight",bb.RSAWeight));
-	result.push_back(Pair("LastPaymentTime",bb.LastPaymentTime));
+	result.push_back(Pair("LastPaymentTime",TimestampToHRDate(bb.LastPaymentTime)));
 	result.push_back(Pair("ResearchSubsidy",bb.ResearchSubsidy));
 	double interest = mint-bb.ResearchSubsidy;
 	result.push_back(Pair("Interest",interest));
-
 	double blockdiff = GetBlockDifficulty(block.nBits);
-	result.push_back(Pair("BlockDiff",blockdiff));
-
+	//result.push_back(Pair("BlockDiff",blockdiff));
 	result.push_back(Pair("GRCAddress",bb.GRCAddress));
-	std::string skein2 = aes_complex_hash(blockhash);
 	result.push_back(Pair("ClientVersion",bb.clientversion));	
-	std::string hbd = AdvancedDecrypt(bb.enccpid);
 	bool IsCpidValid = IsCPIDValid_Retired(bb.cpid, bb.enccpid);
 	result.push_back(Pair("CPIDValid",IsCpidValid));
 	//result.push_back(Pair("Version2",block.nVersion));
 	if (bb.cpidv2.length() > 10) 	result.push_back(Pair("CPIDv2",bb.cpidv2.substr(0,32)));
-
-	if (fDebug2)		result.push_back(Pair("CPIDv2",bb.cpidv2));
-
-	//pblock->hashPrevBlock 12-24-2014
 	if (true)
 	{
-		bool IsCPIDValid2 = CPID_IsCPIDValid(bb.cpid, bb.cpidv2, (uint256)bb.lastblockhash);
+		bool IsCPIDValid2 = IsCPIDValidv2(bb,blockindex->nHeight);
 		result.push_back(Pair("CPIDValidV2",IsCPIDValid2));
 	}
-
-	//Write the correct cpid value (heinous error here:)//Halford - CPID Algorithm v2 - 11-28-2014
-	
-	if (true)
+	if (false)
 	{
-		//uint256 GetBlockHash256(const CBlockIndex* pindex_hash)
 		uint256 pbh = 0;
 		if (blockindex->pprev) pbh = blockindex->pprev->GetBlockHash();
 		std::string me = ComputeCPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey,pbh);
-		//result.push_back(Pair("MyCPID",me));
+		result.push_back(Pair("TestCPID",me));
 	}
     return result;
 }

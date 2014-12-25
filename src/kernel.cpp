@@ -13,7 +13,7 @@ std::string YesNo(bool bin);
 double GetPoSKernelPS2();
 
 std::string RoundToString(double d, int place);
-bool IsCPIDValidv2(MiningCPID& mc);
+bool IsCPIDValidv2(MiningCPID& mc,int height);
 using namespace std;
 MiningCPID DeserializeBoincBlock(std::string block);
 
@@ -294,7 +294,7 @@ static bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64_t& nStakeModifi
 //   a proof-of-work situation.
 //
 
-double GetMagnitudeByHashBoinc(std::string hashBoinc)
+double GetMagnitudeByHashBoinc(std::string hashBoinc, int height)
 {
 	if (hashBoinc.length() > 1)
 		{
@@ -303,7 +303,7 @@ double GetMagnitudeByHashBoinc(std::string hashBoinc)
 			if (boincblock.cpid == "INVESTOR")  return 0;
    			if (boincblock.projectname == "") 	return 0;
     		if (boincblock.rac < 100) 			return 0;
-			if (!IsCPIDValidv2(boincblock)) return 0;
+			if (!IsCPIDValidv2(boincblock,height)) return 0;
 			return boincblock.Magnitude;
 		}
 		return 0;
@@ -491,7 +491,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	if (fDebug) if (LessVerbose(75)) printf("TBF %f TTN %f LPA %f, Coin age %f, NC %f, RSA %f, Mag %f; ",(double)blockFrom.GetBlockTime(),(double)txPrev.nTime,
 		payment_age,coin_age,(double)oNC,(double)RSA_WEIGHT,(double)boincblock.Magnitude);
 
-	if (RSA_WEIGHT > 0) if (!IsCPIDValidv2(boincblock)) 
+	if (RSA_WEIGHT > 0) if (!IsCPIDValidv2(boincblock,1)) 
 	{
 		printf("Check stake kernelhash: CPID Invalid: RSA Weight = 0");
 		oNC=0;
@@ -605,7 +605,8 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 	if (fDebug) if (LessVerbose(75)) printf("TT %f TTN %f LPA %f, Coin age %f, NC %f, RSA %f, Mag %f; ",(double)nTimeTx,(double)txPrev.nTime,
 		payment_age,coin_age,(double)oNC,(double)RSA_WEIGHT,(double)boincblock.Magnitude);
 
-	if (RSA_WEIGHT > 0) if (!IsCPIDValidv2(boincblock)) 
+	//12-24-2014
+	if (RSA_WEIGHT > 0) if (!IsCPIDValidv2(boincblock,pindexPrev->nHeight)) 
 	{
 		printf("Check stake kernelhash: CPID Invalid: RSA Weight = 0");
 		oNC=0;

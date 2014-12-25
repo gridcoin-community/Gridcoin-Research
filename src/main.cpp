@@ -287,7 +287,7 @@ double GetNetworkAvgByProject(std::string projectname);
 extern bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 
 
-extern bool IsCPIDValidv2(MiningCPID& mc);
+extern bool IsCPIDValidv2(MiningCPID& mc, int height);
 
 extern void FindMultiAlgorithmSolution(CBlock* pblock, uint256 hash, uint256 hashTaget, double miningrac);
 
@@ -3570,7 +3570,7 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
 	    		if (boincblock.rac < 100) 			return DoS(1,error("RAC too low"));
 				//	cpidv2: CPID_(bb.cpid, bb.cpidv2, blockindex->pprev->GetBlockHash());
 				//if (!IsCPIDlidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,hashPrevBlock)) return DoS(1,error("Bad CPID"));
-				//Block CPID 
+				//Block CPID 12-24-2014
 				if (!IsCPIDValid_Retired(boincblock.cpid,boincblock.enccpid))
 				{
 						return DoS(1,error("Bad CPID"));
@@ -4562,34 +4562,28 @@ std::string getfilecontents(std::string filename)
 }
 
 
-bool IsCPIDValidv2(MiningCPID& mc)
+bool IsCPIDValidv2(MiningCPID& mc, int height)
 {
-	//Due to massive problems, go back to the old algorithm: structcpid.boincpublickey
-	bool result1 = IsCPIDValid_Retired(mc.cpid,mc.enccpid);
-	return result1;
-	
-	//First use the new algorithm
-//		new_result = CPID_IsCPIDValid(cpid,cpidv2,lbh);
-	
+	//12-24-2014 Halford - Transition to CPIDV2
+	bool result = false;
+	if (height < 96000)
+	{
+			result = IsCPIDValid_Retired(mc.cpid,mc.enccpid);
+	}
+	else
+	{
+	        result = CPID_IsCPIDValid(mc.cpid, mc.cpidv2, (uint256)mc.lastblockhash);
+	}
+
+	return result;
 }
 
 
-
-
-//std::string cpid, std::string ENCboincpubkey, std::string cpidv2)
-
 bool IsLocalCPIDValid(StructCPID& structcpid)
 {
-	// Debugging Stack smashing:
 	bool old_result1 = IsCPIDValid_Retired(structcpid.cpid,structcpid.boincpublickey);
 	return old_result1;
-
-
-	//	std::string ENCbpk = AdvancedCrypt(cpid_non); stored -> 				structcpid.boincpublickey = ENCbpk;
-	//Must contain cpidv2, cpid, boincpublickey
-
 	//First use the new algorithm
-	//if (fDebug) printf("IsCPIDValid4: %s, %s, bh %s",cpid.c_str(),cpidv2.c_str(),blockhash.GetHex().c_str());
 	bool new_result = CPID_IsCPIDValid(structcpid.cpid,structcpid.cpidv2,0);
 	if (!new_result)
 	{
@@ -4607,8 +4601,6 @@ bool IsLocalCPIDValid(StructCPID& structcpid)
 	return new_result;
 
 }
-
-
 
 
 
@@ -4794,7 +4786,7 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 
 			if (LockTime > structMagnitude.LastPaymentTime) structMagnitude.LastPaymentTime = LockTime;
 			if (LockTime < structMagnitude.EarliestPaymentTime) structMagnitude.EarliestPaymentTime = LockTime;
-			// Per RTM 12-24-2014 (Halford) Track detailed payments made to each CPID
+			// Per RTM 12-25-2014 (Halford) Track detailed payments made to each CPID
 			structMagnitude.PaymentTimestamps += RoundToString(LockTime,0)+",";
 			structMagnitude.PaymentAmountsResearch    += RoundToString(bb.ResearchSubsidy,2) + ",";
 			structMagnitude.PaymentAmountsInterest    += RoundToString(interest,2) + ",";
@@ -6662,7 +6654,6 @@ void InitializeProjectStruct(StructCPID& project)
 	//Local CPID with struct
 	//Must contain cpidv2, cpid, boincpublickey
 	project.Iscpidvalid = false;
-	//		bool old_result1 = IsCPIDValid_Retired(structcpid.cpid,structcpid.boincpublickey);
 	//2nd arg is ENC bpk
 	project.Iscpidvalid = IsLocalCPIDValid(project);
  	if (project.team != "gridcoin") 
