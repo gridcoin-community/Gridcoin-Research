@@ -1006,7 +1006,10 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "DISABLE_WINDOWS_ERROR_REPORTING")
 	{
-		std::string result = qtGRCCodeExecutionSubsystem("DISABLE_WINDOWS_ERROR_REPORTING");
+		std::string result = "FAIL";
+		#if defined(WIN32) && defined(QT_GUI)
+			qtGRCCodeExecutionSubsystem("DISABLE_WINDOWS_ERROR_REPORTING");
+		#endif
 		Object entry;
 		entry.push_back(Pair("DISABLE_WINDOWS_ERROR_REPORTING",result));
 		results.push_back(entry);

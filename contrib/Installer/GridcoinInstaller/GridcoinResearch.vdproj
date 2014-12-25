@@ -861,7 +861,7 @@
         "Name" = "8:Microsoft Visual Studio"
         "ProductName" = "8:Gridcoin Research 15.0"
         "ProductCode" = "8:{C17E2019-A570-4876-9A1F-861E18F5A8F3}"
-        "PackageCode" = "8:{DEF8DEE8-EC0D-4587-90F9-EC5F177E5F90}"
+        "PackageCode" = "8:{F2041D37-8D9F-459F-908F-326DDF18E73E}"
         "UpgradeCode" = "8:{9617E9EA-252F-43CE-B53E-B48C85F71192}"
         "AspNetVersion" = "8:4.0.30319.0"
         "RestartWWWService" = "11:FALSE"
