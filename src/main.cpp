@@ -5277,7 +5277,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // Each connection can only send one version message
         if (pfrom->nVersion != 0)
         {
-            pfrom->Misbehaving(1);
+            pfrom->Misbehaving(100);
 		    //pfrom->fDisconnect = true;
             return false;
         }
@@ -5337,6 +5337,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 		if (unauthorized)
 		{
 			printf("Disconnected unauthorized peer.         ");
+            pfrom->Misbehaving(100);
 		    pfrom->fDisconnect = true;
             return false;
         }
@@ -5487,7 +5488,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     else if (pfrom->nVersion == 0)
     {
         // Must have a version message before anything else
-        pfrom->Misbehaving(1);
+        pfrom->Misbehaving(5);
         return false;
     }
 
@@ -5512,6 +5513,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return error("message addr size() = %"PRIszu"", vAddr.size());
         }
 
+
+		if (pfrom->nStartingHeight < 1 && LessVerbose(500)) return true;
+			
+
         // Store the new addresses
         vector<CAddress> vAddrOk;
         int64_t nNow = GetAdjustedTime();
@@ -5524,7 +5529,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 addr.nTime = nNow - 5 * 24 * 60 * 60;
             pfrom->AddAddressKnown(addr);
             bool fReachable = IsReachable(addr);
-            if (addr.nTime > nSince && !pfrom->fGetAddr && vAddr.size() <= 10 && addr.IsRoutable())
+
+			bool bad_node = (pfrom->nStartingHeight < 1 && LessVerbose(700));
+
+			
+            if (addr.nTime > nSince && !pfrom->fGetAddr && vAddr.size() <= 10 && addr.IsRoutable() && !bad_node)
             {
                 // Relay to a limited number of other nodes
                 {
@@ -7026,9 +7035,15 @@ void HarvestCPIDs(bool cleardata)
 	
 	    if (sDec.empty()) printf("Error while deserializing boinc key!  Please use execute genboinckey to generate a boinc key from the host with boinc installed.\r\n");
 		GlobalCPUMiningCPID = DeserializeBoincBlock(sDec);
+		GlobalCPUMiningCPID.initialized = true;
+
 		if (GlobalCPUMiningCPID.cpid.empty()) 
 		{
 				 printf("Error while deserializing boinc key!  Please use execute genboinckey to generate a boinc key from the host with boinc installed.\r\n");
+		}
+		else
+		{
+			printf("CPUMiningCPID Initialized.\r\n");
 		}
 		printf("Using Serialized Boinc CPID %s",GlobalCPUMiningCPID.cpid.c_str());
 
