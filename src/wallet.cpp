@@ -1620,7 +1620,7 @@ double MintLimiter(double PORDiff)
 double MintLimiterPOR(double PORDiff,int64_t locktime,int64_t RSA_WEIGHT)
 {
 	if (RSA_WEIGHT==25000) return 0; //Uninitialized Newbie
-	if (GetAdjustedTime() > 1419161730 && GetAdjustedTime() < 1419179832 && PORDiff > 1000) return 0;
+	//if (GetAdjustedTime() > 1419161730 && GetAdjustedTime() < 1419179832 && PORDiff > 1000) return 0;
 
 	double MaxSubsidy = GetMaximumBoincSubsidy(locktime);
 	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions

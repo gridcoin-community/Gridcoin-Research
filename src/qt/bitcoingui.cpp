@@ -85,6 +85,8 @@ int ReindexWallet();
 extern int RebootClient();
 extern QString ToQstring(std::string s);
 extern int qtTrackConfirm(std::string txid);
+extern std::string qtGRCCodeExecutionSubsystem(std::string sCommand);
+
 extern void qtUpdateConfirm(std::string txid);
 extern void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string txid);
 
@@ -491,6 +493,20 @@ int qtTrackConfirm(std::string txid)
 	return (int)result;
 }
 
+
+std::string qtGRCCodeExecutionSubsystem(std::string sCommand) 
+{
+	std::string sResult = "FAIL";
+	#if defined(WIN32) && defined(QT_GUI)
+		QString qsParms = ToQstring(sCommand);
+		QString qsResult = globalcom->dynamicCall("GRCCodeExecutionSubsystem(Qstring)",qsParms).toString();
+		sResult = FromQString(qsResult);
+		printf("@qtGRCCodeExecutionSubsystem returned %s",sResult.c_str());
+	#endif
+	return sResult;
+
+}
+        
 
 
 int RebootClient()

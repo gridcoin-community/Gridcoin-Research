@@ -30,6 +30,9 @@ uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 extern std::string TimestampToHRDate(double dtm);
 
+std::string qtGRCCodeExecutionSubsystem(std::string sCommand);
+
+
 
 double CoinToDouble(double surrogate);
 
@@ -488,6 +491,11 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	{
 		bool IsCPIDValid2 = IsCPIDValidv2(bb,blockindex->nHeight);
 		result.push_back(Pair("CPIDValidV2",IsCPIDValid2));
+		if (fDebug3 && !IsCPIDValid2)
+		{
+			//std::string cpidv2debug = AES512(bb.enccpid);
+			//result.push_back(Pair("CPIDValidV2debug",cpidv2debug));
+		}
 	}
 	if (false)
 	{
@@ -878,32 +886,29 @@ void WriteCPIDToRPC(std::string email, std::string bpk, uint256 block, Array &re
 {
 	std::string output = "";
 	output = ComputeCPIDv2(email,bpk,block);
-
 	Object entry;
 	entry.push_back(Pair("Long CPID for " + email + " " + block.GetHex(),output));
-	//std
 	output = RetrieveMd5(bpk + email);
-
 	std::string shortcpid = RetrieveMd5(bpk + email);
-	
 	entry.push_back(Pair("std_md5",output));
 	//Stress test
 	std::string me = ComputeCPIDv2(email,bpk,block);
 	entry.push_back(Pair("LongCPID2",me));
 	bool result;
 	result =  CPID_IsCPIDValid(shortcpid, me,block);
-	
 	entry.push_back(Pair("Stress Test 1",result));
-
 	result =  CPID_IsCPIDValid(shortcpid, me,block+1);
 	entry.push_back(Pair("Stress Test 2",result));
-
 	results.push_back(entry);
-	
+	shortcpid = RetrieveMd5(bpk + "0" + email);
+	result = CPID_IsCPIDValid(shortcpid,me,block);
+	entry.push_back(Pair("Stress Test 3 (missing bpk)",result));
+	results.push_back(entry);
 }
+
 Value execute(const Array& params, bool fHelp)
 {
-    if (fHelp || (params.size() != 1 && params.size() != 2))
+    if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3))
         throw runtime_error(
 		"execute <string::itemname> <string::parameter> \r\n"
         "Executes an arbitrary command by name.");
@@ -965,17 +970,46 @@ Value execute(const Array& params, bool fHelp)
 		GetNextProject(false);
 		std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID);
 		if (fDebug) printf("Utilizing %s",sParam.c_str());
-
 		std::string sBase = EncodeBase64(sParam);
-		
 		entry.push_back(Pair("[Specify in config file without quotes] boinckey=",sBase));
 		results.push_back(entry);
 	}
-	else if (sItem == "unfork")
+	else if (sItem == "testcpidv2")
 	{
-			Resuscitate();
-			entry.push_back(Pair("Unfork",1));
+		if (params.size() != 3)
+		{
+			entry.push_back(Pair("Error","You must specify both parameters boincruntimepublickey and boinccpid"));
 			results.push_back(entry);
+		}
+		else
+		{
+			std::string sParam1 = params[1].get_str();
+			std::string sParam2 = params[2].get_str();
+			entry.push_back(Pair("Param1",sParam1));
+			entry.push_back(Pair("Param2",sParam2));
+			//12-25-2014 Test CPIDv2
+			std::string newcpid = ComputeCPIDv2(sParam2,sParam1,0);
+			std::string shortcpid = RetrieveMd5(sParam1+sParam2);
+			entry.push_back(Pair("CPID1",shortcpid));
+			bool isvalid = CPID_IsCPIDValid(shortcpid, newcpid,0);
+			entry.push_back(Pair("CPIDv2 is valid",isvalid));
+			isvalid = CPID_IsCPIDValid(shortcpid, newcpid,10);
+			entry.push_back(Pair("CPIDv2 is valid on bad block",isvalid));
+			std::string me = ComputeCPIDv2(sParam2,sParam1,0);
+			entry.push_back(Pair("CPIDv2 on block0",me));
+		    me = ComputeCPIDv2(sParam2,sParam1,10);
+			entry.push_back(Pair("CPIDv2 on block10",me));
+			results.push_back(entry);
+		}
+	
+
+	}
+	else if (sItem == "DISABLE_WINDOWS_ERROR_REPORTING")
+	{
+		std::string result = qtGRCCodeExecutionSubsystem("DISABLE_WINDOWS_ERROR_REPORTING");
+		Object entry;
+		entry.push_back(Pair("DISABLE_WINDOWS_ERROR_REPORTING",result));
+		results.push_back(entry);
 	}
 
 	else if (sItem == "testcpid")
@@ -984,7 +1018,6 @@ Value execute(const Array& params, bool fHelp)
 		std::string email = "ebola@gridcoin.us";
 		uint256 block("0x000005a247b397eadfefa58e872bc967c2614797bdc8d4d0e6b09fea5c191599");
 		std::string hi = "";
-
 		//1
 		WriteCPIDToRPC(email,bpk,block,results);
 		//2
@@ -992,7 +1025,6 @@ Value execute(const Array& params, bool fHelp)
 		WriteCPIDToRPC(email,bpk,block,results);
 		email="ha";
 		WriteCPIDToRPC(email,bpk,block,results);
-
 		//Empty
 		email="";
 		WriteCPIDToRPC(email,bpk,block,results);
@@ -1001,6 +1033,9 @@ Value execute(const Array& params, bool fHelp)
 		WriteCPIDToRPC(email,bpk,0,results);
 		WriteCPIDToRPC(email,bpk,1,results);
 		WriteCPIDToRPC(email,bpk,123499934534,results);
+		//Stolen CPID either missing bpk or unknown email
+		WriteCPIDToRPC(email,"0",0,results);
+		
 
 	}
 	else if (sItem == "reindex")
@@ -1469,6 +1504,14 @@ Value listitem(const Array& params, bool fHelp)
 			results = MagnitudeReport(false);
 			return results;
 
+	}
+
+	if (sitem == "debug3")
+	{
+		fDebug3 = true;
+		Object entry;
+		entry.push_back(Pair("Entering Debug Mode 3",1));
+		results.push_back(entry);
 	}
 
 	if (sitem == "magnitudecsv")

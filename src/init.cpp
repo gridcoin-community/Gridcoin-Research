@@ -733,6 +733,13 @@ bool AppInit2()
 			printf("Entering GRC debug mode.\r\n");
 	}
 	
+	fDebug3 = false;
+	if (GetArg("debug3", "false")=="true")
+	{
+			fDebug3 = true;
+			printf("Entering GRC debug mode.\r\n");
+	}
+	
 
 #if !defined(WIN32) && !defined(QT_GUI)
     fDaemon = GetBoolArg("-daemon");
