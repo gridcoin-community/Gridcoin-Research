@@ -22,6 +22,7 @@ class SendCoinsDialog;
 class SignVerifyMessageDialog;
 class Notificator;
 class RPCConsole;
+class UpgradeDialog;
 
 QT_BEGIN_NAMESPACE
 class QLabel;
@@ -128,6 +129,7 @@ private:
     Notificator *notificator;
     TransactionView *transactionView;
     RPCConsole *rpcConsole;
+    UpgradeDialog *upgrader;
 
     QMovie *syncIconMovie;
 

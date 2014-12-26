@@ -169,6 +169,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     trayIcon(0),
     notificator(0),
     rpcConsole(0),
+    upgrader(0),
     nWeight(0)
 {
     setFixedSize(980, 550);
@@ -304,8 +305,9 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     rpcConsole = new RPCConsole(this);
     connect(openRPCConsoleAction, SIGNAL(triggered()), rpcConsole, SLOT(show()));
 
-    // upgrader = new UpgradeDialog(this);
-    connect(openRPCConsoleAction, SIGNAL(triggered()), rpcConsole, SLOT(show()));
+    upgrader = new UpgradeDialog(this);
+    connect(upgradeAction, SIGNAL(triggered()), upgrader, SLOT(show()));
+    connect(upgradeAction, SIGNAL(triggered()), upgrader, SLOT(upgrade()));
 
     // Clicking on "Verify Message" in the address book sends you to the verify message tab
     connect(addressBookPage, SIGNAL(verifyMessage(QString)), this, SLOT(gotoVerifyMessageTab(QString)));
@@ -1422,14 +1424,14 @@ void BitcoinGUI::rebuildClicked()
 	ReindexBlocks();
 }
 
-void Imker(void *kippel)
-{
-    std::string target = "snapshot.zip";
-	std::string source = "signed/snapshot.zip";
-	Upgrader *upgrader = (Upgrader*)kippel;
-	upgrader->downloader(target, DATA, source);
-	upgrader->unzipper(target, DATA);
-}
+// void Imker(void *kippel)
+// {
+//     std::string target = "snapshot.zip";
+// 	std::string source = "signed/snapshot.zip";
+// 	Upgrader *upgrader = (Upgrader*)kippel;
+// 	upgrader->downloader(target, DATA, source);
+// 	upgrader->unzipper(target, DATA);
+// }
 
 void BitcoinGUI::upgradeClicked()
 {
@@ -1437,16 +1439,17 @@ void BitcoinGUI::upgradeClicked()
 #ifdef WIN32
 	UpgradeClient();
 #else
-	UpgradeDialog dlg;
-	Upgrader upgrader;
-	dlg.upgrader = &upgrader;
+	// UpgradeDialog dlg;
+	// dlg.performUpgrade = true;
+	// Upgrader upgrader;
+	// dlg.upgrader = &upgrader;
 	// dlg.getPerc(&upgrader);
-	void *alf = &upgrader;
-	boost::thread j(Imker, alf);
+	// void *alf = &upgrader;
+	// boost::thread j(Imker, alf);
 	// usleep(8000*1000);
-	printf("File done: %li", upgrader.getFileDone());
-    dlg.exec();
-    j.join();
+	// printf("File done: %li", upgrader.getFileDone());
+    // dlg.exec();
+    // j.join();
 #endif
 }
 

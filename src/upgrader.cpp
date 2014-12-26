@@ -142,7 +142,7 @@ bool Upgrader::downloader(std::string targetfile, int pf, std::string source)
 			usleep(800*1000);
 			int sz = getFileDone();
 			printf("\r%li\tKB", sz/1024);
-			printf("\t%li\%", getFilePerc(sz));
+			printf("\t%li%%", getFilePerc(sz));
 			fflush( stdout );
 		}
 
@@ -176,7 +176,7 @@ long int Upgrader::getFilePerc(long int sz)
 						return 0;
 					}
 			}
-	return sz*100/(long int)filesize;
+	return sz*100/((long int)filesize + 1);
 }
 
 bool Upgrader::unzipper(std::string targetfile, int pf)

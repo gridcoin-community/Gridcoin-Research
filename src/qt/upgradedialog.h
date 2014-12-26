@@ -7,6 +7,7 @@
 namespace Ui {
     class UpgradeDialog;
 }
+class ClientModel;
 
 /** "Upgrade" dialog box */
 class UpgradeDialog : public QDialog
@@ -16,22 +17,28 @@ class UpgradeDialog : public QDialog
 public:
     explicit UpgradeDialog(QWidget *parent = 0);
     ~UpgradeDialog();
-    Upgrader *upgrader;
-    // void connectR(Upgrader *upgrader);
+    void setClientModel(ClientModel *model);
     void getPerc(Upgrader* upgrader)
 	{
     	upgrader->getFileDone();
 	}
+	bool performUpgrade = false;
 
 private:
     Ui::UpgradeDialog *ui;
-    void setPerc(long int percentage);
+    ClientModel *clientModel;
+    Upgrader upgrader;
+    int historyPtr;
 
 private slots:
     void on_buttonBox_accepted();
 
 public slots:
-	// void setPerc(long int percentage);
+	void upgrade();
+	void setPerc(int percentage);
+
+signals:
+	void check(Upgrader *upgrader, UpgradeDialog *UpgradeDialog);
 };
 
 #endif // UPGRADEDIALOG_H
