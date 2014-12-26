@@ -3545,7 +3545,7 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
 				//Block CPID 12-26-2014 hashPrevBlock->nHeight
 				if (!IsCPIDValidv2(boincblock,height1))
 				{
-						return DoS(10,error("Bad CPID"));
+						return DoS(10,error("Bad CPID : height %f",(double)height1));
 				}
 
 
@@ -4554,7 +4554,7 @@ bool IsCPIDValidv2(MiningCPID& mc, int height)
 {
 	//12-24-2014 Halford - Transition to CPIDV2
 	bool result = false;
-	if (height < 96000)
+	if (height < nGrandfather)
 	{
 			result = IsCPIDValid_Retired(mc.cpid,mc.enccpid);
 	}
