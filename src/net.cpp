@@ -293,7 +293,7 @@ bool RecvLine(SOCKET hSocket, string& strLine)
             if (nBytes == 0)
             {
                 // socket closed
-                printf("socket closed\n");
+                if (fDebug) printf("socket closed\n");
                 return false;
             }
             else
@@ -1510,7 +1510,9 @@ void ThreadSocketHandler2(void* parg)
                         {
                             // socket closed gracefully
                             if (!pnode->fDisconnect)
-                                printf("socket closed\n");
+							{
+                              if (fDebug)   printf("socket closed\n");
+							}
                             pnode->CloseSocketDisconnect();
                         }
                         else if (nBytes < 0)
