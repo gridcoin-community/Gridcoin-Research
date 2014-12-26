@@ -330,7 +330,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors2 = "";
  std::string    msMiningErrors3 = "";
  std::string    msMiningErrors4 = "";
- int nGrandfather = 97660;
+ int nGrandfather = 95101;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2702,7 +2702,7 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 {
     // Check it again in case a previous version let a bad block in, but skip BlockSig checking
-    if (!CheckBlock(!fJustCheck, !fJustCheck, false))
+    if (!CheckBlock(pindex->pprev->nHeight,!fJustCheck, !fJustCheck, false))
         return false;
 
     //// issue here: it doesn't know the version
@@ -2997,7 +2997,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 }
 
 
-
+/*
 bool static Reorganize_testnet(CTxDB& txdb)
 {
     printf("REORGANIZE testnet \n");
@@ -3017,6 +3017,7 @@ bool static Reorganize_testnet(CTxDB& txdb)
 	}
 	return true;
 }
+*/
 
 
 
@@ -3222,7 +3223,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 							#if defined(WIN32) && defined(QT_GUI)
 								nResult = RebootClient();
 							#endif
-							printf("Rebooting...");
+							printf("Rebooting... %f",(double)nResult);
 						}
 					}
 				txdb.TxnAbort();
@@ -3489,7 +3490,7 @@ int BlockHeight(uint256 bh)
 }
 	
 
-bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) const
+bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) const
 {
     
 	//printf("#cb0");
@@ -3509,10 +3510,9 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
 
 	//Reject blocks with diff > 10000000000000000
 	double blockdiff = GetBlockDifficulty(nBits);
-	int lastheight = BlockHeight(hashPrevBlock);
 	if(true)
 	{
-		if (lastheight > nGrandfather && blockdiff > 10000000000000000)
+		if (height1 > nGrandfather && blockdiff > 10000000000000000)
 		{
 			   return DoS(1, error("CheckBlock() : Block Bits larger than 10000000000000000.\r\n"));
 		}
@@ -3528,20 +3528,7 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
         if (vtx[i].IsCoinBase())
             return DoS(100, error("CheckBlock() : more than one coinbase"));
 
-	//8-5-2014 Halford - Check Proof of Research
-    //if (!CheckProofOfResearch(this)) return DoS(1,error("CheckBlock() : Proof Of Research Failed"));
-	/*
-	int nGridHeight=0;
-	map<uint256, CBlockIndex*>::iterator iMapIndex = mapBlockIndex.find(hashPrevBlock);
-    if (iMapIndex != mapBlockIndex.end())
-	{
-		 CBlockIndex* pPrev = (*iMapIndex).second;
-		 nGridHeight = pPrev->nHeight+1;
-	}
-	*/
-
-	
-  
+ 
 	//ProofOfResearch
 	if (true)
 	{
@@ -3556,7 +3543,7 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
 				//if (!IsCPIDlidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,hashPrevBlock)) return DoS(1,error("Bad CPID"));
 				
 				//Block CPID 12-26-2014 hashPrevBlock->nHeight
-				if (!IsCPIDValidv2(boincblock,lastheight));
+				if (!IsCPIDValidv2(boincblock,height1))
 				{
 						return DoS(10,error("Bad CPID"));
 				}
@@ -3968,8 +3955,8 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 */
     }
 
-    // Preliminary checks
-    if (!pblock->CheckBlock())
+    // Preliminary checks 12-26-2014
+    if (!pblock->CheckBlock(pindexBest->nHeight))
         return error("ProcessBlock() : CheckBlock FAILED");
 
     // ppcoin: ask for pending sync-checkpoint if any
@@ -4344,7 +4331,7 @@ bool LoadBlockIndex(bool fAllowNew)
 		uint256 merkle_root = uint256("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f");
 		assert(block.hashMerkleRoot == merkle_root);
         assert(block.GetHash() == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
-        assert(block.CheckBlock());
+        assert(block.CheckBlock(1));
 
         // Start new block file
         unsigned int nFile;

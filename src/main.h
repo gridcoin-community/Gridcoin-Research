@@ -1179,7 +1179,7 @@ public:
     bool ReadFromDisk(const CBlockIndex* pindex, bool fReadTransactions=true);
     bool SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew);
     bool AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof);
-    bool CheckBlock(bool fCheckPOW=true, bool fCheckMerkleRoot=true, bool fCheckSig=true) const;
+    bool CheckBlock(int height1, bool fCheckPOW=true, bool fCheckMerkleRoot=true, bool fCheckSig=true) const;
     bool AcceptBlock(bool generated_by_me);
     bool GetCoinAge(uint64_t& nCoinAge) const; // ppcoin: calculate total coin age spent in block
     bool SignBlock(CWallet& keystore, int64_t nFees);
