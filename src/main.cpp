@@ -330,7 +330,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors2 = "";
  std::string    msMiningErrors3 = "";
  std::string    msMiningErrors4 = "";
- int nGrandfather = 95101;
+ int nGrandfather = 97300;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -3916,11 +3916,10 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     // ppcoin: check proof-of-stake
     // Limited duplicity on stake: prevents block flood attack
     // Duplicate stake allowed only when there is orphan child block
-	//12-26-2014
-    if (pblock->IsProofOfStake() && setStakeSeen.count(pblock->GetProofOfStake()) && !mapOrphanBlocksByPrev.count(hash) && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
+	if (pblock->IsProofOfStake() && setStakeSeen.count(pblock->GetProofOfStake()) && !mapOrphanBlocksByPrev.count(hash) && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
 	{
-		MilliSleep(1);
-        return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for block %s", pblock->GetProofOfStake().first.ToString().c_str(), pblock->GetProofOfStake().second, hash.ToString().c_str());
+		//MilliSleep(1);
+        //return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for block %s", pblock->GetProofOfStake().first.ToString().c_str(), pblock->GetProofOfStake().second, hash.ToString().c_str());
 	}
 
     CBlockIndex* pcheckpoint = Checkpoints::GetLastSyncCheckpoint();
