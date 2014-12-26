@@ -276,7 +276,22 @@ Public Class Utilization
         thUpdate.Start()
         Return "1"
     End Function
-   
+    Public Function GRCCodeExecutionSubsystem(sCommand As String) As String
+        'Generic interface to execute approved signed safe code at runtime
+        Dim sResult As String = "FAIL"
+        Select Case sCommand
+            Case "DISABLE_WINDOWS_ERROR_REPORTING"
+                sResult = AllowWindowsAppsToCrashWithoutErrorReportingDialog()
+            Case "RESERVED"
+                sResult = "NOT IMPLEMENTED YET"
+            Case Else
+                sResult = "NOT IMPLEMENTED"
+        End Select
+
+        If sResult = "" Then sResult = "SUCCESS"
+        Return sResult
+
+    End Function
     Public Function TrackConfirm(sTXID As String) As String
 
         Log("Tracking " + Trim(sTXID))

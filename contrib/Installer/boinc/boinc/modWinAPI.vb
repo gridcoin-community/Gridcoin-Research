@@ -2,6 +2,7 @@
 Imports System.Drawing
 Imports System.Runtime.CompilerServices
 Imports System.IO
+Imports Microsoft.Win32
 
 Module modWinAPI
     Declare Function SetWindowText Lib "user32" Alias "SetWindowTextA" (ByVal hWnd As IntPtr, ByVal lpString As String) As Boolean
@@ -40,7 +41,37 @@ Module modWinAPI
         Public InheritedFromUniqueProcessId As IntPtr
     End Structure
 
+    Public Function AllowWindowsAppsToCrashWithoutErrorReportingDialog() As String
 
+        Try
+
+            '[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting]
+            '"ForceQueue"=dword:00000001
+            Dim RegKey As RegistryKey
+            RegKey = Registry.LocalMachine.OpenSubKey("Software\Microsoft\Windows\Windows Error Reporting", True)
+            RegKey.SetValue("ForceQueue", 1)
+            Dim dFQ As Double = 0
+
+            dFQ = RegKey.GetValue("ForceQueue", -1)
+            If dFQ <> 1 Then MsgBox("Unable to set Key", MsgBoxStyle.Critical, "Registry Editor")
+            RegKey.Close()
+
+            '[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\Consent]
+            '"DefaultConsent"=dword:00000001
+            RegKey = Registry.LocalMachine.OpenSubKey("Software\Microsoft\Windows\Windows Error Reporting\Consent", True)
+            RegKey.SetValue("DefaultConsent", 1)
+            dFQ = RegKey.GetValue("DefaultConsent", -1)
+            If dFQ <> 1 Then MsgBox("Unable to Set Key", MsgBoxStyle.Critical, "Registry Editor")
+            RegKey.Close()
+
+            MsgBox("Successfully set Windows Error Reporting behavior keys.", MsgBoxStyle.Exclamation, "Registry Editor")
+            Return "SUCCESS"
+        Catch ex As Exception
+            MsgBox(ex.Message, MsgBoxStyle.Critical, "Unable to Set Registry Key")
+            Exit Function
+        End Try
+
+    End Function
 
     Public Enum WindowStylesEx As UInteger
         ''' <summary>

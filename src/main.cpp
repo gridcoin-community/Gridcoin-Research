@@ -59,23 +59,15 @@ int64_t nLastTallied = 0;
 int64_t nCPIDsLoaded = 0;
 
 extern std::string boinc_hash(const std::string str);
-
 double MintLimiter(double PORDiff);
-
 extern std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
-
-
-
+double MintLimiterPOR(double PORDiff,int64_t locktime,int64_t rsaweight);
 extern double GetBlockDifficulty(unsigned int nBits);
 double GetLastPaymentTimeByCPID(std::string cpid);
 extern bool Contains(std::string data, std::string instring);
-
 extern uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
 extern bool LockTimeRecent(double locktime);
-
 extern double CoinToDouble(double surrogate);
-
-
 extern double coalesce(double mag1, double mag2);
 extern bool AmIGeneratingBackToBackBlocks();
 extern int64_t Floor(int64_t iAmt1, int64_t iAmt2);
@@ -336,7 +328,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors2 = "";
  std::string    msMiningErrors3 = "";
  std::string    msMiningErrors4 = "";
- int nGrandfather = 94525;
+ int nGrandfather = 96374;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2840,30 +2832,26 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 	// Block Spamming (Halford) 12-23-2014
     double PORDiff = GetBlockDifficulty(nBits);
-
-	if (pindex->nHeight > nGrandfather)
-	{
-		if (bb.cpid == "INVESTOR" && mint < MintLimiter(PORDiff)) 
-		{
-			return error("CheckProofOfStake() : Investor Mint too Small");
-				
-		}
-		else
-		{
-			if (bb.cpid != "INVESTOR" && mint < MintLimiter(PORDiff)) 
-			{
-				return error("CheckProofOfStake() : Researcher Mint too small");
-				
-			}
-
-		}
-	}
-
-		
+			
 	if (pindex->nHeight > nGrandfather && IsProofOfStake())
 	{
+
 		if (LockTimeRecent(GetBlockTime()))
 		{
+
+			// Block Spamming (Halford) 12-23-2014
+			if (bb.cpid == "INVESTOR" && mint < MintLimiter(PORDiff)) 
+			{
+				return error("CheckProofOfStake() : Investor Mint too Small");
+			}
+			else
+			{
+				if (bb.cpid != "INVESTOR" && mint < MintLimiterPOR(PORDiff,GetBlockTime(),bb.RSAWeight)) 
+				{
+				
+					return error("CheckProofOfStake() : Researcher Mint too small");
+				}
+			}
 
 			//Halford: During periods of high difficulty new block must have a higher magnitude than last block until block > 10 mins old:
 
@@ -4786,7 +4774,7 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 
 			if (LockTime > structMagnitude.LastPaymentTime) structMagnitude.LastPaymentTime = LockTime;
 			if (LockTime < structMagnitude.EarliestPaymentTime) structMagnitude.EarliestPaymentTime = LockTime;
-			// Per RTM 12-25-2014 (Halford) Track detailed payments made to each CPID
+			// Per RTM 12-23-2014 (Halford) Track detailed payments made to each CPID
 			structMagnitude.PaymentTimestamps += RoundToString(LockTime,0)+",";
 			structMagnitude.PaymentAmountsResearch    += RoundToString(bb.ResearchSubsidy,2) + ",";
 			structMagnitude.PaymentAmountsInterest    += RoundToString(interest,2) + ",";
@@ -6510,7 +6498,7 @@ double GetMagnitude(std::string cpid, double purported, bool UseNetSoft)
 		StructCPID UntrustedHost = GetStructCPID();
 		UntrustedHost = mvCreditNodeCPID[cpid]; //Contains Mag across entire CPID
 		double mag = UntrustedHost.Magnitude;
-		if (mag >= purported) 
+		if (mag*TOLERANCE_PERCENT >= purported) 
 		{
 			if (fDebug) printf("For cpid %s, using NetSoft cached mag of %f\r\n",cpid.c_str(),mag);
 			return mag;
@@ -6522,7 +6510,7 @@ double GetMagnitude(std::string cpid, double purported, bool UseNetSoft)
 			UntrustedHost = mvCreditNodeCPID[cpid]; //Contains Mag across entire CPID
 			mag = UntrustedHost.Magnitude;
 			printf("Attempt #%f ; For cpid %s, using NetSoft actual mag of %f\r\n",(double)i,cpid.c_str(),mag);
-			if (mag >= purported) return mag;
+			if (mag*TOLERANCE_PERCENT >= purported) return mag;
 		}
 		return mag;
 	
@@ -6576,12 +6564,18 @@ bool CreditCheckOnline(std::string cpid, double purported_magnitude, double mint
 
 	if (!consensus_passed)
 	{
-			double actual_magnitude = GetMagnitude(cpid,purported_magnitude,true);
-			printf("CreditCheckOnline: CPID: %s  PurportedMag %f, NetsoftMag %f",cpid.c_str(),purported_magnitude,actual_magnitude);
+		    double actual_magnitude = 0;
+
+		    for (int i = 0; i <= 3; i++)
+			{
+				actual_magnitude = GetMagnitude(cpid,purported_magnitude,true);
+				printf("CreditCheckOnline Try# %f: CPID: %s  PurportedMag %f, NetsoftMag %f",(double)i,cpid.c_str(),purported_magnitude,actual_magnitude);
+				if (purported_magnitude <= (actual_magnitude*TOLERANCE_PERCENT)) break;
+			}
 			if (purported_magnitude > (actual_magnitude*TOLERANCE_PERCENT)) 
 			{
-				printf("Credit check online failed\r\n");
-				return false;
+					printf("Credit check online failed\r\n");
+					return false;
 			}
 	}
 
@@ -6613,14 +6607,11 @@ void ClearCPID(std::string cpid)
 
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash)
 {
-	
-		if (GetBoolArg("-disablecpidv2")) return "";
-		//ToDO: Fix this:
+		//if (GetBoolArg("-disablecpidv2")) return "";
 		CPID c = CPID();
 		std::string cpid_non = bpk+email;
 		std::string digest = c.CPID_V2(email,bpk,blockhash);
 		return digest;
-	    //return sCPID;
 }
 
 
