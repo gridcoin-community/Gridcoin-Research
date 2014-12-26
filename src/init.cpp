@@ -153,7 +153,7 @@ void StopGridcoin3()
 
 void RestartGridcoin3() 
 {
-     	//Gridcoin - 12-26-2013 Stop all network threads; Stop the node; Restart the Node.
+     	//Gridcoin - Stop all network threads; Stop the node; Restart the Node.
 		//Note: The threadGroup only contains Network Threads:
 	    StopGridcoin3();
  		printf("Starting node...\r\n");

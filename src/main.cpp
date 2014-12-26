@@ -33,6 +33,8 @@
 
 //Resend Unsent Tx
 
+extern void EraseOrphans();
+
 
 using namespace std;
 using namespace boost;
@@ -328,7 +330,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors2 = "";
  std::string    msMiningErrors3 = "";
  std::string    msMiningErrors4 = "";
- int nGrandfather = 96374;
+ int nGrandfather = 95101;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2700,7 +2702,7 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 {
     // Check it again in case a previous version let a bad block in, but skip BlockSig checking
-    if (!CheckBlock(!fJustCheck, !fJustCheck, false))
+    if (!CheckBlock(pindex->pprev->nHeight,!fJustCheck, !fJustCheck, false))
         return false;
 
     //// issue here: it doesn't know the version
@@ -2832,7 +2834,11 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 	// Block Spamming (Halford) 12-23-2014
     double PORDiff = GetBlockDifficulty(nBits);
-			
+	if (bb.RSAWeight != 25000 && mint==0 && pindex->nHeight > nGrandfather)
+	{
+					return error("CheckProofOfStake() : Mint Subsidy is zero");
+	}
+		
 	if (pindex->nHeight > nGrandfather && IsProofOfStake())
 	{
 
@@ -2852,7 +2858,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 					return error("CheckProofOfStake() : Researcher Mint too small");
 				}
 			}
-
+	
 			//Halford: During periods of high difficulty new block must have a higher magnitude than last block until block > 10 mins old:
 
 			if (false)
@@ -2940,8 +2946,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 								double owed_advanced = UntrustedHost.totalowed - UntrustedHost.payments;
 								bool complete_failure = true;
-								if (owed_advanced > -100 && UntrustedHost.Accuracy > 50) complete_failure=false;
-								if (owed_advanced < -300 || UntrustedHost.Accuracy <= 50) complete_failure=true;
+								if (owed_advanced > -400 && UntrustedHost.Accuracy > 50) complete_failure=false;
+								if (owed_advanced < -400 || UntrustedHost.Accuracy <= 50) complete_failure=true;
 								if (complete_failure)
 								{
 									return error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f",
@@ -2991,7 +2997,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 }
 
 
-
+/*
 bool static Reorganize_testnet(CTxDB& txdb)
 {
     printf("REORGANIZE testnet \n");
@@ -3011,6 +3017,7 @@ bool static Reorganize_testnet(CTxDB& txdb)
 	}
 	return true;
 }
+*/
 
 
 
@@ -3204,37 +3211,27 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
         // Switch to new best branch
         if (!Reorganize(txdb, pindexIntermediate))
         {
-			//If reorganize fails, move client into advisory mode, and try one more time:
-			if (CHECKPOINT_DISTRIBUTED_MODE==1)
-			{
-				CheckpointsMode = Checkpoints::ADVISORY;
-				printf("entering advisory mode...\r\n");
-				if (!Reorganize(txdb,pindexIntermediate))
-				{
-					txdb.TxnAbort();
-					InvalidChainFound(pindexNew);
 					//10-30-2014 - Halford - Reboot when reorganize fails 3 times
 					REORGANIZE_FAILED++;
-					/*
-					if (REORGANIZE_FAILED==3)
+
+					std::string suppressreboot = GetArg("-suppressreboot", "false");
+					if (suppressreboot!="true")
 					{
-						int nResult = 0;
-						#if defined(WIN32) && defined(QT_GUI)
-							//nResult = RebootClient();
-						#endif
-						//printf("Rebooting...");
+						if (REORGANIZE_FAILED==5)
+						{
+							int nResult = 0;
+							#if defined(WIN32) && defined(QT_GUI)
+								nResult = RebootClient();
+							#endif
+							printf("Rebooting... %f",(double)nResult);
+						}
 					}
-					*/
-				}
-			}
-			else
-			{
 				txdb.TxnAbort();
 				InvalidChainFound(pindexNew);
 				return error("SetBestChain() : Reorganize failed");
-			}
-        }
-
+		}
+		REORGANIZE_FAILED=0;
+			
         // Connect further blocks
         BOOST_REVERSE_FOREACH(CBlockIndex *pindex, vpindexSecondary)
         {
@@ -3493,7 +3490,7 @@ int BlockHeight(uint256 bh)
 }
 	
 
-bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) const
+bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) const
 {
     
 	//printf("#cb0");
@@ -3513,10 +3510,9 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
 
 	//Reject blocks with diff > 10000000000000000
 	double blockdiff = GetBlockDifficulty(nBits);
-	int lastheight = BlockHeight(hashPrevBlock);
 	if(true)
 	{
-		if (lastheight > nGrandfather && blockdiff > 10000000000000000)
+		if (height1 > nGrandfather && blockdiff > 10000000000000000)
 		{
 			   return DoS(1, error("CheckBlock() : Block Bits larger than 10000000000000000.\r\n"));
 		}
@@ -3532,20 +3528,7 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
         if (vtx[i].IsCoinBase())
             return DoS(100, error("CheckBlock() : more than one coinbase"));
 
-	//8-5-2014 Halford - Check Proof of Research
-    //if (!CheckProofOfResearch(this)) return DoS(1,error("CheckBlock() : Proof Of Research Failed"));
-	/*
-	int nGridHeight=0;
-	map<uint256, CBlockIndex*>::iterator iMapIndex = mapBlockIndex.find(hashPrevBlock);
-    if (iMapIndex != mapBlockIndex.end())
-	{
-		 CBlockIndex* pPrev = (*iMapIndex).second;
-		 nGridHeight = pPrev->nHeight+1;
-	}
-	*/
-
-	
-  
+ 
 	//ProofOfResearch
 	if (true)
 	{
@@ -3558,10 +3541,11 @@ bool CBlock::CheckBlock(bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) c
 	    		if (boincblock.rac < 100) 			return DoS(1,error("RAC too low"));
 				//	cpidv2: CPID_(bb.cpid, bb.cpidv2, blockindex->pprev->GetBlockHash());
 				//if (!IsCPIDlidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,hashPrevBlock)) return DoS(1,error("Bad CPID"));
-				//Block CPID 12-24-2014
-				if (!IsCPIDValid_Retired(boincblock.cpid,boincblock.enccpid))
+				
+				//Block CPID 12-26-2014 hashPrevBlock->nHeight
+				if (!IsCPIDValidv2(boincblock,height1))
 				{
-						return DoS(1,error("Bad CPID"));
+						return DoS(10,error("Bad CPID"));
 				}
 
 
@@ -3857,6 +3841,14 @@ void GridcoinServices()
 			    TallyInBackground();
 	}
 
+
+	if (TimerMain("erase_orphans",30))
+	{
+		
+			 EraseOrphans();
+
+	}
+
 	if (KeyEnabled("exportmagnitude"))
 	{
 		if (TimerMain("export_magnitude",900))
@@ -3899,7 +3891,15 @@ void GridcoinServices()
 
 }
 
+void EraseOrphans()
+{
 
+	//12-26-2014
+	mapOrphanBlocks.clear();
+	setStakeSeenOrphan.clear();
+	setStakeSeen.clear();
+       
+}
 
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 {
@@ -3916,6 +3916,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     // ppcoin: check proof-of-stake
     // Limited duplicity on stake: prevents block flood attack
     // Duplicate stake allowed only when there is orphan child block
+	//12-26-2014
     if (pblock->IsProofOfStake() && setStakeSeen.count(pblock->GetProofOfStake()) && !mapOrphanBlocksByPrev.count(hash) && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
 	{
 		MilliSleep(1);
@@ -3954,8 +3955,8 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 */
     }
 
-    // Preliminary checks
-    if (!pblock->CheckBlock())
+    // Preliminary checks 12-26-2014
+    if (!pblock->CheckBlock(pindexBest->nHeight))
         return error("ProcessBlock() : CheckBlock FAILED");
 
     // ppcoin: ask for pending sync-checkpoint if any
@@ -4330,7 +4331,7 @@ bool LoadBlockIndex(bool fAllowNew)
 		uint256 merkle_root = uint256("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f");
 		assert(block.hashMerkleRoot == merkle_root);
         assert(block.GetHash() == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
-        assert(block.CheckBlock());
+        assert(block.CheckBlock(1));
 
         // Start new block file
         unsigned int nFile;
@@ -5379,7 +5380,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // Disconnect if we connected to ourself
         if (nNonce == nLocalHostNonce && nNonce > 1)
         {
-            printf("connected to self at %s, disconnecting\n", pfrom->addr.ToString().c_str());
+            if (fDebug) printf("connected to self at %s, disconnecting\n", pfrom->addr.ToString().c_str());
             pfrom->fDisconnect = true;
             return true;
         }
@@ -6000,7 +6001,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     // Matching pong received, this ping is no longer outstanding
                     bPingFinished = true;
                     int64_t pingUsecTime = pingUsecEnd - pfrom->nPingUsecStart;
-                    if (pingUsecTime > 0) {
+                    if (pingUsecTime >= -1) {
                         // Successful ping time measurement, replace previous
                         pfrom->nPingUsecTime = pingUsecTime;
                     } else {
@@ -6777,7 +6778,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 						if (!structClientProject.initialized)
 						{
 							structClientProject = GetStructCPID();
-							printf("Calling netsoft for %s",sProj.c_str());
+							if (fDebug) printf("Calling netsoft for %s",sProj.c_str());
 							AddProjectFromNetSoft(structcc);
 						}
 						//End of Adding to Client Project List

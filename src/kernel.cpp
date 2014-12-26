@@ -611,6 +611,7 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 		printf("Check stake kernelhash: CPID Invalid: RSA Weight = 0");
 		oNC=0;
 		if (checking_local) msMiningErrors2="CPID_INVALID";
+		return false;
 	}
 
 
