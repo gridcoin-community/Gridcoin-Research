@@ -26,6 +26,8 @@ std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash)
 extern double MintLimiter(double PORDiff);
 
 
+bool IsCPIDValidv2(MiningCPID& mc, int height);
+
 bool IsLockTimeWithinMinutes(double locktime, int minutes);
 
 uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
@@ -1778,6 +1780,13 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 		 // miningcpid.cpidv2 = CIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pblock->pprev->GetBlockHash());
 		 hashBoinc = SerializeBoincBlock(miningcpid);
+		 if (!IsCPIDValidv2(miningcpid,pindexBest->nHeight))
+		 {
+			 printf("Unable to create boinc block->CPID INVALID");
+			 MilliSleep(500);
+			 return false;
+		 }
+			
        	 //printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
 	}
 	catch (std::exception &e) 

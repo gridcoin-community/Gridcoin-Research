@@ -449,7 +449,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 
 		std::string hashBoinc = SerializeBoincBlock(miningcpid);
 		//printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
-	    if (LessVerbose(5)) printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
+	    if (fDebug)  if (LessVerbose(5)) printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
 		pblock->vtx[0].hashBoinc = hashBoinc;
 
         if (!fProofOfStake)
