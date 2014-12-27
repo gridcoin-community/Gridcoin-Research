@@ -3309,6 +3309,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
         boost::replace_all(strCmd, "%s", hashBestChain.GetHex());
         boost::thread t(runCommand, strCmd); // thread runs free
     }
+	REORGANIZE_FAILED=0;
 
     return true;
 }
@@ -3545,7 +3546,7 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
 				//Block CPID 12-26-2014 hashPrevBlock->nHeight
 				if (!IsCPIDValidv2(boincblock,height1))
 				{
-						return DoS(10,error("Bad CPID : height %f",(double)height1));
+						return DoS(1,error("Bad CPID : height %f, bad hashboinc %s",(double)height1,vtx[0].hashBoinc.c_str()));
 				}
 
 
@@ -3842,7 +3843,7 @@ void GridcoinServices()
 	}
 
 
-	if (TimerMain("erase_orphans",30))
+	if (TimerMain("erase_orphans",500))
 	{
 		
 			 EraseOrphans();
@@ -4536,7 +4537,7 @@ std::string getfilecontents(std::string filename)
 	 myfile.open(filename.c_str()); 
 		
     buffer.reserve(fileSize);
-    printf("opening file %s",filename.c_str());
+    if (fDebug) printf("opening file %s",filename.c_str());
 	
 	if(myfile) 
 	{
@@ -4560,6 +4561,7 @@ bool IsCPIDValidv2(MiningCPID& mc, int height)
 	}
 	else
 	{
+		    if (mc.cpid == "INVESTOR" || mc.cpid=="investor") return true;
 	        result = CPID_IsCPIDValid(mc.cpid, mc.cpidv2, (uint256)mc.lastblockhash);
 	}
 
