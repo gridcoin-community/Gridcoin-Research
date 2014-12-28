@@ -341,7 +341,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 98630;
+ int nGrandfather = 99500;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -4593,6 +4593,8 @@ bool IsCPIDValidv3(std::string cpidv2, bool allow_investor)
 bool IsCPIDValidv2(MiningCPID& mc, int height)
 {
 	//12-24-2014 Halford - Transition to CPIDV2
+	if (height < nGrandfather) return true;
+
 	bool result = false;
 	if (height < 97000)
 	{
