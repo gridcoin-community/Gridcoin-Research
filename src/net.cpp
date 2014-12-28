@@ -145,7 +145,7 @@ std::string GetCommandNonce(std::string command)
 	std::string nonce = RoundToString((double)GetAdjustedTime(),0);
 	std::string pw1 = RetrieveMd5(nonce+","+command+","+sboinchashargs);
 	std::string sComm = nonce+","+command+","+pw1;
-	if (fDebug2) printf("Xmitting %s, %s ",sboinchashargs.c_str(),sComm.c_str());
+	//if (fDebug) printf("Xmitting %s, %s ",sboinchashargs.c_str(),sComm.c_str());
 	return sComm;
 }
 
@@ -1002,7 +1002,6 @@ std::string DefaultBoincHashArgs()
 	if (bha=="boinchashargs") bha = BoincHashWindowsMerkleRootNew;
 	std::string org = DefaultOrg();
 	std::string ClientPublicKey = AdvancedDecryptWithSalt(bha,org);
-	if (fDebug2) printf("Using pub key %s",ClientPublicKey.c_str());
 	return ClientPublicKey;
 }
 

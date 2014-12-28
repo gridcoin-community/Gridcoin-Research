@@ -2637,6 +2637,11 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
             if (!txindex.vSpent[prevout.n].IsNull())
 			{
 				if (fMiner) return false;
+				//This could be due to mismatched coins in wallet: 12-28-2014
+				int nMismatchSpent;
+				int64_t nBalanceInQuestion;
+				pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
+    
 				return error("ConnectInputs() : %s prev tx already used at %s", GetHash().ToString().substr(0,10).c_str(), txindex.vSpent[prevout.n].ToString().c_str());
 
 			}
@@ -5269,7 +5274,10 @@ bool AcidTest(std::string precommand, std::string acid, CNode* pfrom)
 		if (fDebug) printf(" Nonce %s,comm %s,hash %s,pw1 %s \r\n",nonce.c_str(),command.c_str(),hash.c_str(),pw1.c_str());
 		//If timestamp too old; disconnect
 		double timediff = std::abs(GetAdjustedTime() - cdbl(nonce,0));
-		if (timediff > 10*60) printf("Network time attack %f",timediff);
+		if (timediff > 10*60) 
+		{
+			printf("Network time attack %f",timediff);
+		}
 
 		if (hash != pw1 || timediff > (10*60)) 
 		{
@@ -5395,9 +5403,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 	
 	 		if (GetArgument("autoban","false") == "true")
 			{
-				if (pfrom->nStartingHeight < 1000) 
+				if (pfrom->nStartingHeight < 1000 && LessVerbose(500)) 
 				{
-					printf("Node with low height");
+					if (fDebug) printf("Node with low height");
 					pfrom->Misbehaving(20);
 					pfrom->fDisconnect=true;
 					return false;
