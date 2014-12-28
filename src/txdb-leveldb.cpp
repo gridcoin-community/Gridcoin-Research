@@ -438,7 +438,7 @@ bool CTxDB::LoadBlockIndex()
 
     // Verify blocks in the best chain
     int nCheckLevel = GetArg("-checklevel", 1);
-    int nCheckDepth = GetArg( "-checkblocks", 2500);
+    int nCheckDepth = GetArg( "-checkblocks", 700);
     if (nCheckDepth == 0)
         nCheckDepth = 1000000000; // suffices until the year 19000
     if (nCheckDepth > nBestHeight)
@@ -455,7 +455,9 @@ bool CTxDB::LoadBlockIndex()
             return error("LoadBlockIndex() : block.ReadFromDisk failed");
         // check level 1: verify block validity
         // check level 7: verify block signature too
-        if (nCheckLevel>0 && !block.CheckBlock(true, true, (nCheckLevel>6)))
+		// if (!CheckBlock(pindex->pprev->nHeight,!fJustCheck, !fJustCheck, false))
+   
+        if (nCheckLevel>0 && !block.CheckBlock(pindex->nHeight, true, true, (nCheckLevel>6)))
         {
             printf("LoadBlockIndex() : *** found bad block at %d, hash=%s\n", pindex->nHeight, pindex->GetBlockHash().ToString().c_str());
             pindexFork = pindex->pprev;

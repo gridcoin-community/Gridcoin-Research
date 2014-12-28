@@ -236,7 +236,6 @@ Value getworkex(const Array& params, bool fHelp)
         pblock->hashMerkleRoot = pblock->BuildMerkleTree();
 		if (CheckWork(pblock, *pwalletMain, reservekey))
 		{
-				MilliSleep(275000);  //Preventing sync problems
 				return true;
 		}
 		else
@@ -362,7 +361,6 @@ Value getwork(const Array& params, bool fHelp)
 		if (response) 
 		{
 				msMiningErrors = "POW Block Mined";
-				MilliSleep(200000);  //Preventing sync problems
 		}
 		return response;
     }

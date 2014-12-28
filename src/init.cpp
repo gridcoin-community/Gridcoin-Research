@@ -719,7 +719,7 @@ bool AppInit2()
     else
         fDebugNet = GetBoolArg("-debugnet");
 
-	if (GetArg("debug", "false")=="true")
+	if (GetArg("-debug", "false")=="true")
 	{
 			fDebug = true;
 			printf("Entering debug mode.\r\n");
@@ -727,14 +727,14 @@ bool AppInit2()
 	
 	fDebug2 = false;
 	
-	if (GetArg("debug2", "false")=="true")
+	if (GetArg("-debug2", "false")=="true")
 	{
 			fDebug2 = true;
 			printf("Entering GRC debug mode.\r\n");
 	}
 	
 	fDebug3 = false;
-	if (GetArg("debug3", "false")=="true")
+	if (GetArg("-debug3", "false")=="true")
 	{
 			fDebug3 = true;
 			printf("Entering GRC debug mode.\r\n");

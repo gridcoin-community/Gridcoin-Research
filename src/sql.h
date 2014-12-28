@@ -12,6 +12,7 @@ class CBlockIndex;
 class Sql;
 
 
+
 namespace SQL
 {
     enum SqlMode
@@ -106,13 +107,9 @@ public:
 
     bool RelayTo(CNode* pnode) const
     {
-        // returns true if wasn't already sent
-       // if (pnode->hashSqlKnown != hashSql)
-        //{
          //   pnode->hashSqlKnown = hashSql;
             pnode->PushMessage("SQL", *this);
           //  return true;
-       // }
         return false;
     }
 

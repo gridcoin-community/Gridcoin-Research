@@ -160,6 +160,9 @@ extern int miningthreadcount;
 		std::string boincruntimepublickey;
 		std::string GRCAddress;
 		std::string lastblockhash;
+		std::string Organization;
+		std::string OrganizationKey;
+
 		double VouchedRAC;
 		double VouchedNetworkRAC;
 		double Magnitude;
@@ -171,6 +174,7 @@ extern int miningthreadcount;
 		double LastPaymentTime;
 		double ResearchSubsidy;
 		double InterestSubsidy;
+
 	};
 
 	

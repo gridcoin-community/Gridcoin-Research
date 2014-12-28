@@ -48,6 +48,7 @@ class CMessageHeader
             )
 
     // TODO: make private (improves encapsulation)
+	//HALFORD: 12-26-2014 - Add Encryption to messages - Increase size by 32 for checksum + delimiters + 10 for timestamp = 50 = 62 (vs 12)
     public:
         enum {
             MESSAGE_START_SIZE=sizeof(::pchMessageStart),

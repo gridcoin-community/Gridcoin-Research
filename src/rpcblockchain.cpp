@@ -32,6 +32,7 @@ extern std::string TimestampToHRDate(double dtm);
 
 std::string qtGRCCodeExecutionSubsystem(std::string sCommand);
 
+std::string LegacyDefaultBoincHashArgs();
 
 
 double CoinToDouble(double surrogate);
@@ -473,15 +474,17 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("RAC", bb.rac));
 	result.push_back(Pair("NetworkRAC", bb.NetworkRAC));
 	result.push_back(Pair("Magnitude", bb.Magnitude));
-	//result.push_back(Pair("BoincHash",block.vtx[0].hashBoinc));
+	if (fDebug2) result.push_back(Pair("BoincHash",block.vtx[0].hashBoinc));
+
 	result.push_back(Pair("RSAWeight",bb.RSAWeight));
 	result.push_back(Pair("LastPaymentTime",TimestampToHRDate(bb.LastPaymentTime)));
 	result.push_back(Pair("ResearchSubsidy",bb.ResearchSubsidy));
 	double interest = mint-bb.ResearchSubsidy;
 	result.push_back(Pair("Interest",interest));
 	double blockdiff = GetBlockDifficulty(block.nBits);
-	//result.push_back(Pair("BlockDiff",blockdiff));
 	result.push_back(Pair("GRCAddress",bb.GRCAddress));
+	result.push_back(Pair("Organization",bb.Organization));
+	result.push_back(Pair("OrganizationKeyPrefix",bb.OrganizationKey));
 	result.push_back(Pair("ClientVersion",bb.clientversion));	
 	bool IsCpidValid = IsCPIDValid_Retired(bb.cpid, bb.enccpid);
 	result.push_back(Pair("CPIDValid",IsCpidValid));
@@ -605,12 +608,11 @@ Value getblockhash(const Array& params, bool fHelp)
             "Returns hash of block in best-block-chain at <index>.");
 
     int nHeight = params[0].get_int();
-    if (nHeight < 0 || nHeight > nBestHeight)
-        throw runtime_error("Block number out of range.");
-		printf("Getblockhash %f",(double)nHeight);
-		CBlockIndex* RPCpblockindex = RPCFindBlockByHeight(nHeight);
-		printf("@r");
-		return RPCpblockindex->phashBlock->GetHex();
+    if (nHeight < 0 || nHeight > nBestHeight)       throw runtime_error("Block number out of range.");
+	if (fDebug)	printf("Getblockhash %f",(double)nHeight);
+	CBlockIndex* RPCpblockindex = RPCFindBlockByHeight(nHeight);
+	if (fDebug)	printf("@r");
+	return RPCpblockindex->phashBlock->GetHex();
 }
 
 Value getblock(const Array& params, bool fHelp)
@@ -974,6 +976,116 @@ Value execute(const Array& params, bool fHelp)
 		entry.push_back(Pair("[Specify in config file without quotes] boinckey=",sBase));
 		results.push_back(entry);
 	}
+	else if (sItem == "testcpid3")
+	{
+		if (params.size() != 2)
+		{
+			entry.push_back(Pair("Error","You must specify an argument"));
+			results.push_back(entry);
+		}
+		else
+		{
+			std::string sParam1 = params[1].get_str();
+			entry.push_back(Pair("Param1",sParam1));
+			std::string test = AdvancedDecrypt(sParam1);
+			entry.push_back(Pair("Out",test));
+		}
+	
+	}
+
+	else if (sItem == "encryptphrase")
+	{
+			if (params.size() != 2)
+		{
+			entry.push_back(Pair("Error","You must specify a phrase"));
+			results.push_back(entry);
+		}
+		else
+		{
+			std::string sParam1 = params[1].get_str();
+			entry.push_back(Pair("Param1",sParam1));
+			std::string test = AdvancedCrypt(sParam1);
+			entry.push_back(Pair("EncPhrase",test));
+			results.push_back(entry);
+	
+		}
+	
+	}
+
+	
+	else if (sItem == "decryptphrase")
+	{
+			if (params.size() != 2)
+		{
+			entry.push_back(Pair("Error","You must specify a phrase"));
+			results.push_back(entry);
+		}
+		else
+		{
+			std::string sParam1 = params[1].get_str();
+			entry.push_back(Pair("Param1",sParam1));
+			std::string test = AdvancedDecrypt(sParam1);
+			entry.push_back(Pair("DecPhrase",test));
+			results.push_back(entry);
+	
+		}
+	
+	}
+
+	else if (sItem == "genorgkey")
+	{
+			if (params.size() != 3)
+		{
+			entry.push_back(Pair("Error","You must specify a passphrase and organization name"));
+			results.push_back(entry);
+		}
+		else
+		{
+			std::string sParam1 = params[1].get_str();
+			entry.push_back(Pair("Passphrase",sParam1));
+			std::string sParam2 = params[2].get_str();
+			entry.push_back(Pair("OrgName",sParam2));
+
+			//12-28-2014
+			std::string sboinchashargs = LegacyDefaultBoincHashArgs();
+			if (sParam1 != sboinchashargs)
+			{
+				entry.push_back(Pair("Error","Admin must be logged in"));
+			}
+			else
+			{
+				//ClientVersionNew()
+				std::string modulus = sboinchashargs.substr(0,12);
+				std::string key = sParam2 + "," + AdvancedCryptWithSalt(modulus,sParam2);
+				entry.push_back(Pair("OrgKey",key));
+			}
+			results.push_back(entry);
+	
+		}
+	
+	}
+
+	else if (sItem == "testorgkey")
+	{
+		if (params.size() != 3)
+		{
+			entry.push_back(Pair("Error","You must specify an org and public key"));
+			results.push_back(entry);
+		}
+		else
+		{
+			std::string sParam1 = params[1].get_str();
+			entry.push_back(Pair("Org",sParam1));
+			std::string sParam2 = params[2].get_str();
+			entry.push_back(Pair("Key",sParam2));
+			std::string key = sParam1 + "," + AdvancedDecryptWithSalt(sParam2,sParam1);
+			entry.push_back(Pair("PubKey",key));
+			results.push_back(entry);
+	
+		}
+	
+	}
+
 	else if (sItem == "testcpidv2")
 	{
 		if (params.size() != 3)
@@ -1522,6 +1634,7 @@ Value listitem(const Array& params, bool fHelp)
 		results = MagnitudeReportCSV();
 		return results;
 	}
+
 
 	if (sitem == "mymagnitude")
 	{

@@ -29,6 +29,19 @@ using namespace boost;
 #ifndef QT_GUI
  boost::thread_group threadGroup;
 #endif
+extern std::string GetCommandNonce(std::string command);
+extern std::string DefaultOrg();
+extern std::string DefaultOrgKey(int key_length);
+extern std::string DefaultBlockKey(int key_length);
+
+
+
+std::string DefaultBoincHashArgs();
+
+extern std::string LegacyDefaultBoincHashArgs();
+
+
+bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
 
 extern int nMaxConnections;
 MiningCPID GetNextProject(bool bForce);
@@ -122,6 +135,23 @@ unsigned short GetListenPort()
 {
     return (unsigned short)(GetArg("-port", GetDefaultPort()));
 }
+
+
+
+std::string GetCommandNonce(std::string command)
+{
+	//12-28-2014 Message Attacks - Halford
+	std::string sboinchashargs = DefaultOrgKey(12);
+	std::string nonce = RoundToString((double)GetAdjustedTime(),0);
+	std::string pw1 = RetrieveMd5(nonce+","+command+","+sboinchashargs);
+	std::string sComm = nonce+","+command+","+pw1;
+	if (fDebug2) printf("Xmitting %s, %s ",sboinchashargs.c_str(),sComm.c_str());
+	return sComm;
+}
+
+
+
+
 
 void CNode::PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd)
 {
@@ -425,23 +455,6 @@ bool IsReachable(const CNetAddr& addr)
     enum Network net = addr.GetNetwork();
     return vfReachable[net] && !vfLimited[net];
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -969,23 +982,51 @@ void CNode::CloseSocketDisconnect()
     }
 }
 
+bool IsWindows()
+{
+	return BoincHashMerkleRootNew.substr(0,4) == "Elim" ?  true : false;
+}
+
+
+std::string LegacyDefaultBoincHashArgs()
+{
+	   std::string boinc2 = BoincHashMerkleRootNew;
+	   return boinc2;
+}
 
 
 std::string DefaultBoincHashArgs()
 {
 	// (Gridcoin), add support for ProofOfBoinc Node Relay support:
-	if (cached_boinchash_args != "") return cached_boinchash_args;
-	std::string boinc1 = GetArg("-boinchash", "boinchashargs");
-    std::string boinc2 = BoincHashMerkleRootNew;
-	if (boinc1 != "boinchashargs")
-	{
-		cached_boinchash_args = boinc1;
-		return boinc1;
-	}
-	cached_boinchash_args = boinc2;
-	return boinc2;
+	std::string bha = GetArg("-boinchash", "boinchashargs");
+	if (bha=="boinchashargs") bha = BoincHashWindowsMerkleRootNew;
+	std::string org = DefaultOrg();
+	std::string ClientPublicKey = AdvancedDecryptWithSalt(bha,org);
+	if (fDebug2) printf("Using pub key %s",ClientPublicKey.c_str());
+	return ClientPublicKey;
 }
 
+std::string DefaultOrg()
+{
+	std::string org = GetArg("-org", "windows");
+	return org;
+}
+
+
+std::string DefaultOrgKey(int key_length)
+{
+	std::string dok = DefaultBoincHashArgs();
+	if ((int)dok.length() >= key_length) return dok.substr(0,key_length);
+	return "";
+}
+
+
+std::string DefaultBlockKey(int key_length)
+{
+	std::string bha = GetArg("-boinchash", "boinchashargs");
+	if (bha=="boinchashargs") bha = BoincHashWindowsMerkleRootNew;
+	return bha.length() >= key_length ? bha.substr(0,key_length) : "";
+}
 
 
 void CNode::PushVersion()
@@ -997,46 +1038,41 @@ void CNode::PushVersion()
     RAND_bytes((unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce));
     if (fDebug) printf("send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s\n", PROTOCOL_VERSION, nBestHeight, addrMe.ToString().c_str(), addrYou.ToString().c_str(), addr.ToString().c_str());
 
-	std::string sboinchashargs = DefaultBoincHashArgs();
-	uint256 boincHashRandNonce = GetRandHash();
 
-	bool checksum = false;
-	if (sboinchashargs.length() > 5)
-	{
-		if (sboinchashargs.substr(0,4) == "Elim") checksum=true;
-	}
-
-
+	/*
 	if (!checksum && (GlobalCPUMiningCPID.cpid.empty() || GlobalCPUMiningCPID.encboincpublickey.empty()))
 	{
 		    HarvestCPIDs(false);
 			GetNextProject(true);
 	}
+	*/
 
-
+	std::string sboinchashargs = DefaultBoincHashArgs();
+	uint256 boincHashRandNonce = GetRandHash();
 	std::string nonce = boincHashRandNonce.GetHex();
 	std::string pw1 = RetrieveMd5(nonce+","+sboinchashargs);
+	std::string mycpid = GlobalCPUMiningCPID.cpidv2;
 	
-	std::string encbpk = 	GlobalCPUMiningCPID.encboincpublickey;
-	std::string mycpid =    GlobalCPUMiningCPID.cpid;
-
-
-	
+	/*
 	if (!checksum)
 	{
 		printf("^x.");
-		if (mycpid == "INVESTOR" || !IsCPIDValid_Retired(mycpid,encbpk))
+		if (!IsCPIDValidv3(mycpid,false))
 		{
-			printf("To run a compiled version of gridcoin you must have a valid cpid, rac > 100, join team Gridcoin and set your email address properly. CPID: %s, EncBPK %s \r\n",mycpid.c_str(),encbpk.c_str());
+			printf("To run a compiled version of gridcoin you must have a valid cpid, rac > 100, join team Gridcoin and set your email address properly. CPID: %s \r\n",mycpid.c_str());
 			MilliSleep(5000);
 			GetNextProject(true);
-			encbpk = 	GlobalCPUMiningCPID.encboincpublickey;
+			//encbpk = 	GlobalCPUMiningCPID.encboincpublickey;
 			mycpid =    GlobalCPUMiningCPID.cpid;
 		}
 	}
+	*/
 
-    PushMessage("version", PROTOCOL_VERSION, nonce, pw1, 
-				mycpid, encbpk, nLocalServices, nTime, addrYou, addrMe,
+	
+	std::string acid = GetCommandNonce("gridversion");
+                    
+    PushMessage("gridversion", PROTOCOL_VERSION, nonce, pw1, 
+				mycpid, mycpid, acid, nLocalServices, nTime, addrYou, addrMe,
                 nLocalHostNonce, FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()), nBestHeight);
 }
 
@@ -1080,7 +1116,7 @@ bool CNode::Misbehaving(int howmuch)
     if (nMisbehavior >= GetArg("-banscore", 100))
     {
         int64_t banTime = GetTime()+GetArg("-bantime", 60*60*24);  // Default 24-hour ban
-        printf("Misbehaving: %s (%d -> %d) DISCONNECTING\n", addr.ToString().c_str(), nMisbehavior-howmuch, nMisbehavior);
+        if (fDebug) printf("Misbehaving: %s (%d -> %d) DISCONNECTING\n", addr.ToString().c_str(), nMisbehavior-howmuch, nMisbehavior);
         {
             LOCK(cs_setBanned);
             if (setBanned[addr] < banTime)
@@ -1089,7 +1125,7 @@ bool CNode::Misbehaving(int howmuch)
         CloseSocketDisconnect();
         return true;
     } else
-        printf("Misbehaving: %s (%d -> %d)\n", addr.ToString().c_str(), nMisbehavior-howmuch, nMisbehavior);
+        if (fDebug) printf("Misbehaving: %s (%d -> %d)\n", addr.ToString().c_str(), nMisbehavior-howmuch, nMisbehavior);
     return false;
 }
 
@@ -1450,7 +1486,7 @@ void ThreadSocketHandler2(void* parg)
             }
             else if (CNode::IsBanned(addr))
             {
-                printf("connection from %s dropped (banned)\n", addr.ToString().c_str());
+                if (fDebug2) printf("connection from %s dropped (banned)\n", addr.ToString().c_str());
                 closesocket(hSocket);
             }
             else
