@@ -23,6 +23,7 @@ MiningCPID GetNextProject(bool bForce);
 void ThreadCleanWalletPassphrase(void* parg);
 
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
+std::string GetBestBlockHash(std::string sCPID);
 
 double CoinToDouble(double surrogate);
 
@@ -650,7 +651,18 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
     {
         LOCK(cs_main);
         if (pblock->hashPrevBlock != hashBestChain)
+		{
             return error("CheckStake() : generated block is stale");
+		}
+
+		std::string GlobalBlockSolved = GetBestBlockHash(GlobalCPUMiningCPID.cpidv2);
+		if (fDebug2) printf("GBS->%s",GlobalBlockSolved.c_str());
+		if (GlobalBlockSolved != "NULL" && GlobalBlockSolved.length() > 8 && GlobalBlockSolved != "")
+		{
+			//printf("CheckStake() : generated block is stale - Solved at %s \r\n",GlobalBlockSolved.c_str());
+			return error("CheckStake() : generated block is stale - Solved at %s \r\n",GlobalBlockSolved.c_str());
+		}
+		
 
         // Track how many getdata requests this block gets
         {
