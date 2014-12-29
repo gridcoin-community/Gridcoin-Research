@@ -23,7 +23,8 @@ bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 void qtUpdateConfirm(std::string txid);
 bool Contains(std::string data, std::string instring);
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
-extern double MintLimiter(double PORDiff);
+
+extern double MintLimiter(double PORDiff,int64_t RSA_WEIGHT);
 
 
 bool IsCPIDValidv2(MiningCPID& mc, int height);
@@ -34,7 +35,6 @@ uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
 
 double CoinToDouble(double surrogate);
 double GetBlockDifficulty(unsigned int nBits);
-extern double MintLimiterPOR(double PORDiff,int64_t locktime,int64_t RSA_WEIGHT);
 
 bool OutOfSyncByAgeWithChanceOfMining();
 int64_t GetRSAWeightByCPID(std::string cpid);
@@ -1027,7 +1027,7 @@ void CWalletTx::RelayWalletTransaction(CTxDB& txdb)
         uint256 hash = GetHash();
         if (!txdb.ContainsTx(hash))
         {
-            printf("Relaying wtx %s\n", hash.ToString().substr(0,10).c_str());
+            if (fDebug) printf("Relaying wtx %s\n", hash.ToString().substr(0,10).c_str());
             RelayTransaction((CTransaction)*this, hash);
         }
     }
@@ -1061,7 +1061,7 @@ void CWallet::ResendWalletTransactions(bool fForce)
     }
 
     // Rebroadcast any of our txes that aren't in a block yet
-    printf("ResendWalletTransactions()\n");
+    if (fDebug) printf("ResendWalletTransactions()\n");
     CTxDB txdb("r");
     {
         LOCK(cs_wallet);
@@ -1601,39 +1601,21 @@ std::string NewbieLevelToString(int newbie_level)
 
 
 
-double MintLimiter(double PORDiff)
+double MintLimiter(double PORDiff,int64_t RSA_WEIGHT)
 {
-	// Unstick network temporary rule:
-	//if (GetAdjustedTime() > 1419161730 && GetAdjustedTime() < 1419192729 && PORDiff > 1000) return 0;
-
+	if (RSA_WEIGHT==25000) return 0;
 	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
 	if (PORDiff > 0    && PORDiff < 1)   return 0;
 	if (PORDiff > 1    && PORDiff < 5)   return .15;
 	if (PORDiff >= 5   && PORDiff < 10)  return 5;
 	if (PORDiff >= 10  && PORDiff < 50)  return 10;
-	if (PORDiff >= 50  && PORDiff < 100) return 10;
+	if (PORDiff >= 50  && PORDiff < 100) return 15;
 	if (PORDiff >= 100 && PORDiff < 500) return 30;
 	if (PORDiff >= 500) return 75;
 	return 0;
 }
 	
 
-
-double MintLimiterPOR(double PORDiff,int64_t locktime,int64_t RSA_WEIGHT)
-{
-	if (RSA_WEIGHT==25000) return 0; //Uninitialized Newbie
-	//if (GetAdjustedTime() > 1419161730 && GetAdjustedTime() < 1419179832 && PORDiff > 1000) return 0;
-
-	double MaxSubsidy = GetMaximumBoincSubsidy(locktime);
-	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
-	if (PORDiff >= 0   && PORDiff < 1)   return 0;
-	if (PORDiff >= 1   && PORDiff < 5)   return .15;
-	if (PORDiff >= 5   && PORDiff < 50)  return MaxSubsidy/40;
-	if (PORDiff >= 50  && PORDiff < 100)  return MaxSubsidy/20;
-	if (PORDiff >= 100 && PORDiff < 500)  return MaxSubsidy/10;
-	if (PORDiff >= 500)  return MaxSubsidy/5;
-	return 0;
-}
 
 
 bool CWallet::GetStakeWeight(uint64_t& nWeight)
@@ -1768,17 +1750,16 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		 uint256 pbh = 0;
 		 if (pindexPrev) pbh=pindexPrev->GetBlockHash();
 		 miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pbh);
-		 //miningcpid.cpidv2="";
-
 		 miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
 	     miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-		 //double out_por = 0;
-		 //double out_interest=0;
-         //miningcpid.ResearchSubsidy = CoinToDouble(GetProofOfStakeReward(1,0,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),out_por,out_interest));
-		 
 		 msMiningErrors4 = "BRSA: " + RoundToString(miningcpid.RSAWeight,0);
 
 		 // miningcpid.cpidv2 = CIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pblock->pprev->GetBlockHash());
+		 //12-27-2014 Strip Out CPID
+		 // miningcpid.enccpid = ""; //CPID V1 Boinc RunTime enc key
+		 //miningcpid.encboincpublickey = "";
+		 //miningcpid.encaes = "";
+		
 		 hashBoinc = SerializeBoincBlock(miningcpid);
 		 if (!IsCPIDValidv2(miningcpid,pindexBest->nHeight))
 		 {
@@ -2006,30 +1987,15 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		double out_owed = 0;
 		int64_t RSA_WEIGHT  = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 		double mint = CoinToDouble(nReward);
-		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+		double PORDiff = GetBlockDifficulty(nBits);
 		if (fDebug) printf("Creating POS Reward for %s  amt  %s  {RSAWeight %s} \r\n",
 			GlobalCPUMiningCPID.cpid.c_str(),sReward.c_str(),RoundToString((double)RSA_WEIGHT,0).c_str());
 	
 		//INVESTORS
-		if (GlobalCPUMiningCPID.cpid == "INVESTOR" && mint < MintLimiter(PORDiff)) 
+		if (mint < MintLimiter(PORDiff,RSA_WEIGHT)) 
 		{
-				if (LessVerbose(10)) printf("CreateBlock::Investors Mint is too small");
+				if (LessVerbose(10)) printf("CreateStake()::Mint too small");
 				return false; 
-		}
-		//BOINC MINERS
-		if (RSA_WEIGHT > 0 && ((RSA_WEIGHT/14) < MintLimiterPOR(PORDiff,GetAdjustedTime(),RSA_WEIGHT))  )
-		{
-				if (fDebug) if (LessVerbose(100)) printf("Owed %f < MintLimitLevel %f",OUT_POR,MintLimiterPOR(PORDiff,GetAdjustedTime(),RSA_WEIGHT));
-				return false;
-		}
-		//BOINC MINERS WITH LOW INTEREST PAYMENT DUE AND LOW POR DUE
-		if (GlobalCPUMiningCPID.cpid != "INVESTOR" && mint < MintLimiter(PORDiff) && RSA_WEIGHT < 20000) 
-		{
-			if 	(OUT_POR < MintLimiterPOR(PORDiff,GetAdjustedTime(),RSA_WEIGHT))
-			{	
-				if (LessVerbose(10)) printf("CreateBlock::BoincMiners Mint too small with low interest");
-				return false; 
-			}
 		}
 		
 		if (nReward == 0)

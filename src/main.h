@@ -144,6 +144,9 @@ extern std::string  msMiningErrors;
 extern std::string  msMiningErrors2;
 extern std::string  msMiningErrors3;
 extern std::string  msMiningErrors4;
+extern std::string  Organization;
+extern std::string  OrganizationKey;
+
 extern int nGrandfather;
 
 // PoB GPU Miner Global Vars:

@@ -550,6 +550,7 @@ void CheckForUpgrade()
 				#ifdef WIN32
 				nNeedsUpgrade = globalcom->dynamicCall("ClientNeedsUpgrade()").toInt();
 				#endif
+				printf("Needs upgraded %f\r\n",(double)nNeedsUpgrade);
 				if (nNeedsUpgrade) UpgradeClient();
 	}
 	catch(...)

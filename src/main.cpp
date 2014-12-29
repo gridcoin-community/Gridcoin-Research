@@ -35,6 +35,9 @@
 
 extern void EraseOrphans();
 
+std::string GetCommandNonce(std::string command);
+std::string DefaultBlockKey(int key_length);
+
 
 using namespace std;
 using namespace boost;
@@ -59,11 +62,16 @@ unsigned int WHITELISTED_PROJECTS = 0;
 unsigned int CHECKPOINT_VIOLATIONS = 0;
 int64_t nLastTallied = 0;
 int64_t nCPIDsLoaded = 0;
+extern bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
+
+std::string DefaultOrg();
+std::string DefaultOrgKey(int key_length);
 
 extern std::string boinc_hash(const std::string str);
-double MintLimiter(double PORDiff);
+
+double MintLimiter(double PORDiff,int64_t RSA_WEIGHT);
+
 extern std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
-double MintLimiterPOR(double PORDiff,int64_t locktime,int64_t rsaweight);
 extern double GetBlockDifficulty(unsigned int nBits);
 double GetLastPaymentTimeByCPID(std::string cpid);
 extern bool Contains(std::string data, std::string instring);
@@ -97,7 +105,7 @@ uint256 muGlobalCheckpointHash = 0;
 uint256 muGlobalCheckpointHashRelayed = 0;
 int muGlobalCheckpointHashCounter = 0;
 ///////////////////////MINOR VERSION////////////////////////////////
-int MINOR_VERSION = 107;
+int MINOR_VERSION = 125;
 
 			
 bool IsUserQualifiedToSendCheckpoint();
@@ -330,7 +338,10 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors2 = "";
  std::string    msMiningErrors3 = "";
  std::string    msMiningErrors4 = "";
- int nGrandfather = 97300;
+ std::string    Organization = "";
+ std::string    OrganizationKey = "";
+
+ int nGrandfather = 99500;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -804,8 +815,7 @@ MiningCPID GetNextProject(bool bForce)
 								msMiningCPID = structcpid.cpid;
 								mdMiningRAC = structcpid.verifiedrac;
 								msENCboincpublickey = structcpid.boincpublickey;
-								if (LessVerbose(10)) printf("Ready to CPU Mine project %s     RAC(%f)  enc %s\r\n",
-									structcpid.projectname.c_str(),structcpid.rac, msENCboincpublickey.c_str());
+								if (LessVerbose(5)) printf("Ready to CPU Mine project %s     RAC(%f)  enc %s\r\n",	structcpid.projectname.c_str(),structcpid.rac, msENCboincpublickey.c_str());
 								//Required for project to be mined in a block:
 								GlobalCPUMiningCPID.cpid=structcpid.cpid;
 								GlobalCPUMiningCPID.projectname = structcpid.projectname;
@@ -2625,7 +2635,16 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
             // This doesn't trigger the DoS code on purpose; if it did, it would make it easier
             // for an attacker to attempt to split the network.
             if (!txindex.vSpent[prevout.n].IsNull())
-                return fMiner ? false : error("ConnectInputs() : %s prev tx already used at %s", GetHash().ToString().substr(0,10).c_str(), txindex.vSpent[prevout.n].ToString().c_str());
+			{
+				if (fMiner) return false;
+				//This could be due to mismatched coins in wallet: 12-28-2014
+				int nMismatchSpent;
+				int64_t nBalanceInQuestion;
+				pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
+    
+				return error("ConnectInputs() : %s prev tx already used at %s", GetHash().ToString().substr(0,10).c_str(), txindex.vSpent[prevout.n].ToString().c_str());
+
+			}
 
             // Skip ECDSA signature verification when connecting blocks (fBlock=true)
             // before the last blockchain checkpoint. This is safe because block merkle hashes are
@@ -2697,6 +2716,25 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
         SyncWithWallets(tx, this, false, false);
 
     return true;
+}
+
+
+
+double BlockVersion(std::string v)
+{
+	if (v.length() < 10) return 0;
+	std::string vIn = v.substr(1,7);
+	boost::replace_all(vIn, ".", "");
+	double ver1 = cdbl(vIn,0);
+	return ver1;
+}
+
+
+
+double ClientVersionNew()
+{
+	double cv = BlockVersion(FormatFullVersion());
+	return cv;
 }
 
 bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
@@ -2846,50 +2884,19 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		{
 
 			// Block Spamming (Halford) 12-23-2014
-			if (bb.cpid == "INVESTOR" && mint < MintLimiter(PORDiff)) 
+			if (mint < MintLimiter(PORDiff,bb.RSAWeight)) 
 			{
-				return error("CheckProofOfStake() : Investor Mint too Small");
+				return error("CheckProofOfStake() : Mint too Small, %f",(double)mint);
 			}
-			else
+		
+			//12-26-2014 Halford - Orphan Flood Attack
+			if (IsLockTimeWithinMinutes(GetBlockTime(),15))
 			{
-				if (bb.cpid != "INVESTOR" && mint < MintLimiterPOR(PORDiff,GetBlockTime(),bb.RSAWeight)) 
-				{
-				
-					return error("CheckProofOfStake() : Researcher Mint too small");
-				}
+				double bv = BlockVersion(bb.clientversion);
+				double cvn = ClientVersionNew();
+				printf("BV %f, CV %f      ",bv,cvn);
+				if (bv < cvn) return error("ConnectBlock(): Old client version after mandatory upgrade - block rejected\r\n");
 			}
-	
-			//Halford: During periods of high difficulty new block must have a higher magnitude than last block until block > 10 mins old:
-
-			if (false)
-			{
-			
-			double LastBlockAge = PreviousBlockAge();
-	
-			if ((PORDiff > 10) && LastBlockAge < (7*60))
-			{
-				double current_magnitude = bb.Magnitude;
-				CBlock prior_block;
-				if (!prior_block.ReadFromDisk(pindex->pprev)) return error("CheckProofOfStake() : read Prior block failed!");
-				if (prior_block.vtx.size() > 0)
-				{
-					MiningCPID PriorStakeBlock = DeserializeBoincBlock(prior_block.vtx[0].hashBoinc);
-					double prior_magnitude = PriorStakeBlock.Magnitude;
-					if (current_magnitude > 0 && prior_magnitude > 0)
-					{
-						if (current_magnitude < prior_magnitude)
-						{
-							printf("Block Age %f,Prior Mag %f, Current Mag %f Diff %f",LastBlockAge,prior_magnitude,current_magnitude,PORDiff);
-
-							return error("ConnectBlock(): POR Block with lower magnitude than last block submitted.  \r\n");
-						}
-					}
-				}
-			}
-	
-			}
-
-
 
 			//Block being accepted within the last hour: Check with Netsoft - AND Verify User will not be overpaid:
 			bool outcome = CreditCheckOnline(bb.cpid,bb.Magnitude,mint,nCoinAge,nFees,nTime);
@@ -3217,7 +3224,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 					std::string suppressreboot = GetArg("-suppressreboot", "false");
 					if (suppressreboot!="true")
 					{
-						if (REORGANIZE_FAILED==5)
+						if (REORGANIZE_FAILED==100)
 						{
 							int nResult = 0;
 							#if defined(WIN32) && defined(QT_GUI)
@@ -3280,7 +3287,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 	}
 	else
 	{
-		printf("{SBC} new best=%s  height=%d \r\n",hashBestChain.ToString().c_str(), nBestHeight);
+		printf("{SBC} new best=%s  height=%d ; ",hashBestChain.ToString().c_str(), nBestHeight);
 
 	}
 
@@ -3546,7 +3553,7 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
 				//Block CPID 12-26-2014 hashPrevBlock->nHeight
 				if (!IsCPIDValidv2(boincblock,height1))
 				{
-						return DoS(1,error("Bad CPID : height %f, bad hashboinc %s",(double)height1,vtx[0].hashBoinc.c_str()));
+						return DoS(10,error("Bad CPID : height %f, bad hashboinc %s",(double)height1,vtx[0].hashBoinc.c_str()));
 				}
 
 
@@ -3843,10 +3850,10 @@ void GridcoinServices()
 	}
 
 
-	if (TimerMain("erase_orphans",500))
+	if (TimerMain("erase_orphans",1500))
 	{
 		
-			 EraseOrphans();
+			 //EraseOrphans();
 
 	}
 
@@ -3860,12 +3867,11 @@ void GridcoinServices()
 		}
 	}
 
-	//Stack Overflow Error (Pallas): calling this every 5 minutes should cause linux to fail- TEST 11-9-2014- 11-29-2014 (45)
 	if (TimerMain("gather_cpids",45))
 	{
-			printf("\r\nReharvesting cpids in background thread...\r\n");
+			if (fDebug) printf("\r\nReharvesting cpids in background thread...\r\n");
 			LoadCPIDsInBackground();
-			printf("Loaded");
+			printf(" {CPIDs Re-Loaded} ");
 	}
 
 	if (TimerMain("check_for_autoupgrade",60))
@@ -3885,6 +3891,7 @@ void GridcoinServices()
 	if (bCheckedForUpgradeLive == true && !fTestNet && bProjectsInitialized && bGlobalcomInitialized)
 	{
 		bCheckedForUpgradeLive=false;
+		printf("{Checking for Upgrade} ");
 		CheckForUpgrade();
 	}
 	#endif
@@ -3966,7 +3973,30 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     // If don't already have its previous block, shunt it off to holding area until we get it
     if (!mapBlockIndex.count(pblock->hashPrevBlock))
     {
-        printf("ProcessBlock: ORPHAN BLOCK, prev=%s\n", pblock->hashPrevBlock.ToString().substr(0,20).c_str());
+        printf("ProcessBlock: ORPHAN BLOCK, prev=%s\n", pblock->hashPrevBlock.ToString().c_str());
+		//12-26-2014 - Halford - Orphan Block Flood Attack
+
+		double orphan_diff = GetAdjustedTime() - pfrom->nLastOrphan;
+		if (orphan_diff < 60) pfrom->nOrphanCountViolations++;
+		if (orphan_diff > 60*1)
+		{
+				pfrom->nOrphanCountViolations--;
+				pfrom->nOrphanCount--;
+		}
+
+		if (orphan_diff > 60*10)
+		{
+				pfrom->nOrphanCountViolations=0;
+				pfrom->nOrphanCount=0;
+		}
+
+		if (pfrom->nOrphanCount > 100)         pfrom->Misbehaving(1);
+		if (pfrom->nOrphanCountViolations < 0) pfrom->nOrphanCountViolations=0;
+		if (pfrom->nOrphanCount < 0)           pfrom->nOrphanCount=0;
+		if (pfrom->nOrphanCountViolations > 100) pfrom->Misbehaving(1);
+		pfrom->nLastOrphan=GetAdjustedTime();
+		pfrom->nOrphanCount++;
+
         // ppcoin: check proof-of-stake
         if (pblock->IsProofOfStake())
         {
@@ -4023,7 +4053,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     }
 	double nBalance = GetTotalBalance();
 	std::string SendingWalletAddress = DefaultWalletAddress();
-	printf("{PB}: ACC; ");
+	printf("{PB}: ACC; \r\n");
 	//	double mint = mapBlockIndex[hash]->nMint/COIN;
 	
 	if (CHECKPOINT_DISTRIBUTED_MODE==0)
@@ -4551,11 +4581,22 @@ std::string getfilecontents(std::string filename)
 }
 
 
+bool IsCPIDValidv3(std::string cpidv2, bool allow_investor)
+{
+	bool result=false;
+	if (allow_investor) if (cpidv2 == "INVESTOR" || cpidv2=="investor") return true;
+	if (cpidv2.length() < 34) return false;
+	result = CPID_IsCPIDValid(cpidv2.substr(0,32),cpidv2,0);
+	return result;
+}
+
 bool IsCPIDValidv2(MiningCPID& mc, int height)
 {
 	//12-24-2014 Halford - Transition to CPIDV2
+	if (height < nGrandfather) return true;
+
 	bool result = false;
-	if (height < nGrandfather)
+	if (height < 97000)
 	{
 			result = IsCPIDValid_Retired(mc.cpid,mc.enccpid);
 	}
@@ -4571,23 +4612,8 @@ bool IsCPIDValidv2(MiningCPID& mc, int height)
 
 bool IsLocalCPIDValid(StructCPID& structcpid)
 {
-	bool old_result1 = IsCPIDValid_Retired(structcpid.cpid,structcpid.boincpublickey);
-	return old_result1;
-	//First use the new algorithm
-	bool new_result = CPID_IsCPIDValid(structcpid.cpid,structcpid.cpidv2,0);
-	if (!new_result)
-	{
-		//Next Defer to the old algorithm
-		if (structcpid.cpid=="") return false;
-		if (structcpid.cpid.length() < 5) return false;
-		if (structcpid.cpid == "INVESTOR") return true;
-		bool old_result = IsCPIDValid_Retired(structcpid.cpid,structcpid.boincpublickey);
-		if (!old_result)
-		{
-			printf("IsLocalCPIDValidv2 %s, %s ;",structcpid.cpid.c_str(),structcpid.cpidv2.c_str());
-		}
-		return old_result;
-	}
+
+	bool new_result = IsCPIDValidv3(structcpid.cpidv2,true);
 	return new_result;
 
 }
@@ -4915,7 +4941,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 						NetworkAvg = NetworkRAC/(iRow+.01);
 					}
 	
-					printf("Assimilating network consensus..");
+					if (fDebug) printf("Assimilating network consensus..");
 
 					StructCPID structcpid = GetStructCPID();
 					structcpid = mvNetwork["NETWORK"];
@@ -5236,6 +5262,45 @@ bool AmIGeneratingBackToBackBlocks()
 	return false;
 }
 
+bool AcidTest(std::string precommand, std::string acid, CNode* pfrom)
+{
+	std::vector<std::string> vCommand = split(acid,",");
+	if (fDebug) printf("Acid %s",acid.c_str());
+	if (vCommand.size() >= 2)
+	{
+		std::string sboinchashargs = DefaultOrgKey(12);  //Use 12 characters for inter-client communication
+		std::string nonce = vCommand[0];
+		std::string command = vCommand[1];
+		std::string hash = vCommand[2];
+		std::string pw1 = RetrieveMd5(nonce+","+command+","+sboinchashargs);
+		if (fDebug) printf(" Nonce %s,comm %s,hash %s,pw1 %s \r\n",nonce.c_str(),command.c_str(),hash.c_str(),pw1.c_str());
+		//If timestamp too old; disconnect
+		double timediff = std::abs(GetAdjustedTime() - cdbl(nonce,0));
+		if (timediff > 10*60) 
+		{
+			printf("Network time attack %f",timediff);
+		}
+
+		if (hash != pw1 || timediff > (10*60)) 
+		{
+			if (fDebug2) printf("Acid test failed.");
+			pfrom->Misbehaving(10);
+			return false;
+		}
+		return true;
+	}
+	else
+	{
+		if (fDebug2) printf("Message corrupted. Node partially banned.");
+		pfrom->Misbehaving(10);
+		return false;
+	}
+	return true;
+}
+
+
+
+
 // The message start string is designed to be unlikely to occur in normal data.
 // The characters are rarely used upper ASCII, not valid as UTF-8, and produce
 // a large 4-byte int at any alignment.
@@ -5253,13 +5318,20 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         return true;
     }
 
-    if (strCommand == "version")
+	//12-26-2014 Halford : Message Attacks ////////////////////////////////////
+	//boost::replace_all(strCommand, " ", "");
+
+	std::string precommand = strCommand;
+
+	///////////////////////////////////////////////////////////////////////////
+
+
+    if (strCommand == "gridversion")
     {
         // Each connection can only send one version message
         if (pfrom->nVersion != 0)
         {
-            pfrom->Misbehaving(100);
-		    //pfrom->fDisconnect = true;
+            pfrom->Misbehaving(10);
             return false;
         }
 
@@ -5267,40 +5339,25 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         CAddress addrMe;
         CAddress addrFrom;
         uint64_t nNonce = 1;
+		std::string acid = "";
+		vRecv >> pfrom->nVersion >> pfrom->boinchashnonce >> pfrom->boinchashpw >> pfrom->cpid >> pfrom->enccpid >> acid >> pfrom->nServices >> nTime >> addrMe;
 
-		//vRecv >> pfrom->nVersion >> pfrom->boinchashnonce >> pfrom->boinchashpw >> pfrom->nServices >> nTime >> addrMe;
-		vRecv >> pfrom->nVersion >> pfrom->boinchashnonce >> pfrom->boinchashpw >> pfrom->cpid >> pfrom->enccpid >> pfrom->nServices >> nTime >> addrMe;
+		//Halford - 12-26-2014 - Thwart Hackers
+		bool ver_valid = AcidTest(strCommand,acid,pfrom);
+        if (fDebug) printf("Ver Acid %s, Validity %s ",acid.c_str(),YesNo(ver_valid).c_str());
+		if (!ver_valid)
+		{
+		    pfrom->Misbehaving(10);
+		    pfrom->fDisconnect = true;
+            return false;
+		}
 
-		int cpid_authorization_level = 1;
-
-		std::string sdefaultboinchashargs = DefaultBoincHashArgs();
-	 	std::string pw1 = RetrieveMd5(pfrom->boinchashnonce+","+sdefaultboinchashargs);
-	
 		bool unauthorized = false;
-		if (sdefaultboinchashargs.length() < 5 || pw1 != pfrom->boinchashpw) unauthorized=true;
-
-		bool checksum = false;
-		if (sdefaultboinchashargs.length() > 5)
-		{
-			if (sdefaultboinchashargs.substr(0,4) == "Elim") checksum=true;
-		}
-
-		if (!unauthorized) cpid_authorization_level = 1;
-		if (unauthorized)
-		{
-			cpid_authorization_level = 0;
-			//Test the untrusted nodes cpid
-			if (IsCPIDValid_Retired(pfrom->cpid,pfrom->enccpid))
-			{
-				unauthorized=false;  //Do Not set cpid_authorization_level to 1 here since they are still not trusted
-			}
-		}
-		//12-23-2014
 		double timedrift = std::abs(GetAdjustedTime() - nTime);
 		
-		if (cpid_authorization_level==0)
+		if (true)
 		{
-			if (timedrift > (5*60))
+			if (timedrift > (8*60))
 			{
 				printf("Disconnecting unauthorized peer with Network Time so far off by %f seconds!\r\n",(double)timedrift);
 				unauthorized = true;
@@ -5318,7 +5375,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 		if (unauthorized)
 		{
 			printf("Disconnected unauthorized peer.         ");
-            pfrom->Misbehaving(100);
+            pfrom->Misbehaving(20);
 		    pfrom->fDisconnect = true;
             return false;
         }
@@ -5348,10 +5405,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 	
 	 		if (GetArgument("autoban","false") == "true")
 			{
-				if (pfrom->nStartingHeight < 1000) 
+				if (pfrom->nStartingHeight < 1000 && LessVerbose(500)) 
 				{
-					printf("Node with low height");
-					pfrom->Misbehaving(100);
+					if (fDebug) printf("Node with low height");
+					pfrom->Misbehaving(20);
 					pfrom->fDisconnect=true;
 					return false;
 				}
@@ -5359,14 +5416,14 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 	
 			if (pfrom->nStartingHeight < 1 && LessVerbose(700)) 
 			{
-					pfrom->Misbehaving(100);
+					pfrom->Misbehaving(10);
 			    	pfrom->fDisconnect=true;
 					return false;
 			}
 
 			if (pfrom->nStartingHeight < 1 && pfrom->nServices == 0)
 			{
-					pfrom->Misbehaving(100);
+					pfrom->Misbehaving(10);
 			    	pfrom->fDisconnect=true;
 					return false;
 			}
@@ -5480,8 +5537,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
 
 
-    else if (strCommand == "addr")
-    {
+    else if (strCommand == "gridaddr")
+    { 
+		//addr->gridaddr
         vector<CAddress> vAddr;
         vRecv >> vAddr;
 
@@ -5496,7 +5554,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		if (pfrom->nStartingHeight < 1 && LessVerbose(500)) return true;
-			
 
         // Store the new addresses
         vector<CAddress> vAddrOk;
@@ -5636,7 +5693,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 {
                     CBlock block;
                     block.ReadFromDisk((*mi).second);
-                    pfrom->PushMessage("block", block);
+					//HALFORD 12-26-2014
+					std::string acid = GetCommandNonce("gridblock");
+                    pfrom->PushMessage("gridblock", block, acid);
 
                     // Trigger them to send a getblocks request for the next batch of inventory
                     if (inv.hash == pfrom->hashContinue)
@@ -5870,13 +5929,21 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
 
 
-    else if (strCommand == "block")
+    else if (strCommand == "gridblock")
     {
-        CBlock block;
-        vRecv >> block;
-        uint256 hashBlock = block.GetHash();
+		//12-26-2014 HALFORD
 
-        printf("Received block %s\n", hashBlock.ToString().c_str());
+        CBlock block;
+		std::string acid = "";
+        vRecv >> block >> acid;
+
+		bool block_valid = AcidTest(strCommand,acid,pfrom);
+		if (!block_valid) return false;
+		
+        uint256 hashBlock = block.GetHash();
+		if (fDebug) printf("Acid %s, Validity %s ",acid.c_str(),YesNo(block_valid).c_str());
+
+        printf("Received block %s ; ", hashBlock.ToString().c_str());
         if (fDebug) block.print();
 
         CInv inv(MSG_BLOCK, hashBlock);
@@ -5965,10 +6032,15 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
     else if (strCommand == "ping")
     {
+		std::string acid = "";
         if (pfrom->nVersion > BIP0031_VERSION)
         {
             uint64_t nonce = 0;
-            vRecv >> nonce;
+            vRecv >> nonce >> acid;
+			bool pong_valid = AcidTest(strCommand,acid,pfrom);
+			if (!pong_valid) return false;
+			if (fDebug) printf("pong valid %s",YesNo(pong_valid).c_str());
+
             // Echo the message back with the nonce. This allows for two useful features:
             //
             // 1) A remote node can quickly check if the connection is operational
@@ -5992,8 +6064,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         size_t nAvail = vRecv.in_avail();
         bool bPingFinished = false;
         std::string sProblem;
-
-        if (nAvail >= sizeof(nonce)) {
+	    if (nAvail >= sizeof(nonce)) {
             vRecv >> nonce;
 
             // Only process pong message if there is an outstanding ping (old ping without nonce should never pong)
@@ -6078,10 +6149,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // Ignore unknown commands for extensibility
     }
 
+	//12-26-2014 Halford (grid-version,grid-addr)
 
     // Update the last seen time for this node's address
     if (pfrom->fNetworkNode)
-        if (strCommand == "version" || strCommand == "addr" || strCommand == "inv" || strCommand == "getdata" || strCommand == "ping")
+        if (strCommand == "gridversion" || strCommand == "gridaddr" || strCommand == "inv" || strCommand == "getdata" || strCommand == "ping")
             AddressCurrentlyConnected(pfrom->addr);
 
 
@@ -6346,6 +6418,9 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 	std::string delim = "<|>";
 	std::string version = FormatFullVersion();
 	mcpid.GRCAddress = DefaultWalletAddress();
+	mcpid.Organization = DefaultOrg();
+	mcpid.OrganizationKey = DefaultBlockKey(8); //Only reveal 8 characters of the key in the block (should be enough to identify hackers)
+	
 	if (mcpid.lastblockhash.empty()) mcpid.lastblockhash = "0";
 	std::string bb = mcpid.cpid + delim + mcpid.projectname + delim + mcpid.aesskein + delim + RoundToString(mcpid.rac,0)
 					+ delim + RoundToString(mcpid.pobdifficulty,5) + delim + RoundToString((double)mcpid.diffbytes,0) 
@@ -6358,7 +6433,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 					+ delim + NN(mcpid.cpidv2)
 					+ delim + RoundToString(mcpid.Magnitude,0)
 					+ delim + NN(mcpid.GRCAddress) + delim + NN(mcpid.lastblockhash)
-					+ delim + RoundToString(mcpid.InterestSubsidy,2);
+					+ delim + RoundToString(mcpid.InterestSubsidy,2) + delim + NN(mcpid.Organization) + delim + NN(mcpid.OrganizationKey);
 	return bb;
 }
 
@@ -6440,7 +6515,14 @@ MiningCPID DeserializeBoincBlock(std::string block)
 		{
 			surrogate.InterestSubsidy = cdbl(s[18],2);
 		}
-	
+		if (s.size() > 19)
+		{
+			surrogate.Organization = s[19];
+		}
+		if (s.size() > 20)
+		{
+			surrogate.OrganizationKey = s[20];
+		}
 		
 	}
 	}
@@ -6452,8 +6534,6 @@ MiningCPID DeserializeBoincBlock(std::string block)
 
 
 }
-
-
 
 
 
@@ -6638,16 +6718,11 @@ void InitializeProjectStruct(StructCPID& project)
 
 	std::string ENCbpk = AdvancedCrypt(cpid_non);
 	project.boincpublickey = ENCbpk;
-	
-	//Crashes in linux: 12-20-2014
 	project.cpidv2 = ComputeCPIDv2(email, project.cpidhash, 0);
-	//project.cpidv2 = project.cpid;
-
 	project.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + project.cpid;
 	//Local CPID with struct
 	//Must contain cpidv2, cpid, boincpublickey
 	project.Iscpidvalid = false;
-	//2nd arg is ENC bpk
 	project.Iscpidvalid = IsLocalCPIDValid(project);
  	if (project.team != "gridcoin") 
 	{
@@ -6795,7 +6870,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 						{
 							structverify = GetStructCPID();
 							structverify.initialized = true;
-							printf("inserting Credit Node CPID Project %s",sKey.c_str());
+							if (fDebug) printf("inserting Credit Node CPID Project %s",sKey.c_str());
 							mvCreditNodeCPIDProject.insert(map<string,StructCPID>::value_type(sKey,structverify));
 						}
 						structverify.cpid = cpid;
@@ -7136,7 +7211,7 @@ void HarvestCPIDs(bool cleardata)
 				boost::to_lower(team);
 				structcpid.team = team;
 				InitializeProjectStruct(structcpid);
-				printf("Harv new project %s cpid %s valid %s",structcpid.projectname.c_str(),structcpid.cpid.c_str(),YesNo(structcpid.Iscpidvalid).c_str());
+				if (fDebug) printf("Harv new project %s cpid %s valid %s",structcpid.projectname.c_str(),structcpid.cpid.c_str(),YesNo(structcpid.Iscpidvalid).c_str());
 
 				if (!structcpid.Iscpidvalid)
 				{
@@ -7432,6 +7507,10 @@ MiningCPID GetMiningCPID()
 	mc.LastPaymentTime=0;
 	mc.ResearchSubsidy = 0;
 	mc.InterestSubsidy = 0;
+
+	mc.Organization = "";
+	mc.OrganizationKey = "";
+
 	return mc;
 }
 
@@ -7465,7 +7544,9 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
             pto->nPingUsecStart = GetTimeMicros();
             if (pto->nVersion > BIP0031_VERSION) {
                 pto->nPingNonceSent = nonce;
-                pto->PushMessage("ping", nonce);
+				std::string acid = GetCommandNonce("ping");
+            
+                pto->PushMessage("ping", nonce, acid);
             } else {
                 // Peer is too old to support ping command with nonce, pong will never arrive.
                 pto->nPingNonceSent = 0;
@@ -7516,14 +7597,14 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                     // receiver rejects addr messages larger than 1000
                     if (vAddr.size() >= 1000)
                     {
-                        pto->PushMessage("addr", vAddr);
+                        pto->PushMessage("gridaddr", vAddr);
                         vAddr.clear();
                     }
                 }
             }
             pto->vAddrToSend.clear();
             if (!vAddr.empty())
-                pto->PushMessage("addr", vAddr);
+                pto->PushMessage("gridaddr", vAddr);
         }
 
 

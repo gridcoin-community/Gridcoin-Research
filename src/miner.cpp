@@ -424,29 +424,31 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
             printf("CreateNewBlock(): total size %"PRIu64"\n", nBlockSize);
 		//Add Boinc Hash - R HALFORD - 11-28-2014 - Add CPID v2
 		MiningCPID miningcpid = GetNextProject(false);
-		//ToDo:Test CPID v2 IsCpidValid from RPC
-		//Crashes in Linux
 		uint256 pbh = 0;
 		if (pindexPrev) pbh=pindexPrev->GetBlockHash();
 	    miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pbh);
-				
-
-		//miningcpid.cpidv2="";
 		miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
 		//12-9-2014 Verify RSA Weight is actually in the block
 		miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 		double out_por = 0;
 		double out_interest=0;
 
-		//12-14-2014
-
+		
 		//Halford: Use current time since we are creating a new stake
 		int64_t nNewBlockReward = GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),out_por,out_interest);
 		miningcpid.ResearchSubsidy = out_por;
 		miningcpid.InterestSubsidy = out_interest;
 
 		msMiningErrors4 = "BRSA: " + RoundToString(miningcpid.RSAWeight,0);
-
+		//12-27-2014 Strip CPID out of hashboinc
+		miningcpid.enccpid = ""; //CPID V1 Boinc RunTime enc key
+		miningcpid.encboincpublickey = "";
+		miningcpid.encaes = "";
+			
+		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+		
+	
+		
 		std::string hashBoinc = SerializeBoincBlock(miningcpid);
 		//printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
 	    if (fDebug)  if (LessVerbose(5)) printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
@@ -570,9 +572,10 @@ bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
 
         // Process this block the same as if we had received it from another node
         if (!ProcessBlock(NULL, pblock, true))
+		{
             return error("CheckWork() : ProcessBlock, block not accepted");
+		}
     }
-	MilliSleep(275000);  //Preventing sync problems
 		
     return true;
 }
@@ -631,11 +634,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
         return error("CheckStake() : proof-of-stake checking failed");
 	}
 
-	//
-    //double subsidy = (pblock->vtx[0].GetValueOut())/C-OIN;
-	//std::string sSubsidy = RoundToString(subsidy,4);
 	
-
     //// debug print
 	double block_value = CoinToDouble(pblock->vtx[1].GetValueOut());
 	std::string sBlockValue = RoundToString(block_value,4);	
@@ -663,7 +662,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
         // Process this block the same as if we had received it from another node
         if (!ProcessBlock(NULL, pblock, true))
 		{
-            return error("CheckStake() : ProcessBlock (by me), but block not accepted");
+	        return error("CheckStake() : ProcessBlock (by me), but block not accepted");
 		}
     }
 	nLastBlockSolved = GetAdjustedTime();
@@ -672,7 +671,6 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 
 
 }
-
 
 
 
@@ -800,7 +798,7 @@ Begin:
 		}
 		}
 
-		if (IsLockTimeWithinMinutes(nLastBlockSolved,5)) 
+		if (IsLockTimeWithinMinutes(nLastBlockSolved,2)) 
 		{
 				if (fDebug) printf("=");
 				MilliSleep(1000);
@@ -820,6 +818,13 @@ Begin:
 				//Prevent Rapid Fire block creation (large investor nodes):
 		  	    SetThreadPriority(THREAD_PRIORITY_LOWEST);
         		
+			}
+			else
+			{
+				msMiningErrors = "Stake block rejected";
+				printf("Stake block rejected \r\n");
+				MilliSleep(10000);
+		
 			}
             SetThreadPriority(THREAD_PRIORITY_LOWEST);
             MilliSleep(500);

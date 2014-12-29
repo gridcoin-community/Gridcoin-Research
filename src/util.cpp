@@ -164,7 +164,7 @@ void RandAddSeedPerfmon()
     {
         RAND_add(pdata, nSize, nSize/100.0);
         memset(pdata, 0, nSize);
-        printf("RandAddSeed() %lu bytes\n", nSize);
+        if (fDebug) printf("RandAddSeed() %lu bytes\n", nSize);
     }
 #endif
 }
