@@ -34,6 +34,7 @@
 //Resend Unsent Tx
 
 extern void EraseOrphans();
+int DownloadBlocks();
 
 std::string GetCommandNonce(std::string command);
 std::string DefaultBlockKey(int key_length);
@@ -105,7 +106,7 @@ uint256 muGlobalCheckpointHash = 0;
 uint256 muGlobalCheckpointHashRelayed = 0;
 int muGlobalCheckpointHashCounter = 0;
 ///////////////////////MINOR VERSION////////////////////////////////
-int MINOR_VERSION = 125;
+int MINOR_VERSION = 130;
 
 			
 bool IsUserQualifiedToSendCheckpoint();
@@ -3833,6 +3834,18 @@ bool CBlockIndex::IsSuperMajority(int minVersion, const CBlockIndex* pstart, uns
 
 void GridcoinServices()
 {
+	
+	
+	if (nBestHeight < 1000)
+	{
+		//12-28-2014 Suggested by SeP
+		if (GetArg("-suppressdownloadblocks", "") == "")
+		{
+			#if defined(WIN32) && defined(QT_GUI)
+			DownloadBlocks();
+			#endif
+		}
+	}
 	//Called once for every block accepted
 	if (OutOfSyncByAge()) return;
 
@@ -3849,6 +3862,7 @@ void GridcoinServices()
 			    TallyInBackground();
 	}
 
+	
 
 	if (TimerMain("erase_orphans",1500))
 	{
@@ -4633,7 +4647,7 @@ bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey)
 			if (cpid=="INVESTOR") return true;
 			if (ENCboincpubkey == "" || ENCboincpubkey.length() < 5) 
 			{
-					printf("ENCBpk length empty.");
+					if (fDebug) printf("ENCBpk length empty.");
 					return false;
 			}
 			std::string bpk = AdvancedDecrypt(ENCboincpubkey);
@@ -5279,6 +5293,8 @@ bool AcidTest(std::string precommand, std::string acid, CNode* pfrom)
 		if (timediff > 10*60) 
 		{
 			printf("Network time attack %f",timediff);
+			pfrom->Misbehaving(50);
+			pfrom->fDisconnect = true;
 		}
 
 		if (hash != pw1 || timediff > (10*60)) 

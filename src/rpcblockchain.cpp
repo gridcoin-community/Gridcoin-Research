@@ -23,6 +23,7 @@ void ReloadBlockChain1();
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
 MiningCPID GetNextProject(bool bForce);
+std::string GetBestBlockHash(std::string sCPID);
 
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 
@@ -487,11 +488,13 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("OrganizationKeyPrefix",bb.OrganizationKey));
 	result.push_back(Pair("ClientVersion",bb.clientversion));	
 	bool IsCpidValid = IsCPIDValid_Retired(bb.cpid, bb.enccpid);
-	result.push_back(Pair("CPIDValid",IsCpidValid));
-	//result.push_back(Pair("Version2",block.nVersion));
-	if (bb.cpidv2.length() > 10) 	result.push_back(Pair("CPIDv2",bb.cpidv2.substr(0,32)));
-	if (true)
+	if (blockindex->nHeight < 70000) 
 	{
+			result.push_back(Pair("CPIDValid",IsCpidValid));
+	}
+	else
+	{
+		if (bb.cpidv2.length() > 10) 	result.push_back(Pair("CPIDv2",bb.cpidv2.substr(0,32)));
 		bool IsCPIDValid2 = IsCPIDValidv2(bb,blockindex->nHeight);
 		result.push_back(Pair("CPIDValidV2",IsCPIDValid2));
 		if (fDebug3 && !IsCPIDValid2)
@@ -1031,7 +1034,14 @@ Value execute(const Array& params, bool fHelp)
 		}
 	
 	}
+	else if (sItem == "testpoolhash")
+	{
 
+		std::string result = GetBestBlockHash(GlobalCPUMiningCPID.cpidv2);
+		entry.push_back(Pair("PoolHash",result));
+		results.push_back(entry);
+		
+	}
 	else if (sItem == "genorgkey")
 	{
 			if (params.size() != 3)

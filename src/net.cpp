@@ -33,6 +33,8 @@ extern std::string GetCommandNonce(std::string command);
 extern std::string DefaultOrg();
 extern std::string DefaultOrgKey(int key_length);
 extern std::string DefaultBlockKey(int key_length);
+extern std::string GetBestBlockHash(std::string sCPID);
+
 
 
 
@@ -549,46 +551,41 @@ std::string GridHTTPPost(std::string url, std::string hostheader, const string& 
     return s.str();
 }
 
-std::string GetPoolKey(std::string sMiningProject,double dMiningRAC,std::string ENCBoincpublickey,std::string xcpid, std::string messagetype, 
-	uint256 blockhash, double subsidy, double nonce, int height, int blocktype)
+std::string GetBestBlockHash(std::string sCPID)
 {
-	//ToDo Pass in CPU or GPU block type, and Miner-Agent
-	std::string key = "<ADDRESS>";
-	std::string keystop = "</ADDRESS>";
+	std::string key = "<ADDR>";
+	std::string keystop = "</ADDR>";
 	if (fTestNet) 
 	{
 			key = "<ADDRESSTESTNET>";
 			keystop = "</ADDRESSTESTNET>";
 	}
-	if (dMiningRAC < 100 || sMiningProject=="" || xcpid=="") return "";
-	std::string key_copy = ENCBoincpublickey;
 
-	std::string sboincpubkey = AdvancedDecrypt(key_copy);
+	std::string boincauth = sCPID + "<;>" + hashBestChain.ToString();
+	std::string http = GridcoinHttpPost("hashbestchain",boincauth,"GetBestBlockHash.aspx",true);
+	printf("Resp %s",http.c_str());
 
-	std::string boincauth = sMiningProject + "<;>" + RoundToString(dMiningRAC,0) + "<;>" + sboincpubkey + "<;>" + xcpid + "<;>" 
-		+ RoundToString(subsidy,2) + "<;>" + RoundToString(nonce,0) + "<;>" + RoundToString((double)height,0) + "<;>" + RoundToString((double)blocktype,0);
-	std::string http = GridcoinHttpPost(messagetype,boincauth,"GetPoolKey.aspx",true);
 	msPubKey = ExtractXML(http,key,keystop);
-			
-
 	return msPubKey;
 }
 
 std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string urlPage, bool bUseDNS)
 {
-	//6-11-2014
-
+	
 	try 
 	{
 	// HTTP basic authentication
-    std::string strAuth1 = mapArgs["-pooluser"];
-	std::string strAuth2 = mapArgs["-poolpassword"];
-	std::string strAuth3 = mapArgs["-miner"];
+    std::string strAuth1 = GlobalCPUMiningCPID.cpidv2;
+	std::string strAuth2 = hashBestChain.ToString();
+	
     map<string, string> mapRequestHeaders;
-    mapRequestHeaders["Miner"] = strAuth1+"<;>"+strAuth2+"<;>"+strAuth3 + "<;>" + boincauth + "<;>" + msg;
+    mapRequestHeaders["Miner"] = strAuth1+"<;>"+strAuth2+"<;>"+ boincauth + "<;>" + msg;
 	CService addrConnect;
 	std::string ip = "127.0.0.1";
 	std::string poolFullURL = mapArgs["-poolurl"];  
+	poolFullURL = "http://pool.gridcoin.us";
+	//12-28-2014
+
 	if (poolFullURL=="")  return "ERR:Pool URL missing";
 	std::string domain = "";
 	if (poolFullURL.find("https://") != string::npos) 
@@ -614,7 +611,7 @@ std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string
 		if (addrIP.IsValid()) 
 		{
 				addrConnect = addrIP;
-				//printf("Domain Post IP valid\r\n %s",domain.c_str());
+				printf("Domain Post IP valid\r\n %s",domain.c_str());
 		}
 	} 
 	else
@@ -622,9 +619,9 @@ std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string
   		addrConnect = CService(ip, port); 
 	}
 	std::string strPost = GridHTTPPost(urlPage, domain, msg, mapRequestHeaders);
-    //printf("querying getdata\r\n  %s \r\n",strPost.c_str());
+    printf("querying getdata\r\n  %s \r\n",strPost.c_str());
 	std::string http = GetHttpContent(addrConnect, strPost);
-	//printf("http:\r\n  %s\r\n",http.c_str());
+	printf("http:\r\n  %s\r\n",http.c_str());
 	return http;
 	
 	}
