@@ -1,0 +1,5 @@
+all:
+	g++ upgrader.h upgrader.cpp util.h util.cpp -lcurl -lpthread -lcrypto -lboost_thread -lboost_program_options -L/home/lederstrumpf/c++_playfield/GRCRestarter/chilkat-9.5.0-x86_64-linux-gcc/lib -lchilkat-9.5.0 -lboost_filesystem -lboost_system -lboost_date_time -o upgrader -DUPGRADER
+
+clean:
+	rm -rf *o upgrader

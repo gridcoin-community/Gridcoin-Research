@@ -1200,6 +1200,9 @@ int64_t GetAdjustedTime()
     return GetTime() + GetTimeOffset();
 }
 
+#ifndef UPGRADER
+// avoid including unnecessary files for standalone upgrader
+
 void AddTimeData(const CNetAddr& ip, int64_t nTime)
 {
     int64_t nOffsetSample = nTime - GetTime();
@@ -1253,6 +1256,8 @@ void AddTimeData(const CNetAddr& ip, int64_t nTime)
     }
 }
 
+#endif
+
 uint32_t insecure_rand_Rz = 11;
 uint32_t insecure_rand_Rw = 11;
 void seed_insecure_rand(bool fDeterministic)
@@ -1282,10 +1287,15 @@ string FormatVersion(int nVersion)
         return strprintf("%d.%d.%d.%d", nVersion/1000000, (nVersion/10000)%100, (nVersion/100)%100, nVersion%100);
 }
 
+#ifndef UPGRADER
+// avoid including unnecessary files for standalone upgrader
+
 string FormatFullVersion()
 {
     return CLIENT_BUILD;
 }
+
+#endif
 
 // Format the subversion field according to BIP 14 spec (https://en.bitcoin.it/wiki/BIP_0014)
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments)

@@ -17,25 +17,29 @@ class UpgradeDialog : public QDialog
 public:
     explicit UpgradeDialog(QWidget *parent = 0);
     ~UpgradeDialog();
+
     void setClientModel(ClientModel *model);
-    void getPerc(Upgrader* upgrader)
-	{
-    	upgrader->getFileDone();
-	}
 	bool performUpgrade = false;
+	bool downloading = false;
+	bool initialized = false;
 
 private:
     Ui::UpgradeDialog *ui;
     ClientModel *clientModel;
     Upgrader upgrader;
-    int historyPtr;
 
 private slots:
-    void on_buttonBox_accepted();
+    void on_retryDownloadButton_clicked();
+    void on_upgradeButton_clicked();
+    void on_hideButton_clicked();
+
 
 public slots:
 	void upgrade();
 	void setPerc(int percentage);
+	bool requestRestart();
+	void enableUpgradeButton(bool state);
+	void enableretryDownloadButton(bool state);
 
 signals:
 	void check(Upgrader *upgrader, UpgradeDialog *UpgradeDialog);
