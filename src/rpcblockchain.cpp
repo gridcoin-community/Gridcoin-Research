@@ -25,6 +25,9 @@ StructCPID GetStructCPID();
 MiningCPID GetNextProject(bool bForce);
 std::string GetBestBlockHash(std::string sCPID);
 
+
+std::string TestHTTPProtocol(std::string sCPID);
+
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 
 uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
@@ -487,16 +490,16 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("Organization",bb.Organization));
 	result.push_back(Pair("OrganizationKeyPrefix",bb.OrganizationKey));
 	result.push_back(Pair("ClientVersion",bb.clientversion));	
-	bool IsCpidValid = IsCPIDValid_Retired(bb.cpid, bb.enccpid);
 	if (blockindex->nHeight < 70000) 
 	{
+			bool IsCpidValid = IsCPIDValid_Retired(bb.cpid, bb.enccpid);
 			result.push_back(Pair("CPIDValid",IsCpidValid));
 	}
 	else
 	{
 		if (bb.cpidv2.length() > 10) 	result.push_back(Pair("CPIDv2",bb.cpidv2.substr(0,32)));
 		bool IsCPIDValid2 = IsCPIDValidv2(bb,blockindex->nHeight);
-		result.push_back(Pair("CPIDValidV2",IsCPIDValid2));
+		result.push_back(Pair("CPIDValid",IsCPIDValid2));
 		if (fDebug3 && !IsCPIDValid2)
 		{
 			//std::string cpidv2debug = AES512(bb.enccpid);
@@ -1038,6 +1041,13 @@ Value execute(const Array& params, bool fHelp)
 	{
 
 		std::string result = GetBestBlockHash(GlobalCPUMiningCPID.cpidv2);
+		entry.push_back(Pair("PoolHash",result));
+		results.push_back(entry);
+		
+	}
+	else if (sItem=="testpoolhash2")
+	{
+		std::string result = TestHTTPProtocol(GlobalCPUMiningCPID.cpidv2);
 		entry.push_back(Pair("PoolHash",result));
 		results.push_back(entry);
 		

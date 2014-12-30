@@ -69,7 +69,6 @@ extern int miningthreadcount;
 		double interestPayments;
 		double outstanding;
 		double verifiedTotalRAC;
-		double verifiedTotalNetworkRAC;
 		double verifiedMagnitude;
         double TotalMagnitude;
 		double MagnitudeCount;
@@ -83,12 +82,16 @@ extern int miningthreadcount;
 		double longtermtotalowed;
 		double longtermowed;
 		double LastPaymentTime;
+		double ResearchSubsidy;
+		
 		double EarliestPaymentTime;
 		double RSAWeight;
-		double PaymentTimespan;
-		double ResearchSubsidy;
 		double InterestSubsidy;
-	
+		double PaymentTimespan;
+		double verifiedTotalNetworkRAC;
+		
+		double Canary;
+
 
 		std::string cpid;
 		std::string emailhash;
@@ -139,30 +142,12 @@ extern int miningthreadcount;
 
 	struct MiningCPID
 	{
-		std::string projectname;
 		double rac;
-		std::string encboincpublickey;
-		std::string cpid;
-		std::string cpidhash;
 		double pobdifficulty;
 		unsigned int diffbytes;
 		bool initialized;	
-		std::string enccpid;
-		std::string aesskein;
-		std::string encaes;
 		double nonce;
 		double NetworkRAC;
-		int prevBlockType;
-		std::string clientversion;
-		std::string VouchedCPID;
-		std::string cpidv2;
-		std::string email;
-		std::string boincruntimepublickey;
-		std::string GRCAddress;
-		std::string lastblockhash;
-		std::string Organization;
-		std::string OrganizationKey;
-
 		double VouchedRAC;
 		double VouchedNetworkRAC;
 		double Magnitude;
@@ -174,6 +159,26 @@ extern int miningthreadcount;
 		double LastPaymentTime;
 		double ResearchSubsidy;
 		double InterestSubsidy;
+		int prevBlockType;
+		double Canary;
+		
+		std::string projectname;
+		std::string encboincpublickey;
+		std::string cpid;
+		std::string cpidhash;
+		std::string enccpid;
+		std::string aesskein;
+		std::string encaes;
+		std::string clientversion;
+		std::string VouchedCPID;
+		std::string cpidv2;
+		std::string email;
+		std::string boincruntimepublickey;
+		std::string GRCAddress;
+		std::string lastblockhash;
+		std::string Organization;
+		std::string OrganizationKey;
+
 
 	};
 

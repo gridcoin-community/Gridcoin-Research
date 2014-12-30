@@ -34,9 +34,7 @@ extern std::string DefaultOrg();
 extern std::string DefaultOrgKey(int key_length);
 extern std::string DefaultBlockKey(int key_length);
 extern std::string GetBestBlockHash(std::string sCPID);
-
-
-
+extern std::string TestHTTPProtocol(std::string sCPID);
 
 std::string DefaultBoincHashArgs();
 
@@ -218,18 +216,18 @@ bool RecvLine2(SOCKET hSocket, string& strLine)
     while (true)
     {
         char c;
-        int nBytes = recv(hSocket, &c, 1, 0);
-
+     	int nBytes = recv(hSocket, &c, 1,  0);
+		
 		clock_t end = clock();
 		double elapsed_secs = double(end - begin) / (CLOCKS_PER_SEC+.01);
-		if (elapsed_secs > 14) return true;
-			
+		if (elapsed_secs > 5) return true;
+	
         if (nBytes > 0)
         {
-            if (c == '\n')
-                continue;
-            if (c == '\r')
-                return true;
+            
+	
+			if (c == '\n')      continue;
+            if (c == '\r')      return true;
 			
             strLine += c;
             if (strLine.size() >= 39000)
@@ -237,9 +235,11 @@ bool RecvLine2(SOCKET hSocket, string& strLine)
         }
         else if (nBytes <= 0)
         {
+	
             boost::this_thread::interruption_point();
             if (nBytes < 0)
             {
+	
                 int nErr = WSAGetLastError();
                 if (nErr == WSAEMSGSIZE)
                     continue;
@@ -248,9 +248,7 @@ bool RecvLine2(SOCKET hSocket, string& strLine)
                     MilliSleep(50);
 					clock_t end = clock();
 					double elapsed_secs = double(end - begin) / (CLOCKS_PER_SEC+.01);
-		
-					if (elapsed_secs > 14) return true;
-		
+					if (elapsed_secs > 5) return true;
                     continue;
                 }
             }
@@ -259,13 +257,12 @@ bool RecvLine2(SOCKET hSocket, string& strLine)
             if (nBytes == 0)
             {
                 // socket closed
-              
                 return false;
             }
             else
             {
                 // socket error
-                int nErr = WSAGetLastError();
+	            int nErr = WSAGetLastError();
                 printf("recv failed: %d\n", nErr);
                 return false;
             }
@@ -297,8 +294,9 @@ bool RecvLine(SOCKET hSocket, string& strLine)
         int nBytes = recv(hSocket, &c, 1, 0);
         if (nBytes > 0)
         {
-            if (c == '\n')
+            if (c == '\n') 
                 continue;
+			
             if (c == '\r')
                 return true;
             strLine += c;
@@ -464,9 +462,6 @@ bool IsReachable(const CNetAddr& addr)
 
 
 
-
-
-
 void StringToChar(std::string s, char* a) 
 {	a=new char[s.size()+1];
 	a[s.size()]=0;
@@ -489,35 +484,27 @@ std::string GetHttpContent(const CService& addrConnect, std::string getdata)
         return "GetHttpContent() : connection to address failed";
 	}
 
-	//printf("Trying %s",getdata.c_str());
+	if (fDebug) printf("Trying %s",getdata.c_str());
 
     send(hSocket, pszGet, strlen(pszGet), MSG_NOSIGNAL);
-
     string strLine;
 	std::string strOut="null";
-
 	MilliSleep(133);
 	double timeout = 0;
-
-
 	clock_t begin = clock();
-
-	
     while (RecvLine2(hSocket, strLine))
     {
-
 	            strOut = strOut + strLine + "\r\n";
-				MilliSleep(155);
-				timeout=timeout+222;
+				MilliSleep(100);
+				timeout=timeout+100;
   			    clock_t end = clock();
 				double elapsed_secs = double(end - begin) / (CLOCKS_PER_SEC+.01);
-				if (timeout > 14000) break;
-				if (elapsed_secs > 14) break;
+				if (timeout > 10000) break;
+				if (elapsed_secs > 10) break;
 			    if (strLine.find("<END>") != string::npos) break;
-
+				if (strLine.find("</html>") != string::npos) break;
     }
     closesocket(hSocket);
-    
 	return strOut;
 	}
     catch (std::exception &e) 
@@ -531,9 +518,6 @@ std::string GetHttpContent(const CService& addrConnect, std::string getdata)
 	}
 
 }
-
-
-
 
 
 std::string GridHTTPPost(std::string url, std::string hostheader, const string& strMsg, const map<string,string>& mapRequestHeaders)
@@ -560,14 +544,30 @@ std::string GetBestBlockHash(std::string sCPID)
 			key = "<ADDRESSTESTNET>";
 			keystop = "</ADDRESSTESTNET>";
 	}
-
 	std::string boincauth = sCPID + "<;>" + hashBestChain.ToString();
 	std::string http = GridcoinHttpPost("hashbestchain",boincauth,"GetBestBlockHash.aspx",true);
-	printf("Resp %s",http.c_str());
-
+	if (fDebug) printf("Resp %s",http.c_str());
 	msPubKey = ExtractXML(http,key,keystop);
 	return msPubKey;
 }
+
+
+std::string TestHTTPProtocol(std::string sCPID)
+{
+	std::string key = "<ADDR>";
+	std::string keystop = "</ADDR>";
+	if (fTestNet) 
+	{
+			key = "<ADDRESSTESTNET>";
+			keystop = "</ADDRESSTESTNET>";
+	}
+	std::string boincauth = sCPID + "<;>" + hashBestChain.ToString();
+	std::string http = GridcoinHttpPost("hashbestchain",boincauth,"Test404Page.aspx",true);
+	if (fDebug) printf("Resp %s",http.c_str());
+	msPubKey = ExtractXML(http,key,keystop);
+	return msPubKey;
+}
+
 
 std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string urlPage, bool bUseDNS)
 {
@@ -584,7 +584,6 @@ std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string
 	std::string ip = "127.0.0.1";
 	std::string poolFullURL = mapArgs["-poolurl"];  
 	poolFullURL = "http://pool.gridcoin.us";
-	//12-28-2014
 
 	if (poolFullURL=="")  return "ERR:Pool URL missing";
 	std::string domain = "";
@@ -599,7 +598,7 @@ std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string
 
 	if (domain=="") 
 	{
-		printf("Pool Domain Missing \r\n");
+		if (fDebug)		printf("Pool Domain Missing \r\n");
 		return "ERR:Pool Domain missing";
 	}
     int port = 80;
@@ -611,7 +610,7 @@ std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string
 		if (addrIP.IsValid()) 
 		{
 				addrConnect = addrIP;
-				printf("Domain Post IP valid\r\n %s",domain.c_str());
+				if (fDebug) printf("Domain Post IP valid\r\n %s",domain.c_str());
 		}
 	} 
 	else
@@ -619,9 +618,9 @@ std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string
   		addrConnect = CService(ip, port); 
 	}
 	std::string strPost = GridHTTPPost(urlPage, domain, msg, mapRequestHeaders);
-    printf("querying getdata\r\n  %s \r\n",strPost.c_str());
+    if (fDebug) printf("querying getdata\r\n  %s \r\n",strPost.c_str());
 	std::string http = GetHttpContent(addrConnect, strPost);
-	printf("http:\r\n  %s\r\n",http.c_str());
+	if (fDebug) printf("http:\r\n  %s\r\n",http.c_str());
 	return http;
 	
 	}
@@ -697,8 +696,7 @@ std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache)
   				     "User-Agent: Mozilla/4.0\r\n"
                      "\r\n";
              
-        //		printf("querying getdata %s",getdata.c_str());
-		std::string http = GetHttpContent(addrConnect,getdata);
+      	std::string http = GetHttpContent(addrConnect,getdata);
 		std::string resultset = "" + http;
 		c.initialized=true;
 		c.xml = resultset;
@@ -1021,7 +1019,7 @@ std::string DefaultBlockKey(int key_length)
 {
 	std::string bha = GetArg("-boinchash", "boinchashargs");
 	if (bha=="boinchashargs") bha = BoincHashWindowsMerkleRootNew;
-	return bha.length() >= key_length ? bha.substr(0,key_length) : "";
+	return (int)bha.length() >= key_length ? bha.substr(0,key_length) : "";
 }
 
 

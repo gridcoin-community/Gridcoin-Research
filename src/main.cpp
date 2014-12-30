@@ -2895,8 +2895,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			{
 				double bv = BlockVersion(bb.clientversion);
 				double cvn = ClientVersionNew();
-				printf("BV %f, CV %f      ",bv,cvn);
-				if (bv < cvn) return error("ConnectBlock(): Old client version after mandatory upgrade - block rejected\r\n");
+				if (fDebug2) printf("BV %f, CV %f   ",bv,cvn);
+				if (bv+10 < cvn) return error("ConnectBlock(): Old client version after mandatory upgrade - block rejected\r\n");
 			}
 
 			//Block being accepted within the last hour: Check with Netsoft - AND Verify User will not be overpaid:
@@ -4808,12 +4808,12 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 
 		if (IsStake)
 		{
-			double interest = mint-bb.ResearchSubsidy;
+			double interest = (double)mint - (double)bb.ResearchSubsidy;
+
 			//double interest = bb.InterestSubsidy;
 			structMagnitude.payments += bb.ResearchSubsidy;
-			structMagnitude.interestPayments += cdbl(RoundToString(interest,3),3);
-
-
+			structMagnitude.interestPayments=structMagnitude.interestPayments + interest;
+			
 			if (LockTime > structMagnitude.LastPaymentTime) structMagnitude.LastPaymentTime = LockTime;
 			if (LockTime < structMagnitude.EarliestPaymentTime) structMagnitude.EarliestPaymentTime = LockTime;
 			// Per RTM 12-23-2014 (Halford) Track detailed payments made to each CPID
@@ -7443,7 +7443,7 @@ StructCPID GetStructCPID()
 	c.verifiedrectime=0;
 	c.verifiedage=0;
 	c.entries=0;
-	c. AverageRAC=0;
+	c.AverageRAC=0;
 	c.NetworkProjects=0;
 	c.boincpublickey="";
 	c.Iscpidvalid=false;
@@ -7481,9 +7481,13 @@ StructCPID GetStructCPID()
 	c.PaymentTimespan=0;
 	c.ResearchSubsidy = 0;
 	c.InterestSubsidy = 0;
+	c.Canary = 0;
+	c.interestPayments = 0;
+	c.payments = 0;
 	c.PaymentTimestamps = "";
 	c.PaymentAmountsResearch = "";
 	c.PaymentAmountsInterest = "";
+
 	return c;
 
 }
@@ -7523,6 +7527,7 @@ MiningCPID GetMiningCPID()
 	mc.LastPaymentTime=0;
 	mc.ResearchSubsidy = 0;
 	mc.InterestSubsidy = 0;
+	mc.Canary = 0;
 
 	mc.Organization = "";
 	mc.OrganizationKey = "";
