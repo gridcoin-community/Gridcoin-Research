@@ -4808,12 +4808,12 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 
 		if (IsStake)
 		{
-			double interest = mint-bb.ResearchSubsidy;
+			double interest = (double)mint - (double)bb.ResearchSubsidy;
+
 			//double interest = bb.InterestSubsidy;
 			structMagnitude.payments += bb.ResearchSubsidy;
-			structMagnitude.interestPayments += cdbl(RoundToString(interest,3),3);
-
-
+			structMagnitude.interestPayments=structMagnitude.interestPayments + interest;
+			
 			if (LockTime > structMagnitude.LastPaymentTime) structMagnitude.LastPaymentTime = LockTime;
 			if (LockTime < structMagnitude.EarliestPaymentTime) structMagnitude.EarliestPaymentTime = LockTime;
 			// Per RTM 12-23-2014 (Halford) Track detailed payments made to each CPID
@@ -7443,7 +7443,7 @@ StructCPID GetStructCPID()
 	c.verifiedrectime=0;
 	c.verifiedage=0;
 	c.entries=0;
-	c. AverageRAC=0;
+	c.AverageRAC=0;
 	c.NetworkProjects=0;
 	c.boincpublickey="";
 	c.Iscpidvalid=false;
@@ -7482,7 +7482,8 @@ StructCPID GetStructCPID()
 	c.ResearchSubsidy = 0;
 	c.InterestSubsidy = 0;
 	c.Canary = 0;
-
+	c.interestPayments = 0;
+	c.payments = 0;
 	c.PaymentTimestamps = "";
 	c.PaymentAmountsResearch = "";
 	c.PaymentAmountsInterest = "";
