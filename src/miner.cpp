@@ -659,17 +659,14 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 		if (fDebug2) printf("GBS->%s",GlobalBlockSolved.c_str());
 		if (GlobalBlockSolved != "NULL" && GlobalBlockSolved.length() > 8 && GlobalBlockSolved != "")
 		{
-			//printf("CheckStake() : generated block is stale - Solved at %s \r\n",GlobalBlockSolved.c_str());
-			return error("CheckStake() : generated block is stale - Solved at %s \r\n",GlobalBlockSolved.c_str());
+			return error("CheckStake() : generated block is stale - Solved at %s, Block Height: %f \r\n",GlobalBlockSolved.c_str(),(double)nBestHeight+1);
 		}
-		
 
         // Track how many getdata requests this block gets
         {
             LOCK(wallet.cs_wallet);
             wallet.mapRequestCount[hashBlock] = 0;
         }
-
 
         // Process this block the same as if we had received it from another node
         if (!ProcessBlock(NULL, pblock, true))

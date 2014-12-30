@@ -2895,8 +2895,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			{
 				double bv = BlockVersion(bb.clientversion);
 				double cvn = ClientVersionNew();
-				printf("BV %f, CV %f      ",bv,cvn);
-				if (bv < cvn) return error("ConnectBlock(): Old client version after mandatory upgrade - block rejected\r\n");
+				if (fDebug2) printf("BV %f, CV %f   ",bv,cvn);
+				if (bv+10 < cvn) return error("ConnectBlock(): Old client version after mandatory upgrade - block rejected\r\n");
 			}
 
 			//Block being accepted within the last hour: Check with Netsoft - AND Verify User will not be overpaid:
@@ -7481,9 +7481,12 @@ StructCPID GetStructCPID()
 	c.PaymentTimespan=0;
 	c.ResearchSubsidy = 0;
 	c.InterestSubsidy = 0;
+	c.Canary = 0;
+
 	c.PaymentTimestamps = "";
 	c.PaymentAmountsResearch = "";
 	c.PaymentAmountsInterest = "";
+
 	return c;
 
 }
@@ -7523,6 +7526,7 @@ MiningCPID GetMiningCPID()
 	mc.LastPaymentTime=0;
 	mc.ResearchSubsidy = 0;
 	mc.InterestSubsidy = 0;
+	mc.Canary = 0;
 
 	mc.Organization = "";
 	mc.OrganizationKey = "";
