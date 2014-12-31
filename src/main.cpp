@@ -98,7 +98,7 @@ extern std::string GetArgument(std::string arg, std::string defaultvalue);
 extern void SetAdvisory();
 extern bool InAdvisory();
 
-json_spirit::Array MagnitudeReportCSV();
+json_spirit::Array MagnitudeReportCSV(bool detail);
 
 bool bNewUserWizardNotified = false;
 int64_t nLastBlockSolved = 0;  //Future timestamp
@@ -3876,7 +3876,7 @@ void GridcoinServices()
 		if (TimerMain("export_magnitude",900))
 		{
 			json_spirit::Array results;
-		    results = MagnitudeReportCSV();
+		    results = MagnitudeReportCSV(true);
 
 		}
 	}
@@ -4141,6 +4141,10 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
                 vtx[0].nTime = nTime = txCoinStake.nTime;
                 nTime = max(pindexBest->GetPastTimeLimit()+1, GetMaxTransactionTime());
                 nTime = max(GetBlockTime(), PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1));
+				//12-30-2014 Halford
+
+				nNonce++;
+				//
 
                 // we have to make sure that we have no future timestamps in
                 //    our transactions set
@@ -4705,9 +4709,9 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
 	//Gridcoin - payment range is stored in HighLockTime-LowLockTime
 	// If newbie has not participated for 14 days, use earliest payment in chain to assess payment window
 	// (Important to prevent e-mail change attacks) - Calculate payment timespan window in days
-	double payment_timespan = (GetAdjustedTime() - mag.EarliestPaymentTime)/86400;
+	double payment_timespan = (GetAdjustedTime() - mag.EarliestPaymentTime)/43200;
 	if (payment_timespan < 1) payment_timespan = 1;
-	if (payment_timespan > 10) payment_timespan = 14;
+	if (payment_timespan > 11) payment_timespan = 14;
 	mag.PaymentTimespan = payment_timespan;
 	double research_magnitude = LederstrumpfMagnitude2(coalesce(mag.ConsensusMagnitude,block_magnitude),locktime);
 	double owed = payment_timespan * Cap(research_magnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime));

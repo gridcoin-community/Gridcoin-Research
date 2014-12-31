@@ -1858,6 +1858,10 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);
 			//Note: At this point block.vtx[0] is still null, so we send the hashBoinc in separately
 			//KernelHashV1
+
+			//12-30-2014 - Add PoW nonce to POR - Halford
+			// pblock->nNonce = pdata->nNonce;
+       
             if (CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, 
 				*pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, targetProofOfStake, hashBoinc, false, true))
             {
