@@ -130,7 +130,6 @@ Public Class frmSQL
 
     Private Sub btnExec_Click(sender As System.Object, e As System.EventArgs) Handles btnExec.Click
 
-        'Dim sResult As String = InsertConfirm(100, "ee", "b", "abc12a")
        
         'Dim iResult As Long
         'iResult = TrackConfirm("abc12a")

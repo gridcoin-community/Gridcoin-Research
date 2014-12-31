@@ -332,13 +332,15 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msENCboincpublickey = "";
  double      	mdMiningRAC =0;
  double         mdMiningNetworkRAC = 0;
-
+ double			mdPORNonce = 0;
+ double         mdPORNonceSolved = 0;
  std::string    msHashBoinc    = "";
  std::string    msHashBoincTxId= "";
  std::string    msMiningErrors = "";
  std::string    msMiningErrors2 = "";
  std::string    msMiningErrors3 = "";
  std::string    msMiningErrors4 = "";
+
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
@@ -3429,10 +3431,7 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
     pindexNew->SetStakeModifier(nStakeModifier, fGeneratedStakeModifier);
     pindexNew->nStakeModifierChecksum = GetStakeModifierChecksum(pindexNew);
 
-    //if (!CheckStakeModifierCheckpoints(pindexNew->nHeight, pindexNew->nStakeModifierChecksum))
-    //   return error("AddToBlockIndex() : Rejected by stake modifier checkpoint height=%d, modifier=0x%016"PRIx64, pindexNew->nHeight, nStakeModifier);
-
-
+    
     // Add to mapBlockIndex
     map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.insert(make_pair(hash, pindexNew)).first;
     if (pindexNew->IsProofOfStake())
@@ -3704,9 +3703,9 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 				{
 					uint256 targetProofOfStake;
 					
-					if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me))
+					if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me, nNonce))
 					{
-						if (!generated_by_me) printf("WARNING: AcceptBlock(): check proof-of-stake failed for block %s\n", hash.ToString().c_str());
+						if (!generated_by_me) printf("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    \n", hash.ToString().c_str(),(double)nNonce);
 						return false; // do not error here as we expect this during initial block download
 					}
 					
@@ -4131,9 +4130,11 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
     if (nSearchTime > nLastCoinStakeSearchTime)
     {
         int64_t nSearchInterval = IsProtocolV2(nBestHeight+1) ? 1 : nSearchTime - nLastCoinStakeSearchTime;
-        if (wallet.CreateCoinStake(wallet, nBits, nSearchInterval, nFees, txCoinStake, key))
+        if (wallet.CreateCoinStake(wallet, nBits, nSearchInterval, nFees, txCoinStake, key, this))
         {
-			printf("7.");
+			nNonce=mdPORNonceSolved;
+			printf("7. nonce %f",(double)nNonce);
+
             if (txCoinStake.nTime >= max(pindexBest->GetPastTimeLimit()+1, PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1)))
             {
                 // make sure coinstake would meet timestamp protocol
@@ -4142,9 +4143,10 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
                 nTime = max(pindexBest->GetPastTimeLimit()+1, GetMaxTransactionTime());
                 nTime = max(GetBlockTime(), PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1));
 				//12-30-2014 Halford
-
-				nNonce++;
+				//				nNonce++;
+				
 				//
+				printf("POR Coinstake Accepted!  Nonce %f \r\n",(double)nNonce);
 
                 // we have to make sure that we have no future timestamps in
                 //    our transactions set

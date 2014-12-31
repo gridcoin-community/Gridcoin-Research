@@ -24,6 +24,8 @@ MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
 extern int64_t GetRSAWeightByCPID(std::string cpid);
 
+extern int SolveNonce(double diff);
+
 
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT);
 
@@ -586,41 +588,67 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 //
 
 
-bool StakeAcidTest(std::string grc_address, double por_diff, std::string last_block_hash, int height)
+bool StakeAcidTest(std::string grc_address, double por_diff, std::string last_block_hash, int height, unsigned int nonce)
 {
 	
 	if (fTestNet) return true;
-	if (height < 102300) return true;
+	if (height < 103145) return true;
 	//ROB HALFORD - 12-30-2014
-	std::string aggregated_hash = grc_address + "," + last_block_hash;
+	std::string aggregated_hash = grc_address + "," + last_block_hash + "," + RoundToString(nonce,0);
 	std::string hash_md5 = RetrieveMd5(aggregated_hash);
 	uint256 hash = uint256("0x" + hash_md5);
-	uint256 diff1 = uint256("0x8b97b08ce3830118ba68e155b87100e9");
-	uint256 diff2 = uint256("0x7b97b08ce3830118ba68e155b87100e9");
-	uint256 diff3 = uint256("0x6b97b08ce3830118ba68e155b87100e9");
-	uint256 diff4 = uint256("0x5b97b08ce3830118ba68e155b87100e9");
+	uint256 diff1 = uint256("0x00001fffffffffffffffffffffffffff");
+	uint256 diff2 = uint256("0x00000fffffffffffffffffffffffffff");
+	uint256 diff3 = uint256("0x00000dffffffffffffffffffffffffff");
+	uint256 diff4 = uint256("0x000004ffffffffffffffffffffffffff");
+	uint256 diff5 = uint256("0x000001ffffffffffffffffffffffffff");
+	uint256 diff6 = uint256("0x000000ffffffffffffffffffffffffff");
+	uint256 diff7 = uint256("0x000000afffffffffffffffffffffffff");
 
-	if (fDebug2) printf("hash acid test %s \r\n",YesNo(hash < diff1).c_str());
+	if (nonce < 5) return false;
 
+	//12-31-2014
+           
+	if (fDebug2) if (LessVerbose(15)) printf("{HAT} %s %f ",YesNo(hash < diff1).c_str(),(double)nonce);
 
-	if (por_diff >= 1   && por_diff < 10)   return (hash < diff1);
-	if (por_diff >= 10  && por_diff < 100)  return (hash < diff2);
-	if (por_diff >= 100 && por_diff < 1000) return (hash < diff3);
-	if (por_diff >= 1000)                   return (hash < diff4);
+	if (por_diff >= 1   && por_diff < 5)    return (hash < diff1);
+	if (por_diff >= 5   && por_diff < 10)   return (hash < diff2);
+	if (por_diff >= 10  && por_diff < 50)   return (hash < diff3);
+	if (por_diff >= 50  && por_diff < 100)  return (hash < diff4);
+	if (por_diff >= 100 && por_diff < 500)  return (hash < diff5);
+	if (por_diff >= 500 && por_diff < 1000) return (hash < diff6);
+	if (por_diff >= 1000)                   return (hash < diff7);
 	return true;
 
 }
 
+int SolveNonce(double diff)
+{
+	int i = 0;
+	std::string randomhash = GetRandHash().GetHex();
+
+       
+	for (i = 0; i < 900000000; i++)
+	{
+		bool test = StakeAcidTest("abc123",diff,randomhash,110000,i);
+		if (test) return i;
+	}
+
+	return i;
+}
+
+
 static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, unsigned int nTimeBlockFrom, 
 	const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, 
-	uint256& targetProofOfStake, bool fPrintProofOfStake, std::string hashBoinc, bool checking_local)
+	uint256& targetProofOfStake, bool fPrintProofOfStake, std::string hashBoinc, bool checking_local, double por_nonce)
 {
 	if (fDebug) printf("V2");
 
 	double PORDiff = GetBlockDifficulty(nBits);
 	MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
 
-	bool ACID_TEST = StakeAcidTest(boincblock.GRCAddress,PORDiff,pindexPrev->GetBlockHash().GetHex(),pindexPrev->nHeight);
+	bool ACID_TEST = StakeAcidTest(boincblock.GRCAddress,PORDiff,pindexPrev->GetBlockHash().GetHex(),pindexPrev->nHeight,por_nonce);
+
 
 	if (!ACID_TEST) return false;
 
@@ -725,17 +753,17 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 
 bool CheckStakeKernelHash(CBlockIndex* pindexPrev, unsigned int nBits, const CBlock& blockFrom, unsigned int nTxPrevOffset, 
 	const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, 
-	uint256& targetProofOfStake, std::string hashBoinc, bool fPrintProofOfStake, bool checking_local)
+	uint256& targetProofOfStake, std::string hashBoinc, bool fPrintProofOfStake, bool checking_local, double por_nonce)
 {
     if (IsProtocolV2(pindexPrev->nHeight+1))
-        return CheckStakeKernelHashV2(pindexPrev, nBits, blockFrom.GetBlockTime(), txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake, hashBoinc, checking_local);
+        return CheckStakeKernelHashV2(pindexPrev, nBits, blockFrom.GetBlockTime(), txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake, hashBoinc, checking_local, por_nonce);
     else
     return CheckStakeKernelHashV1(nBits, blockFrom, nTxPrevOffset, txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake, hashBoinc, checking_local);
 }
 
 // Check kernel hash target and coinstake signature
 bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned int nBits, 
-	uint256& hashProofOfStake, uint256& targetProofOfStake, std::string hashBoinc, bool checking_local)
+	uint256& hashProofOfStake, uint256& targetProofOfStake, std::string hashBoinc, bool checking_local, double por_nonce)
 {
     if (!tx.IsCoinStake())
         return error("CheckProofOfStake() : called on non-coinstake %s", tx.GetHash().ToString().c_str());
@@ -769,12 +797,12 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
 	if (nGrandfatherHeight > nGrandfather)
 	{
 		if (!CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, txPrev, txin.prevout, tx.nTime, hashProofOfStake, 
-			targetProofOfStake, hashBoinc, fDebug, checking_local))
+			targetProofOfStake, hashBoinc, fDebug, checking_local, por_nonce))
 		{
 			uint256 diff1 = hashProofOfStake - targetProofOfStake;
 			uint256 diff2 = targetProofOfStake - hashProofOfStake;
-			return error("CheckProofOfStake() : INFO: check kernel failed on coinstake %s, hashProof=%s, target=%s, offby1: %s, OffBy2: %s",
-				tx.GetHash().ToString().c_str(), hashProofOfStake.ToString().c_str(), targetProofOfStake.ToString().c_str(), 
+			return error("CheckProofOfStake() : INFO: check kernel failed on coinstake %s, Nonce %f, hashProof=%s, target=%s, offby1: %s, OffBy2: %s",
+				tx.GetHash().ToString().c_str(), (double)por_nonce, hashProofOfStake.ToString().c_str(), targetProofOfStake.ToString().c_str(), 
 				diff1.ToString().c_str(), diff2.ToString().c_str()); 
 			// may occur during initial download or if behind on block chain sync
 

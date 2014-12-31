@@ -25,6 +25,8 @@ StructCPID GetStructCPID();
 MiningCPID GetNextProject(bool bForce);
 std::string GetBestBlockHash(std::string sCPID);
 
+int SolveNonce(double diff);
+
 
 std::string TestHTTPProtocol(std::string sCPID);
 
@@ -1051,6 +1053,16 @@ Value execute(const Array& params, bool fHelp)
 		entry.push_back(Pair("PoolHash",result));
 		results.push_back(entry);
 		
+	}
+	else if (sItem =="nonce")
+	{
+		std::string sParam1 = params[1].get_str();
+		double diff = cdbl(sParam1,0);
+		int nonce = SolveNonce(diff);
+		entry.push_back(Pair("Diff",diff));
+		entry.push_back(Pair("Solved in",nonce));
+		results.push_back(entry);
+
 	}
 	else if (sItem == "genorgkey")
 	{

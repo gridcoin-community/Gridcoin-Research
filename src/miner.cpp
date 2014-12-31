@@ -182,7 +182,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
     txNew.vin.resize(1);
     txNew.vin[0].prevout.SetNull();
     txNew.vout.resize(1);
-
+	mdPORNonce=0;
 
 
     if (!fProofOfStake)
@@ -629,7 +629,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	}
 
 
-	if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc, true))
+	if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc, true, pblock->nNonce))
 	{	
 		if (fDebug) printf("Hash boinc %s",pblock->vtx[0].hashBoinc.c_str());
         return error("CheckStake() : proof-of-stake checking failed");
@@ -655,12 +655,15 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
             return error("CheckStake() : generated block is stale");
 		}
 
+		/*
 		std::string GlobalBlockSolved = GetBestBlockHash(GlobalCPUMiningCPID.cpidv2);
 		if (fDebug2) printf("GBS->%s",GlobalBlockSolved.c_str());
 		if (GlobalBlockSolved != "NULL" && GlobalBlockSolved.length() > 8 && GlobalBlockSolved != "")
 		{
 			return error("CheckStake() : generated block is stale - Solved at %s, Block Height: %f \r\n",GlobalBlockSolved.c_str(),(double)nBestHeight+1);
 		}
+		*/
+
 
         // Track how many getdata requests this block gets
         {
@@ -786,6 +789,8 @@ Begin:
         // Create new block
         //
         int64_t nFees;
+		mdPORNonce=0;
+
         auto_ptr<CBlock> pblock(CreateNewBlock(pwallet, true, &nFees));
         if (!pblock.get())
 		{

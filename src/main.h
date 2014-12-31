@@ -137,6 +137,9 @@ extern std::string 	msMiningProject;
 extern std::string 	msMiningCPID;
 extern double    	mdMiningRAC;
 extern double       mdMiningNetworkRAC;
+extern double       mdPORNonce;
+extern double       mdPORNonceSolved;
+
 extern std::string  msENCboincpublickey;
 extern std::string  msHashBoinc;
 extern std::string  msHashBoincTxId;
