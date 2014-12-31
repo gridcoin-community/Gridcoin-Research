@@ -182,9 +182,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
     txNew.vin.resize(1);
     txNew.vin[0].prevout.SetNull();
     txNew.vout.resize(1);
-	mdPORNonce=0;
-
-
+	
     if (!fProofOfStake)
     {
         CReserveKey reservekey(pwallet);
@@ -789,8 +787,12 @@ Begin:
         // Create new block
         //
         int64_t nFees;
-		mdPORNonce=0;
-
+		if (mdPORNonce > 2147483000) 
+		{
+			printf("Resetting...");
+				mdPORNonce=0;
+		}
+	
         auto_ptr<CBlock> pblock(CreateNewBlock(pwallet, true, &nFees));
         if (!pblock.get())
 		{

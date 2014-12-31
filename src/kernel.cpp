@@ -597,9 +597,9 @@ bool StakeAcidTest(std::string grc_address, double por_diff, std::string last_bl
 	std::string aggregated_hash = grc_address + "," + last_block_hash + "," + RoundToString(nonce,0);
 	std::string hash_md5 = RetrieveMd5(aggregated_hash);
 	uint256 hash = uint256("0x" + hash_md5);
-	uint256 diff1 = uint256("0x00001fffffffffffffffffffffffffff");
-	uint256 diff2 = uint256("0x00000fffffffffffffffffffffffffff");
-	uint256 diff3 = uint256("0x00000dffffffffffffffffffffffffff");
+	uint256 diff1 = uint256("0x0000efffffffffffffffffffffffffff");
+	uint256 diff2 = uint256("0x0000dfffffffffffffffffffffffffff");
+	uint256 diff3 = uint256("0x00001dffffffffffffffffffffffffff");
 	uint256 diff4 = uint256("0x000004ffffffffffffffffffffffffff");
 	uint256 diff5 = uint256("0x000001ffffffffffffffffffffffffff");
 	uint256 diff6 = uint256("0x000000ffffffffffffffffffffffffff");
