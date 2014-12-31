@@ -1603,6 +1603,8 @@ std::string NewbieLevelToString(int newbie_level)
 
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT)
 {
+	if (GetAdjustedTime() > 1420066220 && GetAdjustedTime() < 1420066220+3600) return 0;
+
 	if (RSA_WEIGHT==25000) return 0;
 	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
 	if (PORDiff > 0    && PORDiff < 1)   return 0;
@@ -1678,7 +1680,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	return true;
 }
 
-bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int64_t nSearchInterval, int64_t nFees, CTransaction& txNew, CKey& key, CBlock* pblock)
+bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int64_t nSearchInterval, int64_t nFees, CTransaction& txNew, CKey& key)
 {
     CBlockIndex* pindexPrev = pindexBest;
     CBigNum bnTargetPerCoinDay;

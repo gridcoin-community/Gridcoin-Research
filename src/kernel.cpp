@@ -592,7 +592,7 @@ bool StakeAcidTest(std::string grc_address, double por_diff, std::string last_bl
 {
 	
 	if (fTestNet) return true;
-	if (height < 103145) return true;
+	if (height < 103170) return true;
 	//ROB HALFORD - 12-30-2014
 	std::string aggregated_hash = grc_address + "," + last_block_hash + "," + RoundToString(nonce,0);
 	std::string hash_md5 = RetrieveMd5(aggregated_hash);
