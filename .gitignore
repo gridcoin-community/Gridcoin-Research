@@ -3,6 +3,7 @@ src/gridccoinstake
 src/gridcoinresearchd
 src/test_gridcoin
 src/build.h
+src/obj
 contrib/deprecated
 contrib/deprecated/bin
 release
