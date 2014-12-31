@@ -14,6 +14,21 @@ namespace bfs = boost::filesystem;
 namespace bpt = boost::posix_time;
 typedef std::vector<bfs::path> vec;
 
+bool CANCEL_DOWNLOAD = false;
+bool DOWNLOAD_SUCCESS = false;
+
+static int cancelDownloader(void *p,
+                    curl_off_t dltotal, curl_off_t dlnow,
+                    curl_off_t ultotal, curl_off_t ulnow)
+{
+  	if(CANCEL_DOWNLOAD) 
+  	{
+  		printf("\ncancelling download\n");
+  		return 1;
+  	}
+  	return 0;
+}
+
 size_t write_data(void *ptr, size_t size, size_t nmemb, FILE *stream)
 {
 	size_t written = fwrite(ptr, size, nmemb, stream);
@@ -28,11 +43,11 @@ std::string geturl()
 
 bfs::path GetProgramDir()
 {
-	bfs::path programdir = "/home/lederstrumpf/c++_playfield/GRCRestarter/program/";  // Naturally, this will be OS-dependent later
+	bfs::path programdir = bfs::current_path();  // Naturally, this will be OS-dependent later
 	return programdir;
 }
 
-bfs::path path(int pathfork)
+bfs::path Upgrader::path(int pathfork)
 {
 	bfs::path path;
 	
@@ -56,8 +71,12 @@ bfs::path path(int pathfork)
 void download(void *curlhandle)
 	{
 	struct curlargs *curlarg = (struct curlargs *)curlhandle;
-	curl_easy_perform(curlarg->handle);
-	curlarg->done=true;
+	CURLcode success = CURLE_OK;
+	printf("Starting the downz\n");
+	success = curl_easy_perform(curlarg->handle);
+	if (success == CURLE_OK) { curlarg->success = true; }
+	printf("Finished downloading\n");
+	curlarg->done = true;
 	}
 
 #if defined(UPGRADER)
@@ -73,40 +92,35 @@ int main(int argc, char *argv[])
 	
 	if (strcmp(argv[1], "upgrade")==0)
 	{
-		std::string target = "gridcoin"; // Consider adding reference to directory so that GRCupgrade can be called from anywhere on linux!
+		std::string target = "gridcoin-qt"; // Consider adding reference to directory so that GRCupgrade can be called from anywhere on linux!
 		std::string source = "gridcoin-qt";
-		if(!upgrader.downloader(target, PROGRAM, source)) {return 0;}
+		if(!upgrader.downloader(QT)) {return 0;}
 		if (!upgrader.juggler(PROGRAM, false)) 			{return 0;}
 	}
 	else if (strcmp(argv[1], "downloadblocks")==0)
 	{
-		std::string target = "snapshot.zip";
-		std::string source = "snapshot.zip";
-		if(!upgrader.downloader(target, DATA, source)) 	{return 0;}
+		if(!upgrader.downloader(BLOCKS)) 	{return 0;}
 		printf("Blocks downloaded successfully\n");
-		if(!upgrader.unzipper(target, DATA))            {return 0;}
+		if(!upgrader.unzipper(BLOCKS))            {return 0;}
 		printf("Blocks extracted successfully\n");
-		if (!upgrader.juggler(DATA, false)) 			{return 0;}
+		if (!upgrader.juggler(DATA, true)) 			{return 0;}
 		printf("Blocks copied successfully\n");
 	}
 	else if (strcmp(argv[1], "extractblocks")==0)
 	{
-		std::string target = "snapshot.zip";
-		if(!upgrader.unzipper(target, DATA))             {return 0;}
+		if(!upgrader.unzipper(BLOCKS))             {return 0;}
 		printf("Blocks extracted successfully\n");
-	}
-	else if (strcmp(argv[1], "juggler")==0)
-	{
-		if (upgrader.juggler(DATA, false))
+		if (upgrader.juggler(DATA, true))
 		{
-			printf("Copied file(s) successfully\n");
+			printf("Copied files successfully\n");
 		}
+
 	}
 	else if (strcmp(argv[1], "path")==0)
 	{
 		printf("%s\n", GetDataDir().c_str());
 	}
-	else if (strcmp(argv[1], "justupgrade")==0)
+	else if (strcmp(argv[1], "gridcoin-qt")==0)
 	{
 		#ifndef WIN32
 		int parent = atoi(argv[2]);
@@ -122,7 +136,7 @@ int main(int argc, char *argv[])
 		}
 		#endif
 	}
-	else if (strcmp(argv[1], "justblocks")==0)
+	else if (strcmp(argv[1], "gridcoind")==0)
 	{
 		#ifndef WIN32
 		int parent = atoi(argv[2]);
@@ -132,10 +146,25 @@ int main(int argc, char *argv[])
 			usleep(1000*800);
 		}
 		printf("\nParent dead\n");
-		std::string target = "snapshot.zip";
-		if(!upgrader.unzipper(target, DATA))             {return 0;}
+		if (upgrader.juggler(PROGRAM, false))
+		{
+			printf("Copied files successfully\n");
+		}
+		#endif
+	}
+	else if (strcmp(argv[1], "snapshot.zip")==0)
+	{
+		#ifndef WIN32
+		int parent = atoi(argv[2]);
+		while (0 == kill(parent, 0))
+		{
+			printf("Parent still kicking\n");
+			usleep(1000*800);
+		}
+		printf("\nParent dead\n");
+		if(!upgrader.unzipper(BLOCKS))             {return 0;}
 		printf("Blocks extracted successfully\n");
-		if (upgrader.juggler(DATA, false))
+		if (upgrader.juggler(DATA, true))
 		{
 			printf("Copied files successfully\n");
 		}
@@ -150,27 +179,34 @@ int main(int argc, char *argv[])
 }
 #endif
 
-bool Upgrader::downloader(std::string targetfile, int pf, std::string source)
+bool Upgrader::downloader(int targetfile)
 {
-	std::string urlstring = geturl() + source;
+	std::string urlstring = geturl() + targetswitch(targetfile);
 	const char *url = urlstring.c_str();
 
-	bfs::path target = path(pf) / "upgrade";
+	bfs::path target = path(DATA) / "upgrade";
 	if (!verifyPath(target, true)) {return false;}
-	target /= targetfile;
+	target /= targetswitch(targetfile);
 
 	printf("%s\n",url);
 	printf("%s\n",target.c_str());
 
 	curlhandle.handle = curl_easy_init();
-	curlhandle.done=0;
+	curlhandle.done = false;
+	curlhandle.success = false;
 
+	if (bfs::exists(target))	{bfs::remove(target);}
 	file=fopen(target.c_str(), "wb");
 	fileInitialized=true;
+
 
 	curl_easy_setopt(curlhandle.handle, CURLOPT_URL, url);
 	curl_easy_setopt(curlhandle.handle, CURLOPT_WRITEFUNCTION, write_data);
 	curl_easy_setopt(curlhandle.handle, CURLOPT_WRITEDATA, file);
+	curl_easy_setopt(curlhandle.handle, CURLOPT_WRITEDATA, file);
+	curl_easy_setopt(curlhandle.handle, CURLOPT_XFERINFOFUNCTION, cancelDownloader);
+	curl_easy_setopt(curlhandle.handle, CURLOPT_NOPROGRESS, 0L);
+
 
 	boost::thread(download, (void *)&curlhandle);
 
@@ -178,10 +214,12 @@ bool Upgrader::downloader(std::string targetfile, int pf, std::string source)
 
 	filesize = -1;
 	filesizeRetrieved = false;
+	int c = 0;
 
-	while (!curlhandle.done)
+	while (!curlhandle.done && !CANCEL_DOWNLOAD)
 		{
 			usleep(800*1000);
+			printf("looping\n");
 			#if defined(UPGRADER)
 			int sz = getFileDone();
 			printf("\r%li\tKB", sz/1024);
@@ -194,8 +232,19 @@ bool Upgrader::downloader(std::string targetfile, int pf, std::string source)
 	fclose(file);
 	fileInitialized=false;
 
-	printf("\nfile downloaded successfully\n");
-	return true;
+	// printf((CANCEL_DOWNLOAD)? "\ndownload interrupted\n" : "\nfile downloaded successfully\n");
+	if(!curlhandle.success)
+	{
+		printf((CANCEL_DOWNLOAD)? "\ndownload interrupted\n" : "\ndownload failed\n");
+		if (bfs::exists(target))	bfs::remove(target);
+		cancelDownload(false);
+		return false;
+	}
+	else
+	{
+		printf("\nfile downloaded successfully\n");
+		return true;
+	}
 }
 
 unsigned long int Upgrader::getFileDone()
@@ -220,23 +269,20 @@ int Upgrader::getFilePerc(long int sz)
 						return 0;
 					}
 			}
-	if(filesize > 0)
-	{
-		return sz*100/(filesize);
-	}
-	return 0;
+	
+	return (filesize > 0)? (sz*100/(filesize)) : 0;
 }
 
-bool Upgrader::unzipper(std::string targetfile, int pf)
+bool Upgrader::unzipper(int targetfile)
 {
-	bfs::path target = path(pf);
+	bfs::path target = path(DATA);
 	target /= "upgrade";
 	if (!verifyPath(target, true)) {return false;}
 	
 	CkZip zip;
 	zip.UnlockComponent("unlockCode");
 
-	if(zip.OpenZip((target / targetfile).c_str())) 
+	if(zip.OpenZip((target / targetswitch(targetfile)).c_str())) 
 	{
 		printf("Extracting archive into %s\n", target.c_str());
 		if(!zip.Extract(target.c_str()))
@@ -251,13 +297,14 @@ bool Upgrader::unzipper(std::string targetfile, int pf)
 		return false;
 	}
 	zip.CloseZip();
-	bfs::remove(target / targetfile);
+	bfs::remove(target / targetswitch(targetfile));
 	return true;
 }
 
 bool Upgrader::juggler(int pf, bool recovery)			// for upgrade, backs up target and copies over upgraded file
 {														// for recovery, copies over backup
-	bfs::path backupdir(path(DATA) / "backup");
+	std::string subdir = (pf == BLOCKS)? "Blockchain " : "Client " + bpt::to_simple_string(bpt::second_clock::local_time());
+	bfs::path backupdir(path(DATA) / "backup" / subdir);
 	bfs::path sourcedir(path(DATA));
 	if (recovery)
 		sourcedir = backupdir;
@@ -267,19 +314,57 @@ bool Upgrader::juggler(int pf, bool recovery)			// for upgrade, backs up target 
 
 	printf("Copying %s into %s\n", path(pf).c_str(), (backupdir / bpt::to_simple_string(bpt::second_clock::local_time())).c_str());
 
-	copyDir(path(pf), backupdir / bpt::to_simple_string(bpt::second_clock::local_time()));
+	if ((pf == PROGRAM) && (safeProgramDir()))
+	{
+		vec iteraton = this->fvector(sourcedir);
 
-	printf("Copying %s into %s\n", sourcedir.c_str(), path(pf).c_str());
+		for (vec::const_iterator mongo (iteraton.begin()); mongo != iteraton.end(); ++mongo)
+		{
 
-	copyDir(sourcedir, path(pf));
+			bfs::path fongo = *mongo;
+
+			if (!bfs::exists(sourcedir / fongo) || bfs::is_directory(sourcedir / fongo))
+			{
+				continue;
+			}
+
+			if (bfs::exists(path(pf) / fongo) && !recovery) // i.e. backup files before upgrading
+			{	if (!verifyPath(backupdir, true)) {return false;}
+				bfs::copy_file(path(pf) / fongo, backupdir / fongo, bfs::copy_option::overwrite_if_exists);
+			}
+
+			if (bfs::exists(path(pf) / fongo)) // avoid overwriting
+			{bfs::remove(path(pf) / fongo);}
+
+			bfs::copy_file(sourcedir / fongo, path(pf) / fongo); // the actual upgrade/recovery
+
+			
+	
+		}
+	}
+	else
+	{
+		copyDir(path(pf), backupdir, true);
+
+		printf("Copying %s into %s\n", sourcedir.c_str(), path(pf).c_str());
+
+		copyDir(sourcedir, path(pf), true);
 
 	return true;
+	}
 }
 
-bool Upgrader::copyDir(bfs::path source, bfs::path target)
+bool Upgrader::safeProgramDir()
 {
-	if (!verifyPath(source, false))	{return false;}
-	if (!verifyPath(target, true))	{return false;}
+	#ifndef WIN32
+	return true;
+	#endif
+	return false;
+}
+
+bool Upgrader::copyDir(bfs::path source, bfs::path target, bool recursive)
+{
+	if (!verifyPath(source, false) || !verifyPath(target, true))	{return false;}
 	
 	vec iteraton = this->fvector(source);
 	for (vec::const_iterator mongo (iteraton.begin()); mongo != iteraton.end(); ++mongo)
@@ -287,22 +372,22 @@ bool Upgrader::copyDir(bfs::path source, bfs::path target)
 
 	bfs::path fongo = *mongo;
 
-	// if (!bfs::exists(sourcedir / fongo))
-	// {
-	// 	printf("Error, file does not exist\n");
-	// 	return false;
-	// }
+	if (!bfs::exists(source / fongo))
+	{
+		printf("Error, file/directory does not exist\n");
+		return false;
+	}
 
 	if (bfs::is_directory(source / fongo))
 	{
 		// printf("%s is a directory - time for recursion!\n", (source / fongo).c_str());
 		// if (blacklistDirectory(fongo)) {continue;}
-		if ((fongo == "upgrade") || (fongo == "backup") || (fongo == "now"))
+		if ((fongo == "upgrade") || (fongo == "backup") || (fongo == "now") || (!recursive))
 		{
 			// printf("Skip this shit\n");
 			continue;
 		}
-		copyDir(source / fongo, target / fongo);
+		copyDir(source / fongo, target / fongo, recursive);
 	}
 	else
 	{
@@ -319,16 +404,7 @@ bool Upgrader::copyDir(bfs::path source, bfs::path target)
 	return true;
 }
 
-// bool Upgrader::CopyBlacklistDirectories(bfs::path path)
-// {
-// 	const char *blacklist[] = {
-// 		"upgrade",
-// 		"backup"
-// 	}
-// 	for 
-// }
-
-std::vector<bfs::path> Upgrader::fvector(bfs::path path)
+vec Upgrader::fvector(bfs::path path)
 {
 	vec a;
  
@@ -344,19 +420,30 @@ std::vector<bfs::path> Upgrader::fvector(bfs::path path)
 }
 
 #ifndef UPGRADER
-void Upgrader::upgrade()
+void Upgrader::upgrade(int target)
 {
 	#ifndef WIN32
 	std::stringstream pidstream;
 	pidstream << getpid();
 	std::string pid = pidstream.str();
 	printf("Parent: %s\n", pid.c_str());
+	if (bfs::exists(GetProgramDir() / "upgrader"))
+	{
 	if(!fork())
 	{
 		printf("Parent: %s\n", pid.c_str());
-		execl("/home/lederstrumpf/Gridcoin-Research/src/upgrader", "upgrader", "justblocks", pid.c_str(), NULL);
-		printf("Failed!");
+		if (bfs::exists(bfs::current_path() / "upgrader"))
+		{execl((GetProgramDir() / "upgrader").c_str(), "upgrader", targetswitch(target).c_str() , pid.c_str(), NULL);}
+		printf("%s does not exist!", (bfs::current_path() / "upgrader").c_str());
+		usleep(1000*10000);
 	}
+	else
+	{
+		StartShutdown();	
+	}
+	}
+	printf("Could not find upgrader - please verify that this is in the folder gridcoin-qt/gridcoind was called from\n");
+	#else
 	StartShutdown();
 	#endif
 }
@@ -378,4 +465,24 @@ bool Upgrader::verifyPath(bfs::path path, bool create)
 			printf("%s does not exist and could not be created!\n");
 			return false;
 		}
+}
+
+std::string Upgrader::targetswitch(int target)
+{
+	switch(target)
+	{
+		case BLOCKS:
+		return "snapshot.zip";
+
+		case QT:
+		return "gridcoin-qt";
+
+		case DAEMON:
+		return "gridcoind";
+	}
+}
+
+void Upgrader::cancelDownload(bool cancel)
+{
+	CANCEL_DOWNLOAD = cancel;
 }

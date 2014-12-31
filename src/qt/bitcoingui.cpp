@@ -310,6 +310,9 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     connect(upgradeAction, SIGNAL(triggered()), upgrader, SLOT(show()));
     connect(upgradeAction, SIGNAL(triggered()), upgrader, SLOT(upgrade()));
 
+    connect(downloadAction, SIGNAL(triggered()), upgrader, SLOT(show()));
+    connect(downloadAction, SIGNAL(triggered()), upgrader, SLOT(blocks()));
+
     // Clicking on "Verify Message" in the address book sends you to the verify message tab
     connect(addressBookPage, SIGNAL(verifyMessage(QString)), this, SLOT(gotoVerifyMessageTab(QString)));
     // Clicking on "Sign Message" in the receive coins page sends you to the sign message tab

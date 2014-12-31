@@ -12,37 +12,41 @@ struct curlargs
 { 
 	CURL *handle;
 	bool done;
+	bool success;
 };
 
 enum TARGET
 {
 	DATA,
 	PROGRAM,
+	
+	BLOCKS,
+	QT,
+	DAEMON
 };
 
 class Upgrader
 {
 
 private:
+
 	bool fileInitialized = false;
 	struct curlargs curlhandle;
 	FILE *file;
 	double filesize;
 	bool filesizeRetrieved;
 	std::vector<boost::filesystem::path> fvector(boost::filesystem::path path);
+	std::string targetswitch(int target);
 	bool verifyPath(boost::filesystem::path path, bool create);
-	bool copyDir(boost::filesystem::path source, boost::filesystem::path target);
-	// //launched in a separate thread that performs the downloading:
-	// // data writing function for curl:
-	// size_t write_data(void *ptr, size_t size, size_t nmemb, FILE *stream); 
-	// // arguments for curl:
-	// struct curlargs;
+	bool copyDir(boost::filesystem::path source, boost::filesystem::path target, bool recursive);
+	bool safeProgramDir();
+	boost::filesystem::path path(int pathfork);
 
 public:
 
-	bool downloader(std::string target, int pathfork, std::string source);
-	bool unzipper(std::string target, int pathfork);
-	void upgrade();
+	bool downloader	(int target);
+	bool unzipper	(int target);
+	void upgrade 	(int target);
 
 //	switches around upgrade, target and backup:
 	bool juggler(int pathfork, bool recovery);
@@ -50,6 +54,9 @@ public:
 // 	return info about file being downloaded:
 	unsigned long int getFileDone();
 	int getFilePerc(long int sz);
+
+ 	void cancelDownload(bool cancel);
+
 };
 
 #endif

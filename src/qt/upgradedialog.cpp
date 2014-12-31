@@ -16,7 +16,14 @@
 #include <QThread>
 #include <QMessageBox>
 
-bool downloadDone;
+bool downloading;
+bool downloadSuccess;
+
+struct downloaderArgs
+{
+    Upgrader *upgrader;
+    int target;
+};
 
 UpgradeDialog::UpgradeDialog(QWidget *parent) :
     QDialog(parent),
@@ -29,12 +36,14 @@ UpgradeDialog::UpgradeDialog(QWidget *parent) :
 
 void Imker(void *kippel)
 {
-    std::string target = "snapshot.zip";
-    std::string source = "snapshot.zip";
-    Upgrader *upgrader = (Upgrader*)kippel;
-    upgrader->downloader(target, DATA, source);
-    downloadDone = true;
-    // upgrader->unzipper(target, DATA);
+    downloadSuccess = false;
+    downloading = true;
+    downloaderArgs *argo = (downloaderArgs*)kippel;
+    printf("Starting download\n");
+    downloadSuccess = argo->upgrader->downloader(argo->target);
+    printf("completed download\n");
+    downloading = false;
+    delete kippel;
 }
 
 class Checker: public QObject
@@ -46,7 +55,6 @@ public slots:
 
 signals:
     void change(int percentage);
-    void requestRestart();
     void enableUpgradeButton(bool state);
     void enableretryDownloadButton(bool state);
 };
@@ -60,49 +68,75 @@ void Checker::start()
 
 void Checker::check(Upgrader *upgrader, UpgradeDialog *upgradeDialog)
 {
-    while(!downloadDone)
+    while(downloading)
     {
         emit(change(upgrader->getFilePerc(upgrader->getFileDone())));
         usleep(1000*800);
     }
-    emit(change(100)); // 99 is filthy
-    upgradeDialog->downloading = false;
-    emit(requestRestart());
-    connect(this, SIGNAL(enableUpgradeButton(bool)), upgradeDialog, SLOT(enableUpgradeButton(bool)));
     connect(this, SIGNAL(enableretryDownloadButton(bool)), upgradeDialog, SLOT(enableretryDownloadButton(bool)));
-    emit(enableUpgradeButton(true));
-    emit(enableretryDownloadButton(true));
-    
-}
-
-bool UpgradeDialog::requestRestart()
-{
-    // QMessageBox msgBox;
-    // msgBox.setText("The document has been modified.");
-    // msgBox.exec();
-    // return true;
+    if (downloadSuccess)
+    {
+        emit(change(100)); // 99 is filthy
+        connect(this, SIGNAL(enableUpgradeButton(bool)), upgradeDialog, SLOT(enableUpgradeButton(bool)));
+        emit(enableUpgradeButton(true));
+        emit(enableretryDownloadButton(false));
+    }
+    else
+    {
+        emit(enableretryDownloadButton(true));
+    }
 }
 
 void UpgradeDialog::upgrade()
 {
+    initiate(QT);
+}
+
+void UpgradeDialog::blocks()
+{
+    initiate(BLOCKS);
+}
+
+void UpgradeDialog::initiate(int targo)
+{
+    if((initialized) && (target!=targo))
+    {
+        QMessageBox changeDownload;
+        changeDownload.setWindowTitle((targo == QT)? "Already downloading blocks" : "Already upgrading client");
+        changeDownload.setText((targo == QT)? "Cancel and upgrade client instead" : "Cancel and download blocks instead?");
+        changeDownload.setStandardButtons(QMessageBox::No | QMessageBox::Yes);
+        changeDownload.setDefaultButton(QMessageBox::No);
+        QFont font = QApplication::font("QWorkspaceTitleBar");
+        QFontMetrics metric(font);
+        QSpacerItem* horizontalSpacer = new QSpacerItem(metric.width(windowTitle()) + 150, 0, QSizePolicy::Minimum, QSizePolicy::Expanding);
+        QGridLayout* layout = (QGridLayout*)changeDownload.layout();
+        layout->addItem(horizontalSpacer, layout->rowCount(), 0, 1, layout->columnCount());
+        if (changeDownload.exec() == QMessageBox::Yes) 
+            {
+                // cancelDownload();
+                initialized = false; 
+            }
+    }
     if (!initialized)
     {
     // re-instantiate Upgrade, in case download was broken off previously
-    Upgrader jim;
-    upgrader = jim;
+    target = targo;
     initialized = true;
-    
-    void *alf = &upgrader;
-    downloadDone = false;
+
+    // Upgrader *jim = new Upgrader;
+    // upgrader = *jim;    
+    downloadSuccess = false;
     downloading = true;
-    boost::thread(Imker, alf);
-    // enableUpgradeButton(false);
-    enableUpgradeButton(true); // TEMP
-    enableretryDownloadButton(false);
-    QThread* thread = new QThread;
+    downloaderArgs *argo = new downloaderArgs;
+    argo->upgrader = &upgrader;
+    argo->target = target;
+    boost::thread(Imker, argo);
+    enableUpgradeButton(false);
+    enableretryDownloadButton(true);
+    ui->retryDownloadButton->setText("Cancel Download");
+    QThread *thread = new QThread;
     Checker *checker = new Checker();
     connect(this, SIGNAL(check(Upgrader*, UpgradeDialog*)), checker, SLOT(check(Upgrader*, UpgradeDialog*)));
-    connect(checker, SIGNAL(requestRestart()), this, SLOT(requestRestart()));
     connect(checker, SIGNAL(change(int)), this, SLOT(setPerc(int)));
     checker->moveToThread(thread);
     thread->start();
@@ -132,18 +166,31 @@ UpgradeDialog::~UpgradeDialog()
 
 void UpgradeDialog::on_retryDownloadButton_clicked()
 {
-    initialized = false;
-    upgrade();
+    if (initialized)
+    {
+        cancelDownload();
+        initialized = false;
+        ui->retryDownloadButton->setText("Retry Download");
+    }
+    else
+    {
+        initiate(target);
+    }
 }
 
 void UpgradeDialog::on_upgradeButton_clicked()
 {
-    upgrader.upgrade();
+    upgrader.upgrade(target);
 }
 
 void UpgradeDialog::on_hideButton_clicked()
 {
     close();
+}
+
+void UpgradeDialog::cancelDownload()
+{
+    upgrader.cancelDownload(true);
 }
 
 

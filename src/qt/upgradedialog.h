@@ -27,6 +27,8 @@ private:
     Ui::UpgradeDialog *ui;
     ClientModel *clientModel;
     Upgrader upgrader;
+    int target;
+    void cancelDownload();
 
 private slots:
     void on_retryDownloadButton_clicked();
@@ -36,8 +38,9 @@ private slots:
 
 public slots:
 	void upgrade();
+	void blocks();
+	void initiate(int target);
 	void setPerc(int percentage);
-	bool requestRestart();
 	void enableUpgradeButton(bool state);
 	void enableretryDownloadButton(bool state);
 
