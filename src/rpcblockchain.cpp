@@ -53,7 +53,7 @@ int RebootClient();
 
 extern double GetNetworkProjectCountWithRAC();
 int ReindexWallet();
-extern Array MagnitudeReportCSV();
+extern Array MagnitudeReportCSV(bool detail);
 std::string getfilecontents(std::string filename);
 
 std::string NewbieLevelToString(int newbie_level);
@@ -1397,7 +1397,7 @@ std::string TimestampToHRDate(double dtm)
 
 
 
-Array MagnitudeReportCSV()
+Array MagnitudeReportCSV(bool detail)
 {
 	       Array results;
 		   Object c;
@@ -1412,7 +1412,7 @@ Array MagnitudeReportCSV()
 		   double rows = 0;
 		   double outstanding = 0;
 		   double totaloutstanding = 0;
-		   std::string header = "CPID,Magnitude,PaymentMagnitude,Accuracy,LongTermOwed14day,LongTermOwedDaily,Payments,InterestPayments,LastPaymentTime,CurrentDailyOwed,NextExpectedPayment,AvgDailyPayments,Outstanding,PaymentDate,ResearchPaymentAmount,InterestPaymentAmount\r\n";
+		   std::string header = "CPID,Magnitude,PaymentMagnitude,Accuracy,LongTermOwed14day,LongTermOwedDaily,Payments,InterestPayments,LastPaymentTime,CurrentDailyOwed,NextExpectedPayment,AvgDailyPayments,Outstanding,PaymentTimespan,PaymentDate,ResearchPaymentAmount,InterestPaymentAmount\r\n";
 
 		   std::string row = "";
 		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
@@ -1433,27 +1433,29 @@ Array MagnitudeReportCSV()
 							+ RoundToString(structMag.interestPayments,2) + "," + TimestampToHRDate(structMag.LastPaymentTime) 
 							+ "," + RoundToString(structMag.owed,2) 
 							+ "," + RoundToString(structMag.owed/2,2)
-							+ "," + RoundToString(structMag.payments/14,2) + "," + RoundToString(outstanding,2) + "\n";
+							+ "," + RoundToString(structMag.payments/14,2) + "," + RoundToString(outstanding,2) + "," + RoundToString(structMag.PaymentTimespan,0) +  "\n";
 						header += row;
-						//Add payment detail - Halford - Christmas Eve 2014
-	   					std::vector<std::string> vCPIDTimestamps = split(structMag.PaymentTimestamps.c_str(),",");
-						std::vector<std::string> vCPIDPayments   = split(structMag.PaymentAmountsResearch.c_str(),",");
-						std::vector<std::string> vCPIDInterestPayments = split(structMag.PaymentAmountsInterest.c_str(),",");
-					    for (unsigned int i = 0; i < vCPIDTimestamps.size(); i++)
+						if (detail)
 						{
-								double dTime = cdbl(vCPIDTimestamps[i],0);
-								std::string sResearchAmount = vCPIDPayments[i];
-								std::string sPaymentDate = DateTimeStrFormat("%m-%d-%Y %H:%M:%S", dTime);
-								std::string sInterestAmount = vCPIDInterestPayments[i];
+							//Add payment detail - Halford - Christmas Eve 2014
+	   						std::vector<std::string> vCPIDTimestamps = split(structMag.PaymentTimestamps.c_str(),",");
+							std::vector<std::string> vCPIDPayments   = split(structMag.PaymentAmountsResearch.c_str(),",");
+							std::vector<std::string> vCPIDInterestPayments = split(structMag.PaymentAmountsInterest.c_str(),",");
+							for (unsigned int i = 0; i < vCPIDTimestamps.size(); i++)
+							{
+									double dTime = cdbl(vCPIDTimestamps[i],0);
+									std::string sResearchAmount = vCPIDPayments[i];
+									std::string sPaymentDate = DateTimeStrFormat("%m-%d-%Y %H:%M:%S", dTime);
+									std::string sInterestAmount = vCPIDInterestPayments[i];
 								
-								if (dTime > 0)
-								{
-									row = " , , , , , , , , , , , , ," + sPaymentDate + "," + sResearchAmount + "," + sInterestAmount + "\n";
-									header += row;
+									if (dTime > 0)
+									{
+										row = " , , , , , , , , , , , , , ," + sPaymentDate + "," + sResearchAmount + "," + sInterestAmount + "\n";
+										header += row;
 									
-								}
+									}
+							}
 						}
-
 						rows++;
 						totalpaid += structMag.payments;
 						lto += structMag.totalowed;
@@ -1651,7 +1653,13 @@ Value listitem(const Array& params, bool fHelp)
 
 	if (sitem == "magnitudecsv")
 	{
-		results = MagnitudeReportCSV();
+		results = MagnitudeReportCSV(false);
+		return results;
+	}
+
+	if (sitem=="detailmagnitudecsv")
+	{
+		results = MagnitudeReportCSV(true);
 		return results;
 	}
 

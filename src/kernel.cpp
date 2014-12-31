@@ -17,6 +17,8 @@ bool IsCPIDValidv2(MiningCPID& mc,int height);
 using namespace std;
 MiningCPID DeserializeBoincBlock(std::string block);
 
+std::string RetrieveMd5(std::string s1);
+
 bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
@@ -582,6 +584,33 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 //   quantities so as to generate blocks faster, degrading the system back into
 //   a proof-of-work situation.
 //
+
+
+bool StakeAcidTest(std::string grc_address, double por_diff, std::string last_block_hash, int height)
+{
+	
+	if (fTestNet) return true;
+	if (height < 102300) return true;
+	//ROB HALFORD - 12-30-2014
+	std::string aggregated_hash = grc_address + "," + last_block_hash;
+	std::string hash_md5 = RetrieveMd5(aggregated_hash);
+	uint256 hash = uint256("0x" + hash_md5);
+	uint256 diff1 = uint256("0x8b97b08ce3830118ba68e155b87100e9");
+	uint256 diff2 = uint256("0x7b97b08ce3830118ba68e155b87100e9");
+	uint256 diff3 = uint256("0x6b97b08ce3830118ba68e155b87100e9");
+	uint256 diff4 = uint256("0x5b97b08ce3830118ba68e155b87100e9");
+
+	if (fDebug2) printf("hash acid test %s \r\n",YesNo(hash < diff1).c_str());
+
+
+	if (por_diff >= 1   && por_diff < 10)   return (hash < diff1);
+	if (por_diff >= 10  && por_diff < 100)  return (hash < diff2);
+	if (por_diff >= 100 && por_diff < 1000) return (hash < diff3);
+	if (por_diff >= 1000)                   return (hash < diff4);
+	return true;
+
+}
+
 static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, unsigned int nTimeBlockFrom, 
 	const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, 
 	uint256& targetProofOfStake, bool fPrintProofOfStake, std::string hashBoinc, bool checking_local)
@@ -590,6 +619,11 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 
 	double PORDiff = GetBlockDifficulty(nBits);
 	MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
+
+	bool ACID_TEST = StakeAcidTest(boincblock.GRCAddress,PORDiff,pindexPrev->GetBlockHash().GetHex(),pindexPrev->nHeight);
+
+	if (!ACID_TEST) return false;
+
     int64_t RSA_WEIGHT = GetRSAWeightByBlock(boincblock);
 	int oNC = 0;
  	double coin_age = std::abs((double)nTimeTx-(double)txPrev.nTime);
