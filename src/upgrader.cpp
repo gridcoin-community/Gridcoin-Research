@@ -41,11 +41,11 @@ std::string geturl()
 	return url;
 }
 
-bfs::path GetProgramDir()
-{
-	bfs::path programdir = bfs::current_path();  // Naturally, this will be OS-dependent later
-	return programdir;
-}
+// bfs::path GetProgramDir()
+// {
+// 	bfs::path programdir = bfs::current_path();  // Naturally, this will be OS-dependent later
+// 	return programdir;
+// }
 
 bfs::path Upgrader::path(int pathfork)
 {
@@ -54,7 +54,7 @@ bfs::path Upgrader::path(int pathfork)
 	switch (pathfork)
 	{
 		case DATA:
-			path = GetDefaultDataDir();
+			path = GetDataDir();
 			break;
 
 		case PROGRAM:
@@ -72,10 +72,8 @@ void download(void *curlhandle)
 	{
 	struct curlargs *curlarg = (struct curlargs *)curlhandle;
 	CURLcode success = CURLE_OK;
-	printf("Starting the downz\n");
 	success = curl_easy_perform(curlarg->handle);
 	if (success == CURLE_OK) { curlarg->success = true; }
-	printf("Finished downloading\n");
 	curlarg->done = true;
 	}
 
@@ -89,6 +87,7 @@ int main(int argc, char *argv[])
 	}
 
 	Upgrader upgrader;
+	ReadConfigFile(mapArgs, mapMultiArgs);
 	
 	if (strcmp(argv[1], "upgrade")==0)
 	{
@@ -219,7 +218,6 @@ bool Upgrader::downloader(int targetfile)
 	while (!curlhandle.done && !CANCEL_DOWNLOAD)
 		{
 			usleep(800*1000);
-			printf("looping\n");
 			#if defined(UPGRADER)
 			int sz = getFileDone();
 			printf("\r%li\tKB", sz/1024);

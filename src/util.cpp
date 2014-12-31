@@ -1057,6 +1057,26 @@ const boost::filesystem::path &GetDataDir(bool fNetSpecific)
     return path;
 }
 
+boost::filesystem::path GetProgramDir()
+{
+    boost::filesystem::path path;
+
+    if (mapArgs.count("-programdir")) 
+    {
+        path = boost::filesystem::system_complete(mapArgs["-programdir"]);
+        if (!boost::filesystem::is_directory(path)) 
+        {
+            path = "";
+            return path;
+        }
+    } 
+    else 
+    {
+        printf("Please specify program directory in config file using the 'programdir' argument\nDefaulting to directory gridcoin was called from\n");
+        path = boost::filesystem::current_path();
+    }
+}
+
 boost::filesystem::path GetConfigFile()
 {
     boost::filesystem::path pathConfigFile(GetArg("-conf", "gridcoinresearch.conf"));

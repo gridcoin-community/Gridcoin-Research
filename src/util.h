@@ -201,6 +201,7 @@ int GetFilesize(FILE* file);
 
 bool RenameOver(boost::filesystem::path src, boost::filesystem::path dest);
 boost::filesystem::path GetDefaultDataDir();
+boost::filesystem::path GetProgramDir();
 const boost::filesystem::path &GetDataDir(bool fNetSpecific = true);
 boost::filesystem::path GetConfigFile();
 boost::filesystem::path GetPidFile();
