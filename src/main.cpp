@@ -344,7 +344,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 103165;
+ int nGrandfather = 103368;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -3652,7 +3652,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 
 	if (nHeight > nGrandfather)
 	{
-	  	if (LockTimeRecent(GetBlockTime()))
+	  	if (true)
 		{	
 			// Check timestamp
 			if (GetBlockTime() > FutureDrift(GetAdjustedTime(), nHeight))
@@ -3697,8 +3697,8 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     // Verify hash target and signature of coinstake tx
 	if (nHeight > nGrandfather)
 	{
-		if (LockTimeRecent(GetBlockTime()))
-		{	
+		//if (LockTimeRecent(GetBlockTime()))
+		//{	
 				if (IsProofOfStake())
 				{
 					uint256 targetProofOfStake;
@@ -3710,7 +3710,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 					}
 					
 				}
-		}
+		//}
 	}
 
 
