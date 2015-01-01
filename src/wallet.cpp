@@ -1866,7 +1866,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 			//pblock->nNonce++;
 			mdPORNonce++;
 
-			if (fDebug2) printf("%f ",(double)mdPORNonce);
+	//		if (fDebug2) printf("%f ",(double)mdPORNonce);
 
             if (CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, 
 				*pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, targetProofOfStake, hashBoinc, false, true, mdPORNonce))
