@@ -592,19 +592,20 @@ bool StakeAcidTest(std::string grc_address, double por_diff, std::string last_bl
 {
 	
 	if (fTestNet) return true;
-	if (height < 103372) return true;
+	if (height < nGrandfather) return true;
 	//ROB HALFORD - 12-30-2014
 	std::string aggregated_hash = grc_address + "," + last_block_hash + "," + RoundToString(nonce,0);
 	std::string hash_md5 = RetrieveMd5(aggregated_hash);
 	uint256 hash = uint256("0x" + hash_md5);
-	uint256 diff1 = uint256("0x000001ffffffffffffffffffffffffff");
-	uint256 diff2 = uint256("0x000000ffffffffffffffffffffffffff");
-	uint256 diff3 = uint256("0x0000004dffffffffffffffffffffffff");
-	uint256 diff4 = uint256("0x0000003fffffffffffffffffffffffff");
-	uint256 diff5 = uint256("0x0000002fffffffffffffffffffffffff");
-	uint256 diff6 = uint256("0x0000001fffffffffffffffffffffffff");
-	uint256 diff7 = uint256("0x0000000affffffffffffffffffffffff");
+	uint256 diff1 = uint256("0x0000ffffffffffffffffffffffffffff");
+	uint256 diff2 = uint256("0x00004fffffffffffffffffffffffffff");
+	uint256 diff3 = uint256("0x00001fffffffffffffffffffffffffff");
+	uint256 diff4 = uint256("0x00000fffffffffffffffffffffffffff");
+	uint256 diff5 = uint256("0x000004ffffffffffffffffffffffffff");
+	uint256 diff6 = uint256("0x000002ffffffffffffffffffffffffff");
+	uint256 diff7 = uint256("0x000001ffffffffffffffffffffffffff");
 	if (nonce < 10) return false;
+	if (fDebug2) if (LessVerbose(4)) printf("nonce %f",(double)nonce);
 
 	if (por_diff >= 1   && por_diff < 5)    return (hash < diff1);
 	if (por_diff >= 5   && por_diff < 10)   return (hash < diff2);

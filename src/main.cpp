@@ -106,7 +106,7 @@ uint256 muGlobalCheckpointHash = 0;
 uint256 muGlobalCheckpointHashRelayed = 0;
 int muGlobalCheckpointHashCounter = 0;
 ///////////////////////MINOR VERSION////////////////////////////////
-int MINOR_VERSION = 135;
+int MINOR_VERSION = 140;
 
 			
 bool IsUserQualifiedToSendCheckpoint();
@@ -344,7 +344,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 103368;
+ int nGrandfather = 103375;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
