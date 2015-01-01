@@ -106,7 +106,7 @@ uint256 muGlobalCheckpointHash = 0;
 uint256 muGlobalCheckpointHashRelayed = 0;
 int muGlobalCheckpointHashCounter = 0;
 ///////////////////////MINOR VERSION////////////////////////////////
-int MINOR_VERSION = 140;
+int MINOR_VERSION = 145;
 
 			
 bool IsUserQualifiedToSendCheckpoint();

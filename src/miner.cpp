@@ -653,12 +653,16 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
             return error("CheckStake() : generated block is stale");
 		}
 
+		if (false)
+		{
 		std::string GlobalBlockSolved = GetBestBlockHash(GlobalCPUMiningCPID.cpidv2);
 		if (fDebug2) printf("GBS->%s",GlobalBlockSolved.c_str());
 		if (GlobalBlockSolved != "NULL" && GlobalBlockSolved.length() > 8 && GlobalBlockSolved != "")
 		{
 			return error("CheckStake() : generated block is stale - Solved at %s, Block Height: %f \r\n",GlobalBlockSolved.c_str(),(double)nBestHeight+1);
 		}
+		}
+
 		
 
         // Track how many getdata requests this block gets
