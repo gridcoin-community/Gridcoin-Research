@@ -77,6 +77,7 @@
 #include "bitcoinrpc.h"
 
 #include <iostream>
+#include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 
 extern CWallet* pwalletMain;
 extern int64_t nLastCoinStakeSearchInterval;
@@ -1268,6 +1269,8 @@ void BitcoinGUI::NewUserWizard()
 		if (ok && !boincemail.isEmpty()) 
 		{
 			std::string new_email = tostdstring(boincemail);
+			boost::to_lower(new_email);
+
 			printf("User entered %s \r\n",new_email.c_str());
 			//Create Config File
 			CreateNewConfigFile(new_email);

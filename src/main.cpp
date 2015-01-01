@@ -344,7 +344,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 103375;
+ int nGrandfather = 103512;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -3655,14 +3655,16 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 	  	if (true)
 		{	
 			// Check timestamp
-			if (GetBlockTime() > FutureDrift(GetAdjustedTime(), nHeight))
-				return DoS(60,error("AcceptBlock() : block timestamp too far in the future"));
+			if (GetBlockTime() > FutureDrift(GetAdjustedTime()+10, nHeight))
+				return DoS(80,error("AcceptBlock() : block timestamp too far in the future"));
 
 			// Check coinbase timestamp
 			if (GetBlockTime() > FutureDrift((int64_t)vtx[0].nTime, nHeight))
-				return DoS(60, error("AcceptBlock() : coinbase timestamp is too early"));
+			{
+				return DoS(80, error("AcceptBlock() : coinbase timestamp is too early"));
+			}
 
-	
+
 			// Check coinstake timestamp
 			if (IsProofOfStake() && !CheckCoinStakeTimestamp(nHeight, GetBlockTime(), (int64_t)vtx[1].nTime))
 				return DoS(60, error("AcceptBlock() : coinstake timestamp violation nTimeBlock=%"PRId64" nTimeTx=%u", GetBlockTime(), vtx[1].nTime));
@@ -3835,14 +3837,19 @@ void GridcoinServices()
 {
 	
 	
-	if (nBestHeight < 1000)
+	if (nBestHeight > 100 && nBestHeight < 1000)
 	{
 		//12-28-2014 Suggested by SeP
 		if (GetArg("-suppressdownloadblocks", "") == "")
 		{
-			#if defined(WIN32) && defined(QT_GUI)
-			DownloadBlocks();
-			#endif
+
+			std::string email = GetArgument("email", "NA");
+			if (email.length() > 5)
+			{
+				#if defined(WIN32) && defined(QT_GUI)
+					DownloadBlocks();
+				#endif
+			}
 		}
 	}
 	//Called once for every block accepted
@@ -6733,6 +6740,8 @@ std::string boinc_hash(const std::string str)
 void InitializeProjectStruct(StructCPID& project)
 {
 	std::string email = GetArgument("email", "NA");
+	boost::to_lower(email);
+
 	project.email = email;
 	std::string cpid_non = project.cpidhash+email;
 	project.boincruntimepublickey = project.cpidhash;
@@ -7190,7 +7199,8 @@ void HarvestCPIDs(bool cleardata)
 		mvCPIDCache.clear();
 	}
 	std::string email = GetArgument("email","");
-   
+    boost::to_lower(email);
+
 	int iRow = 0;
 	std::vector<std::string> vCPID = split(sout.c_str(),"<project>");
 	if (vCPID.size() > 0)
