@@ -952,7 +952,7 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
             vNodes.push_back(pnode);
         }
 
-        pnode->nTimeConnected = GetTime();
+        pnode->nTimeConnected = GetAdjustedTime();
         return pnode;
     }
     else
@@ -1026,7 +1026,7 @@ std::string DefaultBlockKey(int key_length)
 void CNode::PushVersion()
 {
     /// when NTP implemented, change to just nTime = GetAdjustedTime()
-    int64_t nTime = (fInbound ? GetAdjustedTime() : GetTime());
+    int64_t nTime = (fInbound ? GetAdjustedTime() : GetAdjustedTime());
     CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(CService("0.0.0.0",0)));
     CAddress addrMe = GetLocalAddress(&addr);
     RAND_bytes((unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce));
@@ -1091,7 +1091,7 @@ bool CNode::IsBanned(CNetAddr ip)
         if (i != setBanned.end())
         {
             int64_t t = (*i).second;
-            if (GetTime() < t)
+            if (GetAdjustedTime() < t)
                 fResult = true;
         }
     }
@@ -1109,7 +1109,7 @@ bool CNode::Misbehaving(int howmuch)
     nMisbehavior += howmuch;
     if (nMisbehavior >= GetArg("-banscore", 100))
     {
-        int64_t banTime = GetTime()+GetArg("-bantime", 60*60*24);  // Default 24-hour ban
+        int64_t banTime = GetAdjustedTime()+GetArg("-bantime", 60*60*24);  // Default 24-hour ban
         if (fDebug) printf("Misbehaving: %s (%d -> %d) DISCONNECTING\n", addr.ToString().c_str(), nMisbehavior-howmuch, nMisbehavior);
         {
             LOCK(cs_setBanned);
@@ -1252,7 +1252,7 @@ void SocketSendData(CNode *pnode)
         assert(data.size() > pnode->nSendOffset);
         int nBytes = send(pnode->hSocket, &data[pnode->nSendOffset], data.size() - pnode->nSendOffset, MSG_NOSIGNAL | MSG_DONTWAIT);
         if (nBytes > 0) {
-            pnode->nLastSend = GetTime();
+            pnode->nLastSend = GetAdjustedTime();
             pnode->nSendOffset += nBytes;
             if (pnode->nSendOffset == data.size()) {
                 pnode->nSendOffset = 0;
@@ -1534,7 +1534,7 @@ void ThreadSocketHandler2(void* parg)
                         {
                             if (!pnode->ReceiveMsgBytes(pchBuf, nBytes))
                                 pnode->CloseSocketDisconnect();
-                            pnode->nLastRecv = GetTime();
+                            pnode->nLastRecv = GetAdjustedTime();
                         }
                         else if (nBytes == 0)
                         {
@@ -1577,7 +1577,19 @@ void ThreadSocketHandler2(void* parg)
             //
             // Inactivity checking
             //
-            int64_t nTime = GetTime();
+            int64_t nTime = GetAdjustedTime();
+			//1-1-2015
+			if (nTime - pnode->nTimeConnected > 5)
+            {
+                if (pnode->nLastRecv == 0 || pnode->nLastSend == 0)
+                {
+                    if (fDebug) printf("socket no message in first 24 seconds, %d %d\n", pnode->nLastRecv != 0, pnode->nLastSend != 0);
+					pnode->Misbehaving(100);
+                    pnode->fDisconnect = true;
+                }
+			 }
+           
+
             if (nTime - pnode->nTimeConnected > 24)
             {
                 if (pnode->nLastRecv == 0 || pnode->nLastSend == 0)
@@ -1822,7 +1834,7 @@ void ThreadDNSAddressSeed2(void* parg)
                     {
                         int nOneDay = 24*3600;
                         CAddress addr = CAddress(CService(ip, GetDefaultPort()));
-                        addr.nTime = GetTime() - 3*nOneDay - GetRand(4*nOneDay); // use a random age between 3 and 7 days old
+                        addr.nTime = GetAdjustedTime() - 3*nOneDay - GetRand(4*nOneDay); // use a random age between 3 and 7 days old
                         vAdd.push_back(addr);
                         found++;
                     }
@@ -1987,7 +1999,7 @@ void ThreadOpenConnections2(void* parg)
     }
 
     // Initiate network connections
-    int64_t nStart = GetTime();
+    int64_t nStart = GetAdjustedTime();
     while (true)
     {
         ProcessOneShot();
@@ -2006,7 +2018,7 @@ void ThreadOpenConnections2(void* parg)
             return;
 
         // Add seed nodes if IRC isn't working
-        if (addrman.size()==0 && (GetTime() - nStart > 60) && !fTestNet)
+        if (addrman.size()==0 && (GetAdjustedTime() - nStart > 60) && !fTestNet)
         {
             std::vector<CAddress> vAdd;
             for (unsigned int i = 0; i < ARRAYLEN(pnSeed); i++)
@@ -2019,7 +2031,7 @@ void ThreadOpenConnections2(void* parg)
                 struct in_addr ip;
                 memcpy(&ip, &pnSeed[i], sizeof(ip));
                 CAddress addr(CService(ip, GetDefaultPort()));
-                addr.nTime = GetTime()-GetRand(nOneWeek)-nOneWeek;
+                addr.nTime = GetAdjustedTime()-GetRand(nOneWeek)-nOneWeek;
                 vAdd.push_back(addr);
             }
             addrman.Add(vAdd, CNetAddr("127.0.0.1"));
@@ -2623,7 +2635,7 @@ bool StopNode()
     printf("StopNode()\n");
     fShutdown = true;
     nTransactionsUpdated++;
-    int64_t nStart = GetTime();
+    int64_t nStart = GetAdjustedTime();
     if (semOutbound)
         for (int i=0; i<MAX_OUTBOUND_CONNECTIONS; i++)
             semOutbound->post();
@@ -2634,7 +2646,7 @@ bool StopNode()
             nThreadsRunning += vnThreadsRunning[n];
         if (nThreadsRunning == 0)
             break;
-        if (GetTime() - nStart > 20)
+        if (GetAdjustedTime() - nStart > 20)
             break;
         MilliSleep(20);
     } while(true);
@@ -2696,7 +2708,7 @@ void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataSt
     {
         LOCK(cs_mapRelay);
         // Expire old relay messages
-        while (!vRelayExpiration.empty() && vRelayExpiration.front().first < GetTime())
+        while (!vRelayExpiration.empty() && vRelayExpiration.front().first < GetAdjustedTime())
         {
             mapRelay.erase(vRelayExpiration.front().second);
             vRelayExpiration.pop_front();
@@ -2704,7 +2716,7 @@ void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataSt
 
         // Save original serialized message so newer versions are preserved
         mapRelay.insert(std::make_pair(inv, ss));
-        vRelayExpiration.push_back(std::make_pair(GetTime() + 15 * 60, inv));
+        vRelayExpiration.push_back(std::make_pair(GetAdjustedTime() + 15 * 60, inv));
     }
 
     RelayInventory(inv);

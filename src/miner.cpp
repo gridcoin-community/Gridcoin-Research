@@ -459,10 +459,20 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
         if (pFees)
             *pFees = nFees;
 
-        // Fill in header
+        // Fill in header  1-1-2015
         pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
-        pblock->nTime          = max(pindexPrev->GetPastTimeLimit()+1, pblock->GetMaxTransactionTime());
-        pblock->nTime          = max(pblock->GetBlockTime(), PastDrift(pindexPrev->GetBlockTime(), nHeight));
+		if (!fProofOfStake)
+		{
+
+			pblock->nTime          = max(pindexPrev->GetPastTimeLimit()+1, pblock->GetMaxTransactionTime());
+			pblock->nTime          = max(pblock->GetBlockTime(), PastDrift(pindexPrev->GetBlockTime(), nHeight));
+		}
+		else
+		{
+						pblock->nTime      =     max(pblock->GetMaxTransactionTime(),GetAdjustedTime());
+				 	    pblock->nTime      =     pblock->vtx[1].nTime; //same as coinstake timestamp
+		}
+
         if (!fProofOfStake)
             pblock->UpdateTime(pindexPrev);
         pblock->nNonce         = 0;
