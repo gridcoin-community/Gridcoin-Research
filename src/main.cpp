@@ -2902,7 +2902,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			{
 				double bv = BlockVersion(bb.clientversion);
 				double cvn = ClientVersionNew();
-				if (fDebug2) printf("BV %f, CV %f   ",bv,cvn);
+				if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 				if (bv+10 < cvn) return error("ConnectBlock(): Old client version after mandatory upgrade - block rejected\r\n");
 			}
 
@@ -4151,7 +4151,6 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
                 nTime = max(pindexBest->GetPastTimeLimit()+1, GetMaxTransactionTime());
                 nTime = max(GetBlockTime(), PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1));
 				//12-30-2014 Halford
-				//				nNonce++;
 				
 				//
 				printf("POR Coinstake Accepted!  Nonce %f \r\n",(double)nNonce);

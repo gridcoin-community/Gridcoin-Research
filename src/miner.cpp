@@ -845,7 +845,7 @@ Begin:
 				printf("Stake block accepted!\r\n");
 				//Prevent Rapid Fire block creation (large investor nodes):
 		  	    SetThreadPriority(THREAD_PRIORITY_LOWEST);
-        		
+        		mdPORNonce=0;
 			}
 			else
 			{

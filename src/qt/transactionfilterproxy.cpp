@@ -12,6 +12,7 @@ const QDateTime TransactionFilterProxy::MIN_DATE = QDateTime::fromTime_t(0);
 // Last date that can be represented (far in the future)
 const QDateTime TransactionFilterProxy::MAX_DATE = QDateTime::fromTime_t(0xFFFFFFFF);
 
+//Halford 1-2-2015 
 TransactionFilterProxy::TransactionFilterProxy(QObject *parent) :
     QSortFilterProxyModel(parent),
     dateFrom(MIN_DATE),
@@ -37,6 +38,8 @@ bool TransactionFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex &
 
     if(!showInactive && (status == TransactionStatus::Conflicted || status == TransactionStatus::NotAccepted))
         return false;
+	//if((status == TransactionStatus::Conflicted || status == TransactionStatus::NotAccepted))  return false;
+
     if(!(TYPE(type) & typeFilter))
         return false;
     if(datetime < dateFrom || datetime > dateTo)

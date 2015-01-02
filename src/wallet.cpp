@@ -1866,7 +1866,6 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 			//pblock->nNonce++;
 			mdPORNonce++;
 
-	//		if (fDebug2) printf("%f ",(double)mdPORNonce);
 
             if (CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, 
 				*pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, targetProofOfStake, hashBoinc, false, true, mdPORNonce))
@@ -1874,8 +1873,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 			
                 // Found a kernel
                 if (fDebug2)            printf("CreateCoinStake : kernel found\n");
-				mdPORNonceSolved = mdPORNonce;
-
+			
                 vector<valtype> vSolutions;
                 txnouttype whichType;
                 CScript scriptPubKeyOut;
@@ -1935,6 +1933,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
                     txNew.vout.push_back(CTxOut(0, scriptPubKeyOut)); //split stake
                 if (fDebug && GetBoolArg("-printcoinstake"))
                     printf("CreateCoinStake : added kernel type=%d\n", whichType);
+				mdPORNonceSolved = mdPORNonce;
                 fKernelFound = true;
                 break;
             }
