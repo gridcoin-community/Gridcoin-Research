@@ -344,7 +344,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 103877;
+ int nGrandfather = 104520;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -5306,14 +5306,17 @@ bool AcidTest(std::string precommand, std::string acid, CNode* pfrom)
 		if (timediff > 10*60) 
 		{
 			printf("Network time attack %f",timediff);
-			pfrom->Misbehaving(50);
+			pfrom->Misbehaving(30);
 			pfrom->fDisconnect = true;
 		}
 
 		if (hash != pw1 || timediff > (10*60)) 
 		{
 			if (fDebug2) printf("Acid test failed.");
-			pfrom->Misbehaving(10);
+			
+			double punishment = GetArg("-punishment", 10);
+			
+			pfrom->Misbehaving(punishment);
 			return false;
 		}
 		return true;
@@ -5376,7 +5379,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (fDebug) printf("Ver Acid %s, Validity %s ",acid.c_str(),YesNo(ver_valid).c_str());
 		if (!ver_valid)
 		{
-		    pfrom->Misbehaving(10);
+			//1-2-2015
+			
+			double punishment = GetArg("-punishment", 10);
+			
+		    pfrom->Misbehaving(punishment);
 		    pfrom->fDisconnect = true;
             return false;
 		}
@@ -5404,7 +5411,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 		if (unauthorized)
 		{
 			printf("Disconnected unauthorized peer.         ");
-            pfrom->Misbehaving(20);
+			
+			double punishment1 = GetArg("-punishment", 20);
+			
+            pfrom->Misbehaving(punishment1);
 		    pfrom->fDisconnect = true;
             return false;
         }
@@ -5437,7 +5447,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 				if (pfrom->nStartingHeight < 1000 && LessVerbose(500)) 
 				{
 					if (fDebug) printf("Node with low height");
-					pfrom->Misbehaving(20);
+					pfrom->Misbehaving(10);
 					pfrom->fDisconnect=true;
 					return false;
 				}
@@ -5577,7 +5587,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return true;
         if (vAddr.size() > 1000)
         {
-            pfrom->Misbehaving(20);
+            pfrom->Misbehaving(10);
             return error("message addr size() = %"PRIszu"", vAddr.size());
         }
 
@@ -5646,7 +5656,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         vRecv >> vInv;
         if (vInv.size() > MAX_INV_SZ)
         {
-            pfrom->Misbehaving(20);
+            pfrom->Misbehaving(10);
             return error("message inv size() = %"PRIszu"", vInv.size());
         }
 
@@ -5696,7 +5706,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         vRecv >> vInv;
         if (vInv.size() > MAX_INV_SZ)
         {
-            pfrom->Misbehaving(20);
+            pfrom->Misbehaving(10);
             return error("message getdata size() = %"PRIszu"", vInv.size());
         }
 
