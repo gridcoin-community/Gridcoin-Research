@@ -9,10 +9,7 @@
 #include <QPixmap>
 #include <QUrl>
 
-
-#if WINQR
 #include <qrencode.h>
-#endif
 
 QRCodeDialog::QRCodeDialog(const QString &addr, const QString &label, bool enableReq, QWidget *parent) :
     QDialog(parent),
@@ -58,7 +55,6 @@ void QRCodeDialog::genCode()
     if (uri != "")
     {
         ui->lblQRCode->setText("");
-#if WINQR
 
         QRcode *code = QRcode_encodeString(uri.toUtf8().constData(), 0, QR_ECLEVEL_L, QR_MODE_8, 1);
         if (!code)
@@ -82,7 +78,6 @@ void QRCodeDialog::genCode()
         ui->lblQRCode->setPixmap(QPixmap::fromImage(myImage).scaled(300, 300));
 
         ui->outUri->setPlainText(uri);
-#endif
     }
 }
 
@@ -90,7 +85,6 @@ QString QRCodeDialog::getURI()
 {
     QString ret = QString("gridcoin:%1").arg(address);
     int paramCount = 0;
-	#if WINQR
 
     ui->outUri->clear();
 
@@ -134,7 +128,6 @@ QString QRCodeDialog::getURI()
 
     ui->btnSaveAs->setEnabled(true);
     return ret;
-#endif
 }
 
 void QRCodeDialog::on_lnReqAmount_textChanged()
