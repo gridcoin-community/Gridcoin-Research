@@ -334,6 +334,8 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  double         mdMiningNetworkRAC = 0;
  double			mdPORNonce = 0;
  double         mdPORNonceSolved = 0;
+ bool           mbBlocksDownloaded = false;
+
  std::string    msHashBoinc    = "";
  std::string    msHashBoincTxId= "";
  std::string    msMiningErrors = "";
@@ -3845,9 +3847,10 @@ void GridcoinServices()
 		{
 
 			std::string email = GetArgument("email", "NA");
-			if (email.length() > 5)
+			if (email.length() > 5 && !mbBlocksDownloaded)
 			{
 				#if defined(WIN32) && defined(QT_GUI)
+					mbBlocksDownloaded=true;
 					DownloadBlocks();
 				#endif
 			}
@@ -5442,7 +5445,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             vRecv >> pfrom->nStartingHeight;
 
 	
-	 		if (GetArgument("autoban","false") == "true")
+	 		if (GetArgument("autoban2","false") == "true")
 			{
 				if (pfrom->nStartingHeight < 1000 && LessVerbose(500)) 
 				{
@@ -5451,20 +5454,20 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 					pfrom->fDisconnect=true;
 					return false;
 				}
-			}
 	
-			if (pfrom->nStartingHeight < 1 && LessVerbose(700)) 
-			{
+				if (pfrom->nStartingHeight < 1 && LessVerbose(700)) 
+				{
 					pfrom->Misbehaving(10);
 			    	pfrom->fDisconnect=true;
 					return false;
-			}
+				}
 
-			if (pfrom->nStartingHeight < 1 && pfrom->nServices == 0)
-			{
+				if (pfrom->nStartingHeight < 1 && pfrom->nServices == 0)
+				{
 					pfrom->Misbehaving(10);
 			    	pfrom->fDisconnect=true;
 					return false;
+				}
 			}
 		
 		

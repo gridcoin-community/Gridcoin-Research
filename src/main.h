@@ -147,6 +147,9 @@ extern std::string  msMiningErrors;
 extern std::string  msMiningErrors2;
 extern std::string  msMiningErrors3;
 extern std::string  msMiningErrors4;
+extern bool         mbBlocksDownloaded;
+
+
 extern std::string  Organization;
 extern std::string  OrganizationKey;
 
