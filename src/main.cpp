@@ -344,7 +344,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 103512;
+ int nGrandfather = 103877;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2491,6 +2491,7 @@ bool ClientOutOfSync()
 	double lastblockage = PreviousBlockAge();
 	if (lastblockage > (30*60)) return true;
 	if (fReindex || fImporting ) return true;
+	if (pindexBest == NULL || nBestHeight < GetNumBlocksOfPeers()-30) return true;
 	return false;
 }
 
@@ -2849,7 +2850,9 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		if (nStakeReward > nCalculatedStakeReward)
             return DoS(1, error("ConnectBlock() : coinstake pays above maximum (actual=%"PRId64" vs calculated=%"PRId64")", nStakeReward, nCalculatedStakeReward));
 		//nTime
-		if (LockTimeRecent(GetBlockTime()) && bb.cpid=="INVESTOR" && nStakeReward > 1)
+		//if (LockTimeRecent(GetBlockTime()) && bb.cpid=="INVESTOR" && nStakeReward > 1)
+		
+		if (!ClientOutOfSync() && bb.cpid=="INVESTOR" && nStakeReward > 1)
 		{
 			//11-9-2014
 			double OUT_POR = 0;
@@ -2858,7 +2861,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			if (nStakeReward > nCalculatedResearchReward*TOLERANCE_PERCENT)
 			{
 							return DoS(1, error("ConnectBlock() : Investor Reward pays too much : cpid %s (actual=%"PRId64" vs calculated=%"PRId64")",
-								bb.cpid.c_str(), nStakeReward, nCalculatedResearchReward));
+							bb.cpid.c_str(), nStakeReward, nCalculatedResearchReward));
 			}
 		}
     }
@@ -2883,15 +2886,17 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	if (pindex->nHeight > nGrandfather && IsProofOfStake())
 	{
 
-		if (LockTimeRecent(GetBlockTime()))
+		// Block Spamming (Halford) 12-23-2014
+		if (mint < MintLimiter(PORDiff,bb.RSAWeight)) 
+		{
+				return error("CheckProofOfStake() : Mint too Small, %f",(double)mint);
+		}
+
+		if (mint == 0  && bb.RSAWeight < 20000) return error("CheckProofOfStake() : Mint is ZERO! %f",(double)mint);
+	
+		if (!ClientOutOfSync())
 		{
 
-			// Block Spamming (Halford) 12-23-2014
-			if (mint < MintLimiter(PORDiff,bb.RSAWeight)) 
-			{
-				return error("CheckProofOfStake() : Mint too Small, %f",(double)mint);
-			}
-		
 			//12-26-2014 Halford - Orphan Flood Attack
 			if (IsLockTimeWithinMinutes(GetBlockTime(),15))
 			{
@@ -3698,8 +3703,6 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     // Verify hash target and signature of coinstake tx
 	if (nHeight > nGrandfather)
 	{
-		//if (LockTimeRecent(GetBlockTime()))
-		//{	
 				if (IsProofOfStake())
 				{
 					uint256 targetProofOfStake;
@@ -3711,7 +3714,6 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 					}
 					
 				}
-		//}
 	}
 
 
@@ -4023,8 +4025,8 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
             // Duplicate stake allowed only when there is orphan child block
             if (setStakeSeenOrphan.count(pblock->GetProofOfStake()) && !mapOrphanBlocksByPrev.count(hash) && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
 			{
-				MilliSleep(1);
-                return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for orphan block %s", pblock->GetProofOfStake().first.ToString().c_str(), pblock->GetProofOfStake().second, hash.ToString().c_str());
+				//MilliSleep(1);
+                //return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for orphan block %s", pblock->GetProofOfStake().first.ToString().c_str(), pblock->GetProofOfStake().second, hash.ToString().c_str());
 			}
             else
 			{
