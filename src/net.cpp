@@ -1579,12 +1579,12 @@ void ThreadSocketHandler2(void* parg)
             //
             int64_t nTime = GetAdjustedTime();
 			//1-1-2015
-			if (nTime - pnode->nTimeConnected > 5)
+			if (nTime - pnode->nTimeConnected > 10)
             {
                 if (pnode->nLastRecv == 0 || pnode->nLastSend == 0)
                 {
                     if (fDebug) printf("socket no message in first 24 seconds, %d %d\n", pnode->nLastRecv != 0, pnode->nLastSend != 0);
-					pnode->Misbehaving(100);
+					pnode->Misbehaving(10);
                     pnode->fDisconnect = true;
                 }
 			 }
