@@ -4013,13 +4013,18 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 				pfrom->nOrphanCountViolations=0;
 				pfrom->nOrphanCount=0;
 		}
+		//1-2-2015
+		double orphan_punishment = GetArg("-orphanpunishment", 1);
 
-		if (pfrom->nOrphanCount > 100)         pfrom->Misbehaving(1);
-		if (pfrom->nOrphanCountViolations < 0) pfrom->nOrphanCountViolations=0;
-		if (pfrom->nOrphanCount < 0)           pfrom->nOrphanCount=0;
-		if (pfrom->nOrphanCountViolations > 100) pfrom->Misbehaving(1);
-		pfrom->nLastOrphan=GetAdjustedTime();
-		pfrom->nOrphanCount++;
+		if (orphan_punishment > 0)
+		{
+			if (pfrom->nOrphanCount > 100)         pfrom->Misbehaving(1);
+			if (pfrom->nOrphanCountViolations < 0) pfrom->nOrphanCountViolations=0;
+			if (pfrom->nOrphanCount < 0)           pfrom->nOrphanCount=0;
+			if (pfrom->nOrphanCountViolations > 100) pfrom->Misbehaving(1);
+			pfrom->nLastOrphan=GetAdjustedTime();
+			pfrom->nOrphanCount++;
+		}
 
         // ppcoin: check proof-of-stake
         if (pblock->IsProofOfStake())
