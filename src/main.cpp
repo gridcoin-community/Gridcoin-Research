@@ -4013,10 +4013,10 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 				pfrom->nOrphanCountViolations=0;
 				pfrom->nOrphanCount=0;
 		}
-		//1-2-2015
+		//1-3-2015
 		double orphan_punishment = GetArg("-orphanpunishment", 1);
 
-		if (orphan_punishment > 0)
+		if (orphan_punishment > 0 && !ClientOutOfSync() )
 		{
 			if (pfrom->nOrphanCount > 100)         pfrom->Misbehaving(1);
 			if (pfrom->nOrphanCountViolations < 0) pfrom->nOrphanCountViolations=0;

@@ -15,6 +15,9 @@ Module modGRC
 
     Public mfrmProjects As frmProjects
     Public mfrmSql As frmSQL
+    Public mfrmTicker As frmLiveTicker
+
+
     Public mfrmWireFrame As frmGRCWireFrameCanvas
 
     Public mfrmLeaderboard As frmLeaderboard

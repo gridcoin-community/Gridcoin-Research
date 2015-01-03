@@ -108,7 +108,7 @@ private:
 
 	QAction *sqlAction;
 	QAction *leaderboardAction;
-
+	QAction *tickerAction;
 
     QAction *verifyMessageAction;
     QAction *aboutAction;
@@ -203,6 +203,8 @@ private slots:
 	void downloadClicked();
 	void rebootClicked();
 	void sqlClicked();
+	void tickerClicked();
+
 	//void leaderboardClicked();
 	//void miningClicked();
 

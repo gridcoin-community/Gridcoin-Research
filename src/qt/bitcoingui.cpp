@@ -741,6 +741,12 @@ void BitcoinGUI::createActions()
 	sqlAction->setStatusTip(tr("SQL Query Analyzer"));
 	sqlAction->setMenuRole(QAction::TextHeuristicRole);
 
+	tickerAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Live Ticker"), this);
+	tickerAction->setStatusTip(tr("Live Ticker"));
+	tickerAction->setMenuRole(QAction::TextHeuristicRole);
+
+
+
 //	leaderboardAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Leaderboard"), this);
 //	leaderboardAction->setStatusTip(tr("Leaderboard"));
 //	leaderboardAction->setMenuRole(QAction::TextHeuristicRole);
@@ -791,6 +797,8 @@ void BitcoinGUI::createActions()
 	connect(downloadAction, SIGNAL(triggered()), this, SLOT(downloadClicked()));
 	connect(rebootAction, SIGNAL(triggered()), this, SLOT(rebootClicked()));
 	connect(sqlAction, SIGNAL(triggered()), this, SLOT(sqlClicked()));
+	connect(tickerAction, SIGNAL(triggered()), this, SLOT(tickerClicked()));
+
 	//connect(leaderboardAction, SIGNAL(triggered()), this, SLOT(leaderboardClicked()));
 
 }
@@ -850,9 +858,12 @@ void BitcoinGUI::createMenuBar()
 	rebuild->addAction(rebootAction);
 	rebuild->addSeparator();
 
-	QMenu *sql = appMenuBar->addMenu(tr("&SQL Query Analyzer"));
-	sql->addSeparator();
-	sql->addAction(sqlAction);
+	QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
+	qmAdvanced->addSeparator();
+	qmAdvanced->addAction(sqlAction);
+	qmAdvanced->addAction(tickerAction);
+
+
 
 //	QMenu *leaderboard = appMenuBar->addMenu(tr("&Leaderboard"));
 //	leaderboard->addSeparator();
@@ -1468,6 +1479,20 @@ void BitcoinGUI::sqlClicked()
 #endif
 
 }
+
+
+void BitcoinGUI::tickerClicked()
+{
+#ifdef WIN32
+	if (!globalcom)
+	{
+		globalcom = new QAxObject("BoincStake.Utilization");
+	}
+    globalcom->dynamicCall("ShowTicker()");
+#endif
+
+}
+
 
 /*
 void BitcoinGUI::leaderboardClicked()
