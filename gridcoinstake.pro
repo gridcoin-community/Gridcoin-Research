@@ -6,7 +6,7 @@ DEFINES += QT_GUI BOOST_THREAD_USE_LIB BOOST_SPIRIT_THREADSAFE
 CONFIG += no_include_pwd
 CONFIG += thread
 QT += core gui network
-QT += qaxcontainer
+#QT += axcontainer
 #QT += axserver
 #QT += widgets
 
@@ -18,7 +18,7 @@ greaterThan(QT_MAJOR_VERSION, 4) {
 }
 
 CONFIG += thread
-CONFIG += qaxcontainer
+#CONFIG += qaxcontainer
 CONFIG += exceptions
 #CONFIG += qaxserver dll
 
@@ -442,7 +442,7 @@ macx:QMAKE_CXXFLAGS_THREAD += -pthread
 # Set libraries and includes at end, to use platform-defined defaults if not overridden
 INCLUDEPATH += $$BOOST_INCLUDE_PATH $$BDB_INCLUDE_PATH $$OPENSSL_INCLUDE_PATH $$QRENCODE_INCLUDE_PATH
 LIBS += $$join(BOOST_LIB_PATH,,-L,) $$join(BDB_LIB_PATH,,-L,) $$join(OPENSSL_LIB_PATH,,-L,) $$join(QRENCODE_LIB_PATH,,-L,)
-LIBS += -lssl -lcrypto -ldb_cxx$$BDB_LIB_SUFFIX -lcurl -L src/chilkat/lib -lchilkat-9.5.0
+LIBS += -lssl -lcrypto -ldb_cxx$$BDB_LIB_SUFFIX -lcurl -lzip
 # -lgdi32 has to happen after -lcrypto (see  #681)
 windows:LIBS += -lws2_32 -lshlwapi -lmswsock -lole32 -loleaut32 -luuid -lgdi32
 #LIBS += -lboost_system$$BOOST_LIB_SUFFIX -lboost_filesystem$$BOOST_LIB_SUFFIX -lboost_program_options$$BOOST_LIB_SUFFIX -lboost_thread$$BOOST_THREAD_LIB_SUFFIX

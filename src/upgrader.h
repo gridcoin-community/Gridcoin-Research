@@ -17,12 +17,16 @@ struct curlargs
 
 enum TARGET
 {
+	QT,
+	DAEMON,
+	#ifndef UPGRADER
+	UPGRADE,	// verify that only main lcient can upgrade upgrader
+	#endif
+
 	DATA,
 	PROGRAM,
 	
-	BLOCKS,
-	QT,
-	DAEMON
+	BLOCKS
 };
 
 class Upgrader

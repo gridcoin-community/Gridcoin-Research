@@ -1063,18 +1063,39 @@ boost::filesystem::path GetProgramDir()
 
     if (mapArgs.count("-programdir")) 
     {
+        printf("Acquiring program directory from conf file\n");
         path = boost::filesystem::system_complete(mapArgs["-programdir"]);
+        
         if (!boost::filesystem::is_directory(path)) 
         {
             path = "";
+            printf("Invalid path stated in gridcoinresearch.conf\n");
             return path;
         }
-    } 
-    else 
-    {
-        printf("Please specify program directory in config file using the 'programdir' argument\nDefaulting to directory gridcoin was called from\n");
-        path = boost::filesystem::current_path();
+
+        return path;
     }
+
+    #ifdef WIN32
+    const char* const list[] = {"gridcoind.exe", "gridcoin-qt.exe", "gridcoinupgrader.exe"};    
+    #elif defined MAC_OSX
+    const char* const list[] = {"gridcoind.exe", "gridcoin-qt.exe", "gridcoinupgrader.exe"}; 
+    #else
+    const char* const list[] = {"gridcoinresearchd", "gridcoin-qt", "gridcoinupgrader"}; 
+    #endif
+
+    for (int i = 0; i < 3; ++i)
+    {
+        if (boost::filesystem::exists((boost::filesystem::current_path() / list[i]).c_str()))
+        {
+            // printf("Identified %s as client directory\n", (boost::filesystem::current_path()).c_str());
+            return boost::filesystem::current_path();
+        }
+    }
+
+        printf("Please specify program directory in config file using the 'programdir' argument\n");
+        path = boost::filesystem::current_path();
+
 }
 
 boost::filesystem::path GetConfigFile()

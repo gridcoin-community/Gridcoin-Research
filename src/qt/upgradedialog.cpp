@@ -43,7 +43,7 @@ void Imker(void *kippel)
     downloadSuccess = argo->upgrader->downloader(argo->target);
     printf("completed download\n");
     downloading = false;
-    delete kippel;
+    // delete argo;
 }
 
 class Checker: public QObject

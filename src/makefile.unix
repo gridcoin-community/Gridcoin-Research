@@ -29,9 +29,12 @@ LIBS += \
    -l boost_program_options$(BOOST_LIB_SUFFIX) \
    -l boost_thread$(BOOST_LIB_SUFFIX) \
    -l boost_chrono$(BOOST_LIB_SUFFIX) \
+   -l boost_date_time \
    -l db_cxx$(BDB_LIB_SUFFIX) \
    -l ssl \
-   -l crypto
+   -l crypto \
+   -l zip \
+   -l curl
 
 ifndef USE_UPNP
 	override USE_UPNP = -
@@ -45,7 +48,7 @@ LIBS+= \
  -Wl,-B$(LMODE2) \
    -l z \
    -l dl \
-   -l pthread
+   -l pthread \
 
 
 # Hardening
@@ -125,6 +128,7 @@ OBJS= \
     obj/script.o \
     obj/sync.o \
     obj/util.o \
+    obj/upgrader.o \
     obj/wallet.o \
     obj/walletdb.o \
     obj/noui.o \
