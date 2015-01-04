@@ -148,6 +148,8 @@ extern std::string  msMiningErrors2;
 extern std::string  msMiningErrors3;
 extern std::string  msMiningErrors4;
 extern std::string  msMiningErrors5;
+extern std::string  msMiningErrors6;
+extern std::string  msMiningErrors7;
 
 extern bool         mbBlocksDownloaded;
 

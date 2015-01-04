@@ -78,33 +78,40 @@ Public Class frmLiveTicker
         Next x
     End Sub
     Public Function GetCryptoPrice(sSymbol As String)
-        'Sample Ticker Format :  {"ticker":{"high":0.00003796,"low":0.0000365,"avg":0.00003723,"lastbuy":0.0000371,"lastsell":0.00003795,"buy":0.00003794,"sell":0.00003795,"lastprice":0.00003795,"updated":1420369200}}
-        Dim sSymbol1 As String
-        sSymbol1 = NiceTicker(sSymbol)
-        Dim ccxPage As String = ""
-        If sSymbol1 = "BTC" Then
-            ccxPage = "btc-usd.json"
-        Else
-            ccxPage = LCase(sSymbol1) + "-btc.json"
-        End If
-        Dim sURL As String = "https://c-cex.com/t/" + ccxPage
-        Dim w As New MyWebClient
-        Dim sJSON As String = w.DownloadString(sURL)
-        Dim sLast As String = ExtractValue(sJSON, "lastprice", "updated")
-        Dim dprice As Double
-        dprice = CDbl(sLast)
-        Dim qBitcoin As Quote
-        qBitcoin = GetQuote("$BTC")
-        If sSymbol1 <> "BTC" And qBitcoin.Price > 0 Then dprice = dprice * qBitcoin.Price
-        Dim q As Quote
-        q = GetQuote(sSymbol)
-        q.Symbol = sSymbol
-        q.PreviousClose = q.Price
-        Dim Variance As Double
-        Variance = Math.Round(dprice, 3) - q.PreviousClose
-        q.Variance = Variance
-        q.Price = Math.Round(dprice, 3)
-        mdPrices(sSymbol) = q
+        Try
+
+            'Sample Ticker Format :  {"ticker":{"high":0.00003796,"low":0.0000365,"avg":0.00003723,"lastbuy":0.0000371,"lastsell":0.00003795,"buy":0.00003794,"sell":0.00003795,"lastprice":0.00003795,"updated":1420369200}}
+            Dim sSymbol1 As String
+            sSymbol1 = NiceTicker(sSymbol)
+            Dim ccxPage As String = ""
+            If sSymbol1 = "BTC" Then
+                ccxPage = "btc-usd.json"
+            Else
+                ccxPage = LCase(sSymbol1) + "-btc.json"
+            End If
+            Dim sURL As String = "https://c-cex.com/t/" + ccxPage
+            Dim w As New MyWebClient
+            Dim sJSON As String = w.DownloadString(sURL)
+            Dim sLast As String = ExtractValue(sJSON, "lastprice", "updated")
+            Dim dprice As Double
+            dprice = CDbl(sLast)
+            Dim qBitcoin As Quote
+            qBitcoin = GetQuote("$BTC")
+            If sSymbol1 <> "BTC" And qBitcoin.Price > 0 Then dprice = dprice * qBitcoin.Price
+            Dim q As Quote
+            q = GetQuote(sSymbol)
+            q.Symbol = sSymbol
+            q.PreviousClose = q.Price
+            Dim Variance As Double
+            Variance = Math.Round(dprice, 3) - q.PreviousClose
+            q.Variance = Variance
+            q.Price = Math.Round(dprice, 3)
+            mdPrices(sSymbol) = q
+        Catch ex As Exception
+            Log("Unable to get quote data probably due to SSL being blocked: " + ex.Message)
+
+        End Try
+
     End Function
     Private Sub Form1_Load(sender As System.Object, e As System.EventArgs) Handles MyBase.Load
 

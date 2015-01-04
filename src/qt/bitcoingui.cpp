@@ -2088,27 +2088,53 @@ void BitcoinGUI::updateStakingIcon()
             nWeight /= COIN;
             //nNetworkWeight /= COIN;
         }
-
+		//1-4-2015
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
         labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> time to earn reward is %3").arg(nWeight).arg(nNetworkWeight).arg(text));
+		//std::string sText = text.toUtf8().constData();
+
+		msMiningErrors6 = "Staking: " + FromQString(text);
+
+
     }
     else
     {
-		//11-5-2014
+		
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
         if (pwalletMain && pwalletMain->IsLocked())
+		{
             labelStakingIcon->setToolTip(tr("Not staking because wallet is locked"));
+			msMiningErrors6="Wallet Locked";
+		}
         else if (vNodes.empty())
+		{
             labelStakingIcon->setToolTip(tr("Not staking because wallet is offline"));
+			msMiningErrors6 = "Offline";
+		}
         else if (IsInitialBlockDownload())
+		{
             labelStakingIcon->setToolTip(tr("Not staking because wallet is syncing"));
+			msMiningErrors6 = "Syncing";
+		}
 		else if (!nLastCoinStakeSearchInterval && !nWeight)
+		{
 			labelStakingIcon->setToolTip(tr("Not staking because you don't have mature coins and stake weight is too low."));
+			msMiningErrors6 = "No Mature Coins; Stakeweight too low";
+		}
         else if (!nWeight)
+		{
             labelStakingIcon->setToolTip(tr("Not staking because you don't have mature coins"));
+			msMiningErrors6 = "No mature coins";
+		}
 		else if (!nLastCoinStakeSearchInterval)
+		{
 			labelStakingIcon->setToolTip(tr("Searching for mature coins... Please wait"));
+			msMiningErrors6 = "Searching for coins";
+		}
         else
+		{
             labelStakingIcon->setToolTip(tr("Not staking"));
+			msMiningErrors6 = "Not staking yet";
+		}
     }
 }

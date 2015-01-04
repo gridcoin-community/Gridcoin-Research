@@ -1698,22 +1698,28 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     int64_t nBalance = GetBalance();
 	
     if (nBalance <= nReserveBalance)
+	{
+		msMiningErrors7 = "No Reserve Balance to Stake";
         return false;
+	}
 
 	//Gridcoin
 	if (!GlobalCPUMiningCPID.initialized)
 	{
 		printf("Global Mining CPID not initialized yet.. Unable to stake\r\n");
+		msMiningErrors7="No Global CPID;";
 		return false;
 	}
 	if (GlobalCPUMiningCPID.cpid == "")
 	{
 		printf("Global Mining CPID not initialized yet.. Unable to stake\r\n");
+		msMiningErrors7="No Global CPID";
 		return false;
 	}
 
 	if (OutOfSyncByAgeWithChanceOfMining())
 	{
+		msMiningErrors7="Out of Sync";
 	    printf("Wallet out of sync - unable to stake..\r\n");
 		MilliSleep(500);
 		return false;
@@ -1729,12 +1735,14 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     // Select coins with suitable depth
     if (!SelectCoinsForStaking(nBalance - nReserveBalance, txNew.nTime, setCoins, nValueIn))
 	{
+		msMiningErrors7="No coins to stake";
 		printf("No coins to stake.");
         return false;
 	}
 
     if (setCoins.empty())
 	{
+		msMiningErrors7="Coins Empty";
 		if (fDebug) if (LessVerbose(100)) printf("Coins empty.");
         return false;
 	}
@@ -1765,6 +1773,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		 hashBoinc = SerializeBoincBlock(miningcpid);
 		 if (!IsCPIDValidv2(miningcpid,pindexBest->nHeight))
 		 {
+			 msMiningErrors7="CPID INVALID";
 			 printf("Unable to create boinc block->CPID INVALID");
 			 MilliSleep(500);
 			 return false;

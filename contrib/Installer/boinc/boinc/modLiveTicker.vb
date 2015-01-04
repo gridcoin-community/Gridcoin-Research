@@ -51,22 +51,29 @@
         Return sOut
     End Function
     Public Sub MegaQuote()
-        'Gets all the equity prices in one request for efficiency...
-        Dim sYTickers As String = ""
-        sYTickers = Replace(msTickers, ",", "+")
-        Dim sURL As String = ""
-        sURL = "http://download.finance.yahoo.com/d/quotes.csv?s=" + sYTickers + "&f=snl1c1p2&e=.csv"
-        Dim wc As New MyWebClient
-        Dim sOut As String = wc.DownloadString(sURL)
-        Dim vTickers() As String
-        vTickers = Split(msTickers, ",")
-        Dim vQuotes() As String
-        vQuotes = Split(sOut, vbCr)
-        Dim dOut As Double
-        Dim x As Long = 0
-        For x = 0 To UBound(vTickers)
-            dOut = MegaOrdinal(vTickers(x), vQuotes)
-        Next
+        Try
+            'Gets all the equity prices in one request for efficiency...
+            Dim sYTickers As String = ""
+            sYTickers = Replace(msTickers, ",", "+")
+            Dim sURL As String = ""
+            sURL = "http://download.finance.yahoo.com/d/quotes.csv?s=" + sYTickers + "&f=snl1c1p2&e=.csv"
+            Dim wc As New MyWebClient
+            Dim sOut As String = wc.DownloadString(sURL)
+            Dim vTickers() As String
+            vTickers = Split(msTickers, ",")
+            Dim vQuotes() As String
+            vQuotes = Split(sOut, vbCr)
+            Dim dOut As Double
+            Dim x As Long = 0
+            For x = 0 To UBound(vTickers)
+                dOut = MegaOrdinal(vTickers(x), vQuotes)
+            Next
+
+        Catch ex As Exception
+            Log("Unable to get quote data probably due to SSL being blocked: " + ex.Message)
+
+        End Try
+
     End Sub
     Public Function MegaOrdinal(sTicker As String, vData() As String) As Double
         For x = 0 To UBound(vData)

@@ -343,6 +343,8 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors3 = "";
  std::string    msMiningErrors4 = "";
  std::string    msMiningErrors5 = "";
+ std::string    msMiningErrors6 = "";
+ std::string    msMiningErrors7 = "";
 
  std::string    Organization = "";
  std::string    OrganizationKey = "";
@@ -620,7 +622,7 @@ std::string GetGlobalStatus()
 			+ RoundToString(PORDiff,3) + "; Net Weight: " + RoundToString(GetPoSKernelPS2(),2)  
 			+ "<br>Boinc Weight: " +  sWeight + "; Status: " + msMiningErrors 
 			+ "<br>Magnitude: " + RoundToString(out_magnitude,3) + ";Project: " + msMiningProject
-			+ "<br>"  + msMiningErrors2 + " " + msMiningErrors3 +" " + msMiningErrors4 + " " + " " + msMiningErrors5 + " " + sBoost.str();
+			+ "<br>"  + msMiningErrors2 + " " + msMiningErrors3 +" " + msMiningErrors4 + " " + " " + msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + sBoost.str();
 
 		//The last line break is for Windows 8.1 Huge Toolbar
 		msGlobalStatus = status;
