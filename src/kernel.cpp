@@ -492,7 +492,8 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 		oNC=1;
 	}
 
-	if (fDebug) if (LessVerbose(75)) printf("TBF %f TTN %f LPA %f, Coin age %f, NC %f, RSA %f, Mag %f; ",(double)blockFrom.GetBlockTime(),(double)txPrev.nTime,
+	if (fDebug3) if (LessVerbose(100)) printf("CPID %s, BlockTime %f PrevTxTime %f Payment_Age %f, Coin_Age %f, NC %f, RSA_WEIGHT %f, Magnitude %f; ",
+		boincblock.cpid.c_str(), (double)blockFrom.GetBlockTime(),(double)txPrev.nTime,
 		payment_age,coin_age,(double)oNC,(double)RSA_WEIGHT,(double)boincblock.Magnitude);
 
 	if (RSA_WEIGHT > 0) if (!IsCPIDValidv2(boincblock,1)) 
@@ -669,8 +670,11 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 		oNC=1;
 	}
 
-	if (fDebug) if (LessVerbose(75)) printf("TT %f TTN %f LPA %f, Coin age %f, NC %f, RSA %f, Mag %f; ",(double)nTimeTx,(double)txPrev.nTime,
+
+	if (fDebug3) if (LessVerbose(100)) printf("StakeMiner: CPID %s, BitsAge %f, nTimeTx %f, PrevTxTime %f, Payment_Age %f, Coin_Age %f, NC %f, RSA_WEIGHT %f, Magnitude %f ;\r\n ",
+		boincblock.cpid.c_str(),(double)BitsAge, (double)nTimeTx,(double)txPrev.nTime,
 		payment_age,coin_age,(double)oNC,(double)RSA_WEIGHT,(double)boincblock.Magnitude);
+
 
 	//12-24-2014
 	if (RSA_WEIGHT > 0) if (!IsCPIDValidv2(boincblock,pindexPrev->nHeight)) 

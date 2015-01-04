@@ -10,6 +10,7 @@ Public Class frmLiveTicker
     Public TotalShown As Long = 0
     Private LabelWidth As Long = 290
     Private LabelHeight As Long = 50
+    Private mlHeightOffset As Long = 25
 
     Public Function NiceTicker(sSymbol As String)
         sSymbol = Replace(Replace(sSymbol, "$", ""), "^", "")
@@ -71,7 +72,8 @@ Public Class frmLiveTicker
                 lblTick(x).Text = DisplayTicker(sCarat(x), CurrentQuote.Price)
                 lblTick(x).Width = LabelWidth
                 dLeftPos = dLeftPos + lblTick(x).Width + 0
-                lblTick(x).Top = Me.Height - lblTick(x).Height - 7
+                lblTick(x).Top = Me.Height - lblTick(x).Height - mlHeightOffset
+
             End If
         Next x
     End Sub
@@ -105,6 +107,10 @@ Public Class frmLiveTicker
         mdPrices(sSymbol) = q
     End Function
     Private Sub Form1_Load(sender As System.Object, e As System.EventArgs) Handles MyBase.Load
+
+        Dim lHO = Val("0" & KeyValue("TickerHeightOffset"))
+        If lHO > 0 Then mlHeightOffset = lHO
+
         'Note: ^DJI does not work for some reason... Use ^DJX*10 for index price
         'Example = msTickers = "GOOG,^DJX,^RUT,^VIX,SPY,AAPL,$GRC,$BTC,SHLD,$LTC"
         msTickers = KeyValue("tickers")
@@ -118,7 +124,7 @@ Public Class frmLiveTicker
             lblTick(x) = New Label
             lblTick(x).BackColor = Color.Black
             lblTick(x).ForeColor = Color.Green
-            lblTick(x).Font = New Font("Chiller", "24")
+            lblTick(x).Font = New Font("Arial", "24")
             lblTick(x).Visible = True
             msCurrentSymbol = mvTickers(x)
             Me.Controls.Add(lblTick(x))
@@ -182,10 +188,10 @@ Public Class frmLiveTicker
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.BackColor = System.Drawing.Color.Black
-        Me.ClientSize = New System.Drawing.Size(1461, 552)
+        Me.ClientSize = New System.Drawing.Size(1461, 122)
         Me.DoubleBuffered = True
         Me.ForeColor = System.Drawing.Color.FromArgb(CType(CType(0, Byte), Integer), CType(CType(192, Byte), Integer), CType(CType(0, Byte), Integer))
-        Me.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedToolWindow
+        Me.FormBorderStyle = System.Windows.Forms.FormBorderStyle.SizableToolWindow
         Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)
         Me.Name = "frmLiveTicker"
         Me.Text = "Gridcoin Live Ticker"
