@@ -72,6 +72,11 @@ Value getmininginfo(const Array& params, bool fHelp)
 
     obj.push_back(Pair("stakeinterest",    (uint64_t)GetCoinYearReward( GetAdjustedTime())));
     obj.push_back(Pair("testnet",       fTestNet));
+	obj.push_back(Pair("MiningErrors 1", msMiningErrors));
+	obj.push_back(Pair("MiningErrors 2", msMiningErrors2));
+	obj.push_back(Pair("MiningErrors 3", msMiningErrors3));
+	obj.push_back(Pair("MiningErrors 4", msMiningErrors4));
+	obj.push_back(Pair("MiningErrors 5", msMiningErrors5));
     return obj;
 }
 

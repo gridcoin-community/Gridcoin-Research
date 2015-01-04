@@ -1669,6 +1669,7 @@ Value listitem(const Array& params, bool fHelp)
 		return results;
 	}
 
+	
 	if (sitem=="detailmagnitudecsv")
 	{
 		results = MagnitudeReportCSV(true);

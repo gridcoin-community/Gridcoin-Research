@@ -654,8 +654,6 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 	MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
 
 	bool ACID_TEST = StakeAcidTest(boincblock.GRCAddress,PORDiff,pindexPrev->GetBlockHash().GetHex(),pindexPrev->nHeight,por_nonce);
-
-
 	if (!ACID_TEST) return false;
 
     int64_t RSA_WEIGHT = GetRSAWeightByBlock(boincblock);
@@ -670,11 +668,23 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 		oNC=1;
 	}
 
+	//Halford 1-4-2015 : Explain to the Researcher why they are not staking:
+	if (checking_local && boincblock.cpid != "INVESTOR")
+	{
+		std::string narr = "";
+		if (boincblock.Magnitude < 2) narr = "Magnitude too low to stake.";
+		if (payment_age < 60*60)      narr += " Last Payment too recent: " + RoundToString(payment_age,0);
+		if (payment_age < BitsAge)    narr += " Payment < Diff: " + RoundToString(payment_age,0) + "; " + RoundToString(BitsAge,0);
+		if (coin_age < 4*60*60)       narr += " Coin Age (immature): " + RoundToString(coin_age,0);
+		if (coin_age < RSA_WEIGHT)    narr += " Coin Age < RSA_Weight: " + RoundToString(coin_age,0) + " " + RoundToString(RSA_WEIGHT,0);
+		if (RSA_WEIGHT/14 < MintLimiter(PORDiff,RSA_WEIGHT)) narr += " RSAWeight < MintLimiter: "
+			+ RoundToString(RSA_WEIGHT/14,0) + "; " + RoundToString(MintLimiter(PORDiff,RSA_WEIGHT),0);
+		msMiningErrors5 = narr;
+	}
 
-	if (fDebug3) if (LessVerbose(100)) printf("StakeMiner: CPID %s, BitsAge %f, nTimeTx %f, PrevTxTime %f, Payment_Age %f, Coin_Age %f, NC %f, RSA_WEIGHT %f, Magnitude %f ;\r\n ",
+	if (fDebug3 && checking_local) if (LessVerbose(200)) printf("StakeMiner: CPID %s, BitsAge %f, nTimeTx %f, PrevTxTime %f, Payment_Age %f, Coin_Age %f, NC %f, RSA_WEIGHT %f, Magnitude %f ;\r\n ",
 		boincblock.cpid.c_str(),(double)BitsAge, (double)nTimeTx,(double)txPrev.nTime,
 		payment_age,coin_age,(double)oNC,(double)RSA_WEIGHT,(double)boincblock.Magnitude);
-
 
 	//12-24-2014
 	if (RSA_WEIGHT > 0) if (!IsCPIDValidv2(boincblock,pindexPrev->nHeight)) 
