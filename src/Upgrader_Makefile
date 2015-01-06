@@ -1,20 +1,46 @@
+# Copyright (c) 2009-2010 Satoshi Nakamoto
+# Distributed under the MIT/X11 software license, see the accompanying
+# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+USE_UPNP:=0
+
 LINK:=$(CXX)
 ARCH:=$(system lscpu | head -n 1 | awk '{print $2}')
 
-LIBS = \
- -Wl,-Bdynamic \
+DEFS=-DBOOST_SPIRIT_THREADSAFE
+
+DEFS += $(addprefix -I,$(CURDIR) $(CURDIR)/obj_upgrader $(BOOST_INCLUDE_PATH) $(BDB_INCLUDE_PATH) $(OPENSSL_INCLUDE_PATH))
+LIBS = $(addprefix -L,$(BOOST_LIB_PATH) $(BDB_LIB_PATH) $(OPENSSL_LIB_PATH))
+
+LMODE = dynamic
+LMODE2 = dynamic
+ifdef STATIC
+	LMODE = static
+	ifeq (${STATIC}, all)
+		LMODE2 = static
+	endif
+endif
+
+# for boost 1.37, add -mt to the boost libraries
+LIBS += \
+ -Wl,-B$(LMODE) \
    -l boost_system$(BOOST_LIB_SUFFIX) \
    -l boost_filesystem$(BOOST_LIB_SUFFIX) \
    -l boost_program_options$(BOOST_LIB_SUFFIX) \
    -l boost_thread$(BOOST_LIB_SUFFIX) \
+   -l boost_chrono$(BOOST_LIB_SUFFIX) \
    -l boost_date_time \
+   -l ssl \
+   -l crypto \
    -l zip \
-   -l curl \
-   -l crypto
+   -l curl
 
-ifeq (${ARCH}, i686)
-    EXT_OPTIONS=-msse2
-endif
+LIBS+= \
+ -Wl,-B$(LMODE2) \
+   -l z \
+   -l dl \
+   -l pthread \
+
 
 # Hardening
 # Make some classes of vulnerabilities unexploitable in case one is discovered.
@@ -47,12 +73,20 @@ endif
     # -D_FORTIFY_SOURCE=2 does some checking for potentially exploitable code patterns in
     # the source such overflowing a statically defined buffer.
     HARDENING+=-D_FORTIFY_SOURCE=2
+#
+
 
 DEBUGFLAGS=-g
 
+
+ifeq (${ARCH}, i686)
+    EXT_OPTIONS=-msse2
+endif
+
+
 # CXXFLAGS can be specified on the make command line, so we use xCXXFLAGS that only
 # adds some defaults in front. Unfortunately, CXXFLAGS=... $(CXXFLAGS) does not work.
-xCXXFLAGS=-O2 $(EXT_OPTIONS) -pthread -DUPGRADER -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wformat-security -Wno-unused-parameter \
+xCXXFLAGS=-O2 $(EXT_OPTIONS) -DUPGRADER -pthread -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wformat-security -Wno-unused-parameter \
     $(DEBUGFLAGS) $(DEFS) $(HARDENING) $(CXXFLAGS)
 
 # LDFLAGS can be specified on the make command line, so we use xLDFLAGS that only
@@ -60,21 +94,25 @@ xCXXFLAGS=-O2 $(EXT_OPTIONS) -pthread -DUPGRADER -Wall -Wextra -Wno-ignored-qual
 xLDFLAGS=$(LDHARDENING) $(LDFLAGS)
 
 OBJS= \
-    obj/util.o \
-    obj/upgrader.o \
+    obj_upgrader/util.o \
+    obj_upgrader/upgrader.o 
 
 all: gridcoinupgrader
 
-obj/%.o: %.cpp
+DEFS += -DHAVE_BUILD_INFO
+
+obj_upgrader/%.o: %.cpp
 	$(CXX) -c $(xCXXFLAGS) -MMD -MF $(@:%.o=%.d) -o $@ $<
 	@cp $(@:%.o=%.d) $(@:%.o=%.P); \
 	  sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$//' \
 	      -e '/^$$/ d' -e 's/$$/ :/' < $(@:%.o=%.d) >> $(@:%.o=%.P); \
 	  rm -f $(@:%.o=%.d)
 
-gridcoinupgrader: $(OBJS:obj/%=obj/%)
+gridcoinupgrader: $(OBJS:obj_upgrader/%=obj_upgrader/%)
 	$(LINK) $(xCXXFLAGS) -o $@ $^ $(xLDFLAGS) $(LIBS)
 
 clean:
 	-rm -f gridcoinupgrader
-	-rm -f obj/*.o
+	-rm -f obj_upgrader/*.o
+
+FORCE:

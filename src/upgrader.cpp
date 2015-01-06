@@ -497,6 +497,25 @@ void Upgrader::upgrade(int target)
 			// usleep(1000*1000*1000);
 		}
 		#else
+		PROCESS_INFORMATION ProcessInfo;
+		STARTUPINFO StartupInfo;
+		ZeroMemory(&StartupInfo, sizeof(StartupInfo));
+		StartupInfo.cb = sizeof StartupInfo ;
+
+		std::string argumentstring = "gridcoinupgrader";
+		argumentstring.append(targetswitch(target));
+		long unsigned int pid = GetCurrentProcessId();
+		argumentstring.append(boost::lexical_cast<std::string>(jones));
+		char * argument = new char[argumentstring.length() + sizeof(char)];
+		strcpy(argument, argumentstring.c_str());
+
+		const char * programstring = (GetProgramDir() / "gridcoinupgrader.exe").c_str();
+		char * program =  new char[programstring.length()];
+		strcpy(program, programstring);
+
+		CreateProcess(program, argument, 
+		NULL,NULL,FALSE,0,NULL,
+		NULL,&StartupInfo,&ProcessInfo);
 		StartShutdown();
 		#endif
 	}

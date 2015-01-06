@@ -6,7 +6,7 @@ DEFINES += QT_GUI BOOST_THREAD_USE_LIB BOOST_SPIRIT_THREADSAFE
 CONFIG += no_include_pwd
 CONFIG += thread
 QT += core gui network
-#QT += axcontainer
+QT += axcontainer
 #QT += axserver
 #QT += widgets
 
