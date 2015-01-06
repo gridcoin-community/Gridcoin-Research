@@ -614,7 +614,7 @@ bool StakeAcidTest(std::string grc_address, double por_diff, std::string last_bl
 	uint256 diff5 = uint256("0x00000fffffffffffffffffffffffffff");
 	uint256 diff6 = uint256("0x00000effffffffffffffffffffffffff");
 	uint256 diff7 = uint256("0x00000dffffffffffffffffffffffffff");
-	if (nonce < 30000) return false;
+	if (nonce < 2500) return false;
 	//if (fDebug2) if (LessVerbose(4)) printf("nonce %f",(double)nonce);
 
 	if (por_diff >= 1   && por_diff < 5)    return (hash < diff1);
@@ -648,7 +648,6 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 	const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, 
 	uint256& targetProofOfStake, bool fPrintProofOfStake, std::string hashBoinc, bool checking_local, double por_nonce)
 {
-	if (fDebug) printf("V2");
 
 	double PORDiff = GetBlockDifficulty(nBits);
 	MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
@@ -659,8 +658,12 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 	int oNC = 0;
  	double coin_age = std::abs((double)nTimeTx-(double)txPrev.nTime);
 	double payment_age = std::abs((double)nTimeTx-(double)boincblock.LastPaymentTime);
+	double combined_mag = boincblock.Magnitude;
+	if (RSA_WEIGHT==25000) combined_mag = 100;
 	double BitsAge = PORDiff * 144; //For every 100 Diff in Bits, two hours of coin age for researchers
-	if ((payment_age > 60*60) && (payment_age > BitsAge)  && boincblock.Magnitude > 1 && boincblock.cpid != "INVESTOR" && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT) 
+	if ((payment_age > 60*60) && (payment_age > BitsAge)  
+		&& combined_mag > 1 
+		&& boincblock.cpid != "INVESTOR" && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT) 
 		&& (RSA_WEIGHT/14 > MintLimiter(PORDiff,RSA_WEIGHT)) )
 	{
 		//Coins are older than RSA balance
@@ -671,7 +674,7 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 	if (checking_local && boincblock.cpid != "INVESTOR")
 	{
 		std::string narr = "";
-		if (boincblock.Magnitude < 2) narr = "Magnitude too low to stake.";
+		if (combined_mag < 2)         narr = "Magnitude too low to stake.";
 		if (payment_age < 60*60)      narr += " Last Payment too recent: " + RoundToString(payment_age,0);
 		if (payment_age < BitsAge)    narr += " Payment < Diff: " + RoundToString(payment_age,0) + "; " + RoundToString(BitsAge,0);
 		if (coin_age < 4*60*60)       narr += " Coin Age (immature): " + RoundToString(coin_age,0);
@@ -679,6 +682,7 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 		if (RSA_WEIGHT/14 < MintLimiter(PORDiff,RSA_WEIGHT)) narr += " RSAWeight < MintLimiter: "
 			+ RoundToString(RSA_WEIGHT/14,0) + "; " + RoundToString(MintLimiter(PORDiff,RSA_WEIGHT),0);
 		if (!ACID_TEST)               narr += " POW Mining: " + RoundToString(por_nonce,0);
+		if (RSA_WEIGHT==25000)        msMiningErrors7="Newbie block being generated.";
 		msMiningErrors5 = narr;
 	}
 
