@@ -171,7 +171,7 @@ bool ATTR_WARN_PRINTF(1,2) error(const char *format, ...);
  * __attribute__((format(printf,X,Y))) gets expanded to __attribute__((format(OutputDebugStringF,X,Y)))
  * which confuses gcc.
  */
-#ifndef UPGRADER
+#ifndef UPGRADERFLAG
 #define printf OutputDebugStringF
 #endif
 
@@ -235,7 +235,7 @@ void runCommand(std::string strCommand);
 
 inline std::string i64tostr(int64_t n)
 {
-    return strprintf("%PRId64", n);
+    return strprintf("%"PRId64, n);
 }
 
 inline std::string itostr(int n)

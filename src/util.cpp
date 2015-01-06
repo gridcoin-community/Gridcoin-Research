@@ -1088,6 +1088,7 @@ boost::filesystem::path GetProgramDir()
 
     for (int i = 0; i < 3; ++i)
     {
+        printf("Checking for %s\n", boost::filesystem::exists((boost::filesystem::current_path() / list[i]).c_str()));
         if (boost::filesystem::exists((boost::filesystem::current_path() / list[i]).c_str()))
         {
             // printf("Identified %s as client directory\n", (boost::filesystem::current_path()).c_str());
@@ -1244,7 +1245,7 @@ int64_t GetAdjustedTime()
     return GetTime() + GetTimeOffset();
 }
 
-#ifndef UPGRADER
+#ifndef UPGRADERFLAG
 // avoid including unnecessary files for standalone upgrader
 
 void AddTimeData(const CNetAddr& ip, int64_t nTime)
@@ -1331,7 +1332,7 @@ string FormatVersion(int nVersion)
         return strprintf("%d.%d.%d.%d", nVersion/1000000, (nVersion/10000)%100, (nVersion/100)%100, nVersion%100);
 }
 
-#ifndef UPGRADER
+#ifndef UPGRADERFLAG
 // avoid including unnecessary files for standalone upgrader
 
 string FormatFullVersion()

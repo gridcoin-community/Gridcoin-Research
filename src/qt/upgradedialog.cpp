@@ -184,7 +184,7 @@ void UpgradeDialog::on_retryDownloadButton_clicked()
 
 void UpgradeDialog::on_upgradeButton_clicked()
 {
-    upgrader.upgrade(target);
+    upgrader.launcher(UPGRADER, target);
 }
 
 void UpgradeDialog::on_hideButton_clicked()

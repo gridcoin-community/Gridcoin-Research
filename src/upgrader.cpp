@@ -98,7 +98,7 @@ bool waitForParent(int parent)
 	return (delay < cutoff);
 }
 
-#if defined(UPGRADER)
+#if defined(UPGRADERFLAG)
 int main(int argc, char *argv[])
 {
 	if (argc < 2)
@@ -142,6 +142,9 @@ int main(int argc, char *argv[])
 		}
 
 	}
+
+	// The following are for internal usage only
+
 	else if (strcmp(argv[1], "gridcoin-qt")==0)
 	{
 		if (waitForParent(atoi(argv[2])))
@@ -149,6 +152,7 @@ int main(int argc, char *argv[])
 			if (upgrader.juggler(PROGRAM, false))
 			{
 				printf("Copied files successfully\n");
+				upgrader.launcher(QT, -1);
 			}
 		}
 	}
@@ -161,7 +165,7 @@ int main(int argc, char *argv[])
 			if (upgrader.juggler(DATA, false))
 			{
 				printf("Copied files successfully\n");
-				return 1;
+				upgrader.launcher(DAEMON, -1);
 			}
 		}
 	}
@@ -174,11 +178,11 @@ int main(int argc, char *argv[])
 			if (upgrader.juggler(DATA, false))
 			{
 				printf("Copied files successfully\n");
-				return 1;
+				upgrader.launcher(atoi(argv[3]), -1);				
 			}
 		}		
-		return 0;
 	}
+	// 
 	else 
 	{
 		printf("That's not an option!\n");
@@ -232,7 +236,7 @@ bool Upgrader::downloader(int targetfile)
 			#else
 			usleep(1000);
 			#endif
-			#if defined(UPGRADER)
+			#if defined(UPGRADERFLAG)
 			int sz = getFileDone();
 			printf("\r%i\tKB", sz/1024);
 			printf("\t%i%%", getFilePerc(sz));
@@ -347,7 +351,7 @@ bool Upgrader::unzipper(int targetfile)
 		return false;
 	}
 
-	bfs::remove(target / targetswitch(targetfile));
+	// bfs::remove(target / targetswitch(targetfile));
 	return true;
 }
 
@@ -475,10 +479,9 @@ vec Upgrader::fvector(bfs::path path)
 	return a;
 }
 
-#ifndef UPGRADER
-void Upgrader::upgrade(int target)
+void Upgrader::launcher(int launchtarget, int launcharg)
 {
-	if (bfs::exists(GetProgramDir() / "gridcoinupgrader"))
+	if (bfs::exists(GetProgramDir() / targetswitch(launchtarget)))
 	{
 		#ifndef WIN32
 		std::stringstream pidstream;
@@ -487,45 +490,58 @@ void Upgrader::upgrade(int target)
 		printf("Parent: %s\n", pid.c_str());
 		if(!fork())
 		{
-			printf("Parent: %s\n", pid.c_str());
-			execl((GetProgramDir() / "gridcoinupgrader").c_str(), "gridcoinupgrader", targetswitch(target).c_str() , pid.c_str(), NULL);
-			printf("%s does not exist!", (GetProgramDir() / "gridcoinupgrader").c_str());
-		}
-		else
-		{
-			StartShutdown();
-			// usleep(1000*1000*1000);
+			if(launchtarget!=UPGRADER)
+			{
+				execl((GetProgramDir() / targetswitch(launchtarget)).c_str(), targetswitch(launchtarget).c_str(), NULL);
+			}
+			else
+			{
+				std::stringstream launcher;
+				#ifdef QT_GUI
+				launcher << QT;
+				#else
+				launcher << DAEMON;
+				#endif
+				execl((GetProgramDir() / targetswitch(launchtarget)).c_str(), targetswitch(launchtarget).c_str(), targetswitch(launcharg).c_str() , pid.c_str(), launcher.str().c_str(), NULL);
+			}
 		}
 		#else
 		PROCESS_INFORMATION ProcessInfo;
 		STARTUPINFO StartupInfo;
 		ZeroMemory(&StartupInfo, sizeof(StartupInfo));
-		StartupInfo.cb = sizeof StartupInfo ;
+		StartupInfo.cb = sizeof StartupInfo;
 
-		std::string argumentstring = "gridcoinupgrader";
-		argumentstring.append(targetswitch(target));
+		std::string argumentstring = targetswitch(launchtarget);
+		argumentstring.append(" ");
+		argumentstring.append(targetswitch(launcharg));
+		argumentstring.append(" ");
 		long unsigned int pid = GetCurrentProcessId();
-		argumentstring.append(boost::lexical_cast<std::string>(jones));
+		argumentstring.append(boost::lexical_cast<std::string>(pid));
+		argumentstring.append(" ");
+		#ifdef QT_GUI
+		argumentstring.append(boost::lexical_cast<std::string>(QT));
+		#else
+		argumentstring.append(boost::lexical_cast<std::string>(DAEMON));
+		#endif
+		argumentstring.append(" ");
 		char * argument = new char[argumentstring.length() + sizeof(char)];
 		strcpy(argument, argumentstring.c_str());
 
-		const char * programstring = (GetProgramDir() / "gridcoinupgrader.exe").c_str();
+		const char * programstring = (GetProgramDir() / targetswitch(launchtarget)).c_str();
 		char * program =  new char[programstring.length()];
 		strcpy(program, programstring);
 
-		CreateProcess(program, argument, 
-		NULL,NULL,FALSE,0,NULL,
-		NULL,&StartupInfo,&ProcessInfo);
-		StartShutdown();
+		CreateProcess(program, argument, NULL, NULL, FALSE, 0, NULL, NULL, &StartupInfo, &ProcessInfo);
 		#endif
 	}
 	else
 	{
-		printf("Could not find upgrader - please verify that this is in the folder gridcoin-qt/gridcoind was called from\n");
-		StartShutdown();
+		printf("Could not find %s\n", targetswitch(launchtarget).c_str());
 	}
+		#ifndef UPGRADERFLAG
+		StartShutdown();
+		#endif
 }
-#endif
 
 bool Upgrader::verifyPath(bfs::path path, bool create)
 {
@@ -554,10 +570,13 @@ std::string Upgrader::targetswitch(int target)
 		return "snapshot.zip";
 
 		case QT:
-		return "gridcoin-qt";
+		return "gridcoinresearch";
 
 		case DAEMON:
 		return "gridcoind";
+
+		case UPGRADER:
+		return "gridcoinupgrader";
 
 		default:
 		return "";

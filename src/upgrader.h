@@ -19,9 +19,7 @@ enum TARGET
 {
 	QT,
 	DAEMON,
-	#ifndef UPGRADER
-	UPGRADE,	// verify that only main lcient can upgrade upgrader
-	#endif
+	UPGRADER,
 
 	DATA,
 	PROGRAM,
@@ -50,7 +48,7 @@ public:
 
 	bool downloader	(int target);
 	bool unzipper	(int target);
-	void upgrade 	(int target);
+	void launcher 	(int launchtarget, int target);
 
 //	switches around upgrade, target and backup:
 	bool juggler(int pathfork, bool recovery);
