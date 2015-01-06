@@ -1,0 +1,70 @@
+# Copyright (c) 2009-2010 Satoshi Nakamoto
+# Distributed under the MIT/X11 software license, see the accompanying
+# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+CXX ?= g++
+CC ?= gcc
+
+USE_UPNP:=0
+
+ DEPSDIR?=/c/deps
+ BOOST_SUFFIX?=-mgw49-mt-s-1_55
+ 
+INCLUDEPATHS?= \
+ -I"$(DEPSDIR)/include" \
+ -I"$(DEPSDIR)/boost_1_55_0" \
+ -I"$(DEPSDIR)/openssl-1.0.1j/include" \
+ -I"$(DEPSDIR)/db-4.8.30.NC/build_unix" \
+ -I"$(DEPSDIR)/" \
+ -I"$(DEPSDIR)/libzip-0.11.2/lib" \
+ -I"$(DEPSDIR)/curl-7.39.0/include" \
+ 
+LIBPATHS= \
+ -L"$(CURDIR)/leveldb" \
+ -L"$(DEPSDIR)/lib" \
+ -L"$(DEPSDIR)/db-4.8.30.NC/build_unix" \
+ -L"$(DEPSDIR)/boost_1_55_0/stage/lib" \
+ -L"$(DEPSDIR)/openssl-1.0.1j" \
+ -L"$(DEPSDIR)/libzip-0.11.2/lib/.libs" \
+ -L"$(DEPSDIR)/curl-7.39.0/lib/.libs"
+
+LIBS= \
+ -l leveldb \
+ -l boost_system-mgw49-mt-s-1_55 \
+ -l boost_filesystem-mgw49-mt-s-1_55 \
+ -l boost_program_options-mgw49-mt-s-1_55 \
+ -l boost_thread-mgw49-mt-s-1_55 \
+ -l boost_chrono-mgw49-mt-s-1_55 \
+ -l boost_date_time-mgw49-mt-s-1_55 \
+ -l db_cxx \
+ -l ssl \
+ -l crypto \
+ -l curl \
+ -l zip
+
+
+
+DEFS=-DWIN32 -D_WINDOWS -DUPGRADER -DBOOST_THREAD_USE_LIB -DBOOST_SPIRIT_THREADSAFE
+DEBUGFLAGS=-g
+CFLAGS=${ADDITIONALCCFLAGS} -mthreads -O3 -msse2 -w -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wformat-security -Wno-unused-parameter $(DEBUGFLAGS) $(DEFS) $(INCLUDEPATHS)
+LDFLAGS= -Wl,--dynamicbase -Wl,--nxcompat
+
+LIBS += -l kernel32 -l user32 -l gdi32 -l comdlg32 -l winspool -l winmm -l shell32 -l comctl32 -l ole32 -l oleaut32 -l uuid -l rpcrt4 -l advapi32 -l ws2_32 -l mswsock -l shlwapi
+
+OBJS= \
+	obj/util.o \
+	obj/upgrader.o \
+
+all: gridcoinupgrader
+
+all: gridcoinupgrader
+
+obj/%.o: %.cpp $(HEADERS)
+	g++ -c $(CFLAGS) -o $@ $<
+
+gridcoinupgrader: $(OBJS:obj/%=obj/%)
+	$(CXX) $(CFLAGS) $(LDFLAGS) -o $@ $(LIBPATHS) $^ $(LIBS)
+
+clean:
+	-rm -f gridcoinupgrader
+	-rm -f obj/*.o
