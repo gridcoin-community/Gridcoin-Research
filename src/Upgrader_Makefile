@@ -17,7 +17,7 @@ DEFS=-DBOOST_SPIRIT_THREADSAFE
 
 
 
-DEFS += $(addprefix -I,$(CURDIR) $(CURDIR)/obj_upgrader $(BOOST_INCLUDE_PATH) $(BDB_INCLUDE_PATH) $(OPENSSL_INCLUDE_PATH)) $(CURL_INCLUDE_PATH)) $(LIBZIP_INCLUDE_PATH))
+DEFS += $(addprefix -I,$(CURDIR) $(CURDIR)/obj-upgrader $(BOOST_INCLUDE_PATH) $(BDB_INCLUDE_PATH) $(OPENSSL_INCLUDE_PATH)) $(CURL_INCLUDE_PATH)) $(LIBZIP_INCLUDE_PATH))
 LIBS = $(addprefix -L,$(BOOST_LIB_PATH) $(BDB_LIB_PATH) $(OPENSSL_LIB_PATH)) $(CURL_LIB_PATH)) $(CURL_LIB_PATH))
 
 LMODE = dynamic
@@ -102,26 +102,26 @@ xCXXFLAGS=-O2 $(EXT_OPTIONS) -DUPGRADER -pthread -Wall -Wextra -Wno-ignored-qual
 xLDFLAGS=$(LDHARDENING) $(LDFLAGS)
 
 OBJS= \
-    obj_upgrader/util.o \
-    obj_upgrader/upgrader.o 
+    obj-upgrader/util.o \
+    obj-upgrader/upgrader.o 
 
 all: gridcoinupgrader
 
 DEFS += -DHAVE_BUILD_INFO
 
-obj_upgrader/%.o: %.cpp
+obj-upgrader/%.o: %.cpp
 	$(CXX) -c $(xCXXFLAGS) -MMD -MF $(@:%.o=%.d) -o $@ $<
 	@cp $(@:%.o=%.d) $(@:%.o=%.P); \
 	  sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$//' \
 	      -e '/^$$/ d' -e 's/$$/ :/' < $(@:%.o=%.d) >> $(@:%.o=%.P); \
 	  rm -f $(@:%.o=%.d)
 
-gridcoinupgrader: $(OBJS:obj_upgrader/%=obj_upgrader/%)
+gridcoinupgrader: $(OBJS:obj-upgrader/%=obj-upgrader/%)
 	$(LINK) $(xCXXFLAGS) -o $@ $^ $(xLDFLAGS) $(LIBS)
 
 clean:
 	-rm -f gridcoinupgrader
-	-rm -f obj_upgrader/*.o
-	-rm -f obj_upgrader/*.P
+	-rm -f obj-upgrader/*.o
+	-rm -f obj-upgrader/*.P
 
 FORCE:
