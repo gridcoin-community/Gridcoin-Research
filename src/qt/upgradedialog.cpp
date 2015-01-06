@@ -43,7 +43,7 @@ void Imker(void *kippel)
     downloadSuccess = argo->upgrader->downloader(argo->target);
     printf("completed download\n");
     downloading = false;
-    // delete argo;
+    delete argo;
 }
 
 class Checker: public QObject
@@ -113,7 +113,7 @@ void UpgradeDialog::initiate(int targo)
         layout->addItem(horizontalSpacer, layout->rowCount(), 0, 1, layout->columnCount());
         if (changeDownload.exec() == QMessageBox::Yes) 
             {
-                // cancelDownload();
+                cancelDownload();
                 initialized = false; 
             }
     }
@@ -124,13 +124,13 @@ void UpgradeDialog::initiate(int targo)
     initialized = true;
 
     // Upgrader *jim = new Upgrader;
-    // upgrader = *jim;    
+    // upgrader = *jim;  
     downloadSuccess = false;
     downloading = true;
     downloaderArgs *argo = new downloaderArgs;
     argo->upgrader = &upgrader;
     argo->target = target;
-    boost::thread(Imker, argo);
+    boost::thread j(Imker, argo);
     enableUpgradeButton(false);
     enableretryDownloadButton(true);
     ui->retryDownloadButton->setText("Cancel Download");

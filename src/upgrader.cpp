@@ -65,6 +65,18 @@ void download(void *curlhandle)
 	curlarg->done = true;
 	}
 
+bool waitForParent(int parent)
+{
+	int delay = 0;
+	while ((0 == kill(parent, 0)) && delay < 60)
+		{
+			printf("Waiting for client to exit...\n");
+			usleep(1000*1000);
+			delay++;
+		}
+	return (delay < 60);
+}
+
 #if defined(UPGRADER)
 int main(int argc, char *argv[])
 {
@@ -113,11 +125,6 @@ int main(int argc, char *argv[])
 	{
 		#ifndef WIN32
 		int parent = atoi(argv[2]);
-		while (0 == kill(parent, 0))
-		{
-			printf("Waiting for client to exit...\n");
-			usleep(1000*1000);
-		}
 		printf("\nClient has exited\n");
 		if (upgrader.juggler(PROGRAM, false))
 		{
@@ -144,20 +151,17 @@ int main(int argc, char *argv[])
 	else if (strcmp(argv[1], "snapshot.zip")==0)
 	{
 		#ifndef WIN32
-		int parent = atoi(argv[2]);
-		while (0 == kill(parent, 0))
+		if (waitForParent(atoi(argv[2])))
 		{
-			printf("Waiting for client to exit...\n");
-			usleep(1000*1000);
-		}
-		printf("\nClient has exited\n");
-		if(!upgrader.unzipper(BLOCKS))             {return 0;}
-		printf("Blocks extracted successfully\n");
-		if (upgrader.juggler(DATA, false))
-		{
-			printf("Copied files successfully\n");
-			return 1;
-		}
+			printf("\nClient has exited\n");
+			if(!upgrader.unzipper(BLOCKS))             {return 0;}
+			printf("Blocks extracted successfully\n");
+			if (upgrader.juggler(DATA, false))
+			{
+				printf("Copied files successfully\n");
+				return 1;
+			}
+		}		
 		#endif
 		return 0;
 	}
@@ -185,6 +189,7 @@ bool Upgrader::downloader(int targetfile)
 	curlhandle.handle = curl_easy_init();
 	curlhandle.done = false;
 	curlhandle.success = false;
+	cancelDownload(false);
 
 	if (bfs::exists(target))	{bfs::remove(target);}
 	file=fopen(target.c_str(), "wb");

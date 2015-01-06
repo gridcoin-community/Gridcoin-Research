@@ -1070,10 +1070,12 @@ boost::filesystem::path GetProgramDir()
         {
             path = "";
             printf("Invalid path stated in gridcoinresearch.conf\n");
+        }
+        else
+        {
             return path;
         }
 
-        return path;
     }
 
     #ifdef WIN32
@@ -1094,7 +1096,8 @@ boost::filesystem::path GetProgramDir()
     }
 
         printf("Please specify program directory in config file using the 'programdir' argument\n");
-        path = boost::filesystem::current_path();
+        path = "";
+        return path;
 
 }
 
