@@ -2047,7 +2047,7 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, 
 	bool VerifyingBlock, int64_t locktime, double& OUT_POR, double& OUT_INTEREST, double RSA_WEIGHT)
 {
-    if (RSA_WEIGHT > 24000) nCoinAge += 10;
+    if (RSA_WEIGHT > 24000) nCoinAge += 1*COIN;
 
 	int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
 	
