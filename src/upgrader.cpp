@@ -71,30 +71,31 @@ void download(void *curlhandle)
 	}
 
 bool waitForParent(int parent)
-{
+{	
+	int delay = 0;
+	int cutoff = 30;
 	#ifdef WIN32
 	printf("Parent: %i\n", parent);
 	HANDLE process = OpenProcess(SYNCHRONIZE, FALSE, parent);
-	while (process != 0)
+	while (process != 0 && delay < cutoff)
 		{
 			printf("Waiting for client to exit...\n");
 			Sleep(2000);
 			CloseHandle(process);
 			process = OpenProcess(SYNCHRONIZE, FALSE, parent);
+			delay++;
 		}
 	
 	#else
-	int delay = 0;
-	while ((0 == kill(parent, 0)) && delay < 60)
+	while ((0 == kill(parent, 0)) && delay < cutoff)
 		{
 			printf("Waiting for client to exit...\n");
-			usleep(1000*1000);
+			usleep(1000*2000);
 			delay++;
 		}
-	printf((delay < 60)? "Client has exited\n" : "Client timed out\n" );
-	return (delay < 60);
-
 	#endif
+	printf((delay < cutoff)? "Client has exited\n" : "Client timed out\n" );
+	return (delay < cutoff);
 }
 
 #if defined(UPGRADER)
@@ -223,7 +224,6 @@ bool Upgrader::downloader(int targetfile)
 
 	filesize = -1;
 	filesizeRetrieved = false;
-	int c = 0;
 
 	while (!curlhandle.done && !CANCEL_DOWNLOAD)
 		{
@@ -297,7 +297,7 @@ bool Upgrader::unzipper(int targetfile)
 	char buffer[1024*1024];
 	FILE *file;
 	int bufferlength, err;
-	long long sum;
+	unsigned long long sum;
 
 	printf("Extracting %s\n", targetzip);
 
@@ -324,10 +324,10 @@ bool Upgrader::unzipper(int targetfile)
                 }
 
                 file = fopen((target / filestat.name).string().c_str(), "w");
-                if (file < 0) {
-                    printf("Could not create %s\n", (target / filestat.name).c_str());
-                    continue;
-                }
+                // if (file < 0) {
+                //     printf("Could not create %s\n", (target / filestat.name).c_str());
+                //     continue;
+                // }
  
                 sum = 0;
                 while (sum != filestat.size) {
@@ -397,8 +397,6 @@ bool Upgrader::juggler(int pf, bool recovery)			// for upgrade, backs up target 
 
 			bfs::copy_file(sourcedir / fongo, path(pf) / fongo); // the actual upgrade/recovery
 
-			
-	
 		}
 	}
 	else
@@ -409,8 +407,9 @@ bool Upgrader::juggler(int pf, bool recovery)			// for upgrade, backs up target 
 
 		copyDir(sourcedir, path(pf), true);
 
-	return true;
 	}
+
+	return true;
 }
 
 bool Upgrader::safeProgramDir()
@@ -520,11 +519,12 @@ bool Upgrader::verifyPath(bfs::path path, bool create)
 			printf("%s successfully created\n", path.c_str());
 			return true;
 		}
-	if (bfs::is_directory(path))
+	else
 		{
 			printf("%s does not exist and could not be created!\n", path.c_str());
 			return false;
 		}
+
 }
 
 std::string Upgrader::targetswitch(int target)
@@ -539,6 +539,9 @@ std::string Upgrader::targetswitch(int target)
 
 		case DAEMON:
 		return "gridcoind";
+
+		default:
+		return "";
 	}
 }
 

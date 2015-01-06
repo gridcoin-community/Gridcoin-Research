@@ -12,21 +12,10 @@ USE_UPNP:=0
  
 INCLUDEPATHS?= \
  -I"$(DEPSDIR)/include" \
- -I"$(DEPSDIR)/boost_1_55_0" \
- -I"$(DEPSDIR)/openssl-1.0.1j/include" \
- -I"$(DEPSDIR)/db-4.8.30.NC/build_unix" \
- -I"$(DEPSDIR)/" \
- -I"$(DEPSDIR)/libzip-0.11.2/lib" \
- -I"$(DEPSDIR)/curl-7.39.0/include" \
  
 LIBPATHS= \
  -L"$(CURDIR)/leveldb" \
- -L"$(DEPSDIR)/lib" \
- -L"$(DEPSDIR)/db-4.8.30.NC/build_unix" \
- -L"$(DEPSDIR)/boost_1_55_0/stage/lib" \
- -L"$(DEPSDIR)/openssl-1.0.1j" \
- -L"$(DEPSDIR)/libzip-0.11.2/lib/.libs" \
- -L"$(DEPSDIR)/curl-7.39.0/lib/.libs"
+ -L"$(DEPSDIR)/lib"
 
 LIBS= \
  -l leveldb \
