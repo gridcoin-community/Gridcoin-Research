@@ -1,15 +1,36 @@
 LINK:=$(CXX)
 ARCH:=$(system lscpu | head -n 1 | awk '{print $2}')
 
+DEPSDIR?=/c/deps/
+
+INCLUDEPATHS?= \
+ -I"$(CURDIR)" \
+ -I"$(DEPSDIR)/include" \
+ -I"$(DEPSDIR)/boost_1_55_0" \
+ -I"$(DEPSDIR)/openssl-1.0.1j/include" \
+ -I"$(DEPSDIR)/db-4.8.30.NC/build_unix" \
+ -I"$(DEPSDIR)/" \
+ -I"$(DEPSDIR)/libzip-0.11.2/lib" \
+ -I"$(DEPSDIR)/curl-7.39.0-devel-mingw64/include"
+
+ LIBPATHS?= \
+ -L"$(CURDIR)/leveldb" \
+ -L"$(DEPSDIR)/lib" \
+ -L"$(DEPSDIR)/db-4.8.30.NC/build_unix" \
+ -L"$(DEPSDIR)/boost_1_55_0/stage/lib" \
+ -L"$(DEPSDIR)/openssl-1.0.1j" \
+ -L"$(DEPSDIR)/libzip-0.11.2/lib" \
+ -L"$(DEPSDIR)/curl-7.39.0/lib/.lib"
+
+BOOST_LIB_SUFFIX = -mgw49-mt-s-1_55
+
 LIBS = \
  -Wl,-Bdynamic \
    -l boost_system$(BOOST_LIB_SUFFIX) \
    -l boost_filesystem$(BOOST_LIB_SUFFIX) \
    -l boost_program_options$(BOOST_LIB_SUFFIX) \
    -l boost_thread$(BOOST_LIB_SUFFIX) \
-   -l boost_date_time \
-   -l zip \
-   -l curl \
+   -l boost_date_time$(BOOST_LIB_SUFFIX) \
    -l crypto
 
 ifeq (${ARCH}, i686)
@@ -34,7 +55,7 @@ endif
     # Make some important things such as the global offset table read only as soon as
     # the dynamic linker is finished building it. This will prevent overwriting of addresses
     # which would later be jumped to.
-    LDHARDENING+=-Wl,-z,relro -Wl,-z,now
+    # LDHARDENING+=-Wl,-z,relro -Wl,-z,now
 
     # Build position independent code to take advantage of Address Space Layout Randomization
     # offered by some kernels.
@@ -59,21 +80,19 @@ xCXXFLAGS=-O2 $(EXT_OPTIONS) -pthread -DUPGRADER -Wall -Wextra -Wno-ignored-qual
 # adds some defaults in front. Unfortunately, LDFLAGS=... $(LDFLAGS) does not work.
 xLDFLAGS=$(LDHARDENING) $(LDFLAGS)
 
+HEADERS = $(wildcard *.h)
+
 OBJS= \
     obj/util.o \
     obj/upgrader.o \
 
 all: gridcoinupgrader
 
-obj/%.o: %.cpp
-	$(CXX) -c $(xCXXFLAGS) -MMD -MF $(@:%.o=%.d) -o $@ $<
-	@cp $(@:%.o=%.d) $(@:%.o=%.P); \
-	  sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$//' \
-	      -e '/^$$/ d' -e 's/$$/ :/' < $(@:%.o=%.d) >> $(@:%.o=%.P); \
-	  rm -f $(@:%.o=%.d)
+obj/%.o: %.cpp $(HEADERS)
+    g++ -c $(CFLAGS) -o $@ $<
 
 gridcoinupgrader: $(OBJS:obj/%=obj/%)
-	$(LINK) $(xCXXFLAGS) -o $@ $^ $(xLDFLAGS) $(LIBS)
+    $(CXX) $(CFLAGS) $(LDFLAGS) -o $@ $(LIBPATHS) $^ $(LIBS)
 
 clean:
 	-rm -f gridcoinupgrader

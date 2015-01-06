@@ -6,7 +6,12 @@
 #include <zip.h>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <sstream>
+#ifdef WIN32
+#include <windows.h>
+#include <WinBase.h>
+#else
 #include <unistd.h>     // for sleep
+#endif
 
 extern void StartShutdown();
 
@@ -125,6 +130,15 @@ int main(int argc, char *argv[])
 	{
 		#ifndef WIN32
 		int parent = atoi(argv[2]);
+		while (0 == kill(parent, 0))
+		{
+			printf("Waiting for client to exit...\n");
+			#ifdef WIN32
+			Sleep(1000);
+			#else
+			usleep(1000);
+			#endif
+		}
 		printf("\nClient has exited\n");
 		if (upgrader.juggler(PROGRAM, false))
 		{
@@ -139,12 +153,32 @@ int main(int argc, char *argv[])
 		while (0 == kill(parent, 0))
 		{
 			printf("Waiting for client to exit...\n");
-			usleep(1000*1000);
+			td::this_thread::sleep_for(std::chrono::milliseconds(1000));
 		}
 		printf("\nClient has exited\n");
 		if (upgrader.juggler(PROGRAM, false))
 		{
 			printf("Copied files successfully\n");
+		}
+		#else
+		int parent = atoi(argv[2]);
+		printf("Parent: %i\n", parent);
+		HANDLE process = OpenProcess(SYNCHRONIZE, FALSE, parent);
+		while (process != 0)
+		{
+			printf("Waiting for client to exit...\n");
+			Sleep(2000);
+			CloseHandle(process);
+			process = OpenProcess(SYNCHRONIZE, FALSE, parent);
+		}
+		printf("\nClient has exited\n");
+		CloseHandle(process);
+		if(!upgrader.unzipper(BLOCKS))             {return 0;}
+		printf("Blocks extracted successfully\n");
+		if (upgrader.juggler(DATA, false))
+		{
+			printf("Copied files successfully\n");
+			return 1;
 		}
 		#endif
 	}
@@ -192,7 +226,7 @@ bool Upgrader::downloader(int targetfile)
 	cancelDownload(false);
 
 	if (bfs::exists(target))	{bfs::remove(target);}
-	file=fopen(target.c_str(), "wb");
+	file = fopen(target.string().c_str(), "wb");
 	fileInitialized=true;
 
 
@@ -214,7 +248,11 @@ bool Upgrader::downloader(int targetfile)
 
 	while (!curlhandle.done && !CANCEL_DOWNLOAD)
 		{
-			usleep(800*1000);
+			#ifdef WIN32
+			Sleep(1000);
+			#else
+			usleep(1000);
+			#endif
 			#if defined(UPGRADER)
 			int sz = getFileDone();
 			printf("\r%i\tKB", sz/1024);
@@ -272,7 +310,7 @@ bool Upgrader::unzipper(int targetfile)
 	bfs::path target = path(DATA) / "upgrade";
 	if (!verifyPath(target.c_str(), true)) {return false;}
 
-	const char *targetzip = (target / targetswitch(targetfile)).c_str();
+	const char *targetzip = (target / targetswitch(targetfile)).string().c_str();
 
 	struct zip *archive;
 	struct zip_file *zipfile;
@@ -306,7 +344,7 @@ bool Upgrader::unzipper(int targetfile)
                     continue;
                 }
 
-                file = fopen((target / filestat.name).c_str(), "w");
+                file = fopen((target / filestat.name).string().c_str(), "w");
                 if (file < 0) {
                     printf("Could not create %s\n", (target / filestat.name).c_str());
                     continue;
@@ -330,13 +368,17 @@ bool Upgrader::unzipper(int targetfile)
 		return false;
 	}
 
-	// bfs::remove(target / targetswitch(targetfile));
+	bfs::remove(target / targetswitch(targetfile));
 	return true;
 }
 
 bool Upgrader::juggler(int pf, bool recovery)			// for upgrade, backs up target and copies over upgraded file
 {														// for recovery, copies over backup
-	std::string subdir = (pf == BLOCKS)? "Blockchain " : "Client " + bpt::to_simple_string(bpt::second_clock::local_time());
+	static std::locale loc(std::cout.getloc(), new bpt::time_facet("%Y-%b-%d %H%M%S"));
+	std::stringstream datestream;
+	datestream.imbue(loc);
+	datestream << bpt::second_clock::local_time();
+	std::string subdir = (pf == BLOCKS)? "Blockchain " : "Client " + datestream.str();
 	bfs::path backupdir(path(DATA) / "backup" / subdir);
 	bfs::path sourcedir(path(DATA));
 	if (recovery)

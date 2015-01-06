@@ -3,7 +3,7 @@
 #include "clientmodel.h"
 #include "version.h"
 #ifdef WIN32
-#include <QAxObject>
+// #include <QAxObject>
 #endif
 #include <sys/types.h>
 #include <stdio.h>
@@ -71,7 +71,11 @@ void Checker::check(Upgrader *upgrader, UpgradeDialog *upgradeDialog)
     while(downloading)
     {
         emit(change(upgrader->getFilePerc(upgrader->getFileDone())));
-        usleep(1000*800);
+        #ifdef WIN32
+        Sleep(1000);
+        #else
+        usleep(1000);
+        #endif
     }
     connect(this, SIGNAL(enableretryDownloadButton(bool)), upgradeDialog, SLOT(enableretryDownloadButton(bool)));
     if (downloadSuccess)
