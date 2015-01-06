@@ -72,6 +72,18 @@ void download(void *curlhandle)
 
 bool waitForParent(int parent)
 {
+	#ifdef WIN32
+	printf("Parent: %i\n", parent);
+	HANDLE process = OpenProcess(SYNCHRONIZE, FALSE, parent);
+	while (process != 0)
+		{
+			printf("Waiting for client to exit...\n");
+			Sleep(2000);
+			CloseHandle(process);
+			process = OpenProcess(SYNCHRONIZE, FALSE, parent);
+		}
+	
+	#else
 	int delay = 0;
 	while ((0 == kill(parent, 0)) && delay < 60)
 		{
@@ -79,7 +91,10 @@ bool waitForParent(int parent)
 			usleep(1000*1000);
 			delay++;
 		}
+	printf((delay < 60)? "Client has exited\n" : "Client timed out\n" );
 	return (delay < 60);
+
+	#endif
 }
 
 #if defined(UPGRADER)
@@ -128,40 +143,18 @@ int main(int argc, char *argv[])
 	}
 	else if (strcmp(argv[1], "gridcoin-qt")==0)
 	{
-		#ifndef WIN32
-		int parent = atoi(argv[2]);
-		while (0 == kill(parent, 0))
+		if (waitForParent(atoi(argv[2])))
 		{
-			printf("Waiting for client to exit...\n");
-			#ifdef WIN32
-			Sleep(1000);
-			#else
-			usleep(1000);
-			#endif
+			if (upgrader.juggler(PROGRAM, false))
+			{
+				printf("Copied files successfully\n");
+			}
 		}
-		printf("\nClient has exited\n");
-		if (upgrader.juggler(PROGRAM, false))
-		{
-			printf("Copied files successfully\n");
-		}
-		#endif
 	}
 	else if (strcmp(argv[1], "gridcoind")==0)
 	{
-		#ifndef WIN32
-		#else
-			int parent = atoi(argv[2]);
-			printf("Parent: %i\n", parent);
-			HANDLE process = OpenProcess(SYNCHRONIZE, FALSE, parent);
-			while (process != 0)
-			{
-				printf("Waiting for client to exit...\n");
-				Sleep(2000);
-				CloseHandle(process);
-				process = OpenProcess(SYNCHRONIZE, FALSE, parent);
-			}
-			printf("\nClient has exited\n");
-			CloseHandle(process);
+		if (waitForParent(atoi(argv[2])))
+		{
 			if(!upgrader.unzipper(BLOCKS))             {return 0;}
 			printf("Blocks extracted successfully\n");
 			if (upgrader.juggler(DATA, false))
@@ -170,14 +163,11 @@ int main(int argc, char *argv[])
 				return 1;
 			}
 		}
-		#endif
 	}
 	else if (strcmp(argv[1], "snapshot.zip")==0)
 	{
-		#ifndef WIN32
 		if (waitForParent(atoi(argv[2])))
 		{
-			printf("\nClient has exited\n");
 			if(!upgrader.unzipper(BLOCKS))             {return 0;}
 			printf("Blocks extracted successfully\n");
 			if (upgrader.juggler(DATA, false))
@@ -186,7 +176,6 @@ int main(int argc, char *argv[])
 				return 1;
 			}
 		}		
-		#endif
 		return 0;
 	}
 	else 
