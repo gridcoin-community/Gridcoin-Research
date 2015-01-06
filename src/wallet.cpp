@@ -1605,7 +1605,7 @@ double MintLimiter(double PORDiff,int64_t RSA_WEIGHT)
 {
 	//if (GetAdjustedTime() > 1420066220 && GetAdjustedTime() < 1420066220+3600) return 0;
 
-	if (RSA_WEIGHT==25000) return 0;
+	if (RSA_WEIGHT >= 24999) return 0;
 	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
 	if (PORDiff > 0    && PORDiff < 1)   return .02;
 	if (PORDiff > 1    && PORDiff < 5)   return .15;

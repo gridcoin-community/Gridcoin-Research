@@ -2884,7 +2884,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 	// Block Spamming (Halford) 12-23-2014
     double PORDiff = GetBlockDifficulty(nBits);
-	if (bb.RSAWeight != 25000 && mint==0 && pindex->nHeight > nGrandfather)
+	if (bb.RSAWeight < 24999 && mint==0 && pindex->nHeight > nGrandfather)
 	{
 					return error("CheckProofOfStake() : Mint Subsidy is zero");
 	}
@@ -2898,7 +2898,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 				return error("CheckProofOfStake() : Mint too Small, %f",(double)mint);
 		}
 
-		if (mint == 0  && bb.RSAWeight < 20000) return error("CheckProofOfStake() : Mint is ZERO! %f",(double)mint);
+		if (mint == 0  && bb.RSAWeight < 24000) return error("CheckProofOfStake() : Mint is ZERO! %f",(double)mint);
 	
 		if (!ClientOutOfSync())
 		{
