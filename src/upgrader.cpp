@@ -149,36 +149,26 @@ int main(int argc, char *argv[])
 	else if (strcmp(argv[1], "gridcoind")==0)
 	{
 		#ifndef WIN32
-		int parent = atoi(argv[2]);
-		while (0 == kill(parent, 0))
-		{
-			printf("Waiting for client to exit...\n");
-			td::this_thread::sleep_for(std::chrono::milliseconds(1000));
-		}
-		printf("\nClient has exited\n");
-		if (upgrader.juggler(PROGRAM, false))
-		{
-			printf("Copied files successfully\n");
-		}
 		#else
-		int parent = atoi(argv[2]);
-		printf("Parent: %i\n", parent);
-		HANDLE process = OpenProcess(SYNCHRONIZE, FALSE, parent);
-		while (process != 0)
-		{
-			printf("Waiting for client to exit...\n");
-			Sleep(2000);
+			int parent = atoi(argv[2]);
+			printf("Parent: %i\n", parent);
+			HANDLE process = OpenProcess(SYNCHRONIZE, FALSE, parent);
+			while (process != 0)
+			{
+				printf("Waiting for client to exit...\n");
+				Sleep(2000);
+				CloseHandle(process);
+				process = OpenProcess(SYNCHRONIZE, FALSE, parent);
+			}
+			printf("\nClient has exited\n");
 			CloseHandle(process);
-			process = OpenProcess(SYNCHRONIZE, FALSE, parent);
-		}
-		printf("\nClient has exited\n");
-		CloseHandle(process);
-		if(!upgrader.unzipper(BLOCKS))             {return 0;}
-		printf("Blocks extracted successfully\n");
-		if (upgrader.juggler(DATA, false))
-		{
-			printf("Copied files successfully\n");
-			return 1;
+			if(!upgrader.unzipper(BLOCKS))             {return 0;}
+			printf("Blocks extracted successfully\n");
+			if (upgrader.juggler(DATA, false))
+			{
+				printf("Copied files successfully\n");
+				return 1;
+			}
 		}
 		#endif
 	}
