@@ -2047,10 +2047,10 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, 
 	bool VerifyingBlock, int64_t locktime, double& OUT_POR, double& OUT_INTEREST, double RSA_WEIGHT)
 {
-    
-	int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
-	if (RSA_WEIGHT > 24000) nInterest++;
+    if (RSA_WEIGHT > 24000) nCoinAge += 10;
 
+	int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
+	
 	int64_t nBoinc    = GetProofOfResearchReward(cpid,VerifyingBlock);
 	int64_t nSubsidy  = nInterest + nBoinc;
 
@@ -2901,7 +2901,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 				return error("CheckProofOfStake() : Mint too Small, %f",(double)mint);
 		}
 
-		if (mint == 0  && bb.RSAWeight < 24000) return error("CheckProofOfStake() : Mint is ZERO! %f",(double)mint);
+		if (mint == 0) return error("CheckProofOfStake() : Mint is ZERO! %f",(double)mint);
 	
 		if (!ClientOutOfSync())
 		{
