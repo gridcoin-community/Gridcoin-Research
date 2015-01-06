@@ -681,7 +681,13 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 		if (coin_age < RSA_WEIGHT)    narr += " Coin Age < RSA_Weight: " + RoundToString(coin_age,0) + " " + RoundToString(RSA_WEIGHT,0);
 		if (RSA_WEIGHT/14 < MintLimiter(PORDiff,RSA_WEIGHT)) narr += " RSAWeight < MintLimiter: "
 			+ RoundToString(RSA_WEIGHT/14,0) + "; " + RoundToString(MintLimiter(PORDiff,RSA_WEIGHT),0);
-		if (!ACID_TEST)               narr += " POW Mining: " + RoundToString(por_nonce,0);
+		if (!ACID_TEST)      {
+			narr += " POW Mining: " + RoundToString(por_nonce,0);
+		}
+		else
+		{
+			narr += " Kernel Found: " + RoundToString(por_nonce,0) + "-" + RoundToString(oNC,0) + "";
+		}
 		if (RSA_WEIGHT >= 24999)        msMiningErrors7="Newbie block being generated.";
 		msMiningErrors5 = narr;
 	}

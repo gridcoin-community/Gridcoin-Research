@@ -152,7 +152,7 @@ extern int64_t GetCoinYearReward(int64_t nTime);
 extern bool Resuscitate();
 
 
-extern bool CreditCheckOnline(std::string cpid, double purported_magnitude, double mint, uint64_t nCoinAge, uint64_t nFees, int64_t locktime);
+extern bool CreditCheckOnline(std::string cpid, double purported_magnitude, double mint, uint64_t nCoinAge, uint64_t nFees, int64_t locktime, double RSAWeight);
 
 extern void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, double mint, bool IsStake);
 
@@ -349,7 +349,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 108226;
+ int nGrandfather = 108618;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2045,13 +2045,16 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 
 // miner's coin stake reward based on coin age spent (coin-days)
 int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, 
-	bool VerifyingBlock, int64_t locktime, double& OUT_POR, double& OUT_INTEREST)
+	bool VerifyingBlock, int64_t locktime, double& OUT_POR, double& OUT_INTEREST, double RSA_WEIGHT)
 {
     
 	int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
+	if (RSA_WEIGHT > 24000) nInterest++;
+
 	int64_t nBoinc    = GetProofOfResearchReward(cpid,VerifyingBlock);
 	int64_t nSubsidy  = nInterest + nBoinc;
 
+	
     if (fDebug || GetBoolArg("-printcreation"))
 	{
         printf("GetProofOfStakeReward(): create=%s nCoinAge=%"PRId64" nBoinc=%"PRId64"   \n",
@@ -2863,7 +2866,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			//11-9-2014
 			double OUT_POR = 0;
 			double OUT_INTEREST = 0;
-			int64_t nCalculatedResearchReward = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR, OUT_INTEREST);
+			int64_t nCalculatedResearchReward = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR, OUT_INTEREST,bb.RSAWeight);
 			if (nStakeReward > nCalculatedResearchReward*TOLERANCE_PERCENT)
 			{
 							return DoS(1, error("ConnectBlock() : Investor Reward pays too much : cpid %s (actual=%"PRId64" vs calculated=%"PRId64")",
@@ -2913,13 +2916,13 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			}
 
 			//Block being accepted within the last hour: Check with Netsoft - AND Verify User will not be overpaid:
-			bool outcome = CreditCheckOnline(bb.cpid,bb.Magnitude,mint,nCoinAge,nFees,nTime);
+			bool outcome = CreditCheckOnline(bb.cpid,bb.Magnitude,mint,nCoinAge,nFees,nTime,bb.RSAWeight);
 			if (!outcome) return DoS(1,error("ConnectBlock(): Netsoft online check failed\r\n"));
 			double OUT_POR = 0;
 			double OUT_INTEREST = 0;
 			//12-14-2014
 
-			int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR, OUT_INTEREST);
+			int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR, OUT_INTEREST, bb.RSAWeight);
 			
 			if (bb.cpid != "INVESTOR" && mint > 1)
 			{
@@ -2936,7 +2939,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 				CreditCheck(bb.cpid,true);
 				double OUT_POR2=0;
 				double OUT_INTEREST2=0;
-				nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime,OUT_POR2,OUT_INTEREST2);
+				nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime,OUT_POR2,OUT_INTEREST2, bb.RSAWeight);
 				if (nStakeReward > (nCalculatedResearch*TOLERANCE_PERCENT))
 				{
 					//Do not reject the block until Net Averages are finished loading
@@ -2951,13 +2954,13 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 					}
 					double OUT_POR3 = 0;
 					double OUT_INTEREST3 = 0;
-					nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime,OUT_POR3,OUT_INTEREST3);
+					nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime,OUT_POR3,OUT_INTEREST3,bb.RSAWeight);
 					if (nStakeReward > (nCalculatedResearch*TOLERANCE_PERCENT))
 					{
 							TallyNetworkAverages(false);
 							double OUT_POR4 = 0;
 							double OUT_INTEREST4 = 0;
-							int64_t nCalculatedResearch2 = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime,OUT_POR4,OUT_INTEREST4);
+							int64_t nCalculatedResearch2 = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime,OUT_POR4,OUT_INTEREST4,bb.RSAWeight);
 							if (nStakeReward > (nCalculatedResearch2*TOLERANCE_PERCENT))
 							{
 
@@ -4169,15 +4172,32 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
 
                 // we have to make sure that we have no future timestamps in
                 //    our transactions set
+
+				printf("K100.");
+
                 for (vector<CTransaction>::iterator it = vtx.begin(); it != vtx.end();)
-                    if (it->nTime > nTime) { it = vtx.erase(it); } else { ++it; }
+				{
+                    if (it->nTime > nTime) 
+					{
+						it = vtx.erase(it); 
+					} 
+					else 
+					{
+						++it; 
+					}
+
+				}
+
+				printf("K101.");
 
                 vtx.insert(vtx.begin() + 1, txCoinStake);
+				printf("K102.");
                 hashMerkleRoot = BuildMerkleTree();
-
+				printf("K103.");
                 // append a signature to our block
                 return key.Sign(GetHash(), vchBlockSig);
-            }
+
+			}
         }
         nLastCoinStakeSearchInterval = nSearchTime - nLastCoinStakeSearchTime;
         nLastCoinStakeSearchTime = nSearchTime;
@@ -6674,7 +6694,8 @@ bool IsUserQualifiedToSendCheckpoint()
 	return false;
 }
 
-bool CreditCheckOnline(std::string cpid, double purported_magnitude, double mint, uint64_t nCoinAge, uint64_t nFees, int64_t locktime)
+bool CreditCheckOnline(std::string cpid, double purported_magnitude, double mint, uint64_t nCoinAge, 
+	uint64_t nFees, int64_t locktime, double RSAWeight)
 {
 	if (cpid=="INVESTOR" && purported_magnitude==0) return true;
 	// First, check the magnitude report
@@ -6718,7 +6739,7 @@ bool CreditCheckOnline(std::string cpid, double purported_magnitude, double mint
 		//TODO: Ensure Inflation portion of mint is compared properly (	COIN_YEAR_REWARD = APR )
 		double OUT_POR = 0;
 		double OUT_INTEREST=0;
-		double owed = GetProofOfStakeReward(nCoinAge,nFees,cpid,true,locktime,OUT_POR,OUT_INTEREST);
+		double owed = GetProofOfStakeReward(nCoinAge,nFees,cpid,true,locktime,OUT_POR,OUT_INTEREST,RSAWeight);
 		if (mint > (owed*TOLERANCE_PERCENT))
 		{
 			printf("Credit Check Online failed:  Mint results in a payment > outstanding owed; owed %f - mint %f.",owed,mint);

@@ -434,7 +434,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 
 		
 		//Halford: Use current time since we are creating a new stake
-		int64_t nNewBlockReward = GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),out_por,out_interest);
+		int64_t nNewBlockReward = GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),out_por,out_interest,miningcpid.RSAWeight);
 		miningcpid.ResearchSubsidy = out_por;
 		miningcpid.InterestSubsidy = out_interest;
 
@@ -837,8 +837,14 @@ Begin:
 			
         if (pblock->SignBlock(*pwallet, nFees))
         {
+			printf("K107.");
+
             SetThreadPriority(THREAD_PRIORITY_NORMAL);
+			printf("K108");
+
 			bool Staked = CheckStake(pblock.get(), *pwallet);
+			printf("K109");
+
 			if (Staked)
 			{
 				msMiningErrors = "Stake block accepted!";

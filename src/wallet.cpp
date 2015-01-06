@@ -1954,9 +1954,26 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             break; // if kernel is found stop searching
     }
 
-    if (nCredit == 0 || nCredit > nBalance - nReserveBalance)
-        return false;
 
+	int64_t RSA_WEIGHT  = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
+	
+
+
+    if (nCredit == 0 && RSA_WEIGHT < 24999)
+	{
+		printf("StakeMiner: Credit = zero.");
+		msMiningErrors7="Credit = zero";
+		msMiningErrors = msMiningErrors7;
+		return false;
+	}
+
+	 if (nCredit > nBalance - nReserveBalance && RSA_WEIGHT < 24999)
+	{
+		printf("StakeMiner: Credit below reserve balance.");
+		msMiningErrors7="Credit below reserve balance";
+		msMiningErrors = msMiningErrors7;
+		return false;
+	}
 
 
 
@@ -1992,36 +2009,44 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     }
 
 	double MaxSubsidy = GetMaximumBoincSubsidy(GetAdjustedTime());
-		
+	if (fDebug) printf("ZXA1.");
+
     // Calculate coin age reward
     {
         uint64_t nCoinAge;
         CTxDB txdb("r");
         if (!txNew.GetCoinAge(txdb, nCoinAge))
+		{
+			msMiningErrors7="Failed to calculate coin age";
             return error("CreateCoinStake : failed to calculate coin age");
+		}
 		//Halford: Use current time since we are creating a new stake
 		double OUT_POR = 0;
 		double out_interest = 0;
-        int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),OUT_POR,out_interest);
-		std::string sReward = RoundToString(CoinToDouble(nReward),4);
+        int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),OUT_POR,out_interest,RSA_WEIGHT);
+		if (fDebug) printf("ZXA2.");
+
 		double out_magnitude = 0;
 		double out_owed = 0;
-		int64_t RSA_WEIGHT  = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 		double mint = CoinToDouble(nReward);
 		double PORDiff = GetBlockDifficulty(nBits);
-		if (fDebug) printf("Creating POS Reward for %s  amt  %s  {RSAWeight %s} \r\n",
-			GlobalCPUMiningCPID.cpid.c_str(),sReward.c_str(),RoundToString((double)RSA_WEIGHT,0).c_str());
+		if (fDebug) printf("ZXA3.");
+
+		if (fDebug) printf("Creating POS Reward for %s  amt  %f  {RSAWeight %f} \r\n",
+			GlobalCPUMiningCPID.cpid.c_str(), mint, (double)RSA_WEIGHT);
 	
 		//INVESTORS
 		if (mint < MintLimiter(PORDiff,RSA_WEIGHT)) 
 		{
-				if (LessVerbose(10)) printf("CreateStake()::Mint too small");
+				if (fDebug) printf("CreateStake()::Mint too small");
+				msMiningErrors7="Mint too small";
 				return false; 
 		}
 		
 		if (nReward == 0)
 		{
 			if (fDebug) printf("CreateBlock():Mint is zero");
+			msMiningErrors7="Mint is zero!";  //Newbie
 			return false;   
 		}
 	    nCredit += nReward;
@@ -2035,6 +2060,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		return false;
 	}
 
+	if (fDebug) printf("ZXA142");
 	
     // Set output amount
     if (txNew.vout.size() == 3)
@@ -2050,13 +2076,18 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     BOOST_FOREACH(const CWalletTx* pcoin, vwtxPrev)
     {
         if (!SignSignature(*this, *pcoin, txNew, nIn++))
+		{
+			msMiningErrors7="Failed to sign coinstake";
             return error("CreateCoinStake : failed to sign coinstake");
+		}
     }
 
     // Limit size
     unsigned int nBytes = ::GetSerializeSize(txNew, SER_NETWORK, PROTOCOL_VERSION);
     if (nBytes >= MAX_BLOCK_SIZE_GEN/5)
-        return error("CreateCoinStake : exceeded coinstake size limit");
+    {  msMiningErrors7="Exceeded coinstake size limit"; 
+		return error("CreateCoinStake : exceeded coinstake size limit");
+	}
 
     // Successfully generated coinstake
 	if (CoinToDouble(nCredit) > (MaxSubsidy/10)) 
