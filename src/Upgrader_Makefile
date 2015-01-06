@@ -9,8 +9,16 @@ ARCH:=$(system lscpu | head -n 1 | awk '{print $2}')
 
 DEFS=-DBOOST_SPIRIT_THREADSAFE
 
-DEFS += $(addprefix -I,$(CURDIR) $(CURDIR)/obj_upgrader $(BOOST_INCLUDE_PATH) $(BDB_INCLUDE_PATH) $(OPENSSL_INCLUDE_PATH))
-LIBS = $(addprefix -L,$(BOOST_LIB_PATH) $(BDB_LIB_PATH) $(OPENSSL_LIB_PATH))
+# Dependency library locations can be customized with:
+#    BOOST_INCLUDE_PATH, BOOST_LIB_PATH, BDB_INCLUDE_PATH,
+#    BDB_LIB_PATH, OPENSSL_INCLUDE_PATH, OPENSSL_LIB_PATH, 
+#    CURL_INCLUDE_PATH, CURL_LIB_PATH, LIBZIP_INCLUDE_PATH 
+#    and LIBZIP_LIB_PATH respectively
+
+
+
+DEFS += $(addprefix -I,$(CURDIR) $(CURDIR)/obj_upgrader $(BOOST_INCLUDE_PATH) $(BDB_INCLUDE_PATH) $(OPENSSL_INCLUDE_PATH)) $(CURL_INCLUDE_PATH)) $(LIBZIP_INCLUDE_PATH))
+LIBS = $(addprefix -L,$(BOOST_LIB_PATH) $(BDB_LIB_PATH) $(OPENSSL_LIB_PATH)) $(CURL_LIB_PATH)) $(CURL_LIB_PATH))
 
 LMODE = dynamic
 LMODE2 = dynamic
@@ -29,7 +37,7 @@ LIBS += \
    -l boost_program_options$(BOOST_LIB_SUFFIX) \
    -l boost_thread$(BOOST_LIB_SUFFIX) \
    -l boost_chrono$(BOOST_LIB_SUFFIX) \
-   -l boost_date_time \
+   -l boost_date_time$(BOOST_LIB_SUFFIX) \
    -l ssl \
    -l crypto \
    -l zip \
@@ -114,5 +122,6 @@ gridcoinupgrader: $(OBJS:obj_upgrader/%=obj_upgrader/%)
 clean:
 	-rm -f gridcoinupgrader
 	-rm -f obj_upgrader/*.o
+	-rm -f obj_upgrader/*.P
 
 FORCE:
