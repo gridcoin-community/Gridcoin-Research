@@ -1835,7 +1835,9 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	
 	//Search
 
-	
+	msMiningErrors7=""; //Clear errors; ready to roll...
+
+
 
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
     {

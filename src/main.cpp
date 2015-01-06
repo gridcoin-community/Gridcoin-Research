@@ -622,7 +622,8 @@ std::string GetGlobalStatus()
 			+ RoundToString(PORDiff,3) + "; Net Weight: " + RoundToString(GetPoSKernelPS2(),2)  
 			+ "<br>Boinc Weight: " +  sWeight + "; Status: " + msMiningErrors 
 			+ "<br>Magnitude: " + RoundToString(out_magnitude,3) + ";Project: " + msMiningProject
-			+ "<br>"  + msMiningErrors2 + " " + msMiningErrors3 +" " + msMiningErrors4 + " " + " " + msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + sBoost.str();
+			+ "<br>" + msMiningErrors2 + " " + msMiningErrors3 + " " + msMiningErrors4 + 
+			+ "<br>" + msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7;
 
 		//The last line break is for Windows 8.1 Huge Toolbar
 		msGlobalStatus = status;
@@ -3846,7 +3847,7 @@ void GridcoinServices()
 	if (nBestHeight > 100 && nBestHeight < 1000)
 	{
 		//12-28-2014 Suggested by SeP
-		if (GetArg("-suppressdownloadblocks", "") == "")
+		if (GetArg("-suppressdownloadblocks", "true") == "false")
 		{
 
 			std::string email = GetArgument("email", "NA");

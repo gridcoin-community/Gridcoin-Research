@@ -1663,6 +1663,17 @@ Value listitem(const Array& params, bool fHelp)
 		results.push_back(entry);
 	}
 
+	if (sitem == "currenttime")
+	{
+
+		Object entry;
+		entry.push_back(Pair("Unix",GetAdjustedTime()));
+		entry.push_back(Pair("UTC",TimestampToHRDate(GetAdjustedTime())));
+		results.push_back(entry);
+
+	}
+
+
 	if (sitem == "magnitudecsv")
 	{
 		results = MagnitudeReportCSV(false);
