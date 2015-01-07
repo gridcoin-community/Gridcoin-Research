@@ -82,15 +82,15 @@ void Checker::check(Upgrader *upgrader, UpgradeDialog *upgradeDialog)
 
 void UpgradeDialog::upgrade()
 {
-    initiate(QT);
+    initialize(QT);
 }
 
 void UpgradeDialog::blocks()
 {
-    initiate(BLOCKS);
+    initialize(BLOCKS);
 }
 
-void UpgradeDialog::initiate(int targo)
+void UpgradeDialog::initialize(int targo)
 {
     if((initialized) && (target!=targo))
     {
@@ -174,7 +174,7 @@ void UpgradeDialog::on_retryDownloadButton_clicked()
             c++;
             printf("Waiting for curl\n");
         }
-        initiate(target);
+        initialize(target);
     }
 }
 

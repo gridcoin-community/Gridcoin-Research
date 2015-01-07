@@ -37,7 +37,7 @@ private slots:
 public slots:
     void upgrade();
     void blocks();
-    void initiate(int target);
+    void initialize(int target);
     void setPerc(int percentage);
     void enableUpgradeButton(bool state);
     void enableretryDownloadButton(bool state);

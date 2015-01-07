@@ -17,7 +17,7 @@ extern void StartShutdown();
 
 namespace bfs = boost::filesystem;
 namespace bpt = boost::posix_time;
-typedef std::vector<bfs::path> vec;
+typedef std::vector<bfs::path> pathvec;
 
 bool CANCEL_DOWNLOAD = false;
 
@@ -330,10 +330,6 @@ bool Upgrader::unzipper(int targetfile)
                 }
 
                 file = fopen((target / filestat.name).string().c_str(), "w");
-                // if (file < 0) {
-                //     printf("Could not create %s\n", (target / filestat.name).c_str());
-                //     continue;
-                // }
  
                 sum = 0;
                 while (sum != filestat.size) {
@@ -353,7 +349,7 @@ bool Upgrader::unzipper(int targetfile)
         return false;
     }
 
-    // bfs::remove(target / targetswitch(targetfile));
+    bfs::remove(target / targetswitch(targetfile));
     return true;
 }
 
@@ -381,9 +377,9 @@ bool Upgrader::juggler(int pf, bool recovery)           // for upgrade, backs up
 
     if ((pf == PROGRAM) && (safeProgramDir()))
     {
-        vec iteraton = this->fvector(sourcedir);
+        pathvec iteraton = this->fvector(sourcedir);
 
-        for (vec::const_iterator mongo (iteraton.begin()); mongo != iteraton.end(); ++mongo)
+        for (pathvec::const_iterator mongo (iteraton.begin()); mongo != iteraton.end(); ++mongo)
         {
 
             bfs::path fongo = *mongo;
@@ -430,8 +426,8 @@ bool Upgrader::copyDir(bfs::path source, bfs::path target, bool recursive)
 {
     if (!verifyPath(source, false) || !verifyPath(target, true))    {return false;}
     
-    vec iteraton = this->fvector(source);
-    for (vec::const_iterator mongo (iteraton.begin()); mongo != iteraton.end(); ++mongo)
+    pathvec iteraton = this->fvector(source);
+    for (pathvec::const_iterator mongo (iteraton.begin()); mongo != iteraton.end(); ++mongo)
     {
 
     bfs::path fongo = *mongo;
@@ -444,11 +440,8 @@ bool Upgrader::copyDir(bfs::path source, bfs::path target, bool recursive)
 
     if (bfs::is_directory(source / fongo))
     {
-        // printf("%s is a directory - time for recursion!\n", (source / fongo).c_str());
-        // if (blacklistDirectory(fongo)) {continue;}
         if ((fongo == "upgrade") || (fongo == "backup") || (!recursive))
         {
-            // printf("Skip this shit\n");
             continue;
         }
         copyDir(source / fongo, target / fongo, recursive);
@@ -467,9 +460,9 @@ bool Upgrader::copyDir(bfs::path source, bfs::path target, bool recursive)
     return true;
 }
 
-vec Upgrader::fvector(bfs::path path)
+pathvec Upgrader::fvector(bfs::path path)
 {
-    vec a;
+    pathvec a;
  
     copy(bfs::directory_iterator(path), bfs::directory_iterator(), back_inserter(a));
 
