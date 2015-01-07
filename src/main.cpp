@@ -4782,9 +4782,9 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
 	//Gridcoin - payment range is stored in HighLockTime-LowLockTime
 	// If newbie has not participated for 14 days, use earliest payment in chain to assess payment window
 	// (Important to prevent e-mail change attacks) - Calculate payment timespan window in days
-	double payment_timespan = (GetAdjustedTime() - mag.EarliestPaymentTime)/43200;
-	if (payment_timespan < 1) payment_timespan = 1;
-	if (payment_timespan > 11) payment_timespan = 14;
+	double payment_timespan = (GetAdjustedTime() - mag.EarliestPaymentTime)/38400;
+	if (payment_timespan < 2) payment_timespan =  2;
+	if (payment_timespan > 10) payment_timespan = 14;
 	mag.PaymentTimespan = payment_timespan;
 	double research_magnitude = LederstrumpfMagnitude2(coalesce(mag.ConsensusMagnitude,block_magnitude),locktime);
 	double owed = payment_timespan * Cap(research_magnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime));

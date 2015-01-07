@@ -1923,9 +1923,12 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 	int64_t RSA_WEIGHT  = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 	
+	//1-7-2015 Halford
 
 
-    if (nCredit == 0)
+
+
+    if (nCredit == 0 && false)
 	{
 		printf("StakeMiner: Credit below reserve balance (zero).");
 		msMiningErrors7="Credit below reserve (zero).";
@@ -1991,7 +1994,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		double out_interest = 0;
         int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,
 			GetAdjustedTime(),OUT_POR,out_interest,RSA_WEIGHT);
-		if (fDebug2) printf("ZXA2.");
+		if (fDebug) printf("ZXA2.");
 
 		double out_magnitude = 0;
 		double out_owed = 0;
@@ -2013,7 +2016,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		if (nReward == 0)
 		{
 			if (fDebug) printf("CreateBlock():Mint is zero");
-			msMiningErrors7="Mint is zero!";  //Newbie
+			msMiningErrors7="Mint is zero";  //Newbie
 			return false;   
 		}
 	    nCredit += nReward;
@@ -2062,6 +2065,12 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     if (nBytes >= MAX_BLOCK_SIZE_GEN/5)
     {  msMiningErrors7="Exceeded coinstake size limit"; 
 		return error("CreateCoinStake : exceeded coinstake size limit");
+	}
+
+	if (mdPORNonceSolved < 1000) 
+	{
+		msMiningErrors = "PoW Mining+";
+		return false;
 	}
 
     // Successfully generated coinstake

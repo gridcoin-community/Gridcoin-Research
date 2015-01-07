@@ -1064,6 +1064,14 @@ Value execute(const Array& params, bool fHelp)
 		results.push_back(entry);
 
 	}
+	else if (sItem == "testnonce")
+	{
+		//1-7-2015
+		entry.push_back(Pair("1",mdPORNonce));
+		mdPORNonce += 2500;
+		entry.push_back(Pair("2",mdPORNonce));
+		results.push_back(entry);
+	}
 	else if (sItem == "genorgkey")
 	{
 			if (params.size() != 3)

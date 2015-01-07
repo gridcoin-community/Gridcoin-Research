@@ -595,14 +595,6 @@ bool StakeAcidTest(std::string grc_address, double por_diff, std::string last_bl
 	if (fTestNet) return true;
 	if (height < nGrandfather) return true;
 	//ROB HALFORD - 12-30-2014
-	/*
-	// Step 1
-	std::string agg_hash = grc_address + "," + last_block_hash;
-	std::string hashMd5 = RetrieveMd5(agg_hash);
-	uint256 hash1 = uint256("0x" + hashMd5);
-	uint256 acid1 = uint256("0x8fffffffffffffffffffffffffffffff");
-	if (hash1 < acid1) return false;
-	*/
 	//Step 2
 	std::string aggregated_hash = grc_address + "," + last_block_hash + "," + RoundToString(nonce,0);
 	std::string hash_md5 = RetrieveMd5(aggregated_hash);
@@ -614,7 +606,7 @@ bool StakeAcidTest(std::string grc_address, double por_diff, std::string last_bl
 	uint256 diff5 = uint256("0x00000fffffffffffffffffffffffffff");
 	uint256 diff6 = uint256("0x00000effffffffffffffffffffffffff");
 	uint256 diff7 = uint256("0x00000dffffffffffffffffffffffffff");
-	if (nonce < 2500) return false;
+	if (nonce < 2199) return false;
 	//if (fDebug2) if (LessVerbose(4)) printf("nonce %f",(double)nonce);
 
 	if (por_diff >= 1   && por_diff < 5)    return (hash < diff1);
