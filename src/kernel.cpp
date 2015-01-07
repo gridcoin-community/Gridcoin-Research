@@ -659,12 +659,12 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
  	double coin_age = std::abs((double)nTimeTx-(double)txPrev.nTime);
 	double payment_age = std::abs((double)nTimeTx-(double)boincblock.LastPaymentTime);
 	double combined_mag = boincblock.Magnitude;
-	if (RSA_WEIGHT >= 24999) combined_mag = 100;
+	//if (RSA_WEIGHT >= 24999) combined_mag = 100;
 	double BitsAge = PORDiff * 144; //For every 100 Diff in Bits, two hours of coin age for researchers
 	if ((payment_age > 60*60) && (payment_age > BitsAge)  
 		&& combined_mag > 1 
 		&& boincblock.cpid != "INVESTOR" && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT) 
-		&& (RSA_WEIGHT/14 > MintLimiter(PORDiff,RSA_WEIGHT)) )
+		&& (RSA_WEIGHT/14 > MintLimiter(PORDiff,RSA_WEIGHT)) && ACID_TEST)
 	{
 		//Coins are older than RSA balance
 		oNC=1;

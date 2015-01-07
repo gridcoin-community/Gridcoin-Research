@@ -106,7 +106,7 @@ uint256 muGlobalCheckpointHash = 0;
 uint256 muGlobalCheckpointHashRelayed = 0;
 int muGlobalCheckpointHashCounter = 0;
 ///////////////////////MINOR VERSION////////////////////////////////
-int MINOR_VERSION = 150;
+int MINOR_VERSION = 160;
 
 			
 bool IsUserQualifiedToSendCheckpoint();
@@ -4181,7 +4181,7 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
 			nNonce=mdPORNonceSolved;
 			printf("7. nonce %f",(double)nNonce);
 
-            if (txCoinStake.nTime >= max(pindexBest->GetPastTimeLimit()+1, PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1)))
+            if (nNonce > 1000 && txCoinStake.nTime >= max(pindexBest->GetPastTimeLimit()+1, PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1)))
             {
                 // make sure coinstake would meet timestamp protocol
                 //    as it would be the same as the block timestamp
@@ -4220,14 +4220,14 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
                 // append a signature to our block
 				//1-6-2015
 
-				if (1==0 && GlobalCPUMiningCPID.RSAWeight > 24000)
-				{
-					return true;
-				}
-				else
-				{
+				//if (1==0 && GlobalCPUMiningCPID.RSAWeight > 24000)
+				//{
+				//	return true;
+				//}
+				//else
+				//{
 					return key.Sign(GetHash(), vchBlockSig);
-				}
+				//}
 
 			}
         }

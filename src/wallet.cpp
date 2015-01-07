@@ -1925,10 +1925,10 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	
 
 
-    if (nCredit == 0 && RSA_WEIGHT < 24999)
+    if (nCredit == 0)
 	{
-		printf("StakeMiner: Credit = zero.");
-		msMiningErrors7="Credit = zero";
+		printf("StakeMiner: Credit below reserve balance (zero).");
+		msMiningErrors7="Credit below reserve (zero).";
 		msMiningErrors = msMiningErrors7;
 		return false;
 	}
