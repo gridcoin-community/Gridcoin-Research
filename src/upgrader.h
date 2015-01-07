@@ -11,7 +11,7 @@
 struct curlargs
 { 
 	CURL *handle;
-	bool done;
+	bool downloading;
 	bool success;
 };
 
@@ -56,7 +56,8 @@ public:
 // 	return info about file being downloaded:
 	unsigned long int getFileDone();
 	int getFilePerc(long int sz);
-
+	bool downloading() {return curlhandle.downloading;}
+	bool downloadSuccess() {return curlhandle.success;}
  	void cancelDownload(bool cancel);
 
 };

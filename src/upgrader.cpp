@@ -20,7 +20,6 @@ namespace bpt = boost::posix_time;
 typedef std::vector<bfs::path> vec;
 
 bool CANCEL_DOWNLOAD = false;
-bool DOWNLOAD_SUCCESS = false;
 
 static int cancelDownloader(void *p,
 					curl_off_t dltotal, curl_off_t dlnow,
@@ -67,7 +66,7 @@ void download(void *curlhandle)
 	CURLcode success = CURLE_OK;
 	success = curl_easy_perform(curlarg->handle);
 	if (success == CURLE_OK) { curlarg->success = true; }
-	curlarg->done = true;
+	curlarg->downloading = false;
 	}
 
 bool waitForParent(int parent)
@@ -182,7 +181,9 @@ int main(int argc, char *argv[])
 			}
 		}		
 	}
-	// 
+
+	//
+
 	else 
 	{
 		printf("That's not an option!\n");
@@ -205,7 +206,7 @@ bool Upgrader::downloader(int targetfile)
 	printf("%s\n",target.c_str());
 
 	curlhandle.handle = curl_easy_init();
-	curlhandle.done = false;
+	curlhandle.downloading = true;
 	curlhandle.success = false;
 	cancelDownload(false);
 
@@ -229,7 +230,7 @@ bool Upgrader::downloader(int targetfile)
 	filesize = -1;
 	filesizeRetrieved = false;
 
-	while (!curlhandle.done && !CANCEL_DOWNLOAD)
+	while (curlhandle.downloading && !CANCEL_DOWNLOAD)
 		{
 			#ifdef WIN32
 			Sleep(1000);
@@ -524,6 +525,7 @@ void Upgrader::launcher(int launchtarget, int launcharg)
 		argumentstring.append(boost::lexical_cast<std::string>(DAEMON));
 		#endif
 		argumentstring.append(" ");
+
 		char * argument = new char[argumentstring.length() + sizeof(char)];
 		strcpy(argument, argumentstring.c_str());
 
@@ -532,6 +534,8 @@ void Upgrader::launcher(int launchtarget, int launcharg)
 		strcpy(program, programstring);
 
 		CreateProcess(program, argument, NULL, NULL, FALSE, 0, NULL, NULL, &StartupInfo, &ProcessInfo);
+		delete argument;
+		delete program;
 		#endif
 	}
 	else
@@ -570,7 +574,7 @@ std::string Upgrader::targetswitch(int target)
 		return "snapshot.zip";
 
 		case QT:
-		return "gridcoinresearch";
+		return "gridcoin-qt";
 
 		case DAEMON:
 		return "gridcoind";

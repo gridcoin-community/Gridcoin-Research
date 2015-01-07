@@ -2,9 +2,6 @@
 #include "ui_upgradedialog.h"
 #include "clientmodel.h"
 #include "version.h"
-#ifdef WIN32
-// #include <QAxObject>
-#endif
 #include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,14 +13,11 @@
 #include <QThread>
 #include <QMessageBox>
 
-bool downloading;
-bool downloadSuccess;
-
 struct downloaderArgs
 {
     Upgrader *upgrader;
     int target;
-};
+}argo;
 
 UpgradeDialog::UpgradeDialog(QWidget *parent) :
     QDialog(parent),
@@ -36,14 +30,9 @@ UpgradeDialog::UpgradeDialog(QWidget *parent) :
 
 void Imker(void *kippel)
 {
-    downloadSuccess = false;
-    downloading = true;
-    downloaderArgs *argo = (downloaderArgs*)kippel;
+    downloaderArgs *argon = (downloaderArgs*)kippel;
     printf("Starting download\n");
-    downloadSuccess = argo->upgrader->downloader(argo->target);
-    printf("completed download\n");
-    downloading = false;
-    delete argo;
+    argon->upgrader->downloader(argon->target);
 }
 
 class Checker: public QObject
@@ -68,7 +57,7 @@ void Checker::start()
 
 void Checker::check(Upgrader *upgrader, UpgradeDialog *upgradeDialog)
 {
-    while(downloading)
+    while(upgrader->downloading())
     {
         emit(change(upgrader->getFilePerc(upgrader->getFileDone())));
         #ifdef WIN32
@@ -78,7 +67,7 @@ void Checker::check(Upgrader *upgrader, UpgradeDialog *upgradeDialog)
         #endif
     }
     connect(this, SIGNAL(enableretryDownloadButton(bool)), upgradeDialog, SLOT(enableretryDownloadButton(bool)));
-    if (downloadSuccess)
+    if (upgrader->downloadSuccess())
     {
         emit(change(100)); // 99 is filthy
         connect(this, SIGNAL(enableUpgradeButton(bool)), upgradeDialog, SLOT(enableUpgradeButton(bool)));
@@ -120,6 +109,7 @@ void UpgradeDialog::initiate(int targo)
                 cancelDownload();
                 initialized = false; 
             }
+        delete horizontalSpacer;
     }
     if (!initialized)
     {
@@ -127,14 +117,9 @@ void UpgradeDialog::initiate(int targo)
     target = targo;
     initialized = true;
 
-    // Upgrader *jim = new Upgrader;
-    // upgrader = *jim;  
-    downloadSuccess = false;
-    downloading = true;
-    downloaderArgs *argo = new downloaderArgs;
-    argo->upgrader = &upgrader;
-    argo->target = target;
-    boost::thread j(Imker, argo);
+    argo.upgrader = &upgrader;
+    argo.target = target;
+    boost::thread(Imker, &argo);
     enableUpgradeButton(false);
     enableretryDownloadButton(true);
     ui->retryDownloadButton->setText("Cancel Download");
@@ -178,6 +163,17 @@ void UpgradeDialog::on_retryDownloadButton_clicked()
     }
     else
     {
+        int c = 0;
+        while (upgrader.downloading() && c < 20)
+        {
+            #ifdef WIN32
+            Sleep(500);
+            #else
+            usleep(1000*500);
+            #endif
+            c++;
+            printf("Waiting for curl\n");
+        }
         initiate(target);
     }
 }

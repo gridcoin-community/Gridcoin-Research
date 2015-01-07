@@ -1063,7 +1063,7 @@ boost::filesystem::path GetProgramDir()
 
     if (mapArgs.count("-programdir")) 
     {
-        printf("Acquiring program directory from conf file\n");
+        // printf("Acquiring program directory from conf file\n");
         path = boost::filesystem::system_complete(mapArgs["-programdir"]);
         
         if (!boost::filesystem::is_directory(path)) 
@@ -1088,7 +1088,7 @@ boost::filesystem::path GetProgramDir()
 
     for (int i = 0; i < 3; ++i)
     {
-        printf("Checking for %s\n", boost::filesystem::exists((boost::filesystem::current_path() / list[i]).c_str()));
+        printf("Checking for %s\n", (boost::filesystem::current_path() / list[i]).c_str());
         if (boost::filesystem::exists((boost::filesystem::current_path() / list[i]).c_str()))
         {
             // printf("Identified %s as client directory\n", (boost::filesystem::current_path()).c_str());

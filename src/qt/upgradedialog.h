@@ -19,8 +19,6 @@ public:
     ~UpgradeDialog();
 
     void setClientModel(ClientModel *model);
-	bool performUpgrade = false;
-	bool downloading = false;
 	bool initialized = false;
 
 private:
