@@ -349,7 +349,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 108618;
+ int nGrandfather = 108725;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2000,6 +2000,7 @@ double GetMagnitudeMultiplier(int64_t nTime)
 int64_t GetProofOfStakeMaxReward(int64_t nCoinAge, int64_t nFees, int64_t locktime)
 {
 	int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
+	nInterest += 1*COIN;
 	int64_t nBoinc    = (GetMaximumBoincSubsidy(locktime)+1) * COIN;
 	int64_t nSubsidy  = nInterest + nBoinc;
     return nSubsidy + nFees;
@@ -2009,6 +2010,8 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 {
 		StructCPID mag = GetStructCPID();
 		mag = mvMagnitudes[cpid];
+		if (!mag.initialized) return 0;
+
 		//Help prevent sync problems by assessing owed @ 90%
 		double owed = (mag.owed*1.0);
 		if (owed < 0) owed = 0;
@@ -2047,10 +2050,10 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, 
 	bool VerifyingBlock, int64_t locktime, double& OUT_POR, double& OUT_INTEREST, double RSA_WEIGHT)
 {
-    if (RSA_WEIGHT > 24000) nCoinAge += 1*COIN;
-
+    
 	int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
-	
+	if (RSA_WEIGHT > 24000) nInterest += 1*COIN;
+
 	int64_t nBoinc    = GetProofOfResearchReward(cpid,VerifyingBlock);
 	int64_t nSubsidy  = nInterest + nBoinc;
 
@@ -2062,12 +2065,18 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 	}
 
 	//Pallas 11-30-2014
+	if (fDebug) printf("Z199");
+
 	int64_t maxStakeReward1 = GetProofOfStakeMaxReward(nCoinAge, nFees, locktime);
 	int64_t maxStakeReward2 = GetProofOfStakeMaxReward(nCoinAge, nFees, GetAdjustedTime());
 	int64_t maxStakeReward = Floor(maxStakeReward1,maxStakeReward2);
 	if ((nSubsidy+nFees) > maxStakeReward) nSubsidy = maxStakeReward-nFees;
+
+	if (fDebug) printf("Z200");
+
 	OUT_POR = CoinToDouble(nBoinc);
 	OUT_INTEREST = CoinToDouble(nInterest);
+	if (fDebug) printf("Z201");
     return nSubsidy + nFees;
 }
 
@@ -2920,7 +2929,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			if (!outcome) return DoS(1,error("ConnectBlock(): Netsoft online check failed\r\n"));
 			double OUT_POR = 0;
 			double OUT_INTEREST = 0;
-			//12-14-2014
 
 			int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR, OUT_INTEREST, bb.RSAWeight);
 			
@@ -3552,8 +3560,6 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
 
  
 	//ProofOfResearch
-	if (true)
-	{
 		if (vtx.size() > 0)
 		{
 			MiningCPID boincblock = DeserializeBoincBlock(vtx[0].hashBoinc);
@@ -3572,13 +3578,24 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
 
 
 			}
+
+	        // Gridcoin (NovaCoin's): check proof-of-stake block signature
+			if (IsProofOfStake() && height1 > nGrandfather)
+			{
+				if (boincblock.RSAWeight < 24000 || boincblock.InterestSubsidy > 3 || boincblock.ResearchSubsidy > 3)
+				{
+					if (fCheckSig && !CheckBlockSignature())
+					return DoS(100, error("CheckBlock() : bad proof-of-stake block signature"));
+				}
+			}
+
+
 		}
 		else
 		{
 			return false;
 		}
 
-	}
 	// End of Proof Of Research
 
 
@@ -3595,9 +3612,6 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
             if (vtx[i].IsCoinStake())
                 return DoS(100, error("CheckBlock() : more than one coinstake"));
 
-        // Gridcoin (NovaCoin's): check proof-of-stake block signature
-        if (fCheckSig && !CheckBlockSignature())
-            return DoS(100, error("CheckBlock() : bad proof-of-stake block signature"));
     }
 
     // Check transactions
@@ -4148,12 +4162,21 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
     if (IsProtocolV2(nBestHeight+1))
         txCoinStake.nTime &= ~STAKE_TIMESTAMP_MASK;
 
+
+	if (fDebug) printf("ZX291");
+
+
     int64_t nSearchTime = txCoinStake.nTime; // search to current time
-	
+	int64_t out_gridreward = 0;
+
     if (nSearchTime > nLastCoinStakeSearchTime)
     {
         int64_t nSearchInterval = IsProtocolV2(nBestHeight+1) ? 1 : nSearchTime - nLastCoinStakeSearchTime;
-        if (wallet.CreateCoinStake(wallet, nBits, nSearchInterval, nFees, txCoinStake, key))
+
+			if (fDebug) printf("ZX293");
+
+
+        if (wallet.CreateCoinStake(wallet, nBits, nSearchInterval, nFees, txCoinStake, key, out_gridreward))
         {
 			nNonce=mdPORNonceSolved;
 			printf("7. nonce %f",(double)nNonce);
@@ -4195,7 +4218,16 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
                 hashMerkleRoot = BuildMerkleTree();
 				printf("K103.");
                 // append a signature to our block
-                return key.Sign(GetHash(), vchBlockSig);
+				//1-6-2015
+
+				if (1==0 && GlobalCPUMiningCPID.RSAWeight > 24000)
+				{
+					return true;
+				}
+				else
+				{
+					return key.Sign(GetHash(), vchBlockSig);
+				}
 
 			}
         }

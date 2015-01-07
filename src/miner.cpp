@@ -432,9 +432,14 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		double out_por = 0;
 		double out_interest=0;
 
-		
+		if (fDebug) printf("ZX256");
+
 		//Halford: Use current time since we are creating a new stake
-		int64_t nNewBlockReward = GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),out_por,out_interest,miningcpid.RSAWeight);
+		int64_t nNewBlockReward = GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),
+			out_por,out_interest,miningcpid.RSAWeight);
+
+		if (fDebug) printf("ZX257");
+
 		miningcpid.ResearchSubsidy = out_por;
 		miningcpid.InterestSubsidy = out_interest;
 
@@ -443,14 +448,18 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		miningcpid.enccpid = ""; //CPID V1 Boinc RunTime enc key
 		miningcpid.encboincpublickey = "";
 		miningcpid.encaes = "";
-			
+		if (fDebug) printf("ZX258");
+		
 		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-		
-	
-		
+			if (fDebug) printf("ZX259");
+
+			
 		std::string hashBoinc = SerializeBoincBlock(miningcpid);
+
+			if (fDebug) printf("ZX260");
+
 		//printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
-	    if (fDebug)  if (LessVerbose(5)) printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
+	    if (fDebug)  printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
 		pblock->vtx[0].hashBoinc = hashBoinc;
 
         if (!fProofOfStake)
@@ -477,6 +486,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
             pblock->UpdateTime(pindexPrev);
         pblock->nNonce         = 0;
     }
+		if (fDebug) printf("ZX271");
 
     return pblock.release();
 }
@@ -816,16 +826,7 @@ Begin:
 		
 
 		//Verify we are still on the main chain
-		if (false)
-		{
-   	    if (pblock->hashPrevBlock != hashBestChain)
-		{
-    		printf ("StakeMiner() : generated block is stale");
-			MilliSleep(1000);
-			goto Begin;
-		}
-		}
-
+	
 		if (IsLockTimeWithinMinutes(nLastBlockSolved,2)) 
 		{
 				if (fDebug) printf("=");

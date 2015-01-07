@@ -1680,7 +1680,8 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	return true;
 }
 
-bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int64_t nSearchInterval, int64_t nFees, CTransaction& txNew, CKey& key)
+bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int64_t nSearchInterval, 
+	int64_t nFees, CTransaction& txNew, CKey& key, int64_t& out_gridreward)
 {
     CBlockIndex* pindexPrev = pindexBest;
     CBigNum bnTargetPerCoinDay;
@@ -1732,6 +1733,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     int64_t nValueIn = 0;
 	printf("*");
 
+		if (fDebug) printf("ZX301");
+
     // Select coins with suitable depth
     if (!SelectCoinsForStaking(nBalance - nReserveBalance, txNew.nTime, setCoins, nValueIn))
 	{
@@ -1756,7 +1759,6 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	try
 	{
 		 miningcpid = GetNextProject(false);
-		 //Stack Smashing
 		 uint256 pbh = 0;
 		 if (pindexPrev) pbh=pindexPrev->GetBlockHash();
 		 miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pbh);
@@ -1764,11 +1766,6 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	     miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 		 msMiningErrors4 = "BRSA: " + RoundToString(miningcpid.RSAWeight,0);
 
-		 // miningcpid.cpidv2 = CIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pblock->pprev->GetBlockHash());
-		 //12-27-2014 Strip Out CPID
-		 // miningcpid.enccpid = ""; //CPID V1 Boinc RunTime enc key
-		 //miningcpid.encboincpublickey = "";
-		 //miningcpid.encaes = "";
 		
 		 hashBoinc = SerializeBoincBlock(miningcpid);
 		 if (!IsCPIDValidv2(miningcpid,pindexBest->nHeight))
@@ -1800,43 +1797,11 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 
 
-	if (false)
-	{
-	//Verify last block is an investor or vice versa - Halford
-	MiningCPID CurrentStake = DeserializeBoincBlock(hashBoinc);
-	CBlock prior_block;
-	if (!prior_block.ReadFromDisk(pindexPrev))   
-	{
-					printf("StakeMiner: read Prior block failed!");
-					return false;
-	}
-	if (prior_block.vtx.size() > 0)
-	{
-			MiningCPID PriorStake = DeserializeBoincBlock(prior_block.vtx[0].hashBoinc);
-			if (PriorStake.RSAWeight > 0 && CurrentStake.RSAWeight > 0)
-			{
-					if (LessVerbose(50)) printf("$h.");
-					msMiningErrors = "Last block is POR (sleeping).";
-					MilliSleep(1000);
-					return false;
-			}
-	
-			if (PriorStake.RSAWeight==0 && CurrentStake.RSAWeight == 0)
-			{
-					if (LessVerbose(50)) printf("$i.");
-					msMiningErrors = "Last block is an Investor (sleeping).";
-					MilliSleep(1000);
-					return false;
-			}
-
-	
-	}
-	}
-	
-	//Search
+		//Search
 
 	msMiningErrors7=""; //Clear errors; ready to roll...
 
+		if (fDebug) printf("ZX399");
 
 
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
@@ -1879,7 +1844,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 
             if (CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, 
-				*pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, targetProofOfStake, hashBoinc, false, true, mdPORNonce))
+				*pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, 
+				targetProofOfStake, hashBoinc, false, true, mdPORNonce))
             {
 			
                 // Found a kernel
@@ -2009,7 +1975,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     }
 
 	double MaxSubsidy = GetMaximumBoincSubsidy(GetAdjustedTime());
-	if (fDebug) printf("ZXA1.");
+	if (fDebug2) printf("ZXA1.");
 
     // Calculate coin age reward
     {
@@ -2023,8 +1989,9 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		//Halford: Use current time since we are creating a new stake
 		double OUT_POR = 0;
 		double out_interest = 0;
-        int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),OUT_POR,out_interest,RSA_WEIGHT);
-		if (fDebug) printf("ZXA2.");
+        int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,
+			GetAdjustedTime(),OUT_POR,out_interest,RSA_WEIGHT);
+		if (fDebug2) printf("ZXA2.");
 
 		double out_magnitude = 0;
 		double out_owed = 0;
@@ -2050,6 +2017,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 			return false;   
 		}
 	    nCredit += nReward;
+		out_gridreward = nReward;
     }
 
 	//12-1-2014 - Halford - Prevent blocks from forming > 10 million diff:
@@ -2073,14 +2041,21 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
     // Sign
     int nIn = 0;
+
+	if (fDebug) printf("ZXA143");
+
     BOOST_FOREACH(const CWalletTx* pcoin, vwtxPrev)
     {
+		if (fDebug) printf("ZXA143");
+
         if (!SignSignature(*this, *pcoin, txNew, nIn++))
 		{
 			msMiningErrors7="Failed to sign coinstake";
             return error("CreateCoinStake : failed to sign coinstake");
 		}
     }
+
+	if (fDebug) printf("ZXA144");
 
     // Limit size
     unsigned int nBytes = ::GetSerializeSize(txNew, SER_NETWORK, PROTOCOL_VERSION);
