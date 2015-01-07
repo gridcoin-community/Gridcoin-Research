@@ -1443,32 +1443,14 @@ void BitcoinGUI::rebuildClicked()
 	ReindexBlocks();
 }
 
-// void Imker(void *kippel)
-// {
-//     std::string target = "snapshot.zip";
-// 	std::string source = "signed/snapshot.zip";
-// 	Upgrader *upgrader = (Upgrader*)kippel;
-// 	upgrader->downloader(target, DATA, source);
-// 	upgrader->unzipper(target, DATA);
-// }
 
 void BitcoinGUI::upgradeClicked()
 {
 	printf("Upgrading Gridcoin...");
 #ifdef WIN32
-	UpgradeClient();
+	// UpgradeClient();
 #else
-	// UpgradeDialog dlg;
-	// dlg.performUpgrade = true;
-	// Upgrader upgrader;
-	// dlg.upgrader = &upgrader;
-	// dlg.getPerc(&upgrader);
-	// void *alf = &upgrader;
-	// boost::thread j(Imker, alf);
-	// usleep(8000*1000);
-	// printf("File done: %li", upgrader.getFileDone());
-    // dlg.exec();
-    // j.join();
+
 #endif
 }
 
