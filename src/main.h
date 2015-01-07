@@ -139,6 +139,7 @@ extern double    	mdMiningRAC;
 extern double       mdMiningNetworkRAC;
 extern double       mdPORNonce;
 extern double       mdPORNonceSolved;
+extern double       mdLastPorNonce;
 
 extern std::string  msENCboincpublickey;
 extern std::string  msHashBoinc;

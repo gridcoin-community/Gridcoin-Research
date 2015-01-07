@@ -334,6 +334,8 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  double         mdMiningNetworkRAC = 0;
  double			mdPORNonce = 0;
  double         mdPORNonceSolved = 0;
+ double         mdLastPorNonce = 0;
+
  bool           mbBlocksDownloaded = false;
 
  std::string    msHashBoinc    = "";
@@ -4178,7 +4180,16 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
 
         if (wallet.CreateCoinStake(wallet, nBits, nSearchInterval, nFees, txCoinStake, key, out_gridreward))
         {
+			//1-7-2015
 			nNonce=mdPORNonceSolved;
+			if (mdLastPorNonce==mdPORNonceSolved && nNonce > 1000)
+			{
+					mdPORNonce = 0;
+					mdPORNonceSolved = 0;
+			}
+
+			mdLastPorNonce = mdPORNonceSolved;
+
 			printf("7. nonce %f",(double)nNonce);
 
             if (nNonce > 1000 && txCoinStake.nTime >= max(pindexBest->GetPastTimeLimit()+1, PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1)))
@@ -4188,12 +4199,10 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
                 vtx[0].nTime = nTime = txCoinStake.nTime;
                 nTime = max(pindexBest->GetPastTimeLimit()+1, GetMaxTransactionTime());
                 nTime = max(GetBlockTime(), PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1));
-				//12-30-2014 Halford
-				
+	
 				//
 				printf("POR Coinstake Accepted!  Nonce %f \r\n",(double)nNonce);
-
-                // we have to make sure that we have no future timestamps in
+				// we have to make sure that we have no future timestamps in
                 //    our transactions set
 
 				printf("K100.");
@@ -4217,18 +4226,8 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
 				printf("K102.");
                 hashMerkleRoot = BuildMerkleTree();
 				printf("K103.");
-                // append a signature to our block
-				//1-6-2015
-
-				//if (1==0 && GlobalCPUMiningCPID.RSAWeight > 24000)
-				//{
-				//	return true;
-				//}
-				//else
-				//{
-					return key.Sign(GetHash(), vchBlockSig);
-				//}
-
+               	return key.Sign(GetHash(), vchBlockSig);
+				
 			}
         }
         nLastCoinStakeSearchInterval = nSearchTime - nLastCoinStakeSearchTime;
@@ -5445,9 +5444,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 		{
 			//1-2-2015
 			
-			double punishment = GetArg("-punishment", 10);
+			//double punishment = GetArg("-punishment", 10);
 			
-		    pfrom->Misbehaving(punishment);
+		    pfrom->Misbehaving(100);
 		    pfrom->fDisconnect = true;
             return false;
 		}
@@ -5476,9 +5475,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 		{
 			printf("Disconnected unauthorized peer.         ");
 			
-			double punishment1 = GetArg("-punishment", 20);
+			//double punishment1 = GetArg("-punishment", 20);
 			
-            pfrom->Misbehaving(punishment1);
+            pfrom->Misbehaving(100);
 		    pfrom->fDisconnect = true;
             return false;
         }

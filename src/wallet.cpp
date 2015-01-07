@@ -1924,11 +1924,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	int64_t RSA_WEIGHT  = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 	
 	//1-7-2015 Halford
-
-
-
-
-    if (nCredit == 0 && false)
+	
+    if (nCredit == 0)
 	{
 		printf("StakeMiner: Credit below reserve balance (zero).");
 		msMiningErrors7="Credit below reserve (zero).";
