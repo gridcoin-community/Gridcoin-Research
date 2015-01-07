@@ -19,7 +19,7 @@ public:
     ~UpgradeDialog();
 
     void setClientModel(ClientModel *model);
-	bool initialized = false;
+    bool initialized = false;
 
 private:
     Ui::UpgradeDialog *ui;
@@ -35,15 +35,15 @@ private slots:
 
 
 public slots:
-	void upgrade();
-	void blocks();
-	void initiate(int target);
-	void setPerc(int percentage);
-	void enableUpgradeButton(bool state);
-	void enableretryDownloadButton(bool state);
+    void upgrade();
+    void blocks();
+    void initiate(int target);
+    void setPerc(int percentage);
+    void enableUpgradeButton(bool state);
+    void enableretryDownloadButton(bool state);
 
 signals:
-	void check(Upgrader *upgrader, UpgradeDialog *UpgradeDialog);
+    void check(Upgrader *upgrader, UpgradeDialog *UpgradeDialog);
 };
 
 #endif // UPGRADEDIALOG_H

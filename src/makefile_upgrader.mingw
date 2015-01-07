@@ -7,7 +7,7 @@ CC ?= gcc
 
 USE_UPNP:=0
 
- DEPSDIR?=/c/deps
+ DEPSDIR?=/usr/local
  BOOST_SUFFIX?=-mgw49-mt-s-1_55
  
 INCLUDEPATHS?= \
