@@ -21,6 +21,8 @@ typedef std::vector<bfs::path> pathvec;
 
 bool CANCEL_DOWNLOAD = false;
 
+downloaderArgs argo;
+
 static int cancelDownloader(void *p,
                     curl_off_t dltotal, curl_off_t dlnow,
                     curl_off_t ultotal, curl_off_t ulnow)
@@ -118,8 +120,6 @@ int main(int argc, char *argv[])
     }
     else if (strcmp(argv[1], "daemon")==0)
     {
-        std::string target = "gridcoin-qt"; // Consider adding reference to directory so that GRCupgrade can be called from anywhere on linux!
-        std::string source = "gridcoin-qt";
         if(!upgrader.downloader(DAEMON)) {return 0;}
         if (!upgrader.juggler(PROGRAM, false))          {return 0;}
     }
@@ -145,7 +145,7 @@ int main(int argc, char *argv[])
 
     // The following are for internal usage only
 
-    else if (strcmp(argv[1], "gridcoin-qt")==0)
+    else if (strcmp(argv[1], "gridcoinresearch")==0)
     {
         if (waitForParent(atoi(argv[2])))
         {

@@ -12,6 +12,7 @@
 #include "main.h"
 #include "net.h"
 #include "wallet.h"
+#include "upgrader.h"
 
 using namespace std;
 using namespace boost;
@@ -72,15 +73,23 @@ Value upgrade(const Array& params, bool fHelp)
 		if (fHelp || params.size() > 3)
         throw runtime_error(
             "upgrade \n"
-            "Upgrades wallet to the latest version.\n"
+            "Upgrades client to the latest version.\n"
             "{}");
 		Object entry;
-		entry.push_back(Pair("Upgrading Wallet Version",1.0));
+		entry.push_back(Pair("Upgrading Client Version",1.0));
 		int result = 0;
 
-#if defined(WIN32) && defined(QT_GUI)
-		result = UpgradeClient();
-#endif
+// #if defined(WIN32) && defined(QT_GUI)
+// 		result = UpgradeClient();
+// #endif
+
+        if (argo.target != -1)
+        {
+            throw runtime_error("Upgrader already busy\n");
+        }
+
+        printf("\ncurrent state %i\n", argo.target);
+
      	entry.push_back(Pair("Result",result));
 		return result;
 }

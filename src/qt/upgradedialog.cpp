@@ -13,12 +13,6 @@
 #include <QThread>
 #include <QMessageBox>
 
-struct downloaderArgs
-{
-    Upgrader *upgrader;
-    int target;
-}argo;
-
 UpgradeDialog::UpgradeDialog(QWidget *parent) :
     QDialog(parent),
     ui(new Ui::UpgradeDialog)

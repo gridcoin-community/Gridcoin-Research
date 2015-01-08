@@ -60,4 +60,10 @@ public:
 
 };
 
+struct downloaderArgs
+{
+    Upgrader *upgrader;
+    int target = -1;
+}extern argo;
+
 #endif
