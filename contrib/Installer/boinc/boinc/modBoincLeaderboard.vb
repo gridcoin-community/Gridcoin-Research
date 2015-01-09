@@ -196,7 +196,6 @@
             sql = "Update Leaderboard set AdjCredits = Factor*Credits where 1=1 "
             d.Exec(sql)
             'Update scrypt sleep for the network:
-            '1-8-2014
             sql = " Select avg(credits*factor*projectcount) as [AdjCredits], Address from " _
                 & " leaderboard group by Address order by avg(credits*factor*projectcount) desc "
             Dim gr As New GridcoinReader

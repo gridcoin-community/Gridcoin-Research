@@ -35,6 +35,7 @@ uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
 
 double CoinToDouble(double surrogate);
 double GetBlockDifficulty(unsigned int nBits);
+void WriteAppCache(std::string key, std::string value);
 
 bool OutOfSyncByAgeWithChanceOfMining();
 int64_t GetRSAWeightByCPID(std::string cpid);
@@ -1837,10 +1838,27 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 			//Note: At this point block.vtx[0] is still null, so we send the hashBoinc in separately
 			//KernelHashV1
 
-			//12-30-2014 - Add PoW nonce to POR - Halford
+			//1-8-2015 - Add PoW nonce to POR - Halford
 			// pblock->nNonce = pdata->nNonce;
 			//pblock->nNonce++;
 			mdPORNonce++;
+
+
+			if (fDebug3)
+			{
+				for (int xx=0;xx < 1000;xx++)
+				{
+					 if (!CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, 				*pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, 				targetProofOfStake, hashBoinc, false, true, mdPORNonce))
+					 {
+						 mdPORNonce++;
+					 }
+					 else
+					 {
+						 break;
+					 }
+				}
+          
+			}
 
 
             if (CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, 
@@ -1850,7 +1868,10 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 			
                 // Found a kernel
                 if (fDebug2)            printf("CreateCoinStake : kernel found\n");
-			
+				//1-8-2015
+				WriteAppCache(pindexPrev->GetBlockHash().GetHex(),RoundToString(mdPORNonce,0));
+				mdPORNonceSolved = mdPORNonce;
+                
                 vector<valtype> vSolutions;
                 txnouttype whichType;
                 CScript scriptPubKeyOut;
@@ -1910,9 +1931,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
                     txNew.vout.push_back(CTxOut(0, scriptPubKeyOut)); //split stake
                 if (fDebug && GetBoolArg("-printcoinstake"))
                     printf("CreateCoinStake : added kernel type=%d\n", whichType);
-				mdPORNonceSolved = mdPORNonce;
-                fKernelFound = true;
-                break;
+				fKernelFound = true;
+				break;
             }
         }
 
@@ -1923,19 +1943,19 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 	int64_t RSA_WEIGHT  = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 	
-	//1-7-2015 Halford
+	//1-8-2015 Halford
 	
     if (nCredit == 0)
 	{
-		printf("StakeMiner: Credit below reserve balance (zero).");
+		if (fDebug) printf("StakeMiner: Credit below reserve balance (zero).");
 		msMiningErrors7="Credit below reserve (zero).";
 		msMiningErrors = msMiningErrors7;
 		return false;
 	}
 
-	 if (nCredit > nBalance - nReserveBalance && RSA_WEIGHT < 24999)
+	if (nCredit > nBalance - nReserveBalance)
 	{
-		printf("StakeMiner: Credit below reserve balance.");
+		if (fDebug) printf("StakeMiner: Credit below reserve balance. %f",(double)nCredit);
 		msMiningErrors7="Credit below reserve balance";
 		msMiningErrors = msMiningErrors7;
 		return false;
@@ -1999,7 +2019,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		double PORDiff = GetBlockDifficulty(nBits);
 		if (fDebug) printf("ZXA3.");
 
-		if (fDebug) printf("Creating POS Reward for %s  amt  %f  {RSAWeight %f} \r\n",
+		if (fDebug2) printf("Creating POS Reward for %s  amt  %f  {RSAWeight %f} \r\n",
 			GlobalCPUMiningCPID.cpid.c_str(), mint, (double)RSA_WEIGHT);
 	
 		//INVESTORS
@@ -2064,7 +2084,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		return error("CreateCoinStake : exceeded coinstake size limit");
 	}
 
-	if (mdPORNonceSolved < 1000) 
+	if (mdPORNonce < 1000) 
 	{
 		msMiningErrors = "PoW Mining+";
 		return false;

@@ -644,7 +644,8 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 	double PORDiff = GetBlockDifficulty(nBits);
 	MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
 
-	bool ACID_TEST = StakeAcidTest(boincblock.GRCAddress,PORDiff,pindexPrev->GetBlockHash().GetHex(),pindexPrev->nHeight,por_nonce);
+	bool ACID_TEST = StakeAcidTest(boincblock.GRCAddress,PORDiff,
+		pindexPrev->GetBlockHash().GetHex(),pindexPrev->nHeight,por_nonce);
 
     int64_t RSA_WEIGHT = GetRSAWeightByBlock(boincblock);
 	int oNC = 0;
@@ -694,8 +695,8 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 		return false;
 	}
 
-	if (fDebug3 && checking_local) if (LessVerbose(200)) printf("StakeMiner: CPID %s, BitsAge %f, nTimeTx %f, PrevTxTime %f, Payment_Age %f, Coin_Age %f, NC %f, RSA_WEIGHT %f, Magnitude %f ;\r\n ",
-		boincblock.cpid.c_str(),(double)BitsAge, (double)nTimeTx,(double)txPrev.nTime,
+	if (fDebug3 && checking_local) if (LessVerbose(10))  printf("StakeMiner: CPID %s, Nonce: %f, BitsAge %f, nTimeTx %f, PrevTxTime %f, Payment_Age %f, Coin_Age %f, NC %f, RSA_WEIGHT %f, Magnitude %f ;\r\n ",
+		boincblock.cpid.c_str(),(double)por_nonce,(double)BitsAge, (double)nTimeTx,(double)txPrev.nTime,
 		payment_age,coin_age,(double)oNC,(double)RSA_WEIGHT,(double)boincblock.Magnitude);
 
 

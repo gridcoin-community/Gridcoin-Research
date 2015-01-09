@@ -244,6 +244,7 @@ extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
 extern double cdbl(std::string s, int place);
 extern double GetBlockValueByHash(uint256 hash);
 extern void WriteAppCache(std::string key, std::string value);
+
 extern std::string AppCache(std::string key);
 
 void StartPostOnBackgroundThread(int height, MiningCPID miningcpid, uint256 hashmerkleroot, double nNonce, double subsidy, unsigned int nVersion, std::string message);
@@ -620,12 +621,14 @@ std::string GetGlobalStatus()
 		{
 				sWeight = sWeight.substr(0,13) + "E" + RoundToString((double)sWeight.length()-13,0);
 		}
-		status = "Blocks: " + RoundToString((double)nBestHeight,0) + "; PoR Difficulty: " 
+		status = "&nbsp;<br>Blocks: " + RoundToString((double)nBestHeight,0) + "; PoR Difficulty: " 
 			+ RoundToString(PORDiff,3) + "; Net Weight: " + RoundToString(GetPoSKernelPS2(),2)  
 			+ "<br>Boinc Weight: " +  sWeight + "; Status: " + msMiningErrors 
-			+ "<br>Magnitude: " + RoundToString(out_magnitude,3) + ";Project: " + msMiningProject
+			+ "<br>Magnitude: " + RoundToString(out_magnitude,3) + "; Project: " + msMiningProject
 			+ "<br>" + msMiningErrors2 + " " + msMiningErrors3 + " " + msMiningErrors4 + 
-			+ "<br>" + msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7;
+			+ "<br>" + msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 +
+			+ "<br>" + sBoost.str();
+
 
 		//The last line break is for Windows 8.1 Huge Toolbar
 		msGlobalStatus = status;
@@ -2666,7 +2669,7 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
 				int64_t nBalanceInQuestion;
 				pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
     
-				return error("ConnectInputs() : %s prev tx already used at %s", GetHash().ToString().substr(0,10).c_str(), txindex.vSpent[prevout.n].ToString().c_str());
+				//return error("ConnectInputs() : %s prev tx already used at %s", GetHash().ToString().substr(0,10).c_str(), txindex.vSpent[prevout.n].ToString().c_str());
 
 			}
 
@@ -2874,7 +2877,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		
 		if (!ClientOutOfSync() && bb.cpid=="INVESTOR" && nStakeReward > 1)
 		{
-			//11-9-2014
 			double OUT_POR = 0;
 			double OUT_INTEREST = 0;
 			int64_t nCalculatedResearchReward = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR, OUT_INTEREST,bb.RSAWeight);
@@ -2898,7 +2900,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 	// Block Spamming (Halford) 12-23-2014
     double PORDiff = GetBlockDifficulty(nBits);
-	if (bb.RSAWeight < 24999 && mint==0 && pindex->nHeight > nGrandfather)
+	if (mint==0 && pindex->nHeight > nGrandfather)
 	{
 					return error("CheckProofOfStake() : Mint Subsidy is zero");
 	}
@@ -2956,7 +2958,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 					int iFutile=0;
 					while (!bNetAveragesLoaded)
 					{
-						//11-8-2014
 						MilliSleep(100);
 						printf("#.");
 						iFutile++;
@@ -3088,6 +3089,17 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
 
     printf("REORGANIZE: Disconnect %"PRIszu" blocks; %s..%s\n", vDisconnect.size(), pfork->GetBlockHash().ToString().substr(0,20).c_str(), pindexBest->GetBlockHash().ToString().substr(0,20).c_str());
     printf("REORGANIZE: Connect %"PRIszu" blocks; %s..%s\n", vConnect.size(), pfork->GetBlockHash().ToString().substr(0,20).c_str(), pindexNew->GetBlockHash().ToString().substr(0,20).c_str());
+	
+	if (vDisconnect.size() > 0)
+	{
+		//1-8-2015 - Re-eligibile for staking
+		StructCPID sMag = mvMagnitudes[GlobalCPUMiningCPID.cpid];
+		if (sMag.initialized)
+		{
+			sMag.LastPaymentTime = 0;
+			mvMagnitudes[GlobalCPUMiningCPID.cpid]=sMag;
+		}
+	}
 
     // Disconnect shorter branch
     list<CTransaction> vResurrect;
@@ -3584,11 +3596,11 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
 	        // Gridcoin (NovaCoin's): check proof-of-stake block signature
 			if (IsProofOfStake() && height1 > nGrandfather)
 			{
-				if (boincblock.RSAWeight < 24000 || boincblock.InterestSubsidy > 3 || boincblock.ResearchSubsidy > 3)
-				{
+				//if (boincblock.RSAWeight < 24000 || boincblock.InterestSubsidy > 3 || boincblock.ResearchSubsidy > 3)
+				//{
 					if (fCheckSig && !CheckBlockSignature())
 					return DoS(100, error("CheckBlock() : bad proof-of-stake block signature"));
-				}
+				//}
 			}
 
 
@@ -3734,8 +3746,11 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 					
 					if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me, nNonce))
 					{
-						if (!generated_by_me) printf("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    \n", hash.ToString().c_str(),(double)nNonce);
-						return false; // do not error here as we expect this during initial block download
+						//if (!generated_by_me) printf("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    \n", hash.ToString().c_str(),(double)nNonce);
+						//return false; // do not error here as we expect this during initial block download
+						return error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    \n", hash.ToString().c_str(),(double)nNonce);
+						//return false; // do not error here as we expect this during initial block download
+
 					}
 					
 				}
@@ -4041,6 +4056,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 
 		if (orphan_punishment > 0 && !ClientOutOfSync() )
 		{
+			if (fDebug2) printf("Orphan punishment enacted.");
 			if (pfrom->nOrphanCount > 100)         pfrom->Misbehaving(1);
 			if (pfrom->nOrphanCountViolations < 0) pfrom->nOrphanCountViolations=0;
 			if (pfrom->nOrphanCount < 0)           pfrom->nOrphanCount=0;
@@ -4180,17 +4196,12 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
 
         if (wallet.CreateCoinStake(wallet, nBits, nSearchInterval, nFees, txCoinStake, key, out_gridreward))
         {
-			//1-7-2015
-			nNonce=mdPORNonceSolved;
-			if (mdLastPorNonce==mdPORNonceSolved && nNonce > 1000)
-			{
-					mdPORNonce = 0;
-					mdPORNonceSolved = 0;
-			}
-
-			mdLastPorNonce = mdPORNonceSolved;
-
-			printf("7. nonce %f",(double)nNonce);
+			//1-8-2015 Extract solved Key
+			double solvedNonce = cdbl(AppCache(pindexBest->GetBlockHash().GetHex()),0);
+			mdPORNonceSolved = solvedNonce;
+			nNonce=solvedNonce;
+			
+			printf("7. Nonce %f, Extraction Nonce %f",(double)nNonce,(double)solvedNonce);
 
             if (nNonce > 1000 && txCoinStake.nTime >= max(pindexBest->GetPastTimeLimit()+1, PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1)))
             {
