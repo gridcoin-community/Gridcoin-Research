@@ -27,6 +27,9 @@ extern std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blo
 MiningCPID DeserializeBoincBlock(std::string block);
 void ExecuteCode();
 
+extern void Imker(void *kippel);
+extern Upgrader upgrader;
+
 
 std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, double& out_rac)
 {
@@ -83,12 +86,20 @@ Value upgrade(const Array& params, bool fHelp)
 // 		result = UpgradeClient();
 // #endif
 
-        if (argo.target != -1)
+        // if (argo.target != -1)
+        // {
+        //     throw runtime_error("Upgrader already busy\n");
+        // }
+
+        if (!upgrader.setTarget(DAEMON))
         {
-            throw runtime_error("Upgrader already busy\n");
+            printf("Upgrader already busy\n");
+            return result;
         }
 
-        printf("\ncurrent state %i\n", argo.target);
+        upgrader.downloader(DAEMON);
+
+        // printf("\ncurrent state %i\n", argo.target);
 
      	entry.push_back(Pair("Result",result));
 		return result;

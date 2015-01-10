@@ -2,7 +2,6 @@
 #include <signal.h>
 #include "upgrader.h"
 #include "util.h"
-#include <boost/thread.hpp>
 #include <zip.h>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <sstream>
@@ -21,7 +20,9 @@ typedef std::vector<bfs::path> pathvec;
 
 bool CANCEL_DOWNLOAD = false;
 
-downloaderArgs argo;
+Upgrader upgrader;
+
+// downloaderArgs argo;
 
 static int cancelDownloader(void *p,
                     curl_off_t dltotal, curl_off_t dlnow,
@@ -63,6 +64,13 @@ bfs::path Upgrader::path(int pathfork)
     return path;
 }
 
+void Imker(void *kippel)
+{
+    Upgrader *argon = (Upgrader*)kippel;
+    printf("Starting download\n");
+    argon->downloader(argon->getTarget());
+}
+
 void download(void *curlhandle)
     {
     struct curlargs *curlarg = (struct curlargs *)curlhandle;
@@ -71,6 +79,8 @@ void download(void *curlhandle)
     if (success == CURLE_OK) { curlarg->success = true; }
     curlarg->downloading = false;
     }
+
+#if defined(UPGRADERFLAG)
 
 bool waitForParent(int parent)
 {   
@@ -100,7 +110,6 @@ bool waitForParent(int parent)
     return (delay < cutoff);
 }
 
-#if defined(UPGRADERFLAG)
 int main(int argc, char *argv[])
 {
     if (argc < 2)
@@ -194,8 +203,23 @@ int main(int argc, char *argv[])
 }
 #endif
 
+bool Upgrader::setTarget(int target)
+{
+    if (targetmutex.try_lock())
+    {
+        globaltarget = target;
+        curlhandle.downloading = true;
+        return true;
+    }
+    return false;
+}
+
 bool Upgrader::downloader(int targetfile)
 {
+    curlhandle.downloading = true;
+    curlhandle.handle = curl_easy_init();
+    curlhandle.success = false;
+
     std::string urlstring = geturl() + targetswitch(targetfile);
     const char *url = urlstring.c_str();
 
@@ -206,9 +230,6 @@ bool Upgrader::downloader(int targetfile)
     printf("%s\n",url);
     printf("%s\n",target.c_str());
 
-    curlhandle.handle = curl_easy_init();
-    curlhandle.downloading = true;
-    curlhandle.success = false;
     cancelDownload(false);
 
     if (bfs::exists(target))    {bfs::remove(target);}
@@ -236,7 +257,7 @@ bool Upgrader::downloader(int targetfile)
             #ifdef WIN32
             Sleep(1000);
             #else
-            usleep(1000);
+            usleep(1000*500);
             #endif
             #if defined(UPGRADERFLAG)
             int sz = getFileDone();

@@ -13,20 +13,14 @@
 #include <QThread>
 #include <QMessageBox>
 
+extern void Imker(void *kippel);
+extern Upgrader upgrader;
+
 UpgradeDialog::UpgradeDialog(QWidget *parent) :
     QDialog(parent),
     ui(new Ui::UpgradeDialog)
 {
     ui->setupUi(this);
-}
-
-// Placed in a dedicated thread to run downloader from upgrader
-
-void Imker(void *kippel)
-{
-    downloaderArgs *argon = (downloaderArgs*)kippel;
-    printf("Starting download\n");
-    argon->upgrader->downloader(argon->target);
 }
 
 class Checker: public QObject
@@ -49,11 +43,13 @@ void Checker::start()
     
 }
 
-void Checker::check(Upgrader *upgrader, UpgradeDialog *upgradeDialog)
+void Checker::check(Upgrader *upgraders, UpgradeDialog *upgradeDialog)
 {
-    while(upgrader->downloading())
+    printf("Checker initialized\n");
+    while(upgrader.downloading())
     {
-        emit(change(upgrader->getFilePerc(upgrader->getFileDone())));
+        emit(change(upgrader.getFilePerc(upgrader.getFileDone())));
+        printf("Delta: %i\n", upgrader.getFilePerc(upgrader.getFileDone()));
         #ifdef WIN32
         Sleep(1000);
         #else
@@ -61,7 +57,7 @@ void Checker::check(Upgrader *upgrader, UpgradeDialog *upgradeDialog)
         #endif
     }
     connect(this, SIGNAL(enableretryDownloadButton(bool)), upgradeDialog, SLOT(enableretryDownloadButton(bool)));
-    if (upgrader->downloadSuccess())
+    if (upgrader.downloadSuccess())
     {
         emit(change(100)); // 99 is filthy
         connect(this, SIGNAL(enableUpgradeButton(bool)), upgradeDialog, SLOT(enableUpgradeButton(bool)));
@@ -103,17 +99,20 @@ void UpgradeDialog::initialize(int targo)
                 cancelDownload();
                 initialized = false; 
             }
-        delete horizontalSpacer;
+        // delete horizontalSpacer;
     }
     if (!initialized)
     {
     // re-instantiate Upgrade, in case download was broken off previously
     target = targo;
+    if (!upgrader.setTarget(target)) 
+        {
+            printf("Upgrader already busy 2\n");
+            return;
+        }
     initialized = true;
 
-    argo.upgrader = &upgrader;
-    argo.target = target;
-    boost::thread(Imker, &argo);
+    boost::thread(Imker, &upgrader);
     enableUpgradeButton(false);
     enableretryDownloadButton(true);
     ui->retryDownloadButton->setText("Cancel Download");

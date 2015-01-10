@@ -6,7 +6,7 @@ DEFINES += QT_GUI BOOST_THREAD_USE_LIB BOOST_SPIRIT_THREADSAFE
 CONFIG += no_include_pwd
 CONFIG += thread
 QT += core gui network
-QT += axcontainer
+#QT += axcontainer
 #QT += axserver
 #QT += widgets
 
@@ -35,7 +35,7 @@ CONFIG += exceptions
 #    CURL_INCLUDE_PATH, CURL_LIB_PATH, LIBZIP_INCLUDE_PATH
 #    and LIBZIP_LIB_PATH respectively
 
-
+MINIUPNPC_INCLUDE_PATH=/usr/include/miniupnpc/
 
 OBJECTS_DIR = build
 MOC_DIR = build

@@ -5,6 +5,7 @@
 #include <string>
 #include <string.h>
 #include <boost/filesystem.hpp>
+#include <boost/thread.hpp>
 
 struct curlargs
 { 
@@ -30,6 +31,7 @@ class Upgrader
 
 private:
 
+    boost::mutex targetmutex;
     bool fileInitialized = false;
     struct curlargs curlhandle;
     FILE *file;
@@ -41,6 +43,7 @@ private:
     bool copyDir(boost::filesystem::path source, boost::filesystem::path target, bool recursive);
     bool safeProgramDir();
     boost::filesystem::path path(int pathfork);
+    int globaltarget;
 
 public:
 
@@ -58,12 +61,18 @@ public:
     bool downloadSuccess() {return curlhandle.success;}
     void cancelDownload(bool cancel);
 
+//  set the upgrader's global target
+    bool setTarget(int target);
+    int getTarget() {return globaltarget;};
+
 };
 
-struct downloaderArgs
-{
-    Upgrader *upgrader;
-    int target = -1;
-}extern argo;
+// struct downloaderArgs
+// {
+//     Upgrader *upgrader;
+//     int target = -1;
+// }extern argo;
+
+// Placed in a dedicated thread to run downloader from upgrader
 
 #endif

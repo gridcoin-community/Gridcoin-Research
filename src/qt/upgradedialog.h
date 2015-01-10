@@ -24,7 +24,6 @@ public:
 private:
     Ui::UpgradeDialog *ui;
     ClientModel *clientModel;
-    Upgrader upgrader;
     int target;
     void cancelDownload();
 
