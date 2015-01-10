@@ -272,13 +272,21 @@ Module modGRC
         Return bOut
     End Function
   
-    
+    Public Function DateStamp() As String
+        Dim sTimeStamp As String
+        sTimeStamp = Format(Now, "MMM d yyyy HH:mm")
+        Return sTimeStamp
+    End Function
+    Public Function DateStamp(dt As Date) As String
+        Return Format(dt, "MMM d yyyy HH:mm")
+
+    End Function
        Public Sub Log(sData As String)
         Try
             Dim sPath As String
             sPath = GetGridFolder() + "debug2.log"
             Dim sw As New System.IO.StreamWriter(sPath, True)
-            sw.WriteLine(Trim(Now) + ", " + sData)
+            sw.WriteLine(Trim(DateStamp) + ", " + sData)
             sw.Close()
         Catch ex As Exception
         End Try
@@ -417,7 +425,7 @@ Module modGRC
 
     Public Function NeedsUpgrade() As Boolean
         Try
-
+            
             Dim sMsg As String
             Dim sURL As String = "http://download.gridcoin.us/download/downloadstake/"
 
@@ -440,8 +448,8 @@ Module modGRC
                         sDT = Trim(sDT)
 
                         Dim dDt As DateTime
-                        'dDt = ParseDate(Trim(sDT))
-                        dDt = CDate(sDT)
+                        dDt = ParseDate(Trim(sDT))
+                        'dDt = CDate(sDT)
                         Dim PSTTimeZoneInfo As TimeZoneInfo
                         'Server is in PST Time Zone
                         PSTTimeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById("Pacific SA Standard Time")
@@ -449,12 +457,14 @@ Module modGRC
                         'dDt = TimeZoneInfo.ConvertTime(dDt, System.TimeZoneInfo.Utc)
                         dDt = TimeZoneInfo.ConvertTime(dDt, PSTTimeZoneInfo)
                         dDt = DateAdd(DateInterval.Hour, -2, dDt)
-
-                        Log("Gridcoin.us boincstake.dll timestamp in PST : " + Trim(dDt))
+                        'This value is Not correct
+                        Log("Gridcoin.us boincstake.dll timestamp in PST : " + DateStamp(dDt))
 
                         'Now we have boincstake.dll timestamp in PST, convert to UTC
                         dDt = TimeZoneInfo.ConvertTime(dDt, System.TimeZoneInfo.Utc)
-                        Log("Gridcoin.us boincstake.dll timestamp in UTC : " + Trim(dDt))
+                        'This value is correct in Germany
+                        Log("Gridcoin.us boincstake.dll timestamp in UTC : " + DateStamp(dDt))
+
 
                         'Pad time by 15 mins to delay the auto upgrade
                         dDt = DateAdd(DateInterval.Minute, -15, dDt)
@@ -468,7 +478,8 @@ Module modGRC
                         Try
                             dtLocal = System.IO.File.GetLastWriteTime(sLocalPathFile)
                             dtLocal = TimeZoneInfo.ConvertTime(dtLocal, System.TimeZoneInfo.Utc)
-                            Log("Gridcoin.us boincstake.dll timestamp (UTC) : " + Trim(dDt) + ", VS : Local boincstake.dll timestamp (UTC) : " + Trim(dtLocal))
+                            Log("Gridcoin.us boincstake.dll timestamp (UTC) : " + DateStamp(dDt) _
+                                + ", VS : Local boincstake.dll timestamp (UTC) : " + DateStamp(dtLocal))
                             If dDt < dtLocal Then
                                 Log("Not upgrading.")
                             End If

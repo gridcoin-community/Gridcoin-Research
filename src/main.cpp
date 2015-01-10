@@ -57,6 +57,8 @@ CCriticalSection cs_main;
 CTxMemPool mempool;
 unsigned int nTransactionsUpdated = 0;
 unsigned int REORGANIZE_FAILED = 0;
+extern void RemoveNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, double mint, bool IsStake);
+
 
 unsigned int WHITELISTED_PROJECTS = 0;
 
@@ -336,6 +338,8 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  double			mdPORNonce = 0;
  double         mdPORNonceSolved = 0;
  double         mdLastPorNonce = 0;
+ double         mdMachineTimer = 0;
+ double         mdMachineTimerLast = 0;
 
  bool           mbBlocksDownloaded = false;
 
@@ -352,7 +356,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 108725;
+ int nGrandfather = 112265;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -879,7 +883,7 @@ MiningCPID GetNextProject(bool bForce)
 		GlobalCPUMiningCPID.Magnitude = 0;
         GlobalCPUMiningCPID.clientversion = "";
 		GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-		GlobalCPUMiningCPID.LastPaymentTime = GetLastPaymentTimeByCPID(GlobalCPUMiningCPID.cpid);
+		GlobalCPUMiningCPID.LastPaymentTime = nLastBlockSolved;
 		mdMiningNetworkRAC = 0;
 	  	}
 		catch (std::exception& e)
@@ -2723,7 +2727,15 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
 
 bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 {
-    // Disconnect in reverse order
+    
+	//Gridcoin - 1-9-2015 - Halford - Remove Weighted Magnitude and payments from Global Magnitude vectors
+	std::string hashboinc = "";
+	if (vtx.size() > 0) hashboinc = vtx[0].hashBoinc;
+	MiningCPID bb = DeserializeBoincBlock(hashboinc);
+    double mint = CoinToDouble(pindex->nMint);
+    RemoveNetworkMagnitude(nTime,bb.cpid,bb,mint,true);
+
+	// Disconnect in reverse order
     for (int i = vtx.size()-1; i >= 0; i--)
         if (!vtx[i].DisconnectInputs(txdb))
             return false;
@@ -2737,6 +2749,8 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
         if (!txdb.WriteBlockIndex(blockindexPrev))
             return error("DisconnectBlock() : WriteBlockIndex failed");
     }
+
+	
 
     // ppcoin: clean up wallet after disconnecting coinstake
     BOOST_FOREACH(CTransaction& tx, vtx)
@@ -3092,13 +3106,15 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
 	
 	if (vDisconnect.size() > 0)
 	{
-		//1-8-2015 - Re-eligibile for staking
+		//1-9-2015 - Re-eligibile for staking
 		StructCPID sMag = mvMagnitudes[GlobalCPUMiningCPID.cpid];
 		if (sMag.initialized)
 		{
 			sMag.LastPaymentTime = 0;
 			mvMagnitudes[GlobalCPUMiningCPID.cpid]=sMag;
 		}
+		nLastBlockSolved = 0;
+	
 	}
 
     // Disconnect shorter branch
@@ -4857,6 +4873,43 @@ void AddWeightedMagnitude(double LockTime,StructCPID &structMagnitude,double mag
 	structMagnitude.PaymentMagnitude = LederstrumpfMagnitude2(structMagnitude.Magnitude,LockTime);
 
 }
+
+
+
+void RemoveNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, double mint, bool IsStake)
+{
+        if (!IsLockTimeWithin14days(LockTime)) return;
+		StructCPID structMagnitude = GetStructCPID();
+		structMagnitude = mvMagnitudes[cpid];
+		if (!structMagnitude.initialized)
+		{
+			structMagnitude = GetStructCPID();
+			structMagnitude.initialized=true;
+			structMagnitude.LastPaymentTime = 0;
+			structMagnitude.EarliestPaymentTime = 99999999999;
+			mvMagnitudes.insert(map<string,StructCPID>::value_type(cpid,structMagnitude));
+		}
+		structMagnitude.projectname = bb.projectname;
+		structMagnitude.rac = structMagnitude.rac - bb.rac;
+		structMagnitude.entries--;
+		if (IsStake)
+		{
+			double interest = (double)mint - (double)bb.ResearchSubsidy;
+			structMagnitude.payments -= bb.ResearchSubsidy;
+			structMagnitude.interestPayments = structMagnitude.interestPayments - interest;
+		    structMagnitude.LastPaymentTime = 0;
+		}
+		structMagnitude.cpid = cpid;
+		double total_owed = 0;
+		mvMagnitudes[cpid] = structMagnitude;
+		structMagnitude.owed = GetOutstandingAmountOwed(structMagnitude,cpid,LockTime,total_owed,bb.Magnitude);
+		structMagnitude.totalowed = total_owed;
+		mvMagnitudes[cpid] = structMagnitude;
+}
+
+
+
+
 
 void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, double mint, bool IsStake)
 {
@@ -7474,7 +7527,6 @@ void ThreadTally()
 		if (Host.initialized)
 		{
 				//ToDo: Should we set this to zero where orphans occur?
-				//Host.LastPaymentTime = 0;
 				//Host.Magnitude = 0;
 				mvMagnitudes[GlobalCPUMiningCPID.cpid]=Host;
 		}	

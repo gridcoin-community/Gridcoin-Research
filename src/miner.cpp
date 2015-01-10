@@ -798,7 +798,7 @@ Inception:
             if (vNodes.size() < 3 || nBestHeight < GetNumBlocksOfPeers())
             {
 				printf("tryingtosync.");
-                MilliSleep(45000);
+                MilliSleep(5000);
                 continue;
             }
         }
@@ -809,12 +809,7 @@ Begin:
         // Create new block
         //
         int64_t nFees;
-		if (mdPORNonce > 2147483000) 
-		{
-			printf("Resetting...");
-				mdPORNonce=0;
-		}
-	
+		
         auto_ptr<CBlock> pblock(CreateNewBlock(pwallet, true, &nFees));
         if (!pblock.get())
 		{
@@ -830,7 +825,7 @@ Begin:
 		if (IsLockTimeWithinMinutes(nLastBlockSolved,2)) 
 		{
 				if (fDebug) printf("=");
-				MilliSleep(1000);
+				MilliSleep(200);
 				goto Begin;
 		}
 
@@ -838,19 +833,14 @@ Begin:
 			
         if (pblock->SignBlock(*pwallet, nFees))
         {
-			printf("K107.");
 
             SetThreadPriority(THREAD_PRIORITY_NORMAL);
-			printf("K108");
-
 			bool Staked = CheckStake(pblock.get(), *pwallet);
-			printf("K109");
 
 			if (Staked)
 			{
 				msMiningErrors = "Stake block accepted!";
 				printf("Stake block accepted!\r\n");
-				//Prevent Rapid Fire block creation (large investor nodes):
 		  	    SetThreadPriority(THREAD_PRIORITY_LOWEST);
         		mdPORNonce=0;
 			}
@@ -858,8 +848,7 @@ Begin:
 			{
 				msMiningErrors = "Stake block rejected";
 				printf("Stake block rejected \r\n");
-				MilliSleep(10000);
-		
+				MilliSleep(1000);
 			}
             SetThreadPriority(THREAD_PRIORITY_LOWEST);
             MilliSleep(500);

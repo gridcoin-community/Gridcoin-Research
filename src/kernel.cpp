@@ -589,7 +589,8 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 //
 
 
-bool StakeAcidTest(std::string grc_address, double por_diff, std::string last_block_hash, int height, unsigned int nonce)
+bool StakeAcidTest(std::string grc_address, double por_diff, std::string last_block_hash, int height, unsigned int nonce, 
+	double last_payment_timestamp, std::string cpid)
 {
 	
 	if (fTestNet) return true;
@@ -598,7 +599,7 @@ bool StakeAcidTest(std::string grc_address, double por_diff, std::string last_bl
 	//Step 2
 	std::string aggregated_hash = grc_address + "," + last_block_hash + "," + RoundToString(nonce,0);
 	std::string hash_md5 = RetrieveMd5(aggregated_hash);
-	uint256 hash = uint256("0x" + hash_md5);
+	uint256 hash  = uint256("0x" + hash_md5);
 	uint256 diff1 = uint256("0x00004fffffffffffffffffffffffffff");
 	uint256 diff2 = uint256("0x00003fffffffffffffffffffffffffff");
 	uint256 diff3 = uint256("0x00002fffffffffffffffffffffffffff");
@@ -606,8 +607,21 @@ bool StakeAcidTest(std::string grc_address, double por_diff, std::string last_bl
 	uint256 diff5 = uint256("0x00000fffffffffffffffffffffffffff");
 	uint256 diff6 = uint256("0x00000effffffffffffffffffffffffff");
 	uint256 diff7 = uint256("0x00000dffffffffffffffffffffffffff");
-	if (nonce < 2199) return false;
-	//if (fDebug2) if (LessVerbose(4)) printf("nonce %f",(double)nonce);
+	double payment_age = std::abs((double)GetAdjustedTime()-(double)last_payment_timestamp);
+	double nonce_height = 0;
+
+	if (payment_age > 60*60*24*14)                              nonce_height = 1000;
+	if (payment_age < 60*60*24*14 && payment_age  > 60*60*24*7) nonce_height = 1250;
+	if (payment_age < 60*60*24*7  && payment_age  > 60*60*24*3) nonce_height = 2500;
+	if (payment_age < 60*60*24*3  && payment_age  > 60*60*24*1) nonce_height = 6000;
+	if (payment_age < 60*60*24*1  && payment_age  > 60*60*12)   nonce_height = 8000;
+	if (payment_age < 60*60*12    && payment_age  > 60*60*6)    nonce_height = 9000;
+	if (payment_age < 60*60*6     && payment_age  > 60*60*2)    nonce_height = 10000;
+	if (payment_age < 60*60*2     && payment_age  > 60*60*1)    nonce_height = 18000;
+	if (payment_age < 60*60*1)                                  nonce_height = 36000;
+
+	if (cpid == "INVESTOR") nonce_height = nonce_height/6;
+	if (nonce < nonce_height) return false;
 
 	if (por_diff >= 1   && por_diff < 5)    return (hash < diff1);
 	if (por_diff >= 5   && por_diff < 10)   return (hash < diff2);
@@ -628,7 +642,7 @@ int SolveNonce(double diff)
        
 	for (i = 0; i < 900000000; i++)
 	{
-		bool test = StakeAcidTest("abc123",diff,randomhash,110000,i);
+		bool test = StakeAcidTest("abc123",diff,randomhash,110000,i,0,"INVESTOR");
 		if (test) return i;
 	}
 
@@ -645,7 +659,7 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 	MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
 
 	bool ACID_TEST = StakeAcidTest(boincblock.GRCAddress,PORDiff,
-		pindexPrev->GetBlockHash().GetHex(),pindexPrev->nHeight,por_nonce);
+		pindexPrev->GetBlockHash().GetHex(),pindexPrev->nHeight,por_nonce,boincblock.LastPaymentTime,boincblock.cpid);
 
     int64_t RSA_WEIGHT = GetRSAWeightByBlock(boincblock);
 	int oNC = 0;
@@ -664,17 +678,21 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 	}
 
 	//Halford 1-4-2015 : Explain to the Researcher why they are not staking:
-	if (checking_local && boincblock.cpid != "INVESTOR")
+	if (checking_local)
 	{
 		std::string narr = "";
-		if (combined_mag < 2)         narr = "Magnitude too low to stake.";
-		if (payment_age < 60*60)      narr += " Last Payment too recent: " + RoundToString(payment_age,0);
-		if (payment_age < BitsAge)    narr += " Payment < Diff: " + RoundToString(payment_age,0) + "; " + RoundToString(BitsAge,0);
-		if (coin_age < 4*60*60)       narr += " Coin Age (immature): " + RoundToString(coin_age,0);
-		if (coin_age < RSA_WEIGHT)    narr += " Coin Age < RSA_Weight: " + RoundToString(coin_age,0) + " " + RoundToString(RSA_WEIGHT,0);
-		if (RSA_WEIGHT/14 < MintLimiter(PORDiff,RSA_WEIGHT)) narr += " RSAWeight < MintLimiter: "
-			+ RoundToString(RSA_WEIGHT/14,0) + "; " + RoundToString(MintLimiter(PORDiff,RSA_WEIGHT),0);
-		if (!ACID_TEST)      {
+		if (boincblock.cpid != "INVESTOR")
+		{
+			if (combined_mag < 2)         narr += "Magnitude too low to stake.";
+			if (payment_age < 60*60)      narr += " Last Payment too recent: " + RoundToString(payment_age,0);
+			if (payment_age < BitsAge)    narr += " Payment < Diff: " + RoundToString(payment_age,0) + "; " + RoundToString(BitsAge,0);
+			if (coin_age < 4*60*60)       narr += " Coin Age (immature): " + RoundToString(coin_age,0);
+			if (coin_age < RSA_WEIGHT)    narr += " Coin Age < RSA_Weight: " + RoundToString(coin_age,0) + " " + RoundToString(RSA_WEIGHT,0);
+			if (RSA_WEIGHT/14 < MintLimiter(PORDiff,RSA_WEIGHT)) narr += " RSAWeight < MintLimiter: "
+					+ RoundToString(RSA_WEIGHT/14,0) + "; " + RoundToString(MintLimiter(PORDiff,RSA_WEIGHT),0);
+		}
+		if (!ACID_TEST)      
+		{
 			narr += " POW Mining: " + RoundToString(por_nonce,0);
 		}
 		else
@@ -695,10 +713,9 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 		return false;
 	}
 
-	if (fDebug3 && checking_local) if (LessVerbose(10))  printf("StakeMiner: CPID %s, Nonce: %f, BitsAge %f, nTimeTx %f, PrevTxTime %f, Payment_Age %f, Coin_Age %f, NC %f, RSA_WEIGHT %f, Magnitude %f ;\r\n ",
+	if (fDebug4 && checking_local) if (LessVerbose(1))  printf("StakeMiner: CPID %s, Nonce: %f, BitsAge %f, nTimeTx %f, PrevTxTime %f, Payment_Age %f, Coin_Age %f, NC %f, RSA_WEIGHT %f, Magnitude %f ;\r\n ",
 		boincblock.cpid.c_str(),(double)por_nonce,(double)BitsAge, (double)nTimeTx,(double)txPrev.nTime,
 		payment_age,coin_age,(double)oNC,(double)RSA_WEIGHT,(double)boincblock.Magnitude);
-
 
 	if (!ACID_TEST) return false;
 

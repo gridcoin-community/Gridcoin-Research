@@ -1681,6 +1681,21 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	return true;
 }
 
+
+void NetworkTimer()
+{
+	if (mdMachineTimerLast == 0) mdMachineTimerLast = GetAdjustedTime();
+	double elapsed = GetAdjustedTime() - mdMachineTimerLast;
+	mdMachineTimerLast = GetAdjustedTime();
+	if (elapsed < 1) elapsed = 1;
+	mdPORNonce += (elapsed*10);
+	if (mdPORNonce > 2147483000) 
+	{
+			printf("Resetting...");
+			mdPORNonce=0;
+	}
+}
+
 bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int64_t nSearchInterval, 
 	int64_t nFees, CTransaction& txNew, CKey& key, int64_t& out_gridreward)
 {
@@ -1767,7 +1782,6 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	     miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 		 msMiningErrors4 = "BRSA: " + RoundToString(miningcpid.RSAWeight,0);
 
-		
 		 hashBoinc = SerializeBoincBlock(miningcpid);
 		 if (!IsCPIDValidv2(miningcpid,pindexBest->nHeight))
 		 {
@@ -1841,25 +1855,10 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 			//1-8-2015 - Add PoW nonce to POR - Halford
 			// pblock->nNonce = pdata->nNonce;
 			//pblock->nNonce++;
-			mdPORNonce++;
+			NetworkTimer();
 
 
-			if (fDebug3)
-			{
-				for (int xx=0;xx < 1000;xx++)
-				{
-					 if (!CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, 				*pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, 				targetProofOfStake, hashBoinc, false, true, mdPORNonce))
-					 {
-						 mdPORNonce++;
-					 }
-					 else
-					 {
-						 break;
-					 }
-				}
-          
-			}
-
+			
 
             if (CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, 
 				*pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, 
