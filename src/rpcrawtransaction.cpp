@@ -73,36 +73,89 @@ std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype,
 
 Value upgrade(const Array& params, bool fHelp)
 {
-		if (fHelp || params.size() > 3)
+		if (fHelp || params.size() != 0)
         throw runtime_error(
             "upgrade \n"
             "Upgrades client to the latest version.\n"
             "{}");
-		Object entry;
-		entry.push_back(Pair("Upgrading Client Version",1.0));
-		int result = 0;
-
-// #if defined(WIN32) && defined(QT_GUI)
-// 		result = UpgradeClient();
-// #endif
-
-        // if (argo.target != -1)
-        // {
-        //     throw runtime_error("Upgrader already busy\n");
-        // }
 
         if (!upgrader.setTarget(DAEMON))
         {
-            printf("Upgrader already busy\n");
+            throw runtime_error("Upgrader already busy\n");
+            return "";
+        }
+        else
+        {
+            boost::thread(Imker, &upgrader);
+            return "Initiated download of client";
+        }        
+}
+
+Value downloadblocks(const Array& params, bool fHelp)
+{
+        if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "downloadblocks \n"
+            "Downloads blockchain to bootstrap client.\n"
+            "{}");
+        
+        if (!upgrader.setTarget(BLOCKS))
+        {
+            throw runtime_error("Upgrader already busy\n");
+            return "";
+        }
+        else
+        {
+            boost::thread(Imker, &upgrader);
+            return "Initiated download of blockchain";
+        }
+}
+
+Value downloadstate(const Array& params, bool fHelp)
+{
+        if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "downloadstate \n"
+            "Returns progress of download.\n"
+            "{}");
+
+        if (!upgrader.downloading())
+        {
+            return (upgrader.downloadSuccess())? "Download finished" : "No download initiated";
+        }
+        else
+        {
+            Object state;
+            state.push_back(Pair("% done", upgrader.getFilePerc(upgrader.getFileDone())));
+            state.push_back(Pair("Downloaded in KB", upgrader.getFileDone() / 1024));
+            state.push_back(Pair("Total size in KB", upgrader.getFileSize() / 1024));
+            return state;
+        }
+
+        // entry.push_back(Pair("Result",result));
+}
+
+Value downloadcancel(const Array& params, bool fHelp)
+{
+        if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "canceldownload \n"
+            "Cancels download of blockchain or client.\n"
+            "{}");
+
+        if (!upgrader.downloading())
+        {
+            return (upgrader.downloadSuccess())? "Download finished" : "No download initiated";
+        }
+        else
+        {
+            Object result;
+            upgrader.cancelDownload(true);
+            result.push_back(Pair("Item canceled", (upgrader.getTarget() == BLOCKS)? "Blockchain" : "Client"));
             return result;
         }
 
-        upgrader.downloader(DAEMON);
-
-        // printf("\ncurrent state %i\n", argo.target);
-
-     	entry.push_back(Pair("Result",result));
-		return result;
+        // entry.push_back(Pair("Result",result));
 }
 
 void ScriptPubKeyToJSON(const CScript& scriptPubKey, Object& out, bool fIncludeHex)

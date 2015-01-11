@@ -35,7 +35,7 @@ CONFIG += exceptions
 #    CURL_INCLUDE_PATH, CURL_LIB_PATH, LIBZIP_INCLUDE_PATH
 #    and LIBZIP_LIB_PATH respectively
 
-MINIUPNPC_INCLUDE_PATH=/usr/include/miniupnpc/
+
 
 OBJECTS_DIR = build
 MOC_DIR = build

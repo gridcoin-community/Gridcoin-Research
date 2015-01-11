@@ -49,7 +49,7 @@ void Checker::check(Upgrader *upgraders, UpgradeDialog *upgradeDialog)
     while(upgrader.downloading())
     {
         emit(change(upgrader.getFilePerc(upgrader.getFileDone())));
-        printf("Delta: %i\n", upgrader.getFilePerc(upgrader.getFileDone()));
+        // printf("Delta: %i\n", upgrader.getFilePerc(upgrader.getFileDone()));
         #ifdef WIN32
         Sleep(1000);
         #else

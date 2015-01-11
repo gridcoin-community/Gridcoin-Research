@@ -10,8 +10,8 @@
 struct curlargs
 { 
     CURL *handle;
-    bool downloading;
-    bool success;
+    bool downloading = false;
+    bool success = false;
 };
 
 enum TARGET
@@ -56,6 +56,7 @@ public:
 
 //  return info about file being downloaded:
     unsigned long int getFileDone();
+    unsigned long int getFileSize();
     int getFilePerc(long int sz);
     bool downloading() {return curlhandle.downloading;}
     bool downloadSuccess() {return curlhandle.success;}
@@ -63,6 +64,7 @@ public:
 
 //  set the upgrader's global target
     bool setTarget(int target);
+    void unlockTarget();
     int getTarget() {return globaltarget;};
 
 };

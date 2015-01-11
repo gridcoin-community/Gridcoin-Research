@@ -69,6 +69,7 @@ void Imker(void *kippel)
     Upgrader *argon = (Upgrader*)kippel;
     printf("Starting download\n");
     argon->downloader(argon->getTarget());
+    argon->unlockTarget(); //TEMPORARY!!!
 }
 
 void download(void *curlhandle)
@@ -214,6 +215,11 @@ bool Upgrader::setTarget(int target)
     return false;
 }
 
+void Upgrader::unlockTarget()
+{
+    targetmutex.unlock();
+}
+
 bool Upgrader::downloader(int targetfile)
 {
     curlhandle.downloading = true;
@@ -261,8 +267,7 @@ bool Upgrader::downloader(int targetfile)
             #endif
             #if defined(UPGRADERFLAG)
             int sz = getFileDone();
-            printf("\r%i\tKB", sz/1024);
-            printf("\t%i%%", getFilePerc(sz));
+            printf("\r%i\tKB \t%i%%", sz/1024, getFilePerc(sz));
             fflush( stdout );
             #endif
         }
@@ -291,6 +296,16 @@ unsigned long int Upgrader::getFileDone()
     {
         fseek(file, 0L, SEEK_END);
         return ftell(file);
+    }
+
+    return 0;
+}
+
+unsigned long int Upgrader::getFileSize()
+{
+    if (fileInitialized)
+    {
+        return filesize;
     }
 
     return 0;
