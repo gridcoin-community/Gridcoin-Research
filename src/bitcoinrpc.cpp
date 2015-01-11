@@ -289,6 +289,7 @@ static const CRPCCommand vRPCCommands[] =
     { "downloadblocks",         &downloadblocks,         false,  false },
     { "downloadstate",          &downloadstate,          false,  false },
     { "downloadcancel",         &downloadcancel,         false,  false },
+    { "restart",                &restart,                false,  false },
 	{ "list",                   &listitem,               false,  false },
 	{ "execute",                &execute,                false,  false },
     { "getrawtransaction",      &getrawtransaction,      false,  false },

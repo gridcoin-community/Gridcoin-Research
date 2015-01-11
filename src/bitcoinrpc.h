@@ -232,6 +232,6 @@ extern json_spirit::Value upgrade(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value downloadblocks(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value downloadstate(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value downloadcancel(const json_spirit::Array& params, bool fHelp);
-
+extern json_spirit::Value restart(const json_spirit::Array& params, bool fHelp);
 
 #endif

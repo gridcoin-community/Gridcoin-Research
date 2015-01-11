@@ -32,6 +32,7 @@ class Upgrader
 private:
 
     boost::mutex targetmutex;
+    boost::mutex cancelmutex;
     bool fileInitialized = false;
     struct curlargs curlhandle;
     FILE *file;
@@ -61,6 +62,7 @@ public:
     bool downloading() {return curlhandle.downloading;}
     bool downloadSuccess() {return curlhandle.success;}
     void cancelDownload(bool cancel);
+    void initChecker();
 
 //  set the upgrader's global target
     bool setTarget(int target);

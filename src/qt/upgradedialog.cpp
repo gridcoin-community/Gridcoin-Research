@@ -16,25 +16,29 @@
 extern void Imker(void *kippel);
 extern Upgrader upgrader;
 
+Checker checker;
+
+enum DOWNLOADSTATE
+{
+    DOWNLOADING,
+    CANCELLED,
+    FINISHED
+};
+
 UpgradeDialog::UpgradeDialog(QWidget *parent) :
     QDialog(parent),
     ui(new Ui::UpgradeDialog)
 {
     ui->setupUi(this);
+    QThread *thread = new QThread;
+    connect(this, SIGNAL(check()), &checker, SLOT(check()));
+    connect(&checker, SIGNAL(change(int)), this, SLOT(setPerc(int)));
+    connect(&checker, SIGNAL(enableUpgradeButton(bool)), this, SLOT(enableUpgradeButton(bool)));
+    connect(&checker, SIGNAL(enableretryDownloadButton(bool)), this, SLOT(enableretryDownloadButton(bool)));
+    connect(&checker, SIGNAL(setDownloadState(int)), this, SLOT(setDownloadState(int)));
+    checker.moveToThread(thread);
+    thread->start();
 }
-
-class Checker: public QObject
-{
-    Q_OBJECT
-public slots:
-    void start();
-    void check(Upgrader *upgrader, UpgradeDialog *upgradeDialog);
-
-signals:
-    void change(int percentage);
-    void enableUpgradeButton(bool state);
-    void enableretryDownloadButton(bool state);
-};
 
 #include "upgradedialog.moc"
 
@@ -43,30 +47,32 @@ void Checker::start()
     
 }
 
-void Checker::check(Upgrader *upgraders, UpgradeDialog *upgradeDialog)
+void Checker::check()
 {
+    if (upgrader.downloading())
+    {
+        emit(setDownloadState(DOWNLOADING));
+    }
     printf("Checker initialized\n");
     while(upgrader.downloading())
     {
+        // emit(setDownloadState(DOWNLOADING));
         emit(change(upgrader.getFilePerc(upgrader.getFileDone())));
-        // printf("Delta: %i\n", upgrader.getFilePerc(upgrader.getFileDone()));
         #ifdef WIN32
         Sleep(1000);
         #else
-        usleep(1000);
+        usleep(1000*1000);
         #endif
     }
-    connect(this, SIGNAL(enableretryDownloadButton(bool)), upgradeDialog, SLOT(enableretryDownloadButton(bool)));
     if (upgrader.downloadSuccess())
     {
         emit(change(100)); // 99 is filthy
-        connect(this, SIGNAL(enableUpgradeButton(bool)), upgradeDialog, SLOT(enableUpgradeButton(bool)));
-        emit(enableUpgradeButton(true));
-        emit(enableretryDownloadButton(false));
+        emit(setDownloadState(FINISHED));
     }
     else
     {
-        emit(enableretryDownloadButton(true));
+        emit(change(0));
+        emit(setDownloadState(CANCELLED));
     }
 }
 
@@ -82,7 +88,7 @@ void UpgradeDialog::blocks()
 
 void UpgradeDialog::initialize(int targo)
 {
-    if((initialized) && (target!=targo))
+    if(upgrader.downloading() && upgrader.getTarget()!=targo)
     {
         QMessageBox changeDownload;
         changeDownload.setWindowTitle((targo == QT)? "Already downloading blocks" : "Already upgrading client");
@@ -96,33 +102,22 @@ void UpgradeDialog::initialize(int targo)
         layout->addItem(horizontalSpacer, layout->rowCount(), 0, 1, layout->columnCount());
         if (changeDownload.exec() == QMessageBox::Yes) 
             {
-                cancelDownload();
-                initialized = false; 
+                upgrader.cancelDownload(true);
             }
         // delete horizontalSpacer;
     }
-    if (!initialized)
+    if (!upgrader.downloading() && !upgrader.downloadSuccess())
     {
     // re-instantiate Upgrade, in case download was broken off previously
     target = targo;
     if (!upgrader.setTarget(target)) 
         {
-            printf("Upgrader already busy 2\n");
+            printf("Upgrader already busy\n");
             return;
         }
-    initialized = true;
 
     boost::thread(Imker, &upgrader);
-    enableUpgradeButton(false);
-    enableretryDownloadButton(true);
-    ui->retryDownloadButton->setText("Cancel Download");
-    QThread *thread = new QThread;
-    Checker *checker = new Checker();
-    connect(this, SIGNAL(check(Upgrader*, UpgradeDialog*)), checker, SLOT(check(Upgrader*, UpgradeDialog*)));
-    connect(checker, SIGNAL(change(int)), this, SLOT(setPerc(int)));
-    checker->moveToThread(thread);
-    thread->start();
-    emit(check(&upgrader, this));    
+    emit(check());    
     }
 }
 
@@ -141,6 +136,35 @@ void UpgradeDialog::enableretryDownloadButton(bool state)
     ui->retryDownloadButton->setEnabled(state);
 }
 
+void UpgradeDialog::setDownloadState(int state)
+{
+
+    switch (state)
+    {
+        case DOWNLOADING:
+        {
+            printf("Selecting WHAT TO DO\n");
+            enableUpgradeButton(false);
+            enableretryDownloadButton(true);
+            ui->retryDownloadButton->setText("Cancel Download");
+            break;
+        }
+        case FINISHED:
+        {
+            enableUpgradeButton(true);
+            enableretryDownloadButton(false);
+            break;
+        }
+        case CANCELLED:
+        {
+            enableUpgradeButton(false);
+            enableretryDownloadButton(true);
+            ui->retryDownloadButton->setText("Retry Downloads");
+            break;
+        }
+    }
+}
+
 UpgradeDialog::~UpgradeDialog()
 {
     delete ui;
@@ -148,11 +172,10 @@ UpgradeDialog::~UpgradeDialog()
 
 void UpgradeDialog::on_retryDownloadButton_clicked()
 {
-    if (initialized)
+    if (upgrader.downloading())
     {
-        cancelDownload();
-        initialized = false;
-        ui->retryDownloadButton->setText("Retry Download");
+        upgrader.cancelDownload(true);
+        setDownloadState(CANCELLED);
     }
     else
     {
@@ -167,6 +190,7 @@ void UpgradeDialog::on_retryDownloadButton_clicked()
             c++;
             printf("Waiting for curl\n");
         }
+        setDownloadState(DOWNLOADING);
         initialize(target);
     }
 }
@@ -179,11 +203,6 @@ void UpgradeDialog::on_upgradeButton_clicked()
 void UpgradeDialog::on_hideButton_clicked()
 {
     close();
-}
-
-void UpgradeDialog::cancelDownload()
-{
-    upgrader.cancelDownload(true);
 }
 
 

@@ -22,8 +22,6 @@ bool CANCEL_DOWNLOAD = false;
 
 Upgrader upgrader;
 
-// downloaderArgs argo;
-
 static int cancelDownloader(void *p,
                     curl_off_t dltotal, curl_off_t dlnow,
                     curl_off_t ultotal, curl_off_t ulnow)
@@ -619,5 +617,7 @@ std::string Upgrader::targetswitch(int target)
 
 void Upgrader::cancelDownload(bool cancel)
 {
+    cancelmutex.lock();
     CANCEL_DOWNLOAD = cancel;
+    cancelmutex.unlock();
 }

@@ -19,13 +19,11 @@ public:
     ~UpgradeDialog();
 
     void setClientModel(ClientModel *model);
-    bool initialized = false;
 
 private:
     Ui::UpgradeDialog *ui;
     ClientModel *clientModel;
     int target;
-    void cancelDownload();
 
 private slots:
     void on_retryDownloadButton_clicked();
@@ -40,9 +38,24 @@ public slots:
     void setPerc(int percentage);
     void enableUpgradeButton(bool state);
     void enableretryDownloadButton(bool state);
+    void setDownloadState(int state);
 
 signals:
-    void check(Upgrader *upgrader, UpgradeDialog *UpgradeDialog);
+    void check();
+};
+
+class Checker: public QObject
+{
+    Q_OBJECT
+public slots:
+    void start();
+    void check();
+
+signals:
+    void setDownloadState(int state);
+    void change(int percentage);
+    void enableUpgradeButton(bool state);
+    void enableretryDownloadButton(bool state);
 };
 
 #endif // UPGRADEDIALOG_H
