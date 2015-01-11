@@ -578,7 +578,11 @@ bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
     {
         LOCK(cs_main);
         if (pblock->hashPrevBlock != hashBestChain)
+		{
+			//1-10-2015
+			msMiningErrors6 = "Generated block is stale.";
             return error("CheckWork() : generated block is stale");
+		}
 
         // Remove key from key pool
         reservekey.KeepKey();
@@ -592,6 +596,7 @@ bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
         // Process this block the same as if we had received it from another node
         if (!ProcessBlock(NULL, pblock, true))
 		{
+			msMiningErrors6 = "Block not accepted.";
             return error("CheckWork() : ProcessBlock, block not accepted");
 		}
     }
@@ -670,6 +675,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
         LOCK(cs_main);
         if (pblock->hashPrevBlock != hashBestChain)
 		{
+			msMiningErrors6="CheckStake(): Generated block is stale.";
             return error("CheckStake() : generated block is stale");
 		}
 
@@ -694,6 +700,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
         // Process this block the same as if we had received it from another node
         if (!ProcessBlock(NULL, pblock, true))
 		{
+			msMiningErrors6="Block vehemently rejected.";
 	        return error("CheckStake() : ProcessBlock (by me), but block not accepted");
 		}
     }
@@ -822,7 +829,7 @@ Begin:
 
 		//Verify we are still on the main chain
 	
-		if (IsLockTimeWithinMinutes(nLastBlockSolved,2)) 
+		if (IsLockTimeWithinMinutes(nLastBlockSolved,3)) 
 		{
 				if (fDebug) printf("=");
 				MilliSleep(200);

@@ -236,6 +236,9 @@ private slots:
 
     void updateWeight();
     void updateStakingIcon();
+	
+	QString GetEstimatedTime(unsigned int nEstimateTime);
+
 	/** called by a timer to check if fRequestShutdown has been set **/
     void detectShutdown();
 

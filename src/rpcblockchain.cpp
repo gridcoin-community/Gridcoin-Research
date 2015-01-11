@@ -1070,24 +1070,7 @@ Value execute(const Array& params, bool fHelp)
 		mdPORNonce += 12500;
 		entry.push_back(Pair("2",mdPORNonce));
 		results.push_back(entry);
-		/*
-		if (fDebug3)
-			{
-				for (int xx=0;xx < 1000;xx++)
-				{
-					 if (!CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, 				*pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, 				targetProofOfStake, hashBoinc, false, true, mdPORNonce))
-					 {
-						 mdPORNonce++;
-					 }
-					 else
-					 {
-						 break;
-					 }
-				}
-          
-			}
-			*/
-
+	
 	}
 	else if (sItem == "genorgkey")
 	{

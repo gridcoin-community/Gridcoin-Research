@@ -35,6 +35,7 @@ extern std::string DefaultOrgKey(int key_length);
 extern std::string DefaultBlockKey(int key_length);
 extern std::string GetBestBlockHash(std::string sCPID);
 extern std::string TestHTTPProtocol(std::string sCPID);
+extern std::string OrgId();
 
 std::string DefaultBoincHashArgs();
 
@@ -140,12 +141,16 @@ unsigned short GetListenPort()
 
 std::string GetCommandNonce(std::string command)
 {
-	//12-28-2014 Message Attacks - Halford
+	//1-11-2015 Message Attacks - Halford
 	std::string sboinchashargs = DefaultOrgKey(12);
 	std::string nonce = RoundToString((double)GetAdjustedTime(),0);
-	std::string pw1 = RetrieveMd5(nonce+","+command+","+sboinchashargs);
-	std::string sComm = nonce+","+command+","+pw1;
-	//if (fDebug) printf("Xmitting %s, %s ",sboinchashargs.c_str(),sComm.c_str());
+	std::string org = DefaultOrg();
+	std::string pub_key_prefix = OrgId();
+	std::string pw1 = RetrieveMd5(nonce+","+command+","+org+","+pub_key_prefix+","+sboinchashargs);
+	uint256 boincHashRandNonce = GetRandHash();
+	std::string bhrn = boincHashRandNonce.GetHex();
+	std::string grid_pass_encrypted = AdvancedCryptWithSalt(bhrn+nonce+org+pub_key_prefix,sboinchashargs);
+	std::string sComm = nonce+","+command+","+pw1+","+org+","+pub_key_prefix+","+bhrn+","+grid_pass_encrypted;
 	return sComm;
 }
 
@@ -1000,6 +1005,18 @@ std::string DefaultBoincHashArgs()
 	return ClientPublicKey;
 }
 
+std::string OrgId()
+{
+	std::string bha = GetArg("-boinchash", "boinchashargs");
+	if (bha=="boinchashargs") bha = BoincHashWindowsMerkleRootNew;
+	std::string org = DefaultOrg();
+	if (bha.length() > 8) org += "-" + bha.substr(0,8);
+	std::string ClientPublicKey = AdvancedDecryptWithSalt(bha,org);
+	if (ClientPublicKey.length() > 8) org += "-" + ClientPublicKey.substr(0,5);
+	return org;
+}
+
+
 std::string DefaultOrg()
 {
 	std::string org = GetArg("-org", "windows");
@@ -1030,7 +1047,8 @@ void CNode::PushVersion()
     CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(CService("0.0.0.0",0)));
     CAddress addrMe = GetLocalAddress(&addr);
     RAND_bytes((unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce));
-    if (fDebug) printf("send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s\n", PROTOCOL_VERSION, nBestHeight, addrMe.ToString().c_str(), addrYou.ToString().c_str(), addr.ToString().c_str());
+    if (fDebug) printf("send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s\n", 
+		PROTOCOL_VERSION, nBestHeight, addrMe.ToString().c_str(), addrYou.ToString().c_str(), addr.ToString().c_str());
 
 
 	/*
@@ -1063,9 +1081,9 @@ void CNode::PushVersion()
 	*/
 
 	
-	std::string acid = GetCommandNonce("gridversion");
+	std::string acid = GetCommandNonce("aries");
                     
-    PushMessage("gridversion", PROTOCOL_VERSION, nonce, pw1, 
+    PushMessage("aries", PROTOCOL_VERSION, nonce, pw1, 
 				mycpid, mycpid, acid, nLocalServices, nTime, addrYou, addrMe,
                 nLocalHostNonce, FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()), nBestHeight);
 }
@@ -1137,7 +1155,7 @@ void CNode::copyStats(CNodeStats &stats)
     X(fInbound);
     X(nStartingHeight);
     X(nMisbehavior);
-
+	//X(securityversion);
     // It is common for nodes with good ping times to suddenly become lagged,
     // due to a new block arriving or other large transfer.
     // Merely reporting pingtime might fool the caller into thinking the node was still responsive,

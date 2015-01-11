@@ -152,6 +152,7 @@ public:
     int nMisbehavior;
     double dPingTime;
     double dPingWait;
+	//std::string securityversion;
 };
 
 
@@ -297,6 +298,7 @@ public:
         addrName = addrNameIn == "" ? addr.ToStringIPPort() : addrNameIn;
         nVersion = 0;
         strSubVer = "";
+		//securityversion = "";
         fOneShot = false;
         fClient = false; // set by version message
         fInbound = fInboundIn;

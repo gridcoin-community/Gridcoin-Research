@@ -2053,6 +2053,40 @@ void BitcoinGUI::detectShutdown()
 }
 
 
+double GetPOREstimatedTime(double RSAWeight)
+{
+	if (RSAWeight == 0) return 0;
+	//RSA Weight ranges from 0 - 5600
+	double orf = 5600-RSAWeight;
+	if (orf < 1) orf = 1;
+	double eta = orf/5600;
+	if (eta > 1) orf = 1;
+	eta = eta * (60*60*24);
+	return eta;
+}
+
+QString BitcoinGUI::GetEstimatedTime(unsigned int nEstimateTime)
+{
+	QString text;
+	if (nEstimateTime < 60)
+    {
+            text = tr("%n second(s)", "", nEstimateTime);
+    }
+        else if (nEstimateTime < 60*60)
+    {
+            text = tr("%n minute(s)", "", nEstimateTime/60);
+    }
+        else if (nEstimateTime < 24*60*60)
+    {
+            text = tr("%n hour(s)", "", nEstimateTime/(60*60));
+    }
+        else
+    {
+            text = tr("%n day(s)", "", nEstimateTime/(60*60*24));
+    }
+	return text;
+}
+
 
 
 void BitcoinGUI::updateStakingIcon()
@@ -2062,27 +2096,16 @@ void BitcoinGUI::updateStakingIcon()
     if (nLastCoinStakeSearchInterval && nWeight)
     {
         uint64_t nNetworkWeight = GetPoSKernelPS();
-        unsigned nEstimateTime = GetTargetSpacing(nBestHeight) * (nNetworkWeight / ((nWeight/COIN)+.001)) * 15;
+        unsigned nEstimateTime = GetTargetSpacing(nBestHeight) * (nNetworkWeight / ((nWeight/COIN)+.001)) * 1;
 		if (fDebug) printf("StakeIcon Vitals BH %f, NetWeight %f, Weight %f \r\n", (double)GetTargetSpacing(nBestHeight),(double)nNetworkWeight,(double)nWeight);
 
-        QString text;
-        if (nEstimateTime < 60)
-        {
-            text = tr("%n second(s)", "", nEstimateTime);
-        }
-        else if (nEstimateTime < 60*60)
-        {
-            text = tr("%n minute(s)", "", nEstimateTime/60);
-        }
-        else if (nEstimateTime < 24*60*60)
-        {
-            text = tr("%n hour(s)", "", nEstimateTime/(60*60));
-        }
-        else
-        {
-            text = tr("%n day(s)", "", nEstimateTime/(60*60*24));
-        }
+        QString text = GetEstimatedTime(nEstimateTime);
 
+        //Halford - 1-9-2015 - Calculate time for POR Block:
+		unsigned int nPOREstimate = (unsigned int)GetPOREstimatedTime(GlobalCPUMiningCPID.RSAWeight);
+		QString PORText = "Estimated time to earn POR Reward: " + GetEstimatedTime(nPOREstimate);
+		if (nPOREstimate == 0) PORText="";
+		
         if (IsProtocolV2(nBestHeight+1))
         {
             nWeight /= COIN;
@@ -2090,11 +2113,9 @@ void BitcoinGUI::updateStakingIcon()
         }
 		//1-4-2015
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
-        labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> time to earn reward is %3").arg(nWeight).arg(nNetworkWeight).arg(text));
-		//std::string sText = text.toUtf8().constData();
-
-		msMiningErrors6 = "Staking: " + FromQString(text);
-
+        labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> time to earn reward is %3. %4").arg(nWeight).arg(nNetworkWeight).arg(text).arg(PORText));
+		msMiningErrors6 = "Interest: " + FromQString(text);
+		if (nPOREstimate > 0) msMiningErrors6 += "; POR: " + FromQString(GetEstimatedTime(nPOREstimate));
 
     }
     else

@@ -1655,11 +1655,13 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
         CTxIndex txindex;
         if (!txdb.ReadTxIndex(pcoin.first->GetHash(), txindex))
             continue;
-
+		//1-11-2015 
         if (IsProtocolV2(nBestHeight+1))
         {
             if (nCurrentTime - pcoin.first->nTime > nStakeMinAge)
-                nWeight += pcoin.first->vout[pcoin.second].nValue;
+			{
+                nWeight += (pcoin.first->vout[pcoin.second].nValue+(RSA_WEIGHT/14*COIN));
+			}
         }
         else
         {
@@ -1850,16 +1852,10 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             uint256 hashProofOfStake = 0, targetProofOfStake = 0;
             COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);
 			//Note: At this point block.vtx[0] is still null, so we send the hashBoinc in separately
-			//KernelHashV1
-
+		
 			//1-8-2015 - Add PoW nonce to POR - Halford
-			// pblock->nNonce = pdata->nNonce;
-			//pblock->nNonce++;
-			NetworkTimer();
-
-
-			
-
+			//NetworkTimer();
+				
             if (CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, 
 				*pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, 
 				targetProofOfStake, hashBoinc, false, true, mdPORNonce))
@@ -1869,8 +1865,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
                 if (fDebug2)            printf("CreateCoinStake : kernel found\n");
 				//1-8-2015
 				WriteAppCache(pindexPrev->GetBlockHash().GetHex(),RoundToString(mdPORNonce,0));
-				mdPORNonceSolved = mdPORNonce;
-                
+			   
                 vector<valtype> vSolutions;
                 txnouttype whichType;
                 CScript scriptPubKeyOut;
@@ -1905,14 +1900,14 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
                     valtype& vchPubKey = vSolutions[0];
                     if (!keystore.GetKey(Hash160(vchPubKey), key))
                     {
-                        if (fDebug && GetBoolArg("-printcoinstake"))
+                        if (fDebug3 || GetBoolArg("-printcoinstake")==true)
                             printf("CreateCoinStake : failed to get key for kernel type=%d\n", whichType);
                         break;  // unable to find corresponding public key
                     }
 
                 if (key.GetPubKey() != vchPubKey)
                 {
-                    if (fDebug && GetBoolArg("-printcoinstake"))
+                    if (fDebug3 || GetBoolArg("-printcoinstake")==true)
                         printf("CreateCoinStake : invalid key for kernel type=%d\n", whichType);
                         break; // keys mismatch
                     }
@@ -1946,8 +1941,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	
     if (nCredit == 0)
 	{
-		if (fDebug) printf("StakeMiner: Credit below reserve balance (zero).");
-		msMiningErrors7="Credit below reserve (zero).";
+		//if (fDebug) printf("StakeMiner: Credit below reserve balance (zero).");
+		msMiningErrors7="Probing coin age";
 		msMiningErrors = msMiningErrors7;
 		return false;
 	}
@@ -2010,28 +2005,26 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		double out_interest = 0;
         int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,
 			GetAdjustedTime(),OUT_POR,out_interest,RSA_WEIGHT);
-		if (fDebug) printf("ZXA2.");
-
+	
 		double out_magnitude = 0;
 		double out_owed = 0;
 		double mint = CoinToDouble(nReward);
 		double PORDiff = GetBlockDifficulty(nBits);
-		if (fDebug) printf("ZXA3.");
-
+	
 		if (fDebug2) printf("Creating POS Reward for %s  amt  %f  {RSAWeight %f} \r\n",
 			GlobalCPUMiningCPID.cpid.c_str(), mint, (double)RSA_WEIGHT);
 	
 		//INVESTORS
 		if (mint < MintLimiter(PORDiff,RSA_WEIGHT)) 
 		{
-				if (fDebug) printf("CreateStake()::Mint too small");
+				if (fDebug3) printf("CreateStake()::Mint %f of %f too small",(double)mint,(double)MintLimiter(PORDiff,RSA_WEIGHT));
 				msMiningErrors7="Mint too small";
 				return false; 
 		}
 		
 		if (nReward == 0)
 		{
-			if (fDebug) printf("CreateBlock():Mint is zero");
+			if (fDebug3) printf("CreateBlock():Mint is zero");
 			msMiningErrors7="Mint is zero";  //Newbie
 			return false;   
 		}
@@ -2047,7 +2040,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		return false;
 	}
 
-	if (fDebug) printf("ZXA142");
+	if (fDebug3) printf("Staking Block\r\n");
 	
     // Set output amount
     if (txNew.vout.size() == 3)
@@ -2061,12 +2054,10 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     // Sign
     int nIn = 0;
 
-	if (fDebug) printf("ZXA143");
-
+	
     BOOST_FOREACH(const CWalletTx* pcoin, vwtxPrev)
     {
-		if (fDebug) printf("ZXA143");
-
+	
         if (!SignSignature(*this, *pcoin, txNew, nIn++))
 		{
 			msMiningErrors7="Failed to sign coinstake";
@@ -2074,8 +2065,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		}
     }
 
-	if (fDebug) printf("ZXA144");
-
+	
     // Limit size
     unsigned int nBytes = ::GetSerializeSize(txNew, SER_NETWORK, PROTOCOL_VERSION);
     if (nBytes >= MAX_BLOCK_SIZE_GEN/5)
@@ -2083,12 +2073,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		return error("CreateCoinStake : exceeded coinstake size limit");
 	}
 
-	if (mdPORNonce < 1000) 
-	{
-		msMiningErrors = "PoW Mining+";
-		return false;
-	}
-
+	
     // Successfully generated coinstake
 	if (CoinToDouble(nCredit) > (MaxSubsidy/10)) 
 	{
