@@ -23,6 +23,27 @@
         sErr = mData.ExecuteP2P(sInsert)
         Return sErr
     End Function
+
+    Public Function mInsertTicket(sTicketId As String, sAssignedTo As String, sDisposition As String, sDesc As String, sType As String, sNotes As String) As String
+        If mData Is Nothing Then mData = New Sql
+        Dim sInsert As String
+        sInsert = "<INSERT><TABLE>Ticket</TABLE><FIELDS>TicketId,AssignedTo,Disposition,Descript,Type</FIELDS><VALUES>'" _
+            + Trim(sTicketId) + "','" + Trim(sAssignedTo) + "','" + Trim(sDisposition) + "','" + Trim(sDesc) + "','" + Trim(sType) + "'</VALUES></INSERT>"
+        Dim sErr As String = ""
+        sErr = mData.ExecuteP2P(sInsert)
+        If Len(sErr) > 1 Then
+            MsgBox(sErr, MsgBoxStyle.Critical, "Error while Creating Ticket")
+            Exit Function
+        End If
+        'Retrieve ticket Guid
+        Dim sGuid As String = P2PValue("id", "Ticket", "TicketId", sTicketId)
+        If (Len(sGuid) > 10) Then
+            sInsert = "<INSERT><TABLE>TicketHistory</TABLE><FIELDS>Parent,Disposition,AssignedTo,Notes</FIELDS><VALUES>'" + Trim(sGuid) + "','" + Trim(sDisposition) + "','" + Trim(sAssignedTo) + "','" + Trim(sNotes) + "'</VALUES></INSERT>"
+            sErr += mData.ExecuteP2P(sInsert)
+        End If
+        Return sErr
+    End Function
+
     Public msTXID As String = ""
 
     Public Function mUpdateConfirmAsync()
@@ -50,8 +71,6 @@
     End Function
     Public Function mTrackConfirm(sTXID As String) As Double
 
-
-
         If mData Is Nothing Then mData = New Sql
 
         Dim dr As GridcoinReader
@@ -78,9 +97,97 @@
             Return 0
         End Try
       
-
     End Function
 
+    Public Function mGetFilteredTickets(sFilter As String) As GridcoinReader
+        If mData Is Nothing Then mData = New Sql
+
+        Dim dr As GridcoinReader
+        Dim sql As String
+
+        
+
+        sql = "Select * From Ticket " + sFilter
+
+        Try
+            dr = mData.GetGridcoinReader(sql)
+        Catch ex As Exception
+            Return dr
+        End Try
+        Return dr
+    End Function
+    Public Function mGetTicketHistory(sTicketID As String) As GridcoinReader
+        If mData Is Nothing Then mData = New Sql
+        Dim myGuid As String
+        myGuid = P2PValue("id", "Ticket", "TicketId", sTicketID)
+        
+        Dim dr As GridcoinReader
+        If myGuid = "" Then Return dr
+
+
+        Dim sql As String
+        sql = "Select * From TicketHistory where Parent='" + myGuid + "'"
+        Try
+            dr = mData.GetGridcoinReader(sql)
+        Catch ex As Exception
+            Return dr
+        End Try
+        Return dr
+    End Function
+
+    Public Function P2PMax(LookupField As String, sTable As String, sSearchField As String, sTargetValue As String) As String
+        If mData Is Nothing Then mData = New Sql
+
+        Dim dr As GridcoinReader
+        Dim sql As String
+        sql = "Select Max(Cast (" + LookupField + " as money)) from " + sTable + " where deleted=0 "
+       
+        Try
+            dr = mData.GetGridcoinReader(sql)
+
+        Catch ex As Exception
+            Return -1
+        End Try
+
+        Try
+            Dim grr As New GridcoinReader.GridcoinRow
+            grr = dr.GetRow(1)
+
+            Return grr.Values(0).ToString()
+
+        Catch ex As Exception
+            Log("HEINOUS 2:" + ex.Message)
+            Return ""
+        End Try
+
+    End Function
+    Public Function P2PValue(LookupField As String, sTable As String, sSearchField As String, sTargetValue As String) As String
+        If mData Is Nothing Then mData = New Sql
+
+        Dim dr As GridcoinReader
+        Dim sql As String
+        sql = "Select " + LookupField + " from " + sTable + " where deleted=0 and " + sSearchField + " ='" + sTargetValue + "'"
+        Log("Tracking " + sql)
+
+        Try
+            dr = mData.GetGridcoinReader(sql)
+
+        Catch ex As Exception
+            Return -1
+        End Try
+
+        Try
+            Dim grr As New GridcoinReader.GridcoinRow
+            grr = dr.GetRow(1)
+           
+            Return grr.Values(0).ToString()
+
+        Catch ex As Exception
+            Log("HEINOUS 2:" + ex.Message)
+            Return ""
+        End Try
+
+    End Function
 
     Public bSqlHouseCleaningComplete As Boolean = False
     Public vProj() As String

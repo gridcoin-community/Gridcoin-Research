@@ -145,6 +145,7 @@ Public Class Sql
                 sHost = GetMasterNodeURL()
                 sData = SQLQuery(sHost, sCommand)
                 If sData = "" Then Return sData
+                If sData <> "" And x = 9 Then Return sData
 
             Catch ex As Exception
                 Log(ex.Message)

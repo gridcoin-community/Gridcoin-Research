@@ -806,17 +806,8 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
     int64_t RSA_WEIGHT = GetRSAWeightByBlock(boincblock);
 	int oNC = 0;
  	double coin_age = std::abs((double)nTimeTx-(double)txPrev.nTime);
-	
 	double BitsAge = PORDiff * 144; //For every 100 Diff in Bits, two hours of coin age for researchers
-	if ((payment_age > 60*60) && (payment_age > BitsAge)  
-		&& boincblock.Magnitude > 1 
-		&& boincblock.cpid != "INVESTOR" && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT) 
-		&& (RSA_WEIGHT/14 > MintLimiter(PORDiff,RSA_WEIGHT)) 
-		&& IsCPIDValidv2(boincblock,pindexPrev->nHeight)		)
-	{
-		//Coins are older than RSA balance
-		oNC=1;
-	}
+
 
 	//Halford 1-4-2015 : Explain to the Researcher why they are not staking:
 	if (checking_local && LessVerbose(100))
@@ -843,6 +834,24 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 
 	
 	if (checking_local) msMiningErrors2 = "RRSA: " + RoundToString(RSA_WEIGHT,0);
+
+
+	if (boincblock.cpid != "INVESTOR")
+	{
+		if ((payment_age > 60*60) && (payment_age > BitsAge)  
+			&& boincblock.Magnitude > 1 && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT) 
+			&& (RSA_WEIGHT/14 > MintLimiter(PORDiff,RSA_WEIGHT)) 
+			&& IsCPIDValidv2(boincblock,pindexPrev->nHeight)		)
+		{
+			//Coins are older than RSA balance - Allow hash to dictate outcome
+		}
+		else
+		{
+			return false;
+		}
+	}
+	
+
 
     if (nTimeTx < txPrev.nTime)  // Transaction timestamp violation
         return error("CheckStakeKernelHash() : nTime violation");

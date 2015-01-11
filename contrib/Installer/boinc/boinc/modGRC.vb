@@ -15,6 +15,9 @@ Module modGRC
 
     Public mfrmProjects As frmProjects
     Public mfrmSql As frmSQL
+    Public mfrmTicketAdd As frmTicketAdd
+    Public mfrmTicketList As frmTicketList
+
     Public mfrmTicker As frmLiveTicker
 
 

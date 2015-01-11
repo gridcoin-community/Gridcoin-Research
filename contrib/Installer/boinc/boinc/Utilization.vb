@@ -213,6 +213,23 @@ Public Class Utilization
             Log("Error while transitioning to frmSQL" + ex.Message)
         End Try
     End Function
+    Public Function ShowTicketAdd()
+        Try
+            mfrmTicketAdd = New frmTicketAdd
+            mfrmTicketAdd.Show()
+        Catch ex As Exception
+            Log("Error while transitioning to frmTicketAdd" + ex.Message)
+        End Try
+    End Function
+    Public Function ShowTicketList()
+        Try
+            mfrmTicketList = New frmTicketList
+            mfrmTicketList.Show()
+        Catch ex As Exception
+            Log("Error while transitioning to frmTicketAdd" + ex.Message)
+        End Try
+    End Function
+
     Public Function ShowTicker()
         Try
             mfrmTicker = New frmLiveTicker

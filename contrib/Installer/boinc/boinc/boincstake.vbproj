@@ -85,6 +85,12 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="clsMailFunctions.vb" />
+    <Compile Include="TicketList.Designer.vb">
+      <DependentUpon>TicketList.vb</DependentUpon>
+    </Compile>
+    <Compile Include="TicketList.vb">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="frmGRCWireFrameCanvasRenderer.Designer.vb">
       <DependentUpon>frmGRCWireFrameCanvasRenderer.vb</DependentUpon>
     </Compile>
@@ -175,6 +181,9 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="TicketList.resx">
+      <DependentUpon>TicketList.vb</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="frmGRCWireFrameCanvasRenderer.resx">
       <DependentUpon>frmGRCWireFrameCanvasRenderer.vb</DependentUpon>
     </EmbeddedResource>
