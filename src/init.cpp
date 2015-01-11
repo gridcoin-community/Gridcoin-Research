@@ -247,7 +247,8 @@ void InitializeBoincProjects()
 		//boinc_projects[73]="http://supernode.gridcoin.us/|Gridcoin Supernode";
 		boinc_projects[75] = "http://mindmodeling.org/|MindModeling@Home";
         boinc_projects[76] = "http://www.gridcoin.us/|INVESTOR"; //This is a general project Used for Inflation Only Subsidies
-		boinc_projects[77] = "http://qcn.stanford.edu/sensor/|Quake-Catcher Network Sensor Monitoring";
+		boinc_projects[77] = "http://qcn.stanford.edu/sensor/|Quake-Catcher Network"; //BOINC - TheDrake
+
 		//More from Custom Miner 1-4-2015 R Halford
 		boinc_projects[78] = "http://registro.ibercivis.es/|ibercivis";
 		boinc_projects[79] = "http://igemathome.org/|iGEM@home";

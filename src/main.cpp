@@ -2721,11 +2721,11 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 {
     
 	//Gridcoin - 1-9-2015 - Halford - Remove Weighted Magnitude and payments from Global Magnitude vectors
-	std::string hashboinc = "";
-	if (vtx.size() > 0) hashboinc = vtx[0].hashBoinc;
-	MiningCPID bb = DeserializeBoincBlock(hashboinc);
-    double mint = CoinToDouble(pindex->nMint);
-    RemoveNetworkMagnitude(nTime,bb.cpid,bb,mint,true);
+	//std::string hashboinc = "";
+	//if (vtx.size() > 0) hashboinc = vtx[0].hashBoinc;
+	//MiningCPID bb = DeserializeBoincBlock(hashboinc);
+    //double mint = CoinToDouble(pindex->nMint);
+    //RemoveNetworkMagnitude(nTime,bb.cpid,bb,mint,true);
 
 	// Disconnect in reverse order
     for (int i = vtx.size()-1; i >= 0; i--)
@@ -2747,6 +2747,10 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
     // ppcoin: clean up wallet after disconnecting coinstake
     BOOST_FOREACH(CTransaction& tx, vtx)
         SyncWithWallets(tx, this, false, false);
+
+	//Retally Network Averages - Halford - 1-11-2015
+	TallyNetworkAverages(true);
+		
 
     return true;
 }
@@ -2980,6 +2984,10 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 							int64_t nCalculatedResearch2 = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime,OUT_POR4,OUT_INTEREST4,bb.RSAWeight);
 							if (nStakeReward > (nCalculatedResearch2*TOLERANCE_PERCENT))
 							{
+
+
+								TallyNetworkAverages(true);
+	
 
 								double user_magnitude = GetMagnitude(bb.cpid,1,false);
 								//return DoS(1, error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f", 						bb.cpid.c_str(), nStakeReward/C-o-IN, nCalculatedResearch/C-OIN, user_magnitude));
@@ -6983,8 +6991,12 @@ void CreditCheck(std::string cpid, bool clearcache)
 					boost::to_lower(sProj);
 					sProj = ToOfficialName(sProj);
 					boost::to_lower(sProj);
+					//1-11-2015 Rob Halford - List of Exceptions to Map Netsoft Name -> Boinc Client Name
+
 					//6-21-2014 (R Halford) : In this convoluted situation, we found MindModeling@beta in the Boinc client, and MindModeling@Home in the CreditCheckOnline XML;
 					if (sProj == "mindmodeling@home") sProj = "mindmodeling@beta";
+					if (sProj == "Quake Catcher Network") sProj = "Quake-Catcher Network";
+
 					//Is project Valid
 					bool projectvalid = ProjectIsValid(sProj);
 					if (!projectvalid) sProj = "";
