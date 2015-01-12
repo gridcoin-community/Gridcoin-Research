@@ -667,7 +667,7 @@ private:
 void ThreadRPCServer(void* parg)
 {
     // Make this thread recognisable as the RPC listener
-    RenameThread("gridcoin-rpclist");
+    RenameThread("grc-rpclist");
 
     try
     {
@@ -971,7 +971,7 @@ static CCriticalSection cs_THREAD_RPCHANDLER;
 void ThreadRPCServer3(void* parg)
 {
     // Make this thread recognisable as the RPC handler
-    RenameThread("gridcoin-rpchand");
+    RenameThread("grc-rpchand");
 
     {
         LOCK(cs_THREAD_RPCHANDLER);

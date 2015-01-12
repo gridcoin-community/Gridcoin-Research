@@ -64,6 +64,7 @@ bfs::path Upgrader::path(int pathfork)
 
 void Imker(void *kippel)
 {
+    RenameThread("grc-downloader");
     Upgrader *argon = (Upgrader*)kippel;
     printf("Starting download\n");
     argon->downloader(argon->getTarget());
@@ -71,13 +72,14 @@ void Imker(void *kippel)
 }
 
 void download(void *curlhandle)
-    {
+{
+    RenameThread("grc-curl");
     struct curlargs *curlarg = (struct curlargs *)curlhandle;
     CURLcode success = CURLE_OK;
     success = curl_easy_perform(curlarg->handle);
     if (success == CURLE_OK) { curlarg->success = true; }
     curlarg->downloading = false;
-    }
+}
 
 #if defined(UPGRADERFLAG)
 
