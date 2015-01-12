@@ -109,7 +109,7 @@ private:
 
 	QAction *sqlAction;
 	QAction *leaderboardAction;
-
+	QAction *tickerAction;
 
     QAction *verifyMessageAction;
     QAction *aboutAction;
@@ -205,6 +205,8 @@ private slots:
 	void downloadClicked();
 	void rebootClicked();
 	void sqlClicked();
+	void tickerClicked();
+
 	//void leaderboardClicked();
 	//void miningClicked();
 
@@ -236,6 +238,9 @@ private slots:
 
     void updateWeight();
     void updateStakingIcon();
+	
+	QString GetEstimatedTime(unsigned int nEstimateTime);
+
 	/** called by a timer to check if fRequestShutdown has been set **/
     void detectShutdown();
 

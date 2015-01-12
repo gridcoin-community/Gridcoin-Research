@@ -182,9 +182,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
     txNew.vin.resize(1);
     txNew.vin[0].prevout.SetNull();
     txNew.vout.resize(1);
-
-
-
+	
     if (!fProofOfStake)
     {
         CReserveKey reservekey(pwallet);
@@ -434,9 +432,14 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		double out_por = 0;
 		double out_interest=0;
 
-		
+		if (fDebug) printf("ZX256");
+
 		//Halford: Use current time since we are creating a new stake
-		int64_t nNewBlockReward = GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),out_por,out_interest);
+		int64_t nNewBlockReward = GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),
+			out_por,out_interest,miningcpid.RSAWeight);
+
+		if (fDebug) printf("ZX257");
+
 		miningcpid.ResearchSubsidy = out_por;
 		miningcpid.InterestSubsidy = out_interest;
 
@@ -445,14 +448,18 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		miningcpid.enccpid = ""; //CPID V1 Boinc RunTime enc key
 		miningcpid.encboincpublickey = "";
 		miningcpid.encaes = "";
-			
+		if (fDebug) printf("ZX258");
+		
 		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-		
-	
-		
+			if (fDebug) printf("ZX259");
+
+			
 		std::string hashBoinc = SerializeBoincBlock(miningcpid);
+
+			if (fDebug) printf("ZX260");
+
 		//printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
-	    if (fDebug)  if (LessVerbose(5)) printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
+	    if (fDebug)  printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
 		pblock->vtx[0].hashBoinc = hashBoinc;
 
         if (!fProofOfStake)
@@ -461,14 +468,25 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
         if (pFees)
             *pFees = nFees;
 
-        // Fill in header
+        // Fill in header  1-1-2015
         pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
-        pblock->nTime          = max(pindexPrev->GetPastTimeLimit()+1, pblock->GetMaxTransactionTime());
-        pblock->nTime          = max(pblock->GetBlockTime(), PastDrift(pindexPrev->GetBlockTime(), nHeight));
+		if (!fProofOfStake)
+		{
+
+			pblock->nTime          = max(pindexPrev->GetPastTimeLimit()+1, pblock->GetMaxTransactionTime());
+			pblock->nTime          = max(pblock->GetBlockTime(), PastDrift(pindexPrev->GetBlockTime(), nHeight));
+		}
+		else
+		{
+						pblock->nTime      =     max(pblock->GetMaxTransactionTime(),GetAdjustedTime());
+				 	    pblock->nTime      =     pblock->vtx[1].nTime; //same as coinstake timestamp
+		}
+
         if (!fProofOfStake)
             pblock->UpdateTime(pindexPrev);
         pblock->nNonce         = 0;
     }
+		if (fDebug) printf("ZX271");
 
     return pblock.release();
 }
@@ -560,7 +578,11 @@ bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
     {
         LOCK(cs_main);
         if (pblock->hashPrevBlock != hashBestChain)
+		{
+			//1-10-2015
+			msMiningErrors6 = "Generated block is stale.";
             return error("CheckWork() : generated block is stale");
+		}
 
         // Remove key from key pool
         reservekey.KeepKey();
@@ -574,6 +596,7 @@ bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
         // Process this block the same as if we had received it from another node
         if (!ProcessBlock(NULL, pblock, true))
 		{
+			msMiningErrors6 = "Block not accepted.";
             return error("CheckWork() : ProcessBlock, block not accepted");
 		}
     }
@@ -629,7 +652,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	}
 
 
-	if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc, true))
+	if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc, true, pblock->nNonce))
 	{	
 		if (fDebug) printf("Hash boinc %s",pblock->vtx[0].hashBoinc.c_str());
         return error("CheckStake() : proof-of-stake checking failed");
@@ -652,15 +675,21 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
         LOCK(cs_main);
         if (pblock->hashPrevBlock != hashBestChain)
 		{
+			msMiningErrors6="CheckStake(): Generated block is stale.";
             return error("CheckStake() : generated block is stale");
 		}
 
+		if (false)
+		{
 		std::string GlobalBlockSolved = GetBestBlockHash(GlobalCPUMiningCPID.cpidv2);
 		if (fDebug2) printf("GBS->%s",GlobalBlockSolved.c_str());
 		if (GlobalBlockSolved != "NULL" && GlobalBlockSolved.length() > 8 && GlobalBlockSolved != "")
 		{
 			return error("CheckStake() : generated block is stale - Solved at %s, Block Height: %f \r\n",GlobalBlockSolved.c_str(),(double)nBestHeight+1);
 		}
+		}
+
+		
 
         // Track how many getdata requests this block gets
         {
@@ -671,6 +700,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
         // Process this block the same as if we had received it from another node
         if (!ProcessBlock(NULL, pblock, true))
 		{
+			msMiningErrors6="Block vehemently rejected.";
 	        return error("CheckStake() : ProcessBlock (by me), but block not accepted");
 		}
     }
@@ -775,7 +805,7 @@ Inception:
             if (vNodes.size() < 3 || nBestHeight < GetNumBlocksOfPeers())
             {
 				printf("tryingtosync.");
-                MilliSleep(45000);
+                MilliSleep(5000);
                 continue;
             }
         }
@@ -786,6 +816,7 @@ Begin:
         // Create new block
         //
         int64_t nFees;
+		
         auto_ptr<CBlock> pblock(CreateNewBlock(pwallet, true, &nFees));
         if (!pblock.get())
 		{
@@ -797,20 +828,11 @@ Begin:
 		
 
 		//Verify we are still on the main chain
-		if (false)
-		{
-   	    if (pblock->hashPrevBlock != hashBestChain)
-		{
-    		printf ("StakeMiner() : generated block is stale");
-			MilliSleep(1000);
-			goto Begin;
-		}
-		}
-
-		if (IsLockTimeWithinMinutes(nLastBlockSolved,2)) 
+	
+		if (IsLockTimeWithinMinutes(nLastBlockSolved,3)) 
 		{
 				if (fDebug) printf("=");
-				MilliSleep(1000);
+				MilliSleep(200);
 				goto Begin;
 		}
 
@@ -818,22 +840,22 @@ Begin:
 			
         if (pblock->SignBlock(*pwallet, nFees))
         {
+
             SetThreadPriority(THREAD_PRIORITY_NORMAL);
 			bool Staked = CheckStake(pblock.get(), *pwallet);
+
 			if (Staked)
 			{
 				msMiningErrors = "Stake block accepted!";
 				printf("Stake block accepted!\r\n");
-				//Prevent Rapid Fire block creation (large investor nodes):
 		  	    SetThreadPriority(THREAD_PRIORITY_LOWEST);
-        		
+        		mdPORNonce=0;
 			}
 			else
 			{
 				msMiningErrors = "Stake block rejected";
 				printf("Stake block rejected \r\n");
-				MilliSleep(10000);
-		
+				MilliSleep(1000);
 			}
             SetThreadPriority(THREAD_PRIORITY_LOWEST);
             MilliSleep(500);

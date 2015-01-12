@@ -130,6 +130,9 @@ extern bool fDebug;
 extern bool fDebugNet;
 extern bool fDebug2;
 extern bool fDebug3;
+extern bool fDebug4;
+extern bool fDebug5;
+
 extern bool fPrintToConsole;
 extern bool fPrintToDebugger;
 extern bool fRequestShutdown;

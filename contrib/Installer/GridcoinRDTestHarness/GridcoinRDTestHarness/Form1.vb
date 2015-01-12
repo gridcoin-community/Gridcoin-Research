@@ -124,14 +124,13 @@ Public Class Form1
     End Function
     Private Sub Button1_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles Button1.Click
         Dim x As New Utilization
-        x.ShowSql()
+        x.ShowTicker()
 
-        x.UpdateConfirm("085e0b60fd229e1ce8a28c8d32a17b081e9810793ab4879dfbe34beda454dc5d")
-        Dim l As Long = x.TrackConfirm("085e0b60fd229e1ce8a28c8d32a17b081e9810793ab4879dfbe34beda454dc5d")
-        l = x.TrackConfirm("085e0b60fd229e1ce8a28c8d32a17b081e9810793ab4879dfbe34beda454dc5d")
+        'x.UpdateConfirm("085e0b60fd229e1ce8a28c8d32a17b081e9810793ab4879dfbe34beda454dc5d")
+        'Dim l As Long = x.TrackConfirm("085e0b60fd229e1ce8a28c8d32a17b081e9810793ab4879dfbe34beda454dc5d")
+        'l = x.TrackConfirm("085e0b60fd229e1ce8a28c8d32a17b081e9810793ab4879dfbe34beda454dc5d")
 
-        Stop
-
+        
     End Sub
 
 

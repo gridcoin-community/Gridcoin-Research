@@ -152,6 +152,7 @@ public:
     int nMisbehavior;
     double dPingTime;
     double dPingWait;
+	//std::string securityversion;
 };
 
 
@@ -292,11 +293,12 @@ public:
         nRecvVersion = INIT_PROTO_VERSION;
         nLastSend = 0;
         nLastRecv = 0;
-        nTimeConnected = GetTime();
+        nTimeConnected = GetAdjustedTime();
         addr = addrIn;
         addrName = addrNameIn == "" ? addr.ToStringIPPort() : addrNameIn;
         nVersion = 0;
         strSubVer = "";
+		//securityversion = "";
         fOneShot = false;
         fClient = false; // set by version message
         fInbound = fInboundIn;
@@ -426,7 +428,7 @@ public:
             printf("askfor %s   %"PRId64" (%s)\n", inv.ToString().c_str(), nRequestTime, DateTimeStrFormat("%H:%M:%S", nRequestTime/1000000).c_str());
 
         // Make sure not to reuse time indexes to keep things in the same order
-        int64_t nNow = (GetTime() - 1) * 1000000;
+        int64_t nNow = (GetAdjustedTime() - 1) * 1000000;
         static int64_t nLastTime;
         ++nLastTime;
         nNow = std::max(nNow, nLastTime);

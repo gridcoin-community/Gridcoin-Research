@@ -25,6 +25,8 @@ StructCPID GetStructCPID();
 MiningCPID GetNextProject(bool bForce);
 std::string GetBestBlockHash(std::string sCPID);
 
+int SolveNonce(double diff);
+
 
 std::string TestHTTPProtocol(std::string sCPID);
 
@@ -1052,6 +1054,24 @@ Value execute(const Array& params, bool fHelp)
 		results.push_back(entry);
 		
 	}
+	else if (sItem =="nonce")
+	{
+		std::string sParam1 = params[1].get_str();
+		double diff = cdbl(sParam1,0);
+		int nonce = SolveNonce(diff);
+		entry.push_back(Pair("Diff",diff));
+		entry.push_back(Pair("Solved in",nonce));
+		results.push_back(entry);
+
+	}
+	else if (sItem == "testnonce")
+	{
+		entry.push_back(Pair("1",mdPORNonce));
+		mdPORNonce += 12500;
+		entry.push_back(Pair("2",mdPORNonce));
+		results.push_back(entry);
+	
+	}
 	else if (sItem == "genorgkey")
 	{
 			if (params.size() != 3)
@@ -1362,8 +1382,8 @@ Array MagnitudeReport(bool bMine)
 									entry.push_back(Pair("Long Term Daily Owed (1 day projection)",structMag.totalowed/14));
 									entry.push_back(Pair("Payments",structMag.payments));
 									entry.push_back(Pair("InterestPayments",structMag.interestPayments));
-
-									entry.push_back(Pair("Last Payment Time",structMag.LastPaymentTime));
+									//1-7-2015
+									entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
 									entry.push_back(Pair("Current Daily Projection",structMag.owed));
 									entry.push_back(Pair("Next Expected Payment",structMag.owed/2));
 									entry.push_back(Pair("Avg Daily Payments",structMag.payments/14));
@@ -1651,12 +1671,24 @@ Value listitem(const Array& params, bool fHelp)
 		results.push_back(entry);
 	}
 
+	if (sitem == "currenttime")
+	{
+
+		Object entry;
+		entry.push_back(Pair("Unix",GetAdjustedTime()));
+		entry.push_back(Pair("UTC",TimestampToHRDate(GetAdjustedTime())));
+		results.push_back(entry);
+
+	}
+
+
 	if (sitem == "magnitudecsv")
 	{
 		results = MagnitudeReportCSV(false);
 		return results;
 	}
 
+	
 	if (sitem=="detailmagnitudecsv")
 	{
 		results = MagnitudeReportCSV(true);

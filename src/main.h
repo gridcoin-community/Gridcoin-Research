@@ -80,11 +80,10 @@ static const uint256 hashGenesisBlockTestNet("0x");
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 inline bool IsProtocolV2(int nHeight) { return nHeight > 85400; }
 
-inline int64_t PastDrift(int64_t nTime, int nHeight)   { return IsProtocolV2(nHeight) ? nTime - 9 * 60  : nTime - 10 * 60; }
-inline int64_t FutureDrift(int64_t nTime, int nHeight) { return IsProtocolV2(nHeight) ? nTime + 9 * 60  : nTime + 10 * 60; }
+inline int64_t PastDrift(int64_t nTime, int nHeight)   { return IsProtocolV2(nHeight) ? nTime - 30 * 60  : nTime - 30 * 60; }
+inline int64_t FutureDrift(int64_t nTime, int nHeight) { return IsProtocolV2(nHeight) ? nTime + 30 * 60  : nTime + 30 * 60; }
 
-inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight) ? 64 : 60; }
-
+inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight) ? 90 : 60; }
 
 extern libzerocoin::Params* ZCParams;
 extern CScript COINBASE_FLAGS;
@@ -137,6 +136,12 @@ extern std::string 	msMiningProject;
 extern std::string 	msMiningCPID;
 extern double    	mdMiningRAC;
 extern double       mdMiningNetworkRAC;
+extern double       mdPORNonce;
+extern double       mdPORNonceSolved;
+extern double       mdLastPorNonce;
+extern double       mdMachineTimer;
+extern double       mdMachineTimerLast;
+
 extern std::string  msENCboincpublickey;
 extern std::string  msHashBoinc;
 extern std::string  msHashBoincTxId;
@@ -144,6 +149,13 @@ extern std::string  msMiningErrors;
 extern std::string  msMiningErrors2;
 extern std::string  msMiningErrors3;
 extern std::string  msMiningErrors4;
+extern std::string  msMiningErrors5;
+extern std::string  msMiningErrors6;
+extern std::string  msMiningErrors7;
+
+extern bool         mbBlocksDownloaded;
+
+
 extern std::string  Organization;
 extern std::string  OrganizationKey;
 
@@ -190,7 +202,7 @@ bool LoadExternalBlockFile(FILE* fileIn);
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfStake);
 int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height);
-int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, bool VerifyingBlock,int64_t locktime,double& OUT_POR, double& OUT_INTEREST);
+int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, bool VerifyingBlock,int64_t locktime,double& OUT_POR, double& OUT_INTEREST,double RSAWeight);
 
 unsigned int ComputeMinWork(unsigned int nBase, int64_t nTime);
 unsigned int ComputeMinStake(unsigned int nBase, int64_t nTime, unsigned int nBlockTime);
@@ -1339,7 +1351,8 @@ public:
     int64_t GetPastTimeLimit() const
     {
         if (IsProtocolV2(nHeight))
-            return GetBlockTime();
+			//         return GetBlockTime();
+	         return GetMedianTimePast();
         else
             return GetMedianTimePast();
     }

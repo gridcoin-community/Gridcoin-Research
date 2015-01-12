@@ -79,6 +79,7 @@
 #include "bitcoinrpc.h"
 
 #include <iostream>
+#include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 
 extern CWallet* pwalletMain;
 extern int64_t nLastCoinStakeSearchInterval;
@@ -751,6 +752,12 @@ void BitcoinGUI::createActions()
 	sqlAction->setStatusTip(tr("SQL Query Analyzer"));
 	sqlAction->setMenuRole(QAction::TextHeuristicRole);
 
+	tickerAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Live Ticker"), this);
+	tickerAction->setStatusTip(tr("Live Ticker"));
+	tickerAction->setMenuRole(QAction::TextHeuristicRole);
+
+
+
 //	leaderboardAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Leaderboard"), this);
 //	leaderboardAction->setStatusTip(tr("Leaderboard"));
 //	leaderboardAction->setMenuRole(QAction::TextHeuristicRole);
@@ -801,6 +808,8 @@ void BitcoinGUI::createActions()
 	connect(downloadAction, SIGNAL(triggered()), this, SLOT(downloadClicked()));
 	connect(rebootAction, SIGNAL(triggered()), this, SLOT(rebootClicked()));
 	connect(sqlAction, SIGNAL(triggered()), this, SLOT(sqlClicked()));
+	connect(tickerAction, SIGNAL(triggered()), this, SLOT(tickerClicked()));
+
 	//connect(leaderboardAction, SIGNAL(triggered()), this, SLOT(leaderboardClicked()));
 
 }
@@ -860,9 +869,12 @@ void BitcoinGUI::createMenuBar()
 	rebuild->addAction(rebootAction);
 	rebuild->addSeparator();
 
-	QMenu *sql = appMenuBar->addMenu(tr("&SQL Query Analyzer"));
-	sql->addSeparator();
-	sql->addAction(sqlAction);
+	QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
+	qmAdvanced->addSeparator();
+	qmAdvanced->addAction(sqlAction);
+	qmAdvanced->addAction(tickerAction);
+
+
 
 //	QMenu *leaderboard = appMenuBar->addMenu(tr("&Leaderboard"));
 //	leaderboard->addSeparator();
@@ -1279,6 +1291,8 @@ void BitcoinGUI::NewUserWizard()
 		if (ok && !boincemail.isEmpty()) 
 		{
 			std::string new_email = tostdstring(boincemail);
+			boost::to_lower(new_email);
+
 			printf("User entered %s \r\n",new_email.c_str());
 			//Create Config File
 			CreateNewConfigFile(new_email);
@@ -1478,6 +1492,20 @@ void BitcoinGUI::sqlClicked()
 #endif
 
 }
+
+
+void BitcoinGUI::tickerClicked()
+{
+#ifdef WIN32
+	if (!globalcom)
+	{
+		globalcom = new QAxObject("BoincStake.Utilization");
+	}
+    globalcom->dynamicCall("ShowTicker()");
+#endif
+
+}
+
 
 /*
 void BitcoinGUI::leaderboardClicked()
@@ -2038,6 +2066,40 @@ void BitcoinGUI::detectShutdown()
 }
 
 
+double GetPOREstimatedTime(double RSAWeight)
+{
+	if (RSAWeight == 0) return 0;
+	//RSA Weight ranges from 0 - 5600
+	double orf = 5600-RSAWeight;
+	if (orf < 1) orf = 1;
+	double eta = orf/5600;
+	if (eta > 1) orf = 1;
+	eta = eta * (60*60*24);
+	return eta;
+}
+
+QString BitcoinGUI::GetEstimatedTime(unsigned int nEstimateTime)
+{
+	QString text;
+	if (nEstimateTime < 60)
+    {
+            text = tr("%n second(s)", "", nEstimateTime);
+    }
+        else if (nEstimateTime < 60*60)
+    {
+            text = tr("%n minute(s)", "", nEstimateTime/60);
+    }
+        else if (nEstimateTime < 24*60*60)
+    {
+            text = tr("%n hour(s)", "", nEstimateTime/(60*60));
+    }
+        else
+    {
+            text = tr("%n day(s)", "", nEstimateTime/(60*60*24));
+    }
+	return text;
+}
+
 
 
 void BitcoinGUI::updateStakingIcon()
@@ -2047,53 +2109,66 @@ void BitcoinGUI::updateStakingIcon()
     if (nLastCoinStakeSearchInterval && nWeight)
     {
         uint64_t nNetworkWeight = GetPoSKernelPS();
-        unsigned nEstimateTime = GetTargetSpacing(nBestHeight) * (nNetworkWeight / ((nWeight/COIN)+.001)) * 15;
+        unsigned nEstimateTime = GetTargetSpacing(nBestHeight) * (nNetworkWeight / ((nWeight/COIN)+.001)) * 1;
 		if (fDebug) printf("StakeIcon Vitals BH %f, NetWeight %f, Weight %f \r\n", (double)GetTargetSpacing(nBestHeight),(double)nNetworkWeight,(double)nWeight);
 
-        QString text;
-        if (nEstimateTime < 60)
-        {
-            text = tr("%n second(s)", "", nEstimateTime);
-        }
-        else if (nEstimateTime < 60*60)
-        {
-            text = tr("%n minute(s)", "", nEstimateTime/60);
-        }
-        else if (nEstimateTime < 24*60*60)
-        {
-            text = tr("%n hour(s)", "", nEstimateTime/(60*60));
-        }
-        else
-        {
-            text = tr("%n day(s)", "", nEstimateTime/(60*60*24));
-        }
+        QString text = GetEstimatedTime(nEstimateTime);
 
+        //Halford - 1-9-2015 - Calculate time for POR Block:
+		unsigned int nPOREstimate = (unsigned int)GetPOREstimatedTime(GlobalCPUMiningCPID.RSAWeight);
+		QString PORText = "Estimated time to earn POR Reward: " + GetEstimatedTime(nPOREstimate);
+		if (nPOREstimate == 0) PORText="";
+		
         if (IsProtocolV2(nBestHeight+1))
         {
             nWeight /= COIN;
             //nNetworkWeight /= COIN;
         }
-
+		//1-4-2015
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
-        labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> time to earn reward is %3").arg(nWeight).arg(nNetworkWeight).arg(text));
+        labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> time to earn reward is %3. %4").arg(nWeight).arg(nNetworkWeight).arg(text).arg(PORText));
+		msMiningErrors6 = "Interest: " + FromQString(text);
+		if (nPOREstimate > 0) msMiningErrors6 += "; POR: " + FromQString(GetEstimatedTime(nPOREstimate));
+
     }
     else
     {
-		//11-5-2014
+		
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
         if (pwalletMain && pwalletMain->IsLocked())
+		{
             labelStakingIcon->setToolTip(tr("Not staking because wallet is locked"));
+			msMiningErrors6="Wallet Locked";
+		}
         else if (vNodes.empty())
+		{
             labelStakingIcon->setToolTip(tr("Not staking because wallet is offline"));
+			msMiningErrors6 = "Offline";
+		}
         else if (IsInitialBlockDownload())
+		{
             labelStakingIcon->setToolTip(tr("Not staking because wallet is syncing"));
+			msMiningErrors6 = "Syncing";
+		}
 		else if (!nLastCoinStakeSearchInterval && !nWeight)
+		{
 			labelStakingIcon->setToolTip(tr("Not staking because you don't have mature coins and stake weight is too low."));
+			msMiningErrors6 = "No Mature Coins; Stakeweight too low";
+		}
         else if (!nWeight)
+		{
             labelStakingIcon->setToolTip(tr("Not staking because you don't have mature coins"));
+			msMiningErrors6 = "No mature coins";
+		}
 		else if (!nLastCoinStakeSearchInterval)
+		{
 			labelStakingIcon->setToolTip(tr("Searching for mature coins... Please wait"));
+			msMiningErrors6 = "Searching for coins";
+		}
         else
+		{
             labelStakingIcon->setToolTip(tr("Not staking"));
+			msMiningErrors6 = "Not staking yet";
+		}
     }
 }

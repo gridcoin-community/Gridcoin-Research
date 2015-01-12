@@ -12,7 +12,9 @@ Public Class Utilization
    
     Public ReadOnly Property Version As Double
         Get
-            Return 337
+            Return 341
+
+
         End Get
     End Property
 
@@ -207,14 +209,19 @@ Public Class Utilization
         Try
             mfrmSql = New frmSQL
             mfrmSql.Show()
-
         Catch ex As Exception
             Log("Error while transitioning to frmSQL" + ex.Message)
-
-
-
         End Try
     End Function
+    Public Function ShowTicker()
+        Try
+            mfrmTicker = New frmLiveTicker
+            mfrmTicker.Show()
+        Catch ex As Exception
+            Log("Error while booting ticker " + ex.Message)
+        End Try
+    End Function
+
     Public Function ShowLeaderboard()
         mfrmLeaderboard = New frmLeaderboard
         mfrmLeaderboard.Show()
