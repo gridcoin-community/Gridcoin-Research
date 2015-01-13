@@ -352,12 +352,8 @@ bool Upgrader::unzipper(int targetfile)
     {
         if (zip_stat_index(archive, i, 0, &filestat) == 0)
         {
-            if (bfs::is_directory(filestat.name)) 
-            {
-                printf("creating %s\n", filestat.name);
-                verifyPath((target / filestat.name).parent_path(), true);
-            } 
-            else
+            verifyPath((target / filestat.name).parent_path(), true);
+            if (!is_directory(target / filestat.name))
             {
                 zipfile = zip_fopen_index(archive, i, 0);
                 if (!zipfile) {
@@ -480,6 +476,7 @@ bool Upgrader::copyDir(bfs::path source, bfs::path target, bool recursive)
         {
             continue;
         }
+        verifyPath(target / fongo, true);
         copyDir(source / fongo, target / fongo, recursive);
     }
         else
@@ -583,10 +580,13 @@ bool Upgrader::verifyPath(bfs::path path, bool create)
         {
             return true;
         }
-    else if (bfs::create_directories(path) && create)
+    else if (create)
         {
+            if (bfs::create_directories(path))
+            {
             printf("%s successfully created\n", path.c_str());
             return true;
+            }
         }
     else
         {
