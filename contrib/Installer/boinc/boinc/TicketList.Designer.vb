@@ -23,7 +23,6 @@ Partial Class frmTicketList
     <System.Diagnostics.DebuggerStepThrough()> _
     Private Sub InitializeComponent()
         Me.Label3 = New System.Windows.Forms.Label()
-        Me.btnRefresh = New System.Windows.Forms.Button()
         Me.cmbFilter = New System.Windows.Forms.ComboBox()
         Me.tvTicketHistory = New System.Windows.Forms.TreeView()
         Me.btnAdd = New System.Windows.Forms.Button()
@@ -38,17 +37,6 @@ Partial Class frmTicketList
         Me.Label3.Size = New System.Drawing.Size(90, 13)
         Me.Label3.TabIndex = 5
         Me.Label3.Text = "Show Tickets for:"
-        '
-        'btnRefresh
-        '
-        Me.btnRefresh.BackColor = System.Drawing.Color.Gray
-        Me.btnRefresh.ForeColor = System.Drawing.Color.Lime
-        Me.btnRefresh.Location = New System.Drawing.Point(824, 569)
-        Me.btnRefresh.Name = "btnRefresh"
-        Me.btnRefresh.Size = New System.Drawing.Size(78, 29)
-        Me.btnRefresh.TabIndex = 13
-        Me.btnRefresh.Text = "Refresh"
-        Me.btnRefresh.UseVisualStyleBackColor = False
         '
         'cmbFilter
         '
@@ -92,16 +80,14 @@ Partial Class frmTicketList
         Me.Controls.Add(Me.tvTicketHistory)
         Me.Controls.Add(Me.btnAdd)
         Me.Controls.Add(Me.cmbFilter)
-        Me.Controls.Add(Me.btnRefresh)
         Me.Controls.Add(Me.Label3)
         Me.Name = "frmTicketList"
-        Me.Text = "Gridcoin - Add or Edit Ticket"
+        Me.Text = "Gridcoin - Ticket List"
         Me.ResumeLayout(False)
         Me.PerformLayout()
 
     End Sub
     Friend WithEvents Label3 As System.Windows.Forms.Label
-    Friend WithEvents btnRefresh As System.Windows.Forms.Button
     Friend WithEvents cmbFilter As System.Windows.Forms.ComboBox
     Private WithEvents tvTicketHistory As System.Windows.Forms.TreeView
     Friend WithEvents btnAdd As System.Windows.Forms.Button

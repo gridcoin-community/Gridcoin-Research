@@ -864,20 +864,21 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
     bnTarget.SetCompact(nBits);
 
     // Weighted target 1-11-2015 Halford
-    int64_t nValueIn = txPrev.vout[prevout.n].nValue + (RSA_WEIGHT/14*COIN);
+    int64_t nValueIn = 0;
+	nValueIn = checking_local ? txPrev.vout[prevout.n].nValue + (RSA_WEIGHT/7*COIN) : txPrev.vout[prevout.n].nValue + (RSA_WEIGHT*COIN);
     CBigNum bnWeight = CBigNum(nValueIn);
     bnTarget *= bnWeight;
 
     targetProofOfStake = bnTarget.getuint256();
 	uint64_t nStakeModifier = 0;
-	nStakeModifier = pindexPrev->nHeight <= 86330 ? pindexPrev->nStakeModifier : pindexPrev->nBits;
+	nStakeModifier = (pindexPrev->nHeight <= 86330) ? pindexPrev->nStakeModifier : pindexPrev->nBits;
 
     int nStakeModifierHeight = pindexPrev->nHeight;
     int64_t nStakeModifierTime = pindexPrev->nTime;
 
     // Calculate hash
     CDataStream ss(SER_GETHASH, 0);
-	ss << nStakeModifier << nTimeBlockFrom << txPrev.nTime << prevout.hash << prevout.n << nTimeTx;
+	ss << nStakeModifier << nTimeBlockFrom << txPrev.nTime << prevout.hash << prevout.n << nTimeTx << RSA_WEIGHT;
 
     hashProofOfStake = Hash(ss.begin(), ss.end());
 
@@ -979,9 +980,10 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
 		{
 			uint256 diff1 = hashProofOfStake - targetProofOfStake;
 			uint256 diff2 = targetProofOfStake - hashProofOfStake;
-			return error("CheckProofOfStake() : INFO: check kernel failed on coinstake %s, Nonce %f, hashProof=%s, target=%s, offby1: %s, OffBy2: %s",
+			if (fDebug) printf("CheckProofOfStake() : INFO: check kernel failed on coinstake %s, Nonce %f, hashProof=%s, target=%s, offby1: %s, OffBy2: %s",
 				tx.GetHash().ToString().c_str(), (double)por_nonce, hashProofOfStake.ToString().c_str(), targetProofOfStake.ToString().c_str(), 
 				diff1.ToString().c_str(), diff2.ToString().c_str()); 
+		    return false;
 			// may occur during initial download or if behind on block chain sync
 
 		}

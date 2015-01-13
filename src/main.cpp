@@ -357,7 +357,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 114175;
+ int nGrandfather = 114792;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2892,6 +2892,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			int64_t nCalculatedResearchReward = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR, OUT_INTEREST,bb.RSAWeight);
 			if (nStakeReward > nCalculatedResearchReward*TOLERANCE_PERCENT)
 			{
+				   
 							return DoS(1, error("ConnectBlock() : Investor Reward pays too much : cpid %s (actual=%"PRId64" vs calculated=%"PRId64")",
 							bb.cpid.c_str(), nStakeReward, nCalculatedResearchReward));
 			}
@@ -2985,33 +2986,34 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 							if (nStakeReward > (nCalculatedResearch2*TOLERANCE_PERCENT))
 							{
 
-
 								TallyNetworkAverages(true);
-	
-
 								double user_magnitude = GetMagnitude(bb.cpid,1,false);
-								//return DoS(1, error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f", 						bb.cpid.c_str(), nStakeReward/C-o-IN, nCalculatedResearch/C-OIN, user_magnitude));
 								StructCPID UntrustedHost = mvMagnitudes[bb.cpid]; //Contains Mag across entire CPID
-
 								double owed_advanced = UntrustedHost.totalowed - UntrustedHost.payments;
 								bool complete_failure = true;
-								if (owed_advanced > -400 && UntrustedHost.Accuracy > 50) complete_failure=false;
+								if (owed_advanced > -400 && UntrustedHost.Accuracy > 50)  complete_failure=false;
 								if (owed_advanced < -400 || UntrustedHost.Accuracy <= 50) complete_failure=true;
+								if (owed_advanced < -1000)
+								{
+									//Ban the researcher if owed less than -1000grc
+									return DoS(100, error("ConnectBlock(): Hack Attempt! : Researchers Reward for CPID %s pays far too much: Owed %f,  (actual=%"PRId64" vs calculated=%"PRId64") Mag: %f",
+											(double)owed_advanced, bb.cpid.c_str(), nStakeReward/COIN, nCalculatedResearch2/COIN, user_magnitude));
+								}
 								if (complete_failure)
 								{
+								
 									return error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f",
 										bb.cpid.c_str(), nStakeReward/COIN, nCalculatedResearch2/COIN, user_magnitude);
 								}
-							}
-
-					}
+   						  }
+					 }
 				}
 			}
 		}
 	}
 
 	
-		AddNetworkMagnitude(nTime, bb.cpid, bb, mint, IsProofOfStake()); //Updates Total payments and Actual Magnitude per CPID
+	AddNetworkMagnitude(nTime, bb.cpid, bb, mint, IsProofOfStake()); //Updates Total payments and Actual Magnitude per CPID
 	
 	//  End of Network Consensus
 
@@ -3598,14 +3600,12 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
     			if (boincblock.projectname == "") 	return DoS(1,error("PoR Project Name invalid"));
 	    		if (boincblock.rac < 100) 			return DoS(1,error("RAC too low"));
 				//	cpidv2: CPID_(bb.cpid, bb.cpidv2, blockindex->pprev->GetBlockHash());
-				//if (!IsCPIDlidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,hashPrevBlock)) return DoS(1,error("Bad CPID"));
 				
 				//Block CPID 12-26-2014 hashPrevBlock->nHeight
 				if (!IsCPIDValidv2(boincblock,height1))
 				{
-						return DoS(10,error("Bad CPID : height %f, bad hashboinc %s",(double)height1,vtx[0].hashBoinc.c_str()));
+						return DoS(100,error("Bad CPID : height %f, bad hashboinc %s",(double)height1,vtx[0].hashBoinc.c_str()));
 				}
-
 
 			}
 
@@ -5410,7 +5410,7 @@ bool AcidTest(std::string precommand, std::string acid, CNode* pfrom)
 		std::string grid_pass =      vCommand[6];
 		std::string grid_pass_decrypted = AdvancedDecryptWithSalt(grid_pass,sboinchashargs);
 		
-		printf("*Org:%s; ",pub_key_prefix.c_str());
+		if (LessVerbose(100)) printf("*Org:%s; ",pub_key_prefix.c_str());
 		if (fDebug)	printf("*Org:%s;K:%s ",org.c_str(),pub_key_prefix.c_str());
 
 		if (grid_pass_decrypted != bhrn+nonce+org+pub_key_prefix) 

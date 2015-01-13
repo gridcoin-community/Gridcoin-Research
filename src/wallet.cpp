@@ -1655,12 +1655,12 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
         CTxIndex txindex;
         if (!txdb.ReadTxIndex(pcoin.first->GetHash(), txindex))
             continue;
-		//1-11-2015 
+		//1-12-2015 
         if (IsProtocolV2(nBestHeight+1))
         {
             if (nCurrentTime - pcoin.first->nTime > nStakeMinAge)
 			{
-                nWeight += (pcoin.first->vout[pcoin.second].nValue+(RSA_WEIGHT/14*COIN));
+                nWeight += (pcoin.first->vout[pcoin.second].nValue + (RSA_WEIGHT*COIN));
 			}
         }
         else
@@ -1677,9 +1677,6 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
     }
 	
 	
-	//HALFORD: (Blended Stake Weight includes RSA_WEIGHT):
-	//WEIGHT SECTION 1: When a new CPID enters the ecosystem
-	nWeight += (RSA_WEIGHT*10);
 	return true;
 }
 
@@ -1853,7 +1850,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);
 			//Note: At this point block.vtx[0] is still null, so we send the hashBoinc in separately
 		
-			//1-8-2015 - Add PoW nonce to POR - Halford
+			//1-12-2015 - Add PoW nonce to POR - Halford
 			//NetworkTimer();
 				
             if (CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, 
@@ -1862,7 +1859,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             {
 			
                 // Found a kernel
-                if (fDebug2)            printf("CreateCoinStake : kernel found\n");
+                if (fDebug)            printf("CreateCoinStake : kernel found\n");
 				//1-8-2015
 				WriteAppCache(pindexPrev->GetBlockHash().GetHex(),RoundToString(mdPORNonce,0));
 			   
@@ -1989,7 +1986,6 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     }
 
 	double MaxSubsidy = GetMaximumBoincSubsidy(GetAdjustedTime());
-	if (fDebug2) printf("ZXA1.");
 
     // Calculate coin age reward
     {

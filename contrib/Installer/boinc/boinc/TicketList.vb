@@ -3,17 +3,19 @@
 Public Class frmTicketList
     Public myGuid As String
     Public WithEvents cms As New ContextMenuStrip
+    Public sHandle As String
 
     Private Sub frmTicketList_Load(sender As System.Object, e As System.EventArgs) Handles MyBase.Load
         cmbFilter.Items.Add("My Tickets")
         cmbFilter.Items.Add("Notices")
         cmbFilter.Items.Add("All Tickets")
+        cmbFilter.Text = "My Tickets"
+        sHandle = KeyValue("handle")
 
         'Add Handlers for Ticket History Select
         AddHandler tvTicketHistory.AfterSelect, AddressOf TicketSelected
         AddHandler tvTicketHistory.MouseDown, AddressOf TicketRightClick
 
-        
         PopulateTickets()
 
 
@@ -40,31 +42,25 @@ Public Class frmTicketList
     End Sub
 
     Private Sub TicketSelected(ByVal sender As Object, ByVal e As TreeViewEventArgs)
-
-        Dim sID As String = tvTicketHistory.SelectedNode.Tag
-
-
-        Dim ta As New frmTicketAdd
-        ta.ShowTicket(sID)
-
-
+       
     End Sub
     Public Sub PopulateTickets()
         tvTicketHistory.Nodes.Clear()
         Dim sFilter As String = ""
         Select Case cmbFilter.Text
             Case "My Tickets"
-                sFilter = " where AssignedTo = 'Halford' "
+                sFilter = " where AssignedTo = '" + sHandle + "'"
+
             Case "All Tickets"
                 sFilter = ""
             Case "Notices"
-                sFilter = " where Type = 'Notices' "
+                sFilter = " where Type = 'Notice' "
         End Select
         Dim dr As GridcoinReader = mGetFilteredTickets(sFilter)
         If dr Is Nothing Then Exit Sub
         For i As Integer = 1 To dr.Rows
             'Dim Grr As GridcoinReader.GridcoinRow = dr.GetRow(i)
-            Dim sRow As String = dr.Value(i, "Disposition") + " - " + Mid(dr.Value(i, "Descrip"), 1, 80) _
+            Dim sRow As String = dr.Value(i, "SubmittedBy") + " - " + dr.Value(i, "Disposition") + " - " + Mid(dr.Value(i, "Descrip"), 1, 80) _
                                 + " - " + dr.Value(i, "AssignedTo") + " - " + dr.Value(i, "Added")
             Dim node As TreeNode = New TreeNode(sRow)
             ' node.Tag = dr.Value(i, "id").ToString()
@@ -87,6 +83,19 @@ Public Class frmTicketList
         Dim nt As New frmTicketAdd
         nt.AddTicket()
         nt.Show()
+
+    End Sub
+
+    Private Sub tvTicketHistory_AfterSelect(sender As System.Object, e As System.Windows.Forms.TreeViewEventArgs) Handles tvTicketHistory.AfterSelect
+
+    End Sub
+
+    Private Sub tvTicketHistory_DoubleClick(sender As Object, e As System.EventArgs) Handles tvTicketHistory.DoubleClick
+        System.Windows.Forms.Cursor.Current = Cursors.WaitCursor
+        Dim sID As String = tvTicketHistory.SelectedNode.Tag
+        Dim ta As New frmTicketAdd
+        ta.ShowTicket(sID)
+        System.Windows.Forms.Cursor.Current = Cursors.Default
 
     End Sub
 End Class

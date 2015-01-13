@@ -3,6 +3,7 @@ Imports System.Text
 Imports System.IO
 Imports Microsoft.VisualBasic
 Imports System.Net
+Imports System.Windows.Forms
 
 Public Class GridcoinReader
     Public Rows As Long
@@ -158,6 +159,7 @@ Public Class Sql
     Public Function GetGridcoinReader(Sql As String) As GridcoinReader
 
         Try
+            System.Windows.Forms.Cursor.Current = Cursors.WaitCursor
 
             Dim g As New GridcoinReader
 
@@ -194,10 +196,12 @@ Public Class Sql
                         oValue = CInt(vRow(y))
                     ElseIf sType = "SYSTEM.DATETIME" Then
                         '12-17-2014 - Add support for dd-mm-yyyy date format for global cultures
-                        Dim global_date_style As System.Globalization.DateTimeStyles
-                        Dim culture As Globalization.CultureInfo = Globalization.CultureInfo.CreateSpecificCulture("en-US")
-                        oValue = Now
-                        Dim good_date As Boolean = DateTime.TryParseExact(vRow(y), "MM/dd/yyyy hh:mm:ss tt", culture, Globalization.DateTimeStyles.None, oValue)
+                        'Dim global_date_style As System.Globalization.DateTimeStyles
+                        'Dim culture As Globalization.CultureInfo = Globalization.CultureInfo.CreateSpecificCulture("en-US")
+                        oValue = CDate(vRow(y))
+
+                        'Dim good_date As Boolean = DateTime.TryParseExact(vRow(y), "MM/dd/yyyy hh:mm:ss tt", culture, Globalization.DateTimeStyles.None, oValue)
+
                     ElseIf sType = "SYSTEM.DECIMAL" Then
                         oValue = CDbl("0" & vRow(y))
 
@@ -209,13 +213,17 @@ Public Class Sql
                 Next
                 g.AddRow(gr)
             Next z
+            System.Windows.Forms.Cursor.Current = Cursors.Default
 
             Return g
         Catch ex As Exception
             Log("GetGridcoinReader:" + Sql + ":" + ex.Message)
+            System.Windows.Forms.Cursor.Current = Cursors.Default
+
 
             If bThrowUIErrors Then Throw ex
         End Try
+        System.Windows.Forms.Cursor.Current = Cursors.Default
 
 
     End Function

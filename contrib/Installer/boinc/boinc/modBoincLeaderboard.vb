@@ -24,16 +24,39 @@
         Return sErr
     End Function
 
-    Public Function mInsertTicket(sTicketId As String, sAssignedTo As String, sDisposition As String, sDesc As String, sType As String, sNotes As String) As String
+
+
+    Public Function mInsertUser(sHandle As String, sGRCaddress As String) As String
         If mData Is Nothing Then mData = New Sql
-        Dim sInsert As String
-        sInsert = "<INSERT><TABLE>Ticket</TABLE><FIELDS>TicketId,AssignedTo,Disposition,Descript,Type</FIELDS><VALUES>'" _
-            + Trim(sTicketId) + "','" + Trim(sAssignedTo) + "','" + Trim(sDisposition) + "','" + Trim(sDesc) + "','" + Trim(sType) + "'</VALUES></INSERT>"
         Dim sErr As String = ""
-        sErr = mData.ExecuteP2P(sInsert)
+        Dim sInsert As String
+        sInsert = "<INSERT><TABLE>Users</TABLE><FIELDS>Handle,GRCAddress</FIELDS><VALUES>'" _
+            + Trim(sHandle) + "','" + Trim(sGRCaddress) + "'</VALUES></INSERT>"
+            sErr = mData.ExecuteP2P(sInsert)
         If Len(sErr) > 1 Then
-            MsgBox(sErr, MsgBoxStyle.Critical, "Error while Creating Ticket")
+            MsgBox(sErr, MsgBoxStyle.Critical, "Error while Adding User")
             Exit Function
+        End If
+        Return sErr
+    End Function
+
+
+    Public Function mInsertTicket(sMode As String, sSubmittedBy As String, sTicketId As String, sAssignedTo As String, sDisposition As String, sDesc As String, sType As String, sNotes As String) As String
+        If mData Is Nothing Then mData = New Sql
+        Dim sErr As String = ""
+        Dim sInsert As String
+
+        If sMode = "Add" Then
+
+            sInsert = "<INSERT><TABLE>Ticket</TABLE><FIELDS>TicketId,SubmittedBy,AssignedTo,Disposition,Descript,Type</FIELDS><VALUES>'" _
+            + Trim(sTicketId) + "','" + Trim(sSubmittedBy) + "','" + Trim(sAssignedTo) + "','" + Trim(sDisposition) + "','" + Trim(sDesc) + "','" + Trim(sType) + "'</VALUES></INSERT>"
+            sErr = mData.ExecuteP2P(sInsert)
+
+            If Len(sErr) > 1 Then
+                MsgBox(sErr, MsgBoxStyle.Critical, "Error while Creating Ticket")
+                Exit Function
+            End If
+
         End If
         'Retrieve ticket Guid
         Dim sGuid As String = P2PValue("id", "Ticket", "TicketId", sTicketId)
@@ -126,7 +149,35 @@
 
 
         Dim sql As String
-        sql = "Select * From TicketHistory where Parent='" + myGuid + "'"
+        sql = "Select * From TicketHistory where Parent='" + myGuid + "' Order By Added"
+        Try
+            dr = mData.GetGridcoinReader(sql)
+        Catch ex As Exception
+            Return dr
+        End Try
+        Return dr
+    End Function
+
+    Public Function mGetUsers() As GridcoinReader
+        If mData Is Nothing Then mData = New Sql
+        Dim dr As GridcoinReader
+        Dim sql As String
+        sql = "Select * From Users where deleted=0"
+        Try
+            dr = mData.GetGridcoinReader(sql)
+        Catch ex As Exception
+            Return dr
+        End Try
+        Return dr
+    End Function
+
+
+
+    Public Function mGetTicket(sTicketID As String) As GridcoinReader
+        If mData Is Nothing Then mData = New Sql
+        Dim dr As GridcoinReader
+        Dim sql As String
+        sql = "Select * From Ticket where ticketid='" + sTicketID + "'"
         Try
             dr = mData.GetGridcoinReader(sql)
         Catch ex As Exception
