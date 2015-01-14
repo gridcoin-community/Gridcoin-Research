@@ -698,10 +698,15 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
         }
 
         // Process this block the same as if we had received it from another node
-        if (!ProcessBlock(NULL, pblock, true))
+		//Halford - 1-14-2015 - Ensure Blocks have a minimum time spacing
+		if (!IsLockTimeWithinMinutes(nLastBlockSubmitted,5)) 
 		{
-			msMiningErrors6="Block vehemently rejected.";
-	        return error("CheckStake() : ProcessBlock (by me), but block not accepted");
+			nLastBlockSubmitted = GetAdjustedTime();
+			if (!ProcessBlock(NULL, pblock, true))
+			{
+				msMiningErrors6="Block vehemently rejected.";
+				return error("CheckStake() : ProcessBlock (by me), but block not accepted");
+			}
 		}
     }
 	nLastBlockSolved = GetAdjustedTime();

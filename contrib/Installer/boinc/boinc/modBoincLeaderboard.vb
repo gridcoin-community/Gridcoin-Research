@@ -120,19 +120,27 @@
       
     End Function
 
-    Public Function mGetFilteredTickets(sFilter As String) As GridcoinReader
+    Public Function mGetFilteredTickets(sFilter As String, sAssignedTo As String) As GridcoinReader
         If mData Is Nothing Then mData = New Sql
 
         Dim dr As GridcoinReader
         Dim sql As String
+        Dim sClause As String = ""
+        If Len(sAssignedTo) > 1 Then
+            sClause = " and id in (select a.parent from ( select Parent,max(updated) as maxdate      FROM ticketHistory" _
+                & "   group by ticketHistory.parent) " _
+                & "   a     inner join TicketHistory as TH on th.parent = A.parent and th.updated = a.maxdate   where th.assignedTo='" + sAssignedTo + "'   )"
+        End If
 
-        
-
-        sql = "Select * From Ticket " + sFilter
+        sql = "Select * From Ticket " + sFilter + " " + sClause
 
         Try
+            Log(sql)
+
             dr = mData.GetGridcoinReader(sql)
         Catch ex As Exception
+            Log(sql + " : err Description: " + ex.Message)
+
             Return dr
         End Try
         Return dr

@@ -105,6 +105,8 @@ json_spirit::Array MagnitudeReportCSV(bool detail);
 
 bool bNewUserWizardNotified = false;
 int64_t nLastBlockSolved = 0;  //Future timestamp
+int64_t nLastBlockSubmitted = 0;
+
 uint256 muGlobalCheckpointHash = 0;
 uint256 muGlobalCheckpointHashRelayed = 0;
 int muGlobalCheckpointHashCounter = 0;
@@ -2865,7 +2867,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
         mapQueuedChanges[hashTx] = CTxIndex(posThisTx, tx.vout.size());
     }
 
-    if (IsProofOfWork())
+    if (IsProofOfWork() && pindex->nHeight > nGrandfather)
     {
         int64_t nReward = GetProofOfWorkMaxReward(nFees,nTime,pindex->nHeight);
         // Check coinbase reward
@@ -2879,7 +2881,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 	uint64_t nCoinAge = 0;
         
-    if (IsProofOfStake())
+    if (IsProofOfStake() && pindex->nHeight > nGrandfather)
     {
         // ppcoin: coin stake tx earns reward instead of paying fee
         if (!vtx[1].GetCoinAge(txdb, nCoinAge))
@@ -2889,8 +2891,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 		if (nStakeReward > nCalculatedStakeReward)
             return DoS(1, error("ConnectBlock() : coinstake pays above maximum (actual=%"PRId64" vs calculated=%"PRId64")", nStakeReward, nCalculatedStakeReward));
-		//nTime
-		//if (LockTimeRecent(GetBlockTime()) && bb.cpid=="INVESTOR" && nStakeReward > 1)
 		
 		if (!ClientOutOfSync() && bb.cpid=="INVESTOR" && nStakeReward > 1)
 		{
@@ -3285,7 +3285,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 					//10-30-2014 - Halford - Reboot when reorganize fails 3 times
 					REORGANIZE_FAILED++;
 
-					std::string suppressreboot = GetArg("-suppressreboot", "false");
+					std::string suppressreboot = GetArg("-suppressreboot", "true");
 					if (suppressreboot!="true")
 					{
 						if (REORGANIZE_FAILED==100)

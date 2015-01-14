@@ -127,9 +127,6 @@ Public Class Form1
         x.ShowTicketList()
         x.InsertConfirm("120<COL>abc<COL>bcd<COL>xxx")
 
-
-
-        
     End Sub
 
 

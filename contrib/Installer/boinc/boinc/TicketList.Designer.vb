@@ -32,7 +32,7 @@ Partial Class frmTicketList
         '
         Me.Label3.AutoSize = True
         Me.Label3.ForeColor = System.Drawing.Color.Lime
-        Me.Label3.Location = New System.Drawing.Point(26, 16)
+        Me.Label3.Location = New System.Drawing.Point(12, 16)
         Me.Label3.Name = "Label3"
         Me.Label3.Size = New System.Drawing.Size(90, 13)
         Me.Label3.TabIndex = 5
@@ -43,7 +43,7 @@ Partial Class frmTicketList
         Me.cmbFilter.BackColor = System.Drawing.Color.FromArgb(CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer))
         Me.cmbFilter.ForeColor = System.Drawing.Color.Lime
         Me.cmbFilter.FormattingEnabled = True
-        Me.cmbFilter.Location = New System.Drawing.Point(122, 8)
+        Me.cmbFilter.Location = New System.Drawing.Point(108, 8)
         Me.cmbFilter.Name = "cmbFilter"
         Me.cmbFilter.Size = New System.Drawing.Size(302, 21)
         Me.cmbFilter.TabIndex = 14
@@ -55,18 +55,18 @@ Partial Class frmTicketList
             Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
         Me.tvTicketHistory.BackColor = System.Drawing.Color.FromArgb(CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer))
         Me.tvTicketHistory.ForeColor = System.Drawing.Color.Lime
-        Me.tvTicketHistory.Location = New System.Drawing.Point(29, 47)
+        Me.tvTicketHistory.Location = New System.Drawing.Point(12, 47)
         Me.tvTicketHistory.Name = "tvTicketHistory"
-        Me.tvTicketHistory.Size = New System.Drawing.Size(817, 584)
+        Me.tvTicketHistory.Size = New System.Drawing.Size(878, 607)
         Me.tvTicketHistory.TabIndex = 16
         '
         'btnAdd
         '
         Me.btnAdd.BackColor = System.Drawing.Color.Gray
         Me.btnAdd.ForeColor = System.Drawing.Color.Lime
-        Me.btnAdd.Location = New System.Drawing.Point(430, 3)
+        Me.btnAdd.Location = New System.Drawing.Point(430, 8)
         Me.btnAdd.Name = "btnAdd"
-        Me.btnAdd.Size = New System.Drawing.Size(78, 29)
+        Me.btnAdd.Size = New System.Drawing.Size(78, 24)
         Me.btnAdd.TabIndex = 15
         Me.btnAdd.Text = "Add"
         Me.btnAdd.UseVisualStyleBackColor = False
@@ -76,7 +76,7 @@ Partial Class frmTicketList
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.BackColor = System.Drawing.Color.Black
-        Me.ClientSize = New System.Drawing.Size(937, 666)
+        Me.ClientSize = New System.Drawing.Size(902, 666)
         Me.Controls.Add(Me.tvTicketHistory)
         Me.Controls.Add(Me.btnAdd)
         Me.Controls.Add(Me.cmbFilter)

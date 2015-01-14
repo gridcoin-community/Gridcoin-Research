@@ -13,7 +13,7 @@ Public Class frmTicketList
         sHandle = KeyValue("handle")
 
         'Add Handlers for Ticket History Select
-        AddHandler tvTicketHistory.AfterSelect, AddressOf TicketSelected
+        '  AddHandler tvTicketHistory.AfterSelect, AddressOf TicketSelected
         AddHandler tvTicketHistory.MouseDown, AddressOf TicketRightClick
 
         PopulateTickets()
@@ -41,22 +41,32 @@ Public Class frmTicketList
 
     End Sub
 
-    Private Sub TicketSelected(ByVal sender As Object, ByVal e As TreeViewEventArgs)
-       
+    Private Sub TicketSelected(ByVal sender As Object, ByVal e As System.EventArgs)
+
+        Dim sID As String = tvTicketHistory.SelectedNode.Tag
+        Dim ta As New frmTicketAdd
+        ta.ShowTicket(sID)
+
+
     End Sub
     Public Sub PopulateTickets()
         tvTicketHistory.Nodes.Clear()
         Dim sFilter As String = ""
+        sHandle = KeyValue("handle")
+        Dim sAssignedTo As String = ""
+
         Select Case cmbFilter.Text
             Case "My Tickets"
-                sFilter = " where AssignedTo = '" + sHandle + "'"
+                sFilter = " where 1=1 "
+                sAssignedTo = sHandle
 
             Case "All Tickets"
-                sFilter = ""
+                sFilter = " where 1=1 "
             Case "Notices"
                 sFilter = " where Type = 'Notice' "
         End Select
-        Dim dr As GridcoinReader = mGetFilteredTickets(sFilter)
+        Dim dr As GridcoinReader = mGetFilteredTickets(sFilter, sAssignedTo)
+
         If dr Is Nothing Then Exit Sub
         For i As Integer = 1 To dr.Rows
             'Dim Grr As GridcoinReader.GridcoinRow = dr.GetRow(i)
@@ -93,11 +103,11 @@ Public Class frmTicketList
     End Sub
 
     Private Sub tvTicketHistory_DoubleClick(sender As Object, e As System.EventArgs) Handles tvTicketHistory.DoubleClick
-        System.Windows.Forms.Cursor.Current = Cursors.WaitCursor
+        ' System.Windows.Forms.Cursor.Current = Cursors.WaitCursor
         Dim sID As String = tvTicketHistory.SelectedNode.Tag
         Dim ta As New frmTicketAdd
         ta.ShowTicket(sID)
-        System.Windows.Forms.Cursor.Current = Cursors.Default
+        'System.Windows.Forms.Cursor.Current = Cursors.Default
 
     End Sub
 End Class
