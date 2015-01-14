@@ -807,6 +807,8 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 	int oNC = 0;
  	double coin_age = std::abs((double)nTimeTx-(double)txPrev.nTime);
 	double BitsAge = PORDiff * 144; //For every 100 Diff in Bits, two hours of coin age for researchers
+	if (BitsAge > 86400) BitsAge=86400; //Limit to 24 hours (possibility of astronomical diff)
+
 
 
 	//Halford 1-4-2015 : Explain to the Researcher why they are not staking:

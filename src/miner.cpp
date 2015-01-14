@@ -829,7 +829,7 @@ Begin:
 
 		//Verify we are still on the main chain
 	
-		if (IsLockTimeWithinMinutes(nLastBlockSolved,3)) 
+		if (IsLockTimeWithinMinutes(nLastBlockSolved,8)) 
 		{
 				if (fDebug) printf("=");
 				MilliSleep(200);

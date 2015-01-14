@@ -24,8 +24,6 @@
         Return sErr
     End Function
 
-
-
     Public Function mInsertUser(sHandle As String, sGRCaddress As String) As String
         If mData Is Nothing Then mData = New Sql
         Dim sErr As String = ""

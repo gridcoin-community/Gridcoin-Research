@@ -109,16 +109,17 @@ Public Class Sql
     Public Function GetMasterNodeURL()
         'Find the node that is currently the leader, with a synced consensus:
         Dim sHost As String
-        sHost = "gridsql.gridcoin.us:32500"
+        sHost = DefaultHostName("p2psql.gridcoin.us", False) + ":" + Trim(DefaultPort(32500, False))
+
         Return sHost
     End Function
     Public Function SQLQuery(sHost As String, sSQL As String) As String
         Dim sURL As String
-        sURL = "http://" + sHost + "/index.html?query="
+        sURL = "http://" + sHost + "/p2psql.aspx?query="
         sSQL = Replace(sSQL, vbCr, "<CR>")
 
         sSQL = Replace(sSQL, vbLf, "<LF>")
-        For x = 1 To 9
+        For x = 1 To 3
             Try
                 Dim wc As New GRCWebClient
                 Using wc
@@ -143,7 +144,7 @@ Public Class Sql
         Dim sData As String = ""
         System.Windows.Forms.Cursor.Current = Cursors.WaitCursor
 
-        For x = 1 To 9
+        For x = 1 To 3
             Try
                 sHost = GetMasterNodeURL()
                 sData = SQLQuery(sHost, sCommand)

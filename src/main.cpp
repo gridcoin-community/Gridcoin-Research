@@ -353,11 +353,10 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors5 = "";
  std::string    msMiningErrors6 = "";
  std::string    msMiningErrors7 = "";
-
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 115261;
+ int nGrandfather = 115765;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2202,6 +2201,14 @@ static unsigned int GetNextTargetRequiredV2(const CBlockIndex* pindexLast, bool 
 	{
 		    return bnTargetLimit.GetCompact(); 
 	}
+
+	//1-14-2015 R Halford - Make diff reset to zero after periods of exploding diff:
+	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+	if (PORDiff > 900000)
+	{
+		    return bnTargetLimit.GetCompact(); 
+	}
+		
 
 	//nTargetTimespan = 16 * 60;  // 16 mins  (TargetSpacing = 64);  nInterval = 15 min
 

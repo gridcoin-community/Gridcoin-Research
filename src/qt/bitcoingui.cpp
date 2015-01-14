@@ -745,6 +745,9 @@ void BitcoinGUI::createActions()
 	tickerAction->setStatusTip(tr("Live Ticker"));
 	tickerAction->setMenuRole(QAction::TextHeuristicRole);
 
+	ticketListAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Tickets"), this);
+	ticketListAction->setStatusTip(tr("Tickets"));
+	ticketListAction->setMenuRole(QAction::TextHeuristicRole);
 
 
 //	leaderboardAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Leaderboard"), this);
@@ -798,6 +801,8 @@ void BitcoinGUI::createActions()
 	connect(rebootAction, SIGNAL(triggered()), this, SLOT(rebootClicked()));
 	connect(sqlAction, SIGNAL(triggered()), this, SLOT(sqlClicked()));
 	connect(tickerAction, SIGNAL(triggered()), this, SLOT(tickerClicked()));
+
+	connect(ticketListAction, SIGNAL(triggered()), this, SLOT(ticketListClicked()));
 
 	//connect(leaderboardAction, SIGNAL(triggered()), this, SLOT(leaderboardClicked()));
 
@@ -863,6 +868,7 @@ void BitcoinGUI::createMenuBar()
 	qmAdvanced->addAction(sqlAction);
 	qmAdvanced->addAction(tickerAction);
 
+	qmAdvanced->addAction(ticketListAction);
 
 
 //	QMenu *leaderboard = appMenuBar->addMenu(tr("&Leaderboard"));
@@ -1476,6 +1482,19 @@ void BitcoinGUI::sqlClicked()
 		globalcom = new QAxObject("BoincStake.Utilization");
 	}
     globalcom->dynamicCall("ShowSql()");
+#endif
+
+}
+
+
+void BitcoinGUI::ticketListClicked()
+{
+#ifdef WIN32
+	if (!globalcom)
+	{
+		globalcom = new QAxObject("BoincStake.Utilization");
+	}
+    globalcom->dynamicCall("ShowTicketList()");
 #endif
 
 }
