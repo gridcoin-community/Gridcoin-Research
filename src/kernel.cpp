@@ -465,7 +465,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	if (checking_local) msMiningErrors2 = "RRSA: " + RoundToString(RSA_WEIGHT,0);
 
 
-	//WEIGHT MODIFICATION SECTION 2: Newbie stake allowance (11-13-2014)
+	//WEIGHT MODIFICATION SECTION 2: Newbie stake allowance
 	//std::string sSubsidy = RoundToString(subsidy,4);
 	//uint64_t nNetworkWeight = GetPoSKernelPS2();
 	//int64_t Weight(int64_t nIntervalBeginning, int64_t nIntervalEnd)
@@ -865,7 +865,7 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 
     // Weighted target 1-11-2015 Halford
     int64_t nValueIn = 0;
-	nValueIn = checking_local ? txPrev.vout[prevout.n].nValue + (RSA_WEIGHT/7*COIN) : txPrev.vout[prevout.n].nValue + (RSA_WEIGHT*COIN);
+	nValueIn = checking_local ? txPrev.vout[prevout.n].nValue + (RSA_WEIGHT/14*COIN) : txPrev.vout[prevout.n].nValue + (RSA_WEIGHT*COIN);
     CBigNum bnWeight = CBigNum(nValueIn);
     bnTarget *= bnWeight;
 

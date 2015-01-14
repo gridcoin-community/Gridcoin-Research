@@ -32,7 +32,7 @@ Partial Class frmTicketList
         '
         Me.Label3.AutoSize = True
         Me.Label3.ForeColor = System.Drawing.Color.Lime
-        Me.Label3.Location = New System.Drawing.Point(70, 22)
+        Me.Label3.Location = New System.Drawing.Point(26, 16)
         Me.Label3.Name = "Label3"
         Me.Label3.Size = New System.Drawing.Size(90, 13)
         Me.Label3.TabIndex = 5
@@ -43,7 +43,7 @@ Partial Class frmTicketList
         Me.cmbFilter.BackColor = System.Drawing.Color.FromArgb(CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer))
         Me.cmbFilter.ForeColor = System.Drawing.Color.Lime
         Me.cmbFilter.FormattingEnabled = True
-        Me.cmbFilter.Location = New System.Drawing.Point(171, 13)
+        Me.cmbFilter.Location = New System.Drawing.Point(122, 8)
         Me.cmbFilter.Name = "cmbFilter"
         Me.cmbFilter.Size = New System.Drawing.Size(302, 21)
         Me.cmbFilter.TabIndex = 14
@@ -55,16 +55,16 @@ Partial Class frmTicketList
             Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
         Me.tvTicketHistory.BackColor = System.Drawing.Color.FromArgb(CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer))
         Me.tvTicketHistory.ForeColor = System.Drawing.Color.Lime
-        Me.tvTicketHistory.Location = New System.Drawing.Point(73, 59)
+        Me.tvTicketHistory.Location = New System.Drawing.Point(29, 47)
         Me.tvTicketHistory.Name = "tvTicketHistory"
-        Me.tvTicketHistory.Size = New System.Drawing.Size(745, 475)
+        Me.tvTicketHistory.Size = New System.Drawing.Size(817, 584)
         Me.tvTicketHistory.TabIndex = 16
         '
         'btnAdd
         '
         Me.btnAdd.BackColor = System.Drawing.Color.Gray
         Me.btnAdd.ForeColor = System.Drawing.Color.Lime
-        Me.btnAdd.Location = New System.Drawing.Point(726, 14)
+        Me.btnAdd.Location = New System.Drawing.Point(430, 3)
         Me.btnAdd.Name = "btnAdd"
         Me.btnAdd.Size = New System.Drawing.Size(78, 29)
         Me.btnAdd.TabIndex = 15

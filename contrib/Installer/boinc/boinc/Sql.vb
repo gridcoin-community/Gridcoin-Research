@@ -141,19 +141,33 @@ Public Class Sql
     Public Function ExecuteP2P(sCommand As String) As String
         Dim sHost As String
         Dim sData As String = ""
+        System.Windows.Forms.Cursor.Current = Cursors.WaitCursor
+
         For x = 1 To 9
             Try
                 sHost = GetMasterNodeURL()
                 sData = SQLQuery(sHost, sCommand)
-                If sData = "" Then Return sData
-                If sData <> "" And x = 9 Then Return sData
+                If sData = "" Then
+                    System.Windows.Forms.Cursor.Current = Cursors.Default
+                    Return sData
+
+                End If
+                If sData <> "" And x = 9 Then
+                    System.Windows.Forms.Cursor.Current = Cursors.Default
+
+                    Return sData
+
+                End If
 
             Catch ex As Exception
                 Log(ex.Message)
                 'Throw ex
+                System.Windows.Forms.Cursor.Current = Cursors.Default
+
                 If x = 9 Then Return ex.Message
             End Try
         Next x
+        System.Windows.Forms.Cursor.Current = Cursors.Default
 
     End Function
     Public Function GetGridcoinReader(Sql As String) As GridcoinReader

@@ -357,7 +357,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 114792;
+ int nGrandfather = 115237;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2996,14 +2996,14 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 								if (owed_advanced < -1000)
 								{
 									//Ban the researcher if owed less than -1000grc
-									return DoS(100, error("ConnectBlock(): Hack Attempt! : Researchers Reward for CPID %s pays far too much: Owed %f,  (actual=%"PRId64" vs calculated=%"PRId64") Mag: %f",
-											(double)owed_advanced, bb.cpid.c_str(), nStakeReward/COIN, nCalculatedResearch2/COIN, user_magnitude));
+									return DoS(100, error("ConnectBlock(): Hack Attempt! : Researchers Reward for CPID %s pays far too much: Owed %f,  (actual=%"PRId64" vs calculated=%"PRId64") Mag: %f, hash %s",
+											(double)owed_advanced, bb.cpid.c_str(), nStakeReward/COIN, nCalculatedResearch2/COIN, user_magnitude,vtx[0].hashBoinc.c_str()));
 								}
 								if (complete_failure)
 								{
 								
-									return error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f",
-										bb.cpid.c_str(), nStakeReward/COIN, nCalculatedResearch2/COIN, user_magnitude);
+									return DoS(20, error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f, Hash: %s",
+										bb.cpid.c_str(), nStakeReward/COIN, nCalculatedResearch2/COIN, user_magnitude, vtx[0].hashBoinc.c_str()));
 								}
    						  }
 					 }

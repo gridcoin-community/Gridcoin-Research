@@ -1655,7 +1655,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
         CTxIndex txindex;
         if (!txdb.ReadTxIndex(pcoin.first->GetHash(), txindex))
             continue;
-		//1-12-2015 
+		//1-13-2015 
         if (IsProtocolV2(nBestHeight+1))
         {
             if (nCurrentTime - pcoin.first->nTime > nStakeMinAge)

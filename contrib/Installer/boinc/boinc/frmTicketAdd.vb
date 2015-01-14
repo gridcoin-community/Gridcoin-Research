@@ -14,10 +14,12 @@ Public Class frmTicketAdd
             sHandle = InputBox("To use the ticket system you must have a handle (IE a nickname).  Please enter a handle >", "Please Enter Username", "")
             UpdateKey("Handle", sHandle)
             'Add the Handle to Users
-            mInsertUser(sHandle, "")
-
+      
         End If
         cmbAssignedTo.Items.Clear()
+
+        mInsertUser(sHandle, "")
+
 
         txtSubmittedBy.Text = sHandle
 
@@ -77,7 +79,6 @@ Public Class frmTicketAdd
         Dim sID As String = tvTicketHistory.SelectedNode.Tag
         'Show the history for this selected row
         rtbNotes.Text = NormalizeNote(drHistory.Value(Val(sID), "Notes"))
-
         cmbAssignedTo.Text = drHistory.Value(Val(sID), "AssignedTo")
         cmbDisposition.Text = drHistory.Value(Val(sID), "Disposition")
 
@@ -107,10 +108,8 @@ Public Class frmTicketAdd
         cmbType.Text = dr.Value(1, "Type")
         txtTicketId.Text = sId
         txtDescription.Text = dr.Value(1, "Descript")
-        
         Call PopulateHistory()
         SetViewMode()
-
         Me.TopMost = True
 
     End Sub
@@ -135,6 +134,7 @@ Public Class frmTicketAdd
     Private Sub btnSubmit_Click(sender As System.Object, e As System.EventArgs) Handles btnSubmit.Click
         ' Add the new ticket
 
+
         If Len(sHandle) = 0 Then
             MsgBox("Handle Empty", MsgBoxStyle.Critical)
             Exit Sub
@@ -152,48 +152,51 @@ Public Class frmTicketAdd
             MsgBox("Description And Notes must be populated with data.", MsgBoxStyle.Critical)
             Exit Sub
         End If
+
+        
         'Me.BackColor = Drawing.Color.Transparent
-        btnSubmit.Enabled = False
-        System.Windows.Forms.Cursor.Current = Cursors.WaitCursor
+        'btnSubmit.Enabled = False
+        '  System.Windows.Forms.Cursor.Current = Cursors.WaitCursor
 
         'Me.Refresh()
 
         mInsertTicket(Mode, txtSubmittedBy.Text, txtTicketId.Text, cmbAssignedTo.Text, cmbDisposition.Text, txtDescription.Text, cmbType.Text, rtbNotes.Text)
+
+
         PopulateHistory()
         SetViewMode()
         ' Me.BackColor = Drawing.Color.Black
+        mfrmTicketList.PopulateTickets()
+
         btnSubmit.Enabled = True
         System.Windows.Forms.Cursor.Current = Cursors.Default
+        'Refresh the ticket list
+        '      Me.BringToFront()
 
 
     End Sub
 
 
     Public Sub PopulateHistory()
-
-        Dim count As Integer
         tvTicketHistory.Nodes.Clear()
         drHistory = mGetTicketHistory(txtTicketId.Text)
         If drHistory Is Nothing Then Exit Sub
         For i As Integer = 1 To drHistory.Rows
-            Dim sRow As String = drHistory.Value(i, "Disposition") + " - " + Mid(NormalizeNoteRow(drHistory.Value(i, "notes")), 1, 80) _
+            Dim sRow As String = drHistory.Value(i, "Disposition") + " - " _
+                                 + Mid(NormalizeNoteRow(drHistory.Value(i, "notes")), 1, 80) _
                                 + " - " + drHistory.Value(i, "AssignedTo") + " - " + drHistory.Value(i, "updated")
             Dim node As TreeNode = New TreeNode(sRow)
-            'node.Tag = drHistory.Value(i, "id").ToString()
             node.Tag = i
-
             tvTicketHistory.Nodes.Add(node)
             rtbNotes.Text = NormalizeNote(drHistory.Value(i, "Notes"))
-
             cmbAssignedTo.Text = drHistory.Value(1, "AssignedTo")
             cmbDisposition.Text = drHistory.Value(1, "Disposition")
-            '            cmbType.Text = dr.Value(1, "Type")
-            '            txtTicketId.Text = sId
-            '            txtDescription.Text = dr.Value(1, "Descript")
-
-
+           
 
         Next i
+
+
+
     End Sub
 
     Private Sub btnRefresh_Click(sender As System.Object, e As System.EventArgs)
@@ -208,9 +211,7 @@ Public Class frmTicketAdd
 
     End Sub
 
-    
+    Private Sub cmbDisposition_SelectedIndexChanged(sender As System.Object, e As System.EventArgs) Handles cmbDisposition.SelectedIndexChanged
 
-    Private Sub cmbType_Validating(sender As Object, e As System.ComponentModel.CancelEventArgs) Handles cmbType.Validating
-        
     End Sub
 End Class

@@ -60,8 +60,10 @@ Public Class frmTicketList
         If dr Is Nothing Then Exit Sub
         For i As Integer = 1 To dr.Rows
             'Dim Grr As GridcoinReader.GridcoinRow = dr.GetRow(i)
-            Dim sRow As String = dr.Value(i, "SubmittedBy") + " - " + dr.Value(i, "Disposition") + " - " + Mid(dr.Value(i, "Descrip"), 1, 80) _
-                                + " - " + dr.Value(i, "AssignedTo") + " - " + dr.Value(i, "Added")
+            Dim sRow As String = dr.Value(i, "TicketId").ToString() + " - " + dr.Value(i, "SubmittedBy") _
+                                 + " - " + dr.Value(i, "Type") + " - " + dr.Value(i, "Disposition") _
+                                 + " - " + Mid(dr.Value(i, "Descript"), 1, 80) _
+                                 + " - " + dr.Value(i, "AssignedTo") + " - " + dr.Value(i, "Added")
             Dim node As TreeNode = New TreeNode(sRow)
             ' node.Tag = dr.Value(i, "id").ToString()
             node.Tag = dr.Value(i, "ticketId").ToString()

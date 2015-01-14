@@ -34,7 +34,7 @@
             + Trim(sHandle) + "','" + Trim(sGRCaddress) + "'</VALUES></INSERT>"
             sErr = mData.ExecuteP2P(sInsert)
         If Len(sErr) > 1 Then
-            MsgBox(sErr, MsgBoxStyle.Critical, "Error while Adding User")
+            'MsgBox(sErr, MsgBoxStyle.Critical, "Error while Adding User")
             Exit Function
         End If
         Return sErr
