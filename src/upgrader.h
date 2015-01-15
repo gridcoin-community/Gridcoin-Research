@@ -30,7 +30,7 @@ class Upgrader
 {
 
 private:
-
+    boost::thread downloadThread;
     boost::mutex targetmutex;
     boost::mutex cancelmutex;
     bool fileInitialized = false;
@@ -44,9 +44,11 @@ private:
     bool copyDir(boost::filesystem::path source, boost::filesystem::path target, bool recursive);
     bool safeProgramDir();
     boost::filesystem::path path(int pathfork);
-    int globaltarget;
+    int globaltarget = -1;
 
 public:
+
+    ~Upgrader();
 
     bool downloader (int target);
     bool unzipper   (int target);
@@ -70,13 +72,5 @@ public:
     int getTarget() {return globaltarget;};
 
 };
-
-// struct downloaderArgs
-// {
-//     Upgrader *upgrader;
-//     int target = -1;
-// }extern argo;
-
-// Placed in a dedicated thread to run downloader from upgrader
 
 #endif

@@ -24,6 +24,7 @@ private:
     Ui::UpgradeDialog *ui;
     ClientModel *clientModel;
     int target;
+    boost::thread downloadThread;
 
 private slots:
     void on_retryDownloadButton_clicked();

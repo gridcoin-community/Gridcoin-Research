@@ -88,7 +88,7 @@ void UpgradeDialog::blocks()
 
 void UpgradeDialog::initialize(int targo)
 {
-    if(upgrader.downloading() && upgrader.getTarget()!=targo)
+    if(upgrader.getTarget()!=-1 && upgrader.getTarget()!=targo && (upgrader.downloadSuccess() || upgrader.downloading()))
     {
         QMessageBox changeDownload;
         changeDownload.setWindowTitle((targo == QT)? "Already downloading blocks" : "Already upgrading client");
@@ -103,10 +103,11 @@ void UpgradeDialog::initialize(int targo)
         if (changeDownload.exec() == QMessageBox::Yes) 
             {
                 upgrader.cancelDownload(true);
+                downloadThread.join();
             }
         // delete horizontalSpacer;
     }
-    if (!upgrader.downloading() && !upgrader.downloadSuccess())
+    if (!upgrader.downloading() && (!upgrader.downloadSuccess() || (upgrader.getTarget()!=-1 && upgrader.getTarget()!=targo)))
     {
     // re-instantiate Upgrade, in case download was broken off previously
     target = targo;
@@ -115,8 +116,7 @@ void UpgradeDialog::initialize(int targo)
             printf("Upgrader already busy\n");
             return;
         }
-
-    boost::thread(Imker, &upgrader);
+    downloadThread = boost::thread(Imker, &upgrader);
     emit(check());    
     }
 }
@@ -143,16 +143,17 @@ void UpgradeDialog::setDownloadState(int state)
     {
         case DOWNLOADING:
         {
-            printf("Selecting WHAT TO DO\n");
             enableUpgradeButton(false);
             enableretryDownloadButton(true);
             ui->retryDownloadButton->setText("Cancel Download");
+            ui->hideButton->setText("Hide");
             break;
         }
         case FINISHED:
         {
             enableUpgradeButton(true);
             enableretryDownloadButton(false);
+            ui->hideButton->setText("Hide");
             break;
         }
         case CANCELLED:
@@ -160,6 +161,7 @@ void UpgradeDialog::setDownloadState(int state)
             enableUpgradeButton(false);
             enableretryDownloadButton(true);
             ui->retryDownloadButton->setText("Retry Downloads");
+            ui->hideButton->setText("Close");
             break;
         }
     }
@@ -167,6 +169,8 @@ void UpgradeDialog::setDownloadState(int state)
 
 UpgradeDialog::~UpgradeDialog()
 {
+    downloadThread.interrupt();
+    downloadThread.join();
     delete ui;
 }
 

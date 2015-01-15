@@ -68,7 +68,7 @@ void Imker(void *kippel)
     Upgrader *argon = (Upgrader*)kippel;
     printf("Starting download\n");
     argon->downloader(argon->getTarget());
-    argon->unlockTarget(); //TEMPORARY!!!
+    argon->unlockTarget();
 }
 
 void download(void *curlhandle)
@@ -230,6 +230,9 @@ bool Upgrader::downloader(int targetfile)
     const char *url = urlstring.c_str();
 
     bfs::path target = path(DATA) / "upgrade";
+    // if user switches between upgrading client and bootstrapping blockchain, we don't want to pass around garbage
+    if (bfs::exists(target)) {bfs::remove_all(target);} 
+    
     if (!verifyPath(target, true)) {return false;}
     target /= targetswitch(targetfile);
 
@@ -251,7 +254,7 @@ bool Upgrader::downloader(int targetfile)
     curl_easy_setopt(curlhandle.handle, CURLOPT_NOPROGRESS, 0L);
 
 
-    boost::thread(download, (void *)&curlhandle);
+    downloadThread = boost::thread(download, (void *)&curlhandle);
 
     printf("downloading file...\n");
 
@@ -443,6 +446,11 @@ bool Upgrader::juggler(int pf, bool recovery)           // for upgrade, backs up
 
     }
 
+    if (!recovery)
+    {
+        bfs::remove_all(sourcedir); // include removing directory to avoid having users tempted to store files here
+    }
+
     return true;
 }
 
@@ -622,4 +630,13 @@ void Upgrader::cancelDownload(bool cancel)
     cancelmutex.lock();
     CANCEL_DOWNLOAD = cancel;
     cancelmutex.unlock();
+}
+
+Upgrader::~Upgrader()
+{
+    cancelDownload(true);
+    setTarget(getTarget());
+    unlockTarget();
+    downloadThread.interrupt();
+    downloadThread.join();
 }
