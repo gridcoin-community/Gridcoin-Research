@@ -1380,7 +1380,7 @@ Value keypoolrefill(const Array& params, bool fHelp)
 void ThreadTopUpKeyPool(void* parg)
 {
     // Make this thread recognisable as the key-topping-up thread
-    RenameThread("gridcoin-key-top");
+    RenameThread("grc-key-top");
 
     pwalletMain->TopUpKeyPool();
 }
@@ -1388,7 +1388,7 @@ void ThreadTopUpKeyPool(void* parg)
 void ThreadCleanWalletPassphrase(void* parg)
 {
     // Make this thread recognisable as the wallet relocking thread
-    RenameThread("gridcoin-lock-wa");
+    RenameThread("grc-lock-wa");
 
     int64_t nMyWakeTime = GetTimeMillis() + *((int64_t*)parg) * 1000;
 
