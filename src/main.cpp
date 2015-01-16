@@ -358,7 +358,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 115765;
+ int nGrandfather = 116862;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -3728,8 +3728,6 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 			{
 				return DoS(80, error("AcceptBlock() : coinbase timestamp is too early"));
 			}
-
-
 			// Check coinstake timestamp
 			//if (IsProofOfStake() && !CheckCoinStakeTimestamp(nHeight, GetBlockTime(), (int64_t)vtx[1].nTime))				return DoS(60, error("AcceptBlock() : coinstake timestamp violation nTimeBlock=%"PRId64" nTimeTx=%u", GetBlockTime(), vtx[1].nTime));
 
@@ -3745,7 +3743,6 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 
 
 	}
-
 
 
     
@@ -3867,18 +3864,7 @@ uint256 CBlockIndex::GetBlockTrust() const
 			
 	int64_t block_mag = 0;
 
-	if (false)
-	{
-		CBlock mag_block;
-		bool result = mag_block.ReadFromDisk(this);
-		if (!result)  return 0;
-		if (mag_block.vtx.size() > 0)
-		{
-				MiningCPID MagBlock = DeserializeBoincBlock(mag_block.vtx[0].hashBoinc);
-				block_mag=MagBlock.Magnitude * 1000000;
-		}
-	}
-
+	
 	uint256 chaintrust = (((CBigNum(1)<<256) / (bnTarget+1)) - (block_mag)).getuint256();
 
 	return chaintrust;

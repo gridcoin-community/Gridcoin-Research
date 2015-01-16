@@ -26,6 +26,9 @@ extern int64_t GetRSAWeightByCPID(std::string cpid);
 
 extern int SolveNonce(double diff);
 
+bool IsCPIDTimeValid(std::string cpid, int64_t locktime);
+
+
 
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT);
 
@@ -810,6 +813,13 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 	if (BitsAge > 86400) BitsAge=86400; //Limit to 24 hours (possibility of astronomical diff)
 
 
+	//1-15-2015 R Halford: Verify CPID on POR blocks meets time of day protocol
+	if (!IsCPIDTimeValid(boincblock.cpid,nTimeBlockFrom))
+	{
+	    if (!checking_local) printf("CheckStakeKernelHashV3() : CPID does not meet legal submission timestamp parameters. %s",hashBoinc.c_str());
+		return false;
+	}
+	
 
 	//Halford 1-4-2015 : Explain to the Researcher why they are not staking:
 	if (checking_local && LessVerbose(100))
@@ -970,12 +980,9 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
 
 	
 	printf("-");
-	int nGrandfatherHeight = 0;
-	if (pindexPrev) nGrandfatherHeight = pindexPrev->nHeight;
-
-		
-
-	if (nGrandfatherHeight > nGrandfather)
+	//if (pindexPrev) nGrandfatherHeight = pindexPrev->nHeight;
+	
+	if (pindexPrev->nHeight > nGrandfather)
 	{
 		if (!CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, txPrev, txin.prevout, tx.nTime, hashProofOfStake, 
 			targetProofOfStake, hashBoinc, fDebug, checking_local, por_nonce))

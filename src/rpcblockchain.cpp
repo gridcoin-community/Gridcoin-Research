@@ -27,6 +27,8 @@ std::string GetBestBlockHash(std::string sCPID);
 
 int SolveNonce(double diff);
 
+int64_t CPIDChronoStart(std::string cpid);
+bool IsCPIDTimeValid(std::string cpid, int64_t locktime);
 
 std::string TestHTTPProtocol(std::string sCPID);
 
@@ -1382,11 +1384,17 @@ Array MagnitudeReport(bool bMine)
 									entry.push_back(Pair("Long Term Daily Owed (1 day projection)",structMag.totalowed/14));
 									entry.push_back(Pair("Payments",structMag.payments));
 									entry.push_back(Pair("InterestPayments",structMag.interestPayments));
-									//1-7-2015
 									entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
 									entry.push_back(Pair("Current Daily Projection",structMag.owed));
 									entry.push_back(Pair("Next Expected Payment",structMag.owed/2));
 									entry.push_back(Pair("Avg Daily Payments",structMag.payments/14));
+
+									if (structMag.cpid==GlobalCPUMiningCPID.cpid)
+									{
+											int64_t cpid_chrono = CPIDChronoStart(GlobalCPUMiningCPID.cpid);
+											entry.push_back(Pair("Registered Payment Time",TimestampToHRDate(cpid_chrono)));
+									}
+
 									results.push_back(entry);
 						}
 				}
@@ -1681,6 +1689,44 @@ Value listitem(const Array& params, bool fHelp)
 
 	}
 
+	if (sitem == "testcpidtime")
+	{
+
+		Object entry;
+		entry.push_back(Pair("Net",GetAdjustedTime()));
+		entry.push_back(Pair("UTC",TimestampToHRDate(GetAdjustedTime())));
+		
+		int64_t cpid1 = CPIDChronoStart("00565aba8b273e72f5292dd54c2e9d9c");
+		int64_t cpid2 = CPIDChronoStart("02d04a476979ec5526c28c3ad0a7d988");
+		int64_t cpid3 = CPIDChronoStart("9dbd2eb638bfda3dc573a8e5f1ce7a4a");
+		int64_t cpid4 = CPIDChronoStart("d7f6b0c023e06d4797fc257aea29050b");
+		int64_t cpid5 = CPIDChronoStart("f985012508217b233308079b42e2cc1b");
+		entry.push_back(Pair("Cpid1",cpid1));
+		//Test validity
+		bool valid1 = IsCPIDTimeValid("00565aba8b273e72f5292dd54c2e9d9c", cpid1+10);
+		bool valid2 = IsCPIDTimeValid("00565aba8b273e72f5292dd54c2e9d9c", cpid1-1000);
+		bool valid3 = IsCPIDTimeValid("00565aba8b273e72f5292dd54c2e9d9c", cpid1+1000);
+		bool valid4 = IsCPIDTimeValid("00565aba8b273e72f5292dd54c2e9d9c", cpid1-86400+1000);
+		bool valid5 = IsCPIDTimeValid("00565aba8b273e72f5292dd54c2e9d9c", cpid1-86400-5000);
+		bool valid6 = IsCPIDTimeValid("00565aba8b273e72f5292dd54c2e9d9c", cpid1-(86400*2)+100);
+		entry.push_back(Pair("v1",valid1));
+		entry.push_back(Pair("v2",valid2));
+		entry.push_back(Pair("v3",valid3));
+		entry.push_back(Pair("v4",valid4));
+		entry.push_back(Pair("v5",valid5));
+		entry.push_back(Pair("v6",valid6));
+		entry.push_back(Pair("Cpid2",cpid2));
+		entry.push_back(Pair("Cpid3",cpid3));
+		entry.push_back(Pair("Cpid4",cpid4));
+		entry.push_back(Pair("Cpid5",cpid5));
+		entry.push_back(Pair("cpid1UTC",TimestampToHRDate(cpid1)));
+		entry.push_back(Pair("cpid2UTC",TimestampToHRDate(cpid2)));
+		entry.push_back(Pair("cpid3UTC",TimestampToHRDate(cpid3)));
+		entry.push_back(Pair("cpid4UTC",TimestampToHRDate(cpid4)));
+		entry.push_back(Pair("cpid5UTC",TimestampToHRDate(cpid5)));
+		results.push_back(entry);
+	}
+
 
 	if (sitem == "magnitudecsv")
 	{
@@ -1706,12 +1752,10 @@ Value listitem(const Array& params, bool fHelp)
 	{
 	    	results = MagnitudeReport(true);
 			return results;
-	
 	}
 
 	if (sitem == "projects") 
 	{
-
 		for(map<string,StructCPID>::iterator ii=mvBoincProjects.begin(); ii!=mvBoincProjects.end(); ++ii) 
 		{
 
@@ -1728,12 +1772,10 @@ Value listitem(const Array& params, bool fHelp)
 			}
 		}
 		return results;
-
 	}
 
 	if (sitem == "leder")
 	{
-		
 		double subsidy = LederstrumpfMagnitude2(450, GetAdjustedTime());
 		Object entry;
 		entry.push_back(Pair("Mag Out For 450",subsidy));
@@ -1744,15 +1786,11 @@ Value listitem(const Array& params, bool fHelp)
 			entry.push_back(Pair("Mag Out",subsidy));
 		}
 		results.push_back(entry);
-
 	}
-
-
 
 
 	if (sitem == "network") 
 	{
-		
 		for(map<string,StructCPID>::iterator ii=mvNetwork.begin(); ii!=mvNetwork.end(); ++ii) 
 		{
 
@@ -1785,7 +1823,6 @@ Value listitem(const Array& params, bool fHelp)
 	if (sitem=="validcpids") 
 	{
 		//Dump vectors:
-		
 		if (mvCPIDs.size() < 1) 
 		{
 			HarvestCPIDs(false);
