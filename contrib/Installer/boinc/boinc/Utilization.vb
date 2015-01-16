@@ -12,7 +12,7 @@ Public Class Utilization
    
     Public ReadOnly Property Version As Double
         Get
-            Return 341
+            Return 347
 
 
         End Get
@@ -213,6 +213,25 @@ Public Class Utilization
             Log("Error while transitioning to frmSQL" + ex.Message)
         End Try
     End Function
+
+    
+    Public Function ShowTicketAdd()
+        Try
+            mfrmTicketAdd = New frmTicketAdd
+            mfrmTicketAdd.Show()
+        Catch ex As Exception
+            Log("Error while transitioning to frmTicketAdd" + ex.Message)
+        End Try
+    End Function
+    Public Function ShowTicketList()
+        Try
+            mfrmTicketList = New frmTicketList
+            mfrmTicketList.Show()
+        Catch ex As Exception
+            Log("Error while transitioning to frmTicketList" + ex.Message)
+        End Try
+    End Function
+
     Public Function ShowTicker()
         Try
             mfrmTicker = New frmLiveTicker
@@ -327,9 +346,9 @@ Public Class Utilization
         Dim sFrom As String = vConfirm(1)
         Dim sTo As String = vConfirm(2)
         Dim sTXID As String = vConfirm(3)
-        Dim lOut As Long = mInsertConfirm(dAmt, sFrom, sTo, sTXID)
+        Dim sOut As String = mInsertConfirm(dAmt, sFrom, sTo, sTXID)
+        Log("Inserted " + Trim(sOut))
 
-        Log("Inserted " + Trim(lOut))
         Return 1
 
     End Function

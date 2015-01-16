@@ -28,6 +28,9 @@ std::string GetBestBlockHash(std::string sCPID);
 double CoinToDouble(double surrogate);
 
 void ThreadTopUpKeyPool(void* parg);
+extern int64_t CPIDChronoStart(std::string cpid);
+extern bool IsCPIDTimeValid(std::string cpid, int64_t locktime);
+
 
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 bool AmIGeneratingBackToBackBlocks();
@@ -605,6 +608,23 @@ bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
 }
 
 
+double HexToDouble(std::string str)
+{
+  double hx = 0;
+  int nn = 0;
+  int r= 0;
+  char * ch = const_cast<char*>(str.c_str());
+  char * p,pp;
+  for (int i = 1; i <= str.length(); i++)
+  {
+    r = str.length() - i;
+    pp =   ch[r];
+    nn = strtoul(&pp, &p, 16 );
+    hx = hx + nn * pow(16 , i-1);
+   }
+  return hx;
+}
+
 double Round_Legacy(double d, int place)
 {
     std::ostringstream ss;
@@ -614,6 +634,54 @@ double Round_Legacy(double d, int place)
 }
 
 	
+double CPIDTime(std::string cpid)
+{
+	if (cpid.length() < 10) return 0;
+	std::string h65535 = cpid.substr(0,4);
+	double hash = HexToDouble(h65535);
+	double timeslice = hash * 1.318;
+	printf("CPID %s   hash %f  timeslice %f",h65535.c_str(),hash,timeslice);
+
+	return timeslice;
+}
+
+
+
+
+int64_t SecondsSinceMidnight(int64_t timestamp)
+{
+	time_t bigtime;
+	bigtime = (time_t)timestamp;
+	struct tm *Tm = gmtime(&bigtime);
+	double secs = (Tm->tm_hour*60*60) + (Tm->tm_min*60) + (Tm->tm_sec);
+	return secs;
+}
+
+
+
+int64_t CPIDChronoStart(std::string cpid)
+{
+	double offset = CPIDTime(cpid);
+	int64_t NetworkTimeAtMidnight = GetAdjustedTime()-SecondsSinceMidnight(GetAdjustedTime());
+	//if (fDebug) printf("Offset %f, NetTime %f, Midnight %f",(double)offset,(double)GetAdjustedTime(),(double)NetworkTimeAtMidnight);
+	int64_t CPIDTime = NetworkTimeAtMidnight+(int64_t)offset;
+	return CPIDTime;
+}
+
+bool IsCPIDTimeValid(std::string cpid, int64_t locktime)
+{
+	return true;
+
+	if (cpid.empty()) return true;
+	if (cpid=="INVESTOR" || cpid=="investor") return true;
+	double offset = CPIDTime(cpid);
+	int64_t passed = SecondsSinceMidnight(locktime);
+	if (fDebug3) printf("In locktime %f, Passed %f, Offset %f \r\n",locktime,passed,offset);
+
+	if (passed >= offset && passed <= (offset+(30*60))) return true;
+	return false;
+}
+
 int SecondFromGRCAddress()
 {
 	std::string sAddress = DefaultWalletAddress();
@@ -633,7 +701,6 @@ int SecondFromGRCAddress()
 	if (sec > 59) sec = 59;
 	return sec;
 }
-
 
 
 bool CheckStake(CBlock* pblock, CWallet& wallet)
@@ -698,10 +765,15 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
         }
 
         // Process this block the same as if we had received it from another node
-        if (!ProcessBlock(NULL, pblock, true))
+		//Halford - 1-14-2015 - Ensure Blocks have a minimum time spacing
+		if (!IsLockTimeWithinMinutes(nLastBlockSubmitted,5)) 
 		{
-			msMiningErrors6="Block vehemently rejected.";
-	        return error("CheckStake() : ProcessBlock (by me), but block not accepted");
+			nLastBlockSubmitted = GetAdjustedTime();
+			if (!ProcessBlock(NULL, pblock, true))
+			{
+				msMiningErrors6="Block vehemently rejected.";
+				return error("CheckStake() : ProcessBlock (by me), but block not accepted");
+			}
 		}
     }
 	nLastBlockSolved = GetAdjustedTime();
@@ -829,7 +901,7 @@ Begin:
 
 		//Verify we are still on the main chain
 	
-		if (IsLockTimeWithinMinutes(nLastBlockSolved,3)) 
+		if (IsLockTimeWithinMinutes(nLastBlockSolved,8)) 
 		{
 				if (fDebug) printf("=");
 				MilliSleep(200);

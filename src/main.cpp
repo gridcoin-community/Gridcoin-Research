@@ -105,6 +105,8 @@ json_spirit::Array MagnitudeReportCSV(bool detail);
 
 bool bNewUserWizardNotified = false;
 int64_t nLastBlockSolved = 0;  //Future timestamp
+int64_t nLastBlockSubmitted = 0;
+
 uint256 muGlobalCheckpointHash = 0;
 uint256 muGlobalCheckpointHashRelayed = 0;
 int muGlobalCheckpointHashCounter = 0;
@@ -353,11 +355,10 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors5 = "";
  std::string    msMiningErrors6 = "";
  std::string    msMiningErrors7 = "";
-
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 113836;
+ int nGrandfather = 117400;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2203,6 +2204,14 @@ static unsigned int GetNextTargetRequiredV2(const CBlockIndex* pindexLast, bool 
 		    return bnTargetLimit.GetCompact(); 
 	}
 
+	//1-14-2015 R Halford - Make diff reset to zero after periods of exploding diff:
+	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+	if (PORDiff > 900000)
+	{
+		    return bnTargetLimit.GetCompact(); 
+	}
+		
+
 	//nTargetTimespan = 16 * 60;  // 16 mins  (TargetSpacing = 64);  nInterval = 15 min
 
     int64_t nInterval = nTargetTimespan / nTargetSpacing;
@@ -2721,11 +2730,11 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 {
     
 	//Gridcoin - 1-9-2015 - Halford - Remove Weighted Magnitude and payments from Global Magnitude vectors
-	std::string hashboinc = "";
-	if (vtx.size() > 0) hashboinc = vtx[0].hashBoinc;
-	MiningCPID bb = DeserializeBoincBlock(hashboinc);
-    double mint = CoinToDouble(pindex->nMint);
-    RemoveNetworkMagnitude(nTime,bb.cpid,bb,mint,true);
+	//std::string hashboinc = "";
+	//if (vtx.size() > 0) hashboinc = vtx[0].hashBoinc;
+	//MiningCPID bb = DeserializeBoincBlock(hashboinc);
+    //double mint = CoinToDouble(pindex->nMint);
+    //RemoveNetworkMagnitude(nTime,bb.cpid,bb,mint,true);
 
 	// Disconnect in reverse order
     for (int i = vtx.size()-1; i >= 0; i--)
@@ -2747,6 +2756,10 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
     // ppcoin: clean up wallet after disconnecting coinstake
     BOOST_FOREACH(CTransaction& tx, vtx)
         SyncWithWallets(tx, this, false, false);
+
+	//Retally Network Averages - Halford - 1-11-2015
+	TallyNetworkAverages(true);
+		
 
     return true;
 }
@@ -2854,7 +2867,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
         mapQueuedChanges[hashTx] = CTxIndex(posThisTx, tx.vout.size());
     }
 
-    if (IsProofOfWork())
+    if (IsProofOfWork() && pindex->nHeight > nGrandfather)
     {
         int64_t nReward = GetProofOfWorkMaxReward(nFees,nTime,pindex->nHeight);
         // Check coinbase reward
@@ -2868,7 +2881,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 	uint64_t nCoinAge = 0;
         
-    if (IsProofOfStake())
+    if (IsProofOfStake() && pindex->nHeight > nGrandfather)
     {
         // ppcoin: coin stake tx earns reward instead of paying fee
         if (!vtx[1].GetCoinAge(txdb, nCoinAge))
@@ -2878,8 +2891,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 		if (nStakeReward > nCalculatedStakeReward)
             return DoS(1, error("ConnectBlock() : coinstake pays above maximum (actual=%"PRId64" vs calculated=%"PRId64")", nStakeReward, nCalculatedStakeReward));
-		//nTime
-		//if (LockTimeRecent(GetBlockTime()) && bb.cpid=="INVESTOR" && nStakeReward > 1)
 		
 		if (!ClientOutOfSync() && bb.cpid=="INVESTOR" && nStakeReward > 1)
 		{
@@ -2888,6 +2899,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			int64_t nCalculatedResearchReward = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR, OUT_INTEREST,bb.RSAWeight);
 			if (nStakeReward > nCalculatedResearchReward*TOLERANCE_PERCENT)
 			{
+				   
 							return DoS(1, error("ConnectBlock() : Investor Reward pays too much : cpid %s (actual=%"PRId64" vs calculated=%"PRId64")",
 							bb.cpid.c_str(), nStakeReward, nCalculatedResearchReward));
 			}
@@ -2981,29 +2993,34 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 							if (nStakeReward > (nCalculatedResearch2*TOLERANCE_PERCENT))
 							{
 
+								TallyNetworkAverages(true);
 								double user_magnitude = GetMagnitude(bb.cpid,1,false);
-								//return DoS(1, error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f", 						bb.cpid.c_str(), nStakeReward/C-o-IN, nCalculatedResearch/C-OIN, user_magnitude));
 								StructCPID UntrustedHost = mvMagnitudes[bb.cpid]; //Contains Mag across entire CPID
-
 								double owed_advanced = UntrustedHost.totalowed - UntrustedHost.payments;
 								bool complete_failure = true;
-								if (owed_advanced > -400 && UntrustedHost.Accuracy > 50) complete_failure=false;
+								if (owed_advanced > -400 && UntrustedHost.Accuracy > 50)  complete_failure=false;
 								if (owed_advanced < -400 || UntrustedHost.Accuracy <= 50) complete_failure=true;
+								if (owed_advanced < -1000)
+								{
+									//Ban the researcher if owed less than -1000grc
+									return DoS(100, error("ConnectBlock(): Hack Attempt! : Researchers Reward for CPID %s pays far too much: Owed %f,  (actual=%"PRId64" vs calculated=%"PRId64") Mag: %f, hash %s",
+											bb.cpid.c_str(), (double)owed_advanced, nStakeReward/COIN, nCalculatedResearch2/COIN, (double)user_magnitude,vtx[0].hashBoinc.c_str()));
+								}
 								if (complete_failure)
 								{
-									return error("ConnectBlock() : Researchers Reward for CPID %s pays too much(actual=%"PRId64" vs calculated=%"PRId64") Mag: %f",
-										bb.cpid.c_str(), nStakeReward/COIN, nCalculatedResearch2/COIN, user_magnitude);
+								
+									return DoS(20, error("ConnectBlock() : Researchers Reward for CPID %s pays too much - Owed %f , (actual=%"PRId64" vs calculated=%"PRId64") Mag: %f, Hash: %s",
+										bb.cpid.c_str(), (double)owed_advanced,nStakeReward/COIN, nCalculatedResearch2/COIN, (double)user_magnitude, vtx[0].hashBoinc.c_str()));
 								}
-							}
-
-					}
+   						  }
+					 }
 				}
 			}
 		}
 	}
 
 	
-		AddNetworkMagnitude(nTime, bb.cpid, bb, mint, IsProofOfStake()); //Updates Total payments and Actual Magnitude per CPID
+	AddNetworkMagnitude(nTime, bb.cpid, bb, mint, IsProofOfStake()); //Updates Total payments and Actual Magnitude per CPID
 	
 	//  End of Network Consensus
 
@@ -3268,7 +3285,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 					//10-30-2014 - Halford - Reboot when reorganize fails 3 times
 					REORGANIZE_FAILED++;
 
-					std::string suppressreboot = GetArg("-suppressreboot", "false");
+					std::string suppressreboot = GetArg("-suppressreboot", "true");
 					if (suppressreboot!="true")
 					{
 						if (REORGANIZE_FAILED==100)
@@ -3545,7 +3562,7 @@ int BlockHeight(uint256 bh)
 bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) const
 {
     
-	//printf("#cb0");
+	//1-16-2015
 
 	if (GetHash()==hashGenesisBlock || GetHash()==hashGenesisBlockTestNet) return true;
 	
@@ -3562,15 +3579,26 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
 
 	//Reject blocks with diff > 10000000000000000
 	double blockdiff = GetBlockDifficulty(nBits);
-	if(true)
-	{
 		if (height1 > nGrandfather && blockdiff > 10000000000000000)
 		{
 			   return DoS(1, error("CheckBlock() : Block Bits larger than 10000000000000000.\r\n"));
 		}
-	}
 
-	//Bad block at 66408,66807
+	
+	if (height1 > nGrandfather && !ClientOutOfSync())
+	{
+				if (GetBlockTime() < PastDrift(GetAdjustedTime(), height1))
+				{
+					return DoS(10,error("AcceptBlock() : block timestamp too far in the past"));
+				}
+
+				if (GetBlockTime() > FutureDrift(GetAdjustedTime(), height1))
+				{
+					return DoS(10,error("AcceptBlock() : block timestamp too far in the future"));
+				}
+	}
+		
+
 
 
     // First transaction must be coinbase, the rest must not be
@@ -3590,14 +3618,12 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
     			if (boincblock.projectname == "") 	return DoS(1,error("PoR Project Name invalid"));
 	    		if (boincblock.rac < 100) 			return DoS(1,error("RAC too low"));
 				//	cpidv2: CPID_(bb.cpid, bb.cpidv2, blockindex->pprev->GetBlockHash());
-				//if (!IsCPIDlidv2(boincblock.cpid,boincblock.enccpid,boincblock.cpidv2,hashPrevBlock)) return DoS(1,error("Bad CPID"));
 				
 				//Block CPID 12-26-2014 hashPrevBlock->nHeight
 				if (!IsCPIDValidv2(boincblock,height1))
 				{
-						return DoS(10,error("Bad CPID : height %f, bad hashboinc %s",(double)height1,vtx[0].hashBoinc.c_str()));
+						return DoS(100,error("Bad CPID : height %f, bad hashboinc %s",(double)height1,vtx[0].hashBoinc.c_str()));
 				}
-
 
 			}
 
@@ -3702,35 +3728,35 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 
 	if (nHeight > nGrandfather)
 	{
-	  	if (true)
-		{	
-			// Check timestamp
+	  		// Check timestamp
 			if (GetBlockTime() > FutureDrift(GetAdjustedTime()+10, nHeight))
 				return DoS(80,error("AcceptBlock() : block timestamp too far in the future"));
+			//Halford 1-16-2015 - Block Timestamp too Early
 
+			if (!ClientOutOfSync())
+			{
+				if (GetBlockTime() < PastDrift(GetAdjustedTime(), nHeight))
+				{
+					return DoS(50,error("AcceptBlock() : block timestamp too far in the past"));
+				}
+			}
+		
 			// Check coinbase timestamp
 			if (GetBlockTime() > FutureDrift((int64_t)vtx[0].nTime, nHeight))
 			{
 				return DoS(80, error("AcceptBlock() : coinbase timestamp is too early"));
 			}
-
-
 			// Check coinstake timestamp
 			//if (IsProofOfStake() && !CheckCoinStakeTimestamp(nHeight, GetBlockTime(), (int64_t)vtx[1].nTime))				return DoS(60, error("AcceptBlock() : coinstake timestamp violation nTimeBlock=%"PRId64" nTimeTx=%u", GetBlockTime(), vtx[1].nTime));
 
 			// Check timestamp against prev
 			if (GetBlockTime() <= pindexPrev->GetPastTimeLimit() || FutureDrift(GetBlockTime(), nHeight) < pindexPrev->GetBlockTime())
 				return DoS(60, error("AcceptBlock() : block's timestamp is too early"));
-		}
-
-		
-	    // Check proof-of-work or proof-of-stake
+		// Check proof-of-work or proof-of-stake
 		if (nBits != GetNextTargetRequired(pindexPrev, IsProofOfStake()))
 				return DoS(100, error("AcceptBlock() : incorrect %s", IsProofOfWork() ? "proof-of-work" : "proof-of-stake"));
 
-
 	}
-
 
 
     
@@ -3852,18 +3878,7 @@ uint256 CBlockIndex::GetBlockTrust() const
 			
 	int64_t block_mag = 0;
 
-	if (false)
-	{
-		CBlock mag_block;
-		bool result = mag_block.ReadFromDisk(this);
-		if (!result)  return 0;
-		if (mag_block.vtx.size() > 0)
-		{
-				MiningCPID MagBlock = DeserializeBoincBlock(mag_block.vtx[0].hashBoinc);
-				block_mag=MagBlock.Magnitude * 1000000;
-		}
-	}
-
+	
 	uint256 chaintrust = (((CBigNum(1)<<256) / (bnTarget+1)) - (block_mag)).getuint256();
 
 	return chaintrust;
@@ -4204,10 +4219,10 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
 			//1-8-2015 Extract solved Key
 			double solvedNonce = cdbl(AppCache(pindexBest->GetBlockHash().GetHex()),0);
 			nNonce=solvedNonce;
-			printf("7. Nonce %f, SNonce %f, StakeTime %f, MaxHistoricalTimeDrift %f, BestBlockPastTimeLimit %f, PastDriftBlockTime %f \r\n",
+			printf("7. Nonce %f, SNonce %f, StakeTime %f, MaxHistTD %f, BBPastTimeLimit %f, PastDriftBlockTm %f \r\n",
 				(double)nNonce,(double)solvedNonce,(double)txCoinStake.nTime,
 				(double)max(pindexBest->GetPastTimeLimit()+1, PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1)),
-				(double)pindexBest->GetPastTimeLimit(), PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1)	);
+				(double)pindexBest->GetPastTimeLimit(), (double)PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1)	);
 		    if (txCoinStake.nTime >= max(pindexBest->GetPastTimeLimit()+1, PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1)))
 			{
                 // make sure coinstake would meet timestamp protocol
@@ -5402,7 +5417,7 @@ bool AcidTest(std::string precommand, std::string acid, CNode* pfrom)
 		std::string grid_pass =      vCommand[6];
 		std::string grid_pass_decrypted = AdvancedDecryptWithSalt(grid_pass,sboinchashargs);
 		
-		printf("*Org:%s; ",pub_key_prefix.c_str());
+		if (LessVerbose(100)) printf("*Org:%s; ",pub_key_prefix.c_str());
 		if (fDebug)	printf("*Org:%s;K:%s ",org.c_str(),pub_key_prefix.c_str());
 
 		if (grid_pass_decrypted != bhrn+nonce+org+pub_key_prefix) 
@@ -6983,8 +6998,12 @@ void CreditCheck(std::string cpid, bool clearcache)
 					boost::to_lower(sProj);
 					sProj = ToOfficialName(sProj);
 					boost::to_lower(sProj);
+					//1-11-2015 Rob Halford - List of Exceptions to Map Netsoft Name -> Boinc Client Name
+
 					//6-21-2014 (R Halford) : In this convoluted situation, we found MindModeling@beta in the Boinc client, and MindModeling@Home in the CreditCheckOnline XML;
 					if (sProj == "mindmodeling@home") sProj = "mindmodeling@beta";
+					if (sProj == "Quake Catcher Network") sProj = "Quake-Catcher Network";
+
 					//Is project Valid
 					bool projectvalid = ProjectIsValid(sProj);
 					if (!projectvalid) sProj = "";

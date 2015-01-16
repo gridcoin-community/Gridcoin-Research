@@ -20,9 +20,70 @@
         Dim sInsert As String
         sInsert = "<INSERT><TABLE>Confirm</TABLE><FIELDS>GRCFrom,GRCTo,txid,amount,Confirmed</FIELDS><VALUES>'" + Trim(sFrom) + "','" + Trim(sTo) + "','" + Trim(sTXID) + "','" + Trim(dAmt) + "','0'</VALUES></INSERT>"
         Dim sErr As String
-        sErr = mData.ExecuteP2P(sInsert)
+        sErr = mData.ExecuteP2P(sInsert, Nothing)
+
+
         Return sErr
     End Function
+
+    Public Function mInsertUser(sHandle As String, sGRCaddress As String) As String
+        If mData Is Nothing Then mData = New Sql
+        Dim sErr As String = ""
+        Dim sInsert As String
+        sInsert = "<INSERT><TABLE>Users</TABLE><FIELDS>Handle,GRCAddress</FIELDS><VALUES>'" _
+            + Trim(sHandle) + "','" + Trim(sGRCaddress) + "'</VALUES></INSERT>"
+        sErr = mData.ExecuteP2P(sInsert, Nothing)
+
+        If Len(sErr) > 1 Then
+            'MsgBox(sErr, MsgBoxStyle.Critical, "Error while Adding User")
+            Exit Function
+        End If
+        Return sErr
+    End Function
+
+
+    Public Function mInsertTicket(sMode As String, sSubmittedBy As String, sTicketId As String, sAssignedTo As String, sDisposition As String, sDesc As String, sType As String, sNotes As String) As String
+        If mData Is Nothing Then mData = New Sql
+        Dim sErr As String = ""
+        Dim sInsert As String
+        If sMode = "Add" Then
+            sInsert = "<INSERT><TABLE>Ticket</TABLE><FIELDS>TicketId,SubmittedBy,AssignedTo,Disposition,Descript,Type</FIELDS><VALUES>'" _
+            + Trim(sTicketId) + "','" + Trim(sSubmittedBy) + "','" + Trim(sAssignedTo) + "','" + Trim(sDisposition) + "','" + Trim(sDesc) + "','" + Trim(sType) + "'</VALUES></INSERT>"
+            sErr = mData.ExecuteP2P(sInsert, Nothing)
+            If Len(sErr) > 1 Then
+                MsgBox(sErr, MsgBoxStyle.Critical, "Error while Creating Ticket")
+                Exit Function
+            End If
+        End If
+        'Retrieve ticket Guid
+        Dim sGuid As String = P2PValue("id", "Ticket", "TicketId", sTicketId)
+        If (Len(sGuid) > 10) Then
+            sInsert = "<INSERT><TABLE>TicketHistory</TABLE><FIELDS>Parent,Disposition,AssignedTo,Notes</FIELDS><VALUES>'" + Trim(sGuid) + "','" + Trim(sDisposition) + "','" + Trim(sAssignedTo) + "','" + Trim(sNotes) + "'</VALUES></INSERT>"
+            sErr += mData.ExecuteP2P(sInsert, Nothing)
+
+
+        End If
+        Return sErr
+    End Function
+
+
+    Public Function mInsertAttachment(sParentId As String, sName As String, blob() As Byte) As String
+        If mData Is Nothing Then mData = New Sql
+        Dim sErr As String = ""
+        Dim sInsert As String '<BLOB></BLOB>
+
+
+
+        sInsert = "<INSERT><TABLE>Attachment</TABLE><FIELDS>Parent,BlobName</FIELDS><VALUES>'" + Trim(sParentId) + "','" + Trim(sName) _
+            + "'</VALUES></INSERT>"
+        sErr += mData.ExecuteP2P(sInsert, blob)
+
+        Return sErr
+    End Function
+
+
+
+
     Public msTXID As String = ""
 
     Public Function mUpdateConfirmAsync()
@@ -41,7 +102,9 @@
 
         Dim sErr As String
         Log("Updating " + sUpdate)
-        sErr = mData.ExecuteP2P(sUpdate)
+        sErr = mData.ExecuteP2P(sUpdate, Nothing)
+
+
         Log("Done " + Trim(sErr))
 
         'Update Dummy
@@ -49,8 +112,6 @@
         Return sErr
     End Function
     Public Function mTrackConfirm(sTXID As String) As Double
-
-
 
         If mData Is Nothing Then mData = New Sql
 
@@ -78,9 +139,133 @@
             Return 0
         End Try
       
-
     End Function
 
+    Public Function mGetFilteredTickets(sFilter As String, sAssignedTo As String) As GridcoinReader
+        If mData Is Nothing Then mData = New Sql
+
+        Dim dr As GridcoinReader
+        Dim sql As String
+        Dim sClause As String = ""
+        If Len(sAssignedTo) > 1 Then
+            sClause = " and id in (select a.parent from ( select Parent,max(updated) as maxdate      FROM ticketHistory" _
+                & "   group by ticketHistory.parent) " _
+                & "   a     inner join TicketHistory as TH on th.parent = A.parent and th.updated = a.maxdate   where th.assignedTo='" + sAssignedTo + "'   )"
+        End If
+
+        sql = "Select * From Ticket " + sFilter + " " + sClause
+
+        Try
+            Log(sql)
+
+            dr = mData.GetGridcoinReader(sql)
+        Catch ex As Exception
+            Log(sql + " : err Description: " + ex.Message)
+
+            Return dr
+        End Try
+        Return dr
+    End Function
+    Public Function mGetTicketHistory(sTicketID As String) As GridcoinReader
+        If mData Is Nothing Then mData = New Sql
+        Dim myGuid As String
+        myGuid = P2PValue("id", "Ticket", "TicketId", sTicketID)
+        
+        Dim dr As GridcoinReader
+        If myGuid = "" Then Return dr
+
+
+        Dim sql As String
+        sql = "Select * From TicketHistory where Parent='" + myGuid + "' Order By Added"
+        Try
+            dr = mData.GetGridcoinReader(sql)
+        Catch ex As Exception
+            Return dr
+        End Try
+        Return dr
+    End Function
+
+    Public Function mGetUsers() As GridcoinReader
+        If mData Is Nothing Then mData = New Sql
+        Dim dr As GridcoinReader
+        Dim sql As String
+        sql = "Select * From Users where deleted=0"
+        Try
+            dr = mData.GetGridcoinReader(sql)
+        Catch ex As Exception
+            Return dr
+        End Try
+        Return dr
+    End Function
+
+
+
+    Public Function mGetTicket(sTicketID As String) As GridcoinReader
+        If mData Is Nothing Then mData = New Sql
+        Dim dr As GridcoinReader
+        Dim sql As String
+        sql = "Select * From Ticket where ticketid='" + sTicketID + "'"
+        Try
+            dr = mData.GetGridcoinReader(sql)
+        Catch ex As Exception
+            Return dr
+        End Try
+        Return dr
+    End Function
+
+    Public Function P2PMax(LookupField As String, sTable As String, sSearchField As String, sTargetValue As String) As String
+        If mData Is Nothing Then mData = New Sql
+
+        Dim dr As GridcoinReader
+        Dim sql As String
+        sql = "Select Max(Cast (" + LookupField + " as money)) from " + sTable + " where deleted=0 "
+       
+        Try
+            dr = mData.GetGridcoinReader(sql)
+
+        Catch ex As Exception
+            Return -1
+        End Try
+
+        Try
+            Dim grr As New GridcoinReader.GridcoinRow
+            grr = dr.GetRow(1)
+
+            Return grr.Values(0).ToString()
+
+        Catch ex As Exception
+            Log("HEINOUS 2:" + ex.Message)
+            Return ""
+        End Try
+
+    End Function
+    Public Function P2PValue(LookupField As String, sTable As String, sSearchField As String, sTargetValue As String) As String
+        If mData Is Nothing Then mData = New Sql
+
+        Dim dr As GridcoinReader
+        Dim sql As String
+        sql = "Select " + LookupField + " from " + sTable + " where deleted=0 and " + sSearchField + " ='" + sTargetValue + "'"
+        Log("Tracking " + sql)
+
+        Try
+            dr = mData.GetGridcoinReader(sql)
+
+        Catch ex As Exception
+            Return -1
+        End Try
+
+        Try
+            Dim grr As New GridcoinReader.GridcoinRow
+            grr = dr.GetRow(1)
+           
+            Return grr.Values(0).ToString()
+
+        Catch ex As Exception
+            Log("HEINOUS 2:" + ex.Message)
+            Return ""
+        End Try
+
+    End Function
 
     Public bSqlHouseCleaningComplete As Boolean = False
     Public vProj() As String

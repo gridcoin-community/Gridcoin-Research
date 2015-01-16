@@ -110,6 +110,7 @@ private:
 	QAction *sqlAction;
 	QAction *leaderboardAction;
 	QAction *tickerAction;
+	QAction *ticketListAction;
 
     QAction *verifyMessageAction;
     QAction *aboutAction;
@@ -206,9 +207,7 @@ private slots:
 	void rebootClicked();
 	void sqlClicked();
 	void tickerClicked();
-
-	//void leaderboardClicked();
-	//void miningClicked();
+	void ticketListClicked();
 
 
 #ifndef Q_OS_MAC

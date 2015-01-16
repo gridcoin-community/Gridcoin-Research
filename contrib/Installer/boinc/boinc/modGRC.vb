@@ -15,6 +15,9 @@ Module modGRC
 
     Public mfrmProjects As frmProjects
     Public mfrmSql As frmSQL
+    Public mfrmTicketAdd As frmTicketAdd
+    Public mfrmTicketList As frmTicketList
+
     Public mfrmTicker As frmLiveTicker
 
 
@@ -123,7 +126,30 @@ Module modGRC
         Dim value As String = System.Text.ASCIIEncoding.ASCII.GetString(b)
         b = System.Convert.FromBase64String(value)
         System.IO.File.WriteAllBytes(sTargetFileName, b)
+    End Function
+    Public Function FileToBase64String(sSourceFileName As String) As String
+        Dim sFilePath As String = sSourceFileName
+        Dim b() As Byte
+        b = System.IO.File.ReadAllBytes(sFilePath)
+        Dim sBase64 As String = System.Convert.ToBase64String(b, 0, b.Length)
+        Return sBase64
+    End Function
 
+
+    Public Function FileToBytes(sSourceFileName As String) As Byte()
+
+        Dim sFilePath As String = sSourceFileName
+        Dim b() As Byte
+        b = System.IO.File.ReadAllBytes(sFilePath)
+        Return b
+
+    End Function
+
+    Public Function Base64StringToFile(sData As String, sFileName As String) As Boolean
+        Dim b() As Byte
+        b = System.Convert.FromBase64String(sData)
+        System.IO.File.WriteAllBytes(sFileName, b)
+        Return True
     End Function
 
     Public Function GetMd5String(ByVal sData As String) As String

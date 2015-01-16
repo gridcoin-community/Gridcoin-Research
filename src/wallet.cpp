@@ -1609,8 +1609,8 @@ double MintLimiter(double PORDiff,int64_t RSA_WEIGHT)
 	if (RSA_WEIGHT >= 24999) return 0;
 	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
 	if (PORDiff > 0    && PORDiff < 1)   return .02;
-	if (PORDiff > 1    && PORDiff < 5)   return .15;
-	if (PORDiff >= 5   && PORDiff < 10)  return 5;
+	if (PORDiff > 1    && PORDiff < 6)   return .15;
+	if (PORDiff >= 6   && PORDiff < 10)  return 5;
 	if (PORDiff >= 10  && PORDiff < 50)  return 10;
 	if (PORDiff >= 50  && PORDiff < 100) return 15;
 	if (PORDiff >= 100 && PORDiff < 500) return 30;
@@ -1655,12 +1655,12 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
         CTxIndex txindex;
         if (!txdb.ReadTxIndex(pcoin.first->GetHash(), txindex))
             continue;
-		//1-11-2015 
+		//1-13-2015 
         if (IsProtocolV2(nBestHeight+1))
         {
             if (nCurrentTime - pcoin.first->nTime > nStakeMinAge)
 			{
-                nWeight += (pcoin.first->vout[pcoin.second].nValue+(RSA_WEIGHT/14*COIN));
+                nWeight += (pcoin.first->vout[pcoin.second].nValue + (RSA_WEIGHT*COIN));
 			}
         }
         else
@@ -1677,9 +1677,6 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
     }
 	
 	
-	//HALFORD: (Blended Stake Weight includes RSA_WEIGHT):
-	//WEIGHT SECTION 1: When a new CPID enters the ecosystem
-	nWeight += (RSA_WEIGHT*10);
 	return true;
 }
 
@@ -1688,6 +1685,9 @@ void NetworkTimer()
 {
 	if (mdMachineTimerLast == 0) mdMachineTimerLast = GetAdjustedTime();
 	double elapsed = GetAdjustedTime() - mdMachineTimerLast;
+
+	if (elapsed < 5) return;
+
 	mdMachineTimerLast = GetAdjustedTime();
 	if (elapsed < 1) elapsed = 1;
 	mdPORNonce += (elapsed*10);
@@ -1853,8 +1853,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);
 			//Note: At this point block.vtx[0] is still null, so we send the hashBoinc in separately
 		
-			//1-8-2015 - Add PoW nonce to POR - Halford
-			//NetworkTimer();
+			//1-12-2015 - Add PoW nonce to POR - Halford
+			NetworkTimer();
 				
             if (CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, 
 				*pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, 
@@ -1862,7 +1862,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             {
 			
                 // Found a kernel
-                if (fDebug2)            printf("CreateCoinStake : kernel found\n");
+                if (fDebug)            printf("CreateCoinStake : kernel found\n");
 				//1-8-2015
 				WriteAppCache(pindexPrev->GetBlockHash().GetHex(),RoundToString(mdPORNonce,0));
 			   
@@ -1989,7 +1989,6 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     }
 
 	double MaxSubsidy = GetMaximumBoincSubsidy(GetAdjustedTime());
-	if (fDebug2) printf("ZXA1.");
 
     // Calculate coin age reward
     {
@@ -2011,13 +2010,13 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		double mint = CoinToDouble(nReward);
 		double PORDiff = GetBlockDifficulty(nBits);
 	
-		if (fDebug2) printf("Creating POS Reward for %s  amt  %f  {RSAWeight %f} \r\n",
+		if (fDebug) printf("Creating POS Reward for %s  amt  %f  {RSAWeight %f} \r\n",
 			GlobalCPUMiningCPID.cpid.c_str(), mint, (double)RSA_WEIGHT);
 	
 		//INVESTORS
 		if (mint < MintLimiter(PORDiff,RSA_WEIGHT)) 
 		{
-				if (fDebug3) printf("CreateStake()::Mint %f of %f too small",(double)mint,(double)MintLimiter(PORDiff,RSA_WEIGHT));
+				if (fDebug) printf("CreateStake()::Mint %f of %f too small",(double)mint,(double)MintLimiter(PORDiff,RSA_WEIGHT));
 				msMiningErrors7="Mint too small";
 				return false; 
 		}

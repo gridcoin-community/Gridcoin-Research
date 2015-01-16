@@ -72,6 +72,16 @@ Module modWinAPI
         End Try
 
     End Function
+    Public Function DefaultHostName(sDefault As String, bOverride As Boolean) As String
+        Dim sPersisted As String = KeyValue(sDefault)
+        If Len(sPersisted) = 0 Then sDefault = Replace(sDefault, "p2psql", "pool")
+        Return sDefault
+    End Function
+    Public Function DefaultPort(lPort As Long, bOverride As Boolean) As Long
+        Dim lPersisted As Long = Val("0" & KeyValue("p2pport"))
+        If lPersisted = 0 Then lPort = 80
+        Return lPort
+    End Function
 
     Public Enum WindowStylesEx As UInteger
         ''' <summary>
