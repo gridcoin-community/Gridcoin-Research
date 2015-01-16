@@ -1609,8 +1609,8 @@ double MintLimiter(double PORDiff,int64_t RSA_WEIGHT)
 	if (RSA_WEIGHT >= 24999) return 0;
 	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
 	if (PORDiff > 0    && PORDiff < 1)   return .02;
-	if (PORDiff > 1    && PORDiff < 5)   return .15;
-	if (PORDiff >= 5   && PORDiff < 10)  return 5;
+	if (PORDiff > 1    && PORDiff < 6)   return .15;
+	if (PORDiff >= 6   && PORDiff < 10)  return 5;
 	if (PORDiff >= 10  && PORDiff < 50)  return 10;
 	if (PORDiff >= 50  && PORDiff < 100) return 15;
 	if (PORDiff >= 100 && PORDiff < 500) return 30;
@@ -1685,6 +1685,9 @@ void NetworkTimer()
 {
 	if (mdMachineTimerLast == 0) mdMachineTimerLast = GetAdjustedTime();
 	double elapsed = GetAdjustedTime() - mdMachineTimerLast;
+
+	if (elapsed < 5) return;
+
 	mdMachineTimerLast = GetAdjustedTime();
 	if (elapsed < 1) elapsed = 1;
 	mdPORNonce += (elapsed*10);
@@ -1851,7 +1854,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 			//Note: At this point block.vtx[0] is still null, so we send the hashBoinc in separately
 		
 			//1-12-2015 - Add PoW nonce to POR - Halford
-			//NetworkTimer();
+			NetworkTimer();
 				
             if (CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, 
 				*pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, 

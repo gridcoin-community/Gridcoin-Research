@@ -358,7 +358,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 117226;
+ int nGrandfather = 117400;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -3562,7 +3562,7 @@ int BlockHeight(uint256 bh)
 bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) const
 {
     
-	//printf("#cb0");
+	//1-16-2015
 
 	if (GetHash()==hashGenesisBlock || GetHash()==hashGenesisBlockTestNet) return true;
 	
@@ -3579,15 +3579,26 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
 
 	//Reject blocks with diff > 10000000000000000
 	double blockdiff = GetBlockDifficulty(nBits);
-	if(true)
-	{
 		if (height1 > nGrandfather && blockdiff > 10000000000000000)
 		{
 			   return DoS(1, error("CheckBlock() : Block Bits larger than 10000000000000000.\r\n"));
 		}
-	}
 
-	//Bad block at 66408,66807
+	
+	if (height1 > nGrandfather && !ClientOutOfSync())
+	{
+				if (GetBlockTime() < PastDrift(GetAdjustedTime(), height1))
+				{
+					return DoS(10,error("AcceptBlock() : block timestamp too far in the past"));
+				}
+
+				if (GetBlockTime() > FutureDrift(GetAdjustedTime(), height1))
+				{
+					return DoS(10,error("AcceptBlock() : block timestamp too far in the future"));
+				}
+	}
+		
+
 
 
     // First transaction must be coinbase, the rest must not be
@@ -3717,9 +3728,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 
 	if (nHeight > nGrandfather)
 	{
-	  	if (true)
-		{	
-			// Check timestamp
+	  		// Check timestamp
 			if (GetBlockTime() > FutureDrift(GetAdjustedTime()+10, nHeight))
 				return DoS(80,error("AcceptBlock() : block timestamp too far in the future"));
 			//Halford 1-16-2015 - Block Timestamp too Early
@@ -3731,8 +3740,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 					return DoS(50,error("AcceptBlock() : block timestamp too far in the past"));
 				}
 			}
-			
-
+		
 			// Check coinbase timestamp
 			if (GetBlockTime() > FutureDrift((int64_t)vtx[0].nTime, nHeight))
 			{
@@ -3744,13 +3752,9 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 			// Check timestamp against prev
 			if (GetBlockTime() <= pindexPrev->GetPastTimeLimit() || FutureDrift(GetBlockTime(), nHeight) < pindexPrev->GetBlockTime())
 				return DoS(60, error("AcceptBlock() : block's timestamp is too early"));
-		}
-
-		
-	    // Check proof-of-work or proof-of-stake
+		// Check proof-of-work or proof-of-stake
 		if (nBits != GetNextTargetRequired(pindexPrev, IsProofOfStake()))
 				return DoS(100, error("AcceptBlock() : incorrect %s", IsProofOfWork() ? "proof-of-work" : "proof-of-stake"));
-
 
 	}
 
@@ -4215,10 +4219,10 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
 			//1-8-2015 Extract solved Key
 			double solvedNonce = cdbl(AppCache(pindexBest->GetBlockHash().GetHex()),0);
 			nNonce=solvedNonce;
-			printf("7. Nonce %f, SNonce %f, StakeTime %f, MaxHistoricalTimeDrift %f, BestBlockPastTimeLimit %f, PastDriftBlockTime %f \r\n",
+			printf("7. Nonce %f, SNonce %f, StakeTime %f, MaxHistTD %f, BBPastTimeLimit %f, PastDriftBlockTm %f \r\n",
 				(double)nNonce,(double)solvedNonce,(double)txCoinStake.nTime,
 				(double)max(pindexBest->GetPastTimeLimit()+1, PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1)),
-				(double)pindexBest->GetPastTimeLimit(), PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1)	);
+				(double)pindexBest->GetPastTimeLimit(), (double)PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1)	);
 		    if (txCoinStake.nTime >= max(pindexBest->GetPastTimeLimit()+1, PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1)))
 			{
                 // make sure coinstake would meet timestamp protocol

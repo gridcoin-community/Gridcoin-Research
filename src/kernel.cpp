@@ -606,17 +606,17 @@ bool StakeAcidTest(std::string grc_address, double por_diff, std::string last_bl
 	uint256 diff1 = uint256("0x00004fffffffffffffffffffffffffff");
 	uint256 diff2 = uint256("0x00003fffffffffffffffffffffffffff");
 	uint256 diff3 = uint256("0x00002fffffffffffffffffffffffffff");
-	uint256 diff4 = uint256("0x00001fffffffffffffffffffffffffff");
-	uint256 diff5 = uint256("0x00000fffffffffffffffffffffffffff");
-	uint256 diff6 = uint256("0x00000effffffffffffffffffffffffff");
-	uint256 diff7 = uint256("0x00000dffffffffffffffffffffffffff");
+	uint256 diff4 = uint256("0x00002fffffffffffffffffffffffffff");
+	uint256 diff5 = uint256("0x00002fffffffffffffffffffffffffff");
+	uint256 diff6 = uint256("0x00002fffffffffffffffffffffffffff");
+	uint256 diff7 = uint256("0x00002fffffffffffffffffffffffffff");
 	double nonce_height = 0;
 
-	if (payment_age > 60*60*24*14)                              nonce_height = 2000;
-	if (payment_age < 60*60*24*14 && payment_age  > 60*60*24*7) nonce_height = 3050;
-	if (payment_age < 60*60*24*7  && payment_age  > 60*60*24*3) nonce_height = 5000;
-	if (payment_age < 60*60*24*3  && payment_age  > 60*60*24*1) nonce_height = 6000;
-	if (payment_age < 60*60*24*1  && payment_age  > 60*60*12)   nonce_height = 9000;
+	if (payment_age > 60*60*24*14)                              nonce_height = 9000;
+	if (payment_age < 60*60*24*14 && payment_age  > 60*60*24*7) nonce_height = 9000;
+	if (payment_age < 60*60*24*7  && payment_age  > 60*60*24*3) nonce_height = 9000;
+	if (payment_age < 60*60*24*3  && payment_age  > 60*60*24*1) nonce_height = 9000;
+	if (payment_age < 60*60*24*1  && payment_age  > 60*60*12)   nonce_height = 10000;
 	if (payment_age < 60*60*12    && payment_age  > 60*60*6)    nonce_height = 10000;
 	if (payment_age < 60*60*6     && payment_age  > 60*60*2)    nonce_height = 30000;
 	if (payment_age < 60*60*2     && payment_age  > 60*60*1)    nonce_height = 40000;
@@ -808,6 +808,10 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 	double payment_age = std::abs((double)nTimeTx-(double)boincblock.LastPaymentTime);
     int64_t RSA_WEIGHT = GetRSAWeightByBlock(boincblock);
 	int oNC = 0;
+
+	bool ACID_TEST = StakeAcidTest(boincblock.GRCAddress,PORDiff,
+		pindexPrev->GetBlockHash().GetHex(),pindexPrev->nHeight,por_nonce,payment_age,boincblock.cpid);
+
  	double coin_age = std::abs((double)nTimeTx-(double)txPrev.nTime);
 	double BitsAge = PORDiff * 144; //For every 100 Diff in Bits, two hours of coin age for researchers
 	if (BitsAge > 86400) BitsAge=86400; //Limit to 24 hours (possibility of astronomical diff)
@@ -835,6 +839,17 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 			if (RSA_WEIGHT/14 < MintLimiter(PORDiff,RSA_WEIGHT)) narr += " RSAWeight < MintLimiter: "
 					+ RoundToString(RSA_WEIGHT/14,0) + "; " + RoundToString(MintLimiter(PORDiff,RSA_WEIGHT),0);
 		}
+
+		if (!ACID_TEST)      
+		{
+			narr += " POW Mining: " + RoundToString(por_nonce,0);
+		}
+		else
+		{
+			narr += " Kernel Found: " + RoundToString(por_nonce,0) + "-" + RoundToString(oNC,0) + "";
+		}
+	
+
 		if (RSA_WEIGHT >= 24999)        msMiningErrors7="Newbie block being generated.";
 		msMiningErrors5 = narr;
 	}
@@ -864,6 +879,7 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 	}
 	
 
+	if (!ACID_TEST) return false;
 
     if (nTimeTx < txPrev.nTime)  // Transaction timestamp violation
         return error("CheckStakeKernelHash() : nTime violation");
@@ -877,7 +893,7 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 
     // Weighted target 1-11-2015 Halford
     int64_t nValueIn = 0;
-	nValueIn = checking_local ? txPrev.vout[prevout.n].nValue + (RSA_WEIGHT/14*COIN) : txPrev.vout[prevout.n].nValue + (RSA_WEIGHT*COIN);
+	nValueIn = checking_local ? txPrev.vout[prevout.n].nValue + (RSA_WEIGHT*COIN) : txPrev.vout[prevout.n].nValue + (RSA_WEIGHT*COIN);
     CBigNum bnWeight = CBigNum(nValueIn);
     bnTarget *= bnWeight;
 
