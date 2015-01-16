@@ -20,7 +20,9 @@
         Dim sInsert As String
         sInsert = "<INSERT><TABLE>Confirm</TABLE><FIELDS>GRCFrom,GRCTo,txid,amount,Confirmed</FIELDS><VALUES>'" + Trim(sFrom) + "','" + Trim(sTo) + "','" + Trim(sTXID) + "','" + Trim(dAmt) + "','0'</VALUES></INSERT>"
         Dim sErr As String
-        sErr = mData.ExecuteP2P(sInsert)
+        sErr = mData.ExecuteP2P(sInsert, Nothing)
+
+
         Return sErr
     End Function
 
@@ -30,7 +32,8 @@
         Dim sInsert As String
         sInsert = "<INSERT><TABLE>Users</TABLE><FIELDS>Handle,GRCAddress</FIELDS><VALUES>'" _
             + Trim(sHandle) + "','" + Trim(sGRCaddress) + "'</VALUES></INSERT>"
-            sErr = mData.ExecuteP2P(sInsert)
+        sErr = mData.ExecuteP2P(sInsert, Nothing)
+
         If Len(sErr) > 1 Then
             'MsgBox(sErr, MsgBoxStyle.Critical, "Error while Adding User")
             Exit Function
@@ -43,27 +46,43 @@
         If mData Is Nothing Then mData = New Sql
         Dim sErr As String = ""
         Dim sInsert As String
-
         If sMode = "Add" Then
-
             sInsert = "<INSERT><TABLE>Ticket</TABLE><FIELDS>TicketId,SubmittedBy,AssignedTo,Disposition,Descript,Type</FIELDS><VALUES>'" _
             + Trim(sTicketId) + "','" + Trim(sSubmittedBy) + "','" + Trim(sAssignedTo) + "','" + Trim(sDisposition) + "','" + Trim(sDesc) + "','" + Trim(sType) + "'</VALUES></INSERT>"
-            sErr = mData.ExecuteP2P(sInsert)
-
+            sErr = mData.ExecuteP2P(sInsert, Nothing)
             If Len(sErr) > 1 Then
                 MsgBox(sErr, MsgBoxStyle.Critical, "Error while Creating Ticket")
                 Exit Function
             End If
-
         End If
         'Retrieve ticket Guid
         Dim sGuid As String = P2PValue("id", "Ticket", "TicketId", sTicketId)
         If (Len(sGuid) > 10) Then
             sInsert = "<INSERT><TABLE>TicketHistory</TABLE><FIELDS>Parent,Disposition,AssignedTo,Notes</FIELDS><VALUES>'" + Trim(sGuid) + "','" + Trim(sDisposition) + "','" + Trim(sAssignedTo) + "','" + Trim(sNotes) + "'</VALUES></INSERT>"
-            sErr += mData.ExecuteP2P(sInsert)
+            sErr += mData.ExecuteP2P(sInsert, Nothing)
+
+
         End If
         Return sErr
     End Function
+
+
+    Public Function mInsertAttachment(sParentId As String, sName As String, blob() As Byte) As String
+        If mData Is Nothing Then mData = New Sql
+        Dim sErr As String = ""
+        Dim sInsert As String '<BLOB></BLOB>
+
+
+
+        sInsert = "<INSERT><TABLE>Attachment</TABLE><FIELDS>Parent,BlobName</FIELDS><VALUES>'" + Trim(sParentId) + "','" + Trim(sName) _
+            + "'</VALUES></INSERT>"
+        sErr += mData.ExecuteP2P(sInsert, blob)
+
+        Return sErr
+    End Function
+
+
+
 
     Public msTXID As String = ""
 
@@ -83,7 +102,9 @@
 
         Dim sErr As String
         Log("Updating " + sUpdate)
-        sErr = mData.ExecuteP2P(sUpdate)
+        sErr = mData.ExecuteP2P(sUpdate, Nothing)
+
+
         Log("Done " + Trim(sErr))
 
         'Update Dummy

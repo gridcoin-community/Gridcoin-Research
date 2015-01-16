@@ -110,23 +110,83 @@ Public Class Sql
         'Find the node that is currently the leader, with a synced consensus:
         Dim sHost As String
         sHost = DefaultHostName("p2psql.gridcoin.us", False) + ":" + Trim(DefaultPort(32500, False))
+        sHost = "localhost:7777"
 
         Return sHost
     End Function
-    Public Function SQLQuery(sHost As String, sSQL As String) As String
+    Public Function SQLQuery(sHost As String, sSQL As String, sParams() As Byte) As String
         Dim sURL As String
         sURL = "http://" + sHost + "/p2psql.aspx?query="
         sSQL = Replace(sSQL, vbCr, "<CR>")
+
+
+        'sParams = Left(sParams, 1000)
+        '1-16-2015
+
 
         sSQL = Replace(sSQL, vbLf, "<LF>")
         For x = 1 To 3
             Try
                 Dim wc As New GRCWebClient
                 Using wc
-                    wc.Headers.Add("ContentType:application/x-www-form-urlencoded")
+                    '                    wc.Headers.Add("ContentType:application/x-www-form-urlencoded")
+                    wc.Headers(HttpRequestHeader.ContentType) = "application/x-www-form-urlencoded"
+
+
+                    '  wc.Headers(HttpRequestHeader.ContentType) = "application/octet-stream"
                     wc.Headers.Add("Query:<QUERY>" + sSQL + "</QUERY>")
+
+
                     Dim result As String
-                    result = wc.DownloadString(sURL)
+                    '      result = wc.DownloadString(sURL)
+
+                    'postArray = Encoding.ASCII.GetBytes(sParams)
+                    '  postArray = Encoding.UTF8.GetBytes(sParams)
+
+                    ' byte[] encbuff = Encoding.UTF8.GetBytes(str);
+                    Dim responseArray As Byte()
+                    If sParams Is Nothing Then
+                        result = wc.UploadString(sURL, "")
+
+
+                    Else
+                        ' Dim postArray As Byte()
+                        ' sReq = System.Text.Encoding.UTF8.GetString(b)
+
+                        '     postArray = Encoding.UTF8.GetBytes(sParams)
+                        '  postArray = Encoding.ASCII.GetBytes("POSTDATA=HI;blahblah")
+                        'Dim sBase64 As String
+                        'sBase64 = Encoding.
+                        Dim sBase64 As String = System.Convert.ToBase64String(sParams, 0, sParams.Length)
+                        '       sBase64 = Replace(sBase64, "/", "[1]")
+                        '      sBase64 = Replace(sBase64, "<", "[2]")
+
+                        'sBase64 = Replace(sBase64, ">", "[3]")
+
+                        ' sBase64 = System.Web.HttpUtility.HtmlEncode(sBase64)
+                        ' sBase64 = System.Web.HttpUtility.HtmlEncode(sParams)
+
+
+                        Dim sPreEncoded As String = ""
+                        sPreEncoded = sBase64
+
+
+                        sBase64 = Replace(sBase64, "/", "HTMLSLASH")
+                        sBase64 = Replace(sBase64, "==", "HTMLDOUBLEEQUALS")
+
+                        Dim p2 As Byte()
+                        p2 = Encoding.ASCII.GetBytes(sBase64)
+                        
+
+                        responseArray = wc.UploadData(sURL, p2)
+                        'result = wc.UploadString(sURL, sBase64)
+
+
+                        result = Encoding.ASCII.GetString(responseArray)
+
+                    End If
+                    
+                    
                     Dim sErr As String
                     sErr = ExtractXML(result, "<ERROR>", "</ERROR>")
                     If Len(sErr) > 0 Then MsgBox(sErr)
@@ -134,12 +194,12 @@ Public Class Sql
 
                 End Using
             Catch ex As Exception
-                If x = 9 Then Throw ex
+                If x = 3 Then Throw ex
             End Try
         Next
     End Function
 
-    Public Function ExecuteP2P(sCommand As String) As String
+    Public Function ExecuteP2P(sCommand As String, sParams() As Byte) As String
         Dim sHost As String
         Dim sData As String = ""
         System.Windows.Forms.Cursor.Current = Cursors.WaitCursor
@@ -147,13 +207,14 @@ Public Class Sql
         For x = 1 To 3
             Try
                 sHost = GetMasterNodeURL()
-                sData = SQLQuery(sHost, sCommand)
+                sData = SQLQuery(sHost, sCommand, sParams)
+
                 If sData = "" Then
                     System.Windows.Forms.Cursor.Current = Cursors.Default
                     Return sData
 
                 End If
-                If sData <> "" And x = 9 Then
+                If sData <> "" And x = 3 Then
                     System.Windows.Forms.Cursor.Current = Cursors.Default
 
                     Return sData
@@ -165,7 +226,7 @@ Public Class Sql
                 'Throw ex
                 System.Windows.Forms.Cursor.Current = Cursors.Default
 
-                If x = 9 Then Return ex.Message
+                If x = 3 Then Return ex.Message
             End Try
         Next x
         System.Windows.Forms.Cursor.Current = Cursors.Default
@@ -182,7 +243,8 @@ Public Class Sql
             Dim sHost As String
             sHost = GetMasterNodeURL()
 
-            sData = SQLQuery(sHost, Sql)
+            sData = SQLQuery(sHost, Sql, Nothing)
+
             Dim vData() As String
             vData = Split(sData, "<ROW>")
             Dim vHeader() As String

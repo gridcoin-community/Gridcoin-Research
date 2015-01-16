@@ -98,14 +98,15 @@ Public Class frmSQL
         Dim sInsert As String
         sInsert = "<INSERT><TABLE>Confirm</TABLE><FIELDS>GRCFrom,GRCTo,txid,amount,Confirmed</FIELDS><VALUES>'" + Trim(sFrom) + "','" + Trim(sTo) + "','" + Trim(sTXID) + "','" + Trim(dAmt) + "','0'</VALUES></INSERT>"
         Dim sErr As String
-        sErr = mData.ExecuteP2P(sInsert)
+        sErr = mData.ExecuteP2P(sInsert, Nothing)
         Return sErr
     End Function
     Public Function UpdateConfirm(sTXID As String, iStatus As Long) As String
         Dim sUpdate As String
         sUpdate = "<UPDATE><TABLE>Confirm</TABLE><FIELDS>Confirmed</FIELDS><VALUES>'" + Trim(iStatus) + "'</VALUES><WHEREFIELDS>txid</WHEREFIELDS><WHEREVALUES>'" + sTXID + "'</WHEREVALUES></UPDATE>"
         Dim sErr As String
-        sErr = mData.ExecuteP2P(sUpdate)
+        sErr = mData.ExecuteP2P(sUpdate, Nothing)
+
         Return sErr
 
     End Function

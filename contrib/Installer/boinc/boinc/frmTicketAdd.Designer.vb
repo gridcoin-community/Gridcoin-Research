@@ -39,6 +39,7 @@ Partial Class frmTicketAdd
         Me.tvTicketHistory = New System.Windows.Forms.TreeView()
         Me.Label8 = New System.Windows.Forms.Label()
         Me.txtSubmittedBy = New System.Windows.Forms.TextBox()
+        Me.btnAddAttachment = New System.Windows.Forms.Button()
         Me.SuspendLayout()
         '
         'Label1
@@ -216,12 +217,24 @@ Partial Class frmTicketAdd
         Me.txtSubmittedBy.Size = New System.Drawing.Size(312, 20)
         Me.txtSubmittedBy.TabIndex = 2
         '
+        'btnAddAttachment
+        '
+        Me.btnAddAttachment.BackColor = System.Drawing.Color.Gray
+        Me.btnAddAttachment.ForeColor = System.Drawing.Color.Lime
+        Me.btnAddAttachment.Location = New System.Drawing.Point(548, 130)
+        Me.btnAddAttachment.Name = "btnAddAttachment"
+        Me.btnAddAttachment.Size = New System.Drawing.Size(112, 29)
+        Me.btnAddAttachment.TabIndex = 17
+        Me.btnAddAttachment.Text = "Add Attachment"
+        Me.btnAddAttachment.UseVisualStyleBackColor = False
+        '
         'frmTicketAdd
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.BackColor = System.Drawing.Color.Black
         Me.ClientSize = New System.Drawing.Size(937, 666)
+        Me.Controls.Add(Me.btnAddAttachment)
         Me.Controls.Add(Me.txtSubmittedBy)
         Me.Controls.Add(Me.Label8)
         Me.Controls.Add(Me.cmbType)
@@ -262,4 +275,5 @@ End Sub
     Private WithEvents tvTicketHistory As System.Windows.Forms.TreeView
     Friend WithEvents Label8 As System.Windows.Forms.Label
     Friend WithEvents txtSubmittedBy As System.Windows.Forms.TextBox
+    Friend WithEvents btnAddAttachment As System.Windows.Forms.Button
 End Class

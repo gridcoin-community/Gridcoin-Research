@@ -214,4 +214,18 @@ Public Class frmTicketAdd
     Private Sub cmbDisposition_SelectedIndexChanged(sender As System.Object, e As System.EventArgs) Handles cmbDisposition.SelectedIndexChanged
 
     End Sub
+
+    Private Sub btnAddAttachment_Click(sender As System.Object, e As System.EventArgs) Handles btnAddAttachment.Click
+        Exit Sub
+
+        'Dim sPath As String
+        'sPath = "c:\boinchashingalgorithm.pdf"
+        'Dim sData As String
+        'sData = FileToBase64String(sPath)
+        'Base64StringToFile(sData, "c:\bha2.pdf")
+        'Me.WindowState = FormWindowState.Minimized
+        'Dim b As Byte()
+        'b = FileToBytes(sPath)
+        'mInsertAttachment("B850E047-73B5-43E1-A709-DCF27E42F755", "bha3.pdf", b)
+    End Sub
 End Class

@@ -358,7 +358,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 116862;
+ int nGrandfather = 117226;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -3722,6 +3722,16 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 			// Check timestamp
 			if (GetBlockTime() > FutureDrift(GetAdjustedTime()+10, nHeight))
 				return DoS(80,error("AcceptBlock() : block timestamp too far in the future"));
+			//Halford 1-16-2015 - Block Timestamp too Early
+
+			if (!ClientOutOfSync())
+			{
+				if (GetBlockTime() < PastDrift(GetAdjustedTime(), nHeight))
+				{
+					return DoS(50,error("AcceptBlock() : block timestamp too far in the past"));
+				}
+			}
+			
 
 			// Check coinbase timestamp
 			if (GetBlockTime() > FutureDrift((int64_t)vtx[0].nTime, nHeight))

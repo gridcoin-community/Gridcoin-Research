@@ -670,10 +670,14 @@ int64_t CPIDChronoStart(std::string cpid)
 
 bool IsCPIDTimeValid(std::string cpid, int64_t locktime)
 {
+	return true;
+
 	if (cpid.empty()) return true;
 	if (cpid=="INVESTOR" || cpid=="investor") return true;
 	double offset = CPIDTime(cpid);
 	int64_t passed = SecondsSinceMidnight(locktime);
+	if (fDebug3) printf("In locktime %f, Passed %f, Offset %f \r\n",locktime,passed,offset);
+
 	if (passed >= offset && passed <= (offset+(30*60))) return true;
 	return false;
 }
