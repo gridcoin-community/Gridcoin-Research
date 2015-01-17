@@ -111,7 +111,7 @@ uint256 muGlobalCheckpointHash = 0;
 uint256 muGlobalCheckpointHashRelayed = 0;
 int muGlobalCheckpointHashCounter = 0;
 ///////////////////////MINOR VERSION////////////////////////////////
-int MINOR_VERSION = 180;
+int MINOR_VERSION = 190;
 
 			
 bool IsUserQualifiedToSendCheckpoint();
@@ -358,7 +358,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 117700;
+ int nGrandfather = 118200;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -3585,6 +3585,7 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
 		}
 
 	
+		/*
 	if (height1 > nGrandfather && !ClientOutOfSync() && !fLoadingIndex)
 	{
 		//1-16-2015
@@ -3598,6 +3599,8 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
 					return DoS(10,error("AcceptBlock() : block timestamp too far in the future"));
 		}
 	}
+	*/
+
 		
 
 
@@ -3730,6 +3733,8 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 	if (nHeight > nGrandfather)
 	{
 	  		// Check timestamp
+
+			/*
 			if (GetBlockTime() > FutureDrift(GetAdjustedTime()+10, nHeight))
 				return DoS(80,error("AcceptBlock() : block timestamp too far in the future"));
 			//Halford 1-16-2015 - Block Timestamp too Early
@@ -3742,7 +3747,8 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 					return error("AcceptBlock(2) : block timestamp too far in the past");
 				}
 			}
-		
+			*/
+
 			// Check coinbase timestamp
 			if (GetBlockTime() > FutureDrift((int64_t)vtx[0].nTime, nHeight))
 			{
