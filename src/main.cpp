@@ -111,7 +111,7 @@ uint256 muGlobalCheckpointHash = 0;
 uint256 muGlobalCheckpointHashRelayed = 0;
 int muGlobalCheckpointHashCounter = 0;
 ///////////////////////MINOR VERSION////////////////////////////////
-int MINOR_VERSION = 160;
+int MINOR_VERSION = 180;
 
 			
 bool IsUserQualifiedToSendCheckpoint();
@@ -358,7 +358,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 117400;
+ int nGrandfather = 117700;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2786,7 +2786,7 @@ double ClientVersionNew()
 bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 {
     // Check it again in case a previous version let a bad block in, but skip BlockSig checking
-    if (!CheckBlock(pindex->pprev->nHeight,!fJustCheck, !fJustCheck, false))
+    if (!CheckBlock(pindex->pprev->nHeight,!fJustCheck, !fJustCheck, false,false))
         return false;
 
     //// issue here: it doesn't know the version
@@ -3559,7 +3559,7 @@ int BlockHeight(uint256 bh)
 }
 	
 
-bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig) const
+bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig, bool fLoadingIndex) const
 {
     
 	//1-16-2015
@@ -3585,17 +3585,18 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
 		}
 
 	
-	if (height1 > nGrandfather && !ClientOutOfSync())
+	if (height1 > nGrandfather && !ClientOutOfSync() && !fLoadingIndex)
 	{
-				if (GetBlockTime() < PastDrift(GetAdjustedTime(), height1))
-				{
+		//1-16-2015
+		double nLastTime = max(pindexBest->GetMedianTimePast()+1, GetAdjustedTime());
+		if (GetBlockTime() < nLastTime)
+		{
 					return error("AcceptBlock() : block timestamp too far in the past");
-				}
-
-				if (GetBlockTime() > FutureDrift(GetAdjustedTime(), height1))
-				{
+		}
+		if (GetBlockTime() > FutureDrift(GetAdjustedTime(), height1))
+		{
 					return DoS(10,error("AcceptBlock() : block timestamp too far in the future"));
-				}
+		}
 	}
 		
 
@@ -3735,9 +3736,10 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 
 			if (!ClientOutOfSync())
 			{
-				if (GetBlockTime() < PastDrift(GetAdjustedTime(), nHeight))
+				double nLastTime = max(pindexBest->GetMedianTimePast()+1, GetAdjustedTime());
+				if (GetBlockTime() < nLastTime)
 				{
-					return DoS(50,error("AcceptBlock() : block timestamp too far in the past"));
+					return error("AcceptBlock(2) : block timestamp too far in the past");
 				}
 			}
 		
