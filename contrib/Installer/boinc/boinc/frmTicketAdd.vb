@@ -28,7 +28,7 @@ Public Class frmTicketAdd
         cmbAssignedTo.Items.Add("Gridcoin")
         cmbAssignedTo.Items.Add("All")
         For y As Integer = 1 To gr.Rows
-            cmbAssignedTo.Items.Add(gr.Value(y, "handle"))
+            cmbAssignedTo.Items.Add("" & gr.Value(y, "handle"))
         Next
 
         'Dispositions
@@ -269,8 +269,8 @@ Public Class frmTicketAdd
 
 
     End Sub
+    Private Function DownloadAttachment() As String
 
-    Private Sub btnOpenAttachment_Click(sender As System.Object, e As System.EventArgs) Handles btnOpenAttachment.Click
         If Len(txtAttachment.Text) > 1 Then
             'First does it exist already?
             Dim sDir As String = ""
@@ -284,13 +284,27 @@ Public Class frmTicketAdd
                 'Show the history for this selected row
                 Dim sBlobGuid As String
                 sBlobGuid = drHistory.Value(Val(sID), "BlobGuid")
-                If Len(sBlobGuid) < 5 Then MsgBox("Attachment has been removed from the P2P server", MsgBoxStyle.Critical) : Exit Sub
+                If Len(sBlobGuid) < 5 Then MsgBox("Attachment has been removed from the P2P server", MsgBoxStyle.Critical) : Exit Function
                 sFullPath = mRetrieveAttachment(sBlobGuid, txtAttachment.Text)
             End If
-            If System.IO.File.Exists(sFullPath) Then
-                'Launch
-                Process.Start(sFullPath)
-            End If
+            Return sFullPath
+        End If
+
+    End Function
+    Private Sub btnOpenAttachment_Click(sender As System.Object, e As System.EventArgs) Handles btnOpenAttachment.Click
+        Dim sFullpath As String = DownloadAttachment()
+        If System.IO.File.Exists(sFullPath) Then
+            'Launch
+            Process.Start(sFullPath)
+        End If
+    End Sub
+
+    Private Sub btnOpenFolder_Click(sender As System.Object, e As System.EventArgs) Handles btnOpenFolder.Click
+        Dim sFullpath As String = DownloadAttachment()
+        If System.IO.File.Exists(sFullpath) Then
+            Process.Start(GetGridFolder() + "Attachments\")
+        Else
+            MsgBox("File has been removed from the P2P Server", MsgBoxStyle.Critical)
 
         End If
     End Sub

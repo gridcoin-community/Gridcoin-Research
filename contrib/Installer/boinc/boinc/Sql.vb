@@ -4,6 +4,7 @@ Imports System.IO
 Imports Microsoft.VisualBasic
 Imports System.Net
 Imports System.Windows.Forms
+Imports System.Globalization
 
 Public Class GridcoinReader
     Public Rows As Long
@@ -128,64 +129,32 @@ Public Class Sql
             Try
                 Dim wc As New GRCWebClient
                 Using wc
-                    '                    wc.Headers.Add("ContentType:application/x-www-form-urlencoded")
                     wc.Headers(HttpRequestHeader.ContentType) = "application/x-www-form-urlencoded"
-
-
-                    '  wc.Headers(HttpRequestHeader.ContentType) = "application/octet-stream"
                     wc.Headers.Add("Query:<QUERY>" + sSQL + "</QUERY>")
 
-
                     Dim result As String
-                    '      result = wc.DownloadString(sURL)
-
-                    'postArray = Encoding.ASCII.GetBytes(sParams)
-                    '  postArray = Encoding.UTF8.GetBytes(sParams)
-
-                    ' byte[] encbuff = Encoding.UTF8.GetBytes(str);
                     Dim responseArray As Byte()
                     If sParams Is Nothing Then
                         result = wc.UploadString(sURL, "")
 
-
                     Else
-                        ' Dim postArray As Byte()
-                        ' sReq = System.Text.Encoding.UTF8.GetString(b)
-
-                        '     postArray = Encoding.UTF8.GetBytes(sParams)
-                        '  postArray = Encoding.ASCII.GetBytes("POSTDATA=HI;blahblah")
-                        'Dim sBase64 As String
-                        'sBase64 = Encoding.
                         Dim sBase64 As String = System.Convert.ToBase64String(sParams, 0, sParams.Length)
-                        '       sBase64 = Replace(sBase64, "/", "[1]")
-                        '      sBase64 = Replace(sBase64, "<", "[2]")
-
-                        'sBase64 = Replace(sBase64, ">", "[3]")
-
-                        ' sBase64 = System.Web.HttpUtility.HtmlEncode(sBase64)
-                        ' sBase64 = System.Web.HttpUtility.HtmlEncode(sParams)
-
-
                         Dim sPreEncoded As String = ""
                         sPreEncoded = sBase64
-
 
                         sBase64 = Replace(sBase64, "/", "HTMLSLASH")
                         sBase64 = Replace(sBase64, "==", "HTMLDOUBLEEQUALS")
 
                         Dim p2 As Byte()
                         p2 = Encoding.ASCII.GetBytes(sBase64)
-                        
 
                         responseArray = wc.UploadData(sURL, p2)
-                        'result = wc.UploadString(sURL, sBase64)
-
 
                         result = Encoding.ASCII.GetString(responseArray)
 
                     End If
-                    
-                    
+
+
                     Dim sErr As String
                     sErr = ExtractXML(result, "<ERROR>", "</ERROR>")
                     If Len(sErr) > 0 Then MsgBox(sErr)
@@ -257,6 +226,17 @@ Public Class Sql
         System.Windows.Forms.Cursor.Current = Cursors.Default
         Return sBoincBytes
     End Function
+    Public Function UnCleanBody(sData As String) As String
+        sData = Replace(sData, "[Q]", "'")
+        sData = Replace(sData, "[LESSTHAN]", "<")
+        sData = Replace(sData, "[GREATERTHAN]", ">")
+        sData = Replace(sData, "[DQ]", Chr(34))
+
+
+        Return sData
+
+    End Function
+
     Public Function GetGridcoinReader(Sql As String) As GridcoinReader
 
         Try
@@ -294,14 +274,15 @@ Public Class Sql
                     Dim oValue As Object
                     If sType = "SYSTEM.STRING" Then
                         oValue = vRow(y).ToString()
+                        oValue = UnCleanBody(oValue)
                     ElseIf sType = "SYSTEM.INTEGER" Then
                         oValue = CInt(vRow(y))
                     ElseIf sType = "SYSTEM.DATETIME" Then
                         '12-17-2014 - Add support for dd-mm-yyyy date format for global cultures
                         'Dim global_date_style As System.Globalization.DateTimeStyles
                         'Dim culture As Globalization.CultureInfo = Globalization.CultureInfo.CreateSpecificCulture("en-US")
-                        oValue = CDate(vRow(y))
-
+                        'oValue = CDate(vRow(y))
+                        oValue = ConvertGlobalDate(vRow(y))
                         'Dim good_date As Boolean = DateTime.TryParseExact(vRow(y), "MM/dd/yyyy hh:mm:ss tt", culture, Globalization.DateTimeStyles.None, oValue)
 
                     ElseIf sType = "SYSTEM.DECIMAL" Then
@@ -327,6 +308,37 @@ Public Class Sql
         End Try
         System.Windows.Forms.Cursor.Current = Cursors.Default
 
+
+    End Function
+    Public Function ConvertGlobalDate(ByVal strdate As String) As DateTime
+
+        Dim dtOut As DateTime
+
+        Try
+
+            Dim vD() As String
+            vD = Split(strdate, " ")
+
+            If UBound(vD) < 1 Then Return Now
+
+            Dim vDate() As String
+            vDate = Split(vD(0), "/")
+
+            Dim vHour() As String
+            vHour = Split(vD(1), ":")
+
+            Dim sAM As String = UCase(vD(2))
+            If sAM = "PM" Then vHour(0) = Trim(Val(vHour(0) + 12))
+
+
+            dtOut = New DateTime(Val(vDate(2)), Val(vDate(0)), Val(vDate(1)), Val(vHour(0)), Val(vHour(1)), Val(vHour(2)))
+
+        Catch ex As Exception
+            Log("Invalid date specified " + Trim(strdate))
+            Return Now
+
+        End Try
+        Return dtOut
 
     End Function
 

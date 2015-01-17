@@ -1685,9 +1685,8 @@ void NetworkTimer()
 {
 	if (mdMachineTimerLast == 0) mdMachineTimerLast = GetAdjustedTime();
 	double elapsed = GetAdjustedTime() - mdMachineTimerLast;
-
+	mdPORNonce += 1;
 	if (elapsed < 5) return;
-
 	mdMachineTimerLast = GetAdjustedTime();
 	if (elapsed < 1) elapsed = 1;
 	mdPORNonce += (elapsed*10);

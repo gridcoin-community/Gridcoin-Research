@@ -40,12 +40,31 @@
         End If
         Return sErr
     End Function
+    Public Function CleanBody(sData As String) As String
+
+        sData = Replace(sData, "'", "[Q]")
+        sData = Replace(sData, "`", "[Q]")
+        sData = Replace(sData, "<", "[LESSTHAN]")
+        sData = Replace(sData, ">", "[GREATERTHAN]")
+        sData = Replace(sData, "‘", "[Q]")
+        sData = Replace(sData, "’", "[Q]")
+        sData = Replace(sData, Chr(147), "[DQ]")
+        sData = Replace(sData, Chr(148), "[DQ]")
+
+        sData = Replace(sData, Chr(34), "[DQ]")
 
 
+
+        Return sData
+
+    End Function
+    
     Public Function mInsertTicket(sMode As String, sSubmittedBy As String, sTicketId As String, sAssignedTo As String, sDisposition As String, sDesc As String, sType As String, sNotes As String) As String
         If mData Is Nothing Then mData = New Sql
         Dim sErr As String = ""
         Dim sInsert As String
+        sNotes = CleanBody(sNotes)
+
         If sMode = "Add" Then
             sInsert = "<INSERT><TABLE>Ticket</TABLE><FIELDS>TicketId,SubmittedBy,AssignedTo,Disposition,Descript,Type</FIELDS><VALUES>'" _
             + Trim(sTicketId) + "','" + Trim(sSubmittedBy) + "','" + Trim(sAssignedTo) + "','" + Trim(sDisposition) + "','" + Trim(sDesc) + "','" + Trim(sType) + "'</VALUES></INSERT>"
@@ -150,7 +169,7 @@
             Log("HEINOUS 2:" + ex.Message)
             Return 0
         End Try
-      
+
     End Function
 
     Public Function mGetFilteredTickets(sFilter As String, sAssignedTo As String) As GridcoinReader
@@ -183,7 +202,7 @@
         If mData Is Nothing Then mData = New Sql
         Dim myGuid As String
         myGuid = P2PValue("id", "Ticket", "TicketId", sTicketID)
-        
+
         Dim dr As GridcoinReader
         If myGuid = "" Then Return dr
 
@@ -232,7 +251,7 @@
         Dim dr As GridcoinReader
         Dim sql As String
         sql = "Select Max(Cast (" + LookupField + " as money)) from " + sTable + " where deleted=0 "
-       
+
         Try
             dr = mData.GetGridcoinReader(sql)
 
@@ -270,7 +289,7 @@
         Try
             Dim grr As New GridcoinReader.GridcoinRow
             grr = dr.GetRow(1)
-           
+
             Return grr.Values(0).ToString()
 
         Catch ex As Exception
@@ -291,7 +310,7 @@
     Sub New()
         ReDim vProj(100)
         vProj(0) = "http://boinc.bakerlab.org/rosetta/   |rosetta@home"
-      
+
 
     End Sub
     Public Function CodeToProject(sCode As String) As BoincProject
@@ -443,7 +462,7 @@
             Dim dBlock As Double = d.HighBlockNumber
             Dim lBlock As Double = dBlock - 8640 '15 days back
             If lBlock < 101 Then lBlock = 101
-          
+
             sql = "Delete from Leaderboard" 'Truncate Table
             d.Exec(sql)
             '''''''''Fake temporary data useful for sample queries until all the clients sync blocks into sql server: (1-1-2014)
@@ -553,7 +572,7 @@
                     End If
                 End If
             Next y
-            
+
             d.ExecHugeQuery(sbi)
             'Update Project Count
             Log("Updating factors")
@@ -585,12 +604,12 @@
     Public Function Outdated(ByVal data As String, ByVal mins As Long) As Boolean
         Try
 
-        If Trim(data) = "" Then Return True
-        If IsDate(data) = False Then Return True
-        Dim lMins As Long
+            If Trim(data) = "" Then Return True
+            If IsDate(data) = False Then Return True
+            Dim lMins As Long
             lMins = Math.Abs(DateDiff(DateInterval.Minute, Now, CDate(data)))
 
-        If lMins > mins Then Return True
+            If lMins > mins Then Return True
             Return False
         Catch ex As Exception
             Return True
