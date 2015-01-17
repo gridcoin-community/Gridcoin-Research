@@ -110,9 +110,7 @@ Public Class Sql
         'Find the node that is currently the leader, with a synced consensus:
         Dim sHost As String
         sHost = DefaultHostName("p2psql.gridcoin.us", False) + ":" + Trim(DefaultPort(32500, False))
-        'sHost = "localhost:0"
-
-
+        'sHost = "localhost:0
         Return sHost
     End Function
     Public Function SQLQuery(sHost As String, sSQL As String, sParams() As Byte) As String
@@ -231,7 +229,33 @@ Public Class Sql
             End Try
         Next x
         System.Windows.Forms.Cursor.Current = Cursors.Default
+    End Function
+    Public Function BoincBlob(sBlobId As String) As String
+        Dim sBlob As String
+        sBlob = BoincHarmonyP2PExecute("select BlobData from attachment where id = '" + sBlobId + "' and deleted=0")
+        If Len(sBlob) > 100 Then
+            Return sBlob
+        Else
+            Return "<ERROR>" + sBlob + "</ERROR>"
+        End If
 
+    End Function
+    Public Function BoincHarmonyP2PExecute(Sql As String)
+        Dim sBoincBytes As String = ""
+
+        Try
+            System.Windows.Forms.Cursor.Current = Cursors.WaitCursor
+            Dim sHarmonyP2PServerHost = GetMasterNodeURL()
+            sBoincBytes = SQLQuery(sHarmonyP2PServerHost, Sql, Nothing)
+            System.Windows.Forms.Cursor.Current = Cursors.Default
+        Catch ex As Exception
+            Log("BoincHarmonyP2PExecute:" + Sql + ":" + ex.Message)
+            System.Windows.Forms.Cursor.Current = Cursors.Default
+            If bThrowUIErrors Then Throw ex
+            Return sBoincBytes
+        End Try
+        System.Windows.Forms.Cursor.Current = Cursors.Default
+        Return sBoincBytes
     End Function
     Public Function GetGridcoinReader(Sql As String) As GridcoinReader
 

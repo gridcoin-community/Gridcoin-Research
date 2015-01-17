@@ -72,8 +72,6 @@
         Dim sErr As String = ""
         Dim sInsert As String '<BLOB></BLOB>
 
-
-
         sInsert = "<INSERT><TABLE>Attachment</TABLE><FIELDS>Parent,BlobName</FIELDS><VALUES>'" + Trim(sParentId) + "','" + Trim(sName) _
             + "'</VALUES></INSERT>"
         sErr += mData.ExecuteP2P(sInsert, blob)
@@ -81,6 +79,20 @@
         Return sErr
     End Function
 
+
+    Public Function mRetrieveAttachment(sId As String, sName As String) As String
+
+        Dim sPath As String = GetGridFolder() + "\Attachments"
+        If System.IO.Directory.Exists(sPath) = False Then MkDir(sPath)
+        Dim sFullPath As String = sPath + "\" + sName
+        Dim sData As String = mData.BoincBlob(sId)
+        If InStr(1, sData, "<ERROR>") > 0 Then MsgBox(sData, MsgBoxStyle.Critical) : Exit Function
+        Dim sBase64 As String = ExtractXML(sData, "<BLOB>", "</BLOB>")
+        WriteBase64StringToFile(sFullPath, sBase64)
+        Return sFullPath
+
+
+    End Function
 
 
 
@@ -150,10 +162,11 @@
         If Len(sAssignedTo) > 1 Then
             sClause = " and id in (select a.parent from ( select Parent,max(updated) as maxdate      FROM ticketHistory" _
                 & "   group by ticketHistory.parent) " _
-                & "   a     inner join TicketHistory as TH on th.parent = A.parent and th.updated = a.maxdate   where th.assignedTo='" + sAssignedTo + "'   )"
+                & "   a     inner join TicketHistory as TH on th.parent = A.parent and th.updated = a.maxdate   where th.assignedTo='" + sAssignedTo + "'   ) "
         End If
 
-        sql = "Select * From Ticket " + sFilter + " " + sClause
+        sql = "Select * From Ticket " + sFilter + " " + sClause + " ORDER BY UPDATED DESC "
+
 
         Try
             Log(sql)
@@ -174,9 +187,9 @@
         Dim dr As GridcoinReader
         If myGuid = "" Then Return dr
 
-
         Dim sql As String
-        sql = "Select * From TicketHistory where Parent='" + myGuid + "' Order By Added"
+        sql = "Select TicketHistory.*,Attachment.Id as BlobGuid,Attachment.BlobName From TicketHistory left join attachment on Attachment.Parent = TicketHistory.id where TicketHistory.Parent = '" + myGuid + "' Order by Added"
+
         Try
             dr = mData.GetGridcoinReader(sql)
         Catch ex As Exception

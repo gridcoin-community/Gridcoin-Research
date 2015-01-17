@@ -134,6 +134,12 @@ Module modGRC
         Dim sBase64 As String = System.Convert.ToBase64String(b, 0, b.Length)
         Return sBase64
     End Function
+    Public Function WriteBase64StringToFile(sFileName As String, sData As String)
+        Dim sFilePath As String = sFileName
+        Dim b() As Byte
+        b = System.Convert.FromBase64String(sData)
+        System.IO.File.WriteAllBytes(sFilePath, b)
+    End Function
 
 
     Public Function FileToBytes(sSourceFileName As String) As Byte()

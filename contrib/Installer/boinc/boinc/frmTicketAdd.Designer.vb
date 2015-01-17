@@ -40,6 +40,9 @@ Partial Class frmTicketAdd
         Me.Label8 = New System.Windows.Forms.Label()
         Me.txtSubmittedBy = New System.Windows.Forms.TextBox()
         Me.btnAddAttachment = New System.Windows.Forms.Button()
+        Me.txtAttachment = New System.Windows.Forms.TextBox()
+        Me.Label9 = New System.Windows.Forms.Label()
+        Me.btnOpenAttachment = New System.Windows.Forms.Button()
         Me.SuspendLayout()
         '
         'Label1
@@ -161,7 +164,7 @@ Partial Class frmTicketAdd
         Me.rtbNotes.ForeColor = System.Drawing.Color.Lime
         Me.rtbNotes.Location = New System.Drawing.Point(73, 208)
         Me.rtbNotes.Name = "rtbNotes"
-        Me.rtbNotes.Size = New System.Drawing.Size(744, 250)
+        Me.rtbNotes.Size = New System.Drawing.Size(760, 250)
         Me.rtbNotes.TabIndex = 7
         Me.rtbNotes.Text = ""
         '
@@ -194,7 +197,7 @@ Partial Class frmTicketAdd
         Me.tvTicketHistory.ForeColor = System.Drawing.Color.Lime
         Me.tvTicketHistory.Location = New System.Drawing.Point(72, 486)
         Me.tvTicketHistory.Name = "tvTicketHistory"
-        Me.tvTicketHistory.Size = New System.Drawing.Size(745, 147)
+        Me.tvTicketHistory.Size = New System.Drawing.Size(761, 147)
         Me.tvTicketHistory.TabIndex = 12
         '
         'Label8
@@ -228,12 +231,46 @@ Partial Class frmTicketAdd
         Me.btnAddAttachment.Text = "Add Attachment"
         Me.btnAddAttachment.UseVisualStyleBackColor = False
         '
+        'txtAttachment
+        '
+        Me.txtAttachment.BackColor = System.Drawing.Color.Teal
+        Me.txtAttachment.ForeColor = System.Drawing.Color.Yellow
+        Me.txtAttachment.Location = New System.Drawing.Point(537, 85)
+        Me.txtAttachment.Name = "txtAttachment"
+        Me.txtAttachment.ReadOnly = True
+        Me.txtAttachment.Size = New System.Drawing.Size(296, 20)
+        Me.txtAttachment.TabIndex = 18
+        '
+        'Label9
+        '
+        Me.Label9.AutoSize = True
+        Me.Label9.ForeColor = System.Drawing.Color.Lime
+        Me.Label9.Location = New System.Drawing.Point(462, 93)
+        Me.Label9.Name = "Label9"
+        Me.Label9.Size = New System.Drawing.Size(64, 13)
+        Me.Label9.TabIndex = 19
+        Me.Label9.Text = "Attachment:"
+        '
+        'btnOpenAttachment
+        '
+        Me.btnOpenAttachment.BackColor = System.Drawing.Color.Gray
+        Me.btnOpenAttachment.ForeColor = System.Drawing.Color.Lime
+        Me.btnOpenAttachment.Location = New System.Drawing.Point(721, 130)
+        Me.btnOpenAttachment.Name = "btnOpenAttachment"
+        Me.btnOpenAttachment.Size = New System.Drawing.Size(112, 29)
+        Me.btnOpenAttachment.TabIndex = 20
+        Me.btnOpenAttachment.Text = "Open Attachment"
+        Me.btnOpenAttachment.UseVisualStyleBackColor = False
+        '
         'frmTicketAdd
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.BackColor = System.Drawing.Color.Black
         Me.ClientSize = New System.Drawing.Size(937, 666)
+        Me.Controls.Add(Me.btnOpenAttachment)
+        Me.Controls.Add(Me.txtAttachment)
+        Me.Controls.Add(Me.Label9)
         Me.Controls.Add(Me.btnAddAttachment)
         Me.Controls.Add(Me.txtSubmittedBy)
         Me.Controls.Add(Me.Label8)
@@ -276,4 +313,7 @@ End Sub
     Friend WithEvents Label8 As System.Windows.Forms.Label
     Friend WithEvents txtSubmittedBy As System.Windows.Forms.TextBox
     Friend WithEvents btnAddAttachment As System.Windows.Forms.Button
+    Friend WithEvents txtAttachment As System.Windows.Forms.TextBox
+    Friend WithEvents Label9 As System.Windows.Forms.Label
+    Friend WithEvents btnOpenAttachment As System.Windows.Forms.Button
 End Class

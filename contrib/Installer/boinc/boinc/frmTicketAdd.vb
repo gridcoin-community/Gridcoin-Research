@@ -7,6 +7,7 @@ Public Class frmTicketAdd
     Private drHistory As GridcoinReader
     Public sHandle As String = ""
 
+    Private sHistoryGuid As String
 
     Private Sub frmTicketAdd_Load(sender As System.Object, e As System.EventArgs) Handles MyBase.Load
         sHandle = KeyValue("Handle")
@@ -81,6 +82,8 @@ Public Class frmTicketAdd
         rtbNotes.Text = NormalizeNote(drHistory.Value(Val(sID), "Notes"))
         cmbAssignedTo.Text = drHistory.Value(Val(sID), "AssignedTo")
         cmbDisposition.Text = drHistory.Value(Val(sID), "Disposition")
+        txtAttachment.Text = drHistory.Value(Val(sID), "BlobName")
+
 
     End Sub
     Public Function NormalizeNote(sData As String)
@@ -111,6 +114,8 @@ Public Class frmTicketAdd
         Call PopulateHistory()
         SetViewMode()
         Me.TopMost = True
+        Me.Refresh()
+        Me.TopMost = False
 
     End Sub
     Private Sub SetViewMode()
@@ -181,10 +186,17 @@ Public Class frmTicketAdd
         tvTicketHistory.Nodes.Clear()
         drHistory = mGetTicketHistory(txtTicketId.Text)
         If drHistory Is Nothing Then Exit Sub
+        Dim sAttach As String = ""
+
         For i As Integer = 1 To drHistory.Rows
             Dim sRow As String = drHistory.Value(i, "Disposition") + " - " _
                                  + Mid(NormalizeNoteRow(drHistory.Value(i, "notes")), 1, 80) _
                                 + " - " + drHistory.Value(i, "AssignedTo") + " - " + drHistory.Value(i, "updated")
+            sAttach = drHistory.Value(i, "BlobName")
+            txtAttachment.Text = sAttach
+            If Len(sAttach) > 1 Then sAttach = " - [" + sAttach + "]"
+            sRow += sAttach
+
             Dim node As TreeNode = New TreeNode(sRow)
             node.Tag = i
             tvTicketHistory.Nodes.Add(node)
@@ -216,16 +228,70 @@ Public Class frmTicketAdd
     End Sub
 
     Private Sub btnAddAttachment_Click(sender As System.Object, e As System.EventArgs) Handles btnAddAttachment.Click
-        Exit Sub
+        If tvTicketHistory.SelectedNode Is Nothing Then MsgBox("You must select a historical ticket history item before attaching.", MsgBoxStyle.Critical) : Exit Sub
 
-        'Dim sPath As String
-        'sPath = "c:\boinchashingalgorithm.pdf"
-        'Dim sData As String
-        'sData = FileToBase64String(sPath)
-        'Base64StringToFile(sData, "c:\bha2.pdf")
-        'Me.WindowState = FormWindowState.Minimized
-        'Dim b As Byte()
-        'b = FileToBytes(sPath)
-        'mInsertAttachment("B850E047-73B5-43E1-A709-DCF27E42F755", "bha3.pdf", b)
+        Dim sID As String = tvTicketHistory.SelectedNode.Tag
+
+        Dim sBlobGuid As String
+        sBlobGuid = drHistory.Value(Val(sID), "id")
+        If Len(sBlobGuid) < 5 Then MsgBox("You must select a historical ticket history item before attaching.", MsgBoxStyle.Critical) : Exit Sub
+
+
+        '        Dim myStream As Stream = Nothing
+        Dim OFD As New OpenFileDialog()
+        OFD.InitialDirectory = GetGridFolder()
+        OFD.Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*|PDF files (*.pdf)|*.pdf"
+        OFD.FilterIndex = 2
+        OFD.RestoreDirectory = True
+        Me.TopMost = False
+
+        If OFD.ShowDialog() = System.Windows.Forms.DialogResult.OK Then
+            Try
+                ' myStream = openFileDialog1.OpenFile()
+                'If (myStream IsNot Nothing) Then
+                ' ' Insert code to read the stream here. 
+                'End If
+                ' Me.WindowState = FormWindowState.Minimized
+                Dim b As Byte()
+                b = FileToBytes(OFD.FileName)
+                Dim sSuccess As String = mInsertAttachment(sBlobGuid, OFD.SafeFileName, b)
+                PopulateHistory()
+
+                'MsgBox("Added", MsgBoxStyle.Information)
+
+            Catch Ex As Exception
+                MessageBox.Show("Cannot read file from disk. Original error: " & Ex.Message)
+            Finally
+            End Try
+        End If
+
+
+
+
+    End Sub
+
+    Private Sub btnOpenAttachment_Click(sender As System.Object, e As System.EventArgs) Handles btnOpenAttachment.Click
+        If Len(txtAttachment.Text) > 1 Then
+            'First does it exist already?
+            Dim sDir As String = ""
+            sDir = GetGridFolder() + "Attachments\"
+            Dim sFullPath As String
+            sFullPath = sDir + txtAttachment.Text
+            If System.IO.Directory.Exists(sDir) = False Then MkDir(sDir)
+            If Not System.IO.File.Exists(sFullPath) Then
+                'Download from P2P
+                Dim sID As String = tvTicketHistory.SelectedNode.Tag
+                'Show the history for this selected row
+                Dim sBlobGuid As String
+                sBlobGuid = drHistory.Value(Val(sID), "BlobGuid")
+                If Len(sBlobGuid) < 5 Then MsgBox("Attachment has been removed from the P2P server", MsgBoxStyle.Critical) : Exit Sub
+                sFullPath = mRetrieveAttachment(sBlobGuid, txtAttachment.Text)
+            End If
+            If System.IO.File.Exists(sFullPath) Then
+                'Launch
+                Process.Start(sFullPath)
+            End If
+
+        End If
     End Sub
 End Class

@@ -3589,7 +3589,7 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
 	{
 				if (GetBlockTime() < PastDrift(GetAdjustedTime(), height1))
 				{
-					return DoS(10,error("AcceptBlock() : block timestamp too far in the past"));
+					return error("AcceptBlock() : block timestamp too far in the past");
 				}
 
 				if (GetBlockTime() > FutureDrift(GetAdjustedTime(), height1))
