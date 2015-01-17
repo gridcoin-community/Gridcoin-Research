@@ -60,6 +60,11 @@ unsigned int nTransactionsUpdated = 0;
 unsigned int REORGANIZE_FAILED = 0;
 extern void RemoveNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, double mint, bool IsStake);
 
+extern double GetChainDailyAvgEarnedByCPID(std::string cpid, int64_t locktime, double& out_payments, double& out_daily_avg_payments);
+
+extern bool ChainPaymentViolation(std::string cpid, int64_t locktime, double Proposed_Subsidy);
+
+
 
 unsigned int WHITELISTED_PROJECTS = 0;
 
@@ -358,7 +363,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 118200;
+ int nGrandfather = 118050;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2929,7 +2934,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		// Block Spamming (Halford) 12-23-2014
 		if (mint < MintLimiter(PORDiff,bb.RSAWeight)) 
 		{
-				return error("CheckProofOfStake() : Mint too Small, %f",(double)mint);
+			return error("CheckProofOfStake() : Mint too Small, %f",(double)mint);
 		}
 
 		if (mint == 0) return error("CheckProofOfStake() : Mint is ZERO! %f",(double)mint);
@@ -2963,62 +2968,36 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 				
 				}
 			}
-			if (nStakeReward > (nCalculatedResearch*TOLERANCE_PERCENT))
+
+			//1-17-2015 R Halford - Use Hard Chain Payment Calculated Daily Average Paid to approve block
+			if (IsLockTimeWithinMinutes(GetBlockTime(),30) && bb.cpid != "INVESTOR")
 			{
-				//One last chance...clear cache and retrieve magnitude from netsoft:
-				CreditCheck(bb.cpid,true);
-				double OUT_POR2=0;
-				double OUT_INTEREST2=0;
-				nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime,OUT_POR2,OUT_INTEREST2, bb.RSAWeight);
-				if (nStakeReward > (nCalculatedResearch*TOLERANCE_PERCENT))
+
+				bool ChainPaymentApproved = ChainPaymentViolation(bb.cpid,GetBlockTime(),bb.ResearchSubsidy);
+				if (!ChainPaymentApproved)
 				{
-					//Do not reject the block until Net Averages are finished loading
-					int iFutile=0;
-					while (!bNetAveragesLoaded)
-					{
-						MilliSleep(100);
-						printf("#.");
-						iFutile++;
-						if (iFutile > 50) break;
-					}
-					double OUT_POR3 = 0;
-					double OUT_INTEREST3 = 0;
-					nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime,OUT_POR3,OUT_INTEREST3,bb.RSAWeight);
-					if (nStakeReward > (nCalculatedResearch*TOLERANCE_PERCENT))
-					{
-							TallyNetworkAverages(false);
-							double OUT_POR4 = 0;
-							double OUT_INTEREST4 = 0;
-							int64_t nCalculatedResearch2 = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime,OUT_POR4,OUT_INTEREST4,bb.RSAWeight);
-							if (nStakeReward > (nCalculatedResearch2*TOLERANCE_PERCENT))
-							{
-
-								TallyNetworkAverages(true);
-								double user_magnitude = GetMagnitude(bb.cpid,1,false);
-								StructCPID UntrustedHost = mvMagnitudes[bb.cpid]; //Contains Mag across entire CPID
-								double owed_advanced = UntrustedHost.totalowed - UntrustedHost.payments;
-								bool complete_failure = true;
-								if (owed_advanced > -400 && UntrustedHost.Accuracy > 50)  complete_failure=false;
-								if (owed_advanced < -400 || UntrustedHost.Accuracy <= 50) complete_failure=true;
-								if (owed_advanced < -1000)
-								{
-									//Ban the researcher if owed less than -1000grc
-									return DoS(100, error("ConnectBlock(): Hack Attempt! : Researchers Reward for CPID %s pays far too much: Owed %f,  (actual=%"PRId64" vs calculated=%"PRId64") Mag: %f, hash %s",
-											bb.cpid.c_str(), (double)owed_advanced, nStakeReward/COIN, nCalculatedResearch2/COIN, (double)user_magnitude,vtx[0].hashBoinc.c_str()));
-								}
-								if (complete_failure)
-								{
-								
-									return DoS(20, error("ConnectBlock() : Researchers Reward for CPID %s pays too much - Owed %f , (actual=%"PRId64" vs calculated=%"PRId64") Mag: %f, Hash: %s",
-										bb.cpid.c_str(), (double)owed_advanced,nStakeReward/COIN, nCalculatedResearch2/COIN, (double)user_magnitude, vtx[0].hashBoinc.c_str()));
-								}
-   						  }
-					 }
+						TallyNetworkAverages(false); //Re-Tally using cache
+						ChainPaymentApproved = ChainPaymentViolation(bb.cpid,GetBlockTime(),bb.ResearchSubsidy);
 				}
+				if (!ChainPaymentApproved) 	
+				{
+						TallyNetworkAverages(true); //Erase Cache & Re-Tally 
+						ChainPaymentApproved = ChainPaymentViolation(bb.cpid,GetBlockTime(),bb.ResearchSubsidy);
+				}
+				if (!ChainPaymentApproved) 
+				{
+											
+						return DoS(20, error("ConnectBlock() : Researchers Reward for CPID %s pays too much - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
+										bb.cpid.c_str(), (double)bb.ResearchSubsidy, 
+										(double)OUT_POR, vtx[0].hashBoinc.c_str()));
+		
+				}
+		
 			}
-		}
-	}
 
+		 }
+	 }
+	
 	
 	AddNetworkMagnitude(nTime, bb.cpid, bb, mint, IsProofOfStake()); //Updates Total payments and Actual Magnitude per CPID
 	
@@ -4856,6 +4835,56 @@ double GetMagnitudeWeight(double LockTime)
 	if (inverse < 1) inverse=1;
 	return inverse*inverse;
 }
+
+
+
+double GetChainDailyAvgEarnedByCPID(std::string cpid, int64_t locktime, double& out_payments, double& out_daily_avg_payments)
+{
+	// Returns the average daily payment amount per CPID
+	out_payments=0;
+	out_daily_avg_payments=0;
+	if (cpid=="INVESTOR") return 0;
+	StructCPID structMag = GetStructCPID();
+	//CPID is verified at the block level
+	structMag = mvMagnitudes[cpid];
+	if (structMag.initialized)
+	{
+				double AvgDailyPayments = structMag.payments/14;
+				double DailyOwed = (structMag.PaymentTimespan * Cap(structMag.PaymentMagnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime))/14);
+				out_payments=structMag.payments;
+				out_daily_avg_payments = AvgDailyPayments;
+				return DailyOwed;
+	}
+	else
+	{
+		//Uninitialized Newbie... 
+		double NewbieCredit = GetMaximumBoincSubsidy(locktime);
+		return NewbieCredit;
+	}
+			
+}
+
+bool ChainPaymentViolation(std::string cpid, int64_t locktime, double Proposed_Subsidy)
+{
+	double DailyOwed = 0;
+	double Payments = 0;
+	double AvgDailyPayments = 0;
+	double BlockMax = GetMaximumBoincSubsidy(locktime);
+	if (Proposed_Subsidy > BlockMax) 
+	{
+		printf("Chain payment violation - proposed subsidy greater than Block Max %s Proposed Subsidy %f",cpid.c_str(),Proposed_Subsidy);
+		return false;
+	}
+	DailyOwed = GetChainDailyAvgEarnedByCPID(cpid,locktime,Payments,AvgDailyPayments);
+	bool bApproved = ( (Proposed_Subsidy+Payments)/14  <  DailyOwed*TOLERANCE_PERCENT);
+	if (fDebug3 || !bApproved) 
+	{
+		printf("Chain payment violation for CPID %s, proposed_subsidy %f, Payments %f, DailyOwed %f, AvgDailyPayments %f",
+			   cpid.c_str(),Proposed_Subsidy,Payments,DailyOwed,AvgDailyPayments);
+	}
+	return bApproved;
+}
+
 
 void AddWeightedMagnitude(double LockTime,StructCPID &structMagnitude,double magnitude_level)
 {

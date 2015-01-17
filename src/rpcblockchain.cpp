@@ -41,7 +41,9 @@ extern std::string TimestampToHRDate(double dtm);
 std::string qtGRCCodeExecutionSubsystem(std::string sCommand);
 
 std::string LegacyDefaultBoincHashArgs();
+double GetChainDailyAvgEarnedByCPID(std::string cpid, int64_t locktime, double& out_payments, double& out_daily_avg_payments);
 
+bool ChainPaymentViolation(std::string cpid, int64_t locktime, double Proposed_Subsidy);
 
 double CoinToDouble(double surrogate);
 
@@ -1076,7 +1078,7 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "genorgkey")
 	{
-			if (params.size() != 3)
+		if (params.size() != 3)
 		{
 			entry.push_back(Pair("Error","You must specify a passphrase and organization name"));
 			results.push_back(entry);
@@ -1106,7 +1108,39 @@ Value execute(const Array& params, bool fHelp)
 		}
 	
 	}
+	else if (sItem == "chainrsa")
+	{
+		if (params.size() != 2)
+		{
+			entry.push_back(Pair("Error","You must specify a cpid"));
+			results.push_back(entry);
+		}
+		else
+		{
+			std::string sParam1 = params[1].get_str();
+			entry.push_back(Pair("CPID",sParam1));
+			//1-17-2015
+			double Payments = 0;
+			double AvgDailyPayments = 0;
+			double DailyOwed = 0;
+			DailyOwed = GetChainDailyAvgEarnedByCPID(sParam1,GetAdjustedTime(),Payments,AvgDailyPayments);
+			bool ChainPaymentApproved = ChainPaymentViolation(sParam1,GetAdjustedTime(),5);
+			entry.push_back(Pair("DailyOwed",DailyOwed));
+			entry.push_back(Pair("AvgPayments",AvgDailyPayments));
+			entry.push_back(Pair("Payments",Payments));
+			entry.push_back(Pair("Chain Payment Approved 5",ChainPaymentApproved));
+			ChainPaymentApproved = ChainPaymentViolation(sParam1,GetAdjustedTime(),100);
+			entry.push_back(Pair("Chain Payment Approved 100",ChainPaymentApproved));
+			ChainPaymentApproved = ChainPaymentViolation(sParam1,GetAdjustedTime(),400);
+			entry.push_back(Pair("Chain Payment Approved 400",ChainPaymentApproved));
+			ChainPaymentApproved = ChainPaymentViolation(sParam1,GetAdjustedTime(),800);
+			entry.push_back(Pair("Chain Payment Approved 800",ChainPaymentApproved));
+			results.push_back(entry);
+	
+		}
 
+
+	}
 	else if (sItem == "testorgkey")
 	{
 		if (params.size() != 3)
@@ -1376,19 +1410,19 @@ Array MagnitudeReport(bool bMine)
 						{
 									Object entry;
 									entry.push_back(Pair("CPID",structMag.cpid));
-									entry.push_back(Pair("Magnitude",structMag.ConsensusMagnitude));
+									//entry.push_back(Pair("Magnitude",structMag.ConsensusMagnitude));
 									entry.push_back(Pair("Payment Magnitude",structMag.PaymentMagnitude));
 									entry.push_back(Pair("Payment Timespan (Days)",structMag.PaymentTimespan));
 									entry.push_back(Pair("Magnitude Accuracy",structMag.Accuracy));
-									entry.push_back(Pair("Long Term Owed (14 day projection)",structMag.totalowed));
-									entry.push_back(Pair("Long Term Daily Owed (1 day projection)",structMag.totalowed/14));
-									entry.push_back(Pair("Payments",structMag.payments));
-									entry.push_back(Pair("InterestPayments",structMag.interestPayments));
+									entry.push_back(Pair("Long Term Owed (14 days)",structMag.totalowed));
+									entry.push_back(Pair("Payments (14 days)",structMag.payments));
+									entry.push_back(Pair("InterestPayments (14 days)",structMag.interestPayments));
 									entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
-									entry.push_back(Pair("Current Daily Projection",structMag.owed));
+									entry.push_back(Pair("Total Owed",structMag.owed));
 									entry.push_back(Pair("Next Expected Payment",structMag.owed/2));
-									entry.push_back(Pair("Avg Daily Payments",structMag.payments/14));
-
+									entry.push_back(Pair("Daily Paid",structMag.payments/14));
+									entry.push_back(Pair("Daily Owed",structMag.totalowed/14));
+									
 									if (structMag.cpid==GlobalCPUMiningCPID.cpid)
 									{
 											int64_t cpid_chrono = CPIDChronoStart(GlobalCPUMiningCPID.cpid);
