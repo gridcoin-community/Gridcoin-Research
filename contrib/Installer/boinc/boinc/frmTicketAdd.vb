@@ -244,13 +244,14 @@ Public Class frmTicketAdd
         If tvTicketHistory.SelectedNode Is Nothing Then MsgBox("You must select a historical ticket history item before attaching.", MsgBoxStyle.Critical) : Exit Sub
 
         Dim sID As String = tvTicketHistory.SelectedNode.Tag
-
+        If KeyValue("AttachmentPassword") = "" Then
+            MsgBox("You must set attachmentpassword in your gridcoinresearch.conf to send attachments.", MsgBoxStyle.Critical)
+            Exit Sub
+        End If
         Dim sBlobGuid As String
         sBlobGuid = drHistory.Value(Val(sID), "id")
         If Len(sBlobGuid) < 5 Then MsgBox("You must select a historical ticket history item before attaching.", MsgBoxStyle.Critical) : Exit Sub
 
-
-        '        Dim myStream As Stream = Nothing
         Dim OFD As New OpenFileDialog()
         OFD.InitialDirectory = GetGridFolder()
         OFD.Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*|PDF files (*.pdf)|*.pdf"
@@ -260,18 +261,12 @@ Public Class frmTicketAdd
 
         If OFD.ShowDialog() = System.Windows.Forms.DialogResult.OK Then
             Try
-                ' myStream = openFileDialog1.OpenFile()
-                'If (myStream IsNot Nothing) Then
-                ' ' Insert code to read the stream here. 
-                'End If
-                ' Me.WindowState = FormWindowState.Minimized
                 Dim b As Byte()
                 b = FileToBytes(OFD.FileName)
+                'Encrypt
+                b = AES512EncryptData(b, KeyValue("AttachmentPassword"))
                 Dim sSuccess As String = mInsertAttachment(sBlobGuid, OFD.SafeFileName, b, KeyValue("TicketPassword"), KeyValue("handle"))
                 PopulateHistory()
-
-                'MsgBox("Added", MsgBoxStyle.Information)
-
             Catch Ex As Exception
                 MessageBox.Show("Cannot read file from disk. Original error: " & Ex.Message)
             Finally
@@ -283,6 +278,10 @@ Public Class frmTicketAdd
 
     End Sub
     Private Function DownloadAttachment() As String
+        If KeyValue("AttachmentPassword") = "" Then
+            MsgBox("You must set attachmentpassword in your gridcoinresearch.conf to send attachments.", MsgBoxStyle.Critical)
+            Exit Function
+        End If
 
         If Len(txtAttachment.Text) > 1 Then
             'First does it exist already?
@@ -298,8 +297,7 @@ Public Class frmTicketAdd
                 Dim sBlobGuid As String
                 sBlobGuid = drHistory.Value(Val(sID), "BlobGuid")
                 If Len(sBlobGuid) < 5 Then MsgBox("Attachment has been removed from the P2P server", MsgBoxStyle.Critical) : Exit Function
-                sFullPath = mRetrieveAttachment(sBlobGuid, txtAttachment.Text)
-                
+                sFullPath = mRetrieveAttachment(sBlobGuid, txtAttachment.Text, KeyValue("AttachmentPassword"))
             End If
             Return sFullPath
         End If

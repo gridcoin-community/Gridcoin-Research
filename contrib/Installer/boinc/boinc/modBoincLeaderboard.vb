@@ -130,7 +130,7 @@
     End Function
 
 
-    Public Function mRetrieveAttachment(sId As String, sName As String) As String
+    Public Function mRetrieveAttachment(sId As String, sName As String, sPass As String) As String
 
         Dim sPath As String = GetGridFolder() + "\Attachments"
         If System.IO.Directory.Exists(sPath) = False Then MkDir(sPath)
@@ -138,9 +138,9 @@
         Dim sData As String = mData.BoincBlob(sId)
         If InStr(1, sData, "<ERROR>") > 0 Then MsgBox(sData, MsgBoxStyle.Critical) : Exit Function
         Dim sBase64 As String = ExtractXML(sData, "<BLOB>", "</BLOB>")
-        WriteBase64StringToFile(sFullPath, sBase64)
-        Return sFullPath
+        DecryptAES512AttachmentToFile(sFullPath, sBase64, sPass)
 
+        Return sFullPath
 
     End Function
 

@@ -116,7 +116,7 @@ uint256 muGlobalCheckpointHash = 0;
 uint256 muGlobalCheckpointHashRelayed = 0;
 int muGlobalCheckpointHashCounter = 0;
 ///////////////////////MINOR VERSION////////////////////////////////
-int MINOR_VERSION = 190;
+int MINOR_VERSION = 195;
 
 			
 bool IsUserQualifiedToSendCheckpoint();
@@ -363,7 +363,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 118830;
+ int nGrandfather = 118834;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -3597,14 +3597,18 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 			if (IsProofOfStake() && height1 > nGrandfather)
 			{
 		
+				/*
 				//Mint limiter checks 1-18-2015
 				double PORDiff = GetBlockDifficulty(nBits);
+
+
 				double mint1 = CoinToDouble(Mint);
 
 				if (mint1 < MintLimiter(PORDiff,boincblock.RSAWeight))
 				{
 						return error("CheckBlock[] : Total Mint too Small, %f",(double)mint1);
 				}
+				*/
 
 
 	    		if (fCheckSig && !CheckBlockSignature())
