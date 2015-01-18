@@ -350,7 +350,9 @@ Public Class Utilization
         Log("Inserted " + Trim(sOut))
         Return 1
     End Function
-
+    Public Function SetDebugMode(bMode) As Boolean
+        mbDebugging = bMode
+    End Function
     Public Function SetSessionInfo(sInfo As String) As Double
         Dim vSession() As String
         vSession = Split(sInfo, "<COL>")

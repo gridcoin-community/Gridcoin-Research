@@ -363,7 +363,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 118825;
+ int nGrandfather = 118830;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2796,7 +2796,7 @@ double ClientVersionNew()
 bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 {
     // Check it again in case a previous version let a bad block in, but skip BlockSig checking
-    if (!CheckBlock(pindex->pprev->nHeight,!fJustCheck, !fJustCheck, false,false))
+    if (!CheckBlock(pindex->pprev->nHeight,pindex->nMint,!fJustCheck, !fJustCheck, false,false))
         return false;
 
     //// issue here: it doesn't know the version
@@ -2938,12 +2938,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			return error("CheckProofOfStake() : Mint too Small, %f",(double)mint);
 		}
 
-		double total_subsidy = bb.ResearchSubsidy+bb.InterestSubsidy;
-		if (total_subsidy < MintLimiter(PORDiff,bb.RSAWeight))
-		{
-					return error("CheckProofOfStake() : Total Mint too Small, %f",(double)total_subsidy);
-		}
-
+		
 		if (mint == 0) return error("CheckProofOfStake() : Mint is ZERO! %f",(double)mint);
 	
 		if (!ClientOutOfSync())
@@ -3545,10 +3540,10 @@ int BlockHeight(uint256 bh)
 }
 	
 
-bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig, bool fLoadingIndex) const
+bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig, bool fLoadingIndex) const
 {
     
-	//1-16-2015
+	//1-18-2015
 
 	if (GetHash()==hashGenesisBlock || GetHash()==hashGenesisBlockTestNet) return true;
 	
@@ -3557,27 +3552,27 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
 
     // Size limits
     if (vtx.empty() || vtx.size() > MAX_BLOCK_SIZE || ::GetSerializeSize(*this, SER_NETWORK, PROTOCOL_VERSION) > MAX_BLOCK_SIZE)
-        return DoS(100, error("CheckBlock() : size limits failed"));
+        return DoS(100, error("CheckBlock[] : size limits failed"));
 
     // Check proof of work matches claimed amount
     if (fCheckPOW && IsProofOfWork() && !CheckProofOfWork(GetPoWHash(), nBits))
-        return DoS(50, error("CheckBlock() : proof of work failed"));
+        return DoS(50, error("CheckBlock[] : proof of work failed"));
 
 	//Reject blocks with diff > 10000000000000000
 	double blockdiff = GetBlockDifficulty(nBits);
 	if (height1 > nGrandfather && blockdiff > 10000000000000000)
 	{
-		   return DoS(1, error("CheckBlock() : Block Bits larger than 10000000000000000.\r\n"));
+		   return DoS(1, error("CheckBlock[] : Block Bits larger than 10000000000000000.\r\n"));
 	}
 
 	
 
     // First transaction must be coinbase, the rest must not be
     if (vtx.empty() || !vtx[0].IsCoinBase())
-        return DoS(100, error("CheckBlock() : first tx is not coinbase"));
+        return DoS(100, error("CheckBlock[] : first tx is not coinbase"));
     for (unsigned int i = 1; i < vtx.size(); i++)
         if (vtx[i].IsCoinBase())
-            return DoS(100, error("CheckBlock() : more than one coinbase"));
+            return DoS(100, error("CheckBlock[] : more than one coinbase"));
 
  
 	//ProofOfResearch
@@ -3588,7 +3583,6 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
 			{
     			if (boincblock.projectname == "") 	return DoS(1,error("PoR Project Name invalid"));
 	    		if (boincblock.rac < 100) 			return DoS(1,error("RAC too low"));
-				//	cpidv2: CPID_(bb.cpid, bb.cpidv2, blockindex->pprev->GetBlockHash());
 				
 				//Block CPID 12-26-2014 hashPrevBlock->nHeight
 				if (!IsCPIDValidv2(boincblock,height1))
@@ -3605,16 +3599,16 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
 		
 				//Mint limiter checks 1-18-2015
 				double PORDiff = GetBlockDifficulty(nBits);
-	
-				double total_subsidy = boincblock.ResearchSubsidy+boincblock.InterestSubsidy;
-				if (total_subsidy < MintLimiter(PORDiff,boincblock.RSAWeight))
+				double mint1 = CoinToDouble(Mint);
+
+				if (mint1 < MintLimiter(PORDiff,boincblock.RSAWeight))
 				{
-						return error("CheckProofOfStake() : Total Mint too Small, %f",(double)total_subsidy);
+						return error("CheckBlock[] : Total Mint too Small, %f",(double)mint1);
 				}
 
 
 	    		if (fCheckSig && !CheckBlockSignature())
-					return DoS(100, error("CheckBlock() : bad proof-of-stake block signature"));
+					return DoS(100, error("CheckBlock[] : bad proof-of-stake block signature"));
 			}
 
 
@@ -3631,14 +3625,14 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
     {
         // Coinbase output should be empty if proof-of-stake block
         if (vtx[0].vout.size() != 1 || !vtx[0].vout[0].IsEmpty())
-            return DoS(100, error("CheckBlock() : coinbase output not empty for proof-of-stake block"));
+            return DoS(100, error("CheckBlock[] : coinbase output not empty for proof-of-stake block"));
 
         // Second transaction must be coinstake, the rest must not be
         if (vtx.empty() || !vtx[1].IsCoinStake())
-            return DoS(100, error("CheckBlock() : second tx is not coinstake"));
+            return DoS(100, error("CheckBlock[] : second tx is not coinstake"));
         for (unsigned int i = 2; i < vtx.size(); i++)
             if (vtx[i].IsCoinStake())
-                return DoS(100, error("CheckBlock() : more than one coinstake"));
+                return DoS(100, error("CheckBlock[] : more than one coinstake"));
 
     }
 
@@ -3646,11 +3640,11 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
     BOOST_FOREACH(const CTransaction& tx, vtx)
     {
         if (!tx.CheckTransaction())
-            return DoS(tx.nDoS, error("CheckBlock() : CheckTransaction failed"));
+            return DoS(tx.nDoS, error("CheckBlock[] : CheckTransaction failed"));
 
         // ppcoin: check transaction timestamp
         if (GetBlockTime() < (int64_t)tx.nTime)
-            return DoS(50, error("CheckBlock() : block timestamp earlier than transaction timestamp"));
+            return DoS(50, error("CheckBlock[] : block timestamp earlier than transaction timestamp"));
     }
 
     // Check for duplicate txids. This is caught by ConnectInputs(),
@@ -3661,7 +3655,7 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
         uniqueTx.insert(tx.GetHash());
     }
     if (uniqueTx.size() != vtx.size())
-        return DoS(100, error("CheckBlock() : duplicate transaction"));
+        return DoS(100, error("CheckBlock[] : duplicate transaction"));
 
     unsigned int nSigOps = 0;
     BOOST_FOREACH(const CTransaction& tx, vtx)
@@ -3669,11 +3663,11 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
         nSigOps += tx.GetLegacySigOpCount();
     }
     if (nSigOps > MAX_BLOCK_SIGOPS)
-        return DoS(100, error("CheckBlock() : out-of-bounds SigOpCount"));
+        return DoS(100, error("CheckBlock[] : out-of-bounds SigOpCount"));
 
     // Check merkle root
     if (fCheckMerkleRoot && hashMerkleRoot != BuildMerkleTree())
-        return DoS(100, error("CheckBlock() : hashMerkleRoot mismatch"));
+        return DoS(100, error("CheckBlock[] : hashMerkleRoot mismatch"));
 
 
     return true;
@@ -3776,7 +3770,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 
 
 
-    // PoW is checked in CheckBlock()
+    // PoW is checked in CheckBlock[]
     if (IsProofOfWork())
     {
         hashProof = GetPoWHash();
@@ -4027,7 +4021,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     }
 
     // Preliminary checks 12-26-2014
-    if (!pblock->CheckBlock(pindexBest->nHeight))
+    if (!pblock->CheckBlock(pindexBest->nHeight, pindexBest->nMint))
         return error("ProcessBlock() : CheckBlock FAILED");
 
     // ppcoin: ask for pending sync-checkpoint if any
@@ -4442,7 +4436,7 @@ bool LoadBlockIndex(bool fAllowNew)
 		uint256 merkle_root = uint256("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f");
 		assert(block.hashMerkleRoot == merkle_root);
         assert(block.GetHash() == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
-        assert(block.CheckBlock(1));
+        assert(block.CheckBlock(1,10));
 
         // Start new block file
         unsigned int nFile;
