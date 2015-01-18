@@ -8,6 +8,11 @@
     Public mdBlockSleepLevel As Double = 0
     Public mData As Sql
 
+    Public msDefaultGRCAddress As String = ""
+    Public msCPID As String = ""
+    Public mlMagnitude As Double = 0
+
+
     Public Structure BoincProject
         Public URL As String
         Public Name As String
@@ -42,7 +47,7 @@
             'continue...Violation of PK
         End If
         Dim sUpdate As String
-        sUpdate = "<UPDATE><TABLE>Users</TABLE><FIELDS>PasswordHash</FIELDS><VALUES>'" + sPassHash + "'</VALUES><WHEREFIELDS>HANDLE</WHEREFIELDS><WHEREVALUES>'" + sHandle + "'</WHEREVALUES></UPDATE>"
+        sUpdate = "<UPDATE><TABLE>Users</TABLE><FIELDS>PasswordHash,CPID,GRCAddress,Magnitude</FIELDS><VALUES>'" + sPassHash + "','" + msCPID + "','" + msDefaultGRCAddress + "','" + Trim(mlMagnitude) + "'</VALUES><WHEREFIELDS>PasswordHash</WHEREFIELDS><WHEREVALUES>'" + sPassHash + "'</WHEREVALUES></UPDATE>"
         sErr = mData.ExecuteP2P(sUpdate, Nothing)
 
         Return sErr

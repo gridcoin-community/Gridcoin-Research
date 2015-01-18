@@ -363,7 +363,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 118821;
+ int nGrandfather = 118825;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2050,7 +2050,7 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 
 			if (owed > (GetMaximumBoincSubsidy(GetAdjustedTime()))) owed = GetMaximumBoincSubsidy(GetAdjustedTime()); 
 
-			if (ChainPaymentViolation(cpid,GetAdjustedTime(),owed)) owed = 0;
+			if (!ChainPaymentViolation(cpid,GetAdjustedTime(),owed)) owed = 0;
 
 
 			//Halford - Ensure researcher was not paid in the last 2 hours:
@@ -3919,12 +3919,7 @@ void GridcoinServices()
 
 	
 
-	if (TimerMain("erase_orphans",1500))
-	{
-		
-			 //EraseOrphans();
 
-	}
 
 	if (KeyEnabled("exportmagnitude"))
 	{
@@ -4865,6 +4860,9 @@ bool ChainPaymentViolation(std::string cpid, int64_t locktime, double Proposed_S
 	double Payments = 0;
 	double AvgDailyPayments = 0;
 	double BlockMax = GetMaximumBoincSubsidy(locktime);
+
+	if (cpid=="INVESTOR" || cpid=="investor") return true;
+
 	if (Proposed_Subsidy > BlockMax) 
 	{
 		printf("Chain payment violation - proposed subsidy greater than Block Max %s Proposed Subsidy %f",cpid.c_str(),Proposed_Subsidy);

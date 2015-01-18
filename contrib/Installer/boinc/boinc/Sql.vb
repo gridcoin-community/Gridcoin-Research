@@ -111,17 +111,16 @@ Public Class Sql
         'Find the node that is currently the leader, with a synced consensus:
         Dim sHost As String
         sHost = DefaultHostName("p2psql.gridcoin.us", False) + ":" + Trim(DefaultPort(32500, False))
-        'sHost = "localhost:0
+
+        '        sHost = "localhost:0
+
+
         Return sHost
     End Function
     Public Function SQLQuery(sHost As String, sSQL As String, sParams() As Byte) As String
         Dim sURL As String
         sURL = "http://" + sHost + "/p2psql.aspx?query="
         sSQL = Replace(sSQL, vbCr, "<CR>")
-
-
-        'sParams = Left(sParams, 1000)
-        '1-16-2015
 
 
         sSQL = Replace(sSQL, vbLf, "<LF>")

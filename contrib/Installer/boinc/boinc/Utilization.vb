@@ -339,9 +339,7 @@ Public Class Utilization
 
     End Function
     Public Function InsertConfirm(sConfirm As String) As Double
-
         Log(sConfirm)
-
         Dim vConfirm() As String
         vConfirm = Split(sConfirm, "<COL>")
         Dim dAmt As Double = vConfirm(0)
@@ -350,9 +348,20 @@ Public Class Utilization
         Dim sTXID As String = vConfirm(3)
         Dim sOut As String = mInsertConfirm(dAmt, sFrom, sTo, sTXID)
         Log("Inserted " + Trim(sOut))
-
         Return 1
+    End Function
 
+    Public Function SetSessionInfo(sInfo As String) As Double
+        Dim vSession() As String
+        vSession = Split(sInfo, "<COL>")
+        Try
+            msDefaultGRCAddress = vSession(0)
+            msCPID = vSession(1)
+            mlMagnitude = Val(vSession(2))
+        Catch ex As Exception
+            Log("SetSessionInfo " + ex.Message)
+
+        End Try
     End Function
     
     Public Function AddressUser(sMagnitude As String) As Double
