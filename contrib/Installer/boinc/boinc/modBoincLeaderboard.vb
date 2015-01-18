@@ -26,18 +26,25 @@
         Return sErr
     End Function
 
-    Public Function mInsertUser(sHandle As String, sGRCaddress As String) As String
+    Public Function mInsertUser(sHandle As String, sGRCaddress As String, CPID As String, sPassword As String) As String
         If mData Is Nothing Then mData = New Sql
         Dim sErr As String = ""
         Dim sInsert As String
-        sInsert = "<INSERT><TABLE>Users</TABLE><FIELDS>Handle,GRCAddress</FIELDS><VALUES>'" _
-            + Trim(sHandle) + "','" + Trim(sGRCaddress) + "'</VALUES></INSERT>"
+        'Store password hash only
+        Dim sPassHash As String = ""
+        sPassHash = GetMd5String(sPassword)
+
+        sInsert = "<INSERT><TABLE>Users</TABLE><FIELDS>Handle,GRCAddress,CPID,PasswordHash</FIELDS><VALUES>'" _
+            + Trim(sHandle) + "','" + Trim(sGRCaddress) + "','" + CPID + "','" + sPassHash + "'</VALUES></INSERT>"
         sErr = mData.ExecuteP2P(sInsert, Nothing)
 
         If Len(sErr) > 1 Then
-            'MsgBox(sErr, MsgBoxStyle.Critical, "Error while Adding User")
-            Exit Function
+            'continue...Violation of PK
         End If
+        Dim sUpdate As String
+        sUpdate = "<UPDATE><TABLE>Users</TABLE><FIELDS>PasswordHash</FIELDS><VALUES>'" + sPassHash + "'</VALUES><WHEREFIELDS>HANDLE</WHEREFIELDS><WHEREVALUES>'" + sHandle + "'</WHEREVALUES></UPDATE>"
+        sErr = mData.ExecuteP2P(sUpdate, Nothing)
+
         Return sErr
     End Function
     Public Function CleanBody(sData As String) As String
@@ -58,8 +65,15 @@
         Return sData
 
     End Function
-    
-    Public Function mInsertTicket(sMode As String, sSubmittedBy As String, sTicketId As String, sAssignedTo As String, sDisposition As String, sDesc As String, sType As String, sNotes As String) As String
+    Public Sub mUpdateViaReader()
+        Dim dr As GridcoinReader
+        Dim sql As String
+        ' sql = "UPDATE USERS SET PasswordHash='" + Trim(sHash) + "' where Confirm where TXID='" + sTXID + "'"
+       
+        '     dr = mData.GetGridcoinReader(sql)
+    End Sub
+    Public Function mInsertTicket(sMode As String, sSubmittedBy As String, sTicketId As String, sAssignedTo As String, sDisposition As String, _
+                                  sDesc As String, sType As String, sNotes As String, sPassword As String) As String
         If mData Is Nothing Then mData = New Sql
         Dim sErr As String = ""
         Dim sInsert As String
@@ -77,21 +91,33 @@
         'Retrieve ticket Guid
         Dim sGuid As String = P2PValue("id", "Ticket", "TicketId", sTicketId)
         If (Len(sGuid) > 10) Then
-            sInsert = "<INSERT><TABLE>TicketHistory</TABLE><FIELDS>Parent,Disposition,AssignedTo,Notes</FIELDS><VALUES>'" + Trim(sGuid) + "','" + Trim(sDisposition) + "','" + Trim(sAssignedTo) + "','" + Trim(sNotes) + "'</VALUES></INSERT>"
-            sErr += mData.ExecuteP2P(sInsert, Nothing)
+            'Calculate the Security Hash
+            Dim sSecurityHash As String
+            Dim grcSecurity As New GridcoinSecurity.GRCSecurity
+            Dim sSecurityGuid As String = Guid.NewGuid.ToString()
+            sSecurityHash = grcSecurity.CreateSecurityHash(sSecurityGuid, sPassword)
 
+            sInsert = "<INSERT><TABLE>TicketHistory</TABLE><FIELDS>SubmittedBy,SecurityGuid,Parent,Disposition,AssignedTo,SecurityHash,Notes</FIELDS><VALUES>'" _
+                + Trim(sSubmittedBy) + "','" + Trim(sSecurityGuid) + "','" _
+                + Trim(sGuid) + "','" + Trim(sDisposition) + "','" + Trim(sAssignedTo) + "','" + Trim(sSecurityHash) + "','" + Trim(sNotes) + "'</VALUES></INSERT>"
+            sErr += mData.ExecuteP2P(sInsert, Nothing)
 
         End If
         Return sErr
     End Function
 
 
-    Public Function mInsertAttachment(sParentId As String, sName As String, blob() As Byte) As String
+    Public Function mInsertAttachment(sParentId As String, sName As String, blob() As Byte, sPassword As String, sSubmittedBy As String) As String
         If mData Is Nothing Then mData = New Sql
         Dim sErr As String = ""
         Dim sInsert As String '<BLOB></BLOB>
+        'Calculate the Security Hash
+        Dim sSecurityHash As String
+        Dim grcSecurity As New GridcoinSecurity.GRCSecurity
+        Dim sSecurityGuid As String = Guid.NewGuid.ToString()
+        sSecurityHash = grcSecurity.CreateSecurityHash(sSecurityGuid, sPassword)
 
-        sInsert = "<INSERT><TABLE>Attachment</TABLE><FIELDS>Parent,BlobName</FIELDS><VALUES>'" + Trim(sParentId) + "','" + Trim(sName) _
+        sInsert = "<INSERT><TABLE>Attachment</TABLE><FIELDS>SubmittedBy,SecurityGuid,SecurityHash,Parent,BlobName</FIELDS><VALUES>'" + Trim(sSubmittedBy) + "','" + Trim(sSecurityGuid) + "','" + Trim(sSecurityHash) + "','" + Trim(sParentId) + "','" + Trim(sName) _
             + "'</VALUES></INSERT>"
         sErr += mData.ExecuteP2P(sInsert, blob)
 
@@ -124,22 +150,13 @@
     End Function
     Public Function mUpdateConfirm(sTXID As String, iStatus As Long) As String
         sTXID = Replace(sTXID, Chr(0), "")
-
         If mData Is Nothing Then mData = New Sql
         Dim sUpdate As String
-        ' sUpdate "<UPDATE><TABLE>Confirm</TABLE><FIELDS>Confirmed</FIELDS><VALUES>'" + Trim(iStatus) + "'</VALUES><WHEREFIELDS>txid</WHEREFIELDS><WHEREVALUES>'" + sTXID + "'</WHEREVALUES></UPDATE>"
-        'sUpdate = "<UPDATE><TABLE>Confirm</TABLE><FIELDS>Confirmed</FIELDS><VALUES>'" + Trim(iStatus) + "'</VALUES><WHEREFIELDS>txid</WHEREFIELDS><WHEREVALUES>'" + Trim(sTXID) + "'</WHEREVALUES></UPDATE>"
         sUpdate = "<UPDATE><TABLE>Confirm</TABLE><FIELDS>Confirmed</FIELDS><VALUES>'1'</VALUES><WHEREFIELDS>TXID</WHEREFIELDS><WHEREVALUES>'" + Trim(sTXID) + "'</WHEREVALUES></UPDATE>"
-
         Dim sErr As String
         Log("Updating " + sUpdate)
         sErr = mData.ExecuteP2P(sUpdate, Nothing)
-
-
         Log("Done " + Trim(sErr))
-
-        'Update Dummy
-
         Return sErr
     End Function
     Public Function mTrackConfirm(sTXID As String) As Double
@@ -207,7 +224,8 @@
         If myGuid = "" Then Return dr
 
         Dim sql As String
-        sql = "Select TicketHistory.*,Attachment.Id as BlobGuid,Attachment.BlobName From TicketHistory left join attachment on Attachment.Parent = TicketHistory.id where TicketHistory.Parent = '" + myGuid + "' Order by Added"
+        sql = "Select Users.PasswordHash,TicketHistory.*,Attachment.Id as BlobGuid,Attachment.BlobName From TicketHistory left join attachment on Attachment.Parent = TicketHistory.id   left join users on users.handle = tickethistory.Submittedby  where TicketHistory.Parent = '" + myGuid + "'  Order by Added"
+
 
         Try
             dr = mData.GetGridcoinReader(sql)
@@ -216,7 +234,30 @@
         End Try
         Return dr
     End Function
+    Public Function mGetAttachment(sBlobId As String) As GridcoinReader
+        If mData Is Nothing Then mData = New Sql
+        Dim dr As GridcoinReader
+        Dim sql As String
+        sql = "select attachment.*,users.passwordHash from attachment left join users on users.handle = attachment.Submittedby where attachment.Id='" + sBlobId + "'"
+        Try
+            dr = mData.GetGridcoinReader(sql)
+        Catch ex As Exception
+            Return dr
+        End Try
+        Return dr
+    End Function
+    Public Function mAttachmentSecurityScan(sBlobId As String) As Boolean
+        Dim gr As GridcoinReader
+        gr = mGetAttachment(sBlobId)
+        Dim grcSecurity As New GridcoinSecurity.GRCSecurity
+        Dim lAuthentic As Long
 
+        lAuthentic = grcSecurity.IsHashAuthentic("" & gr.Value(1, "SecurityGuid"), _
+                                                             "" & gr.Value(1, "SecurityHash"), "" & gr.Value(1, "PasswordHash"))
+
+        If lAuthentic <> 0 Then Return False Else Return True
+
+    End Function
     Public Function mGetUsers() As GridcoinReader
         If mData Is Nothing Then mData = New Sql
         Dim dr As GridcoinReader

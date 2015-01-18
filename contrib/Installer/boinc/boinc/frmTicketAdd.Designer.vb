@@ -22,6 +22,7 @@ Partial Class frmTicketAdd
     'Do not modify it using the code editor.
     <System.Diagnostics.DebuggerStepThrough()> _
     Private Sub InitializeComponent()
+        Dim resources As System.ComponentModel.ComponentResourceManager = New System.ComponentModel.ComponentResourceManager(GetType(frmTicketAdd))
         Me.Label1 = New System.Windows.Forms.Label()
         Me.cmbAssignedTo = New System.Windows.Forms.ComboBox()
         Me.Label2 = New System.Windows.Forms.Label()
@@ -44,6 +45,8 @@ Partial Class frmTicketAdd
         Me.Label9 = New System.Windows.Forms.Label()
         Me.btnOpenAttachment = New System.Windows.Forms.Button()
         Me.btnOpenFolder = New System.Windows.Forms.Button()
+        Me.txtUpdatedBy = New System.Windows.Forms.TextBox()
+        Me.Label10 = New System.Windows.Forms.Label()
         Me.SuspendLayout()
         '
         'Label1
@@ -277,12 +280,35 @@ Partial Class frmTicketAdd
         Me.btnOpenFolder.Text = "Open Folder"
         Me.btnOpenFolder.UseVisualStyleBackColor = False
         '
+        'txtUpdatedBy
+        '
+        Me.txtUpdatedBy.BackColor = System.Drawing.Color.FromArgb(CType(CType(0, Byte), Integer), CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer))
+        Me.txtUpdatedBy.Font = New System.Drawing.Font("Arial", 9.75!, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        Me.txtUpdatedBy.ForeColor = System.Drawing.Color.FromArgb(CType(CType(255, Byte), Integer), CType(CType(255, Byte), Integer), CType(CType(128, Byte), Integer))
+        Me.txtUpdatedBy.Location = New System.Drawing.Point(537, 34)
+        Me.txtUpdatedBy.Name = "txtUpdatedBy"
+        Me.txtUpdatedBy.ReadOnly = True
+        Me.txtUpdatedBy.Size = New System.Drawing.Size(359, 22)
+        Me.txtUpdatedBy.TabIndex = 22
+        '
+        'Label10
+        '
+        Me.Label10.AutoSize = True
+        Me.Label10.ForeColor = System.Drawing.Color.Lime
+        Me.Label10.Location = New System.Drawing.Point(462, 43)
+        Me.Label10.Name = "Label10"
+        Me.Label10.Size = New System.Drawing.Size(66, 13)
+        Me.Label10.TabIndex = 23
+        Me.Label10.Text = "Updated By:"
+        '
         'frmTicketAdd
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.BackColor = System.Drawing.Color.Black
         Me.ClientSize = New System.Drawing.Size(937, 666)
+        Me.Controls.Add(Me.txtUpdatedBy)
+        Me.Controls.Add(Me.Label10)
         Me.Controls.Add(Me.btnOpenFolder)
         Me.Controls.Add(Me.btnOpenAttachment)
         Me.Controls.Add(Me.txtAttachment)
@@ -305,8 +331,9 @@ Partial Class frmTicketAdd
         Me.Controls.Add(Me.rtbNotes)
         Me.Controls.Add(Me.cmbAssignedTo)
         Me.Controls.Add(Me.Label1)
+        Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)
         Me.Name = "frmTicketAdd"
-        Me.Text = "Gridcoin - Add or Edit Ticket"
+        Me.Text = "Gridcoin - Add or Edit Ticket v1.1"
         Me.ResumeLayout(false)
         Me.PerformLayout
 
@@ -333,4 +360,6 @@ End Sub
     Friend WithEvents Label9 As System.Windows.Forms.Label
     Friend WithEvents btnOpenAttachment As System.Windows.Forms.Button
     Friend WithEvents btnOpenFolder As System.Windows.Forms.Button
+    Friend WithEvents txtUpdatedBy As System.Windows.Forms.TextBox
+    Friend WithEvents Label10 As System.Windows.Forms.Label
 End Class

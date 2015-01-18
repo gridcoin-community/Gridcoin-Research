@@ -15,11 +15,19 @@ Public Class frmTicketAdd
             sHandle = InputBox("To use the ticket system you must have a handle (IE a nickname).  Please enter a handle >", "Please Enter Username", "")
             UpdateKey("Handle", sHandle)
             'Add the Handle to Users
-      
         End If
+        Dim sTicketPassword As String = ""
+        sTicketPassword = KeyValue("TicketPassword")
+        If sTicketPassword = "" Then
+            sTicketPassword = InputBox("To use the ticket system you must have a password.  Please enter a password >", "Please Enter Password", "")
+            UpdateKey("TicketPassword", sTicketPassword)
+            'Add the Handle to Users
+        End If
+
+
         cmbAssignedTo.Items.Clear()
 
-        mInsertUser(sHandle, "")
+        mInsertUser(sHandle, "", "", sTicketPassword)
 
 
         txtSubmittedBy.Text = sHandle
@@ -83,6 +91,7 @@ Public Class frmTicketAdd
         cmbAssignedTo.Text = drHistory.Value(Val(sID), "AssignedTo")
         cmbDisposition.Text = drHistory.Value(Val(sID), "Disposition")
         txtAttachment.Text = drHistory.Value(Val(sID), "BlobName")
+        txtUpdatedBy.Text = drHistory.Value(Val(sID), "SubmittedBy")
 
 
     End Sub
@@ -109,6 +118,8 @@ Public Class frmTicketAdd
         cmbAssignedTo.Text = dr.Value(1, "AssignedTo")
         cmbDisposition.Text = dr.Value(1, "Disposition")
         cmbType.Text = dr.Value(1, "Type")
+        txtSubmittedBy.Text = dr.Value(1, "SubmittedBy")
+
         txtTicketId.Text = sId
         txtDescription.Text = dr.Value(1, "Descript")
         Call PopulateHistory()
@@ -158,15 +169,9 @@ Public Class frmTicketAdd
             Exit Sub
         End If
 
-        
-        'Me.BackColor = Drawing.Color.Transparent
-        'btnSubmit.Enabled = False
-        '  System.Windows.Forms.Cursor.Current = Cursors.WaitCursor
+        txtSubmittedBy.Text = KeyValue("handle")
 
-        'Me.Refresh()
-
-        mInsertTicket(Mode, txtSubmittedBy.Text, txtTicketId.Text, cmbAssignedTo.Text, cmbDisposition.Text, txtDescription.Text, cmbType.Text, rtbNotes.Text)
-
+        mInsertTicket(Mode, txtSubmittedBy.Text, txtTicketId.Text, cmbAssignedTo.Text, cmbDisposition.Text, txtDescription.Text, cmbType.Text, rtbNotes.Text, KeyValue("TicketPassword"))
 
         PopulateHistory()
         SetViewMode()
@@ -187,6 +192,7 @@ Public Class frmTicketAdd
         drHistory = mGetTicketHistory(txtTicketId.Text)
         If drHistory Is Nothing Then Exit Sub
         Dim sAttach As String = ""
+        Dim grcSecurity As New GridcoinSecurity.GRCSecurity
 
         For i As Integer = 1 To drHistory.Rows
             Dim sRow As String = drHistory.Value(i, "Disposition") + " - " _
@@ -201,9 +207,16 @@ Public Class frmTicketAdd
             node.Tag = i
             tvTicketHistory.Nodes.Add(node)
             rtbNotes.Text = NormalizeNote(drHistory.Value(i, "Notes"))
-            cmbAssignedTo.Text = drHistory.Value(1, "AssignedTo")
-            cmbDisposition.Text = drHistory.Value(1, "Disposition")
-           
+            cmbAssignedTo.Text = drHistory.Value(i, "AssignedTo")
+            cmbDisposition.Text = drHistory.Value(i, "Disposition")
+         
+            'Verify security hash:
+            Dim lAuthentic As Long = 0
+            lAuthentic = grcSecurity.IsHashAuthentic("" & drHistory.Value(i, "SecurityGuid"), _
+                                                     "" & drHistory.Value(i, "SecurityHash"), "" & drHistory.Value(i, "PasswordHash"))
+          
+            If lAuthentic <> 0 Then node.ForeColor = Drawing.Color.Red
+
 
         Next i
 
@@ -254,7 +267,7 @@ Public Class frmTicketAdd
                 ' Me.WindowState = FormWindowState.Minimized
                 Dim b As Byte()
                 b = FileToBytes(OFD.FileName)
-                Dim sSuccess As String = mInsertAttachment(sBlobGuid, OFD.SafeFileName, b)
+                Dim sSuccess As String = mInsertAttachment(sBlobGuid, OFD.SafeFileName, b, KeyValue("TicketPassword"), KeyValue("handle"))
                 PopulateHistory()
 
                 'MsgBox("Added", MsgBoxStyle.Information)
@@ -286,20 +299,49 @@ Public Class frmTicketAdd
                 sBlobGuid = drHistory.Value(Val(sID), "BlobGuid")
                 If Len(sBlobGuid) < 5 Then MsgBox("Attachment has been removed from the P2P server", MsgBoxStyle.Critical) : Exit Function
                 sFullPath = mRetrieveAttachment(sBlobGuid, txtAttachment.Text)
+                
             End If
             Return sFullPath
         End If
 
     End Function
+    Private Function AttachmentSecurityScan() As Boolean
+        If Len(txtAttachment.Text) = 0 Then Exit Function
+        Try
+
+        Dim sBlobGuid As String
+        Dim sID As String = tvTicketHistory.SelectedNode.Tag
+        sBlobGuid = drHistory.Value(Val(sID), "BlobGuid")
+        Dim bSuccess = mAttachmentSecurityScan(sBlobGuid)
+        If Not bSuccess Then MsgBox("! WARNING !   Attachment came from an unverifiable source.  Virus scan the file and use extreme caution before opening it.", MsgBoxStyle.Critical, "Authenticity Scan Failed")
+            Return bSuccess
+        Catch ex As Exception
+            MsgBox("Document has been removed from the P2P server", MsgBoxStyle.Critical)
+
+        End Try
+
+    End Function
     Private Sub btnOpenAttachment_Click(sender As System.Object, e As System.EventArgs) Handles btnOpenAttachment.Click
+       
+        Try
+
         Dim sFullpath As String = DownloadAttachment()
-        If System.IO.File.Exists(sFullPath) Then
+        Dim bAuthScan As Boolean = AttachmentSecurityScan()
+        If Not bAuthScan Then Exit Sub 'dont let the user open it
+        If System.IO.File.Exists(sFullpath) Then
             'Launch
-            Process.Start(sFullPath)
-        End If
+            Process.Start(sFullpath)
+            End If
+        Catch ex As Exception
+            MsgBox("Document has been removed from the P2P server", MsgBoxStyle.Critical)
+
+        End Try
+
     End Sub
 
     Private Sub btnOpenFolder_Click(sender As System.Object, e As System.EventArgs) Handles btnOpenFolder.Click
+        Call AttachmentSecurityScan()
+
         Dim sFullpath As String = DownloadAttachment()
         If System.IO.File.Exists(sFullpath) Then
             Process.Start(GetGridFolder() + "Attachments\")

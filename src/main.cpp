@@ -181,8 +181,8 @@ CBigNum bnProofOfStakeLimit(~uint256(0) >> 20);
 CBigNum bnProofOfStakeLimitV2(~uint256(0) >> 20);
 CBigNum bnProofOfWorkLimitTestNet(~uint256(0) >> 16);
 
-//Gridcoin Minimum Stake Age (8 Hours)
-unsigned int nStakeMinAge = 8 * 60 * 60; // 8 hour
+//Gridcoin Minimum Stake Age (16 Hours)
+unsigned int nStakeMinAge = 16 * 60 * 60; // 16 hours
 unsigned int nStakeMaxAge = -1; // unlimited
 unsigned int nModifierInterval = 10 * 60; // time to elapse before new modifier is computed
 
@@ -363,7 +363,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 118050;
+ int nGrandfather = 118821;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2048,6 +2048,11 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 				owed = owed/2;
 			}
 
+			if (owed > (GetMaximumBoincSubsidy(GetAdjustedTime()))) owed = GetMaximumBoincSubsidy(GetAdjustedTime()); 
+
+			if (ChainPaymentViolation(cpid,GetAdjustedTime(),owed)) owed = 0;
+
+
 			//Halford - Ensure researcher was not paid in the last 2 hours:
 			if (IsLockTimeWithinMinutes(mag.LastPaymentTime,120))
 			{
@@ -2923,18 +2928,20 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 	// Block Spamming (Halford) 12-23-2014
     double PORDiff = GetBlockDifficulty(nBits);
-	if (mint==0 && pindex->nHeight > nGrandfather)
-	{
-					return error("CheckProofOfStake() : Mint Subsidy is zero");
-	}
 		
-	if (pindex->nHeight > nGrandfather && IsProofOfStake())
+	if (pindex->nHeight > nGrandfather)
 	{
 
 		// Block Spamming (Halford) 12-23-2014
 		if (mint < MintLimiter(PORDiff,bb.RSAWeight)) 
 		{
 			return error("CheckProofOfStake() : Mint too Small, %f",(double)mint);
+		}
+
+		double total_subsidy = bb.ResearchSubsidy+bb.InterestSubsidy;
+		if (total_subsidy < MintLimiter(PORDiff,bb.RSAWeight))
+		{
+					return error("CheckProofOfStake() : Total Mint too Small, %f",(double)total_subsidy);
 		}
 
 		if (mint == 0) return error("CheckProofOfStake() : Mint is ZERO! %f",(double)mint);
@@ -3558,31 +3565,12 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
 
 	//Reject blocks with diff > 10000000000000000
 	double blockdiff = GetBlockDifficulty(nBits);
-		if (height1 > nGrandfather && blockdiff > 10000000000000000)
-		{
-			   return DoS(1, error("CheckBlock() : Block Bits larger than 10000000000000000.\r\n"));
-		}
+	if (height1 > nGrandfather && blockdiff > 10000000000000000)
+	{
+		   return DoS(1, error("CheckBlock() : Block Bits larger than 10000000000000000.\r\n"));
+	}
 
 	
-		/*
-	if (height1 > nGrandfather && !ClientOutOfSync() && !fLoadingIndex)
-	{
-		//1-16-2015
-		double nLastTime = max(pindexBest->GetMedianTimePast()+1, GetAdjustedTime());
-		if (GetBlockTime() < nLastTime)
-		{
-					return error("AcceptBlock() : block timestamp too far in the past");
-		}
-		if (GetBlockTime() > FutureDrift(GetAdjustedTime(), height1))
-		{
-					return DoS(10,error("AcceptBlock() : block timestamp too far in the future"));
-		}
-	}
-	*/
-
-		
-
-
 
     // First transaction must be coinbase, the rest must not be
     if (vtx.empty() || !vtx[0].IsCoinBase())
@@ -3593,8 +3581,8 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
 
  
 	//ProofOfResearch
-		if (vtx.size() > 0)
-		{
+	if (vtx.size() > 0)
+	{
 			MiningCPID boincblock = DeserializeBoincBlock(vtx[0].hashBoinc);
 			if (boincblock.cpid != "INVESTOR")
 			{
@@ -3610,14 +3598,23 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
 
 			}
 
-	        // Gridcoin (NovaCoin's): check proof-of-stake block signature
+		
+		    // Gridcoin (NovaCoin's): check proof-of-stake block signature
 			if (IsProofOfStake() && height1 > nGrandfather)
 			{
-				//if (boincblock.RSAWeight < 24000 || boincblock.InterestSubsidy > 3 || boincblock.ResearchSubsidy > 3)
-				//{
-					if (fCheckSig && !CheckBlockSignature())
+		
+				//Mint limiter checks 1-18-2015
+				double PORDiff = GetBlockDifficulty(nBits);
+	
+				double total_subsidy = boincblock.ResearchSubsidy+boincblock.InterestSubsidy;
+				if (total_subsidy < MintLimiter(PORDiff,boincblock.RSAWeight))
+				{
+						return error("CheckProofOfStake() : Total Mint too Small, %f",(double)total_subsidy);
+				}
+
+
+	    		if (fCheckSig && !CheckBlockSignature())
 					return DoS(100, error("CheckBlock() : bad proof-of-stake block signature"));
-				//}
 			}
 
 
@@ -4191,9 +4188,7 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
         txCoinStake.nTime &= ~STAKE_TIMESTAMP_MASK;
 
 
-	if (fDebug) printf("ZX291");
-
-
+	
     int64_t nSearchTime = txCoinStake.nTime; // search to current time
 	int64_t out_gridreward = 0;
 
@@ -4206,7 +4201,7 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
 			//1-8-2015 Extract solved Key
 			double solvedNonce = cdbl(AppCache(pindexBest->GetBlockHash().GetHex()),0);
 			nNonce=solvedNonce;
-			printf("7. Nonce %f, SNonce %f, StakeTime %f, MaxHistTD %f, BBPastTimeLimit %f, PastDriftBlockTm %f \r\n",
+			if (fDebug3) printf("7. Nonce %f, SNonce %f, StakeTime %f, MaxHistTD %f, BBPTL %f, PDBTm %f \r\n",
 				(double)nNonce,(double)solvedNonce,(double)txCoinStake.nTime,
 				(double)max(pindexBest->GetPastTimeLimit()+1, PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1)),
 				(double)pindexBest->GetPastTimeLimit(), (double)PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1)	);
@@ -4877,7 +4872,7 @@ bool ChainPaymentViolation(std::string cpid, int64_t locktime, double Proposed_S
 	}
 	DailyOwed = GetChainDailyAvgEarnedByCPID(cpid,locktime,Payments,AvgDailyPayments);
 	bool bApproved = ( (Proposed_Subsidy+Payments)/14  <  DailyOwed*TOLERANCE_PERCENT);
-	if (fDebug3 || !bApproved) 
+	if (!bApproved) 
 	{
 		printf("Chain payment violation for CPID %s, proposed_subsidy %f, Payments %f, DailyOwed %f, AvgDailyPayments %f",
 			   cpid.c_str(),Proposed_Subsidy,Payments,DailyOwed,AvgDailyPayments);
