@@ -1862,10 +1862,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 			
                 // Found a kernel
                 if (fDebug)            printf("CreateCoinStake : kernel found\n");
-				//1-8-2015
 				WriteAppCache(pindexPrev->GetBlockHash().GetHex(),RoundToString(mdPORNonce,0));
-			   
-                vector<valtype> vSolutions;
+		        vector<valtype> vSolutions;
                 txnouttype whichType;
                 CScript scriptPubKeyOut;
                 scriptPubKeyKernel = pcoin.first->vout[pcoin.second].scriptPubKey;

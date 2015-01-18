@@ -363,7 +363,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 118834;
+ int nGrandfather = 118977;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -5008,7 +5008,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 	}
 	if (fDebug) printf("Gathering network avgs (begin)\r\n");
 	//If we did this within the last 5 mins, we are fine:
-	if (IsLockTimeWithinMinutes(nLastTallied,30)) return true;
+	if (IsLockTimeWithinMinutes(nLastTallied,10)) return true;
 	nLastTallied = GetAdjustedTime();
 
 	bNetAveragesLoaded = false;

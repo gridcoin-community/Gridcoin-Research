@@ -28,6 +28,7 @@ extern int SolveNonce(double diff);
 
 bool IsCPIDTimeValid(std::string cpid, int64_t locktime);
 
+double CPIDTime(std::string cpid);
 
 
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT);
@@ -598,6 +599,8 @@ bool StakeAcidTest(std::string grc_address, double por_diff, std::string last_bl
 	
 	if (fTestNet) return true;
 	if (height < nGrandfather) return true;
+	return true; //DISABLE FOR NOW
+
 	//ROB HALFORD - 12-30-2014
 	std::string aggregated_hash = grc_address + "," + last_block_hash + "," + RoundToString(nonce,0);
 	std::string hash_md5 = RetrieveMd5(aggregated_hash);
@@ -906,9 +909,12 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
     int nStakeModifierHeight = pindexPrev->nHeight;
     int64_t nStakeModifierTime = pindexPrev->nTime;
 
+	int64_t cpid_guid = (int64_t)CPIDTime(boincblock.cpid);
+	
     // Calculate hash
     CDataStream ss(SER_GETHASH, 0);
-	ss << nStakeModifier << nTimeBlockFrom << txPrev.nTime << prevout.hash << prevout.n << nTimeTx << RSA_WEIGHT;
+	//ss << nStakeModifier << nTimeBlockFrom << txPrev.nTime << prevout.hash << prevout.n << nTimeTx << RSA_WEIGHT;
+	ss << RSA_WEIGHT << cpid_guid << nTimeBlockFrom << txPrev.nTime << prevout.hash << prevout.n << nTimeTx <<  nStakeModifier;
 
     hashProofOfStake = Hash(ss.begin(), ss.end());
 
