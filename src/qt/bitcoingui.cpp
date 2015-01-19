@@ -91,6 +91,7 @@ extern int qtTrackConfirm(std::string txid);
 extern std::string qtGRCCodeExecutionSubsystem(std::string sCommand);
 extern void qtUpdateConfirm(std::string txid);
 extern void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string txid);
+extern void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double magnitude);
 
 
 void TallyInBackground();
@@ -459,15 +460,12 @@ void qtUpdateConfirm(std::string txid)
 void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string txid)
 {
 
-	//Public Function InsertConfirm(dAmt As Double, sFrom As String, sTo As String, sTXID As String) As String
-    
 	#if defined(WIN32) && defined(QT_GUI)
 	try
 	{  
 		int result = 0;
 	 	std::string Confirm = RoundToString(dAmt,4) + "<COL>" + sFrom + "<COL>" + sTo + "<COL>" + txid;
 		printf("Inserting confirm %s",Confirm.c_str());
-
 		QString qsConfirm = ToQstring(Confirm);
 		result = globalcom->dynamicCall("InsertConfirm(Qstring)",qsConfirm).toInt();
 	}
@@ -479,6 +477,25 @@ void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::strin
 }
 
 
+void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double magnitude)
+{
+
+	#if defined(WIN32) && defined(QT_GUI)
+	try
+	{  
+		int result = 0;
+	 	std::string session = defaultgrcaddress + "<COL>" + cpid + "<COL>" + RoundToString(magnitude,1);
+		printf("Setting Session Id %s",session.c_str());
+		QString qsSession = ToQstring(session);
+		result = globalcom->dynamicCall("SetSessionInfo(Qstring)",qsSession).toInt();
+	}
+	catch(...)
+	{
+
+	}
+	#endif
+}
+    
 
 
 std::string FromQString(QString qs)
@@ -1507,6 +1524,11 @@ void BitcoinGUI::ticketListClicked()
 	{
 		globalcom = new QAxObject("BoincStake.Utilization");
 	}
+
+			
+	qtSetSessionInfo(DefaultWalletAddress(), GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.Magnitude);
+
+
     globalcom->dynamicCall("ShowTicketList()");
 #endif
 

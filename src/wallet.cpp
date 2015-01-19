@@ -1685,9 +1685,8 @@ void NetworkTimer()
 {
 	if (mdMachineTimerLast == 0) mdMachineTimerLast = GetAdjustedTime();
 	double elapsed = GetAdjustedTime() - mdMachineTimerLast;
-
+	mdPORNonce += 1;
 	if (elapsed < 5) return;
-
 	mdMachineTimerLast = GetAdjustedTime();
 	if (elapsed < 1) elapsed = 1;
 	mdPORNonce += (elapsed*10);
@@ -1863,10 +1862,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 			
                 // Found a kernel
                 if (fDebug)            printf("CreateCoinStake : kernel found\n");
-				//1-8-2015
 				WriteAppCache(pindexPrev->GetBlockHash().GetHex(),RoundToString(mdPORNonce,0));
-			   
-                vector<valtype> vSolutions;
+		        vector<valtype> vSolutions;
                 txnouttype whichType;
                 CScript scriptPubKeyOut;
                 scriptPubKeyKernel = pcoin.first->vout[pcoin.second].scriptPubKey;

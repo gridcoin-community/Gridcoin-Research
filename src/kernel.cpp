@@ -28,6 +28,7 @@ extern int SolveNonce(double diff);
 
 bool IsCPIDTimeValid(std::string cpid, int64_t locktime);
 
+double CPIDTime(std::string cpid);
 
 
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT);
@@ -598,29 +599,30 @@ bool StakeAcidTest(std::string grc_address, double por_diff, std::string last_bl
 	
 	if (fTestNet) return true;
 	if (height < nGrandfather) return true;
+	return true; //DISABLE FOR NOW
+
 	//ROB HALFORD - 12-30-2014
-	//Step 2
 	std::string aggregated_hash = grc_address + "," + last_block_hash + "," + RoundToString(nonce,0);
 	std::string hash_md5 = RetrieveMd5(aggregated_hash);
 	uint256 hash  = uint256("0x" + hash_md5);
-	uint256 diff1 = uint256("0x00004fffffffffffffffffffffffffff");
-	uint256 diff2 = uint256("0x00003fffffffffffffffffffffffffff");
-	uint256 diff3 = uint256("0x00002fffffffffffffffffffffffffff");
-	uint256 diff4 = uint256("0x00002fffffffffffffffffffffffffff");
-	uint256 diff5 = uint256("0x00002fffffffffffffffffffffffffff");
-	uint256 diff6 = uint256("0x00002fffffffffffffffffffffffffff");
-	uint256 diff7 = uint256("0x00002fffffffffffffffffffffffffff");
+	uint256 diff1 = uint256("0x0000cfffffffffffffffffffffffffff");
+	uint256 diff2 = uint256("0x0000bfffffffffffffffffffffffffff");
+	uint256 diff3 = uint256("0x0000afffffffffffffffffffffffffff");
+	uint256 diff4 = uint256("0x00009fffffffffffffffffffffffffff");
+	uint256 diff5 = uint256("0x00007fffffffffffffffffffffffffff");
+	uint256 diff6 = uint256("0x00006fffffffffffffffffffffffffff");
+	uint256 diff7 = uint256("0x00005fffffffffffffffffffffffffff");
 	double nonce_height = 0;
 
-	if (payment_age > 60*60*24*14)                              nonce_height = 9000;
-	if (payment_age < 60*60*24*14 && payment_age  > 60*60*24*7) nonce_height = 9000;
-	if (payment_age < 60*60*24*7  && payment_age  > 60*60*24*3) nonce_height = 9000;
-	if (payment_age < 60*60*24*3  && payment_age  > 60*60*24*1) nonce_height = 9000;
-	if (payment_age < 60*60*24*1  && payment_age  > 60*60*12)   nonce_height = 10000;
+	if (payment_age > 60*60*24*14)                              nonce_height = 5000;
+	if (payment_age < 60*60*24*14 && payment_age  > 60*60*24*7) nonce_height = 6000;
+	if (payment_age < 60*60*24*7  && payment_age  > 60*60*24*3) nonce_height = 7000;
+	if (payment_age < 60*60*24*3  && payment_age  > 60*60*24*1) nonce_height = 8000;
+	if (payment_age < 60*60*24*1  && payment_age  > 60*60*12)   nonce_height = 9000;
 	if (payment_age < 60*60*12    && payment_age  > 60*60*6)    nonce_height = 10000;
-	if (payment_age < 60*60*6     && payment_age  > 60*60*2)    nonce_height = 30000;
-	if (payment_age < 60*60*2     && payment_age  > 60*60*1)    nonce_height = 40000;
-	if (payment_age < 60*60*1)                                  nonce_height = 50000;
+	if (payment_age < 60*60*6     && payment_age  > 60*60*2)    nonce_height = 12000;
+	if (payment_age < 60*60*2     && payment_age  > 60*60*1)    nonce_height = 24000;
+	if (payment_age < 60*60*1)                                  nonce_height = 40000;
 
 	if (cpid == "INVESTOR") nonce_height = nonce_height/4;
 	if (nonce < nonce_height) return false;
@@ -818,11 +820,14 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 
 
 	//1-15-2015 R Halford: Verify CPID on POR blocks meets time of day protocol
+	/*
 	if (!IsCPIDTimeValid(boincblock.cpid,nTimeBlockFrom))
 	{
 	    if (!checking_local) printf("CheckStakeKernelHashV3() : CPID does not meet legal submission timestamp parameters. %s",hashBoinc.c_str());
 		return false;
 	}
+	*/
+
 	
 
 	//Halford 1-4-2015 : Explain to the Researcher why they are not staking:
@@ -904,9 +909,12 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
     int nStakeModifierHeight = pindexPrev->nHeight;
     int64_t nStakeModifierTime = pindexPrev->nTime;
 
+	int64_t cpid_guid = (int64_t)CPIDTime(boincblock.cpid);
+	
     // Calculate hash
     CDataStream ss(SER_GETHASH, 0);
-	ss << nStakeModifier << nTimeBlockFrom << txPrev.nTime << prevout.hash << prevout.n << nTimeTx << RSA_WEIGHT;
+	//ss << nStakeModifier << nTimeBlockFrom << txPrev.nTime << prevout.hash << prevout.n << nTimeTx << RSA_WEIGHT;
+	ss << RSA_WEIGHT << cpid_guid << nTimeBlockFrom << txPrev.nTime << prevout.hash << prevout.n << nTimeTx <<  nStakeModifier;
 
     hashProofOfStake = Hash(ss.begin(), ss.end());
 

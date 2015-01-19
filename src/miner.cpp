@@ -30,6 +30,8 @@ double CoinToDouble(double surrogate);
 void ThreadTopUpKeyPool(void* parg);
 extern int64_t CPIDChronoStart(std::string cpid);
 extern bool IsCPIDTimeValid(std::string cpid, int64_t locktime);
+extern double CPIDTime(std::string cpid);
+
 
 
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
@@ -637,14 +639,12 @@ double Round_Legacy(double d, int place)
 double CPIDTime(std::string cpid)
 {
 	if (cpid.length() < 10) return 0;
+	if (cpid=="INVESTOR" || cpid=="investor") return 0;
 	std::string h65535 = cpid.substr(0,4);
 	double hash = HexToDouble(h65535);
 	double timeslice = hash * 1.318;
-	printf("CPID %s   hash %f  timeslice %f",h65535.c_str(),hash,timeslice);
-
 	return timeslice;
 }
-
 
 
 

@@ -22,6 +22,7 @@ Partial Class frmTicketAdd
     'Do not modify it using the code editor.
     <System.Diagnostics.DebuggerStepThrough()> _
     Private Sub InitializeComponent()
+        Dim resources As System.ComponentModel.ComponentResourceManager = New System.ComponentModel.ComponentResourceManager(GetType(frmTicketAdd))
         Me.Label1 = New System.Windows.Forms.Label()
         Me.cmbAssignedTo = New System.Windows.Forms.ComboBox()
         Me.Label2 = New System.Windows.Forms.Label()
@@ -40,6 +41,12 @@ Partial Class frmTicketAdd
         Me.Label8 = New System.Windows.Forms.Label()
         Me.txtSubmittedBy = New System.Windows.Forms.TextBox()
         Me.btnAddAttachment = New System.Windows.Forms.Button()
+        Me.txtAttachment = New System.Windows.Forms.TextBox()
+        Me.Label9 = New System.Windows.Forms.Label()
+        Me.btnOpenAttachment = New System.Windows.Forms.Button()
+        Me.btnOpenFolder = New System.Windows.Forms.Button()
+        Me.txtUpdatedBy = New System.Windows.Forms.TextBox()
+        Me.Label10 = New System.Windows.Forms.Label()
         Me.SuspendLayout()
         '
         'Label1
@@ -67,7 +74,7 @@ Partial Class frmTicketAdd
         '
         Me.Label2.AutoSize = True
         Me.Label2.ForeColor = System.Drawing.Color.Lime
-        Me.Label2.Location = New System.Drawing.Point(70, 146)
+        Me.Label2.Location = New System.Drawing.Point(69, 146)
         Me.Label2.Name = "Label2"
         Me.Label2.Size = New System.Drawing.Size(63, 13)
         Me.Label2.TabIndex = 3
@@ -105,19 +112,20 @@ Partial Class frmTicketAdd
         '
         'txtTicketId
         '
-        Me.txtTicketId.BackColor = System.Drawing.Color.Teal
-        Me.txtTicketId.ForeColor = System.Drawing.Color.Yellow
+        Me.txtTicketId.BackColor = System.Drawing.Color.FromArgb(CType(CType(0, Byte), Integer), CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer))
+        Me.txtTicketId.Font = New System.Drawing.Font("Arial", 9.75!, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        Me.txtTicketId.ForeColor = System.Drawing.Color.FromArgb(CType(CType(255, Byte), Integer), CType(CType(255, Byte), Integer), CType(CType(128, Byte), Integer))
         Me.txtTicketId.Location = New System.Drawing.Point(145, 8)
         Me.txtTicketId.Name = "txtTicketId"
         Me.txtTicketId.ReadOnly = True
-        Me.txtTicketId.Size = New System.Drawing.Size(312, 20)
+        Me.txtTicketId.Size = New System.Drawing.Size(312, 22)
         Me.txtTicketId.TabIndex = 1
         '
         'Label5
         '
         Me.Label5.AutoSize = True
         Me.Label5.ForeColor = System.Drawing.Color.Lime
-        Me.Label5.Location = New System.Drawing.Point(70, 17)
+        Me.Label5.Location = New System.Drawing.Point(69, 17)
         Me.Label5.Name = "Label5"
         Me.Label5.Size = New System.Drawing.Size(54, 13)
         Me.Label5.TabIndex = 8
@@ -126,7 +134,7 @@ Partial Class frmTicketAdd
         'btnSubmit
         '
         Me.btnSubmit.BackColor = System.Drawing.Color.Gray
-        Me.btnSubmit.ForeColor = System.Drawing.Color.Lime
+        Me.btnSubmit.ForeColor = System.Drawing.Color.FromArgb(CType(CType(128, Byte), Integer), CType(CType(255, Byte), Integer), CType(CType(128, Byte), Integer))
         Me.btnSubmit.Location = New System.Drawing.Point(464, 130)
         Me.btnSubmit.Name = "btnSubmit"
         Me.btnSubmit.Size = New System.Drawing.Size(78, 29)
@@ -149,7 +157,7 @@ Partial Class frmTicketAdd
         '
         Me.Label7.AutoSize = True
         Me.Label7.ForeColor = System.Drawing.Color.Lime
-        Me.Label7.Location = New System.Drawing.Point(70, 66)
+        Me.Label7.Location = New System.Drawing.Point(69, 66)
         Me.Label7.Name = "Label7"
         Me.Label7.Size = New System.Drawing.Size(34, 13)
         Me.Label7.TabIndex = 14
@@ -161,7 +169,7 @@ Partial Class frmTicketAdd
         Me.rtbNotes.ForeColor = System.Drawing.Color.Lime
         Me.rtbNotes.Location = New System.Drawing.Point(73, 208)
         Me.rtbNotes.Name = "rtbNotes"
-        Me.rtbNotes.Size = New System.Drawing.Size(744, 250)
+        Me.rtbNotes.Size = New System.Drawing.Size(823, 250)
         Me.rtbNotes.TabIndex = 7
         Me.rtbNotes.Text = ""
         '
@@ -194,14 +202,14 @@ Partial Class frmTicketAdd
         Me.tvTicketHistory.ForeColor = System.Drawing.Color.Lime
         Me.tvTicketHistory.Location = New System.Drawing.Point(72, 486)
         Me.tvTicketHistory.Name = "tvTicketHistory"
-        Me.tvTicketHistory.Size = New System.Drawing.Size(745, 147)
+        Me.tvTicketHistory.Size = New System.Drawing.Size(824, 147)
         Me.tvTicketHistory.TabIndex = 12
         '
         'Label8
         '
         Me.Label8.AutoSize = True
         Me.Label8.ForeColor = System.Drawing.Color.Lime
-        Me.Label8.Location = New System.Drawing.Point(70, 42)
+        Me.Label8.Location = New System.Drawing.Point(70, 43)
         Me.Label8.Name = "Label8"
         Me.Label8.Size = New System.Drawing.Size(72, 13)
         Me.Label8.TabIndex = 16
@@ -209,18 +217,19 @@ Partial Class frmTicketAdd
         '
         'txtSubmittedBy
         '
-        Me.txtSubmittedBy.BackColor = System.Drawing.Color.Teal
-        Me.txtSubmittedBy.ForeColor = System.Drawing.Color.Yellow
+        Me.txtSubmittedBy.BackColor = System.Drawing.Color.FromArgb(CType(CType(0, Byte), Integer), CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer))
+        Me.txtSubmittedBy.Font = New System.Drawing.Font("Arial", 9.75!, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        Me.txtSubmittedBy.ForeColor = System.Drawing.Color.FromArgb(CType(CType(255, Byte), Integer), CType(CType(255, Byte), Integer), CType(CType(128, Byte), Integer))
         Me.txtSubmittedBy.Location = New System.Drawing.Point(145, 34)
         Me.txtSubmittedBy.Name = "txtSubmittedBy"
         Me.txtSubmittedBy.ReadOnly = True
-        Me.txtSubmittedBy.Size = New System.Drawing.Size(312, 20)
+        Me.txtSubmittedBy.Size = New System.Drawing.Size(312, 22)
         Me.txtSubmittedBy.TabIndex = 2
         '
         'btnAddAttachment
         '
         Me.btnAddAttachment.BackColor = System.Drawing.Color.Gray
-        Me.btnAddAttachment.ForeColor = System.Drawing.Color.Lime
+        Me.btnAddAttachment.ForeColor = System.Drawing.Color.FromArgb(CType(CType(128, Byte), Integer), CType(CType(255, Byte), Integer), CType(CType(128, Byte), Integer))
         Me.btnAddAttachment.Location = New System.Drawing.Point(548, 130)
         Me.btnAddAttachment.Name = "btnAddAttachment"
         Me.btnAddAttachment.Size = New System.Drawing.Size(112, 29)
@@ -228,12 +237,82 @@ Partial Class frmTicketAdd
         Me.btnAddAttachment.Text = "Add Attachment"
         Me.btnAddAttachment.UseVisualStyleBackColor = False
         '
+        'txtAttachment
+        '
+        Me.txtAttachment.BackColor = System.Drawing.Color.FromArgb(CType(CType(0, Byte), Integer), CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer))
+        Me.txtAttachment.Font = New System.Drawing.Font("Arial", 9.75!, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        Me.txtAttachment.ForeColor = System.Drawing.Color.FromArgb(CType(CType(255, Byte), Integer), CType(CType(255, Byte), Integer), CType(CType(128, Byte), Integer))
+        Me.txtAttachment.Location = New System.Drawing.Point(537, 85)
+        Me.txtAttachment.Name = "txtAttachment"
+        Me.txtAttachment.ReadOnly = True
+        Me.txtAttachment.Size = New System.Drawing.Size(359, 22)
+        Me.txtAttachment.TabIndex = 18
+        '
+        'Label9
+        '
+        Me.Label9.AutoSize = True
+        Me.Label9.ForeColor = System.Drawing.Color.Lime
+        Me.Label9.Location = New System.Drawing.Point(462, 93)
+        Me.Label9.Name = "Label9"
+        Me.Label9.Size = New System.Drawing.Size(64, 13)
+        Me.Label9.TabIndex = 19
+        Me.Label9.Text = "Attachment:"
+        '
+        'btnOpenAttachment
+        '
+        Me.btnOpenAttachment.BackColor = System.Drawing.Color.Gray
+        Me.btnOpenAttachment.ForeColor = System.Drawing.Color.Red
+        Me.btnOpenAttachment.Location = New System.Drawing.Point(666, 130)
+        Me.btnOpenAttachment.Name = "btnOpenAttachment"
+        Me.btnOpenAttachment.Size = New System.Drawing.Size(112, 29)
+        Me.btnOpenAttachment.TabIndex = 20
+        Me.btnOpenAttachment.Text = "Open Attachment"
+        Me.btnOpenAttachment.UseVisualStyleBackColor = False
+        '
+        'btnOpenFolder
+        '
+        Me.btnOpenFolder.BackColor = System.Drawing.Color.Gray
+        Me.btnOpenFolder.ForeColor = System.Drawing.Color.FromArgb(CType(CType(128, Byte), Integer), CType(CType(255, Byte), Integer), CType(CType(128, Byte), Integer))
+        Me.btnOpenFolder.Location = New System.Drawing.Point(784, 130)
+        Me.btnOpenFolder.Name = "btnOpenFolder"
+        Me.btnOpenFolder.Size = New System.Drawing.Size(112, 29)
+        Me.btnOpenFolder.TabIndex = 21
+        Me.btnOpenFolder.Text = "Open Folder"
+        Me.btnOpenFolder.UseVisualStyleBackColor = False
+        '
+        'txtUpdatedBy
+        '
+        Me.txtUpdatedBy.BackColor = System.Drawing.Color.FromArgb(CType(CType(0, Byte), Integer), CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer))
+        Me.txtUpdatedBy.Font = New System.Drawing.Font("Arial", 9.75!, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        Me.txtUpdatedBy.ForeColor = System.Drawing.Color.FromArgb(CType(CType(255, Byte), Integer), CType(CType(255, Byte), Integer), CType(CType(128, Byte), Integer))
+        Me.txtUpdatedBy.Location = New System.Drawing.Point(537, 34)
+        Me.txtUpdatedBy.Name = "txtUpdatedBy"
+        Me.txtUpdatedBy.ReadOnly = True
+        Me.txtUpdatedBy.Size = New System.Drawing.Size(359, 22)
+        Me.txtUpdatedBy.TabIndex = 22
+        '
+        'Label10
+        '
+        Me.Label10.AutoSize = True
+        Me.Label10.ForeColor = System.Drawing.Color.Lime
+        Me.Label10.Location = New System.Drawing.Point(462, 43)
+        Me.Label10.Name = "Label10"
+        Me.Label10.Size = New System.Drawing.Size(66, 13)
+        Me.Label10.TabIndex = 23
+        Me.Label10.Text = "Updated By:"
+        '
         'frmTicketAdd
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.BackColor = System.Drawing.Color.Black
         Me.ClientSize = New System.Drawing.Size(937, 666)
+        Me.Controls.Add(Me.txtUpdatedBy)
+        Me.Controls.Add(Me.Label10)
+        Me.Controls.Add(Me.btnOpenFolder)
+        Me.Controls.Add(Me.btnOpenAttachment)
+        Me.Controls.Add(Me.txtAttachment)
+        Me.Controls.Add(Me.Label9)
         Me.Controls.Add(Me.btnAddAttachment)
         Me.Controls.Add(Me.txtSubmittedBy)
         Me.Controls.Add(Me.Label8)
@@ -252,8 +331,9 @@ Partial Class frmTicketAdd
         Me.Controls.Add(Me.rtbNotes)
         Me.Controls.Add(Me.cmbAssignedTo)
         Me.Controls.Add(Me.Label1)
+        Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)
         Me.Name = "frmTicketAdd"
-        Me.Text = "Gridcoin - Add or Edit Ticket"
+        Me.Text = "Gridcoin - Add or Edit Ticket v1.1"
         Me.ResumeLayout(false)
         Me.PerformLayout
 
@@ -276,4 +356,10 @@ End Sub
     Friend WithEvents Label8 As System.Windows.Forms.Label
     Friend WithEvents txtSubmittedBy As System.Windows.Forms.TextBox
     Friend WithEvents btnAddAttachment As System.Windows.Forms.Button
+    Friend WithEvents txtAttachment As System.Windows.Forms.TextBox
+    Friend WithEvents Label9 As System.Windows.Forms.Label
+    Friend WithEvents btnOpenAttachment As System.Windows.Forms.Button
+    Friend WithEvents btnOpenFolder As System.Windows.Forms.Button
+    Friend WithEvents txtUpdatedBy As System.Windows.Forms.TextBox
+    Friend WithEvents Label10 As System.Windows.Forms.Label
 End Class

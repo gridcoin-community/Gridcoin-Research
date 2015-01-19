@@ -50,30 +50,20 @@ Module modGRC
 
         Try
             Dim encryptor As ICryptoTransform = Aes.Create.CreateEncryptor(TruncateHash(MerkleRoot + Right(sSalt, 4), Aes.Create.KeySize \ 8), TruncateHash("", Aes.Create.BlockSize \ 8))
-
-            'Aes.Create.Key = TruncateHash(MerkleRoot + Right(sSalt, 4), Aes.Create.KeySize \ 8)
-            'Aes.Create.IV = TruncateHash("", Aes.Create.BlockSize \ 8)
             Return encryptor
-
         Catch ex As Exception
             Throw ex
         End Try
-
     End Function
 
     Private Function CreateAESDecryptor(ByVal sSalt As String) As ICryptoTransform
 
         Try
             Dim decryptor As ICryptoTransform = Aes.Create.CreateDecryptor(TruncateHash(MerkleRoot + Right(sSalt, 4), Aes.Create.KeySize \ 8), TruncateHash("", Aes.Create.BlockSize \ 8))
-
-            'Aes.Create.Key = TruncateHash(MerkleRoot + Right(sSalt, 4), Aes.Create.KeySize \ 8)
-            'Aes.Create.IV = TruncateHash("", Aes.Create.BlockSize \ 8)
             Return decryptor
-
         Catch ex As Exception
             Throw ex
         End Try
-
     End Function
 
     Public Function StringToByte(sData As String)
@@ -134,10 +124,21 @@ Module modGRC
         Dim sBase64 As String = System.Convert.ToBase64String(b, 0, b.Length)
         Return sBase64
     End Function
-
+    Public Function WriteBase64StringToFile(sFileName As String, sData As String)
+        Dim sFilePath As String = sFileName
+        Dim b() As Byte
+        b = System.Convert.FromBase64String(sData)
+        System.IO.File.WriteAllBytes(sFilePath, b)
+    End Function
+    Public Function DecryptAES512AttachmentToFile(sFileName As String, sData As String, sPass As String)
+        Dim sFilePath As String = sFileName
+        Dim b() As Byte
+        b = System.Convert.FromBase64String(sData)
+        b = AES512DecryptData(b, sPass)
+        System.IO.File.WriteAllBytes(sFilePath, b)
+    End Function
 
     Public Function FileToBytes(sSourceFileName As String) As Byte()
-
         Dim sFilePath As String = sSourceFileName
         Dim b() As Byte
         b = System.IO.File.ReadAllBytes(sFilePath)
@@ -529,16 +530,45 @@ Module modGRC
     End Function
 
 
+
+    Public Function AES512EncryptData(b() As Byte, Pass As String) As Byte()
+        Try
+            Dim encryptor As ICryptoTransform = CreateAESEncryptor(Pass)
+            Dim ms As New System.IO.MemoryStream
+            Dim encStream As New CryptoStream(ms, encryptor, System.Security.Cryptography.CryptoStreamMode.Write)
+            encStream.Write(b, 0, b.Length)
+            encStream.FlushFinalBlock()
+            Try
+                Return ms.ToArray
+            Catch ex As Exception
+                Log("Error while encrypting " + ex.Message)
+
+            End Try
+        Catch ex As Exception
+            Log("Error while encrypting [2]" + ex.Message)
+
+        End Try
+    End Function
+
+    Public Function AES512DecryptData(EncryptedBytes() As Byte, sPass As String) As Byte()
+        Try
+            Dim decryptor As ICryptoTransform = CreateAESDecryptor(sPass)
+            Dim ms As New System.IO.MemoryStream
+            Dim decStream As New CryptoStream(ms, decryptor, System.Security.Cryptography.CryptoStreamMode.Write)
+            decStream.Write(EncryptedBytes, 0, EncryptedBytes.Length)
+            decStream.FlushFinalBlock()
+            Return ms.ToArray
+        Catch ex As Exception
+            Log("Error while decryption AES512 " + ex.Message)
+        End Try
+    End Function
+
+
     Public Function AES512EncryptData(ByVal plaintext As String) As String
 
         Try
-
-            ' Convert the plaintext string to a byte array. 
             Dim encryptor As ICryptoTransform = CreateAESEncryptor("salt")
-            
-            'Call MerkleAES(MerkleRoot)
             Dim plaintextBytes() As Byte = System.Text.Encoding.Unicode.GetBytes(plaintext)
-            ' Create the stream. 
             Dim ms As New System.IO.MemoryStream
             ' Create the encoder to write to the stream. 
             Dim encStream As New CryptoStream(ms, encryptor, System.Security.Cryptography.CryptoStreamMode.Write)
@@ -547,22 +577,15 @@ Module modGRC
             encStream.FlushFinalBlock()
             Try
                 Return Convert.ToBase64String(ms.ToArray)
-
             Catch ex As Exception
-
             End Try
-
-
         Catch ex As Exception
-
+            Log("Error while encrypting AES 512 " + ex.Message)
         End Try
     End Function
 
     Public Function AES512DecryptData(ByVal encryptedtext As String) As String
         Try
-
-            ' Convert the encrypted text string to a byte array. 
-            '            MerkleAES(MerkleRoot)
             Dim decryptor As ICryptoTransform = CreateAESDecryptor("salt")
             Dim encryptedBytes() As Byte = Convert.FromBase64String(encryptedtext)
             Dim ms As New System.IO.MemoryStream
@@ -575,7 +598,6 @@ Module modGRC
         Catch ex As Exception
             Return ex.Message
         End Try
-
     End Function
 
 
