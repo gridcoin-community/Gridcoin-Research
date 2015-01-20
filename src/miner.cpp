@@ -437,13 +437,10 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		double out_por = 0;
 		double out_interest=0;
 
-		if (fDebug) printf("ZX256");
-
 		//Halford: Use current time since we are creating a new stake
 		int64_t nNewBlockReward = GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),
 			out_por,out_interest,miningcpid.RSAWeight);
 
-		if (fDebug) printf("ZX257");
 
 		miningcpid.ResearchSubsidy = out_por;
 		miningcpid.InterestSubsidy = out_interest;
@@ -456,13 +453,10 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		if (fDebug) printf("ZX258");
 		
 		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-			if (fDebug) printf("ZX259");
-
 			
 		std::string hashBoinc = SerializeBoincBlock(miningcpid);
 
-			if (fDebug) printf("ZX260");
-
+		
 		//printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
 	    if (fDebug)  printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
 		pblock->vtx[0].hashBoinc = hashBoinc;
@@ -732,7 +726,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	//Submit the block during the public key address second
 	int wallet_second = 0;
 
-    if (fDebug) printf("CheckStake() : new proof-of-stake block found, BlockValue %s, \r\n hash: %s \nproofhash: %s  \ntarget: %s\n",
+    if (fDebug3) printf("CheckStake() : new proof-of-stake block found, BlockValue %s, \r\n hash: %s \nproofhash: %s  \ntarget: %s\n",
 					sBlockValue.c_str(), hashBlock.GetHex().c_str(), proofHash.GetHex().c_str(), hashTarget.GetHex().c_str());
 	if (fDebug)     pblock->print();
     if (fDebug) printf("out %s\n", FormatMoney(pblock->vtx[1].GetValueOut()).c_str());
@@ -766,7 +760,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 
         // Process this block the same as if we had received it from another node
 		//Halford - 1-14-2015 - Ensure Blocks have a minimum time spacing
-		if (!IsLockTimeWithinMinutes(nLastBlockSubmitted,5)) 
+		if (!IsLockTimeWithinMinutes(nLastBlockSubmitted,2)) 
 		{
 			nLastBlockSubmitted = GetAdjustedTime();
 			if (!ProcessBlock(NULL, pblock, true))

@@ -45,12 +45,13 @@ Public Class frmLeaderboard
 
     Private Sub SqlToGrid(sql As String, dgv As DataGridView, bClear As Boolean, mData As Sql)
         Try
+            'Only used for Leaderboard Display
 
       
         Dim dr As GridcoinReader
 
         Try
-            dr = mData.GetGridcoinReader(sql)
+                dr = mData.GetGridcoinReader(sql, 10)
         Catch ex As Exception
             Exit Sub
         End Try

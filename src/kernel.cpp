@@ -31,7 +31,7 @@ bool IsCPIDTimeValid(std::string cpid, int64_t locktime);
 double CPIDTime(std::string cpid);
 
 
-double MintLimiter(double PORDiff,int64_t RSA_WEIGHT);
+double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid);
 
 double GetBlockDifficulty(unsigned int nBits);
 
@@ -490,7 +490,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	double coin_age = std::abs((double)nTimeTx-(double)txPrev.nTime);
 	double payment_age = std::abs((double)nTimeTx-(double)boincblock.LastPaymentTime);
 	if ((payment_age > 60*60) && boincblock.Magnitude > 1 && boincblock.cpid != "INVESTOR" && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT) 
-		&& (RSA_WEIGHT/14 > MintLimiter(PORDiff,RSA_WEIGHT)) )
+		&& (RSA_WEIGHT/14 > MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid)) )
 	{
 		//Coins are older than RSA balance
 		oNC=1;
@@ -674,7 +674,7 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 	if ((payment_age > 60*60) && (payment_age > BitsAge)  
 		&& combined_mag > 1 
 		&& boincblock.cpid != "INVESTOR" && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT) 
-		&& (RSA_WEIGHT/14 > MintLimiter(PORDiff,RSA_WEIGHT)) && ACID_TEST)
+		&& (RSA_WEIGHT/14 > MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid)) && ACID_TEST)
 	{
 		//Coins are older than RSA balance
 		oNC=1;
@@ -691,8 +691,8 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 			if (payment_age < BitsAge)    narr += " Payment < Diff: " + RoundToString(payment_age,0) + "; " + RoundToString(BitsAge,0);
 			if (coin_age < 4*60*60)       narr += " Coin Age (immature): " + RoundToString(coin_age,0);
 			if (coin_age < RSA_WEIGHT)    narr += " Coin Age < RSA_Weight: " + RoundToString(coin_age,0) + " " + RoundToString(RSA_WEIGHT,0);
-			if (RSA_WEIGHT/14 < MintLimiter(PORDiff,RSA_WEIGHT)) narr += " RSAWeight < MintLimiter: "
-					+ RoundToString(RSA_WEIGHT/14,0) + "; " + RoundToString(MintLimiter(PORDiff,RSA_WEIGHT),0);
+			if (RSA_WEIGHT/14 < MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid)) narr += " RSAWeight < MintLimiter: "
+					+ RoundToString(RSA_WEIGHT/14,0) + "; " + RoundToString(MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid),0);
 		}
 		if (!ACID_TEST)      
 		{
@@ -841,8 +841,7 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 			if (payment_age < BitsAge)        narr += " Payment < Diff: " + RoundToString(payment_age,0) + "; " + RoundToString(BitsAge,0);
 			if (coin_age < 4*60*60)           narr += " Coin Age (immature): " + RoundToString(coin_age,0);
 			if (coin_age < RSA_WEIGHT)        narr += " Coin Age < RSA_Weight: " + RoundToString(coin_age,0) + " " + RoundToString(RSA_WEIGHT,0);
-			if (RSA_WEIGHT/14 < MintLimiter(PORDiff,RSA_WEIGHT)) narr += " RSAWeight < MintLimiter: "
-					+ RoundToString(RSA_WEIGHT/14,0) + "; " + RoundToString(MintLimiter(PORDiff,RSA_WEIGHT),0);
+			if (RSA_WEIGHT/14 < MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid)) narr += " RSAWeight < MintLimiter: "+ RoundToString(RSA_WEIGHT/14,0) + "; " + RoundToString(MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid),0);
 		}
 
 		if (!ACID_TEST)      
@@ -854,7 +853,6 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 			narr += " Kernel Found: " + RoundToString(por_nonce,0) + "-" + RoundToString(oNC,0) + "";
 		}
 	
-
 		if (RSA_WEIGHT >= 24999)        msMiningErrors7="Newbie block being generated.";
 		msMiningErrors5 = narr;
 	}
@@ -870,10 +868,7 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 
 	if (boincblock.cpid != "INVESTOR")
 	{
-		if ((payment_age > 60*60) && (payment_age > BitsAge)  
-			&& boincblock.Magnitude > 1 && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT) 
-			&& (RSA_WEIGHT/14 > MintLimiter(PORDiff,RSA_WEIGHT)) 
-			&& IsCPIDValidv2(boincblock,pindexPrev->nHeight)		)
+		if ((payment_age > 60*60) && (payment_age > BitsAge) && boincblock.Magnitude > 1 && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT))
 		{
 			//Coins are older than RSA balance - Allow hash to dictate outcome
 		}
@@ -914,7 +909,7 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
     // Calculate hash
     CDataStream ss(SER_GETHASH, 0);
 	//ss << nStakeModifier << nTimeBlockFrom << txPrev.nTime << prevout.hash << prevout.n << nTimeTx << RSA_WEIGHT;
-	ss << RSA_WEIGHT << cpid_guid << nTimeBlockFrom << txPrev.nTime << prevout.hash << prevout.n << nTimeTx <<  nStakeModifier;
+	ss << RSA_WEIGHT << cpid_guid << nTimeBlockFrom << txPrev.nTime << prevout.hash << prevout.n << nTimeTx <<  por_nonce;
 
     hashProofOfStake = Hash(ss.begin(), ss.end());
 

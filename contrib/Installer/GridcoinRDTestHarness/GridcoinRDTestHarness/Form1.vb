@@ -124,15 +124,10 @@ Public Class Form1
     End Function
     Private Sub Button1_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles Button1.Click
         Dim x As New Utilization
-        x.SetDebugMode(True)
-
-        'x.SetSessionInfo("123<COL>abc<COL>50")
-
+        x.SetDebugMode(False)
+        x.ShowSql()
         x.ShowTicketList()
 
-        
-
-        
     End Sub
 
 
@@ -181,7 +176,6 @@ Public Class Form1
             text = Replace(text, "QColor(200, 0, 0)", IIf(night, "QColor(255, 0, 0)", "QColor(255, 0, 0)"))  'red
             'pink = c80075 or 200,0,117
             text = Replace(text, "color: #808080", IIf(night, "color: #808080", "color: #8080")) ' gray
-
             text = Replace(text, "color: #006060", IIf(night, "color: #00ff00", "color: #00ff00"))  'light green instead of blue
             text = Replace(text, "QColor(210,200,180)", IIf(night, "QColor(145,158,152)", "QColor(204,230,232")) '  light blue almost white
             text = Replace(text, "QColor(200,50,50)", IIf(night, "QColor(255,0,0)", "QColor(255,0,0")) '  Tx Table Model (red) going to Red
@@ -193,9 +187,7 @@ Public Class Form1
             text = Replace(text, "#121212", IIf(night, "#000000", "#161616")) '  Tx Table Model (dark black) going to very dark green
             text = Replace(text, "QColor(0,240,40)", IIf(night, "QColor(0,255,0)", "QColor(0,255,0"))  '  guiconstants.h goinf from green to light green
             text = Replace(text, "QColor(0, 255,55)", IIf(night, "QColor(0,255,0)", "QColor(0,255,0")) '  guiconstants.h goinf from green to light green
-
             outfile.WriteLine(text)
-
 
         End While
         outfile.Close()
@@ -306,15 +298,9 @@ Public Class Form1
         End Try
 
     End Sub
-    Private Sub Form1_Load(ByVal sender As Object, ByVal e As System.EventArgs) Handles Me.Load
-
-
-
-    End Sub
 
     Private Sub Button2_Click(sender As System.Object, e As System.EventArgs) Handles Button2.Click
         bu.StopWireFrameRenderer()
-
 
     End Sub
 End Class

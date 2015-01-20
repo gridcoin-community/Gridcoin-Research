@@ -117,7 +117,7 @@ Public Class Sql
 
         Return sHost
     End Function
-    Public Function SQLQuery(sHost As String, sSQL As String, sParams() As Byte) As String
+    Public Function SQLQuery(sHost As String, sSQL As String, sParams() As Byte, sToken As String) As String
         Dim sURL As String
         sURL = "http://" + sHost + "/p2psql.aspx?query="
         sSQL = Replace(sSQL, vbCr, "<CR>")
@@ -130,6 +130,7 @@ Public Class Sql
                 Using wc
                     wc.Headers(HttpRequestHeader.ContentType) = "application/x-www-form-urlencoded"
                     wc.Headers.Add("Query:<QUERY>" + sSQL + "</QUERY>")
+                    wc.Headers.Add("Token:" + sToken)
 
                     Dim result As String
                     Dim responseArray As Byte()
@@ -166,16 +167,16 @@ Public Class Sql
         Next
     End Function
 
-    Public Function ExecuteP2P(sCommand As String, sParams() As Byte) As String
+    Public Function ExecuteP2P(sCommand As String, sParams() As Byte, lSource As Long) As String
         Dim sHost As String
         Dim sData As String = ""
         System.Windows.Forms.Cursor.Current = Cursors.WaitCursor
 
+        Dim sToken As String = GetSecurityToken(lSource)
         For x = 1 To 3
             Try
                 sHost = GetMasterNodeURL()
-                sData = SQLQuery(sHost, sCommand, sParams)
-
+                sData = SQLQuery(sHost, sCommand, sParams, sToken)
                 If sData = "" Then
                     System.Windows.Forms.Cursor.Current = Cursors.Default
                     Return sData
@@ -214,7 +215,8 @@ Public Class Sql
         Try
             System.Windows.Forms.Cursor.Current = Cursors.WaitCursor
             Dim sHarmonyP2PServerHost = GetMasterNodeURL()
-            sBoincBytes = SQLQuery(sHarmonyP2PServerHost, Sql, Nothing)
+            Dim sToken As String = GetSecurityToken(1)
+            sBoincBytes = SQLQuery(sHarmonyP2PServerHost, Sql, Nothing, sToken)
             System.Windows.Forms.Cursor.Current = Cursors.Default
         Catch ex As Exception
             Log("BoincHarmonyP2PExecute:" + Sql + ":" + ex.Message)
@@ -236,7 +238,7 @@ Public Class Sql
 
     End Function
 
-    Public Function GetGridcoinReader(Sql As String) As GridcoinReader
+    Public Function GetGridcoinReader(Sql As String, lSource As Long) As GridcoinReader
 
         Try
             System.Windows.Forms.Cursor.Current = Cursors.WaitCursor
@@ -246,8 +248,10 @@ Public Class Sql
             Dim sData As String
             Dim sHost As String
             sHost = GetMasterNodeURL()
+            
+            Dim sToken As String = GetSecurityToken(lSource)
 
-            sData = SQLQuery(sHost, Sql, Nothing)
+            sData = SQLQuery(sHost, Sql, Nothing, sToken)
 
             Dim vData() As String
             vData = Split(sData, "<ROW>")
@@ -451,7 +455,8 @@ Public Class Sql
 
         Try
             Dim gr As New GridcoinReader
-            gr = GetGridcoinReader(sSql)
+            gr = GetGridcoinReader(sSql, 10)
+
             If gr.Rows = 0 Then Exit Function
             o = gr.Value(1, sCol)
             Return o

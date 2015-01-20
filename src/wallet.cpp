@@ -24,9 +24,7 @@ void qtUpdateConfirm(std::string txid);
 bool Contains(std::string data, std::string instring);
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 
-extern double MintLimiter(double PORDiff,int64_t RSA_WEIGHT);
-
-
+extern double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
 
 bool IsLockTimeWithinMinutes(double locktime, int minutes);
@@ -1602,22 +1600,22 @@ std::string NewbieLevelToString(int newbie_level)
 
 
 
-double MintLimiter(double PORDiff,int64_t RSA_WEIGHT)
+double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid)
 {
 	//if (GetAdjustedTime() > 1420066220 && GetAdjustedTime() < 1420066220+3600) return 0;
-
+	double por = 0;
+	if (cpid != "INVESTOR") por = 10;
 	if (RSA_WEIGHT >= 24999) return 0;
 	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
-	if (PORDiff > 0    && PORDiff < 1)   return .02;
-	if (PORDiff > 1    && PORDiff < 6)   return .15;
-	if (PORDiff >= 6   && PORDiff < 10)  return 5;
-	if (PORDiff >= 10  && PORDiff < 50)  return 10;
-	if (PORDiff >= 50  && PORDiff < 100) return 15;
-	if (PORDiff >= 100 && PORDiff < 500) return 30;
-	if (PORDiff >= 500) return 75;
+	if (PORDiff >= 0   && PORDiff < 1)   return .01;
+	if (PORDiff >= 1   && PORDiff < 6)   return por+.15;
+	if (PORDiff >= 6   && PORDiff < 10)  return por+5;
+	if (PORDiff >= 10  && PORDiff < 50)  return por+10;
+	if (PORDiff >= 50  && PORDiff < 100) return por+15;
+	if (PORDiff >= 100 && PORDiff < 500) return por+30;
+	if (PORDiff >= 500) return por+35;
 	return 0;
 }
-	
 
 
 
@@ -1813,11 +1811,9 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 
 
-		//Search
+	//Search
 
 	msMiningErrors7=""; //Clear errors; ready to roll...
-
-		if (fDebug) printf("ZX399");
 
 
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
@@ -1999,21 +1995,42 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		//Halford: Use current time since we are creating a new stake
 		double OUT_POR = 0;
 		double out_interest = 0;
+
+		// ************************************************* CREATE PROOF OF RESEARCH REWARD ****************************** R HALFORD *************** 1/19/2015 *******************************
+
         int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,
 			GetAdjustedTime(),OUT_POR,out_interest,RSA_WEIGHT);
 	
+		//
+		MiningCPID miningcpid = GetNextProject(false);
+		uint256 pbh = 0;
+		if (pindexPrev) pbh=pindexPrev->GetBlockHash();
+		miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pbh);
+		miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
+		miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
+		miningcpid.ResearchSubsidy = OUT_POR;
+		miningcpid.InterestSubsidy = out_interest;
+		miningcpid.enccpid = ""; //CPID V1 Boinc RunTime enc key
+		miningcpid.encboincpublickey = "";
+		miningcpid.encaes = "";
+		std::string hashBoinc = SerializeBoincBlock(miningcpid);
+		if (fDebug)  printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
+		txNew.hashBoinc = hashBoinc;
+
+
+
 		double out_magnitude = 0;
 		double out_owed = 0;
 		double mint = CoinToDouble(nReward);
 		double PORDiff = GetBlockDifficulty(nBits);
 	
-		if (fDebug) printf("Creating POS Reward for %s  amt  %f  {RSAWeight %f} \r\n",
-			GlobalCPUMiningCPID.cpid.c_str(), mint, (double)RSA_WEIGHT);
+		if (fDebug) printf("Creating POS Reward for %s  amt  %f  {RSAWeight %f}  Research %f, Interest %f \r\n",
+			GlobalCPUMiningCPID.cpid.c_str(), mint, (double)RSA_WEIGHT,miningcpid.ResearchSubsidy,miningcpid.InterestSubsidy);
 	
 		//INVESTORS
-		if (mint < MintLimiter(PORDiff,RSA_WEIGHT)) 
+		if (mint < MintLimiter(PORDiff,RSA_WEIGHT,GlobalCPUMiningCPID.cpid)) 
 		{
-				if (fDebug) printf("CreateStake()::Mint %f of %f too small",(double)mint,(double)MintLimiter(PORDiff,RSA_WEIGHT));
+				if (fDebug) printf("CreateStake()::Mint %f of %f too small",(double)mint,(double)MintLimiter(PORDiff,RSA_WEIGHT,miningcpid.cpid));
 				msMiningErrors7="Mint too small";
 				return false; 
 		}
