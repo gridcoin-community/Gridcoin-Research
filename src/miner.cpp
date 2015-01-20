@@ -19,8 +19,11 @@ using namespace std;
 
 extern unsigned int nMinerSleep;
 MiningCPID GetNextProject(bool bForce);
-
 void ThreadCleanWalletPassphrase(void* parg);
+
+double GetBlockDifficulty(unsigned int nBits);
+
+double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid);
 
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 std::string GetBestBlockHash(std::string sCPID);
@@ -563,13 +566,13 @@ bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
     uint256 hashTarget = CBigNum().SetCompact(pblock->nBits).getuint256();
 
     if(!pblock->IsProofOfWork())
-        return error("CheckWork() : %s is not a proof-of-work block", hashBlock.GetHex().c_str());
+        return error("CheckWork[] : %s is not a proof-of-work block", hashBlock.GetHex().c_str());
 
     if (hashProof > hashTarget)
-        return error("CheckWork() : proof-of-work not meeting target");
+        return error("CheckWork[] : proof-of-work not meeting target");
 
     //// debug print
-    printf("CheckWork() : new proof-of-work block found  \n  proof hash: %s  \ntarget: %s\n", hashProof.GetHex().c_str(), hashTarget.GetHex().c_str());
+    printf("CheckWork[] : new proof-of-work block found  \n  proof hash: %s  \ntarget: %s\n", hashProof.GetHex().c_str(), hashTarget.GetHex().c_str());
     pblock->print();
     printf("generated %s\n", FormatMoney(pblock->vtx[0].vout[0].nValue).c_str());
 
@@ -580,7 +583,7 @@ bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
 		{
 			//1-10-2015
 			msMiningErrors6 = "Generated block is stale.";
-            return error("CheckWork() : generated block is stale");
+            return error("CheckWork[] : generated block is stale");
 		}
 
         // Remove key from key pool
@@ -596,7 +599,7 @@ bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
         if (!ProcessBlock(NULL, pblock, true))
 		{
 			msMiningErrors6 = "Block not accepted.";
-            return error("CheckWork() : ProcessBlock, block not accepted");
+            return error("CheckWork[] : ProcessBlock, block not accepted");
 		}
     }
 		
@@ -712,6 +715,29 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 		return error("CheckStake()::HashBoinc too small");
 	}
 
+
+	if (pblock->nNonce < 100)
+	{
+		if (fDebug) printf("CheckStake::Nonce too low\r\n");
+		return error("CheckStake()::Nonce too low");
+	}
+
+	//1-20-2015 Ensure this stake is above the minimum threshhold; otherwise, vehemently reject
+	double PORDiff = GetBlockDifficulty(pblock->nBits);
+	//double mint1 = CoinToDouble(Mint);
+	MiningCPID boincblock = DeserializeBoincBlock(pblock->vtx[0].hashBoinc);
+	double total_subsidy = boincblock.ResearchSubsidy + boincblock.InterestSubsidy;
+    
+	if (fDebug) printf("CheckStake[]: TotalSubsidy %f, cpid %s, Res %f, Interest %f, hb: %s \r\n",
+					(double)total_subsidy, boincblock.cpid.c_str(),	boincblock.ResearchSubsidy,boincblock.InterestSubsidy,pblock->vtx[0].hashBoinc.c_str());
+			
+	if (total_subsidy < MintLimiter(PORDiff,boincblock.RSAWeight,boincblock.cpid))
+	{
+					printf("****CheckStake[]: Total Mint too Small %s, Res %f, Interest %f, hash %s \r\n",boincblock.cpid.c_str(),
+						boincblock.ResearchSubsidy,boincblock.InterestSubsidy,pblock->vtx[0].hashBoinc.c_str());
+					return error("*****CheckBlock[] : Total Mint too Small, %f",(double)boincblock.ResearchSubsidy+boincblock.InterestSubsidy);
+	}
+			
 
 	if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc, true, pblock->nNonce))
 	{	
@@ -920,7 +946,7 @@ Begin:
 			else
 			{
 				msMiningErrors = "Stake block rejected";
-				printf("Stake block rejected \r\n");
+				if (fDebug) printf("Stake block rejected \r\n");
 				MilliSleep(1000);
 			}
             SetThreadPriority(THREAD_PRIORITY_LOWEST);

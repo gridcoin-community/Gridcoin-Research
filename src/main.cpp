@@ -363,7 +363,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 119810;
+ int nGrandfather = 120320;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -3053,7 +3053,7 @@ bool static Reorganize_testnet(CTxDB& txdb)
 	{
 				CBlockIndex* pblockindex = MainFindBlockByHeight(ii);
 			    if (!block.ReadFromDisk(pblockindex))	return error("ReorganizeTestnet() : ReadFromDisk for disconnect failed");
-                if (!block.DisconnectBlock(txdb, pblockindex))
+                if (!block.DcnectBlock(txdb, pblockindex))
 							return error("ReorganizeTestnet() : DisconnectBlock %s failed", pblockindex->GetBlockHash().ToString().c_str());
 	}
 	return true;
@@ -3599,21 +3599,16 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 			if (IsProofOfStake() && height1 > nGrandfather)
 			{
 		
-				//Mint limiter checks 1-19-2015
+				//Mint limiter checks 1-20-2015
 				double PORDiff = GetBlockDifficulty(nBits);
 				double mint1 = CoinToDouble(Mint);
 				double total_subsidy = boincblock.ResearchSubsidy + boincblock.InterestSubsidy;
-
-				//int64_t nMintLarge = vtx[0].GetValueOut();
-				//double  dMintLarge = CoinToDouble(nMintLarge);
     
-				/*
-				if (fDebug3) printf("CheckBlock[]: Lg %f, Height %f, %s, %f, Res %f, Interest %f, hb: %s \r\n",
-					(double)dMintLarge,		(double)height1,					    boincblock.cpid.c_str(),
+				if (fDebug3) printf("CheckBlock[]: TotalSubsidy %f, Height %f, %s, %f, Res %f, Interest %f, hb: %s \r\n",
+					(double)total_subsidy,(double)height1,    boincblock.cpid.c_str(),
 						(double)mint1,boincblock.ResearchSubsidy,boincblock.InterestSubsidy,vtx[0].hashBoinc.c_str());
-				*/
-
-				if (mint1 < MintLimiter(PORDiff,boincblock.RSAWeight,boincblock.cpid))
+			
+				if (total_subsidy < MintLimiter(PORDiff,boincblock.RSAWeight,boincblock.cpid))
 				{
 					printf("****CheckBlock[]: Total Mint too Small %s, %f, Res %f, Interest %f, hash %s \r\n",boincblock.cpid.c_str(),
 						(double)mint1,boincblock.ResearchSubsidy,boincblock.InterestSubsidy,vtx[0].hashBoinc.c_str());
@@ -4002,9 +3997,9 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     // Check for duplicate
     uint256 hash = pblock->GetHash();
     if (mapBlockIndex.count(hash))
-        return error("ProcessBlock() : already have block %d %s", mapBlockIndex[hash]->nHeight, hash.ToString().substr(0,20).c_str());
+        return error("ProcessBlock[]: already have block %d %s", mapBlockIndex[hash]->nHeight, hash.ToString().substr(0,20).c_str());
     if (mapOrphanBlocks.count(hash))
-        return error("ProcessBlock() : already have block (orphan) %s", hash.ToString().substr(0,20).c_str());
+        return error("ProcessBlock[]: already have block (orphan) %s", hash.ToString().substr(0,20).c_str());
 
     // ppcoin: check proof-of-stake
     // Limited duplicity on stake: prevents block flood attack
@@ -4012,7 +4007,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 	if (pblock->IsProofOfStake() && setStakeSeen.count(pblock->GetProofOfStake()) && !mapOrphanBlocksByPrev.count(hash) && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
 	{
 		//MilliSleep(1);
-        //return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for block %s", pblock->GetProofOfStake().first.ToString().c_str(), pblock->GetProofOfStake().second, hash.ToString().c_str());
+        //return error("ProcessBlock[] : duplicate proof-of-stake (%s, %d) for block %s", pblock->GetProofOfStake().first.ToString().c_str(), pblock->GetProofOfStake().second, hash.ToString().c_str());
 	}
 
     CBlockIndex* pcheckpoint = Checkpoints::GetLastSyncCheckpoint();
@@ -4048,8 +4043,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     }
 
     // Preliminary checks 1-19-2015 ** Note: Mint is zero before block is signed
-	int64_t CTD = 400*COIN;
-    if (!pblock->CheckBlock(pindexBest->nHeight, CTD))
+    if (!pblock->CheckBlock(pindexBest->nHeight, 100*COIN))
         return error("ProcessBlock[] : CheckBlock FAILED");
 
     // ppcoin: ask for pending sync-checkpoint if any
@@ -4212,8 +4206,8 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
     if (nSearchTime > nLastCoinStakeSearchTime)
     {
         int64_t nSearchInterval = IsProtocolV2(nBestHeight+1) ? 1 : nSearchTime - nLastCoinStakeSearchTime;
-
-        if (wallet.CreateCoinStake(wallet, nBits, nSearchInterval, nFees, txCoinStake, key, out_gridreward))
+		std::string out_hashboinc = "";
+        if (wallet.CreateCoinStake(wallet, nBits, nSearchInterval, nFees, txCoinStake, key, out_gridreward, out_hashboinc))
         {
 			//1-8-2015 Extract solved Key
 			double solvedNonce = cdbl(AppCache(pindexBest->GetBlockHash().GetHex()),0);
@@ -4236,6 +4230,8 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
                 for (vector<CTransaction>::iterator it = vtx.begin(); it != vtx.end();)
                     if (it->nTime > nTime) { it = vtx.erase(it); } else { ++it; }
                 vtx.insert(vtx.begin() + 1, txCoinStake);
+				vtx[0].hashBoinc= out_hashboinc;
+
                 hashMerkleRoot = BuildMerkleTree();
 				return key.Sign(GetHash(), vchBlockSig);
 			}

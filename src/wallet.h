@@ -197,8 +197,7 @@ public:
 
     bool GetStakeWeight(uint64_t& nWeight);
     bool CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int64_t nSearchInterval, 
-		int64_t nFees, CTransaction& txNew, CKey& key, int64_t& gridreward);
-
+		int64_t nFees, CTransaction& txNew, CKey& key, int64_t& gridreward,std::string& out_hashboinc);
 
     std::string SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, bool fAskFee=false);
     std::string SendMoneyToDestination(const CTxDestination &address, int64_t nValue, CWalletTx& wtxNew, bool fAskFee=false);
