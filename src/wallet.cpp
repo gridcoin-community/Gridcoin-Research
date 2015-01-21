@@ -24,7 +24,7 @@ void qtUpdateConfirm(std::string txid);
 bool Contains(std::string data, std::string instring);
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 
-extern double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid);
+extern double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
 
 bool IsLockTimeWithinMinutes(double locktime, int minutes);
@@ -1600,21 +1600,20 @@ std::string NewbieLevelToString(int newbie_level)
 
 
 
-double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid)
+double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid, int64_t locktime)
 {
-	//if (GetAdjustedTime() > 1420066220 && GetAdjustedTime() < 1420066220+3600) return 0;
-	double por = 0;
-	if (cpid != "INVESTOR") por = 10;
+	double MaxSubsidy = GetMaximumBoincSubsidy(locktime);
+	double por_min = (cpid != "INVESTOR") ? (MaxSubsidy/40) : 0;
 	if (RSA_WEIGHT >= 24999) return 0;
 	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
-	if (PORDiff >= 0   && PORDiff < 1)   return .25;
-	if (PORDiff >= 1   && PORDiff < 6)   return por+1;
-	if (PORDiff >= 6   && PORDiff < 10)  return por+5;
-	if (PORDiff >= 10  && PORDiff < 50)  return por+10;
-	if (PORDiff >= 50  && PORDiff < 100) return por+15;
-	if (PORDiff >= 100 && PORDiff < 500) return por+30;
-	if (PORDiff >= 500) return por+35;
-	return 0;
+	if (PORDiff >= 0   && PORDiff < 1)   return .50;
+	if (PORDiff >= 1   && PORDiff < 6)   return por_min + (MaxSubsidy/400);
+	if (PORDiff >= 6   && PORDiff < 10)  return por_min + (MaxSubsidy/80);
+	if (PORDiff >= 10  && PORDiff < 50)  return por_min + (MaxSubsidy/40);
+	if (PORDiff >= 50  && PORDiff < 100) return por_min + (MaxSubsidy/25);
+	if (PORDiff >= 100 && PORDiff < 500) return por_min + (MaxSubsidy/13);
+	if (PORDiff >= 500) return por_min + (MaxSubsidy/11);
+	return .50;
 }
 
 
@@ -2023,9 +2022,9 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 			GlobalCPUMiningCPID.cpid.c_str(), mint, (double)RSA_WEIGHT,miningcpid.ResearchSubsidy,miningcpid.InterestSubsidy);
 	
 		//INVESTORS
-		if (mint < MintLimiter(PORDiff,RSA_WEIGHT,GlobalCPUMiningCPID.cpid)) 
+		if (mint < MintLimiter(PORDiff,RSA_WEIGHT,GlobalCPUMiningCPID.cpid,GetAdjustedTime())) 
 		{
-				if (fDebug3) printf("CreateStake()::Mint %f of %f too small",(double)mint,(double)MintLimiter(PORDiff,RSA_WEIGHT,miningcpid.cpid));
+				if (fDebug3) printf("CreateStake()::Mint %f of %f too small",(double)mint,(double)MintLimiter(PORDiff,RSA_WEIGHT,miningcpid.cpid,GetAdjustedTime()));
 				msMiningErrors7="Mint too small";
 				return false; 
 		}

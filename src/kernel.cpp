@@ -31,7 +31,7 @@ bool IsCPIDTimeValid(std::string cpid, int64_t locktime);
 double CPIDTime(std::string cpid);
 
 
-double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid);
+double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 
 double GetBlockDifficulty(unsigned int nBits);
 
@@ -490,7 +490,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	double coin_age = std::abs((double)nTimeTx-(double)txPrev.nTime);
 	double payment_age = std::abs((double)nTimeTx-(double)boincblock.LastPaymentTime);
 	if ((payment_age > 60*60) && boincblock.Magnitude > 1 && boincblock.cpid != "INVESTOR" && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT) 
-		&& (RSA_WEIGHT/14 > MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid)) )
+		&& (RSA_WEIGHT/14 > MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid,nTimeTx)) )
 	{
 		//Coins are older than RSA balance
 		oNC=1;
@@ -599,30 +599,30 @@ bool StakeAcidTest(std::string grc_address, double por_diff, std::string last_bl
 	
 	if (fTestNet) return true;
 	if (height < nGrandfather) return true;
-	////////////////////////////////////////////////////////////return true; //DISABLE FOR NOW
+	////////////////////////////////////////////////////////////return true; 
 
 	//ROB HALFORD - 12-30-2014
 	std::string aggregated_hash = grc_address + "," + last_block_hash + "," + RoundToString(nonce,0);
 	std::string hash_md5 = RetrieveMd5(aggregated_hash);
 	uint256 hash  = uint256("0x" + hash_md5);
-	uint256 diff1 = uint256("0x0000cfffffffffffffffffffffffffff");
-	uint256 diff2 = uint256("0x0000bfffffffffffffffffffffffffff");
-	uint256 diff3 = uint256("0x0000afffffffffffffffffffffffffff");
-	uint256 diff4 = uint256("0x00009fffffffffffffffffffffffffff");
-	uint256 diff5 = uint256("0x00007fffffffffffffffffffffffffff");
-	uint256 diff6 = uint256("0x00006fffffffffffffffffffffffffff");
-	uint256 diff7 = uint256("0x00005fffffffffffffffffffffffffff");
+	uint256 diff1 = uint256("0x0000ffffffffffffffffffffffffffff");
+	uint256 diff2 = uint256("0x0000efffffffffffffffffffffffffff");
+	uint256 diff3 = uint256("0x0000dfffffffffffffffffffffffffff");
+	uint256 diff4 = uint256("0x0000cfffffffffffffffffffffffffff");
+	uint256 diff5 = uint256("0x0000bfffffffffffffffffffffffffff");
+	uint256 diff6 = uint256("0x0000afffffffffffffffffffffffffff");
+	uint256 diff7 = uint256("0x00009fffffffffffffffffffffffffff");
 	double nonce_height = 0;
 
-	if (payment_age > 60*60*24*14)                              nonce_height = 12000;
-	if (payment_age < 60*60*24*14 && payment_age  > 60*60*24*7) nonce_height = 14000;
-	if (payment_age < 60*60*24*7  && payment_age  > 60*60*24*3) nonce_height = 15000;
-	if (payment_age < 60*60*24*3  && payment_age  > 60*60*24*1) nonce_height = 20000;
-	if (payment_age < 60*60*24*1  && payment_age  > 60*60*12)   nonce_height = 23000;
-	if (payment_age < 60*60*12    && payment_age  > 60*60*6)    nonce_height = 24000;
-	if (payment_age < 60*60*6     && payment_age  > 60*60*2)    nonce_height = 25000;
-	if (payment_age < 60*60*2     && payment_age  > 60*60*1)    nonce_height = 29000;
-	if (payment_age < 60*60*1)                                  nonce_height = 35000;
+	if (payment_age > 60*60*24*14)                              nonce_height = 15000;
+	if (payment_age < 60*60*24*14 && payment_age  > 60*60*24*7) nonce_height = 20000;
+	if (payment_age < 60*60*24*7  && payment_age  > 60*60*24*3) nonce_height = 25000;
+	if (payment_age < 60*60*24*3  && payment_age  > 60*60*24*1) nonce_height = 30000;
+	if (payment_age < 60*60*24*1  && payment_age  > 60*60*12)   nonce_height = 35000;
+	if (payment_age < 60*60*12    && payment_age  > 60*60*6)    nonce_height = 40000;
+	if (payment_age < 60*60*6     && payment_age  > 60*60*2)    nonce_height = 45000;
+	if (payment_age < 60*60*2     && payment_age  > 60*60*1)    nonce_height = 50000;
+	if (payment_age < 60*60*1)                                  nonce_height = 55000;
 
 	if (cpid == "INVESTOR") nonce_height = nonce_height/4;
 	if (nonce < nonce_height) return false;
@@ -674,7 +674,7 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 	if ((payment_age > 60*60) && (payment_age > BitsAge)  
 		&& combined_mag > 1 
 		&& boincblock.cpid != "INVESTOR" && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT) 
-		&& (RSA_WEIGHT/14 > MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid)) && ACID_TEST)
+		&& (RSA_WEIGHT/14 > MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid,nTimeTx)) && ACID_TEST)
 	{
 		//Coins are older than RSA balance
 		oNC=1;
@@ -691,8 +691,8 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 			if (payment_age < BitsAge)    narr += " Payment < Diff: " + RoundToString(payment_age,0) + "; " + RoundToString(BitsAge,0);
 			if (coin_age < 4*60*60)       narr += " Coin Age (immature): " + RoundToString(coin_age,0);
 			if (coin_age < RSA_WEIGHT)    narr += " Coin Age < RSA_Weight: " + RoundToString(coin_age,0) + " " + RoundToString(RSA_WEIGHT,0);
-			if (RSA_WEIGHT/14 < MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid)) narr += " RSAWeight < MintLimiter: "
-					+ RoundToString(RSA_WEIGHT/14,0) + "; " + RoundToString(MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid),0);
+			if (RSA_WEIGHT/14 < MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid,nTimeTx)) narr += " RSAWeight < MintLimiter: "
+					+ RoundToString(RSA_WEIGHT/14,0) + "; " + RoundToString(MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid,nTimeTx),0);
 		}
 		if (!ACID_TEST)      
 		{
@@ -841,7 +841,8 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 			if (payment_age < BitsAge)        narr += " Payment < Diff: " + RoundToString(payment_age,0) + "; " + RoundToString(BitsAge,0);
 			if (coin_age < 4*60*60)           narr += " Coin Age (immature): " + RoundToString(coin_age,0);
 			if (coin_age < RSA_WEIGHT)        narr += " Coin Age < RSA_Weight: " + RoundToString(coin_age,0) + " " + RoundToString(RSA_WEIGHT,0);
-			if (RSA_WEIGHT/14 < MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid)) narr += " RSAWeight < MintLimiter: "+ RoundToString(RSA_WEIGHT/14,0) + "; " + RoundToString(MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid),0);
+			if (RSA_WEIGHT/14 < MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid,nTimeTx)) narr += " RSAWeight < MintLimiter: "+ RoundToString(RSA_WEIGHT/14,0) + "; " 
+				+ RoundToString(MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid,nTimeTx),0);
 		}
 
 		if (!ACID_TEST)      

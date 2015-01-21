@@ -78,7 +78,7 @@ std::string DefaultOrgKey(int key_length);
 
 extern std::string boinc_hash(const std::string str);
 
-double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid);
+double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 
 extern std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 extern double GetBlockDifficulty(unsigned int nBits);
@@ -363,7 +363,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 120400;
+ int nGrandfather = 120830;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2935,7 +2935,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	{
 
 		// Block Spamming (Halford) 12-23-2014
-		if (mint < MintLimiter(PORDiff,bb.RSAWeight,bb.cpid)) 
+		if (mint < MintLimiter(PORDiff,bb.RSAWeight,bb.cpid,GetBlockTime())) 
 		{
 			return error("CheckProofOfStake() : Mint too Small, %f",(double)mint);
 		}
@@ -3608,11 +3608,13 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					(double)total_subsidy,(double)height1,    boincblock.cpid.c_str(),
 						(double)mint1,boincblock.ResearchSubsidy,boincblock.InterestSubsidy,vtx[0].hashBoinc.c_str());
 			
-				if (total_subsidy < MintLimiter(PORDiff,boincblock.RSAWeight,boincblock.cpid))
+				if (total_subsidy < MintLimiter(PORDiff,boincblock.RSAWeight,boincblock.cpid,GetBlockTime()))
 				{
-					printf("****CheckBlock[]: Total Mint too Small %s, %f, Res %f, Interest %f, hash %s \r\n",boincblock.cpid.c_str(),
+					printf("****CheckBlock[]: Total Mint too Small %s, mint %f, Res %f, Interest %f, hash %s \r\n",boincblock.cpid.c_str(),
 						(double)mint1,boincblock.ResearchSubsidy,boincblock.InterestSubsidy,vtx[0].hashBoinc.c_str());
-					return error("*****CheckBlock[] : Total Mint too Small, %f",(double)mint1);
+					//1-21-2015 - Prevent Hackers from spamming the network with small blocks
+					return DoS(30, 	error("****CheckBlock[]: Total Mint too Small %s, mint %f, Res %f, Interest %f, hash %s \r\n",boincblock.cpid.c_str(),
+							(double)mint1,boincblock.ResearchSubsidy,boincblock.InterestSubsidy,vtx[0].hashBoinc.c_str()));
 				}
 			
 
@@ -3623,7 +3625,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					double cvn = ClientVersionNew();
 					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 					if (bv+10 < cvn) return error("ConnectBlock(): Old client version after mandatory upgrade - block rejected\r\n");
-					if (bv < 3372) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
+					if (bv < 3373) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
 				}
 
 
@@ -3636,7 +3638,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 		}
 		else
 		{ 
-			 printf("VX100-");
+			printf("VX100-");
 			return false;
 		}
 
@@ -4076,7 +4078,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 		{
 			if (pfrom->nOrphanCount > 75) 
 			{
-				if (fDebug2) printf("Orphan punishment enabled. %f    ",pfrom->nOrphanCount);
+				if (fDebug2) printf("Orphan punishment enabled. %f    ",(double)pfrom->nOrphanCount);
 				pfrom->Misbehaving(2);
 			}
 			if (pfrom->nOrphanCountViolations < 0) pfrom->nOrphanCountViolations=0;

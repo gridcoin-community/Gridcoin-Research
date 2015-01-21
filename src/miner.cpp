@@ -23,7 +23,7 @@ void ThreadCleanWalletPassphrase(void* parg);
 
 double GetBlockDifficulty(unsigned int nBits);
 
-double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid);
+double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 std::string GetBestBlockHash(std::string sCPID);
@@ -673,8 +673,7 @@ bool IsCPIDTimeValid(std::string cpid, int64_t locktime)
 	if (cpid=="INVESTOR" || cpid=="investor") return true;
 	double offset = CPIDTime(cpid);
 	int64_t passed = SecondsSinceMidnight(locktime);
-	if (fDebug3) printf("In locktime %f, Passed %f, Offset %f \r\n",locktime,passed,offset);
-
+	if (fDebug3) printf("In locktime %f, Passed %f, Offset %f \r\n",(double)locktime,(double)passed,(double)offset);
 	if (passed >= offset && passed <= (offset+(30*60))) return true;
 	return false;
 }
@@ -731,11 +730,12 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	if (fDebug) printf("CheckStake[]: TotalSubsidy %f, cpid %s, Res %f, Interest %f, hb: %s \r\n",
 					(double)total_subsidy, boincblock.cpid.c_str(),	boincblock.ResearchSubsidy,boincblock.InterestSubsidy,pblock->vtx[0].hashBoinc.c_str());
 			
-	if (total_subsidy < MintLimiter(PORDiff,boincblock.RSAWeight,boincblock.cpid))
+	if (total_subsidy < MintLimiter(PORDiff,boincblock.RSAWeight,boincblock.cpid,pblock->GetBlockTime() ))
 	{
-					printf("****CheckStake[]: Total Mint too Small %s, Res %f, Interest %f, hash %s \r\n",boincblock.cpid.c_str(),
+			//Prevent Hackers from spamming the network with small blocks
+			printf("****CheckStake[]: Total Mint too Small %s, Res %f, Interest %f, hash %s \r\n",boincblock.cpid.c_str(),
 						boincblock.ResearchSubsidy,boincblock.InterestSubsidy,pblock->vtx[0].hashBoinc.c_str());
-					return error("*****CheckBlock[] : Total Mint too Small, %f",(double)boincblock.ResearchSubsidy+boincblock.InterestSubsidy);
+			return error("*****CheckStake[] : Total Mint too Small, %f",(double)boincblock.ResearchSubsidy+boincblock.InterestSubsidy);
 	}
 			
 
