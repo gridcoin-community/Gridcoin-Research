@@ -363,7 +363,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 120320;
+ int nGrandfather = 120400;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2951,7 +2951,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			{
 				double bv = BlockVersion(bb.clientversion);
 				double cvn = ClientVersionNew();
-				if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
+				//if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 				if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 			}
 
@@ -3604,7 +3604,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 				double mint1 = CoinToDouble(Mint);
 				double total_subsidy = boincblock.ResearchSubsidy + boincblock.InterestSubsidy;
     
-				if (fDebug3) printf("CheckBlock[]: TotalSubsidy %f, Height %f, %s, %f, Res %f, Interest %f, hb: %s \r\n",
+				if (fDebug) printf("CheckBlock[]: TotalSubsidy %f, Height %f, %s, %f, Res %f, Interest %f, hb: %s \r\n",
 					(double)total_subsidy,(double)height1,    boincblock.cpid.c_str(),
 						(double)mint1,boincblock.ResearchSubsidy,boincblock.InterestSubsidy,vtx[0].hashBoinc.c_str());
 			
@@ -3621,7 +3621,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 				{
 					double bv = BlockVersion(boincblock.clientversion);
 					double cvn = ClientVersionNew();
-					if (fDebug3) printf("BV %f, CV %f   ",bv,cvn);
+					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 					if (bv+10 < cvn) return error("ConnectBlock(): Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3372) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
 				}
@@ -4069,13 +4069,16 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 				pfrom->nOrphanCountViolations=0;
 				pfrom->nOrphanCount=0;
 		}
-		//1-3-2015
+	
 		double orphan_punishment = GetArg("-orphanpunishment", 2);
 
 		if (orphan_punishment > 0 && !ClientOutOfSync() )
 		{
-			if (fDebug2) printf("Orphan punishment enacted.");
-			if (pfrom->nOrphanCount > 65)         pfrom->Misbehaving(2);
+			if (pfrom->nOrphanCount > 75) 
+			{
+				if (fDebug2) printf("Orphan punishment enabled. %f    ",pfrom->nOrphanCount);
+				pfrom->Misbehaving(2);
+			}
 			if (pfrom->nOrphanCountViolations < 0) pfrom->nOrphanCountViolations=0;
 			if (pfrom->nOrphanCount < 0)           pfrom->nOrphanCount=0;
 			if (pfrom->nOrphanCountViolations > 65) pfrom->Misbehaving(2);

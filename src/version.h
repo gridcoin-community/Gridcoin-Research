@@ -24,9 +24,9 @@ extern const std::string CLIENT_DATE;
 ///////////////////////////////////////////////////////////
 // network protocol versioning                           //
 //                                                       //
-static const int PROTOCOL_VERSION =       180243;        //
+static const int PROTOCOL_VERSION =       180244;        //
 // disconnect from peers older than this proto version   //
-static const int MIN_PEER_PROTO_VERSION = 180243;        // 
+static const int MIN_PEER_PROTO_VERSION = 180244;        // 
 ///////////////////////////////////////////////////////////
 // intial proto version, to be increased after           //
 // version/verack negotiation                            //
@@ -42,7 +42,7 @@ static const int CADDR_TIME_VERSION = 180243;            //
 // only request blocks from nodes outside this range of  //
 // versions                                              //
 static const int NOBLKS_VERSION_START = 1;               //
-static const int NOBLKS_VERSION_END = 180242;            // 
+static const int NOBLKS_VERSION_END = 180243;            // 
 ///////////////////////////////////////////////////////////
 //
 // database format versioning

@@ -786,7 +786,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 
         // Process this block the same as if we had received it from another node
 		//Halford - 1-14-2015 - Ensure Blocks have a minimum time spacing
-		if (!IsLockTimeWithinMinutes(nLastBlockSubmitted,2)) 
+		if (!IsLockTimeWithinMinutes(nLastBlockSubmitted,3)) 
 		{
 			nLastBlockSubmitted = GetAdjustedTime();
 			if (!ProcessBlock(NULL, pblock, true))
@@ -921,7 +921,7 @@ Begin:
 
 		//Verify we are still on the main chain
 	
-		if (IsLockTimeWithinMinutes(nLastBlockSolved,8)) 
+		if (IsLockTimeWithinMinutes(nLastBlockSolved,10)) 
 		{
 				if (fDebug) printf("=");
 				MilliSleep(200);

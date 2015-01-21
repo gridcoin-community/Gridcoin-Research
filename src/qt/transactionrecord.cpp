@@ -28,7 +28,7 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx)
 		if (!wtx.IsInMainChain())
 		{
 			//Orphaned tx
-			if (ShowOrphans=="true"  && IsLockTimeWithinMinutes(wtx.nTimeReceived,30)) 
+			if (ShowOrphans=="true"  && IsLockTimeWithinMinutes(wtx.nTimeReceived,15)) 
 			{
 				return true;
 			}

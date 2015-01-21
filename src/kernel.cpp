@@ -614,15 +614,15 @@ bool StakeAcidTest(std::string grc_address, double por_diff, std::string last_bl
 	uint256 diff7 = uint256("0x00005fffffffffffffffffffffffffff");
 	double nonce_height = 0;
 
-	if (payment_age > 60*60*24*14)                              nonce_height = 10000;
-	if (payment_age < 60*60*24*14 && payment_age  > 60*60*24*7) nonce_height = 12000;
-	if (payment_age < 60*60*24*7  && payment_age  > 60*60*24*3) nonce_height = 13000;
-	if (payment_age < 60*60*24*3  && payment_age  > 60*60*24*1) nonce_height = 14000;
-	if (payment_age < 60*60*24*1  && payment_age  > 60*60*12)   nonce_height = 15000;
-	if (payment_age < 60*60*12    && payment_age  > 60*60*6)    nonce_height = 16000;
-	if (payment_age < 60*60*6     && payment_age  > 60*60*2)    nonce_height = 17000;
-	if (payment_age < 60*60*2     && payment_age  > 60*60*1)    nonce_height = 19000;
-	if (payment_age < 60*60*1)                                  nonce_height = 20000;
+	if (payment_age > 60*60*24*14)                              nonce_height = 12000;
+	if (payment_age < 60*60*24*14 && payment_age  > 60*60*24*7) nonce_height = 14000;
+	if (payment_age < 60*60*24*7  && payment_age  > 60*60*24*3) nonce_height = 15000;
+	if (payment_age < 60*60*24*3  && payment_age  > 60*60*24*1) nonce_height = 20000;
+	if (payment_age < 60*60*24*1  && payment_age  > 60*60*12)   nonce_height = 23000;
+	if (payment_age < 60*60*12    && payment_age  > 60*60*6)    nonce_height = 24000;
+	if (payment_age < 60*60*6     && payment_age  > 60*60*2)    nonce_height = 25000;
+	if (payment_age < 60*60*2     && payment_age  > 60*60*1)    nonce_height = 29000;
+	if (payment_age < 60*60*1)                                  nonce_height = 35000;
 
 	if (cpid == "INVESTOR") nonce_height = nonce_height/4;
 	if (nonce < nonce_height) return false;

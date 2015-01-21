@@ -1607,8 +1607,8 @@ double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid)
 	if (cpid != "INVESTOR") por = 10;
 	if (RSA_WEIGHT >= 24999) return 0;
 	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
-	if (PORDiff >= 0   && PORDiff < 1)   return .01;
-	if (PORDiff >= 1   && PORDiff < 6)   return por+.15;
+	if (PORDiff >= 0   && PORDiff < 1)   return .25;
+	if (PORDiff >= 1   && PORDiff < 6)   return por+1;
 	if (PORDiff >= 6   && PORDiff < 10)  return por+5;
 	if (PORDiff >= 10  && PORDiff < 50)  return por+10;
 	if (PORDiff >= 50  && PORDiff < 100) return por+15;
