@@ -1606,14 +1606,14 @@ double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid, int64_t l
 	double por_min = (cpid != "INVESTOR") ? (MaxSubsidy/40) : 0;
 	if (RSA_WEIGHT >= 24999) return 0;
 	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
-	if (PORDiff >= 0   && PORDiff < 1)   return .50;
+	if (PORDiff >= 0   && PORDiff < 1)   return 1;
 	if (PORDiff >= 1   && PORDiff < 6)   return por_min + (MaxSubsidy/400);
 	if (PORDiff >= 6   && PORDiff < 10)  return por_min + (MaxSubsidy/80);
 	if (PORDiff >= 10  && PORDiff < 50)  return por_min + (MaxSubsidy/40);
 	if (PORDiff >= 50  && PORDiff < 100) return por_min + (MaxSubsidy/25);
 	if (PORDiff >= 100 && PORDiff < 500) return por_min + (MaxSubsidy/13);
 	if (PORDiff >= 500) return por_min + (MaxSubsidy/11);
-	return .50;
+	return 1;
 }
 
 

@@ -599,7 +599,7 @@ bool StakeAcidTest(std::string grc_address, double por_diff, std::string last_bl
 	
 	if (fTestNet) return true;
 	if (height < nGrandfather) return true;
-	////////////////////////////////////////////////////////////return true; 
+	return true; 
 
 	//ROB HALFORD - 12-30-2014
 	std::string aggregated_hash = grc_address + "," + last_block_hash + "," + RoundToString(nonce,0);
@@ -892,15 +892,24 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
     CBigNum bnTarget;
     bnTarget.SetCompact(nBits);
 
+
     // Weighted target 1-11-2015 Halford
     int64_t nValueIn = 0;
 	nValueIn = checking_local ? txPrev.vout[prevout.n].nValue + (RSA_WEIGHT*COIN) : txPrev.vout[prevout.n].nValue + (RSA_WEIGHT*COIN);
-    CBigNum bnWeight = CBigNum(nValueIn);
+    //   CBigNum bnWeight = CBigNum(nValueIn);
+
+	CBigNum bnWeight = CBigNum(nValueIn/1000);
+	if (fDebug && checking_local)
+	{
+		//printf("nbits %f, weight %f   ",(double)nBits,(double)nValueIn/1000);
+	}
+
+
     bnTarget *= bnWeight;
 
     targetProofOfStake = bnTarget.getuint256();
 	uint64_t nStakeModifier = 0;
-	nStakeModifier = (pindexPrev->nHeight <= 86330) ? pindexPrev->nStakeModifier : pindexPrev->nBits;
+	nStakeModifier = (pindexPrev->nHeight <= 86330) ? pindexPrev->nStakeModifier : nBits;
 
     int nStakeModifierHeight = pindexPrev->nHeight;
     int64_t nStakeModifierTime = pindexPrev->nTime;
