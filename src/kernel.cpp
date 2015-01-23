@@ -601,7 +601,6 @@ bool StakeAcidTest(std::string grc_address, double por_diff, std::string last_bl
 	if (height < nGrandfather) return true;
 	return true; 
 
-	//ROB HALFORD - 12-30-2014
 	std::string aggregated_hash = grc_address + "," + last_block_hash + "," + RoundToString(nonce,0);
 	std::string hash_md5 = RetrieveMd5(aggregated_hash);
 	uint256 hash  = uint256("0x" + hash_md5);
@@ -898,10 +897,10 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 	nValueIn = checking_local ? txPrev.vout[prevout.n].nValue + (RSA_WEIGHT*COIN) : txPrev.vout[prevout.n].nValue + (RSA_WEIGHT*COIN);
     //   CBigNum bnWeight = CBigNum(nValueIn);
 
-	CBigNum bnWeight = CBigNum(nValueIn/1000);
+	CBigNum bnWeight = CBigNum(nValueIn/10000);
 	if (fDebug && checking_local)
 	{
-		//printf("nbits %f, weight %f   ",(double)nBits,(double)nValueIn/1000);
+		//printf("nbits %f, weight %f   ",(double)nBits,(double)nValueIn/10000);
 	}
 
 

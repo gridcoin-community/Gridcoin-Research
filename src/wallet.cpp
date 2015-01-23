@@ -1612,7 +1612,7 @@ double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid, int64_t l
 	if (PORDiff >= 10  && PORDiff < 50)  return por_min + (MaxSubsidy/40);
 	if (PORDiff >= 50  && PORDiff < 100) return por_min + (MaxSubsidy/25);
 	if (PORDiff >= 100 && PORDiff < 500) return por_min + (MaxSubsidy/13);
-	if (PORDiff >= 500) return por_min + (MaxSubsidy/11);
+	if (PORDiff >= 500) return por_min + (MaxSubsidy/12);
 	return 1;
 }
 

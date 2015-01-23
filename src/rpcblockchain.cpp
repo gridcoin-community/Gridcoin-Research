@@ -490,7 +490,8 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("LastPaymentTime",TimestampToHRDate(bb.LastPaymentTime)));
 	result.push_back(Pair("ResearchSubsidy",bb.ResearchSubsidy));
 	double interest = mint-bb.ResearchSubsidy;
-	result.push_back(Pair("Interest",interest));
+	result.push_back(Pair("Interest",bb.InterestSubsidy));
+
 	double blockdiff = GetBlockDifficulty(block.nBits);
 	result.push_back(Pair("GRCAddress",bb.GRCAddress));
 	result.push_back(Pair("Organization",bb.Organization));
@@ -1410,7 +1411,7 @@ Array MagnitudeReport(bool bMine)
 						{
 									Object entry;
 									entry.push_back(Pair("CPID",structMag.cpid));
-									//entry.push_back(Pair("Magnitude",structMag.ConsensusMagnitude));
+									entry.push_back(Pair("Magnitude",structMag.ConsensusMagnitude));
 									entry.push_back(Pair("Payment Magnitude",structMag.PaymentMagnitude));
 									entry.push_back(Pair("Payment Timespan (Days)",structMag.PaymentTimespan));
 									entry.push_back(Pair("Magnitude Accuracy",structMag.Accuracy));
