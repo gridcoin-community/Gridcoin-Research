@@ -597,9 +597,8 @@ double GetPoSKernelPS2()
 
     if (IsProtocolV2(nBestHeight))
         result *= STAKE_TIMESTAMP_MASK + 1;
-	//if (result > 350000000123) result = 350000000123;
 
-    return result;
+    return result/100;
 }
 
 

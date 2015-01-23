@@ -817,18 +817,6 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 	double BitsAge = PORDiff * 144; //For every 100 Diff in Bits, two hours of coin age for researchers
 	if (BitsAge > 86400) BitsAge=86400; //Limit to 24 hours (possibility of astronomical diff)
 
-
-	//1-15-2015 R Halford: Verify CPID on POR blocks meets time of day protocol
-	/*
-	if (!IsCPIDTimeValid(boincblock.cpid,nTimeBlockFrom))
-	{
-	    if (!checking_local) printf("CheckStakeKernelHashV3() : CPID does not meet legal submission timestamp parameters. %s",hashBoinc.c_str());
-		return false;
-	}
-	*/
-
-	
-
 	//Halford 1-4-2015 : Explain to the Researcher why they are not staking:
 	if (checking_local && LessVerbose(100))
 	{
@@ -843,7 +831,7 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 			if (RSA_WEIGHT/14 < MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid,nTimeTx)) narr += " RSAWeight < MintLimiter: "+ RoundToString(RSA_WEIGHT/14,0) + "; " 
 				+ RoundToString(MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid,nTimeTx),0);
 		}
-
+		/*
 		if (!ACID_TEST)      
 		{
 			narr += " POW Mining: " + RoundToString(por_nonce,0);
@@ -852,7 +840,8 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 		{
 			narr += " Kernel Found: " + RoundToString(por_nonce,0) + "-" + RoundToString(oNC,0) + "";
 		}
-	
+		*/
+
 		if (RSA_WEIGHT >= 24999)        msMiningErrors7="Newbie block being generated.";
 		msMiningErrors5 = narr;
 	}
@@ -878,8 +867,7 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 		}
 	}
 	
-
-	if (!ACID_TEST) return false;
+	//////////////////////////////////////////if (!ACID_TEST) return false;   (Leave this in for 6 months, then delete)
 
     if (nTimeTx < txPrev.nTime)  // Transaction timestamp violation
         return error("CheckStakeKernelHash() : nTime violation");
@@ -891,17 +879,18 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
     CBigNum bnTarget;
     bnTarget.SetCompact(nBits);
 
-
     // Weighted target 1-11-2015 Halford
     int64_t nValueIn = 0;
 	nValueIn = checking_local ? txPrev.vout[prevout.n].nValue + (RSA_WEIGHT*COIN) : txPrev.vout[prevout.n].nValue + (RSA_WEIGHT*COIN);
-    //   CBigNum bnWeight = CBigNum(nValueIn);
 
 	CBigNum bnWeight = CBigNum(nValueIn/10000);
+
+	/*
 	if (fDebug && checking_local)
 	{
 		//printf("nbits %f, weight %f   ",(double)nBits,(double)nValueIn/10000);
 	}
+	*/
 
 
     bnTarget *= bnWeight;
@@ -909,10 +898,8 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
     targetProofOfStake = bnTarget.getuint256();
 	uint64_t nStakeModifier = 0;
 	nStakeModifier = (pindexPrev->nHeight <= 86330) ? pindexPrev->nStakeModifier : nBits;
-
     int nStakeModifierHeight = pindexPrev->nHeight;
     int64_t nStakeModifierTime = pindexPrev->nTime;
-
 	int64_t cpid_guid = (int64_t)CPIDTime(boincblock.cpid);
 	
     // Calculate hash
