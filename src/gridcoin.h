@@ -1,11 +1,11 @@
 
-static const std::string BoincHashMerkleRootNew = "123456789012345678901234567890";
+static const std::string BoincHashMerkleRootNew = "ElimZa7b8c9ateXr9kgueTheJ2HackersExa192";
+static const std::string BoincHashWindowsMerkleRootNew = "yG3uv41o6n7apYOVVszTMQ==";
 static const std::string GetBlocksCommand = "unknown";
-static const std::string BoincHashWindowsMerkleRootNew = "12345678901234567890123456789012345678901234567890";
-
 
 //Notes for manually compiled nodes:
 
-//addnode=supernode.gridcoin.us
+//addnode=node.gridcoin.us
 //boincblocks=
-//boinchash=PUrMgXr9kgcqiuehEJ2Tq1dovW
+//boinchash=
+//org=
