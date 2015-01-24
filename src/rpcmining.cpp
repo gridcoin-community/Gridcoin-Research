@@ -72,15 +72,13 @@ Value getmininginfo(const Array& params, bool fHelp)
 
     obj.push_back(Pair("stakeinterest",    (uint64_t)GetCoinYearReward( GetAdjustedTime())));
     obj.push_back(Pair("testnet",       fTestNet));
-	obj.push_back(Pair("MiningErrors 1", msMiningErrors));
-	obj.push_back(Pair("MiningErrors 2", msMiningErrors2));
-	obj.push_back(Pair("MiningErrors 3", msMiningErrors3));
-	obj.push_back(Pair("MiningErrors 4", msMiningErrors4));
-	obj.push_back(Pair("MiningErrors 5", msMiningErrors5));
-	obj.push_back(Pair("MiningErrors 6", msMiningErrors6));
-
-	obj.push_back(Pair("MiningErrors 7", msMiningErrors7));
-
+	obj.push_back(Pair("MiningInfo 1", msMiningErrors));
+	obj.push_back(Pair("MiningInfo 2", msMiningErrors2));
+	obj.push_back(Pair("MiningInfo 3", msMiningErrors3));
+	obj.push_back(Pair("MiningInfo 4", msMiningErrors4));
+	obj.push_back(Pair("MiningInfo 5", msMiningErrors5));
+	obj.push_back(Pair("MiningInfo 6", msMiningErrors6));
+	obj.push_back(Pair("MiningInfo 7", msMiningErrors7));
     return obj;
 }
 
@@ -555,7 +553,9 @@ Value submitblock(const Array& params, bool fHelp)
         throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Block decode failed");
     }
 
-    bool fAccepted = ProcessBlock(NULL, &block,false);
+    //bool fAccepted = ProcessBlock(NULL, &block,false);
+	bool fAccepted = false;
+
     if (!fAccepted)
         return "rejected";
 

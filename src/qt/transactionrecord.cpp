@@ -20,8 +20,7 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx)
 	//1-7-2015
 	std::string ShowOrphans = GetArg("-showorphans", "false");
           
-	if (ShowOrphans=="false" && !IsLockTimeWithinMinutes(wtx.nTimeReceived,5) && !wtx.IsInMainChain()) return false;
-
+	if (ShowOrphans=="false" && !wtx.IsInMainChain()) return false;
 
 	//R Halford - Discard Orphans after Y mins:
 	if (wtx.IsCoinStake())
@@ -29,9 +28,13 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx)
 		if (!wtx.IsInMainChain())
 		{
 			//Orphaned tx
-			if (ShowOrphans=="false" && !IsLockTimeWithinMinutes(wtx.nTimeReceived,5))
+			if (ShowOrphans=="true"  && IsLockTimeWithinMinutes(wtx.nTimeReceived,15)) 
 			{
-				return false; //Remove it
+				return true;
+			}
+			else
+			{
+				return false;
 			}
 		}
     }

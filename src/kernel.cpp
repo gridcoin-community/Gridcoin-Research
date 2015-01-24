@@ -31,7 +31,7 @@ bool IsCPIDTimeValid(std::string cpid, int64_t locktime);
 double CPIDTime(std::string cpid);
 
 
-double MintLimiter(double PORDiff,int64_t RSA_WEIGHT);
+double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 
 double GetBlockDifficulty(unsigned int nBits);
 
@@ -490,7 +490,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	double coin_age = std::abs((double)nTimeTx-(double)txPrev.nTime);
 	double payment_age = std::abs((double)nTimeTx-(double)boincblock.LastPaymentTime);
 	if ((payment_age > 60*60) && boincblock.Magnitude > 1 && boincblock.cpid != "INVESTOR" && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT) 
-		&& (RSA_WEIGHT/14 > MintLimiter(PORDiff,RSA_WEIGHT)) )
+		&& (RSA_WEIGHT/14 > MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid,nTimeTx)) )
 	{
 		//Coins are older than RSA balance
 		oNC=1;
@@ -599,30 +599,29 @@ bool StakeAcidTest(std::string grc_address, double por_diff, std::string last_bl
 	
 	if (fTestNet) return true;
 	if (height < nGrandfather) return true;
-	return true; //DISABLE FOR NOW
+	return true; 
 
-	//ROB HALFORD - 12-30-2014
 	std::string aggregated_hash = grc_address + "," + last_block_hash + "," + RoundToString(nonce,0);
 	std::string hash_md5 = RetrieveMd5(aggregated_hash);
 	uint256 hash  = uint256("0x" + hash_md5);
-	uint256 diff1 = uint256("0x0000cfffffffffffffffffffffffffff");
-	uint256 diff2 = uint256("0x0000bfffffffffffffffffffffffffff");
-	uint256 diff3 = uint256("0x0000afffffffffffffffffffffffffff");
-	uint256 diff4 = uint256("0x00009fffffffffffffffffffffffffff");
-	uint256 diff5 = uint256("0x00007fffffffffffffffffffffffffff");
-	uint256 diff6 = uint256("0x00006fffffffffffffffffffffffffff");
-	uint256 diff7 = uint256("0x00005fffffffffffffffffffffffffff");
+	uint256 diff1 = uint256("0x0000ffffffffffffffffffffffffffff");
+	uint256 diff2 = uint256("0x0000efffffffffffffffffffffffffff");
+	uint256 diff3 = uint256("0x0000dfffffffffffffffffffffffffff");
+	uint256 diff4 = uint256("0x0000cfffffffffffffffffffffffffff");
+	uint256 diff5 = uint256("0x0000bfffffffffffffffffffffffffff");
+	uint256 diff6 = uint256("0x0000afffffffffffffffffffffffffff");
+	uint256 diff7 = uint256("0x00009fffffffffffffffffffffffffff");
 	double nonce_height = 0;
 
-	if (payment_age > 60*60*24*14)                              nonce_height = 5000;
-	if (payment_age < 60*60*24*14 && payment_age  > 60*60*24*7) nonce_height = 6000;
-	if (payment_age < 60*60*24*7  && payment_age  > 60*60*24*3) nonce_height = 7000;
-	if (payment_age < 60*60*24*3  && payment_age  > 60*60*24*1) nonce_height = 8000;
-	if (payment_age < 60*60*24*1  && payment_age  > 60*60*12)   nonce_height = 9000;
-	if (payment_age < 60*60*12    && payment_age  > 60*60*6)    nonce_height = 10000;
-	if (payment_age < 60*60*6     && payment_age  > 60*60*2)    nonce_height = 12000;
-	if (payment_age < 60*60*2     && payment_age  > 60*60*1)    nonce_height = 24000;
-	if (payment_age < 60*60*1)                                  nonce_height = 40000;
+	if (payment_age > 60*60*24*14)                              nonce_height = 15000;
+	if (payment_age < 60*60*24*14 && payment_age  > 60*60*24*7) nonce_height = 20000;
+	if (payment_age < 60*60*24*7  && payment_age  > 60*60*24*3) nonce_height = 25000;
+	if (payment_age < 60*60*24*3  && payment_age  > 60*60*24*1) nonce_height = 30000;
+	if (payment_age < 60*60*24*1  && payment_age  > 60*60*12)   nonce_height = 35000;
+	if (payment_age < 60*60*12    && payment_age  > 60*60*6)    nonce_height = 40000;
+	if (payment_age < 60*60*6     && payment_age  > 60*60*2)    nonce_height = 45000;
+	if (payment_age < 60*60*2     && payment_age  > 60*60*1)    nonce_height = 50000;
+	if (payment_age < 60*60*1)                                  nonce_height = 55000;
 
 	if (cpid == "INVESTOR") nonce_height = nonce_height/4;
 	if (nonce < nonce_height) return false;
@@ -674,7 +673,7 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 	if ((payment_age > 60*60) && (payment_age > BitsAge)  
 		&& combined_mag > 1 
 		&& boincblock.cpid != "INVESTOR" && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT) 
-		&& (RSA_WEIGHT/14 > MintLimiter(PORDiff,RSA_WEIGHT)) && ACID_TEST)
+		&& (RSA_WEIGHT/14 > MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid,nTimeTx)) && ACID_TEST)
 	{
 		//Coins are older than RSA balance
 		oNC=1;
@@ -691,8 +690,8 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 			if (payment_age < BitsAge)    narr += " Payment < Diff: " + RoundToString(payment_age,0) + "; " + RoundToString(BitsAge,0);
 			if (coin_age < 4*60*60)       narr += " Coin Age (immature): " + RoundToString(coin_age,0);
 			if (coin_age < RSA_WEIGHT)    narr += " Coin Age < RSA_Weight: " + RoundToString(coin_age,0) + " " + RoundToString(RSA_WEIGHT,0);
-			if (RSA_WEIGHT/14 < MintLimiter(PORDiff,RSA_WEIGHT)) narr += " RSAWeight < MintLimiter: "
-					+ RoundToString(RSA_WEIGHT/14,0) + "; " + RoundToString(MintLimiter(PORDiff,RSA_WEIGHT),0);
+			if (RSA_WEIGHT/14 < MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid,nTimeTx)) narr += " RSAWeight < MintLimiter: "
+					+ RoundToString(RSA_WEIGHT/14,0) + "; " + RoundToString(MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid,nTimeTx),0);
 		}
 		if (!ACID_TEST)      
 		{
@@ -818,18 +817,6 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 	double BitsAge = PORDiff * 144; //For every 100 Diff in Bits, two hours of coin age for researchers
 	if (BitsAge > 86400) BitsAge=86400; //Limit to 24 hours (possibility of astronomical diff)
 
-
-	//1-15-2015 R Halford: Verify CPID on POR blocks meets time of day protocol
-	/*
-	if (!IsCPIDTimeValid(boincblock.cpid,nTimeBlockFrom))
-	{
-	    if (!checking_local) printf("CheckStakeKernelHashV3() : CPID does not meet legal submission timestamp parameters. %s",hashBoinc.c_str());
-		return false;
-	}
-	*/
-
-	
-
 	//Halford 1-4-2015 : Explain to the Researcher why they are not staking:
 	if (checking_local && LessVerbose(100))
 	{
@@ -841,10 +828,10 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 			if (payment_age < BitsAge)        narr += " Payment < Diff: " + RoundToString(payment_age,0) + "; " + RoundToString(BitsAge,0);
 			if (coin_age < 4*60*60)           narr += " Coin Age (immature): " + RoundToString(coin_age,0);
 			if (coin_age < RSA_WEIGHT)        narr += " Coin Age < RSA_Weight: " + RoundToString(coin_age,0) + " " + RoundToString(RSA_WEIGHT,0);
-			if (RSA_WEIGHT/14 < MintLimiter(PORDiff,RSA_WEIGHT)) narr += " RSAWeight < MintLimiter: "
-					+ RoundToString(RSA_WEIGHT/14,0) + "; " + RoundToString(MintLimiter(PORDiff,RSA_WEIGHT),0);
+			if (RSA_WEIGHT/14 < MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid,nTimeTx)) narr += " RSAWeight < MintLimiter: "+ RoundToString(RSA_WEIGHT/14,0) + "; " 
+				+ RoundToString(MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid,nTimeTx),0);
 		}
-
+		/*
 		if (!ACID_TEST)      
 		{
 			narr += " POW Mining: " + RoundToString(por_nonce,0);
@@ -853,7 +840,7 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 		{
 			narr += " Kernel Found: " + RoundToString(por_nonce,0) + "-" + RoundToString(oNC,0) + "";
 		}
-	
+		*/
 
 		if (RSA_WEIGHT >= 24999)        msMiningErrors7="Newbie block being generated.";
 		msMiningErrors5 = narr;
@@ -870,10 +857,7 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 
 	if (boincblock.cpid != "INVESTOR")
 	{
-		if ((payment_age > 60*60) && (payment_age > BitsAge)  
-			&& boincblock.Magnitude > 1 && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT) 
-			&& (RSA_WEIGHT/14 > MintLimiter(PORDiff,RSA_WEIGHT)) 
-			&& IsCPIDValidv2(boincblock,pindexPrev->nHeight)		)
+		if ((payment_age > 60*60) && (payment_age > BitsAge) && boincblock.Magnitude > 1 && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT))
 		{
 			//Coins are older than RSA balance - Allow hash to dictate outcome
 		}
@@ -883,8 +867,7 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 		}
 	}
 	
-
-	if (!ACID_TEST) return false;
+	//////////////////////////////////////////if (!ACID_TEST) return false;   (Leave this in for 6 months, then delete)
 
     if (nTimeTx < txPrev.nTime)  // Transaction timestamp violation
         return error("CheckStakeKernelHash() : nTime violation");
@@ -899,22 +882,30 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
     // Weighted target 1-11-2015 Halford
     int64_t nValueIn = 0;
 	nValueIn = checking_local ? txPrev.vout[prevout.n].nValue + (RSA_WEIGHT*COIN) : txPrev.vout[prevout.n].nValue + (RSA_WEIGHT*COIN);
-    CBigNum bnWeight = CBigNum(nValueIn);
+
+	CBigNum bnWeight = CBigNum(nValueIn/10000);
+
+	/*
+	if (fDebug && checking_local)
+	{
+		//printf("nbits %f, weight %f   ",(double)nBits,(double)nValueIn/10000);
+	}
+	*/
+
+
     bnTarget *= bnWeight;
 
     targetProofOfStake = bnTarget.getuint256();
 	uint64_t nStakeModifier = 0;
-	nStakeModifier = (pindexPrev->nHeight <= 86330) ? pindexPrev->nStakeModifier : pindexPrev->nBits;
-
+	nStakeModifier = (pindexPrev->nHeight <= 86330) ? pindexPrev->nStakeModifier : nBits;
     int nStakeModifierHeight = pindexPrev->nHeight;
     int64_t nStakeModifierTime = pindexPrev->nTime;
-
 	int64_t cpid_guid = (int64_t)CPIDTime(boincblock.cpid);
 	
     // Calculate hash
     CDataStream ss(SER_GETHASH, 0);
 	//ss << nStakeModifier << nTimeBlockFrom << txPrev.nTime << prevout.hash << prevout.n << nTimeTx << RSA_WEIGHT;
-	ss << RSA_WEIGHT << cpid_guid << nTimeBlockFrom << txPrev.nTime << prevout.hash << prevout.n << nTimeTx <<  nStakeModifier;
+	ss << RSA_WEIGHT << cpid_guid << nTimeBlockFrom << txPrev.nTime << prevout.hash << prevout.n << nTimeTx <<  por_nonce;
 
     hashProofOfStake = Hash(ss.begin(), ss.end());
 

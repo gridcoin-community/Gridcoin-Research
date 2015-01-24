@@ -108,7 +108,7 @@ public:
 
             // Determine whether to show transaction or not
             bool showTransaction = (inWallet && TransactionRecord::showTransaction(mi->second));
-			//11-20-2014 - Remove the Orphan Mined Generated and not Accepted TX
+			//Remove the Orphan Mined Generated and not Accepted TX
 
 			if (showTransaction)
             {

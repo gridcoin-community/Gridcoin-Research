@@ -54,9 +54,9 @@
     <SignAssembly>true</SignAssembly>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="GridcoinSecurity, Version=1.0.0.1, Culture=neutral, processorArchitecture=MSIL">
+    <Reference Include="GRCSec, Version=1.0.0.2, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\release\GridcoinSecurity.dll</HintPath>
+      <HintPath>..\..\..\..\release\GRCSec.dll</HintPath>
     </Reference>
     <Reference Include="openpopstake, Version=2.0.5.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>

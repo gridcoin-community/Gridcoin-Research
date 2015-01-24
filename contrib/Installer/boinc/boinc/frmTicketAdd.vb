@@ -35,6 +35,8 @@ Public Class frmTicketAdd
         Dim gr As GridcoinReader = mGetUsers()
         cmbAssignedTo.Items.Add("Gridcoin")
         cmbAssignedTo.Items.Add("All")
+        If gr Is Nothing Then Exit Sub
+
         For y As Integer = 1 To gr.Rows
             cmbAssignedTo.Items.Add("" & gr.Value(y, "handle"))
         Next
@@ -150,7 +152,6 @@ Public Class frmTicketAdd
     Private Sub btnSubmit_Click(sender As System.Object, e As System.EventArgs) Handles btnSubmit.Click
         ' Add the new ticket
 
-
         If Len(sHandle) = 0 Then
             MsgBox("Handle Empty", MsgBoxStyle.Critical)
             Exit Sub
@@ -175,15 +176,11 @@ Public Class frmTicketAdd
 
         PopulateHistory()
         SetViewMode()
-        ' Me.BackColor = Drawing.Color.Black
         mfrmTicketList.PopulateTickets()
 
         btnSubmit.Enabled = True
         System.Windows.Forms.Cursor.Current = Cursors.Default
-        'Refresh the ticket list
-        '      Me.BringToFront()
-
-
+     
     End Sub
 
 
@@ -192,7 +189,7 @@ Public Class frmTicketAdd
         drHistory = mGetTicketHistory(txtTicketId.Text)
         If drHistory Is Nothing Then Exit Sub
         Dim sAttach As String = ""
-        Dim grcSecurity As New GridcoinSecurity.GRCSecurity
+        Dim grcSecurity As New GRCSec.GRCSec
 
         For i As Integer = 1 To drHistory.Rows
             Dim sRow As String = drHistory.Value(i, "Disposition") + " - " _
@@ -279,7 +276,7 @@ Public Class frmTicketAdd
     End Sub
     Private Function DownloadAttachment() As String
         If KeyValue("AttachmentPassword") = "" Then
-            MsgBox("You must set attachmentpassword in your gridcoinresearch.conf to send attachments.", MsgBoxStyle.Critical)
+            MsgBox("You must set AttachmentPassword in your gridcoinresearch.conf to send attachments.", MsgBoxStyle.Critical)
             Exit Function
         End If
 

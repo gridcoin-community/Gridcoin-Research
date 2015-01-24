@@ -2152,29 +2152,22 @@ void BitcoinGUI::updateStakingIcon()
         uint64_t nNetworkWeight = GetPoSKernelPS();
         unsigned nEstimateTime = GetTargetSpacing(nBestHeight) * (nNetworkWeight / ((nWeight/COIN)+.001)) * 1;
 		if (fDebug) printf("StakeIcon Vitals BH %f, NetWeight %f, Weight %f \r\n", (double)GetTargetSpacing(nBestHeight),(double)nNetworkWeight,(double)nWeight);
-
         QString text = GetEstimatedTime(nEstimateTime);
-
         //Halford - 1-9-2015 - Calculate time for POR Block:
 		unsigned int nPOREstimate = (unsigned int)GetPOREstimatedTime(GlobalCPUMiningCPID.RSAWeight);
 		QString PORText = "Estimated time to earn POR Reward: " + GetEstimatedTime(nPOREstimate);
 		if (nPOREstimate == 0) PORText="";
-		
         if (IsProtocolV2(nBestHeight+1))
         {
             nWeight /= COIN;
-            //nNetworkWeight /= COIN;
         }
-		//1-4-2015
-        labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
+	    labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
         labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> time to earn reward is %3. %4").arg(nWeight).arg(nNetworkWeight).arg(text).arg(PORText));
 		msMiningErrors6 = "Interest: " + FromQString(text);
 		if (nPOREstimate > 0) msMiningErrors6 += "; POR: " + FromQString(GetEstimatedTime(nPOREstimate));
-
     }
     else
     {
-		
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
         if (pwalletMain && pwalletMain->IsLocked())
 		{
