@@ -920,6 +920,7 @@ void WriteCPIDToRPC(std::string email, std::string bpk, uint256 block, Array &re
 	results.push_back(entry);
 }
 
+
 Value execute(const Array& params, bool fHelp)
 {
     if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3))
