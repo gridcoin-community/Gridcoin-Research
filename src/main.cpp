@@ -363,7 +363,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 124390;
+ int nGrandfather = 124895;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
