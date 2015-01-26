@@ -863,6 +863,11 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 		}
 		else
 		{
+			if (!checking_local)
+			{
+				printf("{CheckStakeKernelHashV3::Failure::} PaymentAge %f, BitsAge %f, Magnitude %f, Coin_Age %f, RSAWeight %f \r\n",
+					(double)payment_age,(double)BitsAge,(double)boincblock.Magnitude,(double)coin_age,(double)RSA_WEIGHT);
+			}
 			return false;
 		}
 	}
@@ -885,14 +890,7 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 
 	CBigNum bnWeight = CBigNum(nValueIn/10000);
 
-	/*
-	if (fDebug && checking_local)
-	{
-		//printf("nbits %f, weight %f   ",(double)nBits,(double)nValueIn/10000);
-	}
-	*/
-
-
+	
     bnTarget *= bnWeight;
 
     targetProofOfStake = bnTarget.getuint256();
@@ -926,15 +924,15 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
     // Now check if proof-of-stake hash meets target protocol
     if (CBigNum(hashProofOfStake) > bnTarget)
 	{
-   		if (oNC==0)
-		{
-			if (!checking_local || fDebug4)
+   		// 1-25-2015
+			if (!checking_local)
 			{
-				if (LessVerbose(75)) printf("{V3<Target}: cpid %s, project %s, RSA_WEIGHT: %f \r\n",boincblock.cpid.c_str(),
-					boincblock.projectname.c_str(),(double)RSA_WEIGHT);
+				//Detailed Logging for Linux - Windows difference in calculation result
+				printf("{CheckStakeKernelHashV3::FailureInKernelHash}:: RSA_WEIGHT %f, CPIDGuid %f, TimeBlockFrom %f, PrevnTime %f, PrevOutHash %s, PrevOut %f, nTimeTx %f, Por_Nonce %f \r\n",
+					(double)RSA_WEIGHT,(double)cpid_guid,(double)nTimeBlockFrom, (double)txPrev.nTime, prevout.hash.GetHex().c_str(), (double)prevout.n, (double)nTimeTx, (double)por_nonce);
+
 			}
 			return false;
-		}
 	}
 
     if (fDebug && !fPrintProofOfStake)
