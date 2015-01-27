@@ -363,7 +363,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 122114;
+ int nGrandfather = 124895;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2936,11 +2936,11 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		// Block Spamming (Halford) 12-23-2014
 		if (mint < MintLimiter(PORDiff,bb.RSAWeight,bb.cpid,GetBlockTime())) 
 		{
-			return error("CheckProofOfStake() : Mint too Small, %f",(double)mint);
+			return error("CheckProofOfStake[] : Mint too Small, %f",(double)mint);
 		}
 
 		
-		if (mint == 0) return error("CheckProofOfStake() : Mint is ZERO! %f",(double)mint);
+		if (mint == 0) return error("CheckProofOfStake[] : Mint is ZERO! %f",(double)mint);
 	
 		if (!ClientOutOfSync())
 		{
@@ -3781,7 +3781,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 					
 					if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me, nNonce))
 					{
-						//if (!generated_by_me) printf("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    \n", hash.ToString().c_str(),(double)nNonce);
+						//if (!generated_by_me) printf("WARNING: AcceptBlock[]: check proof-of-stake failed for block %s, nonce %f    \n", hash.ToString().c_str(),(double)nNonce);
 						//return false; // do not error here as we expect this during initial block download
 						return error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    \n", hash.ToString().c_str(),(double)nNonce);
 						//return false; // do not error here as we expect this during initial block download
