@@ -9,7 +9,10 @@
 #include "txdb.h"
 
 
+std::string YesNo(bool bin);
 double GetPoSKernelPS2();
+
+std::string RoundToString(double d, int place);
 
 using namespace std;
 MiningCPID DeserializeBoincBlock(std::string block);
@@ -254,7 +257,7 @@ static bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64_t& nStakeModifi
 }
 
 // ppcoin kernel protocol
-// coinstake must meet hash target according to the protocol:
+// cfoinstake must meet hash target according to the protocol:
 // kernel (input 0) must meet the formula
 //     hash(nStakeModifier + txPrev.block.nTime + txPrev.offset + txPrev.nTime + txPrev.vout.n + nTime) < bnTarget * nCoinDayWeight
 // this ensures that the chance of getting a coinstake is proportional to the
@@ -276,36 +279,66 @@ static bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64_t& nStakeModifi
 //
 int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::string hashBoinc)
 {
+	// If newbie is not boincing, return 0
+	// If newbie is a veteran, return 0
+	// if newbie is an Investor, return 1
+
+	// If newbie is boincing and not in the chain, Uninitialized Newbie, return 2
+	// If newbie solved between 1-5 blocks, return 3
+	// If newbie has reached level1, return 4
+	// If newbie has reached level2, return 5
+	//11-14-2014
+
 	try
 	{
 		if (hashBoinc.length() > 1)
 		{
 			MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
-			if (boincblock.cpid == "" || boincblock.cpid.length() < 6) return 0;  //Block has no CPID
+			if (boincblock.cpid == "" || boincblock.cpid.length() < 6) return 100;  //Block has no CPID
+	   	    if (boincblock.cpid == "INVESTOR") return 1;
+	
 			//CPID <> INVESTOR:
 			if (boincblock.cpid != "INVESTOR") 
 			{
-    			if (boincblock.projectname == "") 	return 0;
-	    		if (boincblock.rac < 100) 			return 0;
-				if (!IsCPIDValid(boincblock.cpid,boincblock.enccpid)) return 0;
+    			if (boincblock.projectname == "") 	return 101;
+	    		if (boincblock.rac < 100) 			return 102;
+				if (!IsCPIDValid(boincblock.cpid,boincblock.enccpid)) return 103;
 				//If we already have a consensus on the node, the cpid does not qualify
 				if (mvMagnitudes.size() > 0)
 				{
 					StructCPID UntrustedHost = mvMagnitudes[boincblock.cpid]; //Contains Consensus Magnitude
 					if (UntrustedHost.initialized)
 					{
-						if (UntrustedHost.Accuracy > MAX_NEWBIE_BLOCKS && UntrustedHost.Accuracy < MAX_NEWBIE_BLOCKS_LEVEL2)
-						{
-							return 2;
-						}
+				
+												
 						if (UntrustedHost.Accuracy > MAX_NEWBIE_BLOCKS_LEVEL2) 
 						{	
+							//Veteran
 							return 0;
 						}
+
+						if (UntrustedHost.Accuracy >= 0 && UntrustedHost.Accuracy < 4) 
+						{
+							//Newbie
+							return 3;
+						}
+						if (UntrustedHost.Accuracy >= 4 && UntrustedHost.Accuracy < MAX_NEWBIE_BLOCKS)
+						{
+							//Newbie Level 1
+							return 4;
+						}
+						if (UntrustedHost.Accuracy >= MAX_NEWBIE_BLOCKS && UntrustedHost.Accuracy < MAX_NEWBIE_BLOCKS_LEVEL2)
+						{
+							//Newbie Level 2
+							return 5;
+						}
+
+
 					}
 				}
 				//printf("Newbie complies with first time stakeweight rule.[BlockFound]\r\n");
-				return 1;
+				//Uninitialized Newbie
+				return 2;
 			}
 		}
 		return 0;
@@ -323,11 +356,32 @@ int NewbieCompliesWithFirstTimeStakeWeightRule(const CBlock& blockFrom, std::str
 	return 0;
 }
 
+double GetMagnitudeByHashBoinc(std::string hashBoinc)
+{
+	if (hashBoinc.length() > 1)
+		{
+			MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
+			if (boincblock.cpid == "" || boincblock.cpid.length() < 6) return 0;  //Block has no CPID
+			if (boincblock.cpid == "INVESTOR")  return 0;
+   			if (boincblock.projectname == "") 	return 0;
+    		if (boincblock.rac < 100) 			return 0;
+			if (!IsCPIDValid(boincblock.cpid,boincblock.enccpid)) return 0;
+			return boincblock.Magnitude;
+			//StructCPID UntrustedHost = mvMagnitudes[boincblock.cpid]; //Contains Consensus Magnitude
+			//return UntrustedHost.Magnitude;
+		}
+		return 0;
+}
+
 
 static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, unsigned int nTxPrevOffset, 
 	const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, 
-	uint256& targetProofOfStake, bool fPrintProofOfStake, std::string hashBoinc)
+	uint256& targetProofOfStake, bool fPrintProofOfStake, std::string hashBoinc, bool checking_local)
 {
+
+	//Note: When client is checking locally for a good kernelhash, block.vtx[0] is still null, and block.vtx[1].GetValueOut() is null (for mint) so hashBoinc is provided separately
+		
+
     if (nTimeTx < txPrev.nTime)  
 	{
 		// Transaction timestamp violation
@@ -348,36 +402,99 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
     int64_t nValueIn = txPrev.vout[prevout.n].nValue;
 
     uint256 hashBlockFrom = blockFrom.GetHash();
-
-	//Testing Magnitude Modifier Here (08-21-2014):
-	//WEIGHT MODIFICATION SECTION 2: Testing newbie stake allowance
-	//ToDo: Change this to be related to magnitude before go-live - investors can get started automatically
-	//This is primarily to allow a newbie researcher to get started with a low balance.
+	// Deserialize boinc hash for detailed logging //
+	MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
+	std::string cpid = boincblock.cpid;
+    
+	double mag_accuracy = 0;
+	std::string cpidvalid = YesNo(IsCPIDValid(boincblock.cpid,boincblock.enccpid));
+	if (mvMagnitudes.size() > 0)
+	{
+			StructCPID UntrustedHost = mvMagnitudes[boincblock.cpid]; //Contains Consensus Magnitude
+			if (UntrustedHost.initialized)
+			{
+						mag_accuracy = UntrustedHost.Accuracy;
+			}
+	}
 	
+	
+
+	//WEIGHT MODIFICATION SECTION 2: Newbie stake allowance (11-13-2014)
+	//This is primarily to allow a newbie researcher to get started with a low balance.
 	//CBigNum bnCoinDayWeight = CBigNum(nValueIn + (5*COIN) ) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
 	int64_t NewbieStakeWeightModifier = 0;
+	//double mint = (blockFrom.vtx[1].GetValueOut())/COIN;
+	//	double subsidy = (blockFrom.vtx[0].GetValueOut())/COIN;
+	//	std::string sSubsidy = RoundToString(subsidy,4);
 
 	int NC = NewbieCompliesWithFirstTimeStakeWeightRule(blockFrom,hashBoinc);
+	msMiningErrors2 = RoundToString(NC,0);
+	int oNC = 0;
+	// If newbie is not boincing, return 0
+	// If newbie is a veteran, return 0
+	// if newbie is an Investor, return 1
+	// If newbie is boincing and not in the chain, Uninitialized Newbie, return 2
+	// If newbie solved between 1-5 blocks, return 3
+	// If newbie has reached level1, return 4
+	// If newbie has reached level2, return 5
 
-	if (NC > 0)
+
+	if (NC >= 2 && NC <= 5)
 	{
-		    //10-27-2014 Dynamic Newbie Weight
-		    uint64_t nNetworkWeight = GetPoSKernelPS2();
-			if (NC == 1)
+		    //11-12-2014 Dynamic Newbie Weight
+			double newbie_magnitude = GetMagnitudeByHashBoinc(hashBoinc);
+
+		    //uint64_t nNetworkWeight = GetPoSKernelPS2();
+			if (NC == 2)
 			{
-				NewbieStakeWeightModifier = nNetworkWeight*.0015*COIN;
+				NewbieStakeWeightModifier = newbie_magnitude*2500*COIN;
+				oNC = NC;
 			}
-			else if (NC==2)
+			else if (NC == 3)
 			{
-				NewbieStakeWeightModifier = nNetworkWeight*.0010*COIN;
-				//printf("NewbieStakeWeightModifier %" PRIu64 " \r\n ", NewbieStakeWeightModifier);
+				NewbieStakeWeightModifier = newbie_magnitude*1500*COIN;
+				//printf("NewbieModifierL2:  Mag %f, Mod  %"PRId64"  \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
+				oNC = NC;
+		    }
+			else if (NC == 4)
+			{
+				NewbieStakeWeightModifier = newbie_magnitude*1000*COIN;
+				//printf("NewbieModifierL3: Mag %f, Mod  %"PRId64" \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
+				oNC = NC;
+			}
+			else if (NC == 5)
+			{
+				NewbieStakeWeightModifier = newbie_magnitude*500*COIN;
+				//printf("NewbieModifierL3: Mag %f, Mod  %"PRId64" \r\n ",  newbie_magnitude,NewbieStakeWeightModifier);
+				oNC = NC;
 			}
 	}
 	else
 	{
-			NewbieStakeWeightModifier = 1*COIN;
+			NewbieStakeWeightModifier = 0*COIN;
+			
 	}
-	CBigNum bnCoinDayWeight = CBigNum(nValueIn + (NewbieStakeWeightModifier)) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
+
+	int64_t boinc_seconds = 0;
+	//int64_t Weight(int64_t nIntervalBeginning, int64_t nIntervalEnd)
+    // Kernel hash weight starts from 0 at the min age
+    // this change increases active coins participating the hash and helps
+    // to secure the network when proof-of-stake difficulty is low
+	//return min(nIntervalEnd - nIntervalBeginning - nStakeMinAge, (int64_t)nStakeMaxAge);
+	
+
+	if (checking_local)
+	{
+		boinc_seconds = (24 * 60 * 60);
+	}
+	else
+	{
+		boinc_seconds = (24 * 60 * 60);
+	}
+		
+
+	CBigNum bnCoinDayWeight = CBigNum(nValueIn + NewbieStakeWeightModifier) * GetWeight((int64_t)txPrev.nTime, (int64_t)nTimeTx) / COIN / (boinc_seconds);
+
     targetProofOfStake = (bnCoinDayWeight * bnTargetPerCoinDay).getuint256();
 
     // Calculate hash
@@ -388,7 +505,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 
     if (!GetKernelStakeModifier(hashBlockFrom, nStakeModifier, nStakeModifierHeight, nStakeModifierTime, fPrintProofOfStake))
     {
-		printf("{NoStkMod}");
+		printf("{!");
 		return false;
 	}
     ss << nStakeModifier;
@@ -402,17 +519,27 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
             DateTimeStrFormat(nStakeModifierTime).c_str(),
             mapBlockIndex[hashBlockFrom]->nHeight,
             DateTimeStrFormat(blockFrom.GetBlockTime()).c_str());
-        printf("CheckStakeKernelHash() : check modifier=0x%016"PRIx64" nTimeBlockFrom=%u nTxPrevOffset=%u nTimeTxPrev=%u nPrevout=%u nTimeTx=%u hashProof=%s\n",
+            printf("CheckStakeKernelHash() : check modifier=0x%016"PRIx64" nTimeBlockFrom=%u nTxPrevOffset=%u nTimeTxPrev=%u nPrevout=%u nTimeTx=%u hashProof=%s\n",
             nStakeModifier,
             nTimeBlockFrom, nTxPrevOffset, txPrev.nTime, prevout.n, nTimeTx,
             hashProofOfStake.ToString().c_str());
     }
 
     // Now check if proof-of-stake hash meets target protocol
-    if (CBigNum(hashProofOfStake) > bnCoinDayWeight * bnTargetPerCoinDay)
+    if (CBigNum(hashProofOfStake) > (bnCoinDayWeight * bnTargetPerCoinDay))
 	{   
-		//printf("~");
-        return false;
+		if (oNC==0)
+		{
+			//Use this area to log the submitters cpid and mint amount:
+			//printf("!#"
+			if (!checking_local)
+			{
+				//Dont print all this crap in the log if we are running a local miner:
+				printf("Block does not meet target: hashboinc %s\r\n",hashBoinc.c_str());
+				printf("Researcher vitals: NC %u, cpid %s, project %s, accuracy %f \r\n",NC,cpid.c_str(),boincblock.projectname.c_str(),mag_accuracy);
+			}
+			return false;
+		}
 	}
     if (fDebug && !fPrintProofOfStake)
     {
@@ -452,7 +579,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 //
 static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, unsigned int nTimeBlockFrom, 
 	const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, 
-	uint256& targetProofOfStake, bool fPrintProofOfStake, std::string hashBoinc)
+	uint256& targetProofOfStake, bool fPrintProofOfStake, std::string hashBoinc, bool checking_local)
 {
 	printf("StakeV2");
     if (nTimeTx < txPrev.nTime)  // Transaction timestamp violation
@@ -513,17 +640,17 @@ static bool CheckStakeKernelHashV2(CBlockIndex* pindexPrev, unsigned int nBits, 
 }
 
 bool CheckStakeKernelHash(CBlockIndex* pindexPrev, unsigned int nBits, const CBlock& blockFrom, unsigned int nTxPrevOffset, const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, 
-	uint256& targetProofOfStake, std::string hashBoinc, bool fPrintProofOfStake)
+	uint256& targetProofOfStake, std::string hashBoinc, bool fPrintProofOfStake, bool checking_local)
 {
     if (IsProtocolV2(pindexPrev->nHeight+1))
-        return CheckStakeKernelHashV2(pindexPrev, nBits, blockFrom.GetBlockTime(), txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake, hashBoinc);
+        return CheckStakeKernelHashV2(pindexPrev, nBits, blockFrom.GetBlockTime(), txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake, hashBoinc, checking_local);
     else
-        return CheckStakeKernelHashV1(nBits, blockFrom, nTxPrevOffset, txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake, hashBoinc);
+        return CheckStakeKernelHashV1(nBits, blockFrom, nTxPrevOffset, txPrev, prevout, nTimeTx, hashProofOfStake, targetProofOfStake, fPrintProofOfStake, hashBoinc, checking_local);
 }
 
 // Check kernel hash target and coinstake signature
 bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned int nBits, 
-	uint256& hashProofOfStake, uint256& targetProofOfStake, std::string hashBoinc)
+	uint256& hashProofOfStake, uint256& targetProofOfStake, std::string hashBoinc, bool checking_local)
 {
     if (!tx.IsCoinStake())
         return error("CheckProofOfStake() : called on non-coinstake %s", tx.GetHash().ToString().c_str());
@@ -546,9 +673,32 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
     CBlock block;
     if (!block.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
         return fDebug? error("CheckProofOfStake() : read block failed") : false; // unable to read block of previous transaction
+	//Verify solver did not solve back to back blocks:
+	MiningCPID NewStakeBlock = DeserializeBoincBlock(hashBoinc);
+	int nGrandfather = 55000;
+	if (NewStakeBlock.GRCAddress.length() > 3  && pindexPrev->nHeight > nGrandfather)
+	{
+		CBlock prior_block;
+		if (!prior_block.ReadFromDisk(pindexPrev))    return error("CheckProofOfStake() : read Prior block failed!");
+		
+		//11-21-2014
+		if (prior_block.vtx.size() > 0)
+		{
+			MiningCPID PriorStakeBlock = DeserializeBoincBlock(prior_block.vtx[0].hashBoinc);
+			if (PriorStakeBlock.GRCAddress == NewStakeBlock.GRCAddress)
+			{
+				return error("CheckProofOfStake() : Back To Back GRC Address found on two blocks in a row.  Rejected!\r\n");
+			}
+		}
+	
+	}
+    if (!CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, txPrev, txin.prevout, tx.nTime, hashProofOfStake, targetProofOfStake, hashBoinc, fDebug, checking_local))
+	{
+		uint256 diff1 = hashProofOfStake - targetProofOfStake;
+		uint256 diff2 = targetProofOfStake - hashProofOfStake;
+        return tx.DoS(1, error("CheckProofOfStake() : INFO: check kernel failed on coinstake %s, hashProof=%s, target=%s, offby1: %s, OffBy2: %s", tx.GetHash().ToString().c_str(), hashProofOfStake.ToString().c_str(), targetProofOfStake.ToString().c_str(), diff1.ToString().c_str(), diff2.ToString().c_str())); // may occur during initial download or if behind on block chain sync
 
-    if (!CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, txPrev, txin.prevout, tx.nTime, hashProofOfStake, targetProofOfStake, hashBoinc, fDebug))
-        return tx.DoS(1, error("CheckProofOfStake() : INFO: check kernel failed on coinstake %s, hashProof=%s", tx.GetHash().ToString().c_str(), hashProofOfStake.ToString().c_str())); // may occur during initial download or if behind on block chain sync
+	}
 
     return true;
 }

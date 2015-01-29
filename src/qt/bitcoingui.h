@@ -101,6 +101,7 @@ private:
 	QAction *rebuildAction;
 	QAction *upgradeAction;
 	QAction *downloadAction;
+	QAction *rebootAction;
 
 	QAction *sqlAction;
 	QAction *leaderboardAction;
@@ -193,6 +194,7 @@ private slots:
 	void rebuildClicked();
 	void upgradeClicked();
 	void downloadClicked();
+	void rebootClicked();
 	//void sqlClicked();
 	//void leaderboardClicked();
 	//void miningClicked();

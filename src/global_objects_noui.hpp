@@ -114,6 +114,7 @@ struct MiningEntry {
 		double TotalNetworkRAC;
 		double Magnitude;
 		double LastMagnitude;
+		double PaymentMagnitude;
 		double owed;
 		double payments;
 		double outstanding;
@@ -131,8 +132,10 @@ struct MiningEntry {
 		double totalowed;
 		double longtermtotalowed;
 		double longtermowed;
-		
-		
+		double LastPaymentTime;
+		double EarliestPaymentTime;
+		double NewbieLevel;
+		double PaymentTimespan;
 	};
 
 
@@ -183,6 +186,7 @@ struct MiningEntry {
 		std::string cpidv2;
 		std::string email;
 		std::string boincruntimepublickey;
+		std::string GRCAddress;
 		double VouchedMagnitude;
 		double VouchedRAC;
 		double VouchedNetworkRAC;
@@ -191,7 +195,7 @@ struct MiningEntry {
 		double ConsensusMagnitudeCount;
 		double Accuracy;
 		double ConsensusMagnitude;
-	
+		double NewbieLevel;
 	
 	};
 

@@ -244,7 +244,8 @@ HEADERS += src/qt/bitcoingui.h \
     src/netbase.h \
     src/clientversion.h \
     src/threadsafety.h \
-    src/cpid.h
+    src/cpid.h \
+    src/sql.h
 
 SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/transactiontablemodel.cpp \
@@ -324,7 +325,9 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/zerocoin/SerialNumberSignatureOfKnowledge.cpp \
     src/zerocoin/SpendMetaData.cpp \
     src/zerocoin/ZeroTest.cpp \
-    src/cpid.cpp
+    src/cpid.cpp \
+    src/sql.cpp
+    
 ##
 #RC_FILE  = qaxserver.rc
 #DEF_FILE = qaxserver.def

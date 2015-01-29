@@ -18,6 +18,10 @@
 #include <QDateTime>
 #include <QtAlgorithms>
 
+
+int64_t GetMaximumBoincSubsidy(int64_t nTime);
+
+
 // Amount column is right-aligned it contains numbers
 static int column_alignments[] = {
         Qt::AlignLeft|Qt::AlignVCenter,
@@ -104,6 +108,26 @@ public:
 
             // Determine whether to show transaction or not
             bool showTransaction = (inWallet && TransactionRecord::showTransaction(mi->second));
+			//11-20-2014 - Remove the Orphan Mined Generated and not Accepted TX
+
+			if (showTransaction)
+            {
+				/*
+                    QList<TransactionRecord> qlDummy = TransactionRecord::decomposeTransaction(wallet, mi->second);
+    	 	  	    if(!qlDummy.isEmpty()) 
+					{
+						    foreach(const TransactionRecord &trDummy, qlDummy)
+							{
+                     				if (trDummy.status.status == TransactionStatus::NotAccepted)
+									{
+										showTransaction = false;
+									}
+							}
+					 }
+					 */
+			}
+             
+
 
             if(status == CT_UPDATED)
             {
@@ -273,6 +297,9 @@ QString TransactionTableModel::formatTxStatus(const TransactionRecord *wtx) cons
 {
     QString status;
 
+	// case TransactionStatus::NotAccepted:
+       
+
     switch(wtx->status.status)
     {
     case TransactionStatus::OpenUntilBlock:
@@ -369,12 +396,19 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
 
 QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx) const
 {
+	double reward = (wtx->credit + wtx->debit)/COIN;
+	double max = GetMaximumBoincSubsidy(GetAdjustedTime());
+
     switch(wtx->type)
     {
     case TransactionRecord::Generated:
-      		if (((wtx->credit + wtx->debit)) >= 25*COIN)
+      		if (reward >= 25 && reward < 200)
 	   		{
 	   			return QIcon(":/icons/tx_cpumined");
+	   		}
+			else if (reward >= max*.90)
+			{
+				return QIcon(":/icons/gold_cpumined");
 	   		}
 	   		else
 	   		{

@@ -87,6 +87,7 @@ extern int RebootClient();
 void TallyInBackground();
 
 double cdbl(std::string s, int place);
+std::string getfilecontents(std::string filename);
 
 
 std::string BackupGridcoinWallet();
@@ -98,6 +99,7 @@ int nRegVersion;
 int nNeedsUpgrade = 0;
 double GetPoBDifficulty();
 
+std::string GetBoincDataDir2();
 extern int CreateRestorePoint();
 extern int DownloadBlocks();
 
@@ -580,6 +582,11 @@ void BitcoinGUI::createActions()
 	downloadAction->setMenuRole(QAction::TextHeuristicRole);
 
 
+	rebootAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Reboot Client"), this);
+	rebootAction->setStatusTip(tr("Reboot Gridcoin"));
+	rebootAction->setMenuRole(QAction::TextHeuristicRole);
+
+
 
 	upgradeAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Upgrade Client"), this);
 	upgradeAction->setStatusTip(tr("Upgrade Client"));
@@ -656,6 +663,8 @@ void BitcoinGUI::createActions()
 	connect(upgradeAction, SIGNAL(triggered()), this, SLOT(upgradeClicked()));
 	connect(downloadAction, SIGNAL(triggered()), this, SLOT(downloadClicked()));
 
+	connect(rebootAction, SIGNAL(triggered()), this, SLOT(rebootClicked()));
+
 	//connect(sqlAction, SIGNAL(triggered()), this, SLOT(sqlClicked()));
 	//connect(leaderboardAction, SIGNAL(triggered()), this, SLOT(leaderboardClicked()));
 
@@ -712,6 +721,8 @@ void BitcoinGUI::createMenuBar()
 	rebuild->addAction(rebuildAction);
 	rebuild->addSeparator();
 	rebuild->addAction(downloadAction);
+	rebuild->addSeparator();
+	rebuild->addAction(rebootAction);
 	rebuild->addSeparator();
 
 //	QMenu *sql = appMenuBar->addMenu(tr("&SQL Query Analyzer"));
@@ -1097,6 +1108,21 @@ void BitcoinGUI::NewUserWizard()
 {
 	if (!IsConfigFileEmpty()) return;
 	    QString boincemail = "";
+		//Typhoon- Check to see if boinc exists in default path - 11-19-2014
+
+		std::string sourcefile = GetBoincDataDir2() + "client_state.xml";
+		std::string sout = "";
+		sout = getfilecontents(sourcefile);
+		bool BoincInstalled = true;
+		std::string sBoincNarr = "";
+		if (sout == "-1") 
+		{
+			printf("Boinc not installed in default location! \r\n");
+			BoincInstalled=false;
+			std::string nicePath = GetBoincDataDir2();
+			sBoincNarr = "Boinc is not installed in default location " + nicePath + "!  Please set boincdatadir=c:\\programdata\\boinc\\    to the correct path where Boincs programdata directory resides.";
+		}
+
 		bool ok;
 		boincemail = QInputDialog::getText(this, tr("New User Wizard"),
                                           tr("Please enter your boinc E-mail address, or click <Cancel> to skip for now:"),
@@ -1110,6 +1136,7 @@ void BitcoinGUI::NewUserWizard()
 			CreateNewConfigFile(new_email);
  		    QString strMessage = tr("Created new Configuration File Successfully. ");
 			QMessageBox::warning(this, tr("New Account Created - Welcome Aboard!"), strMessage);
+
 			//Load CPIDs:
 			HarvestCPIDs(true);
  		}
@@ -1118,6 +1145,13 @@ void BitcoinGUI::NewUserWizard()
 		    QString strMessage = tr("To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. ");
 			QMessageBox::warning(this, tr("New User Wizard - Skipped"), strMessage);
 		}
+		
+		if (sBoincNarr != "")
+		{
+				QString qsMessage = tr(sBoincNarr.c_str());
+				QMessageBox::warning(this, tr("Attention! - Boinc Path Error!"), qsMessage);
+		}
+
 
 }
 
@@ -1273,6 +1307,12 @@ void BitcoinGUI::downloadClicked()
 {
 	DownloadBlocks();
 
+}
+
+void BitcoinGUI::rebootClicked()
+{
+
+	RebootClient();
 }
 
 /*
@@ -1698,7 +1738,7 @@ void BitcoinGUI::timerfire()
 		
 		if (nRegVersion==0 || Timer("start",10))
 		{
-			printf("Starting globalcom...\r\n");
+			if (fDebug) printf("Starting globalcom...\r\n");
 			nRegVersion=9999;
 			if (!bNewUserWizardNotified)
 			{
@@ -1717,7 +1757,6 @@ void BitcoinGUI::timerfire()
 
 		if (Timer("status_update",2))
 		{
-			printf("Status Update");
 			std::string status = GetGlobalStatus();
     		bForceUpdate=true;
 		}
@@ -1797,8 +1836,7 @@ void BitcoinGUI::timerfire()
 												QString qsblock = QString::fromUtf8(RetrieveBlocksAsString(iSqlBlock).c_str());
 												globalcom->dynamicCall("SetSqlBlock(Qstring)",qsblock);
 	    										//Set Public Wallet Address
-     											//QString pwa = QString::fromUtf8(DefaultWalletAddress().c_str());
-												//globalcom->dynamicCall("SetPublicWalletAddress(QString)",pwa);
+     											//globalcom->dynamicCall("SetPublicWalletAddress(QString)",pwa);
 	    										//Set Best Block
 	    										globalcom->dynamicCall("SetBestBlock(int)", nBestHeight);
 												#endif
@@ -1885,8 +1923,12 @@ void BitcoinGUI::updateStakingIcon()
             labelStakingIcon->setToolTip(tr("Not staking because wallet is offline"));
         else if (IsInitialBlockDownload())
             labelStakingIcon->setToolTip(tr("Not staking because wallet is syncing"));
+		else if (!nLastCoinStakeSearchInterval && !nWeight)
+			labelStakingIcon->setToolTip(tr("Not staking because you don't have mature coins and stake weight is too low."));
         else if (!nWeight)
             labelStakingIcon->setToolTip(tr("Not staking because you don't have mature coins"));
+		else if (!nLastCoinStakeSearchInterval)
+			labelStakingIcon->setToolTip(tr("Searching for mature coins... Please wait"));
         else
             labelStakingIcon->setToolTip(tr("Not staking"));
     }

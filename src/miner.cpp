@@ -8,6 +8,7 @@
 #include "miner.h"
 #include "kernel.h"
 #include "cpid.h"
+#include <boost/lexical_cast.hpp>
 
 using namespace std;
 
@@ -23,6 +24,13 @@ void ThreadCleanWalletPassphrase(void* parg);
 
 void ThreadTopUpKeyPool(void* parg);
 
+int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& owed);
+
+bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
+bool AmIGeneratingBackToBackBlocks();
+
+
+std::string RoundToString(double d, int place);
 
 bool OutOfSyncByAgeWithChanceOfMining();
 
@@ -414,7 +422,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 	    //miningcpid.cpidv2 = cpid_hash(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pindexPrev->GetBlockHash());
 		
 		std::string hashBoinc = SerializeBoincBlock(miningcpid);
-		printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
+//		printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
 				
 	    if (LessVerbose(10)) printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
 
@@ -537,12 +545,45 @@ bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
         }
 
         // Process this block the same as if we had received it from another node
-        if (!ProcessBlock(NULL, pblock))
+        if (!ProcessBlock(NULL, pblock, true))
             return error("CheckWork() : ProcessBlock, block not accepted");
     }
-
+	MilliSleep(275000);  //Preventing sync problems
+		
     return true;
 }
+
+
+double Round_Legacy(double d, int place)
+{
+    std::ostringstream ss;
+    ss << std::fixed << std::setprecision(place) << d ;
+	double r = boost::lexical_cast<double>(ss.str());
+	return r;
+}
+
+	
+int SecondFromGRCAddress()
+{
+	std::string sAddress = DefaultWalletAddress();
+	//GRC Classic: Convert a public GRC address to its corresponding payment hour
+	if (sAddress.length() == 0) return 0;
+	char ch = *sAddress.rbegin();
+	char ch2=tolower(ch);
+	int asc = ch2; //Ascii value 0-9 = 48-57, a-z = 97 - 122
+	if (asc > 96) asc=asc-39;	
+	int lookup = asc-47;	
+	double hour = Round_Legacy(lookup/1.5,0);  //convert to 24 hour format, hour now equals 1-24
+	if (hour > 24) hour=24;
+	if (hour < 1) hour = 1;
+	int clockhour = hour-1; //Return 0-23 (Military Clock hours)
+	int sec = clockhour * 2.5;
+	if (sec < 0) sec = 0;
+	if (sec > 59) sec = 59;
+	return sec;
+}
+
+
 
 bool CheckStake(CBlock* pblock, CWallet& wallet)
 {
@@ -559,12 +600,49 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 		return error("CheckStake()::HashBoinc too small");
 	}
 
-    if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc))
+
+	if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc, true))
+	{	
+		printf("original hash boinc %s",pblock->vtx[0].hashBoinc.c_str());
         return error("CheckStake() : proof-of-stake checking failed");
+	}
+
+    double subsidy = (pblock->vtx[0].GetValueOut())/COIN;
+	std::string sSubsidy = RoundToString(subsidy,4);
+
+	/*
+	if (AmIGeneratingBackToBackBlocks()) 
+	{
+		    return error("CheckStake() : Block Rejected: Generating back-to-back blocks\r\n");
+	}
+	*/
+
+
 
     //// debug print
-	
-    printf("CheckStake() : new proof-of-stake block found  \n  hash: %s \nproofhash: %s  \ntarget: %s\n", hashBlock.GetHex().c_str(), proofHash.GetHex().c_str(), hashTarget.GetHex().c_str());
+	double block_value = (pblock->vtx[1].GetValueOut())/COIN;
+	std::string sBlockValue = RoundToString(block_value,4);	
+	//Submit the block during the public key address second
+	int wallet_second = 0;
+	printf("Submitting block %d for %s",wallet_second,sBlockValue.c_str());
+
+	/*
+	// Create a raw time_t variable and a tm structure  
+    time_t rawtime;  
+	struct tm * timeinfo;  
+	time ( &rawtime );  
+	for (int i = 0; i < 590; i++)
+	{
+		timeinfo = localtime(&rawtime);  
+	    int cur_sec = timeinfo->tm_sec;
+		if (wallet_second == cur_sec) break;
+		MilliSleep(100);
+	}
+	*/
+
+
+    printf("CheckStake() : new proof-of-stake block found - Subsidy %s, BlockValue %s, \r\n hash: %s \nproofhash: %s  \ntarget: %s\n",
+		sSubsidy.c_str(), sBlockValue.c_str(), hashBlock.GetHex().c_str(), proofHash.GetHex().c_str(), hashTarget.GetHex().c_str());
 	if (fDebug)     pblock->print();
     printf("out %s\n", FormatMoney(pblock->vtx[1].GetValueOut()).c_str());
 
@@ -580,12 +658,18 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
             wallet.mapRequestCount[hashBlock] = 0;
         }
 
-        // Process this block the same as if we had received it from another node
-        if (!ProcessBlock(NULL, pblock))
-            return error("CheckStake() : ProcessBlock, block not accepted");
-    }
 
+        // Process this block the same as if we had received it from another node
+        if (!ProcessBlock(NULL, pblock, true))
+		{
+            return error("CheckStake() : ProcessBlock (by me), but block not accepted");
+		}
+    }
+	nLastBlockSolved = GetAdjustedTime();
+	
     return true;
+
+
 }
 
 
@@ -602,6 +686,7 @@ void StakeMiner(CWallet *pwallet)
 
     while (true)
     {
+Inception:
         if (fShutdown)
 		{
 			printf("StakeMiner:ShuttingDown..");
@@ -687,6 +772,14 @@ void StakeMiner(CWallet *pwallet)
             }
         }
 Begin:
+		MilliSleep(500);
+		//Ensure Last block is not mine:
+		if (false && AmIGeneratingBackToBackBlocks())
+		{
+			printf("B2B\r\n");
+			MilliSleep(10000);
+			goto Inception;
+		}
 
         //
         // Create new block
@@ -696,10 +789,43 @@ Begin:
         if (!pblock.get())
 		{
 			//This can happen after reharvesting CPIDs... Because CreateNewBlock() requires a valid CPID..  Start Over.
-			MilliSleep(1000);
 			printf("a1.");
+			MilliSleep(1000);
 			goto Begin;
 		}
+
+		//Verify we are still on the main chain
+   	    if (pblock->hashPrevBlock != hashBestChain)
+		{
+    		printf ("StakeMiner() : generated block is stale");
+			MilliSleep(1000);
+			goto Begin;
+		}
+
+		if (IsLockTimeWithinMinutes(nLastBlockSolved,4)) 
+		{
+				printf("=");
+				MilliSleep(1000);
+				goto Begin;
+		}
+
+		//11-23-2014 - R HALFORD - If we received a global hash checkpoint containing the solved hash for the block we are currently staking, accept the block and start over
+		if (false && muGlobalCheckpointHash == pblock->hashPrevBlock)
+		{
+			//A Gridcoiner solved the block we are working on..Start over
+			printf("!GlobalSolutionFound!\r\n");
+			MilliSleep(15000);
+			muGlobalCheckpointHashCounter++;
+			if (muGlobalCheckpointHashCounter > 3)
+			{
+				//Give up after waiting for 60 seconds for the solved block; erase the checkpoint hash
+				muGlobalCheckpointHashCounter=0;
+				muGlobalCheckpointHash = 0;
+				printf("Never received global solution block.. Purging.\r\n");
+			}
+			goto Begin;
+		}
+			
 
         // Trying to sign a block
         if (pblock->SignBlock(*pwallet, nFees))
@@ -711,8 +837,7 @@ Begin:
 				printf("Stake block accepted!\r\n");
 				//Prevent Rapid Fire block creation (large investor nodes):
 		  	    SetThreadPriority(THREAD_PRIORITY_LOWEST);
-        		MilliSleep(300000);  //Preventing sync problems
-
+        		
 			}
             SetThreadPriority(THREAD_PRIORITY_LOWEST);
             MilliSleep(500);

@@ -358,6 +358,30 @@ namespace Checkpoints
     }
 
 
+	
+    bool SendSyncHashCheckpoint(uint256 hash1, std::string SendingWalletAddress)
+    {
+		//11-23-2014 - R HALFORD - Relay Global Checkpoint to all nodes
+		//hashCheckpoint contains the Last Block hash, IE the block everyone else is still hashing
+	    CSyncCheckpoint checkpoint;
+        checkpoint.hashCheckpointGlobal = hash1;
+		checkpoint.hashCheckpoint = hash1;
+		checkpoint.balance = 0;
+		checkpoint.SendingWalletAddress=SendingWalletAddress;
+        CDataStream sMsg(SER_NETWORK, PROTOCOL_VERSION);
+        sMsg << (CUnsignedSyncCheckpoint)checkpoint;
+        checkpoint.vchMsg = std::vector<unsigned char>(sMsg.begin(), sMsg.end());
+        // Relay checkpoint
+        {
+            LOCK(cs_vNodes);
+            BOOST_FOREACH(CNode* pnode, vNodes)
+                checkpoint.RelayTo(pnode);
+        }
+		printf("Global Sync checkpoint broadcast successfully %s\r\n",checkpoint.hashCheckpointGlobal.GetHex().c_str());
+        return true;
+    }
+
+
 
     bool SendSyncCheckpoint(uint256 hashCheckpoint)
     {

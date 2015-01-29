@@ -437,10 +437,25 @@ Module modGRC
                         sDT = Trim(sDT)
 
                         Dim dDt As DateTime
-                        dDt = ParseDate(Trim(sDT))
+                        'dDt = ParseDate(Trim(sDT))
+                        dDt = CDate(sDT)
+                        Dim PSTTimeZoneInfo As TimeZoneInfo
+                        'Server is in PST Time Zone
+                        PSTTimeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById("Pacific SA Standard Time")
+
+                        'dDt = TimeZoneInfo.ConvertTime(dDt, System.TimeZoneInfo.Utc)
+                        dDt = TimeZoneInfo.ConvertTime(dDt, PSTTimeZoneInfo)
+                        dDt = DateAdd(DateInterval.Hour, -2, dDt)
+
+                        Log("Gridcoin.us boincstake.dll timestamp in PST : " + Trim(dDt))
+
+                        'Now we have boincstake.dll timestamp in PST, convert to UTC
                         dDt = TimeZoneInfo.ConvertTime(dDt, System.TimeZoneInfo.Utc)
-                        'Hosting server is PST, so subtract Utc - 7 to achieve PST:
-                        dDt = DateAdd(DateInterval.Hour, -12, dDt)
+                        Log("Gridcoin.us boincstake.dll timestamp in UTC : " + Trim(dDt))
+
+                        'Pad time by 15 mins to delay the auto upgrade
+                        dDt = DateAdd(DateInterval.Minute, -15, dDt)
+
                         'local file time
                         Dim sLocalPath As String = GetGRCAppDir()
                         Dim sLocalFile As String = sFile
@@ -450,7 +465,7 @@ Module modGRC
                         Try
                             dtLocal = System.IO.File.GetLastWriteTime(sLocalPathFile)
                             dtLocal = TimeZoneInfo.ConvertTime(dtLocal, System.TimeZoneInfo.Utc)
-                            Log("Gridcoin.us boinc.dll timestamp (UTC) : " + Trim(dDt) + ", VS : Local boinc.dll timestamp (UTC) : " + Trim(dtLocal))
+                            Log("Gridcoin.us boincstake.dll timestamp (UTC) : " + Trim(dDt) + ", VS : Local boincstake.dll timestamp (UTC) : " + Trim(dtLocal))
                             If dDt < dtLocal Then
                                 Log("Not upgrading.")
                             End If

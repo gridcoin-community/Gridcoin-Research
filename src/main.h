@@ -33,7 +33,11 @@ extern unsigned int WHITELISTED_PROJECTS;
 extern unsigned int CHECKPOINT_VIOLATIONS;
 static const int MAX_NEWBIE_BLOCKS = 200;
 static const int MAX_NEWBIE_BLOCKS_LEVEL2 = 500;
-static const int CHECKPOINT_DISTRIBUTED_MODE = 0;
+static const int CHECKPOINT_DISTRIBUTED_MODE = 3;
+extern int64_t nLastBlockSolved;
+extern uint256 muGlobalCheckpointHash;
+extern uint256 muGlobalCheckpointHashRelayed;
+extern int muGlobalCheckpointHashCounter;
 
 extern bool bNewUserWizardNotified;
 
@@ -115,6 +119,10 @@ extern int64_t COIN_YEAR_REWARD;
 extern int64_t nTransactionFee;
 extern int64_t nReserveBalance;
 extern int64_t nMinimumInputValue;
+extern int64_t nLastTallied;
+extern int64_t nCPIDsLoaded;
+
+
 extern bool fUseFastIndex;
 extern unsigned int nDerivationMethodIndex;
 
@@ -130,6 +138,7 @@ extern double    	mdMiningRAC;
 extern double       mdMiningNetworkRAC;
 extern std::string  msENCboincpublickey;
 extern std::string  msMiningErrors;
+extern std::string  msMiningErrors2;
 // PoB GPU Miner Global Vars:
 extern std::string 	msGPUMiningProject;
 extern std::string 	msGPUMiningCPID;
@@ -151,7 +160,7 @@ class CTxIndex;
 void RegisterWallet(CWallet* pwalletIn);
 void UnregisterWallet(CWallet* pwalletIn);
 void SyncWithWallets(const CTransaction& tx, const CBlock* pblock = NULL, bool fUpdate = false, bool fConnect = true);
-bool ProcessBlock(CNode* pfrom, CBlock* pblock);
+bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool Generated_By_Me);
 bool CheckDiskSpace(uint64_t nAdditionalBytes=0);
 FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszMode="rb");
 FILE* AppendBlockFile(unsigned int& nFileRet);
@@ -1158,7 +1167,7 @@ public:
     bool SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew);
     bool AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof);
     bool CheckBlock(bool fCheckPOW=true, bool fCheckMerkleRoot=true, bool fCheckSig=true) const;
-    bool AcceptBlock();
+    bool AcceptBlock(bool generated_by_me);
     bool GetCoinAge(uint64_t& nCoinAge) const; // ppcoin: calculate total coin age spent in block
     bool SignBlock(CWallet& keystore, int64_t nFees);
     bool CheckBlockSignature() const;

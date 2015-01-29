@@ -4,7 +4,7 @@
         <file alias="address-book">res/icons/address-book.png</file>
         <file alias="quit">res/icons/quit.png</file>
         <file alias="send">res/icons/send.png</file>
-       <file alias="toolbar">res/icons/toolbar.png</file>
+        <file alias="toolbar">res/icons/toolbar.png</file>
         <file alias="connect_0">res/icons/connect0_16.png</file>
         <file alias="connect_1">res/icons/connect1_16.png</file>
         <file alias="connect_2">res/icons/connect2_16.png</file>
@@ -32,7 +32,7 @@
         <file alias="synced">res/icons/synced.png</file>
         <file alias="remove">res/icons/remove.png</file>
         <file alias="tx_mined">res/icons/tx_mined.png</file>
-         <file alias="tx_cpumined">res/icons/tx_cpumined.png</file>
+        <file alias="tx_cpumined">res/icons/tx_cpumined.png</file>
         <file alias="tx_input">res/icons/tx_input.png</file>
         <file alias="tx_output">res/icons/tx_output.png</file>
         <file alias="tx_inout">res/icons/tx_inout.png</file>
@@ -44,10 +44,11 @@
         <file alias="debugwindow">res/icons/debugwindow.png</file>
         <file alias="staking_off">res/icons/staking_off.png</file>
         <file alias="staking_on">res/icons/staking_on.png</file>
-		<file alias="block">res/icons/block.png</file>
+	<file alias="block">res/icons/block.png</file>
         <file alias="ex">res/icons/ex.png</file>
-		<file alias="www">res/icons/www.png</file>
+	<file alias="www">res/icons/www.png</file>
         <file alias="boinc">res/icons/boinc.png</file>
+        <file alias="gold_cpumined">res/icons/gold_cpumined.png</file>
     </qresource>
     <qresource prefix="/images">
         <file alias="about">res/images/about.png</file>

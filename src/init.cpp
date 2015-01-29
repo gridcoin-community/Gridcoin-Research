@@ -181,7 +181,7 @@ void InitializeBoincProjects()
 		GlobalCPUMiningCPID.pobdifficulty = 0;
 		GlobalCPUMiningCPID.diffbytes = 0;
 		GlobalCPUMiningCPID.email = "";
-
+		GlobalCPUMiningCPID.NewbieLevel = 0;
 		std::string boinc_projects[100];
 	       
         boinc_projects[0] = "http://boinc.bakerlab.org/rosetta/   |rosetta@home";

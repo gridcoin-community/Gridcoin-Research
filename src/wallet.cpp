@@ -23,8 +23,18 @@ bool OutOfSyncByAgeWithChanceOfMining();
 
 std::string SerializeBoincBlock(MiningCPID mcpid);
 double GetPoSKernelPS2();
+double GetDifficulty(const CBlockIndex* blockindex = NULL);
+
+double coalesce(double mag1, double mag2);
+
+extern int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& owed);
+extern std::string NewbieLevelToString(int newbie_level);
 
 
+int64_t GetMaximumBoincSubsidy(int64_t nTime);
+
+
+bool LessVerbose(int iMax1000);
 
 MiningCPID GetNextProject();
 
@@ -1517,38 +1527,85 @@ bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx&
 }
 
 
-int NewbieCompliesWithFirstTimeStakeWeightRule()
-{
 
+std::string NewbieLevelToString(int newbie_level)
+{
+	if (newbie_level==1) return "INVESTOR";
+	if (newbie_level==100 || newbie_level==101 || newbie_level==102) return "BOINC_ERROR";
+	if (newbie_level==0) return "VETERAN";
+	if (newbie_level==3) return "NEWBIE_1";
+	if (newbie_level==4) return "NEWBIE_2";
+	if (newbie_level==5) return "NEWBIE_3";
+	if (newbie_level==2) return "NEWBIE_0"; //UNINITIALIZED NEWBIE
+	return "NOT_DEFINED";
+}
+
+
+int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& owed)
+{
+	// If newbie is not boincing, return 0
+	// If newbie is a veteran, return 0
+	// if newbie is an Investor, return 1
+
+	// If newbie is boincing and not in the chain, Uninitialized Newbie, return 2
+	// If newbie solved between 1-5 blocks, return 3
+	// If newbie has reached level1, return 4
+	// If newbie has reached level2, return 5
+	out_magnitude = 0;
 	try 
 	{
-	  if (!GlobalCPUMiningCPID.initialized) return 0;
+	  if (!GlobalCPUMiningCPID.initialized) return 100;
+	  if (GlobalCPUMiningCPID.cpid == "INVESTOR") return 1;
 			
-		//CPID <> INVESTOR:
+	  //CPID <> INVESTOR:
 	
-		if (GlobalCPUMiningCPID.cpid != "INVESTOR") 
-		{
-    		if (GlobalCPUMiningCPID.projectname == "") 	return 0;
-	    	if (GlobalCPUMiningCPID.rac < 100) 			return 0;
+	  if (GlobalCPUMiningCPID.cpid != "INVESTOR") 
+	  {
+    		if (GlobalCPUMiningCPID.projectname == "") 	return 101;
+	    	if (GlobalCPUMiningCPID.rac < 100) 			return 102;
 		    //If we already have a consensus on the node, the cpid does not qualify
 			if (mvMagnitudes.size() > 0)
 			{
 				StructCPID UntrustedHost = mvMagnitudes[GlobalCPUMiningCPID.cpid]; //Contains Consensus Magnitude
+				owed = UntrustedHost.owed;
+
 				if (UntrustedHost.initialized)
 				{
-						if (UntrustedHost.Accuracy > MAX_NEWBIE_BLOCKS && UntrustedHost.Accuracy < MAX_NEWBIE_BLOCKS_LEVEL2)
-						{
-							return 2;
-						}
+						out_magnitude = UntrustedHost.ConsensusMagnitude;
+						
 						if (UntrustedHost.Accuracy > MAX_NEWBIE_BLOCKS_LEVEL2) 
 						{	
+							//Veteran
 							return 0;
 						}
+
+						if (UntrustedHost.Accuracy > 0 && UntrustedHost.Accuracy < 4) 
+						{
+							//Newbie
+							out_magnitude = coalesce(UntrustedHost.ConsensusMagnitude,GlobalCPUMiningCPID.Magnitude);
+						
+							return 3;
+						}
+						if (UntrustedHost.Accuracy >= 4 && UntrustedHost.Accuracy < MAX_NEWBIE_BLOCKS)
+						{
+							//Newbie Level 1
+						
+							return 4;
+						}
+						if (UntrustedHost.Accuracy >= MAX_NEWBIE_BLOCKS && UntrustedHost.Accuracy < MAX_NEWBIE_BLOCKS_LEVEL2)
+						{
+							//Newbie Level 2
+							return 5;
+						}
 			
+				
 				}
 			}
 			printf("{NC}"); //Newbie complies with first time stakeweight rule
-			return 1;
+			//Uninitialized newbie (use globalcpumining magnitude)
+			out_magnitude = GlobalCPUMiningCPID.Magnitude;
+
+			return 2;
 		}
 
 	return 0;
@@ -1568,6 +1625,20 @@ int NewbieCompliesWithFirstTimeStakeWeightRule()
 }
 
 
+
+double MintLimiter()
+{
+	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
+	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+	if (PORDiff >= 0  && PORDiff < .5) return .0001;
+	if (PORDiff >= .5 && PORDiff < 1)  return .25;
+	if (PORDiff >= 1  && PORDiff < 5)  return 1;
+	if (PORDiff >= 5  && PORDiff < 10) return 5;
+	if (PORDiff >= 10 && PORDiff < 50) return 7;
+	if (PORDiff >= 50) return 10;
+	return .001;
+}
+	
 
 
 bool CWallet::GetStakeWeight(uint64_t& nWeight)
@@ -1621,20 +1692,58 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	
 
 	
-	//HALFORD: 9-6-2014 (Blended Stake Weight feature for Newbies):
+	//HALFORD: (Blended Stake Weight feature for Newbies):
 	//WEIGHT SECTION 1: When a new CPID enters the ecosystem, and is seen on less than 9 blocks, this newbie
 	//receives an extra X in stakeweight to help them get started.
-	//10-22-2014
-	if (NewbieCompliesWithFirstTimeStakeWeightRule() > 0)
+	double out_magnitude = 0;
+	double out_owed = 0;
+	int NC = NewbieCompliesWithLocalStakeWeightRule(out_magnitude,out_owed);
+	// If newbie is not boincing, return 0
+	// If newbie is a veteran,    return 0
+	// if newbie is an Investor,  return 1
+	// If newbie is boincing and not in the chain, Uninitialized Newbie, return 2
+	// If newbie solved between 1-5 blocks, return 3
+	// If newbie has reached level1,        return 4
+	// If newbie has reached level2,        return 5
+	int64_t NetworkWeight = GetPoSKernelPS2();
+	double NewbieStakeWeightModifier = 0;
+	double MaxReward = GetMaximumBoincSubsidy(GetAdjustedTime());
+	//11-20-2014 - Halford - Pre-assess reward level
+
+	if (NC == 0)
 	{
-			int64_t NetworkWeight = GetPoSKernelPS2();
-			nWeight += (NetworkWeight*.01);
-			//printf("Newbie Network Weight=%f",nWeight);
+					NewbieStakeWeightModifier = 0;
+	
 	}
-	else if (nWeight > 0)
+	else if (NC==1)
 	{
-		nWeight += 100000;
+					NewbieStakeWeightModifier =	0;
+	
 	}
+	else if (NC == 2)
+	{
+					NewbieStakeWeightModifier =	500000+(out_magnitude*MaxReward);
+					//printf("NL2::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
+					//Uninitialized Newbie
+	
+	}
+	else if (NC == 3 && out_owed > (MaxReward/5))
+	{
+					NewbieStakeWeightModifier =	out_magnitude*(MaxReward/2);
+					printf("NL3::mag %f swm %f",out_magnitude,NewbieStakeWeightModifier);
+					//1 - 5 blocks
+	}
+	else if (NC == 4 && out_owed > (MaxReward/2))
+	{
+					NewbieStakeWeightModifier =	out_magnitude*(MaxReward/3);
+		
+	}
+	else if (NC == 5 && out_owed > (MaxReward/1.5))
+	{
+					NewbieStakeWeightModifier =	out_magnitude*(MaxReward/5);
+	}
+	
+	nWeight += NewbieStakeWeightModifier;
 	
     return true;
 }
@@ -1710,12 +1819,12 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	try
 	{
 		 miningcpid = GetNextProject();
-		 printf("Grabbing Prior blockhash for Cpidv2");
+		 //printf("Grabbing Prior blockhash for Cpidv2");
 		 //miningcpid.cpidv2 = cpid_hash(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pindexPrev->GetBlockHash());
-
+		 
 		 // miningcpid.cpidv2 = cpid_hash(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pblock->pprev->GetBlockHash());
 		 hashBoinc = SerializeBoincBlock(miningcpid);
-		 printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
+	//	 printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
 
 
 	}
@@ -1751,8 +1860,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
                 continue;
         }
 
-			
-
+	
         static int nMaxStakeSearchInterval = 60;
         if (block.GetBlockTime() + nStakeMinAge > txNew.nTime - nMaxStakeSearchInterval)
             continue; // only count coins meeting min age requirement
@@ -1766,8 +1874,9 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);
 			//Note: At this point block.vtx[0] is still null, so we send the hashBoinc in separately
             if (CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, 
-				*pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, targetProofOfStake, hashBoinc, false))
+				*pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, targetProofOfStake, hashBoinc, false, true))
             {
+			
                 // Found a kernel
                 if (fDebug && GetBoolArg("-printcoinstake"))
                     printf("CreateCoinStake : kernel found\n");
@@ -1880,16 +1989,46 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
         CTxDB txdb("r");
         if (!txNew.GetCoinAge(txdb, nCoinAge))
             return error("CreateCoinStake : failed to calculate coin age");
-		//9-1-2014 Halford: Use current time since we are creating a new stake
-
+		//Halford: Use current time since we are creating a new stake
         int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,  GetAdjustedTime());
-
-    
 		printf("Creating POS Reward for %s  amt  %"PRId64"  \r\n",GlobalCPUMiningCPID.cpid.c_str(),nReward/COIN);
+	
+		double out_magnitude = 0;
+		double out_owed = 0;
+		int NC  =  NewbieCompliesWithLocalStakeWeightRule(out_magnitude,out_owed);
+		double mint = nReward/COIN;
+		
+		double MaxSubsidy = GetMaximumBoincSubsidy(GetAdjustedTime());
 
-        if (nReward <= 0)       return false;
+		// Gridcoin - R Halford - For Investors (NC Level 0, or Veterans, Level 0) - Prevent tiny payments & Prevent astronomical diff levels
+		// Enforce: Investor (1), Veteran (0), Newbie (4), Newbie (5)
+		// Do not enforce: Uninitialized Newbie (2), or Level 0 Newbie (3)
+		// BOINC MINERS:
+		if (NC == 0 || NC == 4 || NC == 5)
+		{
+  			if (mint < (MaxSubsidy/25) && LessVerbose(850)) 
+			{
+				printf("CreateBlock::Boinc Miners Mint too small");
+				return false; 
+			}
+		}
+		else if (NC == 1)
+		{
+			//INVESTORS
+			if (mint < MintLimiter() && LessVerbose(850)) 
+			{
+				printf("CreateBlock::Investors Mint is too small");
+				return false; 
+			}
 
-        nCredit += nReward;
+		}
+
+		if (mint == 0)
+		{
+			//printf("CreateBlock():Mint is zero");
+			return false;   
+		}
+	    nCredit += nReward;
     }
 
     // Set output amount

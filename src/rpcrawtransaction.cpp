@@ -20,6 +20,7 @@ using namespace json_spirit;
 
 
 int UpgradeClient();
+
 extern std::string RoundToString(double d, int place);
 extern std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, int& out_rac);
 MiningCPID DeserializeBoincBlock(std::string block);

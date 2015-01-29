@@ -29,6 +29,11 @@ int RebootClient();
 
 extern double GetNetworkProjectCountWithRAC();
 int ReindexWallet();
+extern Array MagnitudeReportCSV();
+int NewbieCompliesWithLocalStakeWeightRule(double& out_magnitude, double& out_owed);
+std::string getfilecontents(std::string filename);
+
+std::string NewbieLevelToString(int newbie_level);
 
 void stopWireFrameRenderer();
 void startWireFrameRenderer();
@@ -42,8 +47,7 @@ bool GetBlockNew(uint256 blockhash, int& out_height, CBlock& blk, bool bForceDis
 bool AESSkeinHash(unsigned int diffbytes, double rac, uint256 scrypthash, std::string& out_skein, std::string& out_aes512);
 				  std::string aes_complex_hash(uint256 scrypt_hash);
 std::vector<std::string> split(std::string s, std::string delim);
-double Lederstrumpf(double RAC, double NetworkRAC);
-double LederstrumpfMagnitude(double mag,int64_t locktime);
+double LederstrumpfMagnitude2(double mag,int64_t locktime);
 
 
 std::string RetrieveCPID5(std::string email,std::string bpk,uint256 blockhash);
@@ -56,6 +60,7 @@ extern double GetPoBDifficulty();
 bool IsCPIDValid(std::string cpid, std::string ENCboincpubkey);
 std::string RetrieveMd5(std::string s1);
 std::string getfilecontents(std::string filename);
+
 MiningCPID DeserializeBoincBlock(std::string block);
 void StopGridcoin3();
 std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string urlPage, bool bUseDNS);
@@ -407,6 +412,8 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("NetworkRAC", bb.NetworkRAC));
 	result.push_back(Pair("Magnitude", bb.Magnitude));
 	result.push_back(Pair("BoincHash",block.vtx[0].hashBoinc));
+	result.push_back(Pair("NewbieLevel",NewbieLevelToString(bb.NewbieLevel)));
+	result.push_back(Pair("GRCAddress",bb.GRCAddress));
 	std::string skein2 = aes_complex_hash(blockhash);
 	//uint256 boincpowhash = block.hashMerkleRoot + bb.nonce;
 	//int iav  = TestAESHash(bb.rac, (unsigned int)bb.diffbytes, boincpowhash, bb.aesskein);
@@ -1089,13 +1096,14 @@ Array MagnitudeReport(bool bMine)
 {
 	       Array results;
 		   Object c;
-		   c.push_back(Pair("RSA Report","Research Savings Account Report"));
+		   std::string Narr = "Research Savings Account Report - Generated " + RoundToString(GetAdjustedTime(),0);
+		   c.push_back(Pair("RSA Report",Narr));
 		   results.push_back(c);
 		   StructCPID globalmag = mvMagnitudes["global"];
-		   double payment_timespan = (globalmag.HighLockTime-globalmag.LowLockTime)/86400;  //Lock time window in days
-		   			Object entry;
-					entry.push_back(Pair("Payment Window",payment_timespan));
-								results.push_back(entry);
+		   double payment_timespan = 14; //(globalmag.HighLockTime-globalmag.LowLockTime)/86400;  //Lock time window in days
+		   Object entry;
+		   entry.push_back(Pair("Payment Window",payment_timespan));
+		   results.push_back(entry);
 
 		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
 		   {
@@ -1108,16 +1116,15 @@ Array MagnitudeReport(bool bMine)
 									Object entry;
 									entry.push_back(Pair("CPID",structMag.cpid));
 									entry.push_back(Pair("Magnitude",structMag.ConsensusMagnitude));
+									entry.push_back(Pair("Payment Magnitude",structMag.PaymentMagnitude));
+									entry.push_back(Pair("Payment Timespan (Days)",structMag.PaymentTimespan));
 									entry.push_back(Pair("Magnitude Accuracy",structMag.Accuracy));
-									
 									entry.push_back(Pair("Long Term Owed (14 day projection)",structMag.totalowed));
 									entry.push_back(Pair("Long Term Daily Owed (1 day projection)",structMag.totalowed/14));
 									entry.push_back(Pair("Payments",structMag.payments));
-
+									entry.push_back(Pair("Last Payment Time",structMag.LastPaymentTime));
 									entry.push_back(Pair("Current Daily Projection",structMag.owed));
-
 									entry.push_back(Pair("Next Expected Payment",structMag.owed/2));
-
 									entry.push_back(Pair("Avg Daily Payments",structMag.payments/14));
 									results.push_back(entry);
 						}
@@ -1127,6 +1134,76 @@ Array MagnitudeReport(bool bMine)
 		
 			return results;
 }
+
+
+
+void CSVToFile(std::string filename, std::string data)
+{
+	boost::filesystem::path path = GetDataDir() / "reports" / filename;
+    boost::filesystem::create_directories(path.parent_path());
+	ofstream myCSV;
+	myCSV.open (path.string().c_str());
+	myCSV << data;
+    myCSV.close();
+}
+
+
+
+
+Array MagnitudeReportCSV()
+{
+	       Array results;
+		   Object c;
+		   StructCPID globalmag = mvMagnitudes["global"];
+		   double payment_timespan = 14; //(globalmag.HighLockTime-globalmag.LowLockTime)/86400;  //Lock time window in days
+		   std::string Narr = "Research Savings Account Report - Generated " + RoundToString(GetAdjustedTime(),0) + " - Timespan: " + RoundToString(payment_timespan,0);
+		   c.push_back(Pair("RSA Report",Narr));
+		   results.push_back(c);
+		   double totalpaid = 0;
+		   double lto  = 0;
+		   double rows = 0;
+		   double outstanding = 0;
+		   double totaloutstanding = 0;
+		   std::string header = "CPID,Magnitude,PaymentMagnitude,Accuracy,LongTermOwed14day,LongTermOwedDaily,Payments,LastPaymentTime,CurrentDailyOwed,NextExpectedPayment,AvgDailyPayments,Outstanding\r\n";
+		   std::string row = "";
+		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
+		   {
+				// For each CPID on the network, report:
+				StructCPID structMag = mvMagnitudes[(*ii).first];
+				if (structMag.initialized && structMag.cpid.length() > 2) 
+				{ 
+					if (structMag.cpid != "INVESTOR")
+					{
+						outstanding = structMag.totalowed - structMag.payments;
+						if (outstanding < 0) outstanding = 0;
+  						row = structMag.cpid + "," + RoundToString(structMag.ConsensusMagnitude,2) + "," 
+							+ RoundToString(structMag.PaymentMagnitude,0) + "," + RoundToString(structMag.Accuracy,0) + "," + RoundToString(structMag.totalowed,2) 
+							+ "," + RoundToString(structMag.totalowed/14,2)
+							+ "," + RoundToString(structMag.payments,2) + "," + RoundToString(structMag.LastPaymentTime,0) + "," + RoundToString(structMag.owed,2) 
+							+ "," + RoundToString(structMag.owed/2,2)
+							+ "," + RoundToString(structMag.payments/14,2) + "," + RoundToString(outstanding,2) + "\n";
+						header += row;
+						rows++;
+						totalpaid += structMag.payments;
+						lto += structMag.totalowed;
+						totaloutstanding += outstanding;
+					}
+
+				}
+
+		   }
+		   std::string footer = RoundToString(rows,0) + ", , , ," + RoundToString(lto,2) + ", ," + RoundToString(totalpaid,2) + ", , , , ," + RoundToString(totaloutstanding,2) + "\n";
+		   header += footer;
+		   Object entry;
+		   entry.push_back(Pair("CSV Complete","\\reports\\magnitude.csv"));
+		   results.push_back(entry);
+     	   CSVToFile("magnitude.csv",header);
+		   return results;
+}
+
+
+
+
 
 std::string YesNo(bool bin)
 {
@@ -1164,6 +1241,18 @@ Value listitem(const Array& params, bool fHelp)
 			double boincmagnitude = CalculatedMagnitude( GetAdjustedTime());
 			entry.push_back(Pair("Magnitude",boincmagnitude));
 			results.push_back(entry);
+	}
+	if (sitem == "nc")
+	{
+		double out_magnitude = 0;
+		double out_owed = 0;
+		int NC = NewbieCompliesWithLocalStakeWeightRule(out_magnitude,out_owed);
+		Object entry;
+		entry.push_back(Pair("NCWithLocalStakeWeight",NC));
+		entry.push_back(Pair("StakeWeightMagnitude",out_magnitude));
+		entry.push_back(Pair("Owed",out_owed));
+		results.push_back(entry);
+
 	}
 	if (sitem == "explainmagnitude")
 	{
@@ -1274,6 +1363,12 @@ Value listitem(const Array& params, bool fHelp)
 
 	}
 
+	if (sitem == "magnitudecsv")
+	{
+		results = MagnitudeReportCSV();
+		return results;
+	}
+
 	if (sitem == "mymagnitude")
 	{
 			results = MagnitudeReport(true);
@@ -1311,13 +1406,13 @@ Value listitem(const Array& params, bool fHelp)
 	if (sitem == "leder")
 	{
 		
-		double subsidy = LederstrumpfMagnitude(450, GetAdjustedTime());
+		double subsidy = LederstrumpfMagnitude2(450, GetAdjustedTime());
 		Object entry;
 		entry.push_back(Pair("Mag Out For 450",subsidy));
 		if (args.length() > 1)
 		{
 			double myrac=cdbl(args,0);
-			subsidy = LederstrumpfMagnitude(myrac, GetAdjustedTime());
+			subsidy = LederstrumpfMagnitude2(myrac, GetAdjustedTime());
 			entry.push_back(Pair("Mag Out",subsidy));
 		}
 		results.push_back(entry);
@@ -1419,8 +1514,6 @@ Value listitem(const Array& params, bool fHelp)
 		}
 		printf ("generating cpid report %s",sitem.c_str());
 
-		//if (structcpid.cpid == GlobalCPUMiningCPID.cpid || structcpid.cpid=="INVESTOR" || structcpid.cpid=="investor")
-				
 		for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii) 
 		{
 
@@ -1429,24 +1522,20 @@ Value listitem(const Array& params, bool fHelp)
 	        if (structcpid.initialized) 
 			{ 
 			
-				if (true)
+				if ((GlobalCPUMiningCPID.cpid.length() > 3 && structcpid.cpid == GlobalCPUMiningCPID.cpid) || structcpid.cpid=="INVESTOR" || GlobalCPUMiningCPID.cpid=="INVESTOR" || GlobalCPUMiningCPID.cpid.length()==0)
 				{
 					Object entry;
 	
 					entry.push_back(Pair("Project",structcpid.projectname));
 					entry.push_back(Pair("CPID",structcpid.cpid));
 					//entry.push_back(Pair("CPIDhash",structcpid.cpidhash));
-					//entry.push_back(Pair("Email",structcpid.emailhash));
-					//entry.push_back(Pair("UTC",structcpid.utc));
 					entry.push_back(Pair("RAC",structcpid.rac));
 					entry.push_back(Pair("Team",structcpid.team));
 					//entry.push_back(Pair("RecTime",structcpid.rectime));
 					//entry.push_back(Pair("Age",structcpid.age));
-					//entry.push_back(Pair("Verified UTC",structcpid.verifiedutc));
 					entry.push_back(Pair("Verified RAC",structcpid.verifiedrac));
 					entry.push_back(Pair("Verified Team",structcpid.verifiedteam));
 					//entry.push_back(Pair("Verified RecTime",structcpid.verifiedrectime));
-					//entry.push_back(Pair("Verified RAC Age",structcpid.verifiedage));
 					entry.push_back(Pair("Is my CPID Valid?",structcpid.Iscpidvalid));
 					entry.push_back(Pair("CPID Link",structcpid.link));
 					entry.push_back(Pair("Errors",structcpid.errors));
@@ -1455,7 +1544,6 @@ Value listitem(const Array& params, bool fHelp)
 
 			}
 		}
-
 
     }
 
