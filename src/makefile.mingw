@@ -37,7 +37,7 @@ UNIX_LIBPATHS?= \
   -I"a:\deps-master\db" \
   -I"a:\deps-master\include\boost" \
   -I"a:\deps-master\boost" \
-  -I"a:\deps-master\boost_1_55_0"
+  -I"a:\deps-master\boost_1_55_0" 
  
  LIBPATHS?= \
   -L"$(CURDIR)/leveldb" \

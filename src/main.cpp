@@ -363,7 +363,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 124895;
+ int nGrandfather = 130540;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -1974,8 +1974,7 @@ int64_t GetMaximumBoincSubsidy(int64_t nTime)
 	if (nTime >= 1438310876 && nTime <= 1445309276) MaxSubsidy = 	100; // between 08-01-2015 and 10-20-2015
 	if (nTime >= 1445309276 && nTime <= 1447977700) MaxSubsidy = 	 75; // between 10-20-2015 and 11-20-2015
 	if (nTime > 1447977700)                         MaxSubsidy =   	 50; // from  11-20-2015 forever
-    return MaxSubsidy;
-
+    return MaxSubsidy+.5;  //The .5 allows for fractional amounts after the 4th decimal place (used to store the POR indicator)
 }
 
 int64_t GetCoinYearReward(int64_t nTime)
@@ -2086,9 +2085,22 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 	int64_t maxStakeReward2 = GetProofOfStakeMaxReward(nCoinAge, nFees, GetAdjustedTime());
 	int64_t maxStakeReward = Floor(maxStakeReward1,maxStakeReward2);
 	if ((nSubsidy+nFees) > maxStakeReward) nSubsidy = maxStakeReward-nFees;
+	int64_t nTotalSubsidy = nSubsidy + nFees;
+	
+	if (nBoinc > 1)
+	{
+		std::string sTotalSubsidy = RoundToString(CoinToDouble(nTotalSubsidy)+.00000123,8);
+		if (sTotalSubsidy.length() > 7)
+		{
+			sTotalSubsidy = sTotalSubsidy.substr(0,sTotalSubsidy.length()-4) + "0124";
+			nTotalSubsidy = cdbl(sTotalSubsidy,8)*COIN;
+			//printf("Total calculated subsidy %s Or %f or %f \r\n",sTotalSubsidy.c_str(),(double)nTotalSubsidy,(double)CoinToDouble(nTotalSubsidy));
+		}
+	}
+
 	OUT_POR = CoinToDouble(nBoinc);
 	OUT_INTEREST = CoinToDouble(nInterest);
-    return nSubsidy + nFees;
+    return nTotalSubsidy;
 }
 
 
@@ -4796,11 +4808,11 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
 	if (payment_timespan > 10) payment_timespan = 14;
 	mag.PaymentTimespan = payment_timespan;
 	double research_magnitude = LederstrumpfMagnitude2(coalesce(mag.ConsensusMagnitude,block_magnitude),locktime);
-	double owed = payment_timespan * Cap(research_magnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime));
+	double owed = payment_timespan * Cap(research_magnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime)*5);
 	double paid = mag.payments;
-	double outstanding = Cap(owed-paid, GetMaximumBoincSubsidy(locktime));
+	double outstanding = Cap(owed-paid, GetMaximumBoincSubsidy(locktime)*5);
 	//Calculate long term totals:
-	total_owed = payment_timespan * Cap(research_magnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime));
+	total_owed = payment_timespan * Cap(research_magnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime)*5);
 	//printf("Getting payment_timespan %f for outstanding amount for %s; owed %f paid %f Research Magnitude %f \r\n",		payment_timespan,cpid.c_str(),owed,paid,mag.ConsensusMagnitude);
 	if (outstanding < 0) outstanding=0;
 	return outstanding;
@@ -6600,19 +6612,20 @@ double LederstrumpfMagnitude_Retired(double Magnitude, int64_t locktime)
 
 double LederstrumpfMagnitude2(double Magnitude, int64_t locktime)
 {
-	double Mag1 = GetMaximumBoincSubsidy(locktime);
+	//2-1-2015 - Halford - Set MagCap to 2000
+	double MagCap = 2000;
 	double out_mag = Magnitude;
-	if (Magnitude >= Mag1*.90 && Magnitude <= Mag1*1.0) out_mag = Mag1*.90;
-	if (Magnitude >= Mag1*1.0 && Magnitude <= Mag1*1.1) out_mag = Mag1*.91;
-	if (Magnitude >= Mag1*1.1 && Magnitude <= Mag1*1.2) out_mag = Mag1*.92;
-	if (Magnitude >= Mag1*1.2 && Magnitude <= Mag1*1.3) out_mag = Mag1*.93;
-	if (Magnitude >= Mag1*1.3 && Magnitude <= Mag1*1.4) out_mag = Mag1*.94;
-	if (Magnitude >= Mag1*1.4 && Magnitude <= Mag1*1.5) out_mag = Mag1*.95;
-	if (Magnitude >= Mag1*1.5 && Magnitude <= Mag1*1.6) out_mag = Mag1*.96;
-	if (Magnitude >= Mag1*1.6 && Magnitude <= Mag1*1.7) out_mag = Mag1*.97;
-	if (Magnitude >= Mag1*1.7 && Magnitude <= Mag1*1.8) out_mag = Mag1*.98;
-	if (Magnitude >= Mag1*1.8 && Magnitude <= Mag1*1.9) out_mag = Mag1*.99;
-	if (Magnitude > Mag1*2.0) out_mag = Mag1*1.0;
+	if (Magnitude >= MagCap*.90 && Magnitude <= MagCap*1.0) out_mag = MagCap*.90;
+	if (Magnitude >= MagCap*1.0 && Magnitude <= MagCap*1.1) out_mag = MagCap*.91;
+	if (Magnitude >= MagCap*1.1 && Magnitude <= MagCap*1.2) out_mag = MagCap*.92;
+	if (Magnitude >= MagCap*1.2 && Magnitude <= MagCap*1.3) out_mag = MagCap*.93;
+	if (Magnitude >= MagCap*1.3 && Magnitude <= MagCap*1.4) out_mag = MagCap*.94;
+	if (Magnitude >= MagCap*1.4 && Magnitude <= MagCap*1.5) out_mag = MagCap*.95;
+	if (Magnitude >= MagCap*1.5 && Magnitude <= MagCap*1.6) out_mag = MagCap*.96;
+	if (Magnitude >= MagCap*1.6 && Magnitude <= MagCap*1.7) out_mag = MagCap*.97;
+	if (Magnitude >= MagCap*1.7 && Magnitude <= MagCap*1.8) out_mag = MagCap*.98;
+	if (Magnitude >= MagCap*1.8 && Magnitude <= MagCap*1.9) out_mag = MagCap*.99;
+	if (Magnitude >  MagCap*2.0)						    out_mag = MagCap*1.0;
 	return out_mag;
 
 }
@@ -7604,7 +7617,7 @@ void ThreadTally()
 void ThreadCPIDs()
 {
 	//SetThreadPriority(THREAD_PRIORITY_LOWEST);
-    RenameThread("gridcoin-cpids");
+    RenameThread("grc-cpids");
     bCPIDsLoaded = false;
 	
 	HarvestCPIDs(true);

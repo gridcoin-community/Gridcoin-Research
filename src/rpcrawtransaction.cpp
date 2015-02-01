@@ -13,6 +13,8 @@
 #include "net.h"
 #include "wallet.h"
 
+//#include "upgrader.h"
+
 using namespace std;
 using namespace boost;
 using namespace boost::assign;
@@ -25,6 +27,23 @@ extern std::string RoundToString(double d, int place);
 extern std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, int& out_rac);
 MiningCPID DeserializeBoincBlock(std::string block);
 void ExecuteCode();
+
+
+//extern void Imker(void *kippel);
+//extern Upgrader upgrader;
+
+
+
+
+/*
+#ifdef QT_GUI
+#include "qt/upgradedialog.h"
+extern Checker checker;
+#endif
+*/
+
+
+
 
 
 std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, double& out_rac)
@@ -65,25 +84,131 @@ std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype,
 }
 
 
+/*
+Value downloadblocks(const Array& params, bool fHelp)
+{
+        if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "downloadblocks \n"
+            "Downloads blockchain to bootstrap client.\n"
+            "{}");
+
+        if (!upgrader.setTarget(BLOCKS))
+        {
+            throw runtime_error("Upgrader already busy\n");
+            return "";
+        }
+        else
+        {
+            boost::thread(Imker, &upgrader);
+            #ifdef QT_GUI
+            QMetaObject::invokeMethod(&checker, "check", Qt::QueuedConnection);
+            #endif
+            return "Initiated download of blockchain";
+        }
+}
+
+
+Value downloadcancel(const Array& params, bool fHelp)
+{
+        if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "downloadcancel \n"
+            "Cancels download of blockchain or client.\n"
+            "{}");
+
+        if (!upgrader.downloading())
+        {
+            return (upgrader.downloadSuccess())? "Download finished" : "No download initiated";
+        }
+        else
+        {
+            Object result;
+            upgrader.cancelDownload(true);
+            result.push_back(Pair("Item canceled", (upgrader.getTarget() == BLOCKS)? "Blockchain" : "Client"));
+            return result;
+        }
+}
+
+Value restart(const Array& params, bool fHelp)
+{
+        if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "restart \n"
+            "Shuts down client, performs blockchain bootstrapping or upgrade.\n"
+            "Subsequently relaunches daemon or qt client, depending on caller.\n"
+            "{}");
+
+        if (upgrader.downloading())
+        {
+            return "Still busy with download.";
+        }
+        else if (upgrader.downloadSuccess())
+        {
+            upgrader.launcher(UPGRADER, upgrader.getTarget());       
+            return "Shutting down...";
+        }
+}
+
+
+Value downloadstate(const Array& params, bool fHelp)
+{
+        if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "downloadstate \n"
+            "Returns progress of download.\n"
+            "{}");
+
+        if (!upgrader.downloading())
+        {
+            return (upgrader.downloadSuccess())? "Download finished" : "No download initiated";
+        }
+        else
+        {
+            Object state;
+            state.push_back(Pair("% done", upgrader.getFilePerc(upgrader.getFileDone())));
+            state.push_back(Pair("Downloaded in KB",(double)( upgrader.getFileDone() / 1024)));
+            state.push_back(Pair("Total size in KB", (double)(upgrader.getFileSize() / 1024)));
+            return state;
+        }
+}
 
 
 Value upgrade(const Array& params, bool fHelp)
 {
-		if (fHelp || params.size() > 3)
+		if (fHelp || params.size() != 0)
         throw runtime_error(
             "upgrade \n"
-            "Upgrades wallet to the latest version.\n"
+            "Upgrades client to the latest version.\n"
             "{}");
-		Object entry;
-		entry.push_back(Pair("Upgrading Wallet Version",1.0));
-		int result = 0;
+		
 
-#if defined(WIN32) && defined(QT_GUI)
-		result = UpgradeClient();
-#endif
-     	entry.push_back(Pair("Result",result));
-		return result;
+		int target;
+		 #ifdef QT_GUI
+		    target = QT;
+         #else
+         target = DAEMON;
+         #endif
+ 
+         if (!upgrader.setTarget(target))
+         {
+             throw runtime_error("Upgrader already busy\n");
+             return "";
+         }
+         else
+         {
+             boost::thread(Imker, &upgrader);
+             #ifdef QT_GUI
+              QMetaObject::invokeMethod(&checker, "check", Qt::QueuedConnection);
+             #endif
+             return "Initiated download of client";
+        }        
+
 }
+
+*/
+
+
 
 void ScriptPubKeyToJSON(const CScript& scriptPubKey, Object& out, bool fIncludeHex)
 {

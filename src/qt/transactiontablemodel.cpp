@@ -21,6 +21,9 @@
 
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 
+std::string RoundToString(double d, int place);
+double CoinToDouble(double surrogate);
+
 
 // Amount column is right-aligned it contains numbers
 static int column_alignments[] = {
@@ -394,19 +397,36 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
     }
 }
 
+
+bool IsPoR(double amt)
+{
+	std::string sAmt = RoundToString(amt,5);
+
+	//printf("txstr %s",sAmt.c_str());
+	if (sAmt.length() > 7)
+	{
+		if (sAmt.substr(sAmt.length()-(4+1),4)=="0124")
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx) const
 {
-	double reward = (wtx->credit + wtx->debit)/COIN;
+	double reward = CoinToDouble(wtx->credit + wtx->debit);
 	double max = GetMaximumBoincSubsidy(GetAdjustedTime());
-
+	bool is_por = IsPoR(reward);
+	//printf("txlist amt %f;      ",reward);
     switch(wtx->type)
     {
     case TransactionRecord::Generated:
-      		if (reward >= 25 && reward < 200)
-	   		{
-	   			return QIcon(":/icons/tx_cpumined");
-	   		}
-			else if (reward >= max*.90)
+		    if (is_por)
+			{
+				return QIcon(":/icons/tx_cpumined");
+			}
+         	else if (reward >= max*.90)
 			{
 				return QIcon(":/icons/gold_cpumined");
 	   		}

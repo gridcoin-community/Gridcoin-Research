@@ -1060,6 +1060,56 @@ const boost::filesystem::path &GetDataDir(bool fNetSpecific)
     return path;
 }
 
+
+
+boost::filesystem::path GetProgramDir()
+{
+    boost::filesystem::path path;
+
+    if (mapArgs.count("-programdir")) 
+    {
+        // printf("Acquiring program directory from conf file\n");
+        path = boost::filesystem::system_complete(mapArgs["-programdir"]);
+        
+        if (!boost::filesystem::is_directory(path)) 
+        {
+            path = "";
+            printf("Invalid path stated in gridcoinresearch.conf\n");
+        }
+        else
+        {
+            return path;
+        }
+
+    }
+
+    #ifdef WIN32
+    const char* const list[] = {"gridcoind.exe", "gridcoin-qt.exe", "gridcoinupgrader.exe"};    
+    #elif defined MAC_OSX
+    const char* const list[] = {"gridcoind.exe", "gridcoin-qt.exe", "gridcoinupgrader.exe"}; 
+    #else
+    const char* const list[] = {"gridcoinresearchd", "gridcoin-qt", "gridcoinupgrader"}; 
+    #endif
+
+    for (int i = 0; i < 3; ++i)
+    {
+        printf("Checking for %s\n", (boost::filesystem::current_path() / list[i]).c_str());
+        if (boost::filesystem::exists((boost::filesystem::current_path() / list[i]).c_str()))
+        {
+            // printf("Identified %s as client directory\n", (boost::filesystem::current_path()).c_str());
+            return boost::filesystem::current_path();
+        }
+    }
+
+        printf("Please specify program directory in config file using the 'programdir' argument\n");
+        path = "";
+        return path;
+
+}
+
+
+
+
 boost::filesystem::path GetConfigFile()
 {
     boost::filesystem::path pathConfigFile(GetArg("-conf", "gridcoinresearch.conf"));
@@ -1203,6 +1253,11 @@ int64_t GetAdjustedTime()
     return GetTime() + GetTimeOffset();
 }
 
+
+#ifndef UPGRADERFLAG
+// avoid including unnecessary files for standalone upgrader
+
+
 void AddTimeData(const CNetAddr& ip, int64_t nTime)
 {
     int64_t nOffsetSample = nTime - GetTime();
@@ -1256,6 +1311,10 @@ void AddTimeData(const CNetAddr& ip, int64_t nTime)
     }
 }
 
+
+#endif
+
+
 uint32_t insecure_rand_Rz = 11;
 uint32_t insecure_rand_Rw = 11;
 void seed_insecure_rand(bool fDeterministic)
@@ -1285,10 +1344,17 @@ string FormatVersion(int nVersion)
         return strprintf("%d.%d.%d.%d", nVersion/1000000, (nVersion/10000)%100, (nVersion/100)%100, nVersion%100);
 }
 
+#ifndef UPGRADERFLAG
+// avoid including unnecessary files for standalone upgrader
+
+
 string FormatFullVersion()
 {
     return CLIENT_BUILD;
 }
+
+#endif
+
 
 // Format the subversion field according to BIP 14 spec (https://en.bitcoin.it/wiki/BIP_0014)
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments)

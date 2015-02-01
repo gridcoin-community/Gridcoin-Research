@@ -722,29 +722,30 @@ std::string BackupGridcoinWallet()
 {
 
 	printf("Staring Wallet Backup\r\n");
-
 	std::string filename = "grc_" + DateTimeStrFormat("%m-%d-%Y",  GetAdjustedTime()) + ".dat";
 	std::string filename_backup = "backup.dat";
-	
-	std::string standard_filename = "std_" + DateTimeStrFormat("%m-%d-%Y",  GetAdjustedTime()) + ".dat";
+	std::string standard_filename = "wallet_" + DateTimeStrFormat("%m-%d-%Y",  GetAdjustedTime()) + ".dat";
 	std::string source_filename   = "wallet.dat";
-
 	boost::filesystem::path path = GetDataDir() / "walletbackups" / filename;
 	boost::filesystem::path target_path_standard = GetDataDir() / "walletbackups" / standard_filename;
 	boost::filesystem::path source_path_standard = GetDataDir() / source_filename;
 	boost::filesystem::path dest_path_std = GetDataDir() / "walletbackups" / filename_backup;
     boost::filesystem::create_directories(path.parent_path());
 	std::string errors = "";
-	//Copy the standard wallet first:
-	//	fileopen_and_copy(source_path_standard.string().c_str(), target_path_standard.string().c_str());
+	//Copy the standard wallet first:  (1-30-2015)
 	BackupWallet(*pwalletMain, target_path_standard.string().c_str());
-	
-	//Dump all private keys into the Level 2 backup
-	
-	ofstream myBackup;
 
+	//Per Forum, do not dump the keys and abort:
+
+	if (true)
+	{
+			printf("User does not want private keys backed up. Exiting.");
+			return "";
+	}
+					
+	//Dump all private keys into the Level 2 backup
+	ofstream myBackup;
 	myBackup.open (path.string().c_str());
-	
     string strAccount;
 	BOOST_FOREACH(const PAIRTYPE(CTxDestination, string)& item, pwalletMain->mapAddressBook)
     {
@@ -785,13 +786,9 @@ std::string BackupGridcoinWallet()
 	
 	std::string reserve_keys = pwalletMain->GetAllGridcoinKeys();
 	myBackup << reserve_keys;
-
-
 	myBackup.close();
 	fileopen_and_copy(path.string().c_str(),dest_path_std.string().c_str());
-
 	return errors;
-
 
 }
 

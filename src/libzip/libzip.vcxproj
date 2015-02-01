@@ -1,0 +1,158 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{B345B7F4-9076-4E5A-A811-1877D1CE1EDE}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>libzip</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+    <IncludePath>$(SolutionDir)lib;$(SolutionDir)lib;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <IncludePath>$(SolutionDir)3pty\zlib;$(SolutionDir)3pty\libzip\lib;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level2</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;LIBZIP_EXPORTS;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>$(OutputPath)zlib.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level2</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;LIBZIP_EXPORTS;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>$(OutputPath)zlib.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="lib\mkstemp.c" />
+    <ClCompile Include="lib\zip_add.c" />
+    <ClCompile Include="lib\zip_add_dir.c" />
+    <ClCompile Include="lib\zip_close.c" />
+    <ClCompile Include="lib\zip_delete.c" />
+    <ClCompile Include="lib\zip_dirent.c" />
+    <ClCompile Include="lib\zip_entry_free.c" />
+    <ClCompile Include="lib\zip_entry_new.c" />
+    <ClCompile Include="lib\zip_error.c" />
+    <ClCompile Include="lib\zip_error_clear.c" />
+    <ClCompile Include="lib\zip_error_get.c" />
+    <ClCompile Include="lib\zip_error_get_sys_type.c" />
+    <ClCompile Include="lib\zip_error_strerror.c" />
+    <ClCompile Include="lib\zip_error_to_str.c" />
+    <ClCompile Include="lib\zip_err_str.c" />
+    <ClCompile Include="lib\zip_fclose.c" />
+    <ClCompile Include="lib\zip_fdopen.c" />
+    <ClCompile Include="lib\zip_filerange_crc.c" />
+    <ClCompile Include="lib\zip_file_error_clear.c" />
+    <ClCompile Include="lib\zip_file_error_get.c" />
+    <ClCompile Include="lib\zip_file_get_offset.c" />
+    <ClCompile Include="lib\zip_file_strerror.c" />
+    <ClCompile Include="lib\zip_fopen.c" />
+    <ClCompile Include="lib\zip_fopen_encrypted.c" />
+    <ClCompile Include="lib\zip_fopen_index.c" />
+    <ClCompile Include="lib\zip_fopen_index_encrypted.c" />
+    <ClCompile Include="lib\zip_fread.c" />
+    <ClCompile Include="lib\zip_free.c" />
+    <ClCompile Include="lib\zip_get_archive_comment.c" />
+    <ClCompile Include="lib\zip_get_archive_flag.c" />
+    <ClCompile Include="lib\zip_get_compression_implementation.c" />
+    <ClCompile Include="lib\zip_get_encryption_implementation.c" />
+    <ClCompile Include="lib\zip_get_file_comment.c" />
+    <ClCompile Include="lib\zip_get_file_extra.c" />
+    <ClCompile Include="lib\zip_get_name.c" />
+    <ClCompile Include="lib\zip_get_num_entries.c" />
+    <ClCompile Include="lib\zip_get_num_files.c" />
+    <ClCompile Include="lib\zip_memdup.c" />
+    <ClCompile Include="lib\zip_name_locate.c" />
+    <ClCompile Include="lib\zip_new.c" />
+    <ClCompile Include="lib\zip_open.c" />
+    <ClCompile Include="lib\zip_rename.c" />
+    <ClCompile Include="lib\zip_replace.c" />
+    <ClCompile Include="lib\zip_set_archive_comment.c" />
+    <ClCompile Include="lib\zip_set_archive_flag.c" />
+    <ClCompile Include="lib\zip_set_default_password.c" />
+    <ClCompile Include="lib\zip_set_file_comment.c" />
+    <ClCompile Include="lib\zip_set_file_extra.c" />
+    <ClCompile Include="lib\zip_set_name.c" />
+    <ClCompile Include="lib\zip_source_buffer.c" />
+    <ClCompile Include="lib\zip_source_close.c" />
+    <ClCompile Include="lib\zip_source_crc.c" />
+    <ClCompile Include="lib\zip_source_deflate.c" />
+    <ClCompile Include="lib\zip_source_error.c" />
+    <ClCompile Include="lib\zip_source_file.c" />
+    <ClCompile Include="lib\zip_source_filep.c" />
+    <ClCompile Include="lib\zip_source_free.c" />
+    <ClCompile Include="lib\zip_source_function.c" />
+    <ClCompile Include="lib\zip_source_layered.c" />
+    <ClCompile Include="lib\zip_source_open.c" />
+    <ClCompile Include="lib\zip_source_pkware.c" />
+    <ClCompile Include="lib\zip_source_pop.c" />
+    <ClCompile Include="lib\zip_source_read.c" />
+    <ClCompile Include="lib\zip_source_stat.c" />
+    <ClCompile Include="lib\zip_source_zip.c" />
+    <ClCompile Include="lib\zip_stat.c" />
+    <ClCompile Include="lib\zip_stat_index.c" />
+    <ClCompile Include="lib\zip_stat_init.c" />
+    <ClCompile Include="lib\zip_strerror.c" />
+    <ClCompile Include="lib\zip_unchange.c" />
+    <ClCompile Include="lib\zip_unchange_all.c" />
+    <ClCompile Include="lib\zip_unchange_archive.c" />
+    <ClCompile Include="lib\zip_unchange_data.c" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

@@ -592,52 +592,6 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 
 
 
-/*
-bool StakeAcidTest(std::string grc_address, double por_diff, std::string last_block_hash, int height, unsigned int nonce, 
-	double payment_age, std::string cpid)
-{
-	
-	if (fTestNet) return true;
-	if (height < nGrandfather) return true;
-	return true; 
-
-	std::string aggregated_hash = grc_address + "," + last_block_hash + "," + RoundToString(nonce,0);
-	std::string hash_md5 = RetrieveMd5(aggregated_hash);
-	uint256 hash  = uint256("0x" + hash_md5);
-	uint256 diff1 = uint256("0x0000ffffffffffffffffffffffffffff");
-	uint256 diff2 = uint256("0x0000efffffffffffffffffffffffffff");
-	uint256 diff3 = uint256("0x0000dfffffffffffffffffffffffffff");
-	uint256 diff4 = uint256("0x0000cfffffffffffffffffffffffffff");
-	uint256 diff5 = uint256("0x0000bfffffffffffffffffffffffffff");
-	uint256 diff6 = uint256("0x0000afffffffffffffffffffffffffff");
-	uint256 diff7 = uint256("0x00009fffffffffffffffffffffffffff");
-	double nonce_height = 0;
-
-	if (payment_age > 60*60*24*14)                              nonce_height = 15000;
-	if (payment_age < 60*60*24*14 && payment_age  > 60*60*24*7) nonce_height = 20000;
-	if (payment_age < 60*60*24*7  && payment_age  > 60*60*24*3) nonce_height = 25000;
-	if (payment_age < 60*60*24*3  && payment_age  > 60*60*24*1) nonce_height = 30000;
-	if (payment_age < 60*60*24*1  && payment_age  > 60*60*12)   nonce_height = 35000;
-	if (payment_age < 60*60*12    && payment_age  > 60*60*6)    nonce_height = 40000;
-	if (payment_age < 60*60*6     && payment_age  > 60*60*2)    nonce_height = 45000;
-	if (payment_age < 60*60*2     && payment_age  > 60*60*1)    nonce_height = 50000;
-	if (payment_age < 60*60*1)                                  nonce_height = 55000;
-
-	if (cpid == "INVESTOR") nonce_height = nonce_height/4;
-	if (nonce < nonce_height) return false;
-
-	if (por_diff >= 1   && por_diff < 5)    return (hash < diff1);
-	if (por_diff >= 5   && por_diff < 10)   return (hash < diff2);
-	if (por_diff >= 10  && por_diff < 50)   return (hash < diff3);
-	if (por_diff >= 50  && por_diff < 100)  return (hash < diff4);
-	if (por_diff >= 100 && por_diff < 500)  return (hash < diff5);
-	if (por_diff >= 500 && por_diff < 1000) return (hash < diff6);
-	if (por_diff >= 1000)                   return (hash < diff7);
-	return true;
-
-}
-*/
-
 
 
 
@@ -705,13 +659,12 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
     // Weighted target 1-25-2015 Halford
     int64_t nValueIn = 0;
 	nValueIn = txPrev.vout[prevout.n].nValue + (RSA_WEIGHT*COIN);
-	CBigNum bnWeight = CBigNum(nValueIn/50000);
+	CBigNum bnWeight = CBigNum(nValueIn/100000);
     bnTarget *= bnWeight;
     targetProofOfStake = bnTarget.getuint256();
 	
     // Calculate hash
     CDataStream ss(SER_GETHASH, 0);
-	//ss << nStakeModifier << nTimeBlockFrom << txPrev.nTime << prevout.hash << prevout.n << nTimeTx << RSA_WEIGHT;
 	ss << RSA_WEIGHT << nTimeBlockFrom << txPrev.nTime << prevout.hash << prevout.n << nTimeTx <<  por_nonce;
     hashProofOfStake = Hash(ss.begin(), ss.end());
     
