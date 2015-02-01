@@ -810,7 +810,7 @@ void StakeMiner(CWallet *pwallet)
     SetThreadPriority(THREAD_PRIORITY_LOWEST);
 
     // Make this thread recognisable as the mining thread
-    RenameThread("gridcoin-stake-miner");
+    RenameThread("grc-stake-miner");
 
     bool fTryToSync = true;
 

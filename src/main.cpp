@@ -7604,7 +7604,7 @@ void ThreadTally()
 void ThreadCPIDs()
 {
 	//SetThreadPriority(THREAD_PRIORITY_LOWEST);
-    RenameThread("gridcoin-cpids");
+    RenameThread("grc-cpids");
     bCPIDsLoaded = false;
 	
 	HarvestCPIDs(true);

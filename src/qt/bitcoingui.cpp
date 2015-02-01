@@ -25,6 +25,7 @@
 #include "signverifymessagedialog.h"
 #include "optionsdialog.h"
 #include "aboutdialog.h"
+#include "upgradedialog.h"
 #include "clientmodel.h"
 #include "walletmodel.h"
 #include "editaddressdialog.h"
@@ -41,6 +42,7 @@
 #include "rpcconsole.h"
 #include "wallet.h"
 #include "init.h"
+#include "upgrader.h"
 
 #ifdef Q_OS_MAC
 #include "macdockiconhandler.h"
@@ -170,6 +172,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     trayIcon(0),
     notificator(0),
     rpcConsole(0),
+    upgrader(0),
     nWeight(0)
 {
     setFixedSize(980, 550);
@@ -304,6 +307,13 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
     rpcConsole = new RPCConsole(this);
     connect(openRPCConsoleAction, SIGNAL(triggered()), rpcConsole, SLOT(show()));
+
+    upgrader = new UpgradeDialog(this);
+    connect(upgradeAction, SIGNAL(triggered()), upgrader, SLOT(show()));
+    connect(upgradeAction, SIGNAL(triggered()), upgrader, SLOT(upgrade()));
+
+    connect(downloadAction, SIGNAL(triggered()), upgrader, SLOT(show()));
+    connect(downloadAction, SIGNAL(triggered()), upgrader, SLOT(blocks()));
 
     // Clicking on "Verify Message" in the address book sends you to the verify message tab
     connect(addressBookPage, SIGNAL(verifyMessage(QString)), this, SLOT(gotoVerifyMessageTab(QString)));
@@ -583,6 +593,7 @@ int UpgradeClient()
 			{
 #ifdef WIN32
 				globalcom->dynamicCall("UpgradeWallet()");
+#else
 #endif
 			}
 			else
@@ -1470,12 +1481,14 @@ void BitcoinGUI::rebuildClicked()
 }
 
 
-
 void BitcoinGUI::upgradeClicked()
 {
 	printf("Upgrading Gridcoin...");
-	UpgradeClient();
+#ifdef WIN32
+	// UpgradeClient();
+#else
 
+#endif
 }
 
 void BitcoinGUI::downloadClicked()
