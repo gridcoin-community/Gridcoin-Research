@@ -59,11 +59,11 @@ LIBS_OLD= \
 
 LIBS= \
  -l leveldb \
- -l boost_system-mgw46-mt-1_55 \
- -l boost_filesystem-mgw46-mt-1_55 \
+ -l boost_system-mgw49-mt-1_55 \
+ -l boost_filesystem-mgw49-mt-1_55 \
  -l boost_program_options-mgw46-mt-1_55 \
- -l boost_thread-mgw46-mt-1_55 \
- -l boost_chrono-mgw46-mt-1_55 \
+ -l boost_thread-mgw49-mt-1_55 \
+ -l boost_chrono-mgw49-mt-1_55 \
  -l db_cxx \
  -l ssl \
  -l crypto
