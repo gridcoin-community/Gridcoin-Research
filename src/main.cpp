@@ -363,7 +363,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 130540;
+ int nGrandfather = 130670;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -5002,7 +5002,7 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 			structMagnitude.payments += bb.ResearchSubsidy;
 			structMagnitude.interestPayments=structMagnitude.interestPayments + interest;
 			
-			if (LockTime > structMagnitude.LastPaymentTime) structMagnitude.LastPaymentTime = LockTime;
+			if (LockTime > structMagnitude.LastPaymentTime && bb.ResearchSubsidy > 0) structMagnitude.LastPaymentTime = LockTime;
 			if (LockTime < structMagnitude.EarliestPaymentTime) structMagnitude.EarliestPaymentTime = LockTime;
 			// Per RTM 12-23-2014 (Halford) Track detailed payments made to each CPID
 			structMagnitude.PaymentTimestamps += RoundToString(LockTime,0)+",";
