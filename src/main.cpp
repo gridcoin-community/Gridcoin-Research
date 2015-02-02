@@ -363,7 +363,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 130670;
+ int nGrandfather = 130890;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2033,7 +2033,12 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 		if (!VerifyingBlock)
 		{
 			//If owed less than 15% of max subsidy, assess at 0:
-			if (owed < (GetMaximumBoincSubsidy(GetAdjustedTime())/15)) owed = 0;
+			if (owed < (GetMaximumBoincSubsidy(GetAdjustedTime())/15)) 
+			{
+				if (fDebug3) printf("Owed < 15pc of max %f \r\n",(double)owed);
+
+				owed = 0;
+			}
 
 			//Coarse payment rule:
 			if (mag.totalowed > (GetMaximumBoincSubsidy(GetAdjustedTime())*2))
@@ -2048,12 +2053,18 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 
 			if (owed > (GetMaximumBoincSubsidy(GetAdjustedTime()))) owed = GetMaximumBoincSubsidy(GetAdjustedTime()); 
 
-			if (!ChainPaymentViolation(cpid,GetAdjustedTime(),owed)) owed = 0;
+			if (!ChainPaymentViolation(cpid,GetAdjustedTime(),owed)) 
+			{
+					printf("Chain Payment Violation! cpid %s \r\n",cpid.c_str());
+					owed = 0;
+
+			}
 
 
 			//Halford - Ensure researcher was not paid in the last 2 hours:
 			if (IsLockTimeWithinMinutes(mag.LastPaymentTime,120))
 			{
+				if (fDebug3) printf("Last Payment Time too recent %f \r\n",(double)mag.LastPaymentTime);
 				owed = 0;
 			}
 
@@ -2094,7 +2105,7 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 		{
 			sTotalSubsidy = sTotalSubsidy.substr(0,sTotalSubsidy.length()-4) + "0124";
 			nTotalSubsidy = cdbl(sTotalSubsidy,8)*COIN;
-			//printf("Total calculated subsidy %s Or %f or %f \r\n",sTotalSubsidy.c_str(),(double)nTotalSubsidy,(double)CoinToDouble(nTotalSubsidy));
+			if (fDebug3) printf("Total calculated subsidy %s Or %f or %f \r\n",sTotalSubsidy.c_str(),(double)nTotalSubsidy,(double)CoinToDouble(nTotalSubsidy));
 		}
 	}
 
@@ -4868,10 +4879,11 @@ double GetChainDailyAvgEarnedByCPID(std::string cpid, int64_t locktime, double& 
 	StructCPID structMag = GetStructCPID();
 	//CPID is verified at the block level
 	structMag = mvMagnitudes[cpid];
+
 	if (structMag.initialized)
 	{
 				double AvgDailyPayments = structMag.payments/14;
-				double DailyOwed = (structMag.PaymentTimespan * Cap(structMag.PaymentMagnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime))/14);
+				double DailyOwed = (structMag.PaymentTimespan * Cap(structMag.PaymentMagnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime)*5)/14);
 				out_payments=structMag.payments;
 				out_daily_avg_payments = AvgDailyPayments;
 				return DailyOwed;
@@ -4896,7 +4908,7 @@ bool ChainPaymentViolation(std::string cpid, int64_t locktime, double Proposed_S
 
 	if (Proposed_Subsidy > BlockMax) 
 	{
-		printf("Chain payment violation - proposed subsidy greater than Block Max %s Proposed Subsidy %f",cpid.c_str(),Proposed_Subsidy);
+		if (fDebug3 || LessVerbose(100)) printf("Chain payment violation - proposed subsidy greater than Block Max %s Proposed Subsidy %f",cpid.c_str(),Proposed_Subsidy);
 		return false;
 	}
 	DailyOwed = GetChainDailyAvgEarnedByCPID(cpid,locktime,Payments,AvgDailyPayments);
