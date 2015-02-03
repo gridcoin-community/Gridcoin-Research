@@ -40,8 +40,6 @@ UpgradeDialog::UpgradeDialog(QWidget *parent) :
     thread->start();
 }
 
-#include "upgradedialog.moc"
-
 void Checker::start()
 {
     
