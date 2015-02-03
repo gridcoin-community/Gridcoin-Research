@@ -363,7 +363,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 130890;
+ int nGrandfather = 131764;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -1968,7 +1968,7 @@ int64_t GetMaximumBoincSubsidy(int64_t nTime)
 	if (nTime >= 1417305600 && nTime <= 1419897600) MaxSubsidy = 	400; // between 11-30-2014 and 12-30-2014
 	if (nTime >= 1419897600 && nTime <= 1422576000) MaxSubsidy = 	400; // between 12-30-2014 and 01-30-2015
 	if (nTime >= 1422576000 && nTime <= 1425254400) MaxSubsidy = 	300; // between 01-30-2015 and 02-28-2015
-	if (nTime >= 1425254400 && nTime <= 1427673600) MaxSubsidy = 	200; // between 02-28-2015 and 03-30-2015
+	if (nTime >= 1425254400 && nTime <= 1427673600) MaxSubsidy = 	250; // between 02-28-2015 and 03-30-2015
 	if (nTime >= 1427673600 && nTime <= 1430352000) MaxSubsidy = 	200; // between 03-30-2015 and 04-30-2015
 	if (nTime >= 1430352000 && nTime <= 1438310876) MaxSubsidy = 	150; // between 05-01-2015 and 07-31-2015
 	if (nTime >= 1438310876 && nTime <= 1445309276) MaxSubsidy = 	100; // between 08-01-2015 and 10-20-2015
@@ -4897,15 +4897,15 @@ double GetChainDailyAvgEarnedByCPID(std::string cpid, int64_t locktime, double& 
 			
 }
 
-bool ChainPaymentViolation(std::string cpid, int64_t locktime, double Proposed_Subsidy)
+bool ChainPaymentViolation(std::string cpid, int64_t locktime_future, double Proposed_Subsidy)
 {
 	double DailyOwed = 0;
 	double Payments = 0;
 	double AvgDailyPayments = 0;
+	int64_t locktime = locktime_future - (60*60*24*14);
 	double BlockMax = GetMaximumBoincSubsidy(locktime);
-
+	//2-2-2015, R Halford: To help smooth out cutover periods, Assess mag multiplier and max boinc subsidies as of T-14:
 	if (cpid=="INVESTOR" || cpid=="investor") return true;
-
 	if (Proposed_Subsidy > BlockMax) 
 	{
 		if (fDebug3 || LessVerbose(100)) printf("Chain payment violation - proposed subsidy greater than Block Max %s Proposed Subsidy %f",cpid.c_str(),Proposed_Subsidy);
@@ -4931,7 +4931,6 @@ void AddWeightedMagnitude(double LockTime,StructCPID &structMagnitude,double mag
 	structMagnitude.ConsensusMagnitude = (structMagnitude.ConsensusTotalMagnitude/(structMagnitude.ConsensusMagnitudeCount+.01));
 	structMagnitude.Magnitude = structMagnitude.ConsensusMagnitude;
 	structMagnitude.PaymentMagnitude = LederstrumpfMagnitude2(structMagnitude.Magnitude,LockTime);
-
 }
 
 

@@ -659,7 +659,7 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
     // Weighted target 1-25-2015 Halford
     int64_t nValueIn = 0;
 	nValueIn = txPrev.vout[prevout.n].nValue + (RSA_WEIGHT*COIN);
-	CBigNum bnWeight = CBigNum(nValueIn/100000);
+	CBigNum bnWeight = CBigNum(nValueIn/125000);
     bnTarget *= bnWeight;
     targetProofOfStake = bnTarget.getuint256();
 	
