@@ -577,23 +577,15 @@ void Upgrader::launcher(int launchtarget, int launcharg)
         std::string programstring = (GetProgramDir() / targetswitch(launchtarget)).string();
         char * program =  new char[programstring.length()];
         strcpy(program, programstring.c_str());
-		//
 
-//		 char text[] = "something";
- //wchar_t wtext[20];
+		wchar_t*  wcProgram = convertCharArrayToLPCWSTR(program);
+		wchar_t* wcArgument = convertCharArrayToLPCWSTR(argument);
  
-wchar_t*  wcProgram = convertCharArrayToLPCWSTR(program);
-
-wchar_t* wcArgument = convertCharArrayToLPCWSTR(argument);
- //
-
- #ifdef QT_GUI
+		#ifdef QT_GUI
 		        CreateProcess(wcProgram, wcArgument, NULL, NULL, FALSE, 0, NULL, NULL, &StartupInfo, &ProcessInfo);
-               
-#else
+		#else
 		        CreateProcess(program, argument, NULL, NULL, FALSE, 0, NULL, NULL, &StartupInfo, &ProcessInfo);
-
-#endif
+		#endif
 
         delete argument;
         delete program;
