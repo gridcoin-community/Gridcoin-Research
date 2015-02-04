@@ -378,7 +378,7 @@ bool IsPoR(double amt)
 	std::string sAmt = RoundToString(amt,8);
 	if (sAmt.length() > 8)
 	{
-		if (sAmt.substr(sAmt.length()-(4+1),4)=="0124")
+		if (sAmt.substr(sAmt.length()-4,4)=="0124")
 		{
 			return true;
 		}

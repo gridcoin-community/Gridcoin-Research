@@ -12,7 +12,9 @@
 @set PARAMS=%PARAMS% -I'../%EWBLIBS%/%BERKELEYDB%/build_unix'
 @set PARAMS=%PARAMS% -I'../%EWBLIBS%/%LEVELDB%/include'
 @set PARAMS=%PARAMS% -I'../%EWBLIBS%/%MINIUPNPC%'
+@set PARAMS=%PARAMS% -I'../%EWBLIBS%/curl/include'
 @set PARAMS=%PARAMS% -I'../%QTPATH%/'
+@set PARAMS=%PARAMS% -I'../%EWBLIBS%/libzip/include'
 @set PARAMS=%PARAMS%"
 @set PARAMS=%PARAMS% LIBPATHS="
 @set PARAMS=%PARAMS%-L'../src/leveldb'
@@ -20,6 +22,9 @@
 @set PARAMS=%PARAMS% -L'../%EWBLIBS%/%OPENSSL%'
 @set PARAMS=%PARAMS% -L'../%EWBLIBS%/%BERKELEYDB%/build_unix'
 @set PARAMS=%PARAMS% -L'../%EWBLIBS%/%MINIUPNPC%'
+@set PARAMS=%PARAMS% -L'../%EWBLIBS%/curl/include'
+@set PARAMS=%PARAMS% -L'../%EWBLIBS%/libzip/include'
+@set PARAMS=%PARAMS% -L'../%EWBLIBS%/libzip/lib'
 @set PARAMS=%PARAMS% -L'../%QTPATH%/'
 @set PARAMS=%PARAMS%"
 @set PARAMS=%PARAMS% ADDITIONALCCFLAGS="%ADDITIONALCCFLAGS%"

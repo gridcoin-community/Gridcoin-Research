@@ -33,7 +33,11 @@
 
 sudo apt-get install ntp git build-essential libssl-dev libdb-dev libdb++-dev libboost-all-dev libqrencode-dev
 sudo apt-get install qt-sdk qt4-default
- 
+#ATTN: !! New packages required as of 2-4-2015 (Lederstrumpfs additions)
+sudo apt-get install libcurl3-dev
+sudo apt-get install libzip-dev
+
+
 cd ~
 git clone https://github.com/gridcoin/Gridcoin-Research
 #NOTE: If you already have Gridcoin, do this:

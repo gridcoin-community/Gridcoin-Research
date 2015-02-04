@@ -66,8 +66,9 @@ LIBS= \
  -l boost_chrono-mgw46-mt-1_55 \
  -l db_cxx \
  -l ssl \
- -l crypto
-
+ -l crypto \
+ -l curl \
+ -l zip
 
 
 DEFS=-DWIN32 -D_WINDOWS -DBOOST_THREAD_USE_LIB -DBOOST_SPIRIT_THREADSAFE
@@ -139,7 +140,8 @@ OBJS= \
     obj/zerocoin/SerialNumberSignatureOfKnowledge.o \
     obj/zerocoin/SpendMetaData.o \
     obj/zerocoin/ZeroTest.o \
-    obj/cpid.o
+    obj/cpid.o \
+    obj/upgrader.o
 
 all: gridcoinresearchd.exe
 
