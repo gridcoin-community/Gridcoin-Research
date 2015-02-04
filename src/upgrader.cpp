@@ -619,6 +619,7 @@ bool Upgrader::verifyPath(bfs::path path, bool create)
             printf("%s does not exist and could not be created!\n", path.c_str());
             return false;
         }
+	return false;
 
 }
 

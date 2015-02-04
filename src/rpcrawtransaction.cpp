@@ -143,6 +143,9 @@ Value restart(const Array& params, bool fHelp)
             upgrader.launcher(UPGRADER, upgrader.getTarget());       
             return "Shutting down...";
         }
+        Object result;
+        result.push_back(Pair("Result", 0));
+        return result;
 }
 
 

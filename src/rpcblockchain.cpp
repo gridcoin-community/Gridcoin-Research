@@ -1410,11 +1410,14 @@ Array MagnitudeReport(bool bMine)
 									entry.push_back(Pair("Daily Paid",structMag.payments/14));
 									entry.push_back(Pair("Daily Owed",structMag.totalowed/14));
 									
+									/*
 									if (structMag.cpid==GlobalCPUMiningCPID.cpid)
 									{
 											int64_t cpid_chrono = CPIDChronoStart(GlobalCPUMiningCPID.cpid);
 											entry.push_back(Pair("Registered Payment Time",TimestampToHRDate(cpid_chrono)));
 									}
+									*/
+
 
 									results.push_back(entry);
 						}
