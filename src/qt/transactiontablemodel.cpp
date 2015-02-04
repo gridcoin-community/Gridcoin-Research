@@ -419,15 +419,14 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
 	double reward = CoinToDouble(wtx->credit + wtx->debit);
 	double max = GetMaximumBoincSubsidy(GetAdjustedTime());
 	bool is_por = IsPoR(reward);
-	//printf("txlist amt %f;      ",reward);
-    switch(wtx->type)
+	switch(wtx->type)
     {
     case TransactionRecord::Generated:
-		    if (is_por)
+		    if (reward >= max*.90)
 			{
 				return QIcon(":/icons/tx_cpumined");
 			}
-         	else if (reward >= max*.90)
+         	else if (is_por)
 			{
 				return QIcon(":/icons/gold_cpumined");
 	   		}
