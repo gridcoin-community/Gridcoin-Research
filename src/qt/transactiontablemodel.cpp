@@ -370,6 +370,22 @@ QString TransactionTableModel::lookupAddress(const std::string &address, bool to
     return description;
 }
 
+
+
+
+bool IsPoR(double amt)
+{
+	std::string sAmt = RoundToString(amt,8);
+	if (sAmt.length() > 8)
+	{
+		if (sAmt.substr(sAmt.length()-(4+1),4)=="0124")
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
 {
     switch(wtx->type)
@@ -384,7 +400,7 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
     case TransactionRecord::SendToSelf:
         return tr("Payment to yourself");
     case TransactionRecord::Generated:
-    	if (((wtx->credit + wtx->debit)) >= 25*COIN)
+    	if (((IsPoR(CoinToDouble(wtx->credit + wtx->debit)))))
 			{
 				return tr("Mined - PoR");
 			}
@@ -397,21 +413,6 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
     }
 }
 
-
-bool IsPoR(double amt)
-{
-	std::string sAmt = RoundToString(amt,5);
-
-	//printf("txstr %s",sAmt.c_str());
-	if (sAmt.length() > 7)
-	{
-		if (sAmt.substr(sAmt.length()-(4+1),4)=="0124")
-		{
-			return true;
-		}
-	}
-	return false;
-}
 
 QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx) const
 {

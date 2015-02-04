@@ -18,10 +18,13 @@ INCLUDEPATHS?= \
 LIBPATHS= \
  -L"$(CURDIR)/leveldb" \
  -L"$(DEPSDIR)/libs" \
- -L"A:\Gridcoin-Research\libs\curl\include" \
- -L"a:\deps-master\ssl" \
+ -L"A:/Gridcoin-Research/libs/curl/include" \
+ -L"a:/deps-master/ssl" \
+ -L"a:\Gridcoin-Research\libs\libzip" 
 
-
+#-l boost_date_time$(BOOST_LIB_SUFFIX) \
+ #-l libzip 
+ 
 LIBS= \
  -l leveldb \
  -l boost_system$(BOOST_LIB_SUFFIX) \
@@ -29,16 +32,12 @@ LIBS= \
  -l boost_program_options$(BOOST_LIB_SUFFIX) \
  -l boost_thread$(BOOST_LIB_SUFFIX) \
  -l boost_chrono$(BOOST_LIB_SUFFIX) \
- #-l boost_date_time$(BOOST_LIB_SUFFIX) \
  -l db_cxx \
  -l ssl \
  -l crypto \
  -l curl \
- -l zip \
- -l libzip \
- -l "a:\deps-master\ssl"
-
-
+ -l libzip
+ 
 
 DEFS=-DWIN32 -D_WINDOWS -DUPGRADERFLAG -DBOOST_THREAD_USE_LIB -DBOOST_SPIRIT_THREADSAFE
 DEBUGFLAGS=-g

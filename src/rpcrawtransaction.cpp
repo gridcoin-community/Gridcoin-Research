@@ -13,7 +13,7 @@
 #include "net.h"
 #include "wallet.h"
 
-//#include "upgrader.h"
+#include "upgrader.h"
 
 using namespace std;
 using namespace boost;
@@ -29,19 +29,16 @@ MiningCPID DeserializeBoincBlock(std::string block);
 void ExecuteCode();
 
 
-//extern void Imker(void *kippel);
-//extern Upgrader upgrader;
+extern void Imker(void *kippel);
+extern Upgrader upgrader;
 
 
 
 
-/*
 #ifdef QT_GUI
 #include "qt/upgradedialog.h"
 extern Checker checker;
 #endif
-*/
-
 
 
 
@@ -83,8 +80,6 @@ std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype,
 	
 }
 
-
-/*
 Value downloadblocks(const Array& params, bool fHelp)
 {
         if (fHelp || params.size() != 0)
@@ -206,7 +201,6 @@ Value upgrade(const Array& params, bool fHelp)
 
 }
 
-*/
 
 
 

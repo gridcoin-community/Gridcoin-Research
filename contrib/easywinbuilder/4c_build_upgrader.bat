@@ -22,7 +22,8 @@
 @set PARAMS=%PARAMS% -L'../%EWBLIBS%/%OPENSSL%'
 @set PARAMS=%PARAMS% -L'../%EWBLIBS%/%BERKELEYDB%/build_unix'
 @set PARAMS=%PARAMS% -L'../%EWBLIBS%/%MINIUPNPC%'
-@set PARAMS=%PARAMS% -L'../%EWBLIBS%/%libzip%'
+@set PARAMS=%PARAMS% -L'a:\Gridcoin-Research\libs\curl\include'
+@set PARAMS=%PARAMS% -L'a:\Gridcoin-Research\libs\libzip\lib'
 @set PARAMS=%PARAMS% -L'../%QTPATH%/'
 @set PARAMS=%PARAMS%"
 @set PARAMS=%PARAMS% ADDITIONALCCFLAGS="%ADDITIONALCCFLAGS%"

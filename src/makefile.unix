@@ -36,7 +36,9 @@ LIBS += \
    -l boost_date_time \
    -l db_cxx$(BDB_LIB_SUFFIX) \
    -l ssl \
-   -l crypto 
+   -l crypto \
+   -l zip \
+   -l curl
    
 ifndef USE_UPNP
 	override USE_UPNP = -

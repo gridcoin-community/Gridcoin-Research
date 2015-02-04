@@ -22,8 +22,8 @@
 #include "transactiontablemodel.h"
 #include "addressbookpage.h"
 
-//#include "upgradedialog.h"
-//#include "upgrader.h"
+#include "upgradedialog.h"
+#include "upgrader.h"
 
 #include "sendcoinsdialog.h"
 #include "signverifymessagedialog.h"
@@ -310,14 +310,12 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     rpcConsole = new RPCConsole(this);
     connect(openRPCConsoleAction, SIGNAL(triggered()), rpcConsole, SLOT(show()));
 
-	/*
 	 upgrader = new UpgradeDialog(this);
      connect(upgradeAction, SIGNAL(triggered()), upgrader, SLOT(show()));
      connect(upgradeAction, SIGNAL(triggered()), upgrader, SLOT(upgrade()));
      connect(downloadAction, SIGNAL(triggered()), upgrader, SLOT(show()));
      connect(downloadAction, SIGNAL(triggered()), upgrader, SLOT(blocks()));
-	*/
-
+	
 
     // Clicking on "Verify Message" in the address book sends you to the verify message tab
     connect(addressBookPage, SIGNAL(verifyMessage(QString)), this, SLOT(gotoVerifyMessageTab(QString)));

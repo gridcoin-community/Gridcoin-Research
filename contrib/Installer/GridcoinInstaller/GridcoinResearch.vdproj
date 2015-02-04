@@ -111,6 +111,12 @@
         }
         "Entry"
         {
+        "MsmKey" = "8:_BDCA92FA7FB345B39A4B18C058F558B6"
+        "OwnerKey" = "8:_UNDEFINED"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
         "MsmKey" = "8:_BEEBDCAEA89A46269E79C2E0AAB54DEE"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
@@ -118,6 +124,12 @@
         "Entry"
         {
         "MsmKey" = "8:_D0966638AB084779AFD69795C33FC8EB"
+        "OwnerKey" = "8:_UNDEFINED"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_D8E8325777D94A708487A0229ED6230E"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
         }
@@ -142,6 +154,12 @@
         "Entry"
         {
         "MsmKey" = "8:_E1E3987847C54B6FA949FA11810649A7"
+        "OwnerKey" = "8:_UNDEFINED"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_E61EE4BEE6D94A3BBD05AC392646D360"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
         }
@@ -634,6 +652,26 @@
             "IsDependency" = "11:FALSE"
             "IsolateTo" = "8:"
             }
+            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_BDCA92FA7FB345B39A4B18C058F558B6"
+            {
+            "SourcePath" = "8:..\\..\\..\\release\\libzip-2.dll"
+            "TargetName" = "8:libzip-2.dll"
+            "Tag" = "8:"
+            "Folder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
+            "Condition" = "8:"
+            "Transitive" = "11:FALSE"
+            "Vital" = "11:TRUE"
+            "ReadOnly" = "11:FALSE"
+            "Hidden" = "11:FALSE"
+            "System" = "11:FALSE"
+            "Permanent" = "11:FALSE"
+            "SharedLegacy" = "11:FALSE"
+            "PackageAs" = "3:1"
+            "Register" = "3:1"
+            "Exclude" = "11:FALSE"
+            "IsDependency" = "11:FALSE"
+            "IsolateTo" = "8:"
+            }
             "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_BEEBDCAEA89A46269E79C2E0AAB54DEE"
             {
             "SourcePath" = "8:..\\..\\..\\release\\mingwm10.dll"
@@ -682,6 +720,26 @@
             "PackageAs" = "3:1"
             "Register" = "3:1"
             "Exclude" = "11:TRUE"
+            "IsDependency" = "11:FALSE"
+            "IsolateTo" = "8:"
+            }
+            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_D8E8325777D94A708487A0229ED6230E"
+            {
+            "SourcePath" = "8:..\\..\\..\\release\\libz-1.dll"
+            "TargetName" = "8:libz-1.dll"
+            "Tag" = "8:"
+            "Folder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
+            "Condition" = "8:"
+            "Transitive" = "11:FALSE"
+            "Vital" = "11:TRUE"
+            "ReadOnly" = "11:FALSE"
+            "Hidden" = "11:FALSE"
+            "System" = "11:FALSE"
+            "Permanent" = "11:FALSE"
+            "SharedLegacy" = "11:FALSE"
+            "PackageAs" = "3:1"
+            "Register" = "3:1"
+            "Exclude" = "11:FALSE"
             "IsDependency" = "11:FALSE"
             "IsolateTo" = "8:"
             }
@@ -760,6 +818,26 @@
             {
             "SourcePath" = "8:..\\..\\..\\release\\msvcr100d.dll"
             "TargetName" = "8:msvcr100d.dll"
+            "Tag" = "8:"
+            "Folder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
+            "Condition" = "8:"
+            "Transitive" = "11:FALSE"
+            "Vital" = "11:TRUE"
+            "ReadOnly" = "11:FALSE"
+            "Hidden" = "11:FALSE"
+            "System" = "11:FALSE"
+            "Permanent" = "11:FALSE"
+            "SharedLegacy" = "11:FALSE"
+            "PackageAs" = "3:1"
+            "Register" = "3:1"
+            "Exclude" = "11:FALSE"
+            "IsDependency" = "11:FALSE"
+            "IsolateTo" = "8:"
+            }
+            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_E61EE4BEE6D94A3BBD05AC392646D360"
+            {
+            "SourcePath" = "8:..\\..\\..\\release\\curl.dll"
+            "TargetName" = "8:curl.dll"
             "Tag" = "8:"
             "Folder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
             "Condition" = "8:"
@@ -903,15 +981,15 @@
         {
         "Name" = "8:Microsoft Visual Studio"
         "ProductName" = "8:Gridcoin Research"
-        "ProductCode" = "8:{C453DA87-0188-49D7-85A8-1A3D1D2E780E}"
-        "PackageCode" = "8:{B01D787B-D672-4B60-9421-AD247E0AAE2E}"
+        "ProductCode" = "8:{02C664E3-416F-49A6-AF70-CF12BAF45C28}"
+        "PackageCode" = "8:{33DDCCC1-E34B-4A54-9124-39765E5D0205}"
         "UpgradeCode" = "8:{9617E9EA-252F-43CE-B53E-B48C85F71192}"
         "AspNetVersion" = "8:4.0.30319.0"
         "RestartWWWService" = "11:FALSE"
         "RemovePreviousVersions" = "11:TRUE"
         "DetectNewerInstalledVersion" = "11:FALSE"
         "InstallAllUsers" = "11:TRUE"
-        "ProductVersion" = "8:21.0"
+        "ProductVersion" = "8:21.1"
         "Manufacturer" = "8:GridcoinResearch"
         "ARPHELPTELEPHONE" = "8:"
         "ARPHELPLINK" = "8:"

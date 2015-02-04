@@ -516,6 +516,15 @@ pathvec Upgrader::fvector(bfs::path path)
     return a;
 }
 
+
+wchar_t *convertCharArrayToLPCWSTR(const char* charArray)
+{
+    wchar_t* wString=new wchar_t[4096];
+    MultiByteToWideChar(CP_ACP, 0, charArray, -1, wString, 4096);
+    return wString;
+}
+
+
 void Upgrader::launcher(int launchtarget, int launcharg)
 {
     if (bfs::exists(GetProgramDir() / targetswitch(launchtarget)))
@@ -568,8 +577,24 @@ void Upgrader::launcher(int launchtarget, int launcharg)
         std::string programstring = (GetProgramDir() / targetswitch(launchtarget)).string();
         char * program =  new char[programstring.length()];
         strcpy(program, programstring.c_str());
+		//
 
-        CreateProcess(program, argument, NULL, NULL, FALSE, 0, NULL, NULL, &StartupInfo, &ProcessInfo);
+//		 char text[] = "something";
+ //wchar_t wtext[20];
+ 
+wchar_t*  wcProgram = convertCharArrayToLPCWSTR(program);
+
+wchar_t* wcArgument = convertCharArrayToLPCWSTR(argument);
+ //
+
+ #ifdef QT_GUI
+		        CreateProcess(wcProgram, wcArgument, NULL, NULL, FALSE, 0, NULL, NULL, &StartupInfo, &ProcessInfo);
+               
+#else
+		        CreateProcess(program, argument, NULL, NULL, FALSE, 0, NULL, NULL, &StartupInfo, &ProcessInfo);
+
+#endif
+
         delete argument;
         delete program;
         #endif

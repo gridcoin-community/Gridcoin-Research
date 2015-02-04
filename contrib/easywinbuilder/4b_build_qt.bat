@@ -8,11 +8,11 @@
 
 
 
-copy A:\deps-master\extras\gridcoin_good.h src\gridcoin.h
-
-
 @echo building qt - qmake...
 @set COINNAME=Gridcoin
+
+
+echo %EWBLIBS%
 
 @set QMPS=BOOST_INCLUDE_PATH=%EWBLIBS%/%BOOST%^
  BOOST_LIB_PATH=%EWBLIBS%/%BOOST%/stage/lib^
@@ -21,12 +21,15 @@ copy A:\deps-master\extras\gridcoin_good.h src\gridcoin.h
  OPENSSL_LIB_PATH=%EWBLIBS%/%OPENSSL%^
  BDB_INCLUDE_PATH=%EWBLIBS%/%BERKELEYDB%/build_unix^
  BDB_LIB_PATH=%EWBLIBS%/%BERKELEYDB%/build_unix^
+ CURL_INCLUDE_PATH=%EWBLIBS%/curl/include^
+ CURL_LIB_PATH=%EWBLIBS%/curl/include^
+ LIBZIP_INCLUDE_PATH=%EWBLIBS%/libzip/include^
+ LIBZIP_LIB_PATH=%EWBLIBS%/libzip/lib^
  MINIUPNPC_INCLUDE_PATH=%EWBLIBS%/%MINIUPNPC%^
  MINIUPNPC_LIB_PATH=%EWBLIBS%/%MINIUPNPC%^
  QMAKE_CXXFLAGS="%ADDITIONALCCFLAGS%"^
  QMAKE_CFLAGS="%ADDITIONALCCFLAGS%"
-
-
+ 
 @%QTPATH%\qmake.exe %QMPS% USE_QRCODE=1 ZZZ=1
 @echo.
 @echo.
@@ -39,7 +42,6 @@ mingw32-make -f Makefile.Release
 @cd %ROOTPATH%
 
 
-copy A:\deps-master\extras\gridcoin_bad.h a:\gridcoin-research\src\gridcoin.h
 
 
 

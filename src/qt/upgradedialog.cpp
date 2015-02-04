@@ -2,6 +2,11 @@
 #include "ui_upgradedialog.h"
 #include "clientmodel.h"
 #include "version.h"
+
+#ifdef WIN32
+#include <QAxObject>
+#endif
+
 #include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,7 +45,7 @@ UpgradeDialog::UpgradeDialog(QWidget *parent) :
     thread->start();
 }
 
-#include "upgradedialog.moc"
+//#include "upgradedialog.moc"
 
 void Checker::start()
 {
