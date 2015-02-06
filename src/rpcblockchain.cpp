@@ -24,6 +24,7 @@ MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
 MiningCPID GetNextProject(bool bForce);
 std::string GetBestBlockHash(std::string sCPID);
+std::string GetArgument(std::string arg, std::string defaultvalue);
 
 int64_t CPIDChronoStart(std::string cpid);
 bool IsCPIDTimeValid(std::string cpid, int64_t locktime);
@@ -976,10 +977,18 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "genboinckey")
 	{
-		//Gridcoin - R Halford - Generate Boinc Mining Key
+		//Gridcoin - R Halford - Generate Boinc Mining Key - 2-6-2015
 		GetNextProject(false);
+		std::string email = GetArgument("email", "NA");
+    	boost::to_lower(email);
+		GlobalCPUMiningCPID.email=email;
+		GlobalCPUMiningCPID.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, 0);
+		//Store the BPK in the aesskein, and the cpid in version
+		GlobalCPUMiningCPID.aesskein = email; //Good
+		GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
+
 		std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID);
-		if (fDebug) printf("Utilizing %s",sParam.c_str());
+		if (fDebug3) printf("GenBoincKey: Utilizing email %s with %s for  %s \r\n",GlobalCPUMiningCPID.email.c_str(),GlobalCPUMiningCPID.boincruntimepublickey.c_str(),sParam.c_str());
 		std::string sBase = EncodeBase64(sParam);
 		entry.push_back(Pair("[Specify in config file without quotes] boinckey=",sBase));
 		results.push_back(entry);

@@ -1643,7 +1643,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
     CTxDB txdb("r");
 	//Retrieve CPID RSA_WEIGHT
 	int64_t RSA_WEIGHT = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-	msMiningErrors3 = "LRSA: " + RoundToString(RSA_WEIGHT,0);
+	////////////////////////////////////////////////////////////////////////////////msMiningErrors3 = "L R S A: " + RoundToString(RSA_WEIGHT,0);
 	double out_owed = 0;
 
     LOCK2(cs_main, cs_wallet);
@@ -1777,7 +1777,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		 miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pbh);
 		 miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
 	     miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-		 msMiningErrors4 = "BRSA: " + RoundToString(miningcpid.RSAWeight,0);
+		 ////////////////////////////////////////////////////////////////////////////////msMiningErrors4 = "B R S A: " + RoundToString(miningcpid.RSAWeight,0);
 		 hashBoinc = SerializeBoincBlock(miningcpid);
 		 if (!IsCPIDValidv2(miningcpid,pindexBest->nHeight))
 		 {

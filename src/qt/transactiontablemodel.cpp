@@ -424,12 +424,12 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
     case TransactionRecord::Generated:
 		    if (reward >= max*.90)
 			{
-				return QIcon(":/icons/tx_cpumined");
+					return QIcon(":/icons/gold_cpumined");
 			}
          	else if (is_por)
 			{
-				return QIcon(":/icons/gold_cpumined");
-	   		}
+					return QIcon(":/icons/tx_cpumined");
+			}
 	   		else
 	   		{
 	   			return QIcon(":/icons/tx_mined");

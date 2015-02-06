@@ -449,7 +449,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		miningcpid.InterestSubsidy = out_interest;
 		//if (fDebug3) printf("Calc Research Subsidy %f, Interest %f \r\n",(double)miningcpid.ResearchSubsidy,(double)miningcpid.InterestSubsidy);
 
-		msMiningErrors4 = "BRSA: " + RoundToString(miningcpid.RSAWeight,0);
+		////////////////// msMiningErrors4 = "B R S A: " + RoundToString(miningcpid.RSAWeight,0);
 		//12-27-2014 Strip CPID out of hashboinc
 		miningcpid.enccpid = ""; //CPID V1 Boinc RunTime enc key
 		miningcpid.encboincpublickey = "";

@@ -363,7 +363,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
 
- int nGrandfather = 131764;
+ int nGrandfather = 135130;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -750,6 +750,28 @@ unsigned int DiffBytes(double PoBDiff)
 MiningCPID GetNextProject(bool bForce)
 {
 
+	
+	std::string sBoincKey = GetArgument("boinckey","");
+    if (!sBoincKey.empty())
+	{ //2-6-2015
+		if (fDebug3 && LessVerbose(50)) printf("Using cached boinckey for project %s\r\n",GlobalCPUMiningCPID.projectname.c_str());
+					msMiningProject = GlobalCPUMiningCPID.projectname;
+					msMiningCPID = GlobalCPUMiningCPID.cpid;
+					if (LessVerbose(5)) printf("Ready to CPU Mine project %s     RAC(%f)  enc %s\r\n",	GlobalCPUMiningCPID.projectname.c_str(), GlobalCPUMiningCPID.rac, msENCboincpublickey.c_str());
+					GlobalCPUMiningCPID.pobdifficulty = GetPoBDifficulty();
+		    		double ProjectRAC = GetNetworkAvgByProject(GlobalCPUMiningCPID.projectname);
+					GlobalCPUMiningCPID.NetworkRAC = ProjectRAC;
+					mdMiningNetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
+					double purported = 0;
+					if (GlobalCPUMiningCPID.rac > 0) purported=1;
+					GlobalCPUMiningCPID.Magnitude = GetMagnitude(GlobalCPUMiningCPID.cpid,purported,true);
+					if (fDebug3) printf("For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
+					msMiningErrors = "Boinc Mining";
+					GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
+					GlobalCPUMiningCPID.LastPaymentTime = GetLastPaymentTimeByCPID(GlobalCPUMiningCPID.cpid);
+					return GlobalCPUMiningCPID;
+	}
+	
 	if (GlobalCPUMiningCPID.projectname.length() > 3 && !bForce)
 	{
 	
@@ -764,7 +786,6 @@ MiningCPID GetNextProject(bool bForce)
 	msMiningCPID = "";
 	mdMiningRAC = 0;
 	msENCboincpublickey = "";
-
 	GlobalCPUMiningCPID.cpid="";
 	GlobalCPUMiningCPID.cpidv2 = "";
 	GlobalCPUMiningCPID.projectname ="";
@@ -2032,11 +2053,10 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 		// Coarse Payment Rule (helps prevent sync problems):
 		if (!VerifyingBlock)
 		{
-			//If owed less than 15% of max subsidy, assess at 0:
-			if (owed < (GetMaximumBoincSubsidy(GetAdjustedTime())/15)) 
+			//If owed less than 4% of max subsidy, assess at 0:
+			if (owed < (GetMaximumBoincSubsidy(GetAdjustedTime())/50)) 
 			{
-				if (fDebug3) printf("Owed < 15pc of max %f \r\n",(double)owed);
-
+				//if (fDebug3) printf("Owed < 15pc of max %f \r\n",(double)owed);
 				owed = 0;
 			}
 
@@ -2064,7 +2084,7 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 			//Halford - Ensure researcher was not paid in the last 2 hours:
 			if (IsLockTimeWithinMinutes(mag.LastPaymentTime,120))
 			{
-				if (fDebug3) printf("Last Payment Time too recent %f \r\n",(double)mag.LastPaymentTime);
+				if (fDebug3 && LessVerbose(5)) printf("Last Payment Time too recent %f \r\n",(double)mag.LastPaymentTime);
 				owed = 0;
 			}
 
@@ -4904,7 +4924,7 @@ bool ChainPaymentViolation(std::string cpid, int64_t locktime_future, double Pro
 	double AvgDailyPayments = 0;
 	int64_t locktime = locktime_future - (60*60*24*14);
 	double BlockMax = GetMaximumBoincSubsidy(locktime);
-	//2-2-2015, R Halford: To help smooth out cutover periods, Assess mag multiplier and max boinc subsidies as of T-14:
+	//2-3-2015, R Halford: To help smooth out cutover periods, Assess mag multiplier and max boinc subsidies as of T-14:
 	if (cpid=="INVESTOR" || cpid=="investor") return true;
 	if (Proposed_Subsidy > BlockMax) 
 	{
@@ -7336,7 +7356,7 @@ void HarvestCPIDs(bool cleardata)
    
 	if (!sBoincKey.empty())
 	{
-		//Deserialize key into Global CPU Mining CPID
+		//Deserialize key into Global CPU Mining CPID 2-6-2015
 		printf("Using key %s \r\n",sBoincKey.c_str());
 	
 		std::string sDec=DecodeBase64(sBoincKey);
@@ -7344,7 +7364,10 @@ void HarvestCPIDs(bool cleardata)
 	
 	    if (sDec.empty()) printf("Error while deserializing boinc key!  Please use execute genboinckey to generate a boinc key from the host with boinc installed.\r\n");
 		GlobalCPUMiningCPID = DeserializeBoincBlock(sDec);
+
 		GlobalCPUMiningCPID.initialized = true;
+
+
 
 		if (GlobalCPUMiningCPID.cpid.empty()) 
 		{
@@ -7354,7 +7377,15 @@ void HarvestCPIDs(bool cleardata)
 		{
 			printf("CPUMiningCPID Initialized.\r\n");
 		}
-		printf("Using Serialized Boinc CPID %s",GlobalCPUMiningCPID.cpid.c_str());
+
+			//Move the BPK from aesskein, and the cpid in version
+			GlobalCPUMiningCPID.email = GlobalCPUMiningCPID.aesskein;
+			GlobalCPUMiningCPID.boincruntimepublickey = GlobalCPUMiningCPID.lastblockhash;
+			
+			printf("Using Serialized Boinc CPID %s with orig email of %s and bpk of %s with cpidhash of %s \r\n",GlobalCPUMiningCPID.cpid.c_str(), GlobalCPUMiningCPID.email.c_str(), GlobalCPUMiningCPID.boincruntimepublickey.c_str(),GlobalCPUMiningCPID.cpidhash.c_str());
+
+			GlobalCPUMiningCPID.cpidhash = GlobalCPUMiningCPID.boincruntimepublickey;
+			printf("Using Serialized Boinc CPID %s with orig email of %s and bpk of %s with cpidhash of %s \r\n",GlobalCPUMiningCPID.cpid.c_str(), GlobalCPUMiningCPID.email.c_str(), GlobalCPUMiningCPID.boincruntimepublickey.c_str(),GlobalCPUMiningCPID.cpidhash.c_str());
 
 			StructCPID structcpid = GetStructCPID();
 			structcpid.initialized = true;
@@ -7371,7 +7402,14 @@ void HarvestCPIDs(bool cleardata)
 			structcpid.NetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
 			
 			structcpid.email = GlobalCPUMiningCPID.email;
-			structcpid.cpidv2 = structcpid.cpid;
+			// 2-6-2015 R Halford - Ensure CPIDv2 Is populated After deserializing GenBoincKey
+
+			std::string cpid_non = structcpid.cpidhash+structcpid.email;
+			//std::string ENCbpk = AdvancedCrypt(cpid_non);
+			//project.boincpublickey = ENCbpk;
+			printf("GenBoincKey using email %s and cpidhash %s key %s \r\n",structcpid.email.c_str(),structcpid.cpidhash.c_str(),sDec.c_str());
+
+			structcpid.cpidv2 = ComputeCPIDv2(structcpid.email, structcpid.cpidhash, 0);
 
 			structcpid.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + structcpid.cpid;
 			structcpid.Iscpidvalid = true;

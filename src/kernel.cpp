@@ -326,7 +326,11 @@ int64_t GetRSAWeightByCPID(std::string cpid)
 			if (UntrustedHost.initialized)
 			{
 						double mag_accuracy = UntrustedHost.Accuracy;
-						if (mag_accuracy > 0) 
+						if (mag_accuracy > 0 && mag_accuracy <= 5)
+						{
+							owed=25000;
+						}	
+						else if (mag_accuracy > 5) 
 						{
 								owed = (UntrustedHost.owed*14) + UntrustedHost.Magnitude;
 						}
@@ -464,8 +468,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	int oNC = 0;
 	//12-7-2014 R Halford 
 	RSA_WEIGHT = GetRSAWeightByBlock(boincblock);
-	if (checking_local) msMiningErrors2 = "RRSA: " + RoundToString(RSA_WEIGHT,0);
-
+	
 
 	//WEIGHT MODIFICATION SECTION 2: Newbie stake allowance
 	//std::string sSubsidy = RoundToString(subsidy,4);
@@ -626,7 +629,7 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 		msMiningErrors5 = narr;
 	}
 
-	if (checking_local) msMiningErrors2 = "RRSA: " + RoundToString(RSA_WEIGHT,0);
+	if (checking_local) msMiningErrors2 = "RSA Weight: " + RoundToString(RSA_WEIGHT,0);
 
 	if (fDebug && !checking_local)
 	{

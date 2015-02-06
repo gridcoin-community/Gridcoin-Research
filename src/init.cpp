@@ -203,7 +203,6 @@ void InitializeBoincProjects()
         boinc_projects[16] = "http://aerospaceresearch.net/constellation/|Constellation";
         boinc_projects[17] = "http://www.cosmologyathome.org/     |Cosmology@Home";
         boinc_projects[18] = "http://boinc.freerainbowtables.com/ |DistrRTgen";
-
         boinc_projects[19] = "http://einstein.phys.uwm.edu/       |Einstein@Home";
         boinc_projects[20] = "http://www.enigmaathome.net/        |Enigma@Home";
         boinc_projects[22] = "http://registro.ibercivis.es/       |ibercivis";
@@ -244,17 +243,17 @@ void InitializeBoincProjects()
 		boinc_projects[70]="http://www.distrrtgen.com/|Distributed Rainbow Table Generator";
 		boinc_projects[71]="http://slinca.com/|slinca@home";
 		boinc_projects[72]="http://finance.gridcoin.us/|Gridcoin Finance";
-		//boinc_projects[73]="http://supernode.gridcoin.us/|Gridcoin Supernode";
 		boinc_projects[75] = "http://mindmodeling.org/|MindModeling@Home";
         boinc_projects[76] = "http://www.gridcoin.us/|INVESTOR"; //This is a general project Used for Inflation Only Subsidies
 		boinc_projects[77] = "http://qcn.stanford.edu/sensor/|Quake-Catcher Network"; //BOINC - TheDrake
-
 		//More from Custom Miner 1-4-2015 R Halford
 		boinc_projects[78] = "http://registro.ibercivis.es/|ibercivis";
 		boinc_projects[79] = "http://igemathome.org/|iGEM@home";
 		boinc_projects[80] = "http://www.primaboinca.com/|primaboinca";
 		boinc_projects[81] = "http://bearnol.is-a-geek.com/wanless2/|wanless2";
-		
+        // R Halford 2-5-2015  Enable Bitcoin Utopia per community response and RTMs analysis
+		boinc_projects[82] = "http://www.bitcoinutopia.net/bitcoinutopia/|bitcoinutopia";
+		boinc_projects[83] = "http://lhcathome2.cern.ch/vLHCathome/|vLHCathome";
 
 
 		for (int i = 0; i < 100; i++)
