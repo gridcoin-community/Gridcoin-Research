@@ -184,10 +184,12 @@ void InitializeBoincProjects()
 		GlobalCPUMiningCPID.diffbytes = 0;
 		GlobalCPUMiningCPID.email = "";
 		GlobalCPUMiningCPID.RSAWeight = 0;
-
-
+		
 		std::string boinc_projects[100];
-	       
+	    
+
+		//Retiring - Remove after we verify everything works
+		/*
         boinc_projects[0] = "http://boinc.bakerlab.org/rosetta/   |rosetta@home";
         boinc_projects[1] = "http://docking.cis.udel.edu/         |Docking";
         boinc_projects[2] = "http://www.malariacontrol.net/       |malariacontrol.net";
@@ -254,6 +256,47 @@ void InitializeBoincProjects()
         // R Halford 2-5-2015  Enable Bitcoin Utopia per community response and RTMs analysis
 		boinc_projects[82] = "http://www.bitcoinutopia.net/bitcoinutopia/|bitcoinutopia";
 		boinc_projects[83] = "http://lhcathome2.cern.ch/vLHCathome/|vLHCathome";
+		*/
+
+
+		// Refreshed Project list - SePulcher - 2/6/2015
+		// Current Projects
+		boinc_projects[0] = "http://www.gridcoin.us/|INVESTOR"; //This is a general project used for inflation only subsidies
+		boinc_projects[1] = "http://boinc.thesonntags.com/collatz/|Collatz Conjecture";
+		boinc_projects[2] = "http://www.cosmologyathome.org/|Cosmology@Home";
+		boinc_projects[3] = "http://einstein.phys.uwm.edu/|Einstein@Home";
+		boinc_projects[4] = "http://moowrap.net/|Moo! Wrapper";
+		boinc_projects[5] = "http://boinc.fzk.de/poem/|POEM@HOME";
+		boinc_projects[6] = "http://www.primegrid.com/|PrimeGrid";
+		boinc_projects[7] = "http://boinc.bakerlab.org/rosetta/|Rosetta@Home";
+		boinc_projects[8] = "http://setiathome.berkeley.edu/|SETI@Home";
+		boinc_projects[9] = "http://pogs.theskynet.org/pogs/|theSkyNet POGS";
+		boinc_projects[10] = "http://www.malariacontrol.net/|malariacontrol.net";
+		boinc_projects[11] = "http://www.worldcommunitygrid.org/|World Community Grid";
+		boinc_projects[12] = "http://asteroidsathome.net/boinc/|Asteroids@home";
+		boinc_projects[13] = "http://climateprediction.net/|Climate Prediction";
+		boinc_projects[14] = "http://milkyway.cs.rpi.edu/milkyway/|MilkyWay@home";
+		boinc_projects[15] = "http://qcn.stanford.edu/sensor/|Quake-Catcher Network";
+		boinc_projects[16] = "http://boinc.gorlaeus.net/|Leiden Classical";
+		boinc_projects[16] = "http://home.edges-grid.eu/home/|EDGeS@Home";
+		boinc_projects[18] = "http://aerospaceresearch.net/constellation/|Constellation";
+		boinc_projects[19] = "http://www.enigmaathome.net/|Enigma@Home";
+		boinc_projects[20] = "http://lhcathomeclassic.cern.ch/sixtrack/|LHC@Home Classic";
+		boinc_projects[21] = "http://escatter11.fullerton.edu/nfs/|NFS@Home";
+		boinc_projects[22] = "http://numberfields.asu.edu/NumberFields/|NumberFields@home";
+		boinc_projects[23] = "http://sat.isa.ru/pdsat/|SAT@home";
+		boinc_projects[24] = "http://szdg.lpds.sztaki.hu/szdg/|SZTAKI Desktop Grid";
+		boinc_projects[25] = "http://www.gpugrid.net/|GPUGRID";
+		boinc_projects[26] = "http://convector.fsv.cvut.cz/|CONVECTOR";
+		boinc_projects[27] = "http://www.rechenkraft.net/yoyo/|yoyo@home";
+		// New Projects
+		boinc_projects[28] = "http://findah.ucd.ie/|FiND@Home";
+		boinc_projects[29] = "http://atlasathome.cern.ch/|ATLAS@Home";
+		boinc_projects[30] = "http://universeathometest.info/universe/|Universe@Home";
+		boinc_projects[31] = "http://www.bitcoinutopia.net/bitcoinutopia/|Bitcoin Utopia";
+		boinc_projects[32] = "http://lhcathome2.cern.ch/vLHCathome/vLHCathome/|vLHCathome";
+		boinc_projects[33] = "http://volunteer.cs.und.edu/csg/|Citizen Science Grid";
+
 
 
 		for (int i = 0; i < 100; i++)
