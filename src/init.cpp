@@ -281,7 +281,9 @@ void InitializeBoincProjects()
 		boinc_projects[16] = "http://home.edges-grid.eu/home/|EDGeS@Home";
 		boinc_projects[18] = "http://aerospaceresearch.net/constellation/|Constellation";
 		boinc_projects[19] = "http://www.enigmaathome.net/|Enigma@Home";
-		boinc_projects[20] = "http://lhcathomeclassic.cern.ch/sixtrack/||LHC@home 1.0";
+		boinc_projects[20] = "http://lhcathomeclassic.cern.ch/sixtrack/|LHC@home 1.0";
+
+		
 		boinc_projects[21] = "http://escatter11.fullerton.edu/nfs/|NFS@Home";
 		boinc_projects[22] = "http://numberfields.asu.edu/NumberFields/|NumberFields@home";
 		boinc_projects[23] = "http://sat.isa.ru/pdsat/|SAT@home";
@@ -296,7 +298,9 @@ void InitializeBoincProjects()
 		boinc_projects[31] = "http://www.bitcoinutopia.net/bitcoinutopia/|Bitcoin Utopia";
 		boinc_projects[32] = "http://lhcathome2.cern.ch/vLHCathome/vLHCathome/|VirtualLHC@home";
 		boinc_projects[33] = "http://volunteer.cs.und.edu/csg/|Citizen Science Grid";
-
+		boinc_projects[34] = "http://burp.renderfarming.net/|BURP";
+	    boinc_projects[35] = "http://mindmodeling.org/            |MindModeling@Beta";
+		boinc_projects[36] = "http://radioactiveathome.org/boinc/|Radioactive@Home";
 
 
 		for (int i = 0; i < 100; i++)
