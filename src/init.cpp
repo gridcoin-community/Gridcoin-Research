@@ -275,27 +275,29 @@ void InitializeBoincProjects()
 		boinc_projects[11] = "http://www.worldcommunitygrid.org/|World Community Grid";
 		boinc_projects[12] = "http://asteroidsathome.net/boinc/|Asteroids@home";
 		boinc_projects[13] = "http://climateprediction.net/|climateprediction.net";
-		boinc_projects[14] = "http://milkyway.cs.rpi.edu/milkyway/|MilkyWay@home";
+		boinc_projects[14] = "http://milkyway.cs.rpi.edu/milkyway/|MilkyWay@Home";
 		boinc_projects[15] = "http://qcn.stanford.edu/sensor/|Quake-Catcher Network";
 		boinc_projects[16] = "http://boinc.gorlaeus.net/|Leiden Classical";
-		boinc_projects[16] = "http://home.edges-grid.eu/home/|EDGeS@Home";
+		boinc_projects[17] = "http://home.edges-grid.eu/home/|EDGeS@Home";
 		boinc_projects[18] = "http://aerospaceresearch.net/constellation/|Constellation";
 		boinc_projects[19] = "http://www.enigmaathome.net/|Enigma@Home";
-		boinc_projects[20] = "http://lhcathomeclassic.cern.ch/sixtrack/||LHC@home 1.0";
+		boinc_projects[20] = "http://lhcathomeclassic.cern.ch/sixtrack/|LHC@home 1.0";
 		boinc_projects[21] = "http://escatter11.fullerton.edu/nfs/|NFS@Home";
 		boinc_projects[22] = "http://numberfields.asu.edu/NumberFields/|NumberFields@home";
 		boinc_projects[23] = "http://sat.isa.ru/pdsat/|SAT@home";
 		boinc_projects[24] = "http://szdg.lpds.sztaki.hu/szdg/|SZTAKI Desktop Grid";
 		boinc_projects[25] = "http://www.gpugrid.net/|GPUGRID";
-		boinc_projects[26] = "http://convector.fsv.cvut.cz/|CONVECTOR";
+		boinc_projects[26] = "http://convector.fsv.cvut.cz/|convector";
 		boinc_projects[27] = "http://www.rechenkraft.net/yoyo/|yoyo@home";
+		boinc_projects[28] = "http://mindmodeling.org/|MindModeling@Beta";
 		// New Projects
-		boinc_projects[28] = "http://findah.ucd.ie/|FiND@Home";
-		boinc_projects[29] = "http://atlasathome.cern.ch/|ATLAS@Home";
-		boinc_projects[30] = "http://universeathometest.info/universe/|Universe@Home";
-		boinc_projects[31] = "http://www.bitcoinutopia.net/bitcoinutopia/|Bitcoin Utopia";
-		boinc_projects[32] = "http://lhcathome2.cern.ch/vLHCathome/vLHCathome/|VirtualLHC@home";
-		boinc_projects[33] = "http://volunteer.cs.und.edu/csg/|Citizen Science Grid";
+		boinc_projects[29] = "http://findah.ucd.ie/|FiND@Home";
+		boinc_projects[30] = "http://atlasathome.cern.ch/|ATLAS@Home";
+		boinc_projects[31] = "http://universeathometest.info/universe/|Universe@Home";
+		boinc_projects[32] = "http://www.bitcoinutopia.net/bitcoinutopia/|Bitcoin Utopia";
+		boinc_projects[33] = "http://lhcathome2.cern.ch/vLHCathome/vLHCathome/|VirtualLHC@home";
+		boinc_projects[34] = "http://volunteer.cs.und.edu/csg/|Citizen Science Grid";
+		boinc_projects[35] = "http://radioactiveathome.org/boinc/|Radioactive@Home";
 
 
 
