@@ -184,12 +184,10 @@ void InitializeBoincProjects()
 		GlobalCPUMiningCPID.diffbytes = 0;
 		GlobalCPUMiningCPID.email = "";
 		GlobalCPUMiningCPID.RSAWeight = 0;
-		
-		std::string boinc_projects[100];
-	    
 
 		//Retiring - Remove after we verify everything works
 		/*
+		std::string boinc_projects[100];
         boinc_projects[0] = "http://boinc.bakerlab.org/rosetta/   |rosetta@home";
         boinc_projects[1] = "http://docking.cis.udel.edu/         |Docking";
         boinc_projects[2] = "http://www.malariacontrol.net/       |malariacontrol.net";
@@ -261,55 +259,54 @@ void InitializeBoincProjects()
 
 		// Refreshed Project list - SePulcher - 2/6/2015
 		// Current Projects
-		boinc_projects[0] = "http://www.gridcoin.us/|INVESTOR"; //This is a general project used for inflation only subsidies
-		boinc_projects[1] = "http://boinc.thesonntags.com/collatz/|Collatz Conjecture";
-		boinc_projects[2] = "http://www.cosmologyathome.org/|Cosmology@Home";
-		boinc_projects[3] = "http://einstein.phys.uwm.edu/|Einstein@Home";
-		boinc_projects[4] = "http://moowrap.net/|Moo! Wrapper";
-		boinc_projects[5] = "http://boinc.fzk.de/poem/|POEM@HOME";
-		boinc_projects[6] = "http://www.primegrid.com/|PrimeGrid";
-		boinc_projects[7] = "http://boinc.bakerlab.org/rosetta/|Rosetta@Home";
-		boinc_projects[8] = "http://setiathome.berkeley.edu/|SETI@Home";
-		boinc_projects[9] = "http://pogs.theskynet.org/pogs/|theSkyNet POGS";
-		boinc_projects[10] = "http://www.malariacontrol.net/|malariacontrol.net";
-		boinc_projects[11] = "http://www.worldcommunitygrid.org/|World Community Grid";
-		boinc_projects[12] = "http://asteroidsathome.net/boinc/|Asteroids@home";
-		boinc_projects[13] = "http://climateprediction.net/|climateprediction.net";
-		boinc_projects[14] = "http://milkyway.cs.rpi.edu/milkyway/|MilkyWay@home";
-		boinc_projects[15] = "http://qcn.stanford.edu/sensor/|Quake-Catcher Network";
-		boinc_projects[16] = "http://boinc.gorlaeus.net/|Leiden Classical";
-		boinc_projects[16] = "http://home.edges-grid.eu/home/|EDGeS@Home";
-		boinc_projects[18] = "http://aerospaceresearch.net/constellation/|Constellation";
-		boinc_projects[19] = "http://www.enigmaathome.net/|Enigma@Home";
-		boinc_projects[20] = "http://lhcathomeclassic.cern.ch/sixtrack/|LHC@home 1.0";
+		std::string boinc_projects[] = {
+			"http://www.gridcoin.us/|INVESTOR", //This is a general project used for inflation only subsidies
+			"http://boinc.thesonntags.com/collatz/|Collatz Conjecture",
+			"http://www.cosmologyathome.org/|Cosmology@Home",
+			"http://einstein.phys.uwm.edu/|Einstein@Home",
+			"http://moowrap.net/|Moo! Wrapper",
+			"http://boinc.fzk.de/poem/|POEM@HOME",
+			"http://www.primegrid.com/|PrimeGrid",
+			"http://boinc.bakerlab.org/rosetta/|Rosetta@Home",
+			"http://setiathome.berkeley.edu/|SETI@Home",
+			"http://pogs.theskynet.org/pogs/|theSkyNet POGS",
+			"http://www.malariacontrol.net/|malariacontrol.net",
+			"http://www.worldcommunitygrid.org/|World Community Grid",
+			"http://asteroidsathome.net/boinc/|Asteroids@home",
+			"http://climateprediction.net/|climateprediction.net",
+			"http://milkyway.cs.rpi.edu/milkyway/|MilkyWay@home",
+			"http://qcn.stanford.edu/sensor/|Quake-Catcher Network",
+			"http://boinc.gorlaeus.net/|Leiden Classical",
+			"http://home.edges-grid.eu/home/|EDGeS@Home",
+			"http://aerospaceresearch.net/constellation/|Constellation",
+			"http://www.enigmaathome.net/|Enigma@Home",
+			"http://lhcathomeclassic.cern.ch/sixtrack/|LHC@home 1.0",
+			"http://escatter11.fullerton.edu/nfs/|NFS@Home",
+			"http://numberfields.asu.edu/NumberFields/|NumberFields@home",
+			"http://sat.isa.ru/pdsat/|SAT@home",
+			"http://szdg.lpds.sztaki.hu/szdg/|SZTAKI Desktop Grid",
+			"http://www.gpugrid.net/|GPUGRID",
+			"http://convector.fsv.cvut.cz/|CONVECTOR",
+			"http://www.rechenkraft.net/yoyo/|yoyo@home",
+			// New Projects
+			"http://findah.ucd.ie/|FiND@Home",
+			"http://atlasathome.cern.ch/|ATLAS@Home",
+			"http://universeathometest.info/universe/|Universe@Home",
+			"http://www.bitcoinutopia.net/bitcoinutopia/|Bitcoin Utopia",
+			"http://lhcathome2.cern.ch/vLHCathome/vLHCathome/|VirtualLHC@home",
+			"http://volunteer.cs.und.edu/csg/|Citizen Science Grid",
+			"http://burp.renderfarming.net/|BURP",
+			"http://mindmodeling.org/|MindModeling@Beta",
+			"http://radioactiveathome.org/boinc/|Radioactive@Home"
+		};
 
-		
-		boinc_projects[21] = "http://escatter11.fullerton.edu/nfs/|NFS@Home";
-		boinc_projects[22] = "http://numberfields.asu.edu/NumberFields/|NumberFields@home";
-		boinc_projects[23] = "http://sat.isa.ru/pdsat/|SAT@home";
-		boinc_projects[24] = "http://szdg.lpds.sztaki.hu/szdg/|SZTAKI Desktop Grid";
-		boinc_projects[25] = "http://www.gpugrid.net/|GPUGRID";
-		boinc_projects[26] = "http://convector.fsv.cvut.cz/|CONVECTOR";
-		boinc_projects[27] = "http://www.rechenkraft.net/yoyo/|yoyo@home";
-		// New Projects
-		boinc_projects[28] = "http://findah.ucd.ie/|FiND@Home";
-		boinc_projects[29] = "http://atlasathome.cern.ch/|ATLAS@Home";
-		boinc_projects[30] = "http://universeathometest.info/universe/|Universe@Home";
-		boinc_projects[31] = "http://www.bitcoinutopia.net/bitcoinutopia/|Bitcoin Utopia";
-		boinc_projects[32] = "http://lhcathome2.cern.ch/vLHCathome/vLHCathome/|VirtualLHC@home";
-		boinc_projects[33] = "http://volunteer.cs.und.edu/csg/|Citizen Science Grid";
-		boinc_projects[34] = "http://burp.renderfarming.net/|BURP";
-	    boinc_projects[35] = "http://mindmodeling.org/            |MindModeling@Beta";
-		boinc_projects[36] = "http://radioactiveathome.org/boinc/|Radioactive@Home";
 
-
-		for (int i = 0; i < 100; i++)
+		for (size_t i = 0; i < sizeof(boinc_projects) / sizeof(std::string); i++)
 		{
 			std::string proj = boinc_projects[i];
 			if (proj.length() > 1)
 			{
-				
-       			boost::to_lower(proj);
+				boost::to_lower(proj);
 				proj = ToOfficialName(proj);
 
 				std::vector<std::string> vProject = split(proj,"|");
@@ -324,12 +321,8 @@ void InitializeBoincProjects()
 				structcpid.projectname = vProject[1];
 				mvBoincProjects[mainProject] = structcpid;
 				WHITELISTED_PROJECTS++;
-
-
-			} 
-
+			}
 		}
-
 }
 
 
