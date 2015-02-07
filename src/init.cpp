@@ -281,7 +281,7 @@ void InitializeBoincProjects()
 		boinc_projects[16] = "http://home.edges-grid.eu/home/|EDGeS@Home";
 		boinc_projects[18] = "http://aerospaceresearch.net/constellation/|Constellation";
 		boinc_projects[19] = "http://www.enigmaathome.net/|Enigma@Home";
-		boinc_projects[20] = "http://lhcathomeclassic.cern.ch/sixtrack/||LHC@home 1.0";
+		boinc_projects[20] = "http://lhcathomeclassic.cern.ch/sixtrack/|LHC@home 1.0";
 		boinc_projects[21] = "http://escatter11.fullerton.edu/nfs/|NFS@Home";
 		boinc_projects[22] = "http://numberfields.asu.edu/NumberFields/|NumberFields@home";
 		boinc_projects[23] = "http://sat.isa.ru/pdsat/|SAT@home";
