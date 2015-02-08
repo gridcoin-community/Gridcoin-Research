@@ -278,12 +278,10 @@ void InitializeBoincProjects()
 		boinc_projects[14] = "http://milkyway.cs.rpi.edu/milkyway/|MilkyWay@home";
 		boinc_projects[15] = "http://qcn.stanford.edu/sensor/|Quake-Catcher Network";
 		boinc_projects[16] = "http://boinc.gorlaeus.net/|Leiden Classical";
-		boinc_projects[16] = "http://home.edges-grid.eu/home/|EDGeS@Home";
+		boinc_projects[17] = "http://home.edges-grid.eu/home/|EDGeS@Home";
 		boinc_projects[18] = "http://aerospaceresearch.net/constellation/|Constellation";
 		boinc_projects[19] = "http://www.enigmaathome.net/|Enigma@Home";
 		boinc_projects[20] = "http://lhcathomeclassic.cern.ch/sixtrack/|LHC@home 1.0";
-
-		
 		boinc_projects[21] = "http://escatter11.fullerton.edu/nfs/|NFS@Home";
 		boinc_projects[22] = "http://numberfields.asu.edu/NumberFields/|NumberFields@home";
 		boinc_projects[23] = "http://sat.isa.ru/pdsat/|SAT@home";
@@ -302,21 +300,17 @@ void InitializeBoincProjects()
 	    boinc_projects[35] = "http://mindmodeling.org/            |MindModeling@Beta";
 		boinc_projects[36] = "http://radioactiveathome.org/boinc/|Radioactive@Home";
 
-
 		for (int i = 0; i < 100; i++)
 		{
 			std::string proj = boinc_projects[i];
 			if (proj.length() > 1)
 			{
-				
        			boost::to_lower(proj);
 				proj = ToOfficialName(proj);
-
 				std::vector<std::string> vProject = split(proj,"|");
 				std::string mainProject = vProject[1];
 				boost::to_lower(mainProject);
 				StructCPID structcpid = GetStructCPID();
-
 				mvBoincProjects.insert(map<string,StructCPID>::value_type(mainProject,structcpid));
 				structcpid = mvBoincProjects[mainProject];
 				structcpid.initialized = true;
@@ -325,11 +319,8 @@ void InitializeBoincProjects()
 				mvBoincProjects[mainProject] = structcpid;
 				WHITELISTED_PROJECTS++;
 
-
 			} 
-
 		}
-
 }
 
 
