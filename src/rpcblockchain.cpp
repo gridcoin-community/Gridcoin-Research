@@ -18,7 +18,13 @@
 
 using namespace json_spirit;
 using namespace std;
+
 extern std::string YesNo(bool bin);
+double Cap(double dAmt, double Ceiling);
+
+
+int64_t GetMaximumBoincSubsidy(int64_t nTime);
+
 void ReloadBlockChain1();
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
@@ -1415,19 +1421,10 @@ Array MagnitudeReport(bool bMine)
 									entry.push_back(Pair("InterestPayments (14 days)",structMag.interestPayments));
 									entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
 									entry.push_back(Pair("Total Owed",structMag.owed));
-									entry.push_back(Pair("Next Expected Payment",structMag.owed/2));
+									double nep = Cap(structMag.owed/2, GetMaximumBoincSubsidy(GetAdjustedTime()));
+									entry.push_back(Pair("Next Estimated Payment",nep));
 									entry.push_back(Pair("Daily Paid",structMag.payments/14));
 									entry.push_back(Pair("Daily Owed",structMag.totalowed/14));
-									
-									/*
-									if (structMag.cpid==GlobalCPUMiningCPID.cpid)
-									{
-											int64_t cpid_chrono = CPIDChronoStart(GlobalCPUMiningCPID.cpid);
-											entry.push_back(Pair("Registered Payment Time",TimestampToHRDate(cpid_chrono)));
-									}
-									*/
-
-
 									results.push_back(entry);
 						}
 				}

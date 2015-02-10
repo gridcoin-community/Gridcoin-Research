@@ -292,7 +292,7 @@ void InitializeBoincProjects()
 		// New Projects
 		boinc_projects[28] = "http://findah.ucd.ie/|FiND@Home";
 		boinc_projects[29] = "http://atlasathome.cern.ch/|ATLAS@Home";
-		boinc_projects[30] = "http://universeathometest.info/universe/|Universe@Home";
+		boinc_projects[30] = "http://universeathometest.info/universe/|Universe@Home Test";
 		boinc_projects[31] = "http://www.bitcoinutopia.net/bitcoinutopia/|Bitcoin Utopia";
 		boinc_projects[32] = "http://lhcathome2.cern.ch/vLHCathome/vLHCathome/|VirtualLHC@home";
 		boinc_projects[33] = "http://volunteer.cs.und.edu/csg/|Citizen Science Grid";

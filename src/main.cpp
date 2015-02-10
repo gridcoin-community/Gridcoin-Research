@@ -39,6 +39,8 @@ int DownloadBlocks();
 std::string GetCommandNonce(std::string command);
 std::string DefaultBlockKey(int key_length);
 
+extern double Cap(double dAmt, double Ceiling);
+
 
 using namespace std;
 using namespace boost;
@@ -2035,7 +2037,7 @@ double GetMagnitudeMultiplier(int64_t nTime)
 int64_t GetProofOfStakeMaxReward(int64_t nCoinAge, int64_t nFees, int64_t locktime)
 {
 	int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
-	nInterest += 1*COIN;
+	nInterest += 10*COIN;
 	int64_t nBoinc    = (GetMaximumBoincSubsidy(locktime)+1) * COIN;
 	int64_t nSubsidy  = nInterest + nBoinc;
     return nSubsidy + nFees;
@@ -2102,7 +2104,7 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 {
     
 	int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
-	if (RSA_WEIGHT > 24000) nInterest += 1*COIN;
+	if (RSA_WEIGHT > 24000) nInterest += 10*COIN;
 	int64_t nBoinc    = GetProofOfResearchReward(cpid,VerifyingBlock);
 	int64_t nSubsidy  = nInterest + nBoinc;
 	
@@ -5006,11 +5008,8 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 				mvMagnitudes.insert(map<string,StructCPID>::value_type(cpid,globalMag));
 		}
 
-		
 		StructCPID structMagnitude = GetStructCPID();
-
 		structMagnitude = mvMagnitudes[cpid];
-
 		if (!structMagnitude.initialized)
 		{
 			structMagnitude = GetStructCPID();
@@ -5028,11 +5027,9 @@ void AddNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, doubl
 		if (IsStake)
 		{
 			double interest = (double)mint - (double)bb.ResearchSubsidy;
-
 			//double interest = bb.InterestSubsidy;
 			structMagnitude.payments += bb.ResearchSubsidy;
 			structMagnitude.interestPayments=structMagnitude.interestPayments + interest;
-			
 			if (LockTime > structMagnitude.LastPaymentTime && bb.ResearchSubsidy > 0) structMagnitude.LastPaymentTime = LockTime;
 			if (LockTime < structMagnitude.EarliestPaymentTime) structMagnitude.EarliestPaymentTime = LockTime;
 			// Per RTM 12-23-2014 (Halford) Track detailed payments made to each CPID
@@ -5104,18 +5101,19 @@ bool TallyNetworkAverages(bool ColdBoot)
 
 						if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
 						MiningCPID bb = DeserializeBoincBlock(hashboinc);
+						// R HALFORD - 2/10/2015 - REGARDLESS OF A PROJECT BEING VALID, COUNT CREDITS AND PAYMENTS AGAINST THE CPID SO THAT CPIDS WHO WORKED RETIRED PROJECTS ARE STILL CALCULATED CORRECTLY (IE TOTAL OWED, TOTAL PAID) 
+
 
 						//Verify validity of project
 						bool piv = ProjectIsValid(bb.projectname);
-						if ( (piv && bb.rac > 100 && bb.projectname.length() > 2 && bb.cpid.length() > 5)  || bb.cpid=="INVESTOR" ) 
+						//	if ( (piv && bb.rac > 100 && bb.projectname.length() > 2 && bb.cpid.length() > 5)  || bb.cpid=="INVESTOR" ) 
+						if (true) 
 						{
-
 							std::string proj= bb.projectname;
 							std::string projcpid = bb.cpid + ":" + bb.projectname;
 							std::string cpid = bb.cpid;
 							std::string cpidv2 = bb.cpidv2;
 							std::string lbh = bb.lastblockhash;
-
 							StructCPID structcpid = GetStructCPID();
 							structcpid = mvNetwork[proj];
 							iRow++;
@@ -5162,7 +5160,6 @@ bool TallyNetworkAverages(bool ColdBoot)
 							mvNetworkCPIDs[projcpid] = structnetcpidproject;
 							// Insert CPID, Magnitude, Payments
 							AddNetworkMagnitude(block.nTime,cpid,bb,mint,pblockindex->IsProofOfStake());
-
 					    	//	printf("Adding mint %f for %s\r\n",mint,cpid.c_str());
 
 						}
