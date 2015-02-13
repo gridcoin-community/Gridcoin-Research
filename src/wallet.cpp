@@ -1409,13 +1409,17 @@ bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pai
 }
 
 // Select some coins without random shuffle or best subset approximation
-bool CWallet::SelectCoinsForStaking(int64_t nTargetValue, unsigned int nSpendTime, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const
+bool CWallet::SelectCoinsForStaking(int64_t nTargetValueIn, unsigned int nSpendTime, 
+	set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const
 {
     vector<COutput> vCoins;
     AvailableCoinsForStaking(vCoins, nSpendTime);
 
     setCoinsRet.clear();
     nValueRet = 0;
+	//2-13-2015 R HALFORD - If this is a POR block, set the Target Coin Value to be 1/2
+	int64_t nTargetValue = nTargetValueIn;
+	if (GlobalCPUMiningCPID.cpid != "INVESTOR") nTargetValue = nTargetValueIn/2;
 
     BOOST_FOREACH(COutput output, vCoins)
     {

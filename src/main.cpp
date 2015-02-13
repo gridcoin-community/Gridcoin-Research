@@ -7084,6 +7084,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 					//6-21-2014 (R Halford) : In this convoluted situation, we found MindModeling@beta in the Boinc client, and MindModeling@Home in the CreditCheckOnline XML;
 					if (sProj == "mindmodeling@home") sProj = "mindmodeling@beta";
 					if (sProj == "Quake Catcher Network") sProj = "Quake-Catcher Network";
+					
 
 					//Is project Valid
 					bool projectvalid = ProjectIsValid(sProj);
@@ -7280,6 +7281,7 @@ std::string ToOfficialName(std::string proj)
 			if (proj=="mindmodeling@beta")      proj = "mindmodeling@beta";
 			if (proj=="volpex@uh")              proj = "volpex";
 			if (proj=="oproject")               proj = "oproject@home";
+			if (proj=="universe@home test")     proj = "universe@home";
 
 			return proj; 
 }
