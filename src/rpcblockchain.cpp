@@ -48,7 +48,7 @@ std::string qtGRCCodeExecutionSubsystem(std::string sCommand);
 std::string LegacyDefaultBoincHashArgs();
 double GetChainDailyAvgEarnedByCPID(std::string cpid, int64_t locktime, double& out_payments, double& out_daily_avg_payments);
 
-bool ChainPaymentViolation(std::string cpid, int64_t locktime, double Proposed_Subsidy);
+bool ChainPaymentApproved(std::string cpid, int64_t locktime, double Proposed_Subsidy);
 
 double CoinToDouble(double surrogate);
 
@@ -1126,17 +1126,15 @@ Value execute(const Array& params, bool fHelp)
 			double AvgDailyPayments = 0;
 			double DailyOwed = 0;
 			DailyOwed = GetChainDailyAvgEarnedByCPID(sParam1,GetAdjustedTime(),Payments,AvgDailyPayments);
-			bool ChainPaymentApproved = ChainPaymentViolation(sParam1,GetAdjustedTime(),5);
+			bool bChainPaymentApproved = ChainPaymentApproved(sParam1,GetAdjustedTime(),5);
 			entry.push_back(Pair("DailyOwed",DailyOwed));
 			entry.push_back(Pair("AvgPayments",AvgDailyPayments));
 			entry.push_back(Pair("Payments",Payments));
-			entry.push_back(Pair("Chain Payment Approved 5",ChainPaymentApproved));
-			ChainPaymentApproved = ChainPaymentViolation(sParam1,GetAdjustedTime(),100);
-			entry.push_back(Pair("Chain Payment Approved 100",ChainPaymentApproved));
-			ChainPaymentApproved = ChainPaymentViolation(sParam1,GetAdjustedTime(),400);
-			entry.push_back(Pair("Chain Payment Approved 400",ChainPaymentApproved));
-			ChainPaymentApproved = ChainPaymentViolation(sParam1,GetAdjustedTime(),800);
-			entry.push_back(Pair("Chain Payment Approved 800",ChainPaymentApproved));
+			entry.push_back(Pair("Chain Payment Approved 5",bChainPaymentApproved));
+			bChainPaymentApproved = ChainPaymentApproved(sParam1,GetAdjustedTime(),100);
+			entry.push_back(Pair("Chain Payment Approved 100",bChainPaymentApproved));
+			bChainPaymentApproved = ChainPaymentApproved(sParam1,GetAdjustedTime(),400);
+			entry.push_back(Pair("Chain Payment Approved 400",bChainPaymentApproved));
 			results.push_back(entry);
 	
 		}

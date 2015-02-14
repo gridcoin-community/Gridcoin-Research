@@ -306,9 +306,9 @@ void InitializeBoincProjects()
 			if (proj.length() > 1)
 			{
        			boost::to_lower(proj);
-				proj = ToOfficialName(proj);
 				std::vector<std::string> vProject = split(proj,"|");
 				std::string mainProject = vProject[1];
+				mainProject = ToOfficialName(mainProject);
 				boost::to_lower(mainProject);
 				StructCPID structcpid = GetStructCPID();
 				mvBoincProjects.insert(map<string,StructCPID>::value_type(mainProject,structcpid));

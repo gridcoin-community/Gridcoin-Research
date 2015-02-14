@@ -2022,7 +2022,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		double mint = CoinToDouble(nReward);
 		double PORDiff = GetBlockDifficulty(nBits);
 	
-		if (fDebug) printf("Creating POS Reward for %s  amt  %f  {RSAWeight %f}  Research %f, Interest %f \r\n",
+		if (fDebug2) printf("Creating POS Reward for %s  amt  %f  {RSAWeight %f}  Research %f, Interest %f \r\n",
 			GlobalCPUMiningCPID.cpid.c_str(), mint, (double)RSA_WEIGHT,miningcpid.ResearchSubsidy,miningcpid.InterestSubsidy);
 	
 		//INVESTORS

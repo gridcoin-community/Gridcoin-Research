@@ -64,7 +64,7 @@ extern void RemoveNetworkMagnitude(double LockTime, std::string cpid, MiningCPID
 
 extern double GetChainDailyAvgEarnedByCPID(std::string cpid, int64_t locktime, double& out_payments, double& out_daily_avg_payments);
 
-extern bool ChainPaymentViolation(std::string cpid, int64_t locktime, double Proposed_Subsidy);
+extern bool ChainPaymentApproved(std::string cpid, int64_t locktime, double Proposed_Subsidy);
 
 
 
@@ -2075,7 +2075,7 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 
 			if (owed > (GetMaximumBoincSubsidy(GetAdjustedTime()))) owed = GetMaximumBoincSubsidy(GetAdjustedTime()); 
 
-			if (!ChainPaymentViolation(cpid,GetAdjustedTime(),owed)) 
+			if (!ChainPaymentApproved(cpid,GetAdjustedTime(),owed)) 
 			{
 					printf("Chain Payment Violation! cpid %s \r\n",cpid.c_str());
 					owed = 0;
@@ -3021,18 +3021,18 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			if (IsLockTimeWithinMinutes(GetBlockTime(),30) && bb.cpid != "INVESTOR")
 			{
 
-				bool ChainPaymentApproved = ChainPaymentViolation(bb.cpid,GetBlockTime(),bb.ResearchSubsidy);
-				if (!ChainPaymentApproved)
+				bool bChainPaymentApproved = ChainPaymentApproved(bb.cpid,GetBlockTime(),bb.ResearchSubsidy);
+				if (!bChainPaymentApproved)
 				{
 						TallyNetworkAverages(false); //Re-Tally using cache
-						ChainPaymentApproved = ChainPaymentViolation(bb.cpid,GetBlockTime(),bb.ResearchSubsidy);
+						bChainPaymentApproved = ChainPaymentApproved(bb.cpid,GetBlockTime(),bb.ResearchSubsidy);
 				}
-				if (!ChainPaymentApproved) 	
+				if (!bChainPaymentApproved) 	
 				{
 						TallyNetworkAverages(true); //Erase Cache & Re-Tally 
-						ChainPaymentApproved = ChainPaymentViolation(bb.cpid,GetBlockTime(),bb.ResearchSubsidy);
+						bChainPaymentApproved = ChainPaymentApproved(bb.cpid,GetBlockTime(),bb.ResearchSubsidy);
 				}
-				if (!ChainPaymentApproved) 
+				if (!bChainPaymentApproved) 
 				{
 											
 						return DoS(20, error("ConnectBlock[] : Researchers Reward for CPID %s pays too much - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
@@ -4919,7 +4919,7 @@ double GetChainDailyAvgEarnedByCPID(std::string cpid, int64_t locktime, double& 
 			
 }
 
-bool ChainPaymentViolation(std::string cpid, int64_t locktime_future, double Proposed_Subsidy)
+bool ChainPaymentApproved(std::string cpid, int64_t locktime_future, double Proposed_Subsidy)
 {
 	double DailyOwed = 0;
 	double Payments = 0;
@@ -4928,6 +4928,7 @@ bool ChainPaymentViolation(std::string cpid, int64_t locktime_future, double Pro
 	double BlockMax = GetMaximumBoincSubsidy(locktime);
 	//2-3-2015, R Halford: To help smooth out cutover periods, Assess mag multiplier and max boinc subsidies as of T-14:
 	if (cpid=="INVESTOR" || cpid=="investor") return true;
+	if (Proposed_Subsidy == 0) return true;
 	if (Proposed_Subsidy > BlockMax) 
 	{
 		if (fDebug3 || LessVerbose(100)) printf("Chain payment violation - proposed subsidy greater than Block Max %s Proposed Subsidy %f",cpid.c_str(),Proposed_Subsidy);
@@ -7078,7 +7079,6 @@ void CreditCheck(std::string cpid, bool clearcache)
 					std::string rectime= ExtractXML(vCC[i],"<expavg_time>","</expavg_time>");
 					boost::to_lower(sProj);
 					sProj = ToOfficialName(sProj);
-					boost::to_lower(sProj);
 					//1-11-2015 Rob Halford - List of Exceptions to Map Netsoft Name -> Boinc Client Name
 
 					//6-21-2014 (R Halford) : In this convoluted situation, we found MindModeling@beta in the Boinc client, and MindModeling@Home in the CreditCheckOnline XML;
@@ -7500,7 +7500,7 @@ void HarvestCPIDs(bool cleardata)
 				boost::to_lower(team);
 				structcpid.team = team;
 				InitializeProjectStruct(structcpid);
-				if (fDebug) printf("Harv new project %s cpid %s valid %s",structcpid.projectname.c_str(),structcpid.cpid.c_str(),YesNo(structcpid.Iscpidvalid).c_str());
+				if (fDebug2) printf("Harv new project %s cpid %s valid %s",structcpid.projectname.c_str(),structcpid.cpid.c_str(),YesNo(structcpid.Iscpidvalid).c_str());
 
 				if (!structcpid.Iscpidvalid)
 				{
@@ -7551,12 +7551,7 @@ void HarvestCPIDs(bool cleardata)
 					structcpid.verifiedrectime = structverify.verifiedrectime;
 					structcpid.verifiedage     = structverify.verifiedage;
 				}
-				if (structcpid.verifiedteam != "gridcoin") 
-				{	
-						structcpid.Iscpidvalid = false;
-						structcpid.errors = "Team invalid";
-				}
-
+			
 				
 				if (!structcpid.Iscpidvalid)
 				{
@@ -7564,10 +7559,16 @@ void HarvestCPIDs(bool cleardata)
 					structcpid.errors = "CPID invalid.  Check E-mail address.";
 				}
 
+				if (structcpid.verifiedteam != "gridcoin") 
+				{	
+						//structcpid.Iscpidvalid = false;
+						structcpid.errors = "Team invalid";
+				}
+
 				if (!structverify.initialized && structcpid.Iscpidvalid)
 				{
 					structcpid.Iscpidvalid = false;
-					structcpid.errors = "Project missing in credit verification node.";
+					structcpid.errors = "Project missing in [Netsoft] credit verification node.  Please contact Netsoft to add this project.";
 				}
 
 				if (structcpid.rac < 100)         

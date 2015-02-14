@@ -444,13 +444,10 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		int64_t nNewBlockReward = GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),
 			out_por,out_interest,miningcpid.RSAWeight);
 
-
 		miningcpid.ResearchSubsidy = out_por;
 		miningcpid.InterestSubsidy = out_interest;
-		//if (fDebug3) printf("Calc Research Subsidy %f, Interest %f \r\n",(double)miningcpid.ResearchSubsidy,(double)miningcpid.InterestSubsidy);
+		if (fDebug2) printf("Calc Research Subsidy %f, Interest %f \r\n",(double)miningcpid.ResearchSubsidy,(double)miningcpid.InterestSubsidy);
 
-		////////////////// msMiningErrors4 = "B R S A: " + RoundToString(miningcpid.RSAWeight,0);
-		//12-27-2014 Strip CPID out of hashboinc
 		miningcpid.enccpid = ""; //CPID V1 Boinc RunTime enc key
 		miningcpid.encboincpublickey = "";
 		miningcpid.encaes = "";
@@ -459,7 +456,6 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 			
 		std::string hashBoinc = SerializeBoincBlock(miningcpid);
 
-		
 		//printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
 	    if (fDebug)  printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
 		pblock->vtx[0].hashBoinc = hashBoinc;
@@ -488,7 +484,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
             pblock->UpdateTime(pindexPrev);
         pblock->nNonce         = 0;
     }
-		if (fDebug) printf("ZX271");
+	if (fDebug) printf("ZX271");
 
     return pblock.release();
 }
