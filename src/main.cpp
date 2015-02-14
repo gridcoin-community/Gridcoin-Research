@@ -118,7 +118,7 @@ uint256 muGlobalCheckpointHash = 0;
 uint256 muGlobalCheckpointHashRelayed = 0;
 int muGlobalCheckpointHashCounter = 0;
 ///////////////////////MINOR VERSION////////////////////////////////
-int MINOR_VERSION = 195;
+int MINOR_VERSION = 196;
 
 			
 bool IsUserQualifiedToSendCheckpoint();
@@ -7282,7 +7282,7 @@ std::string ToOfficialName(std::string proj)
 			if (proj=="volpex@uh")              proj = "volpex";
 			if (proj=="oproject")               proj = "oproject@home";
 			if (proj=="universe@home test")     proj = "universe@home";
-
+			if (proj=="find@home")              proj = "fightmalaria";
 			return proj; 
 }
 
