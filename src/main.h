@@ -71,14 +71,12 @@ static const unsigned int MINIMUM_CHECKPOINT_TRANSMISSION_BALANCE = 4000000;
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//Gridcoin - Genesis1 - MainNet - Used for R&D until 10-20-2014:
-//static const uint256 hashGenesisBlock("0x0000026925f360c804a9b8410e656de447714d1fe39ff0de1002dcc2e457963b");
 
 //Genesis - MainNet - Production Genesis: as of 10-20-2014:
 static const uint256 hashGenesisBlock("0x000005a247b397eadfefa58e872bc967c2614797bdc8d4d0e6b09fea5c191599");
 
 //TestNet Genesis:
-static const uint256 hashGenesisBlockTestNet("0x");
+static const uint256 hashGenesisBlockTestNet("0x00006e037d7b84104208ecf2a8638d23149d712ea810da604ee2f2cb39bae713");
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 inline bool IsProtocolV2(int nHeight) { return nHeight > 85400; }
 

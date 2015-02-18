@@ -315,7 +315,7 @@ void InitializeBoincProjects()
 				structcpid = mvBoincProjects[mainProject];
 				structcpid.initialized = true;
 				structcpid.link = vProject[0];
-				structcpid.projectname = vProject[1];
+				structcpid.projectname = mainProject;
 				mvBoincProjects[mainProject] = structcpid;
 				WHITELISTED_PROJECTS++;
 

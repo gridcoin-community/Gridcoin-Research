@@ -4463,7 +4463,7 @@ bool LoadBlockIndex(bool fAllowNew)
 		block.nTime    = !fTestNet ? 1413033777 : 1406674534;
 		//Official Launch time:
         block.nBits    = bnProofOfWorkLimit.GetCompact();
-		block.nNonce = !fTestNet ? 130208 : 1;
+		block.nNonce = !fTestNet ? 130208 : 22436;
     	printf("starting Genesis Check...");
 	    // If genesis block hash does not match, then generate new genesis hash.
         if (block.GetHash() != hashGenesisBlock)  

@@ -295,4 +295,8 @@ Public Class frmSQL
     Private Sub rtbQuery_TextChanged(sender As System.Object, e As System.EventArgs) Handles rtbQuery.TextChanged
 
     End Sub
+
+    Private Sub dgv_CellContentClick(sender As System.Object, e As System.Windows.Forms.DataGridViewCellEventArgs) Handles dgv.CellContentClick
+
+    End Sub
 End Class
