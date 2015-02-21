@@ -7283,6 +7283,7 @@ std::string ToOfficialName(std::string proj)
 			if (proj=="oproject")               proj = "oproject@home";
 			if (proj=="universe@home test")     proj = "universe@home";
 			if (proj=="find@home")              proj = "fightmalaria";
+			if (proj=="virtuallhc@home")        proj = "vLHCathome";
 			return proj; 
 }
 
@@ -7568,7 +7569,7 @@ void HarvestCPIDs(bool cleardata)
 				if (!structverify.initialized && structcpid.Iscpidvalid)
 				{
 					structcpid.Iscpidvalid = false;
-					structcpid.errors = "Project missing in [Netsoft] credit verification node.  Please contact Netsoft to add this project.";
+					structcpid.errors = "Project missing in [Netsoft] credit verification node.  Please contact Netsoft to add this project. (Wait at least 24 hours for new projects to propagate).";
 				}
 
 				if (structcpid.rac < 100)         
