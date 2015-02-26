@@ -3798,8 +3798,8 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 			// Check timestamp against prev
 			if (GetBlockTime() <= pindexPrev->GetPastTimeLimit() || FutureDrift(GetBlockTime(), nHeight) < pindexPrev->GetBlockTime())
 				return DoS(60, error("AcceptBlock() : block's timestamp is too early"));
-		// Check proof-of-work or proof-of-stake
-		if (nBits != GetNextTargetRequired(pindexPrev, IsProofOfStake()))
+    		// Check proof-of-work or proof-of-stake
+	    	if (nBits != GetNextTargetRequired(pindexPrev, IsProofOfStake()))
 				return DoS(100, error("AcceptBlock() : incorrect %s", IsProofOfWork() ? "proof-of-work" : "proof-of-stake"));
 
 	}
@@ -4579,7 +4579,6 @@ std::string RetrieveMd5(std::string s1)
 	{
 		const char* chIn = s1.c_str();
 		unsigned char digest2[16];
-		//const unsigned char * pszBlah = reinterpret_cast<const unsigned char *> (s1.c_str());
 		MD5((unsigned char*)chIn, strlen(chIn), (unsigned char*)&digest2);    
 		char mdString2[33];
 		for(int i = 0; i < 16; i++) sprintf(&mdString2[i*2], "%02x", (unsigned int)digest2[i]);
@@ -6560,7 +6559,6 @@ double checksum(std::string s)
  uint256 GetScryptHashString(std::string s)
  {
         uint256 thash = 0;
-        //scrypt_1024_1_1_256(BEGIN(s), END(s));
 		thash = Hash(BEGIN(s),END(s));
         return thash;
  }
@@ -7053,7 +7051,6 @@ void CreditCheck(std::string cpid, bool clearcache)
 			std::vector<std::string> vCC = split(cc.c_str(),"<project>");
 
 			//printf("Performing credit check for %s",cpid.c_str());
-
 
 			//Clear current magnitude
 			StructCPID structMag = GetStructCPID();

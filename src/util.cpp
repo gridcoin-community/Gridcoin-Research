@@ -1037,24 +1037,32 @@ const boost::filesystem::path &GetDataDir(bool fNetSpecific)
 
     // This can be called during exceptions by printf, so we cache the
     // value so we don't have to do memory allocations after that.
-    if (cachedPath[fNetSpecific])
+    if (cachedPath[fNetSpecific]  && (fs::is_directory(path))  )
+	{
         return path;
+	}
 
     LOCK(csPathCached);
 
-    if (mapArgs.count("-datadir")) {
-        path = fs::system_complete(mapArgs["-datadir"]);
-        if (!fs::is_directory(path)) {
-            path = "";
-            return path;
-        }
-    } else {
+    if (mapArgs.count("-datadir")) 
+	{
+		    path = fs::system_complete(mapArgs["-datadir"]);
+			if (!fs::is_directory(path)) 
+			{
+				path = "";
+				return path;
+			}
+	}
+	else 
+	{
         path = GetDefaultDataDir();
     }
     if (fNetSpecific && GetBoolArg("-testnet", false))
+	{
         path /= "testnet";
+	}
 
-    fs::create_directory(path);
+	if (!fs::exists(path)) fs::create_directory(path);
 
     cachedPath[fNetSpecific]=true;
     return path;
@@ -1108,7 +1116,7 @@ boost::filesystem::path GetProgramDir()
 }
 
 
-
+//2-25-2015
 
 boost::filesystem::path GetConfigFile()
 {
