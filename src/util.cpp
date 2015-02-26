@@ -1009,11 +1009,15 @@ boost::filesystem::path GetDefaultDataDir()
 #else
 	    //2-25-2015
 		fs::path pathRet;
-		fs::path path2015 = fs::system_complete(mapArgs["-datadir"]);
 		char* pszHome = getenv("HOME");
-		if (fs::is_directory(path2015)) 
+		
+		if (mapArgs.count("-datadir")) 
 		{
-			pathRet = path2015;
+			fs::path path2015 = fs::system_complete(mapArgs["-datadir"]);
+			if (fs::is_directory(path2015)) 
+			{
+				pathRet = path2015;
+			}
 		}
 		else
 		{
