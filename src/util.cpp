@@ -1007,22 +1007,21 @@ boost::filesystem::path GetDefaultDataDir()
     // Windows
     return GetSpecialFolderPath(CSIDL_APPDATA) / "GridcoinResearch";
 #else
-
-
-	path2015 = fs::system_complete(mapArgs["-datadir"]);
-	if (fs::is_directory(path2015)) 
-	{
-		pathRet == path2015;
-	}
-	else
-	{
+	    //2-25-2015
 		fs::path pathRet;
+		fs::path path2015 = fs::system_complete(mapArgs["-datadir"]);
 		char* pszHome = getenv("HOME");
-		if (pszHome == NULL || strlen(pszHome) == 0)
-			pathRet = fs::path("/");
+		if (fs::is_directory(path2015)) 
+		{
+			pathRet = path2015;
+		}
 		else
-			pathRet = fs::path(pszHome);
-	}
+		{
+			if (pszHome == NULL || strlen(pszHome) == 0)
+				pathRet = fs::path("/");
+			else
+				pathRet = fs::path(pszHome);
+		}
 #ifdef MAC_OSX
     // Mac
     pathRet /= "Library/Application Support";
@@ -1042,7 +1041,7 @@ const boost::filesystem::path &GetDataDir(bool fNetSpecific)
     static fs::path pathCached[2];
     static CCriticalSection csPathCached;
     static bool cachedPath[2] = {false, false};
-
+	//2-25-2015
     fs::path &path = pathCached[fNetSpecific];
 
     // This can be called during exceptions by printf, so we cache the
@@ -1126,7 +1125,6 @@ boost::filesystem::path GetProgramDir()
 }
 
 
-//2-25-2015
 
 boost::filesystem::path GetConfigFile()
 {
