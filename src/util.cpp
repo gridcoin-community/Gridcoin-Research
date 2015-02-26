@@ -1067,7 +1067,7 @@ const boost::filesystem::path &GetDataDir(bool fNetSpecific)
     // value so we don't have to do memory allocations after that.
     if (cachedPath[fNetSpecific]  && (fs::is_directory(path))  )
 	{
-       // return path;
+        return path;
 	}
 
     LOCK(csPathCached);

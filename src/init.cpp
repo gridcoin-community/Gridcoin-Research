@@ -402,8 +402,7 @@ bool AppInit(int argc, char* argv[])
     boost::thread* detectShutdownThread = NULL;
 
     bool fRet = false;
-	printf("AppInit");
-
+	
     try
     {
         //
@@ -411,6 +410,10 @@ bool AppInit(int argc, char* argv[])
         //
         // If Qt is used, parameters/bitcoin.conf are parsed in qt/bitcoin.cpp's main()
         ParseParameters(argc, argv);
+
+		printf("AppInit");
+
+
         if (!boost::filesystem::is_directory(GetDataDir(false)))
         {
             fprintf(stderr, "Error: Specified directory does not exist\n");
@@ -679,7 +682,7 @@ bool AppInit2()
           << BOOST_VERSION % 100                // patch level
           << "\r\n";
 
-	printf("Boost Version: %s",s.str().c_str());
+	printf("\r\nBoost Version: %s",s.str().c_str());
 	
 	#if defined(WIN32) && defined(QT_GUI)
 			//startWireFrameRenderer();
