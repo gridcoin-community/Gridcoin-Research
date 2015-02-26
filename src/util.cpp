@@ -1030,10 +1030,25 @@ boost::filesystem::path GetDefaultDataDir()
     // Mac
     pathRet /= "Library/Application Support";
     fs::create_directory(pathRet);
-    return pathRet / "GridcoinResearch";
+
+	if (mapArgs.count("-datadir"))
+	{
+		return pathRet;
+	}
+	else
+	{
+		return pathRet / "GridcoinResearch";
+	}
 #else
     // Unix
-    return pathRet / ".GridcoinResearch";
+	if (mapArgs.count("-datadir"))
+	{
+		return pathRet;
+	}
+	else
+	{
+		return pathRet / ".GridcoinResearch";
+	}
 #endif
 #endif
 }
