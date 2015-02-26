@@ -1007,12 +1007,22 @@ boost::filesystem::path GetDefaultDataDir()
     // Windows
     return GetSpecialFolderPath(CSIDL_APPDATA) / "GridcoinResearch";
 #else
-    fs::path pathRet;
-    char* pszHome = getenv("HOME");
-    if (pszHome == NULL || strlen(pszHome) == 0)
-        pathRet = fs::path("/");
-    else
-        pathRet = fs::path(pszHome);
+
+
+	path2015 = fs::system_complete(mapArgs["-datadir"]);
+	if (fs::is_directory(path2015)) 
+	{
+		pathRet == path2015;
+	}
+	else
+	{
+		fs::path pathRet;
+		char* pszHome = getenv("HOME");
+		if (pszHome == NULL || strlen(pszHome) == 0)
+			pathRet = fs::path("/");
+		else
+			pathRet = fs::path(pszHome);
+	}
 #ifdef MAC_OSX
     // Mac
     pathRet /= "Library/Application Support";
@@ -1039,7 +1049,7 @@ const boost::filesystem::path &GetDataDir(bool fNetSpecific)
     // value so we don't have to do memory allocations after that.
     if (cachedPath[fNetSpecific]  && (fs::is_directory(path))  )
 	{
-        return path;
+       // return path;
 	}
 
     LOCK(csPathCached);
