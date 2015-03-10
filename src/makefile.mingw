@@ -18,8 +18,8 @@ UNIX_LIBPATHS?= \
  
  
  DEPSDIR?=/usr/local
-#BOOST_SUFFIX?=-mgw46-mt-sd-1_55
- BOOST_SUFFIX?=-mgw46-mt-1_55
+#BOOST_SUFFIX?=-mgw49-mt-sd-1_55
+ BOOST_SUFFIX?=-mgw49-mt-1_55
  
  
  
@@ -59,11 +59,11 @@ LIBS_OLD= \
 
 LIBS= \
  -l leveldb \
- -l boost_system-mgw46-mt-1_55 \
- -l boost_filesystem-mgw46-mt-1_55 \
- -l boost_program_options-mgw46-mt-1_55 \
- -l boost_thread-mgw46-mt-1_55 \
- -l boost_chrono-mgw46-mt-1_55 \
+ -l boost_system-mgw49-mt-1_55 \
+ -l boost_filesystem-mgw49-mt-1_55 \
+ -l boost_program_options-mgw49-mt-1_55 \
+ -l boost_thread-mgw49-mt-1_55 \
+ -l boost_chrono-mgw49-mt-1_55 \
  -l db_cxx \
  -l ssl \
  -l crypto \
@@ -158,7 +158,7 @@ OBJS += obj/txdb-leveldb.o
 
 
 #leveldb/libleveldb.a:
-#cd leveldb && $(MAKE) CC=$(CC) CXX=$(CXX) OPT="$(CFLAGS)" TARGET_OS=NATIVE_WINDOWS libleveldb.a libmemenv.a && cd ..
+	cd leveldb && $(MAKE) CC=$(CC) CXX=$(CXX) OPT="$(CFLAGS)" TARGET_OS=NATIVE_WINDOWS libleveldb.a libmemenv.a && cd ..
 
 #oldcd leveldb; make; cd ..
 	
