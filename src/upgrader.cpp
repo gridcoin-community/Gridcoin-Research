@@ -167,7 +167,7 @@ int main(int argc, char *argv[])
             }
         }
     }
-    else if (strcmp(argv[1], "gridcoind")==0)
+    else if (strcmp(argv[1], "gridcoinresearchd")==0)
     {
         if (waitForParent(atoi(argv[2])))
         {
@@ -634,7 +634,7 @@ std::string Upgrader::targetswitch(int target)
         return "gridcoinresearch";
 
         case DAEMON:
-        return "gridcoind";
+        return "gridcoinresearchd";
 
         case UPGRADER:
         return "gridcoinupgrader";

@@ -50,7 +50,7 @@ chmod 755 leveldb/build_detect_platform
 make -f makefile.unix USE_UPNP=- 
 
 
-##### End of Step 1: gridcoind will be found in /src directory
+##### End of Step 1: gridcoinresearchd will be found in /src directory
 
 
 
@@ -81,7 +81,7 @@ addnode=node.gridcoin.us
 
 #save and exit.  Leave the lines with ssl in them out if you don't need ssl.
 
-####### Testing Gridcoin gridcoind :
+####### Testing Gridcoin gridcoinresearchd :
 #Let server start
 gridcoinresearchd
 #Should return current difficulty:
