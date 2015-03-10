@@ -30,7 +30,7 @@ echo %EWBLIBS%
  QMAKE_CXXFLAGS="%ADDITIONALCCFLAGS%"^
  QMAKE_CFLAGS="%ADDITIONALCCFLAGS%"
  
-@%QTPATH%\qmake.exe %QMPS% USE_QRCODE=1 ZZZ=1
+@%QTPATH%\qmake.exe %QMPS% USE_QRCODE=0 ZZZ=1
 @echo.
 @echo.
 @echo building qt - make...

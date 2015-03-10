@@ -83,7 +83,6 @@ INPUT(
 ./build/cpid.o
 ./build/sql.o
 ./build/upgrader.o
-./build/qrcodedialog.o
 ./build/moc_bitcoingui.o
 ./build/moc_transactiontablemodel.o
 ./build/moc_addresstablemodel.o
@@ -115,6 +114,5 @@ INPUT(
 ./build/moc_askpassphrasedialog.o
 ./build/moc_notificator.o
 ./build/moc_rpcconsole.o
-./build/moc_qrcodedialog.o
 ./build/qrc_bitcoin.o
 );
