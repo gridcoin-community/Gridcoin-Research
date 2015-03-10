@@ -166,6 +166,7 @@ obj/txdb-leveldb.o: leveldb/libleveldb.a
 -include obj/*.P
 
 obj/build.h: FORCE
+	mkdir -p obj/zerocoin
 	/bin/sh ../share/genbuild.sh obj/build.h
 version.cpp: obj/build.h
 DEFS += -DHAVE_BUILD_INFO
