@@ -251,36 +251,6 @@ dontaddit:
         Dim rows As DataRowCollection = table.Rows
         ' Add all known headers
 
-        'rows.Add(New Object() {"Content-Description", OpenPop.Mime.Message.Headers.ContentDescription})
-        'rows.Add(New Object() {"Content-Id", OpenPop.Mime.Message.Headers.ContentId})
-        'For Each keyword As String In OpenPop.Mime.Message.Headers.Keywords
-        ' rows.Add(New Object() {"Keyword", keyword})
-        ' Next
-        'For Each dispositionNotificationTo As RfcMailAddress In OpenPop.Mime.Message.Headers.DispositionNotificationTo
-        'rows.Add(New Object() {"Disposition-Notification-To", dispositionNotificationTo})
-        'Next
-        'For Each received As Received In OpenPop.Mime.Message.Headers.Received
-        'rows.Add(New Object() {"Received", Received.Raw})
-        'Next
-        'rows.Add(New Object() {"Importance", OpenPop.Mime.Message.Headers.Importance})
-        'rows.Add(New Object() {"Content-Transfer-Encoding", OpenPop.Mime.Message.Headers.ContentTransferEncoding})
-        'For Each cc As RfcMailAddress In OpenPop.Mime.Message.Headers.Cc
-        'rows.Add(New Object() {"Cc", cc})
-        'Next
-        'For Each bcc As RfcMailAddress In OpenPop.Mime.Message.Headers.Bcc
-        'rows.Add(New Object() {"Bcc", bcc})
-        'Next
-        'For Each [to] As RfcMailAddress In OpenPop.Mime.Message.Headers.[To]
-        ' rows.Add(New Object() {"To", [to]})
-        ' Next
-        'rows.Add(New Object() {"From", OpenPop.Mime.Message.Headers.From})
-        'rows.Add(New Object() {"Reply-To", OpenPop.Mime.Message.Headers.ReplyTo})
-        'For Each inReplyTo As String In OpenPop.Mime.Message.Headers.InReplyTo
-        'rows.Add(New Object() {"In-Reply-To", inReplyTo})
-        'Next
-        'For Each reference As String In OpenPop.Mime.Message.Headers.References
-        ' rows.Add(New Object() {"References", reference})
-        'Next
         'rows.Add(New Object() {"Sender", OpenPop.Mime.Message.Headers.Sender})
         'rows.Add(New Object() {"Content-Type", OpenPop.Mime.Message.Headers.ContentType})
         'rows.Add(New Object() {"Content-Disposition", OpenPop.Mime.Message.Headers.ContentDisposition})
@@ -290,15 +260,6 @@ dontaddit:
         'rows.Add(New Object() {"Mime-Version", OpenPop.Mime.Message.Headers.MimeVersion})
         'rows.Add(New Object() {"Return-Path", OpenPop.Mime.Message.Headers.ReturnPath})
         'rows.Add(New Object() {"Subject", OpenPop.Mime.Message.Headers.Subject})
-        ' Add all unknown headers
-        'For Each key As String In OpenPop.Mime.Message.Headers.UnknownHeaders
-        ' Dim values As String() = OpenPop.Mime.Message.Headers.UnknownHeaders.GetValues(key)
-        ' If values IsNot Nothing Then
-        ' For Each value As String In values
-        ' rows.Add(New Object() {key, value})
-        ' Next
-        'End If
-        'Next
         Dim sBody As String
         Dim sRawBody As String = ""
         Dim bIsHTML As Boolean
