@@ -22,6 +22,11 @@ using namespace std;
 extern std::string YesNo(bool bin);
 double Cap(double dAmt, double Ceiling);
 
+extern std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, std::string sSig);
+extern bool CheckMessageSignature(std::string messagetype, std::string sMsg, std::string sSig);
+
+
+bool LoadAdminMessages(std::string& out_errors);
 
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 
@@ -36,6 +41,7 @@ int64_t CPIDChronoStart(std::string cpid);
 bool IsCPIDTimeValid(std::string cpid, int64_t locktime);
 
 std::string TestHTTPProtocol(std::string sCPID);
+std::string VectorToString(vector<unsigned char> v);
 
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 
@@ -923,9 +929,45 @@ void WriteCPIDToRPC(std::string email, std::string bpk, uint256 block, Array &re
 }
 
 
+std::string SignMessage(std::string sMsg, std::string sPrivateKey)
+{
+	 CKey key;
+	
+	 std::vector<unsigned char> vchMsg = vector<unsigned char>(sMsg.begin(), sMsg.end());
+     std::vector<unsigned char> vchPrivKey = ParseHex(sPrivateKey);
+	 std::vector<unsigned char> vchSig;
+	 key.SetPrivKey(CPrivKey(vchPrivKey.begin(), vchPrivKey.end())); // if key is not correct openssl may crash
+	 if (!key.Sign(Hash(vchMsg.begin(), vchMsg.end()), vchSig))  throw runtime_error("Unable to sign message, check private key?\n");  
+	 std::string SignedMessage = EncodeBase64(VectorToString(vchSig));
+
+	 return SignedMessage;
+}
+
+bool CheckMessageSignature(std::string messagetype, std::string sMsg, std::string sSig)
+{
+	 std::string strMasterPubKey = "";
+	 if (messagetype=="project")
+	 {
+		strMasterPubKey= msMasterProjectPublicKey;
+	 }
+	 else
+	 {
+		 strMasterPubKey = msMasterMessagePublicKey;
+	 }
+	 std::string db64 = DecodeBase64(sSig);
+	 CKey key;
+	 if (!key.SetPubKey(ParseHex(strMasterPubKey)))	return false;
+ 	 std::vector<unsigned char> vchMsg = vector<unsigned char>(sMsg.begin(), sMsg.end());
+ 	 std::vector<unsigned char> vchSig = vector<unsigned char>(db64.begin(), db64.end());
+	 if (!key.Verify(Hash(vchMsg.begin(), vchMsg.end()), vchSig)) return false;
+	 return true;
+   
+}
+
+
 Value execute(const Array& params, bool fHelp)
 {
-    if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3))
+    if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3 && params.size() != 4 && params.size() != 5 && params.size() != 6))
         throw runtime_error(
 		"execute <string::itemname> <string::parameter> \r\n"
         "Executes an arbitrary command by name.");
@@ -979,6 +1021,32 @@ Value execute(const Array& params, bool fHelp)
 
 			results.push_back(entry);
 		}
+	
+	}
+	else if (sItem == "testboinckey")
+	{
+		std::string sType="project";
+
+		std::string strMasterPrivateKey = (sType=="project") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
+		std::string sig = SignMessage("hello",strMasterPrivateKey);
+		entry.push_back(Pair("hello",sig));
+		bool r1 = CheckMessageSignature(sType,"hello",sig);
+		entry.push_back(Pair("Check1",r1));
+		bool r2 = CheckMessageSignature(sType,"hello1",sig);
+		entry.push_back(Pair("Check2",r2));
+		bool r3 = CheckMessageSignature(sType,"hello",sig+"1");
+		entry.push_back(Pair("Check3",r3));
+		//Forged Key
+		std::string forgedKey = "3082011302010104202b1c9faef66d42218eefb7c66fb6e49292972c8992b4100bb48835d325ec2d34a081a53081a2020101302c06072a8648ce3d0101022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f300604010004010704410479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141020101a144034200040cb218ee7495c2ba5d6ba069f97810e85dae8b446c0e4a1c6dec7fe610ab0fa4378bda5320f00e7a08a8e428489f41ad79d0428a091aa548aca18adbbbe64d41";
+		std::string sig2 = SignMessage("hello",forgedKey);
+		bool r10 = CheckMessageSignature(sType,"hello",sig2);
+		entry.push_back(Pair("FK10",r10));
+		std::string sig3 = SignMessage("hi",strMasterPrivateKey);
+		bool r11 = CheckMessageSignature("project","hi",sig3);
+		entry.push_back(Pair("FK11",r11));
+		bool r12 = CheckMessageSignature("general","1",sig3);
+		entry.push_back(Pair("FK12",r12));
+		results.push_back(entry);
 	
 	}
 	else if (sItem == "genboinckey")
@@ -1077,6 +1145,92 @@ Value execute(const Array& params, bool fHelp)
 	{
 	
 	
+	}
+	else if (sItem == "addkey")
+	{
+		//To whitelist a project:
+		//execute addkey add project projectname 1
+		//To blacklist a project:
+		//execute addkey delete project projectname 1
+
+		//Key examples:
+
+		//execute addkey add project milky 1
+		//execute addkey delete project milky 1
+		//execute addkey add project milky 2
+		//execute addkey add price grc .0000046
+		//execute addkey add price grc .0000045
+		//execute addkey delete price grc .0000045
+		//GRC will only memorize the *last* value it finds for a key in the highest block
+
+		//execute memorizekeys
+		//execute listdata project
+		//execute listdata price
+
+
+
+		if (params.size() != 5)
+		{
+			entry.push_back(Pair("Error","You must specify an action, message type, message name and value."));
+			entry.push_back(Pair("Example","execute addkey add_or_delete keytype projectname value."));
+			results.push_back(entry);
+		}
+		else
+		{
+			//execute addkey add project grid20
+			std::string sAction = params[1].get_str();
+			entry.push_back(Pair("Action",sAction));
+			bool bAdd = (sAction=="add") ? true : false;
+			std::string sType = params[2].get_str();
+			entry.push_back(Pair("Type",sType));
+			std::string sPass = "";
+			sPass = (sType=="project") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
+			entry.push_back(Pair("Passphrase",sPass));
+			std::string sName = params[3].get_str();
+			entry.push_back(Pair("Name",sName));
+			std::string sValue = params[4].get_str();
+			entry.push_back(Pair("Value",sValue));
+			std::string result = AddMessage(bAdd,sType,sName,sValue,sPass);
+			entry.push_back(Pair("Results",result));
+			results.push_back(entry);
+		}
+	}
+	else if (sItem == "memorizekeys")
+	{
+		std::string sOut = "";
+		bool result = 	LoadAdminMessages(sOut);
+		entry.push_back(Pair("Results",sOut));
+		results.push_back(entry);
+		
+	}
+	else if (sItem == "listdata")
+	{
+
+		if (params.size() != 2)
+		{
+			entry.push_back(Pair("Error","You must specify a keytype (IE execute dumpkeys project)"));
+			results.push_back(entry);
+		}
+		else
+		{
+			std::string sType = params[1].get_str();
+			entry.push_back(Pair("Key Type",sType));
+  		    for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+		    {
+				std::string key_name  = (*ii).first;
+			   	if (key_name.length() > sType.length())
+				{
+					if (key_name.substr(0,sType.length())==sType)
+					{
+								std::string key_value = mvApplicationCache[(*ii).first];
+						     	entry.push_back(Pair(key_name,key_value));
+					}
+		       
+				}
+		   }
+		   results.push_back(entry);
+		}
+
 	}
 	else if (sItem == "genorgkey")
 	{
@@ -1534,6 +1688,30 @@ Array MagnitudeReportCSV(bool detail)
 
 
 
+std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, std::string sMasterKey)
+{
+   std::string foundation = "S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB";
+    CBitcoinAddress address(foundation);
+    if (!address.IsValid())        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
+    int64_t nAmount = AmountFromValue(1);
+    // Wallet comments
+    CWalletTx wtx;
+    if (pwalletMain->IsLocked())        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
+	std::string sMessageType      = "<MT>" + sType  + "</MT>";  //Project
+    std::string sMessageKey       = "<MK>" + sKey   + "</MK>";
+	std::string sMessageValue     = "<MV>" + sValue + "</MV>";
+	std::string sMessageAction    = bAdd ? "<MA>A</MA>" : "<MA>D</MA>";
+	//Sign Message
+	std::string sSig = SignMessage(sType+sKey+sValue,sMasterKey);
+	std::string sMessageSignature = "<MS>" + sSig + "</MS>";
+	wtx.hashBoinc = sMessageType+sMessageKey+sMessageValue+sMessageAction+sMessageSignature;
+	//printf("Adding hashboinc %s\r\n",wtx.hashBoinc.c_str());
+    string strError = pwalletMain->SendMoneyToDestination(address.Get(), nAmount, wtx);
+    if (strError != "")        throw JSONRPCError(RPC_WALLET_ERROR, strError);
+    return wtx.GetHash().GetHex().c_str();
+}
+
+
 
 
 std::string YesNo(bool bin)
@@ -1722,39 +1900,7 @@ Value listitem(const Array& params, bool fHelp)
 	if (sitem == "testcpidtime")
 	{
 
-		Object entry;
-		entry.push_back(Pair("Net",GetAdjustedTime()));
-		entry.push_back(Pair("UTC",TimestampToHRDate(GetAdjustedTime())));
 		
-		int64_t cpid1 = CPIDChronoStart("00565aba8b273e72f5292dd54c2e9d9c");
-		int64_t cpid2 = CPIDChronoStart("02d04a476979ec5526c28c3ad0a7d988");
-		int64_t cpid3 = CPIDChronoStart("9dbd2eb638bfda3dc573a8e5f1ce7a4a");
-		int64_t cpid4 = CPIDChronoStart("d7f6b0c023e06d4797fc257aea29050b");
-		int64_t cpid5 = CPIDChronoStart("f985012508217b233308079b42e2cc1b");
-		entry.push_back(Pair("Cpid1",cpid1));
-		//Test validity
-		bool valid1 = IsCPIDTimeValid("00565aba8b273e72f5292dd54c2e9d9c", cpid1+10);
-		bool valid2 = IsCPIDTimeValid("00565aba8b273e72f5292dd54c2e9d9c", cpid1-1000);
-		bool valid3 = IsCPIDTimeValid("00565aba8b273e72f5292dd54c2e9d9c", cpid1+1000);
-		bool valid4 = IsCPIDTimeValid("00565aba8b273e72f5292dd54c2e9d9c", cpid1-86400+1000);
-		bool valid5 = IsCPIDTimeValid("00565aba8b273e72f5292dd54c2e9d9c", cpid1-86400-5000);
-		bool valid6 = IsCPIDTimeValid("00565aba8b273e72f5292dd54c2e9d9c", cpid1-(86400*2)+100);
-		entry.push_back(Pair("v1",valid1));
-		entry.push_back(Pair("v2",valid2));
-		entry.push_back(Pair("v3",valid3));
-		entry.push_back(Pair("v4",valid4));
-		entry.push_back(Pair("v5",valid5));
-		entry.push_back(Pair("v6",valid6));
-		entry.push_back(Pair("Cpid2",cpid2));
-		entry.push_back(Pair("Cpid3",cpid3));
-		entry.push_back(Pair("Cpid4",cpid4));
-		entry.push_back(Pair("Cpid5",cpid5));
-		entry.push_back(Pair("cpid1UTC",TimestampToHRDate(cpid1)));
-		entry.push_back(Pair("cpid2UTC",TimestampToHRDate(cpid2)));
-		entry.push_back(Pair("cpid3UTC",TimestampToHRDate(cpid3)));
-		entry.push_back(Pair("cpid4UTC",TimestampToHRDate(cpid4)));
-		entry.push_back(Pair("cpid5UTC",TimestampToHRDate(cpid5)));
-		results.push_back(entry);
 	}
 
 

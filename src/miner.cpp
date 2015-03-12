@@ -446,7 +446,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 
 		miningcpid.ResearchSubsidy = out_por;
 		miningcpid.InterestSubsidy = out_interest;
-		if (fDebug2) printf("Calc Research Subsidy %f, Interest %f \r\n",(double)miningcpid.ResearchSubsidy,(double)miningcpid.InterestSubsidy);
+		//if (fDebug2) printf("Calc Research Subsidy %f, Interest %f \r\n",(double)miningcpid.ResearchSubsidy,(double)miningcpid.InterestSubsidy);
 
 		miningcpid.enccpid = ""; //CPID V1 Boinc RunTime enc key
 		miningcpid.encboincpublickey = "";

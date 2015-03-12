@@ -35,6 +35,10 @@
 
 extern void EraseOrphans();
 int DownloadBlocks();
+extern bool LoadAdminMessages(std::string& out_errors);
+extern std::string VectorToString(vector<unsigned char> v);
+bool CheckMessageSignature(std::string sMessageType, std::string sMsg, std::string sSig);
+
 
 std::string GetCommandNonce(std::string command);
 std::string DefaultBlockKey(int key_length);
@@ -119,7 +123,9 @@ uint256 muGlobalCheckpointHashRelayed = 0;
 int muGlobalCheckpointHashCounter = 0;
 ///////////////////////MINOR VERSION////////////////////////////////
 int MINOR_VERSION = 196;
-
+std::string msMasterProjectPublicKey  = "049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a";
+std::string msMasterMessagePrivateKey = "308201130201010420fbd45ffb02ff05a3322c0d77e1e7aea264866c24e81e5ab6a8e150666b4dc6d8a081a53081a2020101302c06072a8648ce3d0101022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f300604010004010704410479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141020101a144034200044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252467f692ec9c5ba7e5eaa898ab99cbd9949496f7e3cafbf56304b1cc2e5bdf06e";
+std::string msMasterMessagePublicKey  = "044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252467f692ec9c5ba7e5eaa898ab99cbd9949496f7e3cafbf56304b1cc2e5bdf06e";
 			
 bool IsUserQualifiedToSendCheckpoint();
 
@@ -219,6 +225,7 @@ int64_t nTransactionFee = MIN_TX_FEE;
 int64_t nReserveBalance = 0;
 int64_t nMinimumInputValue = 0;
 
+std::map<std::string, std::string> mvApplicationCache;
 
 extern enum Checkpoints::CPMode CheckpointsMode;
 
@@ -7987,3 +7994,114 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     }
     return true;
 }
+
+
+
+std::string ReadCache(std::string section, std::string key)
+{
+	if (section.empty() || key.empty()) return "";
+	std::string value = mvApplicationCache[section + ";" + key];
+	if (value.empty())
+	{
+		mvApplicationCache.insert(map<std::string,std::string>::value_type(section + ";" + key,""));
+	    mvApplicationCache[section + ";" + key]="";
+	}
+	return value;
+}
+
+
+void WriteCache(std::string section, std::string key, std::string value)
+{
+	if (section.empty() || key.empty()) return;
+	std::string temp_value = mvApplicationCache[section + ";" + key];
+	if (temp_value.empty())
+	{
+		mvApplicationCache.insert(map<std::string,std::string>::value_type(section + ";" + key,value));
+	    mvApplicationCache[section + ";" + key]=value;
+	}
+	mvApplicationCache[section + ";" + key]=value;
+}
+
+void ClearCache(std::string section)
+{
+	   for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+	   {
+				std::string key_section = mvApplicationCache[(*ii).first];
+				if (key_section.length() > section.length())
+				{
+					if (key_section.substr(0,section.length())==section)
+					{
+						printf("\r\nClearing the cache....of value %s \r\n",mvApplicationCache[key_section].c_str());
+						mvApplicationCache[key_section]="";
+					}
+				}
+	   }
+
+}
+
+
+void DeleteCache(std::string section, std::string keyname)
+{
+	   std::string pk = section + ";" +keyname;
+       mvApplicationCache.erase(pk);
+}
+
+
+bool MemorizeMessages(const CBlock& block, const CBlockIndex* blockindex)
+{
+	BOOST_FOREACH(const CTransaction&tx, block.vtx)
+	{
+		  if (!tx.hashBoinc.empty())
+		  {
+			  std::string sMessageType  = ExtractXML(tx.hashBoinc,"<MT>","</MT>");
+  			  std::string sMessageKey   = ExtractXML(tx.hashBoinc,"<MK>","</MK>");
+			  std::string sMessageValue = ExtractXML(tx.hashBoinc,"<MV>","</MV>");
+			  std::string sMessageAction= ExtractXML(tx.hashBoinc,"<MA>","</MA>");
+			  std::string sSignature    = ExtractXML(tx.hashBoinc,"<MS>","</MS>");
+
+			  if (!sMessageType.empty() && !sMessageKey.empty() && !sMessageValue.empty() && !sMessageAction.empty() && !sSignature.empty())
+			  {
+				 
+				  //Verify sig first
+				  bool Verified = CheckMessageSignature(sMessageType,sMessageType+sMessageKey+sMessageValue,sSignature);
+				  if (Verified)
+				  {
+						if (sMessageAction=="A")
+						{
+								printf("Adding MessageKey type %s Key %s Value %s\r\n",sMessageType.c_str(),sMessageKey.c_str(),sMessageValue.c_str());
+								WriteCache(sMessageType,sMessageKey,sMessageValue);
+						}
+						else if(sMessageAction=="D")
+						{
+								printf("Deleting key type %s Key %s Value %s\r\n",sMessageType.c_str(),sMessageKey.c_str(),sMessageValue.c_str());
+								DeleteCache(sMessageType,sMessageKey);
+				
+						}
+				  }
+			  }
+				 
+		  }
+	}
+	return false;	
+}
+
+
+
+
+bool LoadAdminMessages(std::string& out_errors)
+{
+	int nMaxDepth = nBestHeight;
+    CBlock block;
+	int nMinDepth = fTestNet ? 1 : 164618;
+	if (nMaxDepth < nMinDepth) return false;
+	out_errors = "";
+    for (int ii = nMinDepth; ii <= nMaxDepth; ii++)
+    {
+     	CBlockIndex* pblockindex = FindBlockByHeight(ii);
+		block.ReadFromDisk(pblockindex);
+		bool result = MemorizeMessages(block,pblockindex);
+    }
+	return true;
+}
+
+

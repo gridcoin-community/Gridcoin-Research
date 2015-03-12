@@ -41,6 +41,11 @@ extern uint256 muGlobalCheckpointHash;
 extern uint256 muGlobalCheckpointHashRelayed;
 extern int muGlobalCheckpointHashCounter;
 extern int MINOR_VERSION;
+extern std::string msMasterProjectPublicKey;
+extern std::string msMasterMessagePublicKey;
+extern std::string msMasterMessagePrivateKey;
+
+
 
 extern bool bNewUserWizardNotified;
 
@@ -82,8 +87,10 @@ inline bool IsProtocolV2(int nHeight) { return nHeight > 85400; }
 
 inline int64_t PastDrift(int64_t nTime, int nHeight)   { return IsProtocolV2(nHeight) ? nTime - 20 * 60  : nTime - 20 * 60; }
 inline int64_t FutureDrift(int64_t nTime, int nHeight) { return IsProtocolV2(nHeight) ? nTime + 20 * 60  : nTime + 20 * 60; }
-
 inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight) ? 90 : 60; }
+
+extern std::map<std::string, std::string> mvApplicationCache;
+
 
 extern libzerocoin::Params* ZCParams;
 extern CScript COINBASE_FLAGS;
