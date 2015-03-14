@@ -26,7 +26,7 @@ extern std::string AddMessage(bool bAdd, std::string sType, std::string sKey, st
 extern bool CheckMessageSignature(std::string messagetype, std::string sMsg, std::string sSig);
 
 
-bool LoadAdminMessages(std::string& out_errors);
+bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 
@@ -946,7 +946,7 @@ std::string SignMessage(std::string sMsg, std::string sPrivateKey)
 bool CheckMessageSignature(std::string messagetype, std::string sMsg, std::string sSig)
 {
 	 std::string strMasterPubKey = "";
-	 if (messagetype=="project")
+	 if (messagetype=="project" || messagetype=="projectmapping")
 	 {
 		strMasterPubKey= msMasterProjectPublicKey;
 	 }
@@ -1027,7 +1027,7 @@ Value execute(const Array& params, bool fHelp)
 	{
 		std::string sType="project";
 
-		std::string strMasterPrivateKey = (sType=="project") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
+		std::string strMasterPrivateKey = (sType=="project" || sType=="projectmapping") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
 		std::string sig = SignMessage("hello",strMasterPrivateKey);
 		entry.push_back(Pair("hello",sig));
 		bool r1 = CheckMessageSignature(sType,"hello",sig);
@@ -1184,7 +1184,7 @@ Value execute(const Array& params, bool fHelp)
 			std::string sType = params[2].get_str();
 			entry.push_back(Pair("Type",sType));
 			std::string sPass = "";
-			sPass = (sType=="project") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
+			sPass = (sType=="project" || sType=="projectmapping") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
 			entry.push_back(Pair("Passphrase",sPass));
 			std::string sName = params[3].get_str();
 			entry.push_back(Pair("Name",sName));
@@ -1198,7 +1198,7 @@ Value execute(const Array& params, bool fHelp)
 	else if (sItem == "memorizekeys")
 	{
 		std::string sOut = "";
-		bool result = 	LoadAdminMessages(sOut);
+		bool result = 	LoadAdminMessages(true,sOut);
 		entry.push_back(Pair("Results",sOut));
 		results.push_back(entry);
 		
@@ -1690,7 +1690,7 @@ Array MagnitudeReportCSV(bool detail)
 
 std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, std::string sMasterKey)
 {
-   std::string foundation = "S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB";
+    std::string foundation = fTestNet ? "mk1e432zWKH1MW57ragKywuXaWAtHy1AHZ" : "S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB";
     CBitcoinAddress address(foundation);
     if (!address.IsValid())        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
     int64_t nAmount = AmountFromValue(1);

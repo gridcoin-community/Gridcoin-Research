@@ -35,16 +35,18 @@
 
 extern void EraseOrphans();
 int DownloadBlocks();
-extern bool LoadAdminMessages(std::string& out_errors);
+extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern std::string VectorToString(vector<unsigned char> v);
 bool CheckMessageSignature(std::string sMessageType, std::string sMsg, std::string sSig);
 
 
 std::string GetCommandNonce(std::string command);
 std::string DefaultBlockKey(int key_length);
+void InitializeBoincProjects();
 
 extern double Cap(double dAmt, double Ceiling);
 
+extern std::string ToOfficialNameNew(std::string proj);
 
 using namespace std;
 using namespace boost;
@@ -1972,6 +1974,8 @@ int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height)
 	{
 		nSubsidy =340569880 * COIN;
 	}
+	if (fTestNet) nSubsidy += 1000*COIN;
+
     return nSubsidy + nFees;
 }
 
@@ -1984,6 +1988,9 @@ int64_t GetProofOfWorkMaxReward(int64_t nFees, int64_t locktime, int64_t height)
 		//R.Halford: 10-11-2014: Gridcoin Foundation Block:
 		nSubsidy = 340569880 * COIN;
 	}
+
+	if (fTestNet) nSubsidy += 1000*COIN;
+
     return nSubsidy + nFees;
 }
 
@@ -2622,6 +2629,7 @@ bool OutOfSyncByAgeWithChanceOfMining()
 	try
 	{
 		    //R Halford - Refactor - Reported by Pallas
+		    if (fTestNet) return false;
 		    if (KeyEnabled("overrideoutofsyncrule")) return false;
 			bool oosbyage = OutOfSyncByAge();
 			//Rule 1: If  Last Block Out of sync by Age - Return Out of Sync 95% of the time:
@@ -3987,7 +3995,11 @@ void GridcoinServices()
 	}
 
 	
-
+	if (TimerMain("GridcoinPersistedDataSystem",5))
+	{
+		std::string errors1 = "";
+		bool result = LoadAdminMessages(false,errors1);
+	}
 
 
 	if (KeyEnabled("exportmagnitude"))
@@ -7272,6 +7284,9 @@ bool ProjectIsValid(std::string project)
   
 std::string ToOfficialName(std::string proj)
 {
+
+			if (fTestNet) return ToOfficialNameNew(proj);
+
 			boost::to_lower(proj);
 			//Convert local XML project name [On the Left] to official [Netsoft] projectname:
 			if (proj=="boincsimap")             proj = "simap";
@@ -7291,9 +7306,54 @@ std::string ToOfficialName(std::string proj)
 			return proj; 
 }
 
+std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr)
+{
+  size_t pos = 0;
+  while((pos = str.find(oldStr, pos)) != std::string::npos){
+     str.replace(pos, oldStr.length(), newStr);
+     pos += newStr.length();
+  }
+  return str;
+}
 
+std::string LowerUnderscore(std::string data)
+{
+	boost::to_lower(data);
+//	printf("before %s",data.c_str();
 
+	data = strReplace(data,"_"," ");
+	//printf("after %s\r\n",data.c_str());
+	return data;
+}
 
+std::string ToOfficialNameNew(std::string proj)
+{
+	    proj = LowerUnderscore(proj);
+		//Convert local XML project name [On the Left] to official [Netsoft] projectname:
+		std::string sType = "projectmapping";
+	    for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+	    {
+				std::string key_name  = (*ii).first;
+			   	if (key_name.length() > sType.length())
+				{
+					if (key_name.substr(0,sType.length())==sType)
+					{
+							std::string key_value = mvApplicationCache[(*ii).first];
+							std::vector<std::string> vKey = split(key_name,";");
+							if (vKey.size() > 0)
+							{
+								std::string project_boinc   = vKey[1];
+								std::string project_netsoft = key_value;
+								proj=LowerUnderscore(proj);
+								project_boinc=LowerUnderscore(project_boinc);
+								project_netsoft=LowerUnderscore(project_netsoft);
+								if (proj==project_boinc) proj=project_netsoft;
+							}
+					 }
+				}
+	    }
+		return proj;
+}
 
 
 
@@ -8047,7 +8107,7 @@ void DeleteCache(std::string section, std::string keyname)
 }
 
 
-bool MemorizeMessages(const CBlock& block, const CBlockIndex* blockindex)
+bool MemorizeMessages(bool bFullTableScan, const CBlock& block, const CBlockIndex* blockindex)
 {
 	BOOST_FOREACH(const CTransaction&tx, block.vtx)
 	{
@@ -8077,6 +8137,22 @@ bool MemorizeMessages(const CBlock& block, const CBlockIndex* blockindex)
 								DeleteCache(sMessageType,sMessageKey);
 				
 						}
+						// If this is a boinc project, load the projects into the coin:
+						if (!bFullTableScan)
+						{
+							if (sMessageType=="project" || sMessageType=="projectmapping")
+							{
+								if (fTestNet)
+								{
+									InitializeBoincProjects();
+									//3-14-2015
+									TallyNetworkAverages(true);
+									HarvestCPIDs(true);
+
+								}
+							}
+						}
+
 				  }
 			  }
 				 
@@ -8088,18 +8164,20 @@ bool MemorizeMessages(const CBlock& block, const CBlockIndex* blockindex)
 
 
 
-bool LoadAdminMessages(std::string& out_errors)
+bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 {
 	int nMaxDepth = nBestHeight;
     CBlock block;
 	int nMinDepth = fTestNet ? 1 : 164618;
+	if (!bFullTableScan) nMinDepth = nMaxDepth-5;
+
 	if (nMaxDepth < nMinDepth) return false;
 	out_errors = "";
     for (int ii = nMinDepth; ii <= nMaxDepth; ii++)
     {
      	CBlockIndex* pblockindex = FindBlockByHeight(ii);
 		block.ReadFromDisk(pblockindex);
-		bool result = MemorizeMessages(block,pblockindex);
+		bool result = MemorizeMessages(bFullTableScan,block,pblockindex);
     }
 	return true;
 }
