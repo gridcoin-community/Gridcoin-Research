@@ -73,6 +73,9 @@ Module modWinAPI
         End Try
 
     End Function
+
+
+
     Public Function DefaultHostName(sDefault As String, bOverride As Boolean) As String
         Dim sPersisted As String = KeyValue(sDefault)
         If Len(sPersisted) = 0 Then sDefault = Replace(sDefault, "p2psql", "pool")
@@ -564,5 +567,15 @@ Module modWinAPI
         Dim sOut As String = Mid(sData, iPos1, iPos2 - iPos1)
         Return sOut
     End Function
+
+    Public Function GetSessionGuid() As String
+        Dim sSessionGuid As String = KeyValue("SessionGuid")
+        If sSessionGuid = "" Then
+            UpdateKey("SessionGuid", Guid.NewGuid.ToString())
+            sSessionGuid = KeyValue("SessionGuid")
+        End If
+        Return sSessionGuid
+    End Function
+
 
 End Module

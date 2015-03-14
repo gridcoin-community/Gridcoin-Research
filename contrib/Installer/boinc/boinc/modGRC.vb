@@ -17,6 +17,7 @@ Module modGRC
     Public mfrmSql As frmSQL
     Public mfrmTicketAdd As frmTicketAdd
     Public mfrmTicketList As frmTicketList
+    Public mfrmLogin As frmLogin
 
     Public mfrmTicker As frmLiveTicker
 

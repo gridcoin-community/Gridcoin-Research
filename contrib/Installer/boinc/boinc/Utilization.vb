@@ -225,6 +225,9 @@ Public Class Utilization
     End Function
     Public Function ShowTicketList()
         Try
+            mfrmLogin = New frmLogin
+
+
             mfrmTicketList = New frmTicketList
             mfrmTicketList.Show()
         Catch ex As Exception

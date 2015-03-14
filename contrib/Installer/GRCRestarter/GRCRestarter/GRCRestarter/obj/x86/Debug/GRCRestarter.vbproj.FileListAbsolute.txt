@@ -41,3 +41,4 @@ A:\Gridcoin-Research\contrib\Installer\GRCRestarter\GRCRestarter\GRCRestarter\ob
 A:\Gridcoin-Research\contrib\Installer\GRCRestarter\GRCRestarter\GRCRestarter\obj\x86\Debug\GRCRestarter.exe
 A:\Gridcoin-Research\contrib\Installer\GRCRestarter\GRCRestarter\GRCRestarter\obj\x86\Debug\GRCRestarter.xml
 A:\Gridcoin-Research\contrib\Installer\GRCRestarter\GRCRestarter\GRCRestarter\obj\x86\Debug\GRCRestarter.pdb
+A:\Gridcoin-Research\contrib\Installer\GRCRestarter\GRCRestarter\GRCRestarter\icsharpcode.sharpziplib.dll
