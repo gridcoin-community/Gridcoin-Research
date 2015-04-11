@@ -332,8 +332,6 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
                 if (prevout.n < prev.vout.size())
                 {
                     strHTML += "<li>";
-					//					const CTxOut& txDesc = vout;
-
 					
                     const CTxOut &vout = prev.vout[prevout.n];
 					std::string grcFrom = PubKeyToGRCAddress(vout.scriptPubKey);

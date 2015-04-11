@@ -419,10 +419,15 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
 	double reward = CoinToDouble(wtx->credit + wtx->debit);
 	double max = GetMaximumBoincSubsidy(GetAdjustedTime());
 	bool is_por = IsPoR(reward);
+	//bool is_remote = IsRemote(reward);
 	switch(wtx->type)
     {
     case TransactionRecord::Generated:
-		    if (reward >= max*.90)
+		    if (wtx->RemoteFlag==1)
+			{
+				return QIcon(":/icons/cpumined_blue");
+			}
+			else if (reward >= max*.90)
 			{
 					return QIcon(":/icons/gold_cpumined");
 			}
@@ -488,6 +493,9 @@ QVariant TransactionTableModel::addressColor(const TransactionRecord *wtx) const
 
 QString TransactionTableModel::formatTxAmount(const TransactionRecord *wtx, bool showUnconfirmed) const
 {
+
+	//4-3-2015 R Halford; Display the correct Tx Amount; Ensure credits sourced from CryptoLottery display the correct amount (not Block Stake minus Credit):
+
     QString str = BitcoinUnits::format(walletModel->getOptionsModel()->getDisplayUnit(), wtx->credit + wtx->debit);
     if(showUnconfirmed)
     {

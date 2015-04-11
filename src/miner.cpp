@@ -208,7 +208,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 	    assert(txNew.vin[0].scriptSig.size() <= 100);
         txNew.vout[0].SetEmpty();
     
-       }
+    }
 
     // Add our coinbase tx as first transaction
     pblock->vtx.push_back(txNew);

@@ -120,6 +120,7 @@ extern unsigned char pchMessageStart[4];
 extern std::map<uint256, CBlock*> mapOrphanBlocks;
 
 extern int64_t COIN_YEAR_REWARD;
+extern bool bCryptoLotteryEnabled;
 
 
 // Settings
@@ -652,6 +653,10 @@ public:
         }
         return nValueOut;
     }
+
+	
+
+
 
     /** Amount of bitcoins coming in to this transaction
         Note that lightweight clients may not know anything besides the hash of previous transactions,

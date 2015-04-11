@@ -50,6 +50,24 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx)
     return true;
 }
 
+
+    //4-3-2015
+	int64_t GetMyValueOut(const CWallet *wallet,const CWalletTx &wtx)
+    {
+        int64_t nValueOut = 0;
+        BOOST_FOREACH(const CTxOut& txout, wtx.vout)
+        {
+	       if (wallet->IsMine(txout))
+		   {
+				nValueOut += txout.nValue;
+		   }
+        }
+        return nValueOut;
+    }
+
+
+
+
 /*
  * Decompose CWallet transaction to model transaction records.
  */
@@ -66,7 +84,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
     if (nNet > 0 || wtx.IsCoinBase() || wtx.IsCoinStake())
     {
         //
-        // Credit
+        // Credit - Calculate Net from CryptoLottery Rob Halford - 4-3-2015-1
         //
         BOOST_FOREACH(const CTxOut& txout, wtx.vout)
         {
@@ -96,13 +114,33 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                 if (wtx.IsCoinStake())
                 {
                     // Generated (proof-of-stake)
-
-                    if (hashPrev == hash)
+			        if (hashPrev == hash)
                         continue; // last coinstake output
 
-                    sub.type = TransactionRecord::Generated;
-                    sub.credit = nNet > 0 ? nNet : wtx.GetValueOut() - nDebit;
-                    hashPrev = hash;
+					if (wtx.vout.size()==2)
+					{  
+						//Standard POR CoinStake
+						sub.type = TransactionRecord::Generated;
+						sub.credit = nNet > 0 ? nNet : wtx.GetValueOut() - nDebit;
+						hashPrev = hash;
+					}
+					else
+					{
+						//CryptoLottery - CoinStake - 4-3-2015
+						sub.type = TransactionRecord::Generated;
+						if (nDebit == 0)
+						{
+							sub.credit = GetMyValueOut(wallet,wtx);
+							sub.RemoteFlag = 1;
+						}
+						else
+						{
+							sub.credit = nNet > 0 ? nNet : GetMyValueOut(wallet,wtx) - nDebit;
+						}
+							
+						hashPrev = hash;
+			
+					}
                 }
 
                 parts.append(sub);

@@ -108,6 +108,7 @@ public:
     std::string address;
     qint64 debit;
     qint64 credit;
+	qint64 RemoteFlag;
     /**@}*/
 
     /** Subtransaction index, for sort key */

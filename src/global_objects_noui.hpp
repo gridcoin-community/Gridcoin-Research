@@ -89,7 +89,7 @@ extern int miningthreadcount;
 		double InterestSubsidy;
 		double PaymentTimespan;
 		double verifiedTotalNetworkRAC;
-		
+		double LastBlock;
 		double Canary;
 
 
@@ -108,7 +108,7 @@ extern int miningthreadcount;
 		std::string PaymentTimestamps;
 		std::string PaymentAmountsResearch;
 		std::string PaymentAmountsInterest;
-
+		std::string GRCAddress;
 		
 	};
 
