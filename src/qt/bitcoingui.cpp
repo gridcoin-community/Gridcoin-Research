@@ -756,16 +756,6 @@ void BitcoinGUI::createActions()
     aboutAction->setMenuRole(QAction::AboutRole);
 
 
-
-//	miningAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Mining Console"), this);
-//	miningAction->setStatusTip(tr("Go to the mining console"));
-//	miningAction->setMenuRole(QAction::TextHeuristicRole);
-
-
-//	emailAction = new QAction(QIcon(":/icons/bitcoin"), tr("&E-Mail Center"), this);
-//	emailAction->setStatusTip(tr("Go to the E-Mail center"));
-//	emailAction->setMenuRole(QAction::TextHeuristicRole);
-
 	sqlAction = new QAction(QIcon(":/icons/bitcoin"), tr("&SQL Query Analyzer"), this);
 	sqlAction->setStatusTip(tr("SQL Query Analyzer"));
 	sqlAction->setMenuRole(QAction::TextHeuristicRole);
@@ -778,15 +768,11 @@ void BitcoinGUI::createActions()
 	ticketListAction->setStatusTip(tr("Tickets"));
 	ticketListAction->setMenuRole(QAction::TextHeuristicRole);
 
+	galazaAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Galaza (Game)"), this);
+	galazaAction->setStatusTip(tr("Galaza"));
+	galazaAction->setMenuRole(QAction::TextHeuristicRole);
 
-//	leaderboardAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Leaderboard"), this);
-//	leaderboardAction->setStatusTip(tr("Leaderboard"));
-//	leaderboardAction->setMenuRole(QAction::TextHeuristicRole);
 
-
-	//aboutQtAction = new QAction(QIcon(":/trolltech/qmessagebox/images/qtlogo-64.png"), tr("About &Qt"), this);
-    //aboutQtAction->setToolTip(tr("Show information about Qt"));
-    //aboutQtAction->setMenuRole(QAction::AboutQtRole);
     optionsAction = new QAction(QIcon(":/icons/options"), tr("&Options..."), this);
     optionsAction->setToolTip(tr("Modify configuration options for GridCoin"));
     optionsAction->setMenuRole(QAction::PreferencesRole);
@@ -822,18 +808,15 @@ void BitcoinGUI::createActions()
     connect(lockWalletAction, SIGNAL(triggered()), this, SLOT(lockWallet()));
     connect(signMessageAction, SIGNAL(triggered()), this, SLOT(gotoSignMessageTab()));
     connect(verifyMessageAction, SIGNAL(triggered()), this, SLOT(gotoVerifyMessageTab()));
-	//	connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
-	//	connect(emailAction, SIGNAL(triggered()), this, SLOT(emailClicked()));
 	connect(rebuildAction, SIGNAL(triggered()), this, SLOT(rebuildClicked()));
 	connect(upgradeAction, SIGNAL(triggered()), this, SLOT(upgradeClicked()));
 	connect(downloadAction, SIGNAL(triggered()), this, SLOT(downloadClicked()));
 	connect(rebootAction, SIGNAL(triggered()), this, SLOT(rebootClicked()));
 	connect(sqlAction, SIGNAL(triggered()), this, SLOT(sqlClicked()));
 	connect(tickerAction, SIGNAL(triggered()), this, SLOT(tickerClicked()));
-
 	connect(ticketListAction, SIGNAL(triggered()), this, SLOT(ticketListClicked()));
+	connect(galazaAction, SIGNAL(triggered()), this, SLOT(galazaClicked()));
 
-	//connect(leaderboardAction, SIGNAL(triggered()), this, SLOT(leaderboardClicked()));
 
 }
 
@@ -896,14 +879,9 @@ void BitcoinGUI::createMenuBar()
 	qmAdvanced->addSeparator();
 	qmAdvanced->addAction(sqlAction);
 	qmAdvanced->addAction(tickerAction);
-
 	qmAdvanced->addAction(ticketListAction);
-
-
-//	QMenu *leaderboard = appMenuBar->addMenu(tr("&Leaderboard"));
-//	leaderboard->addSeparator();
-//	leaderboard->addAction(leaderboardAction);
-
+	qmAdvanced->addSeparator();
+	qmAdvanced->addAction(galazaAction);
 
 
 }
@@ -1524,11 +1502,23 @@ void BitcoinGUI::ticketListClicked()
 		globalcom = new QAxObject("BoincStake.Utilization");
 	}
 
-			
 	qtSetSessionInfo(DefaultWalletAddress(), GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.Magnitude);
-
-
     globalcom->dynamicCall("ShowTicketList()");
+#endif
+
+}
+
+
+
+void BitcoinGUI::galazaClicked()
+{
+#ifdef WIN32
+	if (!globalcom)
+	{
+		globalcom = new QAxObject("BoincStake.Utilization");
+	}
+
+    globalcom->dynamicCall("StartGalaza()");
 #endif
 
 }

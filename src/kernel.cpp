@@ -4,41 +4,27 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <boost/assign/list_of.hpp>
-
 #include "kernel.h"
 #include "txdb.h"
 
-
 std::string YesNo(bool bin);
 double GetPoSKernelPS2();
-
 std::string RoundToString(double d, int place);
 bool IsCPIDValidv2(MiningCPID& mc,int height);
 using namespace std;
 MiningCPID DeserializeBoincBlock(std::string block);
-
 std::string RetrieveMd5(std::string s1);
-
+extern std::string CPIDByAddress(std::string address);
 bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
 extern int64_t GetRSAWeightByCPID(std::string cpid);
-
-bool IsCPIDTimeValid(std::string cpid, int64_t locktime);
-
-double CPIDTime(std::string cpid);
-
-
+extern double OwedByAddress(std::string address);
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
-
 double GetBlockDifficulty(unsigned int nBits);
-
 extern double GetLastPaymentTimeByCPID(std::string cpid);
-
 extern double GetUntrustedMagnitude(std::string cpid, double& out_owed);
-
 bool LessVerbose(int iMax1000);
-
 
 typedef std::map<int, unsigned int> MapModifierCheckpoints;
 /*
@@ -316,6 +302,48 @@ double GetMagnitudeByHashBoinc(std::string hashBoinc, int height)
 		return 0;
 }
 
+
+std::string CPIDByAddress(std::string address)
+{
+		   //4-2-2015 - CryptoLottery
+		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
+		   {
+				StructCPID structMag = GetStructCPID();
+				structMag = mvMagnitudes[(*ii).first];
+				if (structMag.initialized && structMag.cpid.length() > 2 && structMag.cpid != "INVESTOR" && structMag.GRCAddress.length() > 5) 
+				{ 
+					if (structMag.GRCAddress==address)
+					{
+						return structMag.cpid;
+					}
+		     	}
+			}
+		   return "";
+	
+}
+
+
+
+double OwedByAddress(std::string address)
+{
+		   //4-2-2015 - CryptoLottery
+		   double outstanding = 0;
+		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
+		   {
+				StructCPID structMag = GetStructCPID();
+				structMag = mvMagnitudes[(*ii).first];
+				if (structMag.initialized && structMag.cpid.length() > 2 && structMag.cpid != "INVESTOR" && structMag.GRCAddress.length() > 5) 
+				{ 
+					if (structMag.GRCAddress==address)
+					{
+						double out1 = structMag.totalowed - structMag.payments;
+						outstanding += out1;
+					}
+		     	}
+			}
+		   return outstanding;
+}
+
 int64_t GetRSAWeightByCPID(std::string cpid)
 {
 	double owed = 0;
@@ -432,7 +460,6 @@ double GetUntrustedMagnitude(std::string cpid, double& out_owed)
 
 
 
-
 static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, unsigned int nTxPrevOffset, 
 	const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, 
 	uint256& targetProofOfStake, bool fPrintProofOfStake, std::string hashBoinc, bool checking_local)
@@ -440,7 +467,6 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 
 	//Note: When client is checking locally for a good kernelhash, block.vtx[0] is still null, and block.vtx[1].GetValueOut() is null (for mint) so hashBoinc is provided separately
 	double PORDiff = GetBlockDifficulty(nBits);
-	
     if (nTimeTx < txPrev.nTime)  
 	{
 		// Transaction timestamp violation
@@ -460,24 +486,13 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
     bnTargetPerCoinDay.SetCompact(nBits);
     int64_t nValueIn = txPrev.vout[prevout.n].nValue;
     uint256 hashBlockFrom = blockFrom.GetHash();
-
-	
 	MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
 	std::string cpid = boincblock.cpid;
     int64_t RSA_WEIGHT = 0;
 	int oNC = 0;
 	//12-7-2014 R Halford 
 	RSA_WEIGHT = GetRSAWeightByBlock(boincblock);
-	
 
-	//WEIGHT MODIFICATION SECTION 2: Newbie stake allowance
-	//std::string sSubsidy = RoundToString(subsidy,4);
-	//uint64_t nNetworkWeight = GetPoSKernelPS2();
-	//int64_t Weight(int64_t nIntervalBeginning, int64_t nIntervalEnd)
-    // Kernel hash weight starts from 0 at the min age
-    // this change increases active coins participating the hash and helps
-    // to secure the network when proof-of-stake difficulty is low
-	
 	CBigNum bnCoinDayWeight = 0;
 	if (checking_local)
 	{
@@ -497,7 +512,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 		oNC=1;
 	}
 
-	if (fDebug3) if (LessVerbose(100)) printf("CPID %s, BlockTime %f PrevTxTime %f Payment_Age %f, Coin_Age %f, NC %f, RSA_WEIGHT %f, Magnitude %f; ",
+	if (fDebug) if (LessVerbose(100)) printf("CPID %s, BlockTime %f PrevTxTime %f Payment_Age %f, Coin_Age %f, NC %f, RSA_WEIGHT %f, Magnitude %f; ",
 		boincblock.cpid.c_str(), (double)blockFrom.GetBlockTime(),(double)txPrev.nTime,
 		payment_age,coin_age,(double)oNC,(double)RSA_WEIGHT,(double)boincblock.Magnitude);
 
@@ -546,11 +561,8 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 		if (oNC==0)
 		{
 			//Use this area to log the submitters cpid and mint amount:
-			//printf("!#"
 			if (!checking_local || fDebug)
 			{
-				//Dont print all this crap in the log if we are running a local miner:
-				//printf("Block does not meet target: hashboinc %s\r\n",hashBoinc.c_str());
 				if (LessVerbose(75)) printf("{Vitals}: cpid %s, project %s, RSA_WEIGHT: %f \r\n",cpid.c_str(),boincblock.projectname.c_str(),(double)RSA_WEIGHT);
 			}
 			return false;
@@ -594,10 +606,6 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 //
 
 
-
-
-
-
 static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, unsigned int nTimeBlockFrom, 
 	const CTransaction& txPrev, const COutPoint& prevout, unsigned int nTimeTx, uint256& hashProofOfStake, 
 	uint256& targetProofOfStake, bool fPrintProofOfStake, std::string hashBoinc, bool checking_local, double por_nonce)
@@ -608,9 +616,9 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 	double payment_age = std::abs((double)nTimeTx-(double)boincblock.LastPaymentTime);
     int64_t RSA_WEIGHT = GetRSAWeightByBlock(boincblock);
  	double coin_age = std::abs((double)nTimeTx-(double)txPrev.nTime);
-	double BitsAge = PORDiff * 144; //For every 100 Diff in Bits, two hours of coin age for researchers
+	double BitsAge = PORDiff * 144;     //For every 100 Diff in Bits, two hours of coin age for researchers
 	if (BitsAge > 86400) BitsAge=86400; //Limit to 24 hours (possibility of astronomical diff)
-	//Halford 1-4-2015 : Explain to the Researcher why they are not staking:
+	// Halford : Explain to the Researcher why they are not staking:
 	if (checking_local && LessVerbose(100))
 	{
 		std::string narr = "";
@@ -693,7 +701,6 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 	}
     return true;
 }
-
 
 
 
@@ -784,10 +791,5 @@ unsigned int GetStakeModifierChecksum(const CBlockIndex* pindex)
 bool CheckStakeModifierCheckpoints(int nHeight, unsigned int nStakeModifierChecksum)
 {
 	return true;
-	/*
-    MapModifierCheckpoints& checkpoints = (fTestNet ? mapStakeModifierCheckpointsTestNet : mapStakeModifierCheckpoints);
-	    if (checkpoints.count(nHeight))
-        return nStakeModifierChecksum == checkpoints[nHeight];
-    return true;
-	*/
 }
+

@@ -7,7 +7,6 @@
 #include "optionsmodel.h"
 #include "addresstablemodel.h"
 #include "bitcoinunits.h"
-
 #include "wallet.h"
 #include "ui_interface.h"
 
@@ -20,7 +19,6 @@
 
 
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
-
 std::string RoundToString(double d, int place);
 double CoinToDouble(double surrogate);
 
@@ -112,24 +110,6 @@ public:
             // Determine whether to show transaction or not
             bool showTransaction = (inWallet && TransactionRecord::showTransaction(mi->second));
 			//Remove the Orphan Mined Generated and not Accepted TX
-
-			if (showTransaction)
-            {
-				/*
-                    QList<TransactionRecord> qlDummy = TransactionRecord::decomposeTransaction(wallet, mi->second);
-    	 	  	    if(!qlDummy.isEmpty()) 
-					{
-						    foreach(const TransactionRecord &trDummy, qlDummy)
-							{
-                     				if (trDummy.status.status == TransactionStatus::NotAccepted)
-									{
-										showTransaction = false;
-									}
-							}
-					 }
-					 */
-			}
-             
 
 
             if(status == CT_UPDATED)
@@ -419,7 +399,6 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
 	double reward = CoinToDouble(wtx->credit + wtx->debit);
 	double max = GetMaximumBoincSubsidy(GetAdjustedTime());
 	bool is_por = IsPoR(reward);
-	//bool is_remote = IsRemote(reward);
 	switch(wtx->type)
     {
     case TransactionRecord::Generated:

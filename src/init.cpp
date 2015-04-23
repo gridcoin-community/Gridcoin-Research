@@ -22,23 +22,14 @@
 #include "global_objects_noui.hpp"
 
 std::vector<std::string> split(std::string s, std::string delim);
-
-extern void ReloadBlockChain1();
-
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern void InitializeBoincProjects();
-
-
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
-
 void startWireFrameRenderer();
 void stopWireFrameRenderer();
-
 void ShutdownGridcoinMiner();
-void StartNodeNetworkOnly();
 void ThreadCPIDs();
-extern void StopGridcoin3();
 void LoadCPIDsInBackground();
 std::string GetPoolKey(std::string sMiningProject,double dMiningRAC,
 	std::string ENCBoincpublickey,std::string xcpid, std::string messagetype, 
@@ -65,14 +56,11 @@ void WriteAppCache(std::string key, std::string value);
 
 using namespace std;
 using namespace boost;
-
 CWallet* pwalletMain;
 CClientUIInterface uiInterface;
 std::vector<std::string> split(std::string s, std::string delim);
 void ShutdownGridcoinMiner();
-void StartNodeNetworkOnly();
 void ThreadCPIDs();
-extern void StopGridcoin3();
 bool fConfChange;
 bool fEnforceCanonical;
 unsigned int nNodeLifespan;
@@ -133,43 +121,9 @@ void DetectShutdownThread(boost::thread_group* threadGroup)
         if (fRequestShutdown)
 		{
 			printf("Shutting down forcefully...");
-			//Note: this code is used in Litecoin, but not in Peercoin/Gridcoin
-     		/*
-            threadGroup->interrupt_all();
-			//threadGroup.join_all();
-			printf("Stopping node\r\n");
-			StopNode();
-			*/
 		}
     }
 	printf("Shutdown thread ended.");
-}
-
-
-void StopGridcoin3()
-{
-	    threadGroup.interrupt_all();
-        threadGroup.join_all();
-		printf("Stopping node\r\n");
-		StopNode();
-
-}
-
-void RestartGridcoin3() 
-{
-     	//Gridcoin - Stop all network threads; Stop the node; Restart the Node.
-		//Note: The threadGroup only contains Network Threads:
-	    StopGridcoin3();
- 		printf("Starting node...\r\n");
-		StartNodeNetworkOnly();
-}
-
-void ReloadBlockChain1()
-{
-	CTxDB txdb("r");
-    txdb.LoadBlockIndex();
-    //PrintBlockTree();
-        
 }
 
 
@@ -177,7 +131,6 @@ void InitializeBoincProjectsNew()
 {
 		//3-13-2015
 	    // ToDo TestNet:  Ensure that we test both Projects and ProjectMappings
-
 		//Initialize GlobalCPUMiningCPID
 	    GlobalCPUMiningCPID.initialized = true;
 		GlobalCPUMiningCPID.cpid="";
@@ -316,9 +269,6 @@ void InitializeBoincProjects()
 
 
 
-
-
-
 void Shutdown(void* parg)
 {
     static CCriticalSection cs_Shutdown;
@@ -401,10 +351,7 @@ bool AppInit(int argc, char* argv[])
         //
         // If Qt is used, parameters/bitcoin.conf are parsed in qt/bitcoin.cpp's main()
         ParseParameters(argc, argv);
-
 		printf("AppInit");
-
-
         if (!boost::filesystem::is_directory(GetDataDir(false)))
         {
             fprintf(stderr, "Error: Specified directory does not exist\n");
@@ -798,7 +745,6 @@ bool AppInit2()
 
     if (mapArgs.count("-timeout"))
     {
-		//1-1-2015
         int nNewTimeout = GetArg("-timeout", 4000);
         if (nNewTimeout > 0 && nNewTimeout < 600000)
             nConnectTimeout = nNewTimeout;
@@ -863,10 +809,10 @@ bool AppInit2()
     }
 #endif
 
-    //if (GetBoolArg("-shrinkdebugfile", !fDebug))        ShrinkDebugFile();
 	ShrinkDebugFile();
-
     printf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
+	printf("***************************************** GRIDCOIN RESEARCH ***************************************************\r\n");
+
     printf("Gridcoin version %s (%s)\n", FormatFullVersion().c_str(), CLIENT_DATE.c_str());
     printf("Using OpenSSL version %s\n", SSLeay_version(SSLEAY_VERSION));
     if (!fLogTimestamps)
@@ -877,9 +823,6 @@ bool AppInit2()
 
     if (fDaemon)
         fprintf(stdout, "Gridcoin server starting\n");
-
-
-	
 
     int64_t nStart;
 

@@ -10,20 +10,14 @@ Imports System.Security.Cryptography
 Module modGRC
 
     Public mclsUtilization As Utilization
-
     Public mfrmMining As frmMining
-
     Public mfrmProjects As frmProjects
     Public mfrmSql As frmSQL
     Public mfrmTicketAdd As frmTicketAdd
     Public mfrmTicketList As frmTicketList
     Public mfrmLogin As frmLogin
-
     Public mfrmTicker As frmLiveTicker
-
-
     Public mfrmWireFrame As frmGRCWireFrameCanvas
-
     Public mfrmLeaderboard As frmLeaderboard
     Public MerkleRoot As String = "0xda43abf15a2fcd57ceae9ea0b4e0d872981e2c0b72244466650ce6010a14efb8"
     Public merkleroot2 As String = "0xda43abf15abcdefghjihjklmnopq872981e2c0b72244466650ce6010a14efb8"

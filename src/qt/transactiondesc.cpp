@@ -18,13 +18,11 @@ std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype,
 void ExecuteCode();
 extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 
-
 QString ToQString(std::string s)
 {
 	QString str1 = QString::fromUtf8(s.c_str());
 	return str1;
 }
-
 
 
 QString TransactionDesc::FormatTxStatus(const CWalletTx& wtx)
@@ -318,7 +316,6 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
 
 		strHTML += "<br><b>Notes: " + QString::fromStdString(sGRCMessage) + "</b><p><br>";
 		msHashBoinc += wtx.hashBoinc;
-
         strHTML += "<br><b>" + tr("Inputs") + ":</b>";
         strHTML += "<ul>";
 

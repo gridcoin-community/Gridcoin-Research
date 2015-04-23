@@ -9,11 +9,9 @@
 #include "main.h"
 #include "uint256.h"
 
-
 double GetGridcoinBalance(std::string SendersGRCAddress);
 void SetAdvisory();
 bool InAdvisory();
-
 
 static const int nCheckpointSpan = 10;
 
@@ -374,7 +372,6 @@ namespace Checkpoints
     bool SendSyncHashCheckpoint(uint256 hash1, std::string SendingWalletAddress)
     {
 		//11-23-2014 - R HALFORD - Relay Global Checkpoint to all nodes
-		//hashCheckpoint contains the Last Block hash, IE the block everyone else is still hashing
 	    CSyncCheckpoint checkpoint;
         checkpoint.hashCheckpointGlobal = hash1;
 		checkpoint.hashCheckpoint = hash1;

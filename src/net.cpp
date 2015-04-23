@@ -36,44 +36,22 @@ extern std::string DefaultBlockKey(int key_length);
 extern std::string GetBestBlockHash(std::string sCPID);
 extern std::string TestHTTPProtocol(std::string sCPID);
 extern std::string OrgId();
-
 std::string DefaultBoincHashArgs();
-
 extern std::string LegacyDefaultBoincHashArgs();
-
-
 bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
-
 extern int nMaxConnections;
 MiningCPID GetNextProject(bool bForce);
 void HarvestCPIDs(bool cleardata);
-
 bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
-
 extern std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache);
-
-
-
-extern void RestartGridcoin10();
-
-
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
-
 std::string cached_boinchash_args = "";
-
 void WriteAppCache(std::string key, std::string value);
-
 std::string RetrieveMd5(std::string s1);
-extern void StartNodeNetworkOnly();
 
 extern std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string urlPage, bool bUseDNS);
-
 std::string msPubKey = "";
-
-
 std::string RoundToString(double d, int place);
-
-
 
 
 static const int MAX_OUTBOUND_CONNECTIONS = 16;
@@ -138,7 +116,6 @@ unsigned short GetListenPort()
 }
 
 
-
 std::string GetCommandNonce(std::string command)
 {
 	//1-11-2015 Message Attacks - Halford
@@ -153,8 +130,6 @@ std::string GetCommandNonce(std::string command)
 	std::string sComm = nonce+","+command+","+pw1+","+org+","+pub_key_prefix+","+bhrn+","+grid_pass_encrypted;
 	return sComm;
 }
-
-
 
 
 
@@ -285,9 +260,6 @@ bool RecvLine2(SOCKET hSocket, string& strLine)
 	}
 
 }
-
-
-
 
 
 bool RecvLine(SOCKET hSocket, string& strLine)
@@ -464,16 +436,12 @@ bool IsReachable(const CNetAddr& addr)
 
 
 
-
-
-
 void StringToChar(std::string s, char* a) 
 {	a=new char[s.size()+1];
 	a[s.size()]=0;
 	memcpy(a,s.c_str(),s.size());
 
 }
-
 
 
 std::string GetHttpContent(const CService& addrConnect, std::string getdata)
@@ -647,10 +615,8 @@ std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string
 std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache)
 {
 
-
 	try 
 	{
-	
 		 if (cpid=="" || cpid.length() < 5)
 		 {
 				if (fDebug) printf("Blank cpid supplied");
@@ -722,24 +688,6 @@ std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache)
 	}
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -866,7 +814,6 @@ void ThreadGetMyExternalIP(void* parg)
 
 
 
-
 void AddressCurrentlyConnected(const CService& addr)
 {
     addrman.Connected(addr);
@@ -925,19 +872,13 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
     }
 
 
-    /// debug print
-    if (false) printf("trying connection %s lastseen=%.1fhrs\n",        pszDest ? pszDest : addrConnect.ToString().c_str(),        pszDest ? 0 : (double)(GetAdjustedTime() - addrConnect.nTime)/3600.0);
-
-
     // Connect
     SOCKET hSocket;
     if (pszDest ? ConnectSocketByName(addrConnect, hSocket, pszDest, GetDefaultPort()) : ConnectSocket(addrConnect, hSocket))
     {
         addrman.Attempt(addrConnect);
-
         /// debug print
         if (fDebug) printf("connected %s\n", pszDest ? pszDest : addrConnect.ToString().c_str());
-
         // Set to non-blocking
 #ifdef WIN32
         u_long nOne = 1;
@@ -1051,43 +992,16 @@ void CNode::PushVersion()
 		PROTOCOL_VERSION, nBestHeight, addrMe.ToString().c_str(), addrYou.ToString().c_str(), addr.ToString().c_str());
 
 
-	/*
-	if (!checksum && (GlobalCPUMiningCPID.cpid.empty() || GlobalCPUMiningCPID.encboincpublickey.empty()))
-	{
-		    HarvestCPIDs(false);
-			GetNextProject(true);
-	}
-	*/
-
 	std::string sboinchashargs = DefaultBoincHashArgs();
 	uint256 boincHashRandNonce = GetRandHash();
 	std::string nonce = boincHashRandNonce.GetHex();
 	std::string pw1 = RetrieveMd5(nonce+","+sboinchashargs);
 	std::string mycpid = GlobalCPUMiningCPID.cpidv2;
-	
-	/*
-	if (!checksum)
-	{
-		printf("^x.");
-		if (!IsCPIDValidv3(mycpid,false))
-		{
-			printf("To run a compiled version of gridcoin you must have a valid cpid, rac > 100, join team Gridcoin and set your email address properly. CPID: %s \r\n",mycpid.c_str());
-			MilliSleep(5000);
-			GetNextProject(true);
-			//encbpk = 	GlobalCPUMiningCPID.encboincpublickey;
-			mycpid =    GlobalCPUMiningCPID.cpid;
-		}
-	}
-	*/
-
-	
 	std::string acid = GetCommandNonce("aries");
-                    
     PushMessage("aries", PROTOCOL_VERSION, nonce, pw1, 
 				mycpid, mycpid, acid, nLocalServices, nTime, addrYou, addrMe,
                 nLocalHostNonce, FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()), nBestHeight);
 }
-
 
 
 
@@ -1254,18 +1168,13 @@ int CNetMessage::readData(const char *pch, unsigned int nBytes)
 
 
 
-
-
-
-
-
-
 // requires LOCK(cs_vSend)
 void SocketSendData(CNode *pnode)
 {
     std::deque<CSerializeData>::iterator it = pnode->vSendMsg.begin();
 
-    while (it != pnode->vSendMsg.end()) {
+    while (it != pnode->vSendMsg.end()) 
+	{
         const CSerializeData &data = *it;
         assert(data.size() > pnode->nSendOffset);
         int nBytes = send(pnode->hSocket, &data[pnode->nSendOffset], data.size() - pnode->nSendOffset, MSG_NOSIGNAL | MSG_DONTWAIT);
@@ -1280,7 +1189,9 @@ void SocketSendData(CNode *pnode)
                 // could not send full message; stop sending more
                 break;
             }
-        } else {
+		}
+		else
+		{
             if (nBytes < 0) {
                 // error
                 int nErr = WSAGetLastError();
@@ -1871,11 +1782,6 @@ void ThreadDNSAddressSeed2(void* parg)
 
 
 
-
-
-
-
-
 unsigned int pnSeed[] =
 {
     0xdf4bd379, 0x7934d29b, 0x26bc02ad, 0x7ab743ad, 0x0ab3a7bc,
@@ -2027,7 +1933,6 @@ void ThreadOpenConnections2(void* parg)
         vnThreadsRunning[THREAD_OPENCONNECTIONS]++;
         if (fShutdown)
             return;
-
 
         vnThreadsRunning[THREAD_OPENCONNECTIONS]--;
         CSemaphoreGrant grant(*semOutbound);
@@ -2240,10 +2145,6 @@ bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOu
 
 
 
-
-
-
-
 void ThreadMessageHandler(void* parg)
 {
     // Make this thread recognisable as the message handling thread
@@ -2326,8 +2227,6 @@ void ThreadMessageHandler2(void* parg)
             return;
     }
 }
-
-
 
 
 
@@ -2496,95 +2395,6 @@ void static Discover()
 
 
 
-
-
-
-
-
-
-
-void StartNodeNetworkOnly()
-{
-
-
- // Make this thread recognisable as the startup thread
-    RenameThread("grc-start");
-
-    if (semOutbound == NULL) {
-        // initialize semaphore
-        int nMaxOutbound = min(MAX_OUTBOUND_CONNECTIONS, (int)GetArg("-maxconnections", 125));
-        semOutbound = new CSemaphore(nMaxOutbound);
-    }
-
-    if (pnodeLocalHost == NULL)
-        pnodeLocalHost = new CNode(INVALID_SOCKET, CAddress(CService("127.0.0.1", 0), nLocalServices));
-
-    Discover();
-
-    //
-    // Start threads
-    //
-
-    if (!GetBoolArg("-dnsseed", true))
-        printf("DNS seeding disabled\n");
-    else
-        if (!NewThread(ThreadDNSAddressSeed, NULL))
-            printf("Error: NewThread(ThreadDNSAddressSeed) failed\n");
-
-    // Map ports with UPnP
-    if (fUseUPnP)
-        MapPort();
-
-    // Get addresses from IRC and advertise ours
-    if (!NewThread(ThreadIRCSeed, NULL))
-        printf("Error: NewThread(ThreadIRCSeed) failed\n");
-
-    // Send and receive from sockets, accept connections
-    if (!NewThread(ThreadSocketHandler, NULL))
-        printf("Error: NewThread(ThreadSocketHandler) failed\n");
-
-    // Initiate outbound connections from -addnode
-    if (!NewThread(ThreadOpenAddedConnections, NULL))
-        printf("Error: NewThread(ThreadOpenAddedConnections) failed\n");
-
-    // Initiate outbound connections
-    if (!NewThread(ThreadOpenConnections, NULL))
-        printf("Error: NewThread(ThreadOpenConnections) failed\n");
-
-    // Process messages
-    if (!NewThread(ThreadMessageHandler, NULL))
-        printf("Error: NewThread(ThreadMessageHandler) failed\n");
-
-    // Dump network addresses
-    if (!NewThread(ThreadDumpAddress, NULL))
-        printf("Error; NewThread(ThreadDumpAddress) failed\n");
-
-    // Mine proof-of-stake blocks in the background
-    if (!GetBoolArg("-staking", true))
-        printf("Staking disabled\n");
-    else
-        if (!NewThread(ThreadStakeMiner, pwalletMain))
-            printf("Error: NewThread(ThreadStakeMiner) failed\n");
-
-}
-
-
-
-
-
-
-
-void RestartGridcoin10()
-{
-	bool OK = StopNode();
-	//void* parg;
-	StartNode(NULL);
-}
-
-
-
-
-
 void StartNode(void* parg)
 {
     // Make this thread recognisable as the startup thread
@@ -2739,3 +2549,4 @@ void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataSt
 
     RelayInventory(inv);
 }
+

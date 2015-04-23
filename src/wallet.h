@@ -4,12 +4,9 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #ifndef BITCOIN_WALLET_H
 #define BITCOIN_WALLET_H
-
 #include <string>
 #include <vector>
-
 #include <stdlib.h>
-
 #include "main.h"
 #include "key.h"
 #include "keystore.h"
@@ -30,10 +27,8 @@ class CCoinControl;
 enum WalletFeature
 {
     FEATURE_BASE = 10500, // the earliest version new wallets supports (only useful for getinfo's clientversion output)
-
     FEATURE_WALLETCRYPT = 40000, // wallet encryption
     FEATURE_COMPRPUBKEY = 60000, // compressed public keys
-
     FEATURE_LATEST = 60000
 };
 
@@ -495,7 +490,7 @@ public:
         READWRITE(fFromMe);
         READWRITE(fSpent);
 
-		//Serialize two additional fields for Gridcoin
+		//Serialize two additional fields for Gridcoin (Reserved for future use):
 		//READWRITE(nResearchSubsidy);
 		//READWRITE(nInterestSubsidy);
 

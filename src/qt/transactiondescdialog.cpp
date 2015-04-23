@@ -1,18 +1,15 @@
 #include "transactiondescdialog.h"
 #include "ui_transactiondescdialog.h"
 #include "main.h"
-
 #include "transactiontablemodel.h"
 #include <QMessageBox>
-
 #include <QModelIndex>
+
 std::string RoundToString(double d, int place);
 void ExecuteCode();
 extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 QString ToQString(std::string s);
-
 bool Contains(std::string data, std::string instring);
-
 int qtTrackConfirm(std::string txid);
 
 

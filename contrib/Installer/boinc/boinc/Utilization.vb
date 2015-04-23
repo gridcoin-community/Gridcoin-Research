@@ -13,8 +13,6 @@ Public Class Utilization
     Public ReadOnly Property Version As Double
         Get
             Return 352
-
-
         End Get
     End Property
 
@@ -58,8 +56,13 @@ Public Class Utilization
     Public Sub StartWireFrameRenderer()
         Dim thWireFrame As New Threading.Thread(AddressOf ThreadWireFrame)
         thWireFrame.Priority = Threading.ThreadPriority.Lowest
-
         thWireFrame.Start()
+    End Sub
+
+    Public Sub StartGalaza()
+        Dim p As New Process
+        p = Process.Start(GetGRCAppDir() + "\GridcoinGalaza.exe")
+
 
     End Sub
     Public Sub StopWireFrameRenderer()

@@ -12,16 +12,12 @@ double DoubleFromAmount(int64_t amount);
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 
 
-/* Return positive answer if transaction should be shown in list.
- */
+/* Return positive answer if transaction should be shown in list. */
 bool TransactionRecord::showTransaction(const CWalletTx &wtx)
 {
 	
-	//1-7-2015
 	std::string ShowOrphans = GetArg("-showorphans", "false");
-          
 	if (ShowOrphans=="false" && !wtx.IsInMainChain()) return false;
-
 	//R Halford - Discard Orphans after Y mins:
 	if (wtx.IsCoinStake())
 	{
@@ -50,8 +46,6 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx)
     return true;
 }
 
-
-    //4-3-2015
 	int64_t GetMyValueOut(const CWallet *wallet,const CWalletTx &wtx)
     {
         int64_t nValueOut = 0;
@@ -64,8 +58,6 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx)
         }
         return nValueOut;
     }
-
-
 
 
 /*
@@ -318,4 +310,5 @@ std::string TransactionRecord::getTxID()
 {
     return hash.ToString() + strprintf("-%03d", idx);
 }
+
 

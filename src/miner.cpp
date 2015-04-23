@@ -20,37 +20,20 @@ using namespace std;
 extern unsigned int nMinerSleep;
 MiningCPID GetNextProject(bool bForce);
 void ThreadCleanWalletPassphrase(void* parg);
-
 double GetBlockDifficulty(unsigned int nBits);
-
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
-
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 std::string GetBestBlockHash(std::string sCPID);
-
 double CoinToDouble(double surrogate);
-
 void ThreadTopUpKeyPool(void* parg);
-extern int64_t CPIDChronoStart(std::string cpid);
-extern bool IsCPIDTimeValid(std::string cpid, int64_t locktime);
-extern double CPIDTime(std::string cpid);
-
-
-
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
-bool AmIGeneratingBackToBackBlocks();
 double GetDifficulty(const CBlockIndex* blockindex = NULL);
 uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
-
 int64_t GetRSAWeightByCPID(std::string cpid);
-
 std::string RoundToString(double d, int place);
-
 bool OutOfSyncByAgeWithChanceOfMining();
-
 bool TallyNetworkAverages(bool ColdBoot);
 MiningCPID DeserializeBoincBlock(std::string block);
-
 std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
 
@@ -160,7 +143,6 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 
 	if (!bNetAveragesLoaded)
 	{
-
 		if (fDebug) printf("Net averages not yet loaded...");
 		MilliSleep(500);
 		return NULL;
@@ -172,7 +154,6 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		MilliSleep(500);
 		return NULL;
 	}
-
 
     // Create new block
     auto_ptr<CBlock> pblock(new CBlock());
@@ -446,17 +427,11 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 
 		miningcpid.ResearchSubsidy = out_por;
 		miningcpid.InterestSubsidy = out_interest;
-		//if (fDebug2) printf("Calc Research Subsidy %f, Interest %f \r\n",(double)miningcpid.ResearchSubsidy,(double)miningcpid.InterestSubsidy);
-
 		miningcpid.enccpid = ""; //CPID V1 Boinc RunTime enc key
 		miningcpid.encboincpublickey = "";
 		miningcpid.encaes = "";
-		
 		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-			
 		std::string hashBoinc = SerializeBoincBlock(miningcpid);
-
-		//printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
 	    if (fDebug)  printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
 		pblock->vtx[0].hashBoinc = hashBoinc;
 
@@ -466,7 +441,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
         if (pFees)
             *pFees = nFees;
 
-        // Fill in header  1-1-2015
+        // Fill in header  
         pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
 		if (!fProofOfStake)
 		{
@@ -577,7 +552,6 @@ bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
         LOCK(cs_main);
         if (pblock->hashPrevBlock != hashBestChain)
 		{
-			//1-10-2015
 			msMiningErrors6 = "Generated block is stale.";
             return error("CheckWork[] : generated block is stale");
 		}
@@ -629,71 +603,6 @@ double Round_Legacy(double d, int place)
 }
 
 	
-double CPIDTime(std::string cpid)
-{
-	if (cpid.length() < 10) return 0;
-	if (cpid=="INVESTOR" || cpid=="investor") return 0;
-	std::string h65535 = cpid.substr(0,4);
-	double hash = HexToDouble(h65535);
-	double timeslice = hash * 1.318;
-	return timeslice;
-}
-
-
-
-int64_t SecondsSinceMidnight(int64_t timestamp)
-{
-	time_t bigtime;
-	bigtime = (time_t)timestamp;
-	struct tm *Tm = gmtime(&bigtime);
-	double secs = (Tm->tm_hour*60*60) + (Tm->tm_min*60) + (Tm->tm_sec);
-	return secs;
-}
-
-
-
-int64_t CPIDChronoStart(std::string cpid)
-{
-	double offset = CPIDTime(cpid);
-	int64_t NetworkTimeAtMidnight = GetAdjustedTime()-SecondsSinceMidnight(GetAdjustedTime());
-	//if (fDebug) printf("Offset %f, NetTime %f, Midnight %f",(double)offset,(double)GetAdjustedTime(),(double)NetworkTimeAtMidnight);
-	int64_t CPIDTime = NetworkTimeAtMidnight+(int64_t)offset;
-	return CPIDTime;
-}
-
-bool IsCPIDTimeValid(std::string cpid, int64_t locktime)
-{
-	return true;
-
-	if (cpid.empty()) return true;
-	if (cpid=="INVESTOR" || cpid=="investor") return true;
-	double offset = CPIDTime(cpid);
-	int64_t passed = SecondsSinceMidnight(locktime);
-	if (fDebug3) printf("In locktime %f, Passed %f, Offset %f \r\n",(double)locktime,(double)passed,(double)offset);
-	if (passed >= offset && passed <= (offset+(30*60))) return true;
-	return false;
-}
-
-int SecondFromGRCAddress()
-{
-	std::string sAddress = DefaultWalletAddress();
-	//GRC Classic: Convert a public GRC address to its corresponding payment hour
-	if (sAddress.length() == 0) return 0;
-	char ch = *sAddress.rbegin();
-	char ch2=tolower(ch);
-	int asc = ch2; //Ascii value 0-9 = 48-57, a-z = 97 - 122
-	if (asc > 96) asc=asc-39;	
-	int lookup = asc-47;	
-	double hour = Round_Legacy(lookup/1.5,0);  //convert to 24 hour format, hour now equals 1-24
-	if (hour > 24) hour=24;
-	if (hour < 1) hour = 1;
-	int clockhour = hour-1; //Return 0-23 (Military Clock hours)
-	int sec = clockhour * 2.5;
-	if (sec < 0) sec = 0;
-	if (sec > 59) sec = 59;
-	return sec;
-}
-
 
 bool CheckStake(CBlock* pblock, CWallet& wallet)
 {
@@ -702,15 +611,12 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 
     if(!pblock->IsProofOfStake())
         return error("CheckStake() : %s is not a proof-of-stake block", hashBlock.GetHex().c_str());
-
     // verify hash target and signature of coinstake tx
 	if (pblock->vtx.size() < 1)
 	{
 		printf("CheckStake::HashBoinc too small\r\n");
 		return error("CheckStake()::HashBoinc too small");
 	}
-
-
 	if (pblock->nNonce < 100)
 	{
 		if (fDebug) printf("CheckStake::Nonce too low\r\n");
@@ -734,14 +640,12 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 			return error("*****CheckStake[] : Total Mint too Small, %f",(double)boincblock.ResearchSubsidy+boincblock.InterestSubsidy);
 	}
 			
-
 	if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc, true, pblock->nNonce))
 	{	
 		if (fDebug) printf("Hash boinc %s",pblock->vtx[0].hashBoinc.c_str());
         return error("CheckStake() : proof-of-stake checking failed");
 	}
 
-	
     //// debug print
 	double block_value = CoinToDouble(pblock->vtx[1].GetValueOut());
 	std::string sBlockValue = RoundToString(block_value,4);	
@@ -762,18 +666,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
             return error("CheckStake() : generated block is stale");
 		}
 
-		if (false)
-		{
-		std::string GlobalBlockSolved = GetBestBlockHash(GlobalCPUMiningCPID.cpidv2);
-		if (fDebug2) printf("GBS->%s",GlobalBlockSolved.c_str());
-		if (GlobalBlockSolved != "NULL" && GlobalBlockSolved.length() > 8 && GlobalBlockSolved != "")
-		{
-			return error("CheckStake() : generated block is stale - Solved at %s, Block Height: %f \r\n",GlobalBlockSolved.c_str(),(double)nBestHeight+1);
-		}
-		}
-
 		
-
         // Track how many getdata requests this block gets
         {
             LOCK(wallet.cs_wallet);
@@ -952,3 +845,4 @@ Begin:
             MilliSleep(nMinerSleep);
     }
 }
+

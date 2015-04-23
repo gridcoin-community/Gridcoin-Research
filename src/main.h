@@ -130,7 +130,6 @@ extern int64_t nMinimumInputValue;
 extern int64_t nLastTallied;
 extern int64_t nCPIDsLoaded;
 
-
 extern bool fUseFastIndex;
 extern unsigned int nDerivationMethodIndex;
 
@@ -202,7 +201,6 @@ CBlockIndex* RPCFindBlockByHeight(int nHeight);
 
 CBlockIndex* MainFindBlockByHeight(int nHeight);
 
-
 bool ProcessMessages(CNode* pfrom);
 bool SendMessages(CNode* pto, bool fSendTrickle);
 bool LoadExternalBlockFile(FILE* fileIn);
@@ -229,8 +227,6 @@ std::string DefaultWalletAddress();
 /** (try to) add transaction to memory pool **/
 bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
                         bool* pfMissingInputs);
-
-
 
 
 
@@ -967,12 +963,8 @@ public:
         READWRITE(hashMerkleRoot);
         READWRITE(nTime);
         READWRITE(nBits);
-		//? Some explaining would be prudent...
-		
-		//?
         READWRITE(nNonce);
-
-		
+	
 
         // ConnectBlock depends on vtx following header to generate CDiskTxPos
         if (!(nType & (SER_GETHASH|SER_BLOCKHEADERONLY)))
@@ -1551,9 +1543,6 @@ public:
 
 
 
-
-
-
 /** Describes a place in the block chain to another node such that if the
  * other node doesn't have the same branch, it can find a recent common trunk.
  * The further back it is, the further before the fork it may be.
@@ -1680,8 +1669,6 @@ public:
         return pindex->nHeight;
     }
 };
-
-
 
 
 
