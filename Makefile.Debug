@@ -112,16 +112,6 @@ SOURCES       = src/txdb-leveldb.cpp \
 		src/scrypt-x86_64.S \
 		src/scrypt.cpp \
 		src/pbkdf2.cpp \
-		src/zerocoin/Accumulator.cpp \
-		src/zerocoin/AccumulatorProofOfKnowledge.cpp \
-		src/zerocoin/Coin.cpp \
-		src/zerocoin/CoinSpend.cpp \
-		src/zerocoin/Commitment.cpp \
-		src/zerocoin/ParamGeneration.cpp \
-		src/zerocoin/Params.cpp \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.cpp \
-		src/zerocoin/SpendMetaData.cpp \
-		src/zerocoin/ZeroTest.cpp \
 		src/cpid.cpp \
 		src/sql.cpp \
 		src/upgrader.cpp build/moc_bitcoingui.cpp \
@@ -236,7 +226,6 @@ OBJECTS       = build/txdb-leveldb.o \
 		build/Params.o \
 		build/SerialNumberSignatureOfKnowledge.o \
 		build/SpendMetaData.o \
-		build/ZeroTest.o \
 		build/cpid.o \
 		build/sql.o \
 		build/upgrader.o \
@@ -312,7 +301,7 @@ dist:
 	$(ZIP) gridcoinresearch.zip $(SOURCES) $(DIST) gridcoinstake.pro ../Qt/4.8.4/mkspecs/features/device_config.prf ../Qt/4.8.4/mkspecs/qconfig.pri ../Qt/4.8.4/mkspecs/modules/qt_webkit_version.pri ../Qt/4.8.4/mkspecs/features/qt_functions.prf ../Qt/4.8.4/mkspecs/features/qt_config.prf ../Qt/4.8.4/mkspecs/features/exclusive_builds.prf ../Qt/4.8.4/mkspecs/features/default_pre.prf ../Qt/4.8.4/mkspecs/features/win32/default_pre.prf ../Qt/4.8.4/mkspecs/features/debug.prf ../Qt/4.8.4/mkspecs/features/debug_and_release.prf ../Qt/4.8.4/mkspecs/features/default_post.prf ../Qt/4.8.4/mkspecs/features/win32/default_post.prf ../Qt/4.8.4/mkspecs/features/build_pass.prf ../Qt/4.8.4/mkspecs/features/win32/exceptions.prf ../Qt/4.8.4/mkspecs/features/win32/qaxcontainer.prf ../Qt/4.8.4/mkspecs/features/win32/thread.prf ../Qt/4.8.4/mkspecs/features/win32/rtti.prf ../Qt/4.8.4/mkspecs/features/win32/stl.prf ../Qt/4.8.4/mkspecs/features/shared.prf ../Qt/4.8.4/mkspecs/features/warn_on.prf ../Qt/4.8.4/mkspecs/features/qt.prf ../Qt/4.8.4/mkspecs/features/moc.prf ../Qt/4.8.4/mkspecs/features/win32/windows.prf ../Qt/4.8.4/mkspecs/features/resources.prf ../Qt/4.8.4/mkspecs/features/uic.prf ../Qt/4.8.4/mkspecs/features/yacc.prf ../Qt/4.8.4/mkspecs/features/lex.prf a:\Qt\4.8.4\lib\qtmaind.prl a:\Qt\4.8.4\lib\QAxContainerd.prl src\qt\locale\bitcoin_af_ZA.ts src\qt\locale\bitcoin_ar.ts src\qt\locale\bitcoin_be_BY.ts src\qt\locale\bitcoin_bg.ts src\qt\locale\bitcoin_bs.ts src\qt\locale\bitcoin_ca.ts src\qt\locale\bitcoin_ca@valencia.ts src\qt\locale\bitcoin_ca_ES.ts src\qt\locale\bitcoin_cs.ts src\qt\locale\bitcoin_cy.ts src\qt\locale\bitcoin_da.ts src\qt\locale\bitcoin_de.ts src\qt\locale\bitcoin_el_GR.ts src\qt\locale\bitcoin_en.ts src\qt\locale\bitcoin_eo.ts src\qt\locale\bitcoin_es.ts src\qt\locale\bitcoin_es_CL.ts src\qt\locale\bitcoin_es_DO.ts src\qt\locale\bitcoin_es_MX.ts src\qt\locale\bitcoin_es_UY.ts src\qt\locale\bitcoin_et.ts src\qt\locale\bitcoin_eu_ES.ts src\qt\locale\bitcoin_fa.ts src\qt\locale\bitcoin_fa_IR.ts src\qt\locale\bitcoin_fi.ts src\qt\locale\bitcoin_fr.ts src\qt\locale\bitcoin_fr_CA.ts src\qt\locale\bitcoin_gl.ts src\qt\locale\bitcoin_he.ts src\qt\locale\bitcoin_hi_IN.ts src\qt\locale\bitcoin_hr.ts src\qt\locale\bitcoin_hu.ts src\qt\locale\bitcoin_id_ID.ts src\qt\locale\bitcoin_it.ts src\qt\locale\bitcoin_ja.ts src\qt\locale\bitcoin_ka.ts src\qt\locale\bitcoin_kk_KZ.ts src\qt\locale\bitcoin_ko_KR.ts src\qt\locale\bitcoin_ky.ts src\qt\locale\bitcoin_la.ts src\qt\locale\bitcoin_lt.ts src\qt\locale\bitcoin_lv_LV.ts src\qt\locale\bitcoin_ms_MY.ts src\qt\locale\bitcoin_nb.ts src\qt\locale\bitcoin_nl.ts src\qt\locale\bitcoin_pam.ts src\qt\locale\bitcoin_pl.ts src\qt\locale\bitcoin_pt_BR.ts src\qt\locale\bitcoin_pt_PT.ts src\qt\locale\bitcoin_ro_RO.ts src\qt\locale\bitcoin_ru.ts src\qt\locale\bitcoin_sah.ts src\qt\locale\bitcoin_sk.ts src\qt\locale\bitcoin_sl_SI.ts src\qt\locale\bitcoin_sq.ts src\qt\locale\bitcoin_sr.ts src\qt\locale\bitcoin_sv.ts src\qt\locale\bitcoin_th_TH.ts src\qt\locale\bitcoin_tr.ts src\qt\locale\bitcoin_uk.ts src\qt\locale\bitcoin_ur_PK.ts src\qt\locale\bitcoin_vi.ts src\qt\locale\bitcoin_vi_VN.ts src\qt\locale\bitcoin_zh_CN.ts src\qt\locale\bitcoin_zh_TW.ts src\qt\locale\bitcoin_af_ZA.ts src\qt\locale\bitcoin_ar.ts src\qt\locale\bitcoin_be_BY.ts src\qt\locale\bitcoin_bg.ts src\qt\locale\bitcoin_bs.ts src\qt\locale\bitcoin_ca.ts src\qt\locale\bitcoin_ca@valencia.ts src\qt\locale\bitcoin_ca_ES.ts src\qt\locale\bitcoin_cs.ts src\qt\locale\bitcoin_cy.ts src\qt\locale\bitcoin_da.ts src\qt\locale\bitcoin_de.ts src\qt\locale\bitcoin_el_GR.ts src\qt\locale\bitcoin_en.ts src\qt\locale\bitcoin_eo.ts src\qt\locale\bitcoin_es.ts src\qt\locale\bitcoin_es_CL.ts src\qt\locale\bitcoin_es_DO.ts src\qt\locale\bitcoin_es_MX.ts src\qt\locale\bitcoin_es_UY.ts src\qt\locale\bitcoin_et.ts src\qt\locale\bitcoin_eu_ES.ts src\qt\locale\bitcoin_fa.ts src\qt\locale\bitcoin_fa_IR.ts src\qt\locale\bitcoin_fi.ts src\qt\locale\bitcoin_fr.ts src\qt\locale\bitcoin_fr_CA.ts src\qt\locale\bitcoin_gl.ts src\qt\locale\bitcoin_he.ts src\qt\locale\bitcoin_hi_IN.ts src\qt\locale\bitcoin_hr.ts src\qt\locale\bitcoin_hu.ts src\qt\locale\bitcoin_id_ID.ts src\qt\locale\bitcoin_it.ts src\qt\locale\bitcoin_ja.ts src\qt\locale\bitcoin_ka.ts src\qt\locale\bitcoin_kk_KZ.ts src\qt\locale\bitcoin_ko_KR.ts src\qt\locale\bitcoin_ky.ts src\qt\locale\bitcoin_la.ts src\qt\locale\bitcoin_lt.ts src\qt\locale\bitcoin_lv_LV.ts src\qt\locale\bitcoin_ms_MY.ts src\qt\locale\bitcoin_nb.ts src\qt\locale\bitcoin_nl.ts src\qt\locale\bitcoin_pam.ts src\qt\locale\bitcoin_pl.ts src\qt\locale\bitcoin_pt_BR.ts src\qt\locale\bitcoin_pt_PT.ts src\qt\locale\bitcoin_ro_RO.ts src\qt\locale\bitcoin_ru.ts src\qt\locale\bitcoin_sah.ts src\qt\locale\bitcoin_sk.ts src\qt\locale\bitcoin_sl_SI.ts src\qt\locale\bitcoin_sq.ts src\qt\locale\bitcoin_sr.ts src\qt\locale\bitcoin_sv.ts src\qt\locale\bitcoin_th_TH.ts src\qt\locale\bitcoin_tr.ts src\qt\locale\bitcoin_uk.ts src\qt\locale\bitcoin_ur_PK.ts src\qt\locale\bitcoin_vi.ts src\qt\locale\bitcoin_vi_VN.ts src\qt\locale\bitcoin_zh_CN.ts src\qt\locale\bitcoin_zh_TW.ts TRANSLATIONS TYPELIBS TYPELIBS HEADERS RESOURCES IMAGES SOURCES OBJECTIVE_SOURCES FORMS YACCSOURCES YACCSOURCES LEXSOURCES 
 
 clean: compiler_clean 
-	-$(DEL_FILE) build/txdb-leveldb.o build/bitcoin.o build/bitcoingui.o build/transactiontablemodel.o build/addresstablemodel.o build/optionsdialog.o build/sendcoinsdialog.o build/coincontroldialog.o build/coincontroltreewidget.o build/addressbookpage.o build/signverifymessagedialog.o build/aboutdialog.o build/upgradedialog.o build/editaddressdialog.o build/bitcoinaddressvalidator.o build/alert.o build/version.o build/sync.o build/util.o build/netbase.o build/key.o build/script.o build/main.o build/miner.o build/init.o build/net.o build/irc.o build/checkpoints.o build/addrman.o build/db.o build/walletdb.o build/clientmodel.o build/guiutil.o build/transactionrecord.o build/optionsmodel.o build/monitoreddatamapper.o build/transactiondesc.o build/transactiondescdialog.o build/bitcoinstrings.o build/bitcoinamountfield.o build/wallet.o build/keystore.o build/transactionfilterproxy.o build/transactionview.o build/walletmodel.o build/bitcoinrpc.o build/rpcdump.o build/rpcnet.o build/rpcmining.o build/rpcwallet.o build/rpcblockchain.o build/rpcrawtransaction.o build/overviewpage.o build/csvmodelwriter.o build/crypter.o build/sendcoinsentry.o build/qvalidatedlineedit.o build/bitcoinunits.o build/qvaluecombobox.o build/askpassphrasedialog.o build/protocol.o build/notificator.o build/qtipcserver.o build/rpcconsole.o build/noui.o build/kernel.o build/scrypt-arm.o build/scrypt-x86.o build/scrypt-x86_64.o build/scrypt.o build/pbkdf2.o build/Accumulator.o build/AccumulatorProofOfKnowledge.o build/Coin.o build/CoinSpend.o build/Commitment.o build/ParamGeneration.o build/Params.o build/SerialNumberSignatureOfKnowledge.o build/SpendMetaData.o build/ZeroTest.o build/cpid.o build/sql.o build/upgrader.o build/moc_bitcoingui.o build/moc_transactiontablemodel.o build/moc_addresstablemodel.o build/moc_optionsdialog.o build/moc_coincontroldialog.o build/moc_coincontroltreewidget.o build/moc_sendcoinsdialog.o build/moc_addressbookpage.o build/moc_signverifymessagedialog.o build/moc_aboutdialog.o build/moc_upgradedialog.o
+	-$(DEL_FILE) build/txdb-leveldb.o build/bitcoin.o build/bitcoingui.o build/transactiontablemodel.o build/addresstablemodel.o build/optionsdialog.o build/sendcoinsdialog.o build/coincontroldialog.o build/coincontroltreewidget.o build/addressbookpage.o build/signverifymessagedialog.o build/aboutdialog.o build/upgradedialog.o build/editaddressdialog.o build/bitcoinaddressvalidator.o build/alert.o build/version.o build/sync.o build/util.o build/netbase.o build/key.o build/script.o build/main.o build/miner.o build/init.o build/net.o build/irc.o build/checkpoints.o build/addrman.o build/db.o build/walletdb.o build/clientmodel.o build/guiutil.o build/transactionrecord.o build/optionsmodel.o build/monitoreddatamapper.o build/transactiondesc.o build/transactiondescdialog.o build/bitcoinstrings.o build/bitcoinamountfield.o build/wallet.o build/keystore.o build/transactionfilterproxy.o build/transactionview.o build/walletmodel.o build/bitcoinrpc.o build/rpcdump.o build/rpcnet.o build/rpcmining.o build/rpcwallet.o build/rpcblockchain.o build/rpcrawtransaction.o build/overviewpage.o build/csvmodelwriter.o build/crypter.o build/sendcoinsentry.o build/qvalidatedlineedit.o build/bitcoinunits.o build/qvaluecombobox.o build/askpassphrasedialog.o build/protocol.o build/notificator.o build/qtipcserver.o build/rpcconsole.o build/noui.o build/kernel.o build/scrypt-arm.o build/scrypt-x86.o build/scrypt-x86_64.o build/scrypt.o build/pbkdf2.o build/Accumulator.o build/AccumulatorProofOfKnowledge.o build/Coin.o build/CoinSpend.o build/Commitment.o build/ParamGeneration.o build/Params.o build/SerialNumberSignatureOfKnowledge.o build/SpendMetaData.o build/cpid.o build/sql.o build/upgrader.o build/moc_bitcoingui.o build/moc_transactiontablemodel.o build/moc_addresstablemodel.o build/moc_optionsdialog.o build/moc_coincontroldialog.o build/moc_coincontroltreewidget.o build/moc_sendcoinsdialog.o build/moc_addressbookpage.o build/moc_signverifymessagedialog.o build/moc_aboutdialog.o build/moc_upgradedialog.o
 	-$(DEL_FILE) build/moc_editaddressdialog.o build/moc_bitcoinaddressvalidator.o build/moc_clientmodel.o build/moc_guiutil.o build/moc_optionsmodel.o build/moc_monitoreddatamapper.o build/moc_transactiondesc.o build/moc_transactiondescdialog.o build/moc_bitcoinamountfield.o build/moc_transactionfilterproxy.o build/moc_transactionview.o build/moc_walletmodel.o build/moc_overviewpage.o build/moc_csvmodelwriter.o build/moc_sendcoinsentry.o build/moc_qvalidatedlineedit.o build/moc_qvaluecombobox.o build/moc_askpassphrasedialog.o build/moc_notificator.o build/moc_rpcconsole.o build/qrc_bitcoin.o
 	-$(DEL_FILE) A:/Gridcoin-Research/src/leveldb/libleveldb.a; cd A:/Gridcoin-Research/src/leveldb ; $(MAKE) clean
 	-$(DEL_FILE) build/bitcoin-qt_res.o
@@ -766,16 +755,6 @@ build/overviewpage.moc: src/qt/overviewpage.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/qt/walletmodel.h \
 		src/qt/bitcoinunits.h \
@@ -822,16 +801,6 @@ build/rpcconsole.moc: src/qt/rpcconsole.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/qt/rpcconsole.cpp
 	A:/Qt/4.8.4/bin/moc.exe $(DEFINES) $(INCPATH) -D__GNUC__ -DWIN32 src/qt/rpcconsole.cpp -o build/rpcconsole.moc
 
@@ -919,16 +888,6 @@ build/txdb-leveldb.o: src/txdb-leveldb.cpp src/kernel.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/checkpoints.h \
 		src/txdb.h \
@@ -965,16 +924,6 @@ build/bitcoin.o: src/qt/bitcoin.cpp src/qt/bitcoingui.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/ui_interface.h \
 		src/walletdb.h \
@@ -1035,16 +984,6 @@ build/bitcoingui.o: src/qt/bitcoingui.cpp src/qt/bitcoingui.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/ui_interface.h \
 		src/walletdb.h \
@@ -1093,16 +1032,6 @@ build/transactiontablemodel.o: src/qt/transactiontablemodel.cpp src/qt/transacti
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/ui_interface.h \
 		src/walletdb.h \
@@ -1136,16 +1065,6 @@ build/addresstablemodel.o: src/qt/addresstablemodel.cpp src/qt/addresstablemodel
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/ui_interface.h \
 		src/walletdb.h \
@@ -1195,16 +1114,6 @@ build/sendcoinsdialog.o: src/qt/sendcoinsdialog.cpp src/qt/sendcoinsdialog.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/ui_interface.h \
 		src/walletdb.h \
@@ -1249,16 +1158,6 @@ build/coincontroldialog.o: src/qt/coincontroldialog.cpp src/qt/coincontroldialog
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/ui_interface.h \
 		src/walletdb.h \
@@ -1316,16 +1215,6 @@ build/signverifymessagedialog.o: src/qt/signverifymessagedialog.cpp src/qt/signv
 		src/addrman.h \
 		src/gridcoin.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/ui_interface.h \
 		src/walletdb.h \
@@ -1492,16 +1381,6 @@ build/script.o: src/script.cpp src/script.h \
 		src/addrman.h \
 		src/gridcoin.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o build/script.o src/script.cpp
 
@@ -1530,16 +1409,6 @@ build/main.o: src/main.cpp src/alert.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/txdb.h \
 		src/txdb-leveldb.h \
@@ -1582,16 +1451,6 @@ build/miner.o: src/miner.cpp src/txdb.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/miner.h \
 		src/wallet.h \
@@ -1627,16 +1486,6 @@ build/init.o: src/init.cpp src/txdb.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/walletdb.h \
 		src/db.h \
@@ -1651,7 +1500,6 @@ build/init.o: src/init.cpp src/txdb.h \
 		src/init.h \
 		src/wallet.h \
 		src/ui_interface.h \
-		src/zerocoin/ZeroTest.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o build/init.o src/init.cpp
 
 build/net.o: src/net.cpp src/irc.h \
@@ -1678,16 +1526,6 @@ build/net.o: src/net.cpp src/irc.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/init.h \
 		src/wallet.h \
@@ -1747,16 +1585,6 @@ build/checkpoints.o: src/checkpoints.cpp src/checkpoints.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o build/checkpoints.o src/checkpoints.cpp
 
@@ -1797,16 +1625,6 @@ build/db.o: src/db.cpp src/db.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/ui_interface.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o build/db.o src/db.cpp
@@ -1835,16 +1653,6 @@ build/walletdb.o: src/walletdb.cpp src/walletdb.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/base58.h \
 		src/wallet.h \
@@ -1879,16 +1687,6 @@ build/clientmodel.o: src/qt/clientmodel.cpp src/qt/clientmodel.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/ui_interface.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o build/clientmodel.o src/qt/clientmodel.cpp
@@ -1921,16 +1719,6 @@ build/guiutil.o: src/qt/guiutil.cpp src/qt/guiutil.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/ui_interface.h \
 		src/walletdb.h \
@@ -1962,16 +1750,6 @@ build/transactionrecord.o: src/qt/transactionrecord.cpp src/qt/transactionrecord
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/ui_interface.h \
 		src/walletdb.h \
@@ -2005,16 +1783,6 @@ build/optionsmodel.o: src/qt/optionsmodel.cpp src/qt/optionsmodel.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/ui_interface.h \
 		src/walletdb.h \
@@ -2052,16 +1820,6 @@ build/transactiondesc.o: src/qt/transactiondesc.cpp src/qt/transactiondesc.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/wallet.h \
 		src/ui_interface.h \
@@ -2097,16 +1855,6 @@ build/transactiondescdialog.o: src/qt/transactiondescdialog.cpp src/qt/transacti
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/qt/transactiontablemodel.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o build/transactiondescdialog.o src/qt/transactiondescdialog.cpp
@@ -2144,16 +1892,6 @@ build/wallet.o: src/wallet.cpp src/txdb.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/wallet.h \
 		src/ui_interface.h \
@@ -2240,16 +1978,6 @@ build/walletmodel.o: src/qt/walletmodel.cpp src/qt/walletmodel.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/walletdb.h \
 		src/db.h \
@@ -2280,16 +2008,6 @@ build/bitcoinrpc.o: src/bitcoinrpc.cpp src/init.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/ui_interface.h \
 		src/walletdb.h \
@@ -2328,16 +2046,6 @@ build/rpcdump.o: src/rpcdump.cpp src/init.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/ui_interface.h \
 		src/walletdb.h \
@@ -2384,16 +2092,6 @@ build/rpcnet.o: src/rpcnet.cpp src/net.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/ui_interface.h \
 		src/walletdb.h \
 		src/db.h \
@@ -2422,16 +2120,6 @@ build/rpcmining.o: src/rpcmining.cpp src/main.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/db.h \
 		src/txdb.h \
@@ -2474,16 +2162,6 @@ build/rpcwallet.o: src/rpcwallet.cpp src/wallet.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/ui_interface.h \
 		src/walletdb.h \
@@ -2521,16 +2199,6 @@ build/rpcblockchain.o: src/rpcblockchain.cpp src/main.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/bitcoinrpc.h \
 		src/json/json_spirit_reader_template.h \
@@ -2582,16 +2250,6 @@ build/rpcrawtransaction.o: src/rpcrawtransaction.cpp src/base58.h \
 		src/txdb-leveldb.h \
 		src/main.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/init.h \
 		src/wallet.h \
 		src/ui_interface.h \
@@ -2631,16 +2289,6 @@ build/overviewpage.o: src/qt/overviewpage.cpp src/qt/overviewpage.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/qt/walletmodel.h \
 		src/qt/bitcoinunits.h \
@@ -2767,16 +2415,6 @@ build/rpcconsole.o: src/qt/rpcconsole.cpp src/qt/rpcconsole.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		build/rpcconsole.moc
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o build/rpcconsole.o src/qt/rpcconsole.cpp
 
@@ -2805,16 +2443,6 @@ build/noui.o: src/noui.cpp src/ui_interface.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/walletdb.h \
 		src/db.h \
@@ -2851,16 +2479,6 @@ build/kernel.o: src/kernel.cpp src/kernel.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp \
 		src/txdb.h \
 		src/txdb-leveldb.h
@@ -2896,216 +2514,6 @@ build/scrypt.o: src/scrypt.cpp src/scrypt.h \
 
 build/pbkdf2.o: src/pbkdf2.cpp src/pbkdf2.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o build/pbkdf2.o src/pbkdf2.cpp
-
-build/Accumulator.o: src/zerocoin/Accumulator.cpp src/zerocoin/Zerocoin.h \
-		src/serialize.h \
-		src/allocators.h \
-		src/version.h \
-		src/clientversion.h \
-		src/bignum.h \
-		src/uint256.h \
-		src/util.h \
-		src/netbase.h \
-		src/compat.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h
-	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o build/Accumulator.o src/zerocoin/Accumulator.cpp
-
-build/AccumulatorProofOfKnowledge.o: src/zerocoin/AccumulatorProofOfKnowledge.cpp src/zerocoin/Zerocoin.h \
-		src/serialize.h \
-		src/allocators.h \
-		src/version.h \
-		src/clientversion.h \
-		src/bignum.h \
-		src/uint256.h \
-		src/util.h \
-		src/netbase.h \
-		src/compat.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h
-	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o build/AccumulatorProofOfKnowledge.o src/zerocoin/AccumulatorProofOfKnowledge.cpp
-
-build/Coin.o: src/zerocoin/Coin.cpp src/zerocoin/Zerocoin.h \
-		src/serialize.h \
-		src/allocators.h \
-		src/version.h \
-		src/clientversion.h \
-		src/bignum.h \
-		src/uint256.h \
-		src/util.h \
-		src/netbase.h \
-		src/compat.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h
-	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o build/Coin.o src/zerocoin/Coin.cpp
-
-build/CoinSpend.o: src/zerocoin/CoinSpend.cpp src/zerocoin/Zerocoin.h \
-		src/serialize.h \
-		src/allocators.h \
-		src/version.h \
-		src/clientversion.h \
-		src/bignum.h \
-		src/uint256.h \
-		src/util.h \
-		src/netbase.h \
-		src/compat.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h
-	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o build/CoinSpend.o src/zerocoin/CoinSpend.cpp
-
-build/Commitment.o: src/zerocoin/Commitment.cpp src/zerocoin/Zerocoin.h \
-		src/serialize.h \
-		src/allocators.h \
-		src/version.h \
-		src/clientversion.h \
-		src/bignum.h \
-		src/uint256.h \
-		src/util.h \
-		src/netbase.h \
-		src/compat.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h
-	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o build/Commitment.o src/zerocoin/Commitment.cpp
-
-build/ParamGeneration.o: src/zerocoin/ParamGeneration.cpp src/zerocoin/Zerocoin.h \
-		src/serialize.h \
-		src/allocators.h \
-		src/version.h \
-		src/clientversion.h \
-		src/bignum.h \
-		src/uint256.h \
-		src/util.h \
-		src/netbase.h \
-		src/compat.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h
-	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o build/ParamGeneration.o src/zerocoin/ParamGeneration.cpp
-
-build/Params.o: src/zerocoin/Params.cpp src/zerocoin/Zerocoin.h \
-		src/serialize.h \
-		src/allocators.h \
-		src/version.h \
-		src/clientversion.h \
-		src/bignum.h \
-		src/uint256.h \
-		src/util.h \
-		src/netbase.h \
-		src/compat.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h
-	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o build/Params.o src/zerocoin/Params.cpp
-
-build/SerialNumberSignatureOfKnowledge.o: src/zerocoin/SerialNumberSignatureOfKnowledge.cpp src/zerocoin/Zerocoin.h \
-		src/serialize.h \
-		src/allocators.h \
-		src/version.h \
-		src/clientversion.h \
-		src/bignum.h \
-		src/uint256.h \
-		src/util.h \
-		src/netbase.h \
-		src/compat.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h
-	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o build/SerialNumberSignatureOfKnowledge.o src/zerocoin/SerialNumberSignatureOfKnowledge.cpp
-
-build/SpendMetaData.o: src/zerocoin/SpendMetaData.cpp src/zerocoin/Zerocoin.h \
-		src/serialize.h \
-		src/allocators.h \
-		src/version.h \
-		src/clientversion.h \
-		src/bignum.h \
-		src/uint256.h \
-		src/util.h \
-		src/netbase.h \
-		src/compat.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h
-	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o build/SpendMetaData.o src/zerocoin/SpendMetaData.cpp
-
-build/ZeroTest.o: src/zerocoin/ZeroTest.cpp src/zerocoin/Zerocoin.h \
-		src/serialize.h \
-		src/allocators.h \
-		src/version.h \
-		src/clientversion.h \
-		src/bignum.h \
-		src/uint256.h \
-		src/util.h \
-		src/netbase.h \
-		src/compat.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h
-	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o build/ZeroTest.o src/zerocoin/ZeroTest.cpp
 
 build/cpid.o: src/cpid.cpp src/cpid.h \
 		src/util.h \
@@ -3143,16 +2551,6 @@ build/sql.o: src/sql.cpp src/sql.h \
 		src/crypter.h \
 		src/key.h \
 		src/scrypt.h \
-		src/zerocoin/Zerocoin.h \
-		src/zerocoin/Params.h \
-		src/zerocoin/Coin.h \
-		src/zerocoin/Commitment.h \
-		src/zerocoin/Accumulator.h \
-		src/zerocoin/AccumulatorProofOfKnowledge.h \
-		src/zerocoin/CoinSpend.h \
-		src/zerocoin/SerialNumberSignatureOfKnowledge.h \
-		src/zerocoin/SpendMetaData.h \
-		src/zerocoin/ParamGeneration.h \
 		src/global_objects_noui.hpp
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o build/sql.o src/sql.cpp
 
