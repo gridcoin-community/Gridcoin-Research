@@ -67,8 +67,6 @@ sudo apt-get install libdb++-dev
 sudo apt-get install libboost-all-dev
 sudo apt-get install libqrencode-dev
 
-If using Boost 1.37, append -mt to the boost libraries in the makefile.
-
 
 Dependency Build Instructions: Gentoo
 -------------------------------------
