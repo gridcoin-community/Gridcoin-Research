@@ -1,6 +1,6 @@
-
 #include "cpid.h"
 #include <cstdio>
+
 std::string YesNo(bool bin);
 #define S11 (0x9e5+1366-0xf34)
 #define S12 (0x161b+3182-0x227d)
@@ -20,72 +20,167 @@ std::string YesNo(bool bin);
 #define S44 (0x1021+2805-0x1b01)
 
 
-inline CPID::uint4 CPID::F(uint4 x,uint4 y,uint4 z){return((x&y)|(~x&z));}inline
- CPID::uint4 CPID::G(uint4 x,uint4 y,uint4 z){return((x&z)|(y&~z));}inline CPID
-::uint4 CPID::H(uint4 x,uint4 y,uint4 z){return(x^y^z);}inline CPID::uint4 CPID
-::I(uint4 x,uint4 y,uint4 z){return y^(x|~z);}
-inline CPID::uint4 CPID::rotate_left(uint4 x,int n){return(x<<n)|(x>>(
-(0x724+7488-0x2444)-n));}inline CPID::uint4 CPID::rotate_right(uint4 x,int n){
-return(x>>n)|(x<<((0xf51+544-0x1151)-n));}
-inline CPID::uint4 CPID::rotate_left8(int x,int n){return(x<<n)|(x>>(
-(0x1673+891-0x19e6)-n));}inline CPID::uint4 CPID::rotate_right8(int x,int n){
-return(x>>n)|(x<<((0x12e9+2293-0x1bd6)-n));}
+inline CPID::uint4 CPID::F(uint4 x,uint4 y,uint4 z)
+{
+	return((x&y)|(~x&z));
+}
 
-inline void CPID::FF(uint4&a,uint4 b,uint4 c,uint4 d,uint4 x,uint4 s,uint4 ac){a
-=rotate_left(a+F(b,c,d)+x+ac,s)+b;}inline void CPID::GG(uint4&a,uint4 b,uint4 c,
-uint4 d,uint4 x,uint4 s,uint4 ac){a=rotate_left(a+G(b,c,d)+x+ac,s)+b;}inline 
-void CPID::HH(uint4&a,uint4 b,uint4 c,uint4 d,uint4 x,uint4 s,uint4 ac){a=
-rotate_left(a+H(b,c,d)+x+ac,s)+b;}inline void CPID::II(uint4&a,uint4 b,uint4 c,
-uint4 d,uint4 x,uint4 s,uint4 ac){a=rotate_left(a+I(b,c,d)+x+ac,s)+b;}
+inline CPID::uint4 CPID::G(uint4 x,uint4 y,uint4 z)
+{
+	return((x&z)|(y&~z));
+}
+inline CPID::uint4 CPID::H(uint4 x,uint4 y,uint4 z)
+{
+	return(x^y^z);
+}
+
+inline CPID::uint4 CPID::I(uint4 x,uint4 y,uint4 z)
+{
+	return y^(x|~z);
+}
+
+inline CPID::uint4 CPID::rotate_left(uint4 x,int n)
+{
+	return(x<<n)|(x>>((0x724+7488-0x2444)-n));
+}
+
+inline CPID::uint4 CPID::rotate_right(uint4 x,int n)
+{
+	return(x>>n)|(x<<((0xf51+544-0x1151)-n));
+}
+
+inline CPID::uint4 CPID::rotate_left8(int x,int n)
+{
+	return(x<<n)|(x>>((0x1673+891-0x19e6)-n));
+}
+
+inline CPID::uint4 CPID::rotate_right8(int x,int n)
+{
+	return(x>>n)|(x<<((0x12e9+2293-0x1bd6)-n));
+}
+
+
+inline void CPID::FF(uint4&a,uint4 b,uint4 c,uint4 d,uint4 x,uint4 s,uint4 ac)
+{
+	a=rotate_left(a+F(b,c,d)+x+ac,s)+b;
+}
+
+inline void CPID::GG(uint4&a,uint4 b,uint4 c,uint4 d,uint4 x,uint4 s,uint4 ac)
+{
+	a=rotate_left(a+G(b,c,d)+x+ac,s)+b;
+}
+
+inline void CPID::HH(uint4&a,uint4 b,uint4 c,uint4 d,uint4 x,uint4 s,uint4 ac)
+{
+	a=rotate_left(a+H(b,c,d)+x+ac,s)+b;
+}
+
+inline void CPID::II(uint4&a,uint4 b,uint4 c,uint4 d,uint4 x,uint4 s,uint4 ac)
+{
+	a=rotate_left(a+I(b,c,d)+x+ac,s)+b;
+}
 
 CPID::CPID(){init();}
 
-CPID::CPID(std::string text){init();update(text.c_str(),text.length());finalize(
-);}
+CPID::CPID(std::string text)
+{
+	init();update(text.c_str(),text.length());finalize();
+}
 
-CPID::CPID(std::string text,int entropybit,uint256 hash_block){init();entropybit
-++;update5(text,hash_block);finalize();}template<typename T>std::string 
-ByteToHex(T i){std::stringstream stream;stream<<std::setfill(
-((char)(0xbac+70-0xbc2)))<<std::setw((0x1344+4775-0x25e9))<<std::hex<<i;return 
-stream.str();}std::string CPID::HashKey(std::string email1,std::string bpk1){
-boost::algorithm::to_lower(bpk1);boost::algorithm::to_lower(email1);
-boinc_hash_new=bpk1+email1;CPID c=CPID(boinc_hash_new);std::string non_finalized
-="";non_finalized=c.hexdigest();return non_finalized;}int BitwiseCount(std::
-string str,int pos){char ch;if(pos<(int)str.length()){ch=str.at(pos);int asc=(
-int)ch;if(asc>(0x87c+6520-0x21c5)&&asc<(0x1597+4174-0x259e))asc=asc-
-(0x4c5+8720-0x26a6);return asc;}return(0x8b0+1872-0xfff);}std::string HashHex(
-uint256 blockhash){CPID c2=CPID(blockhash.GetHex());std::string shash=c2.
-hexdigest();return shash;}std::string ROR(std::string blockhash,int iPos,std::
-string hash){if(iPos<=(int)hash.length()-(0x1f5b+1342-0x2498)){int asc1=(int)
-hash.at(iPos);int rorcount=BitwiseCount(blockhash,iPos);std::string hex=
-ByteToHex(asc1+rorcount);return hex;}return"\x30\x30";}std::string CPID::CPID_V2
-(std::string email1,std::string bpk1,uint256 block_hash){std::string 
-non_finalized=HashKey(email1,bpk1);std::string digest=Update6(non_finalized,
-block_hash);
-return digest;}
-void CPID::init(){finalized=false;count[(0x88d+1394-0xdff)]=(0x1fe5+1717-0x269a)
-;count[(0x373+6812-0x1e0e)]=(0x65b+2790-0x1141);
-state[(0xc88+3077-0x188d)]=1732584193;state[(0x1230+1876-0x1983)]=4023233417;
-state[(0xada+3060-0x16cc)]=2562383102;state[(0x8d+3707-0xf05)]=271733878;}
+CPID::CPID(std::string text,int entropybit,uint256 hash_block)
+{
+	init();entropybit++;update5(text,hash_block);finalize();
+}
+template<typename T>std::string ByteToHex(T i)
+{
+	std::stringstream stream;
+	stream<<std::setfill(((char)(0xbac+70-0xbc2)))<<std::setw((0x1344+4775-0x25e9))<<std::hex<<i;
+	return stream.str();
+}
 
-void CPID::decode(uint4 output[],const uint1 input[],size_type len){for(unsigned
- int i=(0xbb+8818-0x232d),j=(0xcad+2297-0x15a6);j<len;i++,j+=
-(0x150f+1818-0x1c25))output[i]=((uint4)input[j])|(((uint4)input[j+
-(0x320+7218-0x1f51)])<<(0x1c36+2528-0x260e))|(((uint4)input[j+
-(0x20c3+1239-0x2598)])<<(0x9d+5272-0x1525))|(((uint4)input[j+(0xbb7+2557-0x15b1)
-])<<(0x131b+3426-0x2065));}
+std::string CPID::HashKey(std::string email1,std::string bpk1)
+{
+	boost::algorithm::to_lower(bpk1);boost::algorithm::to_lower(email1);
+	boinc_hash_new=bpk1+email1;
+	CPID c=CPID(boinc_hash_new);
+	std::string non_finalized="";
+	non_finalized=c.hexdigest();
+	return non_finalized;
+}
+
+int BitwiseCount(std::string str,int pos)
+{
+	char ch;
+	if(pos<(int)str.length())
+	{
+		ch=str.at(pos);
+		int asc=(int)ch;
+		if(asc>(0x87c+6520-0x21c5)&&asc<(0x1597+4174-0x259e))
+			asc=asc-(0x4c5+8720-0x26a6);
+		return asc;
+	}
+	return(0x8b0+1872-0xfff);
+}
+
+std::string HashHex(uint256 blockhash)
+{
+	CPID c2=CPID(blockhash.GetHex());
+	std::string shash=c2.hexdigest();
+	return shash;
+}
+
+std::string ROR(std::string blockhash,int iPos,std::string hash)
+{
+	if(iPos<=(int)hash.length()-(0x1f5b+1342-0x2498))
+	{
+		int asc1=(int)hash.at(iPos);
+		int rorcount=BitwiseCount(blockhash,iPos);
+		std::string hex=ByteToHex(asc1+rorcount);
+		return hex;
+	}
+	return"\x30\x30";
+}
+
+std::string CPID::CPID_V2(std::string email1,std::string bpk1,uint256 block_hash)
+{
+	std::string non_finalized=HashKey(email1,bpk1);
+	std::string digest=Update6(non_finalized,block_hash);
+	return digest;
+}
+
+void CPID::init()
+{
+	finalized=false;count[(0x88d+1394-0xdff)]=(0x1fe5+1717-0x269a);
+	count[(0x373+6812-0x1e0e)]=(0x65b+2790-0x1141);
+	state[(0xc88+3077-0x188d)]=1732584193;state[(0x1230+1876-0x1983)]=4023233417;
+	state[(0xada+3060-0x16cc)]=2562383102;state[(0x8d+3707-0xf05)]=271733878;
+}
+
+void CPID::decode(uint4 output[],const uint1 input[],size_type len)
+{
+	for(unsigned int i=(0xbb+8818-0x232d),j=(0xcad+2297-0x15a6);j<len;i++,j+=(0x150f+1818-0x1c25))
+		output[i]=((uint4)input[j])|(((uint4)input[j+(0x320+7218-0x1f51)])<<(0x1c36+2528-0x260e))|(((uint4)input[j+
+    (0x20c3+1239-0x2598)])<<(0x9d+5272-0x1525))|(((uint4)input[j+(0xbb7+2557-0x15b1)
+    ])<<(0x131b+3426-0x2065));
+}
 
 
-void CPID::encode(uint1 output[],const uint4 input[],size_type len){for(
-size_type i=(0x3e2+7679-0x21e1),j=(0x23a4+674-0x2646);j<len;i++,j+=
-(0x23d3+36-0x23f3)){output[j]=input[i]&(0xa45+3187-0x15b9);output[j+
-(0x90a+3950-0x1877)]=(input[i]>>(0x201+7372-0x1ec5))&(0x9bf+6024-0x2048);output[
-j+(0x94+872-0x3fa)]=(input[i]>>(0x396+7043-0x1f09))&(0x561+8582-0x25e8);output[j
-+(0x1a86+2527-0x2462)]=(input[i]>>(0xd14+4931-0x203f))&(0x37b+3944-0x11e4);}}
+void CPID::encode(uint1 output[],const uint4 input[],size_type len)
+{
+	for(size_type i=(0x3e2+7679-0x21e1),j=(0x23a4+674-0x2646);j<len;i++,j+=(0x23d3+36-0x23f3))
+	{
+		output[j]=input[i]&(0xa45+3187-0x15b9);
+		output[j+(0x90a+3950-0x1877)]=(input[i]>>(0x201+7372-0x1ec5))&(0x9bf+6024-0x2048);
+		output[j+(0x94+872-0x3fa)]=(input[i]>>(0x396+7043-0x1f09))&(0x561+8582-0x25e8);
+		output[j+(0x1a86+2527-0x2462)]=(input[i]>>(0xd14+4931-0x203f))&(0x37b+3944-0x11e4);
+	}
+}
 
-void CPID::transform(const uint1 block[blocksize]){uint4 a=state[
-(0x8a5+4443-0x1a00)],b=state[(0x643+3050-0x122c)],c=state[(0x280+7521-0x1fdf)],d
-=state[(0x1de9+985-0x21bf)],x[(0x1784+2549-0x2169)];decode(x,block,blocksize);
+void CPID::transform(const uint1 block[blocksize])
+{
+	uint4 a=state[(0x8a5+4443-0x1a00)],b=state[(0x643+3050-0x122c)],c=state[(0x280+7521-0x1fdf)],d
+	=state[(0x1de9+985-0x21bf)],x[(0x1784+2549-0x2169)];
+decode(x,block,blocksize);
 FF(a,b,c,d,x[(0xd59+2856-0x1881)],S11,3614090360);
 FF(d,a,b,c,x[(0x4b9+4745-0x1741)],S12,3905402710);
 FF(c,d,a,b,x[(0x82a+7856-0x26d8)],S13,606105819);
@@ -158,50 +253,105 @@ state[(0x13e0+4114-0x23f2)]+=a;state[(0x864+5609-0x1e4c)]+=b;state[
 memset(x,(0x123d+2605-0x1c6a),sizeof x);}
 
 
-void CPID::update(const unsigned char input[],size_type length){
-size_type index=count[(0xbaf+535-0xdc6)]/(0x1609+3405-0x234e)%blocksize;
-if((count[(0x12f6+3141-0x1f3b)]+=(length<<(0x1894+3130-0x24cb)))<(length<<
-(0x902+5767-0x1f86)))count[(0xed4+4990-0x2251)]++;count[(0x1410+3546-0x21e9)]+=(
-length>>(0x1325+1183-0x17a7));
-size_type firstpart=(0xcf2+5399-0x21c9)-index;size_type i;
-if(length>=firstpart){
-memcpy(&buffer[index],input,firstpart);transform(buffer);
-for(i=firstpart;i+blocksize<=length;i+=blocksize)transform(&input[i]);index=
-(0x786+6933-0x229b);}else i=(0x3c9+6892-0x1eb5);
-memcpy(&buffer[index],&input[i],length-i);}
+void CPID::update(const unsigned char input[],size_type length)
+{
+	size_type index=count[(0xbaf+535-0xdc6)]/(0x1609+3405-0x234e)%blocksize;
+	if((count[(0x12f6+3141-0x1f3b)]+=(length<<(0x1894+3130-0x24cb)))<(length<<
+(0x902+5767-0x1f86)))
+		count[(0xed4+4990-0x2251)]++;
+	count[(0x1410+3546-0x21e9)]+=(length>>(0x1325+1183-0x17a7));
+	size_type firstpart=(0xcf2+5399-0x21c9)-index;size_type i;
+	if(length>=firstpart)
+	{
+		memcpy(&buffer[index],input,firstpart);transform(buffer);
+		for(i=firstpart;i+blocksize<=length;i+=blocksize)
+			transform(&input[i]);
+		index=(0x786+6933-0x229b);
+	}
+	else 
+		i=(0x3c9+6892-0x1eb5);
+	memcpy(&buffer[index],&input[i],length-i);
+}
 
-void CPID::update(const char input[],size_type length){update((const unsigned 
-char*)input,length);}int HexToByte(std::string hex){int x=(0x4a+4863-0x1349);std
-::stringstream ss;ss<<std::hex<<hex;ss>>x;return x;}int ROL(std::string 
-blockhash,int iPos,std::string hash,int hexpos){std::string cpid3="";if(iPos<=(
-int)hash.length()-(0x1c97+497-0x1e87)){std::string hex=hash.substr(iPos,
-(0xa5d+6424-0x2373));int rorcount=BitwiseCount(blockhash,hexpos);int b=HexToByte
-(hex)-rorcount;if(b>=(0x5b2+1768-0xc9a)){return b;}}return HexToByte("\x30\x30")
-;}std::string CPID::Update6(std::string non_finalized,uint256 block_hash){std::
-string shash=HashHex(block_hash);for(int i=(0x1258+3278-0x1f26);i<(int)
-boinc_hash_new.length();i++){non_finalized+=ROR(shash,i,boinc_hash_new);}return 
-non_finalized;}std::string Update7(std::string longcpid,uint256 hash_block){std
-::string shash=HashHex(hash_block);int hexpos=(0x632+1664-0xcb2);std::string 
-non_finalized="";for(int i1=(0xbd+8943-0x23ac);i1<(int)longcpid.length();i1=i1+
-(0x1ac0+2812-0x25ba)){non_finalized+=ROL(shash,i1,longcpid,hexpos);hexpos++;}
-CPID c7=CPID(non_finalized);std::string hexstring=c7.hexdigest();return 
-hexstring;}void CPID::update5(std::string longcpid,uint256 hash_block){std::
-string shash=HashHex(hash_block);int hexpos=(0x43b+6491-0x1d96);unsigned char*
-input=new unsigned char[(longcpid.length()/(0x534+8432-0x2622))+
-(0xa19+5289-0x1ec1)];for(int i1=(0x1348+1245-0x1825);i1<(int)longcpid.length();
-i1=i1+(0x478+5707-0x1ac1)){input[hexpos]=ROL(shash,i1,longcpid,hexpos);hexpos++;
-}input[longcpid.length()/(0x7ac+7506-0x24fc)+(0xba+3605-0xece)]=
-(0x3c3+5976-0x1b1b);size_type length=longcpid.length()/(0x1186+4729-0x23fd);
-size_type index=count[(0xf02+2743-0x19b9)]/(0x174+6416-0x1a7c)%blocksize;
-if((count[(0x1eb3+1439-0x2452)]+=(length<<(0x89c+7639-0x2670)))<(length<<
-(0x1f07+935-0x22ab)))count[(0x488+7340-0x2133)]++;count[(0xb5+5597-0x1691)]+=(
-length>>(0x374+3554-0x1139));
-size_type firstpart=(0x195+7412-0x1e49)-index;size_type i;
-if(length>=firstpart){
-memcpy(&buffer[index],input,firstpart);transform(buffer);
-for(i=firstpart;i+blocksize<=length;i+=blocksize)transform(&input[i]);index=
-(0x144f+4713-0x26b8);}else i=(0x1053+3145-0x1c9c);
-memcpy(&buffer[index],&input[i],length-i);}
+void CPID::update(const char input[],size_type length)
+{
+	update((const unsigned char*)input,length);
+}
+
+int HexToByte(std::string hex)
+{
+	int x=(0x4a+4863-0x1349);
+	std::stringstream ss;
+	ss<<std::hex<<hex;
+	ss>>x;return x;
+}
+
+int ROL(std::string blockhash,int iPos,std::string hash,int hexpos)
+{
+	std::string cpid3="";
+	if(iPos<=(int)hash.length()-(0x1c97+497-0x1e87))
+	{
+		std::string hex=hash.substr(iPos,(0xa5d+6424-0x2373));
+		int rorcount=BitwiseCount(blockhash,hexpos);
+		int b=HexToByte(hex)-rorcount;
+		if(b>=(0x5b2+1768-0xc9a))
+			return b;
+	}
+	return HexToByte("\x30\x30");
+}
+	
+std::string CPID::Update6(std::string non_finalized,uint256 block_hash)
+{
+	std::string shash=HashHex(block_hash);
+	for(int i=(0x1258+3278-0x1f26);i<(int)boinc_hash_new.length();i++)
+		non_finalized+=ROR(shash,i,boinc_hash_new);
+	return non_finalized;
+}
+
+std::string Update7(std::string longcpid,uint256 hash_block)
+{
+	std::string shash=HashHex(hash_block);
+	int hexpos=(0x632+1664-0xcb2);
+	std::string non_finalized="";
+	for(int i1=(0xbd+8943-0x23ac);i1<(int)longcpid.length();i1=i1+(0x1ac0+2812-0x25ba))
+	{
+		non_finalized+=ROL(shash,i1,longcpid,hexpos);
+		hexpos++;
+	}
+	CPID c7=CPID(non_finalized);
+	std::string hexstring=c7.hexdigest();
+	return hexstring;
+}
+
+void CPID::update5(std::string longcpid,uint256 hash_block)
+{
+	std::string shash=HashHex(hash_block);
+	int hexpos=(0x43b+6491-0x1d96);
+	unsigned char* input=new unsigned char[(longcpid.length()/(0x534+8432-0x2622))+(0xa19+5289-0x1ec1)];
+	for(int i1=(0x1348+1245-0x1825);i1<(int)longcpid.length();i1=i1+(0x478+5707-0x1ac1))
+	{
+		input[hexpos]=ROL(shash,i1,longcpid,hexpos);
+		hexpos++;
+	}
+	input[longcpid.length()/(0x7ac+7506-0x24fc)+(0xba+3605-0xece)]=(0x3c3+5976-0x1b1b);
+	size_type length=longcpid.length()/(0x1186+4729-0x23fd);
+	size_type index=count[(0xf02+2743-0x19b9)]/(0x174+6416-0x1a7c)%blocksize;
+	if((count[(0x1eb3+1439-0x2452)]+=(length<<(0x89c+7639-0x2670)))<(length<<
+(0x1f07+935-0x22ab)))
+		count[(0x488+7340-0x2133)]++;count[(0xb5+5597-0x1691)]+=(length>>(0x374+3554-0x1139));
+	size_type firstpart=(0x195+7412-0x1e49)-index;size_type i;
+	if(length>=firstpart)
+	{
+		memcpy(&buffer[index],input,firstpart);
+		transform(buffer);
+		for(i=firstpart;i+blocksize<=length;i+=blocksize)
+			transform(&input[i]);
+		index=(0x144f+4713-0x26b8);
+	}
+	else 
+		i=(0x1053+3145-0x1c9c);
+	memcpy(&buffer[index],&input[i],length-i);
+}
 
 
 CPID&CPID::finalize(){static unsigned char padding[(0xbf3+5821-0x2270)]={
@@ -231,42 +381,88 @@ encode(digest,state,(0x2c1+8014-0x21ff));
 memset(buffer,(0xa7d+2489-0x1436),sizeof buffer);memset(count,
 (0x101+8152-0x20d9),sizeof count);finalized=true;}return*this;}
 
-std::string CPID::hexdigest()const{if(!finalized){return
-"\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30"
-;}char buf[(0x1605+2905-0x213d)];for(int i=(0xba6+2047-0x13a5);i<
-(0x96b+2692-0x13df);i++)sprintf(buf+i*(0x6b6+3760-0x1564),"\x25\x30\x32\x78",
-digest[i]);buf[(0x1064+790-0x135a)]=(0xaa7+5325-0x1f74);return std::string(buf);
+std::string CPID::hexdigest()const
+{
+	if(!finalized)
+		return"\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30\x30";
+	char buf[(0x1605+2905-0x213d)];
+	for(int i=(0xba6+2047-0x13a5);i<(0x96b+2692-0x13df);i++)
+		sprintf(buf+i*(0x6b6+3760-0x1564),"\x25\x30\x32\x78",digest[i]);
+	buf[(0x1064+790-0x135a)]=(0xaa7+5325-0x1f74);
+	return std::string(buf);
 }
-template<typename T>std::string LongToHex(T i){std::stringstream stream;stream<<
-"\x30\x78"<<std::setfill(((char)(0x225+6873-0x1cce)))<<std::setw(sizeof(T)*
-(0x27d+3962-0x11f5))<<std::hex<<i;return stream.str();}std::string CPID::
-boincdigest(std::string email,std::string bpk,uint256 hash_block){
-if(!finalized)return"";char buf[(0x151+8463-0x2250)];for(int i=
-(0x95f+3677-0x17bc);i<(0x13f8+3123-0x201b);i++){sprintf(buf+i*
-(0x639+7515-0x2392),"\x25\x30\x32\x78",digest[i]);}char ch;std::string 
-non_finalized(buf);std::string shash=HashHex(hash_block);std::string debug="";
-boost::algorithm::to_lower(bpk);boost::algorithm::to_lower(email);std::string 
-cpid_non=bpk+email;for(int i=(0x450+3069-0x104d);i<(int)cpid_non.length();i++){
-non_finalized+=ROR(shash,i,cpid_non);}
-return non_finalized;}bool CompareCPID(std::string usercpid,std::string longcpid
-,uint256 blockhash){if(longcpid.length()<(0x1287+3377-0x1f96))return false;std::
-string cpid1=longcpid.substr((0x14eb+3914-0x2435),(0x652+2202-0xecc));std::
-string cpid2=longcpid.substr((0x315+271-0x404),longcpid.length()-
-(0x477+4848-0x1748));std::string shash=HashHex(blockhash);
-std::string shortcpid=Update7(cpid2,blockhash);if(shortcpid=="")return false;if(
-fDebug)printf(
-"\x73\x68\x6f\x72\x74\x63\x70\x69\x64\x20\x25\x73\x2c\x20\x63\x70\x69\x64\x31\x20\x25\x73\x2c\x20\x75\x73\x65\x72\x63\x70\x69\x64\x20\x25\x73\x20" "\r\n"
-,shortcpid.c_str(),cpid1.c_str(),usercpid.c_str());if(shortcpid==cpid1&&cpid1==
-usercpid&&shortcpid==usercpid)return true;if(fDebug)printf(
-"\x73\x68\x6f\x72\x74\x63\x70\x69\x64\x20\x25\x73\x2c\x20\x63\x70\x69\x64\x31\x20\x25\x73\x2c\x20\x75\x73\x65\x72\x63\x70\x69\x64\x20\x25\x73\x20" "\r\n"
-,shortcpid.c_str(),cpid1.c_str(),usercpid.c_str());return false;}std::ostream&
-operator<<(std::ostream&out,CPID CPID){return out<<CPID.hexdigest();}
-bool CPID_IsCPIDValid(std::string cpid1,std::string longcpid,uint256 blockhash){
-if(cpid1.empty())return false;if(longcpid.empty())return false;if(longcpid.
-length()<(0x21f0+603-0x242b))return false;if(cpid1.length()<(0x14+9069-0x237c))
-return false;if(cpid1=="\x49\x4e\x56\x45\x53\x54\x4f\x52"||longcpid==
-"\x49\x4e\x56\x45\x53\x54\x4f\x52")return true;if(cpid1.length()==
-(0x80d+6641-0x21fe)||longcpid.length()==(0x1054+4502-0x21ea)){printf(
-"\x4e\x55\x4c\x4c\x20\x43\x70\x69\x64\x20\x72\x65\x63\x65\x69\x76\x65\x64" "\r\n"
-);return false;}if(longcpid.length()<(0x39f+6435-0x1cbd))return false;
-bool compared=CompareCPID(cpid1,longcpid,blockhash);return compared;}
+
+template<typename T>std::string LongToHex(T i)
+{
+	std::stringstream stream;
+	stream<<"\x30\x78"<<std::setfill(((char)(0x225+6873-0x1cce)))<<std::setw(sizeof(T)*(0x27d+3962-0x11f5))<<std::hex<<i;
+	return stream.str();
+}
+
+std::string CPID::boincdigest(std::string email,std::string bpk,uint256 hash_block)
+{
+	if(!finalized)
+		return"";
+	char buf[(0x151+8463-0x2250)];
+	for(int i=(0x95f+3677-0x17bc);i<(0x13f8+3123-0x201b);i++)
+		sprintf(buf+i*(0x639+7515-0x2392),"\x25\x30\x32\x78",digest[i]);
+	char ch;
+	std::string non_finalized(buf);
+	std::string shash=HashHex(hash_block);
+	std::string debug="";
+	boost::algorithm::to_lower(bpk);
+	boost::algorithm::to_lower(email);
+	std::string cpid_non=bpk+email;
+	for(int i=(0x450+3069-0x104d);i<(int)cpid_non.length();i++)
+		non_finalized+=ROR(shash,i,cpid_non);
+	return non_finalized;
+}
+
+bool CompareCPID(std::string usercpid,std::string longcpid,uint256 blockhash)
+{
+	if(longcpid.length()<(0x1287+3377-0x1f96))
+		return false;
+	std::string cpid1=longcpid.substr((0x14eb+3914-0x2435),(0x652+2202-0xecc));
+	std::string cpid2=longcpid.substr((0x315+271-0x404),longcpid.length()-(0x477+4848-0x1748));
+	std::string shash=HashHex(blockhash);
+	std::string shortcpid=Update7(cpid2,blockhash);
+	if(shortcpid=="")
+		return false;
+	if(fDebug)
+		printf("\x73\x68\x6f\x72\x74\x63\x70\x69\x64\x20\x25\x73\x2c\x20\x63\x70\x69\x64\x31\x20\x25\x73\x2c\x20\x75\x73\x65\x72\x63\x70\x69\x64\x20\x25\x73\x20" "\r\n"
+,shortcpid.c_str(),cpid1.c_str(),usercpid.c_str());
+	if(shortcpid==cpid1&&cpid1==usercpid&&shortcpid==usercpid)
+		return true;
+	if(fDebug)
+		printf("\x73\x68\x6f\x72\x74\x63\x70\x69\x64\x20\x25\x73\x2c\x20\x63\x70\x69\x64\x31\x20\x25\x73\x2c\x20\x75\x73\x65\x72\x63\x70\x69\x64\x20\x25\x73\x20" "\r\n"
+,shortcpid.c_str(),cpid1.c_str(),usercpid.c_str());
+	return false;
+}
+
+std::ostream& operator<<(std::ostream&out,CPID CPID)
+{
+	return out<<CPID.hexdigest();
+}
+
+bool CPID_IsCPIDValid(std::string cpid1,std::string longcpid,uint256 blockhash)
+{
+	if(cpid1.empty())
+		return false;
+	if(longcpid.empty())
+		return false;
+	if(longcpid.length()<(0x21f0+603-0x242b))
+		return false;
+	if(cpid1.length()<(0x14+9069-0x237c))
+		return false;
+	if(cpid1=="\x49\x4e\x56\x45\x53\x54\x4f\x52"||longcpid=="\x49\x4e\x56\x45\x53\x54\x4f\x52")
+		return true;
+	if(cpid1.length()==(0x80d+6641-0x21fe)||longcpid.length()==(0x1054+4502-0x21ea))
+	{
+		printf("\x4e\x55\x4c\x4c\x20\x43\x70\x69\x64\x20\x72\x65\x63\x65\x69\x76\x65\x64" "\r\n");
+		return false;
+	}
+	if(longcpid.length()<(0x39f+6435-0x1cbd))
+		return false;
+	bool compared=CompareCPID(cpid1,longcpid,blockhash);
+	return compared;
+}
