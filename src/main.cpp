@@ -7231,7 +7231,7 @@ void HarvestCPIDs(bool cleardata)
 				if (!structverify.initialized && structcpid.Iscpidvalid)
 				{
 					structcpid.Iscpidvalid = false;
-					structcpid.errors = "Project missing in [Netsoft] credit verification node.  Please contact Netsoft to add this project. (Wait at least 24 hours for new projects to propagate).";
+					structcpid.errors = "Project missing in [Netsoft] credit verification node (Wait at least 24 hours for new projects to propagate).";
 				}
 
 				if (structcpid.rac < 100)         
