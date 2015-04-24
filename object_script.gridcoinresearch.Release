@@ -70,16 +70,6 @@ INPUT(
 ./build/scrypt-x86_64.o
 ./build/scrypt.o
 ./build/pbkdf2.o
-./build/Accumulator.o
-./build/AccumulatorProofOfKnowledge.o
-./build/Coin.o
-./build/CoinSpend.o
-./build/Commitment.o
-./build/ParamGeneration.o
-./build/Params.o
-./build/SerialNumberSignatureOfKnowledge.o
-./build/SpendMetaData.o
-./build/ZeroTest.o
 ./build/cpid.o
 ./build/sql.o
 ./build/upgrader.o
