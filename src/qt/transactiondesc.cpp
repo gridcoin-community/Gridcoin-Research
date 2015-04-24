@@ -56,7 +56,7 @@ QString TransactionDesc::FormatTxStatus(const CWalletTx& wtx)
 std::string PubKeyToGRCAddress(const CScript& scriptPubKey)
 {
     txnouttype type;
-    vector<CTxDestination> addresses;
+    std::vector<CTxDestination> addresses;
     int nRequired;
 
     if (!ExtractDestinations(scriptPubKey, type, addresses, nRequired))
