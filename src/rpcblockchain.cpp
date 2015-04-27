@@ -1503,12 +1503,12 @@ std::string CryptoLottery(int64_t locktime)
   						}
 		     	}
 		}
-   		printf(sOut.c_str());
+   	
 
 		if (sOut.length() > 10) sOut = sOut.substr(0,sOut.length()-5);
 
 	    //Prod ToDo: if rows < 10 return null
-		printf(sOut.c_str());
+		if (fDebug3) printf("CryptoLottery %s",sOut.c_str());
 		//4-11-2015 ; Simulate No Payments due in testnet 50% of the time:
 		if (LessVerbose(500)) sOut = "";
 		return sOut;
@@ -1690,10 +1690,8 @@ Value listitem(const Array& params, bool fHelp)
 		Object entry;
 	    std::string recipients = CryptoLottery(GetAdjustedTime());
 		entry.push_back(Pair("Recipients",recipients));
-
-	    std::vector<std::string> vRecipients = split(recipients.c_str(),"<COL>");
-	  	int iPos = 0;
- 	    if (vRecipients.size() > 0)
+		std::vector<std::string> vRecipients = split(recipients.c_str(),"<COL>");
+	    if (vRecipients.size() > 0)
 		{
 			  for (unsigned int i=0;i < vRecipients.size(); i++)
 			  {
