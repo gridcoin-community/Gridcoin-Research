@@ -1095,7 +1095,7 @@ bool IsStandardTx(const CTransaction& tx)
             return false;
         if (!txin.scriptSig.IsPushOnly())
             return false;
-        if (fEnforceCanonical && !txin.scriptSig.HasCanonicalPushes()) {
+        if (!txin.scriptSig.HasCanonicalPushes()) {
             return false;
         }
     }
@@ -1109,7 +1109,7 @@ bool IsStandardTx(const CTransaction& tx)
             nDataOut++;
         if (txout.nValue == 0)
             return false;
-        if (fEnforceCanonical && !txout.scriptPubKey.HasCanonicalPushes()) {
+        if (!txout.scriptPubKey.HasCanonicalPushes()) {
             return false;
         }
     }
