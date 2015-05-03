@@ -33,7 +33,6 @@ A:\Gridcoin-Research\release\GRCRestarter.exe.config
 A:\Gridcoin-Research\release\GRCRestarter.exe
 A:\Gridcoin-Research\release\GRCRestarter.pdb
 A:\Gridcoin-Research\release\GRCRestarter.xml
-A:\Gridcoin-Research\contrib\Installer\GRCRestarter\GRCRestarter\GRCRestarter\obj\x86\Debug\GRCRestarter.vbprojResolveAssemblyReference.cache
 A:\Gridcoin-Research\contrib\Installer\GRCRestarter\GRCRestarter\GRCRestarter\obj\x86\Debug\GRCRestarter.GridcoinUpgrader.resources
 A:\Gridcoin-Research\contrib\Installer\GRCRestarter\GRCRestarter\GRCRestarter\obj\x86\Debug\GRCRestarter.Resources.resources
 A:\Gridcoin-Research\contrib\Installer\GRCRestarter\GRCRestarter\GRCRestarter\obj\x86\Debug\GRCRestarter.WatchDog.resources

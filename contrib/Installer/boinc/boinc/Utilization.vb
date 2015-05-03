@@ -1,5 +1,6 @@
 ﻿Imports Microsoft.VisualBasic
 Imports System.Timers
+Imports System.IO
 
 Public Class Utilization
     Implements IGridCoinMining
@@ -8,11 +9,11 @@ Public Class Utilization
     Private _lLeaderboard As Long
     Private _lLeaderUpdates As Long
     Public _boincmagnitude As Double
-
+  
    
     Public ReadOnly Property Version As Double
         Get
-            Return 352
+            Return 353
         End Get
     End Property
 
@@ -43,27 +44,21 @@ Public Class Utilization
     Public Function BoincMagnitude(value As String) As String
         _boincmagnitude = Val(value)
         Log("bm " + Trim(value))
-
     End Function
     Public Function cAES512Encrypt(sData As String) As String
         Return AES512EncryptData(sData)
-
     End Function
     Public Function cAES512Decrypt(sData As String) As String
         Return AES512DecryptData(sData)
     End Function
-
     Public Sub StartWireFrameRenderer()
         Dim thWireFrame As New Threading.Thread(AddressOf ThreadWireFrame)
         thWireFrame.Priority = Threading.ThreadPriority.Lowest
         thWireFrame.Start()
     End Sub
-
     Public Sub StartGalaza()
         Dim p As New Process
         p = Process.Start(GetGRCAppDir() + "\GridcoinGalaza.exe")
-
-
     End Sub
     Public Sub StopWireFrameRenderer()
         If Not mfrmWireFrame Is Nothing Then
@@ -93,9 +88,8 @@ Public Class Utilization
                     Log("Client needs upgraded; Not upgrading due to key.")
                     Return 0
                 End If
-                '11-27-2014 Set a key to prevent multiple upgrades
+                'Set a key to prevent multiple upgrades
                 UpdateKey("AutoUpgrade", Trim(Now))
-
                 Return 1
             End If
             Log("Client up to date")
@@ -110,20 +104,15 @@ Public Class Utilization
     End Property
     Sub New()
         Log("Loading boincstake dll...")
-
         UpdateKey("UpdatingLeaderboard", "false")
         Try
             If Not DatabaseExists("gridcoin_leaderboard") Then ReplicateDatabase("gridcoin_leaderboard")
-
         Catch ex As Exception
             Log("New:" + ex.Message)
         End Try
-
         mclsUtilization = Me
-
     End Sub
     Sub New(bLoadMiningConsole As Boolean)
-
         If bLoadMiningConsole Then ShowMiningConsole()
     End Sub
     Public Sub RestartWallet()
@@ -135,15 +124,12 @@ Public Class Utilization
     Public Sub UpgradeWalletTestnet()
         Call RestartWallet1("testnetupgrade")
     End Sub
-
-
     Public Sub ReindexWallet()
         Call RestartWallet1("reindex")
     End Sub
     Public Sub RebootClient()
         Call RestartWallet1("reboot")
     End Sub
-
     Public Sub DownloadBlocks()
         Log("Downloading blocks")
 
@@ -161,7 +147,6 @@ Public Class Utilization
     Public Sub CreateRestorePointTestNet()
         Call RestartWallet1("createrestorepointtestnet")
     End Sub
-
     Public ReadOnly Property BoincMD5 As String
         Get
             '   Return clsGVM.BoincMD5()
@@ -169,7 +154,6 @@ Public Class Utilization
     End Property
     Public Function cGetMd5(sData As String) As String
         Return GetMd5String(sData)
-
     End Function
     Public Function StrToMd5Hash(s As String) As String
         Return CalcMd5(s)
@@ -208,6 +192,12 @@ Public Class Utilization
     End Function
     Public Function ShowProjects()
     End Function
+
+    Public Function ShowNewUserWizard()
+        Log("Showing NUW")
+        Dim fNUW As New frmNewUserWizard
+        fNUW.Show()
+    End Function
     Public Function ShowSql()
         Try
             mfrmSql = New frmSQL
@@ -229,15 +219,12 @@ Public Class Utilization
     Public Function ShowTicketList()
         Try
             mfrmLogin = New frmLogin
-
-
             mfrmTicketList = New frmTicketList
             mfrmTicketList.Show()
         Catch ex As Exception
             Log("Error while transitioning to frmTicketList" + ex.Message)
         End Try
     End Function
-
     Public Function ShowTicker()
         Try
             mfrmTicker = New frmLiveTicker
@@ -271,7 +258,6 @@ Public Class Utilization
             If KeyValue("suppressminingconsole") <> "true" Then
                 mfrmMining.Visible = True
             End If
-
 
         Catch ex As Exception
         End Try
@@ -328,19 +314,14 @@ Public Class Utilization
 
         Log("Tracking " + Trim(sTXID))
         Try
-
             Dim lOut As Double = mTrackConfirm(sTXID)
             Log("Returning " + Trim(lOut))
-
             Return Trim(lOut)
         Catch ex As Exception
             Log("HEINOUS ERROR" + ex.Message)
             Return "0"
-
         End Try
-
         'return a 0 or 1
-
     End Function
     Public Function InsertConfirm(sConfirm As String) As Double
         Log(sConfirm)
@@ -378,11 +359,9 @@ Public Class Utilization
     End Function
     Public Sub SetSqlBlock(ByVal data As String)
         Exit Sub
-
     End Sub
     Public Sub UpdateLeaderBoard()
         Exit Sub
-
         If KeyValue("disablesql") = "true" Then Exit Sub
         Try
         Catch ex As Exception
@@ -398,8 +377,11 @@ Public Class Utilization
 
 
     End Sub
-
-
+   
+  
+    Public Function GetLanIP() As String
+        Return GetLocalLanIP1()
+    End Function
     Public ReadOnly Property BoincProjectCount As Double
         Get
         End Get
@@ -414,7 +396,6 @@ Public Class Utilization
         e.Show()
         e.RetrievePop3Emails()
     End Sub
-
 
     Protected Overrides Sub Finalize()
         If Not mfrmMining Is Nothing Then

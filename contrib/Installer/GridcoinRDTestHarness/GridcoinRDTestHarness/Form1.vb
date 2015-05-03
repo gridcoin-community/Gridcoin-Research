@@ -17,12 +17,10 @@ Public Class Form1
     'Public m As New Utilization
 
     Public night As Boolean
-
-
+  
     Public Structure Crypt
         Dim Success As Double
         Dim [Return] As Object
-
     End Structure
     Public Structure Symbol
         Public marketid As String
@@ -48,7 +46,6 @@ Public Class Form1
         Dim req As HttpWebRequest = TryCast(HttpWebRequest.Create(u), HttpWebRequest)
         req.ConnectionGroupName = groupName
         Try
-
             Using resp As WebResponse = req.GetResponse()
             End Using
             sp.CloseConnectionGroup(groupName)
@@ -122,10 +119,25 @@ Public Class Form1
         Return CDate("1-1-2031")
 
     End Function
+  
     Private Sub Button1_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles Button1.Click
         Dim x As New Utilization
-        x.SetDebugMode(False)
-        x.StartGalaza()
+        x.ShowNewUserWizard()
+
+        'Dim sKey As String
+        'sKey = BJ.Value
+
+        '        'Add a project to boinc
+        '       BJ = x.BoincCreateAccount("http://www.gpugrid.net/", "robhalford3@gridcoin.us", "dummypass", "robhalford")
+        '
+        'A'ttach this project
+        ' BJ = x.BoincAttachProject("http://www.gpugrid.net", sKey)
+        ' Stop
+        ' Dim sTeam As String
+        ' sTeam = x.BoincRetrieveTeamID("http://www.gpugrid.net/")
+
+        'BJ = x.BoincSetTeamID("http://www.gpugrid.net/", sKey, sTeam)
+
 
 
     End Sub

@@ -768,6 +768,11 @@ void BitcoinGUI::createActions()
 	ticketListAction->setStatusTip(tr("Tickets"));
 	ticketListAction->setMenuRole(QAction::TextHeuristicRole);
 
+	newUserWizardAction = new QAction(QIcon(":/icons/bitcoin"), tr("&New User Wizard"), this);
+	newUserWizardAction->setStatusTip(tr("New User Wizard"));
+	newUserWizardAction->setMenuRole(QAction::TextHeuristicRole);
+
+
 	galazaAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Galaza (Game)"), this);
 	galazaAction->setStatusTip(tr("Galaza"));
 	galazaAction->setMenuRole(QAction::TextHeuristicRole);
@@ -816,6 +821,7 @@ void BitcoinGUI::createActions()
 	connect(tickerAction, SIGNAL(triggered()), this, SLOT(tickerClicked()));
 	connect(ticketListAction, SIGNAL(triggered()), this, SLOT(ticketListClicked()));
 	connect(galazaAction, SIGNAL(triggered()), this, SLOT(galazaClicked()));
+	connect(newUserWizardAction, SIGNAL(triggered()), this, SLOT(newUserWizardClicked()));
 
 
 }
@@ -875,11 +881,13 @@ void BitcoinGUI::createMenuBar()
 	rebuild->addAction(rebootAction);
 	rebuild->addSeparator();
 
+
 	QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
 	qmAdvanced->addSeparator();
 	qmAdvanced->addAction(sqlAction);
 	qmAdvanced->addAction(tickerAction);
 	qmAdvanced->addAction(ticketListAction);
+	qmAdvanced->addAction(newUserWizardAction);
 	qmAdvanced->addSeparator();
 	qmAdvanced->addAction(galazaAction);
 
@@ -1506,6 +1514,21 @@ void BitcoinGUI::ticketListClicked()
     globalcom->dynamicCall("ShowTicketList()");
 #endif
 
+}
+
+
+
+
+void BitcoinGUI::newUserWizardClicked()
+{
+#ifdef WIN32
+	if (!globalcom)
+	{
+		globalcom = new QAxObject("BoincStake.Utilization");
+	}
+
+    globalcom->dynamicCall("ShowNewUserWizard()");
+#endif
 }
 
 

@@ -3,17 +3,12 @@ Imports System.IO
 Imports ICSharpCode.SharpZipLib.Zip
 Imports ICSharpCode.SharpZipLib.Core
 
-
-
 Public Class GridcoinUpgrader
 
     Private bDebug As Boolean = False
-
-
     Private prodURL As String = "http://download.gridcoin.us/download/downloadstake/"
     Private testURL As String = "http://download.gridcoin.us/download/downloadstaketestnet/"
     Private b404 As Integer = 0
-
 
     Private Sub RemoveBlocksDir(d As System.IO.DirectoryInfo)
         Try
@@ -21,7 +16,7 @@ Public Class GridcoinUpgrader
         Catch ex As Exception
         End Try
     End Sub
-   
+
     Public Function GetURL() As String
         If b404 = 0 Then
             'Unchecked - Check state of Anti-DDOS host:
@@ -62,44 +57,42 @@ Public Class GridcoinUpgrader
         Dim sPath As String
         sPath = GetGRCAppDir() + "\" + sName
         Dim p As Double = 50
-
         Try
             Dim fi As New System.IO.FileInfo(sPath)
             Dim dSz As Double = fi.Length
             p = dSz / Sz
         Catch ex As Exception
-
         End Try
         Return p
     End Function
-    Private Function RefreshScreen()
+    Private Sub RefreshScreen()
         Me.Show()
         Me.BringToFront()
-
-
-
         Me.Update() : Me.Refresh() : Application.DoEvents()
-    End Function
-
+    End Sub
     Private Sub GridcoinUpgrader_Disposed(sender As Object, e As System.EventArgs) Handles Me.Disposed
         Environment.Exit(0)
         End
-
+    End Sub
+    Public Sub BusyWaitLoop(sWaitForProcessName As String, lSecs As Long, bKill As Boolean)
+        For x As Integer = 1 To lSecs
+            If Not IsRunning("gridcoinresearch*") Then Exit For
+            System.Threading.Thread.Sleep(1000)
+        Next
+        If bKill Then
+            KillProcess("gridcoinresearch*")
+        End If
     End Sub
     Private Sub Form1_Load(ByVal sender As Object, ByVal e As System.EventArgs) Handles Me.Load
-
         lblPercent.Text = ""
 
         '''''''''''''''''''''RESTORE SNAPSHOT
         If Environment.GetCommandLineArgs.Length > 0 Then
-
             If Environment.CommandLine.Contains("testnet") Then
                 bTestNet = True
             End If
-
             If Environment.CommandLine.Contains("restoresnapshot") Then
                 Try
-
                     KillProcess("gridcoinresearch*")
                     RefreshScreen()
                     txtStatus.Text = "Restoring block chain from snapshot..."
@@ -130,35 +123,27 @@ Public Class GridcoinUpgrader
                 RefreshScreen()
                 ProgressBar1.Maximum = 100
                 TimerUE.Enabled = True
-
                 Dim sz As Long
                 sz = GetWebFileSize("snapshot.zip", "signed")
-               
                 If sz = 0 Then sz = 23993000
-
+                'This is an asynchronous process:
                 DownloadBlocks("snapshot.zip", "signed/")
                 While Not mbFinished
                     System.Threading.Thread.Sleep(800)
-
                     Dim p As Double = 0
                     p = Math.Round(GetFilePercent("snapshot.zip", sz) * 100, 2)
-
                     lblPercent.Text = Trim(p) + "%"
                     RefreshScreen()
-
                 End While
                 TimerUE.Enabled = False
-
                 txtStatus.Text = "Unzipping Blocks File..."
                 RefreshScreen()
-
                 RestoreFromZipSnapshot()
-
             Catch ex As Exception
 
             End Try
         End If
-        '''''''''''''''''''RESTORE POINT (No need to Kill Miners)
+        '''''''''''''''''''RESTORE POINT
         If Environment.GetCommandLineArgs.Length > 0 Then
             If Environment.CommandLine.Contains("restorepoint") Then
                 Call Snapshot()
@@ -172,25 +157,14 @@ Public Class GridcoinUpgrader
                 Try
                     Log("restarting")
                     Me.Show()
-
                     txtStatus.Text = "Waiting for Gridcoin Wallet to exit..."
-                    Me.Update()
-                    Me.Refresh()
-
-                    System.Threading.Thread.Sleep(9500) 'wait for grc to exit first
-
-                    KillProcess("gridcoinresearch*")
-
-                    txtStatus.Text = "Waiting for Gridcoin Wallet to exit..."
-                    System.Threading.Thread.Sleep(2500)
-                    KillProcess("gridcoinresearch*")
-
+                    Me.Update() : Me.Refresh()
+                    BusyWaitLoop("gridcoinresearch*", 10, True)
                     StartGridcoin()
                     Environment.Exit(0)
                     End
                 Catch ex As Exception
                     Log("Cant restart " + ex.Message)
-
                 End Try
             End If
         End If
@@ -208,9 +182,7 @@ Public Class GridcoinUpgrader
                     Me.Update()
                     Me.Visible = False
                     Me.Update()
-
                     frmWatchDog.Show()
-
                     Exit Sub
                 Catch ex As Exception
                     Log("unable to instantiate watchdog " + ex.Message)
@@ -218,26 +190,20 @@ Public Class GridcoinUpgrader
                 End Try
             End If
         End If
-
-        ''''''''''''''''''''''REINDEX KILL MINERS
+        ''''''''''''''''''''''REINDEX
         If Environment.GetCommandLineArgs.Length > 0 Then
             If Environment.CommandLine.Contains("reindex") Then
                 Try
-
-                    KillProcess("gridcoinresearch*")
-                    System.Threading.Thread.Sleep(1000)
+                    BusyWaitLoop("gridcoinresearch*", 5, True)
                     RemoveGrcDataDir()
-                    '6-6-2014 R Halford: Add a step to restore 120,000 blocks for a better user experience:
-
+                    'R Halford: Add a step to restore 120,000 blocks for a better user experience:
                     Try
                         Call RestoreFromSnapshot()
                     Catch ex As Exception
                     End Try
-
                     StartGridcoin()
                     Environment.Exit(0)
                     End
-
                 Catch ex As Exception
                 End Try
             End If
@@ -266,8 +232,7 @@ Public Class GridcoinUpgrader
                 RefreshScreen()
                 txtStatus.Text = "Waiting for Gridcoin Wallet to exit..."
                 RefreshScreen()
-                System.Threading.Thread.Sleep(5000)
-                '11-6-2014
+                BusyWaitLoop("gridcoinresearch*", 9, True)
                 For x = 1 To 20
                     If IsRunning("gridcoinresearch*") Then
                         KillProcess("gridcoinresearch*")
@@ -284,7 +249,6 @@ Public Class GridcoinUpgrader
                     sw.Close()
                 Catch ex As Exception
                     MsgBox("Upgrade failed.  Unable to write files to Application Directory.  Please take ownership of the application directory " + GetGRCAppDir() + ".", MsgBoxStyle.Critical)
-
                     Environment.Exit(0)
                 End Try
                 'Upgrade the wallet before continuing
@@ -299,11 +263,9 @@ Public Class GridcoinUpgrader
                     RefreshScreen()
                 Next
                 StartGridcoin()
-
                 UpgradeGrcRestarter("restoregrcrestarter")
                 Environment.Exit(0)
                 End
-
             Catch ex As Exception
                 MsgBox("Upgrade Failed. " + ex.Message, MsgBoxStyle.Critical)
             End Try
@@ -327,62 +289,43 @@ Public Class GridcoinUpgrader
         Environment.Exit(0)
         End
     End Sub
-   
-    Public Sub RemoveGrcDataDir()
-        '7-1-2014
-        Try
 
-        For x = 1 To 10
-            Dim sDataDir As String = GRCDataDir()
-            Dim sChainstate = sDataDir + "chainstate"
-            Dim sChain = sDataDir + "txleveldb"
-            Dim sDatabase = sDataDir + "database"
-            Dim dBlock As New System.IO.DirectoryInfo(sChainstate)
-            RemoveBlocksDir(dBlock)
-            Dim dChain As New System.IO.DirectoryInfo(sChain)
-            RemoveBlocksDir(dChain)
-            Dim dDatabase As New System.IO.DirectoryInfo(sDatabase)
-            RemoveBlocksDir(dDatabase)
-            Dim y As Integer
+    Public Sub RemoveGrcDataDir()
+        Try
+            For x = 1 To 10
+                Dim sDataDir As String = GRCDataDir()
+                Dim sChainstate = sDataDir + "chainstate"
+                Dim sChain = sDataDir + "txleveldb"
+                Dim sDatabase = sDataDir + "database"
+                Dim dBlock As New System.IO.DirectoryInfo(sChainstate)
+                RemoveBlocksDir(dBlock)
+                Dim dChain As New System.IO.DirectoryInfo(sChain)
+                RemoveBlocksDir(dChain)
+                Dim dDatabase As New System.IO.DirectoryInfo(sDatabase)
+                RemoveBlocksDir(dDatabase)
+                Dim y As Integer
                 'Delete the blocks File:
                 Try
-                    Dim fi2 As New System.IO.FileInfo(sDataDir + "\blk0001.dat")
-                    fi2.Delete()
-
+                    Dim f_i As New System.IO.FileInfo(sDataDir + "\blk0001.dat")
+                    f_i.Delete()
                 Catch ex As Exception
-
+                    Log("Unable to delete blocks file " + sDataDir + "\blk0001.dat")
                 End Try
-            For y = 1 To 5
-                Dim sFile As String = "blk000" + Trim(y) + ".dat"
-                Try
-
+                For y = 1 To 5
+                    Dim sFile As String = "blk000" + Trim(y) + ".dat"
+                    Try
                         Dim fi As New System.IO.FileInfo(sDataDir + "\" + sFile)
-                    fi.Delete()
+                        fi.Delete()
 
-                Catch ex As Exception
-                    Log("Unable to delete " + ex.Message)
-                End Try
-
-            Next
-
-            'Dim sSnapshotBlocks = sDataDir + "snapshot\blocks"
-            'Dim sSnapshotChain = sDataDir + "snapshot\chainstate"
-            'Dim sSnapshotDatabase = sDataDir + "snapshot\database"
-            'Dim sSnapshotBlocksIndex = sDataDir + "snapshot\blocks\index"
-            'Dim dSBlock As New System.IO.DirectoryInfo(sSnapshotBlocks)
-            'RemoveBlocksDir(dSBlock)
-            'Dim dsChain As New System.IO.DirectoryInfo(sSnapshotChain)
-            'RemoveBlocksDir(dsChain)
-            'Dim dsDatabase As New System.IO.DirectoryInfo(sSnapshotDatabase)
-            'RemoveBlocksDir(dsDatabase)
-
-            If dChain.Exists = False And dBlock.Exists = False And dDatabase.Exists = False Then Exit For
-
-            Threading.Thread.Sleep(1000)
+                    Catch ex As Exception
+                        Log("Unable to delete " + ex.Message)
+                    End Try
+                Next
+                If dChain.Exists = False And dBlock.Exists = False And dDatabase.Exists = False Then Exit For
+                Threading.Thread.Sleep(1000)
             Next
         Catch ex As Exception
             Log("Error while removing grc data dir " + ex.Message)
-
         End Try
 
     End Sub
@@ -390,20 +333,6 @@ Public Class GridcoinUpgrader
     Public Sub Snapshot()
         'Not currently supported
         Exit Sub
-
-        Dim sDataDir As String = GRCDataDir()
-        Dim sBlocks = sDataDir + "blocks"
-        Dim sChain = sDataDir + "chainstate"
-        Dim sSnapshotBlocks = sDataDir + "snapshot\blocks"
-        Dim sSnapshotChain = sDataDir + "snapshot\chainstate"
-        Dim sSnapDir As String = sDataDir + "snapshot"
-        Dim Dsnap As DirectoryInfo = New DirectoryInfo(sSnapDir)
-        Try
-            Dsnap.Delete(True)
-        Catch ex As Exception
-        End Try
-        DirectorySnapshot(sBlocks, sSnapshotBlocks, True)
-        DirectorySnapshot(sChain, sSnapshotChain, True)
     End Sub
     Public Sub RestoreFromSnapshot()
         Dim sDataDir As String = GRCDataDir()
@@ -411,79 +340,42 @@ Public Class GridcoinUpgrader
         Dim sChain = sDataDir + "chainstate"
         Dim sDatabase = sDataDir + "database"
         Dim sSnapshotBlocks = sDataDir + "snapshot\blocks"
-
         Dim sSnapshotChain = sDataDir + "snapshot\chainstate"
         Dim sSnapshotDatabase = sDataDir + "snapshot\database"
         RemoveGrcDataDir()
         Try
             System.IO.Directory.CreateDirectory(sSnapshotBlocks)
-
         Catch ex As Exception
-
         End Try
-
         Try
             System.IO.Directory.CreateDirectory(sSnapshotChain)
-
         Catch ex As Exception
-
         End Try
         Try
             System.IO.Directory.CreateDirectory(sSnapshotDatabase)
-
         Catch ex As Exception
-
-        End Try
-        Try
-            'DirectorySnapshot(sSnapshotBlocks, sBlocks, True)
-        Catch ex As Exception
-        End Try
-        Try
-            'DirectorySnapshot(sSnapshotChain, sChain, True)
-        Catch ex As Exception
-        End Try
-        Try
-        Catch ex As Exception
-
         End Try
     End Sub
-    Public Sub ExtractZipFile(archiveFilenameIn As String, outFolder As String)
-
+    Private Sub CreateSkeletonDirsForGRC(sDir As String)
         Try
-
-            'Dim di As New DirectoryInfo(outFolder)
-
-            
             Try
-                'di.Create()
-
-
-                'create chainstate
-                'create database
-
-            Catch ex As Exception
-
-            End Try
-
-            Try
-                Dim di2 As New DirectoryInfo(outFolder & "\chainstate")
+                Dim di2 As New DirectoryInfo(sDir & "\chainstate")
                 di2.Create()
-
             Catch ex As Exception
-
             End Try
             Try
-                Dim di2 As New DirectoryInfo(outFolder & "\database")
+                Dim di2 As New DirectoryInfo(sDir & "\database")
                 di2.Create()
-                Dim di3 As New DirectoryInfo(outFolder & "\txleveldb")
+                Dim di3 As New DirectoryInfo(sDir & "\txleveldb")
                 di3.Create()
-
             Catch ex As Exception
-
             End Try
         Catch ex As Exception
-
         End Try
+    End Sub
+    Public Sub ExtractZipFile(archiveFilenameIn As String, outFolder As String, bCreateSkeletonDirs As Boolean)
+
+        If bCreateSkeletonDirs Then CreateSkeletonDirsForGRC(outFolder)
 
         Dim zf As ZipFile = Nothing
         Try
@@ -508,58 +400,38 @@ Public Class GridcoinUpgrader
         Finally
             If zf IsNot Nothing Then
                 zf.IsStreamOwner = True     ' Makes close also shut the underlying stream
-                ' Ensure we release resources
                 zf.Close()
             End If
         End Try
     End Sub
 
     Public Sub RestoreFromZipSnapshot()
-
         Dim sDataDir As String = GRCDataDir()
-
         Dim sTxLevelDb = sDataDir + "txleveldb"
         Dim sChain = sDataDir + "chainstate"
         Dim sDatabase = sDataDir + "database"
         Dim sAppDir As String = GetGRCAppDir()
-
-     
         Try
             RemoveGrcDataDir()
         Catch ex As Exception
-
         End Try
         Try
             System.IO.Directory.CreateDirectory(sTxLevelDb)
-
-
         Catch ex As Exception
-
         End Try
-
         Try
             System.IO.Directory.CreateDirectory(sChain)
         Catch ex As Exception
-
         End Try
-
-
         Try
             System.IO.Directory.CreateDirectory(sDatabase)
         Catch ex As Exception
-
         End Try
-
-
         Try
-            ExtractZipFile(sAppDir + "\snapshot.zip", sDataDir)
-
+            ExtractZipFile(sAppDir + "\snapshot.zip", sDataDir, True)
         Catch ex As Exception
-
         End Try
-
-
-      End Sub
+    End Sub
 
     Private Sub DirectorySnapshot( _
         ByVal sourceDirName As String, _
@@ -568,9 +440,6 @@ Public Class GridcoinUpgrader
         ' Get the subdirectories for the specified directory. 
         Dim dir As DirectoryInfo = New DirectoryInfo(sourceDirName)
         Dim dirs As DirectoryInfo() = dir.GetDirectories()
-        If Not dir.Exists Then
-            'Throw New DirectoryNotFoundException( _                "Source directory does not exist or could not be found: " _                + sourceDirName)
-        End If
         'Remove the destination directory
         Dim dDestination As New System.IO.DirectoryInfo(destDirName)
         Try
@@ -598,7 +467,6 @@ Public Class GridcoinUpgrader
             Next subdir
         End If
     End Sub
-
     Public Function GRCDataDir() As String
         Dim sFolder As String
         sFolder = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\gridcoinresearch\"
@@ -613,108 +481,82 @@ Public Class GridcoinUpgrader
         msFile = sFile
         msServerFolder = sServerFolder
         mbFinished = False
-
         Try
             Kill(sServerFolder & "\" & sFile)
-
         Catch ex As Exception
-
         End Try
         Dim t As New System.Threading.Thread(AddressOf DownloadFileAsync)
         t.Priority = Threading.ThreadPriority.AboveNormal
         t.Start()
-
     End Sub
 
-    Private Function DownloadFileAsync()
+    Private Sub DownloadFileAsync()
         Dim sFile As String = msFile
         Dim sServerFolder As String = msServerFolder
-
         Dim sLocalPath As String = GetGRCAppDir()
         Dim sLocalFile As String = sFile
-
         If LCase(sLocalFile) = "grcrestarter.exe" Then sLocalFile = "grcrestarter_copy.exe"
         Dim sLocalPathFile As String = sLocalPath + "\" + sLocalFile
-
         Try
             Kill(sLocalPathFile)
         Catch ex As Exception
-
             EventLog.WriteEntry("DownloadFile", "Cant find " + sFile + " " + ex.Message)
-
-
         End Try
-
         Dim sURL As String = GetURL() + sServerFolder + sFile
         Dim myWebClient As New MyWebClient()
         Try
             myWebClient.DownloadFile(sURL, sLocalPathFile)
-
         Catch ex As Exception
-
         End Try
         mbFinished = True
-
-    End Function
-
-    Private Function DownloadFile(ByVal sFile As String, Optional sServerFolder As String = "")
-
+    End Sub
+    Private Sub DownloadFile(ByVal sFile As String, Optional sServerFolder As String = "")
         Dim sLocalPath As String = GetGRCAppDir()
         Dim sLocalFile As String = sFile
-
         If LCase(sLocalFile) = "grcrestarter.exe" Then sLocalFile = "grcrestarter_copy.exe"
         Dim sLocalPathFile As String = sLocalPath + "\" + sLocalFile
-
         txtStatus.Text = "Upgrading file " + sFile + "..."
         Try
             Kill(sLocalPathFile)
         Catch ex As Exception
-
             EventLog.WriteEntry("DownloadFile", "Cant find " + sFile + " " + ex.Message)
-
-
         End Try
-
         Dim sURL As String = GetURL() + sServerFolder + sFile
         Dim myWebClient As New MyWebClient()
         myWebClient.DownloadFile(sURL, sLocalPathFile)
         Me.Refresh()
         System.Threading.Thread.Sleep(500)
-
-    End Function
+    End Sub
     Public Function GetGRCAppDir() As String
         Try
             If bDebug Then
                 Dim fiAlt As New System.IO.FileInfo("c:\program files (x86)\gridcoinresearch\")
                 Return fiAlt.DirectoryName
-
             End If
             Dim fi As New System.IO.FileInfo(Application.ExecutablePath)
             Return fi.DirectoryName
         Catch ex As Exception
+            Return ""
         End Try
     End Function
-   
-    Public Function Base64File(sFileName As String)
+    Public Sub Base64File(sFileName As String)
         Dim sFilePath As String = GetGRCAppDir() + "\" + sFileName
         Dim b() As Byte
         b = System.IO.File.ReadAllBytes(sFilePath)
         Dim sBase64 As String = System.Convert.ToBase64String(b, 0, b.Length)
         b = System.Text.Encoding.ASCII.GetBytes(sBase64)
         System.IO.File.WriteAllBytes(sFilePath, b)
-    End Function
-    Public Function UnBase64File(sFileName As String)
+    End Sub
+    Public Sub UnBase64File(sFileName As String)
         Dim sFilePath As String = GetGRCAppDir() + "\" + sFileName
         Dim b() As Byte
         b = System.IO.File.ReadAllBytes(sFilePath)
         Dim value As String = System.Text.ASCIIEncoding.ASCII.GetString(b)
         b = System.Convert.FromBase64String(value)
         System.IO.File.WriteAllBytes(sFilePath, b)
-    End Function
-
+    End Sub
     Public Function NeedsUpgrade() As Boolean
         Try
-
             Dim sMsg As String
             Dim sURL As String = GetURL()
             Dim w As New MyWebClient
@@ -724,7 +566,6 @@ Public Class GridcoinUpgrader
             If UBound(vFiles) < 10 Then
                 Return False
             End If
-
             sMsg = ""
             For iRow As Integer = 0 To UBound(vFiles)
                 Dim sRow As String = vFiles(iRow)
@@ -734,9 +575,7 @@ Public Class GridcoinUpgrader
                         Dim sDT As String
                         sDT = Mid(sRow, 1, 20)
                         sDT = Trim(sDT)
-
                         Dim dDt As DateTime
-
                         dDt = ParseDate(Trim(sDT))
                         dDt = TimeZoneInfo.ConvertTime(dDt, System.TimeZoneInfo.Utc)
                         'Hosting server is PST, so subtract Utc - 7 to achieve PST:
@@ -746,18 +585,14 @@ Public Class GridcoinUpgrader
                         Dim sLocalFile As String = sFile
                         If LCase(sLocalFile) = "grcrestarter.exe" Then sLocalFile = "grcrestarter_copy.exe"
                         Dim sLocalPathFile As String = sLocalPath + "\" + sLocalFile
-                        'R Halford - 6/7/2014 - People are upgrading in an endless loop
+                        'R Halford - 6/7/2014 - ToDo: Store release datetime in UTC in a specific place on web server instead of relying on web host PST -> UTC conversion
                         'Move to file version instead
-
                         '   FileVersionInfo.GetVersionInfo()
                         '   Dim myFileVersionInfo As FileVersionInfo = FileVersionInfo.GetVersionInfo(Environment.SystemDirectory + "\exe")
-
                         Dim dtLocal As DateTime
-
                         Try
                             dtLocal = System.IO.File.GetLastWriteTime(sLocalPathFile)
                             dtLocal = TimeZoneInfo.ConvertTime(dtLocal, System.TimeZoneInfo.Utc)
-
                             Log("Gridcoin.us boinc.dll timestamp (UTC) : " + Trim(dDt) + ", VS : Local boinc.dll timestamp (UTC) : " + Trim(dtLocal))
                             If dDt < dtLocal Then
                                 Log("Not upgrading.")
@@ -766,10 +601,8 @@ Public Class GridcoinUpgrader
                         Catch ex As Exception
                             Return False
                         End Try
-
                         If dDt > dtLocal Then
                             Log("Upgrading")
-
                             Return True
                         End If
 
@@ -778,52 +611,37 @@ Public Class GridcoinUpgrader
             Next iRow
         Catch ex As Exception
             Return False
-
         End Try
-
+        Return False
     End Function
 
     Public Function GetWebFileSize(sName As String, sDir As String) As Long
-
-
         Try
-
             Dim sMsg As String
             Dim sURL As String = GetURL() + sDir + "/"
-
-
-
-            Dim w As New MyWebClient
-            Dim ww As New WebClient
-
+            Dim wc As New WebClient
             Dim sFiles As String
-            sFiles = ww.DownloadString(sURL)
+            sFiles = wc.DownloadString(sURL)
             Dim vFiles() As String = Split(sFiles, "<br>")
             If UBound(vFiles) < 3 Then
                 Return 0
             End If
-
             sMsg = ""
             For iRow As Integer = 0 To UBound(vFiles)
                 Dim sRow As String = vFiles(iRow)
                 Dim sFile As String = ExtractFilename("<a", "</a>", sRow, 5)
                 If Len(sFile) > 1 Then
                     If LCase(sFile) = LCase(sName) Then
-
                         Dim sSz As String
                         sSz = Trim(Mid(sRow, 22, 12)) 'size portion
-
                         Return Val(sSz)
-
                     End If
                 End If
             Next iRow
         Catch ex As Exception
             Return 0
-
         End Try
         Return 0
-
     End Function
     Public Function ParseDate(sDate As String)
         'parses microsofts IIS date to a date, globally
@@ -834,7 +652,7 @@ Public Class GridcoinUpgrader
             Dim vEle() As String
             vEle = Split(sEle1, "/")
             If UBound(vEle) > 1 Then
-                'Handle mm-dd-yyyy or dd-mm-yyyy or web server PST or web server UST:
+                'Handle IIS PST Date format:
                 Dim sTr As String
                 Dim sTime1 As String
                 Dim sTime2 As String
@@ -855,10 +673,9 @@ Public Class GridcoinUpgrader
             sw.Close()
         Catch ex As Exception
         End Try
-
     End Sub
     Public Function DynamicUpgradeWithManifest() As String
-        Dim sMsg As String
+        Dim sMsg As String = ""
         For iTry As Long = 1 To 5
             Dim sURL As String = GetURL()
             Dim w As New MyWebClient
@@ -869,14 +686,11 @@ Public Class GridcoinUpgrader
             If UBound(vFiles) < 10 Then Return "No mirror found, unable to upgrade."
             sMsg = ""
             ProgressBar1.Maximum = UBound(vFiles) + 1
-
-
             For iRow As Integer = 0 To UBound(vFiles)
                 Dim sRow As String = vFiles(iRow)
                 ProgressBar1.Value = iRow
                 ProgressBar1.Update() : ProgressBar1.Refresh() : Me.Refresh() : Application.DoEvents()
                 RefreshScreen()
-
                 Dim sFile As String = ExtractFilename("<a", "</a>", sRow, 5)
                 If Len(sFile) > 1 Then
                     txtStatus.Text = "Upgrading " + sFile + "..."
@@ -884,7 +698,6 @@ Public Class GridcoinUpgrader
                     txtStatus.Refresh()
                     txtStatus.Update()
                     Application.DoEvents()
-
                     Try
                         DownloadFile(sFile)
                     Catch ex As Exception
@@ -896,7 +709,6 @@ Public Class GridcoinUpgrader
         Next iTry
         Return sMsg
     End Function
-
     Public Function ExtractFilename(ByVal sStartElement As String, ByVal sEndElement As String, ByVal sData As String, ByVal minOutLength As Integer) As String
         Try
             Dim sDataBackup As String
@@ -929,15 +741,13 @@ Public Class GridcoinUpgrader
             If sOut = "bitcoin.png" Or sOut = "bitcoin.ico" Then sOut = ""
             If sOut = "qrc_bitcoin.cpp" Then sOut = ""
             If sExt = "xml" Then sOut = ""
-
             Return Trim(sOut)
         Catch ex As Exception
             Dim message As String = ex.Message
-
-
+            Return ""
         End Try
     End Function
-    Public Function UpgradeGrcRestarter(sParams As String)
+    Public Sub UpgradeGrcRestarter(sParams As String)
         Dim p As Process = New Process()
         Dim pi As ProcessStartInfo = New ProcessStartInfo()
         pi.WorkingDirectory = GetGRCAppDir()
@@ -946,31 +756,22 @@ Public Class GridcoinUpgrader
         pi.FileName = Trim("GRCRestarter_copy.exe")
         p.StartInfo = pi
         p.Start()
-    End Function
-
-
-
-
+    End Sub
     Private Sub TimerUE_Tick(sender As System.Object, e As System.EventArgs) Handles TimerUE.Tick
         ProgressBar1.Maximum = ProgressBar1.Maximum + 1
         Dim v As Long = ProgressBar1.Value
         If v > ProgressBar1.Maximum Then v = ProgressBar1.Maximum
-
         ProgressBar1.Value = v
         RefreshScreen()
-
-
     End Sub
 End Class
 
 Public Class MyWebClient
     Inherits System.Net.WebClient
     Private timeout As Long = 125000
-
     Protected Overrides Function GetWebRequest(ByVal uri As Uri) As System.Net.WebRequest
         Dim w As System.Net.WebRequest = MyBase.GetWebRequest(uri)
         w.Timeout = timeout
-
         Return (w)
     End Function
 End Class

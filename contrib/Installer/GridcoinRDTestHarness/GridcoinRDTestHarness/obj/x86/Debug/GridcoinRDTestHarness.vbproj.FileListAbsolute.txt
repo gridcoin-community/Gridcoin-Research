@@ -74,3 +74,4 @@ A:\Gridcoin-Research\contrib\Installer\GridcoinRDTestHarness\GridcoinRDTestHarne
 A:\Gridcoin-Research\contrib\Installer\GridcoinRDTestHarness\GridcoinRDTestHarness\obj\x86\Debug\GridcoinRDTestHarness.xml
 A:\Gridcoin-Research\contrib\Installer\GridcoinRDTestHarness\GridcoinRDTestHarness\obj\x86\Debug\GridcoinRDTestHarness.pdb
 A:\Gridcoin-Research\contrib\Installer\GridcoinRDTestHarness\GridcoinRDTestHarness\bin\Debug\GRCSec.dll
+A:\Gridcoin-Research\contrib\Installer\GridcoinRDTestHarness\GridcoinRDTestHarness\bin\Debug\ICSharpCode.SharpZipLib.dll
