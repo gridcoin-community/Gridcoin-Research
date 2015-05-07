@@ -40,6 +40,7 @@ extern double Cap(double dAmt, double Ceiling);
 std::string CPIDByAddress(std::string address);
 extern std::string ToOfficialNameNew(std::string proj);
 double OwedByAddress(std::string address);
+extern double GetMagnitudeUnit(int64_t locktime);
 
 using namespace std;
 using namespace boost;
@@ -2818,8 +2819,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
  		 //CryptoLottery Verification of each recipient 4-5-2015 (Recipients start at output position 2 (0=Coinstake flag, 1=coinstake)
 		 //Double check the lock time is recent, as time passes RSA balances change, so this must be done in real time
-		 //LOCK TIME RECENT in CryptoLottery feature
-
+		
 		 // Note : As of 4-22-2015, this feature is still being tested in testnet, so it is not enabled in Prod yet.
 		 if (!ClientOutOfSync() && fTestNet && bCryptoLotteryEnabled)
 		 {
@@ -4497,6 +4497,18 @@ double Cap(double dAmt, double Ceiling)
 	return dAmt;
 }
 
+double Lowest(double dAmt1, double dAmt2)
+{
+	if (dAmt1 < dAmt2) 
+	{
+		return dAmt1;
+	}
+	else
+	{
+		return dAmt2;
+	}
+}
+
 int64_t Floor(int64_t iAmt1, int64_t iAmt2)
 {
 	int64_t iOut = 0;
@@ -4518,9 +4530,22 @@ double coalesce(double mag1, double mag2)
 	return mag2;
 }
 
+double GetMagnitudeUnit(int64_t locktime)
+{
+		StructCPID MagnitudePaymentUnit = mvNetwork["NETWORK"];
+	    double TotalNetworkMagnitude = MagnitudePaymentUnit.NetworkMagnitude/14;
+		if (TotalNetworkMagnitude < 100) TotalNetworkMagnitude=100;
+		double MaximumEmission = 1000*GetMaximumBoincSubsidy(locktime);
+		double MagnitudeUnit = MaximumEmission/TotalNetworkMagnitude;
+		return MagnitudeUnit;	
+}
+
+
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude)
 {
 
+	// Honor Gridcoin Payment Magnitude Unit in RSA Owed calculation to ensure rewards are capped at MaxBlockSubsidy*BLOCKS_PER_DAY
+	
 	// Gridcoin - payment range is stored in HighLockTime-LowLockTime
 	// If newbie has not participated for 14 days, use earliest payment in chain to assess payment window
 	// (Important to prevent e-mail change attacks) - Calculate payment timespan window in days
@@ -4529,11 +4554,12 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
 	if (payment_timespan > 10) payment_timespan = 14;
 	mag.PaymentTimespan = payment_timespan;
 	double research_magnitude = LederstrumpfMagnitude2(coalesce(mag.ConsensusMagnitude,block_magnitude),locktime);
-	double owed = payment_timespan * Cap(research_magnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime)*5);
+	double owed_standard = payment_timespan * Cap(research_magnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime)*5);
+	double owed_network_cap = payment_timespan * GetMagnitudeUnit(locktime) * research_magnitude;
+	double owed = Lowest(owed_standard,owed_network_cap);
 	double paid = mag.payments;
-	double outstanding = Cap(owed-paid, GetMaximumBoincSubsidy(locktime)*5);
-	//Calculate long term totals:
-	total_owed = payment_timespan * Cap(research_magnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime)*5);
+	double outstanding = Lowest(owed-paid, GetMaximumBoincSubsidy(locktime)*5);
+	total_owed = owed;
 	//printf("Getting payment_timespan %f for outstanding amount for %s; owed %f paid %f Research Magnitude %f \r\n",		payment_timespan,cpid.c_str(),owed,paid,mag.ConsensusMagnitude);
 	if (outstanding < 0) outstanding=0;
 	return outstanding;
@@ -4594,9 +4620,11 @@ double GetChainDailyAvgEarnedByCPID(std::string cpid, int64_t locktime, double& 
 	{
 				double AvgDailyPayments = structMag.payments/14;
 				double DailyOwed = (structMag.PaymentTimespan * Cap(structMag.PaymentMagnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime)*5)/14);
+				double owed_network_cap = 1 * GetMagnitudeUnit(locktime) * structMag.PaymentMagnitude;
+				double owed = Lowest(DailyOwed,owed_network_cap);
 				out_payments=structMag.payments;
 				out_daily_avg_payments = AvgDailyPayments;
-				return DailyOwed;
+				return owed;
 	}
 	else
 	{
@@ -4820,7 +4848,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 		return true;
 	}
 	if (fDebug) printf("Gathering network avgs (begin)\r\n");
-	//If we did this within the last 5 mins, we are fine:
+	//If we did this within the last 10 mins, we are fine:
 	if (IsLockTimeWithinMinutes(nLastTallied,10)) return true;
 	nLastTallied = GetAdjustedTime();
 
@@ -4843,6 +4871,9 @@ bool TallyNetworkAverages(bool ColdBoot)
 					int iRow = 0;
 					double NetworkRAC = 0;
 					double NetworkProjects = 0;
+					double NetworkMagnitude = 0;
+					double NetworkAvgMagnitude = 0;
+
 					//Adding support for Magnitudes With Consensus by CPID
 					for (int ii = nMaxDepth; ii > nMinDepth; ii--)
 					{
@@ -4878,10 +4909,11 @@ bool TallyNetworkAverages(bool ColdBoot)
 							structproj.projectname = proj;
 							structproj.rac += bb.rac;
 
-							// 4-2-2015 R HALFORD : Adding GRC Address from block into structCPID for crypto tally 
+							// 5-6-2015 R HALFORD : Adding GRC Address from block into structCPID for crypto tally 
 						
 							NetworkRAC += bb.rac;
 							structproj.TotalRAC = NetworkRAC;
+							NetworkMagnitude += bb.Magnitude;
 							structproj.entries++;
 							if (structproj.entries > 0)
 							{
@@ -4921,6 +4953,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 					if (iRow > 0)
 					{
 						NetworkAvg = NetworkRAC/(iRow+.01);
+						NetworkAvgMagnitude = NetworkMagnitude/(iRow+.01);
 					}
 	
 					if (fDebug) printf("Assimilating network consensus..");
@@ -4934,6 +4967,9 @@ bool TallyNetworkAverages(bool ColdBoot)
 					structcpid.initialized = true;
 					structcpid.AverageRAC = NetworkAvg;
 					structcpid.NetworkProjects = NetworkProjects;
+					structcpid.NetworkMagnitude = NetworkMagnitude;
+					structcpid.NetworkAvgMagnitude = NetworkAvgMagnitude;
+				
 
 					mvNetwork["NETWORK"] = structcpid;
 					// Tally total magnitudes for each cpid:
@@ -7393,6 +7429,9 @@ StructCPID GetStructCPID()
 	c.PaymentAmountsInterest = "";
 	c.GRCAddress="";
 	c.LastBlock = 0;
+	c.NetworkMagnitude=0;
+	c.NetworkAvgMagnitude=0;
+
 	return c;
 
 }

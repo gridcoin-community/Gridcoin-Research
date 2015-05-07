@@ -195,8 +195,6 @@ Module modGRC
             pi.Arguments = ""
             pi.WindowStyle = ProcessWindowStyle.Hidden
 
-
-
             pi.FileName = pi.WorkingDirectory + "\boinc_command.bat"
             p.StartInfo = pi
             p.Start()

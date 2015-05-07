@@ -23,6 +23,8 @@ extern std::string CryptoLottery(int64_t locktime);
 std::string CPIDByAddress(std::string address);
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
+double GetMagnitudeUnit(int64_t locktime);
+
 bool LessVerbose(int iMax1000);
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
@@ -1435,6 +1437,12 @@ Array MagnitudeReport(bool bMine)
 									entry.push_back(Pair("Next Estimated Payment",nep));
 									entry.push_back(Pair("Daily Paid",structMag.payments/14));
 									entry.push_back(Pair("Daily Owed",structMag.totalowed/14));
+
+									double magnitude_unit = GetMagnitudeUnit(GetAdjustedTime());
+									entry.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
+									double est_daily = magnitude_unit*structMag.ConsensusMagnitude;
+									entry.push_back(Pair("Daily Max per Mag Unit", est_daily));
+									
 									results.push_back(entry);
 						}
 				}
@@ -1483,10 +1491,6 @@ std::string CryptoLottery(int64_t locktime)
 						//Reverse Check, ensure Address resolves to cpid:
 						std::string reverse_cpid_lookup = CPIDByAddress(structMag.GRCAddress);
 
-					    //Temporary feature for Testnet:  Make every address owed balance perpetually 500
-						Owed = 500;
-						// ToDo: Remove in Prod
-
 						if (reverse_cpid_lookup == structMag.cpid && Owed > max_subsidy && sOut.find(structMag.GRCAddress) == std::string::npos) 
    					    {
 							// Gather the owed amount, grc address, and cpid.
@@ -1499,7 +1503,7 @@ std::string CryptoLottery(int64_t locktime)
 							sOut += row + "<COL>";
 							rows++;
 							//Prod ToDo: Change to 10:
-							if (rows >= 50) break;
+							if (rows >= 20) break;
   						}
 		     	}
 		}
@@ -1923,8 +1927,13 @@ Value listitem(const Array& params, bool fHelp)
 				
 				if (structcpid.projectname=="NETWORK") 
 				{
-						entry.push_back(Pair("Network Projects",structcpid.NetworkProjects));
-
+						entry.push_back(Pair("Network CPID-Projects Count",structcpid.NetworkProjects));
+						entry.push_back(Pair("Network Average RAC",structcpid.AverageRAC));
+						entry.push_back(Pair("Network Total Magnitude per Day",structcpid.NetworkMagnitude/14));
+						entry.push_back(Pair("Network Average Magnitude per day",structcpid.NetworkAvgMagnitude));
+						double magnitude_unit = GetMagnitudeUnit(GetAdjustedTime());
+						entry.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
+					
 				}
 				results.push_back(entry);
 
