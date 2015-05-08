@@ -142,13 +142,13 @@
         "Entry"
         {
         "MsmKey" = "8:_DEB886DE05C496A5AD26B43C4B1B90B9"
-        "OwnerKey" = "8:_4F3106A1168946ADBC27B471209638C8"
+        "OwnerKey" = "8:_7A0EA93E644A4D9E8037FBB3C062DD65"
         "MsmSig" = "8:_UNDEFINED"
         }
         "Entry"
         {
         "MsmKey" = "8:_DEB886DE05C496A5AD26B43C4B1B90B9"
-        "OwnerKey" = "8:_7A0EA93E644A4D9E8037FBB3C062DD65"
+        "OwnerKey" = "8:_4F3106A1168946ADBC27B471209638C8"
         "MsmSig" = "8:_UNDEFINED"
         }
         "Entry"
@@ -202,12 +202,6 @@
         "Entry"
         {
         "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_DEB886DE05C496A5AD26B43C4B1B90B9"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
-        "MsmKey" = "8:_UNDEFINED"
         "OwnerKey" = "8:_7A0EA93E644A4D9E8037FBB3C062DD65"
         "MsmSig" = "8:_UNDEFINED"
         }
@@ -221,6 +215,12 @@
         {
         "MsmKey" = "8:_UNDEFINED"
         "OwnerKey" = "8:_5644D8F767F33372E534FBD5A2384D12"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_UNDEFINED"
+        "OwnerKey" = "8:_DEB886DE05C496A5AD26B43C4B1B90B9"
         "MsmSig" = "8:_UNDEFINED"
         }
         "Entry"
@@ -778,11 +778,11 @@
                 {
                     "_DEB886DE05C496A5AD26B43C4B1B90B9"
                     {
-                    "Name" = "8:ICSharpCode.SharpZipLib.DLL"
+                    "Name" = "8:icsharpcode.sharpziplib.dll"
                     "Attributes" = "3:512"
                     }
                 }
-            "SourcePath" = "8:ICSharpCode.SharpZipLib.DLL"
+            "SourcePath" = "8:icsharpcode.sharpziplib.dll"
             "TargetName" = "8:"
             "Tag" = "8:"
             "Folder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
@@ -987,15 +987,15 @@
         {
         "Name" = "8:Microsoft Visual Studio"
         "ProductName" = "8:Gridcoin Research"
-        "ProductCode" = "8:{52E0D552-CD94-4217-8FC3-83182962975C}"
-        "PackageCode" = "8:{B2C1A1CF-9AF0-4A99-B94E-8F75EC982ACA}"
+        "ProductCode" = "8:{5EC68A65-D6CD-4626-9752-0E94B0218CBD}"
+        "PackageCode" = "8:{AB55B7D2-9B51-4251-A7CA-E7C7CCDBCAC8}"
         "UpgradeCode" = "8:{9617E9EA-252F-43CE-B53E-B48C85F71192}"
         "AspNetVersion" = "8:4.0.30319.0"
         "RestartWWWService" = "11:FALSE"
         "RemovePreviousVersions" = "11:TRUE"
         "DetectNewerInstalledVersion" = "11:FALSE"
         "InstallAllUsers" = "11:TRUE"
-        "ProductVersion" = "8:23.7"
+        "ProductVersion" = "8:23.9"
         "Manufacturer" = "8:GridcoinResearch"
         "ARPHELPTELEPHONE" = "8:"
         "ARPHELPLINK" = "8:"

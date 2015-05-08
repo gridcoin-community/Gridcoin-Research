@@ -28,6 +28,7 @@ public:
         Fee,               // qint64
         ReserveBalance,    // qint64
         DisplayUnit,       // BitcoinUnits::Unit
+		DisplayAddresses,  // bool
         Language,          // QString
         CoinControlFeatures, // bool
         OptionIDRowCount,
@@ -45,12 +46,14 @@ public:
     bool getMinimizeToTray();
     bool getMinimizeOnClose();
     int getDisplayUnit();
+	bool getDisplayAddresses();
     bool getCoinControlFeatures();
     QString getLanguage() { return language; }
 
 private:
     int nDisplayUnit;
     bool fMinimizeToTray;
+	bool bDisplayAddresses;
     bool fMinimizeOnClose;
     bool fCoinControlFeatures;
     QString language;

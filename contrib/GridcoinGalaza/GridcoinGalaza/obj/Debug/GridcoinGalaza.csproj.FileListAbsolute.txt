@@ -8,3 +8,4 @@ A:\Gridcoin-Research\contrib\GridcoinGalaza\GridcoinGalaza\obj\Debug\GridcoinGal
 A:\Gridcoin-Research\contrib\GridcoinGalaza\GridcoinGalaza\obj\Debug\GridcoinGalaza.csproj.GenerateResource.Cache
 A:\Gridcoin-Research\contrib\GridcoinGalaza\GridcoinGalaza\obj\Debug\GridcoinGalaza.exe
 A:\Gridcoin-Research\contrib\GridcoinGalaza\GridcoinGalaza\obj\Debug\GridcoinGalaza.pdb
+A:\Gridcoin-Research\contrib\GridcoinGalaza\GridcoinGalaza\obj\Debug\GridcoinGalaza.csprojResolveAssemblyReference.cache
