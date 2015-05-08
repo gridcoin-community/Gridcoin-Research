@@ -315,7 +315,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
      connect(upgradeAction, SIGNAL(triggered()), upgrader, SLOT(upgrade()));
      connect(downloadAction, SIGNAL(triggered()), upgrader, SLOT(show()));
      connect(downloadAction, SIGNAL(triggered()), upgrader, SLOT(blocks()));
-	
+
 
     // Clicking on "Verify Message" in the address book sends you to the verify message tab
     connect(addressBookPage, SIGNAL(verifyMessage(QString)), this, SLOT(gotoVerifyMessageTab(QString)));
@@ -450,12 +450,12 @@ int RestartClient()
 void qtUpdateConfirm(std::string txid)
 {
 	int result = 0;
-		
+
 	#if defined(WIN32) && defined(QT_GUI)
 		QString qsTxid = ToQstring(txid);
 		QString sResult = globalcom->dynamicCall("UpdateConfirm(Qstring)",qsTxid).toString();
 	#endif
-		
+
 }
 
 
@@ -464,7 +464,7 @@ void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::strin
 
 	#if defined(WIN32) && defined(QT_GUI)
 	try
-	{  
+	{
 		int result = 0;
 	 	std::string Confirm = RoundToString(dAmt,4) + "<COL>" + sFrom + "<COL>" + sTo + "<COL>" + txid;
 		printf("Inserting confirm %s",Confirm.c_str());
@@ -484,7 +484,7 @@ void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double ma
 
 	#if defined(WIN32) && defined(QT_GUI)
 	try
-	{  
+	{
 		int result = 0;
 	 	std::string session = defaultgrcaddress + "<COL>" + cpid + "<COL>" + RoundToString(magnitude,1);
 		printf("Setting Session Id %s",session.c_str());
@@ -497,7 +497,7 @@ void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double ma
 	}
 	#endif
 }
-    
+
 
 
 std::string FromQString(QString qs)
@@ -523,7 +523,7 @@ int qtTrackConfirm(std::string txid)
 }
 
 
-std::string qtGRCCodeExecutionSubsystem(std::string sCommand) 
+std::string qtGRCCodeExecutionSubsystem(std::string sCommand)
 {
 	std::string sResult = "FAIL";
 	#if defined(WIN32) && defined(QT_GUI)
@@ -535,7 +535,7 @@ std::string qtGRCCodeExecutionSubsystem(std::string sCommand)
 	return sResult;
 
 }
-        
+
 
 
 int RebootClient()
@@ -1230,7 +1230,7 @@ void BitcoinGUI::askQuestion(std::string caption, std::string body, bool *result
 		QString qsBody = tr(body.c_str());
 		QMessageBox::StandardButton retval = QMessageBox::question(this, qsCaption, qsBody, QMessageBox::Yes|QMessageBox::Cancel,   QMessageBox::Cancel);
 		*result = (retval == QMessageBox::Yes);
-		
+
 }
 
 void BitcoinGUI::askFee(qint64 nFeeRequired, bool *payFee)
@@ -1285,7 +1285,7 @@ void BitcoinGUI::NewUserWizard()
 		sout = getfilecontents(sourcefile);
 		//bool BoincInstalled = true;
 		std::string sBoincNarr = "";
-		if (sout == "-1") 
+		if (sout == "-1")
 		{
 			printf("Boinc not installed in default location! \r\n");
 			//BoincInstalled=false;
@@ -1298,7 +1298,7 @@ void BitcoinGUI::NewUserWizard()
                                           tr("Please enter your boinc E-mail address, or click <Cancel> to skip for now:"),
 										  QLineEdit::Normal,
                                           "", &ok);
-		if (ok && !boincemail.isEmpty()) 
+		if (ok && !boincemail.isEmpty())
 		{
 			std::string new_email = tostdstring(boincemail);
 			boost::to_lower(new_email);
@@ -1317,7 +1317,7 @@ void BitcoinGUI::NewUserWizard()
 		    QString strMessage = tr("To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. ");
 			QMessageBox::warning(this, tr("New User Wizard - Skipped"), strMessage);
 		}
-		
+
 		if (sBoincNarr != "")
 		{
 				QString qsMessage = tr(sBoincNarr.c_str());
@@ -1951,7 +1951,7 @@ void ReinstantiateGlobalcom()
 									result = AddressUser();
 									#endif
 						}
-					
+
 
 			}
 #endif
@@ -1983,7 +1983,7 @@ void BitcoinGUI::timerfire()
 	try {
 
 
-		
+
 		if (nRegVersion==0 || Timer("start",10))
 		{
 			if (fDebug) printf("Starting globalcom...\r\n");
@@ -2001,7 +2001,7 @@ void BitcoinGUI::timerfire()
 		}
 
 
-		
+
 		if (Timer("status_update",1))
 		{
 			std::string status = GetGlobalStatus();
@@ -2013,9 +2013,9 @@ void BitcoinGUI::timerfire()
 				bForceUpdate=false;
 				overviewPage->updateglobalstatus();
 				setNumConnections(clientModel->getNumConnections());
-       
+
 		}
- 
+
 
 
 		// RETIRING ALL OF THIS:
@@ -2034,7 +2034,7 @@ void BitcoinGUI::timerfire()
 					//printf("Created restore point : %i",r);
 				}
 
-		
+
 
 
 							if (false)
@@ -2064,7 +2064,7 @@ void BitcoinGUI::timerfire()
 
 
 
-					
+
 
 									if (false)
 									{
@@ -2107,17 +2107,6 @@ QString BitcoinGUI::toqstring(int o)
 	QString str1 = QString::fromUtf8(pre.c_str());
 	return str1;
 }
-
-void BitcoinGUI::detectShutdown()
-{
-	//Note: This routine is used in Litecoin but not Peercoin
-	/*
-	 // Tell the main threads to shutdown.
-     if (ShutdownRequested())
-        QMetaObject::invokeMethod(QCoreApplication::instance(), "quit", Qt::QueuedConnection);
-		*/
-}
-
 
 double GetPOREstimatedTime(double RSAWeight)
 {
