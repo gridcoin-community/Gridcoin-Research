@@ -281,7 +281,7 @@ QString TransactionTableModel::formatTxStatus(const TransactionRecord *wtx) cons
     QString status;
 
 	// case TransactionStatus::NotAccepted:
-       
+
 
     switch(wtx->status.status)
     {
@@ -342,10 +342,6 @@ QString TransactionTableModel::lookupAddress(const std::string &address, bool to
     if(!label.isEmpty())
     {
         description += label + QString(" ");
-    }
-    if(label.isEmpty() || walletModel->getOptionsModel()->getDisplayAddresses() || tooltip)
-    {
-        description += QString("(") + QString::fromStdString(address) + QString(")");
     }
     return description;
 }

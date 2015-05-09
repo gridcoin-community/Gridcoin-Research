@@ -44,7 +44,7 @@ class BitcoinGUI : public QMainWindow
     Q_OBJECT
 public:
 	QString toqstring(int o);
-	
+
 
 
     explicit BitcoinGUI(QWidget *parent = 0);
@@ -61,7 +61,7 @@ public:
     */
     void setWalletModel(WalletModel *walletModel);
 
-	
+
 protected:
     void changeEvent(QEvent *e);
     void closeEvent(QCloseEvent *event);
@@ -112,6 +112,7 @@ private:
 	QAction *tickerAction;
 	QAction *ticketListAction;
 	QAction *galazaAction;
+	QAction *newUserWizardAction;
 
     QAction *verifyMessageAction;
     QAction *aboutAction;
@@ -168,7 +169,7 @@ public slots:
       @param[out] payFee            true to pay the fee, false to not pay the fee
     */
     void askFee(qint64 nFeeRequired, bool *payFee);
-	
+
 	void askQuestion(std::string caption, std::string body, bool *result);
 
 	void NewUserWizard();
@@ -210,6 +211,7 @@ private slots:
 	void tickerClicked();
 	void ticketListClicked();
 	void galazaClicked();
+	void newUserWizardClicked();
 
 
 #ifndef Q_OS_MAC
@@ -239,12 +241,8 @@ private slots:
 
     void updateWeight();
     void updateStakingIcon();
-	
+
 	QString GetEstimatedTime(unsigned int nEstimateTime);
-
-	/** called by a timer to check if fRequestShutdown has been set **/
-    void detectShutdown();
-
 
 	void timerfire();
 

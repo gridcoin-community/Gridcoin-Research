@@ -81,6 +81,9 @@ extern int miningthreadcount;
 		double PaymentTimespan;
 		double verifiedTotalNetworkRAC;
 		double LastBlock;
+		double NetworkMagnitude;
+		double NetworkAvgMagnitude;
+
 		double Canary;
 		std::string cpid;
 		std::string emailhash;

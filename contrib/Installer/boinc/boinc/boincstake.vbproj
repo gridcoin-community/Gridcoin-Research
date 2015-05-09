@@ -58,6 +58,10 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\..\release\GRCSec.dll</HintPath>
     </Reference>
+    <Reference Include="icsharpcode.sharpziplib, Version=0.86.0.518, Culture=neutral, PublicKeyToken=1b03e6acf1164f73">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\..\..\release\icsharpcode.sharpziplib.dll</HintPath>
+    </Reference>
     <Reference Include="openpopstake, Version=2.0.5.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\..\release\openpopstake.dll</HintPath>
@@ -138,10 +142,10 @@
     <Compile Include="frmNewEmail.vb">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="frmProjects.Designer.vb">
-      <DependentUpon>frmProjects.vb</DependentUpon>
+    <Compile Include="frmNewUserWizard.Designer.vb">
+      <DependentUpon>frmNewUserWizard.vb</DependentUpon>
     </Compile>
-    <Compile Include="frmProjects.vb">
+    <Compile Include="frmNewUserWizard.vb">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="frmSQL.Designer.vb">
@@ -220,8 +224,8 @@
       <DependentUpon>frmNewEmail.vb</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
-    <EmbeddedResource Include="frmProjects.resx">
-      <DependentUpon>frmProjects.vb</DependentUpon>
+    <EmbeddedResource Include="frmNewUserWizard.resx">
+      <DependentUpon>frmNewUserWizard.vb</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="frmSQL.resx">
       <DependentUpon>frmSQL.vb</DependentUpon>

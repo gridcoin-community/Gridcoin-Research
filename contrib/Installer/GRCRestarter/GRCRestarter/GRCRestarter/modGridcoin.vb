@@ -21,7 +21,6 @@
             pi.UseShellExecute = True
             pi.FileName = fi.DirectoryName + "\gridcoinresearch.exe"
             If bTestNet Then pi.Arguments = "-testnet"
-
             pi.WindowStyle = ProcessWindowStyle.Maximized
             pi.CreateNoWindow = False
             p.StartInfo = pi
