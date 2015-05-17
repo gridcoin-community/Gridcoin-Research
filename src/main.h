@@ -10,7 +10,6 @@
 #include "net.h"
 #include "script.h"
 #include "scrypt.h"
-#include "zerocoin/Zerocoin.h"
 
 #include "global_objects_noui.hpp"
 #include <list>
@@ -35,10 +34,17 @@ static const int MAX_NEWBIE_BLOCKS = 200;
 static const int MAX_NEWBIE_BLOCKS_LEVEL2 = 500;
 static const int CHECKPOINT_DISTRIBUTED_MODE = 50;
 extern int64_t nLastBlockSolved;
+extern int64_t nLastBlockSubmitted;
+
 extern uint256 muGlobalCheckpointHash;
 extern uint256 muGlobalCheckpointHashRelayed;
 extern int muGlobalCheckpointHashCounter;
 extern int MINOR_VERSION;
+extern std::string msMasterProjectPublicKey;
+extern std::string msMasterMessagePublicKey;
+extern std::string msMasterMessagePrivateKey;
+
+
 
 extern bool bNewUserWizardNotified;
 
@@ -69,24 +75,22 @@ static const unsigned int MINIMUM_CHECKPOINT_TRANSMISSION_BALANCE = 4000000;
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//Gridcoin - Genesis1 - MainNet - Used for R&D until 10-20-2014:
-//static const uint256 hashGenesisBlock("0x0000026925f360c804a9b8410e656de447714d1fe39ff0de1002dcc2e457963b");
 
 //Genesis - MainNet - Production Genesis: as of 10-20-2014:
 static const uint256 hashGenesisBlock("0x000005a247b397eadfefa58e872bc967c2614797bdc8d4d0e6b09fea5c191599");
 
 //TestNet Genesis:
-static const uint256 hashGenesisBlockTestNet("0x");
+static const uint256 hashGenesisBlockTestNet("0x00006e037d7b84104208ecf2a8638d23149d712ea810da604ee2f2cb39bae713");
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 inline bool IsProtocolV2(int nHeight) { return nHeight > 85400; }
 
-inline int64_t PastDrift(int64_t nTime, int nHeight)   { return IsProtocolV2(nHeight) ? nTime      : nTime - 10 * 60; }
-inline int64_t FutureDrift(int64_t nTime, int nHeight) { return IsProtocolV2(nHeight) ? nTime + 15 : nTime + 10 * 60; }
+inline int64_t PastDrift(int64_t nTime, int nHeight)   { return IsProtocolV2(nHeight) ? nTime - 20 * 60  : nTime - 20 * 60; }
+inline int64_t FutureDrift(int64_t nTime, int nHeight) { return IsProtocolV2(nHeight) ? nTime + 20 * 60  : nTime + 20 * 60; }
+inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight) ? 90 : 60; }
 
-inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight) ? 64 : 60; }
+extern std::map<std::string, std::string> mvApplicationCache;
 
 
-extern libzerocoin::Params* ZCParams;
 extern CScript COINBASE_FLAGS;
 extern CCriticalSection cs_main;
 extern std::map<uint256, CBlockIndex*> mapBlockIndex;
@@ -114,6 +118,7 @@ extern unsigned char pchMessageStart[4];
 extern std::map<uint256, CBlock*> mapOrphanBlocks;
 
 extern int64_t COIN_YEAR_REWARD;
+extern bool bCryptoLotteryEnabled;
 
 
 // Settings
@@ -122,7 +127,6 @@ extern int64_t nReserveBalance;
 extern int64_t nMinimumInputValue;
 extern int64_t nLastTallied;
 extern int64_t nCPIDsLoaded;
-
 
 extern bool fUseFastIndex;
 extern unsigned int nDerivationMethodIndex;
@@ -137,6 +141,12 @@ extern std::string 	msMiningProject;
 extern std::string 	msMiningCPID;
 extern double    	mdMiningRAC;
 extern double       mdMiningNetworkRAC;
+extern double       mdPORNonce;
+extern double       mdPORNonceSolved;
+extern double       mdLastPorNonce;
+extern double       mdMachineTimer;
+extern double       mdMachineTimerLast;
+
 extern std::string  msENCboincpublickey;
 extern std::string  msHashBoinc;
 extern std::string  msHashBoincTxId;
@@ -144,6 +154,16 @@ extern std::string  msMiningErrors;
 extern std::string  msMiningErrors2;
 extern std::string  msMiningErrors3;
 extern std::string  msMiningErrors4;
+extern std::string  msMiningErrors5;
+extern std::string  msMiningErrors6;
+extern std::string  msMiningErrors7;
+
+extern bool         mbBlocksDownloaded;
+
+
+extern std::string  Organization;
+extern std::string  OrganizationKey;
+
 extern int nGrandfather;
 
 // PoB GPU Miner Global Vars:
@@ -179,7 +199,6 @@ CBlockIndex* RPCFindBlockByHeight(int nHeight);
 
 CBlockIndex* MainFindBlockByHeight(int nHeight);
 
-
 bool ProcessMessages(CNode* pfrom);
 bool SendMessages(CNode* pto, bool fSendTrickle);
 bool LoadExternalBlockFile(FILE* fileIn);
@@ -187,7 +206,7 @@ bool LoadExternalBlockFile(FILE* fileIn);
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfStake);
 int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height);
-int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, bool VerifyingBlock,int64_t locktime,double& OUT_POR, double& OUT_INTEREST);
+int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, bool VerifyingBlock,int64_t locktime,double& OUT_POR, double& OUT_INTEREST,double RSAWeight);
 
 unsigned int ComputeMinWork(unsigned int nBase, int64_t nTime);
 unsigned int ComputeMinStake(unsigned int nBase, int64_t nTime, unsigned int nBlockTime);
@@ -206,8 +225,6 @@ std::string DefaultWalletAddress();
 /** (try to) add transaction to memory pool **/
 bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
                         bool* pfMissingInputs);
-
-
 
 
 
@@ -631,6 +648,10 @@ public:
         return nValueOut;
     }
 
+	
+
+
+
     /** Amount of bitcoins coming in to this transaction
         Note that lightweight clients may not know anything besides the hash of previous transactions,
         so may not be able to calculate this.
@@ -940,12 +961,8 @@ public:
         READWRITE(hashMerkleRoot);
         READWRITE(nTime);
         READWRITE(nBits);
-		//? Some explaining would be prudent...
-		
-		//?
         READWRITE(nNonce);
-
-		
+	
 
         // ConnectBlock depends on vtx following header to generate CDiskTxPos
         if (!(nType & (SER_GETHASH|SER_BLOCKHEADERONLY)))
@@ -1179,7 +1196,7 @@ public:
     bool ReadFromDisk(const CBlockIndex* pindex, bool fReadTransactions=true);
     bool SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew);
     bool AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof);
-    bool CheckBlock(bool fCheckPOW=true, bool fCheckMerkleRoot=true, bool fCheckSig=true) const;
+    bool CheckBlock(int height1, int64_t mint, bool fCheckPOW=true, bool fCheckMerkleRoot=true, bool fCheckSig=true, bool fLoadingIndex=false) const;
     bool AcceptBlock(bool generated_by_me);
     bool GetCoinAge(uint64_t& nCoinAge) const; // ppcoin: calculate total coin age spent in block
     bool SignBlock(CWallet& keystore, int64_t nFees);
@@ -1336,7 +1353,8 @@ public:
     int64_t GetPastTimeLimit() const
     {
         if (IsProtocolV2(nHeight))
-            return GetBlockTime();
+			//         return GetBlockTime();
+	         return GetMedianTimePast();
         else
             return GetMedianTimePast();
     }
@@ -1523,9 +1541,6 @@ public:
 
 
 
-
-
-
 /** Describes a place in the block chain to another node such that if the
  * other node doesn't have the same branch, it can find a recent common trunk.
  * The further back it is, the further before the fork it may be.
@@ -1652,8 +1667,6 @@ public:
         return pindex->nHeight;
     }
 };
-
-
 
 
 

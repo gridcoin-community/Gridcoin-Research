@@ -72,6 +72,13 @@ Value getmininginfo(const Array& params, bool fHelp)
 
     obj.push_back(Pair("stakeinterest",    (uint64_t)GetCoinYearReward( GetAdjustedTime())));
     obj.push_back(Pair("testnet",       fTestNet));
+	obj.push_back(Pair("MiningInfo 1", msMiningErrors));
+	obj.push_back(Pair("MiningInfo 2", msMiningErrors2));
+	obj.push_back(Pair("MiningInfo 3", msMiningErrors3));
+	obj.push_back(Pair("MiningInfo 4", msMiningErrors4));
+	obj.push_back(Pair("MiningInfo 5", msMiningErrors5));
+	obj.push_back(Pair("MiningInfo 6", msMiningErrors6));
+	obj.push_back(Pair("MiningInfo 7", msMiningErrors7));
     return obj;
 }
 
@@ -236,7 +243,6 @@ Value getworkex(const Array& params, bool fHelp)
         pblock->hashMerkleRoot = pblock->BuildMerkleTree();
 		if (CheckWork(pblock, *pwalletMain, reservekey))
 		{
-				MilliSleep(275000);  //Preventing sync problems
 				return true;
 		}
 		else
@@ -362,7 +368,6 @@ Value getwork(const Array& params, bool fHelp)
 		if (response) 
 		{
 				msMiningErrors = "POW Block Mined";
-				MilliSleep(200000);  //Preventing sync problems
 		}
 		return response;
     }
@@ -548,7 +553,9 @@ Value submitblock(const Array& params, bool fHelp)
         throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Block decode failed");
     }
 
-    bool fAccepted = ProcessBlock(NULL, &block,false);
+    //bool fAccepted = ProcessBlock(NULL, &block,false);
+	bool fAccepted = false;
+
     if (!fAccepted)
         return "rejected";
 

@@ -19,29 +19,21 @@ using namespace std;
 
 extern unsigned int nMinerSleep;
 MiningCPID GetNextProject(bool bForce);
-
 void ThreadCleanWalletPassphrase(void* parg);
-
+double GetBlockDifficulty(unsigned int nBits);
+double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
-
+std::string GetBestBlockHash(std::string sCPID);
 double CoinToDouble(double surrogate);
-
 void ThreadTopUpKeyPool(void* parg);
-
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
-bool AmIGeneratingBackToBackBlocks();
 double GetDifficulty(const CBlockIndex* blockindex = NULL);
 uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
-
 int64_t GetRSAWeightByCPID(std::string cpid);
-
 std::string RoundToString(double d, int place);
-
 bool OutOfSyncByAgeWithChanceOfMining();
-
 bool TallyNetworkAverages(bool ColdBoot);
 MiningCPID DeserializeBoincBlock(std::string block);
-
 std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
 
@@ -151,7 +143,6 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 
 	if (!bNetAveragesLoaded)
 	{
-
 		if (fDebug) printf("Net averages not yet loaded...");
 		MilliSleep(500);
 		return NULL;
@@ -163,7 +154,6 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		MilliSleep(500);
 		return NULL;
 	}
-
 
     // Create new block
     auto_ptr<CBlock> pblock(new CBlock());
@@ -181,9 +171,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
     txNew.vin.resize(1);
     txNew.vin[0].prevout.SetNull();
     txNew.vout.resize(1);
-
-
-
+	
     if (!fProofOfStake)
     {
         CReserveKey reservekey(pwallet);
@@ -201,7 +189,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 	    assert(txNew.vin[0].scriptSig.size() <= 100);
         txNew.vout[0].SetEmpty();
     
-       }
+    }
 
     // Add our coinbase tx as first transaction
     pblock->vtx.push_back(txNew);
@@ -424,32 +412,27 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
             printf("CreateNewBlock(): total size %"PRIu64"\n", nBlockSize);
 		//Add Boinc Hash - R HALFORD - 11-28-2014 - Add CPID v2
 		MiningCPID miningcpid = GetNextProject(false);
-		//ToDo:Test CPID v2 IsCpidValid from RPC
-		//Crashes in Linux
 		uint256 pbh = 0;
 		if (pindexPrev) pbh=pindexPrev->GetBlockHash();
 	    miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pbh);
-				
-
-		//miningcpid.cpidv2="";
 		miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
 		//12-9-2014 Verify RSA Weight is actually in the block
 		miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 		double out_por = 0;
 		double out_interest=0;
 
-		//12-14-2014
-
 		//Halford: Use current time since we are creating a new stake
-		int64_t nNewBlockReward = GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),out_por,out_interest);
+		int64_t nNewBlockReward = GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),
+			out_por,out_interest,miningcpid.RSAWeight);
+
 		miningcpid.ResearchSubsidy = out_por;
 		miningcpid.InterestSubsidy = out_interest;
-
-		msMiningErrors4 = "BRSA: " + RoundToString(miningcpid.RSAWeight,0);
-
+		miningcpid.enccpid = ""; //CPID V1 Boinc RunTime enc key
+		miningcpid.encboincpublickey = "";
+		miningcpid.encaes = "";
+		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
 		std::string hashBoinc = SerializeBoincBlock(miningcpid);
-		//printf("Creating boinc hash : prevblock %s, boinchash %s",pindexPrev->GetBlockHash().GetHex().c_str(),hashBoinc.c_str());
-	    if (LessVerbose(5)) printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
+	    if (fDebug)  printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
 		pblock->vtx[0].hashBoinc = hashBoinc;
 
         if (!fProofOfStake)
@@ -458,14 +441,25 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
         if (pFees)
             *pFees = nFees;
 
-        // Fill in header
+        // Fill in header  
         pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
-        pblock->nTime          = max(pindexPrev->GetPastTimeLimit()+1, pblock->GetMaxTransactionTime());
-        pblock->nTime          = max(pblock->GetBlockTime(), PastDrift(pindexPrev->GetBlockTime(), nHeight));
+		if (!fProofOfStake)
+		{
+
+			pblock->nTime          = max(pindexPrev->GetPastTimeLimit()+1, pblock->GetMaxTransactionTime());
+			pblock->nTime          = max(pblock->GetBlockTime(), PastDrift(pindexPrev->GetBlockTime(), nHeight));
+		}
+		else
+		{
+						pblock->nTime      =     max(pblock->GetMaxTransactionTime(),GetAdjustedTime());
+				 	    pblock->nTime      =     pblock->vtx[1].nTime; //same as coinstake timestamp
+		}
+
         if (!fProofOfStake)
             pblock->UpdateTime(pindexPrev);
         pblock->nNonce         = 0;
     }
+	if (fDebug) printf("ZX271");
 
     return pblock.release();
 }
@@ -543,13 +537,13 @@ bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
     uint256 hashTarget = CBigNum().SetCompact(pblock->nBits).getuint256();
 
     if(!pblock->IsProofOfWork())
-        return error("CheckWork() : %s is not a proof-of-work block", hashBlock.GetHex().c_str());
+        return error("CheckWork[] : %s is not a proof-of-work block", hashBlock.GetHex().c_str());
 
     if (hashProof > hashTarget)
-        return error("CheckWork() : proof-of-work not meeting target");
+        return error("CheckWork[] : proof-of-work not meeting target");
 
     //// debug print
-    printf("CheckWork() : new proof-of-work block found  \n  proof hash: %s  \ntarget: %s\n", hashProof.GetHex().c_str(), hashTarget.GetHex().c_str());
+    printf("CheckWork[] : new proof-of-work block found  \n  proof hash: %s  \ntarget: %s\n", hashProof.GetHex().c_str(), hashTarget.GetHex().c_str());
     pblock->print();
     printf("generated %s\n", FormatMoney(pblock->vtx[0].vout[0].nValue).c_str());
 
@@ -557,7 +551,10 @@ bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
     {
         LOCK(cs_main);
         if (pblock->hashPrevBlock != hashBestChain)
-            return error("CheckWork() : generated block is stale");
+		{
+			msMiningErrors6 = "Generated block is stale.";
+            return error("CheckWork[] : generated block is stale");
+		}
 
         // Remove key from key pool
         reservekey.KeepKey();
@@ -570,13 +567,32 @@ bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
 
         // Process this block the same as if we had received it from another node
         if (!ProcessBlock(NULL, pblock, true))
-            return error("CheckWork() : ProcessBlock, block not accepted");
+		{
+			msMiningErrors6 = "Block not accepted.";
+            return error("CheckWork[] : ProcessBlock, block not accepted");
+		}
     }
-	MilliSleep(275000);  //Preventing sync problems
 		
     return true;
 }
 
+
+double HexToDouble(std::string str)
+{
+  double hx = 0;
+  int nn = 0;
+  int r= 0;
+  char * ch = const_cast<char*>(str.c_str());
+  char * p,pp;
+  for (int i = 1; i <= str.length(); i++)
+  {
+    r = str.length() - i;
+    pp =   ch[r];
+    nn = strtoul(&pp, &p, 16 );
+    hx = hx + nn * pow(16 , i-1);
+   }
+  return hx;
+}
 
 double Round_Legacy(double d, int place)
 {
@@ -587,27 +603,6 @@ double Round_Legacy(double d, int place)
 }
 
 	
-int SecondFromGRCAddress()
-{
-	std::string sAddress = DefaultWalletAddress();
-	//GRC Classic: Convert a public GRC address to its corresponding payment hour
-	if (sAddress.length() == 0) return 0;
-	char ch = *sAddress.rbegin();
-	char ch2=tolower(ch);
-	int asc = ch2; //Ascii value 0-9 = 48-57, a-z = 97 - 122
-	if (asc > 96) asc=asc-39;	
-	int lookup = asc-47;	
-	double hour = Round_Legacy(lookup/1.5,0);  //convert to 24 hour format, hour now equals 1-24
-	if (hour > 24) hour=24;
-	if (hour < 1) hour = 1;
-	int clockhour = hour-1; //Return 0-23 (Military Clock hours)
-	int sec = clockhour * 2.5;
-	if (sec < 0) sec = 0;
-	if (sec > 59) sec = 59;
-	return sec;
-}
-
-
 
 bool CheckStake(CBlock* pblock, CWallet& wallet)
 {
@@ -616,25 +611,40 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 
     if(!pblock->IsProofOfStake())
         return error("CheckStake() : %s is not a proof-of-stake block", hashBlock.GetHex().c_str());
-
     // verify hash target and signature of coinstake tx
 	if (pblock->vtx.size() < 1)
 	{
 		printf("CheckStake::HashBoinc too small\r\n");
 		return error("CheckStake()::HashBoinc too small");
 	}
+	if (pblock->nNonce < 100)
+	{
+		if (fDebug) printf("CheckStake::Nonce too low\r\n");
+		return error("CheckStake()::Nonce too low");
+	}
 
-
-	if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc, true))
+	//1-20-2015 Ensure this stake is above the minimum threshhold; otherwise, vehemently reject
+	double PORDiff = GetBlockDifficulty(pblock->nBits);
+	//double mint1 = CoinToDouble(Mint);
+	MiningCPID boincblock = DeserializeBoincBlock(pblock->vtx[0].hashBoinc);
+	double total_subsidy = boincblock.ResearchSubsidy + boincblock.InterestSubsidy;
+    
+	if (fDebug) printf("CheckStake[]: TotalSubsidy %f, cpid %s, Res %f, Interest %f, hb: %s \r\n",
+					(double)total_subsidy, boincblock.cpid.c_str(),	boincblock.ResearchSubsidy,boincblock.InterestSubsidy,pblock->vtx[0].hashBoinc.c_str());
+			
+	if (total_subsidy < MintLimiter(PORDiff,boincblock.RSAWeight,boincblock.cpid,pblock->GetBlockTime() ))
+	{
+			//Prevent Hackers from spamming the network with small blocks
+			printf("****CheckStake[]: Total Mint too Small %s, Res %f, Interest %f, hash %s \r\n",boincblock.cpid.c_str(),
+						boincblock.ResearchSubsidy,boincblock.InterestSubsidy,pblock->vtx[0].hashBoinc.c_str());
+			return error("*****CheckStake[] : Total Mint too Small, %f",(double)boincblock.ResearchSubsidy+boincblock.InterestSubsidy);
+	}
+			
+	if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc, true, pblock->nNonce))
 	{	
 		if (fDebug) printf("Hash boinc %s",pblock->vtx[0].hashBoinc.c_str());
         return error("CheckStake() : proof-of-stake checking failed");
 	}
-
-	//
-    //double subsidy = (pblock->vtx[0].GetValueOut())/C-OIN;
-	//std::string sSubsidy = RoundToString(subsidy,4);
-	
 
     //// debug print
 	double block_value = CoinToDouble(pblock->vtx[1].GetValueOut());
@@ -642,7 +652,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	//Submit the block during the public key address second
 	int wallet_second = 0;
 
-    if (fDebug) printf("CheckStake() : new proof-of-stake block found, BlockValue %s, \r\n hash: %s \nproofhash: %s  \ntarget: %s\n",
+    if (fDebug3) printf("CheckStake() : new proof-of-stake block found, BlockValue %s, \r\n hash: %s \nproofhash: %s  \ntarget: %s\n",
 					sBlockValue.c_str(), hashBlock.GetHex().c_str(), proofHash.GetHex().c_str(), hashTarget.GetHex().c_str());
 	if (fDebug)     pblock->print();
     if (fDebug) printf("out %s\n", FormatMoney(pblock->vtx[1].GetValueOut()).c_str());
@@ -651,19 +661,28 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
     {
         LOCK(cs_main);
         if (pblock->hashPrevBlock != hashBestChain)
+		{
+			msMiningErrors6="CheckStake(): Generated block is stale.";
             return error("CheckStake() : generated block is stale");
+		}
 
+		
         // Track how many getdata requests this block gets
         {
             LOCK(wallet.cs_wallet);
             wallet.mapRequestCount[hashBlock] = 0;
         }
 
-
         // Process this block the same as if we had received it from another node
-        if (!ProcessBlock(NULL, pblock, true))
+		//Halford - 1-14-2015 - Ensure Blocks have a minimum time spacing (allow newbies to participate easily)
+		if (!IsLockTimeWithinMinutes(nLastBlockSubmitted,30)) 
 		{
-            return error("CheckStake() : ProcessBlock (by me), but block not accepted");
+			nLastBlockSubmitted = GetAdjustedTime();
+			if (!ProcessBlock(NULL, pblock, true))
+			{
+				msMiningErrors6="Block vehemently rejected.";
+				return error("CheckStake() : ProcessBlock (by me), but block not accepted");
+			}
 		}
     }
 	nLastBlockSolved = GetAdjustedTime();
@@ -675,13 +694,12 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 
 
 
-
 void StakeMiner(CWallet *pwallet)
 {
     SetThreadPriority(THREAD_PRIORITY_LOWEST);
 
     // Make this thread recognisable as the mining thread
-    RenameThread("gridcoin-stake-miner");
+    RenameThread("grc-stake-miner");
 
     bool fTryToSync = true;
 
@@ -768,7 +786,7 @@ Inception:
             if (vNodes.size() < 3 || nBestHeight < GetNumBlocksOfPeers())
             {
 				printf("tryingtosync.");
-                MilliSleep(45000);
+                MilliSleep(5000);
                 continue;
             }
         }
@@ -779,6 +797,7 @@ Begin:
         // Create new block
         //
         int64_t nFees;
+		
         auto_ptr<CBlock> pblock(CreateNewBlock(pwallet, true, &nFees));
         if (!pblock.get())
 		{
@@ -790,20 +809,11 @@ Begin:
 		
 
 		//Verify we are still on the main chain
-		if (false)
-		{
-   	    if (pblock->hashPrevBlock != hashBestChain)
-		{
-    		printf ("StakeMiner() : generated block is stale");
-			MilliSleep(1000);
-			goto Begin;
-		}
-		}
-
-		if (IsLockTimeWithinMinutes(nLastBlockSolved,5)) 
+	
+		if (IsLockTimeWithinMinutes(nLastBlockSolved,30)) 
 		{
 				if (fDebug) printf("=");
-				MilliSleep(1000);
+				MilliSleep(200);
 				goto Begin;
 		}
 
@@ -811,15 +821,22 @@ Begin:
 			
         if (pblock->SignBlock(*pwallet, nFees))
         {
+
             SetThreadPriority(THREAD_PRIORITY_NORMAL);
 			bool Staked = CheckStake(pblock.get(), *pwallet);
+
 			if (Staked)
 			{
 				msMiningErrors = "Stake block accepted!";
 				printf("Stake block accepted!\r\n");
-				//Prevent Rapid Fire block creation (large investor nodes):
 		  	    SetThreadPriority(THREAD_PRIORITY_LOWEST);
-        		
+        		mdPORNonce=0;
+			}
+			else
+			{
+				msMiningErrors = "Stake block rejected";
+				if (fDebug) printf("Stake block rejected \r\n");
+				MilliSleep(1000);
 			}
             SetThreadPriority(THREAD_PRIORITY_LOWEST);
             MilliSleep(500);
@@ -828,3 +845,4 @@ Begin:
             MilliSleep(nMinerSleep);
     }
 }
+

@@ -17,12 +17,10 @@ Public Class Form1
     'Public m As New Utilization
 
     Public night As Boolean
-
-
+  
     Public Structure Crypt
         Dim Success As Double
         Dim [Return] As Object
-
     End Structure
     Public Structure Symbol
         Public marketid As String
@@ -48,7 +46,6 @@ Public Class Form1
         Dim req As HttpWebRequest = TryCast(HttpWebRequest.Create(u), HttpWebRequest)
         req.ConnectionGroupName = groupName
         Try
-
             Using resp As WebResponse = req.GetResponse()
             End Using
             sp.CloseConnectionGroup(groupName)
@@ -122,19 +119,28 @@ Public Class Form1
         Return CDate("1-1-2031")
 
     End Function
+  
     Private Sub Button1_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles Button1.Click
         Dim x As New Utilization
-        x.ShowSql()
+        x.ShowNewUserWizard()
 
-        x.UpdateConfirm("085e0b60fd229e1ce8a28c8d32a17b081e9810793ab4879dfbe34beda454dc5d")
-        Dim l As Long = x.TrackConfirm("085e0b60fd229e1ce8a28c8d32a17b081e9810793ab4879dfbe34beda454dc5d")
-        l = x.TrackConfirm("085e0b60fd229e1ce8a28c8d32a17b081e9810793ab4879dfbe34beda454dc5d")
+        'Dim sKey As String
+        'sKey = BJ.Value
 
-        Stop
+        '        'Add a project to boinc
+        '       BJ = x.BoincCreateAccount("http://www.gpugrid.net/", "robhalford3@gridcoin.us", "dummypass", "robhalford")
+        '
+        'A'ttach this project
+        ' BJ = x.BoincAttachProject("http://www.gpugrid.net", sKey)
+        ' Stop
+        ' Dim sTeam As String
+        ' sTeam = x.BoincRetrieveTeamID("http://www.gpugrid.net/")
+
+        'BJ = x.BoincSetTeamID("http://www.gpugrid.net/", sKey, sTeam)
+
+
 
     End Sub
-
-
 
 
     Public Sub RewriteSourceFile(sPATHH As String, sSFileIn As String)
@@ -182,7 +188,6 @@ Public Class Form1
             text = Replace(text, "QColor(200, 0, 0)", IIf(night, "QColor(255, 0, 0)", "QColor(255, 0, 0)"))  'red
             'pink = c80075 or 200,0,117
             text = Replace(text, "color: #808080", IIf(night, "color: #808080", "color: #8080")) ' gray
-
             text = Replace(text, "color: #006060", IIf(night, "color: #00ff00", "color: #00ff00"))  'light green instead of blue
             text = Replace(text, "QColor(210,200,180)", IIf(night, "QColor(145,158,152)", "QColor(204,230,232")) '  light blue almost white
             text = Replace(text, "QColor(200,50,50)", IIf(night, "QColor(255,0,0)", "QColor(255,0,0")) '  Tx Table Model (red) going to Red
@@ -194,9 +199,7 @@ Public Class Form1
             text = Replace(text, "#121212", IIf(night, "#000000", "#161616")) '  Tx Table Model (dark black) going to very dark green
             text = Replace(text, "QColor(0,240,40)", IIf(night, "QColor(0,255,0)", "QColor(0,255,0"))  '  guiconstants.h goinf from green to light green
             text = Replace(text, "QColor(0, 255,55)", IIf(night, "QColor(0,255,0)", "QColor(0,255,0")) '  guiconstants.h goinf from green to light green
-
             outfile.WriteLine(text)
-
 
         End While
         outfile.Close()
@@ -307,15 +310,9 @@ Public Class Form1
         End Try
 
     End Sub
-    Private Sub Form1_Load(ByVal sender As Object, ByVal e As System.EventArgs) Handles Me.Load
-
-
-
-    End Sub
 
     Private Sub Button2_Click(sender As System.Object, e As System.EventArgs) Handles Button2.Click
         bu.StopWireFrameRenderer()
-
 
     End Sub
 End Class

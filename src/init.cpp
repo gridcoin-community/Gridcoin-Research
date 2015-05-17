@@ -10,7 +10,6 @@
 #include "util.h"
 #include "ui_interface.h"
 #include "checkpoints.h"
-#include "zerocoin/ZeroTest.h"
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <boost/filesystem/convenience.hpp>
@@ -22,19 +21,14 @@
 #include "global_objects_noui.hpp"
 
 std::vector<std::string> split(std::string s, std::string delim);
-
-extern void ReloadBlockChain1();
-
+bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
+extern void InitializeBoincProjects();
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
-
 void startWireFrameRenderer();
 void stopWireFrameRenderer();
-
 void ShutdownGridcoinMiner();
-void StartNodeNetworkOnly();
 void ThreadCPIDs();
-extern void StopGridcoin3();
 void LoadCPIDsInBackground();
 std::string GetPoolKey(std::string sMiningProject,double dMiningRAC,
 	std::string ENCBoincpublickey,std::string xcpid, std::string messagetype, 
@@ -61,14 +55,11 @@ void WriteAppCache(std::string key, std::string value);
 
 using namespace std;
 using namespace boost;
-
 CWallet* pwalletMain;
 CClientUIInterface uiInterface;
 std::vector<std::string> split(std::string s, std::string delim);
 void ShutdownGridcoinMiner();
-void StartNodeNetworkOnly();
 void ThreadCPIDs();
-extern void StopGridcoin3();
 bool fConfChange;
 bool fEnforceCanonical;
 unsigned int nNodeLifespan;
@@ -129,51 +120,18 @@ void DetectShutdownThread(boost::thread_group* threadGroup)
         if (fRequestShutdown)
 		{
 			printf("Shutting down forcefully...");
-			//Note: this code is used in Litecoin, but not in Peercoin/Gridcoin
-     		/*
-            threadGroup->interrupt_all();
-			//threadGroup.join_all();
-			printf("Stopping node\r\n");
-			StopNode();
-			*/
 		}
     }
 	printf("Shutdown thread ended.");
 }
 
 
-void StopGridcoin3()
+void InitializeBoincProjectsNew()
 {
-	    threadGroup.interrupt_all();
-        threadGroup.join_all();
-		printf("Stopping node\r\n");
-		StopNode();
-
-}
-
-void RestartGridcoin3() 
-{
-     	//Gridcoin - 12-26-2013 Stop all network threads; Stop the node; Restart the Node.
-		//Note: The threadGroup only contains Network Threads:
-	    StopGridcoin3();
- 		printf("Starting node...\r\n");
-		StartNodeNetworkOnly();
-}
-
-void ReloadBlockChain1()
-{
-	CTxDB txdb("r");
-    txdb.LoadBlockIndex();
-    //PrintBlockTree();
-        
-}
-
-void InitializeBoincProjects()
-{
-
+		//3-13-2015
+	    // ToDo TestNet:  Ensure that we test both Projects and ProjectMappings
 		//Initialize GlobalCPUMiningCPID
 	    GlobalCPUMiningCPID.initialized = true;
-
 		GlobalCPUMiningCPID.cpid="";
 		GlobalCPUMiningCPID.cpidv2 = "";
 		GlobalCPUMiningCPID.projectname ="";
@@ -184,104 +142,129 @@ void InitializeBoincProjects()
 		GlobalCPUMiningCPID.diffbytes = 0;
 		GlobalCPUMiningCPID.email = "";
 		GlobalCPUMiningCPID.RSAWeight = 0;
-
-
 		std::string boinc_projects[100];
-	       
-        boinc_projects[0] = "http://boinc.bakerlab.org/rosetta/   |rosetta@home";
-        boinc_projects[1] = "http://docking.cis.udel.edu/         |Docking";
-        boinc_projects[2] = "http://www.malariacontrol.net/       |malariacontrol.net";
-        boinc_projects[3] = "http://www.worldcommunitygrid.org/   |World Community Grid";
-        boinc_projects[4] = "http://asteroidsathome.net/boinc/    |Asteroids@home";
-        boinc_projects[5] = "http://climateprediction.net/        |climateprediction.net";
-        boinc_projects[6] = "http://pogs.theskynet.org/pogs/      |theskynet pogs";
-        boinc_projects[8] = "http://setiathome.berkeley.edu/      |SETI@home";
-        boinc_projects[11] = "http://boinc.gorlaeus.net/          |Leiden Classical";
-	    boinc_projects[12] = "http://home.edges-grid.eu/home/     |EDGeS@Home";
-        boinc_projects[13] = "http://milkyway.cs.rpi.edu/milkyway/|Milkyway@Home";
-        boinc_projects[15] = "http://casathome.ihep.ac.cn/        |CAS@home";
-        boinc_projects[16] = "http://aerospaceresearch.net/constellation/|Constellation";
-        boinc_projects[17] = "http://www.cosmologyathome.org/     |Cosmology@Home";
-        boinc_projects[18] = "http://boinc.freerainbowtables.com/ |DistrRTgen";
 
-        boinc_projects[19] = "http://einstein.phys.uwm.edu/       |Einstein@Home";
-        boinc_projects[20] = "http://www.enigmaathome.net/        |Enigma@Home";
-        boinc_projects[22] = "http://registro.ibercivis.es/       |ibercivis";
-        boinc_projects[23] = "http://lhcathomeclassic.cern.ch/sixtrack/|LHC@home 1.0";
-        boinc_projects[24] = "http://lhcathome2.cern.ch/test4theory|Test4Theory@Home";
-        boinc_projects[25] = "http://mindmodeling.org/            |MindModeling@Beta";
-		boinc_projects[26] = "http://escatter11.fullerton.edu/nfs/|NFS@Home";
-        boinc_projects[27] = "http://numberfields.asu.edu/NumberFields/|NumberFields@home";
-        boinc_projects[28] = "http://oproject.info/               |OProject@Home";
-        boinc_projects[29] = "http://boinc.fzk.de/poem/           |Poem@Home";
-        boinc_projects[30] = "http://www.primegrid.com/           |PrimeGrid";
-        boinc_projects[32] = "http://sat.isa.ru/pdsat/            |SAT@home";
-        boinc_projects[33] = "http://boincsimap.org/boincsimap/   |simap";
-		boinc_projects[34] = "http://boinc.thesonntags.com/collatz/|Collatz Conjecture";
-        boinc_projects[35] = "http://mmgboinc.unimi.it/           |SimOne@home";
-        boinc_projects[36] = "http://volunteer.cs.und.edu/subset_sum/|SubsetSum@Home";
-        boinc_projects[37] = "http://boinc.vgtu.lt/vtuathome/     |VGTU project@Home";
-        boinc_projects[39] = "http://www.rechenkraft.net/yoyo/    |yoyo@home";
-        boinc_projects[40] = "http://eon.ices.utexas.edu/eon2/    |eon2";
-		////////////////////ADDING CustomMiners:
-		boinc_projects[41] ="http://albert.phys.uwm.edu/|Albert@home";
-		boinc_projects[42]="http://boinc.almeregrid.nl/|AlmereGrid Boinc Grid";
-		boinc_projects[44]="http://bealathome.com/|Beal@home";
-		boinc_projects[47]="http://convector.fsv.cvut.cz/|convector";
-		boinc_projects[48]="http://www.distributeddatamining.org/|Distributed Data Mining";
-		boinc_projects[49]="http://gerasim.boinc.ru/|Gerasim@Home";
-		boinc_projects[50]="http://www.gpugrid.net/|GPUGRID";
-		boinc_projects[53]="http://moowrap.net/|Moo! Wrapper";
-		boinc_projects[54]="http://boinc.med.usherbrooke.ca/nrg/|Najmanovich Research";
-		boinc_projects[57]="http://boinc.riojascience.com/|Rioja Science";
-		boinc_projects[58]="http://szdg.lpds.sztaki.hu/szdg/|SZTAKI Desktop Grid";
-		boinc_projects[61]="http://dg.imp.kiev.ua/slinca/|SLinCA";
-		boinc_projects[63]="http://wuprop.boinc-af.org/|WUProp@Home";
-		boinc_projects[64]="http://boinc.almeregrid.nl/|almeregrid boinc grid";
-		boinc_projects[65]="http://burp.renderfarming.net/|BURP";
-		boinc_projects[67]="http://boinc.umiacs.umd.edu/|The Lattice Project";
-		boinc_projects[68]="http://www.volpex.net/|volpex";
-		boinc_projects[70]="http://www.distrrtgen.com/|Distributed Rainbow Table Generator";
-		boinc_projects[71]="http://slinca.com/|slinca@home";
-		boinc_projects[72]="http://finance.gridcoin.us/|Gridcoin Finance";
-		boinc_projects[73]="http://supernode.gridcoin.us/|Gridcoin Supernode";
-		boinc_projects[75] = "http://mindmodeling.org/|MindModeling@Home";
-        boinc_projects[76] = "http://www.gridcoin.us/|INVESTOR"; //This is a general project Used for Inflation Only Subsidies
-		boinc_projects[77] = "http://qcn.stanford.edu/sensor/|Quake-Catcher Network Sensor Monitoring";
+		//Loop through projects saved in the Gridcoin Persisted Data System
+		std::string sType = "project";
+	    for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+	    {
+				std::string key_name  = (*ii).first;
+			   	if (key_name.length() > sType.length())
+				{
+					if (key_name.substr(0,sType.length())==sType)
+					{
+							std::string key_value = mvApplicationCache[(*ii).first];
+							std::vector<std::string> vKey = split(key_name,";");
+							if (vKey.size() > 0)
+							{
+								std::string project_name = vKey[1];
+								std::string project_value = key_value;
+								boost::to_lower(project_name);
+								std::string mainProject = ToOfficialName(project_name);
+								boost::to_lower(mainProject);
+						    	StructCPID structcpid = GetStructCPID();
+								mvBoincProjects.insert(map<string,StructCPID>::value_type(mainProject,structcpid));
+								structcpid = mvBoincProjects[mainProject];
+								structcpid.initialized = true;
+								structcpid.link = "http://";
+								structcpid.projectname = mainProject;
+								mvBoincProjects[mainProject] = structcpid;
+								WHITELISTED_PROJECTS++;
+				
+							}
+					 }
+				}
+	   }
+
+}
 
 
+void InitializeBoincProjects()
+{
+	    if (fTestNet)
+		{
+			InitializeBoincProjectsNew();
+			return;
+		}
+
+		
+		//Initialize GlobalCPUMiningCPID
+	    GlobalCPUMiningCPID.initialized = true;
+		GlobalCPUMiningCPID.cpid="";
+		GlobalCPUMiningCPID.cpidv2 = "";
+		GlobalCPUMiningCPID.projectname ="";
+		GlobalCPUMiningCPID.rac=0;
+		GlobalCPUMiningCPID.encboincpublickey = "";
+		GlobalCPUMiningCPID.boincruntimepublickey = "";
+		GlobalCPUMiningCPID.pobdifficulty = 0;
+		GlobalCPUMiningCPID.diffbytes = 0;
+		GlobalCPUMiningCPID.email = "";
+		GlobalCPUMiningCPID.RSAWeight = 0;
+		std::string boinc_projects[100];
+
+		// Refreshed Project list - SePulcher - 2/6/2015
+		// Current Projects
+		boinc_projects[0] = "http://www.gridcoin.us/|INVESTOR"; //This is a general project used for inflation only subsidies
+		boinc_projects[1] = "http://boinc.thesonntags.com/collatz/|Collatz Conjecture";
+		boinc_projects[2] = "http://www.cosmologyathome.org/|Cosmology@Home";
+		boinc_projects[3] = "http://einstein.phys.uwm.edu/|Einstein@Home";
+		boinc_projects[4] = "http://moowrap.net/|Moo! Wrapper";
+		boinc_projects[5] = "http://boinc.fzk.de/poem/|POEM@HOME";
+		boinc_projects[6] = "http://www.primegrid.com/|PrimeGrid";
+		boinc_projects[7] = "http://boinc.bakerlab.org/rosetta/|Rosetta@Home";
+		boinc_projects[8] = "http://setiathome.berkeley.edu/|SETI@Home";
+		boinc_projects[9] = "http://pogs.theskynet.org/pogs/|theSkyNet POGS";
+		boinc_projects[10] = "http://www.malariacontrol.net/|malariacontrol.net";
+		boinc_projects[11] = "http://www.worldcommunitygrid.org/|World Community Grid";
+		boinc_projects[12] = "http://asteroidsathome.net/boinc/|Asteroids@home";
+		boinc_projects[13] = "http://climateprediction.net/|climateprediction.net";
+		boinc_projects[14] = "http://milkyway.cs.rpi.edu/milkyway/|MilkyWay@home";
+		boinc_projects[15] = "http://qcn.stanford.edu/sensor/|Quake-Catcher Network";
+		boinc_projects[16] = "http://boinc.gorlaeus.net/|Leiden Classical";
+		boinc_projects[17] = "http://home.edges-grid.eu/home/|EDGeS@Home";
+		boinc_projects[18] = "http://aerospaceresearch.net/constellation/|Constellation";
+		boinc_projects[19] = "http://www.enigmaathome.net/|Enigma@Home";
+		boinc_projects[20] = "http://lhcathomeclassic.cern.ch/sixtrack/|LHC@home 1.0";
+		boinc_projects[21] = "http://escatter11.fullerton.edu/nfs/|NFS@Home";
+		boinc_projects[22] = "http://numberfields.asu.edu/NumberFields/|NumberFields@home";
+		boinc_projects[23] = "http://sat.isa.ru/pdsat/|SAT@home";
+		boinc_projects[24] = "http://szdg.lpds.sztaki.hu/szdg/|SZTAKI Desktop Grid";
+		boinc_projects[25] = "http://www.gpugrid.net/|GPUGRID";
+		boinc_projects[26] = "http://convector.fsv.cvut.cz/|CONVECTOR";
+		boinc_projects[27] = "http://www.rechenkraft.net/yoyo/|yoyo@home";
+		// New Projects
+		boinc_projects[28] = "http://findah.ucd.ie/|FiND@Home";
+		boinc_projects[29] = "http://atlasathome.cern.ch/|ATLAS@Home";
+		boinc_projects[30] = "http://universeathometest.info/universe/|Universe@Home Test";
+		boinc_projects[31] = "http://www.bitcoinutopia.net/bitcoinutopia/|Bitcoin Utopia";
+		boinc_projects[32] = "http://lhcathome2.cern.ch/vLHCathome/vLHCathome/|VirtualLHC@home";
+		boinc_projects[33] = "http://volunteer.cs.und.edu/csg/|Citizen Science Grid";
+		boinc_projects[34] = "http://burp.renderfarming.net/|BURP";
+	    boinc_projects[35] = "http://mindmodeling.org/            |MindModeling@Beta";
+		boinc_projects[36] = "http://radioactiveathome.org/boinc/|Radioactive@Home";
 
 		for (int i = 0; i < 100; i++)
 		{
 			std::string proj = boinc_projects[i];
 			if (proj.length() > 1)
 			{
-				
        			boost::to_lower(proj);
-				proj = ToOfficialName(proj);
-
 				std::vector<std::string> vProject = split(proj,"|");
 				std::string mainProject = vProject[1];
+				mainProject = ToOfficialName(mainProject);
 				boost::to_lower(mainProject);
 				StructCPID structcpid = GetStructCPID();
-
 				mvBoincProjects.insert(map<string,StructCPID>::value_type(mainProject,structcpid));
 				structcpid = mvBoincProjects[mainProject];
 				structcpid.initialized = true;
 				structcpid.link = vProject[0];
-				structcpid.projectname = vProject[1];
+				structcpid.projectname = mainProject;
 				mvBoincProjects[mainProject] = structcpid;
 				WHITELISTED_PROJECTS++;
 
-
 			} 
-
 		}
-
 }
-
-
-
 
 
 
@@ -291,7 +274,7 @@ void Shutdown(void* parg)
     static bool fTaken;
 
     // Make this thread recognisable as the shutdown thread
-    RenameThread("gridcoin-shutoff");
+    RenameThread("grc-shutoff");
 
     bool fFirstThread = false;
     {
@@ -359,8 +342,7 @@ bool AppInit(int argc, char* argv[])
     boost::thread* detectShutdownThread = NULL;
 
     bool fRet = false;
-	printf("AppInit");
-
+	
     try
     {
         //
@@ -368,6 +350,7 @@ bool AppInit(int argc, char* argv[])
         //
         // If Qt is used, parameters/bitcoin.conf are parsed in qt/bitcoin.cpp's main()
         ParseParameters(argc, argv);
+		printf("AppInit");
         if (!boost::filesystem::is_directory(GetDataDir(false)))
         {
             fprintf(stderr, "Error: Specified directory does not exist\n");
@@ -636,16 +619,12 @@ bool AppInit2()
           << BOOST_VERSION % 100                // patch level
           << "\r\n";
 
-	printf("Boost Version: %s",s.str().c_str());
+	printf("\r\nBoost Version: %s",s.str().c_str());
 	
 	#if defined(WIN32) && defined(QT_GUI)
 			//startWireFrameRenderer();
 	#endif
 
-
-	printf("Loading boinc projects \r\n");
-
-	InitializeBoincProjects();
 
     //Placeholder: Load Remote CPIDs Here
 
@@ -719,12 +698,29 @@ bool AppInit2()
     else
         fDebugNet = GetBoolArg("-debugnet");
 
-	if (GetArg("debug", "false")=="true")
+	if (GetArg("-debug", "false")=="true")
 	{
 			fDebug = true;
 			printf("Entering debug mode.\r\n");
 	}
-				
+	
+	fDebug2 = false;
+	
+	if (GetArg("-debug2", "false")=="true")
+	{
+			fDebug2 = true;
+			printf("Entering GRC debug mode.\r\n");
+	}
+	
+	fDebug3 = false;
+	if (GetArg("-debug3", "false")=="true")
+	{
+			fDebug3 = true;
+			printf("Entering GRC debug mode.\r\n");
+	}
+	fDebug4 = (GetArg("-debug4","false")=="true");
+	fDebug5 = (GetArg("-debug5","false")=="true");
+	
 
 #if !defined(WIN32) && !defined(QT_GUI)
     fDaemon = GetBoolArg("-daemon");
@@ -748,7 +744,7 @@ bool AppInit2()
 
     if (mapArgs.count("-timeout"))
     {
-        int nNewTimeout = GetArg("-timeout", 5000);
+        int nNewTimeout = GetArg("-timeout", 4000);
         if (nNewTimeout > 0 && nNewTimeout < 600000)
             nConnectTimeout = nNewTimeout;
     }
@@ -812,10 +808,10 @@ bool AppInit2()
     }
 #endif
 
-    //if (GetBoolArg("-shrinkdebugfile", !fDebug))        ShrinkDebugFile();
 	ShrinkDebugFile();
-
     printf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
+	printf("***************************************** GRIDCOIN RESEARCH ***************************************************\r\n");
+
     printf("Gridcoin version %s (%s)\n", FormatFullVersion().c_str(), CLIENT_DATE.c_str());
     printf("Using OpenSSL version %s\n", SSLeay_version(SSLEAY_VERSION));
     if (!fLogTimestamps)
@@ -826,12 +822,6 @@ bool AppInit2()
 
     if (fDaemon)
         fprintf(stdout, "Gridcoin server starting\n");
-
-
-	printf("Starting CPID thread...");
-
-	LoadCPIDsInBackground();
-
 
     int64_t nStart;
 
@@ -1045,14 +1035,6 @@ bool AppInit2()
         return false;
     }
 
-    // ********************************************************* Testing Zerocoin
-    if (GetBoolArg("-zerotest", false))
-    {
-        printf("\n=== ZeroCoin tests start ===\n");
-        Test_RunAllTests();
-        printf("=== ZeroCoin tests end ===\n\n");
-    }
-
     // ********************************************************* Step 8: load wallet
 
     uiInterface.InitMessage(_("Loading wallet..."));
@@ -1181,7 +1163,16 @@ bool AppInit2()
     
 	// ********************************************************* Step 11: start node
 	uiInterface.InitMessage(_("Loading Network Averages..."));
+	// 
+	
+	printf("Loading boinc projects \r\n");
+	std::string sOut = "";
+	bool result = 	LoadAdminMessages(true,sOut);
+
+	InitializeBoincProjects();
 	TallyNetworkAverages(true);	
+	printf("Starting CPID thread...");
+	LoadCPIDsInBackground();
 
 	uiInterface.InitMessage(_("Finding first applicable Research Project..."));
 	
@@ -1196,11 +1187,15 @@ bool AppInit2()
     RandAddSeedPerfmon();
 
     //// debug print
-    printf("mapBlockIndex.size() = %"PRIszu"\n",   mapBlockIndex.size());
-    printf("nBestHeight = %d\n",            nBestHeight);
-    printf("setKeyPool.size() = %"PRIszu"\n",      pwalletMain->setKeyPool.size());
-    printf("mapWallet.size() = %"PRIszu"\n",       pwalletMain->mapWallet.size());
-    printf("mapAddressBook.size() = %"PRIszu"\n",  pwalletMain->mapAddressBook.size());
+	if (fDebug)
+	{
+		printf("mapBlockIndex.size() = %"PRIszu"\n",   mapBlockIndex.size());
+		printf("nBestHeight = %d\n",            nBestHeight);
+		printf("setKeyPool.size() = %"PRIszu"\n",      pwalletMain->setKeyPool.size());
+		printf("mapWallet.size() = %"PRIszu"\n",       pwalletMain->mapWallet.size());
+		printf("mapAddressBook.size() = %"PRIszu"\n",  pwalletMain->mapAddressBook.size());
+	}
+
 
     if (!NewThread(StartNode, NULL))
         InitError(_("Error: could not start node"));

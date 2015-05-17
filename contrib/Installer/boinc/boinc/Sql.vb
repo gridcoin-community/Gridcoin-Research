@@ -3,6 +3,8 @@ Imports System.Text
 Imports System.IO
 Imports Microsoft.VisualBasic
 Imports System.Net
+Imports System.Windows.Forms
+Imports System.Globalization
 
 Public Class GridcoinReader
     Public Rows As Long
@@ -108,23 +110,51 @@ Public Class Sql
     Public Function GetMasterNodeURL()
         'Find the node that is currently the leader, with a synced consensus:
         Dim sHost As String
-        sHost = "gridsql.gridcoin.us:32500"
+        sHost = DefaultHostName("p2psql.gridcoin.us", False) + ":" + Trim(DefaultPort(32500, False))
+
+        '        sHost = "localhost:0
+
+
         Return sHost
     End Function
-    Public Function SQLQuery(sHost As String, sSQL As String) As String
+    Public Function SQLQuery(sHost As String, sSQL As String, sParams() As Byte, sToken As String) As String
         Dim sURL As String
-        sURL = "http://" + sHost + "/index.html?query="
+        sURL = "http://" + sHost + "/p2psql.aspx?query="
         sSQL = Replace(sSQL, vbCr, "<CR>")
 
+
         sSQL = Replace(sSQL, vbLf, "<LF>")
-        For x = 1 To 9
+        For x = 1 To 3
             Try
                 Dim wc As New GRCWebClient
                 Using wc
-                    wc.Headers.Add("ContentType:application/x-www-form-urlencoded")
+                    wc.Headers(HttpRequestHeader.ContentType) = "application/x-www-form-urlencoded"
                     wc.Headers.Add("Query:<QUERY>" + sSQL + "</QUERY>")
+                    wc.Headers.Add("Token:" + sToken)
+
                     Dim result As String
-                    result = wc.DownloadString(sURL)
+                    Dim responseArray As Byte()
+                    If sParams Is Nothing Then
+                        result = wc.UploadString(sURL, "")
+
+                    Else
+                        Dim sBase64 As String = System.Convert.ToBase64String(sParams, 0, sParams.Length)
+                        Dim sPreEncoded As String = ""
+                        sPreEncoded = sBase64
+
+                        sBase64 = Replace(sBase64, "/", "HTMLSLASH")
+                        sBase64 = Replace(sBase64, "==", "HTMLDOUBLEEQUALS")
+
+                        Dim p2 As Byte()
+                        p2 = Encoding.ASCII.GetBytes(sBase64)
+
+                        responseArray = wc.UploadData(sURL, p2)
+
+                        result = Encoding.ASCII.GetString(responseArray)
+
+                    End If
+
+
                     Dim sErr As String
                     sErr = ExtractXML(result, "<ERROR>", "</ERROR>")
                     If Len(sErr) > 0 Then MsgBox(sErr)
@@ -132,39 +162,97 @@ Public Class Sql
 
                 End Using
             Catch ex As Exception
-                If x = 9 Then Throw ex
+                If x = 3 Then Throw ex
             End Try
         Next
     End Function
 
-    Public Function ExecuteP2P(sCommand As String) As String
+    Public Function ExecuteP2P(sCommand As String, sParams() As Byte, lSource As Long) As String
         Dim sHost As String
         Dim sData As String = ""
-        For x = 1 To 9
+        System.Windows.Forms.Cursor.Current = Cursors.WaitCursor
+
+        Dim sToken As String = GetSecurityToken(lSource)
+        For x = 1 To 3
             Try
                 sHost = GetMasterNodeURL()
-                sData = SQLQuery(sHost, sCommand)
-                If sData = "" Then Return sData
+                sData = SQLQuery(sHost, sCommand, sParams, sToken)
+                If sData = "" Then
+                    System.Windows.Forms.Cursor.Current = Cursors.Default
+                    Return sData
+
+                End If
+                If sData <> "" And x = 3 Then
+                    System.Windows.Forms.Cursor.Current = Cursors.Default
+
+                    Return sData
+
+                End If
 
             Catch ex As Exception
                 Log(ex.Message)
                 'Throw ex
-                If x = 9 Then Return ex.Message
+                System.Windows.Forms.Cursor.Current = Cursors.Default
+
+                If x = 3 Then Return ex.Message
             End Try
         Next x
+        System.Windows.Forms.Cursor.Current = Cursors.Default
+    End Function
+    Public Function BoincBlob(sBlobId As String) As String
+        Dim sBlob As String
+        sBlob = BoincHarmonyP2PExecute("select BlobData from attachment where id = '" + sBlobId + "' and deleted=0")
+        If Len(sBlob) > 100 Then
+            Return sBlob
+        Else
+            Return "<ERROR>" + sBlob + "</ERROR>"
+        End If
 
     End Function
-    Public Function GetGridcoinReader(Sql As String) As GridcoinReader
+    Public Function BoincHarmonyP2PExecute(Sql As String)
+        Dim sBoincBytes As String = ""
 
         Try
+            System.Windows.Forms.Cursor.Current = Cursors.WaitCursor
+            Dim sHarmonyP2PServerHost = GetMasterNodeURL()
+            Dim sToken As String = GetSecurityToken(1)
+            sBoincBytes = SQLQuery(sHarmonyP2PServerHost, Sql, Nothing, sToken)
+            System.Windows.Forms.Cursor.Current = Cursors.Default
+        Catch ex As Exception
+            Log("BoincHarmonyP2PExecute:" + Sql + ":" + ex.Message)
+            System.Windows.Forms.Cursor.Current = Cursors.Default
+            If bThrowUIErrors Then Throw ex
+            Return sBoincBytes
+        End Try
+        System.Windows.Forms.Cursor.Current = Cursors.Default
+        Return sBoincBytes
+    End Function
+    Public Function UnCleanBody(sData As String) As String
+        sData = Replace(sData, "[Q]", "'")
+        sData = Replace(sData, "[LESSTHAN]", "<")
+        sData = Replace(sData, "[GREATERTHAN]", ">")
+        sData = Replace(sData, "[DQ]", Chr(34))
+
+
+        Return sData
+
+    End Function
+
+    Public Function GetGridcoinReader(Sql As String, lSource As Long) As GridcoinReader
+
+        Try
+            System.Windows.Forms.Cursor.Current = Cursors.WaitCursor
 
             Dim g As New GridcoinReader
 
             Dim sData As String
             Dim sHost As String
             sHost = GetMasterNodeURL()
+            
+            Dim sToken As String = GetSecurityToken(lSource)
 
-            sData = SQLQuery(sHost, Sql)
+            sData = SQLQuery(sHost, Sql, Nothing, sToken)
+
             Dim vData() As String
             vData = Split(sData, "<ROW>")
             Dim vHeader() As String
@@ -189,14 +277,17 @@ Public Class Sql
                     Dim oValue As Object
                     If sType = "SYSTEM.STRING" Then
                         oValue = vRow(y).ToString()
+                        oValue = UnCleanBody(oValue)
                     ElseIf sType = "SYSTEM.INTEGER" Then
                         oValue = CInt(vRow(y))
                     ElseIf sType = "SYSTEM.DATETIME" Then
                         '12-17-2014 - Add support for dd-mm-yyyy date format for global cultures
-                        Dim global_date_style As System.Globalization.DateTimeStyles
-                        Dim culture As Globalization.CultureInfo = Globalization.CultureInfo.CreateSpecificCulture("en-US")
-                        oValue = Now
-                        Dim good_date As Boolean = DateTime.TryParseExact(vRow(y), "MM/dd/yyyy hh:mm:ss tt", culture, Globalization.DateTimeStyles.None, oValue)
+                        'Dim global_date_style As System.Globalization.DateTimeStyles
+                        'Dim culture As Globalization.CultureInfo = Globalization.CultureInfo.CreateSpecificCulture("en-US")
+                        'oValue = CDate(vRow(y))
+                        oValue = ConvertGlobalDate(vRow(y))
+                        'Dim good_date As Boolean = DateTime.TryParseExact(vRow(y), "MM/dd/yyyy hh:mm:ss tt", culture, Globalization.DateTimeStyles.None, oValue)
+
                     ElseIf sType = "SYSTEM.DECIMAL" Then
                         oValue = CDbl("0" & vRow(y))
 
@@ -208,14 +299,49 @@ Public Class Sql
                 Next
                 g.AddRow(gr)
             Next z
+            System.Windows.Forms.Cursor.Current = Cursors.Default
 
             Return g
         Catch ex As Exception
             Log("GetGridcoinReader:" + Sql + ":" + ex.Message)
+            System.Windows.Forms.Cursor.Current = Cursors.Default
+
 
             If bThrowUIErrors Then Throw ex
         End Try
+        System.Windows.Forms.Cursor.Current = Cursors.Default
 
+
+    End Function
+    Public Function ConvertGlobalDate(ByVal strdate As String) As DateTime
+
+        Dim dtOut As DateTime
+
+        Try
+
+            Dim vD() As String
+            vD = Split(strdate, " ")
+
+            If UBound(vD) < 1 Then Return Now
+
+            Dim vDate() As String
+            vDate = Split(vD(0), "/")
+
+            Dim vHour() As String
+            vHour = Split(vD(1), ":")
+
+            Dim sAM As String = UCase(vD(2))
+            If sAM = "PM" Then vHour(0) = Trim(Val(vHour(0) + 12))
+
+
+            dtOut = New DateTime(Val(vDate(2)), Val(vDate(0)), Val(vDate(1)), Val(vHour(0)), Val(vHour(1)), Val(vHour(2)))
+
+        Catch ex As Exception
+            Log("Invalid date specified " + Trim(strdate))
+            Return Now
+
+        End Try
+        Return dtOut
 
     End Function
 
@@ -329,7 +455,8 @@ Public Class Sql
 
         Try
             Dim gr As New GridcoinReader
-            gr = GetGridcoinReader(sSql)
+            gr = GetGridcoinReader(sSql, 10)
+
             If gr.Rows = 0 Then Exit Function
             o = gr.Value(1, sCol)
             Return o

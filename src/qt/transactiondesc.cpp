@@ -18,13 +18,11 @@ std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype,
 void ExecuteCode();
 extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 
-
 QString ToQString(std::string s)
 {
 	QString str1 = QString::fromUtf8(s.c_str());
 	return str1;
 }
-
 
 
 QString TransactionDesc::FormatTxStatus(const CWalletTx& wtx)
@@ -58,7 +56,7 @@ QString TransactionDesc::FormatTxStatus(const CWalletTx& wtx)
 std::string PubKeyToGRCAddress(const CScript& scriptPubKey)
 {
     txnouttype type;
-    vector<CTxDestination> addresses;
+    std::vector<CTxDestination> addresses;
     int nRequired;
 
     if (!ExtractDestinations(scriptPubKey, type, addresses, nRequired))
@@ -312,10 +310,12 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
         strHTML += GUIUtil::HtmlEscape(wtx.ToString(), true);
 
         CTxDB txdb("r"); // To fetch source txouts
+		//Decrypt any embedded messages
+		std::string eGRCMessage = ExtractXML(wtx.hashBoinc,"<MESSAGE>","</MESSAGE>");
+		std::string sGRCMessage = AdvancedDecrypt(eGRCMessage);
 
-		strHTML += "<br><b>Notes: " + QString::fromStdString(wtx.hashBoinc) + "</b>";
+		strHTML += "<br><b>Notes: " + QString::fromStdString(sGRCMessage) + "</b><p><br>";
 		msHashBoinc += wtx.hashBoinc;
-
         strHTML += "<br><b>" + tr("Inputs") + ":</b>";
         strHTML += "<ul>";
 
@@ -329,8 +329,6 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
                 if (prevout.n < prev.vout.size())
                 {
                     strHTML += "<li>";
-					//					const CTxOut& txDesc = vout;
-
 					
                     const CTxOut &vout = prev.vout[prevout.n];
 					std::string grcFrom = PubKeyToGRCAddress(vout.scriptPubKey);

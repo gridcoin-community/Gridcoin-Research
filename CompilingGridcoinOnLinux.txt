@@ -33,7 +33,11 @@
 
 sudo apt-get install ntp git build-essential libssl-dev libdb-dev libdb++-dev libboost-all-dev libqrencode-dev
 sudo apt-get install qt-sdk qt4-default
- 
+#ATTN: !! New packages required as of 2-4-2015 (Lederstrumpfs additions)
+sudo apt-get install libcurl3-dev
+sudo apt-get install libzip-dev
+
+
 cd ~
 git clone https://github.com/gridcoin/Gridcoin-Research
 #NOTE: If you already have Gridcoin, do this:
@@ -46,7 +50,7 @@ chmod 755 leveldb/build_detect_platform
 make -f makefile.unix USE_UPNP=- 
 
 
-##### End of Step 1: gridcoind will be found in /src directory
+##### End of Step 1: gridcoinresearchd will be found in /src directory
 
 
 
@@ -77,7 +81,7 @@ addnode=node.gridcoin.us
 
 #save and exit.  Leave the lines with ssl in them out if you don't need ssl.
 
-####### Testing Gridcoin gridcoind :
+####### Testing Gridcoin gridcoinresearchd :
 #Let server start
 gridcoinresearchd
 #Should return current difficulty:
@@ -134,6 +138,50 @@ sudo ./bjam install
 
 
 
+
+
+
+##########################################################
+# 02-21-2015 
+# R Halford - Creating a secure environment for production
+#
+##########################################################
+
+su root
+cd Gridcoin-Research/src
+adduser grcuser && usermod -g users grcuser && delgroup grcuser && chmod 0701 /home/grcuser
+mkdir /home/grcuser/bin
+cp gridcoinresearchd /home/grcuser/bin/gridcoinresearchd
+chown -R grcuser:users /home/grcuser/bin
+cd && rm -rf grcuser
+
+Start Gridcoin Research (From User Environment):
+su grcuser
+cd && bin/gridcoinresearchd
+After running the first time you will receive an error instructing you to create a config file called gridcoinresearch.conf
+nano ~/.GridcoinResearch/gridcoinresearch.conf && chmod 0600 ~/.GridcoinResearch/gridcoinresearch.conf
+Add the following to your config file, changing the username and password to something secure:
+daemon=1
+server=1
+email=
+rpcuser=<username>
+rpcpassword=<password>
+addnode=node.gridcoin.us
+addnode=gridcoin.asia
+
+Ctrl-X to exit and save
+
+Run the Daemon
+
+cd /bin
+./gridcoinresearchd
+
+Wait til server starts
+
+gridcoinresearchd getinfo
+Verify connections are > 1, and Blocks > 1
+
+#################################################################
 
 
 

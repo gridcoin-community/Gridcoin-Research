@@ -27,7 +27,7 @@ UNIX_LIBPATHS?= \
    -I"$(CURDIR)" \
    -I"$(DEPSDIR)/include" \
    -I"$(DEPSDIR)/include/boost" \
-  -I"$(DEPSDIR)/boost_1_55_0/boost"
+   -I"$(DEPSDIR)/boost_1_55_0/boost"
  
  
 
@@ -37,7 +37,7 @@ UNIX_LIBPATHS?= \
   -I"a:\deps-master\db" \
   -I"a:\deps-master\include\boost" \
   -I"a:\deps-master\boost" \
-  -I"a:\deps-master\boost_1_55_0"
+  -I"a:\deps-master\boost_1_55_0" 
  
  LIBPATHS?= \
   -L"$(CURDIR)/leveldb" \
@@ -59,15 +59,16 @@ LIBS_OLD= \
 
 LIBS= \
  -l leveldb \
- -l boost_system-mgw46-mt-1_55 \
- -l boost_filesystem-mgw46-mt-1_55 \
+ -l boost_system-mgw49-mt-1_55 \
+ -l boost_filesystem-mgw49-mt-1_55 \
  -l boost_program_options-mgw46-mt-1_55 \
- -l boost_thread-mgw46-mt-1_55 \
- -l boost_chrono-mgw46-mt-1_55 \
+ -l boost_thread-mgw49-mt-1_55 \
+ -l boost_chrono-mgw49-mt-1_55 \
  -l db_cxx \
  -l ssl \
- -l crypto
-
+ -l crypto \
+ -l curl \
+ -l zip
 
 
 DEFS=-DWIN32 -D_WINDOWS -DBOOST_THREAD_USE_LIB -DBOOST_SPIRIT_THREADSAFE
@@ -129,17 +130,8 @@ OBJS= \
     obj/scrypt.o \
     obj/scrypt-x86.o \
     obj/scrypt-x86_64.o \
-    obj/zerocoin/Accumulator.o \
-    obj/zerocoin/AccumulatorProofOfKnowledge.o \
-    obj/zerocoin/Coin.o \
-    obj/zerocoin/CoinSpend.o \
-    obj/zerocoin/Commitment.o \
-    obj/zerocoin/ParamGeneration.o \
-    obj/zerocoin/Params.o \
-    obj/zerocoin/SerialNumberSignatureOfKnowledge.o \
-    obj/zerocoin/SpendMetaData.o \
-    obj/zerocoin/ZeroTest.o \
-    obj/cpid.o
+    obj/cpid.o \
+    obj/upgrader.o
 
 all: gridcoinresearchd.exe
 
@@ -166,9 +158,6 @@ obj/txdb-leveldb.o: leveldb/libleveldb.a
 obj/%.o: %.cpp $(HEADERS)
 	g++ -c $(CFLAGS) -o $@ $<
 
-obj/zerocoin/%.o: zerocoin/%.cpp
-	g++ -c $(CFLAGS) -o $@ $<
-
 obj/scrypt-x86.o: scrypt-x86.S
 	$(CXX) -c $(xCXXFLAGS) -MMD -o $@ $<
 
@@ -181,6 +170,5 @@ gridcoinresearchd.exe: $(OBJS:obj/%=obj/%)
 clean:
 	-del /Q gridcoinresearchd
 	-del /Q obj\*
-	-del /Q obj\zerocoin\*
 	cd leveldb && $(MAKE) TARGET_OS=NATIVE_WINDOWS clean && cd ..
 FORCE:

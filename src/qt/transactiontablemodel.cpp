@@ -7,7 +7,6 @@
 #include "optionsmodel.h"
 #include "addresstablemodel.h"
 #include "bitcoinunits.h"
-
 #include "wallet.h"
 #include "ui_interface.h"
 
@@ -20,6 +19,8 @@
 
 
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
+std::string RoundToString(double d, int place);
+double CoinToDouble(double surrogate);
 
 
 // Amount column is right-aligned it contains numbers
@@ -108,25 +109,7 @@ public:
 
             // Determine whether to show transaction or not
             bool showTransaction = (inWallet && TransactionRecord::showTransaction(mi->second));
-			//11-20-2014 - Remove the Orphan Mined Generated and not Accepted TX
-
-			if (showTransaction)
-            {
-				/*
-                    QList<TransactionRecord> qlDummy = TransactionRecord::decomposeTransaction(wallet, mi->second);
-    	 	  	    if(!qlDummy.isEmpty()) 
-					{
-						    foreach(const TransactionRecord &trDummy, qlDummy)
-							{
-                     				if (trDummy.status.status == TransactionStatus::NotAccepted)
-									{
-										showTransaction = false;
-									}
-							}
-					 }
-					 */
-			}
-             
+			//Remove the Orphan Mined Generated and not Accepted TX
 
 
             if(status == CT_UPDATED)
@@ -298,7 +281,7 @@ QString TransactionTableModel::formatTxStatus(const TransactionRecord *wtx) cons
     QString status;
 
 	// case TransactionStatus::NotAccepted:
-       
+
 
     switch(wtx->status.status)
     {
@@ -360,11 +343,29 @@ QString TransactionTableModel::lookupAddress(const std::string &address, bool to
     {
         description += label + QString(" ");
     }
-    if(label.isEmpty() || walletModel->getOptionsModel()->getDisplayAddresses() || tooltip)
-    {
-        description += QString("(") + QString::fromStdString(address) + QString(")");
+
+	if(label.isEmpty() || walletModel->getOptionsModel()->getDisplayAddresses() || tooltip)		
+    {		
+        description += QString("(") + QString::fromStdString(address) + QString(")");		
     }
+
     return description;
+}
+
+
+
+
+bool IsPoR(double amt)
+{
+	std::string sAmt = RoundToString(amt,8);
+	if (sAmt.length() > 8)
+	{
+		if (sAmt.substr(sAmt.length()-4,4)=="0124")
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
@@ -381,7 +382,7 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
     case TransactionRecord::SendToSelf:
         return tr("Payment to yourself");
     case TransactionRecord::Generated:
-    	if (((wtx->credit + wtx->debit)) >= 25*COIN)
+    	if (((IsPoR(CoinToDouble(wtx->credit + wtx->debit)))))
 			{
 				return tr("Mined - PoR");
 			}
@@ -394,22 +395,27 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
     }
 }
 
+
 QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx) const
 {
-	double reward = (wtx->credit + wtx->debit)/COIN;
+	double reward = CoinToDouble(wtx->credit + wtx->debit);
 	double max = GetMaximumBoincSubsidy(GetAdjustedTime());
-
-    switch(wtx->type)
+	bool is_por = IsPoR(reward);
+	switch(wtx->type)
     {
     case TransactionRecord::Generated:
-      		if (reward >= 25 && reward < 200)
-	   		{
-	   			return QIcon(":/icons/tx_cpumined");
-	   		}
+		    if (wtx->RemoteFlag==1)
+			{
+				return QIcon(":/icons/cpumined_blue");
+			}
 			else if (reward >= max*.90)
 			{
-				return QIcon(":/icons/gold_cpumined");
-	   		}
+					return QIcon(":/icons/gold_cpumined");
+			}
+         	else if (is_por)
+			{
+					return QIcon(":/icons/tx_cpumined");
+			}
 	   		else
 	   		{
 	   			return QIcon(":/icons/tx_mined");
@@ -468,6 +474,9 @@ QVariant TransactionTableModel::addressColor(const TransactionRecord *wtx) const
 
 QString TransactionTableModel::formatTxAmount(const TransactionRecord *wtx, bool showUnconfirmed) const
 {
+
+	//4-3-2015 R Halford; Display the correct Tx Amount; Ensure credits sourced from CryptoLottery display the correct amount (not Block Stake minus Credit):
+
     QString str = BitcoinUnits::format(walletModel->getOptionsModel()->getDisplayUnit(), wtx->credit + wtx->debit);
     if(showUnconfirmed)
     {

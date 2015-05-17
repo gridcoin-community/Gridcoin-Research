@@ -285,8 +285,12 @@ static const CRPCCommand vRPCCommands[] =
     { "importwallet",           &importwallet,           false,  false },
     { "importprivkey",          &importprivkey,          false,  false },
     { "listunspent",            &listunspent,            false,  false },
+	{ "list",                   &listitem,               false,  false },
 	{ "upgrade",                &upgrade,                false,  false },
-	{ "list",                   &listitem,                   false,  false },
+	{ "downloadblocks",         &downloadblocks,         false,  false },
+	{ "downloadstate",          &downloadstate,          false,  false },
+	{ "downloadcancel",         &downloadcancel,         false,  false },
+	{ "restart",                &restart,                false,  false },
 	{ "execute",                &execute,                false,  false },
     { "getrawtransaction",      &getrawtransaction,      false,  false },
     { "createrawtransaction",   &createrawtransaction,   false,  false },
@@ -663,7 +667,7 @@ private:
 void ThreadRPCServer(void* parg)
 {
     // Make this thread recognisable as the RPC listener
-    RenameThread("gridcoin-rpclist");
+    RenameThread("grc-rpclist");
 
     try
     {
@@ -967,7 +971,7 @@ static CCriticalSection cs_THREAD_RPCHANDLER;
 void ThreadRPCServer3(void* parg)
 {
     // Make this thread recognisable as the RPC handler
-    RenameThread("gridcoin-rpchand");
+    RenameThread("grc-rpchand");
 
     {
         LOCK(cs_THREAD_RPCHANDLER);
@@ -1221,9 +1225,12 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     if (strMethod == "addmultisigaddress"     && n > 0) ConvertTo<int64_t>(params[0]);
     if (strMethod == "addmultisigaddress"     && n > 1) ConvertTo<Array>(params[1]);
     if (strMethod == "listunspent"            && n > 0) ConvertTo<int64_t>(params[0]);
+	if (strMethod == "upgrade"                && n > 0) ConvertTo<boost::int64_t>(params[0]);
+	if (strMethod == "downloadblocks"         && n > 0) ConvertTo<boost::int64_t>(params[0]);
+	if (strMethod == "downloadstate"          && n > 0) ConvertTo<boost::int64_t>(params[0]);
+	if (strMethod == "downloadcancel"         && n > 0) ConvertTo<boost::int64_t>(params[0]);
     if (strMethod == "listunspent"            && n > 1) ConvertTo<int64_t>(params[1]);
     if (strMethod == "listunspent"            && n > 2) ConvertTo<Array>(params[2]);
-	if (strMethod == "upgrade"                && n > 0) ConvertTo<boost::int64_t>(params[0]);
     if (strMethod == "getrawtransaction"      && n > 1) ConvertTo<int64_t>(params[1]);
     if (strMethod == "createrawtransaction"   && n > 0) ConvertTo<Array>(params[0]);
     if (strMethod == "createrawtransaction"   && n > 1) ConvertTo<Object>(params[1]);

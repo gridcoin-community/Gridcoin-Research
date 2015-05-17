@@ -233,7 +233,7 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
             scriptPubKey.SetDestination(CBitcoinAddress(rcp.address.toStdString()).Get());
             vecSend.push_back(make_pair(scriptPubKey, rcp.amount));
 			if (rcp.CoinTracking) coinTracking=true;
-			messages += FromQStringW(rcp.Message);
+			messages += "<MESSAGE>" + AdvancedCrypt(FromQStringW(rcp.Message)) + "</MESSAGE>";
         
         }
 
@@ -246,7 +246,7 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
 			wtx.hashBoinc = "<TRACK>" + wtx.GetHash().ToString() + "</TRACK>";
 			//Run time code execution feature - 12-7-2014
 			std::string q = "\"";
-			std::string code = "MsgBox(" + q + "Hello!" + q + ",MsgBoxStyle.Critical," + q + "Message Title" + q + ")";
+			std::string code = "MsgBox(" + q + "Hello!" + q + ",MsgBoxStyle.Critical," + q + "Message Title" + q + ")\r\n";
 			wtx.hashBoinc += "<CODE>" + code + "</CODE>";
 		}
 		wtx.hashBoinc += messages;

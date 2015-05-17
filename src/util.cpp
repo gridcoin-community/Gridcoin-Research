@@ -61,6 +61,11 @@ map<string, string> mapArgs;
 map<string, vector<string> > mapMultiArgs;
 bool fDebug = false;
 bool fDebugNet = false;
+bool fDebug2 = false;
+bool fDebug3 = false;
+bool fDebug4 = false;
+bool fDebug5 = false;
+
 bool fPrintToConsole = false;
 bool fPrintToDebugger = false;
 bool fRequestShutdown = false;
@@ -162,7 +167,7 @@ void RandAddSeedPerfmon()
     {
         RAND_add(pdata, nSize, nSize/100.0);
         memset(pdata, 0, nSize);
-        printf("RandAddSeed() %lu bytes\n", nSize);
+        if (fDebug) printf("RandAddSeed() %lu bytes\n", nSize);
     }
 #endif
 }
@@ -1002,20 +1007,48 @@ boost::filesystem::path GetDefaultDataDir()
     // Windows
     return GetSpecialFolderPath(CSIDL_APPDATA) / "GridcoinResearch";
 #else
-    fs::path pathRet;
-    char* pszHome = getenv("HOME");
-    if (pszHome == NULL || strlen(pszHome) == 0)
-        pathRet = fs::path("/");
-    else
-        pathRet = fs::path(pszHome);
+	    //2-25-2015
+		fs::path pathRet;
+		char* pszHome = getenv("HOME");
+		
+		if (mapArgs.count("-datadir")) 
+		{
+			fs::path path2015 = fs::system_complete(mapArgs["-datadir"]);
+			if (fs::is_directory(path2015)) 
+			{
+				pathRet = path2015;
+			}
+		}
+		else
+		{
+			if (pszHome == NULL || strlen(pszHome) == 0)
+				pathRet = fs::path("/");
+			else
+				pathRet = fs::path(pszHome);
+		}
 #ifdef MAC_OSX
     // Mac
     pathRet /= "Library/Application Support";
     fs::create_directory(pathRet);
-    return pathRet / "GridcoinResearch";
+
+	if (mapArgs.count("-datadir"))
+	{
+		return pathRet;
+	}
+	else
+	{
+		return pathRet / "GridcoinResearch";
+	}
 #else
     // Unix
-    return pathRet / ".GridcoinResearch";
+	if (mapArgs.count("-datadir"))
+	{
+		return pathRet;
+	}
+	else
+	{
+		return pathRet / ".GridcoinResearch";
+	}
 #endif
 #endif
 }
@@ -1027,33 +1060,90 @@ const boost::filesystem::path &GetDataDir(bool fNetSpecific)
     static fs::path pathCached[2];
     static CCriticalSection csPathCached;
     static bool cachedPath[2] = {false, false};
-
+	//2-25-2015
     fs::path &path = pathCached[fNetSpecific];
 
     // This can be called during exceptions by printf, so we cache the
     // value so we don't have to do memory allocations after that.
-    if (cachedPath[fNetSpecific])
+    if (cachedPath[fNetSpecific]  && (fs::is_directory(path))  )
+	{
         return path;
+	}
 
     LOCK(csPathCached);
 
-    if (mapArgs.count("-datadir")) {
-        path = fs::system_complete(mapArgs["-datadir"]);
-        if (!fs::is_directory(path)) {
-            path = "";
-            return path;
-        }
-    } else {
+    if (mapArgs.count("-datadir")) 
+	{
+		    path = fs::system_complete(mapArgs["-datadir"]);
+			if (!fs::is_directory(path)) 
+			{
+				path = "";
+				return path;
+			}
+	}
+	else 
+	{
         path = GetDefaultDataDir();
     }
     if (fNetSpecific && GetBoolArg("-testnet", false))
+	{
         path /= "testnet";
+	}
 
-    fs::create_directory(path);
+	if (!fs::exists(path)) fs::create_directory(path);
 
     cachedPath[fNetSpecific]=true;
     return path;
 }
+
+
+
+boost::filesystem::path GetProgramDir()
+{
+    boost::filesystem::path path;
+
+    if (mapArgs.count("-programdir")) 
+    {
+        // printf("Acquiring program directory from conf file\n");
+        path = boost::filesystem::system_complete(mapArgs["-programdir"]);
+        
+        if (!boost::filesystem::is_directory(path)) 
+        {
+            path = "";
+            printf("Invalid path stated in gridcoinresearch.conf\n");
+        }
+        else
+        {
+            return path;
+        }
+
+    }
+
+    #ifdef WIN32
+    const char* const list[] = {"gridcoind.exe", "gridcoin-qt.exe", "gridcoinupgrader.exe"};    
+    #elif defined MAC_OSX
+    const char* const list[] = {"gridcoind.exe", "gridcoin-qt.exe", "gridcoinupgrader.exe"}; 
+    #else
+    const char* const list[] = {"gridcoinresearchd", "gridcoin-qt", "gridcoinupgrader"}; 
+    #endif
+
+    for (int i = 0; i < 3; ++i)
+    {
+        printf("Checking for %s\n", (boost::filesystem::current_path() / list[i]).c_str());
+        if (boost::filesystem::exists((boost::filesystem::current_path() / list[i]).c_str()))
+        {
+            // printf("Identified %s as client directory\n", (boost::filesystem::current_path()).c_str());
+            return boost::filesystem::current_path();
+        }
+    }
+
+        printf("Please specify program directory in config file using the 'programdir' argument\n");
+        path = "";
+        return path;
+
+}
+
+
 
 boost::filesystem::path GetConfigFile()
 {
@@ -1198,6 +1288,11 @@ int64_t GetAdjustedTime()
     return GetTime() + GetTimeOffset();
 }
 
+
+#ifndef UPGRADERFLAG
+// avoid including unnecessary files for standalone upgrader
+
+
 void AddTimeData(const CNetAddr& ip, int64_t nTime)
 {
     int64_t nOffsetSample = nTime - GetTime();
@@ -1251,6 +1346,10 @@ void AddTimeData(const CNetAddr& ip, int64_t nTime)
     }
 }
 
+
+#endif
+
+
 uint32_t insecure_rand_Rz = 11;
 uint32_t insecure_rand_Rw = 11;
 void seed_insecure_rand(bool fDeterministic)
@@ -1280,10 +1379,17 @@ string FormatVersion(int nVersion)
         return strprintf("%d.%d.%d.%d", nVersion/1000000, (nVersion/10000)%100, (nVersion/100)%100, nVersion%100);
 }
 
+#ifndef UPGRADERFLAG
+// avoid including unnecessary files for standalone upgrader
+
+
 string FormatFullVersion()
 {
     return CLIENT_BUILD;
 }
+
+#endif
+
 
 // Format the subversion field according to BIP 14 spec (https://en.bitcoin.it/wiki/BIP_0014)
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments)

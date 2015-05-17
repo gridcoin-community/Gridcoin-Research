@@ -1,0 +1,160 @@
+﻿Build started 1/31/2015 2:31:33 PM.
+     1>Project "A:\Gridcoin-Research\src\libzip\libzip.vcxproj" on node 2 (Build target(s)).
+     1>ClCompile:
+         c:\Program Files (x86)\Microsoft Visual Studio 10.0\VC\bin\CL.exe /c /ZI /nologo /W2 /WX- /Od /Oy- /D WIN32 /D _DEBUG /D _WINDOWS /D _USRDLL /D LIBZIP_EXPORTS /D _CRT_SECURE_NO_WARNINGS /D _WINDLL /D _UNICODE /D UNICODE /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Debug\\" /Fd"Debug\vc100.pdb" /Gd /TC /analyze- /errorReport:prompt lib\zip_add.c lib\zip_add_dir.c lib\zip_close.c lib\zip_delete.c lib\zip_dirent.c lib\zip_entry_free.c lib\zip_entry_new.c lib\zip_err_str.c lib\zip_error.c lib\zip_error_clear.c lib\zip_error_get.c lib\zip_error_get_sys_type.c lib\zip_error_strerror.c lib\zip_error_to_str.c lib\zip_fclose.c lib\zip_fdopen.c lib\zip_file_error_clear.c lib\zip_file_error_get.c lib\zip_file_get_offset.c lib\zip_file_strerror.c lib\zip_filerange_crc.c lib\zip_fopen.c lib\zip_fopen_encrypted.c lib\zip_fopen_index.c lib\zip_fopen_index_encrypted.c lib\zip_fread.c lib\zip_free.c lib\zip_get_archive_comment.c lib\zip_get_archive_flag.c lib\zip_get_compression_implementation.c lib\zip_get_encryption_implementation.c lib\zip_get_file_comment.c lib\zip_get_file_extra.c lib\zip_get_name.c lib\zip_get_num_entries.c lib\zip_get_num_files.c lib\zip_memdup.c lib\zip_name_locate.c lib\zip_new.c lib\zip_open.c lib\zip_rename.c lib\zip_replace.c lib\zip_set_archive_comment.c lib\zip_set_archive_flag.c lib\zip_set_default_password.c lib\zip_set_file_comment.c lib\zip_set_file_extra.c lib\zip_set_name.c lib\zip_source_buffer.c lib\zip_source_close.c lib\zip_source_crc.c lib\zip_source_deflate.c lib\zip_source_error.c lib\zip_source_file.c lib\zip_source_filep.c lib\zip_source_free.c lib\zip_source_function.c lib\zip_source_layered.c lib\zip_source_open.c lib\zip_source_pkware.c lib\zip_source_pop.c lib\zip_source_read.c lib\zip_source_stat.c lib\zip_source_zip.c lib\zip_stat.c lib\zip_stat_index.c lib\zip_stat_init.c lib\zip_strerror.c lib\zip_unchange.c lib\zip_unchange_all.c lib\zip_unchange_archive.c lib\zip_unchange_data.c
+         zip_unchange_data.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_unchange_archive.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_unchange_all.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_unchange.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_strerror.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_stat_init.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_stat_index.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_stat.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_source_zip.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_source_stat.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_source_read.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_source_pop.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_source_pkware.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_source_open.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_source_layered.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_source_function.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_source_free.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_source_filep.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_source_file.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_source_error.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         Generating Code...
+         Compiling...
+         zip_source_deflate.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_source_crc.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_source_close.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_source_buffer.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_set_name.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_set_file_extra.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_set_file_comment.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_set_default_password.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_set_archive_flag.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_set_archive_comment.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_replace.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_rename.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_open.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_new.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_name_locate.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_memdup.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_get_num_files.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_get_num_entries.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_get_name.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_get_file_extra.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         Generating Code...
+         Compiling...
+         zip_get_file_comment.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_get_encryption_implementation.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_get_compression_implementation.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_get_archive_flag.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_get_archive_comment.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_free.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_fread.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_fopen_index_encrypted.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_fopen_index.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_fopen_encrypted.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_fopen.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_filerange_crc.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_file_strerror.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_file_get_offset.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_file_error_get.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_file_error_clear.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_fdopen.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_fclose.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_error_to_str.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_error_strerror.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         Generating Code...
+         Compiling...
+         zip_error_get_sys_type.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_error_get.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_error_clear.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_error.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_err_str.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_entry_new.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_entry_free.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_dirent.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_delete.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_close.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_add_dir.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         zip_add.c
+     1>a:\gridcoin-research\src\libzip\lib\zipint.h(37): fatal error C1083: Cannot open include file: 'lib/zlib.h': No such file or directory
+         Generating Code...
+     1>Done Building Project "A:\Gridcoin-Research\src\libzip\libzip.vcxproj" (Build target(s)) -- FAILED.
+
+Build FAILED.
+
+Time Elapsed 00:00:01.30

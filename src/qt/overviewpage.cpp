@@ -250,7 +250,7 @@ void OverviewPage::on_btnWebsite_pressed()
 
 void OverviewPage::on_btnBX_pressed()
 {
-    QDesktopServices::openUrl(QUrl("http://cryptoblox.com/chain/Gridcoin"));
+    QDesktopServices::openUrl(QUrl("http://www.cryptoblox.com/coins/GridcoinResearch/"));
 }
 
 

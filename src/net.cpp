@@ -29,37 +29,29 @@ using namespace boost;
 #ifndef QT_GUI
  boost::thread_group threadGroup;
 #endif
-
+extern std::string GetCommandNonce(std::string command);
+extern std::string DefaultOrg();
+extern std::string DefaultOrgKey(int key_length);
+extern std::string DefaultBlockKey(int key_length);
+extern std::string GetBestBlockHash(std::string sCPID);
+extern std::string TestHTTPProtocol(std::string sCPID);
+extern std::string OrgId();
+std::string DefaultBoincHashArgs();
+extern std::string LegacyDefaultBoincHashArgs();
+bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
 extern int nMaxConnections;
 MiningCPID GetNextProject(bool bForce);
 void HarvestCPIDs(bool cleardata);
-
 bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
-
 extern std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache);
-
-
-
-extern void RestartGridcoin10();
-
-
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
-
 std::string cached_boinchash_args = "";
-
 void WriteAppCache(std::string key, std::string value);
-
 std::string RetrieveMd5(std::string s1);
-extern void StartNodeNetworkOnly();
 
 extern std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string urlPage, bool bUseDNS);
-
 std::string msPubKey = "";
-
-
 std::string RoundToString(double d, int place);
-
-
 
 
 static const int MAX_OUTBOUND_CONNECTIONS = 16;
@@ -122,6 +114,24 @@ unsigned short GetListenPort()
 {
     return (unsigned short)(GetArg("-port", GetDefaultPort()));
 }
+
+
+std::string GetCommandNonce(std::string command)
+{
+	//1-11-2015 Message Attacks - Halford
+	std::string sboinchashargs = DefaultOrgKey(12);
+	std::string nonce = RoundToString((double)GetAdjustedTime(),0);
+	std::string org = DefaultOrg();
+	std::string pub_key_prefix = OrgId();
+	std::string pw1 = RetrieveMd5(nonce+","+command+","+org+","+pub_key_prefix+","+sboinchashargs);
+	uint256 boincHashRandNonce = GetRandHash();
+	std::string bhrn = boincHashRandNonce.GetHex();
+	std::string grid_pass_encrypted = AdvancedCryptWithSalt(bhrn+nonce+org+pub_key_prefix,sboinchashargs);
+	std::string sComm = nonce+","+command+","+pw1+","+org+","+pub_key_prefix+","+bhrn+","+grid_pass_encrypted;
+	return sComm;
+}
+
+
 
 void CNode::PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd)
 {
@@ -186,18 +196,18 @@ bool RecvLine2(SOCKET hSocket, string& strLine)
     while (true)
     {
         char c;
-        int nBytes = recv(hSocket, &c, 1, 0);
-
+     	int nBytes = recv(hSocket, &c, 1,  0);
+		
 		clock_t end = clock();
 		double elapsed_secs = double(end - begin) / (CLOCKS_PER_SEC+.01);
-		if (elapsed_secs > 14) return true;
-			
+		if (elapsed_secs > 5) return true;
+	
         if (nBytes > 0)
         {
-            if (c == '\n')
-                continue;
-            if (c == '\r')
-                return true;
+            
+	
+			if (c == '\n')      continue;
+            if (c == '\r')      return true;
 			
             strLine += c;
             if (strLine.size() >= 39000)
@@ -205,9 +215,11 @@ bool RecvLine2(SOCKET hSocket, string& strLine)
         }
         else if (nBytes <= 0)
         {
+	
             boost::this_thread::interruption_point();
             if (nBytes < 0)
             {
+	
                 int nErr = WSAGetLastError();
                 if (nErr == WSAEMSGSIZE)
                     continue;
@@ -216,9 +228,7 @@ bool RecvLine2(SOCKET hSocket, string& strLine)
                     MilliSleep(50);
 					clock_t end = clock();
 					double elapsed_secs = double(end - begin) / (CLOCKS_PER_SEC+.01);
-		
-					if (elapsed_secs > 14) return true;
-		
+					if (elapsed_secs > 5) return true;
                     continue;
                 }
             }
@@ -227,13 +237,12 @@ bool RecvLine2(SOCKET hSocket, string& strLine)
             if (nBytes == 0)
             {
                 // socket closed
-              
                 return false;
             }
             else
             {
                 // socket error
-                int nErr = WSAGetLastError();
+	            int nErr = WSAGetLastError();
                 printf("recv failed: %d\n", nErr);
                 return false;
             }
@@ -253,9 +262,6 @@ bool RecvLine2(SOCKET hSocket, string& strLine)
 }
 
 
-
-
-
 bool RecvLine(SOCKET hSocket, string& strLine)
 {
     strLine = "";
@@ -265,8 +271,9 @@ bool RecvLine(SOCKET hSocket, string& strLine)
         int nBytes = recv(hSocket, &c, 1, 0);
         if (nBytes > 0)
         {
-            if (c == '\n')
+            if (c == '\n') 
                 continue;
+			
             if (c == '\r')
                 return true;
             strLine += c;
@@ -293,7 +300,7 @@ bool RecvLine(SOCKET hSocket, string& strLine)
             if (nBytes == 0)
             {
                 // socket closed
-                printf("socket closed\n");
+                if (fDebug) printf("socket closed\n");
                 return false;
             }
             else
@@ -429,36 +436,12 @@ bool IsReachable(const CNetAddr& addr)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 void StringToChar(std::string s, char* a) 
 {	a=new char[s.size()+1];
 	a[s.size()]=0;
 	memcpy(a,s.c_str(),s.size());
 
 }
-
 
 
 std::string GetHttpContent(const CService& addrConnect, std::string getdata)
@@ -474,35 +457,27 @@ std::string GetHttpContent(const CService& addrConnect, std::string getdata)
         return "GetHttpContent() : connection to address failed";
 	}
 
-	//printf("Trying %s",getdata.c_str());
+	if (fDebug) printf("Trying %s",getdata.c_str());
 
     send(hSocket, pszGet, strlen(pszGet), MSG_NOSIGNAL);
-
     string strLine;
 	std::string strOut="null";
-
 	MilliSleep(133);
 	double timeout = 0;
-
-
 	clock_t begin = clock();
-
-	
     while (RecvLine2(hSocket, strLine))
     {
-
 	            strOut = strOut + strLine + "\r\n";
-				MilliSleep(155);
-				timeout=timeout+222;
+				MilliSleep(100);
+				timeout=timeout+100;
   			    clock_t end = clock();
 				double elapsed_secs = double(end - begin) / (CLOCKS_PER_SEC+.01);
-				if (timeout > 14000) break;
-				if (elapsed_secs > 14) break;
+				if (timeout > 10000) break;
+				if (elapsed_secs > 10) break;
 			    if (strLine.find("<END>") != string::npos) break;
-
+				if (strLine.find("</html>") != string::npos) break;
     }
     closesocket(hSocket);
-    
 	return strOut;
 	}
     catch (std::exception &e) 
@@ -516,9 +491,6 @@ std::string GetHttpContent(const CService& addrConnect, std::string getdata)
 	}
 
 }
-
-
-
 
 
 std::string GridHTTPPost(std::string url, std::string hostheader, const string& strMsg, const map<string,string>& mapRequestHeaders)
@@ -536,46 +508,56 @@ std::string GridHTTPPost(std::string url, std::string hostheader, const string& 
     return s.str();
 }
 
-std::string GetPoolKey(std::string sMiningProject,double dMiningRAC,std::string ENCBoincpublickey,std::string xcpid, std::string messagetype, 
-	uint256 blockhash, double subsidy, double nonce, int height, int blocktype)
+std::string GetBestBlockHash(std::string sCPID)
 {
-	//ToDo Pass in CPU or GPU block type, and Miner-Agent
-	std::string key = "<ADDRESS>";
-	std::string keystop = "</ADDRESS>";
+	std::string key = "<ADDR>";
+	std::string keystop = "</ADDR>";
 	if (fTestNet) 
 	{
 			key = "<ADDRESSTESTNET>";
 			keystop = "</ADDRESSTESTNET>";
 	}
-	if (dMiningRAC < 100 || sMiningProject=="" || xcpid=="") return "";
-	std::string key_copy = ENCBoincpublickey;
-
-	std::string sboincpubkey = AdvancedDecrypt(key_copy);
-
-	std::string boincauth = sMiningProject + "<;>" + RoundToString(dMiningRAC,0) + "<;>" + sboincpubkey + "<;>" + xcpid + "<;>" 
-		+ RoundToString(subsidy,2) + "<;>" + RoundToString(nonce,0) + "<;>" + RoundToString((double)height,0) + "<;>" + RoundToString((double)blocktype,0);
-	std::string http = GridcoinHttpPost(messagetype,boincauth,"GetPoolKey.aspx",true);
+	std::string boincauth = sCPID + "<;>" + hashBestChain.ToString();
+	std::string http = GridcoinHttpPost("hashbestchain",boincauth,"GetBestBlockHash.aspx",true);
+	if (fDebug) printf("Resp %s",http.c_str());
 	msPubKey = ExtractXML(http,key,keystop);
-			
-
 	return msPubKey;
 }
 
+
+std::string TestHTTPProtocol(std::string sCPID)
+{
+	std::string key = "<ADDR>";
+	std::string keystop = "</ADDR>";
+	if (fTestNet) 
+	{
+			key = "<ADDRESSTESTNET>";
+			keystop = "</ADDRESSTESTNET>";
+	}
+	std::string boincauth = sCPID + "<;>" + hashBestChain.ToString();
+	std::string http = GridcoinHttpPost("hashbestchain",boincauth,"Test404Page.aspx",true);
+	if (fDebug) printf("Resp %s",http.c_str());
+	msPubKey = ExtractXML(http,key,keystop);
+	return msPubKey;
+}
+
+
 std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string urlPage, bool bUseDNS)
 {
-	//6-11-2014
-
+	
 	try 
 	{
 	// HTTP basic authentication
-    std::string strAuth1 = mapArgs["-pooluser"];
-	std::string strAuth2 = mapArgs["-poolpassword"];
-	std::string strAuth3 = mapArgs["-miner"];
+    std::string strAuth1 = GlobalCPUMiningCPID.cpidv2;
+	std::string strAuth2 = hashBestChain.ToString();
+	
     map<string, string> mapRequestHeaders;
-    mapRequestHeaders["Miner"] = strAuth1+"<;>"+strAuth2+"<;>"+strAuth3 + "<;>" + boincauth + "<;>" + msg;
+    mapRequestHeaders["Miner"] = strAuth1+"<;>"+strAuth2+"<;>"+ boincauth + "<;>" + msg;
 	CService addrConnect;
 	std::string ip = "127.0.0.1";
 	std::string poolFullURL = mapArgs["-poolurl"];  
+	poolFullURL = "http://pool.gridcoin.us";
+
 	if (poolFullURL=="")  return "ERR:Pool URL missing";
 	std::string domain = "";
 	if (poolFullURL.find("https://") != string::npos) 
@@ -589,7 +571,7 @@ std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string
 
 	if (domain=="") 
 	{
-		printf("Pool Domain Missing \r\n");
+		if (fDebug)		printf("Pool Domain Missing \r\n");
 		return "ERR:Pool Domain missing";
 	}
     int port = 80;
@@ -601,7 +583,7 @@ std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string
 		if (addrIP.IsValid()) 
 		{
 				addrConnect = addrIP;
-				//printf("Domain Post IP valid\r\n %s",domain.c_str());
+				if (fDebug) printf("Domain Post IP valid\r\n %s",domain.c_str());
 		}
 	} 
 	else
@@ -609,9 +591,9 @@ std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string
   		addrConnect = CService(ip, port); 
 	}
 	std::string strPost = GridHTTPPost(urlPage, domain, msg, mapRequestHeaders);
-    //printf("querying getdata\r\n  %s \r\n",strPost.c_str());
+    if (fDebug) printf("querying getdata\r\n  %s \r\n",strPost.c_str());
 	std::string http = GetHttpContent(addrConnect, strPost);
-	//printf("http:\r\n  %s\r\n",http.c_str());
+	if (fDebug) printf("http:\r\n  %s\r\n",http.c_str());
 	return http;
 	
 	}
@@ -633,10 +615,8 @@ std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string
 std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache)
 {
 
-
 	try 
 	{
-	
 		 if (cpid=="" || cpid.length() < 5)
 		 {
 				if (fDebug) printf("Blank cpid supplied");
@@ -687,8 +667,7 @@ std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache)
   				     "User-Agent: Mozilla/4.0\r\n"
                      "\r\n";
              
-        //		printf("querying getdata %s",getdata.c_str());
-		std::string http = GetHttpContent(addrConnect,getdata);
+      	std::string http = GetHttpContent(addrConnect,getdata);
 		std::string resultset = "" + http;
 		c.initialized=true;
 		c.xml = resultset;
@@ -709,24 +688,6 @@ std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache)
 	}
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -840,7 +801,7 @@ bool GetMyExternalIP(CNetAddr& ipRet)
 void ThreadGetMyExternalIP(void* parg)
 {
     // Make this thread recognisable as the external IP detection thread
-    RenameThread("gridcoin-ext-ip");
+    RenameThread("grc-ext-ip");
 
     CNetAddr addrLocalHost;
     if (GetMyExternalIP(addrLocalHost))
@@ -849,7 +810,6 @@ void ThreadGetMyExternalIP(void* parg)
         AddLocal(addrLocalHost, LOCAL_HTTP);
     }
 }
-
 
 
 
@@ -912,19 +872,13 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
     }
 
 
-    /// debug print
-    if (false) printf("trying connection %s lastseen=%.1fhrs\n",        pszDest ? pszDest : addrConnect.ToString().c_str(),        pszDest ? 0 : (double)(GetAdjustedTime() - addrConnect.nTime)/3600.0);
-
-
     // Connect
     SOCKET hSocket;
     if (pszDest ? ConnectSocketByName(addrConnect, hSocket, pszDest, GetDefaultPort()) : ConnectSocket(addrConnect, hSocket))
     {
         addrman.Attempt(addrConnect);
-
         /// debug print
         if (fDebug) printf("connected %s\n", pszDest ? pszDest : addrConnect.ToString().c_str());
-
         // Set to non-blocking
 #ifdef WIN32
         u_long nOne = 1;
@@ -944,7 +898,7 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
             vNodes.push_back(pnode);
         }
 
-        pnode->nTimeConnected = GetTime();
+        pnode->nTimeConnected = GetAdjustedTime();
         return pnode;
     }
     else
@@ -969,77 +923,85 @@ void CNode::CloseSocketDisconnect()
     }
 }
 
+bool IsWindows()
+{
+	return BoincHashMerkleRootNew.substr(0,4) == "Elim" ?  true : false;
+}
+
+
+std::string LegacyDefaultBoincHashArgs()
+{
+	   std::string boinc2 = BoincHashMerkleRootNew;
+	   return boinc2;
+}
 
 
 std::string DefaultBoincHashArgs()
 {
 	// (Gridcoin), add support for ProofOfBoinc Node Relay support:
-	if (cached_boinchash_args != "") return cached_boinchash_args;
-	std::string boinc1 = GetArg("-boinchash", "boinchashargs");
-    std::string boinc2 = BoincHashMerkleRootNew;
-	if (boinc1 != "boinchashargs")
-	{
-		cached_boinchash_args = boinc1;
-		return boinc1;
-	}
-	cached_boinchash_args = boinc2;
-	return boinc2;
+	std::string bha = GetArg("-boinchash", "boinchashargs");
+	if (bha=="boinchashargs") bha = BoincHashWindowsMerkleRootNew;
+	std::string org = DefaultOrg();
+	std::string ClientPublicKey = AdvancedDecryptWithSalt(bha,org);
+	return ClientPublicKey;
 }
 
+std::string OrgId()
+{
+	std::string bha = GetArg("-boinchash", "boinchashargs");
+	if (bha=="boinchashargs") bha = BoincHashWindowsMerkleRootNew;
+	std::string org = DefaultOrg();
+	if (bha.length() > 8) org += "-" + bha.substr(0,8);
+	std::string ClientPublicKey = AdvancedDecryptWithSalt(bha,org);
+	if (ClientPublicKey.length() > 8) org += "-" + ClientPublicKey.substr(0,5);
+	return org;
+}
+
+
+std::string DefaultOrg()
+{
+	std::string org = GetArg("-org", "windows");
+	return org;
+}
+
+
+std::string DefaultOrgKey(int key_length)
+{
+	std::string dok = DefaultBoincHashArgs();
+	if ((int)dok.length() >= key_length) return dok.substr(0,key_length);
+	return "";
+}
+
+
+std::string DefaultBlockKey(int key_length)
+{
+	std::string bha = GetArg("-boinchash", "boinchashargs");
+	if (bha=="boinchashargs") bha = BoincHashWindowsMerkleRootNew;
+	return (int)bha.length() >= key_length ? bha.substr(0,key_length) : "";
+}
 
 
 void CNode::PushVersion()
 {
     /// when NTP implemented, change to just nTime = GetAdjustedTime()
-    int64_t nTime = (fInbound ? GetAdjustedTime() : GetTime());
+    int64_t nTime = (fInbound ? GetAdjustedTime() : GetAdjustedTime());
     CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(CService("0.0.0.0",0)));
     CAddress addrMe = GetLocalAddress(&addr);
     RAND_bytes((unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce));
-    if (fDebug) printf("send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s\n", PROTOCOL_VERSION, nBestHeight, addrMe.ToString().c_str(), addrYou.ToString().c_str(), addr.ToString().c_str());
+    if (fDebug) printf("send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s\n", 
+		PROTOCOL_VERSION, nBestHeight, addrMe.ToString().c_str(), addrYou.ToString().c_str(), addr.ToString().c_str());
+
 
 	std::string sboinchashargs = DefaultBoincHashArgs();
 	uint256 boincHashRandNonce = GetRandHash();
-
-	bool checksum = false;
-	if (sboinchashargs.length() > 5)
-	{
-		if (sboinchashargs.substr(0,4) == "Elim") checksum=true;
-	}
-
-
-	if (!checksum && (GlobalCPUMiningCPID.cpid.empty() || GlobalCPUMiningCPID.encboincpublickey.empty()))
-	{
-		    HarvestCPIDs(false);
-			GetNextProject(true);
-	}
-
-
 	std::string nonce = boincHashRandNonce.GetHex();
 	std::string pw1 = RetrieveMd5(nonce+","+sboinchashargs);
-	
-	std::string encbpk = 	GlobalCPUMiningCPID.encboincpublickey;
-	std::string mycpid =    GlobalCPUMiningCPID.cpid;
-
-
-	
-	if (!checksum)
-	{
-		printf("^x.");
-		if (mycpid == "INVESTOR" || !IsCPIDValid_Retired(mycpid,encbpk))
-		{
-			printf("To run a compiled version of gridcoin you must have a valid cpid, rac > 100, join team Gridcoin and set your email address properly. CPID: %s, EncBPK %s \r\n",mycpid.c_str(),encbpk.c_str());
-			MilliSleep(5000);
-			GetNextProject(true);
-			encbpk = 	GlobalCPUMiningCPID.encboincpublickey;
-			mycpid =    GlobalCPUMiningCPID.cpid;
-		}
-	}
-
-    PushMessage("version", PROTOCOL_VERSION, nonce, pw1, 
-				mycpid, encbpk, nLocalServices, nTime, addrYou, addrMe,
+	std::string mycpid = GlobalCPUMiningCPID.cpidv2;
+	std::string acid = GetCommandNonce("aries");
+    PushMessage("aries", PROTOCOL_VERSION, nonce, pw1, 
+				mycpid, mycpid, acid, nLocalServices, nTime, addrYou, addrMe,
                 nLocalHostNonce, FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()), nBestHeight);
 }
-
 
 
 
@@ -1061,7 +1023,7 @@ bool CNode::IsBanned(CNetAddr ip)
         if (i != setBanned.end())
         {
             int64_t t = (*i).second;
-            if (GetTime() < t)
+            if (GetAdjustedTime() < t)
                 fResult = true;
         }
     }
@@ -1079,8 +1041,8 @@ bool CNode::Misbehaving(int howmuch)
     nMisbehavior += howmuch;
     if (nMisbehavior >= GetArg("-banscore", 100))
     {
-        int64_t banTime = GetTime()+GetArg("-bantime", 60*60*24);  // Default 24-hour ban
-        printf("Misbehaving: %s (%d -> %d) DISCONNECTING\n", addr.ToString().c_str(), nMisbehavior-howmuch, nMisbehavior);
+        int64_t banTime = GetAdjustedTime()+GetArg("-bantime", 60*60*24);  // Default 24-hour ban
+        if (fDebug) printf("Misbehaving: %s (%d -> %d) DISCONNECTING\n", addr.ToString().c_str(), nMisbehavior-howmuch, nMisbehavior);
         {
             LOCK(cs_setBanned);
             if (setBanned[addr] < banTime)
@@ -1089,7 +1051,7 @@ bool CNode::Misbehaving(int howmuch)
         CloseSocketDisconnect();
         return true;
     } else
-        printf("Misbehaving: %s (%d -> %d)\n", addr.ToString().c_str(), nMisbehavior-howmuch, nMisbehavior);
+        if (fDebug) printf("Misbehaving: %s (%d -> %d)\n", addr.ToString().c_str(), nMisbehavior-howmuch, nMisbehavior);
     return false;
 }
 
@@ -1107,7 +1069,7 @@ void CNode::copyStats(CNodeStats &stats)
     X(fInbound);
     X(nStartingHeight);
     X(nMisbehavior);
-
+	//X(securityversion);
     // It is common for nodes with good ping times to suddenly become lagged,
     // due to a new block arriving or other large transfer.
     // Merely reporting pingtime might fool the caller into thinking the node was still responsive,
@@ -1206,23 +1168,18 @@ int CNetMessage::readData(const char *pch, unsigned int nBytes)
 
 
 
-
-
-
-
-
-
 // requires LOCK(cs_vSend)
 void SocketSendData(CNode *pnode)
 {
     std::deque<CSerializeData>::iterator it = pnode->vSendMsg.begin();
 
-    while (it != pnode->vSendMsg.end()) {
+    while (it != pnode->vSendMsg.end()) 
+	{
         const CSerializeData &data = *it;
         assert(data.size() > pnode->nSendOffset);
         int nBytes = send(pnode->hSocket, &data[pnode->nSendOffset], data.size() - pnode->nSendOffset, MSG_NOSIGNAL | MSG_DONTWAIT);
         if (nBytes > 0) {
-            pnode->nLastSend = GetTime();
+            pnode->nLastSend = GetAdjustedTime();
             pnode->nSendOffset += nBytes;
             if (pnode->nSendOffset == data.size()) {
                 pnode->nSendOffset = 0;
@@ -1232,7 +1189,9 @@ void SocketSendData(CNode *pnode)
                 // could not send full message; stop sending more
                 break;
             }
-        } else {
+		}
+		else
+		{
             if (nBytes < 0) {
                 // error
                 int nErr = WSAGetLastError();
@@ -1257,7 +1216,7 @@ void SocketSendData(CNode *pnode)
 void ThreadSocketHandler(void* parg)
 {
     // Make this thread recognisable as the networking thread
-    RenameThread("gridcoin-net");
+    RenameThread("grc-net");
 
     try
     {
@@ -1444,13 +1403,13 @@ void ThreadSocketHandler2(void* parg)
                 if (nErr != WSAEWOULDBLOCK)
                     printf("socket error accept failed: %d\n", nErr);
             }
-            else if (nInbound >= GetArg("-maxconnections", 125) - MAX_OUTBOUND_CONNECTIONS)
+            else if (nInbound >= GetArg("-maxconnections", 250) - MAX_OUTBOUND_CONNECTIONS)
             {
                 closesocket(hSocket);
             }
             else if (CNode::IsBanned(addr))
             {
-                printf("connection from %s dropped (banned)\n", addr.ToString().c_str());
+                if (fDebug2) printf("connection from %s dropped (banned)\n", addr.ToString().c_str());
                 closesocket(hSocket);
             }
             else
@@ -1504,13 +1463,15 @@ void ThreadSocketHandler2(void* parg)
                         {
                             if (!pnode->ReceiveMsgBytes(pchBuf, nBytes))
                                 pnode->CloseSocketDisconnect();
-                            pnode->nLastRecv = GetTime();
+                            pnode->nLastRecv = GetAdjustedTime();
                         }
                         else if (nBytes == 0)
                         {
                             // socket closed gracefully
                             if (!pnode->fDisconnect)
-                                printf("socket closed\n");
+							{
+                              if (fDebug)   printf("socket closed\n");
+							}
                             pnode->CloseSocketDisconnect();
                         }
                         else if (nBytes < 0)
@@ -1520,7 +1481,9 @@ void ThreadSocketHandler2(void* parg)
                             if (nErr != WSAEWOULDBLOCK && nErr != WSAEMSGSIZE && nErr != WSAEINTR && nErr != WSAEINPROGRESS)
                             {
                                 if (!pnode->fDisconnect)
-                                    printf("socket recv error %d\n", nErr);
+								{
+                                   if (fDebug)  printf("socket recv error %d\n", nErr);
+								}
                                 pnode->CloseSocketDisconnect();
                             }
                         }
@@ -1543,12 +1506,24 @@ void ThreadSocketHandler2(void* parg)
             //
             // Inactivity checking
             //
-            int64_t nTime = GetTime();
-            if (nTime - pnode->nTimeConnected > 60)
+            int64_t nTime = GetAdjustedTime();
+			//1-1-2015
+			if (nTime - pnode->nTimeConnected > 10)
             {
                 if (pnode->nLastRecv == 0 || pnode->nLastSend == 0)
                 {
-                    if (fDebug) printf("socket no message in first 60 seconds, %d %d\n", pnode->nLastRecv != 0, pnode->nLastSend != 0);
+                    if (fDebug) printf("socket no message in first 24 seconds, %d %d\n", pnode->nLastRecv != 0, pnode->nLastSend != 0);
+					pnode->Misbehaving(10);
+                    pnode->fDisconnect = true;
+                }
+			 }
+           
+
+            if (nTime - pnode->nTimeConnected > 24)
+            {
+                if (pnode->nLastRecv == 0 || pnode->nLastSend == 0)
+                {
+                    if (fDebug) printf("socket no message in first 24 seconds, %d %d\n", pnode->nLastRecv != 0, pnode->nLastSend != 0);
                     pnode->fDisconnect = true;
                 }
                 else if (nTime - pnode->nLastSend > TIMEOUT_INTERVAL)
@@ -1590,7 +1565,7 @@ void ThreadSocketHandler2(void* parg)
 void ThreadMapPort(void* parg)
 {
     // Make this thread recognisable as the UPnP thread
-    RenameThread("gridcoin-UPnP");
+    RenameThread("grc-UPnP");
 
     try
     {
@@ -1610,7 +1585,7 @@ void ThreadMapPort(void* parg)
 
 void ThreadMapPort2(void* parg)
 {
-    printf("ThreadMapPort started\n");
+    if (fDebug) printf("ThreadMapPort started\n");
 
     std::string port = strprintf("%u", GetListenPort());
     const char * multicastif = 0;
@@ -1742,14 +1717,14 @@ void MapPort()
 // The second name should resolve to a list of seed addresses.
 static const char *strDNSSeed[][2] = {
     {"dnsseed.gridcoin.us", "supernode.gridcoin.us"},
-    {"www.pgp.mx", ""},
+    {"gridcoin.asia", ""},
     {"", ""},
 };
 
 void ThreadDNSAddressSeed(void* parg)
 {
     // Make this thread recognisable as the DNS seeding thread
-    RenameThread("gridcoin-dnsseed");
+    RenameThread("grc-dnsseed");
 
     try
     {
@@ -1764,7 +1739,7 @@ void ThreadDNSAddressSeed(void* parg)
         vnThreadsRunning[THREAD_DNSSEED]--;
         throw; // support pthread_cancel()
     }
-    printf("ThreadDNSAddressSeed exited\n");
+    if (fDebug) printf("ThreadDNSAddressSeed exited\n");
 }
 
 void ThreadDNSAddressSeed2(void* parg)
@@ -1788,7 +1763,7 @@ void ThreadDNSAddressSeed2(void* parg)
                     {
                         int nOneDay = 24*3600;
                         CAddress addr = CAddress(CService(ip, GetDefaultPort()));
-                        addr.nTime = GetTime() - 3*nOneDay - GetRand(4*nOneDay); // use a random age between 3 and 7 days old
+                        addr.nTime = GetAdjustedTime() - 3*nOneDay - GetRand(4*nOneDay); // use a random age between 3 and 7 days old
                         vAdd.push_back(addr);
                         found++;
                     }
@@ -1800,11 +1775,6 @@ void ThreadDNSAddressSeed2(void* parg)
 
     if (fDebug) printf("%d addresses found from DNS seeds\n", found);
 }
-
-
-
-
-
 
 
 
@@ -1851,7 +1821,7 @@ void ThreadDumpAddress2(void* parg)
 void ThreadDumpAddress(void* parg)
 {
     // Make this thread recognisable as the address dumping thread
-    RenameThread("gridcoin-adrdump");
+    RenameThread("grc-adrdump");
 
     try
     {
@@ -1866,7 +1836,7 @@ void ThreadDumpAddress(void* parg)
 void ThreadOpenConnections(void* parg)
 {
     // Make this thread recognisable as the connection opening thread
-    RenameThread("gridcoin-opencon");
+    RenameThread("grc-opencon");
 
     try
     {
@@ -1929,7 +1899,7 @@ void static ThreadStakeMiner(void* parg)
 
 void ThreadOpenConnections2(void* parg)
 {
-    printf("ThreadOpenConnections started\n");
+    if (fDebug) printf("ThreadOpenConnections started\n");
 
     // Connect to specific addresses
     if (mapArgs.count("-connect") && mapMultiArgs["-connect"].size() > 0)
@@ -1953,7 +1923,7 @@ void ThreadOpenConnections2(void* parg)
     }
 
     // Initiate network connections
-    int64_t nStart = GetTime();
+    int64_t nStart = GetAdjustedTime();
     while (true)
     {
         ProcessOneShot();
@@ -1964,7 +1934,6 @@ void ThreadOpenConnections2(void* parg)
         if (fShutdown)
             return;
 
-
         vnThreadsRunning[THREAD_OPENCONNECTIONS]--;
         CSemaphoreGrant grant(*semOutbound);
         vnThreadsRunning[THREAD_OPENCONNECTIONS]++;
@@ -1972,7 +1941,7 @@ void ThreadOpenConnections2(void* parg)
             return;
 
         // Add seed nodes if IRC isn't working
-        if (addrman.size()==0 && (GetTime() - nStart > 60) && !fTestNet)
+        if (addrman.size()==0 && (GetAdjustedTime() - nStart > 60) && !fTestNet)
         {
             std::vector<CAddress> vAdd;
             for (unsigned int i = 0; i < ARRAYLEN(pnSeed); i++)
@@ -1985,7 +1954,7 @@ void ThreadOpenConnections2(void* parg)
                 struct in_addr ip;
                 memcpy(&ip, &pnSeed[i], sizeof(ip));
                 CAddress addr(CService(ip, GetDefaultPort()));
-                addr.nTime = GetTime()-GetRand(nOneWeek)-nOneWeek;
+                addr.nTime = GetAdjustedTime()-GetRand(nOneWeek)-nOneWeek;
                 vAdd.push_back(addr);
             }
             addrman.Add(vAdd, CNetAddr("127.0.0.1"));
@@ -2052,7 +2021,7 @@ void ThreadOpenConnections2(void* parg)
 void ThreadOpenAddedConnections(void* parg)
 {
     // Make this thread recognisable as the connection opening thread
-    RenameThread("gridcoin-opencon");
+    RenameThread("grc-opencon");
 
     try
     {
@@ -2072,7 +2041,7 @@ void ThreadOpenAddedConnections(void* parg)
 
 void ThreadOpenAddedConnections2(void* parg)
 {
-    printf("ThreadOpenAddedConnections started\n");
+    if (fDebug) printf("ThreadOpenAddedConnections started\n");
 
     if (mapArgs.count("-addnode") == 0)
         return;
@@ -2176,14 +2145,10 @@ bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOu
 
 
 
-
-
-
-
 void ThreadMessageHandler(void* parg)
 {
     // Make this thread recognisable as the message handling thread
-    RenameThread("gridcoin-msghand");
+    RenameThread("grc-msghand");
 
     try
     {
@@ -2203,7 +2168,7 @@ void ThreadMessageHandler(void* parg)
 
 void ThreadMessageHandler2(void* parg)
 {
-    printf("ThreadMessageHandler started\n");
+    if (fDebug) printf("ThreadMessageHandler started\n");
     SetThreadPriority(THREAD_PRIORITY_BELOW_NORMAL);
     while (!fShutdown)
     {
@@ -2262,8 +2227,6 @@ void ThreadMessageHandler2(void* parg)
             return;
     }
 }
-
-
 
 
 
@@ -2355,7 +2318,7 @@ bool BindListenPort(const CService &addrBind, string& strError)
         printf("%s\n", strError.c_str());
         return false;
     }
-    printf("Bound to %s\n", addrBind.ToString().c_str());
+    if (fDebug) printf("Bound to %s\n", addrBind.ToString().c_str());
 
     // Listen for incoming connections
     if (listen(hListenSocket, SOMAXCONN) == SOCKET_ERROR)
@@ -2432,99 +2395,10 @@ void static Discover()
 
 
 
-
-
-
-
-
-
-
-void StartNodeNetworkOnly()
-{
-
-
- // Make this thread recognisable as the startup thread
-    RenameThread("gridcoin-start");
-
-    if (semOutbound == NULL) {
-        // initialize semaphore
-        int nMaxOutbound = min(MAX_OUTBOUND_CONNECTIONS, (int)GetArg("-maxconnections", 125));
-        semOutbound = new CSemaphore(nMaxOutbound);
-    }
-
-    if (pnodeLocalHost == NULL)
-        pnodeLocalHost = new CNode(INVALID_SOCKET, CAddress(CService("127.0.0.1", 0), nLocalServices));
-
-    Discover();
-
-    //
-    // Start threads
-    //
-
-    if (!GetBoolArg("-dnsseed", true))
-        printf("DNS seeding disabled\n");
-    else
-        if (!NewThread(ThreadDNSAddressSeed, NULL))
-            printf("Error: NewThread(ThreadDNSAddressSeed) failed\n");
-
-    // Map ports with UPnP
-    if (fUseUPnP)
-        MapPort();
-
-    // Get addresses from IRC and advertise ours
-    if (!NewThread(ThreadIRCSeed, NULL))
-        printf("Error: NewThread(ThreadIRCSeed) failed\n");
-
-    // Send and receive from sockets, accept connections
-    if (!NewThread(ThreadSocketHandler, NULL))
-        printf("Error: NewThread(ThreadSocketHandler) failed\n");
-
-    // Initiate outbound connections from -addnode
-    if (!NewThread(ThreadOpenAddedConnections, NULL))
-        printf("Error: NewThread(ThreadOpenAddedConnections) failed\n");
-
-    // Initiate outbound connections
-    if (!NewThread(ThreadOpenConnections, NULL))
-        printf("Error: NewThread(ThreadOpenConnections) failed\n");
-
-    // Process messages
-    if (!NewThread(ThreadMessageHandler, NULL))
-        printf("Error: NewThread(ThreadMessageHandler) failed\n");
-
-    // Dump network addresses
-    if (!NewThread(ThreadDumpAddress, NULL))
-        printf("Error; NewThread(ThreadDumpAddress) failed\n");
-
-    // Mine proof-of-stake blocks in the background
-    if (!GetBoolArg("-staking", true))
-        printf("Staking disabled\n");
-    else
-        if (!NewThread(ThreadStakeMiner, pwalletMain))
-            printf("Error: NewThread(ThreadStakeMiner) failed\n");
-
-}
-
-
-
-
-
-
-
-void RestartGridcoin10()
-{
-	bool OK = StopNode();
-	//void* parg;
-	StartNode(NULL);
-}
-
-
-
-
-
 void StartNode(void* parg)
 {
     // Make this thread recognisable as the startup thread
-    RenameThread("gridcoin-start");
+    RenameThread("grc-start");
 	fShutdown = false;
     
     if (semOutbound == NULL) {
@@ -2589,7 +2463,7 @@ bool StopNode()
     printf("StopNode()\n");
     fShutdown = true;
     nTransactionsUpdated++;
-    int64_t nStart = GetTime();
+    int64_t nStart = GetAdjustedTime();
     if (semOutbound)
         for (int i=0; i<MAX_OUTBOUND_CONNECTIONS; i++)
             semOutbound->post();
@@ -2600,7 +2474,7 @@ bool StopNode()
             nThreadsRunning += vnThreadsRunning[n];
         if (nThreadsRunning == 0)
             break;
-        if (GetTime() - nStart > 20)
+        if (GetAdjustedTime() - nStart > 20)
             break;
         MilliSleep(20);
     } while(true);
@@ -2662,7 +2536,7 @@ void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataSt
     {
         LOCK(cs_mapRelay);
         // Expire old relay messages
-        while (!vRelayExpiration.empty() && vRelayExpiration.front().first < GetTime())
+        while (!vRelayExpiration.empty() && vRelayExpiration.front().first < GetAdjustedTime())
         {
             mapRelay.erase(vRelayExpiration.front().second);
             vRelayExpiration.pop_front();
@@ -2670,8 +2544,9 @@ void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataSt
 
         // Save original serialized message so newer versions are preserved
         mapRelay.insert(std::make_pair(inv, ss));
-        vRelayExpiration.push_back(std::make_pair(GetTime() + 15 * 60, inv));
+        vRelayExpiration.push_back(std::make_pair(GetAdjustedTime() + 15 * 60, inv));
     }
 
     RelayInventory(inv);
 }
+

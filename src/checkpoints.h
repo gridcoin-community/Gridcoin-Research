@@ -18,6 +18,7 @@ class uint256;
 class CBlockIndex;
 class CSyncCheckpoint;
 
+
 /** Block-chain checkpoints are compiled-in sanity checks.
  * They are updated every release or three.
  */

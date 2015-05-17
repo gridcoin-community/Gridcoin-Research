@@ -21,6 +21,10 @@
 #include "bitcoingui.h"
 #include "transactiontablemodel.h"
 #include "addressbookpage.h"
+
+#include "upgradedialog.h"
+#include "upgrader.h"
+
 #include "sendcoinsdialog.h"
 #include "signverifymessagedialog.h"
 #include "optionsdialog.h"
@@ -77,6 +81,7 @@
 #include "bitcoinrpc.h"
 
 #include <iostream>
+#include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 
 extern CWallet* pwalletMain;
 extern int64_t nLastCoinStakeSearchInterval;
@@ -85,8 +90,10 @@ int ReindexWallet();
 extern int RebootClient();
 extern QString ToQstring(std::string s);
 extern int qtTrackConfirm(std::string txid);
+extern std::string qtGRCCodeExecutionSubsystem(std::string sCommand);
 extern void qtUpdateConfirm(std::string txid);
 extern void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string txid);
+extern void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double magnitude);
 
 
 void TallyInBackground();
@@ -167,6 +174,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     trayIcon(0),
     notificator(0),
     rpcConsole(0),
+	upgrader(0),
     nWeight(0)
 {
     setFixedSize(980, 550);
@@ -302,6 +310,13 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     rpcConsole = new RPCConsole(this);
     connect(openRPCConsoleAction, SIGNAL(triggered()), rpcConsole, SLOT(show()));
 
+	 upgrader = new UpgradeDialog(this);
+     connect(upgradeAction, SIGNAL(triggered()), upgrader, SLOT(show()));
+     connect(upgradeAction, SIGNAL(triggered()), upgrader, SLOT(upgrade()));
+     connect(downloadAction, SIGNAL(triggered()), upgrader, SLOT(show()));
+     connect(downloadAction, SIGNAL(triggered()), upgrader, SLOT(blocks()));
+
+
     // Clicking on "Verify Message" in the address book sends you to the verify message tab
     connect(addressBookPage, SIGNAL(verifyMessage(QString)), this, SLOT(gotoVerifyMessageTab(QString)));
     // Clicking on "Sign Message" in the receive coins page sends you to the sign message tab
@@ -435,27 +450,24 @@ int RestartClient()
 void qtUpdateConfirm(std::string txid)
 {
 	int result = 0;
-		
+
 	#if defined(WIN32) && defined(QT_GUI)
 		QString qsTxid = ToQstring(txid);
 		QString sResult = globalcom->dynamicCall("UpdateConfirm(Qstring)",qsTxid).toString();
 	#endif
-		
+
 }
 
 
 void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string txid)
 {
 
-	//Public Function InsertConfirm(dAmt As Double, sFrom As String, sTo As String, sTXID As String) As String
-    
 	#if defined(WIN32) && defined(QT_GUI)
 	try
-	{  
+	{
 		int result = 0;
 	 	std::string Confirm = RoundToString(dAmt,4) + "<COL>" + sFrom + "<COL>" + sTo + "<COL>" + txid;
 		printf("Inserting confirm %s",Confirm.c_str());
-
 		QString qsConfirm = ToQstring(Confirm);
 		result = globalcom->dynamicCall("InsertConfirm(Qstring)",qsConfirm).toInt();
 	}
@@ -466,6 +478,25 @@ void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::strin
 	#endif
 }
 
+
+void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double magnitude)
+{
+
+	#if defined(WIN32) && defined(QT_GUI)
+	try
+	{
+		int result = 0;
+	 	std::string session = defaultgrcaddress + "<COL>" + cpid + "<COL>" + RoundToString(magnitude,1);
+		printf("Setting Session Id %s",session.c_str());
+		QString qsSession = ToQstring(session);
+		result = globalcom->dynamicCall("SetSessionInfo(Qstring)",qsSession).toInt();
+	}
+	catch(...)
+	{
+
+	}
+	#endif
+}
 
 
 
@@ -489,6 +520,20 @@ int qtTrackConfirm(std::string txid)
 		printf("@t2 returned %f",(double)result);
 	#endif
 	return (int)result;
+}
+
+
+std::string qtGRCCodeExecutionSubsystem(std::string sCommand)
+{
+	std::string sResult = "FAIL";
+	#if defined(WIN32) && defined(QT_GUI)
+		QString qsParms = ToQstring(sCommand);
+		QString qsResult = globalcom->dynamicCall("GRCCodeExecutionSubsystem(Qstring)",qsParms).toString();
+		sResult = FromQString(qsResult);
+		printf("@qtGRCCodeExecutionSubsystem returned %s",sResult.c_str());
+	#endif
+	return sResult;
+
 }
 
 
@@ -528,6 +573,7 @@ void CheckForUpgrade()
 				#ifdef WIN32
 				nNeedsUpgrade = globalcom->dynamicCall("ClientNeedsUpgrade()").toInt();
 				#endif
+				printf("Needs upgraded %f\r\n",(double)nNeedsUpgrade);
 				if (nNeedsUpgrade) UpgradeClient();
 	}
 	catch(...)
@@ -710,28 +756,28 @@ void BitcoinGUI::createActions()
     aboutAction->setMenuRole(QAction::AboutRole);
 
 
-
-//	miningAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Mining Console"), this);
-//	miningAction->setStatusTip(tr("Go to the mining console"));
-//	miningAction->setMenuRole(QAction::TextHeuristicRole);
-
-
-//	emailAction = new QAction(QIcon(":/icons/bitcoin"), tr("&E-Mail Center"), this);
-//	emailAction->setStatusTip(tr("Go to the E-Mail center"));
-//	emailAction->setMenuRole(QAction::TextHeuristicRole);
-
 	sqlAction = new QAction(QIcon(":/icons/bitcoin"), tr("&SQL Query Analyzer"), this);
 	sqlAction->setStatusTip(tr("SQL Query Analyzer"));
 	sqlAction->setMenuRole(QAction::TextHeuristicRole);
 
-//	leaderboardAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Leaderboard"), this);
-//	leaderboardAction->setStatusTip(tr("Leaderboard"));
-//	leaderboardAction->setMenuRole(QAction::TextHeuristicRole);
+	tickerAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Live Ticker"), this);
+	tickerAction->setStatusTip(tr("Live Ticker"));
+	tickerAction->setMenuRole(QAction::TextHeuristicRole);
+
+	ticketListAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Tickets"), this);
+	ticketListAction->setStatusTip(tr("Tickets"));
+	ticketListAction->setMenuRole(QAction::TextHeuristicRole);
+
+	newUserWizardAction = new QAction(QIcon(":/icons/bitcoin"), tr("&New User Wizard"), this);
+	newUserWizardAction->setStatusTip(tr("New User Wizard"));
+	newUserWizardAction->setMenuRole(QAction::TextHeuristicRole);
 
 
-	//aboutQtAction = new QAction(QIcon(":/trolltech/qmessagebox/images/qtlogo-64.png"), tr("About &Qt"), this);
-    //aboutQtAction->setToolTip(tr("Show information about Qt"));
-    //aboutQtAction->setMenuRole(QAction::AboutQtRole);
+	galazaAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Galaza (Game)"), this);
+	galazaAction->setStatusTip(tr("Galaza"));
+	galazaAction->setMenuRole(QAction::TextHeuristicRole);
+
+
     optionsAction = new QAction(QIcon(":/icons/options"), tr("&Options..."), this);
     optionsAction->setToolTip(tr("Modify configuration options for GridCoin"));
     optionsAction->setMenuRole(QAction::PreferencesRole);
@@ -767,14 +813,16 @@ void BitcoinGUI::createActions()
     connect(lockWalletAction, SIGNAL(triggered()), this, SLOT(lockWallet()));
     connect(signMessageAction, SIGNAL(triggered()), this, SLOT(gotoSignMessageTab()));
     connect(verifyMessageAction, SIGNAL(triggered()), this, SLOT(gotoVerifyMessageTab()));
-	//	connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
-	//	connect(emailAction, SIGNAL(triggered()), this, SLOT(emailClicked()));
 	connect(rebuildAction, SIGNAL(triggered()), this, SLOT(rebuildClicked()));
 	connect(upgradeAction, SIGNAL(triggered()), this, SLOT(upgradeClicked()));
 	connect(downloadAction, SIGNAL(triggered()), this, SLOT(downloadClicked()));
 	connect(rebootAction, SIGNAL(triggered()), this, SLOT(rebootClicked()));
 	connect(sqlAction, SIGNAL(triggered()), this, SLOT(sqlClicked()));
-	//connect(leaderboardAction, SIGNAL(triggered()), this, SLOT(leaderboardClicked()));
+	connect(tickerAction, SIGNAL(triggered()), this, SLOT(tickerClicked()));
+	connect(ticketListAction, SIGNAL(triggered()), this, SLOT(ticketListClicked()));
+	connect(galazaAction, SIGNAL(triggered()), this, SLOT(galazaClicked()));
+	connect(newUserWizardAction, SIGNAL(triggered()), this, SLOT(newUserWizardClicked()));
+
 
 }
 
@@ -833,14 +881,15 @@ void BitcoinGUI::createMenuBar()
 	rebuild->addAction(rebootAction);
 	rebuild->addSeparator();
 
-	QMenu *sql = appMenuBar->addMenu(tr("&SQL Query Analyzer"));
-	sql->addSeparator();
-	sql->addAction(sqlAction);
 
-//	QMenu *leaderboard = appMenuBar->addMenu(tr("&Leaderboard"));
-//	leaderboard->addSeparator();
-//	leaderboard->addAction(leaderboardAction);
-
+	QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
+	qmAdvanced->addSeparator();
+	qmAdvanced->addAction(sqlAction);
+	qmAdvanced->addAction(tickerAction);
+	qmAdvanced->addAction(ticketListAction);
+	qmAdvanced->addAction(newUserWizardAction);
+	qmAdvanced->addSeparator();
+	qmAdvanced->addAction(galazaAction);
 
 
 }
@@ -1181,7 +1230,7 @@ void BitcoinGUI::askQuestion(std::string caption, std::string body, bool *result
 		QString qsBody = tr(body.c_str());
 		QMessageBox::StandardButton retval = QMessageBox::question(this, qsCaption, qsBody, QMessageBox::Yes|QMessageBox::Cancel,   QMessageBox::Cancel);
 		*result = (retval == QMessageBox::Yes);
-		
+
 }
 
 void BitcoinGUI::askFee(qint64 nFeeRequired, bool *payFee)
@@ -1211,13 +1260,15 @@ bool CreateNewConfigFile(std::string boinc_email)
 {
 	std::string filename = "gridcoinresearch.conf";
 	boost::filesystem::path path = GetDataDir() / filename;
-	ofstream myConfig;
+	std::ofstream myConfig;
 	myConfig.open (path.string().c_str());
 	std::string row = "cpumining=true\r\n";
 	myConfig << row;
 	row = "email=" + boinc_email + "\r\n";
 	myConfig << row;
 	row = "addnode=node.gridcoin.us \r\n";
+	myConfig << row;
+	row = "addnode=gridcoin.asia \r\n";
 	myConfig << row;
 	myConfig.close();
 	return true;
@@ -1234,7 +1285,7 @@ void BitcoinGUI::NewUserWizard()
 		sout = getfilecontents(sourcefile);
 		//bool BoincInstalled = true;
 		std::string sBoincNarr = "";
-		if (sout == "-1") 
+		if (sout == "-1")
 		{
 			printf("Boinc not installed in default location! \r\n");
 			//BoincInstalled=false;
@@ -1247,9 +1298,11 @@ void BitcoinGUI::NewUserWizard()
                                           tr("Please enter your boinc E-mail address, or click <Cancel> to skip for now:"),
 										  QLineEdit::Normal,
                                           "", &ok);
-		if (ok && !boincemail.isEmpty()) 
+		if (ok && !boincemail.isEmpty())
 		{
 			std::string new_email = tostdstring(boincemail);
+			boost::to_lower(new_email);
+
 			printf("User entered %s \r\n",new_email.c_str());
 			//Create Config File
 			CreateNewConfigFile(new_email);
@@ -1264,7 +1317,7 @@ void BitcoinGUI::NewUserWizard()
 		    QString strMessage = tr("To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. ");
 			QMessageBox::warning(this, tr("New User Wizard - Skipped"), strMessage);
 		}
-		
+
 		if (sBoincNarr != "")
 		{
 				QString qsMessage = tr(sBoincNarr.c_str());
@@ -1447,6 +1500,65 @@ void BitcoinGUI::sqlClicked()
 #endif
 
 }
+
+
+void BitcoinGUI::ticketListClicked()
+{
+#ifdef WIN32
+	if (!globalcom)
+	{
+		globalcom = new QAxObject("BoincStake.Utilization");
+	}
+
+	qtSetSessionInfo(DefaultWalletAddress(), GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.Magnitude);
+    globalcom->dynamicCall("ShowTicketList()");
+#endif
+
+}
+
+
+
+
+void BitcoinGUI::newUserWizardClicked()
+{
+#ifdef WIN32
+	if (!globalcom)
+	{
+		globalcom = new QAxObject("BoincStake.Utilization");
+	}
+
+    globalcom->dynamicCall("ShowNewUserWizard()");
+#endif
+}
+
+
+
+void BitcoinGUI::galazaClicked()
+{
+#ifdef WIN32
+	if (!globalcom)
+	{
+		globalcom = new QAxObject("BoincStake.Utilization");
+	}
+
+    globalcom->dynamicCall("StartGalaza()");
+#endif
+
+}
+
+
+void BitcoinGUI::tickerClicked()
+{
+#ifdef WIN32
+	if (!globalcom)
+	{
+		globalcom = new QAxObject("BoincStake.Utilization");
+	}
+    globalcom->dynamicCall("ShowTicker()");
+#endif
+
+}
+
 
 /*
 void BitcoinGUI::leaderboardClicked()
@@ -1839,7 +1951,7 @@ void ReinstantiateGlobalcom()
 									result = AddressUser();
 									#endif
 						}
-					
+
 
 			}
 #endif
@@ -1871,7 +1983,7 @@ void BitcoinGUI::timerfire()
 	try {
 
 
-		
+
 		if (nRegVersion==0 || Timer("start",10))
 		{
 			if (fDebug) printf("Starting globalcom...\r\n");
@@ -1889,7 +2001,7 @@ void BitcoinGUI::timerfire()
 		}
 
 
-		
+
 		if (Timer("status_update",1))
 		{
 			std::string status = GetGlobalStatus();
@@ -1901,9 +2013,9 @@ void BitcoinGUI::timerfire()
 				bForceUpdate=false;
 				overviewPage->updateglobalstatus();
 				setNumConnections(clientModel->getNumConnections());
-       
+
 		}
- 
+
 
 
 		// RETIRING ALL OF THIS:
@@ -1922,7 +2034,7 @@ void BitcoinGUI::timerfire()
 					//printf("Created restore point : %i",r);
 				}
 
-		
+
 
 
 							if (false)
@@ -1952,7 +2064,7 @@ void BitcoinGUI::timerfire()
 
 
 
-					
+
 
 									if (false)
 									{
@@ -1996,16 +2108,39 @@ QString BitcoinGUI::toqstring(int o)
 	return str1;
 }
 
-void BitcoinGUI::detectShutdown()
+double GetPOREstimatedTime(double RSAWeight)
 {
-	//Note: This routine is used in Litecoin but not Peercoin
-	/*
-	 // Tell the main threads to shutdown.
-     if (ShutdownRequested())
-        QMetaObject::invokeMethod(QCoreApplication::instance(), "quit", Qt::QueuedConnection);
-		*/
+	if (RSAWeight == 0) return 0;
+	//RSA Weight ranges from 0 - 5600
+	double orf = 5600-RSAWeight;
+	if (orf < 1) orf = 1;
+	double eta = orf/5600;
+	if (eta > 1) orf = 1;
+	eta = eta * (60*60*24);
+	return eta;
 }
 
+QString BitcoinGUI::GetEstimatedTime(unsigned int nEstimateTime)
+{
+	QString text;
+	if (nEstimateTime < 60)
+    {
+            text = tr("%n second(s)", "", nEstimateTime);
+    }
+        else if (nEstimateTime < 60*60)
+    {
+            text = tr("%n minute(s)", "", nEstimateTime/60);
+    }
+        else if (nEstimateTime < 24*60*60)
+    {
+            text = tr("%n hour(s)", "", nEstimateTime/(60*60));
+    }
+        else
+    {
+            text = tr("%n day(s)", "", nEstimateTime/(60*60*24));
+    }
+	return text;
+}
 
 
 
@@ -2016,52 +2151,59 @@ void BitcoinGUI::updateStakingIcon()
     if (nLastCoinStakeSearchInterval && nWeight)
     {
         uint64_t nNetworkWeight = GetPoSKernelPS();
-        unsigned nEstimateTime = GetTargetSpacing(nBestHeight) * (nNetworkWeight / (nWeight+.001)) * 15;
-
-        QString text;
-        if (nEstimateTime < 60)
-        {
-            text = tr("%n second(s)", "", nEstimateTime);
-        }
-        else if (nEstimateTime < 60*60)
-        {
-            text = tr("%n minute(s)", "", nEstimateTime/60);
-        }
-        else if (nEstimateTime < 24*60*60)
-        {
-            text = tr("%n hour(s)", "", nEstimateTime/(60*60));
-        }
-        else
-        {
-            text = tr("%n day(s)", "", nEstimateTime/(60*60*24));
-        }
-
+        unsigned nEstimateTime = GetTargetSpacing(nBestHeight) * (nNetworkWeight / ((nWeight/COIN)+.001)) * 1;
+		if (fDebug) printf("StakeIcon Vitals BH %f, NetWeight %f, Weight %f \r\n", (double)GetTargetSpacing(nBestHeight),(double)nNetworkWeight,(double)nWeight);
+        QString text = GetEstimatedTime(nEstimateTime);
+        //Halford - 1-9-2015 - Calculate time for POR Block:
+		unsigned int nPOREstimate = (unsigned int)GetPOREstimatedTime(GlobalCPUMiningCPID.RSAWeight);
+		QString PORText = "Estimated time to earn POR Reward: " + GetEstimatedTime(nPOREstimate);
+		if (nPOREstimate == 0) PORText="";
         if (IsProtocolV2(nBestHeight+1))
         {
             nWeight /= COIN;
-            nNetworkWeight /= COIN;
         }
-
-        labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
-        labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br>Guesstimated time to earn reward is %3").arg(nWeight).arg(nNetworkWeight).arg(text));
+	    labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
+        labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> time to earn reward is %3. %4").arg(nWeight).arg(nNetworkWeight).arg(text).arg(PORText));
+		msMiningErrors6 = "Interest: " + FromQString(text);
+		if (nPOREstimate > 0) msMiningErrors6 += "; POR: " + FromQString(GetEstimatedTime(nPOREstimate));
     }
     else
     {
-		//11-5-2014
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
         if (pwalletMain && pwalletMain->IsLocked())
+		{
             labelStakingIcon->setToolTip(tr("Not staking because wallet is locked"));
+			msMiningErrors6="Wallet Locked";
+		}
         else if (vNodes.empty())
+		{
             labelStakingIcon->setToolTip(tr("Not staking because wallet is offline"));
+			msMiningErrors6 = "Offline";
+		}
         else if (IsInitialBlockDownload())
+		{
             labelStakingIcon->setToolTip(tr("Not staking because wallet is syncing"));
+			msMiningErrors6 = "Syncing";
+		}
 		else if (!nLastCoinStakeSearchInterval && !nWeight)
+		{
 			labelStakingIcon->setToolTip(tr("Not staking because you don't have mature coins and stake weight is too low."));
+			msMiningErrors6 = "No Mature Coins; Stakeweight too low";
+		}
         else if (!nWeight)
+		{
             labelStakingIcon->setToolTip(tr("Not staking because you don't have mature coins"));
+			msMiningErrors6 = "No mature coins";
+		}
 		else if (!nLastCoinStakeSearchInterval)
+		{
 			labelStakingIcon->setToolTip(tr("Searching for mature coins... Please wait"));
+			msMiningErrors6 = "Searching for coins";
+		}
         else
+		{
             labelStakingIcon->setToolTip(tr("Not staking"));
+			msMiningErrors6 = "Not staking yet";
+		}
     }
 }

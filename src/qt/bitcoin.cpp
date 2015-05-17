@@ -4,7 +4,6 @@
 
 
 #include <QApplication>
-
 #include <QTimer>
 
 #include "bitcoingui.h"
@@ -13,11 +12,9 @@
 #include "optionsmodel.h"
 #include "guiutil.h"
 #include "guiconstants.h"
-
 #include "init.h"
 #include "ui_interface.h"
 #include "qtipcserver.h"
-
 #include <QMessageBox>
 #include <QTextCodec>
 #include <QLocale>
@@ -128,8 +125,6 @@ static std::string Translate(const char* psz)
 {
     return QCoreApplication::translate("bitcoin-core", psz).toStdString();
 }
-
-
 
 
 

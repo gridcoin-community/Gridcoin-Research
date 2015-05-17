@@ -4,12 +4,9 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #ifndef BITCOIN_WALLET_H
 #define BITCOIN_WALLET_H
-
 #include <string>
 #include <vector>
-
 #include <stdlib.h>
-
 #include "main.h"
 #include "key.h"
 #include "keystore.h"
@@ -30,10 +27,8 @@ class CCoinControl;
 enum WalletFeature
 {
     FEATURE_BASE = 10500, // the earliest version new wallets supports (only useful for getinfo's clientversion output)
-
     FEATURE_WALLETCRYPT = 40000, // wallet encryption
     FEATURE_COMPRPUBKEY = 60000, // compressed public keys
-
     FEATURE_LATEST = 60000
 };
 
@@ -46,12 +41,12 @@ public:
 
     CKeyPool()
     {
-        nTime = GetTime();
+        nTime = GetAdjustedTime();
     }
 
     CKeyPool(const CPubKey& vchPubKeyIn)
     {
-        nTime = GetTime();
+        nTime = GetAdjustedTime();
         vchPubKey = vchPubKeyIn;
     }
 
@@ -196,7 +191,8 @@ public:
     bool CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey);
 
     bool GetStakeWeight(uint64_t& nWeight);
-    bool CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int64_t nSearchInterval, int64_t nFees, CTransaction& txNew, CKey& key);
+    bool CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int64_t nSearchInterval, 
+		int64_t nFees, CTransaction& txNew, CKey& key, int64_t& gridreward,std::string& out_hashboinc);
 
     std::string SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, bool fAskFee=false);
     std::string SendMoneyToDestination(const CTxDestination &address, int64_t nValue, CWalletTx& wtxNew, bool fAskFee=false);
@@ -494,7 +490,7 @@ public:
         READWRITE(fFromMe);
         READWRITE(fSpent);
 
-		//Serialize two additional fields for Gridcoin
+		//Serialize two additional fields for Gridcoin (Reserved for future use):
 		//READWRITE(nResearchSubsidy);
 		//READWRITE(nInterestSubsidy);
 
@@ -767,7 +763,7 @@ public:
 
     CWalletKey(int64_t nExpires=0)
     {
-        nTimeCreated = (nExpires ? GetTime() : 0);
+        nTimeCreated = (nExpires ? GetAdjustedTime() : 0);
         nTimeExpires = nExpires;
     }
 

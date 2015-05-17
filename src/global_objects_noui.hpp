@@ -24,21 +24,13 @@ extern volatile bool bExecuteCode;
 extern volatile bool bAddressUser;
 extern volatile bool bCheckedForUpgrade;
 extern volatile bool bCheckedForUpgradeLive;
-
 extern volatile bool bGlobalcomInitialized;
-
-
 extern volatile bool bAllowBackToBack;
 extern volatile bool CreatingCPUBlock;
-
 extern volatile double nGlobalNonce;
 extern volatile double nGlobalHashCounter;
 extern volatile double nGlobalSolutionNonce;
-
-
 extern int miningthreadcount;
-
-
 	
     struct StructCPID 
 	{
@@ -69,7 +61,6 @@ extern int miningthreadcount;
 		double interestPayments;
 		double outstanding;
 		double verifiedTotalRAC;
-		double verifiedTotalNetworkRAC;
 		double verifiedMagnitude;
         double TotalMagnitude;
 		double MagnitudeCount;
@@ -83,13 +74,17 @@ extern int miningthreadcount;
 		double longtermtotalowed;
 		double longtermowed;
 		double LastPaymentTime;
+		double ResearchSubsidy;
 		double EarliestPaymentTime;
 		double RSAWeight;
-		double PaymentTimespan;
-		double ResearchSubsidy;
 		double InterestSubsidy;
-	
+		double PaymentTimespan;
+		double verifiedTotalNetworkRAC;
+		double LastBlock;
+		double NetworkMagnitude;
+		double NetworkAvgMagnitude;
 
+		double Canary;
 		std::string cpid;
 		std::string emailhash;
 		std::string cpidhash;
@@ -102,7 +97,10 @@ extern int miningthreadcount;
 		std::string email;
 		std::string boincruntimepublickey;
 	    std::string cpidv2;
-		
+		std::string PaymentTimestamps;
+		std::string PaymentAmountsResearch;
+		std::string PaymentAmountsInterest;
+		std::string GRCAddress;
 		
 	};
 
@@ -136,27 +134,12 @@ extern int miningthreadcount;
 
 	struct MiningCPID
 	{
-		std::string projectname;
 		double rac;
-		std::string encboincpublickey;
-		std::string cpid;
-		std::string cpidhash;
 		double pobdifficulty;
 		unsigned int diffbytes;
 		bool initialized;	
-		std::string enccpid;
-		std::string aesskein;
-		std::string encaes;
 		double nonce;
 		double NetworkRAC;
-		int prevBlockType;
-		std::string clientversion;
-		std::string VouchedCPID;
-		std::string cpidv2;
-		std::string email;
-		std::string boincruntimepublickey;
-		std::string GRCAddress;
-		std::string lastblockhash;
 		double VouchedRAC;
 		double VouchedNetworkRAC;
 		double Magnitude;
@@ -168,6 +151,27 @@ extern int miningthreadcount;
 		double LastPaymentTime;
 		double ResearchSubsidy;
 		double InterestSubsidy;
+		int prevBlockType;
+		double Canary;
+		
+		std::string projectname;
+		std::string encboincpublickey;
+		std::string cpid;
+		std::string cpidhash;
+		std::string enccpid;
+		std::string aesskein;
+		std::string encaes;
+		std::string clientversion;
+		std::string VouchedCPID;
+		std::string cpidv2;
+		std::string email;
+		std::string boincruntimepublickey;
+		std::string GRCAddress;
+		std::string lastblockhash;
+		std::string Organization;
+		std::string OrganizationKey;
+
+
 	};
 
 	
@@ -188,27 +192,20 @@ extern std::map<std::string, StructCPID> mvCreditNode;
 extern std::map<std::string, StructCPID> mvNetwork;
 extern std::map<std::string, StructCPID> mvNetworkCPIDs;
 extern std::map<std::string, StructCPID> mvMagnitudes;
-
-
-
 extern std::map<std::string, StructCPID> mvCreditNodeCPIDProject; //Contains verified CPID+Projects;
 extern std::map<std::string, StructCPID> mvCreditNodeCPID;  //Contains verified CPID total Magnitude;
 //Caches
 extern std::map<std::string, StructCPIDCache> mvCPIDCache; //Contains cached blocknumbers for CPID+Projects;
-
 extern std::map<std::string, StructBlockCache> mvBlockCache;  //Contains Cached Blocks
 extern std::map<std::string, StructCPIDCache> mvAppCache; //Contains cached blocknumbers for CPID+Projects;
 
 //Global CPU Mining CPID:
 extern MiningCPID GlobalCPUMiningCPID;
 
-
 //Boinc Valid Projects
 extern std::map<std::string, StructCPID> mvBoincProjects; // Contains all of the allowed boinc projects;
 // Timers
 extern std::map<std::string, int> mvTimers; // Contains event timers that reset after max ms duration iterator is exceeded
-
-
 extern double nMinerPaymentCount;
 
 

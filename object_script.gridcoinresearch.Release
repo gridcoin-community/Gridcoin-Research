@@ -11,6 +11,7 @@ INPUT(
 ./build/addressbookpage.o
 ./build/signverifymessagedialog.o
 ./build/aboutdialog.o
+./build/upgradedialog.o
 ./build/editaddressdialog.o
 ./build/bitcoinaddressvalidator.o
 ./build/alert.o
@@ -69,19 +70,9 @@ INPUT(
 ./build/scrypt-x86_64.o
 ./build/scrypt.o
 ./build/pbkdf2.o
-./build/Accumulator.o
-./build/AccumulatorProofOfKnowledge.o
-./build/Coin.o
-./build/CoinSpend.o
-./build/Commitment.o
-./build/ParamGeneration.o
-./build/Params.o
-./build/SerialNumberSignatureOfKnowledge.o
-./build/SpendMetaData.o
-./build/ZeroTest.o
 ./build/cpid.o
 ./build/sql.o
-./build/qrcodedialog.o
+./build/upgrader.o
 ./build/moc_bitcoingui.o
 ./build/moc_transactiontablemodel.o
 ./build/moc_addresstablemodel.o
@@ -92,6 +83,7 @@ INPUT(
 ./build/moc_addressbookpage.o
 ./build/moc_signverifymessagedialog.o
 ./build/moc_aboutdialog.o
+./build/moc_upgradedialog.o
 ./build/moc_editaddressdialog.o
 ./build/moc_bitcoinaddressvalidator.o
 ./build/moc_clientmodel.o
@@ -112,6 +104,5 @@ INPUT(
 ./build/moc_askpassphrasedialog.o
 ./build/moc_notificator.o
 ./build/moc_rpcconsole.o
-./build/moc_qrcodedialog.o
 ./build/qrc_bitcoin.o
 );

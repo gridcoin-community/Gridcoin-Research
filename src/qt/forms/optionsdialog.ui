@@ -386,14 +386,14 @@
         </layout>
        </item>
        <item>
-        <widget class="QCheckBox" name="displayAddresses">
-         <property name="toolTip">
-          <string>Whether to show Gridcoin addresses in the transaction list or not.</string>
-         </property>
-         <property name="text">
-          <string>&amp;Display addresses in transaction list</string>
-         </property>
-        </widget>
+         <widget class="QCheckBox" name="displayAddresses">
+                    <property name="toolTip">
+                     <string>Whether to show Gridcoin addresses in the transaction list or not.</string>
+           </property>
+                   <property name="text">
+                    <string>&amp;Display addresses in transaction list</string>
+           </property>
+         </widget>
        </item>
        <item>
         <widget class="QCheckBox" name="coinControlFeatures">

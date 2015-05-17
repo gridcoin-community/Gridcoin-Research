@@ -126,10 +126,14 @@ bool DecryptSecret(const CKeyingMaterial& vMasterKey, const std::vector<unsigned
 
 std::string AdvancedCrypt(std::string boinchash);
 std::string AdvancedDecrypt(std::string boinchash_encrypted);
+std::string AdvancedCryptWithSalt(std::string boinchash, std::string salt);
+std::string AdvancedDecryptWithSalt(std::string boinchash_encrypted, std::string salt);
 
 bool GridDecrypt(const std::vector<unsigned char>& vchCiphertext,std::vector<unsigned char>& vchPlaintext);
 bool GridEncrypt(std::vector<unsigned char> vchPlaintext, std::vector<unsigned char> &vchCiphertext);
 
+bool GridDecryptWithSalt(const std::vector<unsigned char>& vchCiphertext,std::vector<unsigned char>& vchPlaintext, std::string salt);
+bool GridEncryptWithSalt(std::vector<unsigned char> vchPlaintext, std::vector<unsigned char> &vchCiphertext, std::string salt);
 
 
 #endif

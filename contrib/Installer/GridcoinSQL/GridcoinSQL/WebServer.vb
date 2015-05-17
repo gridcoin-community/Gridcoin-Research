@@ -70,16 +70,14 @@ Public Class HTTPSession
         End While
     End Sub
     Private Sub AddNode(sNode As String)
-
         Try
 
-        Dim oSql As New SQLBase("gridcoinsql")
-        Dim sData As String
-        oSql.InsertRecord("node", "Host,LastSeen", "'" + Trim(sNode) + "',getdate()")
+            Dim oSql As New SQLBase("gridcoinsql")
+            Dim sData As String
+            oSql.InsertRecord("node", "Host,LastSeen", "'" + Trim(sNode) + "',getdate()")
         Catch ex As Exception
 
         End Try
-
     End Sub
 
     Public Function ExtractXML(sData As String, sStartKey As String, sEndKey As String)
@@ -237,6 +235,7 @@ Public Class HTTPSession
             End If
         End Try
     End Sub
+
     Public Function GetHttpData(sTable As String, sStart As String, sEnd As String)
         Dim oSql As SQLBase
 
@@ -285,8 +284,6 @@ Public Class HTTPSession
             Dim sResult As String = oSql.UpdateRecord(sTable, sFields, sValues, sWhereFields, sWhereValues)
 
             Return sResult
-
-            '            sUpdate = "<UPDATE><TABLE>Confirm</TABLE><FIELDS>Confirmed</FIELDS><VALUES>'" + Trim(iStatus) + "'</VALUES><WHEREFIELDS>txid</WHEREFIELDS><WHEREVALUES>'" + sTXID + "'</WHEREVALUES></UPDATE>"
 
         End If
 

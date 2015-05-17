@@ -3,7 +3,6 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "addrman.h"
-
 using namespace std;
 
 int CAddrInfo::GetTriedBucket(const std::vector<unsigned char> &nKey) const
@@ -303,7 +302,7 @@ void CAddrMan::Good_(const CService &addr, int64_t nTime)
     // TODO: maybe re-add the node, but for now, just bail out
     if (nUBucket == -1) return;
 
-    printf("Moving %s to tried\n", addr.ToString().c_str());
+    if (fDebug) printf("Moving %s to tried\n", addr.ToString().c_str());
 
     // move nId to the tried tables
     MakeTried(info, nId, nUBucket);

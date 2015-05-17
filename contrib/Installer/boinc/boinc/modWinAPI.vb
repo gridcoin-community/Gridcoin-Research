@@ -2,10 +2,12 @@
 Imports System.Drawing
 Imports System.Runtime.CompilerServices
 Imports System.IO
+Imports Microsoft.Win32
 
 Module modWinAPI
     Declare Function SetWindowText Lib "user32" Alias "SetWindowTextA" (ByVal hWnd As IntPtr, ByVal lpString As String) As Boolean
     Declare Function ShowWindow Lib "user32" Alias "ShowWindow" (ByVal hwnd As IntPtr, ByVal nCmdShow As Integer) As Boolean
+    Public mbDebugging As Boolean
 
     Public Const PROCESSBASICINFORMATION As UInteger = 0
     Declare Function SetWindowPos5555 Lib "user32" ( _
@@ -40,7 +42,52 @@ Module modWinAPI
         Public InheritedFromUniqueProcessId As IntPtr
     End Structure
 
+    Public Function AllowWindowsAppsToCrashWithoutErrorReportingDialog() As String
 
+        Try
+
+            '[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting]
+            '"ForceQueue"=dword:00000001
+            Dim RegKey As RegistryKey
+            RegKey = Registry.LocalMachine.OpenSubKey("Software\Microsoft\Windows\Windows Error Reporting", True)
+            RegKey.SetValue("ForceQueue", 1)
+            Dim dFQ As Double = 0
+
+            dFQ = RegKey.GetValue("ForceQueue", -1)
+            If dFQ <> 1 Then MsgBox("Unable to set Key", MsgBoxStyle.Critical, "Registry Editor")
+            RegKey.Close()
+
+            '[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\Consent]
+            '"DefaultConsent"=dword:00000001
+            RegKey = Registry.LocalMachine.OpenSubKey("Software\Microsoft\Windows\Windows Error Reporting\Consent", True)
+            RegKey.SetValue("DefaultConsent", 1)
+            dFQ = RegKey.GetValue("DefaultConsent", -1)
+            If dFQ <> 1 Then MsgBox("Unable to Set Key", MsgBoxStyle.Critical, "Registry Editor")
+            RegKey.Close()
+
+            MsgBox("Successfully set Windows Error Reporting behavior keys.", MsgBoxStyle.Exclamation, "Registry Editor")
+            Return "SUCCESS"
+        Catch ex As Exception
+            MsgBox(ex.Message, MsgBoxStyle.Critical, "Unable to Set Registry Key")
+            Exit Function
+        End Try
+
+    End Function
+
+
+
+    Public Function DefaultHostName(sDefault As String, bOverride As Boolean) As String
+        Dim sPersisted As String = KeyValue(sDefault)
+        If Len(sPersisted) = 0 Then sDefault = Replace(sDefault, "p2psql", "pool")
+        If mbDebugging Then Return "localhost"
+        Return sDefault
+    End Function
+    Public Function DefaultPort(lPort As Long, bOverride As Boolean) As Long
+        Dim lPersisted As Long = Val("0" & KeyValue("p2pport"))
+        If lPersisted = 0 Then lPort = 80
+        If mbDebugging Then Return 7777
+        Return lPort
+    End Function
 
     Public Enum WindowStylesEx As UInteger
         ''' <summary>
@@ -520,5 +567,15 @@ Module modWinAPI
         Dim sOut As String = Mid(sData, iPos1, iPos2 - iPos1)
         Return sOut
     End Function
+
+    Public Function GetSessionGuid() As String
+        Dim sSessionGuid As String = KeyValue("SessionGuid")
+        If sSessionGuid = "" Then
+            UpdateKey("SessionGuid", Guid.NewGuid.ToString())
+            sSessionGuid = KeyValue("SessionGuid")
+        End If
+        Return sSessionGuid
+    End Function
+
 
 End Module

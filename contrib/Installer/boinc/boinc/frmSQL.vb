@@ -28,7 +28,7 @@ Public Class frmSQL
         Dim h1 As New System.Windows.Forms.ColumnHeader
 
         Try
-            dr = mData.GetGridcoinReader("SELECT * FROM INTERNALTABLES")
+            dr = mData.GetGridcoinReader("SELECT * FROM INTERNALTABLES", 0)
 
         Catch ex As Exception
             Log("Error while select internaltables " + ex.Message)
@@ -98,14 +98,16 @@ Public Class frmSQL
         Dim sInsert As String
         sInsert = "<INSERT><TABLE>Confirm</TABLE><FIELDS>GRCFrom,GRCTo,txid,amount,Confirmed</FIELDS><VALUES>'" + Trim(sFrom) + "','" + Trim(sTo) + "','" + Trim(sTXID) + "','" + Trim(dAmt) + "','0'</VALUES></INSERT>"
         Dim sErr As String
-        sErr = mData.ExecuteP2P(sInsert)
+        sErr = mData.ExecuteP2P(sInsert, Nothing, 2)
         Return sErr
     End Function
     Public Function UpdateConfirm(sTXID As String, iStatus As Long) As String
         Dim sUpdate As String
         sUpdate = "<UPDATE><TABLE>Confirm</TABLE><FIELDS>Confirmed</FIELDS><VALUES>'" + Trim(iStatus) + "'</VALUES><WHEREFIELDS>txid</WHEREFIELDS><WHEREVALUES>'" + sTXID + "'</WHEREVALUES></UPDATE>"
         Dim sErr As String
-        sErr = mData.ExecuteP2P(sUpdate)
+        sErr = mData.ExecuteP2P(sUpdate, Nothing, 2)
+
+
         Return sErr
 
     End Function
@@ -115,7 +117,7 @@ Public Class frmSQL
         Dim sql As String
         sql = "Select Confirmed from Confirm where TXID='" + sTXID + "'"
         Try
-            dr = mData.GetGridcoinReader(sql)
+            dr = mData.GetGridcoinReader(sql, 10)
 
         Catch ex As Exception
             Return -1
@@ -130,17 +132,12 @@ Public Class frmSQL
 
     Private Sub btnExec_Click(sender As System.Object, e As System.EventArgs) Handles btnExec.Click
 
-        'Dim sResult As String = InsertConfirm(100, "ee", "b", "abc12a")
-       
-        'Dim iResult As Long
-        'iResult = TrackConfirm("abc12a")
         If mData Is Nothing Then mData = New Sql
 
         Dim dr As GridcoinReader
         mData.bThrowUIErrors = True
-
         Try
-            dr = mData.GetGridcoinReader(rtbQuery.Text)
+            dr = mData.GetGridcoinReader(rtbQuery.Text, 0)
         Catch ex As Exception
             MsgBox(ex.Message, vbCritical, "Gridcoin Query Analayzer")
             Exit Sub
@@ -175,17 +172,15 @@ Public Class frmSQL
                 dgv.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.None
             Next
 
-
             For y = 1 To dr.Rows
                 grr = dr.GetRow(y)
                 dgv.Rows.Add()
                 For x = 0 To grr.FieldNames.Count - 1
-                    sValue = grr.Values(x).ToString
+                    sValue = ("" & grr.Values(x)).ToString
+
                     dgv.Rows(iRow).Cells(x).Value = sValue
                 Next x
                 iRow = iRow + 1
-
-
             Next
             For x = 0 To grr.FieldNames.Count - 1
                 dgv.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells
@@ -203,7 +198,7 @@ Public Class frmSQL
         sql = "Select * From " + sTable + " WHERE ID >= " + Trim(lStartRow) + " AND ID <= " + Trim(lEndRow)
         Dim dr As GridcoinReader
 
-        dr = mData.GetGridcoinReader(sql)
+        dr = mData.GetGridcoinReader(sql, 11)
         Dim iRow As Long
         Dim sbOut As New StringBuilder
         Dim sRow As String
@@ -238,7 +233,7 @@ Public Class frmSQL
     Public Function CreateManifest() As StringBuilder
         Dim dr As GridcoinReader
 
-        dr = mData.GetGridcoinReader("SELECT * FROM sqlite_master WHERE type='table';")
+        dr = mData.GetGridcoinReader("SELECT * FROM sqlite_master WHERE type='table';", 10)
         'todo order by
         Dim iRow As Long
         Dim sRow As String
@@ -298,6 +293,10 @@ Public Class frmSQL
     End Function
 
     Private Sub rtbQuery_TextChanged(sender As System.Object, e As System.EventArgs) Handles rtbQuery.TextChanged
+
+    End Sub
+
+    Private Sub dgv_CellContentClick(sender As System.Object, e As System.Windows.Forms.DataGridViewCellEventArgs) Handles dgv.CellContentClick
 
     End Sub
 End Class

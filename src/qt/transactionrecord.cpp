@@ -12,19 +12,25 @@ double DoubleFromAmount(int64_t amount);
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 
 
-/* Return positive answer if transaction should be shown in list.
- */
+/* Return positive answer if transaction should be shown in list. */
 bool TransactionRecord::showTransaction(const CWalletTx &wtx)
 {
+	
+	std::string ShowOrphans = GetArg("-showorphans", "false");
+	if (ShowOrphans=="false" && !wtx.IsInMainChain()) return false;
 	//R Halford - Discard Orphans after Y mins:
 	if (wtx.IsCoinStake())
 	{
 		if (!wtx.IsInMainChain())
 		{
 			//Orphaned tx
-			if (!IsLockTimeWithinMinutes(wtx.nTimeReceived,15))
+			if (ShowOrphans=="true"  && IsLockTimeWithinMinutes(wtx.nTimeReceived,15)) 
 			{
-				return false; //Remove it
+				return true;
+			}
+			else
+			{
+				return false;
 			}
 		}
     }
@@ -39,6 +45,20 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx)
     }
     return true;
 }
+
+	int64_t GetMyValueOut(const CWallet *wallet,const CWalletTx &wtx)
+    {
+        int64_t nValueOut = 0;
+        BOOST_FOREACH(const CTxOut& txout, wtx.vout)
+        {
+	       if (wallet->IsMine(txout))
+		   {
+				nValueOut += txout.nValue;
+		   }
+        }
+        return nValueOut;
+    }
+
 
 /*
  * Decompose CWallet transaction to model transaction records.
@@ -56,7 +76,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
     if (nNet > 0 || wtx.IsCoinBase() || wtx.IsCoinStake())
     {
         //
-        // Credit
+        // Credit - Calculate Net from CryptoLottery Rob Halford - 4-3-2015-1
         //
         BOOST_FOREACH(const CTxOut& txout, wtx.vout)
         {
@@ -86,13 +106,33 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                 if (wtx.IsCoinStake())
                 {
                     // Generated (proof-of-stake)
-
-                    if (hashPrev == hash)
+			        if (hashPrev == hash)
                         continue; // last coinstake output
 
-                    sub.type = TransactionRecord::Generated;
-                    sub.credit = nNet > 0 ? nNet : wtx.GetValueOut() - nDebit;
-                    hashPrev = hash;
+					if (wtx.vout.size()==2)
+					{  
+						//Standard POR CoinStake
+						sub.type = TransactionRecord::Generated;
+						sub.credit = nNet > 0 ? nNet : wtx.GetValueOut() - nDebit;
+						hashPrev = hash;
+					}
+					else
+					{
+						//CryptoLottery - CoinStake - 4-3-2015
+						sub.type = TransactionRecord::Generated;
+						if (nDebit == 0)
+						{
+							sub.credit = GetMyValueOut(wallet,wtx);
+							sub.RemoteFlag = 1;
+						}
+						else
+						{
+							sub.credit = nNet > 0 ? nNet : GetMyValueOut(wallet,wtx) - nDebit;
+						}
+							
+						hashPrev = hash;
+			
+					}
                 }
 
                 parts.append(sub);
@@ -270,4 +310,5 @@ std::string TransactionRecord::getTxID()
 {
     return hash.ToString() + strprintf("-%03d", idx);
 }
+
 

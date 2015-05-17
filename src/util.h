@@ -128,6 +128,11 @@ extern std::map<std::string, std::string> mapArgs;
 extern std::map<std::string, std::vector<std::string> > mapMultiArgs;
 extern bool fDebug;
 extern bool fDebugNet;
+extern bool fDebug2;
+extern bool fDebug3;
+extern bool fDebug4;
+extern bool fDebug5;
+
 extern bool fPrintToConsole;
 extern bool fPrintToDebugger;
 extern bool fRequestShutdown;
@@ -169,7 +174,11 @@ bool ATTR_WARN_PRINTF(1,2) error(const char *format, ...);
  * __attribute__((format(printf,X,Y))) gets expanded to __attribute__((format(OutputDebugStringF,X,Y)))
  * which confuses gcc.
  */
+
+#ifndef UPGRADERFLAG
 #define printf OutputDebugStringF
+#endif
+
 
 void PrintException(std::exception* pex, const char* pszThread);
 void PrintExceptionContinue(std::exception* pex, const char* pszThread);
@@ -197,6 +206,8 @@ int GetFilesize(FILE* file);
 
 bool RenameOver(boost::filesystem::path src, boost::filesystem::path dest);
 boost::filesystem::path GetDefaultDataDir();
+boost::filesystem::path GetProgramDir();
+
 const boost::filesystem::path &GetDataDir(bool fNetSpecific = true);
 boost::filesystem::path GetConfigFile();
 boost::filesystem::path GetPidFile();

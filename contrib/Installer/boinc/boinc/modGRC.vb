@@ -6,17 +6,27 @@ Imports System.Reflection
 Imports System.Net
 Imports System.Text
 Imports System.Security.Cryptography
+Imports ICSharpCode.SharpZipLib.Zip
+Imports ICSharpCode.SharpZipLib.Core
 
 Module modGRC
 
+    Public Structure BatchJob
+        Dim Value As String
+        Dim Status As Boolean
+        Dim OutputError As String
+    End Structure
+
+
     Public mclsUtilization As Utilization
-
     Public mfrmMining As frmMining
-
-    Public mfrmProjects As frmProjects
+    Public mfrmProjects As frmNewUserWizard
     Public mfrmSql As frmSQL
+    Public mfrmTicketAdd As frmTicketAdd
+    Public mfrmTicketList As frmTicketList
+    Public mfrmLogin As frmLogin
+    Public mfrmTicker As frmLiveTicker
     Public mfrmWireFrame As frmGRCWireFrameCanvas
-
     Public mfrmLeaderboard As frmLeaderboard
     Public MerkleRoot As String = "0xda43abf15a2fcd57ceae9ea0b4e0d872981e2c0b72244466650ce6010a14efb8"
     Public merkleroot2 As String = "0xda43abf15abcdefghjihjklmnopq872981e2c0b72244466650ce6010a14efb8"
@@ -44,30 +54,20 @@ Module modGRC
 
         Try
             Dim encryptor As ICryptoTransform = Aes.Create.CreateEncryptor(TruncateHash(MerkleRoot + Right(sSalt, 4), Aes.Create.KeySize \ 8), TruncateHash("", Aes.Create.BlockSize \ 8))
-
-            'Aes.Create.Key = TruncateHash(MerkleRoot + Right(sSalt, 4), Aes.Create.KeySize \ 8)
-            'Aes.Create.IV = TruncateHash("", Aes.Create.BlockSize \ 8)
             Return encryptor
-
         Catch ex As Exception
             Throw ex
         End Try
-
     End Function
 
     Private Function CreateAESDecryptor(ByVal sSalt As String) As ICryptoTransform
 
         Try
             Dim decryptor As ICryptoTransform = Aes.Create.CreateDecryptor(TruncateHash(MerkleRoot + Right(sSalt, 4), Aes.Create.KeySize \ 8), TruncateHash("", Aes.Create.BlockSize \ 8))
-
-            'Aes.Create.Key = TruncateHash(MerkleRoot + Right(sSalt, 4), Aes.Create.KeySize \ 8)
-            'Aes.Create.IV = TruncateHash("", Aes.Create.BlockSize \ 8)
             Return decryptor
-
         Catch ex As Exception
             Throw ex
         End Try
-
     End Function
 
     Public Function StringToByte(sData As String)
@@ -87,24 +87,233 @@ Module modGRC
             Dim fi As New System.IO.FileInfo(Assembly.GetExecutingAssembly().Location)
             Return fi.DirectoryName
         Catch ex As Exception
+            Return ""
         End Try
+    End Function
+    Public Function BoincSetTeamID(sProjectURL As String, sAccountKey As String, sTeamID As String) As BatchJob
+        Dim BJ As New BatchJob
+        Dim myWebClient As New MyWebClient()
+        Dim sFullURL As String = sProjectURL + "am_set_info.php?account_key=" + sAccountKey + "&teamid=" + sTeamID
+
+        Dim sHTTP As String = myWebClient.DownloadString(sFullURL)
+        If sHTTP.Contains("success") Then
+            BJ.Status = True
+        Else
+            BJ.Status = False
+        End If
+        Return BJ
+
+    End Function
+
+    Public Function BoincAttachProject(sProjectURL As String, sAccountKey As String) As BatchJob
+        Dim sOut As String = BoincCommand("--project_attach " + sProjectURL + " " + sAccountKey)
+        Dim BJ As New BatchJob
+        If sOut Is Nothing Then
+            BJ.Status = False
+            BJ.Value = "command failed"
+            Return BJ
+        End If
+
+        If sOut = "" Then
+            BJ.Status = True
+            BJ.Value = "success"
+            Return BJ
+        End If
+
+        If sOut.Contains("account key:") Then
+            BJ.Status = True
+            Dim vSplit() As String
+            vSplit = Split(sOut, "account key:")
+            BJ.Value = Trim(vSplit(1))
+        Else
+            BJ.Status = False
+            BJ.OutputError = sOut
+            If sOut.Contains("already attached") Then BJ.OutputError = "already attached"
+
+            If sOut.Contains("not unique") Then BJ.OutputError = "not unique"
+        End If
+        Return BJ
+    End Function
+    Public Sub StringToFile(sFN As String, sData As String)
+        Dim objWriter As New System.IO.StreamWriter(sFN)
+        objWriter.Write(sData)
+        objWriter.Close()
+
+    End Sub
+    Public Function FileToString(sFN As String) As String
+        Dim objReader As New System.IO.StreamReader(sFN)
+        Dim sOut As String = objReader.ReadToEnd()
+        objReader.Close()
+        Return sOut
+    End Function
+
+    Public Function BoincCreateAccount(sProjectURL As String, sEmail As String, sBoincPassword As String, sUserName As String) As BatchJob
+        Dim sOut As String = BoincCommand("--create_account " + sProjectURL + " " + sEmail + " " + sBoincPassword + " " + sUserName)
+        Dim BJ As New BatchJob
+        If sOut.Contains("account key:") Then
+            BJ.Status = True
+            Dim vSplit() As String
+            vSplit = Split(sOut, "account key:")
+            BJ.Value = Trim(vSplit(1))
+        Else
+            BJ.Status = False
+            BJ.OutputError = sOut
+            If sOut.Contains("not unique") Then BJ.OutputError = "not unique"
+        End If
+        Return BJ
+    End Function
+    Public Function BoincLookupAccount(sProjectURL As String, sEmail As String, sBoincPassword As String) As BatchJob
+        Dim sOut As String = BoincCommand("--lookup_account " + sProjectURL + " " + sEmail + " " + sBoincPassword)
+        Dim BJ As New BatchJob
+        If sOut.Contains("account key:") Then
+            BJ.Status = True
+            Dim vSplit() As String
+            vSplit = Split(sOut, "account key:")
+            BJ.Value = Trim(vSplit(1))
+        Else
+            BJ.Status = False
+            BJ.OutputError = sOut
+            If sOut.Contains("no database rows") Then BJ.OutputError = "no database rows"
+            If sOut.Contains("bad password") Then BJ.OutputError = "bad password"
+        End If
+        Return BJ
+    End Function
+
+
+    Public Function BoincCommand(sCommand As String) As String
+
+        Try
+
+            Dim sFullCommand As String = Chr(34) + GetBoincAppDir() + "boinccmd.exe" + Chr(34) + " " + sCommand + ">" + Chr(34) + GetBoincAppDir() + "boinccmd_out.txt" + Chr(34) + " 2>&1"
+            StringToFile(GetBoincAppDir() + "boinc_command.bat", sFullCommand)
+            If File.Exists(GetBoincAppDir() + "boinccmd_out.txt") Then System.IO.File.Delete(GetBoincAppDir() + "boinccmd_out.txt")
+
+            Dim p As Process = New Process()
+            Dim pi As ProcessStartInfo = New ProcessStartInfo()
+            pi.WorkingDirectory = GetBoincAppDir()
+            pi.UseShellExecute = True
+            pi.Arguments = ""
+            pi.WindowStyle = ProcessWindowStyle.Hidden
+
+            pi.FileName = pi.WorkingDirectory + "\boinc_command.bat"
+            p.StartInfo = pi
+            p.Start()
+            For x = 1 To 7
+                System.Threading.Thread.Sleep(500)
+                If p.HasExited Then Exit For
+            Next
+
+            Dim sOut As String = FileToString(GetBoincAppDir() + "boinccmd_out.txt")
+            sOut = Replace(sOut, Chr(10), "")
+            sOut = Replace(sOut, Chr(13), "")
+            If sOut Is Nothing Then sOut = ""
+
+            Return sOut
+        Catch ex As Exception
+            Return ""
+        End Try
+
+
+    End Function
+    Public Function BoincRetrieveTeamID(sProjectURL) As String
+        Dim myWebClient As New MyWebClient()
+        Try
+
+        Dim sFullURL As String = sProjectURL + "team_lookup.php?team_name=gridcoin&format=xml"
+        Dim sHTTP As String = myWebClient.DownloadString(sFullURL)
+
+        Dim sTeamID As String
+        sTeamID = ExtractXML(sHTTP, "<id>", "</id>")
+            Return sTeamID
+        Catch ex As Exception
+            Return ""
+        End Try
+
+    End Function
+
+    Public Function AttachProject(sURL As String, sEmail As String, sPass As String, sUserName As String) As String
+        Dim sResult As String = ""
+        Dim BJ As New BatchJob
+        BJ = BoincLookupAccount(sURL, sEmail, sPass)
+        Dim sKey As String
+        sKey = BJ.Value
+        If BJ.Status = False Then
+            'Account does not exist
+            sResult += "Account does not exist; Creating new account." + vbCrLf
+            'Add an account to the project
+            BJ = BoincCreateAccount(sURL, sEmail, sPass, sUserName)
+            If BJ.Status = False Then
+                sResult += "Failed to create a new account for project " + sURL + vbCrLf + "Process Failed." + vbCrLf
+                Return sResult
+            Else
+                sResult += "Created account successfully." + vbCrLf
+                sKey = BJ.Value
+            End If
+        End If
+
+        'Attach project to boinc
+
+        BJ = BoincAttachProject(sURL, sKey)
+        If BJ.Status = True Then
+            sResult += "Attached project " + sURL + " to boinc successfully." + vbCrLf
+        Else
+            sResult += "Failed to attach project : " + BJ.OutputError + vbCrLf
+            'Dont fail here; maybe already attached
+        End If
+
+        'Get the Gridcoin team ID 
+        Dim sTeam As String
+        sTeam = BoincRetrieveTeamID(sURL)
+        sResult += "Retrieved Team Gridcoin ID: " + sTeam + vbCrLf
+
+        BJ = BoincSetTeamID(sURL, sKey, sTeam)
+
+        If BJ.Status = True Then
+            sResult += "Successfully added user to Team Gridcoin." + vbCrLf
+        Else
+            sResult += "Failed to add user to Team Gridcoin." + vbCrLf
+        End If
+
+        Return sResult
+
+    End Function
+
+    Public Function GetBoincAppDir() As String
+        Dim sDir1 As String = "c:\program files\BOINC\"
+        If System.IO.Directory.Exists(sDir1) Then Return sDir1
+        sDir1 = "c:\program files (x86)\BOINC\"
+        If System.IO.Directory.Exists(sDir1) Then Return sDir1
+        sDir1 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles) + "\BOINC\"
+        If System.IO.Directory.Exists(sDir1) Then Return sDir1
+        sDir1 = KeyValue("boincappdir")
+        If System.IO.Directory.Exists(sDir1) Then Return sDir1
+        Return ""
+    End Function
+    Public Function GetLocalLanIP1() As String
+        Dim hostName = System.Net.Dns.GetHostName()
+        Dim sIP As String = ""
+        For Each hostAdr In System.Net.Dns.GetHostEntry(hostName).AddressList()
+            sIP = hostAdr.ToString()
+
+            If hostAdr.ToString().StartsWith("192.168.1.") Then
+
+            End If
+        Next
+
+        Stop
+
     End Function
     Public Sub ThreadWireFrame()
         If Not mfrmWireFrame Is Nothing Then
             mfrmWireFrame.EndWireFrame()
-
-
         End If
-        
         mfrmWireFrame = New frmGRCWireFrameCanvas
         mfrmWireFrame.Show()
-
     End Sub
     Public Sub StopWireFrame()
         If mfrmWireFrame Is Nothing Then
             mfrmWireFrame = New frmGRCWireFrameCanvas
         End If
-
     End Sub
     Public Function Base64File(sFileName As String)
         Dim sFilePath As String = GetGRCAppDir() + "\" + sFileName
@@ -120,7 +329,41 @@ Module modGRC
         Dim value As String = System.Text.ASCIIEncoding.ASCII.GetString(b)
         b = System.Convert.FromBase64String(value)
         System.IO.File.WriteAllBytes(sTargetFileName, b)
+    End Function
+    Public Function FileToBase64String(sSourceFileName As String) As String
+        Dim sFilePath As String = sSourceFileName
+        Dim b() As Byte
+        b = System.IO.File.ReadAllBytes(sFilePath)
+        Dim sBase64 As String = System.Convert.ToBase64String(b, 0, b.Length)
+        Return sBase64
+    End Function
+    Public Function WriteBase64StringToFile(sFileName As String, sData As String)
+        Dim sFilePath As String = sFileName
+        Dim b() As Byte
+        b = System.Convert.FromBase64String(sData)
+        System.IO.File.WriteAllBytes(sFilePath, b)
+    End Function
+    Public Function DecryptAES512AttachmentToFile(sFileName As String, sData As String, sPass As String)
+        Dim sFilePath As String = sFileName
+        Dim b() As Byte
+        b = System.Convert.FromBase64String(sData)
+        b = AES512DecryptData(b, sPass)
+        System.IO.File.WriteAllBytes(sFilePath, b)
+    End Function
 
+    Public Function FileToBytes(sSourceFileName As String) As Byte()
+        Dim sFilePath As String = sSourceFileName
+        Dim b() As Byte
+        b = System.IO.File.ReadAllBytes(sFilePath)
+        Return b
+
+    End Function
+
+    Public Function Base64StringToFile(sData As String, sFileName As String) As Boolean
+        Dim b() As Byte
+        b = System.Convert.FromBase64String(sData)
+        System.IO.File.WriteAllBytes(sFileName, b)
+        Return True
     End Function
 
     Public Function GetMd5String(ByVal sData As String) As String
@@ -163,7 +406,101 @@ Module modGRC
         sReq = System.Text.Encoding.UTF8.GetString(b)
         Return sReq
     End Function
+    Public Function IsBoincInstalled() As Boolean
+        Dim sPath As String = GetBoincAppDir()
+        If File.Exists(sPath + "boincmgr.exe") Then Return True Else Return False
+    End Function
+    Private Sub ExtractZipEntry(ze As ZipEntry, zf As ZipFile, outFolder As String)
+        Dim entryFileName As [String] = ze.Name
+        Dim buffer As Byte() = New Byte(4095) {}    ' 4K is optimum
+        Dim zipStream As Stream = zf.GetInputStream(ze)
+        ' Manipulate the output filename here as desired.
+        Dim fullZipToPath As [String] = Path.Combine(outFolder, entryFileName)
+        fullZipToPath = Replace(fullZipToPath, "/", "\")
+        Try
 
+            Using streamWriter As FileStream = File.Create(fullZipToPath)
+                StreamUtils.Copy(zipStream, streamWriter, buffer)
+            End Using
+        Catch ex As Exception
+
+            'Dont blow up here, or it will break the entire process
+
+        End Try
+
+    End Sub
+    Public Sub ExtractZipFile(archiveFilenameIn As String, outFolder As String)
+        Dim zf As ZipFile = Nothing
+
+        Try
+            MkDir(outFolder)
+
+        Catch ex As Exception
+
+        End Try
+        Try
+            Dim fs As FileStream = File.OpenRead(archiveFilenameIn)
+            zf = New ZipFile(fs)
+            For Each zipEntry As ZipEntry In zf
+                If Not zipEntry.IsFile Then     ' Ignore directories
+
+                    Try
+                        MkDir(outFolder & "\" & zipEntry.Name)
+
+                    Catch ex As Exception
+
+                    End Try
+
+
+                End If
+
+                ExtractZipEntry(zipEntry, zf, outFolder)
+
+            Next
+        Catch ex As Exception
+            Dim sErr As String = ex.Message
+
+        Finally
+            If zf IsNot Nothing Then
+                zf.IsStreamOwner = True     ' Makes close also shut the underlying stream
+                zf.Close()
+            End If
+        End Try
+    End Sub
+    Public Sub LaunchBoinc()
+        Dim sPath As String = GetBoincAppDir()
+
+        Try
+            Dim p As Process = New Process()
+            Dim pi As ProcessStartInfo = New ProcessStartInfo()
+            Dim fi As New System.IO.FileInfo(sPath + "boincmgr.exe")
+            pi.WorkingDirectory = fi.DirectoryName
+            pi.UseShellExecute = True
+            pi.FileName = sPath + "\boincmgr.exe"
+            pi.WindowStyle = ProcessWindowStyle.Minimized
+            pi.CreateNoWindow = False
+            p.StartInfo = pi
+            p.Start()
+        Catch ex As Exception
+
+        End Try
+
+    End Sub
+    Public Sub InstallBoinc()
+        Dim sBoincDir As String = "c:\program files\Boinc\"
+        Try
+            Dim di As New DirectoryInfo(sBoincDir)
+            di.Delete(True)
+        Catch ex As Exception
+
+        End Try
+        Try
+            ExtractZipFile(GetGRCAppDir() + "\boinc.zip", sBoincDir)
+        Catch ex As Exception
+
+        End Try
+
+    End Sub
     Public Function RestartWallet1(sParams As String)
         Dim p As Process = New Process()
         Dim pi As ProcessStartInfo = New ProcessStartInfo()
@@ -269,13 +606,21 @@ Module modGRC
         Return bOut
     End Function
   
-    
+    Public Function DateStamp() As String
+        Dim sTimeStamp As String
+        sTimeStamp = Format(Now, "MMM d yyyy HH:mm")
+        Return sTimeStamp
+    End Function
+    Public Function DateStamp(dt As Date) As String
+        Return Format(dt, "MMM d yyyy HH:mm")
+
+    End Function
        Public Sub Log(sData As String)
         Try
             Dim sPath As String
             sPath = GetGridFolder() + "debug2.log"
             Dim sw As New System.IO.StreamWriter(sPath, True)
-            sw.WriteLine(Trim(Now) + ", " + sData)
+            sw.WriteLine(Trim(DateStamp) + ", " + sData)
             sw.Close()
         Catch ex As Exception
         End Try
@@ -414,7 +759,7 @@ Module modGRC
 
     Public Function NeedsUpgrade() As Boolean
         Try
-
+            
             Dim sMsg As String
             Dim sURL As String = "http://download.gridcoin.us/download/downloadstake/"
 
@@ -437,8 +782,8 @@ Module modGRC
                         sDT = Trim(sDT)
 
                         Dim dDt As DateTime
-                        'dDt = ParseDate(Trim(sDT))
-                        dDt = CDate(sDT)
+                        dDt = ParseDate(Trim(sDT))
+                        'dDt = CDate(sDT)
                         Dim PSTTimeZoneInfo As TimeZoneInfo
                         'Server is in PST Time Zone
                         PSTTimeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById("Pacific SA Standard Time")
@@ -446,12 +791,14 @@ Module modGRC
                         'dDt = TimeZoneInfo.ConvertTime(dDt, System.TimeZoneInfo.Utc)
                         dDt = TimeZoneInfo.ConvertTime(dDt, PSTTimeZoneInfo)
                         dDt = DateAdd(DateInterval.Hour, -2, dDt)
-
-                        Log("Gridcoin.us boincstake.dll timestamp in PST : " + Trim(dDt))
+                        'This value is Not correct
+                        Log("Gridcoin.us boincstake.dll timestamp in PST : " + DateStamp(dDt))
 
                         'Now we have boincstake.dll timestamp in PST, convert to UTC
                         dDt = TimeZoneInfo.ConvertTime(dDt, System.TimeZoneInfo.Utc)
-                        Log("Gridcoin.us boincstake.dll timestamp in UTC : " + Trim(dDt))
+                        'This value is correct in Germany
+                        Log("Gridcoin.us boincstake.dll timestamp in UTC : " + DateStamp(dDt))
+
 
                         'Pad time by 15 mins to delay the auto upgrade
                         dDt = DateAdd(DateInterval.Minute, -15, dDt)
@@ -465,7 +812,8 @@ Module modGRC
                         Try
                             dtLocal = System.IO.File.GetLastWriteTime(sLocalPathFile)
                             dtLocal = TimeZoneInfo.ConvertTime(dtLocal, System.TimeZoneInfo.Utc)
-                            Log("Gridcoin.us boincstake.dll timestamp (UTC) : " + Trim(dDt) + ", VS : Local boincstake.dll timestamp (UTC) : " + Trim(dtLocal))
+                            Log("Gridcoin.us boincstake.dll timestamp (UTC) : " + DateStamp(dDt) _
+                                + ", VS : Local boincstake.dll timestamp (UTC) : " + DateStamp(dtLocal))
                             If dDt < dtLocal Then
                                 Log("Not upgrading.")
                             End If
@@ -489,16 +837,45 @@ Module modGRC
     End Function
 
 
+
+    Public Function AES512EncryptData(b() As Byte, Pass As String) As Byte()
+        Try
+            Dim encryptor As ICryptoTransform = CreateAESEncryptor(Pass)
+            Dim ms As New System.IO.MemoryStream
+            Dim encStream As New CryptoStream(ms, encryptor, System.Security.Cryptography.CryptoStreamMode.Write)
+            encStream.Write(b, 0, b.Length)
+            encStream.FlushFinalBlock()
+            Try
+                Return ms.ToArray
+            Catch ex As Exception
+                Log("Error while encrypting " + ex.Message)
+
+            End Try
+        Catch ex As Exception
+            Log("Error while encrypting [2]" + ex.Message)
+
+        End Try
+    End Function
+
+    Public Function AES512DecryptData(EncryptedBytes() As Byte, sPass As String) As Byte()
+        Try
+            Dim decryptor As ICryptoTransform = CreateAESDecryptor(sPass)
+            Dim ms As New System.IO.MemoryStream
+            Dim decStream As New CryptoStream(ms, decryptor, System.Security.Cryptography.CryptoStreamMode.Write)
+            decStream.Write(EncryptedBytes, 0, EncryptedBytes.Length)
+            decStream.FlushFinalBlock()
+            Return ms.ToArray
+        Catch ex As Exception
+            Log("Error while decryption AES512 " + ex.Message)
+        End Try
+    End Function
+
+
     Public Function AES512EncryptData(ByVal plaintext As String) As String
 
         Try
-
-            ' Convert the plaintext string to a byte array. 
             Dim encryptor As ICryptoTransform = CreateAESEncryptor("salt")
-            
-            'Call MerkleAES(MerkleRoot)
             Dim plaintextBytes() As Byte = System.Text.Encoding.Unicode.GetBytes(plaintext)
-            ' Create the stream. 
             Dim ms As New System.IO.MemoryStream
             ' Create the encoder to write to the stream. 
             Dim encStream As New CryptoStream(ms, encryptor, System.Security.Cryptography.CryptoStreamMode.Write)
@@ -507,22 +884,15 @@ Module modGRC
             encStream.FlushFinalBlock()
             Try
                 Return Convert.ToBase64String(ms.ToArray)
-
             Catch ex As Exception
-
             End Try
-
-
         Catch ex As Exception
-
+            Log("Error while encrypting AES 512 " + ex.Message)
         End Try
     End Function
 
     Public Function AES512DecryptData(ByVal encryptedtext As String) As String
         Try
-
-            ' Convert the encrypted text string to a byte array. 
-            '            MerkleAES(MerkleRoot)
             Dim decryptor As ICryptoTransform = CreateAESDecryptor("salt")
             Dim encryptedBytes() As Byte = Convert.FromBase64String(encryptedtext)
             Dim ms As New System.IO.MemoryStream
@@ -535,7 +905,6 @@ Module modGRC
         Catch ex As Exception
             Return ex.Message
         End Try
-
     End Function
 
 
