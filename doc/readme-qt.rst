@@ -26,7 +26,7 @@ then execute the following:
 
 Alternatively, install Qt Creator and open the `gridcoin-qt.pro` file.
 
-An executable named `gridcoin-qt` will be built.
+An executable named `gridcoinresearch` will be built.
 
 
 Windows
