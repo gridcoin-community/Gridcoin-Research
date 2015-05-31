@@ -24,6 +24,23 @@ std::string CPIDByAddress(std::string address);
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 double GetMagnitudeUnit(int64_t locktime);
+std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
+extern  std::string GetTeamURLs(bool bMissingOnly, bool bReturnProjectNames);
+extern  bool InsertSmartContract(std::string URL,std::string Name);
+std::string ExtractHTML(std::string HTMLdata, std::string tagstartprefix,  std::string tagstart_suffix, std::string tag_end);
+
+extern bool SynchronizeRacForDPOR(bool SyncEntireCoin);
+extern bool TallyMagnitudesByContract();
+
+
+
+extern void QueryWorldCommunityGridRAC();
+bool Contains(std::string data, std::string instring);
+std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
+
+
+std::string ReadCache(std::string section, std::string key);
+
 
 bool LessVerbose(int iMax1000);
 MiningCPID GetMiningCPID();
@@ -39,6 +56,8 @@ std::string SerializeBoincBlock(MiningCPID mcpid);
 extern std::string TimestampToHRDate(double dtm);
 std::string qtGRCCodeExecutionSubsystem(std::string sCommand);
 std::string LegacyDefaultBoincHashArgs();
+std::string GetHttpPage(std::string url);
+
 double GetChainDailyAvgEarnedByCPID(std::string cpid, int64_t locktime, double& out_payments, double& out_daily_avg_payments);
 bool ChainPaymentApproved(std::string cpid, int64_t locktime, double Proposed_Subsidy);
 double CoinToDouble(double surrogate);
@@ -117,6 +136,8 @@ double GetNetworkProjectCountWithRAC()
 
 double GetNetworkAvgByProject(std::string projectname)
 {
+	projectname = strReplace(projectname,"_"," ");
+
 	try 
 	{
 		if (mvNetwork.size() < 1)
@@ -893,6 +914,243 @@ bool CheckMessageSignature(std::string messagetype, std::string sMsg, std::strin
 }
 
 
+std::string ExtractValue(std::string data, std::string delimiter, int pos)
+{
+	std::vector<std::string> vKeys = split(data.c_str(),delimiter);
+	std::string keyvalue = "";
+	if (vKeys.size() >= pos)
+	{
+		keyvalue = vKeys[pos];
+	}
+
+	return keyvalue;
+
+
+}
+
+
+
+bool TallyMagnitudesByContract()
+{
+	std::string projects = GetTeamURLs(false,true);
+	//This list contains projects with contracts:
+	std::vector<std::string> vProjects = split(projects.c_str(),"<ROW>");
+	mvDPOR.clear();
+	for (unsigned int i = 0; i < vProjects.size(); i++)
+	{
+		if (vProjects[i].length() > 1)
+		{
+			//Return the contract for the team
+			std::string contract_name = "" + vProjects[i];
+			std::string contract = ReadCache("contract", contract_name);
+			printf("Accessing contract %s\r\n",contract_name.c_str());
+			double projavg=GetNetworkAvgByProject(contract_name);
+			// For each CPID in the contract
+			std::vector<std::string> vCPIDs = split(contract.c_str(),";");
+			for (unsigned int c = 0; c < vCPIDs.size(); c++)
+			{
+				printf("ProjAvg %f, IU %s \r\n",projavg,vCPIDs[c].c_str());
+				std::string cpid = ExtractValue(vCPIDs[c],",",0);
+				if (cpid.length() > 10)
+				{
+					double rac = cdbl(ExtractValue(vCPIDs[c],",",1),0);
+					std::string project = vProjects[i];
+					printf("cpid %s, rac %f",cpid.c_str(),rac);
+					//Add weighted Magnitude here
+					StructCPID stCPID = GetStructCPID();
+					stCPID = mvDPOR[cpid];
+					if (!stCPID.initialized)
+					{
+								stCPID.initialized = true;
+								mvDPOR.insert(map<string,StructCPID>::value_type(cpid,stCPID));
+					}
+					stCPID.verifiedrac = rac;
+		
+					if (projavg > 100)
+					{
+							stCPID.verifiedTotalNetworkRAC = stCPID.verifiedTotalNetworkRAC + projavg;
+							double project_magnitude = rac/(projavg+.01) * 100;
+							stCPID.TotalMagnitude += project_magnitude;
+							stCPID.TotalRAC += rac;
+							stCPID.MagnitudeCount++;
+							double WhitelistedWithRAC = GetNetworkProjectCountWithRAC();
+							stCPID.Magnitude = (stCPID.TotalMagnitude/WHITELISTED_PROJECTS) * WhitelistedWithRAC;
+					}
+					mvDPOR[cpid]=stCPID;
+				}
+
+			}
+
+		}
+	}
+	return true;
+}
+
+bool SynchronizeRacForDPOR(bool SyncEntireCoin)
+{
+	std::string teams = GetTeamURLs(true,false);
+	std::string projs = GetTeamURLs(true,true);
+	//This list contains projects that have not been synced for 24+ hours in Gridcoin:
+	std::vector<std::string> vTeams = split(teams.c_str(),"<ROW>");
+	std::vector<std::string> vProjs = split(projs.c_str(),"<ROW>");
+	bool result = false;
+
+	for (unsigned int i = 0; i < vTeams.size(); i++)
+	{
+		if (vTeams[i].length() > 5)
+		{
+			printf("Inserting smart contract for team project %s",vTeams[i].c_str());
+			if (vProjs[i]=="world_community_grid")
+			{
+				
+				QueryWorldCommunityGridRAC();
+				if (!SyncEntireCoin)				break;
+			}
+			else
+			{
+				result = 			InsertSmartContract(vTeams[i],vProjs[i]);
+				if (result && !SyncEntireCoin) break;
+			}
+			
+		}
+	}
+
+	return true;
+	
+}
+
+std::string GetTeamURLs(bool bMissingOnly, bool bReturnProjectNames)
+{
+
+			std::string sType = "project";
+			std::string project_urls = "";
+			std::string project_names = "";
+  		    for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+		    {
+				std::string key_name  = (*ii).first;
+			   	if (key_name.length() > sType.length())
+				{
+					if (key_name.substr(0,sType.length())==sType)
+					{
+								std::string key_value = mvApplicationCache[(*ii).first];
+								std::string project_name = ExtractValue(key_name,";",1);
+								//Get the age of the RAC in the smart contract
+								std::string contract_name = "contract;" + project_name;
+								std::string contract = mvApplicationCache[contract_name];
+								int64_t age = GetCurrentTime() - mvApplicationCacheTimestamp[contract_name];
+								if (!bMissingOnly || (bMissingOnly && age > (60*60*24)) || (bMissingOnly && contract.length() < 20))
+								{
+									project_urls += key_value + "<ROW>";
+									project_names += project_name + "<ROW>";
+								}
+					}
+		       
+				}
+		   }
+		   return (bReturnProjectNames ? project_names : project_urls);
+
+}
+
+
+void QueryWorldCommunityGridRAC()
+{
+	int gridcoin_team_id = 30513;
+	int max_pages = 1100;
+	int page_size = 100;
+	std::string q = "\"";
+	std::string contract = "";
+		
+	for (int i = 0; i < max_pages; i = i + page_size)
+	{
+			std::string URL = "http://stats.kwsn.info/team.php?proj=wcg&teamid=" + RoundToString(gridcoin_team_id,0) + "&sort_order=total_credit&sort_direction=DESC&offset=" + RoundToString(i,0);
+			std::string results = GetHttpPage(URL);
+
+			int iRow = 0;
+			std::vector<std::string> vUsers = split(results.c_str(),"<tr>");
+			for (unsigned int i = 0; i < vUsers.size(); i++)
+			{
+			
+				if (Contains(vUsers[i],"cpid="))
+				{
+					std::string cpid = ExtractXML(vUsers[i],"cpid=",q);
+					printf("cpid %s \r\n",cpid.c_str());
+					std::vector<std::string> vTD = split(vUsers[i].c_str(),"<td");
+					if (vTD.size() > 3)
+					{
+						for (unsigned int j = 0; j < vTD.size(); j++)
+						{
+							vTD[j] = "<td" + vTD[j];
+						}
+						std::string rac = ExtractHTML(vTD[5],"<td",">","</td>");
+						if (rac=="") rac = "0";
+						double dRac = cdbl(rac,0);
+						if (dRac > 99)
+						{
+							printf("WCG cpid %s rac %f\r\n",cpid.c_str(),dRac);
+							contract += cpid + "," + RoundToString(dRac,0) + ";";
+						}
+					}
+				}
+		}
+   }
+
+   if (contract.length() > 20)
+   {
+		    std::string sAction = "add";
+			std::string sType = "contract";
+			std::string sPass = "";
+			sPass = (sType=="project" || sType=="projectmapping" || sType=="smart_contract") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
+			std::string sName = "world_community_grid";
+			std::string sValue = contract;
+			printf("Contract %s\r\n",contract.c_str());
+			std::string result = AddMessage(true,sType,sName,sValue,sPass);
+			printf("Results %s",result.c_str());
+   }
+
+}
+
+
+bool InsertSmartContract(std::string URL, std::string name)
+{
+
+	std::string results = GetHttpPage(URL);
+	double total_rac = 0;
+	printf("Querying DPOR RAC for project %s response %s\r\n",URL.c_str(),results.c_str());
+	int iRow = 0;
+	std::vector<std::string> vUsers = split(results.c_str(),"<user>");
+	std::string contract = "";
+		for (unsigned int i = 0; i < vUsers.size(); i++)
+		{
+			std::string cpid = ExtractXML(vUsers[i],"<cpid>","</cpid>");
+			std::string rac = ExtractXML(vUsers[i],"<expavg_credit>","</expavg_credit>");
+			
+			double dRac = cdbl(rac,0);
+			if (dRac > 99)
+			{
+				printf("Cpid %s rac %f\r\n",cpid.c_str(),dRac);
+				contract += cpid + "," + RoundToString(dRac,0) + ";";
+				total_rac++;
+			}
+		}
+
+			std::string sAction = "add";
+			std::string sType = "contract";
+			std::string sPass = "";
+			sPass = (sType=="project" || sType=="projectmapping" || sType=="smart_contract") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
+			std::string sName = "" + name;
+			std::string sValue = contract;
+
+			if (vUsers.size() > 1 && total_rac > 100)
+			{
+				std::string result = AddMessage(true,sType,sName,sValue,sPass);
+				printf("Results %s",result.c_str());
+			}
+			return (vUsers.size() > 1 && total_rac > 100) ? true : false;
+}
+
+
+
+
 Value execute(const Array& params, bool fHelp)
 {
     if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3 && params.size() != 4 && params.size() != 5 && params.size() != 6))
@@ -1031,13 +1289,33 @@ Value execute(const Array& params, bool fHelp)
 		}
 	
 	}
-	else if (sItem =="nonce")
+	else if (sItem == "contract")
 	{
-	
+
+			bool result = InsertSmartContract("http://milkyway.cs.rpi.edu/milkyway/team_email_list.php?teamid=6566&xml=1","milkyway");
+			entry.push_back(Pair("Done","Done"));
+			results.push_back(entry);
+		
 	}
-	else if (sItem == "testnonce")
+	else if (sItem == "wcgtest")
 	{
-	
+		
+			QueryWorldCommunityGridRAC();
+			entry.push_back(Pair("Done","Done"));
+			results.push_back(entry);
+		
+	}
+	else if (sItem == "syncrac")
+	{
+		bool result = SynchronizeRacForDPOR(true);
+		entry.push_back(Pair("Done","Done"));
+	    results.push_back(entry);
+	}
+	else if (sItem == "dportally")
+	{
+		bool result = TallyMagnitudesByContract();
+		entry.push_back(Pair("Done","Done"));
+	    results.push_back(entry);
 	
 	}
 	else if (sItem == "addkey")
@@ -1423,7 +1701,6 @@ Array MagnitudeReport(bool bMine)
 									entry.push_back(Pair("CPID",structMag.cpid));
 									entry.push_back(Pair("GRCAddress",structMag.GRCAddress));
 									entry.push_back(Pair("Last Block",structMag.LastBlock));
-
 									entry.push_back(Pair("Magnitude",structMag.ConsensusMagnitude));
 									entry.push_back(Pair("Payment Magnitude",structMag.PaymentMagnitude));
 									entry.push_back(Pair("Payment Timespan (Days)",structMag.PaymentTimespan));
@@ -1437,12 +1714,14 @@ Array MagnitudeReport(bool bMine)
 									entry.push_back(Pair("Next Estimated Payment",nep));
 									entry.push_back(Pair("Daily Paid",structMag.payments/14));
 									entry.push_back(Pair("Daily Owed",structMag.totalowed/14));
-
 									double magnitude_unit = GetMagnitudeUnit(GetAdjustedTime());
 									entry.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
 									double est_daily = magnitude_unit*structMag.ConsensusMagnitude;
 									entry.push_back(Pair("Daily Max per Mag Unit", est_daily));
-									
+									double Owed =  OwedByAddress(structMag.GRCAddress);
+									entry.push_back(Pair("Owed by address (testnet only)", Owed));
+									StructCPID DPOR = mvDPOR[structMag.cpid];
+									entry.push_back(Pair("DPOR Magnitude",	DPOR.Magnitude));
 									results.push_back(entry);
 						}
 				}
@@ -1514,13 +1793,68 @@ std::string CryptoLottery(int64_t locktime)
 	    //Prod ToDo: if rows < 10 return null
 		if (fDebug3) printf("CryptoLottery %s",sOut.c_str());
 		//4-11-2015 ; Simulate No Payments due in testnet 50% of the time:
-		if (LessVerbose(500)) sOut = "";
+		if (fTestNet && LessVerbose(500)) sOut = "";
 		return sOut;
 }
 
 
 
+Array ContractReportCSV()
+{
+	      Array results;
+	      Object c;
+		  std::string Narr = "Open Contract Report - Generated " + RoundToString(GetAdjustedTime(),0);
+          c.push_back(Pair("Open Contract Report",Narr));
+		  results.push_back(c);
+		  double rows = 0;
+		  std::string header = "Name,StartDate,Expiration,Content,Value \r\n";
+   	      std::string row = "";
+		  std::string sType = "contract";
+  		  for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+		  {
+				std::string key_name  = (*ii).first;
+			   	if (key_name.length() > sType.length())
+				{
+					if (key_name.substr(0,sType.length())==sType)
+					{
+								std::string key_value = mvApplicationCache[(*ii).first];
+								std::vector<std::string> vContractValues = split(key_value.c_str(),";");
+								std::string contract_name = strReplace(key_name,"contract;","");
 
+								row = contract_name + "," + RoundToString(mvApplicationCacheTimestamp[(*ii).first],0) + "," 
+									+ RoundToString(mvApplicationCacheTimestamp[(*ii).first]+86400,0) + ", , \n";
+								header += row;
+								rows++;
+								for (int i = 0; i < vContractValues.size(); i++)
+								{
+									std::vector<std::string> vContractSubValues = split(vContractValues[i].c_str(),",");
+									if (vContractSubValues.size() > 1)
+									{
+										std::string subkey = vContractSubValues[0];
+										std::string subvalue = vContractSubValues[1];
+										row = " , , ," + subkey + "," + subvalue + "\n";
+										header += row;
+									}
+
+								}
+								header +=  "\n";
+					
+					}
+		       
+				}
+		   }
+		   int64_t timestamp = GetTime();
+		   std::string footer = "Total: " + RoundToString(rows,0) + ", , , ," + "\n";
+		   header += footer;
+		   Object entry;
+		   entry.push_back(Pair("CSV Complete",strprintf("\\reports\\open_contracts_%"PRId64".csv",timestamp)));
+		   results.push_back(entry);
+     	   
+		   CSVToFile(strprintf("open_contracts_%"PRId64".csv",timestamp), header);
+		   return results;
+
+		 
+}
 
 
 
@@ -1540,7 +1874,7 @@ Array MagnitudeReportCSV(bool detail)
 		   double rows = 0;
 		   double outstanding = 0;
 		   double totaloutstanding = 0;
-		   std::string header = "CPID,Magnitude,PaymentMagnitude,Accuracy,LongTermOwed14day,LongTermOwedDaily,Payments,InterestPayments,LastPaymentTime,CurrentDailyOwed,NextExpectedPayment,AvgDailyPayments,Outstanding,PaymentTimespan,PaymentDate,ResearchPaymentAmount,InterestPaymentAmount\r\n";
+		   std::string header = "CPID,Magnitude,PaymentMagnitude,Accuracy,LongTermOwed14day,LongTermOwedDaily,Payments,InterestPayments,LastPaymentTime,CurrentDailyOwed,NextExpectedPayment,AvgDailyPayments,Outstanding,PaymentTimespan,DPOR_Magnitude,PaymentDate,ResearchPaymentAmount,InterestPaymentAmount\r\n";
 
 		   std::string row = "";
 		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
@@ -1554,6 +1888,9 @@ Array MagnitudeReportCSV(bool detail)
 					{
 						outstanding = structMag.totalowed - structMag.payments;
 						if (outstanding < 0) outstanding = 0;
+
+						StructCPID stDPOR = mvDPOR[structMag.cpid];
+					
   						row = structMag.cpid + "," + RoundToString(structMag.ConsensusMagnitude,2) + "," 
 							+ RoundToString(structMag.PaymentMagnitude,0) + "," + RoundToString(structMag.Accuracy,0) + "," + RoundToString(structMag.totalowed,2) 
 							+ "," + RoundToString(structMag.totalowed/14,2)
@@ -1561,7 +1898,8 @@ Array MagnitudeReportCSV(bool detail)
 							+ RoundToString(structMag.interestPayments,2) + "," + TimestampToHRDate(structMag.LastPaymentTime) 
 							+ "," + RoundToString(structMag.owed,2) 
 							+ "," + RoundToString(structMag.owed/2,2)
-							+ "," + RoundToString(structMag.payments/14,2) + "," + RoundToString(outstanding,2) + "," + RoundToString(structMag.PaymentTimespan,0) +  "\n";
+							+ "," + RoundToString(structMag.payments/14,2) + "," + RoundToString(outstanding,2) + "," 
+							+ RoundToString(structMag.PaymentTimespan,0) + "," + RoundToString(stDPOR.Magnitude,0) + "\n";
 						header += row;
 						if (detail)
 						{
@@ -1610,20 +1948,19 @@ std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::stri
 {
     std::string foundation = fTestNet ? "mk1e432zWKH1MW57ragKywuXaWAtHy1AHZ" : "S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB";
     CBitcoinAddress address(foundation);
-    if (!address.IsValid())        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
-    int64_t nAmount = AmountFromValue(1);
+    if (!address.IsValid())       throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
+    int64_t nAmount = AmountFromValue(.25);
     // Wallet comments
     CWalletTx wtx;
-    if (pwalletMain->IsLocked())        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
-	std::string sMessageType      = "<MT>" + sType  + "</MT>";  //Project
+    if (pwalletMain->IsLocked())  throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
+	std::string sMessageType      = "<MT>" + sType  + "</MT>";  //Project or Smart Contract
     std::string sMessageKey       = "<MK>" + sKey   + "</MK>";
 	std::string sMessageValue     = "<MV>" + sValue + "</MV>";
-	std::string sMessageAction    = bAdd ? "<MA>A</MA>" : "<MA>D</MA>";
+	std::string sMessageAction    = bAdd ? "<MA>A</MA>" : "<MA>D</MA>"; //Add or Delete
 	//Sign Message
 	std::string sSig = SignMessage(sType+sKey+sValue,sMasterKey);
 	std::string sMessageSignature = "<MS>" + sSig + "</MS>";
 	wtx.hashBoinc = sMessageType+sMessageKey+sMessageValue+sMessageAction+sMessageSignature;
-	//printf("Adding hashboinc %s\r\n",wtx.hashBoinc.c_str());
     string strError = pwalletMain->SendMoneyToDestination(address.Get(), nAmount, wtx);
     if (strError != "")        throw JSONRPCError(RPC_WALLET_ERROR, strError);
     return wtx.GetHash().GetHex().c_str();
@@ -1849,6 +2186,13 @@ Value listitem(const Array& params, bool fHelp)
 	if (sitem == "magnitudecsv")
 	{
 		results = MagnitudeReportCSV(false);
+		return results;
+	}
+
+	if (sitem == "opencontracts")
+	{
+
+		results = ContractReportCSV();
 		return results;
 	}
 

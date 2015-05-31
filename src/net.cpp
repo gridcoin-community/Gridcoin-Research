@@ -11,6 +11,8 @@
 #include "addrman.h"
 #include "ui_interface.h"
 
+#include <boost/algorithm/string/case_conv.hpp> // for to_lower()
+
 #ifdef WIN32
 #include <string.h>
 #endif
@@ -35,6 +37,11 @@ extern std::string DefaultOrgKey(int key_length);
 extern std::string DefaultBlockKey(int key_length);
 extern std::string GetBestBlockHash(std::string sCPID);
 extern std::string TestHTTPProtocol(std::string sCPID);
+extern std::string GetHttpPage(std::string url);
+std::vector<std::string> split(std::string s, std::string delim);
+
+
+
 extern std::string OrgId();
 std::string DefaultBoincHashArgs();
 extern std::string LegacyDefaultBoincHashArgs();
@@ -204,12 +211,9 @@ bool RecvLine2(SOCKET hSocket, string& strLine)
 	
         if (nBytes > 0)
         {
-            
-	
-			if (c == '\n')      continue;
+            if (c == '\n')      continue;
             if (c == '\r')      return true;
-			
-            strLine += c;
+		    strLine += c;
             if (strLine.size() >= 39000)
                 return true;
         }
@@ -444,6 +448,59 @@ void StringToChar(std::string s, char* a)
 }
 
 
+
+std::string GetLargeHttpContent(const CService& addrConnect, std::string getdata)
+{
+
+	try 
+	{
+	char *pszGet = (char*)getdata.c_str();
+
+    SOCKET hSocket;
+    if (!ConnectSocket(addrConnect, hSocket))
+	{
+        return "GetLargeHttpContent() : connection to address failed";
+	}
+
+	if (fDebug) printf("Trying %s",getdata.c_str());
+
+    send(hSocket, pszGet, strlen(pszGet), MSG_NOSIGNAL);
+    string strLine;
+	std::string strOut="null";
+	MilliSleep(62);
+	double timeout = 0;
+	clock_t begin = clock();
+    while (RecvLine2(hSocket, strLine))
+    {
+	            strOut = strOut + strLine + "\r\n";
+				MilliSleep(10);
+				timeout=timeout+10;
+  			    clock_t end = clock();
+				double elapsed_secs = double(end - begin) / (CLOCKS_PER_SEC+.01);
+				if (timeout > 20000) break;
+				if (elapsed_secs > 20) break;
+			    if (strLine.find("<END>") != string::npos) break;
+				if (strLine.find("</html>") != string::npos) break;
+				if (strLine.find("</users>") != string::npos) break;
+
+    }
+    closesocket(hSocket);
+	return strOut;
+	}
+    catch (std::exception &e) 
+	{
+        return "";
+
+    }
+	catch (...)
+	{
+		return "";
+	}
+
+}
+
+
+
 std::string GetHttpContent(const CService& addrConnect, std::string getdata)
 {
 
@@ -608,6 +665,87 @@ std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string
 	}
 
 }
+
+
+std::string ExtractDomainFromURL(std::string url, int partid)
+{
+	boost::to_lower(url);
+		
+//	std::string domain = "milkyway.cs.rpi.edu";
+	//std::string page = "milkyway/team_email_list.php?teamid=6566&xml=1";
+	std::string out_url = "";
+	std::string domain = "";
+
+	std::vector<std::string> vURL = split(url.c_str(),"http://");
+	if (vURL.size() > 0)
+	{
+		std::string protocol = vURL[0];
+		std::string raw_url = vURL[1];
+		//Extract the domain from the URL:
+		std::vector<std::string> vElements = split(raw_url.c_str(),"/");
+		domain = vElements[0];
+		//Join the remaining elements to obtain the actual URL
+		
+		for (int i = 1; i < vElements.size(); i++)
+		{
+			out_url += vElements[i] + "/";
+		}
+	}
+
+	if (out_url.length() > 2) out_url = out_url.substr(0,out_url.length()-1);
+	if (partid == 0) return domain;
+	if (partid == 1) return out_url;
+	return "";
+}
+
+
+
+std::string GetHttpPage(std::string url)
+{
+
+	try 
+	{
+	
+		std::string domain = ExtractDomainFromURL(url,0);
+		std::string page = ExtractDomainFromURL(url,1);
+		printf("domain %s,    page %s\r\n",domain.c_str(),page.c_str());
+
+		CService addrConnect;
+
+		CService addrIP(domain, 80, true);
+        if (addrIP.IsValid()) 
+		{
+				addrConnect = addrIP;
+		}
+		else
+		{
+			return "";
+		}
+
+		std::string getdata = "GET /" + page + " HTTP/1.1\r\n"
+                     "Host: " + domain + "\r\n"
+  				     "User-Agent: Mozilla/4.0\r\n"
+                     "\r\n";
+             
+      	std::string http = GetLargeHttpContent(addrConnect,getdata);
+		std::string resultset = "" + http;
+		return resultset;
+	}
+    catch (std::exception &e) 
+	{
+		printf("Error while querying address for XML %s",url.c_str());
+
+        return "";
+    }
+	catch (...)
+	{
+
+		return "";
+	}
+
+}
+
+
 
 
 

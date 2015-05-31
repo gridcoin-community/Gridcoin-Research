@@ -31,6 +31,16 @@ int DownloadBlocks();
 extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern std::string VectorToString(std::vector<unsigned char> v);
 bool CheckMessageSignature(std::string sMessageType, std::string sMsg, std::string sSig);
+bool TallyMagnitudesByContract();
+
+bool SynchronizeRacForDPOR(bool SyncEntireCoin);
+
+extern std::string ReadCache(std::string section, std::string key);
+
+extern std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
+
+
+
 std::string CryptoLottery(int64_t locktime);
 std::string GetCommandNonce(std::string command);
 std::string DefaultBlockKey(int key_length);
@@ -56,6 +66,7 @@ set<CWallet*> setpwalletRegistered;
 CCriticalSection cs_main;
 
 extern std::string NodeAddress(CNode* pfrom);
+extern std::string ExtractHTML(std::string HTMLdata, std::string tagstartprefix,  std::string tagstart_suffix, std::string tag_end);
 
 CTxMemPool mempool;
 unsigned int nTransactionsUpdated = 0;
@@ -79,6 +90,7 @@ extern std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blo
 extern double GetBlockDifficulty(unsigned int nBits);
 double GetLastPaymentTimeByCPID(std::string cpid);
 extern bool Contains(std::string data, std::string instring);
+
 extern uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
 extern bool LockTimeRecent(double locktime);
 extern double CoinToDouble(double surrogate);
@@ -103,7 +115,7 @@ uint256 muGlobalCheckpointHash = 0;
 uint256 muGlobalCheckpointHashRelayed = 0;
 int muGlobalCheckpointHashCounter = 0;
 ///////////////////////MINOR VERSION////////////////////////////////
-int MINOR_VERSION = 196;
+int MINOR_VERSION = 250;
 std::string msMasterProjectPublicKey  = "049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a";
 // The Private Key is revealed by design, for public messages only:
 std::string msMasterMessagePrivateKey = "308201130201010420fbd45ffb02ff05a3322c0d77e1e7aea264866c24e81e5ab6a8e150666b4dc6d8a081a53081a2020101302c06072a8648ce3d0101022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f300604010004010704410479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141020101a144034200044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252467f692ec9c5ba7e5eaa898ab99cbd9949496f7e3cafbf56304b1cc2e5bdf06e";
@@ -178,6 +190,9 @@ int64_t nReserveBalance = 0;
 int64_t nMinimumInputValue = 0;
 
 std::map<std::string, std::string> mvApplicationCache;
+std::map<std::string, int64_t> mvApplicationCacheTimestamp;
+std::map<std::string, StructCPID> mvDPOR;
+
 extern enum Checkpoints::CPMode CheckpointsMode;
 
 // Gridcoin - Rob Halford
@@ -3747,6 +3762,16 @@ void GridcoinServices()
 	{
 			    TallyInBackground();
 	}
+	//Once every 30 minutes, find out if a project RAC needs synced:
+	if (TimerMain("update_project_rac",30))
+	{
+		bool result = SynchronizeRacForDPOR(false);
+	}
+
+	if (TimerMain("TallyDPORMagnitude",10))
+	{
+		bool result = TallyMagnitudesByContract();
+	}
 
 	if (TimerMain("GridcoinPersistedDataSystem",5))
 	{
@@ -4285,6 +4310,37 @@ std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end
 	return extraction;
 }
 
+std::string ExtractHTML(std::string HTMLdata, std::string tagstartprefix,  std::string tagstart_suffix, std::string tag_end)
+{
+
+	std::string extraction = "";
+	string::size_type loc = HTMLdata.find( tagstartprefix, 0 );
+	if( loc != string::npos ) 
+	{
+		//Find the end of the start tag
+		string::size_type loc_EOStartTag = HTMLdata.find( tagstart_suffix, loc+tagstartprefix.length());
+		if (loc_EOStartTag != string::npos )
+		{
+
+			string::size_type loc_end = HTMLdata.find( tag_end, loc_EOStartTag+tagstart_suffix.length());
+			if (loc_end != string::npos )
+			{
+				extraction = HTMLdata.substr(loc_EOStartTag+(tagstart_suffix.length()), loc_end-loc_EOStartTag-(tagstart_suffix.length()));
+				extraction = strReplace(extraction,",","");
+				if (Contains(extraction,"\r\n"))
+				{
+					std::vector<std::string> vExtract = split(extraction,"\r\n");
+					if (vExtract.size() >= 2)
+					{
+						extraction = vExtract[2];
+						return extraction;
+					}
+				}
+			}
+		}
+	}
+	return extraction;
+}
 
 
 std::string RetrieveMd5(std::string s1)
@@ -4319,6 +4375,16 @@ double Round(double d, int place)
 double cdbl(std::string s, int place)
 {
 	if (s=="") s="0";
+	s = strReplace(s,"\r","");
+	s = strReplace(s,"\n","");
+	s = strReplace(s,"a","");
+	s = strReplace(s,"a","");
+	s = strReplace(s,"b","");
+	s = strReplace(s,"c","");
+	s = strReplace(s,"d","");
+	s = strReplace(s,"e","");
+	s = strReplace(s,"f","");
+
     double r = lexical_cast<double>(s);
 	double d = Round(r,place);
 	return d;
@@ -4822,7 +4888,6 @@ void AddNetworkMagnitude(double height,CTransaction& wtxCryptoLottery, double Lo
 		mvMagnitudes[cpid] = structMagnitude;
 		structMagnitude.owed = GetOutstandingAmountOwed(structMagnitude,cpid,LockTime,total_owed,bb.Magnitude);
 		structMagnitude.totalowed = total_owed;
-		//4-4-2015
 		// If CPID is invalid (should not be able to happen since block is rejected) but for security, make total owed 0
 
 		bool bValid = IsCPIDValidv2(bb,height);
@@ -5400,6 +5465,16 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 			printf("Disconnected unauthorized peer.         ");
             pfrom->Misbehaving(100);
 		    pfrom->fDisconnect = true;
+            return false;
+        }
+
+
+		// Ensure testnet users are running latest version as of 5-29-2015
+		if (pfrom->nVersion < 180261 && fTestNet)
+		{
+		    // disconnect from peers older than this proto version
+            if (fDebug) printf("partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
+            pfrom->fDisconnect = true;
             return false;
         }
 
@@ -7674,7 +7749,7 @@ std::string ReadCache(std::string section, std::string key)
 }
 
 
-void WriteCache(std::string section, std::string key, std::string value)
+void WriteCache(std::string section, std::string key, std::string value, int64_t locktime)
 {
 	if (section.empty() || key.empty()) return;
 	std::string temp_value = mvApplicationCache[section + ";" + key];
@@ -7684,6 +7759,15 @@ void WriteCache(std::string section, std::string key, std::string value)
 	    mvApplicationCache[section + ";" + key]=value;
 	}
 	mvApplicationCache[section + ";" + key]=value;
+	// Record Cache Entry timestamp
+	int64_t temp_locktime = mvApplicationCacheTimestamp[section + ";" + key];
+	if (temp_locktime == 0)
+	{
+		mvApplicationCacheTimestamp.insert(map<std::string,int64_t>::value_type(section+";"+key,1));
+		mvApplicationCacheTimestamp[section+";"+key]=locktime;
+	}
+	mvApplicationCacheTimestamp[section+";"+key] = locktime;
+
 }
 
 void ClearCache(std::string section)
@@ -7697,6 +7781,7 @@ void ClearCache(std::string section)
 					{
 						printf("\r\nClearing the cache....of value %s \r\n",mvApplicationCache[key_section].c_str());
 						mvApplicationCache[key_section]="";
+						mvApplicationCacheTimestamp[key_section]=1;
 					}
 				}
 	   }
@@ -7708,6 +7793,7 @@ void DeleteCache(std::string section, std::string keyname)
 {
 	   std::string pk = section + ";" +keyname;
        mvApplicationCache.erase(pk);
+	   mvApplicationCacheTimestamp.erase(pk);
 }
 
 
@@ -7733,7 +7819,7 @@ bool MemorizeMessages(bool bFullTableScan, const CBlock& block, const CBlockInde
 						if (sMessageAction=="A")
 						{
 								printf("Adding MessageKey type %s Key %s Value %s\r\n",sMessageType.c_str(),sMessageKey.c_str(),sMessageValue.c_str());
-								WriteCache(sMessageType,sMessageKey,sMessageValue);
+								WriteCache(sMessageType,sMessageKey,sMessageValue,tx.nTime);
 						}
 						else if(sMessageAction=="D")
 						{
@@ -7749,7 +7835,6 @@ bool MemorizeMessages(bool bFullTableScan, const CBlock& block, const CBlockInde
 								if (fTestNet)
 								{
 									InitializeBoincProjects();
-									//3-14-2015
 									TallyNetworkAverages(true);
 									HarvestCPIDs(true);
 

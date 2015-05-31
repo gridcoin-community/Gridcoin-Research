@@ -89,8 +89,8 @@ inline int64_t FutureDrift(int64_t nTime, int nHeight) { return IsProtocolV2(nHe
 inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight) ? 90 : 60; }
 
 extern std::map<std::string, std::string> mvApplicationCache;
-
-
+extern std::map<std::string, int64_t> mvApplicationCacheTimestamp;
+extern std::map<std::string, StructCPID> mvDPOR;
 extern CScript COINBASE_FLAGS;
 extern CCriticalSection cs_main;
 extern std::map<uint256, CBlockIndex*> mapBlockIndex;
@@ -106,7 +106,6 @@ extern uint256 nBestInvalidTrust;
 extern uint256 hashBestChain;
 extern CBlockIndex* pindexBest;
 extern unsigned int nTransactionsUpdated;
-
 extern uint64_t nLastBlockTx;
 extern uint64_t nLastBlockSize;
 extern int64_t nLastCoinStakeSearchInterval;
@@ -116,7 +115,6 @@ extern CCriticalSection cs_setpwalletRegistered;
 extern std::set<CWallet*> setpwalletRegistered;
 extern unsigned char pchMessageStart[4];
 extern std::map<uint256, CBlock*> mapOrphanBlocks;
-
 extern int64_t COIN_YEAR_REWARD;
 extern bool bCryptoLotteryEnabled;
 

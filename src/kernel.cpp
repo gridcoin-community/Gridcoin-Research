@@ -337,7 +337,7 @@ double OwedByAddress(std::string address)
 					if (structMag.GRCAddress==address)
 					{
 						double out1 = structMag.totalowed - structMag.payments;
-						outstanding += out1;
+						return out1;
 					}
 		     	}
 			}
