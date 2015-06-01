@@ -1037,7 +1037,7 @@ std::string GetTeamURLs(bool bMissingOnly, bool bReturnProjectNames)
 								//Get the age of the RAC in the smart contract
 								std::string contract_name = "contract;" + project_name;
 								std::string contract = mvApplicationCache[contract_name];
-								int64_t age = GetCurrentTime() - mvApplicationCacheTimestamp[contract_name];
+								int64_t age = GetAdjustedTime() - mvApplicationCacheTimestamp[contract_name];
 								if (!bMissingOnly || (bMissingOnly && age > (60*60*24)) || (bMissingOnly && contract.length() < 20))
 								{
 									project_urls += key_value + "<ROW>";
