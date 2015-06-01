@@ -3765,7 +3765,7 @@ void GridcoinServices()
 	//Once every 30 minutes, find out if a project RAC needs synced:
 	if (TimerMain("update_project_rac",30))
 	{
-		bool result = SynchronizeRacForDPOR(false);
+		//bool result = SynchronizeRacForDPOR(false);
 	}
 
 	if (TimerMain("TallyDPORMagnitude",10))

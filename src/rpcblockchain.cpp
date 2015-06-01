@@ -1949,7 +1949,7 @@ std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::stri
     std::string foundation = fTestNet ? "mk1e432zWKH1MW57ragKywuXaWAtHy1AHZ" : "S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB";
     CBitcoinAddress address(foundation);
     if (!address.IsValid())       throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
-    int64_t nAmount = AmountFromValue(.25);
+    int64_t nAmount = AmountFromValue(.05);
     // Wallet comments
     CWalletTx wtx;
     if (pwalletMain->IsLocked())  throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
