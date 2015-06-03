@@ -12,12 +12,44 @@ double DoubleFromAmount(int64_t amount);
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 
 
+bool IsSmartContractForDPOR(const CWalletTx &wtx)
+{
+   bool result = false;
+   QList<TransactionRecord> parts;
+   int64_t nTime = wtx.GetTxTime();
+   uint256 hash = wtx.GetHash(), hashPrev = 0;
+   
+   for (unsigned int nOut = 0; nOut < wtx.vout.size(); nOut++)
+   {
+                const CTxOut& txout = wtx.vout[nOut];
+                TransactionRecord sub(hash, nTime);
+                sub.idx = parts.size();
+               
+
+                CTxDestination address;
+                if (ExtractDestination(txout.scriptPubKey, address))
+                {
+                    sub.type = TransactionRecord::SendToAddress;
+                    sub.address = CBitcoinAddress(address).ToString();
+					int64_t nDebit = wtx.GetDebit();
+				    if (nDebit=.00001 && sub.address =="S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB")
+					{
+						return true;
+					}
+                }
+    
+   }
+   return false;
+}
+
+
 /* Return positive answer if transaction should be shown in list. */
 bool TransactionRecord::showTransaction(const CWalletTx &wtx)
 {
 	
 	std::string ShowOrphans = GetArg("-showorphans", "false");
 	if (ShowOrphans=="false" && !wtx.IsInMainChain()) return false;
+	if (IsSmartContractForDPOR(wtx)) return false;
 	//R Halford - Discard Orphans after Y mins:
 	if (wtx.IsCoinStake())
 	{
