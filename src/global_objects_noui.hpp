@@ -83,7 +83,7 @@ extern int miningthreadcount;
 		double LastBlock;
 		double NetworkMagnitude;
 		double NetworkAvgMagnitude;
-
+		double NetsoftRAC;
 		double Canary;
 		std::string cpid;
 		std::string emailhash;

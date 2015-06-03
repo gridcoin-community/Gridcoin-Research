@@ -40,6 +40,9 @@ extern std::string ReadCache(std::string section, std::string key);
 extern std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
 
 
+extern  std::string GetNetsoftProjects(std::string cpid);
+
+
 
 std::string CryptoLottery(int64_t locktime);
 std::string GetCommandNonce(std::string command);
@@ -3762,10 +3765,11 @@ void GridcoinServices()
 	{
 			    TallyInBackground();
 	}
-	//Once every 30 minutes, find out if a project RAC needs synced:
-	if (TimerMain("update_project_rac",30))
+	//Once every 12 hours, find out if a project RAC needs synced:
+	if (TimerMain("update_project_rac",12*60))
 	{
-		//bool result = SynchronizeRacForDPOR(false);
+
+		bool result = SynchronizeRacForDPOR(false);
 	}
 
 	if (TimerMain("TallyDPORMagnitude",10))
@@ -4384,6 +4388,8 @@ double cdbl(std::string s, int place)
 	s = strReplace(s,"d","");
 	s = strReplace(s,"e","");
 	s = strReplace(s,"f","");
+
+	s = strReplace(s,"-","");
 
     double r = lexical_cast<double>(s);
 	double d = Round(r,place);
@@ -6795,6 +6801,76 @@ void AddProjectFromNetSoft(StructCPID& netsoft)
 }
 
 
+
+
+
+
+
+
+
+
+std::string GetNetsoftProjects(std::string cpid)
+{
+			std::string cc = GetHttpPage(cpid,true,true);
+			if (cc.length() < 10) 
+			{
+				if (fDebug) printf("Note: HTTP Page returned blank from netsoft for %s\r\n",cpid.c_str());
+				return "";
+			}
+
+			int iRow = 0;
+			std::vector<std::string> vCC = split(cc.c_str(),"<project>");
+			
+			if (vCC.size() > 1)
+			{
+				for (unsigned int i = 0; i < vCC.size(); i++)
+				{
+					std::string sProj  = ExtractXML(vCC[i],"<name>","</name>");
+					std::string utc    = ExtractXML(vCC[i],"<total_credit>","</total_credit>");
+					std::string rac    = ExtractXML(vCC[i],"<expavg_credit>","</expavg_credit>");
+					std::string team   = ExtractXML(vCC[i],"<team_name>","</team_name>");
+					std::string rectime= ExtractXML(vCC[i],"<expavg_time>","</expavg_time>");
+					boost::to_lower(sProj);
+					sProj = ToOfficialName(sProj);
+					if (sProj == "mindmodeling@home") sProj = "mindmodeling@beta";
+					if (sProj == "Quake Catcher Network") sProj = "Quake-Catcher Network";
+					
+
+					if (sProj.length() > 3) 
+					{
+						std::string sKey = cpid + "+" + sProj;
+					
+						StructCPID strDPOR = GetStructCPID();
+						strDPOR = mvDPOR[sKey];
+
+						if (!strDPOR.initialized)
+						{
+							strDPOR.initialized=true;
+							mvDPOR.insert(map<string,StructCPID>::value_type(sKey,strDPOR));
+						}
+
+						iRow++;
+						strDPOR.cpid = cpid;
+						strDPOR.NetsoftRAC = cdbl(rac,0);
+						mvDPOR[sKey] = strDPOR;
+					}
+				}
+			}
+
+			return cc;
+
+}
+
+
+
+
+
+
+
+
+
+
+
 void CreditCheck(std::string cpid, bool clearcache)
 {
 	try {
@@ -7497,6 +7573,7 @@ StructCPID GetStructCPID()
 	c.ResearchSubsidy = 0;
 	c.InterestSubsidy = 0;
 	c.Canary = 0;
+	c.NetsoftRAC = 0;
 	c.interestPayments = 0;
 	c.payments = 0;
 	c.PaymentTimestamps = "";
@@ -7818,12 +7895,12 @@ bool MemorizeMessages(bool bFullTableScan, const CBlock& block, const CBlockInde
 				  {
 						if (sMessageAction=="A")
 						{
-								printf("Adding MessageKey type %s Key %s Value %s\r\n",sMessageType.c_str(),sMessageKey.c_str(),sMessageValue.c_str());
+								if (fDebug) printf("Adding MessageKey type %s Key %s Value %s\r\n",sMessageType.c_str(),sMessageKey.c_str(),sMessageValue.c_str());
 								WriteCache(sMessageType,sMessageKey,sMessageValue,tx.nTime);
 						}
 						else if(sMessageAction=="D")
 						{
-								printf("Deleting key type %s Key %s Value %s\r\n",sMessageType.c_str(),sMessageKey.c_str(),sMessageValue.c_str());
+								if (fDebug) printf("Deleting key type %s Key %s Value %s\r\n",sMessageType.c_str(),sMessageKey.c_str(),sMessageValue.c_str());
 								DeleteCache(sMessageType,sMessageKey);
 				
 						}

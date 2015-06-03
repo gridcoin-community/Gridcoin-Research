@@ -482,6 +482,7 @@ std::string GetLargeHttpContent(const CService& addrConnect, std::string getdata
 			    if (strLine.find("<END>") != string::npos) break;
 				if (strLine.find("</html>") != string::npos) break;
 				if (strLine.find("</users>") != string::npos) break;
+				if (strLine.find("</error>") != string::npos) break;
 
     }
     closesocket(hSocket);

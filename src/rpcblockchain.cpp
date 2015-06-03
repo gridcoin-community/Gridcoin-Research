@@ -17,7 +17,7 @@ using namespace std;
 double OwedByAddress(std::string address);
 extern std::string YesNo(bool bin);
 double Cap(double dAmt, double Ceiling);
-extern std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, std::string sSig);
+extern std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, std::string sSig, int64_t MinimumBalance);
 extern bool CheckMessageSignature(std::string messagetype, std::string sMsg, std::string sSig);
 extern std::string CryptoLottery(int64_t locktime);
 std::string CPIDByAddress(std::string address);
@@ -28,6 +28,7 @@ std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end
 extern  std::string GetTeamURLs(bool bMissingOnly, bool bReturnProjectNames);
 extern  bool InsertSmartContract(std::string URL,std::string Name);
 std::string ExtractHTML(std::string HTMLdata, std::string tagstartprefix,  std::string tagstart_suffix, std::string tag_end);
+extern  std::string GetNetsoftProjects(std::string cpid);
 
 extern bool SynchronizeRacForDPOR(bool SyncEntireCoin);
 extern bool TallyMagnitudesByContract();
@@ -949,13 +950,27 @@ bool TallyMagnitudesByContract()
 			std::vector<std::string> vCPIDs = split(contract.c_str(),";");
 			for (unsigned int c = 0; c < vCPIDs.size(); c++)
 			{
-				printf("ProjAvg %f, IU %s \r\n",projavg,vCPIDs[c].c_str());
+				//printf("ProjAvg %f, IU %s \r\n",projavg,vCPIDs[c].c_str());
 				std::string cpid = ExtractValue(vCPIDs[c],",",0);
 				if (cpid.length() > 10)
 				{
+					//Tally the RAC for this Project+CPID for this researcher so we can reconcile to Netsoft also:
+					std::string cpid_project = cpid + "+" + contract_name;
+					cpid_project = strReplace(cpid_project,"_"," ");
+					
+					StructCPID stCPIDProject = GetStructCPID();
+					stCPIDProject = mvDPOR[cpid_project];
+					if (!stCPIDProject.initialized)
+					{
+						stCPIDProject.initialized=true;
+						mvDPOR.insert(map<string,StructCPID>::value_type(cpid_project,stCPIDProject));
+					}
+
 					double rac = cdbl(ExtractValue(vCPIDs[c],",",1),0);
+
+					stCPIDProject.verifiedrac = rac;
+					mvDPOR[cpid_project] = stCPIDProject;
 					std::string project = vProjects[i];
-					printf("cpid %s, rac %f",cpid.c_str(),rac);
 					//Add weighted Magnitude here
 					StructCPID stCPID = GetStructCPID();
 					stCPID = mvDPOR[cpid];
@@ -988,6 +1003,10 @@ bool TallyMagnitudesByContract()
 
 bool SynchronizeRacForDPOR(bool SyncEntireCoin)
 {
+
+	//Only do this if user is not an investor (6-2-2015)
+	if (GlobalCPUMiningCPID.cpid=="INVESTOR") return false;
+
 	std::string teams = GetTeamURLs(true,false);
 	std::string projs = GetTeamURLs(true,true);
 	//This list contains projects that have not been synced for 24+ hours in Gridcoin:
@@ -1103,7 +1122,7 @@ void QueryWorldCommunityGridRAC()
 			std::string sName = "world_community_grid";
 			std::string sValue = contract;
 			printf("Contract %s\r\n",contract.c_str());
-			std::string result = AddMessage(true,sType,sName,sValue,sPass);
+			std::string result = AddMessage(true,sType,sName,sValue,sPass,AmountFromValue(2500));
 			printf("Results %s",result.c_str());
    }
 
@@ -1115,7 +1134,7 @@ bool InsertSmartContract(std::string URL, std::string name)
 
 	std::string results = GetHttpPage(URL);
 	double total_rac = 0;
-	printf("Querying DPOR RAC for project %s response %s\r\n",URL.c_str(),results.c_str());
+	//printf("Querying DPOR RAC for project %s response %s\r\n",URL.c_str(),results.c_str());
 	int iRow = 0;
 	std::vector<std::string> vUsers = split(results.c_str(),"<user>");
 	std::string contract = "";
@@ -1123,11 +1142,11 @@ bool InsertSmartContract(std::string URL, std::string name)
 		{
 			std::string cpid = ExtractXML(vUsers[i],"<cpid>","</cpid>");
 			std::string rac = ExtractXML(vUsers[i],"<expavg_credit>","</expavg_credit>");
+			//if (fDebug) printf("Cpid %s rac %s			,     ",cpid.c_str(),rac.c_str());
 			
 			double dRac = cdbl(rac,0);
 			if (dRac > 99)
 			{
-				printf("Cpid %s rac %f\r\n",cpid.c_str(),dRac);
 				contract += cpid + "," + RoundToString(dRac,0) + ";";
 				total_rac++;
 			}
@@ -1142,8 +1161,7 @@ bool InsertSmartContract(std::string URL, std::string name)
 
 			if (vUsers.size() > 1 && total_rac > 100)
 			{
-				std::string result = AddMessage(true,sType,sName,sValue,sPass);
-				printf("Results %s",result.c_str());
+				std::string result = AddMessage(true,sType,sName,sValue,sPass,AmountFromValue(2500));
 			}
 			return (vUsers.size() > 1 && total_rac > 100) ? true : false;
 }
@@ -1189,6 +1207,63 @@ Value execute(const Array& params, bool fHelp)
 			results.push_back(entry);
 	
 	}
+	else if (sItem == "rac")
+	{
+
+		//Compare the DPOR Rac Report to the Netsoft Rac Report
+		if (params.size() != 2)
+		{
+			entry.push_back(Pair("Error","You must specify a cpid."));
+			results.push_back(entry);
+		}
+		else
+		{
+
+				TallyMagnitudesByContract();
+				std::string argcpid = params[1].get_str();
+				std::string np = GetNetsoftProjects(argcpid);
+
+				double mytotalpct = 0;
+				double ParticipatingProjectCount = 0;
+				double TotalMagnitude = 0;
+				double Mag = 0;
+				double NetworkProjectCountWithRAC = 0;
+				Object entry;
+				std::string narr = "";
+			    narr = "Netsoft_RAC, DPOR_RAC, Project_RAC";
+		  	    entry.push_back(Pair("RAC Reconciliation Report",narr));
+			
+				for(map<string,StructCPID>::iterator ibp=mvBoincProjects.begin(); ibp!=mvBoincProjects.end(); ++ibp) 
+				{
+					StructCPID WhitelistedProject = GetStructCPID();
+					WhitelistedProject = mvBoincProjects[(*ibp).first];
+					if (WhitelistedProject.initialized)
+					{
+						double ProjectRAC = GetNetworkAvgByProject(WhitelistedProject.projectname);
+						if (ProjectRAC > 100) 
+						{
+								NetworkProjectCountWithRAC++;
+						}
+						StructCPID structcpid = GetStructCPID();
+						StructCPID stDPORProject = mvDPOR[argcpid + "+" + WhitelistedProject.projectname];
+						if (stDPORProject.initialized) 
+						{ 
+							  // Name, Netsoft, DPOR, Avg
+							  narr = RoundToString(stDPORProject.NetsoftRAC,0) + ", " + RoundToString(stDPORProject.verifiedrac,0) 
+								  + ", " + RoundToString(ProjectRAC,0);
+		  					  entry.push_back(Pair(WhitelistedProject.projectname,narr));
+						}
+		
+
+					}
+				}
+				//entry.push_back(Pair("XML View",np));
+
+				results.push_back(entry);
+				return results;
+		}
+	}
+
 	else if (sItem == "encrypt")
 	{
 		//Encrypt a phrase
@@ -1307,6 +1382,7 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "syncrac")
 	{
+
 		bool result = SynchronizeRacForDPOR(true);
 		entry.push_back(Pair("Done","Done"));
 	    results.push_back(entry);
@@ -1359,7 +1435,7 @@ Value execute(const Array& params, bool fHelp)
 			entry.push_back(Pair("Name",sName));
 			std::string sValue = params[4].get_str();
 			entry.push_back(Pair("Value",sValue));
-			std::string result = AddMessage(bAdd,sType,sName,sValue,sPass);
+			std::string result = AddMessage(bAdd,sType,sName,sValue,sPass,AmountFromValue(5));
 			entry.push_back(Pair("Results",result));
 			results.push_back(entry);
 		}
@@ -1944,12 +2020,12 @@ Array MagnitudeReportCSV(bool detail)
 
 
 
-std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, std::string sMasterKey)
+std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, std::string sMasterKey, int64_t MinimumBalance)
 {
     std::string foundation = fTestNet ? "mk1e432zWKH1MW57ragKywuXaWAtHy1AHZ" : "S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB";
     CBitcoinAddress address(foundation);
     if (!address.IsValid())       throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
-    int64_t nAmount = AmountFromValue(.05);
+    int64_t nAmount = AmountFromValue(.00001);
     // Wallet comments
     CWalletTx wtx;
     if (pwalletMain->IsLocked())  throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
@@ -1961,7 +2037,9 @@ std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::stri
 	std::string sSig = SignMessage(sType+sKey+sValue,sMasterKey);
 	std::string sMessageSignature = "<MS>" + sSig + "</MS>";
 	wtx.hashBoinc = sMessageType+sMessageKey+sMessageValue+sMessageAction+sMessageSignature;
-    string strError = pwalletMain->SendMoneyToDestination(address.Get(), nAmount, wtx);
+    string strError = pwalletMain->SendMoneyToDestinationWithMinimumBalance(address.Get(), nAmount, MinimumBalance, wtx);
+
+	
     if (strError != "")        throw JSONRPCError(RPC_WALLET_ERROR, strError);
     return wtx.GetHash().GetHex().c_str();
 }
@@ -2054,6 +2132,8 @@ Value listitem(const Array& params, bool fHelp)
 
 		results.push_back(entry);
 	}
+
+
 
 
 	if (sitem == "explainmagnitude")
