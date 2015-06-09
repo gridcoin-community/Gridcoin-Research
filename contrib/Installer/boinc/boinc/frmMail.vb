@@ -381,10 +381,12 @@ dontaddit:
         For Each b As Byte In ba
             hex.AppendFormat("{0:x2}", b)
         Next
-
         Return hex.ToString()
-
-
+    End Function
+    Public Function GetHex(i As Integer) As String
+        Dim hex As New StringBuilder
+        hex.AppendFormat("{0:x2}", i)
+        Return hex.ToString()
     End Function
 
     Public Sub PopulateOffLineMessages()

@@ -94,6 +94,12 @@ extern std::string qtGRCCodeExecutionSubsystem(std::string sCommand);
 extern void qtUpdateConfirm(std::string txid);
 extern void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string txid);
 extern void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double magnitude);
+extern void qtSyncWithDPORNodes(std::string data);
+extern std::string qtGetNeuralHash(std::string data);
+
+
+
+extern int64_t IsNeural();
 
 
 void TallyInBackground();
@@ -349,11 +355,7 @@ int ReindexWallet()
 			if (!fTestNet)
 			{
 #ifdef WIN32
-				if (!globalcom)
-				{
-					globalcom = new QAxObject("BoincStake.Utilization");
-				}
-
+			
 				globalcom->dynamicCall("ReindexWallet()");
 #endif
 			}
@@ -477,6 +479,57 @@ void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::strin
 	}
 	#endif
 }
+//  Public Function SyncCPIDsWithDPORNodes(sData As String) As Double
+
+
+void qtSyncWithDPORNodes(std::string data)
+{
+
+	#if defined(WIN32) && defined(QT_GUI)
+	try
+	{
+		int result = 0;
+		QString qsData = ToQstring(data);
+		result = globalcom->dynamicCall("SyncCPIDsWithDPORNodes(Qstring)",qsData).toInt();
+	}
+	catch(...)
+	{
+
+	}
+	#endif
+}
+
+
+std::string FromQString(QString qs)
+{
+	std::string sOut = qs.toUtf8().constData();
+	return sOut;
+}
+
+
+std::string qtGetNeuralHash(std::string data)
+{
+
+	#if defined(WIN32) && defined(QT_GUI)
+	try
+	{
+		if (!bGlobalcomInitialized) return "NA";
+		
+		QString qsData = ToQstring(data);
+		QString sResult = globalcom->dynamicCall("GetNeuralHash()").toString();
+		std::string result = FromQString(sResult);
+		printf("My Neural Hash %s \r\n",result.c_str());
+		return result;
+
+	}
+	catch(...)
+	{
+		return "?";
+	}
+	#endif
+}
+
+
 
 
 void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double magnitude)
@@ -499,12 +552,6 @@ void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double ma
 }
 
 
-
-std::string FromQString(QString qs)
-{
-	std::string sOut = qs.toUtf8().constData();
-	return sOut;
-}
 
 
 
@@ -564,10 +611,14 @@ int RebootClient()
 }
 
 
+
+
 void CheckForUpgrade()
 {
 	try
 	{
+		    if (bCheckedForUpgrade == false && !fTestNet && bProjectsInitialized)
+			{
 				int nNeedsUpgrade = 0;
 				bCheckedForUpgrade = true;
 				#ifdef WIN32
@@ -575,12 +626,57 @@ void CheckForUpgrade()
 				#endif
 				printf("Needs upgraded %f\r\n",(double)nNeedsUpgrade);
 				if (nNeedsUpgrade) UpgradeClient();
+
+				
+					
+
+
+
+			}
 	}
 	catch(...)
 	{
 
 	}
 }
+
+
+void BusyWait()
+{
+	for (int x=0; x<50; x++)
+	{
+		if (bGlobalcomInitialized) return;
+		MilliSleep(100);
+	}
+
+}
+
+
+int64_t IsNeural()
+{
+
+	if (!bGlobalcomInitialized) BusyWait();
+
+	if (!bGlobalcomInitialized) return 0;
+	
+
+	try
+	{
+	        	//NeuralNetwork
+				int nNeural = 0;
+				#ifdef WIN32
+				nNeural = globalcom->dynamicCall("NeuralNetwork()").toInt();
+				#endif
+				printf("Neural %f\r\n",(double)nNeural);
+				return (int64_t)nNeural;
+	}
+	catch(...)
+	{
+		printf("Exception %f \r\n",(double)1);
+		return 0;
+	}
+}
+
 
 
 int UpgradeClient()
@@ -594,6 +690,7 @@ int UpgradeClient()
 			if (!fTestNet)
 			{
 #ifdef WIN32
+				//if (globalcom==NULL) ReinstantiateGlobalcom();
 				globalcom->dynamicCall("UpgradeWallet()");
 #endif
 			}
@@ -755,6 +852,10 @@ void BitcoinGUI::createActions()
     aboutAction->setToolTip(tr("Show information about GridCoin"));
     aboutAction->setMenuRole(QAction::AboutRole);
 
+	miningAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Neural Network"), this);
+	miningAction->setStatusTip(tr("Neural Network"));
+	miningAction->setMenuRole(QAction::TextHeuristicRole);
+
 
 	sqlAction = new QAction(QIcon(":/icons/bitcoin"), tr("&SQL Query Analyzer"), this);
 	sqlAction->setStatusTip(tr("SQL Query Analyzer"));
@@ -818,6 +919,9 @@ void BitcoinGUI::createActions()
 	connect(downloadAction, SIGNAL(triggered()), this, SLOT(downloadClicked()));
 	connect(rebootAction, SIGNAL(triggered()), this, SLOT(rebootClicked()));
 	connect(sqlAction, SIGNAL(triggered()), this, SLOT(sqlClicked()));
+
+	connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
+
 	connect(tickerAction, SIGNAL(triggered()), this, SLOT(tickerClicked()));
 	connect(ticketListAction, SIGNAL(triggered()), this, SLOT(ticketListClicked()));
 	connect(galazaAction, SIGNAL(triggered()), this, SLOT(galazaClicked()));
@@ -859,10 +963,6 @@ void BitcoinGUI::createMenuBar()
     help->addAction(aboutAction);
     help->addAction(aboutQtAction);
 
-//	QMenu *mining = appMenuBar->addMenu(tr("&Mining"));
-//    mining->addSeparator();
-//    mining->addAction(miningAction);
-
 //	QMenu *email = appMenuBar->addMenu(tr("&E-Mail"));
 //    email->addSeparator();
 //    email->addAction(emailAction);
@@ -885,6 +985,7 @@ void BitcoinGUI::createMenuBar()
 	QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
 	qmAdvanced->addSeparator();
 	qmAdvanced->addAction(sqlAction);
+	qmAdvanced->addAction(miningAction);
 	qmAdvanced->addAction(tickerAction);
 	qmAdvanced->addAction(ticketListAction);
 	qmAdvanced->addAction(newUserWizardAction);
@@ -1585,7 +1686,7 @@ int ReindexBlocks()
 }
 
 
-/*
+
 
 void BitcoinGUI::miningClicked()
 {
@@ -1599,7 +1700,7 @@ void BitcoinGUI::miningClicked()
       globalcom->dynamicCall("ShowMiningConsole()");
 #endif
 }
-*/
+
 
 
 void BitcoinGUI::bxClicked()
@@ -1934,16 +2035,8 @@ void ReinstantiateGlobalcom()
 
 			}
 
-			bGlobalcomInitialized = true;
-		    if (bCheckedForUpgrade == false && !fTestNet && bProjectsInitialized)
-			{
-						int nNeedsUpgrade = 0;
-						bCheckedForUpgrade = true;
-						printf("Checking to see if Gridcoin needs upgraded\r\n");
-						nNeedsUpgrade = globalcom->dynamicCall("ClientNeedsUpgrade()").toInt();
-						if (nNeedsUpgrade) UpgradeClient();
 
-						if (!bAddressUser)
+				if (!bAddressUser)
 						{
 									bAddressUser = true;
 									#if defined(WIN32) && defined(QT_GUI)
@@ -1953,7 +2046,9 @@ void ReinstantiateGlobalcom()
 						}
 
 
-			}
+
+
+			bGlobalcomInitialized = true;
 #endif
 }
 
@@ -1982,11 +2077,11 @@ void BitcoinGUI::timerfire()
 
 	try {
 
-
-
 		if (nRegVersion==0 || Timer("start",10))
 		{
-			if (fDebug) printf("Starting globalcom...\r\n");
+			printf("Starting globalcom...\r\n");
+			ReinstantiateGlobalcom();
+
 			nRegVersion=9999;
 			if (!bNewUserWizardNotified)
 			{
@@ -1994,8 +2089,8 @@ void BitcoinGUI::timerfire()
 				NewUserWizard();
 			}
 			#ifdef WIN32
-			if (globalcom==NULL) ReinstantiateGlobalcom();
-			nRegVersion = globalcom->dynamicCall("Version()").toInt();
+		
+		    nRegVersion = globalcom->dynamicCall("Version()").toInt();
 			sRegVer = boost::lexical_cast<std::string>(nRegVersion);
 			#endif
 		}

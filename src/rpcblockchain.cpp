@@ -29,20 +29,23 @@ extern  std::string GetTeamURLs(bool bMissingOnly, bool bReturnProjectNames);
 extern  bool InsertSmartContract(std::string URL,std::string Name);
 std::string ExtractHTML(std::string HTMLdata, std::string tagstartprefix,  std::string tagstart_suffix, std::string tag_end);
 extern  std::string GetNetsoftProjects(std::string cpid);
+std::string NeuralRequest(std::string MyNeuralRequest);
+extern std::string MyBeaconExists(std::string cpid);
+extern bool AdvertiseBeacon();
+std::string GetNeuralNetworkReport();
+
+void GatherNeuralHashes();
+extern std::string GetListOf(std::string datatype);
+void qtSyncWithDPORNodes(std::string data);
 
 extern bool SynchronizeRacForDPOR(bool SyncEntireCoin);
 extern bool TallyMagnitudesByContract();
-
-
-
 extern void QueryWorldCommunityGridRAC();
+std::string qtGetNeuralHash(std::string data);
+
 bool Contains(std::string data, std::string instring);
 std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
-
-
 std::string ReadCache(std::string section, std::string key);
-
-
 bool LessVerbose(int iMax1000);
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
@@ -92,7 +95,6 @@ std::string TxToString(const CTransaction& tx, const uint256 hashBlock, int64_t&
 extern double GetPoBDifficulty();
 bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
-
 std::string RetrieveMd5(std::string s1);
 std::string getfilecontents(std::string filename);
 MiningCPID DeserializeBoincBlock(std::string block);
@@ -466,11 +468,8 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("ResearchSubsidy",bb.ResearchSubsidy));
 	double interest = mint-bb.ResearchSubsidy;
 	result.push_back(Pair("Interest",bb.InterestSubsidy));
-
 	double blockdiff = GetBlockDifficulty(block.nBits);
 	result.push_back(Pair("GRCAddress",bb.GRCAddress));
-	//result.push_back(Pair("Organization",bb.Organization));
-	//result.push_back(Pair("OrganizationKeyPrefix",bb.OrganizationKey));
 	result.push_back(Pair("ClientVersion",bb.clientversion));	
 	if (blockindex->nHeight < 70000 && !fTestNet) 
 	{
@@ -483,6 +482,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 		bool IsCPIDValid2 = IsCPIDValidv2(bb,blockindex->nHeight);
 		result.push_back(Pair("CPIDValid",IsCPIDValid2));
 	}
+	result.push_back(Pair("NeuralHash",bb.NeuralHash));
     return result;
 }
 
@@ -1168,6 +1168,62 @@ bool InsertSmartContract(std::string URL, std::string name)
 
 
 
+std::string GetListOf(std::string datatype)
+{
+			std::string rows = "";
+			std::string row = "";
+  		    for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+		    {
+				std::string key_name  = (*ii).first;
+			   	if (key_name.length() > datatype.length())
+				{
+					if (key_name.substr(0,datatype.length())==datatype)
+					{
+								std::string key_value = mvApplicationCache[(*ii).first];
+								std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
+								row = subkey + "<COL>" + key_value;
+								rows += row + "<ROW>";
+					}
+		       
+				}
+		   }
+		   return rows;
+}
+
+
+bool AdvertiseBeacon()
+{
+			// 6-7-2015
+
+			GetNextProject(false);
+			if (GlobalCPUMiningCPID.cpid=="INVESTOR") return false;
+			//If beacon is already in the chain, exit early
+			std::string myBeacon = MyBeaconExists(GlobalCPUMiningCPID.cpid);
+			printf("MyBeacon %s",myBeacon.c_str());
+			if (myBeacon.length() > 10) return true;
+			uint256 hashRand = GetRandHash();
+    		std::string email = GetArgument("email", "NA");
+        	boost::to_lower(email);
+		    GlobalCPUMiningCPID.email=email;
+		    GlobalCPUMiningCPID.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, hashRand);
+			GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
+			std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID);
+			std::string GRCAddress = DefaultWalletAddress();
+			std::string contract = GlobalCPUMiningCPID.cpidv2 + ";" + hashRand.GetHex() + ";" + GRCAddress;
+			printf("Creating beacon for cpid %s, %s",GlobalCPUMiningCPID.cpid.c_str(),contract.c_str());
+			std::string sBase = EncodeBase64(contract);
+			std::string sAction = "add";
+			std::string sType = "beacon";
+			std::string sPass = "";
+			sPass = (sType=="project" || sType=="projectmapping" || sType=="smart_contract") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
+			std::string sName = GlobalCPUMiningCPID.cpid;
+			//std::string sValue = contract;
+			std::string result = AddMessage(true,sType,sName,sBase,sPass,AmountFromValue(1));
+			return true;
+}
+
+
+
 
 Value execute(const Array& params, bool fHelp)
 {
@@ -1207,6 +1263,52 @@ Value execute(const Array& params, bool fHelp)
 			results.push_back(entry);
 	
 	}
+	else if (sItem == "neuralrequest")
+	{
+
+			std::string response = NeuralRequest("REQUEST");
+			entry.push_back(Pair("Response", response));
+			results.push_back(entry);
+
+	}
+	else if (sItem == "advertisebeacon")
+	{
+
+		bool result = AdvertiseBeacon();
+		entry.push_back(Pair("Beacon",result));
+		results.push_back(entry);
+	}
+	else if (sItem == "syncdpor2")
+	{
+			//bool result = SynchronizeRacForDPOR(false);
+   		std::string data = GetListOf("beacon");
+		qtSyncWithDPORNodes(data);
+
+	}
+	else if(sItem=="gatherneuralhashes")
+	{
+		GatherNeuralHashes();
+		entry.push_back(Pair("Sent","."));
+		results.push_back(entry);
+
+	}
+	else if (sItem == "neuralreport")
+	{
+		
+
+			std::string report = GetNeuralNetworkReport();
+			entry.push_back(Pair("Neural Network Report",report));
+			results.push_back(entry);
+	
+	}
+	else if (sItem=="myneuralhash")
+	{
+		std::string myNeuralHash = qtGetNeuralHash("");
+		entry.push_back(Pair("My Neural Hash",myNeuralHash.c_str()));
+		results.push_back(entry);
+
+	}
+
 	else if (sItem == "rac")
 	{
 
@@ -1447,6 +1549,24 @@ Value execute(const Array& params, bool fHelp)
 		entry.push_back(Pair("Results",sOut));
 		results.push_back(entry);
 		
+	}
+	else if (sItem == "getlistof")
+	{
+		if (params.size() != 2)
+		{
+			entry.push_back(Pair("Error","You must specify a keytype."));
+			results.push_back(entry);
+		}
+		else
+		{
+			std::string sType = params[1].get_str();
+			entry.push_back(Pair("Key Type",sType));
+			std::string data = GetListOf(sType);
+ 	      	entry.push_back(Pair("Data",data));
+		    results.push_back(entry);
+		}
+
+
 	}
 	else if (sItem == "listdata")
 	{
@@ -1873,6 +1993,14 @@ std::string CryptoLottery(int64_t locktime)
 		return sOut;
 }
 
+
+
+std::string MyBeaconExists(std::string cpid)
+{
+
+	std::string myBeacon = mvApplicationCache["beacon;" + cpid];
+	return myBeacon;
+}
 
 
 Array ContractReportCSV()

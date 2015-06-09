@@ -50,10 +50,16 @@ Public Class frmNewEmail
         oWriter.Close()
     End Sub
     Private Sub WebBrowser1_DocumentCompleted(ByVal sender As Object, ByVal e As System.Windows.Forms.WebBrowserDocumentCompletedEventArgs) Handles WebBrowser1.DocumentCompleted
+        Try
+
         lPass = lPass + 1
         If lPass = 1 Then
             WebBrowser1.Document.DomDocument.GetType.GetProperty("designMode").SetValue(WebBrowser1.Document.DomDocument, "On", Nothing)
-        End If
+            End If
+        Catch ex As Exception
+
+        End Try
+
     End Sub
     Private Function GetBody() As String
         If btnRichText.Checked Then

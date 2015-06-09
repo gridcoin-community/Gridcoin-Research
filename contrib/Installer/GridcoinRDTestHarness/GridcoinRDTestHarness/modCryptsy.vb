@@ -9,7 +9,7 @@ Public Class Cryptsy
     Public Function createTimeStamp(datestr As String, format As String)
         Return String.Format(format, datestr)
     End Function
-
+   
     Public Sub New(APIKey As String, Secret As String)
 
         _APIKey = APIKey

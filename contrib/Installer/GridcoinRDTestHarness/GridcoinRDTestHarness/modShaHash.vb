@@ -1,5 +1,22 @@
 ﻿Imports System.Text
+Public Module Functions
+    Public Function GetGridFolder() As String
+        Dim sTemp As String
+        sTemp = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\gridcoinresearch\"
+        Return sTemp
+    End Function
+    Public Sub Log(sData As String)
+        Try
+            Dim sPath As String
+            sPath = GetGridFolder() + "debugTH.log"
+            Dim sw As New System.IO.StreamWriter(sPath, True)
+            sw.WriteLine(Trim(Now) + ", " + sData)
+            sw.Close()
+        Catch ex As Exception
+        End Try
 
+    End Sub
+End Module
 Public Class HMACSHA512Hasher
 
     Private Sub New()

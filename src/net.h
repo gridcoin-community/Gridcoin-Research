@@ -152,6 +152,9 @@ public:
     int nMisbehavior;
     double dPingTime;
     double dPingWait;
+	int64_t nNeuralNetwork;
+	std::string NeuralHash;
+
 	//std::string securityversion;
 };
 
@@ -230,6 +233,8 @@ public:
 	//12-10-2014 CPID Support
 	std::string cpid;
 	std::string enccpid;
+	int64_t nNeuralNetwork;
+	std::string NeuralHash;
 	////////////////////////
 
 	
@@ -318,9 +323,8 @@ public:
 		nLastOrphan=0;
 		nOrphanCount=0;
 		nOrphanCountViolations=0;
-
-
-
+		nNeuralNetwork=0;
+		NeuralHash = "";
         hashCheckpointKnown = 0;
         setInventoryKnown.max_size(SendBufferSize() / 1000);
         nPingNonceSent = 0;
@@ -717,6 +721,24 @@ public:
         {
             BeginMessage(pszCommand);
             ssSend << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9 << a10 << a11 << a12 << a13;
+            EndMessage();
+        }
+        catch (...)
+        {
+            AbortMessage();
+            throw;
+        }
+    }
+
+
+	template<typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7, typename T8, typename T9, typename T10, typename T11, typename T12, typename T13, typename T14>
+    void PushMessage(const char* pszCommand, const T1& a1, const T2& a2, const T3& a3, const T4& a4, const T5& a5, const T6& a6, const T7& a7, const T8& a8, 
+		const T9& a9, const T10& a10, const T11& a11, const T12& a12, const T13& a13, const T14& a14)
+    {
+        try
+        {
+            BeginMessage(pszCommand);
+            ssSend << a1 << a2 << a3 << a4 << a5 << a6 << a7 << a8 << a9 << a10 << a11 << a12 << a13 << a14;
             EndMessage();
         }
         catch (...)

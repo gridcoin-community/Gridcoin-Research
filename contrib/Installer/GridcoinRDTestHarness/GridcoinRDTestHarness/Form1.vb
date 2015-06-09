@@ -121,183 +121,75 @@ Public Class Form1
     End Function
   
     Private Sub Button1_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles Button1.Click
+
+        Dim sCPIDs As String = ""
+
+        Dim bOut As Boolean
+        Dim m As New md5
+
+        bOut = m.CompareCPID("aeed96e8131dca89a6b48b7843fa3585", _
+                           "aeed96e8131dca89a6b48b7843fa35853f67ca9738c4376b70959d6c3c683c6a3a3b939f6634ca379a9b986c3b36663e786a6f7475706f417566782f7468", _
+                           "1d0ee24fde6150f64721a40093bd68b8cb720457cc358b85f15fffecdf2cda22")
+
+      
         Dim x As New Utilization
-        x.ShowNewUserWizard()
-
-        'Dim sKey As String
-        'sKey = BJ.Value
-
-        '        'Add a project to boinc
-        '       BJ = x.BoincCreateAccount("http://www.gpugrid.net/", "robhalford3@gridcoin.us", "dummypass", "robhalford")
-        '
-        'A'ttach this project
-        ' BJ = x.BoincAttachProject("http://www.gpugrid.net", sKey)
-        ' Stop
-        ' Dim sTeam As String
-        ' sTeam = x.BoincRetrieveTeamID("http://www.gpugrid.net/")
-
-        'BJ = x.BoincSetTeamID("http://www.gpugrid.net/", sKey, sTeam)
+        x.ShowMiningConsole()
+        Dim sBeacon As String = "784afb35d92503160125feb183157378<COL>Nzg0YWZiMzVkOTI1MDMxNjAxMjVmZWIxODMxNTczNzgzYWM1NjgzYWM2MzM2NjM0OWI2YjQyNjY2NTMzOTczNTk3M2Y0MDNhMzZjOTMxNjkzZGM2MzczOGM4Mzg2NzY4NzM3MDYzNjk2MjZkNjc3MDczNjUzMzQxNjg3MzZhNjU2NDcwNmE2ZjJmNzY3NDs1ZmFiNDBiZWE4ZGQxYTAwZmRkZTc5N2YxMDdmM2Q3YTEwN2MzNjA2ZGI1Y2U5NWZhYTA5OTg2YjQwNDk2OTlkO1NISHJGYUVaWXg2VDFhTVhXV3F5RHpvWFhZS0pXVWZyR1A=<ROW>"
 
 
+        x.SyncCPIDsWithDPORNodes(sBeacon)
+
+
+
+        Exit Sub
+
+
+        If False Then
+
+            Dim sDir As String = "C:\Users\AppData\Roaming\GridcoinResearch\reports\magnitude_1433284769.csv"
+
+            Dim sr As New StreamReader(sDir)
+            Dim sTemp As String
+            sr.ReadLine()
+
+            While sr.EndOfStream = False
+                sTemp = sr.ReadLine
+                Dim vTemp() As String
+                vTemp = Split(sTemp, ",")
+
+                sCPIDs = sCPIDs + vTemp(0) + ","
+            End While
+            Dim vCPIDs() As String
+            vCPIDs = Split(sCPIDs, ",")
+           
+
+        End If
+
+
+        'Dim sContract As String = GetMagnitudeContract()
+        Stop
+
+       
+
+        End
 
     End Sub
 
+    Public Function WriteGenericData(sKey As String, sValue As String)
+        '  Dim r As New Row
+        ' r.Added = Now
+        'r.Expiration = DateAdd(DateInterval.Minute, 1, Now)
+        'r.Database = "Generic"
+        'r.Table = "DummyTable" + Mid(sKey, 1, 1) + Mid(sValue, 1, 1)
 
-    Public Sub RewriteSourceFile(sPATHH As String, sSFileIn As String)
-        Dim sFileIn As String
-        sFileIn = sPATHH + sSFileIn
-
-        Dim infile As New StreamReader(sFileIn)
-        Dim sOutPath As String
-        Dim di As New DirectoryInfo(sFileIn)
-
-        If night Then
-            sOutPath = Replace(di.FullName, "-master", "-black")
-
-
-        Else
-            sOutPath = Replace(di.FullName, "-master", "-white")
-
-        End If
-
-        Dim outfile As New StreamWriter(sOutPath)
-        Dim text As String
-        Dim sBackupPath As String = "c:\gridcoin-master\src\qcolorbackup\"
-        Dim sFileName As String
-        Dim fi As New FileInfo(sFileIn)
-        FileCopy(sFileIn, sBackupPath + fi.Name)
-        While (infile.EndOfStream = False)
-            text = infile.ReadLine()
-            If InStr(1, text, "<color alpha=") > 0 Then
-                text = text + vbCrLf + infile.ReadLine + vbCrLf + infile.ReadLine + vbCrLf + infile.ReadLine
-                '<red>0</red>
-                '        <green>255</green>
-                '        <blue>0</blue>
-                text = ReplaceRGB(text, night)
-                Stop
-
-            End If
-            'BLACK
-            text = Replace(text, "QColor(25,25,25)", IIf(night, "QColor(0,0,0)", "QColor(255,255,255)")) 'Black to black or white
-
-            text = Replace(text, "background-color: #08e8e8", IIf(night, "background-color: #0817E8", "background-color: #0817FF")) 'progress bar blue or blue
-
-            '//QProgressBar::chunk { background: QLinearGradient(x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 #FF8000, stop: 1 orange); border-radius: 7px; margin: 0px; }");
-            text = Replace(text, "#FF8000", IIf(night, "#44FF00", "#44FF00"))  'instead of orange, green or green
-            text = Replace(text, "color: red", IIf(night, "color: #FF0000", "color: #FF0000"))
-            text = Replace(text, "QColor(200, 0, 0)", IIf(night, "QColor(255, 0, 0)", "QColor(255, 0, 0)"))  'red
-            'pink = c80075 or 200,0,117
-            text = Replace(text, "color: #808080", IIf(night, "color: #808080", "color: #8080")) ' gray
-            text = Replace(text, "color: #006060", IIf(night, "color: #00ff00", "color: #00ff00"))  'light green instead of blue
-            text = Replace(text, "QColor(210,200,180)", IIf(night, "QColor(145,158,152)", "QColor(204,230,232")) '  light blue almost white
-            text = Replace(text, "QColor(200,50,50)", IIf(night, "QColor(255,0,0)", "QColor(255,0,0")) '  Tx Table Model (red) going to Red
-            text = Replace(text, "QColor(200,0,0)", IIf(night, "QColor(255,0,0)", "QColor(255,0,0)")) '  Tx Table Model (red) going to Red
-            text = Replace(text, "QColor(200, 0, 0)", IIf(night, "QColor(255,0,0)", "QColor(255,0,0")) '  Tx Table Model (red) going to Red
-            text = Replace(text, "QColor(200,55,0)", IIf(night, "QColor(255,0,0)", "QColor(255,0,0")) '  Tx Table Model (BURNT ORANGE) going to Red
-            text = Replace(text, "#161616", IIf(night, "#000000", "#161616")) '  Tx Table Model (dark black) going to black 
-            text = Replace(text, "#363636", IIf(night, "#363636", "#525252")) '  Tx Table Model (lighter row alt black) going to 
-            text = Replace(text, "#121212", IIf(night, "#000000", "#161616")) '  Tx Table Model (dark black) going to very dark green
-            text = Replace(text, "QColor(0,240,40)", IIf(night, "QColor(0,255,0)", "QColor(0,255,0"))  '  guiconstants.h goinf from green to light green
-            text = Replace(text, "QColor(0, 255,55)", IIf(night, "QColor(0,255,0)", "QColor(0,255,0")) '  guiconstants.h goinf from green to light green
-            outfile.WriteLine(text)
-
-        End While
-        outfile.Close()
-
-    End Sub
-    Public Function ReplaceRGB(sData As String, night As Boolean)
-
-        '<red>0</red>
-        '        <green>255</green>
-        '        <blue>0</blue>
-        Dim r As Long
-        Dim g As Long
-        Dim b As Long
-        Dim sOut As String
-
-        GetRgb(sData, r, g, b)
-        If r = 0 And g = 255 And b = 0 Then
-            sOut = IIf(night, WriteRgb(0, 255, 0), WriteRgb(0, 255, 0)) ' going from green to green, green
-            Return sOut
-        End If
-
-        If r = 27 And g = 240 And b = 134 Then
-            sOut = IIf(night, WriteRgb(0, 255, 0), WriteRgb(0, 255, 0)) 'dark green to green
-            Return sOut
-        End If
-        If r = 137 And g = 148 And b = 68 Then
-            sOut = IIf(night, WriteRgb(0, 255, 0), WriteRgb(0, 255, 0)) 'tan      to green
-            Return sOut
-        End If
-
-        If r = 255 And g = 255 And b = 255 Then
-            sOut = IIf(night, WriteRgb(255, 255, 255), WriteRgb(0, 0, 0)) 'white to white or black
-            Return sOut
-
-        End If
-        If r = 0 And g = 0 And b = 0 Then
-            sOut = IIf(night, WriteRgb(0, 0, 0), WriteRgb(255, 255, 255)) 'black to white
-            Return sOut
-
-        End If
-        'green to light green 
-        If IsColor(27, 240, 134, r, g, b, 0, 255, 0, 0, 255, 0, night, sOut) Then Return sOut
-
-        'Menu Button Alt Fore Color (Dark blue 0 0 127) 
-
-        If IsColor(0, 0, 127, r, g, b, 0, 0, 127, 0, 0, 127, night, sOut) Then Return sOut
-        If IsColor(137, 148, 68, r, g, b, 0, 255, 0, 0, 255, 0, night, sOut) Then Return sOut 'UPS tan (137-148-68)
-        If IsColor(120, 120, 120, r, g, b, 120, 120, 120, 120, 120, 120, night, sOut) Then Return sOut ' med gray
-        If IsColor(46, 57, 1, r, g, b, 255, 255, 255, 0, 0, 0, night, sOut) Then Return sOut ' very dark olive to black
-
-
-
-        sOut = WriteRgb(r, g, b)
-        Return sOut
+        'r.PrimaryKey = sKey
+        'r.DataColumn1 = sValue
+        'modPersistedDataSystem.Store(r)
 
 
     End Function
-    Public Function IsColor(TestR As Long, TestG As Long, TestB As Long, _
-                            sourceR As Long, SourceG As Long, sourceB As Long, _
-                            nightr As Long, nightg As Long, nightb As Long, dayr As Long, dayg As Long, _
-                            dayb As Long, night As Boolean, ByRef sOut As String) As Boolean
+    
 
-        If TestR = sourceR And TestG = SourceG And TestB = sourceB Then
-            sOut = IIf(night, WriteRgb(nightr, nightg, nightb), WriteRgb(dayr, dayg, dayb))
-            Return True
-        End If
-
-    End Function
-    Public Function GetRgb(sdata As String, ByRef r As Long, ByRef g As Long, ByRef b As Long)
-
-        Dim vData() As String
-        vData = Split(sdata, vbCrLf)
-        For x = 0 To UBound(vData)
-            Dim sTemp As String = vData(x)
-            If InStr(1, sTemp, "<red>") > 0 Then
-                sTemp = Replace(sTemp, "<red>", "")
-                sTemp = Replace(sTemp, "</red>", "")
-                r = Val(sTemp)
-
-            End If
-            If InStr(1, sTemp, "<green>") > 0 Then
-                sTemp = Replace(sTemp, "<green>", "")
-                sTemp = Replace(sTemp, "</green>", "")
-                g = Val(sTemp)
-            End If
-            If InStr(1, sTemp, "<blue>") > 0 Then
-                sTemp = Replace(sTemp, "<blue>", "")
-                sTemp = Replace(sTemp, "</blue>", "")
-                b = Val(sTemp)
-            End If
-        Next x
-    End Function
-
-    Public Function WriteRgb(r As Long, g As Long, b As Long) As String
-        Dim sOut As String
-        sOut = "<color alpha=""255"">" + vbCrLf + "<red>" + Trim(r) + "</red>" + vbCrLf + "<green>" + Trim(g) + "</green>" + vbCrLf + "<blue>" + Trim(b) + "</blue>"
-        Return sOut
-    End Function
 
     Public Sub Log(sData As String)
         Try

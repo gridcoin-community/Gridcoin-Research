@@ -13,7 +13,8 @@ Public Class Utilization
    
     Public ReadOnly Property Version As Double
         Get
-            Return 353
+            Return 355
+
         End Get
     End Property
 
@@ -97,6 +98,9 @@ Public Class Utilization
             Return 0
         End Get
     End Property
+    Public Function NeuralNetwork() As Double
+        Return 1999
+    End Function
     Public ReadOnly Property BoincThreads As Double
         Get
 
@@ -157,6 +161,13 @@ Public Class Utilization
     End Function
     Public Function StrToMd5Hash(s As String) As String
         Return CalcMd5(s)
+    End Function
+    Public Function GetNeuralHash() As String
+        If Len(msCurrentNeuralHash) > 1 Then Return msCurrentNeuralHash 'This is invalidated when it changes
+
+        Dim sContract As String = GetMagnitudeContract()
+        Dim sHash As String = GetMd5String(sContract)
+        Return sHash
     End Function
     Public ReadOnly Property RetrieveWin32BoincHash() As String
         Get
@@ -243,21 +254,13 @@ Public Class Utilization
         Try
 
             lfrmMiningCounter = lfrmMiningCounter + 1
-            Exit Function
-
+            
             If mfrmMining Is Nothing Then
                 mfrmMining = New frmMining
                 mfrmMining.SetClsUtilization(Me)
             End If
 
-            If lfrmMiningCounter = 1 Then
-                If KeyValue("suppressminingconsole") = "true" Then Exit Function
-                mfrmMining.Show()
-            End If
-
-            If KeyValue("suppressminingconsole") <> "true" Then
-                mfrmMining.Visible = True
-            End If
+            mfrmMining.Show()
 
         Catch ex As Exception
         End Try
@@ -350,7 +353,49 @@ Public Class Utilization
 
         End Try
     End Function
-    
+    Public Function SyncCPIDsWithDPORNodes(sData As String) As Double
+        'Write the Gridcoin CPIDs to the Persisted Data System
+        Dim vCPIDs() As String = Split(sData, "<ROW>")
+        For x As Integer = 0 To UBound(vCPIDs)
+            If Len(vCPIDs(x)) > 20 Then
+                Dim vRow() As String
+                vRow = Split(vCPIDs(x), "<COL>")
+                Dim sCPID As String = vRow(0)
+                Dim sBase As String = vRow(1)
+                Dim unBase As String = DecodeBase64(sBase)
+                ' contract = GlobalCPUMiningCPID.cpidv2 + ";" + hashRand.GetHex() + ";" + GRCAddress;
+                Dim vCPIDRow() As String = Split(unBase, ";")
+                Dim cpidv2 As String = vCPIDRow(0)
+                Dim BlockHash As String = vCPIDRow(1)
+                Dim Address As String = vCPIDRow(2)
+                Dim dr As New Row
+                
+                dr.Database = "CPID"
+                dr.Table = "CPIDS"
+
+                dr.PrimaryKey = sCPID
+                dr = Read(dr)
+
+                If NeedsSynced(dr) Then
+                    dr.Expiration = Tomorrow()
+                    dr.DataColumn1 = cpidv2
+
+                    dr.DataColumn3 = BlockHash
+                    dr.DataColumn4 = Address
+                    Dim bValid As Boolean = False
+                    Dim clsMD5 As New MD5
+
+                    bValid = clsMD5.CompareCPID(sCPID, cpidv2, BlockHash)
+                    dr.DataColumn5 = Trim(bValid)
+
+                    Store(dr)
+                End If
+
+            End If
+        Next
+        Call SyncDPOR2()
+
+    End Function
     Public Function AddressUser(sMagnitude As String) As Double
         Log("Addressing User with Magnitude " + Trim(sMagnitude))
         Dim s As New SpeechSynthesis

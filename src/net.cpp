@@ -41,6 +41,7 @@ extern std::string GetHttpPage(std::string url);
 std::vector<std::string> split(std::string s, std::string delim);
 
 
+int64_t IsNeural();
 
 extern std::string OrgId();
 std::string DefaultBoincHashArgs();
@@ -1137,9 +1138,14 @@ void CNode::PushVersion()
 	std::string pw1 = RetrieveMd5(nonce+","+sboinchashargs);
 	std::string mycpid = GlobalCPUMiningCPID.cpidv2;
 	std::string acid = GetCommandNonce("aries");
+
+
+
     PushMessage("aries", PROTOCOL_VERSION, nonce, pw1, 
 				mycpid, mycpid, acid, nLocalServices, nTime, addrYou, addrMe,
                 nLocalHostNonce, FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()), nBestHeight);
+	
+
 }
 
 
@@ -1209,6 +1215,9 @@ void CNode::copyStats(CNodeStats &stats)
     X(nStartingHeight);
     X(nMisbehavior);
 	//X(securityversion);
+	X(nNeuralNetwork);
+	X(NeuralHash);
+
     // It is common for nodes with good ping times to suddenly become lagged,
     // due to a new block arriving or other large transfer.
     // Merely reporting pingtime might fool the caller into thinking the node was still responsive,

@@ -161,6 +161,7 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="GRCRunTimeInterpreter.vb" />
+    <Compile Include="MD5.vb" />
     <Compile Include="modBoincLeaderboard.vb" />
     <Compile Include="modGRC.vb">
       <SubType>Component</SubType>
@@ -172,6 +173,9 @@
     <Compile Include="modGRCWireFrameState.vb" />
     <Compile Include="modGRCWireFrameVector.vb" />
     <Compile Include="modLiveTicker.vb">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="modPersistedDataSystem.vb">
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="modWinAPI.vb" />

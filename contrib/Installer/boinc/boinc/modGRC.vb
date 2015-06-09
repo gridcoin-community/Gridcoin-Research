@@ -323,6 +323,12 @@ Module modGRC
         b = System.Text.Encoding.ASCII.GetBytes(sBase64)
         System.IO.File.WriteAllBytes(sFilePath, b)
     End Function
+    Public Function DecodeBase64(sData As String)
+        Dim b() As Byte
+        b = System.Convert.FromBase64String(sData)
+        Return ByteToString(b)
+    End Function
+
     Public Function UnBase64File(sSourceFileName As String, sTargetFileName As String)
         Dim b() As Byte
         b = System.IO.File.ReadAllBytes(sSourceFileName)
@@ -371,18 +377,10 @@ Module modGRC
             Dim objMD5 As New System.Security.Cryptography.MD5CryptoServiceProvider
             Dim arrData() As Byte
             Dim arrHash() As Byte
-
-            ' first convert the string to bytes (using UTF8 encoding for unicode characters)
             arrData = System.Text.Encoding.UTF8.GetBytes(sData)
-
-            ' hash contents of this byte array
             arrHash = objMD5.ComputeHash(arrData)
-
-            ' thanks objects
             objMD5 = Nothing
-            Dim sOut As String = ByteArrayToWierdHexString(arrHash)
-
-            ' return formatted hash
+            Dim sOut As String = ByteArrayToHexString2(arrHash)
             Return sOut
 
         Catch ex As Exception
@@ -390,8 +388,7 @@ Module modGRC
         End Try
     End Function
 
-    ' utility function to convert a byte array into a hex string
-    Private Function ByteArrayToWierdHexString(ByVal arrInput() As Byte) As String
+    Private Function ByteArrayToHexString2(ByVal arrInput() As Byte) As String
         Dim strOutput As New System.Text.StringBuilder(arrInput.Length)
         For i As Integer = 0 To arrInput.Length - 1
             strOutput.Append(arrInput(i).ToString("X2"))
@@ -605,7 +602,7 @@ Module modGRC
         End Try
         Return bOut
     End Function
-  
+
     Public Function DateStamp() As String
         Dim sTimeStamp As String
         sTimeStamp = Format(Now, "MMM d yyyy HH:mm")
@@ -615,7 +612,7 @@ Module modGRC
         Return Format(dt, "MMM d yyyy HH:mm")
 
     End Function
-       Public Sub Log(sData As String)
+    Public Sub Log(sData As String)
         Try
             Dim sPath As String
             sPath = GetGridFolder() + "debug2.log"
@@ -686,7 +683,7 @@ Module modGRC
         Return bigtime3f7o6l0daedrf4597acff2affbb5ed209f439aFroBearden0edd44ae1167a1e9be6eeb5cc2acd9c9
     End Function
 
-     Public Function CalcMd5(sMd5 As String) As String
+    Public Function CalcMd5(sMd5 As String) As String
 
         Try
             Dim md5 As Object
@@ -759,7 +756,7 @@ Module modGRC
 
     Public Function NeedsUpgrade() As Boolean
         Try
-            
+
             Dim sMsg As String
             Dim sURL As String = "http://download.gridcoin.us/download/downloadstake/"
 

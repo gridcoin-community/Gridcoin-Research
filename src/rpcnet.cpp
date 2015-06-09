@@ -11,6 +11,13 @@
 
 using namespace json_spirit;
 using namespace std;
+bool Contains(std::string data, std::string instring);
+extern std::string NeuralRequest(std::string MyNeuralRequest);
+
+
+extern void GatherNeuralHashes();
+
+
 
 Value getconnectioncount(const Array& params, bool fHelp)
 {
@@ -22,6 +29,46 @@ Value getconnectioncount(const Array& params, bool fHelp)
     LOCK(cs_vNodes);
     return (int)vNodes.size();
 }
+
+
+std::string NeuralRequest(std::string MyNeuralRequest)
+{
+    // Find a Neural Network Node that is free
+    LOCK(cs_vNodes);
+    BOOST_FOREACH(CNode* pNode, vNodes) 
+	{
+		if (Contains(pNode->strSubVer,"1999"))
+		{
+			//6-5-2015
+			printf("Node is a neural participant \r\n");
+			std::string reqid = "reqid";
+         	pNode->PushMessage("neural", MyNeuralRequest, reqid);
+            printf("Pushed \r\n");
+		}
+    }
+    return "";
+}
+
+
+void GatherNeuralHashes()
+{
+    // Find a Neural Network Node that is free
+    LOCK(cs_vNodes);
+    BOOST_FOREACH(CNode* pNode, vNodes) 
+	{
+		if (Contains(pNode->strSubVer,"1999"))
+		{
+			std::string reqid = "reqid";
+			std::string command_name="neural_hash";
+         	pNode->PushMessage("neural", command_name, reqid);
+            printf("Pushed \r\n");
+		}
+		//6-8-2015
+    }
+    
+}
+
+
 
 Value ping(const Array& params, bool fHelp)
 {
@@ -65,7 +112,8 @@ Value getpeerinfo(const Array& params, bool fHelp)
     CopyNodeStats(vstats);
 
     Array ret;
-
+	GatherNeuralHashes();
+	
     BOOST_FOREACH(const CNodeStats& stats, vstats) {
         Object obj;
 
@@ -82,7 +130,11 @@ Value getpeerinfo(const Array& params, bool fHelp)
         obj.push_back(Pair("inbound", stats.fInbound));
         obj.push_back(Pair("startingheight", stats.nStartingHeight));
         obj.push_back(Pair("banscore", stats.nMisbehavior));
-		//obj.push_back(Pair("securityversion", stats.securityversion));
+		bool bNeural = false;
+		bNeural = Contains(stats.strSubVer,"1999");
+
+		obj.push_back(Pair("Neural Network", bNeural));
+		obj.push_back(Pair("Neural Hash",stats.NeuralHash));
 
         ret.push_back(obj);
     }

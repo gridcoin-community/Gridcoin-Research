@@ -79,8 +79,12 @@ bool fNoListen = false;
 bool fLogTimestamps = false;
 CMedianFilter<int64_t> vTimeOffsets(200,0);
 bool fReopenDebugLog = false;
+bool Contains(std::string data, std::string instring);
 
 
+std::string RoundToString(double d, int place);
+
+int64_t IsNeural();
 
 extern std::string GetBoincDataDir();
 
@@ -1396,8 +1400,11 @@ std::string FormatSubVersion(const std::string& name, int nClientVersion, const 
     std::ostringstream ss;
     ss << "/";
     ss << name << ":" << FormatVersion(nClientVersion);
-    if (!comments.empty())
-        ss << "(" << boost::algorithm::join(comments, "; ") << ")";
+	std::string comments_neural = RoundToString(((double)IsNeural()),0);
+
+    if (!comments.empty())         ss << "(" << boost::algorithm::join(comments, "; ") << ")";
+	ss << "(" << comments_neural << ")";
+
     ss << "/";
     return ss.str();
 }

@@ -38,11 +38,19 @@ bool SynchronizeRacForDPOR(bool SyncEntireCoin);
 extern std::string ReadCache(std::string section, std::string key);
 
 extern std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
+bool AdvertiseBeacon();
+
+extern void IncrementNeuralNetworkSupermajority(std::string NeuralHash);
+
+extern std::string GetNeuralNetworkSupermajorityHash(int64_t& out_popularity);
+
 
 
 extern  std::string GetNetsoftProjects(std::string cpid);
-
-
+extern std::string GetNeuralNetworkReport();
+void qtSyncWithDPORNodes(std::string data);
+std::string qtGetNeuralHash(std::string data);
+std::string GetListOf(std::string datatype);
 
 std::string CryptoLottery(int64_t locktime);
 std::string GetCommandNonce(std::string command);
@@ -194,6 +202,8 @@ int64_t nMinimumInputValue = 0;
 
 std::map<std::string, std::string> mvApplicationCache;
 std::map<std::string, int64_t> mvApplicationCacheTimestamp;
+std::map<std::string, int64_t> mvNeuralNetworkHash;
+
 std::map<std::string, StructCPID> mvDPOR;
 
 extern enum Checkpoints::CPMode CheckpointsMode;
@@ -2939,7 +2949,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	
 	
 	AddNetworkMagnitude((double)pindex->nHeight,vtx[1],nTime, bb.cpid, bb, mint, IsProofOfStake()); //Updates Total payments and Actual Magnitude per CPID
-	
+	IncrementNeuralNetworkSupermajority(bb.NeuralHash);
+					
 	//  End of Network Consensus
 
     if (!txdb.WriteBlockIndex(CDiskBlockIndex(pindex)))
@@ -3766,10 +3777,18 @@ void GridcoinServices()
 			    TallyInBackground();
 	}
 	//Once every 12 hours, find out if a project RAC needs synced:
-	if (TimerMain("update_project_rac",12*60))
+	if (TimerMain("update_prject_rac",60))
 	{
 
-		bool result = SynchronizeRacForDPOR(false);
+		//bool result = SynchronizeRacForDPOR(false);
+		std::string data = GetListOf("beacon");
+		qtSyncWithDPORNodes(data);
+
+	}
+
+	if (TimerMain("send_beacon",60))
+	{
+		bool result = AdvertiseBeacon();
 	}
 
 	if (TimerMain("TallyDPORMagnitude",10))
@@ -4924,7 +4943,9 @@ bool TallyNetworkAverages(bool ColdBoot)
 	nLastTallied = GetAdjustedTime();
 
 	bNetAveragesLoaded = false;
-	
+	//Clear the neural network hash buffer
+	mvNeuralNetworkHash.clear();
+
 	LOCK(cs_main);
 	try 
 	{
@@ -4955,6 +4976,11 @@ bool TallyNetworkAverages(bool ColdBoot)
 
 						if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
 						MiningCPID bb = DeserializeBoincBlock(hashboinc);
+
+						//6-9-2015 - Increment Neural Network Hashes Supermajority (over the last 200 blocks)
+						if (ii > (nMaxDepth-200)) IncrementNeuralNetworkSupermajority(bb.NeuralHash);
+						
+
 						// R HALFORD - 2/10/2015 - REGARDLESS OF A PROJECT BEING VALID, COUNT CREDITS AND PAYMENTS AGAINST THE CPID SO THAT CPIDS WHO WORKED RETIRED PROJECTS ARE STILL CALCULATED CORRECTLY (IE TOTAL OWED, TOTAL PAID) 
 
 						//Verify validity of project
@@ -5436,6 +5462,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 		std::string acid = "";
 		vRecv >> pfrom->nVersion >> pfrom->boinchashnonce >> pfrom->boinchashpw >> pfrom->cpid >> pfrom->enccpid >> acid >> pfrom->nServices >> nTime >> addrMe;
 
+		//  PushMessage("aries", PROTOCOL_VERSION, nonce, pw1, 			mycpid, mycpid, acid, nLocalServices, nTime, addrYou, 
+		
+
+
 		//Halford - 12-26-2014 - Thwart Hackers
 		bool ver_valid = AcidTest(strCommand,acid,pfrom);
         if (fDebug) printf("Ver Acid %s, Validity %s ",acid.c_str(),YesNo(ver_valid).c_str());
@@ -5502,12 +5532,22 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             vRecv >> pfrom->strSubVer;
 
 		
+		////addrMe,        nLocalHostNonce, FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()), nBestHeight);
+	
+
         if (!vRecv.empty())
             vRecv >> pfrom->nStartingHeight;
+		//6-5-2015, Pull in Neural Network Fields
 
-	
-	 		if (GetArgument("autoban2","false") == "true")
-			{
+		pfrom->nNeuralNetwork = 0;
+
+		if (!vRecv.empty())
+			vRecv >> pfrom->nNeuralNetwork;
+
+	    printf("MyNeural Partner = %f\r\n",(double)pfrom->nNeuralNetwork);
+
+		if (GetArgument("autoban2","false") == "true")
+		{
 				if (pfrom->nStartingHeight < 1000 && LessVerbose(500)) 
 				{
 					if (fDebug) printf("Node with low height");
@@ -5616,7 +5656,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         pfrom->fSuccessfullyConnected = true;
 
-        if (fDebug) printf("receive version message: version %d, blocks=%d, us=%s, them=%s, peer=%s\n", pfrom->nVersion, pfrom->nStartingHeight, addrMe.ToString().c_str(), addrFrom.ToString().c_str(), pfrom->addr.ToString().c_str());
+        if (fDebug) printf("receive version message: version %d, blocks=%d, us=%s, them=%s, peer=%s\n", pfrom->nVersion, 
+			pfrom->nStartingHeight, addrMe.ToString().c_str(), addrFrom.ToString().c_str(), pfrom->addr.ToString().c_str());
 
         cPeerBlockCounts.input(pfrom->nStartingHeight);
 
@@ -6113,8 +6154,28 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (!tracker.IsNull())
             tracker.fn(tracker.param1, vRecv);
     }
+	else if (strCommand == "neural")
+	{
+ 	 	    printf("Received Neural Request \r\n");
 
+			std::string neural_request = "";
+			std::string neural_request_id = "";
+	        vRecv >> neural_request >> neural_request_id;  // foreign node issued neural request with request ID:
+			printf("neural request %s \r\n",neural_request.c_str());
+			std::string neural_response = "generic_response";
 
+			if (neural_request=="neural_hash")
+			{
+				neural_response = qtGetNeuralHash("");
+				printf("MY neural response %s",neural_response.c_str());
+			}
+			else
+			{
+				neural_response="generic_response";
+			}
+			
+            pfrom->PushMessage("nresp", neural_response);
+	}
     else if (strCommand == "ping")
     {
 		std::string acid = "";
@@ -6140,7 +6201,15 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             pfrom->PushMessage("pong", nonce);
         }
     }
-
+	else if (strCommand == "nresp")
+	{
+			std::string neural_response = "";
+	        vRecv >> neural_response;
+			//            if (pfrom->nNeuralRequestSent != 0) 
+			// nNeuralNonce must match request ID
+			pfrom->NeuralHash = neural_response;
+			printf("Neural Response %s \r\n",neural_response.c_str());
+	}
 
     else if (strCommand == "pong")
     {
@@ -6471,6 +6540,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 	mcpid.GRCAddress = DefaultWalletAddress();
 	mcpid.Organization = DefaultOrg();
 	mcpid.OrganizationKey = DefaultBlockKey(8); //Only reveal 8 characters of the key in the block (should be enough to identify hackers)
+	mcpid.NeuralHash = qtGetNeuralHash("");
 	
 	if (mcpid.lastblockhash.empty()) mcpid.lastblockhash = "0";
 	std::string bb = mcpid.cpid + delim + mcpid.projectname + delim + mcpid.aesskein + delim + RoundToString(mcpid.rac,0)
@@ -6484,7 +6554,8 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 					+ delim + NN(mcpid.cpidv2)
 					+ delim + RoundToString(mcpid.Magnitude,0)
 					+ delim + NN(mcpid.GRCAddress) + delim + NN(mcpid.lastblockhash)
-					+ delim + RoundToString(mcpid.InterestSubsidy,2) + delim + NN(mcpid.Organization) + delim + NN(mcpid.OrganizationKey);
+					+ delim + RoundToString(mcpid.InterestSubsidy,2) + delim + NN(mcpid.Organization) 
+					+ delim + NN(mcpid.OrganizationKey) + delim + mcpid.NeuralHash;
 	return bb;
 }
 
@@ -6557,6 +6628,10 @@ MiningCPID DeserializeBoincBlock(std::string block)
 		if (s.size() > 20)
 		{
 			surrogate.OrganizationKey = s[20];
+		}
+		if (s.size() > 21)
+		{
+			surrogate.NeuralHash = s[21];
 		}
 		
 	}
@@ -7626,6 +7701,7 @@ MiningCPID GetMiningCPID()
 	mc.Canary = 0; //Used to test for a memory overflow
 	mc.Organization = "";
 	mc.OrganizationKey = "";
+	mc.NeuralHash = "";
 	return mc;
 }
 
@@ -7642,27 +7718,31 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         // Message: ping
         //
         bool pingSend = false;
-        if (pto->fPingQueued) {
+        if (pto->fPingQueued) 
+		{
             // RPC ping request by user
             pingSend = true;
         }
-        if (pto->nPingNonceSent == 0 && pto->nPingUsecStart + PING_INTERVAL * 1000000 < GetTimeMicros()) {
+        if (pto->nPingNonceSent == 0 && pto->nPingUsecStart + PING_INTERVAL * 1000000 < GetTimeMicros()) 
+		{
             // Ping automatically sent as a latency probe & keepalive.
             pingSend = true;
         }
-        if (pingSend) {
+        if (pingSend) 
+		{
             uint64_t nonce = 0;
             while (nonce == 0) {
                 RAND_bytes((unsigned char*)&nonce, sizeof(nonce));
             }
             pto->fPingQueued = false;
             pto->nPingUsecStart = GetTimeMicros();
-            if (pto->nVersion > BIP0031_VERSION) {
+            if (pto->nVersion > BIP0031_VERSION) 
+			{
                 pto->nPingNonceSent = nonce;
 				std::string acid = GetCommandNonce("ping");
-            
                 pto->PushMessage("ping", nonce, acid);
-            } else {
+            } else 
+			{
                 // Peer is too old to support ping command with nonce, pong will never arrive.
                 pto->nPingNonceSent = 0;
                 pto->PushMessage("ping");
@@ -7872,6 +7952,58 @@ void DeleteCache(std::string section, std::string keyname)
        mvApplicationCache.erase(pk);
 	   mvApplicationCacheTimestamp.erase(pk);
 }
+
+void IncrementNeuralNetworkSupermajority(std::string NeuralHash)
+{
+	if (NeuralHash.length() < 5) return;
+	int64_t temp_hashcount = mvNeuralNetworkHash[NeuralHash];
+	if (temp_hashcount == 0)
+	{
+		mvNeuralNetworkHash.insert(map<std::string,int64_t>::value_type(NeuralHash,0));
+	}
+	temp_hashcount++;
+	mvNeuralNetworkHash[NeuralHash] = temp_hashcount;
+}
+
+
+std::string GetNeuralNetworkSupermajorityHash(int64_t& out_popularity)
+{
+	int64_t highest_popularity = -1;
+	std::string neural_hash = "";
+	for(map<std::string,int64_t>::iterator ii=mvNeuralNetworkHash.begin(); ii!=mvNeuralNetworkHash.end(); ++ii) 
+	{
+				int64_t popularity = mvNeuralNetworkHash[(*ii).first];
+				if (popularity > highest_popularity)
+				{
+					highest_popularity = popularity;
+					neural_hash = (*ii).first;
+				}
+	}
+	out_popularity = highest_popularity;
+	return neural_hash;
+}
+
+
+
+
+std::string GetNeuralNetworkReport()
+{
+	//Returns a report of the networks neural hashes in order of popularity
+	std::string neural_hash = "";
+	std::string report = "Neural_hash, Popularity\r\n";
+	std::string row = "";
+	for(map<std::string,int64_t>::iterator ii=mvNeuralNetworkHash.begin(); ii!=mvNeuralNetworkHash.end(); ++ii) 
+	{
+				int64_t popularity = mvNeuralNetworkHash[(*ii).first];
+				neural_hash = (*ii).first;
+				row = neural_hash+ "," + RoundToString(popularity,0);
+				report += row + "\r\n";
+	}
+
+	return report;
+}
+
+
 
 
 bool MemorizeMessages(bool bFullTableScan, const CBlock& block, const CBlockIndex* blockindex)

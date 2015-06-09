@@ -22,6 +22,7 @@ double GetPoSKernelPS2();
 
 volatile bool bCPIDsLoaded;
 volatile bool bProjectsInitialized;
+std::string GetNeuralNetworkSupermajorityHash(int64_t& out_popularity);
 
 
 Value getsubsidy(const Array& params, bool fHelp)
@@ -68,10 +69,19 @@ Value getmininginfo(const Array& params, bool fHelp)
     weight.push_back(Pair("maximum",    (uint64_t)0));
     weight.push_back(Pair("combined",  (uint64_t)nWeight));
     obj.push_back(Pair("stakeweight", weight));
-		double nCutoff =  GetAdjustedTime() - (60*60*24*14);
+	double nCutoff =  GetAdjustedTime() - (60*60*24*14);
 
     obj.push_back(Pair("stakeinterest",    (uint64_t)GetCoinYearReward( GetAdjustedTime())));
     obj.push_back(Pair("testnet",       fTestNet));
+	int64_t neural_popularity = 0;
+	std::string neural_hash = GetNeuralNetworkSupermajorityHash(neural_popularity);
+	
+	obj.push_back(Pair("NeuralHash", neural_hash));
+
+	obj.push_back(Pair("NeuralPopularity", neural_popularity));
+
+	obj.push_back(Pair("testnet",       fTestNet));
+
 	obj.push_back(Pair("MiningInfo 1", msMiningErrors));
 	obj.push_back(Pair("MiningInfo 2", msMiningErrors2));
 	obj.push_back(Pair("MiningInfo 3", msMiningErrors3));
