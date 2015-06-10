@@ -14,7 +14,7 @@ Public Class frmMining
     Private lMHRateCounter As Long = 0
     Private mIDelay As Long = 0
 
-    Private clsUtilization As Utilization
+    'Private clsUtilization As Utilization
     Private RefreshCount As Long
     Private bUICharted As Boolean = False
     Public bDisposing As Boolean
@@ -27,10 +27,7 @@ Public Class frmMining
     Private mlElapsedTime As Long
     Private msLastSleepStatus As String
 
-    Public Sub SetClsUtilization(c As Utilization)
-        clsUtilization = c
-    End Sub
-  
+
     Private Sub UpdateCharts()
         Try
             ChartBoinc()
@@ -129,12 +126,6 @@ Public Class frmMining
     End Sub
     Private Sub frmMining_FormClosing(ByVal sender As Object, ByVal e As System.Windows.Forms.FormClosingEventArgs) Handles Me.FormClosing
 
-        If bDisposing Then
-       
-            Me.Close()
-            Me.Dispose()
-            Exit Sub
-        End If
         Me.Hide()
         e.Cancel = True
     End Sub
@@ -192,18 +183,9 @@ Public Class frmMining
    
    
     Public Sub New()
-
-        ' This call is required by the designer.
         InitializeComponent()
-
-  
-
     End Sub
 
- 
-    Private Sub PoolsToolStripMenuItem_Click(sender As System.Object, e As System.EventArgs) Handles PoolsToolStripMenuItem.Click
- 
-    End Sub
 
     Private Sub PopulateHeadings(vHeading() As String, oDGV As DataGridView)
 
@@ -304,7 +286,6 @@ Public Class frmMining
             dgvProjects.Rows.Clear()
 
             For Each prj As Row In lstProjects
-                iRow += 1
                 Dim surrogatePrjCPID As New Row
                 surrogatePrjCPID.Database = "Project"
                 surrogatePrjCPID.Table = prj.PrimaryKey + "CPID"
@@ -315,6 +296,8 @@ Public Class frmMining
                 Dim avgRac As Double = CPIDRAC / (PrjRAC + 0.01) * 100
 
                 If CPIDRAC > 0 Then
+                    iRow += 1
+
                     dgvProjects.Rows.Add()
                     dgvProjects.Rows(iRow - 1).Cells(0).Value = sCPID
                     dgvProjects.Rows(iRow - 1).Cells(1).Value = prj.PrimaryKey
@@ -340,6 +323,12 @@ Public Class frmMining
 
         End If
 
+
+    End Sub
+
+    Private Sub ContractDetailsToolStripMenuItem_Click(sender As System.Object, e As System.EventArgs) Handles ContractDetailsToolStripMenuItem.Click
+        Dim sData As String = GetMagnitudeContract()
+        MsgBox(sData)
 
     End Sub
 End Class

@@ -39,8 +39,7 @@ std::string NeuralRequest(std::string MyNeuralRequest)
 	{
 		if (Contains(pNode->strSubVer,"1999"))
 		{
-			//6-5-2015
-			printf("Node is a neural participant \r\n");
+			//printf("Node is a neural participant \r\n");
 			std::string reqid = "reqid";
          	pNode->PushMessage("neural", MyNeuralRequest, reqid);
             printf("Pushed \r\n");

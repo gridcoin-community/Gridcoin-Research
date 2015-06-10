@@ -13,7 +13,7 @@ Public Class Utilization
    
     Public ReadOnly Property Version As Double
         Get
-            Return 355
+            Return 356
 
         End Get
     End Property
@@ -257,7 +257,6 @@ Public Class Utilization
             
             If mfrmMining Is Nothing Then
                 mfrmMining = New frmMining
-                mfrmMining.SetClsUtilization(Me)
             End If
 
             mfrmMining.Show()
@@ -363,34 +362,28 @@ Public Class Utilization
                 Dim sCPID As String = vRow(0)
                 Dim sBase As String = vRow(1)
                 Dim unBase As String = DecodeBase64(sBase)
-                ' contract = GlobalCPUMiningCPID.cpidv2 + ";" + hashRand.GetHex() + ";" + GRCAddress;
+                'contract = GlobalCPUMiningCPID.cpidv2 + ";" + hashRand.GetHex() + ";" + GRCAddress;
                 Dim vCPIDRow() As String = Split(unBase, ";")
                 Dim cpidv2 As String = vCPIDRow(0)
                 Dim BlockHash As String = vCPIDRow(1)
                 Dim Address As String = vCPIDRow(2)
                 Dim dr As New Row
-                
                 dr.Database = "CPID"
                 dr.Table = "CPIDS"
-
                 dr.PrimaryKey = sCPID
                 dr = Read(dr)
-
                 If NeedsSynced(dr) Then
-                    dr.Expiration = Tomorrow()
+                    dr.Expiration = DateAdd(DateInterval.Day, 14, Now)
+                    dr.Synced = Tomorrow()
                     dr.DataColumn1 = cpidv2
-
                     dr.DataColumn3 = BlockHash
                     dr.DataColumn4 = Address
                     Dim bValid As Boolean = False
                     Dim clsMD5 As New MD5
-
                     bValid = clsMD5.CompareCPID(sCPID, cpidv2, BlockHash)
                     dr.DataColumn5 = Trim(bValid)
-
                     Store(dr)
                 End If
-
             End If
         Next
         Call SyncDPOR2()
@@ -443,13 +436,13 @@ Public Class Utilization
     End Sub
 
     Protected Overrides Sub Finalize()
-        If Not mfrmMining Is Nothing Then
-            mfrmMining.bDisposing = True
-            mfrmMining.Close()
-            mfrmMining.Dispose()
-            mfrmMining = Nothing
-        End If
-        MyBase.Finalize()
+        Try
+
+            MyBase.Finalize()
+        Catch ex As Exception
+
+        End Try
+
     End Sub
 
 End Class

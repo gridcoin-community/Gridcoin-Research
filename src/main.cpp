@@ -35,6 +35,8 @@ bool TallyMagnitudesByContract();
 
 bool SynchronizeRacForDPOR(bool SyncEntireCoin);
 
+
+
 extern std::string ReadCache(std::string section, std::string key);
 
 extern std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
@@ -3791,7 +3793,7 @@ void GridcoinServices()
 		bool result = AdvertiseBeacon();
 	}
 
-	if (TimerMain("TallyDPORMagnitude",10))
+	if (TimerMain("TallyDPORMagnitude",20))
 	{
 		bool result = TallyMagnitudesByContract();
 	}
@@ -5544,7 +5546,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 		if (!vRecv.empty())
 			vRecv >> pfrom->nNeuralNetwork;
 
-	    printf("MyNeural Partner = %f\r\n",(double)pfrom->nNeuralNetwork);
+	    //printf("MyNeural Partner = %f\r\n",(double)pfrom->nNeuralNetwork);
 
 		if (GetArgument("autoban2","false") == "true")
 		{
@@ -6205,7 +6207,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 	{
 			std::string neural_response = "";
 	        vRecv >> neural_response;
-			//            if (pfrom->nNeuralRequestSent != 0) 
+			// if (pfrom->nNeuralRequestSent != 0) 
 			// nNeuralNonce must match request ID
 			pfrom->NeuralHash = neural_response;
 			printf("Neural Response %s \r\n",neural_response.c_str());
@@ -8002,7 +8004,6 @@ std::string GetNeuralNetworkReport()
 
 	return report;
 }
-
 
 
 

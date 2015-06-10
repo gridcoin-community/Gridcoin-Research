@@ -52,7 +52,7 @@ Module modPersistedDataSystem
         For Each cpid As Row In lstCPIDs
             Dim r As Double = RoundedMag(201.11)
 
-            Dim sRow As String = cpid.PrimaryKey + "," + Trim(Math.Round(Val(cpid.Magnitude), 2)) _
+            Dim sRow As String = cpid.PrimaryKey + "," + Trim(RoundedMag(Val(cpid.Magnitude))) _
                                  + "," + Trim(Math.Round(Val(cpid.RAC), 2)) + "," + Trim(cpid.Expiration) + "," + Trim(cpid.Synced) + "," + Trim(cpid.DataColumn4) + "," + Trim(cpid.DataColumn5) + ";"
             sOut += sRow
         Next
@@ -67,14 +67,20 @@ Module modPersistedDataSystem
         lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
         Dim sOut As String = ""
         For Each cpid As Row In lstCPIDs
-            Dim sRow As String = cpid.PrimaryKey + "," + Trim(RoundedMag(Val(cpid.Magnitude))) + ";"
-            sOut += sRow
+            If cpid.DataColumn5 = "True" Then
+                If CDate(cpid.Added) < DateAdd(DateInterval.Day, -1, Now) Then
+                    Dim sRow As String = cpid.PrimaryKey + "," + Trim(RoundedMag(Val(cpid.Magnitude))) + ";"
+                    sOut += sRow
+                End If
+
+            End If
+
         Next
         Return sOut
     End Function
     Public Function RoundedMag(num As Double)
         'Rounds magnitude to nearest 10
-        Return Math.Round(num * 0.1, 0) / 0.1
+        Return Math.Round(num * 0.2, 0) / 0.2
     End Function
     Public Function UpdateNetworkAverages() As Boolean
         'loop through all projects on file, persist network averages
@@ -120,8 +126,6 @@ Module modPersistedDataSystem
     End Function
     Public Sub CompleteSync()
         UpdateMagnitudes()
-
-        ' UpdateMagnitudes()
     End Sub
     Public Function UpdateMagnitudes() As Boolean
         'Loop through the researchers
@@ -139,19 +143,16 @@ Module modPersistedDataSystem
             If NeedsSynced(cpid) Then
                 Dim bResult As Boolean = GetRACViaNetsoft(cpid.PrimaryKey)
                 If bResult Then
+                    cpid.Expiration = DateAdd(DateInterval.Day, 14, Now)
                     cpid.Synced = Tomorrow()
                     Store(cpid)
                 End If
             End If
-
-
         Next
         UpdateNetworkAverages()
         lstCPIDs = GetList(surrogateRow, "*")
 
-
         For Each cpid As Row In lstCPIDs
-        
             Dim surrogatePrj As New Row
             surrogatePrj.Database = "Project"
             surrogatePrj.Table = "Projects"
@@ -173,7 +174,6 @@ Module modPersistedDataSystem
             cpid.Database = "CPID"
             cpid.Table = "CPIDS"
             cpid.RAC = Trim(TotalRAC)
-
             cpid.Magnitude = Trim(Math.Round(Magg, 2))
             Store(cpid)
         Next
@@ -243,6 +243,7 @@ Module modPersistedDataSystem
 
     End Function
     Public Function PersistProjectRAC(sCPID As String, rac As Double, Project As String) As Boolean
+        'Store the CPID_PROJECT RAC:
         Dim d As New Row
         d.Expiration = Tomorrow()
         d.Added = Now
@@ -251,7 +252,7 @@ Module modPersistedDataSystem
         d.PrimaryKey = Project + "_" + sCPID
         d.RAC = Trim(rac)
         Store(d)
-        'Store the project too
+        'Store the Project record
         d = New Row
         d.Expiration = Tomorrow()
         d.Added = Now
@@ -261,12 +262,13 @@ Module modPersistedDataSystem
         d.DataColumn1 = Project
         Store(d)
         d = New Row
-        d.Expiration = Tomorrow()
-        d.Added = Now
-        d.Database = "CPID"
-        d.Table = "CPIDS"
-        d.PrimaryKey = sCPID
-        Store(d)
+
+        'd.Expiration = Tomorrow()
+        'd.Added = Now
+        'd.Database = "CPID"
+        'd.Table = "CPIDS"
+        'd.PrimaryKey = sCPID
+        'Store(d)
         Return True
     End Function
 
@@ -368,7 +370,8 @@ Module modPersistedDataSystem
         Dim sTemp As String = ""
         Dim d As String = "<COL>"
         Dim bFound As Boolean
-            dataRow.Added = Now
+        If dataRow.Added = New Date Then dataRow.Added = Now
+
         
         Using objWriter As New System.IO.StreamWriter(sWritePath)
 

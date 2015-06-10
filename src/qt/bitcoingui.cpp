@@ -518,14 +518,14 @@ std::string qtGetNeuralHash(std::string data)
 		QString qsData = ToQstring(data);
 		QString sResult = globalcom->dynamicCall("GetNeuralHash()").toString();
 		std::string result = FromQString(sResult);
-		printf("My Neural Hash %s \r\n",result.c_str());
 		return result;
-
 	}
 	catch(...)
 	{
 		return "?";
 	}
+	#else
+		return "?";
 	#endif
 }
 
@@ -655,8 +655,7 @@ void BusyWait()
 int64_t IsNeural()
 {
 
-	if (!bGlobalcomInitialized) BusyWait();
-
+	
 	if (!bGlobalcomInitialized) return 0;
 	
 
@@ -667,7 +666,6 @@ int64_t IsNeural()
 				#ifdef WIN32
 				nNeural = globalcom->dynamicCall("NeuralNetwork()").toInt();
 				#endif
-				printf("Neural %f\r\n",(double)nNeural);
 				return (int64_t)nNeural;
 	}
 	catch(...)
@@ -2012,6 +2010,8 @@ void ReinstantiateGlobalcom()
 {
 #ifdef WIN32
 
+	        if (bGlobalcomInitialized) return;
+
 			//Note, on Windows, if the performance counters are corrupted, rebuild them by going to an elevated command prompt and
 	   		//issue the command: lodctr /r (to rebuild the performance counters in the registry)
 			std::string os = GetArg("-os", "windows");
@@ -2079,7 +2079,6 @@ void BitcoinGUI::timerfire()
 
 		if (nRegVersion==0 || Timer("start",10))
 		{
-			printf("Starting globalcom...\r\n");
 			ReinstantiateGlobalcom();
 
 			nRegVersion=9999;
@@ -2089,7 +2088,6 @@ void BitcoinGUI::timerfire()
 				NewUserWizard();
 			}
 			#ifdef WIN32
-		
 		    nRegVersion = globalcom->dynamicCall("Version()").toInt();
 			sRegVer = boost::lexical_cast<std::string>(nRegVersion);
 			#endif

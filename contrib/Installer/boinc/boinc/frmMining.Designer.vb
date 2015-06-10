@@ -63,6 +63,7 @@ Partial Class frmMining
         Me.TabPage2 = New System.Windows.Forms.TabPage()
         Me.dgv = New System.Windows.Forms.DataGridView()
         Me.lblWarning = New System.Windows.Forms.Label()
+        Me.ContractDetailsToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         CType(Me.Chart1, System.ComponentModel.ISupportInitialize).BeginInit()
         CType(Me.ChartUtilization, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.MenuStrip1.SuspendLayout()
@@ -232,6 +233,7 @@ Partial Class frmMining
         'ConfigurationToolStripMenuItem
         '
         Me.ConfigurationToolStripMenuItem.BackColor = System.Drawing.Color.Transparent
+        Me.ConfigurationToolStripMenuItem.DropDownItems.AddRange(New System.Windows.Forms.ToolStripItem() {Me.ContractDetailsToolStripMenuItem})
         Me.ConfigurationToolStripMenuItem.ImageTransparentColor = System.Drawing.Color.Black
         Me.ConfigurationToolStripMenuItem.Name = "ConfigurationToolStripMenuItem"
         Me.ConfigurationToolStripMenuItem.Size = New System.Drawing.Size(93, 20)
@@ -435,6 +437,12 @@ Partial Class frmMining
         Me.lblWarning.TabIndex = 55
         Me.lblWarning.Text = " "
         '
+        'ContractDetailsToolStripMenuItem
+        '
+        Me.ContractDetailsToolStripMenuItem.Name = "ContractDetailsToolStripMenuItem"
+        Me.ContractDetailsToolStripMenuItem.Size = New System.Drawing.Size(158, 22)
+        Me.ContractDetailsToolStripMenuItem.Text = "Contract Details"
+        '
         'frmMining
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
@@ -501,4 +509,5 @@ End Sub
     Friend WithEvents TabPage1 As System.Windows.Forms.TabPage
     Friend WithEvents TabPage2 As System.Windows.Forms.TabPage
     Friend WithEvents dgv As System.Windows.Forms.DataGridView
+    Friend WithEvents ContractDetailsToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
 End Class

@@ -34,6 +34,8 @@ extern std::string MyBeaconExists(std::string cpid);
 extern bool AdvertiseBeacon();
 std::string GetNeuralNetworkReport();
 
+Array GetJSONNeuralNetworkReport();
+
 void GatherNeuralHashes();
 extern std::string GetListOf(std::string datatype);
 void qtSyncWithDPORNodes(std::string data);
@@ -944,7 +946,7 @@ bool TallyMagnitudesByContract()
 			//Return the contract for the team
 			std::string contract_name = "" + vProjects[i];
 			std::string contract = ReadCache("contract", contract_name);
-			printf("Accessing contract %s\r\n",contract_name.c_str());
+			//printf("Accessing contract %s\r\n",contract_name.c_str());
 			double projavg=GetNetworkAvgByProject(contract_name);
 			// For each CPID in the contract
 			std::vector<std::string> vCPIDs = split(contract.c_str(),";");
@@ -1295,11 +1297,10 @@ Value execute(const Array& params, bool fHelp)
 	else if (sItem == "neuralreport")
 	{
 		
+			Array myNeuralJSON = GetJSONNeuralNetworkReport();
 
-			std::string report = GetNeuralNetworkReport();
-			entry.push_back(Pair("Neural Network Report",report));
-			results.push_back(entry);
-	
+			results.push_back(myNeuralJSON);
+
 	}
 	else if (sItem=="myneuralhash")
 	{
@@ -2060,6 +2061,32 @@ Array ContractReportCSV()
 		 
 }
 
+
+
+
+Array GetJSONNeuralNetworkReport()
+{
+	  Array results;
+	  //Returns a report of the networks neural hashes in order of popularity
+	  std::string neural_hash = "";
+	  std::string report = "Neural_hash, Popularity\r\n";
+	  std::string row = "";
+	  Object entry;
+  	  entry.push_back(Pair("Neural Hash","Popularity"));
+	  for(map<std::string,int64_t>::iterator ii=mvNeuralNetworkHash.begin(); ii!=mvNeuralNetworkHash.end(); ++ii) 
+	  {
+				int64_t popularity = mvNeuralNetworkHash[(*ii).first];
+				neural_hash = (*ii).first;
+				row = neural_hash + "," + RoundToString(popularity,0);
+				report += row + "\r\n";
+				entry.push_back(Pair(neural_hash,RoundToString(popularity,0)));
+				
+	  }
+	  results.push_back(entry);
+	  return results;
+
+ 	 
+}
 
 
 
