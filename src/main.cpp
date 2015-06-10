@@ -3781,10 +3781,10 @@ void GridcoinServices()
 	//Once every 12 hours, find out if a project RAC needs synced:
 	if (TimerMain("update_prject_rac",60))
 	{
-
-		//bool result = SynchronizeRacForDPOR(false);
+		#if defined(WIN32) && defined(QT_GUI)
 		std::string data = GetListOf("beacon");
 		qtSyncWithDPORNodes(data);
+		#endif
 
 	}
 
@@ -6168,8 +6168,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 			if (neural_request=="neural_hash")
 			{
-				neural_response = qtGetNeuralHash("");
-				printf("MY neural response %s",neural_response.c_str());
+				#if defined(WIN32) && defined(QT_GUI)
+					neural_response = qtGetNeuralHash("");
+				#endif
+				printf("Neural response %s",neural_response.c_str());
 			}
 			else
 			{
@@ -6541,9 +6543,12 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 	std::string version = FormatFullVersion();
 	mcpid.GRCAddress = DefaultWalletAddress();
 	mcpid.Organization = DefaultOrg();
-	mcpid.OrganizationKey = DefaultBlockKey(8); //Only reveal 8 characters of the key in the block (should be enough to identify hackers)
-	mcpid.NeuralHash = qtGetNeuralHash("");
+	mcpid.OrganizationKey = DefaultBlockKey(8); //Only reveal 8 characters
 	
+	#if defined(WIN32) && defined(QT_GUI)
+		mcpid.NeuralHash = qtGetNeuralHash("");
+	#endif
+
 	if (mcpid.lastblockhash.empty()) mcpid.lastblockhash = "0";
 	std::string bb = mcpid.cpid + delim + mcpid.projectname + delim + mcpid.aesskein + delim + RoundToString(mcpid.rac,0)
 					+ delim + RoundToString(mcpid.pobdifficulty,5) + delim + RoundToString((double)mcpid.diffbytes,0) 

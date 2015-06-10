@@ -1397,10 +1397,15 @@ string FormatFullVersion()
 // Format the subversion field according to BIP 14 spec (https://en.bitcoin.it/wiki/BIP_0014)
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments)
 {
+	double neural_id = 0;
+	#if defined(WIN32) && defined(QT_GUI)
+		neural_id = (double)IsNeural();
+	#endif
+
     std::ostringstream ss;
     ss << "/";
     ss << name << ":" << FormatVersion(nClientVersion);
-	std::string comments_neural = RoundToString(((double)IsNeural()),0);
+	std::string comments_neural = RoundToString(neural_id,0);
 
     if (!comments.empty())         ss << "(" << boost::algorithm::join(comments, "; ") << ")";
 	ss << "(" << comments_neural << ")";

@@ -1623,8 +1623,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 	//Retrieve CPID RSA_WEIGHT
 	int64_t RSA_WEIGHT = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 	////////////////////////////////////////////////////////////////////////////////msMiningErrors3 = "L R S A: " + RoundToString(RSA_WEIGHT,0);
-	double out_owed = 0;
-
+	
     LOCK2(cs_main, cs_wallet);
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
     {
@@ -1995,8 +1994,6 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		if (fDebug)  printf("CreateCoinStakeHashboinc: %s\r\n",hashBoinc.c_str());
 		out_hashboinc = hashBoinc;
 		
-		double out_magnitude = 0;
-		double out_owed = 0;
 		double mint = CoinToDouble(nReward);
 		double PORDiff = GetBlockDifficulty(nBits);
 	

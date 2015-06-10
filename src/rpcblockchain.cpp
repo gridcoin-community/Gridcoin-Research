@@ -1284,7 +1284,9 @@ Value execute(const Array& params, bool fHelp)
 	{
 			//bool result = SynchronizeRacForDPOR(false);
    		std::string data = GetListOf("beacon");
-		qtSyncWithDPORNodes(data);
+		#if defined(WIN32) && defined(QT_GUI)
+			qtSyncWithDPORNodes(data);
+		#endif
 
 	}
 	else if(sItem=="gatherneuralhashes")
@@ -1298,15 +1300,15 @@ Value execute(const Array& params, bool fHelp)
 	{
 		
 			Array myNeuralJSON = GetJSONNeuralNetworkReport();
-
 			results.push_back(myNeuralJSON);
-
 	}
 	else if (sItem=="myneuralhash")
 	{
-		std::string myNeuralHash = qtGetNeuralHash("");
-		entry.push_back(Pair("My Neural Hash",myNeuralHash.c_str()));
-		results.push_back(entry);
+		#if defined(WIN32) && defined(QT_GUI)
+			std::string myNeuralHash = qtGetNeuralHash("");
+			entry.push_back(Pair("My Neural Hash",myNeuralHash.c_str()));
+			results.push_back(entry);
+		#endif
 
 	}
 
@@ -1327,7 +1329,6 @@ Value execute(const Array& params, bool fHelp)
 				std::string np = GetNetsoftProjects(argcpid);
 
 				double mytotalpct = 0;
-				double ParticipatingProjectCount = 0;
 				double TotalMagnitude = 0;
 				double Mag = 0;
 				double NetworkProjectCountWithRAC = 0;
@@ -1470,7 +1471,7 @@ Value execute(const Array& params, bool fHelp)
 	else if (sItem == "contract")
 	{
 
-			bool result = InsertSmartContract("http://milkyway.cs.rpi.edu/milkyway/team_email_list.php?teamid=6566&xml=1","milkyway");
+			InsertSmartContract("http://milkyway.cs.rpi.edu/milkyway/team_email_list.php?teamid=6566&xml=1","milkyway");
 			entry.push_back(Pair("Done","Done"));
 			results.push_back(entry);
 		
@@ -1486,7 +1487,7 @@ Value execute(const Array& params, bool fHelp)
 	else if (sItem == "syncrac")
 	{
 
-		bool result = SynchronizeRacForDPOR(true);
+		SynchronizeRacForDPOR(true);
 		entry.push_back(Pair("Done","Done"));
 	    results.push_back(entry);
 	}
