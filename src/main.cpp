@@ -8081,7 +8081,7 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
     {
      	CBlockIndex* pblockindex = FindBlockByHeight(ii);
 		block.ReadFromDisk(pblockindex);
-		bool result = MemorizeMessages(bFullTableScan,block,pblockindex);
+		MemorizeMessages(bFullTableScan,block,pblockindex);
     }
 	return true;
 }
