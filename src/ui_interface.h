@@ -6,8 +6,10 @@
 #ifndef BITCOIN_UI_INTERFACE_H
 #define BITCOIN_UI_INTERFACE_H
 
+#ifndef Q_MOC_RUN
 #include <boost/signals2/last_value.hpp>
 #include <boost/signals2/signal.hpp>
+#endif
 
 #include <string>
 

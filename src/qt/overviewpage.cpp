@@ -5,7 +5,9 @@
 #include "overviewpage.h"
 #include "ui_overviewpage.h"
 
+#ifndef Q_MOC_RUN
 #include "main.h"
+#endif
 #include "walletmodel.h"
 #include "bitcoinunits.h"
 #include "optionsmodel.h"

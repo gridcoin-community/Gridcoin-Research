@@ -1,10 +1,12 @@
 #include "rpcconsole.h"
 #include "ui_rpcconsole.h"
 
+#ifndef Q_MOC_RUN
 #include "clientmodel.h"
 #include "bitcoinrpc.h"
 #include "guiutil.h"
 #include "main.h"
+#endif
 
 #include <QTime>
 #include <QTimer>
