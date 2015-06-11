@@ -2,7 +2,9 @@
 #define UPGRADEDIALOG_H
 
 #include <QDialog>
+#ifndef Q_MOC_RUN
 #include "../upgrader.h"
+#endif
 
 namespace Ui {
     class UpgradeDialog;
