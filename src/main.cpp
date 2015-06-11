@@ -2899,7 +2899,10 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			{
 				double bv = BlockVersion(bb.clientversion);
 				double cvn = ClientVersionNew();
-				if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
+				if (bv+50 < cvn)
+				{
+					//	return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
+				}
 			}
 
 			//Block being accepted within the last hour: Check with Netsoft - AND Verify User will not be overpaid:
@@ -3504,7 +3507,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					double bv = BlockVersion(boincblock.clientversion);
 					double cvn = ClientVersionNew();
 					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
-					if (bv+10 < cvn) return error("ConnectBlock(): Old client version after mandatory upgrade - block rejected\r\n");
+					//if (bv+10 < cvn) return error("ConnectBlock(): Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3373) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
 				}
 
