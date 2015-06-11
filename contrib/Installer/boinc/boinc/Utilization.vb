@@ -13,7 +13,7 @@ Public Class Utilization
    
     Public ReadOnly Property Version As Double
         Get
-            Return 356
+            Return 357
 
         End Get
     End Property
@@ -374,7 +374,7 @@ Public Class Utilization
                 dr = Read(dr)
                 If NeedsSynced(dr) Then
                     dr.Expiration = DateAdd(DateInterval.Day, 14, Now)
-                    dr.Synced = Tomorrow()
+                    dr.Synced = DateAdd(DateInterval.Day, -1, Now)
                     dr.DataColumn1 = cpidv2
                     dr.DataColumn3 = BlockHash
                     dr.DataColumn4 = Address
