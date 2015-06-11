@@ -13,7 +13,8 @@ Public Class Utilization
    
     Public ReadOnly Property Version As Double
         Get
-            Return 357
+            Return 360
+
 
         End Get
     End Property
@@ -354,39 +355,22 @@ Public Class Utilization
     End Function
     Public Function SyncCPIDsWithDPORNodes(sData As String) As Double
         'Write the Gridcoin CPIDs to the Persisted Data System
-        Dim vCPIDs() As String = Split(sData, "<ROW>")
-        For x As Integer = 0 To UBound(vCPIDs)
-            If Len(vCPIDs(x)) > 20 Then
-                Dim vRow() As String
-                vRow = Split(vCPIDs(x), "<COL>")
-                Dim sCPID As String = vRow(0)
-                Dim sBase As String = vRow(1)
-                Dim unBase As String = DecodeBase64(sBase)
-                'contract = GlobalCPUMiningCPID.cpidv2 + ";" + hashRand.GetHex() + ";" + GRCAddress;
-                Dim vCPIDRow() As String = Split(unBase, ";")
-                Dim cpidv2 As String = vCPIDRow(0)
-                Dim BlockHash As String = vCPIDRow(1)
-                Dim Address As String = vCPIDRow(2)
-                Dim dr As New Row
-                dr.Database = "CPID"
-                dr.Table = "CPIDS"
-                dr.PrimaryKey = sCPID
-                dr = Read(dr)
-                If NeedsSynced(dr) Then
-                    dr.Expiration = DateAdd(DateInterval.Day, 14, Now)
-                    dr.Synced = DateAdd(DateInterval.Day, -1, Now)
-                    dr.DataColumn1 = cpidv2
-                    dr.DataColumn3 = BlockHash
-                    dr.DataColumn4 = Address
-                    Dim bValid As Boolean = False
-                    Dim clsMD5 As New MD5
-                    bValid = clsMD5.CompareCPID(sCPID, cpidv2, BlockHash)
-                    dr.DataColumn5 = Trim(bValid)
-                    Store(dr)
-                End If
-            End If
-        Next
-        Call SyncDPOR2()
+       
+
+            Try
+                msSyncData = sData
+
+                Call SyncDPOR2()
+
+            Catch ex As Exception
+                Log("Exception during SyncDpor2 : " + ex.Message)
+                Return -2
+            End Try
+
+
+        Log("Finished syncing DPOR cpids.")
+
+        Return 0
 
     End Function
     Public Function AddressUser(sMagnitude As String) As Double

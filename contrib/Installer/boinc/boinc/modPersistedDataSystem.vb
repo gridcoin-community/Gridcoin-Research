@@ -15,6 +15,7 @@ Module modPersistedDataSystem
     'Stale data older than the Expiration shall be purged automatically
 
     'Data is stored across all Gridcoin windows nodes, in a decentralized store
+    Public msSyncData As String = ""
 
     Private lUseCount As Long = 0
     Public Structure Row
@@ -125,9 +126,56 @@ Module modPersistedDataSystem
         If Now > dr.Synced Then Return True Else Return False
     End Function
     Public Sub CompleteSync()
+        UpdateMagnitudesPhase1()
         UpdateMagnitudes()
     End Sub
+    Public Function UpdateMagnitudesPhase1()
+        Try
+
+        Dim vCPIDs() As String = Split(msSyncData, "<ROW>")
+        For x As Integer = 0 To UBound(vCPIDs)
+            If Len(vCPIDs(x)) > 20 Then
+                Dim vRow() As String
+                vRow = Split(vCPIDs(x), "<COL>")
+                Dim sCPID As String = vRow(0)
+                Dim sBase As String = vRow(1)
+                Dim unBase As String = DecodeBase64(sBase)
+                'contract = GlobalCPUMiningCPID.cpidv2 + ";" + hashRand.GetHex() + ";" + GRCAddress;
+                Dim vCPIDRow() As String = Split(unBase, ";")
+                Dim cpidv2 As String = vCPIDRow(0)
+                Dim BlockHash As String = vCPIDRow(1)
+                Dim Address As String = vCPIDRow(2)
+                Dim dr As New Row
+                dr.Database = "CPID"
+                dr.Table = "CPIDS"
+                dr.PrimaryKey = sCPID
+                dr = Read(dr)
+                If NeedsSynced(dr) Then
+                    dr.Expiration = DateAdd(DateInterval.Day, 14, Now)
+                    dr.Synced = DateAdd(DateInterval.Day, -1, Now)
+                    dr.DataColumn1 = cpidv2
+                    dr.DataColumn3 = BlockHash
+                    dr.DataColumn4 = Address
+                    Dim bValid As Boolean = False
+                    Dim clsMD5 As New MD5
+                    bValid = clsMD5.CompareCPID(sCPID, cpidv2, BlockHash)
+                    dr.DataColumn5 = Trim(bValid)
+                    Store(dr)
+                End If
+            End If
+            Next
+        Catch ex As Exception
+            Log("UpdateMagnitudesPhase1: " + ex.Message)
+        End Try
+
+        msSyncData = ""
+
+    End Function
+
     Public Function UpdateMagnitudes() As Boolean
+
+        Try
+
         'Loop through the researchers
         Dim surrogateRow As New Row
         surrogateRow.Database = "CPID"
@@ -178,6 +226,9 @@ Module modPersistedDataSystem
             Store(cpid)
         Next
         Return True
+        Catch ex As Exception
+            Log("UpdateMagnitudes: " + ex.Message)
+        End Try
 
     End Function
     Public Function GetList(DataRow As Row, sWildcard As String) As List(Of Row)

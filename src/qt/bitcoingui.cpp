@@ -486,16 +486,11 @@ void qtSyncWithDPORNodes(std::string data)
 {
 
 	#if defined(WIN32) && defined(QT_GUI)
-	try
-	{
 		int result = 0;
+		printf("Syncing with DPOR nodes...\r\n");
 		QString qsData = ToQstring(data);
 		result = globalcom->dynamicCall("SyncCPIDsWithDPORNodes(Qstring)",qsData).toInt();
-	}
-	catch(...)
-	{
-
-	}
+		printf("Done syncing.\r\n");
 	#endif
 }
 
