@@ -3824,7 +3824,7 @@ void GridcoinServices()
 			printf(" {CPIDs Re-Loaded} ");
 	}
 
-	if (TimerMain("check_for_autoupgrade",60))
+	if (TimerMain("check_for_autoupgrade",240))
 	{
 		bCheckedForUpgradeLive = true;
 	}
@@ -3843,6 +3843,7 @@ void GridcoinServices()
 		bCheckedForUpgradeLive=false;
 		printf("{Checking for Upgrade} ");
 		CheckForUpgrade();
+		printf("{Done checking for upgrade} ");
 	}
 	#endif
 
@@ -4942,15 +4943,15 @@ bool TallyNetworkAverages(bool ColdBoot)
 		bNetAveragesLoaded = true;
 		return true;
 	}
-	if (fDebug) printf("Gathering network avgs (begin)\r\n");
+	printf("Gathering network avgs (begin)\r\n");
 	//If we did this within the last 10 mins, we are fine:
 	if (IsLockTimeWithinMinutes(nLastTallied,10)) return true;
 	nLastTallied = GetAdjustedTime();
 
 	bNetAveragesLoaded = false;
 	//Clear the neural network hash buffer
-	mvNeuralNetworkHash.clear();
-
+	if (mvNeuralNetworkHash.size() > 1)  mvNeuralNetworkHash.clear();
+	printf(".$1.");
 	LOCK(cs_main);
 	try 
 	{
@@ -5092,6 +5093,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 		bNetAveragesLoaded=true;
 	}
 	bNetAveragesLoaded=true;
+	printf("2");
 	return false;
 
 }

@@ -615,8 +615,6 @@ int RebootClient()
 
 void CheckForUpgrade()
 {
-	try
-	{
 		    if (bCheckedForUpgrade == false && !fTestNet && bProjectsInitialized)
 			{
 				int nNeedsUpgrade = 0;
@@ -626,18 +624,7 @@ void CheckForUpgrade()
 				#endif
 				printf("Needs upgraded %f\r\n",(double)nNeedsUpgrade);
 				if (nNeedsUpgrade) UpgradeClient();
-
-				
-					
-
-
-
 			}
-	}
-	catch(...)
-	{
-
-	}
 }
 
 
