@@ -171,6 +171,7 @@ extern int miningthreadcount;
 		std::string Organization;
 		std::string OrganizationKey;
 		std::string NeuralHash;
+		std::string superblock;
 
 	};
 

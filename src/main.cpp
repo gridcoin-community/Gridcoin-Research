@@ -47,6 +47,13 @@ extern void IncrementNeuralNetworkSupermajority(std::string NeuralHash);
 extern std::string GetNeuralNetworkSupermajorityHash(int64_t& out_popularity);
 
 
+bool TallyMagnitudesInSuperblock();
+
+
+extern void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
+
+std::string qtGetNeuralContract(std::string data);
+
 
 extern  std::string GetNetsoftProjects(std::string cpid);
 extern std::string GetNeuralNetworkReport();
@@ -128,7 +135,7 @@ uint256 muGlobalCheckpointHash = 0;
 uint256 muGlobalCheckpointHashRelayed = 0;
 int muGlobalCheckpointHashCounter = 0;
 ///////////////////////MINOR VERSION////////////////////////////////
-int MINOR_VERSION = 250;
+int MINOR_VERSION = 251;
 std::string msMasterProjectPublicKey  = "049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a";
 // The Private Key is revealed by design, for public messages only:
 std::string msMasterMessagePrivateKey = "308201130201010420fbd45ffb02ff05a3322c0d77e1e7aea264866c24e81e5ab6a8e150666b4dc6d8a081a53081a2020101302c06072a8648ce3d0101022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f300604010004010704410479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141020101a144034200044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252467f692ec9c5ba7e5eaa898ab99cbd9949496f7e3cafbf56304b1cc2e5bdf06e";
@@ -2955,7 +2962,11 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	
 	AddNetworkMagnitude((double)pindex->nHeight,vtx[1],nTime, bb.cpid, bb, mint, IsProofOfStake()); //Updates Total payments and Actual Magnitude per CPID
 	IncrementNeuralNetworkSupermajority(bb.NeuralHash);
-					
+	//PROD TO DO - 6/12/2015 - Reject superblocks not hashing to the supermajority:
+
+	if (bb.superblock.length() > 20)						WriteCache("superblock","magnitudes",bb.superblock,GetAdjustedTime());
+
+
 	//  End of Network Consensus
 
     if (!txdb.WriteBlockIndex(CDiskBlockIndex(pindex)))
@@ -3781,24 +3792,44 @@ void GridcoinServices()
 	{
 			    TallyInBackground();
 	}
-	//Once every 12 hours, find out if a project RAC needs synced:
-	if (TimerMain("update_prject_rac",60))
+	//Once every 12 hours, find out if a project RAC needs synced: 6-12-2015
+	if (TimerMain("update_prject_rac",30))
 	{
-		#if defined(WIN32) && defined(QT_GUI)
-		std::string data = GetListOf("beacon");
-		qtSyncWithDPORNodes(data);
-		#endif
+		//Sync RAC with neural network IF superblock is over 24 hours Old, Or if we have No superblock (in case of the latter, age will be 45 years old)
+		int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+		// Note that nodes will NOT accept superblocks without a supermajority hash, so it will not be in memory unless it is a good superblock.
+		if (superblock_age > 24*60*60)
+		{
+			#if defined(WIN32) && defined(QT_GUI)
+				std::string data = GetListOf("beacon");
+				qtSyncWithDPORNodes(data);
+			#endif
+		}
 
 	}
+
+
+	if (TimerMain("update_neural_rac",360))
+	{
+			#if defined(WIN32) && defined(QT_GUI)
+				std::string data = GetListOf("beacon");
+				qtSyncWithDPORNodes(data);
+			#endif
+	}
+
 
 	if (TimerMain("send_beacon",60))
 	{
 		bool result = AdvertiseBeacon();
+		if (!result)
+		{
+			msMiningErrors6 = "Unable To Send Beacon! Unlock Wallet!";
+		}
 	}
 
 	if (TimerMain("TallyDPORMagnitude",20))
 	{
-		bool result = TallyMagnitudesByContract();
+		bool result = TallyMagnitudesInSuperblock();
 	}
 
 	if (TimerMain("GridcoinPersistedDataSystem",5))
@@ -4949,6 +4980,8 @@ bool TallyNetworkAverages(bool ColdBoot)
 	nLastTallied = GetAdjustedTime();
 
 	bNetAveragesLoaded = false;
+	bool superblockloaded = false;
+
 	//Clear the neural network hash buffer
 	if (mvNeuralNetworkHash.size() > 1)  mvNeuralNetworkHash.clear();
 	printf(".$1.");
@@ -4985,7 +5018,14 @@ bool TallyNetworkAverages(bool ColdBoot)
 
 						//6-9-2015 - Increment Neural Network Hashes Supermajority (over the last 200 blocks)
 						if (ii > (nMaxDepth-200)) IncrementNeuralNetworkSupermajority(bb.NeuralHash);
-						
+						if (!superblockloaded)
+						{
+							if (bb.superblock.length() > 20)
+							{
+								WriteCache("superblock","magnitudes",bb.superblock,GetAdjustedTime());
+								superblockloaded=true;
+							}
+						}
 
 						// R HALFORD - 2/10/2015 - REGARDLESS OF A PROJECT BEING VALID, COUNT CREDITS AND PAYMENTS AGAINST THE CPID SO THAT CPIDS WHO WORKED RETIRED PROJECTS ARE STILL CALCULATED CORRECTLY (IE TOTAL OWED, TOTAL PAID) 
 
@@ -6542,6 +6582,36 @@ std::string NN(std::string value)
 	return value.empty() ? "" : value;
 }
 
+std::string GetNeuralNetworkSuperBlock()
+{
+	//Only try to stake a superblock if the contract expired in the coin And the superblock is the highest popularity block
+	//6-12-2015
+	int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+	if (superblock_age > 24*60*60)
+	{
+		std::string myNeuralHash = "";
+		#if defined(WIN32) && defined(QT_GUI)
+	           myNeuralHash = qtGetNeuralHash("");
+		#endif
+ 	    int64_t popularity = 0;
+		std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
+		if (fDebug) printf("superblock age %f, myNeuralHash %s, consensus_hash %s",(double)superblock_age,myNeuralHash.c_str(),consensus_hash.c_str());
+
+		if (consensus_hash==myNeuralHash)
+		{
+			//Stake the contract
+			std::string contract = "";
+			#if defined(WIN32) && defined(QT_GUI)
+				contract = qtGetNeuralContract("");
+			#endif
+			return contract;
+		}
+
+	}
+	return "";
+	
+}
+
 std::string SerializeBoincBlock(MiningCPID mcpid)
 {
 	std::string delim = "<|>";
@@ -6552,6 +6622,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 	
 	#if defined(WIN32) && defined(QT_GUI)
 		mcpid.NeuralHash = qtGetNeuralHash("");
+		mcpid.superblock = GetNeuralNetworkSuperBlock();
 	#endif
 
 	if (mcpid.lastblockhash.empty()) mcpid.lastblockhash = "0";
@@ -6567,7 +6638,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 					+ delim + RoundToString(mcpid.Magnitude,0)
 					+ delim + NN(mcpid.GRCAddress) + delim + NN(mcpid.lastblockhash)
 					+ delim + RoundToString(mcpid.InterestSubsidy,2) + delim + NN(mcpid.Organization) 
-					+ delim + NN(mcpid.OrganizationKey) + delim + mcpid.NeuralHash;
+					+ delim + NN(mcpid.OrganizationKey) + delim + mcpid.NeuralHash + delim + mcpid.superblock;
 	return bb;
 }
 
@@ -6644,6 +6715,10 @@ MiningCPID DeserializeBoincBlock(std::string block)
 		if (s.size() > 21)
 		{
 			surrogate.NeuralHash = s[21];
+		}
+		if (s.size() > 22)
+		{
+			surrogate.superblock = s[22];
 		}
 		
 	}
@@ -7714,6 +7789,7 @@ MiningCPID GetMiningCPID()
 	mc.Organization = "";
 	mc.OrganizationKey = "";
 	mc.NeuralHash = "";
+	mc.superblock = "";
 	return mc;
 }
 

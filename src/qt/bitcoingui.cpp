@@ -96,6 +96,8 @@ extern void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std
 extern void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double magnitude);
 extern void qtSyncWithDPORNodes(std::string data);
 extern std::string qtGetNeuralHash(std::string data);
+extern std::string qtGetNeuralContract(std::string data);
+
 
 
 
@@ -500,6 +502,30 @@ std::string FromQString(QString qs)
 	std::string sOut = qs.toUtf8().constData();
 	return sOut;
 }
+
+
+
+std::string qtGetNeuralContract(std::string data)
+{
+
+	#if defined(WIN32) && defined(QT_GUI)
+	try
+	{
+		if (!bGlobalcomInitialized) return "NA";
+		QString qsData = ToQstring(data);
+		QString sResult = globalcom->dynamicCall("GetNeuralContract()").toString();
+		std::string result = FromQString(sResult);
+		return result;
+	}
+	catch(...)
+	{
+		return "?";
+	}
+	#else
+		return "?";
+	#endif
+}
+
 
 
 std::string qtGetNeuralHash(std::string data)

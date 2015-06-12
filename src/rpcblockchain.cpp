@@ -45,6 +45,9 @@ extern bool TallyMagnitudesByContract();
 extern void QueryWorldCommunityGridRAC();
 std::string qtGetNeuralHash(std::string data);
 
+extern bool TallyMagnitudesInSuperblock();
+
+
 bool Contains(std::string data, std::string instring);
 std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
 std::string ReadCache(std::string section, std::string key);
@@ -933,6 +936,44 @@ std::string ExtractValue(std::string data, std::string delimiter, int pos)
 
 
 
+
+
+bool TallyMagnitudesInSuperblock()
+{
+	std::string superblock = ReadCache("superblock","magnitudes");
+	std::vector<std::string> vSuperblock = split(superblock.c_str(),";");
+	mvDPOR.clear();
+	for (unsigned int i = 0; i < vSuperblock.size(); i++)
+	{
+		// For each CPID in the contract
+		if (vSuperblock[i].length() > 1)
+		{
+				std::string cpid = ExtractValue(vSuperblock[i],",",0);
+				double magnitude = cdbl(ExtractValue(vSuperblock[i],",",1),0);
+				if (cpid.length() > 10)
+				{
+					StructCPID stCPID = GetStructCPID();
+					stCPID = mvDPOR[cpid];
+					if (!stCPID.initialized)
+					{
+								stCPID.initialized = true;
+								mvDPOR.insert(map<string,StructCPID>::value_type(cpid,stCPID));
+					}
+	     			stCPID.TotalMagnitude = magnitude;
+					stCPID.MagnitudeCount++;
+					stCPID.Magnitude = magnitude;
+					mvDPOR[cpid]=stCPID;
+				}
+		}
+	}
+
+	
+	return true;
+}
+
+
+
+
 bool TallyMagnitudesByContract()
 {
 	std::string projects = GetTeamURLs(false,true);
@@ -1195,10 +1236,9 @@ std::string GetListOf(std::string datatype)
 
 bool AdvertiseBeacon()
 {
-			// 6-7-2015
-
+			
 			GetNextProject(false);
-			if (GlobalCPUMiningCPID.cpid=="INVESTOR") return false;
+			if (GlobalCPUMiningCPID.cpid=="INVESTOR") return true;
 			//If beacon is already in the chain, exit early
 			std::string myBeacon = MyBeaconExists(GlobalCPUMiningCPID.cpid);
 			printf("MyBeacon %s",myBeacon.c_str());
@@ -1324,7 +1364,7 @@ Value execute(const Array& params, bool fHelp)
 		else
 		{
 
-				TallyMagnitudesByContract();
+				TallyMagnitudesInSuperblock();
 				std::string argcpid = params[1].get_str();
 				std::string np = GetNetsoftProjects(argcpid);
 
@@ -1493,7 +1533,7 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "dportally")
 	{
-		bool result = TallyMagnitudesByContract();
+		bool result = TallyMagnitudesInSuperblock();
 		entry.push_back(Pair("Done","Done"));
 	    results.push_back(entry);
 	
@@ -2072,15 +2112,23 @@ Array GetJSONNeuralNetworkReport()
 	  std::string neural_hash = "";
 	  std::string report = "Neural_hash, Popularity\r\n";
 	  std::string row = "";
+	  double pct = 0;
 	  Object entry;
-  	  entry.push_back(Pair("Neural Hash","Popularity"));
+  	  entry.push_back(Pair("Neural Hash","Popularity,Percent %"));
+	  printf("sz %f",(double)mvNeuralNetworkHash.size());
+
 	  for(map<std::string,int64_t>::iterator ii=mvNeuralNetworkHash.begin(); ii!=mvNeuralNetworkHash.end(); ++ii) 
 	  {
 				int64_t popularity = mvNeuralNetworkHash[(*ii).first];
 				neural_hash = (*ii).first;
-				row = neural_hash + "," + RoundToString(popularity,0);
-				report += row + "\r\n";
-				entry.push_back(Pair(neural_hash,RoundToString(popularity,0)));
+				//If the hash != empty_hash:
+				if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e")
+				{
+					row = neural_hash + "," + RoundToString(popularity,0);
+					report += row + "\r\n";
+					pct = (((double)popularity)/((double)mvNeuralNetworkHash.size()+1))*100;
+					entry.push_back(Pair(neural_hash,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%"));
+				}
 				
 	  }
 	  results.push_back(entry);

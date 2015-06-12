@@ -16,6 +16,7 @@ Module modPersistedDataSystem
 
     'Data is stored across all Gridcoin windows nodes, in a decentralized store
     Public msSyncData As String = ""
+    Public mbForcefullySyncAllRac = False
 
     Private lUseCount As Long = 0
     Public Structure Row
@@ -126,8 +127,10 @@ Module modPersistedDataSystem
         If Now > dr.Synced Then Return True Else Return False
     End Function
     Public Sub CompleteSync()
+        mbForcefullySyncAllRac = True
         UpdateMagnitudesPhase1()
         UpdateMagnitudes()
+        mbForcefullySyncAllRac = False
     End Sub
     Public Function UpdateMagnitudesPhase1()
         Try
@@ -150,18 +153,18 @@ Module modPersistedDataSystem
                 dr.Table = "CPIDS"
                 dr.PrimaryKey = sCPID
                 dr = Read(dr)
-                If NeedsSynced(dr) Then
-                    dr.Expiration = DateAdd(DateInterval.Day, 14, Now)
-                    dr.Synced = DateAdd(DateInterval.Day, -1, Now)
-                    dr.DataColumn1 = cpidv2
-                    dr.DataColumn3 = BlockHash
-                    dr.DataColumn4 = Address
-                    Dim bValid As Boolean = False
-                    Dim clsMD5 As New MD5
-                    bValid = clsMD5.CompareCPID(sCPID, cpidv2, BlockHash)
-                    dr.DataColumn5 = Trim(bValid)
-                    Store(dr)
-                End If
+                    If NeedsSynced(dr) Or mbForcefullySyncAllRac Then
+                        dr.Expiration = DateAdd(DateInterval.Day, 14, Now)
+                        dr.Synced = DateAdd(DateInterval.Day, -1, Now)
+                        dr.DataColumn1 = cpidv2
+                        dr.DataColumn3 = BlockHash
+                        dr.DataColumn4 = Address
+                        Dim bValid As Boolean = False
+                        Dim clsMD5 As New MD5
+                        bValid = clsMD5.CompareCPID(sCPID, cpidv2, BlockHash)
+                        dr.DataColumn5 = Trim(bValid)
+                        Store(dr)
+                    End If
             End If
             Next
         Catch ex As Exception
@@ -188,14 +191,14 @@ Module modPersistedDataSystem
         Dim WhitelistedProjects As Double = lstProjectsCt.Count
         Dim WhitelistedWithRAC As Double = lstProjectsCt.Count
         For Each cpid As Row In lstCPIDs
-            If NeedsSynced(cpid) Then
-                Dim bResult As Boolean = GetRACViaNetsoft(cpid.PrimaryKey)
-                If bResult Then
-                    cpid.Expiration = DateAdd(DateInterval.Day, 14, Now)
-                    cpid.Synced = Tomorrow()
-                    Store(cpid)
+                If NeedsSynced(cpid) Or mbForcefullySyncAllRac Then
+                    Dim bResult As Boolean = GetRACViaNetsoft(cpid.PrimaryKey)
+                    If bResult Then
+                        cpid.Expiration = DateAdd(DateInterval.Day, 14, Now)
+                        cpid.Synced = Tomorrow()
+                        Store(cpid)
+                    End If
                 End If
-            End If
         Next
         UpdateNetworkAverages()
         lstCPIDs = GetList(surrogateRow, "*")
