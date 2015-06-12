@@ -1398,17 +1398,19 @@ string FormatFullVersion()
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments)
 {
 	double neural_id = 0;
+	std::string neural_v = "0";
+
 	#if defined(WIN32) && defined(QT_GUI)
 		neural_id = (double)IsNeural();
+		neural_v = RoundToString(neural_id,0);
 	#endif
 
     std::ostringstream ss;
     ss << "/";
     ss << name << ":" << FormatVersion(nClientVersion);
-	std::string comments_neural = RoundToString(neural_id,0);
 
     if (!comments.empty())         ss << "(" << boost::algorithm::join(comments, "; ") << ")";
-	ss << "(" << comments_neural << ")";
+	ss << "(" << neural_v << ")";
 
     ss << "/";
     return ss.str();
