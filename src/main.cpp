@@ -40,7 +40,7 @@ bool SynchronizeRacForDPOR(bool SyncEntireCoin);
 extern std::string ReadCache(std::string section, std::string key);
 
 extern std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
-bool AdvertiseBeacon();
+std::string AdvertiseBeacon();
 
 extern void IncrementNeuralNetworkSupermajority(std::string NeuralHash);
 
@@ -135,7 +135,7 @@ uint256 muGlobalCheckpointHash = 0;
 uint256 muGlobalCheckpointHashRelayed = 0;
 int muGlobalCheckpointHashCounter = 0;
 ///////////////////////MINOR VERSION////////////////////////////////
-int MINOR_VERSION = 251;
+int MINOR_VERSION = 252;
 std::string msMasterProjectPublicKey  = "049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a";
 // The Private Key is revealed by design, for public messages only:
 std::string msMasterMessagePrivateKey = "308201130201010420fbd45ffb02ff05a3322c0d77e1e7aea264866c24e81e5ab6a8e150666b4dc6d8a081a53081a2020101302c06072a8648ce3d0101022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f300604010004010704410479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141020101a144034200044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252467f692ec9c5ba7e5eaa898ab99cbd9949496f7e3cafbf56304b1cc2e5bdf06e";
@@ -2964,7 +2964,11 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	IncrementNeuralNetworkSupermajority(bb.NeuralHash);
 	//PROD TO DO - 6/12/2015 - Reject superblocks not hashing to the supermajority:
 
-	if (bb.superblock.length() > 20)						WriteCache("superblock","magnitudes",bb.superblock,GetAdjustedTime());
+	if (bb.superblock.length() > 20) 
+	{
+		WriteCache("superblock","magnitudes",bb.superblock,GetBlockTime());
+		WriteCache("superblock","block_number",RoundToString((double)pindex->nHeight,0),GetBlockTime());
+	}
 
 
 	//  End of Network Consensus
@@ -3820,9 +3824,10 @@ void GridcoinServices()
 
 	if (TimerMain("send_beacon",60))
 	{
-		bool result = AdvertiseBeacon();
-		if (!result)
+		std::string result = AdvertiseBeacon();
+		if (result.length() < 5 && result != "SUCCESS")
 		{
+			printf("BEACON ERROR!  Unable to send beacon %s \r\n",result.c_str());
 			msMiningErrors6 = "Unable To Send Beacon! Unlock Wallet!";
 		}
 	}
@@ -5022,7 +5027,9 @@ bool TallyNetworkAverages(bool ColdBoot)
 						{
 							if (bb.superblock.length() > 20)
 							{
-								WriteCache("superblock","magnitudes",bb.superblock,GetAdjustedTime());
+								WriteCache("superblock","magnitudes",bb.superblock,block.nTime);
+								WriteCache("superblock","block_number",RoundToString(ii,0),block.nTime);
+								TallyMagnitudesInSuperblock();
 								superblockloaded=true;
 							}
 						}

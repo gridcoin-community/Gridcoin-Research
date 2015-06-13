@@ -49,6 +49,7 @@ Partial Class frmMining
         Me.FileToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.HideToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.ConfigurationToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
+        Me.ContractDetailsToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.PoolsToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.TabControl1 = New System.Windows.Forms.TabControl()
         Me.TabOverview = New System.Windows.Forms.TabPage()
@@ -63,7 +64,9 @@ Partial Class frmMining
         Me.TabPage2 = New System.Windows.Forms.TabPage()
         Me.dgv = New System.Windows.Forms.DataGridView()
         Me.lblWarning = New System.Windows.Forms.Label()
-        Me.ContractDetailsToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
+        Me.btnExport = New System.Windows.Forms.Button()
+        Me.txtSearch = New System.Windows.Forms.TextBox()
+        Me.Label1 = New System.Windows.Forms.Label()
         CType(Me.Chart1, System.ComponentModel.ISupportInitialize).BeginInit()
         CType(Me.ChartUtilization, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.MenuStrip1.SuspendLayout()
@@ -210,7 +213,7 @@ Partial Class frmMining
         Me.MenuStrip1.Items.AddRange(New System.Windows.Forms.ToolStripItem() {Me.FileToolStripMenuItem, Me.ConfigurationToolStripMenuItem, Me.PoolsToolStripMenuItem})
         Me.MenuStrip1.Location = New System.Drawing.Point(0, 0)
         Me.MenuStrip1.Name = "MenuStrip1"
-        Me.MenuStrip1.Size = New System.Drawing.Size(940, 24)
+        Me.MenuStrip1.Size = New System.Drawing.Size(1071, 24)
         Me.MenuStrip1.TabIndex = 42
         Me.MenuStrip1.Text = "MenuStrip1"
         '
@@ -239,6 +242,12 @@ Partial Class frmMining
         Me.ConfigurationToolStripMenuItem.Size = New System.Drawing.Size(93, 20)
         Me.ConfigurationToolStripMenuItem.Text = "Configuration"
         '
+        'ContractDetailsToolStripMenuItem
+        '
+        Me.ContractDetailsToolStripMenuItem.Name = "ContractDetailsToolStripMenuItem"
+        Me.ContractDetailsToolStripMenuItem.Size = New System.Drawing.Size(158, 22)
+        Me.ContractDetailsToolStripMenuItem.Text = "Contract Details"
+        '
         'PoolsToolStripMenuItem
         '
         Me.PoolsToolStripMenuItem.Name = "PoolsToolStripMenuItem"
@@ -253,7 +262,7 @@ Partial Class frmMining
         Me.TabControl1.Location = New System.Drawing.Point(14, 39)
         Me.TabControl1.Name = "TabControl1"
         Me.TabControl1.SelectedIndex = 0
-        Me.TabControl1.Size = New System.Drawing.Size(913, 383)
+        Me.TabControl1.Size = New System.Drawing.Size(1045, 383)
         Me.TabControl1.TabIndex = 53
         '
         'TabOverview
@@ -376,7 +385,7 @@ Partial Class frmMining
         Me.TabPage2.Controls.Add(Me.dgv)
         Me.TabPage2.Location = New System.Drawing.Point(4, 22)
         Me.TabPage2.Name = "TabPage2"
-        Me.TabPage2.Size = New System.Drawing.Size(905, 357)
+        Me.TabPage2.Size = New System.Drawing.Size(1037, 357)
         Me.TabPage2.TabIndex = 3
         Me.TabPage2.Text = "Neural Network"
         Me.TabPage2.UseVisualStyleBackColor = True
@@ -422,7 +431,7 @@ Partial Class frmMining
         DataGridViewCellStyle5.ForeColor = System.Drawing.Color.Lime
         Me.dgv.RowsDefaultCellStyle = DataGridViewCellStyle5
         Me.dgv.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect
-        Me.dgv.Size = New System.Drawing.Size(902, 354)
+        Me.dgv.Size = New System.Drawing.Size(1034, 354)
         Me.dgv.TabIndex = 1
         '
         'lblWarning
@@ -437,11 +446,33 @@ Partial Class frmMining
         Me.lblWarning.TabIndex = 55
         Me.lblWarning.Text = " "
         '
-        'ContractDetailsToolStripMenuItem
+        'btnExport
         '
-        Me.ContractDetailsToolStripMenuItem.Name = "ContractDetailsToolStripMenuItem"
-        Me.ContractDetailsToolStripMenuItem.Size = New System.Drawing.Size(158, 22)
-        Me.ContractDetailsToolStripMenuItem.Text = "Contract Details"
+        Me.btnExport.Location = New System.Drawing.Point(292, 734)
+        Me.btnExport.Name = "btnExport"
+        Me.btnExport.Size = New System.Drawing.Size(118, 35)
+        Me.btnExport.TabIndex = 56
+        Me.btnExport.Text = "Export to CSV"
+        Me.btnExport.UseVisualStyleBackColor = False
+        '
+        'txtSearch
+        '
+        Me.txtSearch.Location = New System.Drawing.Point(757, 38)
+        Me.txtSearch.Name = "txtSearch"
+        Me.txtSearch.Size = New System.Drawing.Size(299, 20)
+        Me.txtSearch.TabIndex = 61
+        '
+        'Label1
+        '
+        Me.Label1.AutoSize = True
+        Me.Label1.BackColor = System.Drawing.Color.Transparent
+        Me.Label1.Font = New System.Drawing.Font("Microsoft Sans Serif", 9.75!)
+        Me.Label1.ForeColor = System.Drawing.Color.Green
+        Me.Label1.Location = New System.Drawing.Point(700, 42)
+        Me.Label1.Name = "Label1"
+        Me.Label1.Size = New System.Drawing.Size(54, 16)
+        Me.Label1.TabIndex = 62
+        Me.Label1.Text = "Search:"
         '
         'frmMining
         '
@@ -450,7 +481,10 @@ Partial Class frmMining
         Me.BackColor = System.Drawing.Color.Black
         Me.BackgroundImage = Global.BoincStake.My.Resources.Resources.GradientU
         Me.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch
-        Me.ClientSize = New System.Drawing.Size(940, 793)
+        Me.ClientSize = New System.Drawing.Size(1071, 793)
+        Me.Controls.Add(Me.txtSearch)
+        Me.Controls.Add(Me.Label1)
+        Me.Controls.Add(Me.btnExport)
         Me.Controls.Add(Me.lblWarning)
         Me.Controls.Add(Me.TabControl1)
         Me.Controls.Add(Me.btnHide)
@@ -477,12 +511,12 @@ Partial Class frmMining
         Me.GroupBox2.ResumeLayout(False)
         CType(Me.ChartHashRate, System.ComponentModel.ISupportInitialize).EndInit()
         CType(Me.pbCgminer, System.ComponentModel.ISupportInitialize).EndInit()
-        Me.TabPage2.ResumeLayout(false)
-        CType(Me.dgv,System.ComponentModel.ISupportInitialize).EndInit
-        Me.ResumeLayout(false)
-        Me.PerformLayout
+        Me.TabPage2.ResumeLayout(False)
+        CType(Me.dgv, System.ComponentModel.ISupportInitialize).EndInit()
+        Me.ResumeLayout(False)
+        Me.PerformLayout()
 
-End Sub
+    End Sub
     Friend WithEvents btnRefresh As System.Windows.Forms.Button
     Friend WithEvents Chart1 As System.Windows.Forms.DataVisualization.Charting.Chart
     Friend WithEvents ChartUtilization As System.Windows.Forms.DataVisualization.Charting.Chart
@@ -510,4 +544,7 @@ End Sub
     Friend WithEvents TabPage2 As System.Windows.Forms.TabPage
     Friend WithEvents dgv As System.Windows.Forms.DataGridView
     Friend WithEvents ContractDetailsToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
+    Friend WithEvents btnExport As System.Windows.Forms.Button
+    Friend WithEvents txtSearch As System.Windows.Forms.TextBox
+    Friend WithEvents Label1 As System.Windows.Forms.Label
 End Class

@@ -31,10 +31,12 @@ std::string ExtractHTML(std::string HTMLdata, std::string tagstartprefix,  std::
 extern  std::string GetNetsoftProjects(std::string cpid);
 std::string NeuralRequest(std::string MyNeuralRequest);
 extern std::string MyBeaconExists(std::string cpid);
-extern bool AdvertiseBeacon();
+extern std::string AdvertiseBeacon();
 std::string GetNeuralNetworkReport();
-
 Array GetJSONNeuralNetworkReport();
+
+extern Array GetJSONBeaconReport();
+
 
 void GatherNeuralHashes();
 extern std::string GetListOf(std::string datatype);
@@ -488,6 +490,10 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 		result.push_back(Pair("CPIDValid",IsCPIDValid2));
 	}
 	result.push_back(Pair("NeuralHash",bb.NeuralHash));
+	if (bb.superblock.length() > 20)
+	{
+		result.push_back(Pair("SuperblockLength", RoundToString((double)bb.superblock.length(),0) ));
+	}
     return result;
 }
 
@@ -1234,15 +1240,15 @@ std::string GetListOf(std::string datatype)
 }
 
 
-bool AdvertiseBeacon()
+std::string AdvertiseBeacon()
 {
 			
 			GetNextProject(false);
-			if (GlobalCPUMiningCPID.cpid=="INVESTOR") return true;
+			if (GlobalCPUMiningCPID.cpid=="INVESTOR") return "SUCCESS";
 			//If beacon is already in the chain, exit early
 			std::string myBeacon = MyBeaconExists(GlobalCPUMiningCPID.cpid);
 			printf("MyBeacon %s",myBeacon.c_str());
-			if (myBeacon.length() > 10) return true;
+			if (myBeacon.length() > 10) return "SUCCESS";
 			uint256 hashRand = GetRandHash();
     		std::string email = GetArgument("email", "NA");
         	boost::to_lower(email);
@@ -1259,9 +1265,8 @@ bool AdvertiseBeacon()
 			std::string sPass = "";
 			sPass = (sType=="project" || sType=="projectmapping" || sType=="smart_contract") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
 			std::string sName = GlobalCPUMiningCPID.cpid;
-			//std::string sValue = contract;
 			std::string result = AddMessage(true,sType,sName,sBase,sPass,AmountFromValue(1));
-			return true;
+			return result;
 }
 
 
@@ -1316,8 +1321,8 @@ Value execute(const Array& params, bool fHelp)
 	else if (sItem == "advertisebeacon")
 	{
 
-		bool result = AdvertiseBeacon();
-		entry.push_back(Pair("Beacon",result));
+		std::string sResult = AdvertiseBeacon();
+		entry.push_back(Pair("Beacon",sResult));
 		results.push_back(entry);
 	}
 	else if (sItem == "syncdpor2")
@@ -1336,9 +1341,13 @@ Value execute(const Array& params, bool fHelp)
 		results.push_back(entry);
 
 	}
+	else if (sItem == "beaconreport")
+	{
+			Array myBeaconJSONReport = GetJSONBeaconReport();
+			results.push_back(myBeaconJSONReport);
+	}
 	else if (sItem == "neuralreport")
 	{
-		
 			Array myNeuralJSON = GetJSONNeuralNetworkReport();
 			results.push_back(myNeuralJSON);
 	}
@@ -1351,7 +1360,17 @@ Value execute(const Array& params, bool fHelp)
 		#endif
 
 	}
+	else if (sItem == "superblockage")
+	{
 
+		int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+		entry.push_back(Pair("Superblock Age",superblock_age));
+		std::string timestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
+		entry.push_back(Pair("Superblock Timestamp",timestamp));
+		entry.push_back(Pair("Superblock Block Number",mvApplicationCache["superblock;block_number"]));
+		results.push_back(entry);
+
+	}
 	else if (sItem == "rac")
 	{
 
@@ -2103,7 +2122,41 @@ Array ContractReportCSV()
 }
 
 
+Array GetJSONBeaconReport()
+{
 
+	
+        Array results;
+	    Object entry;
+  	    entry.push_back(Pair("CPID","GRCAddress"));
+        std::string datatype="beacon";
+	  	std::string rows = "";
+		std::string row = "";
+  		for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+		{
+				std::string key_name  = (*ii).first;
+			   	if (key_name.length() > datatype.length())
+				{
+					if (key_name.substr(0,datatype.length())==datatype)
+					{
+								std::string key_value = mvApplicationCache[(*ii).first];
+								std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
+								row = subkey + "<COL>" + key_value;
+								//								std::string contract = GlobalCPUMiningCPID.cpidv2 + ";" + hashRand.GetHex() + ";" + GRCAddress;
+								std::string contract = DecodeBase64(key_value);
+								std::string cpid = subkey;
+								std::string cpidv2 = ExtractValue(contract,";",0);
+								std::string grcaddress = ExtractValue(contract,";",2);
+								entry.push_back(Pair(cpid,grcaddress));
+					}
+				}
+	   }
+	
+	  results.push_back(entry);
+	  return results;
+
+
+}
 
 Array GetJSONNeuralNetworkReport()
 {

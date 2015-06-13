@@ -202,6 +202,7 @@
   <ItemGroup>
     <EmbeddedResource Include="frmLogin.resx">
       <DependentUpon>frmLogin.vb</DependentUpon>
+      <SubType>Designer</SubType>
     </EmbeddedResource>
     <EmbeddedResource Include="frmTicketList.resx">
       <DependentUpon>frmTicketList.vb</DependentUpon>

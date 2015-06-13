@@ -70,10 +70,10 @@ Module modPersistedDataSystem
         Dim sOut As String = ""
         For Each cpid As Row In lstCPIDs
             If cpid.DataColumn5 = "True" Then
-                If CDate(cpid.Added) < DateAdd(DateInterval.Day, -1, Now) Then
-                    Dim sRow As String = cpid.PrimaryKey + "," + Trim(RoundedMag(Val(cpid.Magnitude))) + ";"
-                    sOut += sRow
-                End If
+                ' If CDate(cpid.Added) < DateAdd(DateInterval.Day, -1, Now) Then
+                Dim sRow As String = cpid.PrimaryKey + "," + Trim(RoundedMag(Val(cpid.Magnitude))) + ";"
+                sOut += sRow
+                'End If
 
             End If
 
@@ -81,40 +81,53 @@ Module modPersistedDataSystem
         Return sOut
     End Function
     Public Function RoundedMag(num As Double)
-        'Rounds magnitude to nearest 10
+        'Rounds magnitude to nearest 5
         Return Math.Round(num * 0.2, 0) / 0.2
     End Function
+
+    Public Function RoundedRac(num As Double)
+        'Rounds magnitude to nearest 10
+        Return Math.Round(num * 0.1, 0) / 0.1
+    End Function
+
     Public Function UpdateNetworkAverages() As Boolean
         'loop through all projects on file, persist network averages
         'Get a collection of Projects
-        Dim surrogateRow As New Row
-        surrogateRow.Database = "Project"
-        surrogateRow.Table = "Projects"
-        Dim lstProjects As List(Of Row) = GetList(surrogateRow, "*")
-        Dim lstProjectCPIDs As List(Of Row)
-        Dim units As Double = 0
-        For Each prj As Row In lstProjects
-            'Tally all of the RAC in this project
-            'Get the RAC container
-            surrogateRow = New Row
+        Try
+
+            Dim surrogateRow As New Row
             surrogateRow.Database = "Project"
-            surrogateRow.Table = prj.PrimaryKey + "cpid"
-            lstProjectCPIDs = GetList(surrogateRow, "*")
-            Dim prjTotalRAC = 0
-            units = 0
-            For Each prjCPID As Row In lstProjectCPIDs
-                If Val(prjCPID.RAC) > 99 Then
-                    prjTotalRAC += Val(prjCPID.RAC)
-                    units += 1
-                End If
+            surrogateRow.Table = "Projects"
+            Dim lstProjects As List(Of Row) = GetList(surrogateRow, "*")
+            Dim lstProjectCPIDs As List(Of Row)
+            Dim units As Double = 0
+            For Each prj As Row In lstProjects
+                'Tally all of the RAC in this project
+                'Get the RAC container
+                surrogateRow = New Row
+                surrogateRow.Database = "Project"
+                surrogateRow.Table = prj.PrimaryKey + "cpid"
+                lstProjectCPIDs = GetList(surrogateRow, "*")
+                Dim prjTotalRAC = 0
+                units = 0
+                For Each prjCPID As Row In lstProjectCPIDs
+                    If Val(prjCPID.RAC) > 99 Then
+                        prjTotalRAC += Val(prjCPID.RAC)
+                        units += 1
+                    End If
+                Next
+                'Persist this total
+                prj.Database = "Project"
+                prj.Table = "Projects"
+                prj.RAC = Trim(RoundedRac(prjTotalRAC / (units + 0.01)))
+                Store(prj)
             Next
-            'Persist this total
-            prj.Database = "Project"
-            prj.Table = "Projects"
-            prj.RAC = Trim(prjTotalRAC / (units + 0.01))
-            Store(prj)
-        Next
-        Return True
+            Return True
+        Catch ex As Exception
+            Log("Update network averages: " + ex.Message)
+            Return False
+
+        End Try
 
     End Function
     Public Sub SyncDPOR2()
@@ -131,41 +144,47 @@ Module modPersistedDataSystem
         UpdateMagnitudesPhase1()
         UpdateMagnitudes()
         mbForcefullySyncAllRac = False
+
+        If LCase(KeyValue("exportmagnitude")) = "true" Then
+            ExportToCSV2()
+        End If
     End Sub
     Public Function UpdateMagnitudesPhase1()
         Try
-
-        Dim vCPIDs() As String = Split(msSyncData, "<ROW>")
-        For x As Integer = 0 To UBound(vCPIDs)
-            If Len(vCPIDs(x)) > 20 Then
-                Dim vRow() As String
-                vRow = Split(vCPIDs(x), "<COL>")
-                Dim sCPID As String = vRow(0)
-                Dim sBase As String = vRow(1)
-                Dim unBase As String = DecodeBase64(sBase)
-                'contract = GlobalCPUMiningCPID.cpidv2 + ";" + hashRand.GetHex() + ";" + GRCAddress;
-                Dim vCPIDRow() As String = Split(unBase, ";")
-                Dim cpidv2 As String = vCPIDRow(0)
-                Dim BlockHash As String = vCPIDRow(1)
-                Dim Address As String = vCPIDRow(2)
-                Dim dr As New Row
-                dr.Database = "CPID"
-                dr.Table = "CPIDS"
-                dr.PrimaryKey = sCPID
-                dr = Read(dr)
+            
+            Dim vCPIDs() As String = Split(msSyncData, "<ROW>")
+            For x As Integer = 0 To UBound(vCPIDs)
+                If Len(vCPIDs(x)) > 20 Then
+                    Dim vRow() As String
+                    vRow = Split(vCPIDs(x), "<COL>")
+                    Dim sCPID As String = vRow(0)
+                    Dim sBase As String = vRow(1)
+                    Dim unBase As String = DecodeBase64(sBase)
+                    'contract = GlobalCPUMiningCPID.cpidv2 + ";" + hashRand.GetHex() + ";" + GRCAddress;
+                    Dim vCPIDRow() As String = Split(unBase, ";")
+                    Dim cpidv2 As String = vCPIDRow(0)
+                    Dim BlockHash As String = vCPIDRow(1)
+                    Dim Address As String = vCPIDRow(2)
+                    Dim dr As New Row
+                    dr.Database = "CPID"
+                    dr.Table = "CPIDS"
+                    dr.PrimaryKey = sCPID
+                    dr = Read(dr)
                     If NeedsSynced(dr) Or mbForcefullySyncAllRac Then
                         dr.Expiration = DateAdd(DateInterval.Day, 14, Now)
                         dr.Synced = DateAdd(DateInterval.Day, -1, Now)
                         dr.DataColumn1 = cpidv2
                         dr.DataColumn3 = BlockHash
                         dr.DataColumn4 = Address
+
                         Dim bValid As Boolean = False
                         Dim clsMD5 As New MD5
+
                         bValid = clsMD5.CompareCPID(sCPID, cpidv2, BlockHash)
                         dr.DataColumn5 = Trim(bValid)
                         Store(dr)
                     End If
-            End If
+                End If
             Next
         Catch ex As Exception
             Log("UpdateMagnitudesPhase1: " + ex.Message)
@@ -176,65 +195,99 @@ Module modPersistedDataSystem
     End Function
 
     Public Function UpdateMagnitudes() As Boolean
+        Dim lstCPIDs As List(Of Row)
+        Dim surrogateRow As New Row
+        Dim TotalRAC As Double = 0
+        Dim WhitelistedProjects As Double = 0
+        Dim WhitelistedWithRAC As Double = 0
 
         Try
 
-        'Loop through the researchers
-        Dim surrogateRow As New Row
-        surrogateRow.Database = "CPID"
-        surrogateRow.Table = "CPIDS"
+            'Loop through the researchers
+            surrogateRow.Database = "CPID"
+            surrogateRow.Table = "CPIDS"
+            lstCPIDs = GetList(surrogateRow, "*")
+            lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
 
-        Dim lstCPIDs As List(Of Row) = GetList(surrogateRow, "*")
-        Dim TotalRAC As Double = 0
-        Dim lstProjectsCt As List(Of Row) = GetList(surrogateRow, "*")
 
-        Dim WhitelistedProjects As Double = lstProjectsCt.Count
-        Dim WhitelistedWithRAC As Double = lstProjectsCt.Count
-        For Each cpid As Row In lstCPIDs
+            Dim lstProjectsCt As List(Of Row) = GetList(surrogateRow, "*")
+
+            WhitelistedProjects = lstProjectsCt.Count
+            WhitelistedWithRAC = lstProjectsCt.Count
+            For Each cpid As Row In lstCPIDs
                 If NeedsSynced(cpid) Or mbForcefullySyncAllRac Then
-                    Dim bResult As Boolean = GetRACViaNetsoft(cpid.PrimaryKey)
+                    Dim bResult As Boolean = GetRacViaNetsoft(cpid.PrimaryKey)
                     If bResult Then
                         cpid.Expiration = DateAdd(DateInterval.Day, 14, Now)
                         cpid.Synced = Tomorrow()
                         Store(cpid)
                     End If
                 End If
-        Next
-        UpdateNetworkAverages()
-        lstCPIDs = GetList(surrogateRow, "*")
-
-        For Each cpid As Row In lstCPIDs
-            Dim surrogatePrj As New Row
-            surrogatePrj.Database = "Project"
-            surrogatePrj.Table = "Projects"
-            Dim lstProjects As List(Of Row) = GetList(surrogatePrj, "*")
-            TotalRAC = 0
-            For Each prj As Row In lstProjects
-                Dim surrogatePrjCPID As New Row
-                surrogatePrjCPID.Database = "Project"
-                surrogatePrjCPID.Table = prj.PrimaryKey + "CPID"
-                surrogatePrjCPID.PrimaryKey = prj.PrimaryKey + "_" + cpid.PrimaryKey
-                Dim rowRAC = Read(surrogatePrjCPID)
-                Dim CPIDRAC As Double = Val(rowRAC.RAC)
-                Dim PrjRAC As Double = Val(prj.RAC)
-                Dim avgRac As Double = CPIDRAC / (PrjRAC + 0.01) * 100
-                TotalRAC += avgRac
             Next
-            'Now we can store the magnitude
-            Dim Magg As Double = (TotalRAC / WhitelistedProjects) * WhitelistedWithRAC
-            cpid.Database = "CPID"
-            cpid.Table = "CPIDS"
-            cpid.RAC = Trim(TotalRAC)
-            cpid.Magnitude = Trim(Math.Round(Magg, 2))
-            Store(cpid)
-        Next
-        Return True
         Catch ex As Exception
-            Log("UpdateMagnitudes: " + ex.Message)
+            Log("UpdateMagnitudes:GatherRAC: " + ex.Message)
+        End Try
+
+        Try
+
+            UpdateNetworkAverages()
+        Catch ex As Exception
+            Log("UpdateMagnitudes:UpdateNetworkAverages: " + ex.Message)
+        End Try
+
+        Try
+
+            lstCPIDs = GetList(surrogateRow, "*")
+            For Each cpid As Row In lstCPIDs
+                Dim surrogatePrj As New Row
+                surrogatePrj.Database = "Project"
+                surrogatePrj.Table = "Projects"
+                Dim lstProjects As List(Of Row) = GetList(surrogatePrj, "*")
+                TotalRAC = 0
+                For Each prj As Row In lstProjects
+                    Dim surrogatePrjCPID As New Row
+                    surrogatePrjCPID.Database = "Project"
+                    surrogatePrjCPID.Table = prj.PrimaryKey + "CPID"
+                    surrogatePrjCPID.PrimaryKey = prj.PrimaryKey + "_" + cpid.PrimaryKey
+                    Dim rowRAC = Read(surrogatePrjCPID)
+                    Dim CPIDRAC As Double = Val(rowRAC.RAC)
+                    Dim PrjRAC As Double = Val(prj.RAC)
+                    Dim avgRac As Double = CPIDRAC / (PrjRAC + 0.01) * 100
+                    TotalRAC += avgRac
+                Next
+                'Now we can store the magnitude
+                Dim Magg As Double = (TotalRAC / WhitelistedProjects) * WhitelistedWithRAC
+                cpid.Database = "CPID"
+                cpid.Table = "CPIDS"
+                cpid.RAC = Trim(RoundedRac(TotalRAC))
+                cpid.Magnitude = Trim(Math.Round(Magg, 2))
+                Store(cpid)
+            Next
+            Return True
+        Catch ex As Exception
+            Log("UpdateMagnitudes:StoreMagnitudes: " + ex.Message)
         End Try
 
     End Function
+
     Public Function GetList(DataRow As Row, sWildcard As String) As List(Of Row)
+        Dim xx As New List(Of Row)
+
+        For x As Integer = 1 To 10
+            Try
+                xx = GetList_Safe(DataRow, sWildcard)
+                Return xx
+            Catch ex As Exception
+                Log("While asking for list in getlist of " + DataRow.PrimaryKey + ", " + ex.Message)
+                System.Threading.Thread.Sleep(2000)
+            End Try
+        Next
+
+        Return xx
+
+    End Function
+
+    Public Function GetList_Safe(DataRow As Row, sWildcard As String) As List(Of Row)
         Dim sPath As String = GetPath(DataRow)
         Dim sTemp As String = ""
         Dim d As String = "<COL>"
@@ -256,37 +309,51 @@ Module modPersistedDataSystem
         End If
         Return x
     End Function
-    Public Function GetRACViaNetsoft(sCPID As String) As Boolean
+    Public Function GetRacViaNetsoft(sCPID As String) As Boolean
+        For x = 1 To 5
+            Dim bResult As Boolean = GetRACViaNetsoft_Resilient(sCPID)
+            If bResult Then Return bResult
+        Next
+        Return False
+    End Function
+    Public Function GetRACViaNetsoft_Resilient(sCPID As String) As Boolean
 
         If sCPID = "" Then Return False
         msCurrentNeuralHash = ""
 
-        Dim sURL As String = "http://boinc.netsoft-online.com/get_user.php?cpid=" + sCPID
 
-        Dim w As New MyWebClient2
-        Dim sData As String = w.DownloadString(sURL)
-        'Push all team gridcoin rac in
-        Dim vData() As String
-        vData = Split(sData, "<project>")
-        Dim sName As String
-        Dim Rac As Double
-        Dim Team As String
+        Try
 
-        If InStr(1, sData, "<error>") > 0 Then
-            Return False
-        End If
-        For y As Integer = 0 To UBound(vData)
-            'For each project
-            sName = ExtractXML(vData(y), "<name>", "</name>")
-            Rac = ExtractXML(vData(y), "<expavg_credit>", "</expavg_credit>")
-            Team = LCase(Trim(ExtractXML(vData(y), "<team_name>", "</team_name>")))
-            'Store the :  PROJECT_CPID, RAC
-            If Rac > 99 And Team = "gridcoin" Then
-                PersistProjectRAC(sCPID, Rac, sName)
+            Dim sURL As String = "http://boinc.netsoft-online.com/get_user.php?cpid=" + sCPID
+
+            Dim w As New MyWebClient2
+            Dim sData As String = w.DownloadString(sURL)
+            'Push all team gridcoin rac in
+            Dim vData() As String
+            vData = Split(sData, "<project>")
+            Dim sName As String
+            Dim Rac As Double
+            Dim Team As String
+
+            If InStr(1, sData, "<error>") > 0 Then
+                Return False
             End If
-        Next y
+            For y As Integer = 0 To UBound(vData)
+                'For each project
+                sName = ExtractXML(vData(y), "<name>", "</name>")
+                Rac = RoundedRac(Val(ExtractXML(vData(y), "<expavg_credit>", "</expavg_credit>")))
+                Team = LCase(Trim(ExtractXML(vData(y), "<team_name>", "</team_name>")))
+                'Store the :  PROJECT_CPID, RAC
+                If Rac > 99 And Team = "gridcoin" Then
+                    PersistProjectRAC(sCPID, Rac, sName)
+                End If
+            Next y
 
-        Return True
+            Return True
+
+        Catch ex As Exception
+            Return False
+        End Try
 
 
     End Function
@@ -304,7 +371,7 @@ Module modPersistedDataSystem
         d.Database = "Project"
         d.Table = Project + "CPID"
         d.PrimaryKey = Project + "_" + sCPID
-        d.RAC = Trim(rac)
+        d.RAC = Trim(RoundedRac(rac))
         Store(d)
         'Store the Project record
         d = New Row
@@ -499,9 +566,18 @@ Module modPersistedDataSystem
         Return sPath + sFilename
     End Function
     Public Function Store(dataRow As Row) As Boolean
-        '       Dim sPath As String = GetPath(dataRow)
-        Insert(dataRow, False)
-        Return True
+
+        For x As Integer = 1 To 10
+            Try
+                Insert(dataRow, False)
+                Return True
+
+            Catch ex As Exception
+                Log("While storing data row " + dataRow.Table + "," + dataRow.Database + ", PK: " + dataRow.PrimaryKey + " on attempt " + Trim(x) + " : " + ex.Message)
+                System.Threading.Thread.Sleep(2000)
+            End Try
+        Next x
+        Return False
     End Function
     Public Function GetMd5String2(ByVal sData As String) As String
         Try
@@ -527,14 +603,63 @@ Module modPersistedDataSystem
         Return strOutput.ToString().ToLower
     End Function
 
+
+
+    Public Sub ExportToCSV2()
+        Try
+
+        Dim sReport As String = ""
+        Dim sReportRow As String = ""
+        Dim sHeader As String = "CPID,Magnitude,RAC,Expiration,Synced,Address,CPID_Valid"
+        sReport += sHeader + vbCrLf
+        Dim grr As New GridcoinReader.GridcoinRow
+        Dim sHeading As String = "CPID;Magnitude;RAC;Expiration;Synced;Address;CPID_Valid"
+        Dim vHeading() As String = Split(sHeading, ";")
+        Dim sData As String = modPersistedDataSystem.GetMagnitudeContractDetails()
+        Dim vData() As String = Split(sData, ";")
+        Dim iRow As Long = 0
+        Dim sValue As String
+        For y = 0 To UBound(vData) - 1
+            sReportRow = ""
+            For x = 0 To UBound(vHeading)
+                Dim vRow() As String = Split(vData(y), ",")
+                sValue = vRow(x)
+                sReportRow += sValue + ","
+            Next x
+            sReport += sReportRow + vbCrLf
+            iRow = iRow + 1
+        Next
+        'Get the Neural Hash
+        Dim sMyNeuralHash As String
+        Dim sContract = GetMagnitudeContract()
+        sMyNeuralHash = GetMd5String(sContract)
+        sReport += "Hash: " + sMyNeuralHash + " (" + Trim(iRow) + ")"
+        Dim sWritePath As String = GetGridFolder() + "reports\DailyNeuralMagnitudeReport.csv"
+        If Not System.IO.Directory.Exists(GetGridFolder() + "reports") Then MkDir(GetGridFolder() + "reports")
+        Using objWriter As New System.IO.StreamWriter(sWritePath)
+            objWriter.WriteLine(sReport)
+            objWriter.Close()
+        End Using
+
+        Catch ex As Exception
+            Log("Error while exportingToCSV2: " + ex.Message)
+        End Try
+
+    End Sub
+
+
 End Module
 
 Public Class MyWebClient2
     Inherits System.Net.WebClient
-    Private timeout As Long = 12000
+    Private timeout As Long = 10000
     Protected Overrides Function GetWebRequest(ByVal uri As Uri) As System.Net.WebRequest
         Dim w As System.Net.WebRequest = MyBase.GetWebRequest(uri)
         w.Timeout = timeout
         Return (w)
     End Function
+
+
+
+
 End Class

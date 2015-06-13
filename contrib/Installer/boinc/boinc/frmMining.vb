@@ -13,6 +13,7 @@ Public Class frmMining
     Private LastMHRate As String = ""
     Private lMHRateCounter As Long = 0
     Private mIDelay As Long = 0
+    Private msNeuralReport As String = ""
 
     'Private clsUtilization As Utilization
     Private RefreshCount As Long
@@ -212,6 +213,12 @@ Public Class frmMining
 
     Public Sub PopulateNeuralData()
 
+        Dim sReport As String = ""
+        Dim sReportRow As String = ""
+
+        Dim sHeader As String = "CPID,Magnitude,RAC,Expiration,Synced,Address,CPID_Valid"
+        sReport += sHeader + vbCrLf
+
         dgv.Rows.Clear()
         dgv.Columns.Clear()
         dgv.BackgroundColor = Drawing.Color.Black
@@ -230,11 +237,14 @@ Public Class frmMining
         Dim sValue As String
         For y = 0 To UBound(vData) - 1
             dgv.Rows.Add()
+            sReportRow = ""
             For x = 0 To UBound(vHeading)
                 Dim vRow() As String = Split(vData(y), ",")
                 sValue = vRow(x)
                 dgv.Rows(iRow).Cells(x).Value = sValue
+                sReportRow += sValue + ","
             Next x
+            sReport += sReportRow + vbCrLf
             iRow = iRow + 1
         Next
         'Get the Neural Hash
@@ -242,8 +252,9 @@ Public Class frmMining
         Dim sContract = GetMagnitudeContract()
         sMyNeuralHash = GetMd5String(sContract)
         dgv.Rows.Add()
-        dgv.Rows(iRow).Cells(0).Value = "Hash: " + sMyNeuralHash
-
+        dgv.Rows(iRow).Cells(0).Value = "Hash: " + sMyNeuralHash + " (" + Trim(iRow) + ")"
+        sReport += "Hash: " + sMyNeuralHash + " (" + Trim(iRow) + ")"
+        msNeuralReport = sReport
 
 
     End Sub
@@ -330,5 +341,32 @@ Public Class frmMining
         Dim sData As String = GetMagnitudeContract()
         MsgBox(sData)
 
+    End Sub
+
+    Private Sub btnExport_Click(sender As System.Object, e As System.EventArgs) Handles btnExport.Click
+        Dim sWritePath As String = GetGridFolder() + "reports\NeuralMagnitudeReport.csv"
+        If Not System.IO.Directory.Exists(GetGridFolder() + "reports") Then MkDir(GetGridFolder() + "reports")
+
+        Using objWriter As New System.IO.StreamWriter(sWritePath)
+            objWriter.WriteLine(msNeuralReport)
+            objWriter.Close()
+        End Using
+        ExportToCSV2()
+
+        MsgBox("Exported to Reports\" + "NeuralMagnitudeReport.csv")
+
+    End Sub
+
+    Private Sub TextBox1_TextChanged(sender As System.Object, e As System.EventArgs) Handles txtSearch.TextChanged
+        Dim sPhrase As String = txtSearch.Text
+        For y = 1 To dgv.Rows.Count - 1
+            For x = 0 To dgv.Rows(y).Cells.Count - 1
+                If LCase(Trim("" & dgv.Rows(y).Cells(x).Value)).Contains(LCase(Trim(txtSearch.Text))) Then
+                    dgv.Rows(y).Selected = True
+                    dgv.CurrentCell = dgv.Rows(y).Cells(0)
+                    Exit Sub
+                End If
+            Next
+        Next
     End Sub
 End Class

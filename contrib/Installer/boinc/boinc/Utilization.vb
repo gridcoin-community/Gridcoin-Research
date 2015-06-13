@@ -13,7 +13,7 @@ Public Class Utilization
    
     Public ReadOnly Property Version As Double
         Get
-            Return 361
+            Return 364
 
         End Get
     End Property
@@ -107,7 +107,6 @@ Public Class Utilization
         End Get
     End Property
     Sub New()
-        Log("Loading boincstake dll...")
         UpdateKey("UpdatingLeaderboard", "false")
         Try
             If Not DatabaseExists("gridcoin_leaderboard") Then ReplicateDatabase("gridcoin_leaderboard")
