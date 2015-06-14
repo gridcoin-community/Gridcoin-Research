@@ -42,9 +42,14 @@ extern std::string ReadCache(std::string section, std::string key);
 extern std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
 std::string AdvertiseBeacon();
 
-extern void IncrementNeuralNetworkSupermajority(std::string NeuralHash);
+extern void IncrementNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress);
 
 extern std::string GetNeuralNetworkSupermajorityHash(int64_t& out_popularity);
+
+
+extern void DeleteCache(std::string section, std::string keyname);
+extern void ClearCache(std::string section);
+
 
 
 bool TallyMagnitudesInSuperblock();
@@ -135,7 +140,7 @@ uint256 muGlobalCheckpointHash = 0;
 uint256 muGlobalCheckpointHashRelayed = 0;
 int muGlobalCheckpointHashCounter = 0;
 ///////////////////////MINOR VERSION////////////////////////////////
-int MINOR_VERSION = 252;
+int MINOR_VERSION = 253;
 std::string msMasterProjectPublicKey  = "049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a";
 // The Private Key is revealed by design, for public messages only:
 std::string msMasterMessagePrivateKey = "308201130201010420fbd45ffb02ff05a3322c0d77e1e7aea264866c24e81e5ab6a8e150666b4dc6d8a081a53081a2020101302c06072a8648ce3d0101022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f300604010004010704410479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141020101a144034200044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252467f692ec9c5ba7e5eaa898ab99cbd9949496f7e3cafbf56304b1cc2e5bdf06e";
@@ -2910,6 +2915,19 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 				{
 					//	return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 				}
+
+
+				double staked = cdbl("0" + ReadCache("stakedbyaddress",bb.GRCAddress),0);
+				if (staked > 7*3)
+				{
+					//Client should not have staked more than 14 blocks in the last 200 blocks after efficient version mandatory upgrade
+					if (!fTestNet && false)
+					{
+							return error("Client staked more than 21 blocks over the last 200 blocks; block rejected\r\n");
+					}
+				}
+
+
 			}
 
 			//Block being accepted within the last hour: Check with Netsoft - AND Verify User will not be overpaid:
@@ -2961,7 +2979,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	
 	
 	AddNetworkMagnitude((double)pindex->nHeight,vtx[1],nTime, bb.cpid, bb, mint, IsProofOfStake()); //Updates Total payments and Actual Magnitude per CPID
-	IncrementNeuralNetworkSupermajority(bb.NeuralHash);
+	IncrementNeuralNetworkSupermajority(bb.NeuralHash,bb.GRCAddress);
 	//PROD TO DO - 6/12/2015 - Reject superblocks not hashing to the supermajority:
 
 	if (bb.superblock.length() > 20) 
@@ -3796,20 +3814,23 @@ void GridcoinServices()
 	{
 			    TallyInBackground();
 	}
-	//Once every 12 hours, find out if a project RAC needs synced: 6-12-2015
-	if (TimerMain("update_prject_rac",30))
+
+	// Every 30 blocks as a Synchronized TEAM:
+	if ((nBestHeight % 30) == 0)
 	{
 		//Sync RAC with neural network IF superblock is over 24 hours Old, Or if we have No superblock (in case of the latter, age will be 45 years old)
 		int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
 		// Note that nodes will NOT accept superblocks without a supermajority hash, so it will not be in memory unless it is a good superblock.
-		if (superblock_age > 24*60*60)
+		// Let's start syncing the neural network as soon as the LAST superblock is over 20 hours old.  That gives us 4 hours to come to a consensus:
+		// Also, lets do this as a TEAM exactly every 30 blocks (every 30 minutes) to try to reach an EXACT consensus every half hour:
+		// For effeciency, the network sleeps between 01:00 and 21:00 AND after a new superblock is staked
+		if (superblock_age > 20*60*60)
 		{
 			#if defined(WIN32) && defined(QT_GUI)
 				std::string data = GetListOf("beacon");
 				qtSyncWithDPORNodes(data);
 			#endif
 		}
-
 	}
 
 
@@ -4989,7 +5010,10 @@ bool TallyNetworkAverages(bool ColdBoot)
 
 	//Clear the neural network hash buffer
 	if (mvNeuralNetworkHash.size() > 1)  mvNeuralNetworkHash.clear();
-	printf(".$1.");
+	//Clear the votes
+	ClearCache("neuralsecurity");
+	ClearCache("stakedbyaddress");
+	
 	LOCK(cs_main);
 	try 
 	{
@@ -5020,9 +5044,16 @@ bool TallyNetworkAverages(bool ColdBoot)
 
 						if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
 						MiningCPID bb = DeserializeBoincBlock(hashboinc);
-
+					
 						//6-9-2015 - Increment Neural Network Hashes Supermajority (over the last 200 blocks)
-						if (ii > (nMaxDepth-200)) IncrementNeuralNetworkSupermajority(bb.NeuralHash);
+						if (ii > (nMaxDepth-200)) 
+						{
+								IncrementNeuralNetworkSupermajority(bb.NeuralHash,bb.GRCAddress);
+								// Increment blocks staked by Address
+								double staked = cdbl("0" + ReadCache("stakedbyaddress",bb.GRCAddress),0);
+								staked++;
+								WriteCache("stakedbyaddress",bb.GRCAddress,RoundToString(staked,0),GetAdjustedTime());
+						}
 						if (!superblockloaded)
 						{
 							if (bb.superblock.length() > 20)
@@ -8048,10 +8079,20 @@ void DeleteCache(std::string section, std::string keyname)
 	   mvApplicationCacheTimestamp.erase(pk);
 }
 
-void IncrementNeuralNetworkSupermajority(std::string NeuralHash)
+void IncrementNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress)
 {
 	if (NeuralHash.length() < 5) return;
 	int64_t temp_hashcount = mvNeuralNetworkHash[NeuralHash];
+	// 6-13-2015 ONLY Count Each Neural Hash Once per GRC address / CPID (1 VOTE PER RESEARCHER)
+	std::string Security = ReadCache("neuralsecurity",GRCAddress);
+	if (Security == NeuralHash) 
+	{
+		//This node has already voted, throw away the vote
+		return;
+	}
+	WriteCache("neuralsecurity",GRCAddress,NeuralHash,GetAdjustedTime());
+
+		
 	if (temp_hashcount == 0)
 	{
 		mvNeuralNetworkHash.insert(map<std::string,int64_t>::value_type(NeuralHash,0));
