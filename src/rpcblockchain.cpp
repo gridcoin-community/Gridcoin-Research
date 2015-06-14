@@ -2158,6 +2158,23 @@ Array GetJSONBeaconReport()
 
 }
 
+
+double GetTotalNeuralNetworkHashVotes()
+{
+	double total = 0;
+	std::string neural_hash = "";
+	for(map<std::string,double>::iterator ii=mvNeuralNetworkHash.begin(); ii!=mvNeuralNetworkHash.end(); ++ii) 
+	{
+				double popularity = mvNeuralNetworkHash[(*ii).first];
+				neural_hash = (*ii).first;
+				if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity >= 1)
+				{
+					total += popularity;
+				}
+				
+	}
+	return total;	 
+}
 Array GetJSONNeuralNetworkReport()
 {
 	  Array results;
@@ -2168,26 +2185,24 @@ Array GetJSONNeuralNetworkReport()
 	  double pct = 0;
 	  Object entry;
   	  entry.push_back(Pair("Neural Hash","Popularity,Percent %"));
-	  printf("sz %f",(double)mvNeuralNetworkHash.size());
-
-	  for(map<std::string,int64_t>::iterator ii=mvNeuralNetworkHash.begin(); ii!=mvNeuralNetworkHash.end(); ++ii) 
+	  double votes = GetTotalNeuralNetworkHashVotes();
+		
+	  for(map<std::string,double>::iterator ii=mvNeuralNetworkHash.begin(); ii!=mvNeuralNetworkHash.end(); ++ii) 
 	  {
-				int64_t popularity = mvNeuralNetworkHash[(*ii).first];
+				double popularity = mvNeuralNetworkHash[(*ii).first];
 				neural_hash = (*ii).first;
 				//If the hash != empty_hash:
-				if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e")
+				if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity >= 1)
 				{
 					row = neural_hash + "," + RoundToString(popularity,0);
 					report += row + "\r\n";
-					pct = (((double)popularity)/((double)mvNeuralNetworkHash.size()+1))*100;
+					pct = (((double)popularity)/(votes+.01))*100;
 					entry.push_back(Pair(neural_hash,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%"));
 				}
-				
 	  }
 	  results.push_back(entry);
 	  return results;
 
- 	 
 }
 
 

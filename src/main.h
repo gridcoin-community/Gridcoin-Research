@@ -90,7 +90,7 @@ inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight)
 
 extern std::map<std::string, std::string> mvApplicationCache;
 extern std::map<std::string, int64_t> mvApplicationCacheTimestamp;
-extern std::map<std::string, int64_t> mvNeuralNetworkHash;
+extern std::map<std::string, double> mvNeuralNetworkHash;
 
 extern std::map<std::string, StructCPID> mvDPOR;
 extern CScript COINBASE_FLAGS;

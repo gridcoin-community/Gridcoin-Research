@@ -457,8 +457,9 @@ Partial Class frmMining
         '
         'txtSearch
         '
-        Me.txtSearch.BackColor = System.Drawing.Color.Gray
-        Me.txtSearch.ForeColor = System.Drawing.Color.FromArgb(CType(CType(0, Byte), Integer), CType(CType(192, Byte), Integer), CType(CType(0, Byte), Integer))
+        Me.txtSearch.BackColor = System.Drawing.Color.Gainsboro
+        Me.txtSearch.Font = New System.Drawing.Font("Microsoft Sans Serif", 8.25!, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        Me.txtSearch.ForeColor = System.Drawing.Color.FromArgb(CType(CType(0, Byte), Integer), CType(CType(64, Byte), Integer), CType(CType(0, Byte), Integer))
         Me.txtSearch.Location = New System.Drawing.Point(757, 38)
         Me.txtSearch.Name = "txtSearch"
         Me.txtSearch.Size = New System.Drawing.Size(299, 20)
@@ -467,7 +468,7 @@ Partial Class frmMining
         'Label1
         '
         Me.Label1.AutoSize = True
-        Me.Label1.BackColor = System.Drawing.Color.FromArgb(CType(CType(224, Byte), Integer), CType(CType(224, Byte), Integer), CType(CType(224, Byte), Integer))
+        Me.Label1.BackColor = System.Drawing.Color.Gainsboro
         Me.Label1.Font = New System.Drawing.Font("Microsoft Sans Serif", 9.75!)
         Me.Label1.ForeColor = System.Drawing.Color.Green
         Me.Label1.Location = New System.Drawing.Point(700, 42)
