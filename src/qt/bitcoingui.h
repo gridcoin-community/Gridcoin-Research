@@ -208,6 +208,8 @@ private slots:
 	void downloadClicked();
 	void rebootClicked();
 	void sqlClicked();
+	void miningClicked();
+
 	void tickerClicked();
 	void ticketListClicked();
 	void galazaClicked();

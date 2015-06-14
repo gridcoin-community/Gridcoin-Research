@@ -14,6 +14,7 @@ Public Module ModuleZeroProofKnowledge
         Next b
         Return sb.ToString()
     End Function
+
     Public Function HexStringToBytes(ByVal str As String) As Byte()
         ' Determine the number of bytes
         Dim bytes(str.Length >> 1 - 1) As Byte

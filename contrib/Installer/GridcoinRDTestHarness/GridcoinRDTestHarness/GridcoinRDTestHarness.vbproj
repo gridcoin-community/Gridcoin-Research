@@ -80,6 +80,7 @@
       <DependentUpon>Form1.vb</DependentUpon>
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="md5.vb" />
     <Compile Include="modCryptsy.vb" />
     <Compile Include="modShaHash.vb" />
     <Compile Include="My Project\AssemblyInfo.vb" />

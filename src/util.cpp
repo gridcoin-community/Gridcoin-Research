@@ -79,8 +79,12 @@ bool fNoListen = false;
 bool fLogTimestamps = false;
 CMedianFilter<int64_t> vTimeOffsets(200,0);
 bool fReopenDebugLog = false;
+bool Contains(std::string data, std::string instring);
 
 
+std::string RoundToString(double d, int place);
+
+int64_t IsNeural();
 
 extern std::string GetBoincDataDir();
 
@@ -1393,11 +1397,21 @@ string FormatFullVersion()
 // Format the subversion field according to BIP 14 spec (https://en.bitcoin.it/wiki/BIP_0014)
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments)
 {
+	double neural_id = 0;
+	std::string neural_v = "0";
+
+	#if defined(WIN32) && defined(QT_GUI)
+		neural_id = (double)IsNeural();
+		neural_v = RoundToString(neural_id,0);
+	#endif
+
     std::ostringstream ss;
     ss << "/";
     ss << name << ":" << FormatVersion(nClientVersion);
-    if (!comments.empty())
-        ss << "(" << boost::algorithm::join(comments, "; ") << ")";
+
+    if (!comments.empty())         ss << "(" << boost::algorithm::join(comments, "; ") << ")";
+	ss << "(" << neural_v << ")";
+
     ss << "/";
     return ss.str();
 }

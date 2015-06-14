@@ -13,7 +13,8 @@ Public Class Utilization
    
     Public ReadOnly Property Version As Double
         Get
-            Return 353
+            Return 365
+
         End Get
     End Property
 
@@ -97,13 +98,15 @@ Public Class Utilization
             Return 0
         End Get
     End Property
+    Public Function NeuralNetwork() As Double
+        Return 1999
+    End Function
     Public ReadOnly Property BoincThreads As Double
         Get
 
         End Get
     End Property
     Sub New()
-        Log("Loading boincstake dll...")
         UpdateKey("UpdatingLeaderboard", "false")
         Try
             If Not DatabaseExists("gridcoin_leaderboard") Then ReplicateDatabase("gridcoin_leaderboard")
@@ -158,6 +161,17 @@ Public Class Utilization
     Public Function StrToMd5Hash(s As String) As String
         Return CalcMd5(s)
     End Function
+    Public Function GetNeuralHash() As String
+        If Len(msCurrentNeuralHash) > 1 Then Return msCurrentNeuralHash 'This is invalidated when it changes
+        Dim sContract As String = GetMagnitudeContract()
+        Dim sHash As String = GetMd5String(sContract)
+        Return sHash
+    End Function
+    Public Function GetNeuralContract() As String
+        Dim sContract As String = GetMagnitudeContract()
+        Return sContract
+    End Function
+
     Public ReadOnly Property RetrieveWin32BoincHash() As String
         Get
 
@@ -243,21 +257,12 @@ Public Class Utilization
         Try
 
             lfrmMiningCounter = lfrmMiningCounter + 1
-            Exit Function
-
+            
             If mfrmMining Is Nothing Then
                 mfrmMining = New frmMining
-                mfrmMining.SetClsUtilization(Me)
             End If
 
-            If lfrmMiningCounter = 1 Then
-                If KeyValue("suppressminingconsole") = "true" Then Exit Function
-                mfrmMining.Show()
-            End If
-
-            If KeyValue("suppressminingconsole") <> "true" Then
-                mfrmMining.Visible = True
-            End If
+            mfrmMining.Show()
 
         Catch ex As Exception
         End Try
@@ -350,7 +355,26 @@ Public Class Utilization
 
         End Try
     End Function
-    
+    Public Function SyncCPIDsWithDPORNodes(sData As String) As Double
+        'Write the Gridcoin CPIDs to the Persisted Data System
+       
+
+            Try
+                msSyncData = sData
+
+                Call SyncDPOR2()
+
+            Catch ex As Exception
+                Log("Exception during SyncDpor2 : " + ex.Message)
+                Return -2
+            End Try
+
+
+        Log("Finished syncing DPOR cpids.")
+
+        Return 0
+
+    End Function
     Public Function AddressUser(sMagnitude As String) As Double
         Log("Addressing User with Magnitude " + Trim(sMagnitude))
         Dim s As New SpeechSynthesis
@@ -398,13 +422,13 @@ Public Class Utilization
     End Sub
 
     Protected Overrides Sub Finalize()
-        If Not mfrmMining Is Nothing Then
-            mfrmMining.bDisposing = True
-            mfrmMining.Close()
-            mfrmMining.Dispose()
-            mfrmMining = Nothing
-        End If
-        MyBase.Finalize()
+        Try
+
+            MyBase.Finalize()
+        Catch ex As Exception
+
+        End Try
+
     End Sub
 
 End Class
