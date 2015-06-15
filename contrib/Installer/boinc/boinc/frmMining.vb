@@ -327,8 +327,19 @@ Public Class frmMining
             oNewForm.Controls.Add(dgvProjects)
             dgvProjects.Left = 5
             dgvProjects.Top = 5
-            dgvProjects.Width = oNewForm.Width - 40
-            dgvProjects.Height = oNewForm.Height - 40
+            Dim TotalControlHeight As Long = (dgvProjects.RowTemplate.Height * (iRow + 2)) + 20
+            dgvProjects.Height = TotalControlHeight
+            oNewForm.Height = dgvProjects.Height + 285
+            dgvProjects.Width = oNewForm.Width - 25
+            Dim rtbRac As New System.Windows.Forms.RichTextBox
+
+            Dim sXML As String = GetXMLOnly(sCPID)
+            rtbRac.Left = 5
+            rtbRac.Top = dgvProjects.Height + 8
+            rtbRac.Height = 245
+            rtbRac.Width = oNewForm.Width - 5
+            rtbRac.Text = sXML
+            oNewForm.Controls.Add(rtbRac)
             oNewForm.Show()
 
 

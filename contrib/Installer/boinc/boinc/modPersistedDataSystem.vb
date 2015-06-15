@@ -82,14 +82,25 @@ Module modPersistedDataSystem
     End Function
     Public Function RoundedMag(num As Double)
         'Rounds magnitude to nearest 5
-        Return Math.Round(num * 0.2, 0) / 0.2
+        Return Math.Round(Math.Round(num * GetDitherMag(num), 0) / GetDitherMag(num), 2)
     End Function
 
     Public Function RoundedRac(num As Double)
         'Rounds magnitude to nearest 10
-        Return Math.Round(num * 0.1, 0) / 0.1
-    End Function
+        Return Math.Round(Math.Round(num * GetDitherMag(num), 0) / GetDitherMag(num), 2)
 
+    End Function
+    Public Function GetDitherMag(Data As Double) As Double
+        Dim Dither As Double = 0.1
+        If Data > 0 And Data < 100 Then Dither = 0.2 '5
+        If Data >= 100 And Data <= 1000 Then Dither = 0.1 '10
+        If Data >= 1000 And Data <= 10000 Then Dither = 0.025 '40
+        If Data >= 10000 And Data <= 50000 Then Dither = 0.006 '160
+        If Data >= 50000 And Data <= 100000 Then Dither = 0.003 ' 320
+        If Data >= 100000 And Data <= 999999 Then Dither = 0.0015 ' 640
+        If Data >= 1000000 Then Dither = 0.0007 '1428
+        Return Dither
+    End Function
     Public Function UpdateNetworkAverages() As Boolean
         'loop through all projects on file, persist network averages
         'Get a collection of Projects
@@ -272,18 +283,21 @@ Module modPersistedDataSystem
 
     Public Function GetList(DataRow As Row, sWildcard As String) As List(Of Row)
         Dim xx As New List(Of Row)
+        Dim sErr As String = ""
 
         For x As Integer = 1 To 10
             Try
                 xx = GetList_Safe(DataRow, sWildcard)
                 Return xx
             Catch ex As Exception
-                Log("While asking for list in getlist of " + DataRow.PrimaryKey + ", " + ex.Message)
+                sErr = ex.Message
                 System.Threading.Thread.Sleep(2000)
             End Try
         Next
 
         Return xx
+
+        Log("While asking for list in getlist of " + DataRow.PrimaryKey + ", " + sErr)
 
     End Function
 
@@ -315,6 +329,22 @@ Module modPersistedDataSystem
             If bResult Then Return bResult
         Next
         Return False
+    End Function
+    Public Function GetXMLOnly(sCPID As String)
+
+        If sCPID = "" Then Return False
+
+        Try
+
+            Dim sURL As String = "http://boinc.netsoft-online.com/get_user.php?cpid=" + sCPID
+            Dim w As New MyWebClient2
+            Dim sData As String = w.DownloadString(sURL)
+            Return sData
+
+        Catch
+
+        End Try
+
     End Function
     Public Function GetRACViaNetsoft_Resilient(sCPID As String) As Boolean
 
@@ -459,6 +489,23 @@ Module modPersistedDataSystem
 
     End Function
     Public Function Read(dataRow As Row) As Row
+        Dim oRow As Row
+        Dim sErr As String
+        For x As Integer = 1 To 10
+            Try
+                oRow = Read_Surrogate(dataRow)
+                Return oRow
+            Catch ex As Exception
+                sErr = ex.Message
+                System.Threading.Thread.Sleep(1000)
+            End Try
+        Next
+        Log("Read: " + sErr)
+        Return dataRow
+
+    End Function
+
+    Public Function Read_Surrogate(dataRow As Row) As Row
         Dim sPath As String = GetPath(dataRow)
         Dim sTemp As String = ""
         Dim d As String = "<COL>"
@@ -566,6 +613,7 @@ Module modPersistedDataSystem
         Return sPath + sFilename
     End Function
     Public Function Store(dataRow As Row) As Boolean
+        Dim sErr As String = ""
 
         For x As Integer = 1 To 10
             Try
@@ -573,10 +621,14 @@ Module modPersistedDataSystem
                 Return True
 
             Catch ex As Exception
-                Log("While storing data row " + dataRow.Table + "," + dataRow.Database + ", PK: " + dataRow.PrimaryKey + " on attempt " + Trim(x) + " : " + ex.Message)
+                sErr = ex.Message
                 System.Threading.Thread.Sleep(2000)
             End Try
         Next x
+
+        Log("While storing data row " + dataRow.Table + "," + dataRow.Database + ", PK: " + dataRow.PrimaryKey + " : " + sErr)
+
+
         Return False
     End Function
     Public Function GetMd5String2(ByVal sData As String) As String
