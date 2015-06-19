@@ -9,11 +9,13 @@ Public Class Utilization
     Private _lLeaderboard As Long
     Private _lLeaderUpdates As Long
     Public _boincmagnitude As Double
-  
+    Private msSentence As String = ""
+    Private mlSpeakMagnitude As Double
+
    
     Public ReadOnly Property Version As Double
         Get
-            Return 366
+            Return 369
 
         End Get
     End Property
@@ -290,8 +292,16 @@ Public Class Utilization
 
     End Sub
     Public Sub SpeakSentence(sSentence As String)
+        msSentence = sSentence
+        '  Log("Speaking..." + Trim(Now))
+        Dim t As New Threading.Thread(AddressOf SpeakOnBackgroundThread)
+        t.Start()
+        '  Log("Thread started..." + Trim(Now))
+
+    End Sub
+    Public Sub SpeakOnBackgroundThread()
         Dim S As New SpeechSynthesis
-        S.Speak(sSentence)
+        S.Speak(msSentence)
     End Sub
     Public Function UpdateConfirm(sTxId As String) As String
         msTxId = sTxId
@@ -355,30 +365,45 @@ Public Class Utilization
 
         End Try
     End Function
+    Public Function SetTestNetFlag(sData As String) As Double
+        Try
+            If sData = "TESTNET" Then
+                mbTestNet = True
+            Else
+                mbTestNet = False
+            End If
+            Log("Testnet : " + Trim(mbTestNet))
+
+        Catch ex As Exception
+            Return 0
+        End Try
+        Return 1
+    End Function
     Public Function SyncCPIDsWithDPORNodes(sData As String) As Double
         'Write the Gridcoin CPIDs to the Persisted Data System
-       
-
-            Try
-                msSyncData = sData
-
-                Call SyncDPOR2()
-
-            Catch ex As Exception
-                Log("Exception during SyncDpor2 : " + ex.Message)
-                Return -2
-            End Try
-
-
+        Try
+            msSyncData = sData
+            Call SyncDPOR2()
+        Catch ex As Exception
+            Log("Exception during SyncDpor2 : " + ex.Message)
+            Return -2
+        End Try
         Log("Finished syncing DPOR cpids.")
 
         Return 0
 
     End Function
-    Public Function AddressUser(sMagnitude As String) As Double
-        Log("Addressing User with Magnitude " + Trim(sMagnitude))
+    Public Sub AddressUserThread()
+
         Dim s As New SpeechSynthesis
-        s.AddressUserBySurname(Val(sMagnitude))
+        s.AddressUserBySurname(mlSpeakMagnitude)
+
+    End Sub
+    Public Function AddressUser(sMagnitude As String) As Double
+        Dim t As New Threading.Thread(AddressOf AddressUserThread)
+        mlSpeakMagnitude = Val(sMagnitude)
+        t.Start()
+
         Return 1
     End Function
     Public Sub SetSqlBlock(ByVal data As String)

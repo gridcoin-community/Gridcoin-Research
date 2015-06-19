@@ -317,8 +317,14 @@ static CBlockIndex *InsertBlockIndex(uint256 hash)
     return pindexNew;
 }
 
+//Halford - todo - 6/19/2015 - Load block index on dedicated thread to decrease startup time by 90% - move checkblocks to separate thread
+
 bool CTxDB::LoadBlockIndex()
 {
+
+	int64_t nStart = GetTimeMillis();
+
+
     if (mapBlockIndex.size() > 0) {
         // Already loaded once in this session. It can happen during migration
         // from BDB.
@@ -387,6 +393,14 @@ bool CTxDB::LoadBlockIndex()
     }
     delete iterator;
 
+
+
+	printf("Time to memorize diskindex %15"PRId64"ms\n", GetTimeMillis() - nStart);
+	nStart = GetTimeMillis();
+
+
+
+
     if (fRequestShutdown)
         return true;
 
@@ -408,6 +422,11 @@ bool CTxDB::LoadBlockIndex()
         if (!CheckStakeModifierCheckpoints(pindex->nHeight, pindex->nStakeModifierChecksum))
             return error("CTxDB::LoadBlockIndex() : Failed stake modifier checkpoint height=%d, modifier=0x%016"PRIx64, pindex->nHeight, pindex->nStakeModifier);
     }
+
+
+	printf("Time to calculate Chain Trust %15"PRId64"ms\n", GetTimeMillis() - nStart);
+	nStart = GetTimeMillis();
+
 
     // Load hashBestChain pointer to end of best chain
     if (!ReadHashBestChain(hashBestChain))
@@ -438,7 +457,7 @@ bool CTxDB::LoadBlockIndex()
 
     // Verify blocks in the best chain
     int nCheckLevel = GetArg("-checklevel", 1);
-    int nCheckDepth = GetArg( "-checkblocks", 350);
+    int nCheckDepth = GetArg( "-checkblocks", 1000);
     if (nCheckDepth == 0)
         nCheckDepth = 1000000000; // suffices until the year 19000
     if (nCheckDepth > nBestHeight)
@@ -552,6 +571,13 @@ bool CTxDB::LoadBlockIndex()
             }
         }
     }
+
+
+
+	printf("Time to Verify Blocks %15"PRId64"ms\n", GetTimeMillis() - nStart);
+
+
+
     if (pindexFork && !fRequestShutdown)
     {
         // Reorg back to the fork

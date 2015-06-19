@@ -17,6 +17,7 @@ Module modPersistedDataSystem
     'Data is stored across all Gridcoin windows nodes, in a decentralized store
     Public msSyncData As String = ""
     Public mbForcefullySyncAllRac = False
+    Public mbTestNet As Boolean = False
 
     Private lUseCount As Long = 0
     Public Structure Row
@@ -164,6 +165,10 @@ Module modPersistedDataSystem
         Try
             
             Dim vCPIDs() As String = Split(msSyncData, "<ROW>")
+            Dim vTestNet() As String
+            vTestNet = Split(vCPIDs(0), "<COL>")
+            Log("Updating magnitude in " + Trim(mbTestNet) + " for " + Trim(UBound(vCPIDs)) + " cpids.")
+
             For x As Integer = 0 To UBound(vCPIDs)
                 If Len(vCPIDs(x)) > 20 Then
                     Dim vRow() As String

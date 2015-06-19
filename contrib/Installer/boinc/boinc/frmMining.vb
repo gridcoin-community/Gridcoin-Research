@@ -174,6 +174,7 @@ Public Class frmMining
 
             Call OneMinuteUpdate()
             Me.TabControl1.SelectedIndex = 2
+            If mbTestNet Then lblTestnet.Text = "TESTNET"
 
         Catch ex As Exception
 

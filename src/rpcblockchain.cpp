@@ -1327,8 +1327,7 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "syncdpor2")
 	{
-			//bool result = SynchronizeRacForDPOR(false);
-   		std::string data = GetListOf("beacon");
+		std::string data = GetListOf("beacon");
 		#if defined(WIN32) && defined(QT_GUI)
 			qtSyncWithDPORNodes(data);
 		#endif

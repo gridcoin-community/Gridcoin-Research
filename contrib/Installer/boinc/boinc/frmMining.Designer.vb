@@ -67,6 +67,7 @@ Partial Class frmMining
         Me.btnExport = New System.Windows.Forms.Button()
         Me.txtSearch = New System.Windows.Forms.TextBox()
         Me.Label1 = New System.Windows.Forms.Label()
+        Me.lblTestnet = New System.Windows.Forms.Label()
         CType(Me.Chart1, System.ComponentModel.ISupportInitialize).BeginInit()
         CType(Me.ChartUtilization, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.MenuStrip1.SuspendLayout()
@@ -275,7 +276,7 @@ Partial Class frmMining
         Me.TabOverview.Location = New System.Drawing.Point(4, 22)
         Me.TabOverview.Name = "TabOverview"
         Me.TabOverview.Padding = New System.Windows.Forms.Padding(3)
-        Me.TabOverview.Size = New System.Drawing.Size(905, 357)
+        Me.TabOverview.Size = New System.Drawing.Size(1037, 357)
         Me.TabOverview.TabIndex = 0
         Me.TabOverview.Text = "Overview"
         Me.TabOverview.UseVisualStyleBackColor = True
@@ -375,7 +376,7 @@ Partial Class frmMining
         Me.TabPage1.Location = New System.Drawing.Point(4, 22)
         Me.TabPage1.Name = "TabPage1"
         Me.TabPage1.Padding = New System.Windows.Forms.Padding(3)
-        Me.TabPage1.Size = New System.Drawing.Size(905, 357)
+        Me.TabPage1.Size = New System.Drawing.Size(1037, 357)
         Me.TabPage1.TabIndex = 2
         Me.TabPage1.Text = "Boinc Stats"
         Me.TabPage1.UseVisualStyleBackColor = True
@@ -477,6 +478,18 @@ Partial Class frmMining
         Me.Label1.TabIndex = 62
         Me.Label1.Text = "Search:"
         '
+        'lblTestnet
+        '
+        Me.lblTestnet.AutoSize = True
+        Me.lblTestnet.BackColor = System.Drawing.Color.Transparent
+        Me.lblTestnet.Font = New System.Drawing.Font("Microsoft Sans Serif", 12.0!, System.Drawing.FontStyle.Italic, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        Me.lblTestnet.ForeColor = System.Drawing.Color.Red
+        Me.lblTestnet.Location = New System.Drawing.Point(478, 0)
+        Me.lblTestnet.Name = "lblTestnet"
+        Me.lblTestnet.Size = New System.Drawing.Size(13, 20)
+        Me.lblTestnet.TabIndex = 63
+        Me.lblTestnet.Text = " "
+        '
         'frmMining
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
@@ -485,6 +498,7 @@ Partial Class frmMining
         Me.BackgroundImage = Global.BoincStake.My.Resources.Resources.GradientU
         Me.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch
         Me.ClientSize = New System.Drawing.Size(1071, 793)
+        Me.Controls.Add(Me.lblTestnet)
         Me.Controls.Add(Me.txtSearch)
         Me.Controls.Add(Me.Label1)
         Me.Controls.Add(Me.btnExport)
@@ -550,4 +564,5 @@ Partial Class frmMining
     Friend WithEvents btnExport As System.Windows.Forms.Button
     Friend WithEvents txtSearch As System.Windows.Forms.TextBox
     Friend WithEvents Label1 As System.Windows.Forms.Label
+    Friend WithEvents lblTestnet As System.Windows.Forms.Label
 End Class

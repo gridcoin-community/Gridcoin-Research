@@ -39,7 +39,6 @@ extern int64_t nLastBlockSubmitted;
 extern uint256 muGlobalCheckpointHash;
 extern uint256 muGlobalCheckpointHashRelayed;
 extern int muGlobalCheckpointHashCounter;
-extern int MINOR_VERSION;
 extern std::string msMasterProjectPublicKey;
 extern std::string msMasterMessagePublicKey;
 extern std::string msMasterMessagePrivateKey;

@@ -532,6 +532,7 @@ Module modGRC
     Public Function GetGridFolder() As String
         Dim sTemp As String
         sTemp = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\gridcoinresearch\"
+        If mbTestNet Then sTemp += "Testnet\"
         Return sTemp
     End Function
     Public Function KeyValue(ByVal sKey As String) As String

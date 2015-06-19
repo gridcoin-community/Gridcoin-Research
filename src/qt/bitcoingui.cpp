@@ -95,6 +95,8 @@ extern void qtUpdateConfirm(std::string txid);
 extern void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string txid);
 extern void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double magnitude);
 extern void qtSyncWithDPORNodes(std::string data);
+extern double qtExecuteGenericFunction(std::string function,std::string data);
+
 extern std::string qtGetNeuralHash(std::string data);
 extern std::string qtGetNeuralContract(std::string data);
 
@@ -481,7 +483,26 @@ void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::strin
 	}
 	#endif
 }
-//  Public Function SyncCPIDsWithDPORNodes(sData As String) As Double
+
+//R Halford - 6/19/2015 - Let's clean up the windows side by removing all these functions and making a generic interface for comm between Windows and Linux; Start with one new generic function here:
+
+double qtExecuteGenericFunction(std::string function, std::string data)
+{
+	double return_code = 0;
+	#if defined(WIN32) && defined(QT_GUI)
+		int result = 0;
+		printf("Executing generic function %s \r\n",function.c_str());
+		QString qsData = ToQstring(data);
+		QString qsFunction = ToQstring(function +"(Qstring)");
+		std::string sFunction = function+"(Qstring)";
+		result = globalcom->dynamicCall(sFunction.c_str(),qsData).toInt();
+		printf(".NET returned result code %f\r\n",(double)result);
+		return (double)result;
+	#endif
+ 	return (double)result;
+}
+
+
 
 
 void qtSyncWithDPORNodes(std::string data)
@@ -491,8 +512,10 @@ void qtSyncWithDPORNodes(std::string data)
 		int result = 0;
 		printf("Syncing with DPOR nodes...\r\n");
 		QString qsData = ToQstring(data);
+		std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
+		double function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
 		result = globalcom->dynamicCall("SyncCPIDsWithDPORNodes(Qstring)",qsData).toInt();
-		printf("Done syncing.\r\n");
+		printf("Done syncing. %f\r\n",function_call);
 	#endif
 }
 
@@ -1703,7 +1726,11 @@ void BitcoinGUI::miningClicked()
 		globalcom = new QAxObject("BoincStake.Utilization");
 	}
 
-      globalcom->dynamicCall("ShowMiningConsole()");
+	std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
+	double function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
+	printf("ExecGenericFunctionResponse %f\r\n",(double)function_call);
+
+	globalcom->dynamicCall("ShowMiningConsole()");
 #endif
 }
 
