@@ -3841,7 +3841,7 @@ void GridcoinServices()
 	}
 
 
-	if (TimerMain("update_neural_rac",360))
+	if (TimerMain("update_neural_rac",560))
 	{
 			#if defined(WIN32) && defined(QT_GUI)
 				std::string data = GetListOf("beacon");

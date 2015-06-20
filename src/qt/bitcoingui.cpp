@@ -489,8 +489,8 @@ void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::strin
 double qtExecuteGenericFunction(std::string function, std::string data)
 {
 	double return_code = 0;
+	int result = 0;
 	#if defined(WIN32) && defined(QT_GUI)
-		int result = 0;
 		printf("Executing generic function %s \r\n",function.c_str());
 		QString qsData = ToQstring(data);
 		QString qsFunction = ToQstring(function +"(Qstring)");
