@@ -1,0 +1,131 @@
+﻿Imports System.Windows.Forms
+Imports System.Text
+
+Public Class frmVoting
+
+    Public WithEvents cms As New ContextMenuStrip
+    Public _GridRowIndex As Long = 0
+
+    Private Sub frmVoting_Load(sender As System.Object, e As System.EventArgs) Handles MyBase.Load
+
+        If Not msGenericDictionary.ContainsKey("POLLS") Then
+            MsgBox("No voting data exists.")
+            Exit Sub
+        End If
+        Dim sVoting As String = msGenericDictionary("POLLS")
+        If Len(sVoting) = 0 Then Exit Sub
+
+        'List the active polls in windows
+        Dim sHeading As String = "#;Title;Expiration;Share Type;Question;Answers;Total Participants;Total Shares;Best Answer"
+        dgv.Rows.Clear()
+        dgv.Columns.Clear()
+
+        Dim vHeading() As String = Split(sHeading, ";")
+
+        PopulateHeadings(vHeading, dgv)
+        Dim iRow As Long = 0
+        Dim vPolls() As String = Split(sVoting, "<POLL>")
+        For y As Integer = 0 To vPolls.Length - 1
+            vPolls(y) = Replace(vPolls(y), "_", " ")
+            Dim sTitle As String = ExtractXML(vPolls(y), "<TITLE>", "</TITLE>")
+            Dim sExpiration As String = ExtractXML(vPolls(y), "<EXPIRATION>")
+            Dim sShareType As String = ExtractXML(vPolls(y), "<SHARETYPE>")
+            Dim sQuestion As String = ExtractXML(vPolls(y), "<QUESTION>")
+            Dim sAnswers As String = ExtractXML(vPolls(y), "<ANSWERS>")
+            If Len(sTitle) > 0 Then
+                'Array of answers
+                Dim sArrayOfAnswers As String = ExtractXML(vPolls(y), "<ARRAYANSWERS>")
+                Dim vAnswers() As String = Split(sArrayOfAnswers, "<RESERVED>")
+                For subY As Integer = 0 To vAnswers.Length - 1
+                    Dim sAnswerName As String = ExtractXML(vAnswers(subY), "<ANSWERNAME>")
+                    Dim sParticipants As String = ExtractXML(vAnswers(subY), "<PARTICIPANTS>")
+                    Dim sShares As String = ExtractXML(vAnswers(subY), "<SHARES>")
+
+                Next
+                Dim sTotalParticipants As String = ExtractXML(vPolls(y), "<TOTALPARTICIPANTS>")
+                Dim sTotalShares As String = ExtractXML(vPolls(y), "<TOTALSHARES>")
+                Dim sBestAnswer As String = ExtractXML(vPolls(y), "<BESTANSWER>")
+                dgv.Rows.Add()
+
+                dgv.Rows(iRow).Cells(0).Value = iRow + 1
+                dgv.Rows(iRow).Cells(1).Value = sTitle
+                dgv.Rows(iRow).Cells(2).Value = sExpiration
+                dgv.Rows(iRow).Cells(3).Value = sShareType
+                dgv.Rows(iRow).Cells(4).Value = sQuestion
+                dgv.Rows(iRow).Cells(5).Value = sAnswers
+                dgv.Rows(iRow).Cells(6).Value = sTotalParticipants
+                dgv.Rows(iRow).Cells(7).Value = sTotalShares
+                dgv.Rows(iRow).Cells(8).Value = sBestAnswer
+
+                iRow += 1
+
+            End If
+
+        Next
+
+    End Sub
+
+    Private Sub dgv_CellContentDoubleClick(sender As Object, e As System.Windows.Forms.DataGridViewCellEventArgs) Handles dgv.CellContentDoubleClick
+        _GridRowIndex = e.RowIndex
+        If _GridRowIndex < 0 Then Exit Sub
+        Dim sTitle As String = dgv.Rows(_GridRowIndex).Cells(1).Value
+        If Len(sTitle) > 0 Then
+            Dim frmChart As New frmChartVotes
+            frmChart.Show()
+            frmChart.ChartPoll(sTitle)
+        End If
+
+    End Sub
+    Private Sub dgv_CellMouseClick(sender As Object, e As System.Windows.Forms.DataGridViewCellMouseEventArgs) Handles dgv.CellMouseClick
+        If e.Button = Windows.Forms.MouseButtons.Left Then
+            If dgv.ContextMenuStrip Is Nothing Then Exit Sub
+            dgv.ContextMenuStrip.Visible = False
+        End If
+        _GridRowIndex = e.RowIndex
+        If _GridRowIndex < 0 Then Exit Sub
+
+        Dim sTitle As String = dgv.Rows(_GridRowIndex).Cells(1).Value
+
+        If e.Button = Windows.Forms.MouseButtons.Right Then
+            If Len(sTitle) > 1 Then
+                Dim _EventList As String = "Chart|Vote"
+                cms.Items.Clear()
+                Dim vEventList() As String
+                vEventList = Split(_EventList, "|")
+                dgv.Rows(e.RowIndex).Selected = True
+                For x As Integer = 0 To UBound(vEventList)
+                    cms.Items.Add(vEventList(x))
+                    AddHandler cms.Items(x).Click, AddressOf ContextMenuSelected
+                Next
+                dgv.ContextMenuStrip = cms
+                dgv.ContextMenuStrip.Show(Cursor.Position)
+            End If
+
+        End If
+    End Sub
+    Private Sub ContextMenuSelected(ByVal sender As Object, ByVal e As System.EventArgs)
+        Dim tsmi As ToolStripMenuItem = sender
+        If _GridRowIndex = -1 Then
+            'User is clicking on the header
+            dgv.ContextMenuStrip.Hide()
+            Exit Sub
+        End If
+        Dim sTitle As String = dgv.Rows(_GridRowIndex).Cells(1).Value
+        If tsmi.Text = "Chart" Then
+            'Drill into the vote, and chart the vote:
+            If Len(sTitle) > 0 Then
+                Dim frmChart As New frmChartVotes
+                frmChart.Show()
+                frmChart.ChartPoll(sTitle)
+            End If
+
+        ElseIf tsmi.Text = "Vote" Then
+            MsgBox("Being Implemented, please vote from the command line.  See http://finance.gridcoin.us/images/gridcoin%20decentralized%20voting%20system.pdf for more information.", MsgBoxStyle.Information)
+        End If
+
+    End Sub
+
+    Private Sub dgv_CellContentClick(sender As System.Object, e As System.Windows.Forms.DataGridViewCellEventArgs) Handles dgv.CellContentClick
+
+    End Sub
+End Class

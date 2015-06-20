@@ -189,29 +189,6 @@ Public Class frmMining
     End Sub
 
 
-    Private Sub PopulateHeadings(vHeading() As String, oDGV As DataGridView)
-
-        For x = 0 To UBound(vHeading)
-            Dim dc As New System.Windows.Forms.DataGridViewColumn
-            dc.Name = vHeading(x)
-            Dim dgvct As New System.Windows.Forms.DataGridViewTextBoxCell
-            dgvct.Style.BackColor = Drawing.Color.Black
-            dgvct.Style.ForeColor = Drawing.Color.Lime
-            dc.CellTemplate = dgvct
-            oDGV.Columns.Add(dc)
-        Next x
-        Dim dgcc As New DataGridViewCellStyle
-        dgcc.ForeColor = System.Drawing.Color.SandyBrown
-        oDGV.ColumnHeadersDefaultCellStyle = dgcc
-        For x = 0 To UBound(vHeading)
-            oDGV.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.None
-        Next
-        For x = 0 To UBound(vHeading)
-            oDGV.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells
-        Next
-
-    End Sub
-
     Public Sub PopulateNeuralData()
 
         Dim sReport As String = ""

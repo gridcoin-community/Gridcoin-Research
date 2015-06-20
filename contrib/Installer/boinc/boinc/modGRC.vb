@@ -8,6 +8,7 @@ Imports System.Text
 Imports System.Security.Cryptography
 Imports ICSharpCode.SharpZipLib.Zip
 Imports ICSharpCode.SharpZipLib.Core
+Imports System.Windows.Forms
 
 Module modGRC
 
@@ -17,6 +18,7 @@ Module modGRC
         Dim OutputError As String
     End Structure
 
+    Public msGenericDictionary As New Dictionary(Of String, String)
 
     Public mclsUtilization As Utilization
     Public mfrmMining As frmMining
@@ -38,6 +40,29 @@ Module modGRC
         Public Shared intensity As String = "13"
         Public Shared lookup_gap As String = "2"
     End Structure
+
+    Public Sub PopulateHeadings(vHeading() As String, oDGV As DataGridView)
+
+        For x = 0 To UBound(vHeading)
+            Dim dc As New System.Windows.Forms.DataGridViewColumn
+            dc.Name = vHeading(x)
+            Dim dgvct As New System.Windows.Forms.DataGridViewTextBoxCell
+            dgvct.Style.BackColor = Drawing.Color.Black
+            dgvct.Style.ForeColor = Drawing.Color.Lime
+            dc.CellTemplate = dgvct
+            oDGV.Columns.Add(dc)
+        Next x
+        Dim dgcc As New DataGridViewCellStyle
+        dgcc.ForeColor = System.Drawing.Color.SandyBrown
+        oDGV.ColumnHeadersDefaultCellStyle = dgcc
+        For x = 0 To UBound(vHeading)
+            oDGV.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.None
+        Next
+        For x = 0 To UBound(vHeading)
+            oDGV.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells
+        Next
+
+    End Sub
 
     Private Function TruncateHash(ByVal key As String, ByVal length As Integer) As Byte()
         Dim sha1 As New SHA1CryptoServiceProvider
@@ -219,11 +244,11 @@ Module modGRC
         Dim myWebClient As New MyWebClient()
         Try
 
-        Dim sFullURL As String = sProjectURL + "team_lookup.php?team_name=gridcoin&format=xml"
-        Dim sHTTP As String = myWebClient.DownloadString(sFullURL)
+            Dim sFullURL As String = sProjectURL + "team_lookup.php?team_name=gridcoin&format=xml"
+            Dim sHTTP As String = myWebClient.DownloadString(sFullURL)
 
-        Dim sTeamID As String
-        sTeamID = ExtractXML(sHTTP, "<id>", "</id>")
+            Dim sTeamID As String
+            sTeamID = ExtractXML(sHTTP, "<id>", "</id>")
             Return sTeamID
         Catch ex As Exception
             Return ""

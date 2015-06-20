@@ -12,10 +12,11 @@ Public Class Utilization
     Private msSentence As String = ""
     Private mlSpeakMagnitude As Double
 
-   
+
     Public ReadOnly Property Version As Double
         Get
-            Return 369
+            Return 370
+
 
         End Get
     End Property
@@ -46,7 +47,6 @@ Public Class Utilization
     End Function
     Public Function BoincMagnitude(value As String) As String
         _boincmagnitude = Val(value)
-        Log("bm " + Trim(value))
     End Function
     Public Function cAES512Encrypt(sData As String) As String
         Return AES512EncryptData(sData)
@@ -136,8 +136,7 @@ Public Class Utilization
         Call RestartWallet1("reboot")
     End Sub
     Public Sub DownloadBlocks()
-        Log("Downloading blocks")
-
+       
         Call RestartWallet1("downloadblocks")
     End Sub
     Public Sub ReindexWalletTestNet()
@@ -208,9 +207,12 @@ Public Class Utilization
     End Function
     Public Function ShowProjects()
     End Function
+    Public Function ShowVotingConsole()
+        Dim fmVoting As New frmVoting
+        fmVoting.Show()
+    End Function
 
     Public Function ShowNewUserWizard()
-        Log("Showing NUW")
         Dim fNUW As New frmNewUserWizard
         fNUW.Show()
     End Function
@@ -293,11 +295,9 @@ Public Class Utilization
     End Sub
     Public Sub SpeakSentence(sSentence As String)
         msSentence = sSentence
-        '  Log("Speaking..." + Trim(Now))
         Dim t As New Threading.Thread(AddressOf SpeakOnBackgroundThread)
         t.Start()
-        '  Log("Thread started..." + Trim(Now))
-
+    
     End Sub
     Public Sub SpeakOnBackgroundThread()
         Dim S As New SpeechSynthesis
@@ -364,6 +364,24 @@ Public Class Utilization
             Log("SetSessionInfo " + ex.Message)
 
         End Try
+    End Function
+    Public Function SetGenericVotingData(sValue As String)
+        Return SetGenericData("POLLS", sValue)
+    End Function
+    Public Function SetGenericData(sKey As String, sValue As String)
+        Try
+
+            If msGenericDictionary.ContainsKey(sKey) Then
+             
+                msGenericDictionary(sKey) = sValue
+            Else
+                msGenericDictionary.Add(sKey, sValue)
+            End If
+        Return 1
+        Catch ex As Exception
+            Return 0
+        End Try
+
     End Function
     Public Function SetTestNetFlag(sData As String) As Double
         Try

@@ -34,6 +34,15 @@ extern std::string MyBeaconExists(std::string cpid);
 extern std::string AdvertiseBeacon();
 std::string GetNeuralNetworkReport();
 Array GetJSONNeuralNetworkReport();
+extern bool PollExists(std::string pollname);
+extern bool PollExpired(std::string pollname);
+
+extern bool PollAcceptableAnswer(std::string pollname, std::string answer);
+extern std::string PollAnswers(std::string pollname);
+
+
+
+extern Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export);
 
 extern Array GetJSONBeaconReport();
 
@@ -48,6 +57,7 @@ extern void QueryWorldCommunityGridRAC();
 std::string qtGetNeuralHash(std::string data);
 
 extern bool TallyMagnitudesInSuperblock();
+double GetTotalBalance();
 
 
 bool Contains(std::string data, std::string instring);
@@ -930,7 +940,7 @@ std::string ExtractValue(std::string data, std::string delimiter, int pos)
 {
 	std::vector<std::string> vKeys = split(data.c_str(),delimiter);
 	std::string keyvalue = "";
-	if (vKeys.size() >= pos)
+	if (vKeys.size() >= (unsigned int)pos)
 	{
 		keyvalue = vKeys[pos];
 	}
@@ -1240,6 +1250,13 @@ std::string GetListOf(std::string datatype)
 }
 
 
+std::string AddContract(std::string sType, std::string sName, std::string sContract)
+{
+			std::string sPass = (sType=="project" || sType=="projectmapping" || sType=="smart_contract") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
+			std::string result = AddMessage(true,sType,sName,sContract,sPass,AmountFromValue(1));
+			return result;
+}
+
 std::string AdvertiseBeacon()
 {
 			
@@ -1262,10 +1279,8 @@ std::string AdvertiseBeacon()
 			std::string sBase = EncodeBase64(contract);
 			std::string sAction = "add";
 			std::string sType = "beacon";
-			std::string sPass = "";
-			sPass = (sType=="project" || sType=="projectmapping" || sType=="smart_contract") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
 			std::string sName = GlobalCPUMiningCPID.cpid;
-			std::string result = AddMessage(true,sType,sName,sBase,sPass,AmountFromValue(1));
+			std::string result = AddContract(sType,sName,sBase);
 			return result;
 }
 
@@ -1369,6 +1384,181 @@ Value execute(const Array& params, bool fHelp)
 		entry.push_back(Pair("Superblock Block Number",mvApplicationCache["superblock;block_number"]));
 		results.push_back(entry);
 
+	}
+	else if (sItem == "vote")
+	{
+		if (params.size() != 3)
+		{
+			entry.push_back(Pair("Error","You must specify the Poll Title, and the Vote Value.  For example: execute vote gender male."));
+			results.push_back(entry);
+		}
+		else
+		{
+				std::string Title = params[1].get_str();
+				std::string Answer = params[2].get_str();
+				if (Title=="" || Answer == "" ) 
+				{
+							entry.push_back(Pair("Error","You must specify both the answer and the title."));
+							results.push_back(entry);
+	
+				}
+				else
+				{
+					//Verify the Existence of the poll, the acceptability of the answer, and the expiration of the poll: (EXIST, EXPIRED, ACCEPTABLE)
+					//If polltype == 1, use magnitude, if 2 use Balance, if 3 use hybrid:
+					//6-20-2015
+					double nBalance = GetTotalBalance();
+					uint256 hashRand = GetRandHash();
+					std::string email = GetArgument("email", "NA");
+					boost::to_lower(email);
+					GlobalCPUMiningCPID.email=email;
+					GlobalCPUMiningCPID.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, hashRand);
+					GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
+
+					if (!PollExists(Title))
+					{
+							entry.push_back(Pair("Error","Poll does not exist."));
+							results.push_back(entry);
+	
+					}
+					else
+					{
+						if (PollExpired(Title))
+						{
+							entry.push_back(Pair("Error","Sorry, Poll is already expired."));
+							results.push_back(entry);
+						}
+						else
+						{
+							if (!PollAcceptableAnswer(Title,Answer))
+							{
+								std::string acceptable_answers = PollAnswers(Title);
+								entry.push_back(Pair("Error","Sorry, Answer " + Answer + " is not one of the acceptable answers, allowable answers are: " + acceptable_answers + "."));
+								results.push_back(entry);
+							}
+							else
+							{
+								std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID);
+								std::string GRCAddress = DefaultWalletAddress();
+								StructCPID structMag = GetStructCPID();
+								structMag = mvMagnitudes[GlobalCPUMiningCPID.cpid];
+								double dmag = structMag.ConsensusMagnitude;
+								std::string voter = "<CPIDV2>"+GlobalCPUMiningCPID.cpidv2 + "</CPIDV2><CPID>" 
+									+ GlobalCPUMiningCPID.cpid + "</CPID><GRCADDRESS>" + GRCAddress + "</GRCADDRESS><RND>" 
+									+ hashRand.GetHex() + "</RND><BALANCE>" + RoundToString(nBalance,2) + "</BALANCE><MAGNITUDE>" + RoundToString(dmag,0) + "</MAGNITUDE>";
+								std::string pk = Title+";"+GRCAddress+";"+GlobalCPUMiningCPID.cpid;
+								std::string contract = "<TITLE>" + Title + "</TITLE><ANSWER>" + Answer + "</ANSWER>" + voter;
+								std::string result = AddContract("vote",pk,contract);
+								entry.push_back(Pair("Success","Your vote has been cast for topic " + Title + ": With an Answer of " + Answer + ": " + result.c_str()));
+								results.push_back(entry);
+							}
+						}
+					}
+
+				}
+		}
+
+	}
+	else if (sItem == "addpoll")
+	{
+		if (params.size() != 6)
+		{
+			entry.push_back(Pair("Error","You must specify the Poll Title, Expiration In DAYS from Now, Question, Answers delimited by a semicolon, ShareType (1=Magnitude,2=Balance,3=Both).  Oh and please use underscores in place of spaces inside a sentence.  "));
+			results.push_back(entry);
+		}
+		else
+		{
+				std::string Title = params[1].get_str();
+				std::string Days = params[2].get_str();
+				double days = cdbl(Days,0);
+				std::string Question = params[3].get_str();
+				std::string Answers = params[4].get_str();
+				std::string ShareType = params[5].get_str();
+				double sharetype = cdbl(ShareType,0);
+				if (Title=="" || Question == "" || Answers == "") 
+				{
+						entry.push_back(Pair("Error","You must specify a Poll Title, Poll Question and Poll Answers."));
+						results.push_back(entry);
+				}
+				else
+				{
+					double nBalance = GetTotalBalance();
+				
+					if (nBalance < 10000)
+					{
+						entry.push_back(Pair("Error","You must have a balance > 10,000 GRC to create a poll."));
+						results.push_back(entry);
+					}
+					else
+					{
+						if (days < 0 || days == 0)
+						{
+							entry.push_back(Pair("Error","You must specify a positive value for days for the expiration date."));
+							results.push_back(entry);
+			
+						}
+						else
+						{
+							if (sharetype != 1 && sharetype != 2 && sharetype != 3)
+							{
+								entry.push_back(Pair("Error","You must specify a value of 1, 2, or 3 for the sharetype."));
+								results.push_back(entry);
+
+							}
+							else
+							{
+								std::string expiration = RoundToString(GetAdjustedTime() + (days*86400),0);
+								std::string contract = "<TITLE>" + Title + "</TITLE><DAYS>" + RoundToString(days,0) + "</DAYS><QUESTION>" + Question + "</QUESTION><ANSWERS>" + Answers + "</ANSWERS><SHARETYPE>" + RoundToString(sharetype,0) + "</SHARETYPE><EXPIRATION>" + expiration + "</EXPIRATION>";
+								std::string result = AddContract("poll",Title,contract);
+								entry.push_back(Pair("Success","Your poll has been added: " + result));
+								results.push_back(entry);
+							}
+
+						}
+				}
+			}
+		}
+
+	}
+	else if (sItem == "listpolls")
+	{
+			std::string out1 = "";
+			Array myPolls = GetJSONPollsReport(false,"",out1);
+			results.push_back(myPolls);
+
+	}
+	else if (sItem=="listpolldetails")
+	{
+		    std::string out1 = "";
+			Array myPolls = GetJSONPollsReport(true,"",out1);
+			results.push_back(myPolls);
+
+	}
+	else if (sItem=="listpollresults")
+	{
+		if (params.size() != 2)
+		{
+			entry.push_back(Pair("Error","You must specify the Poll Title."));
+			results.push_back(entry);
+		}
+		else
+		{
+			std::string Title1 = params[1].get_str();
+				
+			if (!PollExists(Title1))
+			{
+				entry.push_back(Pair("Error","Poll does not exist.  Please execute listpolls."));
+				results.push_back(entry);
+
+			}
+			else
+			{
+				std::string Title = params[1].get_str();
+				std::string out1 = "";
+				Array myPolls = GetJSONPollsReport(true,Title,out1);
+				results.push_back(myPolls);
+			}
+		}
 	}
 	else if (sItem == "rac")
 	{
@@ -2089,7 +2279,7 @@ Array ContractReportCSV()
 									+ RoundToString(mvApplicationCacheTimestamp[(*ii).first]+86400,0) + ", , \n";
 								header += row;
 								rows++;
-								for (int i = 0; i < vContractValues.size(); i++)
+								for (unsigned int i = 0; i < vContractValues.size(); i++)
 								{
 									std::vector<std::string> vContractSubValues = split(vContractValues[i].c_str(),",");
 									if (vContractSubValues.size() > 1)
@@ -2121,6 +2311,217 @@ Array ContractReportCSV()
 }
 
 
+std::string GetPollContractByTitle(std::string objecttype, std::string title)
+{
+		for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+		{
+				std::string key_name  = (*ii).first;
+			   	if (key_name.length() > objecttype.length())
+				{
+					if (key_name.substr(0,objecttype.length())==objecttype)
+					{
+								std::string contract = mvApplicationCache[(*ii).first];
+								std::string PollTitle = ExtractXML(contract,"<TITLE>","</TITLE>");
+								boost::to_lower(PollTitle);
+								boost::to_lower(title);
+								if (PollTitle==title)
+								{
+									return contract;
+								}
+					}
+				}
+		}
+		return "";
+}
+
+bool PollExists(std::string pollname)
+{
+	std::string contract = GetPollContractByTitle("poll",pollname);
+	return contract.length() > 10 ? true : false;
+}
+
+bool PollExpired(std::string pollname)
+{
+	std::string contract = GetPollContractByTitle("poll",pollname);
+	double expiration = cdbl(ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>"),0);
+	return (expiration < (double)GetAdjustedTime()) ? true : false;
+}
+
+double PollCalculateShares(std::string contract, double sharetype)
+{
+
+	std::string address = ExtractXML(contract,"<GRCADDRESS>","</GRCADDRESS>");
+	std::string cpid = ExtractXML(contract,"<CPID>","</CPID>");
+	double magnitude = cdbl(ExtractXML(contract,"<MAGNITUDE>","</MAGNITUDE>"),0);
+	double balance = cdbl(ExtractXML(contract,"<BALANCE>","</BALANCE>"),0);
+	if (sharetype==1) return magnitude;
+	if (sharetype==2) return balance;
+	if (sharetype==3) return magnitude+balance;
+	return 0;
+}
+
+							
+
+double VotesCount(std::string pollname, std::string answer, double sharetype, double& out_participants)
+{
+	double total_shares = 0;
+	out_participants = 0;
+	std::string objecttype="vote";
+	for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+	{
+				std::string key_name  = (*ii).first;
+			   	if (key_name.length() > objecttype.length())
+				{
+					if (key_name.substr(0,objecttype.length())==objecttype)
+					{
+								std::string contract = mvApplicationCache[(*ii).first];
+								std::string Title = ExtractXML(contract,"<TITLE>","</TITLE>");
+								std::string VoterAnswer = ExtractXML(contract,"<ANSWER>","</ANSWER>");
+								boost::to_lower(Title);
+								boost::to_lower(pollname);
+								boost::to_lower(VoterAnswer);
+								boost::to_lower(answer);
+
+								if (pollname == Title && answer == VoterAnswer)
+								{
+									double shares = PollCalculateShares(contract,sharetype);
+									total_shares += shares;
+									out_participants++;
+								}
+					}
+				}
+	}
+	return total_shares;
+}
+
+bool PollAcceptableAnswer(std::string pollname, std::string answer)
+{
+	std::string contract = GetPollContractByTitle("poll",pollname);
+	std::string answers = ExtractXML(contract,"<ANSWERS>","</ANSWERS>");
+	std::vector<std::string> vAnswers = split(answers.c_str(),";");
+	for (unsigned int i = 0; i < vAnswers.size(); i++)
+    {
+									boost::to_lower(vAnswers[i]);
+									boost::to_lower(answer);
+									if (answer == vAnswers[i]) return true;
+	}
+	return false;
+}
+
+std::string PollAnswers(std::string pollname)
+{
+	std::string contract = GetPollContractByTitle("poll",pollname);
+	std::string answers = ExtractXML(contract,"<ANSWERS>","</ANSWERS>");
+	return answers;
+
+}
+
+
+std::string GetShareType(double dShareType)
+{
+	if (dShareType == 1) return "Magnitude";
+	if (dShareType == 2) return "Balance";
+	if (dShareType == 3) return "Both";
+	return "?";
+}
+
+Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export)
+{
+    	//Title,ExpirationDate, Question, Answers, ShareType(1=Magnitude,2=Balance,3=Both)
+        Array results;
+	    Object entry;
+  	    entry.push_back(Pair("Polls","Polls Report " + QueryByTitle));
+        std::string datatype="poll";
+	  	std::string rows = "";
+		std::string row = "";
+		double iPollNumber = 0;
+		double total_participants = 0;
+		double total_shares = 0;
+		boost::to_lower(QueryByTitle);
+		std::string sExport = "";
+		std::string sExportRow = "";
+		out_export="";
+  		for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+		{
+				std::string key_name  = (*ii).first;
+			   	if (key_name.length() > datatype.length())
+				{
+					if (key_name.substr(0,datatype.length())==datatype)
+					{
+								std::string contract = mvApplicationCache[(*ii).first];
+								std::string Title = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
+								std::string Expiration = ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>");
+								std::string Question = ExtractXML(contract,"<QUESTION>","</QUESTION>");
+								std::string Answers = ExtractXML(contract,"<ANSWERS>","</ANSWERS>");
+								std::string ShareType = ExtractXML(contract,"<SHARETYPE>","</SHARETYPE>");
+								boost::to_lower(Title);
+								if (!PollExpired(Title))
+								{
+									if (QueryByTitle=="" || QueryByTitle == Title)
+									{
+										iPollNumber++;
+										total_participants = 0;
+										total_shares=0;
+										std::string BestAnswer  = "";
+										double highest_share = 0;
+										std::string ExpirationDate = TimestampToHRDate(cdbl(Expiration,0));
+										std::string sShareType = GetShareType(cdbl(ShareType,0));
+										std::string TitleNarr = "Poll #" + RoundToString((double)iPollNumber,0) 
+											+ " (" + ExpirationDate + " ) - " + sShareType;
+										
+										entry.push_back(Pair(TitleNarr,Title));
+										sExportRow = "<POLL><TITLE>" + Title + "</TITLE><EXPIRATION>" + ExpirationDate + "</EXPIRATION><SHARETYPE>" + sShareType + "</SHARETYPE><QUESTION>" + Question + "</QUESTION><ANSWERS>"+Answers+"</ANSWERS>";
+
+										if (bDetail)
+										{
+									
+											entry.push_back(Pair("Question",Question));
+											std::vector<std::string> vAnswers = split(Answers.c_str(),";");
+									         sExportRow += "<ARRAYANSWERS>";
+											for (unsigned int i = 0; i < vAnswers.size(); i++)
+											{
+												double participants=0;
+												double dShares = VotesCount(Title,vAnswers[i],cdbl(ShareType,0),participants);
+												if (dShares > highest_share) 
+												{
+														highest_share = dShares;
+														BestAnswer = vAnswers[i];
+												}
+
+												entry.push_back(Pair("#" + RoundToString((double)i+1,0) + " [" + RoundToString(participants,0) + "]. " 
+													+ vAnswers[i],dShares));
+												total_participants += participants;
+												total_shares += dShares;
+												sExportRow += "<RESERVED></RESERVED><ANSWERNAME>" + vAnswers[i] + "</ANSWERNAME><PARTICIPANTS>" + RoundToString(participants,0) + "</PARTICIPANTS><SHARES>" + RoundToString(dShares,0) + "</SHARES>";
+
+
+											}
+											sExportRow += "</ARRAYANSWERS>";
+											
+											//Totals:
+											entry.push_back(Pair("Participants",total_participants));
+											entry.push_back(Pair("Total Shares",total_shares));
+											entry.push_back(Pair("Best Answer",BestAnswer));
+											sExportRow += "<TOTALPARTICIPANTS>" + RoundToString(total_participants,0)
+												+ "</TOTALPARTICIPANTS><TOTALSHARES>" + RoundToString(total_shares,0)
+												+ "</TOTALSHARES><BESTANSWER>" + BestAnswer + "</BESTANSWER>";
+
+											
+										
+										}
+										sExportRow += "</POLL>";
+										sExport += sExportRow;
+									}
+								}
+					    }
+				}
+	   }
+	
+	  results.push_back(entry);
+	  out_export = sExport;
+	  return results;
+}
+		
 Array GetJSONBeaconReport()
 {
 

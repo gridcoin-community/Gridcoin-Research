@@ -43,6 +43,8 @@ extern std::string strReplace(std::string& str, const std::string& oldStr, const
 std::string AdvertiseBeacon();
 
 
+extern double GetTotalBalance();
+
 
 extern void IncrementNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress,double distance);
 

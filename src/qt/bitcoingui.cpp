@@ -99,13 +99,8 @@ extern double qtExecuteGenericFunction(std::string function,std::string data);
 
 extern std::string qtGetNeuralHash(std::string data);
 extern std::string qtGetNeuralContract(std::string data);
-
-
-
-
+json_spirit::Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export);
 extern int64_t IsNeural();
-
-
 void TallyInBackground();
 
 double cdbl(std::string s, int place);
@@ -473,9 +468,10 @@ void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::strin
 	{
 		int result = 0;
 	 	std::string Confirm = RoundToString(dAmt,4) + "<COL>" + sFrom + "<COL>" + sTo + "<COL>" + txid;
-		printf("Inserting confirm %s",Confirm.c_str());
 		QString qsConfirm = ToQstring(Confirm);
 		result = globalcom->dynamicCall("InsertConfirm(Qstring)",qsConfirm).toInt();
+		printf("Inserting confirm %s %f",Confirm.c_str(),(double)result);
+		
 	}
 	catch(...)
 	{
@@ -495,7 +491,15 @@ double qtExecuteGenericFunction(std::string function, std::string data)
 		QString qsData = ToQstring(data);
 		QString qsFunction = ToQstring(function +"(Qstring)");
 		std::string sFunction = function+"(Qstring)";
-		result = globalcom->dynamicCall(sFunction.c_str(),qsData).toInt();
+		if (data=="")
+		{
+			sFunction = function + "()";
+			globalcom->dynamicCall(sFunction.c_str());
+		}
+		else
+		{
+			result = globalcom->dynamicCall(sFunction.c_str(),qsData).toInt();
+		}
 		printf(".NET returned result code %f\r\n",(double)result);
 		return (double)result;
 	#endif
@@ -510,12 +514,11 @@ void qtSyncWithDPORNodes(std::string data)
 
 	#if defined(WIN32) && defined(QT_GUI)
 		int result = 0;
-		printf("Syncing with DPOR nodes...\r\n");
 		QString qsData = ToQstring(data);
 		std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
 		double function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
 		result = globalcom->dynamicCall("SyncCPIDsWithDPORNodes(Qstring)",qsData).toInt();
-		printf("Done syncing. %f\r\n",function_call);
+		printf("Done syncing. %f %f\r\n",function_call,(double)result);
 	#endif
 }
 
@@ -580,18 +583,11 @@ void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double ma
 {
 
 	#if defined(WIN32) && defined(QT_GUI)
-	try
-	{
 		int result = 0;
 	 	std::string session = defaultgrcaddress + "<COL>" + cpid + "<COL>" + RoundToString(magnitude,1);
-		printf("Setting Session Id %s",session.c_str());
 		QString qsSession = ToQstring(session);
 		result = globalcom->dynamicCall("SetSessionInfo(Qstring)",qsSession).toInt();
-	}
-	catch(...)
-	{
-
-	}
+		printf("rs%f",(double)result);
 	#endif
 }
 
@@ -901,7 +897,12 @@ void BitcoinGUI::createActions()
 	newUserWizardAction = new QAction(QIcon(":/icons/bitcoin"), tr("&New User Wizard"), this);
 	newUserWizardAction->setStatusTip(tr("New User Wizard"));
 	newUserWizardAction->setMenuRole(QAction::TextHeuristicRole);
+	
 
+	votingAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Voting"), this);
+	votingAction->setStatusTip(tr("Voting"));
+	votingAction->setMenuRole(QAction::TextHeuristicRole);
+	
 
 	galazaAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Galaza (Game)"), this);
 	galazaAction->setStatusTip(tr("Galaza"));
@@ -950,6 +951,7 @@ void BitcoinGUI::createActions()
 	connect(sqlAction, SIGNAL(triggered()), this, SLOT(sqlClicked()));
 
 	connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
+	connect(votingAction, SIGNAL(triggered()), this, SLOT(votingClicked()));
 
 	connect(tickerAction, SIGNAL(triggered()), this, SLOT(tickerClicked()));
 	connect(ticketListAction, SIGNAL(triggered()), this, SLOT(ticketListClicked()));
@@ -1015,6 +1017,8 @@ void BitcoinGUI::createMenuBar()
 	qmAdvanced->addSeparator();
 	qmAdvanced->addAction(sqlAction);
 	qmAdvanced->addAction(miningAction);
+	qmAdvanced->addAction(votingAction);
+
 	qmAdvanced->addAction(tickerAction);
 	qmAdvanced->addAction(ticketListAction);
 	qmAdvanced->addAction(newUserWizardAction);
@@ -1714,22 +1718,27 @@ int ReindexBlocks()
 
 }
 
+void BitcoinGUI::votingClicked()
+{
 
+	#ifdef WIN32
+		//
+		std::string sVotingPayload = "";
+		GetJSONPollsReport(true,"",sVotingPayload);
+		printf("votingpayload %s",sVotingPayload.c_str());
+		double function_call = qtExecuteGenericFunction("SetGenericVotingData",sVotingPayload);
+		function_call = qtExecuteGenericFunction("ShowVotingConsole","");
+	#endif
+
+}
 
 
 void BitcoinGUI::miningClicked()
 {
 
 #ifdef WIN32
-
-	if (globalcom==NULL) {
-		globalcom = new QAxObject("BoincStake.Utilization");
-	}
-
 	std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
 	double function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-	printf("ExecGenericFunctionResponse %f\r\n",(double)function_call);
-
 	globalcom->dynamicCall("ShowMiningConsole()");
 #endif
 }
@@ -2075,12 +2084,9 @@ void ReinstantiateGlobalcom()
 						{
 									bAddressUser = true;
 									#if defined(WIN32) && defined(QT_GUI)
-									int result = 0;
-									result = AddressUser();
+										AddressUser();
 									#endif
 						}
-
-
 
 
 			bGlobalcomInitialized = true;
