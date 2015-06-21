@@ -688,7 +688,7 @@ std::string ExtractDomainFromURL(std::string url, int partid)
 		domain = vElements[0];
 		//Join the remaining elements to obtain the actual URL
 		
-		for (int i = 1; i < vElements.size(); i++)
+		for (unsigned int i = 1; i < vElements.size(); i++)
 		{
 			out_url += vElements[i] + "/";
 		}

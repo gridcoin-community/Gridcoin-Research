@@ -7,7 +7,6 @@
 
 std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, double& out_rac);
 std::string RoundToString(double d, int place);
-double DoubleFromAmount(int64_t amount);
 
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 
