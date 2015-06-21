@@ -4964,7 +4964,7 @@ void AddNetworkMagnitude(double height,CTransaction& wtxCryptoLottery, double Lo
 							structCryptoLottery.payments += Amount;
 							structCryptoLottery.GRCAddress = Recipient;
 							structCryptoLottery.LastBlock = height;
-							printf("Adding Paid Payment for CPID %s, GRC address %s, for Amount %f \r\n",CLcpid.c_str(),Recipient.c_str(),Amount);
+							//printf("Adding Paid Payment for CPID %s, GRC address %s, for Amount %f \r\n",CLcpid.c_str(),Recipient.c_str(),Amount);
 
 		    				if (LockTime > structCryptoLottery.LastPaymentTime && Amount > 0) structCryptoLottery.LastPaymentTime = LockTime;
 							if (LockTime < structCryptoLottery.EarliestPaymentTime)           structCryptoLottery.EarliestPaymentTime = LockTime;
@@ -7133,7 +7133,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 					sProj = ToOfficialName(sProj);
 					//1-11-2015 Rob Halford - List of Exceptions to Map Netsoft Name -> Boinc Client Name
 
-					//6-21-2014 (R Halford) : In this convoluted situation, we found MindModeling@beta in the Boinc client, and MindModeling@Home in the CreditCheckOnline XML;
+					//Halford: In this convoluted situation, we found MindModeling@beta in the Boinc client, and MindModeling@Home in the CreditCheckOnline XML;
 					if (sProj == "mindmodeling@home") sProj = "mindmodeling@beta";
 					if (sProj == "Quake Catcher Network") sProj = "Quake-Catcher Network";
 					

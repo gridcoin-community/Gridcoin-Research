@@ -94,6 +94,12 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="clsMailFunctions.vb" />
+    <Compile Include="frmPlaceVote.Designer.vb">
+      <DependentUpon>frmPlaceVote.vb</DependentUpon>
+    </Compile>
+    <Compile Include="frmPlaceVote.vb">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="frmChartVotes.Designer.vb">
       <DependentUpon>frmChartVotes.vb</DependentUpon>
     </Compile>
@@ -212,6 +218,9 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="frmPlaceVote.resx">
+      <DependentUpon>frmPlaceVote.vb</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="frmChartVotes.resx">
       <DependentUpon>frmChartVotes.vb</DependentUpon>
     </EmbeddedResource>

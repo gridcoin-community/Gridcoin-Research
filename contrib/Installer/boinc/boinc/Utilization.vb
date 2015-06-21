@@ -15,8 +15,7 @@ Public Class Utilization
 
     Public ReadOnly Property Version As Double
         Get
-            Return 371
-
+            Return 373
 
         End Get
     End Property
@@ -27,12 +26,20 @@ Public Class Utilization
             ' Return Val(clsGVM.BoincUtilization)
         End Get
     End Property
+    Public Function GetDotNetMessages(sDataType As String) As String
+        Dim sReply As String = msRPCCommand
+        msRPCCommand = ""
+        Return sReply
+    End Function
+    Public Function SetRPCResponse(sResponse) As Double
+        SetRPCReply(sResponse)
+
+        Return 1
+    End Function
     Public Function FromBase64String(sData As String) As String
-       
         Dim ba() As Byte = Convert.FromBase64String(sData)
         Dim sOut As String = ByteToString(ba)
         Return sOut
-
     End Function
     Public Function ByteToString(b() As Byte)
         Dim sReq As String
@@ -69,6 +76,14 @@ Public Class Utilization
 
         End If
     End Sub
+    Public Sub TestnetSetGenericRPCValue(sData As String)
+        SetRPCReply(sData)
+    End Sub
+    Public Function TestnetGetGenericRPCValue() As String
+        Return GetRPCReply("RPC")
+
+
+    End Function
     Public ReadOnly Property ClientNeedsUpgrade As Double
         Get
             Dim bNeedsUp As Boolean = NeedsUpgrade()
@@ -136,7 +151,6 @@ Public Class Utilization
         Call RestartWallet1("reboot")
     End Sub
     Public Sub DownloadBlocks()
-       
         Call RestartWallet1("downloadblocks")
     End Sub
     Public Sub ReindexWalletTestNet()
@@ -224,8 +238,6 @@ Public Class Utilization
             Log("Error while transitioning to frmSQL" + ex.Message)
         End Try
     End Function
-
-    
     Public Function ShowTicketAdd()
         Try
             mfrmTicketAdd = New frmTicketAdd
@@ -259,7 +271,6 @@ Public Class Utilization
 
     Public Function ShowMiningConsole()
         Try
-
             lfrmMiningCounter = lfrmMiningCounter + 1
             
             If mfrmMining Is Nothing Then
@@ -365,19 +376,19 @@ Public Class Utilization
 
         End Try
     End Function
-    Public Function SetGenericVotingData(sValue As String)
+    Public Function SetGenericVotingData(sValue As String) As Double
         Return SetGenericData("POLLS", sValue)
     End Function
-    Public Function SetGenericData(sKey As String, sValue As String)
+    Public Function SetGenericData(sKey As String, sValue As String) As Double
         Try
 
             If msGenericDictionary.ContainsKey(sKey) Then
-             
+
                 msGenericDictionary(sKey) = sValue
             Else
                 msGenericDictionary.Add(sKey, sValue)
             End If
-        Return 1
+            Return 1
         Catch ex As Exception
             Return 0
         End Try

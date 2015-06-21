@@ -19,6 +19,10 @@ Public Class frmVoting
         Dim sHeading As String = "#;Title;Expiration;Share Type;Question;Answers;Total Participants;Total Shares;Best Answer"
         dgv.Rows.Clear()
         dgv.Columns.Clear()
+        dgv.SelectionMode = DataGridViewSelectionMode.FullRowSelect
+        dgv.EditingPanel.Visible = False
+        dgv.AllowUserToAddRows = False
+        dgv.ReadOnly = True
 
         Dim vHeading() As String = Split(sHeading, ";")
 
@@ -120,7 +124,10 @@ Public Class frmVoting
             End If
 
         ElseIf tsmi.Text = "Vote" Then
-            MsgBox("Being Implemented, please vote from the command line.  See http://finance.gridcoin.us/images/gridcoin%20decentralized%20voting%20system.pdf for more information.", MsgBoxStyle.Information)
+            Dim frmVote As New frmPlaceVote
+            frmVote.Show()
+            frmVote.PlaceVote(sTitle)
+
         End If
 
     End Sub

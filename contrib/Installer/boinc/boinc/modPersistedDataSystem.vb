@@ -443,6 +443,8 @@ Module modPersistedDataSystem
         Return sOut
     End Function
     Public Function DeserializeDate(s As String) As Date
+        If s = "" Then Return CDate("1-1-1900")
+
         Dim vDate() As String
         vDate = Split(s, "/")
         Dim dtOut As Date
@@ -463,13 +465,14 @@ Module modPersistedDataSystem
 
         r.PrimaryKey = vData(3)
 
-        r.DataColumn1 = vData(4)
-        r.DataColumn2 = vData(5)
-        r.DataColumn3 = vData(6)
-        r.DataColumn4 = vData(7)
-        r.DataColumn5 = vData(8)
-        r.Magnitude = vData(9)
-        r.RAC = vData(10)
+
+        If UBound(vData) >= 4 Then r.DataColumn1 = "" & vData(4)
+        If UBound(vData) >= 5 Then r.DataColumn2 = "" & vData(5)
+        If UBound(vData) >= 6 Then r.DataColumn3 = "" & vData(6)
+        If UBound(vData) >= 7 Then r.DataColumn4 = "" & vData(7)
+        If UBound(vData) >= 8 Then r.DataColumn5 = "" & vData(8)
+        If UBound(vData) >= 9 Then r.Magnitude = "" & vData(9)
+        If UBound(vData) >= 10 Then r.RAC = "" & vData(10)
 
         Return r
 
@@ -592,16 +595,21 @@ Module modPersistedDataSystem
         Return True
 
     End Function
+    Public Function SerStr(sData As String) As String
+        sData = "" & sData
+        Return sData
+    End Function
     Public Function SerializeRow(dataRow As Row) As String
         Dim d As String = "<COL>"
        
         Dim sSerialized As String = SerializeDate(dataRow.Added) + d + SerializeDate(dataRow.Expiration) _
-            + d + SerializeDate(dataRow.Synced) + d + LCase(dataRow.PrimaryKey) + d + dataRow.DataColumn1 + d + dataRow.DataColumn2 _
-            + d + dataRow.DataColumn3 + d + dataRow.DataColumn4 + d + dataRow.DataColumn5 + d + dataRow.Magnitude + d + dataRow.RAC
+            + d + SerializeDate(dataRow.Synced) + d + LCase(dataRow.PrimaryKey) + d _
+            + SerStr(dataRow.DataColumn1) + d + SerStr(dataRow.DataColumn2) _
+            + d + SerStr(dataRow.DataColumn3) + d + SerStr(dataRow.DataColumn4) + d + SerStr(dataRow.DataColumn5) _
+            + d + SerStr(dataRow.Magnitude) + d + SerStr(dataRow.RAC)
 
         Return sSerialized
     End Function
-
 
     Public Function GetPath(dataRow As Row) As String
         Dim sFilename As String = LCase(dataRow.Database) + "_" + LCase(dataRow.Table) + ".dat"

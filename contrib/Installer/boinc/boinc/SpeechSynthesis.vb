@@ -31,7 +31,6 @@ Public Class SpeechSynthesis
             Dim sSurname = KeyValue("Surname")
             Dim sDayInterval As String = DayInterval()
             sSentence = "Good " + sDayInterval + " " + sSurname + " " + sName + ", Your Magnitude is " + Trim(Magnitude)
-            Log("Speaking " + Trim(sSentence))
             Speak(sSentence)
             Return True
         Catch ex As Exception

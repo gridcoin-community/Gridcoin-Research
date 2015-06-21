@@ -40,6 +40,8 @@ extern bool PollExpired(std::string pollname);
 extern bool PollAcceptableAnswer(std::string pollname, std::string answer);
 extern std::string PollAnswers(std::string pollname);
 
+extern std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2);
+
 
 
 extern Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export);
@@ -1289,6 +1291,20 @@ std::string AdvertiseBeacon()
 
 
 
+std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2)
+{
+	 Array params;
+	 params.push_back(method);
+	 params.push_back(arg1);
+	 params.push_back(arg2);
+ 	 Value vResult = execute(params,false);
+	 std::string sResult = "";
+	 sResult = write_string(vResult, false) + "\n";
+	 printf("Response %s",sResult.c_str());
+	 return sResult;
+}
+
+
 
 Value execute(const Array& params, bool fHelp)
 {
@@ -1587,6 +1603,15 @@ Value execute(const Array& params, bool fHelp)
 				results.push_back(myPolls);
 			}
 		}
+	}
+	else if (sItem=="netexec")
+	{
+		
+			std::string myresponse = ExecuteRPCCommand("vote","gender_poll","male");
+			entry.push_back(Pair("Response",myresponse.c_str()));
+			results.push_back(entry);
+	
+
 	}
 	else if (sItem == "rac")
 	{
