@@ -40,6 +40,8 @@ bool IsSmartContractForDPOR(const CWalletTx &wtx)
     
    }
    return false;
+   //if (IsSmartContractForDPOR(wtx)) return false;
+
 }
 
 
@@ -49,7 +51,7 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx)
 	
 	std::string ShowOrphans = GetArg("-showorphans", "false");
 	if (ShowOrphans=="false" && !wtx.IsInMainChain()) return false;
-	if (IsSmartContractForDPOR(wtx)) return false;
+
 	//R Halford - Discard Orphans after Y mins:
 	if (wtx.IsCoinStake())
 	{

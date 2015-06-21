@@ -1408,7 +1408,7 @@ std::string HeadlessRoundToString(double d, int place)
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments)
 {
 	double neural_id = 0;
-	std::string neural_v = HeadlessRoundToString((double)MINOR_VERSION,0);
+	std::string neural_v = "0";
 
 	#if defined(WIN32) && defined(QT_GUI)
 		neural_id = (double)IsNeural();
