@@ -20,6 +20,7 @@ Module modGRC
 
     Public msGenericDictionary As New Dictionary(Of String, String)
     Public msRPCCommand As String = ""
+    Public msRPCReply As String = ""
     Public mclsUtilization As Utilization
     Public mfrmMining As frmMining
     Public mfrmProjects As frmNewUserWizard
@@ -43,11 +44,13 @@ Module modGRC
     Public Function ExecuteRPCCommand(sCommand As String, sArg1 As String, sArg2 As String)
         Dim sPayload As String = "<COMMAND>" + sCommand + "</COMMAND><ARG1>" + sArg1 + "</ARG1><ARG2>" + sArg2 + "</ARG2>"
         SetRPCReply("")
+        msRPCReply = ""
         msRPCCommand = sPayload
         'Busy Wait
         Dim sReply As String = ""
         For x As Integer = 1 To 60
-            sReply = GetRPCReply("RPC")
+            'sReply = GetRPCReply("RPC")
+            sReply = msRPCReply
             If sReply <> "" Then Exit For
             Threading.Thread.Sleep(250) '1/4 sec sleep
             Application.DoEvents()
@@ -938,6 +941,10 @@ Module modGRC
         Return d.DataColumn1
     End Function
     Public Function SetRPCReply(sData As String) As Double
+
+        msRPCReply = sData
+        Log("Received QT RPC Reply: " + sData)
+
         Dim d As New Row
         d.Table = "RPC"
         d.Database = "RPC"
@@ -945,7 +952,7 @@ Module modGRC
         'd.Added = DateAdd(DateInterval.Day, 1, Now)
         'd.Expiration = DateAdd(DateInterval.Day, 1, Now)
         d.DataColumn1 = sData
-        Store(d)
+        '  Store(d)
         Return 1
     End Function
 

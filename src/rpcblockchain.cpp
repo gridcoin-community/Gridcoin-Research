@@ -32,6 +32,9 @@ extern  std::string GetNetsoftProjects(std::string cpid);
 std::string NeuralRequest(std::string MyNeuralRequest);
 extern std::string MyBeaconExists(std::string cpid);
 extern std::string AdvertiseBeacon();
+
+StructCPID GetInitializedStructCPID(std::string name);
+
 std::string GetNeuralNetworkReport();
 Array GetJSONNeuralNetworkReport();
 extern bool PollExists(std::string pollname);
@@ -42,12 +45,16 @@ extern std::string PollAnswers(std::string pollname);
 
 extern std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2);
 
+bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 
 
 extern Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export);
 
 extern Array GetJsonVoteDetailsReport(std::string pollname);
+extern std::string GetPollXMLElementByPollTitle(std::string pollname, std::string XMLElement1, std::string XMLElement2);
 
+
+extern double PollDuration(std::string pollname);
 
 extern Array GetJSONBeaconReport();
 
@@ -1462,14 +1469,51 @@ Value execute(const Array& params, bool fHelp)
 								StructCPID structMag = GetStructCPID();
 								structMag = mvMagnitudes[GlobalCPUMiningCPID.cpid];
 								double dmag = structMag.ConsensusMagnitude;
-								std::string voter = "<CPIDV2>"+GlobalCPUMiningCPID.cpidv2 + "</CPIDV2><CPID>" 
-									+ GlobalCPUMiningCPID.cpid + "</CPID><GRCADDRESS>" + GRCAddress + "</GRCADDRESS><RND>" 
-									+ hashRand.GetHex() + "</RND><BALANCE>" + RoundToString(nBalance,2) + "</BALANCE><MAGNITUDE>" + RoundToString(dmag,0) + "</MAGNITUDE>";
-								std::string pk = Title+";"+GRCAddress+";"+GlobalCPUMiningCPID.cpid;
-								std::string contract = "<TITLE>" + Title + "</TITLE><ANSWER>" + Answer + "</ANSWER>" + voter;
-								std::string result = AddContract("vote",pk,contract);
-								entry.push_back(Pair("Success","Your vote has been cast for topic " + Title + ": With an Answer of " + Answer + ": " + result.c_str()));
-								results.push_back(entry);
+								double poll_duration = PollDuration(Title)*86400;
+
+								// Prevent Double Voting
+								std::string cpid1 = GlobalCPUMiningCPID.cpid;
+								std::string GRCAddress1 = DefaultWalletAddress();
+				         		GetEarliestStakeTime(GRCAddress1,cpid1);
+								int64_t nGRCTime = mvApplicationCacheTimestamp["nGRCTime"];
+								int64_t nCPIDTime = mvApplicationCacheTimestamp["nCPIDTime"];
+								double cpid_age = GetAdjustedTime() - nCPIDTime;
+								double stake_age = GetAdjustedTime() - nGRCTime;
+
+								// Phase II - Prevent Double Voting
+																								
+								StructCPID structGRC = GetStructCPID();
+								structGRC = mvMagnitudes[GRCAddress];
+								
+								printf("CPIDAge %f,StakeAge %f,Poll Duration %f \r\n",cpid_age,stake_age,poll_duration);
+
+								double dShareType= cdbl(GetPollXMLElementByPollTitle(Title,"<SHARETYPE>","</SHARETYPE>"),0);
+							
+	 	 	                    // Share Type 1 == "Magnitude"
+								// Share Type 2 == "Balance"
+								// Share Type 3 == "Both"
+								if ((dShareType == 1 || dShareType==3) && cpid_age < poll_duration) 
+								{
+									entry.push_back(Pair("Error","Sorry, When voting in a magnitude poll, your CPID must be older than the poll duration."));
+									results.push_back(entry);
+								}
+								else if ( (dShareType==3 || dShareType == 2) && stake_age < poll_duration)
+								{
+									entry.push_back(Pair("Error","Sorry, When voting in a Balance poll, your stake age must be older than the poll duration."));
+									results.push_back(entry);
+								}
+								else
+								{
+									std::string voter = "<CPIDV2>"+GlobalCPUMiningCPID.cpidv2 + "</CPIDV2><CPID>" 
+										+ GlobalCPUMiningCPID.cpid + "</CPID><GRCADDRESS>" + GRCAddress + "</GRCADDRESS><RND>" 
+										+ hashRand.GetHex() + "</RND><BALANCE>" + RoundToString(nBalance,2) 
+										+ "</BALANCE><MAGNITUDE>" + RoundToString(dmag,0) + "</MAGNITUDE>";
+									std::string pk = Title+";"+GRCAddress+";"+GlobalCPUMiningCPID.cpid;
+									std::string contract = "<TITLE>" + Title + "</TITLE><ANSWER>" + Answer + "</ANSWER>" + voter;
+									std::string result = AddContract("vote",pk,contract);
+									entry.push_back(Pair("Success","Your vote has been cast for topic " + Title + ": With an Answer of " + Answer + ": " + result.c_str()));
+									results.push_back(entry);
+								}
 							}
 						}
 					}
@@ -1482,7 +1526,7 @@ Value execute(const Array& params, bool fHelp)
 	{
 		if (params.size() != 6)
 		{
-			entry.push_back(Pair("Error","You must specify the Poll Title, Expiration In DAYS from Now, Question, Answers delimited by a semicolon, ShareType (1=Magnitude,2=Balance,3=Both).  Oh and please use underscores in place of spaces inside a sentence.  "));
+			entry.push_back(Pair("Error","You must specify the Poll Title, Expiration In DAYS from Now, Question, Answers delimited by a semicolon, ShareType (1=Magnitude,2=Balance,3=Both,4=CPIDCount,5=ParticipantCount).  Please use underscores in place of spaces inside a sentence.  "));
 			results.push_back(entry);
 		}
 		else
@@ -1518,9 +1562,9 @@ Value execute(const Array& params, bool fHelp)
 						}
 						else
 						{
-							if (sharetype != 1 && sharetype != 2 && sharetype != 3)
+							if (sharetype != 1 && sharetype != 2 && sharetype != 3 && sharetype !=4 && sharetype !=5)
 							{
-								entry.push_back(Pair("Error","You must specify a value of 1, 2, or 3 for the sharetype."));
+								entry.push_back(Pair("Error","You must specify a value of 1, 2, 3, 4 or 5 for the sharetype."));
 								results.push_back(entry);
 
 							}
@@ -1612,6 +1656,22 @@ Value execute(const Array& params, bool fHelp)
 			results.push_back(entry);
 	
 
+	}
+	else if (sItem=="staketime")
+	{
+
+		//6-22-2015
+
+				std::string cpid = GlobalCPUMiningCPID.cpid;
+				std::string GRCAddress = DefaultWalletAddress();
+				
+     		bool result = GetEarliestStakeTime(GRCAddress,cpid);
+
+
+			entry.push_back(Pair("GRCTime",mvApplicationCacheTimestamp["nGRCTime"]));
+			entry.push_back(Pair("CPIDTime",mvApplicationCacheTimestamp["nCPIDTime"]));
+
+			results.push_back(entry);
 	}
 	else if (sItem == "rac")
 	{
@@ -2203,6 +2263,12 @@ Array MagnitudeReport(bool bMine)
 									entry.push_back(Pair("Magnitude",structMag.ConsensusMagnitude));
 									entry.push_back(Pair("Payment Magnitude",structMag.PaymentMagnitude));
 									entry.push_back(Pair("Payment Timespan (Days)",structMag.PaymentTimespan));
+									
+									StructCPID stGRC = GetInitializedStructCPID(structMag.GRCAddress);
+									//entry.push_back(Pair("Earliest Payment by CPID",structMag.EarliestPaymentTime));
+									//entry.push_back(Pair("Earliest Payment by GRCAddress",stGRC.EarliestPaymentTime));
+									
+
 									entry.push_back(Pair("Magnitude Accuracy",structMag.Accuracy));
 									entry.push_back(Pair("Long Term Owed (14 days)",structMag.totalowed));
 									entry.push_back(Pair("Payments (14 days)",structMag.payments));
@@ -2400,6 +2466,12 @@ bool PollExpired(std::string pollname)
 	return (expiration < (double)GetAdjustedTime()) ? true : false;
 }
 
+double PollDuration(std::string pollname)
+{
+	std::string contract = GetPollContractByTitle("poll",pollname);
+	double days = cdbl(ExtractXML(contract,"<DAYS>","</DAYS>"),0);
+	return days;
+}
 
 double DoubleFromAmount(int64_t amount)
 {
@@ -2436,9 +2508,18 @@ double PollCalculateShares(std::string contract, double sharetype, double MoneyS
 		double UserWeightedMagnitude = MoneySupplyFactor*magnitude;
 		return UserWeightedMagnitude+balance;
 	}
+	if (sharetype==4) 
+	{
+		if (magnitude > 0) return 1;
+		return 0;
+	}
+	if (sharetype==5)
+	{
+		if (address.length() > 5) return 1;
+		return 0;
+	}
 	return 0;
 }
-
 							
 
 double VotesCount(std::string pollname, std::string answer, double sharetype, double& out_participants)
@@ -2513,7 +2594,9 @@ std::string GetShareType(double dShareType)
 {
 	if (dShareType == 1) return "Magnitude";
 	if (dShareType == 2) return "Balance";
-	if (dShareType == 3) return "Both";
+	if (dShareType == 3) return "Magnitude+Balance";
+	if (dShareType == 4) return "CPID Count";
+	if (dShareType == 5) return "Participants";
 	return "?";
 }
 

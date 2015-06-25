@@ -126,6 +126,7 @@ extern int64_t nReserveBalance;
 extern int64_t nMinimumInputValue;
 extern int64_t nLastTallied;
 extern int64_t nCPIDsLoaded;
+extern int64_t nLastGRCtallied;
 
 extern bool fUseFastIndex;
 extern unsigned int nDerivationMethodIndex;

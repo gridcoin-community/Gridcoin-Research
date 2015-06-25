@@ -53,7 +53,7 @@ Partial Class frmPlaceVote
         'btnVote
         '
         Me.btnVote.ForeColor = System.Drawing.Color.Lime
-        Me.btnVote.Location = New System.Drawing.Point(488, 708)
+        Me.btnVote.Location = New System.Drawing.Point(477, 570)
         Me.btnVote.Name = "btnVote"
         Me.btnVote.Size = New System.Drawing.Size(118, 35)
         Me.btnVote.TabIndex = 57
@@ -65,7 +65,7 @@ Partial Class frmPlaceVote
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.BackColor = System.Drawing.Color.Black
-        Me.ClientSize = New System.Drawing.Size(1106, 799)
+        Me.ClientSize = New System.Drawing.Size(1106, 615)
         Me.Controls.Add(Me.btnVote)
         Me.Controls.Add(Me.lblQuestion)
         Me.Controls.Add(Me.lblTitle)

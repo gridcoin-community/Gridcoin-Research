@@ -53,8 +53,7 @@ Module modPersistedDataSystem
         lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
         Dim sOut As String = ""
         For Each cpid As Row In lstCPIDs
-            Dim r As Double = RoundedMag(201.11)
-
+           
             Dim sRow As String = cpid.PrimaryKey + "," + Trim(RoundedMag(Val(cpid.Magnitude))) _
                                  + "," + Trim(Math.Round(Val(cpid.RAC), 2)) + "," + Trim(cpid.Expiration) + "," + Trim(cpid.Synced) + "," + Trim(cpid.DataColumn4) + "," + Trim(cpid.DataColumn5) + ";"
             sOut += sRow
@@ -93,8 +92,8 @@ Module modPersistedDataSystem
     End Function
     Public Function GetDitherMag(Data As Double) As Double
         Dim Dither As Double = 0.1
-        If Data > 0 And Data < 100 Then Dither = 0.2 '5
-        If Data >= 100 And Data <= 1000 Then Dither = 0.1 '10
+        If Data > 0 And Data < 500 Then Dither = 0.2 '5
+        If Data >= 500 And Data <= 1000 Then Dither = 0.1 '10
         If Data >= 1000 And Data <= 10000 Then Dither = 0.025 '40
         If Data >= 10000 And Data <= 50000 Then Dither = 0.006 '160
         If Data >= 50000 And Data <= 100000 Then Dither = 0.003 ' 320

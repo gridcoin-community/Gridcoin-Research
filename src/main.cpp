@@ -42,11 +42,15 @@ extern std::string ReadCache(std::string section, std::string key);
 extern std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
 std::string AdvertiseBeacon();
 
+extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
+
 
 extern double GetTotalBalance();
 
 
 extern void IncrementNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress,double distance);
+
+extern StructCPID GetInitializedStructCPID(std::string name);
 
 
 extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
@@ -109,6 +113,7 @@ unsigned int WHITELISTED_PROJECTS = 0;
 unsigned int CHECKPOINT_VIOLATIONS = 0;
 int64_t nLastTallied = 0;
 int64_t nCPIDsLoaded = 0;
+int64_t nLastGRCtallied = 0;
 extern bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
 
 std::string DefaultOrg();
@@ -3831,7 +3836,7 @@ void GridcoinServices()
 		// Also, lets do this as a TEAM exactly every 30 blocks (~30 minutes) to try to reach an EXACT consensus every half hour:
 		// For effeciency, the network sleeps for 20 hours after a good superblock is accepted
 
-		if (superblock_age > 20*60*60)
+		if (superblock_age > 23*60*60)
 		{
 			#if defined(WIN32) && defined(QT_GUI)
 				std::string errors1 = "";
@@ -3843,6 +3848,8 @@ void GridcoinServices()
 	}
 
 
+	/*
+	Disabling this as of 6-24-2015 - attempting to bring granularity down to 5 in neural network (now we only sync as a team every 30 blocks)
 	if (TimerMain("update_neural_rac",560))
 	{
 			#if defined(WIN32) && defined(QT_GUI)
@@ -3850,7 +3857,7 @@ void GridcoinServices()
 				qtSyncWithDPORNodes(data);
 			#endif
 	}
-
+	*/
 
 	if (TimerMain("send_beacon",60))
 	{
@@ -4882,38 +4889,44 @@ void RemoveNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, do
 
 
 
+StructCPID GetInitializedStructCPID(std::string name)
+{
+	StructCPID cpid = GetStructCPID();
+	cpid = mvMagnitudes[name];
+	if (!cpid.initialized)
+	{
+				cpid.initialized=true;
+				cpid.LowLockTime = 99999999999;
+				cpid.HighLockTime = 0;
+				cpid.LastPaymentTime = 0;
+				cpid.EarliestPaymentTime = 99999999999;
+				mvMagnitudes.insert(map<string,StructCPID>::value_type(name,cpid));
+				mvMagnitudes[name]=cpid;
+
+	}
+	else
+	{
+			return cpid;
+	}
+
+	
+}
 
 
-void AddNetworkMagnitude(double height,CTransaction& wtxCryptoLottery, double LockTime, std::string cpid, MiningCPID bb, double mint, bool IsStake)
+
+void AddNetworkMagnitude(double height,CTransaction& wtxCryptoLottery, double LockTime, std::string cpid, 
+		MiningCPID bb, double mint, bool IsStake)
 {
 
 	    if (!IsLockTimeWithin14days(LockTime)) return;
 
-		StructCPID globalMag = GetStructCPID();
-		globalMag = mvMagnitudes["global"];
-		if (!globalMag.initialized)
-		{
-				globalMag = GetStructCPID();
-				globalMag.initialized=true;
-				globalMag.LowLockTime = 99999999999;
-				globalMag.HighLockTime = 0;
-				mvMagnitudes.insert(map<string,StructCPID>::value_type(cpid,globalMag));
-		}
+		StructCPID globalMag = GetInitializedStructCPID("global");
+		StructCPID structMagnitude = GetInitializedStructCPID(cpid);
 
-		StructCPID structMagnitude = GetStructCPID();
-		structMagnitude = mvMagnitudes[cpid];
-		if (!structMagnitude.initialized)
-		{
-			structMagnitude = GetStructCPID();
-			structMagnitude.initialized=true;
-			structMagnitude.LastPaymentTime = 0;
-			structMagnitude.EarliestPaymentTime = 99999999999;
-			structMagnitude.GRCAddress = bb.GRCAddress;
-			structMagnitude.LastBlock = height;
-			structMagnitude.cpid = cpid;
-			mvMagnitudes.insert(map<string,StructCPID>::value_type(cpid,structMagnitude));
-								
-		}
+		StructCPID structGRC = GetInitializedStructCPID(bb.GRCAddress);
+		structGRC.GRCAddress=bb.GRCAddress;
+		structGRC.LastBlock=height;
+		structGRC.entries++;
 
 		structMagnitude.cpid = cpid;
 		structMagnitude.GRCAddress = bb.GRCAddress;
@@ -4928,12 +4941,16 @@ void AddNetworkMagnitude(double height,CTransaction& wtxCryptoLottery, double Lo
 		structMagnitude.interestPayments=structMagnitude.interestPayments + interest;
 		if (LockTime > structMagnitude.LastPaymentTime && bb.ResearchSubsidy > 0) structMagnitude.LastPaymentTime = LockTime;
 		if (LockTime < structMagnitude.EarliestPaymentTime) structMagnitude.EarliestPaymentTime = LockTime;
+		if (LockTime > structGRC.LastPaymentTime && bb.ResearchSubsidy > 0) structGRC.LastPaymentTime = LockTime;
+		if (LockTime < structGRC.EarliestPaymentTime) structGRC.EarliestPaymentTime = LockTime;
+
 		// Per RTM 12-23-2014 (Halford) Track detailed payments made to each CPID
 		structMagnitude.PaymentTimestamps += RoundToString(LockTime,0)+",";
 		structMagnitude.PaymentAmountsResearch    += RoundToString(bb.ResearchSubsidy,2) + ",";
 		structMagnitude.PaymentAmountsInterest    += RoundToString(interest,2) + ",";
      	mvMagnitudes[cpid] = structMagnitude;
-	
+	    mvMagnitudes[bb.GRCAddress]=structGRC;
+
       	   // CryptoLottery : Add amounts PAID in the CryptoLottery to the CPID (Still in TestNet)
 	       if (fTestNet && bCryptoLotteryEnabled && height > 7700)
 		   {
@@ -4949,18 +4966,7 @@ void AddNetworkMagnitude(double height,CTransaction& wtxCryptoLottery, double Lo
 
 						if (!CLcpid.empty() && Amount > 0)
 						{
-							StructCPID structCryptoLottery = GetStructCPID();
-							structCryptoLottery = mvMagnitudes[CLcpid];
-							if (!structCryptoLottery.initialized)
-							{
-										structCryptoLottery = GetStructCPID();
-										structCryptoLottery.initialized=true;
-										structCryptoLottery.LastPaymentTime = 0;
-										structCryptoLottery.EarliestPaymentTime = 99999999999;
-										structCryptoLottery.GRCAddress = Recipient;
-										structCryptoLottery.LastBlock = height;
-										mvMagnitudes.insert(map<string,StructCPID>::value_type(CLcpid,structCryptoLottery));
-							}
+							StructCPID structCryptoLottery = GetInitializedStructCPID(CLcpid);
 							structCryptoLottery.payments += Amount;
 							structCryptoLottery.GRCAddress = Recipient;
 							structCryptoLottery.LastBlock = height;
@@ -4968,11 +4974,20 @@ void AddNetworkMagnitude(double height,CTransaction& wtxCryptoLottery, double Lo
 
 		    				if (LockTime > structCryptoLottery.LastPaymentTime && Amount > 0) structCryptoLottery.LastPaymentTime = LockTime;
 							if (LockTime < structCryptoLottery.EarliestPaymentTime)           structCryptoLottery.EarliestPaymentTime = LockTime;
+
+							StructCPID strCLGRC = GetInitializedStructCPID(Recipient);
+
+							if (LockTime > strCLGRC.LastPaymentTime && Amount > 0) strCLGRC.LastPaymentTime = LockTime;
+							if (LockTime < strCLGRC.EarliestPaymentTime)           strCLGRC.EarliestPaymentTime = LockTime;
+
+
 							structCryptoLottery.PaymentTimestamps += RoundToString(LockTime,0)+",";
 							structCryptoLottery.PaymentAmountsResearch    += RoundToString(Amount,2) + ",";
 							structCryptoLottery.PaymentAmountsInterest    += RoundToString(0,2) + ",";
 							structCryptoLottery.cpid = CLcpid;
+							mvMagnitudes[Recipient] = strCLGRC;
 							mvMagnitudes[CLcpid] = structCryptoLottery;
+							
 						}
 					}
 								
@@ -4980,9 +4995,8 @@ void AddNetworkMagnitude(double height,CTransaction& wtxCryptoLottery, double Lo
 		   }
 	
 
-	   structMagnitude = mvMagnitudes[cpid];
+  	    structMagnitude = mvMagnitudes[cpid];
 	
-
 		//Since this function can be called more than once per block (once for the solver, once for the voucher), the avg changes here:
 		if (bb.Magnitude > 0)
 		{
@@ -5009,6 +5023,80 @@ void AddNetworkMagnitude(double height,CTransaction& wtxCryptoLottery, double Lo
 		mvMagnitudes[cpid] = structMagnitude;
 		mvMagnitudes["global"] = globalMag;
 }
+
+
+
+
+
+
+
+bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
+{
+    if (nBestHeight < 15) 
+	{
+		return true;
+	}
+	//6-22-2015
+	if (IsLockTimeWithinMinutes(nLastGRCtallied,600)) return true;
+	nLastGRCtallied = GetAdjustedTime();
+	int64_t nGRCTime = 0;
+	int64_t nCPIDTime = 0;
+	LOCK(cs_main);
+	{
+		int nMaxDepth = nBestHeight;
+			int nLookback = 1000*120;
+			int nMinDepth = nMaxDepth - nLookback;
+			if (nMinDepth < 2) nMinDepth = 2;
+			CBlock block;
+			int iRow = 0;
+			for (int ii = nMinDepth; ii < nMaxDepth; ii++)
+			{
+     					CBlockIndex* pblockindex = FindBlockByHeight(ii);
+						block.ReadFromDisk(pblockindex);
+						std::string hashboinc = "";
+						if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
+						MiningCPID bb = DeserializeBoincBlock(hashboinc);
+
+						if (grcaddress==bb.GRCAddress)
+						{
+							nGRCTime = block.nTime;
+						}
+						if (cpid == bb.cpid)
+						{
+							nCPIDTime = block.nTime;
+						}
+						if (nGRCTime > 0 && nCPIDTime > 0) break;
+			}
+	}
+
+	mvApplicationCacheTimestamp["nGRCTime"] = nGRCTime;
+	mvApplicationCacheTimestamp["nCPIDTime"] = nCPIDTime;
+	return true;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5134,13 +5222,14 @@ bool TallyNetworkAverages(bool ColdBoot)
 								structnetcpidproject.initialized = true;
 								mvNetworkCPIDs.insert(map<string,StructCPID>::value_type(projcpid,structnetcpidproject));
 								NetworkProjects++;
-
 							}
+
 							structnetcpidproject.projectname = proj;
 							structnetcpidproject.cpid = cpid;
 							structnetcpidproject.cpidv2 = cpidv2;
 							structnetcpidproject.rac = structnetcpidproject.rac + bb.rac;
 							structnetcpidproject.entries++;
+
 							if (structnetcpidproject.entries > 0)
 							{
 								structnetcpidproject.AverageRAC = structnetcpidproject.rac/(structnetcpidproject.entries+.01);
@@ -5173,7 +5262,6 @@ bool TallyNetworkAverages(bool ColdBoot)
 					structcpid.NetworkMagnitude = NetworkMagnitude;
 					structcpid.NetworkAvgMagnitude = NetworkAvgMagnitude;
 				
-
 					mvNetwork["NETWORK"] = structcpid;
 					// Tally total magnitudes for each cpid:
 
