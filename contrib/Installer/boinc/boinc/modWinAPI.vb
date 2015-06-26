@@ -555,7 +555,9 @@ Module modWinAPI
             End If
         Next
     End Function
-
+    Public Function ExtractXML(sData As String, sKey As String)
+        Return ExtractXML(sData, sKey, "</" + Mid(sKey, 2, Len(sKey) - 1))
+    End Function
 
 
     Public Function ExtractXML(sData As String, sStartKey As String, sEndKey As String)

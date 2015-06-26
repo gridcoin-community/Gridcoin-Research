@@ -174,6 +174,7 @@ Public Class frmMining
 
             Call OneMinuteUpdate()
             Me.TabControl1.SelectedIndex = 2
+            If mbTestNet Then lblTestnet.Text = "TESTNET"
 
         Catch ex As Exception
 
@@ -187,29 +188,6 @@ Public Class frmMining
         InitializeComponent()
     End Sub
 
-
-    Private Sub PopulateHeadings(vHeading() As String, oDGV As DataGridView)
-
-        For x = 0 To UBound(vHeading)
-            Dim dc As New System.Windows.Forms.DataGridViewColumn
-            dc.Name = vHeading(x)
-            Dim dgvct As New System.Windows.Forms.DataGridViewTextBoxCell
-            dgvct.Style.BackColor = Drawing.Color.Black
-            dgvct.Style.ForeColor = Drawing.Color.Lime
-            dc.CellTemplate = dgvct
-            oDGV.Columns.Add(dc)
-        Next x
-        Dim dgcc As New DataGridViewCellStyle
-        dgcc.ForeColor = System.Drawing.Color.SandyBrown
-        oDGV.ColumnHeadersDefaultCellStyle = dgcc
-        For x = 0 To UBound(vHeading)
-            oDGV.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.None
-        Next
-        For x = 0 To UBound(vHeading)
-            oDGV.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells
-        Next
-
-    End Sub
 
     Public Sub PopulateNeuralData()
 
@@ -327,8 +305,19 @@ Public Class frmMining
             oNewForm.Controls.Add(dgvProjects)
             dgvProjects.Left = 5
             dgvProjects.Top = 5
-            dgvProjects.Width = oNewForm.Width - 40
-            dgvProjects.Height = oNewForm.Height - 40
+            Dim TotalControlHeight As Long = (dgvProjects.RowTemplate.Height * (iRow + 2)) + 20
+            dgvProjects.Height = TotalControlHeight
+            oNewForm.Height = dgvProjects.Height + 285
+            dgvProjects.Width = oNewForm.Width - 25
+            Dim rtbRac As New System.Windows.Forms.RichTextBox
+
+            Dim sXML As String = GetXMLOnly(sCPID)
+            rtbRac.Left = 5
+            rtbRac.Top = dgvProjects.Height + 8
+            rtbRac.Height = 245
+            rtbRac.Width = oNewForm.Width - 5
+            rtbRac.Text = sXML
+            oNewForm.Controls.Add(rtbRac)
             oNewForm.Show()
 
 

@@ -9,11 +9,13 @@ Public Class Utilization
     Private _lLeaderboard As Long
     Private _lLeaderUpdates As Long
     Public _boincmagnitude As Double
-  
-   
+    Private msSentence As String = ""
+    Private mlSpeakMagnitude As Double
+
+
     Public ReadOnly Property Version As Double
         Get
-            Return 365
+            Return 374
 
         End Get
     End Property
@@ -24,12 +26,20 @@ Public Class Utilization
             ' Return Val(clsGVM.BoincUtilization)
         End Get
     End Property
+    Public Function GetDotNetMessages(sDataType As String) As String
+        Dim sReply As String = msRPCCommand
+        msRPCCommand = ""
+        Return sReply
+    End Function
+    Public Function SetRPCResponse(sResponse) As Double
+        SetRPCReply(sResponse)
+
+        Return 1
+    End Function
     Public Function FromBase64String(sData As String) As String
-       
         Dim ba() As Byte = Convert.FromBase64String(sData)
         Dim sOut As String = ByteToString(ba)
         Return sOut
-
     End Function
     Public Function ByteToString(b() As Byte)
         Dim sReq As String
@@ -44,7 +54,6 @@ Public Class Utilization
     End Function
     Public Function BoincMagnitude(value As String) As String
         _boincmagnitude = Val(value)
-        Log("bm " + Trim(value))
     End Function
     Public Function cAES512Encrypt(sData As String) As String
         Return AES512EncryptData(sData)
@@ -67,6 +76,14 @@ Public Class Utilization
 
         End If
     End Sub
+    Public Sub TestnetSetGenericRPCValue(sData As String)
+        SetRPCReply(sData)
+    End Sub
+    Public Function TestnetGetGenericRPCValue() As String
+        Return GetRPCReply("RPC")
+
+
+    End Function
     Public ReadOnly Property ClientNeedsUpgrade As Double
         Get
             Dim bNeedsUp As Boolean = NeedsUpgrade()
@@ -134,8 +151,6 @@ Public Class Utilization
         Call RestartWallet1("reboot")
     End Sub
     Public Sub DownloadBlocks()
-        Log("Downloading blocks")
-
         Call RestartWallet1("downloadblocks")
     End Sub
     Public Sub ReindexWalletTestNet()
@@ -206,9 +221,12 @@ Public Class Utilization
     End Function
     Public Function ShowProjects()
     End Function
+    Public Function ShowVotingConsole()
+        Dim fmVoting As New frmVoting
+        fmVoting.Show()
+    End Function
 
     Public Function ShowNewUserWizard()
-        Log("Showing NUW")
         Dim fNUW As New frmNewUserWizard
         fNUW.Show()
     End Function
@@ -220,8 +238,6 @@ Public Class Utilization
             Log("Error while transitioning to frmSQL" + ex.Message)
         End Try
     End Function
-
-    
     Public Function ShowTicketAdd()
         Try
             mfrmTicketAdd = New frmTicketAdd
@@ -255,7 +271,6 @@ Public Class Utilization
 
     Public Function ShowMiningConsole()
         Try
-
             lfrmMiningCounter = lfrmMiningCounter + 1
             
             If mfrmMining Is Nothing Then
@@ -290,8 +305,14 @@ Public Class Utilization
 
     End Sub
     Public Sub SpeakSentence(sSentence As String)
+        msSentence = sSentence
+        Dim t As New Threading.Thread(AddressOf SpeakOnBackgroundThread)
+        t.Start()
+    
+    End Sub
+    Public Sub SpeakOnBackgroundThread()
         Dim S As New SpeechSynthesis
-        S.Speak(sSentence)
+        S.Speak(msSentence)
     End Sub
     Public Function UpdateConfirm(sTxId As String) As String
         msTxId = sTxId
@@ -355,30 +376,63 @@ Public Class Utilization
 
         End Try
     End Function
+    Public Function SetGenericVotingData(sValue As String) As Double
+        Return SetGenericData("POLLS", sValue)
+    End Function
+    Public Function SetGenericData(sKey As String, sValue As String) As Double
+        Try
+
+            If msGenericDictionary.ContainsKey(sKey) Then
+
+                msGenericDictionary(sKey) = sValue
+            Else
+                msGenericDictionary.Add(sKey, sValue)
+            End If
+            Return 1
+        Catch ex As Exception
+            Return 0
+        End Try
+
+    End Function
+    Public Function SetTestNetFlag(sData As String) As Double
+        Try
+            If sData = "TESTNET" Then
+                mbTestNet = True
+            Else
+                mbTestNet = False
+            End If
+            Log("Testnet : " + Trim(mbTestNet))
+
+        Catch ex As Exception
+            Return 0
+        End Try
+        Return 1
+    End Function
     Public Function SyncCPIDsWithDPORNodes(sData As String) As Double
         'Write the Gridcoin CPIDs to the Persisted Data System
-       
-
-            Try
-                msSyncData = sData
-
-                Call SyncDPOR2()
-
-            Catch ex As Exception
-                Log("Exception during SyncDpor2 : " + ex.Message)
-                Return -2
-            End Try
-
-
+        Try
+            msSyncData = sData
+            Call SyncDPOR2()
+        Catch ex As Exception
+            Log("Exception during SyncDpor2 : " + ex.Message)
+            Return -2
+        End Try
         Log("Finished syncing DPOR cpids.")
 
         Return 0
 
     End Function
-    Public Function AddressUser(sMagnitude As String) As Double
-        Log("Addressing User with Magnitude " + Trim(sMagnitude))
+    Public Sub AddressUserThread()
+
         Dim s As New SpeechSynthesis
-        s.AddressUserBySurname(Val(sMagnitude))
+        s.AddressUserBySurname(mlSpeakMagnitude)
+
+    End Sub
+    Public Function AddressUser(sMagnitude As String) As Double
+        Dim t As New Threading.Thread(AddressOf AddressUserThread)
+        mlSpeakMagnitude = Val(sMagnitude)
+        t.Start()
+
         Return 1
     End Function
     Public Sub SetSqlBlock(ByVal data As String)

@@ -256,6 +256,7 @@ int main(int argc, char *argv[])
 		printf("Starting .NET timer\r\n");
 
 		QObject::connect(timer, SIGNAL(timeout()), guiref, SLOT(timerfire()));
+  
 	    //Start globalcom
 
         if(AppInit2())
@@ -282,7 +283,7 @@ int main(int argc, char *argv[])
                 {
                     window.show();
                 }
-				timer->start(10000);
+				timer->start(4000);
 	
                 // Place this here as guiref has to be defined if we don't want to lose URIs
                 ipcInit(argc, argv);

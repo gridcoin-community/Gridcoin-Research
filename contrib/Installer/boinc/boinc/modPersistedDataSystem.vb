@@ -17,6 +17,7 @@ Module modPersistedDataSystem
     'Data is stored across all Gridcoin windows nodes, in a decentralized store
     Public msSyncData As String = ""
     Public mbForcefullySyncAllRac = False
+    Public mbTestNet As Boolean = False
 
     Private lUseCount As Long = 0
     Public Structure Row
@@ -52,8 +53,7 @@ Module modPersistedDataSystem
         lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
         Dim sOut As String = ""
         For Each cpid As Row In lstCPIDs
-            Dim r As Double = RoundedMag(201.11)
-
+           
             Dim sRow As String = cpid.PrimaryKey + "," + Trim(RoundedMag(Val(cpid.Magnitude))) _
                                  + "," + Trim(Math.Round(Val(cpid.RAC), 2)) + "," + Trim(cpid.Expiration) + "," + Trim(cpid.Synced) + "," + Trim(cpid.DataColumn4) + "," + Trim(cpid.DataColumn5) + ";"
             sOut += sRow
@@ -82,14 +82,25 @@ Module modPersistedDataSystem
     End Function
     Public Function RoundedMag(num As Double)
         'Rounds magnitude to nearest 5
-        Return Math.Round(num * 0.2, 0) / 0.2
+        Return Math.Round(Math.Round(num * GetDitherMag(num), 0) / GetDitherMag(num), 2)
     End Function
 
     Public Function RoundedRac(num As Double)
         'Rounds magnitude to nearest 10
-        Return Math.Round(num * 0.1, 0) / 0.1
-    End Function
+        Return Math.Round(Math.Round(num * GetDitherMag(num), 0) / GetDitherMag(num), 2)
 
+    End Function
+    Public Function GetDitherMag(Data As Double) As Double
+        Dim Dither As Double = 0.1
+        If Data > 0 And Data < 500 Then Dither = 0.2 '5
+        If Data >= 500 And Data <= 1000 Then Dither = 0.1 '10
+        If Data >= 1000 And Data <= 10000 Then Dither = 0.025 '40
+        If Data >= 10000 And Data <= 50000 Then Dither = 0.006 '160
+        If Data >= 50000 And Data <= 100000 Then Dither = 0.003 ' 320
+        If Data >= 100000 And Data <= 999999 Then Dither = 0.0015 ' 640
+        If Data >= 1000000 Then Dither = 0.0007 '1428
+        Return Dither
+    End Function
     Public Function UpdateNetworkAverages() As Boolean
         'loop through all projects on file, persist network averages
         'Get a collection of Projects
@@ -153,6 +164,10 @@ Module modPersistedDataSystem
         Try
             
             Dim vCPIDs() As String = Split(msSyncData, "<ROW>")
+            Dim vTestNet() As String
+            vTestNet = Split(vCPIDs(0), "<COL>")
+            Log("Updating magnitude in " + Trim(mbTestNet) + " for " + Trim(UBound(vCPIDs)) + " cpids.")
+
             For x As Integer = 0 To UBound(vCPIDs)
                 If Len(vCPIDs(x)) > 20 Then
                     Dim vRow() As String
@@ -272,18 +287,21 @@ Module modPersistedDataSystem
 
     Public Function GetList(DataRow As Row, sWildcard As String) As List(Of Row)
         Dim xx As New List(Of Row)
+        Dim sErr As String = ""
 
         For x As Integer = 1 To 10
             Try
                 xx = GetList_Safe(DataRow, sWildcard)
                 Return xx
             Catch ex As Exception
-                Log("While asking for list in getlist of " + DataRow.PrimaryKey + ", " + ex.Message)
+                sErr = ex.Message
                 System.Threading.Thread.Sleep(2000)
             End Try
         Next
 
         Return xx
+
+        Log("While asking for list in getlist of " + DataRow.PrimaryKey + ", " + sErr)
 
     End Function
 
@@ -315,6 +333,22 @@ Module modPersistedDataSystem
             If bResult Then Return bResult
         Next
         Return False
+    End Function
+    Public Function GetXMLOnly(sCPID As String)
+
+        If sCPID = "" Then Return False
+
+        Try
+
+            Dim sURL As String = "http://boinc.netsoft-online.com/get_user.php?cpid=" + sCPID
+            Dim w As New MyWebClient2
+            Dim sData As String = w.DownloadString(sURL)
+            Return sData
+
+        Catch
+
+        End Try
+
     End Function
     Public Function GetRACViaNetsoft_Resilient(sCPID As String) As Boolean
 
@@ -408,6 +442,8 @@ Module modPersistedDataSystem
         Return sOut
     End Function
     Public Function DeserializeDate(s As String) As Date
+        If s = "" Then Return CDate("1-1-1900")
+
         Dim vDate() As String
         vDate = Split(s, "/")
         Dim dtOut As Date
@@ -428,13 +464,14 @@ Module modPersistedDataSystem
 
         r.PrimaryKey = vData(3)
 
-        r.DataColumn1 = vData(4)
-        r.DataColumn2 = vData(5)
-        r.DataColumn3 = vData(6)
-        r.DataColumn4 = vData(7)
-        r.DataColumn5 = vData(8)
-        r.Magnitude = vData(9)
-        r.RAC = vData(10)
+
+        If UBound(vData) >= 4 Then r.DataColumn1 = "" & vData(4)
+        If UBound(vData) >= 5 Then r.DataColumn2 = "" & vData(5)
+        If UBound(vData) >= 6 Then r.DataColumn3 = "" & vData(6)
+        If UBound(vData) >= 7 Then r.DataColumn4 = "" & vData(7)
+        If UBound(vData) >= 8 Then r.DataColumn5 = "" & vData(8)
+        If UBound(vData) >= 9 Then r.Magnitude = "" & vData(9)
+        If UBound(vData) >= 10 Then r.RAC = "" & vData(10)
 
         Return r
 
@@ -459,6 +496,23 @@ Module modPersistedDataSystem
 
     End Function
     Public Function Read(dataRow As Row) As Row
+        Dim oRow As Row
+        Dim sErr As String
+        For x As Integer = 1 To 10
+            Try
+                oRow = Read_Surrogate(dataRow)
+                Return oRow
+            Catch ex As Exception
+                sErr = ex.Message
+                System.Threading.Thread.Sleep(1000)
+            End Try
+        Next
+        Log("Read: " + sErr)
+        Return dataRow
+
+    End Function
+
+    Public Function Read_Surrogate(dataRow As Row) As Row
         Dim sPath As String = GetPath(dataRow)
         Dim sTemp As String = ""
         Dim d As String = "<COL>"
@@ -540,16 +594,21 @@ Module modPersistedDataSystem
         Return True
 
     End Function
+    Public Function SerStr(sData As String) As String
+        sData = "" & sData
+        Return sData
+    End Function
     Public Function SerializeRow(dataRow As Row) As String
         Dim d As String = "<COL>"
        
         Dim sSerialized As String = SerializeDate(dataRow.Added) + d + SerializeDate(dataRow.Expiration) _
-            + d + SerializeDate(dataRow.Synced) + d + LCase(dataRow.PrimaryKey) + d + dataRow.DataColumn1 + d + dataRow.DataColumn2 _
-            + d + dataRow.DataColumn3 + d + dataRow.DataColumn4 + d + dataRow.DataColumn5 + d + dataRow.Magnitude + d + dataRow.RAC
+            + d + SerializeDate(dataRow.Synced) + d + LCase(dataRow.PrimaryKey) + d _
+            + SerStr(dataRow.DataColumn1) + d + SerStr(dataRow.DataColumn2) _
+            + d + SerStr(dataRow.DataColumn3) + d + SerStr(dataRow.DataColumn4) + d + SerStr(dataRow.DataColumn5) _
+            + d + SerStr(dataRow.Magnitude) + d + SerStr(dataRow.RAC)
 
         Return sSerialized
     End Function
-
 
     Public Function GetPath(dataRow As Row) As String
         Dim sFilename As String = LCase(dataRow.Database) + "_" + LCase(dataRow.Table) + ".dat"
@@ -566,6 +625,7 @@ Module modPersistedDataSystem
         Return sPath + sFilename
     End Function
     Public Function Store(dataRow As Row) As Boolean
+        Dim sErr As String = ""
 
         For x As Integer = 1 To 10
             Try
@@ -573,10 +633,14 @@ Module modPersistedDataSystem
                 Return True
 
             Catch ex As Exception
-                Log("While storing data row " + dataRow.Table + "," + dataRow.Database + ", PK: " + dataRow.PrimaryKey + " on attempt " + Trim(x) + " : " + ex.Message)
+                sErr = ex.Message
                 System.Threading.Thread.Sleep(2000)
             End Try
         Next x
+
+        Log("While storing data row " + dataRow.Table + "," + dataRow.Database + ", PK: " + dataRow.PrimaryKey + " : " + sErr)
+
+
         Return False
     End Function
     Public Function GetMd5String2(ByVal sData As String) As String

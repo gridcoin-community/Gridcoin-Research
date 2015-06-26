@@ -90,6 +90,8 @@ Value getinfo(const Array& params, bool fHelp)
 
     Object obj, diff;
     obj.push_back(Pair("version",       FormatFullVersion()));
+	obj.push_back(Pair("minor_version",   (int)MINOR_VERSION));
+
     obj.push_back(Pair("protocolversion",(int)PROTOCOL_VERSION));
     obj.push_back(Pair("walletversion", pwalletMain->GetVersion()));
     obj.push_back(Pair("balance",       ValueFromAmount(pwalletMain->GetBalance())));
@@ -795,6 +797,10 @@ Value addmultisigaddress(const Array& params, bool fHelp)
         throw runtime_error(
             strprintf("not enough keys supplied "
                       "(got %"PRIszu" keys, but need at least %d to redeem)", keys.size(), nRequired));
+
+	if (keys.size() > 16)       throw runtime_error("Number of addresses involved in the multisignature address creation > 16\nReduce the number");
+
+
     std::vector<CKey> pubkeys;
     pubkeys.resize(keys.size());
     for (unsigned int i = 0; i < keys.size(); i++)

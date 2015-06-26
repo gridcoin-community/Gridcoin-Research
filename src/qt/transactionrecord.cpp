@@ -7,7 +7,6 @@
 
 std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, double& out_rac);
 std::string RoundToString(double d, int place);
-double DoubleFromAmount(int64_t amount);
 
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 
@@ -40,6 +39,8 @@ bool IsSmartContractForDPOR(const CWalletTx &wtx)
     
    }
    return false;
+   //if (IsSmartContractForDPOR(wtx)) return false;
+
 }
 
 
@@ -49,7 +50,7 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx)
 	
 	std::string ShowOrphans = GetArg("-showorphans", "false");
 	if (ShowOrphans=="false" && !wtx.IsInMainChain()) return false;
-	if (IsSmartContractForDPOR(wtx)) return false;
+
 	//R Halford - Discard Orphans after Y mins:
 	if (wtx.IsCoinStake())
 	{

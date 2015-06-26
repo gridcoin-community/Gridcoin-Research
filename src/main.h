@@ -39,7 +39,6 @@ extern int64_t nLastBlockSubmitted;
 extern uint256 muGlobalCheckpointHash;
 extern uint256 muGlobalCheckpointHashRelayed;
 extern int muGlobalCheckpointHashCounter;
-extern int MINOR_VERSION;
 extern std::string msMasterProjectPublicKey;
 extern std::string msMasterMessagePublicKey;
 extern std::string msMasterMessagePrivateKey;
@@ -90,7 +89,7 @@ inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight)
 
 extern std::map<std::string, std::string> mvApplicationCache;
 extern std::map<std::string, int64_t> mvApplicationCacheTimestamp;
-extern std::map<std::string, int64_t> mvNeuralNetworkHash;
+extern std::map<std::string, double> mvNeuralNetworkHash;
 
 extern std::map<std::string, StructCPID> mvDPOR;
 extern CScript COINBASE_FLAGS;
@@ -127,6 +126,7 @@ extern int64_t nReserveBalance;
 extern int64_t nMinimumInputValue;
 extern int64_t nLastTallied;
 extern int64_t nCPIDsLoaded;
+extern int64_t nLastGRCtallied;
 
 extern bool fUseFastIndex;
 extern unsigned int nDerivationMethodIndex;
