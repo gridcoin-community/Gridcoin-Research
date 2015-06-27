@@ -505,7 +505,7 @@ double qtExecuteGenericFunction(std::string function, std::string data)
 		{
 			result = globalcom->dynamicCall(sFunction.c_str(),qsData).toInt();
 		}
-		printf(".NET returned result code %f\r\n",(double)result);
+		//printf(".NET returned result code %f\r\n",(double)result);
 		return (double)result;
 	#endif
  	return (double)result;
@@ -1748,7 +1748,7 @@ void BitcoinGUI::votingClicked()
 		std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
 		function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
 		function_call = qtExecuteGenericFunction("ShowVotingConsole","");
-		printf("votingpayload %s %f",sVotingPayload.c_str(),function_call);
+		//printf("votingpayload %s %f",sVotingPayload.c_str(),function_call);
 	#endif
 
 }

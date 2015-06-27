@@ -41,21 +41,29 @@ Module modGRC
         Public Shared intensity As String = "13"
         Public Shared lookup_gap As String = "2"
     End Structure
-    Public Function ExecuteRPCCommand(sCommand As String, sArg1 As String, sArg2 As String)
-        Dim sPayload As String = "<COMMAND>" + sCommand + "</COMMAND><ARG1>" + sArg1 + "</ARG1><ARG2>" + sArg2 + "</ARG2>"
-        SetRPCReply("")
-        msRPCReply = ""
-        msRPCCommand = sPayload
-        'Busy Wait
+    Public Function ExecuteRPCCommand(sCommand As String, sArg1 As String, sArg2 As String) As String
         Dim sReply As String = ""
-        For x As Integer = 1 To 60
-            'sReply = GetRPCReply("RPC")
-            sReply = msRPCReply
-            If sReply <> "" Then Exit For
-            Threading.Thread.Sleep(250) '1/4 sec sleep
-            Application.DoEvents()
-        Next
-        Return sReply
+
+        Try
+
+            Dim sPayload As String = "<COMMAND>" + sCommand + "</COMMAND><ARG1>" + sArg1 + "</ARG1><ARG2>" + sArg2 + "</ARG2>"
+            SetRPCReply("")
+            msRPCReply = ""
+            msRPCCommand = sPayload
+            'Busy Wait
+            For x As Integer = 1 To 60
+                sReply = msRPCReply
+                If sReply <> "" Then Return sReply
+                Threading.Thread.Sleep(250) '1/4 sec sleep
+                Application.DoEvents()
+            Next
+            sReply = "Unable to reach Gridcoin RPC."
+            Return sReply
+
+        Catch ex As Exception
+            Log("EXCEPTION: ExecuteRPCCommand : " + ex.Message)
+            Return "Unable to execute vote, " + ex.Message
+        End Try
 
     End Function
     Public Sub PopulateHeadings(vHeading() As String, oDGV As DataGridView)
@@ -663,6 +671,7 @@ Module modGRC
             sw.WriteLine(Trim(DateStamp) + ", " + sData)
             sw.Close()
         Catch ex As Exception
+
         End Try
 
     End Sub
@@ -932,7 +941,7 @@ Module modGRC
             Return ex.Message
         End Try
     End Function
-    Public Function GetRPCReply(sType As String) As String
+    Public Function xGetRPCReply(sType As String) As String
         Dim d As New Row
         d.Database = "RPC"
         d.Table = "RPC"
@@ -941,19 +950,15 @@ Module modGRC
         Return d.DataColumn1
     End Function
     Public Function SetRPCReply(sData As String) As Double
+        Try
 
-        msRPCReply = sData
-        Log("Received QT RPC Reply: " + sData)
+            msRPCReply = sData
+            Log("Received QT RPC Reply: " + sData)
+            Return 1
+        Catch ex As Exception
+            Return 0
+        End Try
 
-        Dim d As New Row
-        d.Table = "RPC"
-        d.Database = "RPC"
-        d.PrimaryKey = "RPC"
-        'd.Added = DateAdd(DateInterval.Day, 1, Now)
-        'd.Expiration = DateAdd(DateInterval.Day, 1, Now)
-        d.DataColumn1 = sData
-        '  Store(d)
-        Return 1
     End Function
 
 End Module

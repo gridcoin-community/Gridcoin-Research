@@ -382,12 +382,16 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
     case TransactionRecord::SendToSelf:
         return tr("Payment to yourself");
     case TransactionRecord::Generated:
-    	if (((IsPoR(CoinToDouble(wtx->credit + wtx->debit)))))
-			{
+	    if (wtx->RemoteFlag==1)
+		{
+			return tr("Mined - DPOR");
+		}
+		else if (((IsPoR(CoinToDouble(wtx->credit + wtx->debit)))))
+		{
 				return tr("Mined - PoR");
-			}
-			else
-		    {
+		}
+		else
+		{
 				return tr("Mined - Interest");
 		}
     default:

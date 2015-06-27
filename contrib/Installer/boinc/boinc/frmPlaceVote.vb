@@ -125,4 +125,15 @@ Public Class frmPlaceVote
         MsgBox(sResult, MsgBoxStyle.Information, "Gridcoin Voting System")
 
     End Sub
+
+    Private Sub Button1_Click(sender As System.Object, e As System.EventArgs) Handles Button1.Click
+       
+        Dim sTitle As String = lblTitle.Text
+        Dim sVote As String = "TEST"
+
+        sTitle = Replace(sTitle, " ", "_")
+        Dim sResult As String = ExecuteRPCCommand("vote", sTitle, sVote)
+        MsgBox(sResult, MsgBoxStyle.Information, "Gridcoin Voting System")
+
+    End Sub
 End Class

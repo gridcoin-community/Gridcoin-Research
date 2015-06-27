@@ -1745,9 +1745,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
     if (setCoins.empty())
 	{
-		msMiningErrors7="Coins Empty";
-		if (fDebug) if (LessVerbose(100)) printf("Coins empty.");
-        return false;
+		return false;
 	}
 
     int64_t nCredit = 0;

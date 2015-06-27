@@ -40,12 +40,14 @@ bool SynchronizeRacForDPOR(bool SyncEntireCoin);
 extern std::string ReadCache(std::string section, std::string key);
 
 extern std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
-std::string AdvertiseBeacon();
+std::string AdvertiseBeacon(bool force);
 
 extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 
 
 extern double GetTotalBalance();
+
+extern double GetPaymentsByCPID(std::string cpid);
 
 
 extern void IncrementNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress,double distance);
@@ -339,7 +341,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    OrganizationKey = "";
 
  //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
- int nGrandfather = 136635;
+ int nGrandfather = fTestNet ? 26100 : 136635;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -586,7 +588,7 @@ std::string GetGlobalStatus()
 		}
 		status = "&nbsp;<br>Blocks: " + RoundToString((double)nBestHeight,0) + "; PoR Difficulty: " 
 			+ RoundToString(PORDiff,3) + "; Net Weight: " + RoundToString(GetPoSKernelPS2(),2)  
-			+ "<br>Boinc Weight: " +  sWeight + "; Status: " + msMiningErrors 
+			+ "<br>DPOR Weight: " +  sWeight + "; Status: " + msMiningErrors 
 			+ "<br>Magnitude: " + RoundToString(out_magnitude,3) + "; Project: " + msMiningProject
 			+ "<br>" + msMiningErrors2 + " " + msMiningErrors3 + " " + msMiningErrors4 + 
 			+ "<br>" + msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 +
@@ -2008,7 +2010,11 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 {
     
 	int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
-	if (RSA_WEIGHT > 24000) nInterest += 10*COIN;
+	if (RSA_WEIGHT > 24000 && !fTestNet) nInterest += 10*COIN;
+
+	//PROD TODO DURING MANDATORY UPGRADE ON JULY 15th 2015: Remove Newbie interest bonus
+		
+
 	int64_t nBoinc    = GetProofOfResearchReward(cpid,VerifyingBlock);
 	int64_t nSubsidy  = nInterest + nBoinc;
 	
@@ -2871,7 +2877,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
  		 //CryptoLottery Verification of each recipient 4-5-2015 (Recipients start at output position 2 (0=Coinstake flag, 1=coinstake)
 		 //Double check the lock time is recent, as time passes RSA balances change, so this must be done in real time
 		
-		 // Note : As of 4-22-2015, this feature is still being tested in testnet, so it is not enabled in Prod yet.
+		 // Note : As of 6-27-2015, this feature is still being tested in testnet, so it is not enabled in Prod yet.
 		 if (!ClientOutOfSync() && fTestNet && bCryptoLotteryEnabled)
 		 {
 			if (vtx[0].vout.size() > 2)
@@ -3861,7 +3867,7 @@ void GridcoinServices()
 
 	if (TimerMain("send_beacon",60))
 	{
-		std::string result = AdvertiseBeacon();
+		std::string result = AdvertiseBeacon(false);
 		if (result.length() < 5 && result != "SUCCESS")
 		{
 			printf("BEACON ERROR!  Unable to send beacon %s \r\n",result.c_str());
@@ -4728,7 +4734,7 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
 	if (fTestNet) 
 	{
 			StructCPID stDPOR = mvDPOR[cpid];
-		    research_magnitude = 	LederstrumpfMagnitude2(stDPOR.Magnitude,locktime);
+		    research_magnitude = LederstrumpfMagnitude2(stDPOR.Magnitude,locktime);
 	}
 	else
 	{
@@ -4739,7 +4745,13 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
 		GetMaximumBoincSubsidy(locktime)*5);
 	double owed_network_cap = payment_timespan * GetMagnitudeUnit(locktime) * research_magnitude;
 	double owed = Lowest(owed_standard,owed_network_cap);
+	if (fTestNet) owed += 10000;
+	
 	double paid = mag.payments;
+	double PaymentsToCPID = GetPaymentsByCPID(cpid);
+		
+	if (fTestNet) paid = PaymentsToCPID;
+					
 	double outstanding = Lowest(owed-paid, GetMaximumBoincSubsidy(locktime)*5);
 	total_owed = owed;
 	//printf("Getting payment_timespan %f for outstanding amount for %s; owed %f paid %f Research Magnitude %f \r\n",		payment_timespan,cpid.c_str(),owed,paid,mag.ConsensusMagnitude);
@@ -4801,9 +4813,14 @@ double GetChainDailyAvgEarnedByCPID(std::string cpid, int64_t locktime, double& 
 	if (structMag.initialized)
 	{
 				double AvgDailyPayments = structMag.payments/14;
+				double PaymentsToCPID = GetPaymentsByCPID(cpid);
+		     	if (fTestNet) AvgDailyPayments = PaymentsToCPID/14;
+	
 				double DailyOwed = (structMag.PaymentTimespan * Cap(structMag.PaymentMagnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime)*5)/14);
 				double owed_network_cap = 1 * GetMagnitudeUnit(locktime) * structMag.PaymentMagnitude;
 				double owed = Lowest(DailyOwed,owed_network_cap);
+				if (fTestNet) owed += 10000;
+
 				out_payments=structMag.payments;
 				out_daily_avg_payments = AvgDailyPayments;
 				return owed;
@@ -4902,16 +4919,50 @@ StructCPID GetInitializedStructCPID(std::string name)
 				cpid.EarliestPaymentTime = 99999999999;
 				mvMagnitudes.insert(map<string,StructCPID>::value_type(name,cpid));
 				mvMagnitudes[name]=cpid;
-
+				return cpid;
 	}
 	else
 	{
 			return cpid;
 	}
 
-	
 }
 
+double GetPaymentsByCPID(std::string cpid)
+{
+			double total = 0;
+			
+			std::string key = "PAYMENT_"+cpid;
+  		    for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+		    {
+				std::string key_name  = (*ii).first;
+			   	if (key_name.length() > key.length())
+				{
+					if (key_name.substr(0,key.length())==key)
+					{
+								std::string key_value = mvApplicationCache[(*ii).first];
+								std::string subkey = key_name.substr(key.length()+1,key_name.length()-key.length()-1);
+								double txTime = cdbl(subkey,0);
+								if (IsLockTimeWithin14days(txTime)) 
+								{
+									total += cdbl(key_value,0);			
+								}
+		       
+					}
+				}
+			}
+		    return total;
+
+}
+
+void RegisterPayment(std::string cpid, double time, double amount)
+{
+	if (amount != 0) 
+	{
+		WriteCache("PAYMENT_"+cpid,RoundToString(time,0),RoundToString(amount,0),(int64_t)time);
+	}
+
+}
 
 
 void AddNetworkMagnitude(double height,CTransaction& wtxCryptoLottery, double LockTime, std::string cpid, 
@@ -4938,13 +4989,15 @@ void AddNetworkMagnitude(double height,CTransaction& wtxCryptoLottery, double Lo
 		double interest = (double)mint - (double)bb.ResearchSubsidy;
 		//double interest = bb.InterestSubsidy;
 		structMagnitude.payments += bb.ResearchSubsidy;
+		RegisterPayment(bb.cpid,LockTime,bb.ResearchSubsidy);
+
 		structMagnitude.interestPayments=structMagnitude.interestPayments + interest;
 		if (LockTime > structMagnitude.LastPaymentTime && bb.ResearchSubsidy > 0) structMagnitude.LastPaymentTime = LockTime;
 		if (LockTime < structMagnitude.EarliestPaymentTime) structMagnitude.EarliestPaymentTime = LockTime;
 		if (LockTime > structGRC.LastPaymentTime && bb.ResearchSubsidy > 0) structGRC.LastPaymentTime = LockTime;
 		if (LockTime < structGRC.EarliestPaymentTime) structGRC.EarliestPaymentTime = LockTime;
 
-		// Per RTM 12-23-2014 (Halford) Track detailed payments made to each CPID
+		// Per RTM 12-23-2014 - Track detailed payments made to each CPID
 		structMagnitude.PaymentTimestamps += RoundToString(LockTime,0)+",";
 		structMagnitude.PaymentAmountsResearch    += RoundToString(bb.ResearchSubsidy,2) + ",";
 		structMagnitude.PaymentAmountsInterest    += RoundToString(interest,2) + ",";
@@ -4968,6 +5021,8 @@ void AddNetworkMagnitude(double height,CTransaction& wtxCryptoLottery, double Lo
 						{
 							StructCPID structCryptoLottery = GetInitializedStructCPID(CLcpid);
 							structCryptoLottery.payments += Amount;
+							RegisterPayment(CLcpid,LockTime+(double)i,Amount);
+
 							structCryptoLottery.GRCAddress = Recipient;
 							structCryptoLottery.LastBlock = height;
 							//printf("Adding Paid Payment for CPID %s, GRC address %s, for Amount %f \r\n",CLcpid.c_str(),Recipient.c_str(),Amount);
@@ -5034,17 +5089,18 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 {
     if (nBestHeight < 15) 
 	{
+		mvApplicationCacheTimestamp["nGRCTime"] = GetAdjustedTime();
+		mvApplicationCacheTimestamp["nCPIDTime"] = GetAdjustedTime();
 		return true;
 	}
-	//6-22-2015
 	if (IsLockTimeWithinMinutes(nLastGRCtallied,600)) return true;
 	nLastGRCtallied = GetAdjustedTime();
 	int64_t nGRCTime = 0;
 	int64_t nCPIDTime = 0;
 	LOCK(cs_main);
 	{
-		int nMaxDepth = nBestHeight;
-			int nLookback = 1000*120;
+		    int nMaxDepth = nBestHeight;
+			int nLookback = 1000*6*30;
 			int nMinDepth = nMaxDepth - nLookback;
 			if (nMinDepth < 2) nMinDepth = 2;
 			CBlock block;
@@ -5069,19 +5125,12 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 			}
 	}
 
+	if (nGRCTime==0)  nGRCTime = GetAdjustedTime();
+	if (nCPIDTime==0) nCPIDTime = GetAdjustedTime();
 	mvApplicationCacheTimestamp["nGRCTime"] = nGRCTime;
 	mvApplicationCacheTimestamp["nCPIDTime"] = nCPIDTime;
 	return true;
 }
-
-
-
-
-
-
-
-
-
 
 
 
@@ -5186,9 +5235,10 @@ bool TallyNetworkAverages(bool ColdBoot)
 							std::string cpid = bb.cpid;
 							std::string cpidv2 = bb.cpidv2;
 							std::string lbh = bb.lastblockhash;
+							iRow++;
+							
 							StructCPID structproj = GetStructCPID();
 							structproj = mvNetwork[proj];
-							iRow++;
 							if (!structproj.initialized) 
 							{
 								structproj = GetStructCPID();
@@ -5701,7 +5751,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 5-29-2015
-		if (pfrom->nVersion < 180261 && fTestNet)
+		if (pfrom->nVersion < 180262 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -8162,6 +8212,30 @@ void WriteCache(std::string section, std::string key, std::string value, int64_t
 	mvApplicationCacheTimestamp[section+";"+key] = locktime;
 
 }
+
+
+
+void PurgeCacheAsOfExpiration(std::string section, int64_t expiration)
+{
+	   for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+	   {
+				std::string key_section = mvApplicationCache[(*ii).first];
+				if (key_section.length() > section.length())
+				{
+					if (key_section.substr(0,section.length())==section)
+					{
+						if (mvApplicationCacheTimestamp[key_section] < expiration)
+						{
+							printf("purging %s",key_section.c_str());
+							mvApplicationCache[key_section]="";
+							mvApplicationCacheTimestamp[key_section]=1;
+						}
+					}
+				}
+	   }
+
+}
+
 
 void ClearCache(std::string section)
 {

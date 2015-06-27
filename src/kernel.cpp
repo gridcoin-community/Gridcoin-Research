@@ -26,6 +26,8 @@ extern double GetLastPaymentTimeByCPID(std::string cpid);
 extern double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 bool LessVerbose(int iMax1000);
 
+double GetPaymentsByCPID(std::string cpid);
+
 typedef std::map<int, unsigned int> MapModifierCheckpoints;
 /*
         ( 0, 0x0e00670bu )
@@ -326,7 +328,7 @@ std::string CPIDByAddress(std::string address)
 
 double OwedByAddress(std::string address)
 {
-		   //4-2-2015 - CryptoLottery
+		   //6-27-2015 - CryptoLottery
 		   double outstanding = 0;
 		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
 		   {
@@ -337,6 +339,10 @@ double OwedByAddress(std::string address)
 					if (structMag.GRCAddress==address)
 					{
 						double out1 = structMag.totalowed - structMag.payments;
+						double PaymentsToCPID = GetPaymentsByCPID(structMag.cpid);
+						double out2 = structMag.totalowed - PaymentsToCPID;
+						//printf("Owed by address %f vs %f \r\n",out1,out2);
+						if (fTestNet) return out2;
 						return out1;
 					}
 		     	}

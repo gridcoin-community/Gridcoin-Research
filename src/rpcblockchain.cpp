@@ -31,7 +31,9 @@ std::string ExtractHTML(std::string HTMLdata, std::string tagstartprefix,  std::
 extern  std::string GetNetsoftProjects(std::string cpid);
 std::string NeuralRequest(std::string MyNeuralRequest);
 extern std::string MyBeaconExists(std::string cpid);
-extern std::string AdvertiseBeacon();
+extern std::string AdvertiseBeacon(bool force);
+
+double GetPaymentsByCPID(std::string cpid);
 
 StructCPID GetInitializedStructCPID(std::string name);
 
@@ -1269,15 +1271,16 @@ std::string AddContract(std::string sType, std::string sName, std::string sContr
 			return result;
 }
 
-std::string AdvertiseBeacon()
+std::string AdvertiseBeacon(bool force)
 {
 			
 			GetNextProject(false);
 			if (GlobalCPUMiningCPID.cpid=="INVESTOR") return "SUCCESS";
 			//If beacon is already in the chain, exit early
 			std::string myBeacon = MyBeaconExists(GlobalCPUMiningCPID.cpid);
-			printf("MyBeacon %s",myBeacon.c_str());
-			if (myBeacon.length() > 10) return "SUCCESS";
+			//printf("MyBeacon %s",myBeacon.c_str());
+			if (myBeacon.length() > 10 && !force) return "SUCCESS";
+
 			uint256 hashRand = GetRandHash();
     		std::string email = GetArgument("email", "NA");
         	boost::to_lower(email);
@@ -1304,7 +1307,25 @@ std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string 
 	 params.push_back(method);
 	 params.push_back(arg1);
 	 params.push_back(arg2);
- 	 Value vResult = execute(params,false);
+	 printf("Executing method %s\r\n",method.c_str());
+	 Value vResult;
+	 try
+	 {
+ 		vResult = execute(params,false);
+	 }
+ 	 catch (std::exception& e)
+	 {
+		 printf("Std exception %s \r\n",method.c_str());
+		 
+		 std::string caught = e.what();
+		 return "Exception " + caught;
+
+	 } 
+	 catch (...) 
+	 {
+		    printf("Generic exception %s \r\n",method.c_str());
+			return "Generic Exception";
+	 }
 	 std::string sResult = "";
 	 sResult = write_string(vResult, false) + "\n";
 	 printf("Response %s",sResult.c_str());
@@ -1361,10 +1382,36 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "advertisebeacon")
 	{
+		if (params.size() == 2)
+		{
+			std::string optional = params[1].get_str();
+			boost::to_lower(optional);
+			if (optional != "force")
+			{
+				entry.push_back(Pair("Error","You must specify force to force the beacon in."));
+				results.push_back(entry);
+			}
+			else
+			{
+				
+		    	std::string sResult = AdvertiseBeacon(true);
+				entry.push_back(Pair("CPID",GlobalCPUMiningCPID.cpid.c_str()));
+			    entry.push_back(Pair("Force Beacon",sResult));
+			    results.push_back(entry);
+		
+			}
+		}
+		else
+		{
+		    	std::string sResult = AdvertiseBeacon(false);
+				entry.push_back(Pair("CPID",GlobalCPUMiningCPID.cpid.c_str()));
 
-		std::string sResult = AdvertiseBeacon();
-		entry.push_back(Pair("Beacon",sResult));
-		results.push_back(entry);
+			    entry.push_back(Pair("Beacon",sResult));
+				
+			    results.push_back(entry);
+
+		}
+			
 	}
 	else if (sItem == "syncdpor2")
 	{
@@ -1655,12 +1702,9 @@ Value execute(const Array& params, bool fHelp)
 			entry.push_back(Pair("Response",myresponse.c_str()));
 			results.push_back(entry);
 	
-
 	}
 	else if (sItem=="staketime")
 	{
-
-		//6-22-2015
 
 				std::string cpid = GlobalCPUMiningCPID.cpid;
 				std::string GRCAddress = DefaultWalletAddress();
@@ -2265,13 +2309,15 @@ Array MagnitudeReport(bool bMine)
 									entry.push_back(Pair("Payment Timespan (Days)",structMag.PaymentTimespan));
 									
 									StructCPID stGRC = GetInitializedStructCPID(structMag.GRCAddress);
-									//entry.push_back(Pair("Earliest Payment by CPID",structMag.EarliestPaymentTime));
-									//entry.push_back(Pair("Earliest Payment by GRCAddress",stGRC.EarliestPaymentTime));
 									
 
 									entry.push_back(Pair("Magnitude Accuracy",structMag.Accuracy));
 									entry.push_back(Pair("Long Term Owed (14 days)",structMag.totalowed));
 									entry.push_back(Pair("Payments (14 days)",structMag.payments));
+									//
+									double PaymentsToCPID = GetPaymentsByCPID(structMag.cpid);
+	     							entry.push_back(Pair("DPOR Payments (14 days)",PaymentsToCPID));
+	
 									entry.push_back(Pair("InterestPayments (14 days)",structMag.interestPayments));
 									entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
 									entry.push_back(Pair("Total Owed",structMag.owed));

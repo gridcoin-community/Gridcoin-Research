@@ -15,7 +15,7 @@ Public Class Utilization
 
     Public ReadOnly Property Version As Double
         Get
-            Return 374
+            Return 376
 
         End Get
     End Property
@@ -80,9 +80,7 @@ Public Class Utilization
         SetRPCReply(sData)
     End Sub
     Public Function TestnetGetGenericRPCValue() As String
-        Return GetRPCReply("RPC")
-
-
+       
     End Function
     Public ReadOnly Property ClientNeedsUpgrade As Double
         Get
