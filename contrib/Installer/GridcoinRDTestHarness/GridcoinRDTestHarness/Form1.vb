@@ -104,13 +104,7 @@ Public Class Form1
         mU.SetGenericVotingData(sVotes)
         mU.ShowVotingConsole()
 
-        mU.TestnetSetGenericRPCValue("?")
-
-        MsgBox(mU.TestnetGetGenericRPCValue())
-
-        mU.TestnetSetGenericRPCValue("")
-
-        MsgBox(mU.TestnetGetGenericRPCValue())
+        mU.ShowMiningConsole()
 
 
         Exit Sub

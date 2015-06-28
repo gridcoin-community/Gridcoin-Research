@@ -52,7 +52,7 @@ Partial Class Form1
         Me.Controls.Add(Me.Button2)
         Me.Controls.Add(Me.Button1)
         Me.Name = "Form1"
-        Me.Text = "Form1"
+        Me.Text = "Gridcoin Test Harness 1.1"
         Me.ResumeLayout(False)
 
     End Sub

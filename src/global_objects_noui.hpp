@@ -100,6 +100,7 @@ extern int miningthreadcount;
 		std::string PaymentTimestamps;
 		std::string PaymentAmountsResearch;
 		std::string PaymentAmountsInterest;
+		std::string PaymentAmountsBlocks;
 		std::string GRCAddress;
 		
 	};

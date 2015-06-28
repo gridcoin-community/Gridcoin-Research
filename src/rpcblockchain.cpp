@@ -37,6 +37,9 @@ double GetPaymentsByCPID(std::string cpid);
 
 StructCPID GetInitializedStructCPID(std::string name);
 
+StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
+
+
 std::string GetNeuralNetworkReport();
 Array GetJSONNeuralNetworkReport();
 extern bool PollExists(std::string pollname);
@@ -2905,7 +2908,10 @@ Array MagnitudeReportCSV(bool detail)
 		   double rows = 0;
 		   double outstanding = 0;
 		   double totaloutstanding = 0;
-		   std::string header = "CPID,Magnitude,PaymentMagnitude,Accuracy,LongTermOwed14day,LongTermOwedDaily,Payments,InterestPayments,LastPaymentTime,CurrentDailyOwed,NextExpectedPayment,AvgDailyPayments,Outstanding,PaymentTimespan,DPOR_Magnitude,PaymentDate,ResearchPaymentAmount,InterestPaymentAmount\r\n";
+		   std::string header = "CPID,Magnitude,PaymentMagnitude,Accuracy,LongTermOwed14day,LongTermOwedDaily,Payments,InterestPayments,LastPaymentTime,CurrentDailyOwed,NextExpectedPayment,AvgDailyPayments,Outstanding,PaymentTimespan,DPOR_Magnitude";
+		   
+		   if (detail) header += ",PaymentDate,ResearchPaymentAmount,InterestPaymentAmount,Block#";
+		   header += "\r\n";
 
 		   std::string row = "";
 		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
@@ -2938,16 +2944,18 @@ Array MagnitudeReportCSV(bool detail)
 	   						std::vector<std::string> vCPIDTimestamps = split(structMag.PaymentTimestamps.c_str(),",");
 							std::vector<std::string> vCPIDPayments   = split(structMag.PaymentAmountsResearch.c_str(),",");
 							std::vector<std::string> vCPIDInterestPayments = split(structMag.PaymentAmountsInterest.c_str(),",");
+							std::vector<std::string> vCPIDPaymentBlocks    = split(structMag.PaymentAmountsBlocks.c_str(),",");
 							for (unsigned int i = 0; i < vCPIDTimestamps.size(); i++)
 							{
 									double dTime = cdbl(vCPIDTimestamps[i],0);
 									std::string sResearchAmount = vCPIDPayments[i];
 									std::string sPaymentDate = DateTimeStrFormat("%m-%d-%Y %H:%M:%S", dTime);
 									std::string sInterestAmount = vCPIDInterestPayments[i];
-								
+								    std::string sPaymentBlock = vCPIDPaymentBlocks[i];
+
 									if (dTime > 0)
 									{
-										row = " , , , , , , , , , , , , , ," + sPaymentDate + "," + sResearchAmount + "," + sInterestAmount + "\n";
+										row = " , , , , , , , , , , , , , , , " + sPaymentDate + "," + sResearchAmount + "," + sInterestAmount + "," + sPaymentBlock + "\n";
 										header += row;
 									
 									}
@@ -3305,7 +3313,7 @@ Value listitem(const Array& params, bool fHelp)
 
 				if (structcpid.projectname=="NETWORK") 
 				{
-						entry.push_back(Pair("Network CPID-Projects Count",structcpid.NetworkProjects));
+						//entry.push_back(Pair("Network CPID-Projects Count",structcpid.NetworkProjects));
 						entry.push_back(Pair("Network Average RAC",structcpid.AverageRAC));
 						entry.push_back(Pair("Network Total Magnitude per Day",structcpid.NetworkMagnitude/14));
 						entry.push_back(Pair("Network Average Magnitude per day",structcpid.NetworkAvgMagnitude));
