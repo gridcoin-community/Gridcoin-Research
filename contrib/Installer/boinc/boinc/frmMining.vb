@@ -194,7 +194,7 @@ Public Class frmMining
         Dim sReport As String = ""
         Dim sReportRow As String = ""
 
-        Dim sHeader As String = "CPID,Magnitude,RAC,Expiration,Synced,Address,CPID_Valid"
+        Dim sHeader As String = "CPID,Magnitude,Total RAC,Expiration,Synced,Address,CPID Valid"
         sReport += sHeader + vbCrLf
 
         dgv.Rows.Clear()
@@ -202,7 +202,7 @@ Public Class frmMining
         dgv.BackgroundColor = Drawing.Color.Black
         dgv.ForeColor = Drawing.Color.Lime
         Dim grr As New GridcoinReader.GridcoinRow
-        Dim sHeading As String = "CPID;Magnitude;RAC;Expiration;Synced;Address;CPID_Valid"
+        Dim sHeading As String = "CPID;Magnitude;Total RAC;Expiration;Synced;Address;CPID Valid"
 
         Dim vHeading() As String = Split(sHeading, ";")
 

@@ -212,7 +212,7 @@ Module modPersistedDataSystem
     Public Function UpdateMagnitudes() As Boolean
         Dim lstCPIDs As List(Of Row)
         Dim surrogateRow As New Row
-        Dim TotalRAC As Double = 0
+
         Dim WhitelistedProjects As Double = 0
         Dim WhitelistedWithRAC As Double = 0
 
@@ -233,9 +233,7 @@ Module modPersistedDataSystem
                 If NeedsSynced(cpid) Or mbForcefullySyncAllRac Then
                     Dim bResult As Boolean = GetRacViaNetsoft(cpid.PrimaryKey)
                     If bResult Then
-                        cpid.Expiration = DateAdd(DateInterval.Day, 14, Now)
-                        cpid.Synced = Tomorrow()
-                        Store(cpid)
+
                     End If
                 End If
             Next
@@ -258,7 +256,8 @@ Module modPersistedDataSystem
                 surrogatePrj.Database = "Project"
                 surrogatePrj.Table = "Projects"
                 Dim lstProjects As List(Of Row) = GetList(surrogatePrj, "*")
-                TotalRAC = 0
+                Dim TotalAvgRAC As Double = 0
+                'Dim TotalRAC As Double = 0
                 For Each prj As Row In lstProjects
                     Dim surrogatePrjCPID As New Row
                     surrogatePrjCPID.Database = "Project"
@@ -268,13 +267,14 @@ Module modPersistedDataSystem
                     Dim CPIDRAC As Double = Val(rowRAC.RAC)
                     Dim PrjRAC As Double = Val(prj.RAC)
                     Dim avgRac As Double = CPIDRAC / (PrjRAC + 0.01) * 100
-                    TotalRAC += avgRac
+                    '   TotalRAC += PrjRAC
+                    TotalAvgRAC += avgRac
                 Next
                 'Now we can store the magnitude
-                Dim Magg As Double = (TotalRAC / WhitelistedProjects) * WhitelistedWithRAC
+                Dim Magg As Double = (TotalAvgRAC / WhitelistedProjects) * WhitelistedWithRAC
                 cpid.Database = "CPID"
                 cpid.Table = "CPIDS"
-                cpid.RAC = Trim(RoundedRac(TotalRAC))
+                'cpid.RAC = Trim(RoundedRac(TotalRAC))
                 cpid.Magnitude = Trim(Math.Round(Magg, 2))
                 Store(cpid)
             Next
@@ -372,6 +372,7 @@ Module modPersistedDataSystem
             If InStr(1, sData, "<error>") > 0 Then
                 Return False
             End If
+            Dim TotalRAC As Double = 0
             For y As Integer = 0 To UBound(vData)
                 'For each project
                 sName = ExtractXML(vData(y), "<name>", "</name>")
@@ -380,9 +381,23 @@ Module modPersistedDataSystem
                 'Store the :  PROJECT_CPID, RAC
                 If Rac > 99 And Team = "gridcoin" Then
                     PersistProjectRAC(sCPID, Rac, sName)
+                    TotalRAC += Rac
                 End If
             Next y
 
+
+            Dim d As Row = New Row
+            d.Expiration = Tomorrow()
+            d.Added = Now
+            d.Database = "CPID"
+            d.Table = "CPIDS"
+            d.PrimaryKey = sCPID
+            d = Read(d)
+            d.Expiration = DateAdd(DateInterval.Day, 14, Now)
+            d.Synced = Tomorrow()
+           
+            d.RAC = TotalRac
+            Store(d)
             Return True
 
         Catch ex As Exception
@@ -416,14 +431,7 @@ Module modPersistedDataSystem
         d.PrimaryKey = Project
         d.DataColumn1 = Project
         Store(d)
-        d = New Row
-
-        'd.Expiration = Tomorrow()
-        'd.Added = Now
-        'd.Database = "CPID"
-        'd.Table = "CPIDS"
-        'd.PrimaryKey = sCPID
-        'Store(d)
+   
         Return True
     End Function
 
@@ -674,10 +682,10 @@ Module modPersistedDataSystem
 
         Dim sReport As String = ""
         Dim sReportRow As String = ""
-        Dim sHeader As String = "CPID,Magnitude,RAC,Expiration,Synced,Address,CPID_Valid"
+            Dim sHeader As String = "CPID,Magnitude,TotalRAC,Expiration,Synced,Address,CPID_Valid"
         sReport += sHeader + vbCrLf
         Dim grr As New GridcoinReader.GridcoinRow
-        Dim sHeading As String = "CPID;Magnitude;RAC;Expiration;Synced;Address;CPID_Valid"
+            Dim sHeading As String = "CPID;Magnitude;TotalRAC;Expiration;Synced;Address;CPID_Valid"
         Dim vHeading() As String = Split(sHeading, ";")
         Dim sData As String = modPersistedDataSystem.GetMagnitudeContractDetails()
         Dim vData() As String = Split(sData, ";")

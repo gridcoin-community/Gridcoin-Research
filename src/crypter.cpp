@@ -153,8 +153,7 @@ bool LoadGridKey(std::string gridkey, std::string salt)
 	const char* chSalt = salt.c_str();
 	OPENSSL_cleanse(chKeyGridcoin, sizeof(chKeyGridcoin));
     OPENSSL_cleanse(chIVGridcoin, sizeof(chIVGridcoin));
-	int i = 0;
-	i = EVP_BytesToKey(EVP_aes_256_cbc(), EVP_sha512(),(unsigned char *)chSalt,
+    EVP_BytesToKey(EVP_aes_256_cbc(), EVP_sha512(),(unsigned char *)chSalt,
 		(unsigned char *)chGridKey, 
 		strlen(chGridKey), 1,
 		chKeyGridcoin, chIVGridcoin);

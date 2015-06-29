@@ -1976,7 +1976,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
         int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,
 			GetAdjustedTime(),OUT_POR,out_interest,RSA_WEIGHT);
-	
+
 		MiningCPID miningcpid = GetNextProject(false);
 		uint256 pbh = 0;
 		if (pindexPrev) pbh=pindexPrev->GetBlockHash();
@@ -2056,10 +2056,11 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 			}
 
 	
+
 		   if (LotterySize > 1)
 		   {
 			  
-			  for (int i=0;i < vRecipients.size(); i++)
+			  for (unsigned int i=0;i < vRecipients.size(); i++)
 			  {
 					std::vector<std::string> vPayments = split(vRecipients[i].c_str(),";");
 					//0=script Pub Key, 1=negative amount, 2=coinstake

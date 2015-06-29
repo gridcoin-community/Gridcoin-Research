@@ -36,6 +36,9 @@ bool TallyNetworkAverages(bool ColdBoot);
 MiningCPID DeserializeBoincBlock(std::string block);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
+std::string PubKeyToAddress(const CScript& scriptPubKey);
+double OwedByAddress(std::string address);
+int64_t GetMaximumBoincSubsidy(int64_t nTime);
 
 int static FormatHashBlocks(void* pbuffer, unsigned int len)
 {
@@ -584,7 +587,7 @@ double HexToDouble(std::string str)
   int r= 0;
   char * ch = const_cast<char*>(str.c_str());
   char * p,pp;
-  for (int i = 1; i <= str.length(); i++)
+  for (unsigned int i = 1; i <= str.length(); i++)
   {
     r = str.length() - i;
     pp =   ch[r];
@@ -622,6 +625,28 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 		if (fDebug) printf("CheckStake::Nonce too low\r\n");
 		return error("CheckStake()::Nonce too low");
 	}
+
+	// 6-28-2015 : Verify all the cryptolottery recipients are still valid
+	if (fTestNet && bCryptoLotteryEnabled)
+	{
+			if (pblock->vtx[0].vout.size() > 2)
+			{
+				for (unsigned int i = 2; i < pblock->vtx[0].vout.size(); i++)
+				{
+					std::string Recipient = PubKeyToAddress(pblock->vtx[0].vout[i].scriptPubKey);
+					double      Amount    = CoinToDouble(pblock->vtx[0].vout[i].nValue);
+					double      Owed      = OwedByAddress(Recipient);
+					if (Amount > 0 && (Amount > Owed || Amount > GetMaximumBoincSubsidy(pblock->nTime))) 
+					{
+				        printf("POR Payment results in an overpayment; Recipient %s, Amount %f, Owed %f \r\n",Recipient.c_str(), Amount, Owed);
+		        		return error("POR Payment results in an overpayment; Recipient %s, Amount %f, Owed %f \r\n",
+							Recipient.c_str(), Amount, Owed);
+					}
+				}
+			}
+	 }
+
+
 
 	//1-20-2015 Ensure this stake is above the minimum threshhold; otherwise, vehemently reject
 	double PORDiff = GetBlockDifficulty(pblock->nBits);

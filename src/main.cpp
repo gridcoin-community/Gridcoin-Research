@@ -48,6 +48,8 @@ extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 extern double GetTotalBalance();
 
 extern double GetPaymentsByCPID(std::string cpid);
+extern std::string PubKeyToAddress(const CScript& scriptPubKey);
+
 
 
 extern void IncrementNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress,double distance);
@@ -87,6 +89,7 @@ extern double Cap(double dAmt, double Ceiling);
 std::string CPIDByAddress(std::string address);
 extern std::string ToOfficialNameNew(std::string proj);
 double OwedByAddress(std::string address);
+
 extern double GetMagnitudeUnit(int64_t locktime);
 
 using namespace std;
@@ -342,7 +345,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    OrganizationKey = "";
 
  //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
- int nGrandfather = fTestNet ? 26100 : 136635;
+ int nGrandfather = fTestNet ? 26500 : 136635;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2891,7 +2894,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 					if (Amount > 0 && (Amount > Owed || Amount > GetMaximumBoincSubsidy(nTime))) 
 					{
 				        printf("POR Payment results in an overpayment; Recipient %s, Amount %f, Owed %f \r\n",Recipient.c_str(), Amount, Owed);
-		        		//	return DoS(75,error("POR Payment results in an overpayment; Recipient %s, Amount %f, Owed %f \r\n",							Recipient.c_str(), Amount, Owed));
+		        		return DoS(75,error("POR Payment results in an overpayment; Recipient %s, Amount %f, Owed %f \r\n",
+							Recipient.c_str(), Amount, Owed));
 					}
 				}
 			}
@@ -4746,7 +4750,7 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
 		GetMaximumBoincSubsidy(locktime)*5);
 	double owed_network_cap = payment_timespan * GetMagnitudeUnit(locktime) * research_magnitude;
 	double owed = Lowest(owed_standard,owed_network_cap);
-	if (fTestNet) owed += 10000;
+	if (fTestNet) owed += 40000;
 	
 	double paid = mag.payments;
 	double PaymentsToCPID = GetPaymentsByCPID(cpid);
@@ -4820,7 +4824,7 @@ double GetChainDailyAvgEarnedByCPID(std::string cpid, int64_t locktime, double& 
 				double DailyOwed = (structMag.PaymentTimespan * Cap(structMag.PaymentMagnitude*GetMagnitudeMultiplier(locktime), GetMaximumBoincSubsidy(locktime)*5)/14);
 				double owed_network_cap = 1 * GetMagnitudeUnit(locktime) * structMag.PaymentMagnitude;
 				double owed = Lowest(DailyOwed,owed_network_cap);
-				if (fTestNet) owed += 10000;
+				if (fTestNet) owed += 40000;
 
 				out_payments=structMag.payments;
 				out_daily_avg_payments = AvgDailyPayments;
@@ -5119,13 +5123,6 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 
 
 
-
-
-
-
-
-
-// 6-28-2015
 	
 StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef)
 {
@@ -5715,7 +5712,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 5-29-2015
-		if (pfrom->nVersion < 180262 && fTestNet)
+		if (pfrom->nVersion < 180263 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
