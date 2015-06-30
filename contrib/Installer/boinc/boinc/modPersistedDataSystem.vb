@@ -92,7 +92,8 @@ Module modPersistedDataSystem
     End Function
     Public Function GetDitherMag(Data As Double) As Double
         Dim Dither As Double = 0.1
-        If Data > 0 And Data < 500 Then Dither = 0.2 '5
+        If Data > 0 And Data < 25 Then Dither = 0.8 '1.25
+        If Data >= 25 And Data < 500 Then Dither = 0.2 '5
         If Data >= 500 And Data <= 1000 Then Dither = 0.1 '10
         If Data >= 1000 And Data <= 10000 Then Dither = 0.025 '40
         If Data >= 10000 And Data <= 50000 Then Dither = 0.006 '160
@@ -276,6 +277,7 @@ Module modPersistedDataSystem
                 cpid.Table = "CPIDS"
                 'cpid.RAC = Trim(RoundedRac(TotalRAC))
                 cpid.Magnitude = Trim(Math.Round(Magg, 2))
+                If Magg < 1 And Magg > 0 And TotalAvgRAC > 100 Then cpid.Magnitude = 1
                 Store(cpid)
             Next
             Return True

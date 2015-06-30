@@ -3851,7 +3851,7 @@ void GridcoinServices()
 		{
 			#if defined(WIN32) && defined(QT_GUI)
 				std::string errors1 = "";
-                LoadAdminMessages(true,errors1);
+                LoadAdminMessages(false,errors1);
 				std::string data = GetListOf("beacon");
 				qtSyncWithDPORNodes(data);
 			#endif

@@ -1276,14 +1276,14 @@ std::string AddContract(std::string sType, std::string sName, std::string sContr
 
 std::string AdvertiseBeacon(bool force)
 {
-			
+	 LOCK(cs_main);
+	 {
 			GetNextProject(false);
 			if (GlobalCPUMiningCPID.cpid=="INVESTOR") return "SUCCESS";
 			//If beacon is already in the chain, exit early
 			std::string myBeacon = MyBeaconExists(GlobalCPUMiningCPID.cpid);
 			//printf("MyBeacon %s",myBeacon.c_str());
 			if (myBeacon.length() > 10 && !force) return "SUCCESS";
-
 			uint256 hashRand = GetRandHash();
     		std::string email = GetArgument("email", "NA");
         	boost::to_lower(email);
@@ -1300,6 +1300,7 @@ std::string AdvertiseBeacon(bool force)
 			std::string sName = GlobalCPUMiningCPID.cpid;
 			std::string result = AddContract(sType,sName,sBase);
 			return result;
+	 }
 }
 
 
