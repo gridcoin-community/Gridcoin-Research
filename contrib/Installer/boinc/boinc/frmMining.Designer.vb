@@ -472,7 +472,7 @@ Partial Class frmMining
         Me.Label1.BackColor = System.Drawing.Color.Gainsboro
         Me.Label1.Font = New System.Drawing.Font("Microsoft Sans Serif", 9.75!)
         Me.Label1.ForeColor = System.Drawing.Color.Green
-        Me.Label1.Location = New System.Drawing.Point(700, 42)
+        Me.Label1.Location = New System.Drawing.Point(700, 40)
         Me.Label1.Name = "Label1"
         Me.Label1.Size = New System.Drawing.Size(54, 16)
         Me.Label1.TabIndex = 62

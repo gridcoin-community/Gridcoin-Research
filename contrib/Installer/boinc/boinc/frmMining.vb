@@ -15,7 +15,6 @@ Public Class frmMining
     Private mIDelay As Long = 0
     Private msNeuralReport As String = ""
 
-    'Private clsUtilization As Utilization
     Private RefreshCount As Long
     Private bUICharted As Boolean = False
     Public bDisposing As Boolean
@@ -161,8 +160,6 @@ Public Class frmMining
             sHR.LabelForeColor = Color.Honeydew
             ChartHashRate.Series.Add(sHR)
            
-            '''''''''''''''''''''''''''''''Add Max Hash Rate
-
         
         Catch ex As Exception
         End Try
@@ -263,7 +260,7 @@ Public Class frmMining
         If Len(sCPID) > 1 Then
             '6-7-2015
             Dim dgvProjects As New DataGridView
-            Dim sHeading As String = "CPID,Project,RAC,ProjectAvgRAC,Expiration"
+            Dim sHeading As String = "CPID,Project,RAC,Minimum RAC,ProjectAvgRAC,Expiration"
             Dim vHeading() As String = Split(sHeading, ",")
             PopulateHeadings(vHeading, dgvProjects)
 
@@ -282,7 +279,8 @@ Public Class frmMining
                 Dim rowRAC = Read(surrogatePrjCPID)
                 Dim CPIDRAC As Double = Val(rowRAC.RAC)
                 Dim PrjRAC As Double = Val(prj.RAC)
-                Dim avgRac As Double = CPIDRAC / (PrjRAC + 0.01) * 100
+                'Dim avgRac As Double = CPIDRAC / (PrjRAC + 0.01) * 100
+                Dim MinRAC As Double = Math.Round(PrjRAC * mdMinimumRacPercentage, 2)
 
                 If CPIDRAC > 0 Then
                     iRow += 1
@@ -291,9 +289,12 @@ Public Class frmMining
                     dgvProjects.Rows(iRow - 1).Cells(0).Value = sCPID
                     dgvProjects.Rows(iRow - 1).Cells(1).Value = prj.PrimaryKey
                     dgvProjects.Rows(iRow - 1).Cells(2).Value = Trim(CPIDRAC)
-                    dgvProjects.Rows(iRow - 1).Cells(3).Value = Trim(PrjRAC)
-                    dgvProjects.Rows(iRow - 1).Cells(4).Value = Trim(prj.Expiration)
-
+                    dgvProjects.Rows(iRow - 1).Cells(3).Value = Trim(MinRAC)
+                    dgvProjects.Rows(iRow - 1).Cells(4).Value = Trim(PrjRAC)
+                    dgvProjects.Rows(iRow - 1).Cells(5).Value = Trim(prj.Expiration)
+                    If CPIDRAC < MinRAC Then
+                        dgvProjects.Rows(iRow - 1).Cells(2).Style.BackColor = Color.Red
+                    End If
                 End If
 
             Next

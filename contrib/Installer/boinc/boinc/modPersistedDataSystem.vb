@@ -18,6 +18,8 @@ Module modPersistedDataSystem
     Public msSyncData As String = ""
     Public mbForcefullySyncAllRac = False
     Public mbTestNet As Boolean = False
+    'Minimum RAC percentage required for RAC to be counted in magnitude:
+    Public mdMinimumRacPercentage As Double = 0.06
 
     Private lUseCount As Long = 0
     Public Structure Row
@@ -34,14 +36,12 @@ Module modPersistedDataSystem
         Public DataColumn5 As String
         Public Magnitude As String
         Public RAC As String
-
     End Structure
     Public Structure CPID
         Public cpid As String
         Public RAC As Double
         Public Magnitude As Double
         Public Expiration As Date
-
     End Structure
     Public msCurrentNeuralHash = ""
 
@@ -53,7 +53,6 @@ Module modPersistedDataSystem
         lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
         Dim sOut As String = ""
         For Each cpid As Row In lstCPIDs
-           
             Dim sRow As String = cpid.PrimaryKey + "," + Trim(RoundedMag(Val(cpid.Magnitude))) _
                                  + "," + Trim(Math.Round(Val(cpid.RAC), 2)) + "," + Trim(cpid.Expiration) + "," + Trim(cpid.Synced) + "," + Trim(cpid.DataColumn4) + "," + Trim(cpid.DataColumn5) + ";"
             sOut += sRow
@@ -73,22 +72,17 @@ Module modPersistedDataSystem
                 ' If CDate(cpid.Added) < DateAdd(DateInterval.Day, -1, Now) Then
                 Dim sRow As String = cpid.PrimaryKey + "," + Trim(RoundedMag(Val(cpid.Magnitude))) + ";"
                 sOut += sRow
-                'End If
-
             End If
-
         Next
         Return sOut
     End Function
     Public Function RoundedMag(num As Double)
-        'Rounds magnitude to nearest 5
+        'Rounds magnitude to nearest Dither Factor
         Return Math.Round(Math.Round(num * GetDitherMag(num), 0) / GetDitherMag(num), 2)
     End Function
-
     Public Function RoundedRac(num As Double)
-        'Rounds magnitude to nearest 10
+        'Rounds magnitude to nearest Dither Factor
         Return Math.Round(Math.Round(num * GetDitherMag(num), 0) / GetDitherMag(num), 2)
-
     End Function
     Public Function GetDitherMag(Data As Double) As Double
         Dim Dither As Double = 0.1
@@ -123,7 +117,7 @@ Module modPersistedDataSystem
                 Dim prjTotalRAC = 0
                 units = 0
                 For Each prjCPID As Row In lstProjectCPIDs
-                    If Val(prjCPID.RAC) > 99 Then
+                    If Val(prjCPID.RAC) > 10 Then
                         prjTotalRAC += Val(prjCPID.RAC)
                         units += 1
                     End If
@@ -192,7 +186,6 @@ Module modPersistedDataSystem
                         dr.DataColumn1 = cpidv2
                         dr.DataColumn3 = BlockHash
                         dr.DataColumn4 = Address
-
                         Dim bValid As Boolean = False
                         Dim clsMD5 As New MD5
 
@@ -224,26 +217,18 @@ Module modPersistedDataSystem
             surrogateRow.Table = "CPIDS"
             lstCPIDs = GetList(surrogateRow, "*")
             lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
-
-
             Dim lstProjectsCt As List(Of Row) = GetList(surrogateRow, "*")
-
             WhitelistedProjects = lstProjectsCt.Count
             WhitelistedWithRAC = lstProjectsCt.Count
             For Each cpid As Row In lstCPIDs
                 If NeedsSynced(cpid) Or mbForcefullySyncAllRac Then
                     Dim bResult As Boolean = GetRacViaNetsoft(cpid.PrimaryKey)
-                    If bResult Then
-
-                    End If
                 End If
             Next
         Catch ex As Exception
             Log("UpdateMagnitudes:GatherRAC: " + ex.Message)
         End Try
-
         Try
-
             UpdateNetworkAverages()
         Catch ex As Exception
             Log("UpdateMagnitudes:UpdateNetworkAverages: " + ex.Message)
@@ -266,18 +251,23 @@ Module modPersistedDataSystem
                     surrogatePrjCPID.PrimaryKey = prj.PrimaryKey + "_" + cpid.PrimaryKey
                     Dim rowRAC = Read(surrogatePrjCPID)
                     Dim CPIDRAC As Double = Val(rowRAC.RAC)
-                    Dim PrjRAC As Double = Val(prj.RAC)
-                    Dim avgRac As Double = CPIDRAC / (PrjRAC + 0.01) * 100
-                    '   TotalRAC += PrjRAC
-                    TotalAvgRAC += avgRac
+                    Dim PrjAvgRAC As Double = Val(prj.RAC)
+                    Dim avgRac As Double = CPIDRAC / (PrjAvgRAC + 0.01) * 100
+                    Dim MinRAC As Double = PrjAvgRAC * mdMinimumRacPercentage
+
+                    If CPIDRAC > MinRAC Then
+                        TotalAvgRAC += avgRac
+                    Else
+                        'Optional: Erase researchers RAC here (magnitude is already adjusted)
+                    End If
+
                 Next
                 'Now we can store the magnitude
                 Dim Magg As Double = (TotalAvgRAC / WhitelistedProjects) * WhitelistedWithRAC
                 cpid.Database = "CPID"
                 cpid.Table = "CPIDS"
-                'cpid.RAC = Trim(RoundedRac(TotalRAC))
                 cpid.Magnitude = Trim(Math.Round(Magg, 2))
-                If Magg < 1 And Magg > 0 And TotalAvgRAC > 100 Then cpid.Magnitude = 1
+                If Magg < 1 And Magg > 0.25 Then cpid.Magnitude = 1
                 Store(cpid)
             Next
             Return True
@@ -357,11 +347,9 @@ Module modPersistedDataSystem
         If sCPID = "" Then Return False
         msCurrentNeuralHash = ""
 
-
         Try
 
             Dim sURL As String = "http://boinc.netsoft-online.com/get_user.php?cpid=" + sCPID
-
             Dim w As New MyWebClient2
             Dim sData As String = w.DownloadString(sURL)
             'Push all team gridcoin rac in
@@ -381,7 +369,7 @@ Module modPersistedDataSystem
                 Rac = RoundedRac(Val(ExtractXML(vData(y), "<expavg_credit>", "</expavg_credit>")))
                 Team = LCase(Trim(ExtractXML(vData(y), "<team_name>", "</team_name>")))
                 'Store the :  PROJECT_CPID, RAC
-                If Rac > 99 And Team = "gridcoin" Then
+                If Rac > 10 And Team = "gridcoin" Then
                     PersistProjectRAC(sCPID, Rac, sName)
                     TotalRAC += Rac
                 End If
@@ -433,10 +421,8 @@ Module modPersistedDataSystem
         d.PrimaryKey = Project
         d.DataColumn1 = Project
         Store(d)
-   
         Return True
     End Function
-
 
     Public Function ExtractXML2(sData As String, sStartKey As String, sEndKey As String)
         Dim iPos1 As Integer = InStr(1, sData, sStartKey)
@@ -471,9 +457,7 @@ Module modPersistedDataSystem
         r.Added = DeserializeDate(vData(0))
         r.Expiration = DeserializeDate(vData(1))
         r.Synced = DeserializeDate(vData(2))
-
         r.PrimaryKey = vData(3)
-
 
         If UBound(vData) >= 4 Then r.DataColumn1 = "" & vData(4)
         If UBound(vData) >= 5 Then r.DataColumn2 = "" & vData(5)
@@ -546,8 +530,6 @@ Module modPersistedDataSystem
         Return dataRow
 
     End Function
-
-
     Public Function Insert(dataRow As Row, bOnlyWriteIfNotFound As Boolean)
 
         Dim sPath As String = GetPath(dataRow)
@@ -557,14 +539,12 @@ Module modPersistedDataSystem
         Dim bFound As Boolean
         If dataRow.Added = New Date Then dataRow.Added = Now
 
-        
+
         Using objWriter As New System.IO.StreamWriter(sWritePath)
 
             If System.IO.File.Exists(sPath) Then
                 Dim stream As New System.IO.FileStream(sPath, IO.FileMode.Open)
-
                 Using objReader As New System.IO.StreamReader(stream)
-
                     While objReader.EndOfStream = False
                         sTemp = objReader.ReadLine
                         Dim r As Row = DataToRow(sTemp)
@@ -582,10 +562,8 @@ Module modPersistedDataSystem
                     End While
                     objReader.Close()
                 End Using
-
                 Try
                     Kill(sPath)
-
                 Catch ex As Exception
 
                 End Try
@@ -732,8 +710,5 @@ Public Class MyWebClient2
         w.Timeout = timeout
         Return (w)
     End Function
-
-
-
 
 End Class
