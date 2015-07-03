@@ -319,7 +319,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    OrganizationKey = "";
 
  //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
- int nGrandfather = fTestNet ? 27444 : 267449;
+ int nGrandfather = fTestNet ? 27444 : 267497;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2881,7 +2881,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		if (staked > 60)
 		{
 					//Client should not have staked more than 60 blocks in the last 500 blocks after efficient version mandatory upgrade
-					return error("Client staked more than 60 blocks over the last 500 blocks; block rejected\r\n");
+					//return error("Client staked more than 60 blocks over the last 500 blocks; block rejected\r\n");
 		}
 
 
@@ -6782,49 +6782,10 @@ void printbool(std::string comment, bool boo)
 
 double GetMagnitude(std::string cpid, double purported, bool UseNetSoft)
 {
-	if (!UseNetSoft)
-	{
-		//First try the consensus:
-		CreditCheck(cpid,false);
-		StructCPID UntrustedHost = GetStructCPID();
-		UntrustedHost = mvCreditNodeCPID[cpid]; //Contains Mag across entire CPID
-		double magnitude_consensus = UntrustedHost.ConsensusMagnitude;
-		if (magnitude_consensus >= purported) 
-		{
-				if (fDebug) printf("For cpid %s, using Consensus mag of %f\r\n",cpid.c_str(),magnitude_consensus);
-				return magnitude_consensus;
-		}
-		//Try clearing the cache; call Netsoft
-		CreditCheck(cpid,true);
-		UntrustedHost = mvCreditNodeCPID[cpid]; //Contains Mag across entire CPID
-		magnitude_consensus = UntrustedHost.Magnitude;
-	    if (fDebug) printf("For cpid %s, using Netsoft mag of %f\r\n",cpid.c_str(),magnitude_consensus);
-		return magnitude_consensus;
-	}
-	else
-	{
-		CreditCheck(cpid,false);
-		StructCPID UntrustedHost = GetStructCPID();
-		UntrustedHost = mvCreditNodeCPID[cpid]; //Contains Mag across entire CPID
-		double mag = UntrustedHost.Magnitude;
-		if (mag >= purported) 
-		{
-			if (fDebug) printf("For cpid %s, using NetSoft cached mag of %f\r\n",cpid.c_str(),mag);
-			return mag;
-		}
-		//Try clearing the cache; call Netsoft
-		for (int i = 0; i <= 3;i++)
-		{
-			CreditCheck(cpid,true);
-			UntrustedHost = mvCreditNodeCPID[cpid]; //Contains Mag across entire CPID
-			mag = UntrustedHost.Magnitude;
-			printf("Attempt #%f ; For cpid %s, using NetSoft actual mag of %f\r\n",(double)i,cpid.c_str(),mag);
-			if (mag >= purported) return mag;
-		}
-		return mag;
-	
-	}
-			
+	// Get neural network magnitude:
+	StructCPID stDPOR = mvDPOR[GlobalCPUMiningCPID.cpid];
+	double research_magnitude = LederstrumpfMagnitude2(stDPOR.Magnitude,GetAdjustedTime());
+	return research_magnitude;
 }
 
 
