@@ -319,7 +319,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    OrganizationKey = "";
 
  //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
- int nGrandfather = fTestNet ? 27444 : 267503;
+ int nGrandfather = fTestNet ? 27444 : 267504;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2813,8 +2813,9 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
         int64_t nCalculatedStakeReward = GetProofOfStakeMaxReward(nCoinAge, nFees, nTime);
 
-		if (nStakeReward > nCalculatedStakeReward)
+		if (nStakeReward > nCalculatedStakeReward && vtx[0].vout.size() < 2)
             return DoS(1, error("ConnectBlock[] : coinstake pays above maximum (actual=%"PRId64" vs calculated=%"PRId64")", nStakeReward, nCalculatedStakeReward));
+		
 		if (bb.cpid=="INVESTOR" && nStakeReward > 1)
 		{
 			double OUT_POR = 0;
@@ -7094,7 +7095,6 @@ void CreditCheck(std::string cpid, bool clearcache)
 							project_magnitude = UserVerifiedRAC/(projavg+.01) * 100;
 							structc.TotalMagnitude = structc.TotalMagnitude + project_magnitude;
 							structc.MagnitudeCount++;
-							structc.Magnitude = (structc.TotalMagnitude/(structc.MagnitudeCount+.01));
 							//Halford 9-28-2014: Per Survey results, use Magnitude Calculation v2: Assess Magnitude based on all whitelisted projects
 							double WhitelistedWithRAC = GetNetworkProjectCountWithRAC();
 							structc.Magnitude = (structc.TotalMagnitude/WHITELISTED_PROJECTS) * WhitelistedWithRAC;
