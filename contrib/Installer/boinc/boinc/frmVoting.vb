@@ -29,6 +29,7 @@ Public Class frmVoting
         PopulateHeadings(vHeading, dgv)
         Dim iRow As Long = 0
         Dim vPolls() As String = Split(sVoting, "<POLL>")
+       
         For y As Integer = 0 To vPolls.Length - 1
             vPolls(y) = Replace(vPolls(y), "_", " ")
             Dim sTitle As String = ExtractXML(vPolls(y), "<TITLE>", "</TITLE>")
@@ -56,17 +57,14 @@ Public Class frmVoting
                 dgv.Rows(iRow).Cells(2).Value = sExpiration
                 dgv.Rows(iRow).Cells(3).Value = sShareType
                 dgv.Rows(iRow).Cells(4).Value = sQuestion
+                If Len(sAnswers) > 81 Then sAnswers = Mid(sAnswers, 1, 81) + "..."
                 dgv.Rows(iRow).Cells(5).Value = sAnswers
                 dgv.Rows(iRow).Cells(6).Value = sTotalParticipants
                 dgv.Rows(iRow).Cells(7).Value = sTotalShares
                 dgv.Rows(iRow).Cells(8).Value = sBestAnswer
-
                 iRow += 1
-
             End If
-
         Next
-
     End Sub
 
     Private Sub dgv_CellContentDoubleClick(sender As Object, e As System.Windows.Forms.DataGridViewCellEventArgs) Handles dgv.CellContentDoubleClick
@@ -78,7 +76,6 @@ Public Class frmVoting
             frmChart.Show()
             frmChart.ChartPoll(sTitle)
         End If
-
     End Sub
     Private Sub dgv_CellMouseClick(sender As Object, e As System.Windows.Forms.DataGridViewCellMouseEventArgs) Handles dgv.CellMouseClick
         If e.Button = Windows.Forms.MouseButtons.Left Then

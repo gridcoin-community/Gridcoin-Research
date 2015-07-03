@@ -526,7 +526,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	{
 		printf("Check stake kernelhash: CPID Invalid: RSA Weight = 0");
 		oNC=0;
-		if (checking_local) msMiningErrors2="CPID_INVALID";
+		if (checking_local) msMiningErrors6="CPID_INVALID";
 	}
 
     targetProofOfStake = (bnCoinDayWeight * bnTargetPerCoinDay).getuint256();
@@ -643,8 +643,7 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 		msMiningErrors5 = narr;
 	}
 
-	if (checking_local) msMiningErrors2 = "RSA Weight: " + RoundToString(RSA_WEIGHT,0);
-
+	
 	if (fDebug && !checking_local)
 	{
 		printf("{CheckStakeKernelHashV3::INFO::} PaymentAge %f, BitsAge %f, Magnitude %f, Coin_Age %f, RSAWeight %f \r\n",

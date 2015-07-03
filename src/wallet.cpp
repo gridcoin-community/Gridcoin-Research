@@ -1622,7 +1622,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
     CTxDB txdb("r");
 	//Retrieve CPID RSA_WEIGHT
 	int64_t RSA_WEIGHT = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-	////////////////////////////////////////////////////////////////////////////////msMiningErrors3 = "L R S A: " + RoundToString(RSA_WEIGHT,0);
+	////////////////////////////////////////////////////////////////////////////////
 	
     LOCK2(cs_main, cs_wallet);
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
@@ -2001,15 +2001,13 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		//INVESTORS
 		if (mint < MintLimiter(PORDiff,RSA_WEIGHT,GlobalCPUMiningCPID.cpid,GetAdjustedTime())) 
 		{
-				if (fDebug2) printf("CreateStake()::Mint %f of %f too small",(double)mint,(double)MintLimiter(PORDiff,RSA_WEIGHT,miningcpid.cpid,GetAdjustedTime()));
-				msMiningErrors7="Mint too small";
+				if (fDebug) printf("CreateStake()::Mint %f of %f too small",(double)mint,(double)MintLimiter(PORDiff,RSA_WEIGHT,miningcpid.cpid,GetAdjustedTime()));
 				return false; 
 		}
 		
 		if (nReward == 0)
 		{
-			if (fDebug3) printf("CreateBlock():Mint is zero");
-			msMiningErrors7="Mint is zero";  //Newbie
+			if (fDebug) printf("CreateBlock():Mint is zero");
 			return false;   
 		}
 	    nCredit += nReward;

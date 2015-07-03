@@ -165,7 +165,7 @@ double GetNetworkProjectCountWithRAC()
 		NetworkProject = mvNetwork[(*ibp).first];
 		if (NetworkProject.initialized)
 		{
-			if (NetworkProject.AverageRAC > 100) count++;
+			if (NetworkProject.AverageRAC > 10) count++;
 		}
 	}
 	return count;
@@ -1057,7 +1057,7 @@ bool TallyMagnitudesByContract()
 					}
 					stCPID.verifiedrac = rac;
 		
-					if (projavg > 100)
+					if (projavg > 10)
 					{
 							stCPID.verifiedTotalNetworkRAC = stCPID.verifiedTotalNetworkRAC + projavg;
 							double project_magnitude = rac/(projavg+.01) * 100;
@@ -1179,7 +1179,7 @@ void QueryWorldCommunityGridRAC()
 						std::string rac = ExtractHTML(vTD[5],"<td",">","</td>");
 						if (rac=="") rac = "0";
 						double dRac = cdbl(rac,0);
-						if (dRac > 99)
+						if (dRac > 10)
 						{
 							printf("WCG cpid %s rac %f\r\n",cpid.c_str(),dRac);
 							contract += cpid + "," + RoundToString(dRac,0) + ";";
@@ -1221,7 +1221,7 @@ bool InsertSmartContract(std::string URL, std::string name)
 			//if (fDebug) printf("Cpid %s rac %s			,     ",cpid.c_str(),rac.c_str());
 			
 			double dRac = cdbl(rac,0);
-			if (dRac > 99)
+			if (dRac > 10)
 			{
 				contract += cpid + "," + RoundToString(dRac,0) + ";";
 				total_rac++;
@@ -1235,11 +1235,11 @@ bool InsertSmartContract(std::string URL, std::string name)
 			std::string sName = "" + name;
 			std::string sValue = contract;
 
-			if (vUsers.size() > 1 && total_rac > 100)
+			if (vUsers.size() > 1 && total_rac > 10)
 			{
 				std::string result = AddMessage(true,sType,sName,sValue,sPass,AmountFromValue(2500));
 			}
-			return (vUsers.size() > 1 && total_rac > 100) ? true : false;
+			return (vUsers.size() > 1 && total_rac > 10) ? true : false;
 }
 
 
@@ -1753,7 +1753,7 @@ Value execute(const Array& params, bool fHelp)
 					if (WhitelistedProject.initialized)
 					{
 						double ProjectRAC = GetNetworkAvgByProject(WhitelistedProject.projectname);
-						if (ProjectRAC > 100) 
+						if (ProjectRAC > 10) 
 						{
 								NetworkProjectCountWithRAC++;
 						}
@@ -3127,7 +3127,7 @@ Value listitem(const Array& params, bool fHelp)
 			if (WhitelistedProject.initialized)
 			{
 				double ProjectRAC = GetNetworkAvgByProject(WhitelistedProject.projectname);
-				if (ProjectRAC > 100) NetworkProjectCountWithRAC++;
+				if (ProjectRAC > 10) NetworkProjectCountWithRAC++;
 				StructCPID structcpid = GetStructCPID();
 				structcpid = mvCPIDs[WhitelistedProject.projectname];
 				bool projectvalid = ProjectIsValid(structcpid.projectname);
@@ -3139,7 +3139,7 @@ Value listitem(const Array& params, bool fHelp)
 				{ 
 					if (structcpid.projectname.length() > 2 && projectvalid)
 					{
-						including = (ProjectRAC > 0 && structcpid.Iscpidvalid && structcpid.verifiedrac > 100);
+						including = (ProjectRAC > 0 && structcpid.Iscpidvalid && structcpid.verifiedrac > 10);
 						UserVerifiedRAC = structcpid.verifiedrac;
 						if (UserVerifiedRAC < 0) UserVerifiedRAC=0;
 						narr_desc = "NetRac: " + RoundToString(ProjectRAC,0) + ", CPIDValid: " + YesNo(structcpid.Iscpidvalid) + ", VerifiedRAC: " +RoundToString(structcpid.verifiedrac,0);
@@ -3350,7 +3350,7 @@ Value listitem(const Array& params, bool fHelp)
 			
 				if (structcpid.cpid == GlobalCPUMiningCPID.cpid || structcpid.cpid=="INVESTOR" || structcpid.cpid=="investor")
 				{
-					if (structcpid.verifiedrac > 100 && structcpid.verifiedteam=="gridcoin")
+					if (structcpid.verifiedrac > 10 && structcpid.verifiedteam=="gridcoin")
 					{
 						Object entry;
 						entry.push_back(Pair("Project",structcpid.projectname));

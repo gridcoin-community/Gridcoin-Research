@@ -384,7 +384,17 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
     case TransactionRecord::Generated:
 	    if (wtx->RemoteFlag==1)
 		{
-			return tr("Mined - DPOR");
+
+			double reward = CoinToDouble(wtx->credit + wtx->debit);
+			double max = GetMaximumBoincSubsidy(GetAdjustedTime());
+			if (reward==max)
+			{
+				return tr("Mined - DPOR");
+			}
+			else
+			{
+				return tr("Minted - DPOR");
+			}
 		}
 		else if (((IsPoR(CoinToDouble(wtx->credit + wtx->debit)))))
 		{

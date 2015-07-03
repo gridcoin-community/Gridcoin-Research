@@ -336,8 +336,6 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msHashBoincTxId= "";
  std::string    msMiningErrors = "";
  std::string    msMiningErrors2 = "";
- std::string    msMiningErrors3 = "";
- std::string    msMiningErrors4 = "";
  std::string    msMiningErrors5 = "";
  std::string    msMiningErrors6 = "";
  std::string    msMiningErrors7 = "";
@@ -594,7 +592,7 @@ std::string GetGlobalStatus()
 			+ RoundToString(PORDiff,3) + "; Net Weight: " + RoundToString(GetPoSKernelPS2(),2)  
 			+ "<br>DPOR Weight: " +  sWeight + "; Status: " + msMiningErrors 
 			+ "<br>Magnitude: " + RoundToString(out_magnitude,3) + "; Project: " + msMiningProject
-			+ "<br>" + msMiningErrors2 + " " + msMiningErrors3 + " " + msMiningErrors4 + 
+			+ "<br>" + msMiningErrors2 + " " +   
 			+ "<br>" + msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 +
 			+ "<br>" + sBoost.str();
 		//The last line break is for Windows 8.1 Huge Toolbar
@@ -754,7 +752,7 @@ MiningCPID GetNextProject(bool bForce)
 				structcpid = mvCPIDs[(*ii).first];
 				if (structcpid.initialized) 
 				{ 
-					if (structcpid.Iscpidvalid && structcpid.verifiedrac > 100)
+					if (structcpid.Iscpidvalid && structcpid.verifiedrac > 99)
 					{
 						iValidProjects++;
 					}
@@ -780,7 +778,7 @@ MiningCPID GetNextProject(bool bForce)
 				structcpid = mvCPIDs[(*ii).first];
 				if (structcpid.initialized) 
 				{ 
-					if (structcpid.Iscpidvalid && structcpid.projectname.length() > 2 && structcpid.verifiedrac > 100)
+					if (structcpid.Iscpidvalid && structcpid.projectname.length() > 2 && structcpid.verifiedrac > 99)
 					{
 							iRow++;
 							if (i==3 || iDistributedProject == iRow)
@@ -7108,7 +7106,7 @@ void AddProjectFromNetSoft(StructCPID& netsoft)
 	if (NewProject.verifiedteam != "gridcoin") NewProject.verifiedrac = -1;
 	InitializeProjectStruct(NewProject);
 	mvCPIDs.insert(map<string,StructCPID>::value_type(NewProject.projectname,NewProject));
-	if (NewProject.rac > 100 && NewProject.Iscpidvalid)
+	if (NewProject.rac > 10 && NewProject.Iscpidvalid)
 	{
 		mvCPIDs[netsoft.projectname] = NewProject;
 		printf("Adding local project missing - from Netsoft %s %s\r\n",NewProject.projectname.c_str(),NewProject.cpid.c_str());
@@ -7316,9 +7314,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 						}
 						projavg=GetNetworkAvgByProject(sProj);
 
-						//	bool including = (ProjectRAC > 1 && structcpid.rac > 100 && structcpid.Iscpidvalid && structcpid.verifiedrac > 100);
-			
-						if (projavg > 100 && structc.verifiedrac > 100 && structc.team == "gridcoin")
+						if (projavg > 10 && structc.verifiedrac > 10 && structc.team == "gridcoin")
 						{
 							structc.verifiedTotalNetworkRAC = structc.verifiedTotalNetworkRAC + projavg;
 							double project_magnitude = 0;
@@ -7743,7 +7739,7 @@ void HarvestCPIDs(bool cleardata)
 
 				if (structverify.initialized)
 				{
-					if (structcpid.verifiedrac == 0 && structcpid.rac > 100)
+					if (structcpid.verifiedrac == 0 && structcpid.rac > 10)
 					{
 							
 								structcpid.errors = "Unable to verify project RAC online: Project missing in credit verification node.";
@@ -8309,6 +8305,11 @@ bool MemorizeMessages(bool bFullTableScan, const CBlock& block, const CBlockInde
 						{
 								if (fDebug) printf("Adding MessageKey type %s Key %s Value %s\r\n",sMessageType.c_str(),sMessageKey.c_str(),sMessageValue.c_str());
 								WriteCache(sMessageType,sMessageKey,sMessageValue,tx.nTime);
+								if (sMessageType=="poll")
+								{
+										msMiningErrors2 = "Poll: " + sMessageKey;
+								}
+	
 						}
 						else if(sMessageAction=="D")
 						{
