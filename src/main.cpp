@@ -2890,10 +2890,10 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR, OUT_INTEREST, bb.RSAWeight);
 		if (bb.cpid != "INVESTOR" && mint > 1)
 		{
-				if ((bb.ResearchSubsidy+OUT_INTEREST) < mint)
+				if ((bb.ResearchSubsidy+(double)OUT_INTEREST+(double)1) < (double)mint)
 				{
-						return error("ConnectBlock[] : Researchers Interest %f and Research %f and Mint %f for CPID %s does not match calculated research subsidy",
-							(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,(double)mint,bb.cpid.c_str());
+						return error("ConnectBlock[] : Researchers Interest %f and Research %f and Mint %f with Out_Interest %f for CPID %s does not match calculated research subsidy",
+							(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,(double)mint,(double)OUT_INTEREST,bb.cpid.c_str());
 				
 				}
 		}
