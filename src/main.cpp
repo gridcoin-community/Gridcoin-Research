@@ -319,7 +319,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    OrganizationKey = "";
 
  //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
- int nGrandfather = fTestNet ? 27444 : 267785;
+ int nGrandfather = fTestNet ? 27444 : 267449;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -724,7 +724,7 @@ MiningCPID GetNextProject(bool bForce)
 				structcpid = mvCPIDs[(*ii).first];
 				if (structcpid.initialized) 
 				{ 
-					if (structcpid.Iscpidvalid && structcpid.verifiedrac > 99)
+					if (structcpid.Iscpidvalid && structcpid.verifiedrac > 10)
 					{
 						iValidProjects++;
 					}
@@ -7359,7 +7359,6 @@ void HarvestCPIDs(bool cleardata)
 			printf("CPUMiningCPID Initialized.\r\n");
 		}
 
-			//Move the BPK from aesskein, and the cpid in version
 			GlobalCPUMiningCPID.email = GlobalCPUMiningCPID.aesskein;
 			GlobalCPUMiningCPID.boincruntimepublickey = GlobalCPUMiningCPID.lastblockhash;
 			printf("Using Serialized Boinc CPID %s with orig email of %s and bpk of %s with cpidhash of %s \r\n",GlobalCPUMiningCPID.cpid.c_str(), GlobalCPUMiningCPID.email.c_str(), GlobalCPUMiningCPID.boincruntimepublickey.c_str(),GlobalCPUMiningCPID.cpidhash.c_str());
@@ -7533,7 +7532,7 @@ void HarvestCPIDs(bool cleardata)
 					structcpid.errors = "Project missing in [Netsoft] credit verification node (Wait at least 24 hours for new projects to propagate).";
 				}
 
-				if (structcpid.rac < 100)         
+				if (structcpid.rac < 10)         
 				{
 					structcpid.Iscpidvalid = false;
 					structcpid.errors = "RAC too low";
@@ -7541,7 +7540,7 @@ void HarvestCPIDs(bool cleardata)
 
 				if (structverify.initialized)
 				{
-					if (structcpid.verifiedrac < 100 && structcpid.verifiedrac > 0)
+					if (structcpid.verifiedrac < 10 && structcpid.verifiedrac > 0)
 					{
 						structcpid.errors = "Verified RAC too low.";
 
