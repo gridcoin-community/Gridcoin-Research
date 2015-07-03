@@ -630,7 +630,7 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 		std::string narr = "";
 		if (boincblock.cpid != "INVESTOR")
 		{
-			if (boincblock.Magnitude < 2)     narr += "Magnitude too low to stake.";
+			if (boincblock.Magnitude < .25)     narr += "Magnitude too low to stake.";
 			if (payment_age < 60*60)          narr += " Last Payment too recent: " + RoundToString(payment_age,0);
 			if (payment_age < BitsAge)        narr += " Payment < Diff: " + RoundToString(payment_age,0) + "; " + RoundToString(BitsAge,0);
 			if (coin_age < 4*60*60)           narr += " Coin Age (immature): " + RoundToString(coin_age,0);

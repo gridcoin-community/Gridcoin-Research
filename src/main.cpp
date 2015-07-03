@@ -319,7 +319,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    OrganizationKey = "";
 
  //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
- int nGrandfather = fTestNet ? 27444 : 267497;
+ int nGrandfather = fTestNet ? 27444 : 267503;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -2820,9 +2820,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			double OUT_POR = 0;
 			double OUT_INTEREST = 0;
 			int64_t nCalculatedResearchReward = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR, OUT_INTEREST,bb.RSAWeight);
-			if (nStakeReward > nCalculatedResearchReward)
+			if ((double)bb.InterestSubsidy > (double)OUT_INTEREST+1 && vtx[0].vout.size() < 2)
 			{
-				   
 					return DoS(1, error("ConnectBlock[] : Investor Reward pays too much : cpid %s (actual=%"PRId64" vs calculated=%"PRId64")",
 					bb.cpid.c_str(), nStakeReward, nCalculatedResearchReward));
 			}
@@ -2888,7 +2887,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		double OUT_POR = 0;
 		double OUT_INTEREST = 0;
 		int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR, OUT_INTEREST, bb.RSAWeight);
-		if (bb.cpid != "INVESTOR" && mint > 1)
+		if (bb.cpid != "INVESTOR" && mint > 1 && vtx[0].vout.size() < 2)
 		{
 				if ((bb.ResearchSubsidy+(double)OUT_INTEREST+(double)1) < (double)mint)
 				{

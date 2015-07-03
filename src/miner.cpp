@@ -623,6 +623,8 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	if (pblock->nNonce < 100)
 	{
 		if (fDebug) printf("CheckStake::Nonce too low\r\n");
+		nLastBlockSubmitted = 0;
+		
 		return error("CheckStake()::Nonce too low");
 	}
 
