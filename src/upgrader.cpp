@@ -236,12 +236,7 @@ bool Upgrader::downloader(int targetfile)
     
     if (!verifyPath(target, true)) {return false;}
     target /= targetswitch(targetfile);
-
-    printf("%s\n",url);
-    printf("%s\n",target.c_str());
-
     cancelDownload(false);
-
     if (bfs::exists(target))    {bfs::remove(target);}
     file = fopen(target.string().c_str(), "wb");
     fileInitialized=true;
@@ -352,7 +347,7 @@ bool Upgrader::unzipper(int targetfile)
         return false;
     }
  
-    for (int i = 0; i < zip_get_num_entries(archive, 0); i++) 
+    for (unsigned int i = 0; i < zip_get_num_entries(archive, 0); i++) 
     {
         if (zip_stat_index(archive, i, 0, &filestat) == 0)
         {
@@ -409,7 +404,7 @@ bool Upgrader::juggler(int pf, bool recovery)           // for upgrade, backs up
         return false;
     }
 
-    printf("Copying %s into %s\n", path(pf).c_str(), backupdir.c_str());
+    //printf("Copying %s into %s\n", path(pf).c_str(), backupdir.c_str());
 
     if ((pf == PROGRAM) && (safeProgramDir()))
     {
@@ -440,9 +435,6 @@ bool Upgrader::juggler(int pf, bool recovery)           // for upgrade, backs up
     else
     {
         copyDir(path(pf), backupdir, true);
-
-        printf("Copying %s into %s\n", sourcedir.c_str(), path(pf).c_str());
-
         copyDir(sourcedir, path(pf), true);
 
     }
@@ -610,13 +602,13 @@ bool Upgrader::verifyPath(bfs::path path, bool create)
         {
             if (bfs::create_directories(path))
             {
-            printf("%s successfully created\n", path.c_str());
+            //printf("%s successfully created\n", path.c_str());
             return true;
             }
         }
     else
         {
-            printf("%s does not exist and could not be created!\n", path.c_str());
+            //printf("%s does not exist and could not be created!\n", path.c_str());
             return false;
         }
 	return false;

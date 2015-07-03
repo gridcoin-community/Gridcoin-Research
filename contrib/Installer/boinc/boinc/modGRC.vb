@@ -82,6 +82,9 @@ Module modGRC
         oDGV.ColumnHeadersDefaultCellStyle = dgcc
         For x = 0 To UBound(vHeading)
             oDGV.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.None
+
+            oDGV.Columns(x).SortMode = DataGridViewColumnSortMode.Automatic
+
         Next
         For x = 0 To UBound(vHeading)
             oDGV.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells

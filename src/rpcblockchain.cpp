@@ -103,7 +103,6 @@ int64_t GetRSAWeightByCPID(std::string cpid);
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spirit::Object& entry);
 extern enum Checkpoints::CPMode CheckpointsMode;
-extern bool Resuscitate();
 bool ProjectIsValid(std::string project);
 int RebootClient();
 extern double GetNetworkProjectCountWithRAC();
@@ -126,7 +125,6 @@ double LederstrumpfMagnitude2(double mag,int64_t locktime);
 
 std::string TxToString(const CTransaction& tx, const uint256 hashBlock, int64_t& out_amount, int64_t& out_locktime, int64_t& out_projectid, 
 	std::string& out_projectaddress, std::string& comments, std::string& out_grcaddress);
-extern double GetPoBDifficulty();
 bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
 std::string RetrieveMd5(std::string s1);
@@ -145,14 +143,6 @@ uint256 GridcoinMultipleAlgoHash(std::string t1);
 void ExecuteCode();
 void CreditCheck(std::string cpid, bool clearcache);
 double CalculatedMagnitude(int64_t locktime);
-
-
-
-double GetPoBDifficulty()
-{
-	//ToDo:Retire
-	return 0;
-}
 
 
 
@@ -520,6 +510,11 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	if (bb.superblock.length() > 20)
 	{
 		result.push_back(Pair("SuperblockLength", RoundToString((double)bb.superblock.length(),0) ));
+
+		std::string neural_hash = RetrieveMd5(bb.superblock);
+		double popularity = 0;
+		result.push_back(Pair("SuperblockHash", neural_hash));
+
 	}
     return result;
 }
@@ -1569,8 +1564,8 @@ Value execute(const Array& params, bool fHelp)
 						}
 					}
 
-				}
-		}
+			   }
+		  }
 
 	}
 	else if (sItem == "addpoll")
@@ -2307,36 +2302,32 @@ Array MagnitudeReport(bool bMine)
 									Object entry;
 									entry.push_back(Pair("CPID",structMag.cpid));
 									entry.push_back(Pair("GRCAddress",structMag.GRCAddress));
-									entry.push_back(Pair("Last Block",structMag.LastBlock));
-									entry.push_back(Pair("Magnitude",structMag.ConsensusMagnitude));
-									entry.push_back(Pair("Payment Magnitude",structMag.PaymentMagnitude));
+									entry.push_back(Pair("Last Block Paid",structMag.LastBlock));
+									StructCPID DPOR = mvDPOR[structMag.cpid];
+									entry.push_back(Pair("DPOR Magnitude",	DPOR.Magnitude));
+									//entry.push_back(Pair("Magnitude",structMag.ConsensusMagnitude));
+									//entry.push_back(Pair("Payment Magnitude",structMag.PaymentMagnitude));
 									entry.push_back(Pair("Payment Timespan (Days)",structMag.PaymentTimespan));
-									
 									StructCPID stGRC = GetInitializedStructCPID(structMag.GRCAddress);
-									
-
-									entry.push_back(Pair("Magnitude Accuracy",structMag.Accuracy));
-									entry.push_back(Pair("Long Term Owed (14 days)",structMag.totalowed));
-									entry.push_back(Pair("Payments (14 days)",structMag.payments));
+									//entry.push_back(Pair("Magnitude Accuracy",structMag.Accuracy));
+									entry.push_back(Pair("Total Earned (14 days)",structMag.totalowed));
+									//entry.push_back(Pair("Payments (14 days)",structMag.payments));
 									//
 									double PaymentsToCPID = GetPaymentsByCPID(structMag.cpid);
 	     							entry.push_back(Pair("DPOR Payments (14 days)",PaymentsToCPID));
-	
 									entry.push_back(Pair("InterestPayments (14 days)",structMag.interestPayments));
 									entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
-									entry.push_back(Pair("Total Owed",structMag.owed));
+									entry.push_back(Pair("Owed",structMag.owed));
 									double nep = Cap(structMag.owed/2, GetMaximumBoincSubsidy(GetAdjustedTime()));
-									entry.push_back(Pair("Next Estimated Payment",nep));
-									entry.push_back(Pair("Daily Paid",structMag.payments/14));
+									//entry.push_back(Pair("Next Estimated Payment",nep));
+									entry.push_back(Pair("Daily Paid",PaymentsToCPID/14));
 									entry.push_back(Pair("Daily Owed",structMag.totalowed/14));
 									double magnitude_unit = GetMagnitudeUnit(GetAdjustedTime());
-									entry.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
+									//entry.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
 									double est_daily = magnitude_unit*structMag.ConsensusMagnitude;
 									entry.push_back(Pair("Daily Max per Mag Unit", est_daily));
-									double Owed =  OwedByAddress(structMag.GRCAddress);
-									entry.push_back(Pair("Owed by address (testnet only)", Owed));
-									StructCPID DPOR = mvDPOR[structMag.cpid];
-									entry.push_back(Pair("DPOR Magnitude",	DPOR.Magnitude));
+									double OwedByAddr = OwedByAddress(structMag.GRCAddress);
+									entry.push_back(Pair("Owed by address (testnet only)", OwedByAddr));
 									results.push_back(entry);
 						}
 				}
@@ -2369,8 +2360,7 @@ std::string TimestampToHRDate(double dtm)
 
 std::string CryptoLottery(int64_t locktime)
 {
-		   //ToDo Add GRCAddress to Mag Report	   
-	       std::string sOut = "";
+		   std::string sOut = "";
  		   std::string row = "";
 		   int rows = 0;
 		   double max_subsidy = (double)GetMaximumBoincSubsidy(locktime);
@@ -2380,11 +2370,9 @@ std::string CryptoLottery(int64_t locktime)
 				structMag = mvMagnitudes[(*ii).first];
 				if (structMag.initialized && structMag.cpid.length() > 2 && structMag.cpid != "INVESTOR" && structMag.GRCAddress.length() > 5) 
 				{ 
-				
 						double      Owed      = OwedByAddress(structMag.GRCAddress);
 						//Reverse Check, ensure Address resolves to cpid:
 						std::string reverse_cpid_lookup = CPIDByAddress(structMag.GRCAddress);
-
 						if (reverse_cpid_lookup == structMag.cpid && Owed > max_subsidy && sOut.find(structMag.GRCAddress) == std::string::npos) 
    					    {
 							// Gather the owed amount, grc address, and cpid.
@@ -2393,22 +2381,16 @@ std::string CryptoLottery(int64_t locktime)
 							double tbp = Owed / 2;
 							if (tbp > max_subsidy) tbp=max_subsidy;
 							row = structMag.cpid + ";" + structMag.GRCAddress + ";" + RoundToString(tbp,2);
-							//printf(row.c_str());
 							sOut += row + "<COL>";
 							rows++;
-							//Prod ToDo: Change to 10:
-							if (rows >= 20) break;
+							if (rows >= 25) break;
   						}
 		     	}
 		}
-   	
 
-		if (sOut.length() > 10) sOut = sOut.substr(0,sOut.length()-5);
-
-	    //Prod ToDo: if rows < 10 return null
-		if (fDebug3) printf("CryptoLottery %s",sOut.c_str());
-		//4-11-2015 ; Simulate No Payments due in testnet 50% of the time:
-		if (fTestNet && LessVerbose(500)) sOut = "";
+		if (sOut.length() > 10) sOut = sOut.substr(0,sOut.length()-5); //Remove last delimiter
+	    if (fDebug3) printf("CryptoLottery %s",sOut.c_str());
+		if (rows < 5) sOut = "";
 		return sOut;
 }
 
@@ -2416,7 +2398,6 @@ std::string CryptoLottery(int64_t locktime)
 
 std::string MyBeaconExists(std::string cpid)
 {
-
 	std::string myBeacon = mvApplicationCache["beacon;" + cpid];
 	return myBeacon;
 }
@@ -2461,8 +2442,7 @@ Array ContractReportCSV()
 
 								}
 								header +=  "\n";
-					
-					}
+   					}
 		       
 				}
 		   }
@@ -2472,11 +2452,8 @@ Array ContractReportCSV()
 		   Object entry;
 		   entry.push_back(Pair("CSV Complete",strprintf("\\reports\\open_contracts_%"PRId64".csv",timestamp)));
 		   results.push_back(entry);
-     	   
-		   CSVToFile(strprintf("open_contracts_%"PRId64".csv",timestamp), header);
+     	   CSVToFile(strprintf("open_contracts_%"PRId64".csv",timestamp), header);
 		   return results;
-
-		 
 }
 
 
@@ -3038,16 +3015,6 @@ Value listitem(const Array& params, bool fHelp)
 	Object e2;
 	e2.push_back(Pair("Command",sitem));
 	results.push_back(e2);
-
-	if (sitem=="creditcheck")
-	{
-			Object entry;
-	
-			CreditCheck(GlobalCPUMiningCPID.cpid,true);
-			double boincmagnitude = CalculatedMagnitude( GetAdjustedTime());
-			entry.push_back(Pair("Magnitude",boincmagnitude));
-			results.push_back(entry);
-	}
 	if (sitem == "networktime")
 	{
 			Object entry;

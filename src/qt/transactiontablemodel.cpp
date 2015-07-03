@@ -393,7 +393,7 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
 			}
 			else
 			{
-				return tr("Minted - DPOR");
+				return tr("Minted - (Local) DPOR");
 			}
 		}
 		else if (((IsPoR(CoinToDouble(wtx->credit + wtx->debit)))))

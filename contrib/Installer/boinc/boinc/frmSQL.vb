@@ -106,8 +106,6 @@ Public Class frmSQL
         sUpdate = "<UPDATE><TABLE>Confirm</TABLE><FIELDS>Confirmed</FIELDS><VALUES>'" + Trim(iStatus) + "'</VALUES><WHEREFIELDS>txid</WHEREFIELDS><WHEREVALUES>'" + sTXID + "'</WHEREVALUES></UPDATE>"
         Dim sErr As String
         sErr = mData.ExecuteP2P(sUpdate, Nothing, 2)
-
-
         Return sErr
 
     End Function
@@ -265,16 +263,9 @@ Public Class frmSQL
     End Sub
 
     Private Sub btnRefreshLeaderboard_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
-
-
     End Sub
 
     Private Sub tSync_Tick(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles tSync.Tick
-
-        ' lblSync.Visible = True
-        ' pbSync.Visible = True
-        ' SetPb(pbSync, nBestBlock, mlSqlBestBlock)
-
     End Sub
     Private Function SetPb(ByVal pb As ProgressBar, ByVal valMax As Long, ByVal valActual As Long)
         Dim max As Long
@@ -288,8 +279,6 @@ Public Class frmSQL
         pb.Refresh()
         pb.Update()
         Me.Update()
-
-
     End Function
 
     Private Sub rtbQuery_TextChanged(sender As System.Object, e As System.EventArgs) Handles rtbQuery.TextChanged

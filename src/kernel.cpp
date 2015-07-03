@@ -307,7 +307,7 @@ double GetMagnitudeByHashBoinc(std::string hashBoinc, int height)
 
 std::string CPIDByAddress(std::string address)
 {
-		   //4-2-2015 - CryptoLottery
+		   //CryptoLottery
 		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
 		   {
 				StructCPID structMag = GetStructCPID();

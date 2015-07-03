@@ -1835,7 +1835,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             {
 			
                 // Found a kernel
-                if (fDebug3)   printf("CCS:K;");
+                if (fDebug)   printf("CCS:K;");
 				WriteAppCache(pindexPrev->GetBlockHash().GetHex(),RoundToString(mdPORNonce,0));
 		        vector<valtype> vSolutions;
                 txnouttype whichType;
@@ -1924,7 +1924,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		return false;
 	}
 
-	printf("K+");
+	if (fDebug) printf("K+");
 
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
     {

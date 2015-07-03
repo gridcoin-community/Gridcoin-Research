@@ -129,9 +129,7 @@ void DetectShutdownThread(boost::thread_group* threadGroup)
 
 void InitializeBoincProjectsNew()
 {
-		//3-13-2015
-	    // ToDo TestNet:  Ensure that we test both Projects and ProjectMappings
-		//Initialize GlobalCPUMiningCPID
+	   //Initialize GlobalCPUMiningCPID
 	    GlobalCPUMiningCPID.initialized = true;
 		GlobalCPUMiningCPID.cpid="";
 		GlobalCPUMiningCPID.cpidv2 = "";
@@ -182,12 +180,13 @@ void InitializeBoincProjectsNew()
 
 void InitializeBoincProjects()
 {
-	    if (fTestNet)
-		{
-			InitializeBoincProjectsNew();
+	    	InitializeBoincProjectsNew();
 			return;
-		}
+		
 
+		// Retiring:
+
+		/*
 		
 		//Initialize GlobalCPUMiningCPID
 	    GlobalCPUMiningCPID.initialized = true;
@@ -265,6 +264,10 @@ void InitializeBoincProjects()
 
 			} 
 		}
+		*/
+
+
+
 }
 
 
