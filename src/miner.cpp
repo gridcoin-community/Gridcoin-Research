@@ -627,7 +627,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	}
 
 	// 6-28-2015 : Verify all the cryptolottery recipients are still valid
-	if (fTestNet && bCryptoLotteryEnabled)
+	if (bCryptoLotteryEnabled)
 	{
 			if (pblock->vtx[0].vout.size() > 2)
 			{

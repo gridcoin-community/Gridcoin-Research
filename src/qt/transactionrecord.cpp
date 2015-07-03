@@ -31,7 +31,7 @@ bool IsSmartContractForDPOR(const CWalletTx &wtx)
                     sub.type = TransactionRecord::SendToAddress;
                     sub.address = CBitcoinAddress(address).ToString();
 					int64_t nDebit = wtx.GetDebit();
-				    if (nDebit=.00001 && sub.address =="S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB")
+				    if (nDebit==.00001)
 					{
 						return true;
 					}

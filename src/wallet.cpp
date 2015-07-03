@@ -2026,7 +2026,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	
 	
     // Set output amount - 4-3-2015 - Expand Coinstake to pay Top 10 Researchers in CryptoLottery
-	if (fTestNet && bCryptoLotteryEnabled)
+	if (bCryptoLotteryEnabled)
 	{
 		    printf("Creating cryptolottery coinstake...\r\n");
 
