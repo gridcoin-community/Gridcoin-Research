@@ -156,7 +156,9 @@ void InitializeBoincProjectsNew()
 							std::vector<std::string> vKey = split(key_name,";");
 							if (vKey.size() > 0)
 							{
+
 								std::string project_name = vKey[1];
+								printf("Proj %s ",project_name.c_str());
 								std::string project_value = key_value;
 								boost::to_lower(project_name);
 								std::string mainProject = ToOfficialName(project_name);
@@ -1168,12 +1170,16 @@ bool AppInit2()
 	// ********************************************************* Step 11: start node
 	uiInterface.InitMessage(_("Loading Network Averages..."));
 	// 
+	std::string sOut = "";
+	printf("Loading admin Messages");
+	bool result = 	LoadAdminMessages(true,sOut);
+	printf("Done loading Admin messages");
 	
 	printf("Loading boinc projects \r\n");
-	std::string sOut = "";
-	bool result = 	LoadAdminMessages(true,sOut);
 
 	InitializeBoincProjects();
+	printf("Done loading boinc projects");
+
 	TallyNetworkAverages(true);	
 	printf("Starting CPID thread...");
 	LoadCPIDsInBackground();

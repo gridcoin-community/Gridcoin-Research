@@ -1960,6 +1960,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	double MaxSubsidy = GetMaximumBoincSubsidy(GetAdjustedTime());
 
     // Calculate coin age reward
+	double out_interest = 0;
+
     {
         uint64_t nCoinAge;
         CTxDB txdb("r");
@@ -1970,8 +1972,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		}
 		//Halford: Use current time since we are creating a new stake
 		double OUT_POR = 0;
-		double out_interest = 0;
-
+		
 		// ************************************************* CREATE PROOF OF RESEARCH REWARD ****************************** R HALFORD *************** 1/19/2015 *******************************
 
         int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,
@@ -2022,19 +2023,18 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		return false;
 	}
 
-	if (fDebug) printf("Staking Block \r\n");
+	if (fDebug3) printf("Staking Block \r\n");
 	
-	
-    // Set output amount - 4-3-2015 - Expand Coinstake to pay Top 10 Researchers in CryptoLottery
+	//DPOR TODO && out_interest < 5 .. etc.
+    // Set output amount - 4-3-2015 - Expand Coinstake to pay DPOR Researchers in CryptoLottery
 	if (bCryptoLotteryEnabled)
 	{
-		    printf("Creating cryptolottery coinstake...\r\n");
-
+		 
 		    std::string recipients = CryptoLottery(GetAdjustedTime());
 		    std::vector<std::string> vRecipients = split(recipients.c_str(),"<COL>");
 		    unsigned int LotterySize = vRecipients.size();
 			if (LotterySize < 3) LotterySize=0;  //Lottery returns a size of 1 when empty
-			printf("Lottery size %f\r\n",(double)vRecipients.size());
+			printf("DPOR size %f\r\n",(double)vRecipients.size());
 
 		  	int iPos = 0;
 			if (txNew.vout.size() == 3)

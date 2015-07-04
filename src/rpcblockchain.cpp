@@ -97,7 +97,6 @@ std::string LegacyDefaultBoincHashArgs();
 std::string GetHttpPage(std::string url);
 
 double GetChainDailyAvgEarnedByCPID(std::string cpid, int64_t locktime, double& out_payments, double& out_daily_avg_payments);
-bool ChainPaymentApproved(std::string cpid, int64_t locktime, double Proposed_Subsidy);
 double CoinToDouble(double surrogate);
 int64_t GetRSAWeightByCPID(std::string cpid);
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
@@ -2050,17 +2049,10 @@ Value execute(const Array& params, bool fHelp)
 			double AvgDailyPayments = 0;
 			double DailyOwed = 0;
 			DailyOwed = GetChainDailyAvgEarnedByCPID(sParam1,GetAdjustedTime(),Payments,AvgDailyPayments);
-			bool bChainPaymentApproved = ChainPaymentApproved(sParam1,GetAdjustedTime(),5);
 			entry.push_back(Pair("DailyOwed",DailyOwed));
 			entry.push_back(Pair("AvgPayments",AvgDailyPayments));
 			entry.push_back(Pair("Payments",Payments));
-			entry.push_back(Pair("Chain Payment Approved 5",bChainPaymentApproved));
-			bChainPaymentApproved = ChainPaymentApproved(sParam1,GetAdjustedTime(),100);
-			entry.push_back(Pair("Chain Payment Approved 100",bChainPaymentApproved));
-			bChainPaymentApproved = ChainPaymentApproved(sParam1,GetAdjustedTime(),400);
-			entry.push_back(Pair("Chain Payment Approved 400",bChainPaymentApproved));
-			results.push_back(entry);
-	
+			
 		}
 
 
@@ -2363,6 +2355,7 @@ std::string CryptoLottery(int64_t locktime)
 		   std::string sOut = "";
  		   std::string row = "";
 		   int rows = 0;
+		   printf("CL Start\r\n");
 		   double max_subsidy = (double)GetMaximumBoincSubsidy(locktime);
 		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
 		   {
@@ -2373,7 +2366,7 @@ std::string CryptoLottery(int64_t locktime)
 						double      Owed      = OwedByAddress(structMag.GRCAddress);
 						//Reverse Check, ensure Address resolves to cpid:
 						std::string reverse_cpid_lookup = CPIDByAddress(structMag.GRCAddress);
-						if (reverse_cpid_lookup == structMag.cpid && Owed > max_subsidy && sOut.find(structMag.GRCAddress) == std::string::npos) 
+						if (reverse_cpid_lookup == structMag.cpid && Owed > (max_subsidy*2) && sOut.find(structMag.GRCAddress) == std::string::npos) 
    					    {
 							// Gather the owed amount, grc address, and cpid.
 							// During block verification we will verify owed <> block_paid, grcaddress belongs to cpid, and cpid is owed > purported_owed
@@ -2383,7 +2376,7 @@ std::string CryptoLottery(int64_t locktime)
 							row = structMag.cpid + ";" + structMag.GRCAddress + ";" + RoundToString(tbp,2);
 							sOut += row + "<COL>";
 							rows++;
-							if (rows >= 25) break;
+							if (rows >= 20) break;
   						}
 		     	}
 		}

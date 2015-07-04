@@ -427,7 +427,6 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		//Halford: Use current time since we are creating a new stake
 		int64_t nNewBlockReward = GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),
 			out_por,out_interest,miningcpid.RSAWeight);
-
 		miningcpid.ResearchSubsidy = out_por;
 		miningcpid.InterestSubsidy = out_interest;
 		miningcpid.enccpid = ""; //CPID V1 Boinc RunTime enc key
@@ -701,8 +700,8 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
         }
 
         // Process this block the same as if we had received it from another node
-		//Halford - 1-14-2015 - Ensure Blocks have a minimum time spacing (allow newbies to participate easily)
-		if (!IsLockTimeWithinMinutes(nLastBlockSubmitted,30)) 
+		//Halford - Ensure Blocks have a minimum time spacing (allow newbies to participate easily)
+		if (!IsLockTimeWithinMinutes(nLastBlockSubmitted,5)) 
 		{
 			nLastBlockSubmitted = GetAdjustedTime();
 			if (!ProcessBlock(NULL, pblock, true))

@@ -44,6 +44,8 @@ extern void IncrementNeuralNetworkSupermajority(std::string NeuralHash, std::str
 extern StructCPID GetInitializedStructCPID(std::string name);
 extern StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
 extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
+extern double GetOwedAmount(std::string cpid);
+
 
 
 extern void DeleteCache(std::string section, std::string keyname);
@@ -92,7 +94,6 @@ unsigned int nTransactionsUpdated = 0;
 unsigned int REORGANIZE_FAILED = 0;
 extern void RemoveNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, double mint, bool IsStake);
 extern double GetChainDailyAvgEarnedByCPID(std::string cpid, int64_t locktime, double& out_payments, double& out_daily_avg_payments);
-extern bool ChainPaymentApproved(std::string cpid, int64_t locktime, double Proposed_Subsidy);
 
 unsigned int WHITELISTED_PROJECTS = 0;
 unsigned int CHECKPOINT_VIOLATIONS = 0;
@@ -319,7 +320,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    OrganizationKey = "";
 
  //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
- int nGrandfather = fTestNet ? 27444 : 267504;
+ int nGrandfather = fTestNet ? 27444 : 267500;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -1951,12 +1952,6 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 
 			if (owed > (GetMaximumBoincSubsidy(GetAdjustedTime()))) owed = GetMaximumBoincSubsidy(GetAdjustedTime()); 
 
-			if (!ChainPaymentApproved(cpid,GetAdjustedTime(),owed)) 
-			{
-					printf("Chain Payment Violation! cpid %s \r\n",cpid.c_str());
-					owed = 0;
-			}
-
 			//Halford - Ensure researcher was not paid in the last 2 hours:
 			if (IsLockTimeWithinMinutes(mag.LastPaymentTime,120))
 			{
@@ -2728,6 +2723,11 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
     int64_t nValueOut = 0;
     int64_t nStakeReward = 0;
     unsigned int nSigOps = 0;
+	double DPOR_Paid = 0;
+ 				
+	bool bIsDPOR = false;
+
+
     BOOST_FOREACH(CTransaction& tx, vtx)
     {
         uint256 hashTx = tx.GetHash();
@@ -2782,7 +2782,32 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
             if (!tx.IsCoinStake())
                 nFees += nTxValueIn - nTxValueOut;
             if (tx.IsCoinStake())
+			{
                 nStakeReward = nTxValueOut - nTxValueIn;
+				if (tx.vout.size() > 5 && pindex->nHeight > nGrandfather) bIsDPOR = true;
+				//DPOR Verification of each recipient (Recipients start at output position 2 (0=Coinstake flag, 1=coinstake)
+				if (bIsDPOR && pindex->nHeight > nGrandfather)
+				{
+					for (unsigned int i = 2; i < tx.vout.size(); i++)
+					{
+						std::string Recipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
+						double      Amount    = CoinToDouble(tx.vout[i].nValue);
+						double      Owed      = OwedByAddress(Recipient);
+						if (fDebug3) printf("Iterating Recipient #%f  %s with Amount %f \r\n,",(double)i,Recipient.c_str(),Amount);
+
+						if (Amount > 0 && (Amount > Owed || Amount > GetMaximumBoincSubsidy(nTime))) 
+						{
+								printf("POR Payment results in an overpayment; Recipient %s, Amount %f, Owed %f \r\n",Recipient.c_str(), Amount, Owed);
+		        				return DoS(75,error("POR Payment results in an overpayment; Recipient %s, Amount %f, Owed %f \r\n",
+										Recipient.c_str(), Amount, Owed));
+						}
+						DPOR_Paid += Amount;
+					}
+					//We will check the coinstake master recipient below
+
+				}
+	
+			}
 
             if (!tx.ConnectInputs(txdb, mapInputs, mapQueuedChanges, posThisTx, pindex, true, false))
                 return false;
@@ -2793,8 +2818,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
     if (IsProofOfWork() && pindex->nHeight > nGrandfather)
     {
-		
-        int64_t nReward = GetProofOfWorkMaxReward(nFees,nTime,pindex->nHeight);
+		int64_t nReward = GetProofOfWorkMaxReward(nFees,nTime,pindex->nHeight);
         // Check coinbase reward
         if (vtx[0].GetValueOut() > nReward)
             return DoS(50, error("ConnectBlock[] : coinbase reward exceeded (actual=%"PRId64" vs calculated=%"PRId64")",
@@ -2804,49 +2828,33 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 	MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc);
 	uint64_t nCoinAge = 0;
-        
+	
+	double dStakeReward = CoinToDouble(nStakeReward+nFees) - DPOR_Paid; //DPOR Recipients checked above already
+	if (fDebug3) printf("Stake Reward of %f , DPOR PAID %f    ",dStakeReward,DPOR_Paid);
     if (IsProofOfStake() && pindex->nHeight > nGrandfather)
     {
-        // ppcoin: coin stake tx earns reward instead of paying fee
+	    // ppcoin: coin stake tx earns reward instead of paying fee
         if (!vtx[1].GetCoinAge(txdb, nCoinAge))
             return error("ConnectBlock[] : %s unable to get coin age for coinstake", vtx[1].GetHash().ToString().substr(0,10).c_str());
 
-        int64_t nCalculatedStakeReward = GetProofOfStakeMaxReward(nCoinAge, nFees, nTime);
+		double dCalcStakeReward = CoinToDouble(GetProofOfStakeMaxReward(nCoinAge, nFees, nTime));
 
-		if (nStakeReward > nCalculatedStakeReward && vtx[0].vout.size() < 2 && !bCryptoLotteryEnabled)
-            return DoS(1, error("ConnectBlock[] : coinstake pays above maximum (actual=%"PRId64" vs calculated=%"PRId64")", nStakeReward, nCalculatedStakeReward));
+		if (dStakeReward > dCalcStakeReward+1)
+            return DoS(1, error("ConnectBlock[] : coinstake pays above maximum (actual= %f, vs calculated=%f )", dStakeReward, dCalcStakeReward));
 		
-		if (bb.cpid=="INVESTOR" && nStakeReward > 1)
+		if (bb.cpid=="INVESTOR" && dStakeReward > 1)
 		{
 			double OUT_POR = 0;
-			double OUT_INTEREST = 0;
-			int64_t nCalculatedResearchReward = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR, OUT_INTEREST,bb.RSAWeight);
-			if ((double)bb.InterestSubsidy > (double)OUT_INTEREST+1 && vtx[0].vout.size() < 2)
+			double OUT_INTEREST_OWED = 0;
+			double dCalculatedResearchReward = CoinToDouble(GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR, OUT_INTEREST_OWED,bb.RSAWeight));
+			if (dStakeReward > (OUT_INTEREST_OWED+1) )
 			{
-					return DoS(1, error("ConnectBlock[] : Investor Reward pays too much : cpid %s (actual=%"PRId64" vs calculated=%"PRId64")",
-					bb.cpid.c_str(), nStakeReward, nCalculatedResearchReward));
+					return DoS(1, error("ConnectBlock[] : Investor Reward pays too much : cpid %s (actual %f vs calculated %f)",
+					bb.cpid.c_str(), dStakeReward, OUT_INTEREST_OWED));
 			}
 		}
 
- 		//CryptoLottery Verification of each recipient (Recipients start at output position 2 (0=Coinstake flag, 1=coinstake)
-		if (bCryptoLotteryEnabled)
-		{
-			if (vtx[0].vout.size() > 2)
-			{
-				for (unsigned int i = 2; i < vtx[0].vout.size(); i++)
-				{
-					std::string Recipient = PubKeyToAddress(vtx[0].vout[i].scriptPubKey);
-					double      Amount    = CoinToDouble(vtx[0].vout[i].nValue);
-					double      Owed      = OwedByAddress(Recipient);
-					if (Amount > 0 && (Amount > Owed || Amount > GetMaximumBoincSubsidy(nTime))) 
-					{
-				        printf("POR Payment results in an overpayment; Recipient %s, Amount %f, Owed %f \r\n",Recipient.c_str(), Amount, Owed);
-		        		return DoS(75,error("POR Payment results in an overpayment; Recipient %s, Amount %f, Owed %f \r\n",
-							Recipient.c_str(), Amount, Owed));
-					}
-				}
-			}
-		}
+ 			
 	}
 		
     // Track money supply and mint amount info
@@ -2859,23 +2867,13 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		
 	if (pindex->nHeight > nGrandfather)
 	{
-		// Block Spamming (Halford) 12-23-2014
+		// Block Spamming 
 		if (mint < MintLimiter(PORDiff,bb.RSAWeight,bb.cpid,GetBlockTime())) 
 		{
 			return error("CheckProofOfStake[] : Mint too Small, %f",(double)mint);
 		}
 
 		if (mint == 0) return error("CheckProofOfStake[] : Mint is ZERO! %f",(double)mint);
-
-		/*
-		//Orphan Flood Attack
-		double bv = BlockVersion(bb.clientversion);
-		double cvn = ClientVersionNew();
-		if (bv+50 < cvn)
-		{
-					//	return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
-		}
-		*/
 
 		double staked = cdbl("0" + ReadCache("stakedbyaddress",bb.GRCAddress),0);
 		if (staked > 60)
@@ -2884,13 +2882,12 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 					//return error("Client staked more than 60 blocks over the last 500 blocks; block rejected\r\n");
 		}
 
-
 		double OUT_POR = 0;
 		double OUT_INTEREST = 0;
 		int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR, OUT_INTEREST, bb.RSAWeight);
-		if (bb.cpid != "INVESTOR" && mint > 1 && vtx[0].vout.size() < 2 && !fJustCheck)
+		if (bb.cpid != "INVESTOR" && dStakeReward > 1)
 		{
-				if ((bb.ResearchSubsidy+(double)OUT_INTEREST+(double)1) < (double)mint)
+				if ((bb.ResearchSubsidy+bb.InterestSubsidy+1) < dStakeReward)
 				{
 						return error("ConnectBlock[] : Researchers Interest %f and Research %f and Mint %f with Out_Interest %f for CPID %s does not match calculated research subsidy",
 							(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,(double)mint,(double)OUT_INTEREST,bb.cpid.c_str());
@@ -2898,16 +2895,14 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 				}
 		}
 
-		//Use Hard Chain Payment Daily Average Paid to approve block
-		if (bb.cpid != "INVESTOR")
+		//Approve first coinstake in DPOR block
+		if (bb.cpid != "INVESTOR" && IsLockTimeWithinMinutes(GetBlockTime(),15))
 		{
-				bool bChainPaymentApproved = ChainPaymentApproved(bb.cpid,GetBlockTime(),bb.ResearchSubsidy);
-				if (!bChainPaymentApproved) 
+			    if (bb.ResearchSubsidy > GetOwedAmount(bb.cpid))	
 				{
-											
 						return DoS(20, error("ConnectBlock[] : Researchers Reward for CPID %s pays too much - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
-										bb.cpid.c_str(), (double)bb.ResearchSubsidy, 
-										(double)OUT_POR, vtx[0].hashBoinc.c_str()));
+										bb.cpid.c_str(), bb.ResearchSubsidy, 
+										OUT_POR, vtx[0].hashBoinc.c_str()));
 		
 				}
 		
@@ -2926,7 +2921,9 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			std::string neural_hash = RetrieveMd5(bb.superblock);
 			double popularity = 0;
 			std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-			if (consensus_hash != neural_hash)
+			// Only reject superblock when it is new:
+		
+			if (IsLockTimeWithinMinutes(GetBlockTime(),15) && consensus_hash != neural_hash)
 			{
 					return DoS(20, error("ConnectBlock[] : Superblock hash does not match consensus hash; SuperblockHash: %s, Consensus Hash: %s",
 										neural_hash.c_str(), consensus_hash.c_str()));
@@ -4637,6 +4634,13 @@ double GetMagnitudeUnit(int64_t locktime)
 		return MagnitudeUnit;	
 }
 
+double GetOwedAmount(std::string cpid)
+{
+	StructCPID m = mvMagnitudes[cpid];
+	if (m.initialized) return m.owed;
+	return 0;
+}
+
 
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude)
 {
@@ -4727,30 +4731,6 @@ double GetChainDailyAvgEarnedByCPID(std::string cpid, int64_t locktime, double& 
 	return owed;
 }
 
-bool ChainPaymentApproved(std::string cpid, int64_t locktime_future, double Proposed_Subsidy)
-{
-	double DailyOwed = 0;
-	double Payments = 0;
-	double AvgDailyPayments = 0;
-	int64_t locktime = locktime_future - (60*60*24*14);
-	double BlockMax = GetMaximumBoincSubsidy(locktime);
-	// R Halford: To help smooth out cutover periods, Assess mag multiplier and max boinc subsidies as of T-14:
-	if (cpid=="INVESTOR") return true;
-	if (Proposed_Subsidy == 0) return true;
-	if (Proposed_Subsidy > BlockMax) 
-	{
-		if (fDebug3 || LessVerbose(100)) printf("Chain payment violation - proposed subsidy greater than Block Max %s Proposed Subsidy %f",cpid.c_str(),Proposed_Subsidy);
-		return false;
-	}
-	DailyOwed = GetChainDailyAvgEarnedByCPID(cpid,locktime,Payments,AvgDailyPayments);
-	bool bApproved = ( (Proposed_Subsidy+Payments)/14  <  DailyOwed);
-	if (!bApproved) 
-	{
-		printf("Chain payment violation for CPID %s, proposed_subsidy %f, Payments %f, DailyOwed %f, AvgDailyPayments %f",
-			   cpid.c_str(),Proposed_Subsidy,Payments,DailyOwed,AvgDailyPayments);
-	}
-	return bApproved;
-}
 
 
 void AddWeightedMagnitude(double LockTime, StructCPID &structMagnitude, double magnitude_level)
@@ -5473,9 +5453,9 @@ bool AcidTest(std::string precommand, std::string acid, CNode* pfrom)
 		double timediff = std::abs(GetAdjustedTime() - cdbl(nonce,0));
 		if (timediff > 12*60 && GetAdjustedTime() > 1410913403)
 		{
-			printf("Network time attack [2] timediff %f  nonce %f    localtime %f",timediff,(double)cdbl(nonce,0),(double)GetAdjustedTime());
-			pfrom->Misbehaving(25);
-			pfrom->fDisconnect = true;
+			//printf("Network time attack [2] timediff %f  nonce %f    localtime %f",timediff,(double)cdbl(nonce,0),(double)GetAdjustedTime());
+			//pfrom->Misbehaving(25);
+			//pfrom->fDisconnect = true;
 		}
 
 		if (hash != pw1)
@@ -8058,12 +8038,13 @@ bool MemorizeMessages(bool bFullTableScan, const CBlock& block, const CBlockInde
 	{
 		  if (!tx.hashBoinc.empty())
 		  {
+			  if (Contains(tx.hashBoinc,"<MT>"))
+			  {
 			  std::string sMessageType  = ExtractXML(tx.hashBoinc,"<MT>","</MT>");
   			  std::string sMessageKey   = ExtractXML(tx.hashBoinc,"<MK>","</MK>");
 			  std::string sMessageValue = ExtractXML(tx.hashBoinc,"<MV>","</MV>");
 			  std::string sMessageAction= ExtractXML(tx.hashBoinc,"<MA>","</MA>");
 			  std::string sSignature    = ExtractXML(tx.hashBoinc,"<MS>","</MS>");
-
 			  if (!sMessageType.empty() && !sMessageKey.empty() && !sMessageValue.empty() && !sMessageAction.empty() && !sSignature.empty())
 			  {
 				 
@@ -8092,20 +8073,21 @@ bool MemorizeMessages(bool bFullTableScan, const CBlock& block, const CBlockInde
 						{
 							if (sMessageType=="project" || sMessageType=="projectmapping")
 							{
-								if (fTestNet)
+								if (true)
 								{
 									InitializeBoincProjects();
 									TallyNetworkAverages(true);
 									HarvestCPIDs(true);
-
 								}
 							}
 						}
 
 				  }
+
 			  }
 				 
 		  }
+	   }
 	}
 	return false;	
 }
@@ -8115,19 +8097,35 @@ bool MemorizeMessages(bool bFullTableScan, const CBlock& block, const CBlockInde
 
 bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 {
-	int nMaxDepth = nBestHeight;
+	int nMaxDepth = nBestHeight-1;
     CBlock block;
 	int nMinDepth = fTestNet ? 1 : 164618;
 	if (!bFullTableScan) nMinDepth = nMaxDepth-5;
 
 	if (nMaxDepth < nMinDepth) return false;
 	out_errors = "";
-    for (int ii = nMinDepth; ii <= nMaxDepth; ii++)
-    {
-     	CBlockIndex* pblockindex = FindBlockByHeight(ii);
-		block.ReadFromDisk(pblockindex);
-		MemorizeMessages(bFullTableScan,block,pblockindex);
-    }
+	int ii = 0;
+	printf("Max height %f",(double)nMaxDepth);
+	
+	try
+	{
+		for (ii = nMinDepth; ii <= nMaxDepth; ii++)
+		{
+     		CBlockIndex* pblockindex = FindBlockByHeight(ii);
+			bool IsValid = block.ReadFromDisk(pblockindex);
+			if (IsValid)
+			{
+				MemorizeMessages(bFullTableScan,block,pblockindex);
+			
+			}
+		}
+	}
+	catch (std::exception &e) 
+	{
+		printf("Error loading block index %f",(double)ii);
+		return false;
+	}
+	
 	return true;
 }
 
