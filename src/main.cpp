@@ -2793,10 +2793,12 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 						std::string Recipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
 						double      Amount    = CoinToDouble(tx.vout[i].nValue);
 						double      Owed      = OwedByAddress(Recipient);
-						if (fDebug3) printf("Iterating Recipient #%f  %s with Amount %f \r\n,",(double)i,Recipient.c_str(),Amount);
+						if (fDebug) printf("Iterating Recipient #%f  %s with Amount %f \r\n,",(double)i,Recipient.c_str(),Amount);
 
 						if (Amount > 0 && (Amount > Owed || Amount > GetMaximumBoincSubsidy(nTime))) 
 						{
+								if (fDebug3) printf("Iterating Recipient #%f  %s with Amount %f \r\n,",(double)i,Recipient.c_str(),Amount);
+
 								printf("POR Payment results in an overpayment; Recipient %s, Amount %f, Owed %f \r\n",Recipient.c_str(), Amount, Owed);
 		        				return DoS(75,error("POR Payment results in an overpayment; Recipient %s, Amount %f, Owed %f \r\n",
 										Recipient.c_str(), Amount, Owed));
@@ -2847,7 +2849,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			double OUT_POR = 0;
 			double OUT_INTEREST_OWED = 0;
 			double dCalculatedResearchReward = CoinToDouble(GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR, OUT_INTEREST_OWED,bb.RSAWeight));
-			if (dStakeReward > (OUT_INTEREST_OWED+1) )
+			if (dStakeReward > (dCalculatedResearchReward+1+nFees) )
 			{
 					return DoS(1, error("ConnectBlock[] : Investor Reward pays too much : cpid %s (actual %f vs calculated %f)",
 					bb.cpid.c_str(), dStakeReward, OUT_INTEREST_OWED));

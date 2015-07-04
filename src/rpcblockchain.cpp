@@ -2348,6 +2348,15 @@ std::string TimestampToHRDate(double dtm)
 	return sDt;
 }
 
+struct CPIDOwed
+{
+    std::string cpid;
+	std::string GRCAddress;
+	bool initialized;
+    double owed;
+};
+
+bool SortByOwed(const CPIDOwed &magL, const CPIDOwed &magR) { return magL.owed > magR.owed; }
 
 
 std::string CryptoLottery(int64_t locktime)
@@ -2355,35 +2364,58 @@ std::string CryptoLottery(int64_t locktime)
 		   std::string sOut = "";
  		   std::string row = "";
 		   int rows = 0;
+		   //7-4-2015
 		   printf("CL Start\r\n");
 		   double max_subsidy = (double)GetMaximumBoincSubsidy(locktime);
+		   vector<CPIDOwed> vCPIDSOwed;
+		   					
+		   int iRecord = 0;
 		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
 		   {
-				StructCPID structMag = GetStructCPID();
+			    StructCPID structMag = GetStructCPID();
 				structMag = mvMagnitudes[(*ii).first];
 				if (structMag.initialized && structMag.cpid.length() > 2 && structMag.cpid != "INVESTOR" && structMag.GRCAddress.length() > 5) 
 				{ 
-						double      Owed      = OwedByAddress(structMag.GRCAddress);
-						//Reverse Check, ensure Address resolves to cpid:
-						std::string reverse_cpid_lookup = CPIDByAddress(structMag.GRCAddress);
-						if (reverse_cpid_lookup == structMag.cpid && Owed > (max_subsidy*2) && sOut.find(structMag.GRCAddress) == std::string::npos) 
-   					    {
-							// Gather the owed amount, grc address, and cpid.
-							// During block verification we will verify owed <> block_paid, grcaddress belongs to cpid, and cpid is owed > purported_owed
-							std::string row = "";
-							double tbp = Owed / 2;
-							if (tbp > max_subsidy) tbp=max_subsidy;
-							row = structMag.cpid + ";" + structMag.GRCAddress + ";" + RoundToString(tbp,2);
-							sOut += row + "<COL>";
-							rows++;
-							if (rows >= 20) break;
-  						}
-		     	}
-		}
+					CPIDOwed c;
+					c.owed = structMag.totalowed-structMag.payments;
+					c.GRCAddress = structMag.GRCAddress;
+					c.cpid = structMag.cpid;
+					c.initialized = true;
+					vCPIDSOwed.push_back(c);
+				}
+		   }
 
+		   std::sort(vCPIDSOwed.begin(), vCPIDSOwed.end(), SortByOwed);
+		   
+		   for(std::vector<CPIDOwed>::iterator it = vCPIDSOwed.begin(); it != vCPIDSOwed.end(); it++)
+		   {
+				StructCPID structMag = mvMagnitudes[it->cpid];
+				if (structMag.initialized && structMag.cpid.length() > 2 && structMag.cpid != "INVESTOR" && structMag.GRCAddress.length() > 5) 
+				{ 
+							double      Owed      = OwedByAddress(structMag.GRCAddress);
+							//Reverse Check, ensure Address resolves to cpid:
+							std::string reverse_cpid_lookup = CPIDByAddress(structMag.GRCAddress);
+							if (reverse_cpid_lookup == structMag.cpid && Owed > (max_subsidy*4) && sOut.find(structMag.GRCAddress) == std::string::npos) 
+   							{
+								// Gather the owed amount, grc address, and cpid.
+								// During block verification we will verify owed <> block_paid, grcaddress belongs to cpid, and cpid is owed > purported_owed
+								std::string row = "";
+								double tbp = Owed / 2;
+								if (tbp > max_subsidy) tbp=max_subsidy;
+								row = structMag.cpid + ";" + structMag.GRCAddress + ";" + RoundToString(tbp,2);
+								sOut += row + "<COL>";
+								rows++;
+								if (rows >= 20) break;
+  							}
+		     	}
+	
+		   }
+
+		  
+		
 		if (sOut.length() > 10) sOut = sOut.substr(0,sOut.length()-5); //Remove last delimiter
 	    if (fDebug3) printf("CryptoLottery %s",sOut.c_str());
-		if (rows < 5) sOut = "";
+		if (rows < 10) sOut = "";
 		return sOut;
 }
 
@@ -2879,7 +2911,7 @@ Array MagnitudeReportCSV(bool detail)
 		   double rows = 0;
 		   double outstanding = 0;
 		   double totaloutstanding = 0;
-		   std::string header = "CPID,Magnitude,PaymentMagnitude,Accuracy,LongTermOwed14day,LongTermOwedDaily,Payments,InterestPayments,LastPaymentTime,CurrentDailyOwed,NextExpectedPayment,AvgDailyPayments,Outstanding,PaymentTimespan,DPOR_Magnitude";
+		   std::string header = "CPID,GRCAddress,Magnitude,PaymentMagnitude,Accuracy,LongTermOwed14day,LongTermOwedDaily,Payments,InterestPayments,LastPaymentTime,CurrentDailyOwed,NextExpectedPayment,AvgDailyPayments,Outstanding,PaymentTimespan,DPOR_Magnitude";
 		   
 		   if (detail) header += ",PaymentDate,ResearchPaymentAmount,InterestPaymentAmount,Block#";
 		   header += "\r\n";
@@ -2895,11 +2927,10 @@ Array MagnitudeReportCSV(bool detail)
 					if (structMag.cpid != "INVESTOR")
 					{
 						outstanding = structMag.totalowed - structMag.payments;
-						if (outstanding < 0) outstanding = 0;
-
+						
 						StructCPID stDPOR = mvDPOR[structMag.cpid];
 					
-  						row = structMag.cpid + "," + RoundToString(structMag.ConsensusMagnitude,2) + "," 
+  						row = structMag.cpid + "," + structMag.GRCAddress + "," + RoundToString(structMag.ConsensusMagnitude,2) + "," 
 							+ RoundToString(structMag.PaymentMagnitude,0) + "," + RoundToString(structMag.Accuracy,0) + "," + RoundToString(structMag.totalowed,2) 
 							+ "," + RoundToString(structMag.totalowed/14,2)
 							+ "," + RoundToString(structMag.payments,2) + "," 
@@ -2926,7 +2957,7 @@ Array MagnitudeReportCSV(bool detail)
 
 									if (dTime > 0)
 									{
-										row = " , , , , , , , , , , , , , , , " + sPaymentDate + "," + sResearchAmount + "," + sInterestAmount + "," + sPaymentBlock + "\n";
+										row = " , , , , , , , , , , , , , , , , " + sPaymentDate + "," + sResearchAmount + "," + sInterestAmount + "," + sPaymentBlock + "\n";
 										header += row;
 									
 									}
@@ -2942,7 +2973,7 @@ Array MagnitudeReportCSV(bool detail)
 
 		   }
 		   int64_t timestamp = GetTime();
-		   std::string footer = RoundToString(rows,0) + ", , , ," + RoundToString(lto,2) + ", ," + RoundToString(totalpaid,2) + ", , , , ," + RoundToString(totaloutstanding,2) + "\n";
+		   std::string footer = RoundToString(rows,0) + ", , , , ," + RoundToString(lto,2) + ", ," + RoundToString(totalpaid,2) + ", , , , , ," + RoundToString(totaloutstanding,2) + "\n";
 		   header += footer;
 		   Object entry;
 		   entry.push_back(Pair("CSV Complete",strprintf("\\reports\\magnitude_%"PRId64".csv",timestamp)));
