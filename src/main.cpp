@@ -2813,7 +2813,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
         int64_t nCalculatedStakeReward = GetProofOfStakeMaxReward(nCoinAge, nFees, nTime);
 
-		if (nStakeReward > nCalculatedStakeReward && vtx[0].vout.size() < 2)
+		if (nStakeReward > nCalculatedStakeReward && vtx[0].vout.size() < 2 && !bCryptoLotteryEnabled)
             return DoS(1, error("ConnectBlock[] : coinstake pays above maximum (actual=%"PRId64" vs calculated=%"PRId64")", nStakeReward, nCalculatedStakeReward));
 		
 		if (bb.cpid=="INVESTOR" && nStakeReward > 1)
@@ -2888,7 +2888,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		double OUT_POR = 0;
 		double OUT_INTEREST = 0;
 		int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR, OUT_INTEREST, bb.RSAWeight);
-		if (bb.cpid != "INVESTOR" && mint > 1 && vtx[0].vout.size() < 2)
+		if (bb.cpid != "INVESTOR" && mint > 1 && vtx[0].vout.size() < 2 && !fJustCheck)
 		{
 				if ((bb.ResearchSubsidy+(double)OUT_INTEREST+(double)1) < (double)mint)
 				{
