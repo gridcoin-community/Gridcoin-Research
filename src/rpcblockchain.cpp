@@ -2320,9 +2320,9 @@ Array MagnitudeReport(bool bMine)
 				}
 
 			}
-	   		Object entry;
-			entry.push_back(Pair("Grand Total Outstanding Owed",total_owed));
-			results.push_back(entry);
+	   		Object entry2;
+			entry2.push_back(Pair("Grand Total Outstanding Owed",total_owed));
+			results.push_back(entry2);
 									
 			return results;
 }
