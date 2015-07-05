@@ -3469,13 +3469,13 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 							(double)mint1,boincblock.ResearchSubsidy,boincblock.InterestSubsidy,vtx[0].hashBoinc.c_str()));
 				}
 				//Orphan Flood Attack
-				if (IsLockTimeWithinMinutes(GetBlockTime(),15))
+				if (IsLockTimeWithinMinutes(GetBlockTime(),30))
 				{
 					double bv = BlockVersion(boincblock.clientversion);
 					double cvn = ClientVersionNew();
-					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
+					if (fDebug2) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock(): Old client version after mandatory upgrade - block rejected\r\n");
-					if (bv < 3373) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
+					if (bv < 3422) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
 				}
 
 	    		if (fCheckSig && !CheckBlockSignature())
@@ -4626,7 +4626,7 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
 	double payment_timespan = (GetAdjustedTime() - mag.EarliestPaymentTime)/38400;
 	if (payment_timespan < 2) payment_timespan =  2;
 	if (payment_timespan > 10) payment_timespan = 14;
-	mag.PaymentTimespan = payment_timespan;
+	mag.PaymentTimespan = Round(payment_timespan,0);
 	double research_magnitude = 0;
 	// Get neural network magnitude:
 	StructCPID stDPOR = mvDPOR[cpid];
