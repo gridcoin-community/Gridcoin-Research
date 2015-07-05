@@ -44,7 +44,7 @@ extern void IncrementNeuralNetworkSupermajority(std::string NeuralHash, std::str
 extern StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
 extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 extern double GetOwedAmount(std::string cpid);
-
+extern double Round(double d, int place);
 
 
 extern void DeleteCache(std::string section, std::string keyname);
@@ -744,7 +744,7 @@ MiningCPID GetNextProject(bool bForce)
 				structcpid = mvCPIDs[(*ii).first];
 				if (structcpid.initialized) 
 				{ 
-					if (structcpid.Iscpidvalid && structcpid.projectname.length() > 2 && structcpid.verifiedrac > 99)
+					if (structcpid.Iscpidvalid && structcpid.projectname.length() > 2 && structcpid.verifiedrac > 9)
 					{
 							iRow++;
 							if (i==3 || iDistributedProject == iRow)
@@ -3896,14 +3896,14 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 
 		if (orphan_punishment > 0 && !ClientOutOfSync() )
 		{
-			if (pfrom->nOrphanCount > 75) 
+			if (pfrom->nOrphanCount > 575) 
 			{
 				if (fDebug2) printf("Orphan punishment enabled. %f    ",(double)pfrom->nOrphanCount);
 				pfrom->Misbehaving(2);
 			}
 			if (pfrom->nOrphanCountViolations < 0) pfrom->nOrphanCountViolations=0;
 			if (pfrom->nOrphanCount < 0)           pfrom->nOrphanCount=0;
-			if (pfrom->nOrphanCountViolations > 65) pfrom->Misbehaving(2);
+			if (pfrom->nOrphanCountViolations > 565) pfrom->Misbehaving(2);
 			pfrom->nLastOrphan=GetAdjustedTime();
 			pfrom->nOrphanCount++;
 		}
@@ -4388,9 +4388,6 @@ double cdbl(std::string s, int place)
 	s = strReplace(s,"d","");
 	s = strReplace(s,"e","");
 	s = strReplace(s,"f","");
-
-	s = strReplace(s,"-","");
-
     double r = lexical_cast<double>(s);
 	double d = Round(r,place);
 	return d;
@@ -4767,8 +4764,7 @@ void AdjustTimestamps(StructCPID& strCPID, double timestamp, double subsidy)
 void AddNetworkMagnitude(double height,CTransaction& wtxCryptoLottery, double LockTime, std::string cpid, 
 		MiningCPID bb, double mint, bool IsStake)
 {
-        if (!IsLockTimeWithin14days(LockTime)) return;
-
+       
 		StructCPID globalMag = GetInitializedStructCPID2("global",mvMagnitudes);
 		StructCPID structMagnitude = GetInitializedStructCPID2(cpid,mvMagnitudes);
 		StructCPID structGRC = GetInitializedStructCPID2(bb.GRCAddress,mvMagnitudes);
@@ -4945,8 +4941,6 @@ bool TallyNetworkAverages(bool ColdBoot)
 	ClearCache("neuralsecurity");
 	ClearCache("stakedbyaddress");
 	mvNeuralNetworkHash["TOTAL_VOTES"] = 0;
-	int CONSENSUS_LOOKBACK = 40;  //Amount of blocks to go back from best block, to avoid counting forked blocks
-	int BLOCK_GRANULARITY = 30;   //Consensus block divisor 
 
 	LOCK(cs_main);
 	try 

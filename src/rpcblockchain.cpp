@@ -32,6 +32,7 @@ extern  std::string GetNetsoftProjects(std::string cpid);
 std::string NeuralRequest(std::string MyNeuralRequest);
 extern std::string MyBeaconExists(std::string cpid);
 extern std::string AdvertiseBeacon(bool force);
+double Round(double d, int place);
 
 
 StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
@@ -2297,11 +2298,11 @@ Array MagnitudeReport(bool bMine)
 								
 									entry.push_back(Pair("Total Earned (14 days)",structMag.totalowed));
 									entry.push_back(Pair("DPOR Payments (14 days)",structMag.payments));
-									double outstanding = structMag.totalowed - structMag.payments;
+									double outstanding = Round(structMag.totalowed - structMag.payments,2);
+
 									total_owed += outstanding;
 									entry.push_back(Pair("Outstanding Owed (14 days)",outstanding));
 									
-
 									entry.push_back(Pair("InterestPayments (14 days)",structMag.interestPayments));
 									entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
 									entry.push_back(Pair("Owed",structMag.owed));
@@ -2322,6 +2323,13 @@ Array MagnitudeReport(bool bMine)
 			}
 	   		Object entry2;
 			entry2.push_back(Pair("Grand Total Outstanding Owed",total_owed));
+
+			int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
+			int nLookback = 1000*14; //Daily block count * Lookback in days = 14 days
+			int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
+			entry2.push_back(Pair("Start Block",nMinDepth));
+			entry2.push_back(Pair("End Block",nMaxDepth));
+	
 			results.push_back(entry2);
 									
 			return results;
@@ -2385,8 +2393,6 @@ std::string CryptoLottery(int64_t locktime)
 		   // Sort by Max Owed descending:
 		   std::sort(vCPIDSOwed.begin(), vCPIDSOwed.end(), SortByOwed);
 
-		   int CONSENSUS_LOOKBACK = 40;  //Amount of blocks to go back from best block, to avoid counting forked blocks
-	       int BLOCK_GRANULARITY = 30;   //Consensus block divisor 
 		   int nLastTally = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
 		   int height_since_last_tally = nBestHeight - CONSENSUS_LOOKBACK - nLastTally;
 		   if (height_since_last_tally < 0) height_since_last_tally=0;
