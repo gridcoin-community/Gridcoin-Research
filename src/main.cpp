@@ -2688,7 +2688,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
         printf("ConnectBlock::Failed - \r\n");
 		return false;
 	}
-
+	//7-5-2015
     //// issue here: it doesn't know the version
     unsigned int nTxPos;
     if (fJustCheck)
@@ -2765,7 +2765,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
             if (tx.IsCoinStake())
 			{
                 nStakeReward = nTxValueOut - nTxValueIn;
-				if (tx.vout.size() > 5 && pindex->nHeight > nGrandfather) bIsDPOR = true;
+				if (tx.vout.size() > 2 && pindex->nHeight > nGrandfather) bIsDPOR = true;
 				//DPOR Verification of each recipient (Recipients start at output position 2 (0=Coinstake flag, 1=coinstake)
 				if (bIsDPOR && pindex->nHeight > nGrandfather)
 				{
@@ -3435,10 +3435,26 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
         if (vtx[i].IsCoinBase())
             return DoS(100, error("CheckBlock[] : more than one coinbase"));
 
+
+
 	//ProofOfResearch
 	if (vtx.size() > 0)
 	{
 			MiningCPID boincblock = DeserializeBoincBlock(vtx[0].hashBoinc);
+
+
+			//Orphan Flood Attack
+			if (height1 > nGrandfather)
+			{
+					double bv = BlockVersion(boincblock.clientversion);
+					double cvn = ClientVersionNew();
+					if (fDebug3) printf("BV %f, CV %f   ",bv,cvn);
+					//if (bv+10 < cvn) return error("ConnectBlock(): Old client version after mandatory upgrade - block rejected\r\n");
+					if (bv < 3423) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
+			}
+
+
+
 			if (boincblock.cpid != "INVESTOR")
 			{
     			if (boincblock.projectname == "") 	return DoS(1,error("PoR Project Name invalid"));
@@ -3468,16 +3484,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					return DoS(30, 	error("****CheckBlock[]: Total Mint too Small %s, mint %f, Res %f, Interest %f, hash %s \r\n",boincblock.cpid.c_str(),
 							(double)mint1,boincblock.ResearchSubsidy,boincblock.InterestSubsidy,vtx[0].hashBoinc.c_str()));
 				}
-				//Orphan Flood Attack
-				if (IsLockTimeWithinMinutes(GetBlockTime(),30))
-				{
-					double bv = BlockVersion(boincblock.clientversion);
-					double cvn = ClientVersionNew();
-					if (fDebug2) printf("BV %f, CV %f   ",bv,cvn);
-					//if (bv+10 < cvn) return error("ConnectBlock(): Old client version after mandatory upgrade - block rejected\r\n");
-					if (bv < 3422) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-				}
-
+			
 	    		if (fCheckSig && !CheckBlockSignature())
 					return DoS(100, error("CheckBlock[] : bad proof-of-stake block signature"));
 			}
@@ -7962,6 +7969,97 @@ bool MemorizeMessages(bool bFullTableScan, const CBlock& block, const CBlockInde
 	return false;	
 }
 
+
+
+
+bool UnusualActivityReport()
+{
+
+   map<uint256, CTxIndex> mapQueuedChanges;
+ 
+
+	int nMaxDepth = nBestHeight;
+    CBlock block;
+	int nMinDepth = fTestNet ? 1 : 1;
+
+	if (nMaxDepth < nMinDepth || nMaxDepth < 10) return false;
+
+	nMinDepth = 10000;
+	nMaxDepth = 11000;
+	int ii = 0;
+			for (ii = nMinDepth; ii <= nMaxDepth; ii++)
+			{
+     			CBlockIndex* pblockindex = FindBlockByHeight(ii);
+				if (block.ReadFromDisk(pblockindex))
+				{
+					int64_t nFees = 0;
+					int64_t nValueIn = 0;
+					int64_t nValueOut = 0;
+					int64_t nStakeReward = 0;
+					unsigned int nSigOps = 0;
+					double DPOR_Paid = 0;
+ 				
+					bool bIsDPOR = false;
+					
+
+					BOOST_FOREACH(const CTransaction& tx, block.vtx)
+					{
+							
+						    MapPrevTx mapInputs;
+					        if (tx.IsCoinBase())
+									nValueOut += tx.GetValueOut();
+							else
+							{
+									bool fInvalid;
+									//									 if (!tx.FetchInputs(txdb, mapQueuedChanges, true, false, mapInputs, fInvalid))										 continue;
+									 int64_t nTxValueIn = tx.GetValueIn(mapInputs);
+									 int64_t nTxValueOut = tx.GetValueOut();
+									 nValueIn += nTxValueIn;
+									 nValueOut += nTxValueOut;
+									 if (!tx.IsCoinStake())             nFees += nTxValueIn - nTxValueOut;
+									 if (tx.IsCoinStake())
+				  				 	 {
+											nStakeReward = nTxValueOut - nTxValueIn;
+											if (tx.vout.size() > 2) bIsDPOR = true;
+											//DPOR Verification of each recipient (Recipients start at output position 2 (0=Coinstake flag, 1=coinstake)
+											if (bIsDPOR)
+											{
+													for (unsigned int i = 2; i < tx.vout.size(); i++)
+													{
+														std::string Recipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
+														double      Amount    = CoinToDouble(tx.vout[i].nValue);
+														double      Owed      = OwedByAddress(Recipient);
+														if (Amount > GetMaximumBoincSubsidy(GetAdjustedTime())) 
+														{
+														}
+														if (Amount > 0 && (Amount > (Owed*1.25) )) 
+														{
+														}
+			   	 	  	 							    DPOR_Paid += Amount;
+
+													}
+				
+										   }
+								     }
+
+								//if (!tx.ConnectInputs(txdb, mapInputs, mapQueuedChanges, posThisTx, pindex, true, false))                return false;
+							}
+
+					}
+
+					int64_t TotalMint = nValueOut - nValueIn + nFees;
+					double mint = CoinToDouble(TotalMint);
+					
+
+					printf("Iterating block height %f with In %f Out %f Fees %f mint of %f reward of %f\r\n",(double)ii,(double)nValueIn,(double)nValueOut,(double)nFees,(double)TotalMint,(double)nStakeReward);
+
+
+					}
+				}
+	
+			
+    return true;
+}
 
 
 
