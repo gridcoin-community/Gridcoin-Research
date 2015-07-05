@@ -27,9 +27,9 @@ extern volatile bool bCheckedForUpgradeLive;
 extern volatile bool bGlobalcomInitialized;
 extern volatile bool bAllowBackToBack;
 extern volatile bool CreatingCPUBlock;
-extern volatile double nGlobalNonce;
+
 extern volatile double nGlobalHashCounter;
-extern volatile double nGlobalSolutionNonce;
+
 extern int miningthreadcount;
 	
     struct StructCPID 
@@ -66,10 +66,7 @@ extern int miningthreadcount;
 		double MagnitudeCount;
 		double LowLockTime;
 		double HighLockTime;
-		double ConsensusTotalMagnitude;
-		double ConsensusMagnitudeCount;
 		double Accuracy;
-		double ConsensusMagnitude;
 		double totalowed;
 		double longtermtotalowed;
 		double longtermowed;
@@ -144,10 +141,7 @@ extern int miningthreadcount;
 		double VouchedRAC;
 		double VouchedNetworkRAC;
 		double Magnitude;
-		double ConsensusTotalMagnitude;
-		double ConsensusMagnitudeCount;
 		double Accuracy;
-		double ConsensusMagnitude;
 		double RSAWeight;
 		double LastPaymentTime;
 		double ResearchSubsidy;

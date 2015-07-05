@@ -619,13 +619,13 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 		printf("CheckStake::HashBoinc too small\r\n");
 		return error("CheckStake()::HashBoinc too small");
 	}
-	if (pblock->nNonce < 100)
+	if (pblock->nNonce < 10)
 	{
 		if (fDebug) printf("CheckStake::Nonce too low\r\n");
 		nLastBlockSubmitted = 0;
-		
 		return error("CheckStake()::Nonce too low");
 	}
+
 
 	// 6-28-2015 : Verify all the cryptolottery recipients are still valid
 	if (bCryptoLotteryEnabled)

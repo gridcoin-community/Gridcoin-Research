@@ -33,9 +33,6 @@ std::string NeuralRequest(std::string MyNeuralRequest);
 extern std::string MyBeaconExists(std::string cpid);
 extern std::string AdvertiseBeacon(bool force);
 
-double GetPaymentsByCPID(std::string cpid);
-
-StructCPID GetInitializedStructCPID(std::string name);
 
 StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
 
@@ -69,7 +66,7 @@ extern std::string GetListOf(std::string datatype);
 void qtSyncWithDPORNodes(std::string data);
 
 extern bool SynchronizeRacForDPOR(bool SyncEntireCoin);
-extern bool TallyMagnitudesByContract();
+
 extern void QueryWorldCommunityGridRAC();
 std::string qtGetNeuralHash(std::string data);
 
@@ -95,8 +92,6 @@ extern std::string TimestampToHRDate(double dtm);
 std::string qtGRCCodeExecutionSubsystem(std::string sCommand);
 std::string LegacyDefaultBoincHashArgs();
 std::string GetHttpPage(std::string url);
-
-double GetChainDailyAvgEarnedByCPID(std::string cpid, int64_t locktime, double& out_payments, double& out_daily_avg_payments);
 double CoinToDouble(double surrogate);
 int64_t GetRSAWeightByCPID(std::string cpid);
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
@@ -141,7 +136,7 @@ bool GridEncrypt(std::vector<unsigned char> vchPlaintext, std::vector<unsigned c
 uint256 GridcoinMultipleAlgoHash(std::string t1);
 void ExecuteCode();
 void CreditCheck(std::string cpid, bool clearcache);
-double CalculatedMagnitude(int64_t locktime);
+double CalculatedMagnitude(int64_t locktime,bool bUseLederstrumpf);
 
 
 
@@ -983,15 +978,21 @@ bool TallyMagnitudesInSuperblock()
 					stCPID = mvDPOR[cpid];
 					if (!stCPID.initialized)
 					{
-								stCPID.initialized = true;
-								mvDPOR.insert(map<string,StructCPID>::value_type(cpid,stCPID));
+							stCPID.initialized = true;
+							mvDPOR.insert(map<string,StructCPID>::value_type(cpid,stCPID));
 					}
 	     			stCPID.TotalMagnitude = magnitude;
 					stCPID.MagnitudeCount++;
 					stCPID.Magnitude = magnitude;
 					mvDPOR[cpid]=stCPID;
+
+					StructCPID stMagg = GetInitializedStructCPID2(cpid,mvMagnitudes);
+					stMagg.cpid = cpid;
+					stMagg.Magnitude = stCPID.Magnitude;
+					stMagg.PaymentMagnitude = LederstrumpfMagnitude2(magnitude,GetAdjustedTime());
+					mvMagnitudes[cpid] = stMagg;
 				}
-		}
+			}
 	}
 
 	
@@ -1001,8 +1002,9 @@ bool TallyMagnitudesInSuperblock()
 
 
 
-bool TallyMagnitudesByContract()
+bool Retiring_TallyMagnitudesByContract()
 {
+	//This function is being retired: Original purpose - tally magnitudes from One boinc project - in the QT neural network (Not the Windows neural network)
 	std::string projects = GetTeamURLs(false,true);
 	//This list contains projects with contracts:
 	std::vector<std::string> vProjects = split(projects.c_str(),"<ROW>");
@@ -1020,7 +1022,6 @@ bool TallyMagnitudesByContract()
 			std::vector<std::string> vCPIDs = split(contract.c_str(),";");
 			for (unsigned int c = 0; c < vCPIDs.size(); c++)
 			{
-				//printf("ProjAvg %f, IU %s \r\n",projavg,vCPIDs[c].c_str());
 				std::string cpid = ExtractValue(vCPIDs[c],",",0);
 				if (cpid.length() > 10)
 				{
@@ -1513,7 +1514,7 @@ Value execute(const Array& params, bool fHelp)
 								std::string GRCAddress = DefaultWalletAddress();
 								StructCPID structMag = GetStructCPID();
 								structMag = mvMagnitudes[GlobalCPUMiningCPID.cpid];
-								double dmag = structMag.ConsensusMagnitude;
+								double dmag = structMag.Magnitude;
 								double poll_duration = PollDuration(Title)*86400;
 
 								// Prevent Double Voting
@@ -2045,13 +2046,6 @@ Value execute(const Array& params, bool fHelp)
 		{
 			std::string sParam1 = params[1].get_str();
 			entry.push_back(Pair("CPID",sParam1));
-			double Payments = 0;
-			double AvgDailyPayments = 0;
-			double DailyOwed = 0;
-			DailyOwed = GetChainDailyAvgEarnedByCPID(sParam1,GetAdjustedTime(),Payments,AvgDailyPayments);
-			entry.push_back(Pair("DailyOwed",DailyOwed));
-			entry.push_back(Pair("AvgPayments",AvgDailyPayments));
-			entry.push_back(Pair("Payments",Payments));
 			
 		}
 
@@ -2296,27 +2290,21 @@ Array MagnitudeReport(bool bMine)
 									entry.push_back(Pair("GRCAddress",structMag.GRCAddress));
 									entry.push_back(Pair("Last Block Paid",structMag.LastBlock));
 									StructCPID DPOR = mvDPOR[structMag.cpid];
-									entry.push_back(Pair("DPOR Magnitude",	DPOR.Magnitude));
-									//entry.push_back(Pair("Magnitude",structMag.ConsensusMagnitude));
-									//entry.push_back(Pair("Payment Magnitude",structMag.PaymentMagnitude));
+									entry.push_back(Pair("DPOR Magnitude",	structMag.Magnitude));
+									entry.push_back(Pair("Payment Magnitude",structMag.PaymentMagnitude));
 									entry.push_back(Pair("Payment Timespan (Days)",structMag.PaymentTimespan));
-									StructCPID stGRC = GetInitializedStructCPID(structMag.GRCAddress);
-									//entry.push_back(Pair("Magnitude Accuracy",structMag.Accuracy));
 									entry.push_back(Pair("Total Earned (14 days)",structMag.totalowed));
-									//entry.push_back(Pair("Payments (14 days)",structMag.payments));
-									//
-									double PaymentsToCPID = GetPaymentsByCPID(structMag.cpid);
-	     							entry.push_back(Pair("DPOR Payments (14 days)",PaymentsToCPID));
+									entry.push_back(Pair("DPOR Payments (14 days)",structMag.payments));
 									entry.push_back(Pair("InterestPayments (14 days)",structMag.interestPayments));
 									entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
 									entry.push_back(Pair("Owed",structMag.owed));
 									double nep = Cap(structMag.owed/2, GetMaximumBoincSubsidy(GetAdjustedTime()));
-									//entry.push_back(Pair("Next Estimated Payment",nep));
-									entry.push_back(Pair("Daily Paid",PaymentsToCPID/14));
+									
+									entry.push_back(Pair("Daily Paid",structMag.payments/14));
 									entry.push_back(Pair("Daily Owed",structMag.totalowed/14));
 									double magnitude_unit = GetMagnitudeUnit(GetAdjustedTime());
 									//entry.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
-									double est_daily = magnitude_unit*structMag.ConsensusMagnitude;
+									double est_daily = magnitude_unit*structMag.Magnitude;
 									entry.push_back(Pair("Daily Max per Mag Unit", est_daily));
 									double OwedByAddr = OwedByAddress(structMag.GRCAddress);
 									entry.push_back(Pair("Owed by address (testnet only)", OwedByAddr));
@@ -2911,7 +2899,7 @@ Array MagnitudeReportCSV(bool detail)
 		   double rows = 0;
 		   double outstanding = 0;
 		   double totaloutstanding = 0;
-		   std::string header = "CPID,GRCAddress,Magnitude,PaymentMagnitude,Accuracy,LongTermOwed14day,LongTermOwedDaily,Payments,InterestPayments,LastPaymentTime,CurrentDailyOwed,NextExpectedPayment,AvgDailyPayments,Outstanding,PaymentTimespan,DPOR_Magnitude";
+		   std::string header = "CPID,GRCAddress,Magnitude,PaymentMagnitude,Accuracy,LongTermOwed14day,LongTermOwedDaily,Payments,InterestPayments,LastPaymentTime,CurrentDailyOwed,NextExpectedPayment,AvgDailyPayments,Outstanding,PaymentTimespan";
 		   
 		   if (detail) header += ",PaymentDate,ResearchPaymentAmount,InterestPaymentAmount,Block#";
 		   header += "\r\n";
@@ -2930,7 +2918,7 @@ Array MagnitudeReportCSV(bool detail)
 						
 						StructCPID stDPOR = mvDPOR[structMag.cpid];
 					
-  						row = structMag.cpid + "," + structMag.GRCAddress + "," + RoundToString(structMag.ConsensusMagnitude,2) + "," 
+  						row = structMag.cpid + "," + structMag.GRCAddress + "," + RoundToString(structMag.Magnitude,2) + "," 
 							+ RoundToString(structMag.PaymentMagnitude,0) + "," + RoundToString(structMag.Accuracy,0) + "," + RoundToString(structMag.totalowed,2) 
 							+ "," + RoundToString(structMag.totalowed/14,2)
 							+ "," + RoundToString(structMag.payments,2) + "," 
@@ -2938,7 +2926,7 @@ Array MagnitudeReportCSV(bool detail)
 							+ "," + RoundToString(structMag.owed,2) 
 							+ "," + RoundToString(structMag.owed/2,2)
 							+ "," + RoundToString(structMag.payments/14,2) + "," + RoundToString(outstanding,2) + "," 
-							+ RoundToString(structMag.PaymentTimespan,0) + "," + RoundToString(stDPOR.Magnitude,0) + "\n";
+							+ RoundToString(structMag.PaymentTimespan,0) + "\n";
 						header += row;
 						if (detail)
 						{

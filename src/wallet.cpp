@@ -2068,7 +2068,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 						std::string grc_address = vPayments[1];
 						double amt = cdbl(vPayments[2],2);
 			 			CScript RewardPublicKey;
-				     	printf("Adding POR Reward for cpid %s, grcaddress %s, amount %f \r\n",cpid.c_str(),grc_address.c_str(),amt);
+				     	if (fDebug) printf("Adding POR Reward for cpid %s, grcaddress %s, amount %f \r\n",cpid.c_str(),grc_address.c_str(),amt);
 						CBitcoinAddress address(grc_address);
 						RewardPublicKey.SetDestination(address.Get());
 						txNew.vout[iPos].scriptPubKey = RewardPublicKey;
