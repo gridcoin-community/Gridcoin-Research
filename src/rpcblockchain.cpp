@@ -2203,6 +2203,7 @@ Value execute(const Array& params, bool fHelp)
 	{
 			mvCPIDCache.clear();
     	    HarvestCPIDs(true);
+			GetNextProject(true);
 		    entry.push_back(Pair("Reset",1));
 			results.push_back(entry);
 	}
@@ -2275,7 +2276,7 @@ Array MagnitudeReport(bool bMine)
 		   Object entry;
 		   entry.push_back(Pair("Payment Window",payment_timespan));
 		   results.push_back(entry);
-
+		   double total_owed = 0;
 		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
 		   {
 				// For each CPID on the network, report:
@@ -2293,8 +2294,14 @@ Array MagnitudeReport(bool bMine)
 									entry.push_back(Pair("DPOR Magnitude",	structMag.Magnitude));
 									entry.push_back(Pair("Payment Magnitude",structMag.PaymentMagnitude));
 									entry.push_back(Pair("Payment Timespan (Days)",structMag.PaymentTimespan));
+								
 									entry.push_back(Pair("Total Earned (14 days)",structMag.totalowed));
 									entry.push_back(Pair("DPOR Payments (14 days)",structMag.payments));
+									double outstanding = structMag.totalowed - structMag.payments;
+									total_owed += outstanding;
+									entry.push_back(Pair("Outstanding Owed (14 days)",outstanding));
+									
+
 									entry.push_back(Pair("InterestPayments (14 days)",structMag.interestPayments));
 									entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
 									entry.push_back(Pair("Owed",structMag.owed));
@@ -2313,7 +2320,9 @@ Array MagnitudeReport(bool bMine)
 				}
 
 			}
-		
+
+ 		    results.push_back(Pair("Grand Total Outstanding Owed",total_owed));
+									
 			return results;
 }
 
@@ -2352,8 +2361,8 @@ std::string CryptoLottery(int64_t locktime)
 		   std::string sOut = "";
  		   std::string row = "";
 		   int rows = 0;
-		   //7-4-2015
-		   printf("CL Start\r\n");
+		   //7-5-2015
+		   if (fDebug3) printf("CL Start\r\n");
 		   double max_subsidy = (double)GetMaximumBoincSubsidy(locktime);
 		   vector<CPIDOwed> vCPIDSOwed;
 		   					
@@ -2372,9 +2381,15 @@ std::string CryptoLottery(int64_t locktime)
 					vCPIDSOwed.push_back(c);
 				}
 		   }
-
+		   // Sort by Max Owed descending:
 		   std::sort(vCPIDSOwed.begin(), vCPIDSOwed.end(), SortByOwed);
-		   
+
+		   int CONSENSUS_LOOKBACK = 40;  //Amount of blocks to go back from best block, to avoid counting forked blocks
+	       int BLOCK_GRANULARITY = 30;   //Consensus block divisor 
+		   int nLastTally = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
+		   int height_since_last_tally = nBestHeight - CONSENSUS_LOOKBACK - nLastTally;
+		   if (height_since_last_tally < 0) height_since_last_tally=0;
+		   int iSkip = 0;
 		   for(std::vector<CPIDOwed>::iterator it = vCPIDSOwed.begin(); it != vCPIDSOwed.end(); it++)
 		   {
 				StructCPID structMag = mvMagnitudes[it->cpid];
@@ -2383,7 +2398,8 @@ std::string CryptoLottery(int64_t locktime)
 							double      Owed      = OwedByAddress(structMag.GRCAddress);
 							//Reverse Check, ensure Address resolves to cpid:
 							std::string reverse_cpid_lookup = CPIDByAddress(structMag.GRCAddress);
-							if (reverse_cpid_lookup == structMag.cpid && Owed > (max_subsidy*4) && sOut.find(structMag.GRCAddress) == std::string::npos) 
+							iSkip++;
+							if (reverse_cpid_lookup == structMag.cpid && Owed > (max_subsidy*4) && sOut.find(structMag.GRCAddress) == std::string::npos && iSkip > height_since_last_tally) 
    							{
 								// Gather the owed amount, grc address, and cpid.
 								// During block verification we will verify owed <> block_paid, grcaddress belongs to cpid, and cpid is owed > purported_owed

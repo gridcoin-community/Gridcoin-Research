@@ -2636,10 +2636,7 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
     // ppcoin: clean up wallet after disconnecting coinstake
     BOOST_FOREACH(CTransaction& tx, vtx)
         SyncWithWallets(tx, this, false, false);
-
-	//Retally Network Averages - Halford - 1-11-2015
-	TallyNetworkAverages(true);
-		
+	
 
     return true;
 }
@@ -2785,7 +2782,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 										Recipient.c_str(), Amount, Owed));
 						}
 			
-						if (Amount > 0 && (Amount > (Owed*1.25)) && IsLockTimeWithinMinutes(GetBlockTime(),30) ) 
+						if (Amount > 0 && (Amount > (Owed*1.25) )) 
 						{
 								if (fDebug3) printf("Iterating Recipient #%f  %s with Amount %f \r\n,",(double)i,Recipient.c_str(),Amount);
 
@@ -2900,9 +2897,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 	}
 
-	//Gridcoin: Maintain network consensus for Payments and Neural popularity:  
-	AddNetworkMagnitude((double)pindex->nHeight,vtx[1],nTime, bb.cpid, bb, mint, IsProofOfStake()); //Updates Total payments and Actual Magnitude per CPID
-	IncrementNeuralNetworkSupermajority(bb.NeuralHash,bb.GRCAddress,30);
+	//Gridcoin: Maintain network consensus for Payments and Neural popularity:  (As of 7-5-2015 this is now done exactly every 50 blocks)
+
 	//DPOR - 6/12/2015 - Reject superblocks not hashing to the supermajority:
 
 	if (bb.superblock.length() > 20) 
@@ -3745,12 +3741,13 @@ void GridcoinServices()
 		std::string backup_results = BackupGridcoinWallet();
 		printf("Daily backup results: %s\r\n",backup_results.c_str());
 	}
-	//Every 30 blocks, tally consensus mags:
-	if (TimerMain("update_boinc_magnitude", 30))
+
+	//As a team, tally network averages at the exact same time (Either way, tally uses a consensus driven start and end block to assess payments owed)
+	if ((nBestHeight % 30) == 0)
 	{
 			    TallyInBackground();
 	}
-
+	
 	// Every 30 blocks as a Synchronized TEAM:
 	if ((nBestHeight % 30) == 0)
 	{
@@ -4939,8 +4936,6 @@ bool TallyNetworkAverages(bool ColdBoot)
 		return true;
 	}
 	printf("Gathering network avgs (begin)\r\n");
-	//If we did this within the last 10 mins, we are fine:
-	if (IsLockTimeWithinMinutes(nLastTallied,10)) return true;
 	nLastTallied = GetAdjustedTime();
 	bNetAveragesLoaded = false;
 	bool superblockloaded = false;
@@ -4950,14 +4945,20 @@ bool TallyNetworkAverages(bool ColdBoot)
 	ClearCache("neuralsecurity");
 	ClearCache("stakedbyaddress");
 	mvNeuralNetworkHash["TOTAL_VOTES"] = 0;
+	int CONSENSUS_LOOKBACK = 40;  //Amount of blocks to go back from best block, to avoid counting forked blocks
+	int BLOCK_GRANULARITY = 30;   //Consensus block divisor 
 
 	LOCK(cs_main);
 	try 
 	{
-					int nMaxDepth = nBestHeight;
-					int nLookback = 1000*14; //Daily block count * Lookback in days
-					int nMinDepth = nMaxDepth - nLookback;
-					if (nMinDepth < 2) nMinDepth = 2;
+					//7-5-2015 - R Halford - Start block and End block must be an exact range agreed by the network:
+
+					int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
+					int nLookback = 1000*14; //Daily block count * Lookback in days = 14 days
+					int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
+					if (fDebug3) printf("START BLOCK %f, END BLOCK %f",(double)nMaxDepth,(double)nMinDepth);
+
+					if (nMinDepth < 2)              nMinDepth = 2;
 					if (mvNetwork.size() > 1)       mvNetwork.clear();
 					if (mvNetworkCPIDs.size() > 1)  mvNetworkCPIDs.clear();
 					if (mvMagnitudes.size() > 1) 	mvMagnitudes.clear();
@@ -7357,12 +7358,6 @@ void HarvestCPIDs(bool cleardata)
 						structcpid.errors = "Team invalid";
 				}
 
-				if (!structverify.initialized && structcpid.Iscpidvalid)
-				{
-					structcpid.Iscpidvalid = false;
-					structcpid.errors = "Project missing in [Netsoft] credit verification node (Wait at least 24 hours for new projects to propagate).";
-				}
-
 				if (structcpid.rac < 10)         
 				{
 					structcpid.Iscpidvalid = false;
@@ -7397,8 +7392,8 @@ void HarvestCPIDs(bool cleardata)
                if (!projectvalid) 
 			   {
 
-				   structcpid.Iscpidvalid = false;
-				   structcpid.errors = "Not an official boinc whitelisted project.  Please see 'list projects'.";
+				   //structcpid.Iscpidvalid = false;
+				   //structcpid.errors = "Not an official boinc whitelisted project.  Please see 'list projects'.";
 			   }
 
     	  	   mvCPIDs[proj] = structcpid;						
@@ -7958,12 +7953,8 @@ bool MemorizeMessages(bool bFullTableScan, const CBlock& block, const CBlockInde
 						{
 							if (sMessageType=="project" || sMessageType=="projectmapping")
 							{
-								if (true)
-								{
-									InitializeBoincProjects();
-									TallyNetworkAverages(true);
-									HarvestCPIDs(true);
-								}
+								if (fDebug3) printf("New project loaded %s",sMessageKey.c_str());
+
 							}
 						}
 
@@ -7982,35 +7973,35 @@ bool MemorizeMessages(bool bFullTableScan, const CBlock& block, const CBlockInde
 
 bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 {
-	int nMaxDepth = nBestHeight-1;
+	int nMaxDepth = nBestHeight;
     CBlock block;
 	int nMinDepth = fTestNet ? 1 : 164618;
-	if (!bFullTableScan) nMinDepth = nMaxDepth-5;
+	if (!bFullTableScan) nMinDepth = nMaxDepth-6;
 
 	if (nMaxDepth < nMinDepth) return false;
 	out_errors = "";
 	int ii = 0;
-	printf("Max height %f",(double)nMaxDepth);
+	if (fDebug3 && bFullTableScan) 	printf("LAM Max height %f \r\n",(double)nMaxDepth);
 	
-	try
+	LOCK(cs_main);
 	{
-		for (ii = nMinDepth; ii <= nMaxDepth; ii++)
+		try
 		{
-     		CBlockIndex* pblockindex = FindBlockByHeight(ii);
-			bool IsValid = block.ReadFromDisk(pblockindex);
-			if (IsValid)
+			for (ii = nMinDepth; ii <= nMaxDepth; ii++)
 			{
-				MemorizeMessages(bFullTableScan,block,pblockindex);
-			
+     			CBlockIndex* pblockindex = FindBlockByHeight(ii);
+				if (block.ReadFromDisk(pblockindex))
+				{
+					MemorizeMessages(bFullTableScan,block,pblockindex);
+				}
 			}
 		}
+		catch (std::exception &e) 
+		{
+			printf("Error loading block index %f",(double)ii);
+			return false;
+		}
 	}
-	catch (std::exception &e) 
-	{
-		printf("Error loading block index %f",(double)ii);
-		return false;
-	}
-	
 	return true;
 }
 

@@ -1172,7 +1172,7 @@ bool AppInit2()
 	// 
 	std::string sOut = "";
 	printf("Loading admin Messages");
-	bool result = 	LoadAdminMessages(true,sOut);
+	bool result = LoadAdminMessages(true,sOut);
 	printf("Done loading Admin messages");
 	
 	printf("Loading boinc projects \r\n");
@@ -1182,7 +1182,7 @@ bool AppInit2()
 
 	TallyNetworkAverages(true);	
 	printf("Starting CPID thread...");
-	LoadCPIDsInBackground();
+	LoadCPIDsInBackground();  //This calls HarvesCPIDs(true)
 
 	uiInterface.InitMessage(_("Finding first applicable Research Project..."));
 	
