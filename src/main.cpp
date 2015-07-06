@@ -30,6 +30,9 @@
 int DownloadBlocks();
 extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern std::string VectorToString(std::vector<unsigned char> v);
+extern bool UnusualActivityReport();
+
+
 bool CheckMessageSignature(std::string sMessageType, std::string sMsg, std::string sSig);
 bool TallyMagnitudesByContract();
 bool SynchronizeRacForDPOR(bool SyncEntireCoin);
@@ -259,6 +262,7 @@ extern std::vector<std::string> split(std::string s, std::string delim);
 extern bool ProjectIsValid(std::string project);
 extern std::string SerializeBoincBlock(MiningCPID mcpid);
 extern MiningCPID DeserializeBoincBlock(std::string block);
+
 extern void InitializeCPIDs();
 extern void ResendWalletTransactions2();
 double GetNetworkAvgByProject(std::string projectname);
@@ -6336,7 +6340,7 @@ bool ProcessMessages(CNode* pfrom)
 
         // Scan for message start
         if (memcmp(msg.hdr.pchMessageStart, pchMessageStart, sizeof(pchMessageStart)) != 0) {
-            printf("\n\nPROCESSMESSAGE: INVALID MESSAGESTART\n\n");
+            if (fDebug) printf("\n\nPROCESSMESSAGE: INVALID MESSAGESTART\n\n");
             fOk = false;
             break;
         }
@@ -6735,12 +6739,7 @@ void InitializeProjectStruct(StructCPID& project)
 	//Must contain cpidv2, cpid, boincpublickey
 	project.Iscpidvalid = false;
 	project.Iscpidvalid = IsLocalCPIDValid(project);
- 	if (project.team != "gridcoin") 
-	{
-			project.Iscpidvalid = false;
-			project.errors = "Team invalid";
-	}
-	if (fDebug) printf("Assimilating local project %s, Valid %s",project.projectname.c_str(),YesNo(project.Iscpidvalid).c_str());
+ 	if (fDebug) printf("Assimilating local project %s, Valid %s",project.projectname.c_str(),YesNo(project.Iscpidvalid).c_str());
 
 
 }
@@ -7309,13 +7308,7 @@ void HarvestCPIDs(bool cleardata)
 				}
 				structcpid.utc = cdbl(utc,0);
 				structcpid.rac = cdbl(rac,0);
-			
-				if (structcpid.team != "gridcoin") 
-				{
-						structcpid.Iscpidvalid = false;
-						structcpid.errors = "Team invalid";
-				}
-
+		
 				structcpid.rectime = cdbl(rectime,0);
 
 				double currenttime =  GetAdjustedTime();
@@ -7353,12 +7346,7 @@ void HarvestCPIDs(bool cleardata)
 					structcpid.errors = "CPID invalid.  Check E-mail address.";
 				}
 
-				if (structcpid.verifiedteam != "gridcoin") 
-				{	
-						//structcpid.Iscpidvalid = false;
-						structcpid.errors = "Team invalid";
-				}
-
+		
 				if (structcpid.rac < 10)         
 				{
 					structcpid.Iscpidvalid = false;
@@ -7975,8 +7963,9 @@ bool MemorizeMessages(bool bFullTableScan, const CBlock& block, const CBlockInde
 bool UnusualActivityReport()
 {
 
-   map<uint256, CTxIndex> mapQueuedChanges;
- 
+    map<uint256, CTxIndex> mapQueuedChanges;
+    CTxDB txdb("r");
+
 
 	int nMaxDepth = nBestHeight;
     CBlock block;
@@ -7984,8 +7973,8 @@ bool UnusualActivityReport()
 
 	if (nMaxDepth < nMinDepth || nMaxDepth < 10) return false;
 
-	nMinDepth = 10000;
-	nMaxDepth = 11000;
+	nMinDepth = 50000;
+	nMaxDepth = nBestHeight;
 	int ii = 0;
 			for (ii = nMinDepth; ii <= nMaxDepth; ii++)
 			{
@@ -8000,9 +7989,10 @@ bool UnusualActivityReport()
 					double DPOR_Paid = 0;
  				
 					bool bIsDPOR = false;
-					
+					std::string MainRecipient = "";
+					double max_subsidy = GetMaximumBoincSubsidy(block.nTime)+50; //allow for 
 
-					BOOST_FOREACH(const CTransaction& tx, block.vtx)
+					BOOST_FOREACH(CTransaction& tx, block.vtx)
 					{
 							
 						    MapPrevTx mapInputs;
@@ -8010,8 +8000,13 @@ bool UnusualActivityReport()
 									nValueOut += tx.GetValueOut();
 							else
 							{
-									bool fInvalid;
-									//									 if (!tx.FetchInputs(txdb, mapQueuedChanges, true, false, mapInputs, fInvalid))										 continue;
+									 bool fInvalid;
+
+									 bool TxOK = tx.FetchInputs(txdb, mapQueuedChanges, true, false, mapInputs, fInvalid);
+
+									 if (!TxOK) continue;
+
+
 									 int64_t nTxValueIn = tx.GetValueIn(mapInputs);
 									 int64_t nTxValueOut = tx.GetValueOut();
 									 nValueIn += nTxValueIn;
@@ -8022,18 +8017,27 @@ bool UnusualActivityReport()
 											nStakeReward = nTxValueOut - nTxValueIn;
 											if (tx.vout.size() > 2) bIsDPOR = true;
 											//DPOR Verification of each recipient (Recipients start at output position 2 (0=Coinstake flag, 1=coinstake)
+											if (tx.vout.size() > 2)
+											{
+												MainRecipient = PubKeyToAddress(tx.vout[2].scriptPubKey);
+											}
+											int iStart = 3;
+											if (ii > 267500) iStart=2;
 											if (bIsDPOR)
 											{
-													for (unsigned int i = 2; i < tx.vout.size(); i++)
+													for (unsigned int i = iStart; i < tx.vout.size(); i++)
 													{
 														std::string Recipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
 														double      Amount    = CoinToDouble(tx.vout[i].nValue);
-														double      Owed      = OwedByAddress(Recipient);
+														//double      Owed      = OwedByAddress(Recipient);
 														if (Amount > GetMaximumBoincSubsidy(GetAdjustedTime())) 
 														{
 														}
-														if (Amount > 0 && (Amount > (Owed*1.25) )) 
+
+														if (Amount > max_subsidy) 
 														{
+															printf("Block #%f:%f, Recipient %s, Paid %f\r\n",(double)ii,(double)i,Recipient.c_str(),Amount);
+
 														}
 			   	 	  	 							    DPOR_Paid += Amount;
 
@@ -8048,10 +8052,18 @@ bool UnusualActivityReport()
 					}
 
 					int64_t TotalMint = nValueOut - nValueIn + nFees;
-					double mint = CoinToDouble(TotalMint);
-					
+					double subsidy = CoinToDouble(TotalMint);
 
-					printf("Iterating block height %f with In %f Out %f Fees %f mint of %f reward of %f\r\n",(double)ii,(double)nValueIn,(double)nValueOut,(double)nFees,(double)TotalMint,(double)nStakeReward);
+
+					if (subsidy > max_subsidy)
+					{
+						std::string hb = block.vtx[0].hashBoinc;
+						MiningCPID bb = DeserializeBoincBlock(hb);
+						if (bb.cpid != "INVESTOR")
+						{
+								printf("Block #%f:%f, Recipient %s, CPID %s, Paid %f\r\n",(double)ii,(double)0, bb.GRCAddress.c_str(), bb.cpid.c_str(), subsidy);
+						}
+					}
 
 
 					}

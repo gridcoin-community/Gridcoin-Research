@@ -33,6 +33,7 @@ std::string NeuralRequest(std::string MyNeuralRequest);
 extern std::string MyBeaconExists(std::string cpid);
 extern std::string AdvertiseBeacon(bool force);
 double Round(double d, int place);
+bool UnusualActivityReport();
 
 
 StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
@@ -1456,6 +1457,15 @@ Value execute(const Array& params, bool fHelp)
 		entry.push_back(Pair("Superblock Timestamp",timestamp));
 		entry.push_back(Pair("Superblock Block Number",mvApplicationCache["superblock;block_number"]));
 		results.push_back(entry);
+
+	}
+	else if (sItem == "unusual")
+	{
+		
+			bool result = UnusualActivityReport();
+			entry.push_back(Pair("UAR",1));
+			results.push_back(entry);
+
 
 	}
 	else if (sItem == "vote")
