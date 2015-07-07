@@ -34,6 +34,7 @@ extern std::string MyBeaconExists(std::string cpid);
 extern std::string AdvertiseBeacon(bool force);
 double Round(double d, int place);
 bool UnusualActivityReport();
+extern double GetSuperblockAvgMag(std::string superblock);
 
 
 StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
@@ -962,6 +963,33 @@ std::string ExtractValue(std::string data, std::string delimiter, int pos)
 
 
 
+double GetSuperblockAvgMag(std::string superblock)
+{
+	std::vector<std::string> vSuperblock = split(superblock.c_str(),";");
+	double rows = 0;
+	double total_mag = 0;
+	for (unsigned int i = 0; i < vSuperblock.size(); i++)
+	{
+		// For each CPID in the contract
+		if (vSuperblock[i].length() > 1)
+		{
+				std::string cpid = ExtractValue(vSuperblock[i],",",0);
+				double magnitude = cdbl(ExtractValue(vSuperblock[i],",",1),0);
+				if (cpid.length() > 10)
+				{
+	     			total_mag += magnitude;
+					rows++;
+				}
+			}
+	}
+	double avg = total_mag/(rows+.01);
+	return avg;
+}
+
+
+
+
+
 
 bool TallyMagnitudesInSuperblock()
 {
@@ -1256,7 +1284,11 @@ std::string GetListOf(std::string datatype)
 								std::string key_value = mvApplicationCache[(*ii).first];
 								std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
 								row = subkey + "<COL>" + key_value;
-								rows += row + "<ROW>";
+								if (Contains(row,"INVESTOR") && datatype=="beacon") row = "";
+								if (row != "")
+								{
+									rows += row + "<ROW>";
+								}
 					}
 		       
 				}
@@ -1974,6 +2006,14 @@ Value execute(const Array& params, bool fHelp)
 		entry.push_back(Pair("Results",sOut));
 		results.push_back(entry);
 		
+	}
+	else if (sItem == "superblockaverage")
+	{
+		std::string superblock = ReadCache("superblock","magnitudes");
+		double avg = GetSuperblockAvgMag(superblock);
+		entry.push_back(Pair("avg",avg));
+		results.push_back(entry);
+	
 	}
 	else if (sItem == "getlistof")
 	{

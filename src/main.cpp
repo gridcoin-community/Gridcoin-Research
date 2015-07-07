@@ -46,6 +46,9 @@ extern double GetTotalBalance();
 extern std::string PubKeyToAddress(const CScript& scriptPubKey);
 extern void IncrementNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress,double distance);
 
+double GetSuperblockAvgMag(std::string superblock);
+
+
 extern StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
 extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 extern double GetOwedAmount(std::string cpid);
@@ -2927,8 +2930,12 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			}
 			
 		}
-		WriteCache("superblock","magnitudes",bb.superblock,GetBlockTime());
-		WriteCache("superblock","block_number",RoundToString((double)pindex->nHeight,0),GetBlockTime());
+		double avg_mag = GetSuperblockAvgMag(bb.superblock);
+		if (avg_mag > 10)
+		{
+			WriteCache("superblock","magnitudes",bb.superblock,GetBlockTime());
+			WriteCache("superblock","block_number",RoundToString((double)pindex->nHeight,0),GetBlockTime());
+		}
 	}
 
 
@@ -5066,10 +5073,14 @@ bool TallyNetworkAverages(bool ColdBoot)
 						{
 							if (bb.superblock.length() > 20)
 							{
-								WriteCache("superblock","magnitudes",bb.superblock,block.nTime);
-								WriteCache("superblock","block_number",RoundToString(ii,0),block.nTime);
-								TallyMagnitudesInSuperblock();
-								superblockloaded=true;
+								double avg_mag = GetSuperblockAvgMag(bb.superblock);
+								if (avg_mag > 10)
+								{
+									WriteCache("superblock","magnitudes",bb.superblock,block.nTime);
+									WriteCache("superblock","block_number",RoundToString(ii,0),block.nTime);
+									TallyMagnitudesInSuperblock();
+									superblockloaded=true;
+								}
 							}
 						}
 
@@ -7983,6 +7994,13 @@ bool MemorizeMessages(bool bFullTableScan, const CBlock& block, const CBlockInde
 			  std::string sMessageValue = ExtractXML(tx.hashBoinc,"<MV>","</MV>");
 			  std::string sMessageAction= ExtractXML(tx.hashBoinc,"<MA>","</MA>");
 			  std::string sSignature    = ExtractXML(tx.hashBoinc,"<MS>","</MS>");
+			  if (sMessageType=="beacon" && Contains(sMessageValue,"INVESTOR")) 
+			  {
+					printf(".skipping.\r\n");
+					sMessageValue="";
+			  }
+
+							
 			  if (!sMessageType.empty() && !sMessageKey.empty() && !sMessageValue.empty() && !sMessageAction.empty() && !sSignature.empty())
 			  {
 				 
