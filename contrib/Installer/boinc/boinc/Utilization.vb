@@ -15,8 +15,7 @@ Public Class Utilization
 
     Public ReadOnly Property Version As Double
         Get
-            Return 382
-
+            Return 383
 
         End Get
     End Property
@@ -178,6 +177,7 @@ Public Class Utilization
     Public Function GetNeuralHash() As String
         If Len(msCurrentNeuralHash) > 1 Then Return msCurrentNeuralHash 'This is invalidated when it changes
         Dim sContract As String = GetMagnitudeContract()
+
         Dim sHash As String = GetMd5String(sContract)
         Return sHash
     End Function

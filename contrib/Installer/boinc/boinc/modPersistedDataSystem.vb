@@ -20,6 +20,7 @@ Module modPersistedDataSystem
     Public mbTestNet As Boolean = False
     'Minimum RAC percentage required for RAC to be counted in magnitude:
     Public mdMinimumRacPercentage As Double = 0.06
+    Public bMagsDoneLoading As Boolean = True
 
     Private lUseCount As Long = 0
     Public Structure Row
@@ -64,6 +65,9 @@ Module modPersistedDataSystem
         Dim surrogateRow As New Row
         surrogateRow.Database = "CPID"
         surrogateRow.Table = "CPIDS"
+        Dim lTotal As Long
+        Dim lRows As Long
+
         Dim lstCPIDs As List(Of Row) = GetList(surrogateRow, "*")
         lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
         Dim sOut As String = ""
@@ -71,9 +75,16 @@ Module modPersistedDataSystem
             If cpid.DataColumn5 = "True" Then
                 ' If CDate(cpid.Added) < DateAdd(DateInterval.Day, -1, Now) Then
                 Dim sRow As String = cpid.PrimaryKey + "," + Trim(RoundedMag(Val(cpid.Magnitude))) + ";"
+                lTotal = lTotal + Val(cpid.Magnitude)
+                lRows = lRows + 1
                 sOut += sRow
             End If
         Next
+        Dim avg As Double
+        avg = lTotal / (lRows + 0.01)
+        If avg < 25 Then sOut = ""
+        If bMagsDoneLoading = False Then sOut = ""
+
         Return sOut
     End Function
     Public Function RoundedMag(num As Double)
@@ -147,6 +158,7 @@ Module modPersistedDataSystem
     End Function
     Public Sub CompleteSync()
         mbForcefullySyncAllRac = True
+        bMagsDoneLoading = False
         UpdateMagnitudesPhase1()
         UpdateMagnitudes()
         mbForcefullySyncAllRac = False
@@ -154,6 +166,8 @@ Module modPersistedDataSystem
         If LCase(KeyValue("exportmagnitude")) = "true" Then
             ExportToCSV2()
         End If
+        bMagsDoneLoading = True
+
     End Sub
     Public Function UpdateMagnitudesPhase1()
         Try
