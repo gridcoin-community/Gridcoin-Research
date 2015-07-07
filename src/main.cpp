@@ -31,6 +31,8 @@ int DownloadBlocks();
 extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern std::string VectorToString(std::vector<unsigned char> v);
 extern bool UnusualActivityReport();
+extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
+
 
 
 bool CheckMessageSignature(std::string sMessageType, std::string sMsg, std::string sSig);
@@ -49,6 +51,7 @@ extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 extern double GetOwedAmount(std::string cpid);
 extern double Round(double d, int place);
 
+extern bool ComputeNeuralNetworkSupermajorityHashes();
 
 extern void DeleteCache(std::string section, std::string keyname);
 extern void ClearCache(std::string section);
@@ -99,6 +102,7 @@ extern void RemoveNetworkMagnitude(double LockTime, std::string cpid, MiningCPID
 unsigned int WHITELISTED_PROJECTS = 0;
 unsigned int CHECKPOINT_VIOLATIONS = 0;
 int64_t nLastTallied = 0;
+int64_t nLastLoadAdminMessages = 0;
 int64_t nCPIDsLoaded = 0;
 int64_t nLastGRCtallied = 0;
 extern bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
@@ -177,6 +181,7 @@ unsigned int nStakeMinAge = 16 * 60 * 60; // 16 hours
 unsigned int nStakeMaxAge = -1; // unlimited
 unsigned int nModifierInterval = 10 * 60; // time to elapse before new modifier is computed
 bool bCryptoLotteryEnabled = true;
+bool bRemotePaymentsEnabled = false;
 
 // Gridcoin:
 int nCoinbaseMaturity = 100;
@@ -2786,7 +2791,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 										Recipient.c_str(), Amount, Owed));
 						}
 			
-						if (Amount > 0 && (Amount > (Owed*1.25) )) 
+						if (Amount > 0 && (Amount > (Owed*1.25)  || !bRemotePaymentsEnabled  )) 
 						{
 								if (fDebug3) printf("Iterating Recipient #%f  %s with Amount %f \r\n,",(double)i,Recipient.c_str(),Amount);
 
@@ -2916,8 +2921,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		
 			if (IsLockTimeWithinMinutes(GetBlockTime(),15) && consensus_hash != neural_hash)
 			{
-					return DoS(20, error("ConnectBlock[] : Superblock hash does not match consensus hash; SuperblockHash: %s, Consensus Hash: %s",
-										neural_hash.c_str(), consensus_hash.c_str()));
+					return error("ConnectBlock[] : Superblock hash does not match consensus hash; SuperblockHash: %s, Consensus Hash: %s",
+										neural_hash.c_str(), consensus_hash.c_str());
 		
 			}
 			
@@ -3454,7 +3459,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					double cvn = ClientVersionNew();
 					if (fDebug3) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock(): Old client version after mandatory upgrade - block rejected\r\n");
-					if (bv < 3423) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
+					if (bv < 3425) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
 			}
 
 
@@ -3754,13 +3759,18 @@ void GridcoinServices()
 	}
 
 	//As a team, tally network averages at the exact same time (Either way, tally uses a consensus driven start and end block to assess payments owed)
-	if ((nBestHeight % 30) == 0)
+	if ((nBestHeight % BLOCK_GRANULARITY) == 0)
 	{
 			    TallyInBackground();
 	}
-	
-	// Every 30 blocks as a Synchronized TEAM:
-	if ((nBestHeight % 30) == 0)
+
+	if ((nBestHeight % 10) == 0)
+	{
+		ComputeNeuralNetworkSupermajorityHashes();
+	}
+
+	// Every N blocks as a Synchronized TEAM:
+	if ((nBestHeight % 10) == 0)
 	{
 		//Sync RAC with neural network IF superblock is over 24 hours Old, Or if we have No superblock (in case of the latter, age will be 45 years old)
 		int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
@@ -3771,12 +3781,13 @@ void GridcoinServices()
 		// Also, lets do this as a TEAM exactly every 30 blocks (~30 minutes) to try to reach an EXACT consensus every half hour:
 		// For effeciency, the network sleeps for 20 hours after a good superblock is accepted
 
-		if (superblock_age > 23*60*60)
+		if (superblock_age > 12*60*60)
 		{
 			#if defined(WIN32) && defined(QT_GUI)
 				std::string errors1 = "";
                 LoadAdminMessages(false,errors1);
 				std::string data = GetListOf("beacon");
+				printf("Syncing neural network \r\n");
 				qtSyncWithDPORNodes(data);
 			#endif
 		}
@@ -3985,16 +3996,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 				Checkpoints::SendSyncCheckpoint(Checkpoints::AutoSelectSyncCheckpoint());
 		}
 	}
-	else if (CHECKPOINT_DISTRIBUTED_MODE==2)
-	{
-		//11-23-2014: If we are in decentralized individual hash checkpoint mode - send a hash checkpoint
-		printf("Broadcasting hash Checkpoint for block %s \r\n",pblock->hashPrevBlock.GetHex().c_str());
-		if (pfrom)
-		{
-			Checkpoints::SendSyncHashCheckpoint(pblock->hashPrevBlock,SendingWalletAddress);
-		}
-	}
-	
+
 	GridcoinServices();
     return true;
 }
@@ -4934,6 +4936,66 @@ StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, Stru
 }
 
 
+
+bool ComputeNeuralNetworkSupermajorityHashes()
+{
+	//Iterate throught last 14 days, tally network averages
+    if (nBestHeight < 15)  return true;
+	bool superblockloaded = false;
+	//Clear the neural network hash buffer
+	if (mvNeuralNetworkHash.size() > 1)  mvNeuralNetworkHash.clear();
+	//Clear the votes
+	ClearCache("neuralsecurity");
+	mvNeuralNetworkHash["TOTAL_VOTES"] = 0;
+	LOCK(cs_main);
+	try 
+	{
+		int nMaxDepth = nBestHeight;
+		int nLookback = 100;
+		int nMinDepth = (nMaxDepth - nLookback);
+		if (nMinDepth < 2)              nMinDepth = 2;
+		CBlock block;
+		for (int ii = nMaxDepth; ii > nMinDepth; ii--)
+		{
+     					CBlockIndex* pblockindex = FindBlockByHeight(ii);
+						block.ReadFromDisk(pblockindex);
+						std::string hashboinc = "";
+						if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
+						MiningCPID bb = DeserializeBoincBlock(hashboinc);
+						//Increment Neural Network Hashes Supermajority (over the last N blocks)
+						IncrementNeuralNetworkSupermajority(bb.NeuralHash,bb.GRCAddress,(nMaxDepth-ii)+30);
+		
+		}
+	}
+	catch (std::exception &e) 
+	{
+			printf("Neural Error while memorizing hashes.\r\n");
+	}
+    catch(...)
+	{
+		printf("Neural error While Memorizing Hashes! [1]\r\n");
+	}
+	return true;
+	
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 bool TallyNetworkAverages(bool ColdBoot)
 {
 	//Iterate throught last 14 days, tally network averages
@@ -4942,6 +5004,14 @@ bool TallyNetworkAverages(bool ColdBoot)
 		bNetAveragesLoaded = true;
 		return true;
 	}
+
+	if (IsLockTimeWithinMinutes(nLastTallied,5)) 
+	{
+		bNetAveragesLoaded=true;
+		return true;
+	}
+	nLastTallied = GetAdjustedTime();
+
 	printf("Gathering network avgs (begin)\r\n");
 	nLastTallied = GetAdjustedTime();
 	bNetAveragesLoaded = false;
@@ -4988,8 +5058,6 @@ bool TallyNetworkAverages(bool ColdBoot)
 						//Increment Neural Network Hashes Supermajority (over the last 500 blocks)
 						if (ii > (nMaxDepth-500)) 
 						{
-								IncrementNeuralNetworkSupermajority(bb.NeuralHash,bb.GRCAddress,(nMaxDepth-ii)+30);
-								// Increment blocks staked by Address
 								double staked = cdbl("0" + ReadCache("stakedbyaddress",bb.GRCAddress),0);
 								staked++;
 								WriteCache("stakedbyaddress",bb.GRCAddress,RoundToString(staked,0),GetAdjustedTime());
@@ -5064,6 +5132,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 					mvNetwork["NETWORK"] = structcpid;
 					
 					TallyMagnitudesInSuperblock();
+					ComputeNeuralNetworkSupermajorityHashes();
 
 					bNetAveragesLoaded = true;
 					if (fDebug) printf("Done gathering\r\n");
@@ -8083,6 +8152,7 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 	if (!bFullTableScan) nMinDepth = nMaxDepth-6;
 
 	if (nMaxDepth < nMinDepth) return false;
+		
 	out_errors = "";
 	int ii = 0;
 	if (fDebug3 && bFullTableScan) 	printf("LAM Max height %f \r\n",(double)nMaxDepth);

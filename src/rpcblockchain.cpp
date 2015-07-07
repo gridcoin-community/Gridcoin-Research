@@ -38,6 +38,7 @@ bool UnusualActivityReport();
 
 StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
 
+std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 
 std::string GetNeuralNetworkReport();
 Array GetJSONNeuralNetworkReport();
@@ -1468,6 +1469,13 @@ Value execute(const Array& params, bool fHelp)
 
 
 	}
+	else if (sItem == "neuralhash")
+	{
+			double popularity = 0;
+			std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
+			entry.push_back(Pair("Popular",consensus_hash));
+			results.push_back(entry);
+	}
 	else if (sItem == "vote")
 	{
 		if (params.size() != 3)
@@ -2135,7 +2143,7 @@ Value execute(const Array& params, bool fHelp)
 		//2
 		email = "ebol349324923849023908429084892098023423432423423424332a@gridcoin.us";
 		WriteCPIDToRPC(email,bpk,block,results);
-		email="ha";
+		email="test";
 		WriteCPIDToRPC(email,bpk,block,results);
 		//Empty
 		email="";
@@ -2283,7 +2291,7 @@ Array MagnitudeReport(bool bMine)
 		   results.push_back(c);
 		   StructCPID globalmag = GetStructCPID();
 		   globalmag = mvMagnitudes["global"];
-		   double payment_timespan = 14; //(globalmag.HighLockTime-globalmag.LowLockTime)/86400;  //Lock time window in days
+		   double payment_timespan = 14; 
 		   Object entry;
 		   entry.push_back(Pair("Payment Window",payment_timespan));
 		   results.push_back(entry);
@@ -2305,14 +2313,11 @@ Array MagnitudeReport(bool bMine)
 									entry.push_back(Pair("DPOR Magnitude",	structMag.Magnitude));
 									entry.push_back(Pair("Payment Magnitude",structMag.PaymentMagnitude));
 									entry.push_back(Pair("Payment Timespan (Days)",structMag.PaymentTimespan));
-								
 									entry.push_back(Pair("Total Earned (14 days)",structMag.totalowed));
 									entry.push_back(Pair("DPOR Payments (14 days)",structMag.payments));
 									double outstanding = Round(structMag.totalowed - structMag.payments,2);
-
 									total_owed += outstanding;
 									entry.push_back(Pair("Outstanding Owed (14 days)",outstanding));
-									
 									entry.push_back(Pair("InterestPayments (14 days)",structMag.interestPayments));
 									entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
 									entry.push_back(Pair("Owed",structMag.owed));
@@ -2380,8 +2385,9 @@ std::string CryptoLottery(int64_t locktime)
 		   std::string sOut = "";
  		   std::string row = "";
 		   int rows = 0;
-		   //7-5-2015
-		   if (fDebug3) printf("CL Start\r\n");
+
+		   if (!bRemotePaymentsEnabled) return "";
+
 		   double max_subsidy = (double)GetMaximumBoincSubsidy(locktime);
 		   vector<CPIDOwed> vCPIDSOwed;
 		   					
@@ -2436,7 +2442,7 @@ std::string CryptoLottery(int64_t locktime)
 		
 		if (sOut.length() > 10) sOut = sOut.substr(0,sOut.length()-5); //Remove last delimiter
 	    if (fDebug3) printf("CryptoLottery %s",sOut.c_str());
-		if (rows < 10) sOut = "";
+		if (rows < 15) sOut = "";
 		return sOut;
 }
 
@@ -2877,7 +2883,7 @@ double GetTotalNeuralNetworkHashVotes()
 	{
 				double popularity = mvNeuralNetworkHash[(*ii).first];
 				neural_hash = (*ii).first;
-				if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity >= 1)
+				if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity >= .01)
 				{
 					total += popularity;
 				}
@@ -2902,7 +2908,7 @@ Array GetJSONNeuralNetworkReport()
 				double popularity = mvNeuralNetworkHash[(*ii).first];
 				neural_hash = (*ii).first;
 				//If the hash != empty_hash:
-				if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity >= 1)
+				if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity >= .01)
 				{
 					row = neural_hash + "," + RoundToString(popularity,0);
 					report += row + "\r\n";
@@ -3066,6 +3072,7 @@ Value listitem(const Array& params, bool fHelp)
 			entry.push_back(Pair("Network Time",GetAdjustedTime()));
 			results.push_back(entry);
 	}
+	
 	if (sitem == "rsaweight")
 	{
 		double out_magnitude = 0;

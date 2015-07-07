@@ -33,8 +33,8 @@ extern unsigned int CHECKPOINT_VIOLATIONS;
 static const int MAX_NEWBIE_BLOCKS = 200;
 static const int MAX_NEWBIE_BLOCKS_LEVEL2 = 500;
 static const int CHECKPOINT_DISTRIBUTED_MODE = 50;
-static const int CONSENSUS_LOOKBACK = 40;  //Amount of blocks to go back from best block, to avoid counting forked blocks
-static const int BLOCK_GRANULARITY = 30;   //Consensus block divisor 
+static const int CONSENSUS_LOOKBACK = 15;  //Amount of blocks to go back from best block, to avoid counting forked blocks
+static const int BLOCK_GRANULARITY = 10;   //Consensus block divisor 
 	
 
 extern int64_t nLastBlockSolved;
@@ -122,7 +122,7 @@ extern unsigned char pchMessageStart[4];
 extern std::map<uint256, CBlock*> mapOrphanBlocks;
 extern int64_t COIN_YEAR_REWARD;
 extern bool bCryptoLotteryEnabled;
-
+extern bool bRemotePaymentsEnabled;
 
 // Settings
 extern int64_t nTransactionFee;

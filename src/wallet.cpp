@@ -1922,7 +1922,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	if (nCredit > nBalance - nReserveBalance)
 	{
 		if (fDebug) printf("StakeMiner: Credit below reserve balance. %f",(double)nCredit);
-		msMiningErrors7="Credit below reserve balance";
+		msMiningErrors7="";
 		msMiningErrors = msMiningErrors7;
 		return false;
 	}
@@ -2028,8 +2028,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 	if (fDebug3) printf("Staking Block \r\n");
 	
-	//DPOR TODO && out_interest < 5 .. etc.
-    // Set output amount - 4-3-2015 - Expand Coinstake to pay DPOR Researchers in CryptoLottery
+	// Set output amount - 4-3-2015 - Expand Coinstake to pay DPOR Researchers in CryptoLottery
 	if (bCryptoLotteryEnabled)
 	{
 		 
