@@ -161,7 +161,17 @@ Module modPersistedDataSystem
             Dim vCPIDs() As String = Split(msSyncData, "<ROW>")
             Dim vTestNet() As String
             vTestNet = Split(vCPIDs(0), "<COL>")
-            Log("Updating magnitude in " + Trim(mbTestNet) + " for " + Trim(UBound(vCPIDs)) + " cpids.")
+            Log("Updating magnitude in testnet=" + Trim(mbTestNet) + " for " + Trim(UBound(vCPIDs)) + " cpids.")
+            'Delete any CPIDs that are in the neural network that no longer have beacons:
+            Dim surrogateRow1 As New Row
+            surrogateRow1.Database = "CPID"
+            surrogateRow1.Table = "CPIDS"
+            Dim sPath As String = GetPath(surrogateRow1)
+            Try
+                Kill(sPath)
+            Catch ex As Exception
+                Log("Neural updatemagnitudesphase1:" + ex.Message)
+            End Try
 
             For x As Integer = 0 To UBound(vCPIDs)
                 If Len(vCPIDs(x)) > 20 Then
