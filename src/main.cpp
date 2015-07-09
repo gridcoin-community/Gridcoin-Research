@@ -33,6 +33,8 @@ extern std::string VectorToString(std::vector<unsigned char> v);
 extern bool UnusualActivityReport();
 extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 
+extern bool FullSyncWithDPORNodes();
+
 
 
 bool CheckMessageSignature(std::string sMessageType, std::string sMsg, std::string sSig);
@@ -45,6 +47,8 @@ extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 extern double GetTotalBalance();
 extern std::string PubKeyToAddress(const CScript& scriptPubKey);
 extern void IncrementNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress,double distance);
+extern bool LoadSuperblock(std::string data, int64_t nTime, double height);
+
 
 double GetSuperblockAvgMag(std::string superblock);
 
@@ -509,6 +513,21 @@ bool TimerMain(std::string timer_name, int max_ms)
 }
 
 
+bool FullSyncWithDPORNodes()
+{
+			#if defined(WIN32) && defined(QT_GUI)
+				std::string errors1 = "";
+                LoadAdminMessages(false,errors1);
+				std::string cpiddata = GetListOf("beacon");
+				std::string whitelist = GetListOf("project");
+				std::string data = "<WHITELIST>" + whitelist + "</WHITELIST><CPIDDATA>" + cpiddata + "</CPIDDATA>";
+				//printf("Syncing neural network %s \r\n",data.c_str());
+				qtSyncWithDPORNodes(data);
+			#endif
+			return true;
+}		
+
+
 
 double GetPoSKernelPS2()
 {
@@ -682,10 +701,10 @@ MiningCPID GetNextProject(bool bForce)
 					return GlobalCPUMiningCPID;
 	}
 	
-	if (GlobalCPUMiningCPID.projectname.length() > 3 && !bForce)
+	if (GlobalCPUMiningCPID.projectname.length() > 3 && !bForce  && GlobalCPUMiningCPID.projectname != "INVESTOR")
 	{
 	
-				if (!Timer_Main("globalcpuminingcpid",20))
+				if (!Timer_Main("globalcpuminingcpid",5))
 				{
 					//Prevent Thrashing
 					return GlobalCPUMiningCPID;
@@ -756,7 +775,7 @@ MiningCPID GetNextProject(bool bForce)
 				structcpid = mvCPIDs[(*ii).first];
 				if (structcpid.initialized) 
 				{ 
-					if (structcpid.Iscpidvalid && structcpid.projectname.length() > 2 && structcpid.verifiedrac > 9)
+					if (structcpid.Iscpidvalid && structcpid.projectname.length() > 1)
 					{
 							iRow++;
 							if (i==3 || iDistributedProject == iRow)
@@ -2684,6 +2703,24 @@ std::string PubKeyToAddress(const CScript& scriptPubKey)
 	return address;
 }
 
+bool LoadSuperblock(std::string data, int64_t nTime, double height)
+{
+	if (Contains(data,"<AVERAGES>"))
+	{
+		WriteCache("superblock","magnitudes",ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>"),nTime);
+		WriteCache("superblock","averages",ExtractXML(data,"<AVERAGES>","</AVERAGES>"),nTime);
+		WriteCache("superblock","block_number",RoundToString(height,0),nTime);
+		TallyMagnitudesInSuperblock();
+		return true;
+	}
+	else
+	{
+		WriteCache("superblock","magnitudes",data,nTime);
+		WriteCache("superblock","block_number",RoundToString(height,0),nTime);
+		TallyMagnitudesInSuperblock();
+		return true;
+	}
+}
 
 
 double ClientVersionNew()
@@ -2921,20 +2958,17 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			double popularity = 0;
 			std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
 			// Only reject superblock when it is new:
-		
 			if (IsLockTimeWithinMinutes(GetBlockTime(),15) && consensus_hash != neural_hash)
 			{
 					return error("ConnectBlock[] : Superblock hash does not match consensus hash; SuperblockHash: %s, Consensus Hash: %s",
 										neural_hash.c_str(), consensus_hash.c_str());
 		
 			}
-			
 		}
 		double avg_mag = GetSuperblockAvgMag(bb.superblock);
 		if (avg_mag > 10)
 		{
-			WriteCache("superblock","magnitudes",bb.superblock,GetBlockTime());
-			WriteCache("superblock","block_number",RoundToString((double)pindex->nHeight,0),GetBlockTime());
+			LoadSuperblock(bb.superblock,GetBlockTime(),(double)pindex->nHeight);
 		}
 	}
 
@@ -3771,32 +3805,24 @@ void GridcoinServices()
 			    TallyInBackground();
 	}
 
-	if ((nBestHeight % 10) == 0)
+	if ((nBestHeight % 5) == 0)
 	{
 		ComputeNeuralNetworkSupermajorityHashes();
 	}
 
 	// Every N blocks as a Synchronized TEAM:
-	if ((nBestHeight % 10) == 0)
+	if ((nBestHeight % 30) == 0)
 	{
 		//Sync RAC with neural network IF superblock is over 24 hours Old, Or if we have No superblock (in case of the latter, age will be 45 years old)
 		int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
 		// Note that nodes will NOT accept superblocks without a supermajority hash, so the last block will not be in memory unless it is a good superblock.
-
-		// Let's start syncing the neural network as soon as the LAST superblock is over 20 hours old.  That gives us 4 hours to come to a consensus:
-
+		// Let's start syncing the neural network as soon as the LAST superblock is over 12 hours old.
 		// Also, lets do this as a TEAM exactly every 30 blocks (~30 minutes) to try to reach an EXACT consensus every half hour:
 		// For effeciency, the network sleeps for 20 hours after a good superblock is accepted
 
 		if (superblock_age > 12*60*60)
 		{
-			#if defined(WIN32) && defined(QT_GUI)
-				std::string errors1 = "";
-                LoadAdminMessages(false,errors1);
-				std::string data = GetListOf("beacon");
-				printf("Syncing neural network \r\n");
-				qtSyncWithDPORNodes(data);
-			#endif
+			FullSyncWithDPORNodes();
 		}
 	}
 
@@ -5076,9 +5102,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 								double avg_mag = GetSuperblockAvgMag(bb.superblock);
 								if (avg_mag > 10)
 								{
-									WriteCache("superblock","magnitudes",bb.superblock,block.nTime);
-									WriteCache("superblock","block_number",RoundToString(ii,0),block.nTime);
-									TallyMagnitudesInSuperblock();
+									LoadSuperblock(bb.superblock,block.nTime,ii);
 									superblockloaded=true;
 								}
 							}
@@ -5098,10 +5122,10 @@ bool TallyNetworkAverages(bool ColdBoot)
 							structproj.TotalRAC = NetworkRAC;
 							NetworkMagnitude += bb.Magnitude;
 							structproj.entries++;
-							if (structproj.entries > 0)
-							{
-									structproj.AverageRAC = structproj.rac / (structproj.entries+.01);
-							}
+							//if (structproj.entries > 0)
+							//{
+							//		structproj.AverageRAC = structproj.rac / (structproj.entries+.01);
+							//}
 							mvNetwork[bb.projectname] = structproj;
 							//Insert Global Project+CPID Stats:
 							StructCPID structnetcpidproject = GetInitializedStructCPID2(projcpid,mvNetworkCPIDs);
