@@ -749,7 +749,7 @@ MiningCPID GetNextProject(bool bForce)
 				structcpid = mvCPIDs[(*ii).first];
 				if (structcpid.initialized) 
 				{ 
-					if (structcpid.Iscpidvalid && structcpid.verifiedrac > 10)
+					if (structcpid.Iscpidvalid)
 					{
 						iValidProjects++;
 					}
@@ -785,7 +785,7 @@ MiningCPID GetNextProject(bool bForce)
 								msMiningCPID = structcpid.cpid;
 								mdMiningRAC = structcpid.verifiedrac;
 								msENCboincpublickey = structcpid.boincpublickey;
-								if (LessVerbose(5)) printf("Ready to CPU Mine project %s     RAC(%f)  enc %s\r\n",	structcpid.projectname.c_str(),structcpid.rac, msENCboincpublickey.c_str());
+								if (LessVerbose(5) || fDebug3) printf("Ready to CPU Mine project %s     RAC(%f)  enc %s\r\n",	structcpid.projectname.c_str(),structcpid.rac, msENCboincpublickey.c_str());
 								//Required for project to be mined in a block:
 								GlobalCPUMiningCPID.cpid=structcpid.cpid;
 								GlobalCPUMiningCPID.projectname = structcpid.projectname;
@@ -6843,7 +6843,7 @@ void InitializeProjectStruct(StructCPID& project)
 	//Must contain cpidv2, cpid, boincpublickey
 	project.Iscpidvalid = false;
 	project.Iscpidvalid = IsLocalCPIDValid(project);
- 	if (fDebug) printf("Assimilating local project %s, Valid %s",project.projectname.c_str(),YesNo(project.Iscpidvalid).c_str());
+ 	if (fDebug3) printf("Assimilating local project %s, CPID Valid: %s",project.projectname.c_str(),YesNo(project.Iscpidvalid).c_str());
 
 
 }
@@ -7958,7 +7958,9 @@ void IncrementNeuralNetworkSupermajority(std::string NeuralHash, std::string GRC
 	{
 		mvNeuralNetworkHash.insert(map<std::string,double>::value_type(NeuralHash,0));
 	}
-	double votes = (1/distance)*100;
+	double multiplier = 200;
+	if (distance < 40) multiplier = 400;
+	double votes = (1/distance)*multiplier;
 	temp_hashcount += votes;
 	total_votes += votes;
 	mvNeuralNetworkHash[NeuralHash] = temp_hashcount;

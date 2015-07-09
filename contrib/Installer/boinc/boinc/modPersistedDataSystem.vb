@@ -398,11 +398,10 @@ Module modPersistedDataSystem
                 Return True
             End If
             If Not bRequireExactMatch Then
-                Dim sCompare1 As String = Replace(Trim(UCase(blah.PrimaryKey)), " ", "")
-                Dim sCompare2 As String = Replace(Trim(UCase(sData)), " ", "")
+                Dim sCompare1 As String = Replace(Replace(Trim(UCase(blah.PrimaryKey)), " ", ""), "_", "")
+                Dim sCompare2 As String = Replace(Replace(Trim(UCase(sData)), " ", ""), "_", "")
                 If Left(sCompare1, 8) = Left(sCompare2, 8) Then Return True
             End If
-
         Next
         Return False
     End Function
