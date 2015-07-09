@@ -20,6 +20,7 @@ Module modPersistedDataSystem
     Public mbTestNet As Boolean = False
     'Minimum RAC percentage required for RAC to be counted in magnitude:
     Public mdMinimumRacPercentage As Double = 0.06
+    Public bMagsDoneLoading As Boolean = True
 
     Private lUseCount As Long = 0
     Public Structure Row
@@ -64,18 +65,58 @@ Module modPersistedDataSystem
         Dim surrogateRow As New Row
         surrogateRow.Database = "CPID"
         surrogateRow.Table = "CPIDS"
+        Dim lTotal As Long
+        Dim lRows As Long
+        If bMagsDoneLoading = False Then Return ""
+        Dim sOut As String = ""
+        sOut = "<MAGNITUDES>"
         Dim lstCPIDs As List(Of Row) = GetList(surrogateRow, "*")
         lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
-        Dim sOut As String = ""
         For Each cpid As Row In lstCPIDs
             If cpid.DataColumn5 = "True" Then
                 ' If CDate(cpid.Added) < DateAdd(DateInterval.Day, -1, Now) Then
                 Dim sRow As String = cpid.PrimaryKey + "," + Trim(RoundedMag(Val(cpid.Magnitude))) + ";"
+                lTotal = lTotal + Val(cpid.Magnitude)
+                lRows = lRows + 1
                 sOut += sRow
             End If
         Next
+        sOut += "</MAGNITUDES><AVERAGES>"
+        Dim avg As Double
+        avg = lTotal / (lRows + 0.01)
+        If avg < 25 Then Return ""
+        'APPEND the Averages:
+        Dim rRow As New Row
+        rRow.Database = "Project"
+        rRow.Table = "Projects"
+        Dim lstP As List(Of Row) = GetList(rRow, "*")
+        lstP.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
+        For Each r As Row In lstP
+            If r.RAC > 0 Then
+                Dim sRow As String = r.PrimaryKey + "," + Trim(RoundedMag(Val(r.RAC))) + ";"
+                lRows = lRows + 1
+                sOut += sRow
+            End If
+        Next
+        sOut += "</AVERAGES>"
         Return sOut
     End Function
+    Public Function xReservedForFuture(data As String)
+        Dim sMags As String
+        sMags = ExtractXML(data, "<MAGNITUDES>")
+        Dim vMags() As String
+        vMags = Split(sMags, ";")
+        For x As Integer = 0 To UBound(vMags)
+            If Len(vMags(x)) > 10 Then
+                Dim vRow() As String = Split(vMags(x), ",")
+                If Len(vRow(0)) > 5 Then
+                    Dim sCPID As String = vRow(0)
+                    Dim dMag As Double = Val(vRow(1))
+                End If
+            End If
+        Next x
+    End Function
+
     Public Function RoundedMag(num As Double)
         'Rounds magnitude to nearest Dither Factor
         Return Math.Round(Math.Round(num * GetDitherMag(num), 0) / GetDitherMag(num), 2)
@@ -146,22 +187,90 @@ Module modPersistedDataSystem
         If Now > dr.Synced Then Return True Else Return False
     End Function
     Public Sub CompleteSync()
+        If bMagsDoneLoading = False Then Exit Sub
+
         mbForcefullySyncAllRac = True
+
+        Try
+
+        bMagsDoneLoading = False
         UpdateMagnitudesPhase1()
         UpdateMagnitudes()
         mbForcefullySyncAllRac = False
 
         If LCase(KeyValue("exportmagnitude")) = "true" Then
             ExportToCSV2()
-        End If
+            End If
+        Catch ex As Exception
+            Log("Completesync:" + ex.Message)
+        End Try
+
+        bMagsDoneLoading = True
+
     End Sub
+    Private Function BlowAwayTable(dr As Row)
+        Dim sPath As String = GetPath(dr)
+        Try
+            Kill(sPath)
+        Catch ex As Exception
+            Log("Neural updatemagnitudesphase1:" + ex.Message)
+        End Try
+
+    End Function
     Public Function UpdateMagnitudesPhase1()
         Try
-            
-            Dim vCPIDs() As String = Split(msSyncData, "<ROW>")
+            'Blow away the projects
+            Dim surrogateRow1 As New Row
+
+            surrogateRow1.Database = "Project"
+            surrogateRow1.Table = "Projects"
+            BlowAwayTable(surrogateRow1)
+
+            surrogateRow1.Database = "Whitelist"
+            surrogateRow1.Table = "Whitelist"
+            BlowAwayTable(surrogateRow1)
+
+            Dim sWhitelist As String
+            sWhitelist = ExtractXML(msSyncData, "<WHITELIST>")
+            Dim sCPIDData As String = ExtractXML(msSyncData, "<CPIDDATA>")
+            Log(msSyncData)
+            Log("")
+
+            Log(sWhitelist)
+            Log("")
+            Log(sCPIDData)
+
+            Try
+
+            Dim vWhitelist() As String = Split(sWhitelist, "<ROW>")
+            For x As Integer = 0 To UBound(vWhitelist)
+                If Len(vWhitelist(x)) > 1 Then
+                    Dim vRow() As String
+                    vRow = Split(vWhitelist(x), "<COL>")
+                    Dim sProject As String = vRow(0)
+                    Dim sURL As String = vRow(1)
+                    Dim dr As New Row
+                    dr.Database = "Whitelist"
+                    dr.Table = "Whitelist"
+                    dr.PrimaryKey = sProject
+                    dr = Read(dr)
+                        dr.Expiration = DateAdd(DateInterval.Day, 14, Now)
+                        dr.Synced = DateAdd(DateInterval.Day, -1, Now)
+                        Store(dr)
+                End If
+            Next x
+            Catch ex As Exception
+                Log("while loading projects " + ex.Message)
+            End Try
+
+            Dim vCPIDs() As String = Split(sCPIDData, "<ROW>")
             Dim vTestNet() As String
             vTestNet = Split(vCPIDs(0), "<COL>")
-            Log("Updating magnitude in " + Trim(mbTestNet) + " for " + Trim(UBound(vCPIDs)) + " cpids.")
+            Log("Updating magnitude in testnet=" + Trim(mbTestNet) + " for " + Trim(UBound(vCPIDs)) + " cpids.")
+            'Delete any CPIDs that are in the neural network that no longer have beacons:
+            surrogateRow1.Database = "CPID"
+            surrogateRow1.Table = "CPIDS"
+            BlowAwayTable(surrogateRow1)
 
             For x As Integer = 0 To UBound(vCPIDs)
                 If Len(vCPIDs(x)) > 20 Then
@@ -206,6 +315,11 @@ Module modPersistedDataSystem
     Public Function UpdateMagnitudes() As Boolean
         Dim lstCPIDs As List(Of Row)
         Dim surrogateRow As New Row
+        Dim lstWhitelist As List(Of Row)
+        Dim surrogateWhitelistRow As New Row
+        surrogateWhitelistRow.Database = "Whitelist"
+        surrogateWhitelistRow.Table = "Whitelist"
+        lstWhitelist = GetList(surrogateWhitelistRow, "*")
 
         Dim WhitelistedProjects As Double = 0
         Dim WhitelistedWithRAC As Double = 0
@@ -219,7 +333,7 @@ Module modPersistedDataSystem
             lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
             Dim lstProjectsCt As List(Of Row) = GetList(surrogateRow, "*")
             WhitelistedProjects = lstProjectsCt.Count
-            WhitelistedWithRAC = lstProjectsCt.Count
+            WhitelistedWithRAC = lstWhitelist.Count
             For Each cpid As Row In lstCPIDs
                 If NeedsSynced(cpid) Or mbForcefullySyncAllRac Then
                     Dim bResult As Boolean = GetRacViaNetsoft(cpid.PrimaryKey)
@@ -246,21 +360,23 @@ Module modPersistedDataSystem
                 'Dim TotalRAC As Double = 0
                 For Each prj As Row In lstProjects
                     Dim surrogatePrjCPID As New Row
-                    surrogatePrjCPID.Database = "Project"
-                    surrogatePrjCPID.Table = prj.PrimaryKey + "CPID"
-                    surrogatePrjCPID.PrimaryKey = prj.PrimaryKey + "_" + cpid.PrimaryKey
-                    Dim rowRAC = Read(surrogatePrjCPID)
-                    Dim CPIDRAC As Double = Val(rowRAC.RAC)
-                    Dim PrjAvgRAC As Double = Val(prj.RAC)
-                    Dim avgRac As Double = CPIDRAC / (PrjAvgRAC + 0.01) * 100
-                    Dim MinRAC As Double = PrjAvgRAC * mdMinimumRacPercentage
 
-                    If CPIDRAC > MinRAC Then
-                        TotalAvgRAC += avgRac
-                    Else
-                        'Optional: Erase researchers RAC here (magnitude is already adjusted)
+                    If IsInList(prj.PrimaryKey, lstWhitelist, False) Then
+                        surrogatePrjCPID.Database = "Project"
+                        surrogatePrjCPID.Table = prj.PrimaryKey + "CPID"
+                        surrogatePrjCPID.PrimaryKey = prj.PrimaryKey + "_" + cpid.PrimaryKey
+                        Dim rowRAC = Read(surrogatePrjCPID)
+                        Dim CPIDRAC As Double = Val(rowRAC.RAC)
+                        Dim PrjAvgRAC As Double = Val(prj.RAC)
+                        Dim avgRac As Double = CPIDRAC / (PrjAvgRAC + 0.01) * 100
+                        Dim MinRAC As Double = PrjAvgRAC * mdMinimumRacPercentage
+
+                        If CPIDRAC > MinRAC Then
+                            TotalAvgRAC += avgRac
+                        Else
+                            'Optional: Erase researchers RAC here (magnitude is already adjusted)
+                        End If
                     End If
-
                 Next
                 'Now we can store the magnitude
                 Dim Magg As Double = (TotalAvgRAC / WhitelistedProjects) * WhitelistedWithRAC
@@ -276,7 +392,20 @@ Module modPersistedDataSystem
         End Try
 
     End Function
+    Public Function IsInList(sData As String, lstRows As List(Of Row), bRequireExactMatch As Boolean) As Boolean
+        For Each blah As Row In lstRows
+            If Trim(UCase(blah.PrimaryKey)) = Trim(UCase(sData)) Then
+                Return True
+            End If
+            If Not bRequireExactMatch Then
+                Dim sCompare1 As String = Replace(Trim(UCase(blah.PrimaryKey)), " ", "")
+                Dim sCompare2 As String = Replace(Trim(UCase(sData)), " ", "")
+                If Left(sCompare1, 8) = Left(sCompare2, 8) Then Return True
+            End If
 
+        Next
+        Return False
+    End Function
     Public Function GetList(DataRow As Row, sWildcard As String) As List(Of Row)
         Dim xx As New List(Of Row)
         Dim sErr As String = ""

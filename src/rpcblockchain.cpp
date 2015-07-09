@@ -34,7 +34,11 @@ extern std::string MyBeaconExists(std::string cpid);
 extern std::string AdvertiseBeacon(bool force);
 double Round(double d, int place);
 bool UnusualActivityReport();
+extern double GetSuperblockAvgMag(std::string superblock);
 
+bool FullSyncWithDPORNodes();
+
+bool LoadSuperblock(std::string data, int64_t nTime, double height);
 
 StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
 
@@ -72,6 +76,7 @@ extern bool SynchronizeRacForDPOR(bool SyncEntireCoin);
 
 extern void QueryWorldCommunityGridRAC();
 std::string qtGetNeuralHash(std::string data);
+std::string qtGetNeuralContract(std::string data);
 
 extern bool TallyMagnitudesInSuperblock();
 double GetTotalBalance();
@@ -962,6 +967,43 @@ std::string ExtractValue(std::string data, std::string delimiter, int pos)
 
 
 
+double GetSuperblockAvgMag(std::string data)
+{
+	std::string superblock = "";
+	if (Contains(data,"<AVERAGES>"))
+	{
+		superblock = ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>");
+	}
+	else
+	{
+		superblock = data;
+	}
+	
+	std::vector<std::string> vSuperblock = split(superblock.c_str(),";");
+	double rows = 0;
+	double total_mag = 0;
+	for (unsigned int i = 0; i < vSuperblock.size(); i++)
+	{
+		// For each CPID in the contract
+		if (vSuperblock[i].length() > 1)
+		{
+				std::string cpid = ExtractValue(vSuperblock[i],",",0);
+				double magnitude = cdbl(ExtractValue(vSuperblock[i],",",1),0);
+				if (cpid.length() > 10)
+				{
+	     			total_mag += magnitude;
+					rows++;
+				}
+			}
+	}
+	double avg = total_mag/(rows+.01);
+	return avg;
+}
+
+
+
+
+
 
 bool TallyMagnitudesInSuperblock()
 {
@@ -997,8 +1039,34 @@ bool TallyMagnitudesInSuperblock()
 				}
 			}
 	}
+	// Load boinc project averages from neural network
 
-	
+	std::string projects = ReadCache("superblock","averages");
+	std::vector<std::string> vProjects = split(projects.c_str(),";");
+	for (unsigned int i = 0; i < vProjects.size(); i++)
+	{
+		// For each Project in the contract
+		if (vProjects[i].length() > 1)
+		{
+				std::string project = ExtractValue(vProjects[i],",",0);
+				double avg = cdbl(ExtractValue(vProjects[i],",",1),0);
+				if (project.length() > 1)
+				{
+					StructCPID stProject = GetStructCPID();
+					stProject = mvNetwork[project];
+					if (!stProject.initialized)
+					{
+							stProject.initialized = true;
+							mvNetwork.insert(map<string,StructCPID>::value_type(project,stProject));
+					}
+					stProject.projectname = project;
+	     			stProject.AverageRAC = avg;
+					mvNetwork[project]=stProject;
+					printf("project %s avg %f ",project.c_str(),avg);
+
+				}
+			}
+	}
 	return true;
 }
 
@@ -1256,7 +1324,11 @@ std::string GetListOf(std::string datatype)
 								std::string key_value = mvApplicationCache[(*ii).first];
 								std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
 								row = subkey + "<COL>" + key_value;
-								rows += row + "<ROW>";
+								if (Contains(row,"INVESTOR") && datatype=="beacon") row = "";
+								if (row != "")
+								{
+									rows += row + "<ROW>";
+								}
 					}
 		       
 				}
@@ -1417,11 +1489,9 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "syncdpor2")
 	{
-		std::string data = GetListOf("beacon");
-		#if defined(WIN32) && defined(QT_GUI)
-			qtSyncWithDPORNodes(data);
-		#endif
-
+		FullSyncWithDPORNodes();
+		entry.push_back(Pair("Syncing",1));
+		results.push_back(entry);
 	}
 	else if(sItem=="gatherneuralhashes")
 	{
@@ -1447,6 +1517,7 @@ Value execute(const Array& params, bool fHelp)
 			entry.push_back(Pair("My Neural Hash",myNeuralHash.c_str()));
 			results.push_back(entry);
 		#endif
+	
 
 	}
 	else if (sItem == "superblockage")
@@ -1735,6 +1806,22 @@ Value execute(const Array& params, bool fHelp)
 
 			results.push_back(entry);
 	}
+	else if (sItem=="testnewcontract")
+	{
+		std::string contract = "";
+ 		#if defined(WIN32) && defined(QT_GUI)
+			contract = qtGetNeuralContract("");
+		#endif
+  		LoadSuperblock(contract,GetAdjustedTime(),280000);
+
+		entry.push_back(Pair("ContractTest",contract));
+		// Hash of current superblock
+		std::string neural_hash = RetrieveMd5(contract);
+		entry.push_back(Pair("Hash",neural_hash));
+
+		results.push_back(entry);
+	
+	}
 	else if (sItem == "rac")
 	{
 
@@ -1974,6 +2061,14 @@ Value execute(const Array& params, bool fHelp)
 		entry.push_back(Pair("Results",sOut));
 		results.push_back(entry);
 		
+	}
+	else if (sItem == "superblockaverage")
+	{
+		std::string superblock = ReadCache("superblock","magnitudes");
+		double avg = GetSuperblockAvgMag(superblock);
+		entry.push_back(Pair("avg",avg));
+		results.push_back(entry);
+	
 	}
 	else if (sItem == "getlistof")
 	{
@@ -3326,10 +3421,10 @@ Value listitem(const Array& params, bool fHelp)
 			{ 
 				Object entry;
 				entry.push_back(Pair("Project",structcpid.projectname));
-				entry.push_back(Pair("RAC",structcpid.rac));
+				//entry.push_back(Pair("RAC",structcpid.rac));
 				entry.push_back(Pair("Avg RAC",structcpid.AverageRAC));
 
-				entry.push_back(Pair("Entries",structcpid.entries));
+				//entry.push_back(Pair("Entries",structcpid.entries));
 
 				if (structcpid.projectname=="NETWORK") 
 				{
