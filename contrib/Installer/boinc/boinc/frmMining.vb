@@ -210,6 +210,9 @@ Public Class frmMining
         Dim vData() As String = Split(sData, ";")
         Dim iRow As Long = 0
         Dim sValue As String
+        'dgv.Visible = False
+        Me.Cursor.Current = Cursors.WaitCursor
+
         For y = 0 To UBound(vData) - 1
             dgv.Rows.Add()
             sReportRow = ""
@@ -221,7 +224,13 @@ Public Class frmMining
             Next x
             sReport += sReportRow + vbCrLf
             iRow = iRow + 1
+            If iRow Mod 10 = 0 Then Application.DoEvents()
+
         Next
+        'dgv.Visible = True
+
+        Me.Cursor.Current = Cursors.Default
+
         'Get the Neural Hash
         Dim sMyNeuralHash As String
         Dim sContract = GetMagnitudeContract()
@@ -230,6 +239,53 @@ Public Class frmMining
         dgv.Rows(iRow).Cells(0).Value = "Hash: " + sMyNeuralHash + " (" + Trim(iRow) + ")"
         sReport += "Hash: " + sMyNeuralHash + " (" + Trim(iRow) + ")"
         msNeuralReport = sReport
+
+        'Populate Projects
+
+        dgvProjects.Rows.Clear()
+        dgvProjects.Columns.Clear()
+        dgvProjects.BackgroundColor = Drawing.Color.Black
+        dgvProjects.ForeColor = Drawing.Color.Lime
+        sHeading = "Project Name;Avg RAC;Whitelisted"
+        vHeading = Split(sHeading, ";")
+
+        PopulateHeadings(vHeading, dgvProjects)
+        '7-10-2015
+
+        Dim surrogateRow As New Row
+        Dim lstWhitelist As List(Of Row)
+        Dim surrogateWhitelistRow As New Row
+        surrogateWhitelistRow.Database = "Whitelist"
+        surrogateWhitelistRow.Table = "Whitelist"
+        lstWhitelist = GetList(surrogateWhitelistRow, "*")
+        Dim WhitelistedProjects As Double = 0
+        Dim PrjCount As Double = 0
+        iRow = 0
+        
+        'Loop through the whitelist
+        lstWhitelist.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
+        Dim rPRJ As New Row
+        rPRJ.Database = "Project"
+        rPRJ.Table = "Projects"
+
+        Dim lstProjects As List(Of Row) = GetList(rPRJ, "*")
+        lstProjects.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
+
+        PrjCount = lstWhitelist.Count
+        For Each prj As Row In lstProjects
+            Dim bIsThisWhitelisted = IsInList(prj.PrimaryKey, lstWhitelist, False)
+            If bIsThisWhitelisted Then
+                WhitelistedProjects += 1
+            End If
+            dgvProjects.Rows.Add()
+            dgvProjects.Rows(iRow).Cells(0).Value = prj.PrimaryKey
+            dgvProjects.Rows(iRow).Cells(1).Value = prj.RAC
+            dgvProjects.Rows(iRow).Cells(2).Value = Trim(bIsThisWhitelisted)
+            iRow = iRow + 1
+        Next
+        
+        lblTotalProjects.Text = Trim(PrjCount)
+        lblWhitelistedProjects.Text = Trim(WhitelistedProjects)
 
 
     End Sub
@@ -241,35 +297,44 @@ Public Class frmMining
         End If
     End Sub
 
-
-    Private Sub TabControl1_TabIndexChanged(sender As Object, e As System.EventArgs) Handles TabControl1.TabIndexChanged
-        
-    End Sub
-
-    Private Sub dgv_CellContentClick(sender As System.Object, e As System.Windows.Forms.DataGridViewCellEventArgs) Handles dgv.CellContentClick
-
-    End Sub
-
     Private Sub dgv_CellContentDoubleClick(sender As Object, e As System.Windows.Forms.DataGridViewCellEventArgs) Handles dgv.CellContentDoubleClick
         'Drill into CPID
         If e.RowIndex < 0 Then Exit Sub
+        'Get whitelist total first
+        Dim lstWhitelist As List(Of Row)
+        Dim surrogateWhitelistRow As New Row
+        surrogateWhitelistRow.Database = "Whitelist"
+        surrogateWhitelistRow.Table = "Whitelist"
+        lstWhitelist = GetList(surrogateWhitelistRow, "*")
+        Dim rPRJ As New Row
+        rPRJ.Database = "Project"
+        rPRJ.Table = "Projects"
+        Dim lstProjects1 As List(Of Row) = GetList(rPRJ, "*")
+        lstProjects1.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
+        Dim WhitelistedProjects As Double = GetWhitelistedCount(lstProjects1, lstWhitelist)
+        Dim WhitelistedWithRAC As Double = lstProjects1.Count
+        Dim PrjCount As Double = 0
+       
+        'Loop through the whitelist
+        lstWhitelist.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
+        Dim TotalRAC As Double = 0
 
+        'Drill
         Dim sCPID As String = Trim(dgv.Rows(e.RowIndex).Cells(0).Value)
         If sCPID.Contains("Hash") Then Exit Sub
-
         If Len(sCPID) > 1 Then
-            '6-7-2015
+            '7-10-2015 - Expose Project Mag and Cumulative Mag:
             Dim dgvProjects As New DataGridView
-            Dim sHeading As String = "CPID,Project,RAC,Minimum RAC,ProjectAvgRAC,Expiration"
+            Dim sHeading As String = "CPID,Project,RAC,Minimum RAC,ProjectAvgRAC,Project Mag,Cumulative RAC,Cumulative Mag"
             Dim vHeading() As String = Split(sHeading, ",")
             PopulateHeadings(vHeading, dgvProjects)
-
             Dim surrogatePrj As New Row
             surrogatePrj.Database = "Project"
             surrogatePrj.Table = "Projects"
             Dim lstProjects As List(Of Row) = GetList(surrogatePrj, "*")
             Dim iRow As Long = 0
             dgvProjects.Rows.Clear()
+            Dim CumulativeMag As Double = 0
 
             For Each prj As Row In lstProjects
                 Dim surrogatePrjCPID As New Row
@@ -291,17 +356,48 @@ Public Class frmMining
                     dgvProjects.Rows(iRow - 1).Cells(2).Value = Trim(CPIDRAC)
                     dgvProjects.Rows(iRow - 1).Cells(3).Value = Trim(MinRAC)
                     dgvProjects.Rows(iRow - 1).Cells(4).Value = Trim(PrjRAC)
-                    dgvProjects.Rows(iRow - 1).Cells(5).Value = Trim(prj.Expiration)
+                    'dgvProjects.Rows(iRow - 1).Cells(5).Value = Trim(prj.Expiration)
+                    'Cumulative Mag:
+                    Dim bIsThisWhitelisted As Boolean = False
+                    bIsThisWhitelisted = IsInList(prj.PrimaryKey, lstWhitelist, False)
+                    Dim IndMag As Double = 0
+                   
+
                     If CPIDRAC < MinRAC Then
+                        dgvProjects.Rows(iRow - 1).Cells(2).Style.BackColor = Color.Yellow
+                    End If
+                    If Not bIsThisWhitelisted Then
                         dgvProjects.Rows(iRow - 1).Cells(2).Style.BackColor = Color.Red
                     End If
+
+                    If CPIDRAC >= MinRAC And bIsThisWhitelisted Then
+                        IndMag = Math.Round((CPIDRAC / PrjRAC + 0.01) * 100, 2)
+                        CumulativeMag += IndMag
+                        TotalRAC += CPIDRAC
+                    End If
+                    dgvProjects.Rows(iRow - 1).Cells(5).Value = IndMag
+                    dgvProjects.Rows(iRow - 1).Cells(6).Value = TotalRAC
+                    dgvProjects.Rows(iRow - 1).Cells(7).Value = CumulativeMag
+
                 End If
 
             Next
 
+            Dim MyMagg As Double = (CumulativeMag / WhitelistedProjects) * WhitelistedWithRAC
+
+            iRow += 1
+            dgvProjects.Rows.Add()
+        
+            dgvProjects.Rows(iRow - 1).Cells(0).Value = "Total Mag: " + Trim(Math.Round(MyMagg, 2))
+            dgvProjects.Rows(iRow - 1).Cells(6).Value = TotalRAC
+            dgvProjects.Rows(iRow - 1).Cells(7).Value = CumulativeMag
+
+
+
             Dim oNewForm As New Form
             oNewForm.Width = Screen.PrimaryScreen.WorkingArea.Width / 2
             oNewForm.Height = Screen.PrimaryScreen.WorkingArea.Height / 2.5
+            oNewForm.Text = "CPID Magnitude Details - Gridcoin Neural Network - (Red=Blacklisted, Yellow=Below Minimum Network Avg)"
 
             oNewForm.Controls.Add(dgvProjects)
             dgvProjects.Left = 5
@@ -351,12 +447,17 @@ Public Class frmMining
         Dim sPhrase As String = txtSearch.Text
         For y = 1 To dgv.Rows.Count - 1
             For x = 0 To dgv.Rows(y).Cells.Count - 1
-                If LCase(Trim("" & dgv.Rows(y).Cells(x).Value)).Contains(LCase(Trim(txtSearch.Text))) Then
+                'If LCase(Trim("" & dgv.Rows(y).Cells(x).Value)).Contains(LCase(Trim(txtSearch.Text))) Or
+                If LCase(Trim("" & dgv.Rows(y).Cells(x).Value)) Like LCase(Trim(txtSearch.Text)) + "*" Then
                     dgv.Rows(y).Selected = True
                     dgv.CurrentCell = dgv.Rows(y).Cells(0)
                     Exit Sub
                 End If
             Next
         Next
+    End Sub
+
+    Private Sub btnRefresh_Click(sender As System.Object, e As System.EventArgs) Handles btnRefresh.Click
+        PopulateNeuralData()
     End Sub
 End Class

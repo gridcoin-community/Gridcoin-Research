@@ -15,7 +15,7 @@ Public Class Utilization
 
     Public ReadOnly Property Version As Double
         Get
-            Return 384
+            Return 385
 
         End Get
     End Property
@@ -411,8 +411,6 @@ Public Class Utilization
         'Write the Gridcoin CPIDs to the Persisted Data System
         Try
             msSyncData = sData
-
-
             Call SyncDPOR2()
         Catch ex As Exception
             Log("Exception during SyncDpor2 : " + ex.Message)
@@ -423,6 +421,9 @@ Public Class Utilization
         Return 0
 
     End Function
+    Public Sub UpdateMagnitudesOnly()
+        Call UpdateMagnitudes()
+    End Sub
     Public Sub AddressUserThread()
 
         Dim s As New SpeechSynthesis

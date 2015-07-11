@@ -311,7 +311,17 @@ Module modPersistedDataSystem
         msSyncData = ""
 
     End Function
+    Public Function GetWhitelistedCount(lstProjects As List(Of Row), lstWhitelist As List(Of Row))
+        Dim WhitelistedProjects As Double = 0
 
+        For Each prj As Row In lstProjects
+            Dim bIsThisWhitelisted = IsInList(prj.PrimaryKey, lstWhitelist, False)
+            If bIsThisWhitelisted Then
+                WhitelistedProjects += 1
+            End If
+        Next
+        Return WhitelistedProjects
+    End Function
     Public Function UpdateMagnitudes() As Boolean
         Dim lstCPIDs As List(Of Row)
         Dim surrogateRow As New Row
@@ -320,20 +330,19 @@ Module modPersistedDataSystem
         surrogateWhitelistRow.Database = "Whitelist"
         surrogateWhitelistRow.Table = "Whitelist"
         lstWhitelist = GetList(surrogateWhitelistRow, "*")
-
-        Dim WhitelistedProjects As Double = 0
-        Dim WhitelistedWithRAC As Double = 0
-
+        Dim rPRJ As New Row
+        rPRJ.Database = "Project"
+        rPRJ.Table = "Projects"
+        Dim lstProjects1 As List(Of Row) = GetList(rPRJ, "*")
+        Dim WhitelistedProjects As Double = GetWhitelistedCount(lstProjects1, lstWhitelist)
+        Dim WhitelistedWithRAC As Double = lstProjects1.Count
         Try
-
             'Loop through the researchers
             surrogateRow.Database = "CPID"
             surrogateRow.Table = "CPIDS"
             lstCPIDs = GetList(surrogateRow, "*")
             lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
             Dim lstProjectsCt As List(Of Row) = GetList(surrogateRow, "*")
-            WhitelistedProjects = lstProjectsCt.Count
-            WhitelistedWithRAC = lstWhitelist.Count
             For Each cpid As Row In lstCPIDs
                 If NeedsSynced(cpid) Or mbForcefullySyncAllRac Then
                     Dim bResult As Boolean = GetRacViaNetsoft(cpid.PrimaryKey)
@@ -349,7 +358,6 @@ Module modPersistedDataSystem
         End Try
 
         Try
-
             lstCPIDs = GetList(surrogateRow, "*")
             For Each cpid As Row In lstCPIDs
                 Dim surrogatePrj As New Row

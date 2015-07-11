@@ -1766,6 +1766,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		 if (!IsCPIDValidv2(miningcpid,pindexBest->nHeight))
 		 {
 			 msMiningErrors7="CPID INVALID";
+			 if (GlobalCPUMiningCPID.initialized) 			 GlobalCPUMiningCPID.cpid="INVESTOR";
 			 printf("Unable to create boinc block->CPID INVALID");
 			 MilliSleep(500);
 			 return false;
