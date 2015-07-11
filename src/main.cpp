@@ -34,7 +34,12 @@ extern bool UnusualActivityReport();
 extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 
 extern bool FullSyncWithDPORNodes();
+extern  void TestScan();
+extern void TestScan2();
 
+
+
+std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
 
 
 bool CheckMessageSignature(std::string sMessageType, std::string sMsg, std::string sSig);
@@ -329,9 +334,10 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors7 = "";
  std::string    Organization = "";
  std::string    OrganizationKey = "";
-
+ std::string    msNeuralResponse = "";
  //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
  int nGrandfather = fTestNet ? 27444 : 267500;
+ int nNewIndex = fTestNet ? 28286 : 271625;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -688,7 +694,7 @@ MiningCPID GetNextProject(bool bForce)
 		if (fDebug3 && LessVerbose(50)) printf("Using cached boinckey for project %s\r\n",GlobalCPUMiningCPID.projectname.c_str());
 					msMiningProject = GlobalCPUMiningCPID.projectname;
 					msMiningCPID = GlobalCPUMiningCPID.cpid;
-					if (LessVerbose(5)) printf("Ready to CPU Mine project %s     RAC(%f)  enc %s\r\n",	GlobalCPUMiningCPID.projectname.c_str(), GlobalCPUMiningCPID.rac, msENCboincpublickey.c_str());
+					if (LessVerbose(5)) printf("BoicKey - Mining project %s     RAC(%f)  enc %s\r\n",	GlobalCPUMiningCPID.projectname.c_str(), GlobalCPUMiningCPID.rac, msENCboincpublickey.c_str());
 					double ProjectRAC = GetNetworkAvgByProject(GlobalCPUMiningCPID.projectname);
 					GlobalCPUMiningCPID.NetworkRAC = ProjectRAC;
 					mdMiningNetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
@@ -721,6 +727,7 @@ MiningCPID GetNextProject(bool bForce)
 	GlobalCPUMiningCPID.pobdifficulty = 0;
 	GlobalCPUMiningCPID.diffbytes = 0;
 	GlobalCPUMiningCPID.lastblockhash = "0";
+	//7-10-2015
 
 	if ( (IsInitialBlockDownload() || !bCPIDsLoaded) && !bForce) 
 	{
@@ -781,7 +788,8 @@ MiningCPID GetNextProject(bool bForce)
 								msMiningCPID = structcpid.cpid;
 								mdMiningRAC = structcpid.verifiedrac;
 								msENCboincpublickey = structcpid.boincpublickey;
-								if (LessVerbose(5) || fDebug3) printf("Ready to CPU Mine project %s     RAC(%f)  enc %s\r\n",	structcpid.projectname.c_str(),structcpid.rac, msENCboincpublickey.c_str());
+								if (LessVerbose(5) || fDebug3) printf("Ready to CPU Mine project %s with CPID %s, RAC(%f) \r\n",	structcpid.projectname.c_str(),structcpid.cpid.c_str(),
+									structcpid.rac);
 								//Required for project to be mined in a block:
 								GlobalCPUMiningCPID.cpid=structcpid.cpid;
 								GlobalCPUMiningCPID.projectname = structcpid.projectname;
@@ -793,7 +801,7 @@ MiningCPID GetNextProject(bool bForce)
 								GlobalCPUMiningCPID.NetworkRAC = ProjectRAC;
 								mdMiningNetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
 								GlobalCPUMiningCPID.Magnitude = CalculatedMagnitude(GetAdjustedTime(),false);
-								if (fDebug) printf("For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
+								if (fDebug3) printf("For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
 								//Reserved for GRC Speech Synthesis
 								msMiningErrors = "Boinc Mining";
 								GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
@@ -2893,6 +2901,13 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
     // Track money supply and mint amount info
     pindex->nMint = nValueOut - nValueIn + nFees;
     pindex->nMoneySupply = (pindex->pprev? pindex->pprev->nMoneySupply : 0) + nValueOut - nValueIn;
+
+	// Gridcoin: Store verified magnitude and CPID in block index (7-11-2015)
+	pindex->sCPID  = bb.cpid;
+	pindex->nMagnitude = bb.Magnitude;
+	pindex->nResearchSubsidy = bb.ResearchSubsidy;
+	pindex->nInterestSubsidy = bb.InterestSubsidy;
+	
 	double mint = CoinToDouble(pindex->nMint);
     double PORDiff = GetBlockDifficulty(nBits);
 		
@@ -6242,13 +6257,24 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 					neural_response = qtGetNeuralHash("");
 				#endif
 				printf("Neural response %s",neural_response.c_str());
+	            pfrom->PushMessage("hash_nresp", neural_response);
+
+			}
+			else if (neural_request=="explainmag")
+			{
+				// 7/11/2015 - Allow linux/mac to make neural requests
+				#if defined(WIN32) && defined(QT_GUI)
+					neural_response = qtExecuteDotNetStringFunction("ExplainMag",neural_request_id);
+				#endif
+				printf("Neural response %s\r\n",neural_response.c_str());
+	            pfrom->PushMessage("expmag_nresp", neural_response);
+
 			}
 			else
 			{
 				neural_response="generic_response";
 			}
 			
-            pfrom->PushMessage("nresp", neural_response);
 	}
     else if (strCommand == "ping")
     {
@@ -6275,13 +6301,23 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             pfrom->PushMessage("pong", nonce);
         }
     }
-	else if (strCommand == "nresp")
+	else if (strCommand == "hash_nresp")
 	{
 			std::string neural_response = "";
 	        vRecv >> neural_response;
 			// if (pfrom->nNeuralRequestSent != 0) 
 			// nNeuralNonce must match request ID
 			pfrom->NeuralHash = neural_response;
+			printf("Neural Response %s \r\n",neural_response.c_str());
+	}
+	else if (strCommand == "expmag_nresp")
+	{
+			std::string neural_response = "";
+	        vRecv >> neural_response;
+			if (neural_response.length() > 10)
+			{
+				msNeuralResponse=neural_response;
+			}
 			printf("Neural Response %s \r\n",neural_response.c_str());
 	}
 
@@ -8083,6 +8119,37 @@ bool UnusualActivityReport()
     return true;
 }
 
+
+void TestScan()
+{
+	BOOST_FOREACH(const PAIRTYPE(uint256, CBlockIndex*)& item, mapBlockIndex)
+    {
+        CBlockIndex* pindex = item.second;
+		if (LessVerbose(3) || pindex->nHeight > 28268)
+		{
+			printf("map block index h %f ,  cpid %s   , Mag  %f , RS %f, INT %f \r\n",(double)pindex->nHeight,pindex->sCPID.c_str(), (double)pindex->nMagnitude, 
+				pindex->nResearchSubsidy,pindex->nInterestSubsidy);
+		}
+    }
+}
+
+
+void TestScan2()
+{
+	//7-11-2015
+	CBlockIndex* pindex = pindexBest;
+    while (pindex->nHeight > 1)
+	{
+        pindex = pindex->pprev;
+		if (LessVerbose(3) || pindex->nHeight > 28268)
+		{
+			printf("map block index h %f ,  cpid %s   , Mag  %f , RS %f, INT %f \r\n",(double)pindex->nHeight,pindex->sCPID.c_str(), (double)pindex->nMagnitude, 
+				pindex->nResearchSubsidy,pindex->nInterestSubsidy);
+		}
+    
+	}
+    
+}
 
 
 bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)

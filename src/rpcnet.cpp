@@ -18,6 +18,8 @@ extern std::string NeuralRequest(std::string MyNeuralRequest);
 extern void GatherNeuralHashes();
 
 
+extern bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
+
 
 Value getconnectioncount(const Array& params, bool fHelp)
 {
@@ -62,10 +64,36 @@ void GatherNeuralHashes()
          	pNode->PushMessage("neural", command_name, reqid);
             printf("Pushed \r\n");
 		}
-		//6-8-2015
     }
-    
 }
+
+
+
+bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit)
+{
+    // Find a Neural Network Node that is free
+    LOCK(cs_vNodes);
+	int iContactCount = 0;
+	msNeuralResponse="";
+    BOOST_FOREACH(CNode* pNode, vNodes) 
+	{
+		if (Contains(pNode->strSubVer,"1999"))
+		{
+			std::string reqid = cpid;
+		 	pNode->PushMessage("neural", command_name, reqid);
+            printf("Requested command %s \r\n",command_name.c_str());
+			iContactCount++;
+			if (iContactCount >= NodeLimit) return true;
+		}
+    }
+	if (iContactCount==0) 
+	{
+		printf("No neural network nodes online.");
+		return false;
+	}
+	return true;
+}
+
 
 
 

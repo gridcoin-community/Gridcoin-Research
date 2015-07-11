@@ -97,6 +97,8 @@ extern void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, do
 extern void qtSyncWithDPORNodes(std::string data);
 extern double qtExecuteGenericFunction(std::string function,std::string data);
 extern std::string FromQString(QString qs);
+extern std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
+
 
 std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2);
 
@@ -701,11 +703,7 @@ void BusyWait()
 
 int64_t IsNeural()
 {
-
-	
 	if (!bGlobalcomInitialized) return 0;
-	
-
 	try
 	{
 	        	//NeuralNetwork

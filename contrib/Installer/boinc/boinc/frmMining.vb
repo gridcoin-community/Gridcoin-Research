@@ -250,8 +250,7 @@ Public Class frmMining
         vHeading = Split(sHeading, ";")
 
         PopulateHeadings(vHeading, dgvProjects)
-        '7-10-2015
-
+       
         Dim surrogateRow As New Row
         Dim lstWhitelist As List(Of Row)
         Dim surrogateWhitelistRow As New Row
@@ -335,7 +334,6 @@ Public Class frmMining
             Dim iRow As Long = 0
             dgvProjects.Rows.Clear()
             Dim CumulativeMag As Double = 0
-
             For Each prj As Row In lstProjects
                 Dim surrogatePrjCPID As New Row
                 surrogatePrjCPID.Database = "Project"
@@ -372,12 +370,15 @@ Public Class frmMining
 
                     If CPIDRAC >= MinRAC And bIsThisWhitelisted Then
                         IndMag = Math.Round((CPIDRAC / PrjRAC + 0.01) * 100, 2)
+
+
                         CumulativeMag += IndMag
                         TotalRAC += CPIDRAC
                     End If
                     dgvProjects.Rows(iRow - 1).Cells(5).Value = IndMag
                     dgvProjects.Rows(iRow - 1).Cells(6).Value = TotalRAC
-                    dgvProjects.Rows(iRow - 1).Cells(7).Value = CumulativeMag
+                    Dim DisplayMag As Double = Math.Round((CumulativeMag / WhitelistedProjects) * WhitelistedWithRAC, 2)
+                    dgvProjects.Rows(iRow - 1).Cells(7).Value = DisplayMag
 
                 End If
 
@@ -390,9 +391,7 @@ Public Class frmMining
         
             dgvProjects.Rows(iRow - 1).Cells(0).Value = "Total Mag: " + Trim(Math.Round(MyMagg, 2))
             dgvProjects.Rows(iRow - 1).Cells(6).Value = TotalRAC
-            dgvProjects.Rows(iRow - 1).Cells(7).Value = CumulativeMag
-
-
+            dgvProjects.Rows(iRow - 1).Cells(7).Value = Trim(Math.Round(MyMagg, 2))
 
             Dim oNewForm As New Form
             oNewForm.Width = Screen.PrimaryScreen.WorkingArea.Width / 2

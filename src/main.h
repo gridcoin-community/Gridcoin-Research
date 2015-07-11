@@ -159,7 +159,7 @@ extern std::string  msMiningErrors2;
 extern std::string  msMiningErrors5;
 extern std::string  msMiningErrors6;
 extern std::string  msMiningErrors7;
-
+extern std::string  msNeuralResponse;
 extern bool         mbBlocksDownloaded;
 
 
@@ -167,6 +167,7 @@ extern std::string  Organization;
 extern std::string  OrganizationKey;
 
 extern int nGrandfather;
+extern int nNewIndex;
 
 // PoB GPU Miner Global Vars:
 extern std::string 	msGPUMiningProject;
@@ -1233,6 +1234,12 @@ public:
 
     int64_t nMint;
     int64_t nMoneySupply;
+	// Gridcoin (7-11-2015) Add new Accrual Fields to block index
+	std::string sCPID;
+	double nResearchSubsidy;
+	double nInterestSubsidy;
+	double nMagnitude;
+	//
 
     unsigned int nFlags;  // ppcoin: block index flags
     enum  
@@ -1281,6 +1288,11 @@ public:
         nTime          = 0;
         nBits          = 0;
         nNonce         = 0;
+		//7-11-2015 - Gridcoin - New Accrual Fields
+		sCPID = "";
+		nResearchSubsidy = 0;
+		nInterestSubsidy = 0;
+		nMagnitude = 0;
     }
 
     CBlockIndex(unsigned int nFileIn, unsigned int nBlockPosIn, CBlock& block)
@@ -1502,6 +1514,16 @@ public:
         READWRITE(nBits);
         READWRITE(nNonce);
         READWRITE(blockHash);
+		//7-11-2015 - Gridcoin - New Accrual Fields
+		
+		if (nHeight > nNewIndex)
+		{
+			READWRITE(sCPID);
+			READWRITE(nResearchSubsidy);
+			READWRITE(nInterestSubsidy);
+			READWRITE(nMagnitude);
+		}
+
     )
 
     uint256 GetBlockHash() const

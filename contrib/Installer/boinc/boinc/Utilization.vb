@@ -15,7 +15,7 @@ Public Class Utilization
 
     Public ReadOnly Property Version As Double
         Get
-            Return 385
+            Return 386
 
         End Get
     End Property
@@ -33,7 +33,6 @@ Public Class Utilization
     End Function
     Public Function SetRPCResponse(sResponse) As Double
         SetRPCReply(sResponse)
-
         Return 1
     End Function
     Public Function FromBase64String(sData As String) As String
@@ -116,11 +115,11 @@ Public Class Utilization
     Public Function NeuralNetwork() As Double
         Return 1999
     End Function
-    Public ReadOnly Property BoincThreads As Double
-        Get
-
-        End Get
-    End Property
+    'Public ReadOnly Property BoincThreads As Double
+    '   Get
+    '
+    '   End Get
+    'End Property
     Sub New()
         UpdateKey("UpdatingLeaderboard", "false")
         Try
@@ -129,6 +128,9 @@ Public Class Utilization
             Log("New:" + ex.Message)
         End Try
         mclsUtilization = Me
+        Dim sContract As String = GetMagnitudeContract()
+        If Len(sContract) = 0 Then bMagsDoneLoading = False
+
     End Sub
     Sub New(bLoadMiningConsole As Boolean)
         If bLoadMiningConsole Then ShowMiningConsole()
@@ -163,11 +165,11 @@ Public Class Utilization
     Public Sub CreateRestorePointTestNet()
         Call RestartWallet1("createrestorepointtestnet")
     End Sub
-    Public ReadOnly Property BoincMD5 As String
-        Get
-            '   Return clsGVM.BoincMD5()
-        End Get
-    End Property
+    'Public ReadOnly Property BoincMD5 As String
+    '   Get
+    ' '  Return clsGVM.BoincMD5()
+    ' End Get
+    'End Property
     Public Function cGetMd5(sData As String) As String
         Return GetMd5String(sData)
     End Function
@@ -177,7 +179,6 @@ Public Class Utilization
     Public Function GetNeuralHash() As String
         If Len(msCurrentNeuralHash) > 1 Then Return msCurrentNeuralHash 'This is invalidated when it changes
         Dim sContract As String = GetMagnitudeContract()
-
         Dim sHash As String = GetMd5String(sContract)
         Return sHash
     End Function
@@ -186,40 +187,40 @@ Public Class Utilization
         Return sContract
     End Function
 
-    Public ReadOnly Property RetrieveWin32BoincHash() As String
-        Get
-
-        End Get
-    End Property
-    Public ReadOnly Property RetrieveSqlHighBlock As Double
-
-        Get
-        
-        End Get
-    End Property
-    Public ReadOnly Property BoincDeltaOverTime As String
-        Get
-
-        End Get
-    End Property
-    Public ReadOnly Property BoincTotalCreditsAvg As Double
-        Get
-
-        End Get
-    End Property
-    Public ReadOnly Property BoincTotalCredits As Double
-        Get
-
-        End Get
-    End Property
-    Public Function Des3Encrypt(ByVal s As String) As String
-
-    End Function
-    Public Function Des3Decrypt(ByVal sData As String) As String
-
-    End Function
-    Public Function ShowProjects()
-    End Function
+    ' Public ReadOnly Property RetrieveWin32BoincHash() As String
+    '    Get
+    '
+    '   End Get
+    'End Property
+    'Public ReadOnly Property RetrieveSqlHighBlock As Double
+    '
+    'Get
+    '
+    '   End Get
+    'End Property
+    ' Public ReadOnly Property BoincDeltaOverTime As String
+    '    Get
+    '
+    '   End Get
+    'End Property
+    'Public ReadOnly Property BoincTotalCreditsAvg As Double
+    '    Get
+    '
+    '        End Get
+    '   End Property
+    '  Public ReadOnly Property BoincTotalCredits As Double
+    '     Get
+    '
+    '   End Get
+    'End Property
+    'Public Function Des3Encrypt(ByVal s As String) As String
+    '
+    '   End Function
+    '  Public Function Des3Decrypt(ByVal sData As String) As String
+    '
+    'End Function
+    'Public Function ShowProjects()
+    'End Function
     Public Function ShowVotingConsole()
         Dim fmVoting As New frmVoting
         fmVoting.Show()
@@ -271,7 +272,7 @@ Public Class Utilization
     Public Function ShowMiningConsole()
         Try
             lfrmMiningCounter = lfrmMiningCounter + 1
-            
+
             If mfrmMining Is Nothing Then
                 mfrmMining = New frmMining
             End If
@@ -281,7 +282,7 @@ Public Class Utilization
         Catch ex As Exception
         End Try
     End Function
-   
+
     Public ReadOnly Property SourceBlock As String
         Get
 
@@ -307,14 +308,14 @@ Public Class Utilization
         msSentence = sSentence
         Dim t As New Threading.Thread(AddressOf SpeakOnBackgroundThread)
         t.Start()
-    
+
     End Sub
     Public Sub SpeakOnBackgroundThread()
         Dim S As New SpeechSynthesis
         S.Speak(msSentence)
     End Sub
     Public Function UpdateConfirm(sTxId As String) As String
-        msTxId = sTxId
+        msTXID = sTxId
         Dim thUpdate As New System.Threading.Thread(AddressOf mUpdateConfirmAsync)
         thUpdate.Start()
         Return "1"
@@ -375,14 +376,23 @@ Public Class Utilization
 
         End Try
     End Function
+    Public Function ExplainMag(sCPID As String) As String
+        Log("Neural request for " + sCPID)
+        If bMagsDoneLoading = False Then
+            Log("This node is still syncing.")
+            Return ""
+        End If
+        Dim sOut As String = ""
+        sOut = ExplainNeuralNetworkMagnitudeByCPID(sCPID)
+        Log("Responding to neural request for " + sCPID + " " + sOut)
+        Return sOut
+    End Function
     Public Function SetGenericVotingData(sValue As String) As Double
         Return SetGenericData("POLLS", sValue)
     End Function
     Public Function SetGenericData(sKey As String, sValue As String) As Double
         Try
-
             If msGenericDictionary.ContainsKey(sKey) Then
-
                 msGenericDictionary(sKey) = sValue
             Else
                 msGenericDictionary.Add(sKey, sValue)
@@ -457,8 +467,8 @@ Public Class Utilization
 
 
     End Sub
-   
-  
+
+
     Public Function GetLanIP() As String
         Return GetLocalLanIP1()
     End Function

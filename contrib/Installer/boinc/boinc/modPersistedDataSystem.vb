@@ -21,6 +21,8 @@ Module modPersistedDataSystem
     'Minimum RAC percentage required for RAC to be counted in magnitude:
     Public mdMinimumRacPercentage As Double = 0.06
     Public bMagsDoneLoading As Boolean = True
+    Public mdLastSync As Date = DateAdd(DateInterval.Day, -10, Now)
+
 
     Private lUseCount As Long = 0
     Public Structure Row
@@ -126,6 +128,7 @@ Module modPersistedDataSystem
         Return Math.Round(Math.Round(num * GetDitherMag(num), 0) / GetDitherMag(num), 2)
     End Function
     Public Function GetDitherMag(Data As Double) As Double
+        'This function is used by the neural network to round a magnitude up or down a small amount so that the whole network agrees on a single number (IE small mags are rounded by .25 while 4 digit mags are rounded by 10)
         Dim Dither As Double = 0.1
         If Data > 0 And Data < 25 Then Dither = 0.8 '1.25
         If Data >= 25 And Data < 500 Then Dither = 0.2 '5
@@ -187,11 +190,18 @@ Module modPersistedDataSystem
         If Now > dr.Synced Then Return True Else Return False
     End Function
     Public Sub CompleteSync()
-        If bMagsDoneLoading = False Then Exit Sub
-
+        If bMagsDoneLoading = False Then
+            If Math.Abs(DateDiff(DateInterval.Second, Now, mdLastSync)) > 60 * 10 Then
+                bMagsDoneLoading = True
+            Else
+                Exit Sub
+            End If
+        End If
+        
         mbForcefullySyncAllRac = True
-
+        
         Try
+            msCurrentNeuralHash = ""
 
         bMagsDoneLoading = False
         UpdateMagnitudesPhase1()
@@ -206,6 +216,7 @@ Module modPersistedDataSystem
         End Try
 
         bMagsDoneLoading = True
+        mdLastSync = Now
 
     End Sub
     Private Function BlowAwayTable(dr As Row)
@@ -400,17 +411,30 @@ Module modPersistedDataSystem
         End Try
 
     End Function
+    Public Function StringStandardize(sData As String) As String
+        Dim sCompare1 As String = sData
+        sCompare1 = Replace(sCompare1, "_", " ")
+        sCompare1 = Replace(sCompare1, " ", "")
+        sCompare1 = UCase(sCompare1)
+        Return sCompare1
+    End Function
     Public Function IsInList(sData As String, lstRows As List(Of Row), bRequireExactMatch As Boolean) As Boolean
         For Each blah As Row In lstRows
             If Trim(UCase(blah.PrimaryKey)) = Trim(UCase(sData)) Then
                 Return True
             End If
             If Not bRequireExactMatch Then
-                Dim sCompare1 As String = Replace(Replace(Trim(UCase(blah.PrimaryKey)), " ", ""), "_", "")
-                Dim sCompare2 As String = Replace(Replace(Trim(UCase(sData)), " ", ""), "_", "")
+                Dim sCompare1 As String = StringStandardize(blah.PrimaryKey)
+                Dim sCompare2 As String = StringStandardize(sData)
                 If Left(sCompare1, 8) = Left(sCompare2, 8) Then Return True
             End If
         Next
+        For Each blah As Row In lstRows
+            Dim sCompare1 As String = StringStandardize(blah.PrimaryKey)
+            Dim sCompare2 As String = StringStandardize(sData)
+            Log(sCompare1 + " does not equal " + sCompare2)
+        Next
+
         Return False
     End Function
     Public Function GetList(DataRow As Row, sWildcard As String) As List(Of Row)
@@ -790,44 +814,123 @@ Module modPersistedDataSystem
         Next
         Return strOutput.ToString().ToLower
     End Function
+    Public Function ExplainNeuralNetworkMagnitudeByCPID(sCPID As String) As String
+        Dim lstWhitelist As List(Of Row)
+        Dim surrogateWhitelistRow As New Row
+        surrogateWhitelistRow.Database = "Whitelist"
+        surrogateWhitelistRow.Table = "Whitelist"
+        lstWhitelist = GetList(surrogateWhitelistRow, "*")
+        Dim rPRJ As New Row
+        rPRJ.Database = "Project"
+        rPRJ.Table = "Projects"
+        Dim lstProjects1 As List(Of Row) = GetList(rPRJ, "*")
+        lstProjects1.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
+        Dim WhitelistedProjects As Double = GetWhitelistedCount(lstProjects1, lstWhitelist)
+        Dim WhitelistedWithRAC As Double = lstProjects1.Count
+        Dim PrjCount As Double = 0
+        lstWhitelist.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
+        Dim TotalRAC As Double = 0
+        If sCPID.Contains("Hash") Then Exit Function
+        If Len(sCPID) < 10 Then Exit Function
+        Dim sOut As String
 
+        Dim sHeading As String = "CPID,Project,RAC,Minimum RAC,ProjectAvgRAC,Project Mag,Cumulative RAC,Cumulative Mag"
+        sOut += sHeading + "<ROW>"
+
+        Dim vHeading() As String = Split(sHeading, ",")
+        Dim surrogatePrj As New Row
+        surrogatePrj.Database = "Project"
+        surrogatePrj.Table = "Projects"
+        Dim lstProjects As List(Of Row) = GetList(surrogatePrj, "*")
+        Dim iRow As Long = 0
+        Dim CumulativeMag As Double = 0
+        Dim sRow As String = ""
+        Dim sErr As String = ""
+
+        For Each prj As Row In lstProjects
+            Dim surrogatePrjCPID As New Row
+            surrogatePrjCPID.Database = "Project"
+            surrogatePrjCPID.Table = prj.PrimaryKey + "CPID"
+            surrogatePrjCPID.PrimaryKey = prj.PrimaryKey + "_" + sCPID
+            Dim rowRAC = Read(surrogatePrjCPID)
+            Dim CPIDRAC As Double = Val(rowRAC.RAC)
+            Dim PrjRAC As Double = Val(prj.RAC)
+            Dim MinRAC As Double = Math.Round(PrjRAC * mdMinimumRacPercentage, 2)
+
+            If CPIDRAC > 0 Then
+                iRow += 1
+                sRow = sCPID + "," + prj.PrimaryKey + "," + Trim(CPIDRAC) + "," + Trim(MinRAC) + "," + Trim(PrjRAC)
+                'Cumulative Mag:
+                Dim bIsThisWhitelisted As Boolean = False
+                bIsThisWhitelisted = IsInList(prj.PrimaryKey, lstWhitelist, False)
+                Dim IndMag As Double = 0
+                If CPIDRAC < MinRAC Then
+                    sErr = "Below Min RAC"
+                End If
+                If Not bIsThisWhitelisted Then
+                    sErr = "Not Whitelisted"
+                End If
+
+                If CPIDRAC >= MinRAC And bIsThisWhitelisted Then
+                    IndMag = Math.Round((CPIDRAC / PrjRAC + 0.01) * 100, 2)
+
+                    CumulativeMag += IndMag
+                    TotalRAC += CPIDRAC
+                End If
+                sRow += "," + Trim(IndMag) + "," + Trim(TotalRAC)
+
+                Dim DisplayMag As Double = Math.Round((CumulativeMag / WhitelistedProjects) * WhitelistedWithRAC, 2)
+                sRow += "," + Trim(DisplayMag) + "," + sErr
+                sOut += sRow + "<ROW>"
+            End If
+
+        Next
+        Dim MyMagg As Double = (CumulativeMag / WhitelistedProjects) * WhitelistedWithRAC
+
+        sRow = "Total Mag: " + Trim(Math.Round(MyMagg, 2)) + "," + Trim(TotalRAC) + Trim(Trim(Math.Round(MyMagg, 2)))
+        sOut += sRow
+
+        'Dim sXML As String = GetXMLOnly(sCPID)
+        Return sOut
+
+    End Function
 
 
     Public Sub ExportToCSV2()
         Try
 
-        Dim sReport As String = ""
-        Dim sReportRow As String = ""
+            Dim sReport As String = ""
+            Dim sReportRow As String = ""
             Dim sHeader As String = "CPID,Magnitude,TotalRAC,Expiration,Synced,Address,CPID_Valid"
-        sReport += sHeader + vbCrLf
-        Dim grr As New GridcoinReader.GridcoinRow
+            sReport += sHeader + vbCrLf
+            Dim grr As New GridcoinReader.GridcoinRow
             Dim sHeading As String = "CPID;Magnitude;TotalRAC;Expiration;Synced;Address;CPID_Valid"
-        Dim vHeading() As String = Split(sHeading, ";")
-        Dim sData As String = modPersistedDataSystem.GetMagnitudeContractDetails()
-        Dim vData() As String = Split(sData, ";")
-        Dim iRow As Long = 0
-        Dim sValue As String
-        For y = 0 To UBound(vData) - 1
-            sReportRow = ""
-            For x = 0 To UBound(vHeading)
-                Dim vRow() As String = Split(vData(y), ",")
-                sValue = vRow(x)
-                sReportRow += sValue + ","
-            Next x
-            sReport += sReportRow + vbCrLf
-            iRow = iRow + 1
-        Next
-        'Get the Neural Hash
-        Dim sMyNeuralHash As String
-        Dim sContract = GetMagnitudeContract()
-        sMyNeuralHash = GetMd5String(sContract)
-        sReport += "Hash: " + sMyNeuralHash + " (" + Trim(iRow) + ")"
-        Dim sWritePath As String = GetGridFolder() + "reports\DailyNeuralMagnitudeReport.csv"
-        If Not System.IO.Directory.Exists(GetGridFolder() + "reports") Then MkDir(GetGridFolder() + "reports")
-        Using objWriter As New System.IO.StreamWriter(sWritePath)
-            objWriter.WriteLine(sReport)
-            objWriter.Close()
-        End Using
+            Dim vHeading() As String = Split(sHeading, ";")
+            Dim sData As String = modPersistedDataSystem.GetMagnitudeContractDetails()
+            Dim vData() As String = Split(sData, ";")
+            Dim iRow As Long = 0
+            Dim sValue As String
+            For y = 0 To UBound(vData) - 1
+                sReportRow = ""
+                For x = 0 To UBound(vHeading)
+                    Dim vRow() As String = Split(vData(y), ",")
+                    sValue = vRow(x)
+                    sReportRow += sValue + ","
+                Next x
+                sReport += sReportRow + vbCrLf
+                iRow = iRow + 1
+            Next
+            'Get the Neural Hash
+            Dim sMyNeuralHash As String
+            Dim sContract = GetMagnitudeContract()
+            sMyNeuralHash = GetMd5String(sContract)
+            sReport += "Hash: " + sMyNeuralHash + " (" + Trim(iRow) + ")"
+            Dim sWritePath As String = GetGridFolder() + "reports\DailyNeuralMagnitudeReport.csv"
+            If Not System.IO.Directory.Exists(GetGridFolder() + "reports") Then MkDir(GetGridFolder() + "reports")
+            Using objWriter As New System.IO.StreamWriter(sWritePath)
+                objWriter.WriteLine(sReport)
+                objWriter.Close()
+            End Using
 
         Catch ex As Exception
             Log("Error while exportingToCSV2: " + ex.Message)

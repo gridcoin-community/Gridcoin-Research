@@ -36,6 +36,11 @@ double Round(double d, int place);
 bool UnusualActivityReport();
 extern double GetSuperblockAvgMag(std::string superblock);
 
+void TestScan();
+void TestScan2();
+
+bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
+
 bool FullSyncWithDPORNodes();
 
 bool LoadSuperblock(std::string data, int64_t nTime, double height);
@@ -1789,9 +1794,46 @@ Value execute(const Array& params, bool fHelp)
 		// Hash of current superblock
 		std::string neural_hash = RetrieveMd5(contract);
 		entry.push_back(Pair("Hash",neural_hash));
+		results.push_back(entry);
+	}
+	else if (sItem == "explainmagnitude2")
+	{
+		bool force = false;
+		if (params.size() == 2)
+		{
+			std::string optional = params[1].get_str();
+			boost::to_lower(optional);
+			if (optional != "force") force = true;
+		}
+
+		if (force) msNeuralResponse = "";
+		if (msNeuralResponse=="")
+		{
+			bool bResult = AsyncNeuralRequest("explainmag",GlobalCPUMiningCPID.cpid,10);
+			entry.push_back(Pair("Requested Explain Magnitude For",GlobalCPUMiningCPID.cpid));
+		}
+
+
+   		std::vector<std::string> vMag = split(msNeuralResponse.c_str(),"<ROW>");
+		for (unsigned int i = 0; i < vMag.size(); i++)
+		{
+				entry.push_back(Pair(RoundToString(i+1,0),vMag[i].c_str()));
+		}
+		if (msNeuralResponse=="") 
+		{
+					entry.push_back(Pair("Response","No response."));
+		}
 
 		results.push_back(entry);
 	
+	}
+	else if (sItem=="testscannew")
+	{
+
+		TestScan();
+		TestScan2();
+
+
 	}
 	else if (sItem == "rac")
 	{
@@ -2392,8 +2434,8 @@ Array MagnitudeReport(bool bMine)
 									//entry.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
 									double est_daily = magnitude_unit*structMag.Magnitude;
 									entry.push_back(Pair("Daily Max per Mag Unit", est_daily));
-									double OwedByAddr = OwedByAddress(structMag.GRCAddress);
-									entry.push_back(Pair("Owed by address (testnet only)", OwedByAddr));
+									//double OwedByAddr = OwedByAddress(structMag.GRCAddress);
+									//entry.push_back(Pair("Owed by address (testnet only)", OwedByAddr));
 									results.push_back(entry);
 						}
 				}

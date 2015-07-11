@@ -323,7 +323,7 @@ bool CTxDB::LoadBlockIndex()
 {
 
 	int64_t nStart = GetTimeMillis();
-
+	double dBlockCount = 0;
 
     if (mapBlockIndex.size() > 0) {
         // Already loaded once in this session. It can happen during migration
@@ -376,6 +376,17 @@ bool CTxDB::LoadBlockIndex()
         pindexNew->nBits          = diskindex.nBits;
         pindexNew->nNonce         = diskindex.nNonce;
 
+		//7-11-2015 - Gridcoin - New Accrual Fields
+
+		if (diskindex.nHeight > nNewIndex)
+		{
+			pindexNew->sCPID             = diskindex.sCPID;
+			pindexNew->nResearchSubsidy  = diskindex.nResearchSubsidy;
+			pindexNew->nInterestSubsidy  = diskindex.nInterestSubsidy;
+			pindexNew->nMagnitude        = diskindex.nMagnitude;
+		}
+
+		dBlockCount++;
         // Watch for genesis block
         if (pindexGenesisBlock == NULL && blockHash == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
             pindexGenesisBlock = pindexNew;
@@ -393,13 +404,10 @@ bool CTxDB::LoadBlockIndex()
     }
     delete iterator;
 
-
-
-	printf("Time to memorize diskindex %15"PRId64"ms\n", GetTimeMillis() - nStart);
+	
+	printf("Time to memorize diskindex containing %f blocks : %15"PRId64"ms\n", dBlockCount, GetTimeMillis() - nStart);
 	nStart = GetTimeMillis();
-
-
-
+	
 
     if (fRequestShutdown)
         return true;
