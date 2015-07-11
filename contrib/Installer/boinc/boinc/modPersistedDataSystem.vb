@@ -22,6 +22,7 @@ Module modPersistedDataSystem
     Public mdMinimumRacPercentage As Double = 0.06
     Public bMagsDoneLoading As Boolean = True
     Public mdLastSync As Date = DateAdd(DateInterval.Day, -10, Now)
+    Public mlPercentComplete As Double = 0
 
 
     Private lUseCount As Long = 0
@@ -64,6 +65,8 @@ Module modPersistedDataSystem
     End Function
 
     Public Function GetMagnitudeContract() As String
+        Try
+
         Dim surrogateRow As New Row
         surrogateRow.Database = "CPID"
         surrogateRow.Table = "CPIDS"
@@ -77,8 +80,8 @@ Module modPersistedDataSystem
         For Each cpid As Row In lstCPIDs
             If cpid.DataColumn5 = "True" Then
                 ' If CDate(cpid.Added) < DateAdd(DateInterval.Day, -1, Now) Then
-                Dim sRow As String = cpid.PrimaryKey + "," + Trim(RoundedMag(Val(cpid.Magnitude))) + ";"
-                lTotal = lTotal + Val(cpid.Magnitude)
+                Dim sRow As String = cpid.PrimaryKey + "," + Trim(RoundedMag(Val(Trim("0" + cpid.Magnitude)))) + ";"
+                lTotal = lTotal + Val("0" + Trim(cpid.Magnitude))
                 lRows = lRows + 1
                 sOut += sRow
             End If
@@ -95,13 +98,19 @@ Module modPersistedDataSystem
         lstP.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
         For Each r As Row In lstP
             If r.RAC > 0 Then
-                Dim sRow As String = r.PrimaryKey + "," + Trim(RoundedMag(Val(r.RAC))) + ";"
+                Dim sRow As String = r.PrimaryKey + "," + Trim(RoundedMag(Val(Trim("0" + r.RAC)))) + ";"
                 lRows = lRows + 1
                 sOut += sRow
             End If
         Next
         sOut += "</AVERAGES>"
-        Return sOut
+            Return sOut
+
+        Catch ex As Exception
+            Log("GetMagnitudeContract" + ex.Message)
+            Return ""
+        End Try
+
     End Function
     Public Function xReservedForFuture(data As String)
         Dim sMags As String
@@ -203,10 +212,28 @@ Module modPersistedDataSystem
         Try
             msCurrentNeuralHash = ""
 
-        bMagsDoneLoading = False
-        UpdateMagnitudesPhase1()
-        UpdateMagnitudes()
-        mbForcefullySyncAllRac = False
+            bMagsDoneLoading = False
+            
+            Try
+                mlPercentComplete = 1
+                UpdateMagnitudesPhase1()
+
+            Catch ex As Exception
+                Log("Err in completesync" + ex.Message)
+
+            End Try
+            Log("Updating mags")
+            Try
+                mlPercentComplete = 10
+
+                UpdateMagnitudes()
+                mlPercentComplete = 0
+
+            Catch ex As Exception
+                Log("Err in UpdateMagnitudes in completesync" + ex.Message)
+
+            End Try
+            mbForcefullySyncAllRac = False
 
         If LCase(KeyValue("exportmagnitude")) = "true" Then
             ExportToCSV2()
@@ -217,6 +244,7 @@ Module modPersistedDataSystem
 
         bMagsDoneLoading = True
         mdLastSync = Now
+        mlPercentComplete = 0
 
     End Sub
     Private Function BlowAwayTable(dr As Row)
@@ -247,12 +275,8 @@ Module modPersistedDataSystem
             Log(msSyncData)
             Log("")
 
-            Log(sWhitelist)
-            Log("")
-            Log(sCPIDData)
-
             Try
-
+                mlPercentComplete = 2
             Dim vWhitelist() As String = Split(sWhitelist, "<ROW>")
             For x As Integer = 0 To UBound(vWhitelist)
                 If Len(vWhitelist(x)) > 1 Then
@@ -271,9 +295,9 @@ Module modPersistedDataSystem
                 End If
             Next x
             Catch ex As Exception
-                Log("while loading projects " + ex.Message)
+                Log("UM Phase 1: While loading projects " + ex.Message)
             End Try
-
+            mlPercentComplete = 5
             Dim vCPIDs() As String = Split(sCPIDData, "<ROW>")
             Dim vTestNet() As String
             vTestNet = Split(vCPIDs(0), "<COL>")
@@ -308,13 +332,16 @@ Module modPersistedDataSystem
                         dr.DataColumn4 = Address
                         Dim bValid As Boolean = False
                         Dim clsMD5 As New MD5
-
+                        
                         bValid = clsMD5.CompareCPID(sCPID, cpidv2, BlockHash)
                         dr.DataColumn5 = Trim(bValid)
                         Store(dr)
+
                     End If
                 End If
             Next
+            mlPercentComplete = 6
+
         Catch ex As Exception
             Log("UpdateMagnitudesPhase1: " + ex.Message)
         End Try
@@ -333,20 +360,33 @@ Module modPersistedDataSystem
         Next
         Return WhitelistedProjects
     End Function
-    Public Function UpdateMagnitudes() As Boolean
-        Dim lstCPIDs As List(Of Row)
-        Dim surrogateRow As New Row
-        Dim lstWhitelist As List(Of Row)
+    Public Function GetWPC(ByRef WhitelistedProjects As Double, ByRef WhitelistedWithRAC As Double) As List(Of Row)
+
         Dim surrogateWhitelistRow As New Row
+        Dim lstWhitelist As List(Of Row)
         surrogateWhitelistRow.Database = "Whitelist"
         surrogateWhitelistRow.Table = "Whitelist"
         lstWhitelist = GetList(surrogateWhitelistRow, "*")
+        '
         Dim rPRJ As New Row
         rPRJ.Database = "Project"
         rPRJ.Table = "Projects"
         Dim lstProjects1 As List(Of Row) = GetList(rPRJ, "*")
-        Dim WhitelistedProjects As Double = GetWhitelistedCount(lstProjects1, lstWhitelist)
-        Dim WhitelistedWithRAC As Double = lstProjects1.Count
+
+        WhitelistedProjects = GetWhitelistedCount(lstProjects1, lstWhitelist)
+        WhitelistedWithRAC = lstProjects1.Count
+        Return lstWhitelist
+
+    End Function
+
+    Public Function UpdateMagnitudes() As Boolean
+        Dim lstCPIDs As List(Of Row)
+        Dim surrogateRow As New Row
+        Dim WhitelistedProjects As Double = 0
+        Dim whitelistedWithRac As Double = 0
+        Dim lstWhitelist As List(Of Row)
+
+        Dim iRow As Long = 0
         Try
             'Loop through the researchers
             surrogateRow.Database = "CPID"
@@ -358,17 +398,32 @@ Module modPersistedDataSystem
                 If NeedsSynced(cpid) Or mbForcefullySyncAllRac Then
                     Dim bResult As Boolean = GetRacViaNetsoft(cpid.PrimaryKey)
                 End If
+                iRow += 1
+
+                Dim p As Double = (iRow / (lstCPIDs.Count + 0.01)) * 100 * 0.99
+
+                mlPercentComplete = p
+
             Next
         Catch ex As Exception
             Log("UpdateMagnitudes:GatherRAC: " + ex.Message)
         End Try
+
+
         Try
             UpdateNetworkAverages()
         Catch ex As Exception
             Log("UpdateMagnitudes:UpdateNetworkAverages: " + ex.Message)
         End Try
 
+        lstWhitelist = GetWPC(WhitelistedProjects, whitelistedWithRac)
+
+        Log("WP: " + Trim(WhitelistedProjects))
+        Log("WWR:" + Trim(whitelistedWithRac))
+
         Try
+            Dim iRow2 As Long
+
             lstCPIDs = GetList(surrogateRow, "*")
             For Each cpid As Row In lstCPIDs
                 Dim surrogatePrj As New Row
@@ -385,17 +440,20 @@ Module modPersistedDataSystem
                         surrogatePrjCPID.Table = prj.PrimaryKey + "CPID"
                         surrogatePrjCPID.PrimaryKey = prj.PrimaryKey + "_" + cpid.PrimaryKey
                         Dim rowRAC = Read(surrogatePrjCPID)
-                        Dim CPIDRAC As Double = Val(rowRAC.RAC)
-                        Dim PrjAvgRAC As Double = Val(prj.RAC)
+                        Dim CPIDRAC As Double = Val(Trim("0" + rowRAC.RAC))
+                        Dim PrjAvgRAC As Double = Val(Trim("0" + prj.RAC))
                         Dim avgRac As Double = CPIDRAC / (PrjAvgRAC + 0.01) * 100
                         Dim MinRAC As Double = PrjAvgRAC * mdMinimumRacPercentage
-
+                       
                         If CPIDRAC > MinRAC Then
                             TotalAvgRAC += avgRac
                         Else
                             'Optional: Erase researchers RAC here (magnitude is already adjusted)
                         End If
+                    Else
+                       
                     End If
+
                 Next
                 'Now we can store the magnitude
                 Dim Magg As Double = (TotalAvgRAC / WhitelistedProjects) * WhitelistedWithRAC
@@ -405,6 +463,7 @@ Module modPersistedDataSystem
                 If Magg < 1 And Magg > 0.25 Then cpid.Magnitude = 1
                 Store(cpid)
             Next
+            mlPercentComplete = 0
             Return True
         Catch ex As Exception
             Log("UpdateMagnitudes:StoreMagnitudes: " + ex.Message)
@@ -432,7 +491,6 @@ Module modPersistedDataSystem
         For Each blah As Row In lstRows
             Dim sCompare1 As String = StringStandardize(blah.PrimaryKey)
             Dim sCompare2 As String = StringStandardize(sData)
-            Log(sCompare1 + " does not equal " + sCompare2)
         Next
 
         Return False

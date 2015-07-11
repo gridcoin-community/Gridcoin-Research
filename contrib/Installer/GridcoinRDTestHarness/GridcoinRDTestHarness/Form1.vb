@@ -105,11 +105,6 @@ Public Class Form1
         '   sContract = mU.GetNeuralContract()
 
 
-        '     mU.SyncCPIDsWithDPORNodes("")
-        '  sContract = mU.GetNeuralContract()
-
-        '  mU.SetGenericVotingData(sVotes)
-        ' mU.ShowVotingConsole()
         '
         ' mU.ShowMiningConsole()
         mU.ShowMiningConsole()

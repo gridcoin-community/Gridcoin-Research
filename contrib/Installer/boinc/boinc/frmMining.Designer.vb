@@ -76,6 +76,8 @@ Partial Class frmMining
         Me.dgvProjects = New System.Windows.Forms.DataGridView()
         Me.lblTotalProjects = New System.Windows.Forms.Label()
         Me.Label3 = New System.Windows.Forms.Label()
+        Me.pbSync = New System.Windows.Forms.ProgressBar()
+        Me.TimerSync = New System.Windows.Forms.Timer(Me.components)
         CType(Me.Chart1, System.ComponentModel.ISupportInitialize).BeginInit()
         CType(Me.ChartUtilization, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.MenuStrip1.SuspendLayout()
@@ -565,6 +567,18 @@ Partial Class frmMining
         Me.Label3.TabIndex = 65
         Me.Label3.Text = "Total Projects:"
         '
+        'pbSync
+        '
+        Me.pbSync.Location = New System.Drawing.Point(477, 575)
+        Me.pbSync.Name = "pbSync"
+        Me.pbSync.Size = New System.Drawing.Size(578, 18)
+        Me.pbSync.TabIndex = 67
+        '
+        'TimerSync
+        '
+        Me.TimerSync.Enabled = True
+        Me.TimerSync.Interval = 1100
+        '
         'frmMining
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
@@ -573,6 +587,7 @@ Partial Class frmMining
         Me.BackgroundImage = Global.BoincStake.My.Resources.Resources.GradientU
         Me.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch
         Me.ClientSize = New System.Drawing.Size(1071, 793)
+        Me.Controls.Add(Me.pbSync)
         Me.Controls.Add(Me.lblTotalProjects)
         Me.Controls.Add(Me.Label3)
         Me.Controls.Add(Me.dgvProjects)
@@ -647,4 +662,6 @@ Partial Class frmMining
     Friend WithEvents dgvProjects As System.Windows.Forms.DataGridView
     Friend WithEvents lblTotalProjects As System.Windows.Forms.Label
     Friend WithEvents Label3 As System.Windows.Forms.Label
+    Friend WithEvents pbSync As System.Windows.Forms.ProgressBar
+    Friend WithEvents TimerSync As System.Windows.Forms.Timer
 End Class

@@ -459,4 +459,15 @@ Public Class frmMining
     Private Sub btnRefresh_Click(sender As System.Object, e As System.EventArgs) Handles btnRefresh.Click
         PopulateNeuralData()
     End Sub
+
+    Private Sub TimerSync_Tick(sender As System.Object, e As System.EventArgs) Handles TimerSync.Tick
+        If mlPercentComplete <> 0 Then
+            pbSync.Visible = True
+            pbSync.Maximum = 105
+            pbSync.Value = mlPercentComplete
+            Application.DoEvents()
+        Else
+            pbSync.Visible = False
+        End If
+    End Sub
 End Class
