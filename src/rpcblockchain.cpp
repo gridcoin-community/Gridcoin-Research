@@ -23,7 +23,7 @@ extern std::string CryptoLottery(int64_t locktime);
 std::string CPIDByAddress(std::string address);
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
-double GetMagnitudeUnit(int64_t locktime);
+double GRCMagnitudeUnit(int64_t locktime);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 extern  std::string GetTeamURLs(bool bMissingOnly, bool bReturnProjectNames);
 extern  bool InsertSmartContract(std::string URL,std::string Name);
@@ -496,6 +496,10 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("RSAWeight",bb.RSAWeight));
 	result.push_back(Pair("LastPaymentTime",TimestampToHRDate(bb.LastPaymentTime)));
 	result.push_back(Pair("ResearchSubsidy",bb.ResearchSubsidy));
+	result.push_back(Pair("FutureResearchSubsidy",bb.ResearchSubsidy2));
+	result.push_back(Pair("ResearchAge",bb.ResearchAge));
+	result.push_back(Pair("ResearchMagnitudeUnit",bb.ResearchMagnitudeUnit));
+
 	double interest = mint-bb.ResearchSubsidy;
 	result.push_back(Pair("Interest",bb.InterestSubsidy));
 	double blockdiff = GetBlockDifficulty(block.nBits);
@@ -1012,7 +1016,8 @@ bool TallyMagnitudesInSuperblock()
 	std::string superblock = ReadCache("superblock","magnitudes");
 	std::vector<std::string> vSuperblock = split(superblock.c_str(),";");
     if (mvDPOR.size() > 0) 	mvDPOR.clear();
-	if (fDebug3) printf(".6.");
+	double TotalNetworkMagnitude = 0;
+	double TotalNetworkEntries = 0;
 	for (unsigned int i = 0; i < vSuperblock.size(); i++)
 	{
 		// For each CPID in the contract
@@ -1032,12 +1037,22 @@ bool TallyMagnitudesInSuperblock()
 					stMagg.Magnitude = stCPID.Magnitude;
 					stMagg.PaymentMagnitude = LederstrumpfMagnitude2(magnitude,GetAdjustedTime());
 					mvMagnitudes[cpid] = stMagg;
+					TotalNetworkMagnitude += stMagg.Magnitude;
+					TotalNetworkEntries++;
 				}
 			}
 	}
-	if (fDebug3) printf(".7.");
+	double NetworkAvgMagnitude = TotalNetworkMagnitude / (TotalNetworkEntries+.01);
+	// Store the Total Network Magnitude:
+	StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
+	network.projectname="NETWORK";
+	network.NetworkMagnitude = TotalNetworkMagnitude;
+	network.NetworkAvgMagnitude = NetworkAvgMagnitude;
+	
+	double TotalProjects = 0;
+	double TotalRAC = 0;
+	double AVGRac = 0;
 	// Load boinc project averages from neural network
-
 	std::string projects = ReadCache("superblock","averages");
 	std::vector<std::string> vProjects = split(projects.c_str(),";");
 	for (unsigned int i = 0; i < vProjects.size(); i++)
@@ -1053,12 +1068,18 @@ bool TallyMagnitudesInSuperblock()
 					stProject.projectname = project;
 	     			stProject.AverageRAC = avg;
 					mvNetwork[project]=stProject;
-					printf("project %s avg %f ",project.c_str(),avg);
-
+					TotalProjects++;
+					TotalRAC += avg;
 				}
 			}
 	}
-	if (fDebug3) printf(".8.");
+
+	AVGRac = TotalRAC/(TotalProjects+.01);
+	network.AverageRAC = AVGRac;
+	network.rac = TotalRAC;
+	network.NetworkProjects = TotalProjects;
+	mvNetwork["NETWORK"] = network;
+		
 	return true;
 }
 
@@ -2428,22 +2449,20 @@ Array MagnitudeReport(bool bMine)
 									
 									entry.push_back(Pair("Daily Paid",structMag.payments/14));
 									entry.push_back(Pair("Daily Owed",structMag.totalowed/14));
-									double magnitude_unit = GetMagnitudeUnit(GetAdjustedTime());
-									//entry.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
-									double est_daily = magnitude_unit*structMag.Magnitude;
-									entry.push_back(Pair("Daily Max per Mag Unit", est_daily));
-									//double OwedByAddr = OwedByAddress(structMag.GRCAddress);
-									//entry.push_back(Pair("Owed by address (testnet only)", OwedByAddr));
 									results.push_back(entry);
 						}
 				}
 
 			}
+							
 	   		Object entry2;
+
+	   		double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
+			entry2.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
 			entry2.push_back(Pair("Grand Total Outstanding Owed",total_owed));
 
 			int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
-			int nLookback = 1000*14; //Daily block count * Lookback in days = 14 days
+			int nLookback = BLOCKS_PER_DAY*14; //Daily block count * Lookback in days = 14 days
 			int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
 			entry2.push_back(Pair("Start Block",nMinDepth));
 			entry2.push_back(Pair("End Block",nMaxDepth));
@@ -3422,20 +3441,17 @@ Value listitem(const Array& params, bool fHelp)
 			{ 
 				Object entry;
 				entry.push_back(Pair("Project",structcpid.projectname));
-				//entry.push_back(Pair("RAC",structcpid.rac));
 				entry.push_back(Pair("Avg RAC",structcpid.AverageRAC));
-
-				//entry.push_back(Pair("Entries",structcpid.entries));
-
 				if (structcpid.projectname=="NETWORK") 
 				{
-						//entry.push_back(Pair("Network CPID-Projects Count",structcpid.NetworkProjects));
-						entry.push_back(Pair("Network Average RAC",structcpid.AverageRAC));
-						entry.push_back(Pair("Network Total Magnitude per Day",structcpid.NetworkMagnitude/14));
-						entry.push_back(Pair("Network Average Magnitude per day",structcpid.NetworkAvgMagnitude));
-						double magnitude_unit = GetMagnitudeUnit(GetAdjustedTime());
+						//entry.push_back(Pair("Network Average RAC",structcpid.AverageRAC));
+						entry.push_back(Pair("Network Total Magnitude",structcpid.NetworkMagnitude));
+						entry.push_back(Pair("Network Average Magnitude",structcpid.NetworkAvgMagnitude));
+						double MaximumEmission = BLOCKS_PER_DAY*GetMaximumBoincSubsidy(GetAdjustedTime());
+						entry.push_back(Pair("Network Avg Daily Payments",structcpid.payments/14));
+						entry.push_back(Pair("Network Max Daily Payments",MaximumEmission));
+						double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
 						entry.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
-					
 				}
 				results.push_back(entry);
 
@@ -3476,9 +3492,6 @@ Value listitem(const Array& params, bool fHelp)
 						entry.push_back(Pair("Team",structcpid.team));
 						entry.push_back(Pair("RecTime",structcpid.rectime));
 						entry.push_back(Pair("Age",structcpid.age));
-						entry.push_back(Pair("Verified UTC",structcpid.verifiedutc));
-						entry.push_back(Pair("Verified Team",structcpid.verifiedteam));
-						entry.push_back(Pair("Verified RAC Age",structcpid.verifiedage));
 						entry.push_back(Pair("Is my CPID Valid?",structcpid.Iscpidvalid));
 						entry.push_back(Pair("CPID Link",structcpid.link));
 						entry.push_back(Pair("Errors",structcpid.errors));
@@ -3521,7 +3534,6 @@ Value listitem(const Array& params, bool fHelp)
 					entry.push_back(Pair("CPID",structcpid.cpid));
 					entry.push_back(Pair("RAC",structcpid.rac));
 					entry.push_back(Pair("Team",structcpid.team));
-					entry.push_back(Pair("Verified Team",structcpid.verifiedteam));
 					entry.push_back(Pair("Is my CPID Valid?",structcpid.Iscpidvalid));
 					entry.push_back(Pair("CPID Link",structcpid.link));
 					entry.push_back(Pair("Errors",structcpid.errors));
