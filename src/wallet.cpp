@@ -1756,22 +1756,35 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 	try
 	{
-		 miningcpid = GetNextProject(false);
-		 uint256 pbh = 0;
-		 if (pindexPrev) pbh=pindexPrev->GetBlockHash();
-		 miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pbh);
-		 miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
-	     miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-		 hashBoinc = SerializeBoincBlock(miningcpid);
-		 if (!IsCPIDValidv2(miningcpid,pindexBest->nHeight))
+		 for (int i = 0; i < 10; i++)
 		 {
-			 msMiningErrors7="CPID INVALID";
-			 if (GlobalCPUMiningCPID.initialized) 			 GlobalCPUMiningCPID.cpid="INVESTOR";
-			 printf("Unable to create boinc block->CPID INVALID");
-			 MilliSleep(500);
-			 return false;
+			 miningcpid = GetNextProject(true);
+			 uint256 pbh = 0;
+			 if (pindexPrev) pbh=pindexPrev->GetBlockHash();
+			 miningcpid.cpidv2 = ComputeCPIDv2(miningcpid.email, miningcpid.boincruntimepublickey, pbh);
+			 miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
+			 miningcpid.RSAWeight = GetRSAWeightByCPID(miningcpid.cpid);
+			 hashBoinc = SerializeBoincBlock(miningcpid);
+			 if (!IsCPIDValidv2(miningcpid,pindexPrev->nHeight))
+			 {
+				 printf("Unable to create boinc block->CPID INVALID cpid %s %s %s",miningcpid.cpid.c_str(),miningcpid.boincruntimepublickey.c_str(),miningcpid.email.c_str());
+				 MilliSleep(300);
+			 }
+			 else
+			 {
+				 msMiningErrors7="+";
+				 break;
+			 }
+			 if (i==9)
+			 {
+				msMiningErrors7="CPID INVALID";
+				return false;
+			 }
+
 		 }
-			
+
+		 
+
 	}
 	catch (std::exception &e) 
 	{

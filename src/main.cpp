@@ -32,6 +32,8 @@ extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern std::string VectorToString(std::vector<unsigned char> v);
 extern bool UnusualActivityReport();
 extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
+extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
+
 
 extern bool FullSyncWithDPORNodes();
 extern  void TestScan();
@@ -683,31 +685,57 @@ void UnregisterWallet(CWallet* pwalletIn)
 }
 
 
+MiningCPID GetInitializedGlobalCPUMiningCPID(std::string cpid)
+{
+
+	MiningCPID mc = GetMiningCPID();
+	mc.initialized = true;
+	mc.cpid=cpid;
+	mc.projectname = cpid;
+	mc.cpidv2=cpid;
+	mc.cpidhash = "";
+	mc.email = cpid;
+	mc.boincruntimepublickey = cpid;
+	mc.rac=0;
+	mc.encboincpublickey = "";
+	mc.enccpid = "";
+	mc.NetworkRAC = 0;
+	mc.Magnitude = 0;
+    mc.clientversion = "";
+	mc.RSAWeight = GetRSAWeightByCPID(cpid);
+	mc.LastPaymentTime = nLastBlockSolved;
+	mc.diffbytes = 0;
+	mc.lastblockhash = "0";
+	return mc;
+}
+
 
 MiningCPID GetNextProject(bool bForce)
 {
 
-	
 	std::string sBoincKey = GetArgument("boinckey","");
     if (!sBoincKey.empty())
 	{ 
 		if (fDebug3 && LessVerbose(50)) printf("Using cached boinckey for project %s\r\n",GlobalCPUMiningCPID.projectname.c_str());
 					msMiningProject = GlobalCPUMiningCPID.projectname;
 					msMiningCPID = GlobalCPUMiningCPID.cpid;
-					if (LessVerbose(5)) printf("BoicKey - Mining project %s     RAC(%f)  enc %s\r\n",	GlobalCPUMiningCPID.projectname.c_str(), GlobalCPUMiningCPID.rac, msENCboincpublickey.c_str());
+					if (LessVerbose(5)) printf("BoincKey - Mining project %s     RAC(%f)  enc %s\r\n",	GlobalCPUMiningCPID.projectname.c_str(), GlobalCPUMiningCPID.rac, msENCboincpublickey.c_str());
 					double ProjectRAC = GetNetworkAvgByProject(GlobalCPUMiningCPID.projectname);
 					GlobalCPUMiningCPID.NetworkRAC = ProjectRAC;
 					mdMiningNetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
-					
 					GlobalCPUMiningCPID.Magnitude = CalculatedMagnitude(GetAdjustedTime(),false);
-					if (fDebug3) printf("For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
+					if (fDebug3) printf("(boinckey) For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
 					msMiningErrors = "Boinc Mining";
 					GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 					GlobalCPUMiningCPID.LastPaymentTime = GetLastPaymentTimeByCPID(GlobalCPUMiningCPID.cpid);
 					return GlobalCPUMiningCPID;
 	}
 	
-	if (GlobalCPUMiningCPID.projectname.length() > 3 && !bForce  && GlobalCPUMiningCPID.projectname != "INVESTOR")
+
+
+
+
+	if (GlobalCPUMiningCPID.projectname.length() > 3   &&   !bForce  && GlobalCPUMiningCPID.projectname != "INVESTOR")
 	{
 				if (!Timer_Main("globalcpuminingcpid",5))
 				{
@@ -715,20 +743,17 @@ MiningCPID GetNextProject(bool bForce)
 					return GlobalCPUMiningCPID;
 				}
 	}
+
+
+
+
+
 	msMiningProject = "";
 	msMiningCPID = "";
 	mdMiningRAC = 0;
 	msENCboincpublickey = "";
-	GlobalCPUMiningCPID.cpid="";
-	GlobalCPUMiningCPID.cpidv2 = "";
-	GlobalCPUMiningCPID.projectname ="";
-	GlobalCPUMiningCPID.rac=0;
-	GlobalCPUMiningCPID.encboincpublickey = "";
-	GlobalCPUMiningCPID.pobdifficulty = 0;
-	GlobalCPUMiningCPID.diffbytes = 0;
-	GlobalCPUMiningCPID.lastblockhash = "0";
-	//7-10-2015
-
+	GlobalCPUMiningCPID = GetInitializedGlobalCPUMiningCPID("");
+	
 	if ( (IsInitialBlockDownload() || !bCPIDsLoaded) && !bForce) 
 	{
 			if (LessVerbose(100))		    printf("CPUMiner: Gridcoin is downloading blocks Or CPIDs are not yet loaded...");
@@ -751,23 +776,16 @@ MiningCPID GetNextProject(bool bForce)
 		for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii) 
 		{
 				StructCPID structcpid = mvCPIDs[(*ii).first];
-				if (structcpid.initialized) 
-				{ 
-					if (structcpid.Iscpidvalid)
-					{
-						iValidProjects++;
-					}
-				}
+				if (structcpid.initialized && structcpid.Iscpidvalid)			iValidProjects++;
 		}
-		
-
+	
 		// Find next available CPU project:
 		int iDistributedProject = 0;
 		int iRow = 0;
 
 		if (iValidProjects > 0)
 		{
-		for (int i = 0; i <= 3;i++)
+		for (int i = 0; i <= 4;i++)
 		{
 			iRow=0;
 			iDistributedProject = (rand() % iValidProjects)+1;
@@ -778,35 +796,73 @@ MiningCPID GetNextProject(bool bForce)
 				StructCPID structcpid = mvCPIDs[(*ii).first];
 				if (structcpid.initialized) 
 				{ 
-					if (structcpid.Iscpidvalid && structcpid.projectname.length() > 1)
+					if (structcpid.Iscpidvalid && structcpid.projectname.length() > 1 && structcpid.rac > 0)
 					{
 							iRow++;
-							if (i==3 || iDistributedProject == iRow)
+							if (i==4 || iDistributedProject == iRow)
 							{
-								//Only used for global status:
-								msMiningProject = structcpid.projectname;
-								msMiningCPID = structcpid.cpid;
-								mdMiningRAC = structcpid.verifiedrac;
-								msENCboincpublickey = structcpid.boincpublickey;
-								if (LessVerbose(5) || fDebug3) printf("Ready to CPU Mine project %s with CPID %s, RAC(%f) \r\n",	structcpid.projectname.c_str(),structcpid.cpid.c_str(),
-									structcpid.rac);
-								//Required for project to be mined in a block:
-								GlobalCPUMiningCPID.cpid=structcpid.cpid;
-								GlobalCPUMiningCPID.projectname = structcpid.projectname;
-								GlobalCPUMiningCPID.rac=structcpid.verifiedrac;
-								GlobalCPUMiningCPID.encboincpublickey = structcpid.boincpublickey;
-								GlobalCPUMiningCPID.enccpid = structcpid.boincpublickey;
-								GlobalCPUMiningCPID.encaes = structcpid.boincpublickey;
-								double ProjectRAC = GetNetworkAvgByProject(GlobalCPUMiningCPID.projectname);
-								GlobalCPUMiningCPID.NetworkRAC = ProjectRAC;
-								mdMiningNetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
-								GlobalCPUMiningCPID.Magnitude = CalculatedMagnitude(GetAdjustedTime(),false);
-								if (fDebug3) printf("For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
-								//Reserved for GRC Speech Synthesis
-								msMiningErrors = "Boinc Mining";
-								GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-								GlobalCPUMiningCPID.LastPaymentTime = GetLastPaymentTimeByCPID(GlobalCPUMiningCPID.cpid);
-								return GlobalCPUMiningCPID;
+								//Pretest magnitude:
+								double premag = CalculatedMagnitude2(structcpid.cpid,GetAdjustedTime(),false);
+								if (premag > 0)
+								{
+									//Only used for global status:
+									msMiningProject = structcpid.projectname;
+									msMiningCPID = structcpid.cpid;
+									mdMiningRAC = structcpid.rac;
+								    // Reset Client Email
+										std::string email = GetArgument("email", "NA");
+										boost::to_lower(email);
+										GlobalCPUMiningCPID.email = email;
+
+									//	std::string cpid_non = structcpid.cpidhash+email;
+									//	std::string ENCbpk = AdvancedCrypt(cpid_non);
+									//	structcpid.boincpublickey = ENCbpk;
+								    //
+									//	msENCboincpublickey = structcpid.boincpublickey;
+									
+
+									if (LessVerbose(5) || fDebug3) printf("Ready to CPU Mine project %s with CPID %s, RAC(%f) \r\n",	
+										structcpid.projectname.c_str(),structcpid.cpid.c_str(),
+										structcpid.rac);
+									//Required for project to be mined in a block:
+									GlobalCPUMiningCPID.cpid=structcpid.cpid;
+									GlobalCPUMiningCPID.projectname = structcpid.projectname;
+									GlobalCPUMiningCPID.rac=structcpid.rac;
+									GlobalCPUMiningCPID.encboincpublickey = structcpid.boincpublickey;
+									GlobalCPUMiningCPID.enccpid = structcpid.boincpublickey;
+									GlobalCPUMiningCPID.encaes = structcpid.boincpublickey;
+									//7-11-2015
+									bool checkcpid = IsCPIDValid_Retired(structcpid.cpid,GlobalCPUMiningCPID.enccpid);
+									if (!checkcpid) 
+									{
+										printf("CPID invalid %s  1.  ",structcpid.cpid.c_str());
+										continue;
+									}
+
+
+									GlobalCPUMiningCPID.boincruntimepublickey = structcpid.cpidhash;
+									uint256 pbh = 1;
+									GlobalCPUMiningCPID.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey, pbh);
+									GlobalCPUMiningCPID.lastblockhash = "0";
+								    if (!IsCPIDValidv2(GlobalCPUMiningCPID,1))
+									{
+										printf("CPID INVALID 2 %s, %s  ",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.cpidv2.c_str());
+										continue;
+									}
+		
+
+
+									double ProjectRAC = GetNetworkAvgByProject(GlobalCPUMiningCPID.projectname);
+									GlobalCPUMiningCPID.NetworkRAC = ProjectRAC;
+									mdMiningNetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
+									GlobalCPUMiningCPID.Magnitude = CalculatedMagnitude(GetAdjustedTime(),false);
+									if (fDebug3 && LessVerbose(5)) printf("For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
+									//Reserved for GRC Speech Synthesis
+									msMiningErrors = "Boinc Mining";
+									GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
+									GlobalCPUMiningCPID.LastPaymentTime = GetLastPaymentTimeByCPID(GlobalCPUMiningCPID.cpid);
+									return GlobalCPUMiningCPID;
+								}
 							}
 						
 					}
@@ -822,22 +878,10 @@ MiningCPID GetNextProject(bool bForce)
 		msMiningCPID = "INVESTOR";
 		mdMiningRAC = 0;
 		msENCboincpublickey = "";
-		GlobalCPUMiningCPID.initialized = true;
-		GlobalCPUMiningCPID.cpid="INVESTOR";
-		GlobalCPUMiningCPID.projectname = "INVESTOR";
-		GlobalCPUMiningCPID.cpidv2="INVESTOR";
-		GlobalCPUMiningCPID.cpidhash = "";
-		GlobalCPUMiningCPID.email = "INVESTOR";
-		GlobalCPUMiningCPID.boincruntimepublickey = "INVESTOR";
-		GlobalCPUMiningCPID.rac=0;
-		GlobalCPUMiningCPID.encboincpublickey = "";
-		GlobalCPUMiningCPID.enccpid = "";
-		GlobalCPUMiningCPID.NetworkRAC = 0;
-		GlobalCPUMiningCPID.Magnitude = 0;
-        GlobalCPUMiningCPID.clientversion = "";
-		GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-		GlobalCPUMiningCPID.LastPaymentTime = nLastBlockSolved;
+		GlobalCPUMiningCPID = GetInitializedGlobalCPUMiningCPID("INVESTOR");
 		mdMiningNetworkRAC = 0;
+		if (fDebug) printf("Investor mode\r\n");
+
 	  	}
 		catch (std::exception& e)
 		{
@@ -853,7 +897,6 @@ MiningCPID GetNextProject(bool bForce)
 		return GlobalCPUMiningCPID;
 
 }
-
 
 
 
@@ -1855,6 +1898,15 @@ double CalculatedMagnitude(int64_t locktime,bool bUseLederstrumpf)
 	StructCPID stDPOR = mvDPOR[GlobalCPUMiningCPID.cpid];
 	return bUseLederstrumpf ? LederstrumpfMagnitude2(stDPOR.Magnitude,locktime) : stDPOR.Magnitude;
 }
+
+double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf)
+{
+	// Get neural network magnitude:
+	StructCPID stDPOR = mvDPOR[cpid];
+	return bUseLederstrumpf ? LederstrumpfMagnitude2(stDPOR.Magnitude,locktime) : stDPOR.Magnitude;
+}
+
+
 
 // miner's coin base reward
 int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height)
@@ -2871,7 +2923,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	uint64_t nCoinAge = 0;
 	
 	double dStakeReward = CoinToDouble(nStakeReward+nFees) - DPOR_Paid; //DPOR Recipients checked above already
-	if (fDebug3) printf("Stake Reward of %f , DPOR PAID %f    ",dStakeReward,DPOR_Paid);
+	if (fDebug) printf("Stake Reward of %f , DPOR PAID %f    ",dStakeReward,DPOR_Paid);
+
     if (IsProofOfStake() && pindex->nHeight > nGrandfather)
     {
 	    // ppcoin: coin stake tx earns reward instead of paying fee
@@ -3508,7 +3561,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 			{
 					double bv = BlockVersion(boincblock.clientversion);
 					double cvn = ClientVersionNew();
-					if (fDebug3) printf("BV %f, CV %f   ",bv,cvn);
+					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock(): Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3425) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
 			}
@@ -6648,7 +6701,7 @@ std::string GetNeuralNetworkSuperBlock()
 	//Only try to stake a superblock if the contract expired in the coin And the superblock is the highest popularity block
 	
 	int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-	if (superblock_age > 24*60*60)
+	if (superblock_age > 12*60*60)
 	{
 		std::string myNeuralHash = "";
 		#if defined(WIN32) && defined(QT_GUI)
@@ -6656,7 +6709,7 @@ std::string GetNeuralNetworkSuperBlock()
 		#endif
  	    double popularity = 0;
 		std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-		if (fDebug) printf("superblock age %f, myNeuralHash %s, consensus_hash %s",(double)superblock_age,myNeuralHash.c_str(),consensus_hash.c_str());
+		//if (fDebug3) printf("superblock age %f, myNeuralHash %s, consensus_hash %s",(double)superblock_age,myNeuralHash.c_str(),consensus_hash.c_str());
 
 		if (consensus_hash==myNeuralHash)
 		{
@@ -6664,6 +6717,7 @@ std::string GetNeuralNetworkSuperBlock()
 			std::string contract = "";
 			#if defined(WIN32) && defined(QT_GUI)
 				contract = qtGetNeuralContract("");
+				if (fDebug3) printf("including superblock %f\r\n",(double)contract.length());
 			#endif
 			return contract;
 		}
@@ -6871,17 +6925,13 @@ void AddProjectFromNetSoft(StructCPID& netsoft)
 	StructCPID NewProject = GetStructCPID();
 	NewProject.cpid = netsoft.cpid;
 	NewProject.projectname = netsoft.projectname;
-	NewProject.verifiedutc = netsoft.verifiedutc;
-	NewProject.verifiedrac = netsoft.verifiedrac;
 	NewProject.rac = netsoft.rac;
 	NewProject.team = netsoft.verifiedteam;
 	NewProject.verifiedteam = netsoft.verifiedteam;
 	NewProject.initialized = true;
-	NewProject.verifiedrectime = netsoft.verifiedrectime;
-	NewProject.verifiedage = netsoft.verifiedage;
 	NewProject.emailhash=netsoft.emailhash;
 	NewProject.cpidhash = GlobalCPUMiningCPID.cpidhash;
-	if (NewProject.verifiedteam != "gridcoin") NewProject.verifiedrac = -1;
+	if (NewProject.verifiedteam != "gridcoin") NewProject.rac = -1;
 	InitializeProjectStruct(NewProject);
 	mvCPIDs.insert(map<string,StructCPID>::value_type(NewProject.projectname,NewProject));
 	if (NewProject.rac > 1 && NewProject.Iscpidvalid)
@@ -6985,11 +7035,9 @@ void CreditCheck(std::string cpid, bool clearcache)
 						iRow++;
 						structcc.cpid = cpid;
 						structcc.projectname = sProj;
-						structcc.verifiedutc = cdbl(utc,0);
-						structcc.verifiedrac = cdbl(rac,0);
 						boost::to_lower(team);
 						structcc.verifiedteam = team;
-						if (structcc.verifiedteam != "gridcoin") structcc.verifiedrac = -1;
+						if (structcc.verifiedteam != "gridcoin") structcc.rac = -1;
 						structcc.verifiedrectime = cdbl(rectime,0);
 						double currenttime =  GetAdjustedTime();
 						double nActualTimespan = currenttime - structcc.verifiedrectime;
@@ -7009,30 +7057,25 @@ void CreditCheck(std::string cpid, bool clearcache)
 						StructCPID structverify = GetInitializedStructCPID2(sKey,mvCreditNodeCPIDProject);  //Contains verified CPID+Projects;
 						structverify.cpid = cpid;
 						structverify.projectname = sProj;
-						structverify.verifiedutc = cdbl(utc,0);
-						structverify.verifiedrac = cdbl(rac,0);
 						structverify.verifiedteam = team;
-						structverify.verifiedrectime = cdbl(rectime,0);
 						structverify.verifiedage = nActualTimespan;
 						mvCreditNodeCPIDProject[sKey]=structverify;
 						//Store this information by CPID also:
 						StructCPID structc = GetInitializedStructCPID2(cpid,mvCreditNodeCPID);
 						structc.cpid = cpid;
 						structc.projectname = sProj;
-						structc.verifiedutc = cdbl(utc,0);
-						structc.verifiedrac = cdbl(rac,0);
+						structc.rac = cdbl(rac,0);
 						boost::to_lower(team);
 						structc.team = team;
 						structc.verifiedteam = team;
-						structc.verifiedrectime = cdbl(rectime,0);
 						structc.verifiedage = nActualTimespan;
 						structc.verifiedTotalRAC += cdbl(rac,0);
 						projavg=GetNetworkAvgByProject(sProj);
-						if (projavg > 1 && structc.verifiedrac > 1 && structc.team == "gridcoin")
+						if (projavg > 1 && structc.rac > 1 && structc.team == "gridcoin")
 						{
 							structc.verifiedTotalNetworkRAC = structc.verifiedTotalNetworkRAC + projavg;
 							double project_magnitude = 0;
-							double UserVerifiedRAC = structc.verifiedrac;
+							double UserVerifiedRAC = structc.rac;
 							if (UserVerifiedRAC < 0) UserVerifiedRAC = 0;
 							project_magnitude = UserVerifiedRAC/(projavg+.01) * 100;
 							structc.TotalMagnitude = structc.TotalMagnitude + project_magnitude;
@@ -7045,7 +7088,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 							if (fDebug) printf("Adding magnitude for project %s : ProjectAvgRAC %f, User RAC %f, new Magnitude %f\r\n",
 								sProj.c_str(),
 								projavg,
-								structc.verifiedrac,
+								structc.rac,
 								structc.Magnitude);
 
 						}
@@ -7094,7 +7137,7 @@ double CreditCheck(std::string cpid, std::string projectname)
 	}
 	else
 	{
-		double rac = structverify.verifiedrac;
+		double rac = structverify.rac;
 		return rac;
 	}
 				
@@ -7258,7 +7301,7 @@ void HarvestCPIDs(bool cleardata)
 		}
 
 			GlobalCPUMiningCPID.email = GlobalCPUMiningCPID.aesskein;
-			GlobalCPUMiningCPID.boincruntimepublickey = GlobalCPUMiningCPID.lastblockhash;
+			//GlobalCPUMiningCPID.boincruntimepublickey = GlobalCPUMiningCPID.lastblockhash;
 			printf("Using Serialized Boinc CPID %s with orig email of %s and bpk of %s with cpidhash of %s \r\n",GlobalCPUMiningCPID.cpid.c_str(), GlobalCPUMiningCPID.email.c_str(), GlobalCPUMiningCPID.boincruntimepublickey.c_str(),GlobalCPUMiningCPID.cpidhash.c_str());
 			GlobalCPUMiningCPID.cpidhash = GlobalCPUMiningCPID.boincruntimepublickey;
 			printf("Using Serialized Boinc CPID %s with orig email of %s and bpk of %s with cpidhash of %s \r\n",GlobalCPUMiningCPID.cpid.c_str(), GlobalCPUMiningCPID.email.c_str(), GlobalCPUMiningCPID.boincruntimepublickey.c_str(),GlobalCPUMiningCPID.cpidhash.c_str());
@@ -7270,7 +7313,6 @@ void HarvestCPIDs(bool cleardata)
 			structcpid.verifiedteam = "gridcoin";
 			structcpid.rac = GlobalCPUMiningCPID.rac;
 			structcpid.cpid = GlobalCPUMiningCPID.cpid;
-			structcpid.verifiedrac = GlobalCPUMiningCPID.rac; //Will be re-verified later
 			structcpid.boincpublickey = GlobalCPUMiningCPID.encboincpublickey;
 			structcpid.boincruntimepublickey = structcpid.cpidhash;
 			structcpid.NetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
@@ -7283,9 +7325,6 @@ void HarvestCPIDs(bool cleardata)
 			structcpid.Iscpidvalid = true;
 			mvCPIDs.insert(map<string,StructCPID>::value_type(structcpid.projectname,structcpid));
 			//7-10-2015
-			//StructCPID structverify = GetStrctCPID();
-			//std::string sKey = structcpid.cpid + ":" + structcpid.projectname;
-			//structverify = GetStrctCPID();
 			CreditCheck(structcpid.cpid,false);
 			GetNextProject(false);
 			if (fDebug) printf("GCMCPI %s",GlobalCPUMiningCPID.cpid.c_str());
@@ -7386,10 +7425,7 @@ void HarvestCPIDs(bool cleardata)
 				
 				if (structverify.initialized) 
 				{
-					structcpid.verifiedutc     = structverify.verifiedutc;
-					structcpid.verifiedrac     = structverify.verifiedrac;
 					structcpid.verifiedteam    = structverify.verifiedteam;
-					structcpid.verifiedrectime = structverify.verifiedrectime;
 					structcpid.verifiedage     = structverify.verifiedage;
 				}
 				
@@ -7407,35 +7443,14 @@ void HarvestCPIDs(bool cleardata)
 
 				if (structverify.initialized)
 				{
-					if (structcpid.verifiedrac < 10 && structcpid.verifiedrac > 0)
-					{
-						
-					}
-				}
-
-				if (structverify.initialized)
-				{
-					if (structcpid.verifiedrac == 0 && structcpid.rac > 10)
-					{
-							
-								structcpid.errors = "Unable to verify project RAC online: Project missing in credit verification node.";
-					}
-
+				
 					if (structverify.initialized && structcpid.projectname != structverify.projectname)
 					{
 							structcpid.errors = "Project name does not match client project name.";
-			
 					}
-				
-
+	
 			   }
-               if (!projectvalid) 
-			   {
-
-				   //structcpid.Iscpidvalid = false;
-				   //structcpid.errors = "Not an official boinc whitelisted project.  Please see 'list projects'.";
-			   }
-
+    
     	  	   mvCPIDs[proj] = structcpid;						
     	  	   if (fDebug) printf("Adding %s",structcpid.cpid.c_str());
 
@@ -7517,7 +7532,6 @@ StructCPID GetStructCPID()
 	c.age = 0;
 	c.team="";
 	c.activeproject=false;
-	c.verifiedrac=0;
 	c.verifiedutc=0;
 	c.verifiedteam="";
 	c.verifiedrectime=0;
@@ -8136,7 +8150,6 @@ void TestScan()
 
 void TestScan2()
 {
-	//7-11-2015
 	CBlockIndex* pindex = pindexBest;
     while (pindex->nHeight > 1)
 	{

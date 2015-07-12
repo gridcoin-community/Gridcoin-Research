@@ -272,9 +272,7 @@ Module modPersistedDataSystem
             Dim sWhitelist As String
             sWhitelist = ExtractXML(msSyncData, "<WHITELIST>")
             Dim sCPIDData As String = ExtractXML(msSyncData, "<CPIDDATA>")
-            Log(msSyncData)
-            Log("")
-
+           
             Try
                 mlPercentComplete = 2
             Dim vWhitelist() As String = Split(sWhitelist, "<ROW>")
@@ -418,9 +416,7 @@ Module modPersistedDataSystem
 
         lstWhitelist = GetWPC(WhitelistedProjects, whitelistedWithRac)
 
-        Log("WP: " + Trim(WhitelistedProjects))
-        Log("WWR:" + Trim(whitelistedWithRac))
-
+        
         Try
             Dim iRow2 As Long
 
@@ -945,8 +941,10 @@ Module modPersistedDataSystem
         Next
         Dim MyMagg As Double = (CumulativeMag / WhitelistedProjects) * WhitelistedWithRAC
 
-        sRow = "Total Mag: " + Trim(Math.Round(MyMagg, 2)) + "," + Trim(TotalRAC) + Trim(Trim(Math.Round(MyMagg, 2)))
+        sRow = "Total Mag: " + Trim(Math.Round(MyMagg, 2)) + "," + Trim(TotalRAC) + "," + Trim(Trim(Math.Round(MyMagg, 2)))
         sOut += sRow
+
+        sRow += "<ROW>Your Neural Magnitude: " + Trim(Math.Round(MyMagg, 2))
 
         'Dim sXML As String = GetXMLOnly(sCPID)
         Return sOut

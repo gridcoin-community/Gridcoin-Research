@@ -1094,12 +1094,10 @@ bool Retiring_TallyMagnitudesByContract()
 					
 					StructCPID stCPIDProject = GetInitializedStructCPID2(cpid_project,mvDPOR);
 					double rac = cdbl(ExtractValue(vCPIDs[c],",",1),0);
-					stCPIDProject.verifiedrac = rac;
 					mvDPOR[cpid_project] = stCPIDProject;
 					std::string project = vProjects[i];
 					//Add weighted Magnitude here
 					StructCPID stCPID = GetInitializedStructCPID2(cpid,mvDPOR);
-					stCPID.verifiedrac = rac;
 					if (projavg > 10)
 					{
 							stCPID.verifiedTotalNetworkRAC = stCPID.verifiedTotalNetworkRAC + projavg;
@@ -1875,7 +1873,7 @@ Value execute(const Array& params, bool fHelp)
 						if (stDPORProject.initialized) 
 						{ 
 							  // Name, Netsoft, DPOR, Avg
-							  narr = RoundToString(stDPORProject.NetsoftRAC,0) + ", " + RoundToString(stDPORProject.verifiedrac,0) 
+							  narr = RoundToString(stDPORProject.NetsoftRAC,0) + ", " + RoundToString(stDPORProject.rac,0) 
 								  + ", " + RoundToString(ProjectRAC,0);
 		  					  entry.push_back(Pair(WhitelistedProject.projectname,narr));
 						}
@@ -3258,10 +3256,10 @@ Value listitem(const Array& params, bool fHelp)
 				{ 
 					if (structcpid.projectname.length() > 2 && projectvalid)
 					{
-						including = (ProjectRAC > 0 && structcpid.Iscpidvalid && structcpid.verifiedrac > 10);
-						UserVerifiedRAC = structcpid.verifiedrac;
-						if (UserVerifiedRAC < 0) UserVerifiedRAC=0;
-						narr_desc = "NetRac: " + RoundToString(ProjectRAC,0) + ", CPIDValid: " + YesNo(structcpid.Iscpidvalid) + ", VerifiedRAC: " +RoundToString(structcpid.verifiedrac,0);
+						including = (ProjectRAC > 0 && structcpid.Iscpidvalid && structcpid.rac > 10);
+						UserVerifiedRAC = structcpid.rac;
+						narr_desc = "NetRac: " + RoundToString(ProjectRAC,0) + ", CPIDValid: " 
+							+ YesNo(structcpid.Iscpidvalid) + ", RAC: " +RoundToString(structcpid.rac,0);
 					}
 				}
 				narr = including ? ("Participating " + narr_desc) : ("Enumerating " + narr_desc);
@@ -3466,7 +3464,7 @@ Value listitem(const Array& params, bool fHelp)
 			
 				if (structcpid.cpid == GlobalCPUMiningCPID.cpid || structcpid.cpid=="INVESTOR" || structcpid.cpid=="investor")
 				{
-					if (structcpid.verifiedrac > 10 && structcpid.verifiedteam=="gridcoin")
+					if (structcpid.verifiedteam=="gridcoin")
 					{
 						Object entry;
 						entry.push_back(Pair("Project",structcpid.projectname));
@@ -3479,9 +3477,7 @@ Value listitem(const Array& params, bool fHelp)
 						entry.push_back(Pair("RecTime",structcpid.rectime));
 						entry.push_back(Pair("Age",structcpid.age));
 						entry.push_back(Pair("Verified UTC",structcpid.verifiedutc));
-						entry.push_back(Pair("Verified RAC",structcpid.verifiedrac));
 						entry.push_back(Pair("Verified Team",structcpid.verifiedteam));
-						entry.push_back(Pair("Verified RecTime",structcpid.verifiedrectime));
 						entry.push_back(Pair("Verified RAC Age",structcpid.verifiedage));
 						entry.push_back(Pair("Is my CPID Valid?",structcpid.Iscpidvalid));
 						entry.push_back(Pair("CPID Link",structcpid.link));
@@ -3515,7 +3511,9 @@ Value listitem(const Array& params, bool fHelp)
 	        if (structcpid.initialized) 
 			{ 
 			
-				if ((GlobalCPUMiningCPID.cpid.length() > 3 && structcpid.cpid == GlobalCPUMiningCPID.cpid) || structcpid.cpid=="INVESTOR" || GlobalCPUMiningCPID.cpid=="INVESTOR" || GlobalCPUMiningCPID.cpid.length()==0)
+				if ((GlobalCPUMiningCPID.cpid.length() > 3 && 
+					structcpid.cpid == GlobalCPUMiningCPID.cpid) 
+					|| structcpid.cpid=="INVESTOR" || GlobalCPUMiningCPID.cpid=="INVESTOR" || GlobalCPUMiningCPID.cpid.length()==0)
 				{
 					Object entry;
 	
@@ -3523,7 +3521,6 @@ Value listitem(const Array& params, bool fHelp)
 					entry.push_back(Pair("CPID",structcpid.cpid));
 					entry.push_back(Pair("RAC",structcpid.rac));
 					entry.push_back(Pair("Team",structcpid.team));
-					entry.push_back(Pair("Verified RAC",structcpid.verifiedrac));
 					entry.push_back(Pair("Verified Team",structcpid.verifiedteam));
 					entry.push_back(Pair("Is my CPID Valid?",structcpid.Iscpidvalid));
 					entry.push_back(Pair("CPID Link",structcpid.link));
