@@ -387,6 +387,13 @@ Public Class Utilization
         Log("Responding to neural request for " + sCPID + " " + sOut)
         Return sOut
     End Function
+    Public Function ResolveDiscrepancies(sContract As String) As String
+        Log("Received contract " + sContract)
+        Dim sResult = ResolveDiscrepanciesInNeuralNetwork(sContract)
+        Return sResult
+    End Function
+		
+
     Public Function SetGenericVotingData(sValue As String) As Double
         Return SetGenericData("POLLS", sValue)
     End Function

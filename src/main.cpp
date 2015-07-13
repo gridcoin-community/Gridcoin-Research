@@ -34,6 +34,7 @@ extern bool UnusualActivityReport();
 extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
 extern double ComputeResearchAccrual(std::string cpid, double dCurrentMagnitude, int nStakeHeight, int64_t nStakeTime, double& dAccrualAge, double& dMagnitudeUnit);
+bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 
 
 
@@ -3901,6 +3902,26 @@ void GridcoinServices()
 		}
 	}
 
+	if (( (nBestHeight-10) % 30 ) == 0)
+	{
+			// 10 Blocks after the network started syncing the neural network as a team, ask the neural network to come to a quorum
+			int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+			if (superblock_age > 12*60*60)
+			{
+				// First verify my node has a synced contract
+				std::string contract = "";
+				#if defined(WIN32) && defined(QT_GUI)
+					contract = qtGetNeuralContract("");
+				#endif
+				double avg_mag = GetSuperblockAvgMag(contract);
+				if (avg_mag > 10)
+				{
+						bool bResult = AsyncNeuralRequest("quorum","gridcoin",25);
+				}
+			}
+	}
+
+
 	if (TimerMain("send_beacon",60))
 	{
 		std::string result = AdvertiseBeacon(false);
@@ -6297,6 +6318,16 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 	            pfrom->PushMessage("expmag_nresp", neural_response);
 
 			}
+			else if (neural_request=="quorum")
+			{
+				// 7-12-2015 Resolve discrepencies in the neural network intelligently - allow nodes to speak to each other
+				std::string contract = "";
+				#if defined(WIN32) && defined(QT_GUI)
+						contract = qtGetNeuralContract("");
+				#endif
+				printf("Quorum response %f \r\n",(double)neural_response.length());
+	            pfrom->PushMessage("quorum_nresp", contract);
+			}
 			else
 			{
 				neural_response="generic_response";
@@ -6347,7 +6378,22 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 			}
 			printf("Neural Response %s \r\n",neural_response.c_str());
 	}
+	else if (strCommand == "quorum_nresp")
+	{
+			std::string neural_response = "";
+	        vRecv >> neural_response;
+			if (neural_response.length() > 10)
+			{
+				 std::string results = "";
+				 //Resolve discrepancies
+		 		 #if defined(WIN32) && defined(QT_GUI)
+					results = qtExecuteDotNetStringFunction("ResolveDiscrepancies",neural_response);
+				 #endif
+	  			 printf("Quorum Response: %s \r\n",results.c_str());
+		
+			}
 
+	}
     else if (strCommand == "pong")
     {
         int64_t pingUsecEnd = nTimeReceived;
@@ -6649,9 +6695,8 @@ double LederstrumpfMagnitude2(double Magnitude, int64_t locktime)
 	if (Magnitude >= MagCap*1.6 && Magnitude <= MagCap*1.7) out_mag = MagCap*.97;
 	if (Magnitude >= MagCap*1.7 && Magnitude <= MagCap*1.8) out_mag = MagCap*.98;
 	if (Magnitude >= MagCap*1.8 && Magnitude <= MagCap*1.9) out_mag = MagCap*.99;
-	if (Magnitude >  MagCap*2.0)						    out_mag = MagCap*1.0;
+	if (Magnitude >= MagCap*1.9)						    out_mag = MagCap*1.0;
 	return out_mag;
-
 }
 
 
@@ -8119,7 +8164,7 @@ bool UnusualActivityReport()
 						MiningCPID bb = DeserializeBoincBlock(hb);
 						if (bb.cpid != "INVESTOR")
 						{
-								printf("Block #%f:%f, Recipient %s, CPID %s, Paid %f\r\n",(double)ii,(double)0, bb.GRCAddress.c_str(), bb.cpid.c_str(), subsidy);
+								printf("Block #%f:%f, Recipient %s, CPID %s, Paid %f, StakeReward %f \r\n",(double)ii,(double)0, bb.GRCAddress.c_str(), bb.cpid.c_str(), subsidy,(double)nStakeReward);
 						}
 				}
 
@@ -8170,7 +8215,7 @@ double GRCMagnitudeUnit(int64_t locktime)
 	double Kitty = MaximumEmission - (network.payments/14);
 	if (Kitty < 1) Kitty = 1;
 	double MagnitudeUnit = Kitty/TotalNetworkMagnitude;
-	if (fDebug3) printf("MagUnit  dailypayments %f, kitty %f, netmag %f, MaxEmission %f, mag unit %f \r\n",network.payments/14,Kitty,TotalNetworkMagnitude,MaximumEmission,MagnitudeUnit);
+	//if (fDebug3) printf("MagUnit  dailypayments %f, kitty %f, netmag %f, MaxEmission %f, mag unit %f \r\n",network.payments/14,Kitty,TotalNetworkMagnitude,MaximumEmission,MagnitudeUnit);
 	return MagnitudeUnit;	
 }
 
@@ -8188,9 +8233,8 @@ double ComputeResearchAccrual(std::string cpid, double dCurrentMagnitude, int nS
 	dMagnitudeUnit = GRCMagnitudeUnit(nStakeTime);
 	// TODO: If the accrual age is > 30 days, grab a snapshot from a superblock at the midpoint to make the avg magnitude accurate:
 	double Accrual = dAccrualAge*AvgMagnitude*dMagnitudeUnit;
-	if (fDebug3) printf("Accrual  StakeHeight %f,HistoryHeight%f,  AccrualAge %f, AvgMag %f, MagUnit %f \r\n",(double)nStakeHeight,
-		(double)pHistorical->nHeight,
-		dAccrualAge,AvgMagnitude,dMagnitudeUnit);
+	//if (fDebug3) printf("Accrual  StakeHeight %f,HistoryHeight%f,  AccrualAge %f, AvgMag %f, MagUnit %f \r\n",(double)nStakeHeight,		(double)pHistorical->nHeight,		dAccrualAge,AvgMagnitude,dMagnitudeUnit);
+
 	return Accrual;
 }
 

@@ -149,6 +149,62 @@ Module modPersistedDataSystem
         If Data >= 1000000 Then Dither = 0.0007 '1428
         Return Dither
     End Function
+    Public Function WithinBounds(n1 As Double, n2 As Double, percent As Double) As Boolean
+        If n2 < (n1 + (n1 * percent)) And n2 > (n1 - (n1 * percent)) Then
+            Return True
+        End If
+        Return False
+    End Function
+    Public Function ResolveDiscrepanciesInNeuralNetwork(sContract As String) As String
+        Dim dr As New Row
+        Log("Starting neural network resolution process ...")
+
+        Try
+
+            Dim iUpdated As Long = 0
+            Dim iMagnitudeDrift As Long = 0
+            Dim iTimeStart As Double = Timer
+
+        Dim sMags As String = ExtractXML(sContract, "<MAGNITUDES>")
+        Dim vMags As String() = Split(sMags, ";")
+        For x As Integer = 0 To UBound(vMags)
+            If vMags(x).Contains(",") Then
+                Dim vRow As String() = Split(vMags(x), ",")
+                If UBound(vRow) >= 1 Then
+                    Dim sCPID As String = vRow(0)
+                    Dim sMag As String = vRow(1)
+                    Dim dForeignMag As Double = Val("0" + Trim(sMag))
+                    dr.Database = "CPID"
+                    dr.Table = "CPIDS"
+                    dr.PrimaryKey = sCPID
+                    dr = Read(dr)
+                    Dim dLocalMag As Double = Val("0" + Trim(dr.Magnitude))
+                    If dForeignMag > 0 And dLocalMag > 0 And dForeignMag < dLocalMag Then
+                        If WithinBounds(dForeignMag, dLocalMag, 0.18) Then
+                            'If the foreign nodes magnitude is above zero and ours is above zero, and foreign nodes is less than ours and within the bounds tolerance percent, then go with the foreign lower mag
+                            dr.Magnitude = dForeignMag
+                                Store(dr)
+                                iUpdated += 1
+                                iMagnitudeDrift += Math.Abs(dForeignMag - dLocalMag)
+                            Log("Neural Network Quorum: Updating magnitude for CPID " + sCPID + " from " + Trim(dLocalMag) + " to " + Trim(dForeignMag))
+                        End If
+                    End If
+
+                End If
+            End If
+            Next
+            Dim iTimeEnd As Double = Timer
+            Dim iElapsed As Double = iTimeEnd - iTimeStart
+            Dim sResponse As String = "Resolved (" + Trim(iUpdated) + ") discrepancies with magnitude drift of (" + Trim(iMagnitudeDrift) + ") in " + Trim(iElapsed) + " seconds."
+
+        Catch ex As Exception
+            Log("Error occurred while resolving discrepancies: " + ex.Message)
+        End Try
+
+        Log("Finished resolving discrepencies.")
+
+
+    End Function
     Public Function UpdateNetworkAverages() As Boolean
         'loop through all projects on file, persist network averages
         'Get a collection of Projects

@@ -1815,6 +1815,11 @@ Value execute(const Array& params, bool fHelp)
 		entry.push_back(Pair("Hash",neural_hash));
 		results.push_back(entry);
 	}
+	else if (sItem == "forcequorum")
+	{
+			bool bResult = AsyncNeuralRequest("quorum","gridcoin",10);
+			entry.push_back(Pair("Requested a quorum - waiting for resolution.",1));
+	}
 	else if (sItem == "explainmagnitude2")
 	{
 		bool force = false;
@@ -1832,8 +1837,7 @@ Value execute(const Array& params, bool fHelp)
 			entry.push_back(Pair("Requested Explain Magnitude For",GlobalCPUMiningCPID.cpid));
 		}
 
-
-   		std::vector<std::string> vMag = split(msNeuralResponse.c_str(),"<ROW>");
+		std::vector<std::string> vMag = split(msNeuralResponse.c_str(),"<ROW>");
 		for (unsigned int i = 0; i < vMag.size(); i++)
 		{
 				entry.push_back(Pair(RoundToString(i+1,0),vMag[i].c_str()));
