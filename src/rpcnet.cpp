@@ -81,7 +81,7 @@ bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit)
 		{
 			std::string reqid = cpid;
 		 	pNode->PushMessage("neural", command_name, reqid);
-            printf("Requested command %s \r\n",command_name.c_str());
+            if (fDebug3) printf("Requested command %s \r\n",command_name.c_str());
 			iContactCount++;
 			if (iContactCount >= NodeLimit) return true;
 		}

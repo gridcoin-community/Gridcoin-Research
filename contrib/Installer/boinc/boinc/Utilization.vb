@@ -15,7 +15,7 @@ Public Class Utilization
 
     Public ReadOnly Property Version As Double
         Get
-            Return 390
+            Return 391
 
         End Get
     End Property
@@ -388,11 +388,11 @@ Public Class Utilization
         Return sOut
     End Function
     Public Function ResolveDiscrepancies(sContract As String) As String
-        Log("Received contract " + sContract)
-        Dim sResult = ResolveDiscrepanciesInNeuralNetwork(sContract)
-        Return sResult
+        ' Dim sResult = ResolveDiscrepanciesInNeuralNetwork(sContract)
+        ' Return sResult
+        Call ThreadResolveDiscrepanciesInNeuralNetwork(sContract)
+        Return "Started Async Resolution."
     End Function
-		
 
     Public Function SetGenericVotingData(sValue As String) As Double
         Return SetGenericData("POLLS", sValue)

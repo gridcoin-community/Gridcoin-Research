@@ -23,7 +23,7 @@ Module modPersistedDataSystem
     Public bMagsDoneLoading As Boolean = True
     Public mdLastSync As Date = DateAdd(DateInterval.Day, -10, Now)
     Public mlPercentComplete As Double = 0
-
+    Public msContractDataForQuorum As String
 
     Private lUseCount As Long = 0
     Public Structure Row
@@ -155,54 +155,64 @@ Module modPersistedDataSystem
         End If
         Return False
     End Function
+    Public Sub ThreadResolveDiscrepanciesInNeuralNetwork(sContract As String)
+        msContractDataForQuorum = sContract
+        Dim t1 As New System.Threading.Thread(AddressOf threadResolveDiscrepancies)
+        t1.Start()
+    End Sub
+    Public Sub threadResolveDiscrepancies()
+        If Len(msContractDataForQuorum) > 1 Then
+            Log("Resolution process started.")
+            ResolveDiscrepanciesInNeuralNetwork(msContractDataForQuorum)
+        End If
+    End Sub
     Public Function ResolveDiscrepanciesInNeuralNetwork(sContract As String) As String
         Dim dr As New Row
         Log("Starting neural network resolution process ...")
-
+        ' Log("Contract " + Left(sContract, 100))
+        Dim sResponse As String = ""
         Try
 
             Dim iUpdated As Long = 0
             Dim iMagnitudeDrift As Long = 0
             Dim iTimeStart As Double = Timer
 
-        Dim sMags As String = ExtractXML(sContract, "<MAGNITUDES>")
-        Dim vMags As String() = Split(sMags, ";")
-        For x As Integer = 0 To UBound(vMags)
-            If vMags(x).Contains(",") Then
-                Dim vRow As String() = Split(vMags(x), ",")
-                If UBound(vRow) >= 1 Then
-                    Dim sCPID As String = vRow(0)
-                    Dim sMag As String = vRow(1)
-                    Dim dForeignMag As Double = Val("0" + Trim(sMag))
-                    dr.Database = "CPID"
-                    dr.Table = "CPIDS"
-                    dr.PrimaryKey = sCPID
-                    dr = Read(dr)
-                    Dim dLocalMag As Double = Val("0" + Trim(dr.Magnitude))
-                    If dForeignMag > 0 And dLocalMag > 0 And dForeignMag < dLocalMag Then
-                        If WithinBounds(dForeignMag, dLocalMag, 0.18) Then
-                            'If the foreign nodes magnitude is above zero and ours is above zero, and foreign nodes is less than ours and within the bounds tolerance percent, then go with the foreign lower mag
-                            dr.Magnitude = dForeignMag
-                                Store(dr)
-                                iUpdated += 1
-                                iMagnitudeDrift += Math.Abs(dForeignMag - dLocalMag)
+            Dim sMags As String = ExtractXML(sContract, "<MAGNITUDES>")
+            Dim vMags As String() = Split(sMags, ";")
+            For x As Integer = 0 To UBound(vMags)
+                If vMags(x).Contains(",") Then
+                    Dim vRow As String() = Split(vMags(x), ",")
+                    If UBound(vRow) >= 1 Then
+                        Dim sCPID As String = vRow(0)
+                        Dim sMag As String = vRow(1)
+                        Dim dForeignMag As Double = Val("0" + Trim(sMag))
+                        dr.Database = "CPID"
+                        dr.Table = "CPIDS"
+                        dr.PrimaryKey = sCPID
+                        dr = Read(dr)
+                        Dim dLocalMag As Double = Val("0" + Trim(dr.Magnitude))
+                        '7-13-2015 Intelligently resolve disputes between neural network nodes
+                        If dLocalMag > 0 And dForeignMag > 0 And dForeignMag <> dLocalMag Then
+                            ' Log("Neural Network Quorum: Updating magnitude for CPID " + sCPID + " from " + Trim(dLocalMag) + " to " + Trim(dForeignMag))
+                            Dim bResult As Boolean = GetRacViaNetsoft(dr.PrimaryKey)
+                            iUpdated += 1
+                            iMagnitudeDrift += Math.Abs(dForeignMag - dLocalMag)
                             Log("Neural Network Quorum: Updating magnitude for CPID " + sCPID + " from " + Trim(dLocalMag) + " to " + Trim(dForeignMag))
                         End If
                     End If
-
                 End If
-            End If
             Next
             Dim iTimeEnd As Double = Timer
             Dim iElapsed As Double = iTimeEnd - iTimeStart
-            Dim sResponse As String = "Resolved (" + Trim(iUpdated) + ") discrepancies with magnitude drift of (" + Trim(iMagnitudeDrift) + ") in " + Trim(iElapsed) + " seconds."
+            sResponse = "Resolved (" + Trim(iUpdated) + ") discrepancies with magnitude drift of (" + Trim(iMagnitudeDrift) + ") in " + Trim(iElapsed) + " seconds."
 
         Catch ex As Exception
             Log("Error occurred while resolving discrepancies: " + ex.Message)
+            Return "Resolving Discrepancies " + ex.Message
         End Try
 
-        Log("Finished resolving discrepencies.")
-
+        Log(sResponse)
+        Return sResponse
 
     End Function
     Public Function UpdateNetworkAverages() As Boolean
@@ -262,14 +272,14 @@ Module modPersistedDataSystem
                 Exit Sub
             End If
         End If
-        
+
         mbForcefullySyncAllRac = True
-        
+
         Try
             msCurrentNeuralHash = ""
 
             bMagsDoneLoading = False
-            
+
             Try
                 mlPercentComplete = 1
                 UpdateMagnitudesPhase1()
@@ -291,8 +301,8 @@ Module modPersistedDataSystem
             End Try
             mbForcefullySyncAllRac = False
 
-        If LCase(KeyValue("exportmagnitude")) = "true" Then
-            ExportToCSV2()
+            If LCase(KeyValue("exportmagnitude")) = "true" Then
+                ExportToCSV2()
             End If
         Catch ex As Exception
             Log("Completesync:" + ex.Message)
@@ -328,26 +338,26 @@ Module modPersistedDataSystem
             Dim sWhitelist As String
             sWhitelist = ExtractXML(msSyncData, "<WHITELIST>")
             Dim sCPIDData As String = ExtractXML(msSyncData, "<CPIDDATA>")
-           
+
             Try
                 mlPercentComplete = 2
-            Dim vWhitelist() As String = Split(sWhitelist, "<ROW>")
-            For x As Integer = 0 To UBound(vWhitelist)
-                If Len(vWhitelist(x)) > 1 Then
-                    Dim vRow() As String
-                    vRow = Split(vWhitelist(x), "<COL>")
-                    Dim sProject As String = vRow(0)
-                    Dim sURL As String = vRow(1)
-                    Dim dr As New Row
-                    dr.Database = "Whitelist"
-                    dr.Table = "Whitelist"
-                    dr.PrimaryKey = sProject
-                    dr = Read(dr)
+                Dim vWhitelist() As String = Split(sWhitelist, "<ROW>")
+                For x As Integer = 0 To UBound(vWhitelist)
+                    If Len(vWhitelist(x)) > 1 Then
+                        Dim vRow() As String
+                        vRow = Split(vWhitelist(x), "<COL>")
+                        Dim sProject As String = vRow(0)
+                        Dim sURL As String = vRow(1)
+                        Dim dr As New Row
+                        dr.Database = "Whitelist"
+                        dr.Table = "Whitelist"
+                        dr.PrimaryKey = sProject
+                        dr = Read(dr)
                         dr.Expiration = DateAdd(DateInterval.Day, 14, Now)
                         dr.Synced = DateAdd(DateInterval.Day, -1, Now)
                         Store(dr)
-                End If
-            Next x
+                    End If
+                Next x
             Catch ex As Exception
                 Log("UM Phase 1: While loading projects " + ex.Message)
             End Try
@@ -386,7 +396,7 @@ Module modPersistedDataSystem
                         dr.DataColumn4 = Address
                         Dim bValid As Boolean = False
                         Dim clsMD5 As New MD5
-                        
+
                         bValid = clsMD5.CompareCPID(sCPID, cpidv2, BlockHash)
                         dr.DataColumn5 = Trim(bValid)
                         Store(dr)
@@ -472,7 +482,7 @@ Module modPersistedDataSystem
 
         lstWhitelist = GetWPC(WhitelistedProjects, whitelistedWithRac)
 
-        
+
         Try
             Dim iRow2 As Long
 
@@ -496,19 +506,19 @@ Module modPersistedDataSystem
                         Dim PrjAvgRAC As Double = Val(Trim("0" + prj.RAC))
                         Dim avgRac As Double = CPIDRAC / (PrjAvgRAC + 0.01) * 100
                         Dim MinRAC As Double = PrjAvgRAC * mdMinimumRacPercentage
-                       
+
                         If CPIDRAC > MinRAC Then
                             TotalAvgRAC += avgRac
                         Else
                             'Optional: Erase researchers RAC here (magnitude is already adjusted)
                         End If
                     Else
-                       
+
                     End If
 
                 Next
                 'Now we can store the magnitude
-                Dim Magg As Double = (TotalAvgRAC / WhitelistedProjects) * WhitelistedWithRAC
+                Dim Magg As Double = (TotalAvgRAC / WhitelistedProjects) * whitelistedWithRac
                 cpid.Database = "CPID"
                 cpid.Table = "CPIDS"
                 cpid.Magnitude = Trim(Math.Round(Magg, 2))
@@ -655,8 +665,8 @@ Module modPersistedDataSystem
             d = Read(d)
             d.Expiration = DateAdd(DateInterval.Day, 14, Now)
             d.Synced = Tomorrow()
-           
-            d.RAC = TotalRac
+
+            d.RAC = TotalRAC
             Store(d)
             Return True
 
@@ -858,7 +868,7 @@ Module modPersistedDataSystem
     End Function
     Public Function SerializeRow(dataRow As Row) As String
         Dim d As String = "<COL>"
-       
+
         Dim sSerialized As String = SerializeDate(dataRow.Added) + d + SerializeDate(dataRow.Expiration) _
             + d + SerializeDate(dataRow.Synced) + d + LCase(dataRow.PrimaryKey) + d _
             + SerStr(dataRow.DataColumn1) + d + SerStr(dataRow.DataColumn2) _

@@ -96,6 +96,7 @@ extern void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std
 extern void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double magnitude);
 extern void qtSyncWithDPORNodes(std::string data);
 extern double qtExecuteGenericFunction(std::string function,std::string data);
+
 extern std::string FromQString(QString qs);
 extern std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
 
@@ -523,7 +524,7 @@ std::string qtExecuteDotNetStringFunction(std::string function, std::string data
 		std::string sFunction = function+"(Qstring)";
 		QString qsReturnData = globalcom->dynamicCall(sFunction.c_str(),qsData).toString();
 		sReturnData = FromQString(qsReturnData);
-		//printf(".NET returned %s \r\n",sReturnData.c_str());
+		if (fDebug) printf(".NET returned %s \r\n",sReturnData.c_str());
 		return sReturnData;
 	#endif
  	return sReturnData;

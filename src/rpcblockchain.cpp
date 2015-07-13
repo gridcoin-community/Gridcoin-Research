@@ -1819,6 +1819,7 @@ Value execute(const Array& params, bool fHelp)
 	{
 			bool bResult = AsyncNeuralRequest("quorum","gridcoin",10);
 			entry.push_back(Pair("Requested a quorum - waiting for resolution.",1));
+			results.push_back(entry);
 	}
 	else if (sItem == "explainmagnitude2")
 	{

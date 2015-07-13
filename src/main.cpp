@@ -35,6 +35,7 @@ extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
 extern double ComputeResearchAccrual(std::string cpid, double dCurrentMagnitude, int nStakeHeight, int64_t nStakeTime, double& dAccrualAge, double& dMagnitudeUnit);
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
+double qtExecuteGenericFunction(std::string function,std::string data);
 
 
 
@@ -749,9 +750,7 @@ MiningCPID GetNextProject(bool bForce)
 				}
 	}
 
-
-
-
+	
 
 	msMiningProject = "";
 	msMiningCPID = "";
@@ -815,18 +814,11 @@ MiningCPID GetNextProject(bool bForce)
 									msMiningCPID = structcpid.cpid;
 									mdMiningRAC = structcpid.rac;
 								    // Reset Client Email
-										std::string email = GetArgument("email", "NA");
-										boost::to_lower(email);
-										GlobalCPUMiningCPID.email = email;
-
-									//	std::string cpid_non = structcpid.cpidhash+email;
-									//	std::string ENCbpk = AdvancedCrypt(cpid_non);
-									//	structcpid.boincpublickey = ENCbpk;
-								    //
-									//	msENCboincpublickey = structcpid.boincpublickey;
-									
-
-									if (LessVerbose(5) || fDebug3) printf("Ready to CPU Mine project %s with CPID %s, RAC(%f) \r\n",	
+									std::string email = GetArgument("email", "NA");
+									boost::to_lower(email);
+									GlobalCPUMiningCPID.email = email;
+										
+									if (LessVerbose(1) || fDebug) printf("Ready to CPU Mine project %s with CPID %s, RAC(%f) \r\n",	
 										structcpid.projectname.c_str(),structcpid.cpid.c_str(),
 										structcpid.rac);
 									//Required for project to be mined in a block:
@@ -861,7 +853,7 @@ MiningCPID GetNextProject(bool bForce)
 									GlobalCPUMiningCPID.NetworkRAC = ProjectRAC;
 									mdMiningNetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
 									GlobalCPUMiningCPID.Magnitude = CalculatedMagnitude(GetAdjustedTime(),false);
-									if (fDebug3 && LessVerbose(5)) printf("For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
+									if (fDebug && LessVerbose(2)) printf("For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
 									//Reserved for GRC Speech Synthesis
 									msMiningErrors = "Boinc Mining";
 									GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
@@ -6323,9 +6315,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 				// 7-12-2015 Resolve discrepencies in the neural network intelligently - allow nodes to speak to each other
 				std::string contract = "";
 				#if defined(WIN32) && defined(QT_GUI)
+						std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
+						qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
 						contract = qtGetNeuralContract("");
 				#endif
-				printf("Quorum response %f \r\n",(double)neural_response.length());
+				printf("Quorum response %f \r\n",(double)contract.length());
 	            pfrom->PushMessage("quorum_nresp", contract);
 			}
 			else
@@ -6380,19 +6374,20 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 	}
 	else if (strCommand == "quorum_nresp")
 	{
-			std::string neural_response = "";
-	        vRecv >> neural_response;
-			if (neural_response.length() > 10)
+			std::string neural_contract = "";
+	        vRecv >> neural_contract;
+			if (fDebug3 && neural_contract.length() > 100) printf("Quorum contract received %s",neural_contract.substr(0,80).c_str());
+			if (neural_contract.length() > 10)
 			{
 				 std::string results = "";
 				 //Resolve discrepancies
 		 		 #if defined(WIN32) && defined(QT_GUI)
-					results = qtExecuteDotNetStringFunction("ResolveDiscrepancies",neural_response);
+	 	 		 	std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
+					qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
+					results = qtExecuteDotNetStringFunction("ResolveDiscrepancies",neural_contract);
 				 #endif
-	  			 printf("Quorum Response: %s \r\n",results.c_str());
-		
+	  			 if (fDebug3 && !results.empty()) printf("Quorum Resolution: %s \r\n",results.c_str());
 			}
-
 	}
     else if (strCommand == "pong")
     {
@@ -8009,9 +8004,12 @@ std::string GetNeuralNetworkReport()
 }
 
 
+//7-13-2015
 
 bool MemorizeMessages(bool bFullTableScan, const CBlock& block, const CBlockIndex* blockindex)
 {
+	try
+	{
 	BOOST_FOREACH(const CTransaction&tx, block.vtx)
 	{
 		  if (!tx.hashBoinc.empty())
@@ -8070,6 +8068,19 @@ bool MemorizeMessages(bool bFullTableScan, const CBlock& block, const CBlockInde
 		  }
 	   }
 	}
+	}
+	catch (std::exception &e) 
+	{
+			printf("Error while memorizing messages [std]");
+			return false;
+	}
+	catch(...)
+	{
+			printf("Error while memorizing messages");
+			return false;
+	}
+
+
 	return false;	
 }
 
@@ -8270,7 +8281,7 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 	out_errors = "";
 	int ii = 0;
 	if (fDebug3 && bFullTableScan) 	printf("LAM Max height %f \r\n",(double)nMaxDepth);
-	
+	    
 	LOCK(cs_main);
 	{
 		try
@@ -8278,7 +8289,7 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 			for (ii = nMinDepth; ii <= nMaxDepth; ii++)
 			{
      			CBlockIndex* pblockindex = FindBlockByHeight(ii);
-				if (block.ReadFromDisk(pblockindex))
+				if (block.ReadFromDisk(pblockindex,true))
 				{
 					MemorizeMessages(bFullTableScan,block,pblockindex);
 				}
