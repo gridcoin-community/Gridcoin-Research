@@ -771,7 +771,7 @@ MiningCPID GetNextProject(bool bForce)
 	
 		if (mvCPIDs.size() < 1)
 		{
-			printf("Gridcoin has no CPIDs...");
+			if (fDebug3 && LessVerbose(50)) printf("Gridcoin has no CPIDs...");
 			//Let control reach the investor area
 		}
 

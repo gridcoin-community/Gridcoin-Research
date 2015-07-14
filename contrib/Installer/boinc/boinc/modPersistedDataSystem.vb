@@ -57,8 +57,11 @@ Module modPersistedDataSystem
         lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
         Dim sOut As String = ""
         For Each cpid As Row In lstCPIDs
-            Dim sRow As String = cpid.PrimaryKey + "," + Trim(RoundedMag(Val(cpid.Magnitude))) _
-                                 + "," + Trim(Math.Round(Val(cpid.RAC), 2)) + "," + Trim(cpid.Expiration) + "," + Trim(cpid.Synced) + "," + Trim(cpid.DataColumn4) + "," + Trim(cpid.DataColumn5) + ";"
+            Dim sRow As String = cpid.PrimaryKey + "," + Trim(RoundedMag(Val(Trim("0" + cpid.Magnitude)))) _
+                                 + "," + Trim(Math.Round(Val("0" + Trim(cpid.RAC)), 2)) _
+                                 + "," + Trim(cpid.Expiration) _
+                                 + "," + Trim(cpid.Synced) + "," + Trim(cpid.DataColumn4) _
+                                 + "," + Trim(cpid.DataColumn5) + ";"
             sOut += sRow
         Next
         Return sOut
@@ -97,11 +100,11 @@ Module modPersistedDataSystem
         Dim lstP As List(Of Row) = GetList(rRow, "*")
         lstP.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
         For Each r As Row In lstP
-            If r.RAC > 0 Then
-                Dim sRow As String = r.PrimaryKey + "," + Trim(RoundedMag(Val(Trim("0" + r.RAC)))) + ";"
-                lRows = lRows + 1
-                sOut += sRow
-            End If
+                If Val("0" + Trim(r.RAC)) > 0 Then
+                    Dim sRow As String = r.PrimaryKey + "," + Trim(RoundedMag(Val(Trim("0" + r.RAC)))) + ";"
+                    lRows = lRows + 1
+                    sOut += sRow
+                End If
         Next
         sOut += "</AVERAGES>"
             Return sOut
@@ -192,8 +195,7 @@ Module modPersistedDataSystem
                         dr = Read(dr)
                         Dim dLocalMag As Double = Val("0" + Trim(dr.Magnitude))
                         '7-13-2015 Intelligently resolve disputes between neural network nodes
-                        If dLocalMag > 0 And dForeignMag > 0 And dForeignMag <> dLocalMag Then
-                            ' Log("Neural Network Quorum: Updating magnitude for CPID " + sCPID + " from " + Trim(dLocalMag) + " to " + Trim(dForeignMag))
+                        If dLocalMag > 0 And dForeignMag > 0 And RoundedMag(dForeignMag) <> RoundedMag(dLocalMag) Then
                             Dim bResult As Boolean = GetRacViaNetsoft(dr.PrimaryKey)
                             iUpdated += 1
                             iMagnitudeDrift += Math.Abs(dForeignMag - dLocalMag)
