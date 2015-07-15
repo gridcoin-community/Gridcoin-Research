@@ -185,7 +185,7 @@ extern bool IsLockTimeWithinMinutes(double locktime, int minutes);
 double GetNetworkProjectCountWithRAC();
 extern double CalculatedMagnitude(int64_t locktime,bool bUseLederstrumpf);
 extern int64_t GetCoinYearReward(int64_t nTime);
-extern void AddNetworkMagnitude(double height,CTransaction& wtxCryptoLottery,double LockTime, std::string cpid, MiningCPID bb, double mint, bool IsStake);
+extern void AddNetworkMagnitude(double height,double LockTime, std::string cpid, MiningCPID bb, double mint);
 
 
 map<uint256, CBlockIndex*> mapBlockIndex;
@@ -247,6 +247,7 @@ extern  bool TallyNetworkAverages(bool ColdBoot);
 bool FindRAC(bool CheckingWork,std::string TargetCPID, std::string TargetProjectName, double pobdiff,
 		 	 bool bCreditNodeVerification, std::string& out_errors, int& out_position);
 volatile bool bNetAveragesLoaded = false;
+volatile bool bTallyStarted      = false;
 volatile bool bRestartGridcoinMiner = false;
 volatile bool bForceUpdate = false;
 volatile bool bExecuteCode = false;
@@ -3026,13 +3027,13 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			}
 		}
 		/*
-		--Commenting this out as of now, we will let the superblock load in TallyNetworkAverages in approx 15 blocks... so the network loads it in a synchronized fashion
+		--Commenting this out as of now, we will let the superblock load in TllyNtworkAverages in approx 15 blocks... so the network loads it in a synchronized fashion
 		double avg_mag = GetSuperblockAvgMag(bb.superblock);
 		if (avg_mag > 10)
 		{
 			LoadSuperblock(bb.superblock,GetBlockTime(),(double)pindex->nHeight);
 			//Note the incident on 7-11-2015 @ midnight.  The superblock was staked, loaded, accepted for 5 blocks by the majority
-			//then rejected due to nodes coming online and doing TallyNetworkAverages and not actually calling this function 
+			//then rejected due to nodes coming online and doing TllyNtworkAverages and not actually calling this function 
 			// IE overwriting Their superblock with the historical superblock.  So, technically the Load at this point should be 
 			// commented out.  
 		}
@@ -3868,9 +3869,14 @@ void GridcoinServices()
 	}
 
 	//As a team, tally network averages at the exact same time (Either way, tally uses a consensus driven start and end block to assess payments owed)
-	if ((nBestHeight % BLOCK_GRANULARITY) == 0)
+	if ((nBestHeight % 20) == 0)
 	{
 			    TallyInBackground();
+	}
+
+	if (TimerMain("ResetVars",15))
+	{
+		bTallyStarted = false;
 	}
 
 	if ((nBestHeight % 5) == 0)
@@ -4876,7 +4882,67 @@ void AdjustTimestamps(StructCPID& strCPID, double timestamp, double subsidy)
 		if (timestamp < strCPID.EarliestPaymentTime) strCPID.EarliestPaymentTime = timestamp;
 }
 
-void AddNetworkMagnitude(double height,CTransaction& wtxCryptoLottery, double LockTime, std::string cpid, 
+
+
+
+
+
+void AddNetworkMagnitude(double height, double LockTime, std::string cpid, 
+		MiningCPID bb, double mint)
+{
+       
+		StructCPID globalMag = GetInitializedStructCPID2("global",mvMagnitudes);
+		StructCPID stMag = GetInitializedStructCPID2(cpid,mvMagnitudes);
+		stMag.cpid = cpid;
+		stMag.GRCAddress = bb.GRCAddress;
+		stMag.LastBlock = height;
+		stMag.projectname = bb.projectname;
+		stMag.rac += bb.rac;
+		stMag.entries++;
+
+		double interest = (double)mint - (double)bb.ResearchSubsidy;
+		stMag.payments += bb.ResearchSubsidy;
+		stMag.interestPayments += bb.InterestSubsidy;
+		AdjustTimestamps(stMag,LockTime,bb.ResearchSubsidy);
+		
+		// Per RTM 6-27-2015 - Track detailed payments made to each CPID
+		stMag.PaymentTimestamps         += RoundToString(LockTime,0) + ",";
+		stMag.PaymentAmountsResearch    += RoundToString(bb.ResearchSubsidy,2) + ",";
+		stMag.PaymentAmountsInterest    += RoundToString(bb.InterestSubsidy,2) + ",";
+		stMag.PaymentAmountsBlocks      += RoundToString((double)height,0) + ",";
+     	mvMagnitudes[cpid] = stMag;
+	    //Since this function can be called more than once per block (once for the solver, once for the voucher), the avg changes here:
+	    if (bb.Magnitude > 0)
+	    {
+			AddWeightedMagnitude(LockTime,stMag,bb.Magnitude);
+	    }
+		stMag = GetInitializedStructCPID2(cpid,mvMagnitudes); //Get it again in case AddWeighted added something to it
+	    
+	    stMag.AverageRAC = stMag.rac / (stMag.entries+.01);
+	    AdjustTimestamps(globalMag,LockTime,1);
+	    double total_owed = 0;
+	    mvMagnitudes[cpid] = stMag;
+	    stMag.owed = GetOutstandingAmountOwed(stMag,cpid,LockTime,total_owed,bb.Magnitude);
+	    stMag.totalowed = total_owed;
+	    // If CPID is invalid (should not be able to happen since block is rejected) but for security, make total owed 0
+	    bool bValid = IsCPIDValidv2(bb,height);
+	    if (!bValid) 
+	    {
+				stMag.owed=0;
+				stMag.totalowed=0;
+	    }
+	    mvMagnitudes[cpid] = stMag;
+	    mvMagnitudes["global"] = globalMag;
+}
+
+
+
+
+
+
+
+
+void AddNetworkMagnitude_Retire(double height,CTransaction& wtxCryptoLottery, double LockTime, std::string cpid, 
 		MiningCPID bb, double mint, bool IsStake)
 {
        
@@ -5081,9 +5147,37 @@ bool ComputeNeuralNetworkSupermajorityHashes()
 	
 }
 
+MiningCPID GetBoincBlockByHeight(int ii, double& mint, int64_t& nTime)
+{
+	CBlock block;
+	MiningCPID bb;
+	CBlockIndex* pblockindex = FindBlockByHeight(ii);
+	if (block.ReadFromDisk(pblockindex))
+	{
+		nTime = block.nTime;
+		std::string hashboinc = "";
+		mint = CoinToDouble(pblockindex->nMint);
+		if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
+		bb = DeserializeBoincBlock(hashboinc);
+		return bb;
+	}
+	return bb;
+}
+						
 
 
-
+void AddProjectRAC(MiningCPID bb,double& NetworkRAC, double& NetworkMagnitude)
+{
+	StructCPID network = GetInitializedStructCPID2(bb.projectname,mvNetwork);
+	network.projectname = bb.projectname;
+	network.rac += bb.rac;
+	NetworkRAC += bb.rac;
+	network.TotalRAC = NetworkRAC;
+	NetworkMagnitude += bb.Magnitude;
+	network.entries++;
+	mvNetwork[bb.projectname] = network;
+						
+}
 
 
 bool TallyNetworkAverages(bool ColdBoot)
@@ -5095,12 +5189,15 @@ bool TallyNetworkAverages(bool ColdBoot)
 		return true;
 	}
 
-	if (IsLockTimeWithinMinutes(nLastTallied,5)) 
+	if (IsLockTimeWithinMinutes(nLastTallied,10)) 
 	{
 		bNetAveragesLoaded=true;
 		return true;
 	}
 
+	if (bTallyStarted) return true;
+
+	bTallyStarted = true;
 	printf("Gathering network avgs (begin)\r\n");
 	nLastTallied = GetAdjustedTime();
 	bNetAveragesLoaded = false;
@@ -5111,7 +5208,11 @@ bool TallyNetworkAverages(bool ColdBoot)
 	ClearCache("neuralsecurity");
 	//ClearCache("stakedbyaddress");
 	double NetworkPayments = 0;
-	LOCK(cs_main);
+	//Remove the lock for main, and run this in the background thread.
+	//This function is not thread safe, but the above mutex keeps any 2nd copies from running at the same time.
+
+	//LOCK(cs_main);
+	double mint = 0;
 	try 
 	{
 					//7-5-2015 - R Halford - Start block and End block must be an exact range agreed by the network:
@@ -5123,86 +5224,55 @@ bool TallyNetworkAverages(bool ColdBoot)
 
 					if (nMinDepth < 2)              nMinDepth = 2;
 					if (mvNetwork.size() > 0)       mvNetwork.clear();
-					if (mvNetworkCPIDs.size() > 0)  mvNetworkCPIDs.clear();
+
+					//mvMagnitudes holds Payments per CPID, and Payment Details per cpid:
 					if (mvMagnitudes.size() > 0) 	mvMagnitudes.clear();
-					CBlock block;
 					if (fDebug3) printf(".1.");
 					int iRow = 0;
 					double NetworkRAC = 0;
 					double NetworkProjects = 0;
 					double NetworkMagnitude = 0;
 					double NetworkAvgMagnitude = 0;
-
-					//Adding support for Magnitudes With Consensus by CPID
+					double NetworkPayments = 0;
+					int64_t nTime = 0;
 					for (int ii = nMaxDepth; ii > nMinDepth; ii--)
 					{
-     					CBlockIndex* pblockindex = FindBlockByHeight(ii);
-						block.ReadFromDisk(pblockindex);
-						std::string hashboinc = "";
-						double mint = CoinToDouble(pblockindex->nMint);
-						if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
-						MiningCPID bb = DeserializeBoincBlock(hashboinc);
+     					
+						MiningCPID bb = GetBoincBlockByHeight(ii,mint,nTime);
 						NetworkPayments += bb.ResearchSubsidy;
-			
-						if (!superblockloaded)
+					    if (!superblockloaded && bb.superblock.length() > 20)
 						{
-							if (bb.superblock.length() > 20)
+							double avg_mag = GetSuperblockAvgMag(bb.superblock);
+							if (avg_mag > 10)
 							{
-								double avg_mag = GetSuperblockAvgMag(bb.superblock);
-								if (avg_mag > 10)
-								{
-									LoadSuperblock(bb.superblock,block.nTime,ii);
+									LoadSuperblock(bb.superblock,nTime,ii);
 									superblockloaded=true;
-								}
 							}
 						}
-
-						if (true) 
-						{
-							std::string projcpid = bb.cpid + ":" + bb.projectname;
-							std::string cpid = bb.cpid;
-							iRow++;
-							StructCPID structproj = GetInitializedStructCPID2(bb.projectname,mvNetwork);
-							//Insert Global Network Project Stats:
-							structproj.projectname = bb.projectname;
-							structproj.rac += bb.rac;
-							// Add GRC Address from block into structCPID for DPOR
-							NetworkRAC += bb.rac;
-							structproj.TotalRAC = NetworkRAC;
-							NetworkMagnitude += bb.Magnitude;
-							structproj.entries++;
-							mvNetwork[bb.projectname] = structproj;
-							//Insert Global Project+CPID Stats:
-							StructCPID structnetcpidproject = GetInitializedStructCPID2(projcpid,mvNetworkCPIDs);
-							structnetcpidproject.projectname = bb.projectname;
-							structnetcpidproject.cpid = cpid;
-							structnetcpidproject.cpidv2 = bb.cpidv2;
-							structnetcpidproject.rac += bb.rac;
-							structnetcpidproject.entries++;
-							if (structnetcpidproject.entries > 0)
-							{
-								structnetcpidproject.AverageRAC = structnetcpidproject.rac/(structnetcpidproject.entries+.01);
-							}
-							mvNetworkCPIDs[projcpid] = structnetcpidproject;
-							// Insert CPID, Magnitude, Payments
-							AddNetworkMagnitude((double)ii,block.vtx[1],block.nTime,cpid,bb,mint,pblockindex->IsProofOfStake());
-						}
+						
+						iRow++;
+						// Tally the Network Stats for all Projects:
+						AddProjectRAC(bb,NetworkRAC,NetworkMagnitude);
+						// Insert CPID, Magnitude, Payments
+						AddNetworkMagnitude((double)ii,nTime,bb.cpid,bb,mint);
 					}
 						
 				
 					if (fDebug3) printf("Network consensus..");
-
-					StructCPID structcpid = GetInitializedStructCPID2("NETWORK",mvNetwork);
-					structcpid.projectname="NETWORK";
-					structcpid.rac = NetworkRAC;
-					structcpid.NetworkProjects = NetworkProjects;
-					structcpid.payments = NetworkPayments;
+					StructCPID net = GetInitializedStructCPID2("NETWORK",mvNetwork);
+					net.projectname="NETWORK";
+					net.rac = NetworkRAC;
+					net.NetworkProjects = NetworkProjects;
+					net.payments = NetworkPayments;
 					// Total magnitudes for each cpid:
-					mvNetwork["NETWORK"] = structcpid;
+					mvNetwork["NETWORK"] = net;
+					if (fDebug3) printf("TallyMagnitudesInSuperblock()");
 					TallyMagnitudesInSuperblock();
+					if (fDebug3) printf("ComputeNeuralNetworkSupermajorityHashes()");
 					ComputeNeuralNetworkSupermajorityHashes();
 					bNetAveragesLoaded = true;
 					if (fDebug3) printf(".Done.\r\n");
+					bTallyStarted = false;
 					return true;
 		
 	}

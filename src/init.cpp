@@ -380,9 +380,9 @@ bool AppInit(int argc, char* argv[])
             return false;
         }
 
-        // Command-line RPC
+        // Command-line RPC  - Test this - ensure single commands execute and exit please.
         for (int i = 1; i < argc; i++)
-            if (!IsSwitchChar(argv[i][0]) && !boost::algorithm::istarts_with(argv[i], "gridcoin:"))
+            if (!IsSwitchChar(argv[i][0]) && !boost::algorithm::istarts_with(argv[i], "gridcoinresearchd"))
                 fCommandLine = true;
 
         if (fCommandLine)

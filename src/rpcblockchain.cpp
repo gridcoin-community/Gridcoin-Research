@@ -38,6 +38,7 @@ extern double GetSuperblockAvgMag(std::string superblock);
 
 void TestScan();
 void TestScan2();
+void TallyInBackground();
 
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 
@@ -2340,6 +2341,13 @@ Value execute(const Array& params, bool fHelp)
 	{
 			TallyNetworkAverages(true);
 			entry.push_back(Pair("Tally Network Averages",1));
+			results.push_back(entry);
+	}
+	else if (sItem == "tallyinbackground")
+	{
+		
+			TallyInBackground();
+			entry.push_back(Pair("Tallying in Background...",1));
 			results.push_back(entry);
 	}
 	else if (sItem == "testhash")
