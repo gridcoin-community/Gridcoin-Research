@@ -801,14 +801,14 @@ MiningCPID GetNextProject(bool bForce)
 				StructCPID structcpid = mvCPIDs[(*ii).first];
 				if (structcpid.initialized) 
 				{ 
-					if (structcpid.Iscpidvalid && structcpid.projectname.length() > 1 && structcpid.rac > 0)
+					if (structcpid.Iscpidvalid && structcpid.projectname.length() > 1)
 					{
 							iRow++;
 							if (i==4 || iDistributedProject == iRow)
 							{
 								//Pretest magnitude:
-								double premag = CalculatedMagnitude2(structcpid.cpid,GetAdjustedTime(),false);
-								if (premag > 0)
+								//double premag = CalculatedMagnitude2(structcpid.cpid,GetAdjustedTime(),false);
+								if (true)
 								{
 									//Only used for global status:
 									msMiningProject = structcpid.projectname;
@@ -3923,7 +3923,7 @@ void GridcoinServices()
 	if (TimerMain("send_beacon",60))
 	{
 		std::string result = AdvertiseBeacon(false);
-		if (result.length() < 5 && result != "SUCCESS")
+		if (result.length() < 15 && result != "SUCCESS")
 		{
 			printf("BEACON ERROR!  Unable to send beacon %s \r\n",result.c_str());
 			msMiningErrors6 = "Unable To Send Beacon! Unlock Wallet!";

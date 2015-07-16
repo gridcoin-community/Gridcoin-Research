@@ -1343,6 +1343,7 @@ std::string AddContract(std::string sType, std::string sName, std::string sContr
 
 std::string AdvertiseBeacon(bool force)
 {
+	//7-15-2015
 	 LOCK(cs_main);
 	 {
 			GetNextProject(false);
@@ -1356,6 +1357,10 @@ std::string AdvertiseBeacon(bool force)
         	boost::to_lower(email);
 		    GlobalCPUMiningCPID.email=email;
 		    GlobalCPUMiningCPID.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, hashRand);
+
+			bool IsCPIDValid2 = CPID_IsCPIDValid(GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.cpidv2, hashRand);
+			if (!IsCPIDValid2) return "Invalid CPID";
+
 			GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
 			std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID);
 			std::string GRCAddress = DefaultWalletAddress();

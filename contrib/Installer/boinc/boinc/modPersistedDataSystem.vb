@@ -708,7 +708,7 @@ Module modPersistedDataSystem
         d.PrimaryKey = Project
         d.DataColumn1 = Project
         Read(d)
-        '7-15-2015 (Infinity Error)
+        ' (Infinity Error)
         If Not d.Found Then
             Store(d)
         End If
