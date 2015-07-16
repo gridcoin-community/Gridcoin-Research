@@ -678,6 +678,15 @@ Module modGRC
         End Try
 
     End Sub
+    Public Sub PurgeLog()
+        Try
+            Dim sPath As String
+            sPath = GetGridFolder() + "debug2.log"
+            Kill(sPath)
+        Catch ex As Exception
+
+        End Try
+    End Sub
 
 
     Public Function GetNewId(sTable As String, mData As Sql) As Long

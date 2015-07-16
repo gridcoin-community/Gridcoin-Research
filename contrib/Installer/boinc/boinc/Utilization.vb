@@ -15,7 +15,7 @@ Public Class Utilization
 
     Public ReadOnly Property Version As Double
         Get
-            Return 392
+            Return 393
         End Get
     End Property
 
@@ -114,13 +114,11 @@ Public Class Utilization
     Public Function NeuralNetwork() As Double
         Return 1999
     End Function
-    'Public ReadOnly Property BoincThreads As Double
-    '   Get
-    '
-    '   End Get
-    'End Property
+   
     Sub New()
         UpdateKey("UpdatingLeaderboard", "false")
+        PurgeLog()
+
         Try
             If Not DatabaseExists("gridcoin_leaderboard") Then ReplicateDatabase("gridcoin_leaderboard")
         Catch ex As Exception
@@ -164,11 +162,6 @@ Public Class Utilization
     Public Sub CreateRestorePointTestNet()
         Call RestartWallet1("createrestorepointtestnet")
     End Sub
-    'Public ReadOnly Property BoincMD5 As String
-    '   Get
-    ' '  Return clsGVM.BoincMD5()
-    ' End Get
-    'End Property
     Public Function cGetMd5(sData As String) As String
         Return GetMd5String(sData)
     End Function
@@ -186,40 +179,6 @@ Public Class Utilization
         Return sContract
     End Function
 
-    ' Public ReadOnly Property RetrieveWin32BoincHash() As String
-    '    Get
-    '
-    '   End Get
-    'End Property
-    'Public ReadOnly Property RetrieveSqlHighBlock As Double
-    '
-    'Get
-    '
-    '   End Get
-    'End Property
-    ' Public ReadOnly Property BoincDeltaOverTime As String
-    '    Get
-    '
-    '   End Get
-    'End Property
-    'Public ReadOnly Property BoincTotalCreditsAvg As Double
-    '    Get
-    '
-    '        End Get
-    '   End Property
-    '  Public ReadOnly Property BoincTotalCredits As Double
-    '     Get
-    '
-    '   End Get
-    'End Property
-    'Public Function Des3Encrypt(ByVal s As String) As String
-    '
-    '   End Function
-    '  Public Function Des3Decrypt(ByVal sData As String) As String
-    '
-    'End Function
-    'Public Function ShowProjects()
-    'End Function
     Public Function ShowVotingConsole()
         Dim fmVoting As New frmVoting
         fmVoting.Show()
@@ -463,14 +422,7 @@ Public Class Utilization
         Catch ex As Exception
         End Try
     End Sub
-    Public Sub SetLastBlockHash(ByVal data As String)
-        ' clsGVM.LastBlockHash = Trim(data)
-    End Sub
-    Public Sub SetPublicWalletAddress(ByVal data As String)
-
-    End Sub
     Public Sub SetBestBlock(ByVal nBlock As Integer)
-
 
     End Sub
 

@@ -26,7 +26,7 @@ Public Class frmMining
     Private msLastBlockHash As String
     Private mlElapsedTime As Long
     Private msLastSleepStatus As String
-
+  
 
     Private Sub UpdateCharts()
         Try
@@ -246,7 +246,7 @@ Public Class frmMining
         dgvProjects.Columns.Clear()
         dgvProjects.BackgroundColor = Drawing.Color.Black
         dgvProjects.ForeColor = Drawing.Color.Lime
-        sHeading = "Project Name;Avg RAC;Whitelisted"
+        sHeading = "Project Name;Total RAC;Avg RAC;Whitelisted"
         vHeading = Split(sHeading, ";")
 
         PopulateHeadings(vHeading, dgvProjects)
@@ -279,7 +279,9 @@ Public Class frmMining
             dgvProjects.Rows.Add()
             dgvProjects.Rows(iRow).Cells(0).Value = prj.PrimaryKey
             dgvProjects.Rows(iRow).Cells(1).Value = prj.RAC
-            dgvProjects.Rows(iRow).Cells(2).Value = Trim(bIsThisWhitelisted)
+            dgvProjects.Rows(iRow).Cells(2).Value = prj.AvgRAC
+
+            dgvProjects.Rows(iRow).Cells(3).Value = Trim(bIsThisWhitelisted)
             iRow = iRow + 1
         Next
         
@@ -311,12 +313,13 @@ Public Class frmMining
         Dim lstProjects1 As List(Of Row) = GetList(rPRJ, "*")
         lstProjects1.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
         Dim WhitelistedProjects As Double = GetWhitelistedCount(lstProjects1, lstWhitelist)
-        Dim WhitelistedWithRAC As Double = lstProjects1.Count
+        Dim TotalProjects As Double = lstProjects1.Count
         Dim PrjCount As Double = 0
        
         'Loop through the whitelist
         lstWhitelist.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
         Dim TotalRAC As Double = 0
+        Dim TotalNetworkRAC As Double = 0
 
         'Drill
         Dim sCPID As String = Trim(dgv.Rows(e.RowIndex).Cells(0).Value)
@@ -324,7 +327,7 @@ Public Class frmMining
         If Len(sCPID) > 1 Then
             '7-10-2015 - Expose Project Mag and Cumulative Mag:
             Dim dgvProjects As New DataGridView
-            Dim sHeading As String = "CPID,Project,RAC,Minimum RAC,ProjectAvgRAC,Project Mag,Cumulative RAC,Cumulative Mag"
+            Dim sHeading As String = "CPID,Project,RAC,Project Total RAC,Project Avg RAC,Project Mag,Cumulative RAC,Cumulative Mag"
             Dim vHeading() As String = Split(sHeading, ",")
             PopulateHeadings(vHeading, dgvProjects)
             Dim surrogatePrj As New Row
@@ -333,6 +336,7 @@ Public Class frmMining
             Dim lstProjects As List(Of Row) = GetList(surrogatePrj, "*")
             Dim iRow As Long = 0
             dgvProjects.Rows.Clear()
+
             Dim CumulativeMag As Double = 0
             For Each prj As Row In lstProjects
                 Dim surrogatePrjCPID As New Row
@@ -342,61 +346,54 @@ Public Class frmMining
                 Dim rowRAC = Read(surrogatePrjCPID)
                 Dim CPIDRAC As Double = Val(rowRAC.RAC)
                 Dim PrjRAC As Double = Val(prj.RAC)
-                'Dim avgRac As Double = CPIDRAC / (PrjRAC + 0.01) * 100
-                Dim MinRAC As Double = Math.Round(PrjRAC * mdMinimumRacPercentage, 2)
-
                 If CPIDRAC > 0 Then
                     iRow += 1
-
                     dgvProjects.Rows.Add()
                     dgvProjects.Rows(iRow - 1).Cells(0).Value = sCPID
                     dgvProjects.Rows(iRow - 1).Cells(1).Value = prj.PrimaryKey
                     dgvProjects.Rows(iRow - 1).Cells(2).Value = Trim(CPIDRAC)
-                    dgvProjects.Rows(iRow - 1).Cells(3).Value = Trim(MinRAC)
-                    dgvProjects.Rows(iRow - 1).Cells(4).Value = Trim(PrjRAC)
-                    'dgvProjects.Rows(iRow - 1).Cells(5).Value = Trim(prj.Expiration)
+                    dgvProjects.Rows(iRow - 1).Cells(3).Value = Trim(prj.RAC)
+                    dgvProjects.Rows(iRow - 1).Cells(4).Value = Trim(prj.AvgRAC)
                     'Cumulative Mag:
                     Dim bIsThisWhitelisted As Boolean = False
                     bIsThisWhitelisted = IsInList(prj.PrimaryKey, lstWhitelist, False)
                     Dim IndMag As Double = 0
-                   
-
-                    If CPIDRAC < MinRAC Then
-                        dgvProjects.Rows(iRow - 1).Cells(2).Style.BackColor = Color.Yellow
-                    End If
                     If Not bIsThisWhitelisted Then
                         dgvProjects.Rows(iRow - 1).Cells(2).Style.BackColor = Color.Red
                     End If
 
-                    If CPIDRAC >= MinRAC And bIsThisWhitelisted Then
-                        IndMag = Math.Round((CPIDRAC / PrjRAC + 0.01) * 100, 2)
-
-
+                    If bIsThisWhitelisted Then
+                        IndMag = Math.Round(((CPIDRAC / (PrjRAC + 0.01)) / (WhitelistedProjects + 0.01)) * NeuralNetworkMultiplier, 2)
                         CumulativeMag += IndMag
                         TotalRAC += CPIDRAC
+                        TotalNetworkRAC += PrjRAC
                     End If
                     dgvProjects.Rows(iRow - 1).Cells(5).Value = IndMag
                     dgvProjects.Rows(iRow - 1).Cells(6).Value = TotalRAC
-                    Dim DisplayMag As Double = Math.Round((CumulativeMag / WhitelistedProjects) * WhitelistedWithRAC, 2)
-                    dgvProjects.Rows(iRow - 1).Cells(7).Value = DisplayMag
+                    dgvProjects.Rows(iRow - 1).Cells(7).Value = CumulativeMag
 
                 End If
 
             Next
 
-            Dim MyMagg As Double = (CumulativeMag / WhitelistedProjects) * WhitelistedWithRAC
+            'Formula for individual drill-in for Magnitude
+            'Magnitude = (TotalRACContributions  /  ProjectRAC) / (WhitelistedProjectsCount)) * NeuralNetworkMultiplier
 
             iRow += 1
             dgvProjects.Rows.Add()
         
-            dgvProjects.Rows(iRow - 1).Cells(0).Value = "Total Mag: " + Trim(Math.Round(MyMagg, 2))
+            dgvProjects.Rows(iRow - 1).Cells(0).Value = "Total Mag: " + Trim(Math.Round(CumulativeMag, 2))
+
+            dgvProjects.Rows(iRow - 1).Cells(3).Value = TotalNetworkRAC
+
+
             dgvProjects.Rows(iRow - 1).Cells(6).Value = TotalRAC
-            dgvProjects.Rows(iRow - 1).Cells(7).Value = Trim(Math.Round(MyMagg, 2))
+            dgvProjects.Rows(iRow - 1).Cells(7).Value = Trim(Math.Round(CumulativeMag, 2))
 
             Dim oNewForm As New Form
-            oNewForm.Width = Screen.PrimaryScreen.WorkingArea.Width / 2
-            oNewForm.Height = Screen.PrimaryScreen.WorkingArea.Height / 2.5
-            oNewForm.Text = "CPID Magnitude Details - Gridcoin Neural Network - (Red=Blacklisted, Yellow=Below Minimum Network Avg)"
+            oNewForm.Width = Screen.PrimaryScreen.WorkingArea.Width / 1.6
+            oNewForm.Height = Screen.PrimaryScreen.WorkingArea.Height / 2.2
+            oNewForm.Text = "CPID Magnitude Details - Gridcoin Neural Network - (Red=Blacklisted)"
 
             oNewForm.Controls.Add(dgvProjects)
             dgvProjects.Left = 5
@@ -463,9 +460,14 @@ Public Class frmMining
     Private Sub TimerSync_Tick(sender As System.Object, e As System.EventArgs) Handles TimerSync.Tick
         If mlPercentComplete <> 0 Then
             pbSync.Visible = True
-            pbSync.Maximum = 105
-            pbSync.Value = mlPercentComplete
+            pbSync.Maximum = 100
+            If mlPercentComplete <= pbSync.Maximum Then pbSync.Value = mlPercentComplete
             Application.DoEvents()
+
+            If mlPercentComplete < 50 Then pbSync.ForeColor = Color.Red
+            If mlPercentComplete > 50 And mlPercentComplete < 90 Then pbSync.ForeColor = Color.Yellow
+            If mlPercentComplete > 90 Then pbSync.ForeColor = Color.Green
+
         Else
             pbSync.Visible = False
         End If

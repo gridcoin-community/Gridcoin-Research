@@ -555,6 +555,7 @@ Partial Class frmMining
         Me.lblTotalProjects.Size = New System.Drawing.Size(20, 24)
         Me.lblTotalProjects.TabIndex = 66
         Me.lblTotalProjects.Text = "0"
+        Me.lblTotalProjects.Visible = False
         '
         'Label3
         '
@@ -566,6 +567,7 @@ Partial Class frmMining
         Me.Label3.Size = New System.Drawing.Size(94, 16)
         Me.Label3.TabIndex = 65
         Me.Label3.Text = "Total Projects:"
+        Me.Label3.Visible = False
         '
         'pbSync
         '

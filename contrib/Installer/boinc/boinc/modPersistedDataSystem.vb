@@ -24,6 +24,7 @@ Module modPersistedDataSystem
     Public mdLastSync As Date = DateAdd(DateInterval.Day, -10, Now)
     Public mlPercentComplete As Double = 0
     Public msContractDataForQuorum As String
+    Public NeuralNetworkMultiplier As Double = 115000
 
     Private lUseCount As Long = 0
     Public Structure Row
@@ -39,7 +40,11 @@ Module modPersistedDataSystem
         Public DataColumn4 As String
         Public DataColumn5 As String
         Public Magnitude As String
+
         Public RAC As String
+        Public AvgRAC As String
+        Public Found As Boolean
+
     End Structure
     Public Structure CPID
         Public cpid As String
@@ -100,8 +105,8 @@ Module modPersistedDataSystem
         Dim lstP As List(Of Row) = GetList(rRow, "*")
         lstP.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
         For Each r As Row In lstP
-                If Val("0" + Trim(r.RAC)) > 0 Then
-                    Dim sRow As String = r.PrimaryKey + "," + Trim(RoundedMag(Val(Trim("0" + r.RAC)))) + ";"
+                If Val("0" + Trim(r.AvgRAC)) > 0 Then
+                    Dim sRow As String = r.PrimaryKey + "," + Trim(RoundedMag(Val(Trim("0" + r.AvgRAC)))) + ";"
                     lRows = lRows + 1
                     sOut += sRow
                 End If
@@ -196,10 +201,15 @@ Module modPersistedDataSystem
                         Dim dLocalMag As Double = Val("0" + Trim(dr.Magnitude))
                         '7-13-2015 Intelligently resolve disputes between neural network nodes
                         If dLocalMag > 0 And dForeignMag > 0 And RoundedMag(dForeignMag) <> RoundedMag(dLocalMag) Then
-                            Dim bResult As Boolean = GetRacViaNetsoft(dr.PrimaryKey)
-                            iUpdated += 1
-                            iMagnitudeDrift += Math.Abs(dForeignMag - dLocalMag)
-                            Log("Neural Network Quorum: Updating magnitude for CPID " + sCPID + " from " + Trim(dLocalMag) + " to " + Trim(dForeignMag))
+                            If WithinBounds(dLocalMag, dForeignMag, 0.15) And dForeignMag < dLocalMag Then
+                                'Dim bResult As Boolean = GetRacViaNetsoft(dr.PrimaryKey)
+                                dr.Magnitude = RoundedMag(dForeignMag)
+                                Store(dr)
+                                iUpdated += 1
+                                iMagnitudeDrift += Math.Abs(dForeignMag - dLocalMag)
+                                Log("Neural Network Quorum: Updating magnitude for CPID " + sCPID + " from " + Trim(dLocalMag) + " to " + Trim(dForeignMag))
+                            End If
+
                         End If
                     End If
                 End If
@@ -238,7 +248,7 @@ Module modPersistedDataSystem
                 Dim prjTotalRAC = 0
                 units = 0
                 For Each prjCPID As Row In lstProjectCPIDs
-                    If Val(prjCPID.RAC) > 10 Then
+                    If Val(prjCPID.RAC) > 1 Then
                         prjTotalRAC += Val(prjCPID.RAC)
                         units += 1
                     End If
@@ -246,7 +256,9 @@ Module modPersistedDataSystem
                 'Persist this total
                 prj.Database = "Project"
                 prj.Table = "Projects"
-                prj.RAC = Trim(RoundedRac(prjTotalRAC / (units + 0.01)))
+                prj.AvgRAC = Trim(RoundedRac(prjTotalRAC / (units + 0.01)))
+                prj.RAC = Trim(RoundedRac(prjTotalRAC))
+
                 Store(prj)
             Next
             Return True
@@ -426,7 +438,7 @@ Module modPersistedDataSystem
         Next
         Return WhitelistedProjects
     End Function
-    Public Function GetWPC(ByRef WhitelistedProjects As Double, ByRef WhitelistedWithRAC As Double) As List(Of Row)
+    Public Function GetWPC(ByRef WhitelistedProjects As Double, ByRef CountOfAllProjects As Double) As List(Of Row)
 
         Dim surrogateWhitelistRow As New Row
         Dim lstWhitelist As List(Of Row)
@@ -440,7 +452,7 @@ Module modPersistedDataSystem
         Dim lstProjects1 As List(Of Row) = GetList(rPRJ, "*")
 
         WhitelistedProjects = GetWhitelistedCount(lstProjects1, lstWhitelist)
-        WhitelistedWithRAC = lstProjects1.Count
+        CountOfAllProjects = lstProjects1.Count
         Return lstWhitelist
 
     End Function
@@ -449,7 +461,7 @@ Module modPersistedDataSystem
         Dim lstCPIDs As List(Of Row)
         Dim surrogateRow As New Row
         Dim WhitelistedProjects As Double = 0
-        Dim whitelistedWithRac As Double = 0
+        Dim ProjCount As Double = 0
         Dim lstWhitelist As List(Of Row)
 
         Dim iRow As Long = 0
@@ -465,9 +477,7 @@ Module modPersistedDataSystem
                     Dim bResult As Boolean = GetRacViaNetsoft(cpid.PrimaryKey)
                 End If
                 iRow += 1
-
-                Dim p As Double = (iRow / (lstCPIDs.Count + 0.01)) * 100 * 0.99
-
+                Dim p As Double = (iRow / (lstCPIDs.Count + 0.01)) * 100
                 mlPercentComplete = p
 
             Next
@@ -475,16 +485,16 @@ Module modPersistedDataSystem
             Log("UpdateMagnitudes:GatherRAC: " + ex.Message)
         End Try
 
-
         Try
             UpdateNetworkAverages()
         Catch ex As Exception
             Log("UpdateMagnitudes:UpdateNetworkAverages: " + ex.Message)
         End Try
 
-        lstWhitelist = GetWPC(WhitelistedProjects, whitelistedWithRac)
+        lstWhitelist = GetWPC(WhitelistedProjects, ProjCount)
+        lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
 
-
+        'Update all researchers magnitudes:
         Try
             Dim iRow2 As Long
 
@@ -494,37 +504,32 @@ Module modPersistedDataSystem
                 surrogatePrj.Database = "Project"
                 surrogatePrj.Table = "Projects"
                 Dim lstProjects As List(Of Row) = GetList(surrogatePrj, "*")
-                Dim TotalAvgRAC As Double = 0
+                Dim TotalRAC As Double = 0
+                Dim TotalNetworkRAC As Double = 0
+                Dim TotalMagnitude As Double = 0
                 'Dim TotalRAC As Double = 0
                 For Each prj As Row In lstProjects
                     Dim surrogatePrjCPID As New Row
-
                     If IsInList(prj.PrimaryKey, lstWhitelist, False) Then
                         surrogatePrjCPID.Database = "Project"
                         surrogatePrjCPID.Table = prj.PrimaryKey + "CPID"
                         surrogatePrjCPID.PrimaryKey = prj.PrimaryKey + "_" + cpid.PrimaryKey
                         Dim rowRAC = Read(surrogatePrjCPID)
                         Dim CPIDRAC As Double = Val(Trim("0" + rowRAC.RAC))
-                        Dim PrjAvgRAC As Double = Val(Trim("0" + prj.RAC))
-                        Dim avgRac As Double = CPIDRAC / (PrjAvgRAC + 0.01) * 100
-                        Dim MinRAC As Double = PrjAvgRAC * mdMinimumRacPercentage
-
-                        If CPIDRAC > MinRAC Then
-                            TotalAvgRAC += avgRac
-                        Else
-                            'Optional: Erase researchers RAC here (magnitude is already adjusted)
+                        Dim PrjTotalRAC As Double = Val(Trim("0" + prj.RAC))
+                        If CPIDRAC > 0 Then
+                            TotalRAC += CPIDRAC
+                            TotalNetworkRAC += PrjTotalRAC
+                            Dim IndMag As Double = Math.Round(((CPIDRAC / (PrjTotalRAC + 0.01)) / (WhitelistedProjects + 0.01)) * NeuralNetworkMultiplier, 2)
+                            TotalMagnitude += IndMag
                         End If
-                    Else
-
                     End If
-
                 Next
-                'Now we can store the magnitude
-                Dim Magg As Double = (TotalAvgRAC / WhitelistedProjects) * whitelistedWithRac
+                'Now we can store the magnitude - Formula for Network Magnitude per CPID:
                 cpid.Database = "CPID"
                 cpid.Table = "CPIDS"
-                cpid.Magnitude = Trim(Math.Round(Magg, 2))
-                If Magg < 1 And Magg > 0.25 Then cpid.Magnitude = 1
+                cpid.Magnitude = Trim(Math.Round(TotalMagnitude, 2))
+                If TotalMagnitude < 1 And TotalMagnitude > 0.25 Then cpid.Magnitude = 1
                 Store(cpid)
             Next
             mlPercentComplete = 0
@@ -667,7 +672,6 @@ Module modPersistedDataSystem
             d = Read(d)
             d.Expiration = DateAdd(DateInterval.Day, 14, Now)
             d.Synced = Tomorrow()
-
             d.RAC = TotalRAC
             Store(d)
             Return True
@@ -694,6 +698,7 @@ Module modPersistedDataSystem
         d.PrimaryKey = Project + "_" + sCPID
         d.RAC = Trim(RoundedRac(rac))
         Store(d)
+
         'Store the Project record
         d = New Row
         d.Expiration = Tomorrow()
@@ -702,7 +707,12 @@ Module modPersistedDataSystem
         d.Table = "Projects"
         d.PrimaryKey = Project
         d.DataColumn1 = Project
-        Store(d)
+        Read(d)
+        '7-15-2015 (Infinity Error)
+        If Not d.Found Then
+            Store(d)
+        End If
+
         Return True
     End Function
 
@@ -740,6 +750,9 @@ Module modPersistedDataSystem
         r.Expiration = DeserializeDate(vData(1))
         r.Synced = DeserializeDate(vData(2))
         r.PrimaryKey = vData(3)
+        r.Magnitude = "0"
+        r.RAC = "0"
+        r.AvgRAC = "0"
 
         If UBound(vData) >= 4 Then r.DataColumn1 = "" & vData(4)
         If UBound(vData) >= 5 Then r.DataColumn2 = "" & vData(5)
@@ -748,6 +761,7 @@ Module modPersistedDataSystem
         If UBound(vData) >= 8 Then r.DataColumn5 = "" & vData(8)
         If UBound(vData) >= 9 Then r.Magnitude = "" & vData(9)
         If UBound(vData) >= 10 Then r.RAC = "" & vData(10)
+        If UBound(vData) >= 11 Then r.AvgRAC = "" & vData(11)
 
         Return r
 
@@ -802,6 +816,7 @@ Module modPersistedDataSystem
                     r.Table = dataRow.Table
 
                     If LCase(dataRow.PrimaryKey) = LCase(r.PrimaryKey) Then
+                        r.Found = True
                         Return r
                     End If
                 End While
@@ -809,6 +824,8 @@ Module modPersistedDataSystem
             End Using
 
         End If
+        dataRow.Found = False
+
         Return dataRow
 
     End Function
@@ -875,7 +892,7 @@ Module modPersistedDataSystem
             + d + SerializeDate(dataRow.Synced) + d + LCase(dataRow.PrimaryKey) + d _
             + SerStr(dataRow.DataColumn1) + d + SerStr(dataRow.DataColumn2) _
             + d + SerStr(dataRow.DataColumn3) + d + SerStr(dataRow.DataColumn4) + d + SerStr(dataRow.DataColumn5) _
-            + d + SerStr(dataRow.Magnitude) + d + SerStr(dataRow.RAC)
+            + d + SerStr(dataRow.Magnitude) + d + SerStr(dataRow.RAC) + d + SerStr(dataRow.AvgRAC)
 
         Return sSerialized
     End Function
@@ -948,7 +965,7 @@ Module modPersistedDataSystem
         Dim lstProjects1 As List(Of Row) = GetList(rPRJ, "*")
         lstProjects1.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
         Dim WhitelistedProjects As Double = GetWhitelistedCount(lstProjects1, lstWhitelist)
-        Dim WhitelistedWithRAC As Double = lstProjects1.Count
+        Dim TotalProjects As Double = lstProjects1.Count
         Dim PrjCount As Double = 0
         lstWhitelist.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
         Dim TotalRAC As Double = 0
@@ -956,7 +973,7 @@ Module modPersistedDataSystem
         If Len(sCPID) < 10 Then Exit Function
         Dim sOut As String
 
-        Dim sHeading As String = "CPID,Project,RAC,Minimum RAC,ProjectAvgRAC,Project Mag,Cumulative RAC,Cumulative Mag"
+        Dim sHeading As String = "CPID,Project,RAC,ProjectAvgRAC,Project Mag,Cumulative RAC,Cumulative Mag"
         sOut += sHeading + "<ROW>"
 
         Dim vHeading() As String = Split(sHeading, ",")
@@ -977,42 +994,31 @@ Module modPersistedDataSystem
             Dim rowRAC = Read(surrogatePrjCPID)
             Dim CPIDRAC As Double = Val(rowRAC.RAC)
             Dim PrjRAC As Double = Val(prj.RAC)
-            Dim MinRAC As Double = Math.Round(PrjRAC * mdMinimumRacPercentage, 2)
-
             If CPIDRAC > 0 Then
                 iRow += 1
-                sRow = sCPID + "," + prj.PrimaryKey + "," + Trim(CPIDRAC) + "," + Trim(MinRAC) + "," + Trim(PrjRAC)
+                sRow = sCPID + "," + prj.PrimaryKey + "," + Trim(CPIDRAC) + "," + Trim(PrjRAC)
                 'Cumulative Mag:
                 Dim bIsThisWhitelisted As Boolean = False
                 bIsThisWhitelisted = IsInList(prj.PrimaryKey, lstWhitelist, False)
                 Dim IndMag As Double = 0
-                If CPIDRAC < MinRAC Then
-                    sErr = "Below Min RAC"
-                End If
                 If Not bIsThisWhitelisted Then
                     sErr = "Not Whitelisted"
                 End If
-
-                If CPIDRAC >= MinRAC And bIsThisWhitelisted Then
-                    IndMag = Math.Round((CPIDRAC / PrjRAC + 0.01) * 100, 2)
-
+                If bIsThisWhitelisted Then
+                    IndMag = Math.Round(((CPIDRAC / (PrjRAC + 0.01)) / (WhitelistedProjects + 0.01)) * NeuralNetworkMultiplier, 2)
                     CumulativeMag += IndMag
                     TotalRAC += CPIDRAC
                 End If
                 sRow += "," + Trim(IndMag) + "," + Trim(TotalRAC)
-
-                Dim DisplayMag As Double = Math.Round((CumulativeMag / WhitelistedProjects) * WhitelistedWithRAC, 2)
-                sRow += "," + Trim(DisplayMag) + "," + sErr
+                sRow += "," + Trim(CumulativeMag) + "," + sErr
                 sOut += sRow + "<ROW>"
             End If
-
         Next
-        Dim MyMagg As Double = (CumulativeMag / WhitelistedProjects) * WhitelistedWithRAC
-
-        sRow = "Total Mag: " + Trim(Math.Round(MyMagg, 2)) + "," + Trim(TotalRAC) + "," + Trim(Trim(Math.Round(MyMagg, 2)))
+        
+        sRow = "Total Mag: " + Trim(Math.Round(CumulativeMag, 2)) + "," + Trim(TotalRAC) + "," + Trim(Trim(Math.Round(CumulativeMag, 2)))
         sOut += sRow
 
-        sRow += "<ROW>Your Neural Magnitude: " + Trim(Math.Round(MyMagg, 2))
+        sRow += "<ROW>Your Neural Magnitude: " + Trim(Math.Round(CumulativeMag, 2))
 
         'Dim sXML As String = GetXMLOnly(sCPID)
         Return sOut
