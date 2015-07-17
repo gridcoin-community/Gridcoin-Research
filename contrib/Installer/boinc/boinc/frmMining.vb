@@ -14,6 +14,8 @@ Public Class frmMining
     Private lMHRateCounter As Long = 0
     Private mIDelay As Long = 0
     Private msNeuralReport As String = ""
+    Private WM_SETREDRAW = &HB
+
 
     Private RefreshCount As Long
     Private bUICharted As Boolean = False
@@ -191,7 +193,7 @@ Public Class frmMining
         Dim sReport As String = ""
         Dim sReportRow As String = ""
 
-        Dim sHeader As String = "CPID,Magnitude,Total RAC,Expiration,Synced,Address,CPID Valid"
+        Dim sHeader As String = "CPID,Magnitude,Total RAC,Synced Til,Address,CPID Valid"
         sReport += sHeader + vbCrLf
 
         dgv.Rows.Clear()
@@ -199,7 +201,7 @@ Public Class frmMining
         dgv.BackgroundColor = Drawing.Color.Black
         dgv.ForeColor = Drawing.Color.Lime
         Dim grr As New GridcoinReader.GridcoinRow
-        Dim sHeading As String = "CPID;Magnitude;Total RAC;Expiration;Synced;Address;CPID Valid"
+        Dim sHeading As String = "CPID;Magnitude;Total RAC;Synced Til;Address;CPID Valid"
 
         Dim vHeading() As String = Split(sHeading, ";")
 
@@ -212,6 +214,10 @@ Public Class frmMining
         Dim sValue As String
         'dgv.Visible = False
         Me.Cursor.Current = Cursors.WaitCursor
+        dgv.AutoResizeColumns(DataGridViewAutoSizeColumnsMode.ColumnHeader)
+        dgv.ReadOnly = True
+        dgv.EditingPanel.Visible = False
+        '     SendMessage(dgv.Handle, WM_SETREDRAW, False, 0)
 
         For y = 0 To UBound(vData) - 1
             dgv.Rows.Add()
@@ -227,7 +233,10 @@ Public Class frmMining
             If iRow Mod 10 = 0 Then Application.DoEvents()
 
         Next
-        'dgv.Visible = True
+        '  SendMessage(dgv.Handle, WM_SETREDRAW, True, 0)
+
+        SetAutoSizeMode2(vHeading, dgv)
+
 
         Me.Cursor.Current = Cursors.Default
 
@@ -463,12 +472,11 @@ Public Class frmMining
             pbSync.Maximum = 100
             If mlPercentComplete <= pbSync.Maximum Then pbSync.Value = mlPercentComplete
             Application.DoEvents()
-
             If mlPercentComplete < 50 Then pbSync.ForeColor = Color.Red
             If mlPercentComplete > 50 And mlPercentComplete < 90 Then pbSync.ForeColor = Color.Yellow
             If mlPercentComplete > 90 Then pbSync.ForeColor = Color.Green
-
         Else
+            If pbSync.Visible = True Then pbSync.Visible = False : PopulateNeuralData()
             pbSync.Visible = False
         End If
     End Sub

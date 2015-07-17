@@ -170,29 +170,23 @@ double GetNetworkProjectCountWithRAC()
 
 double GetNetworkAvgByProject(std::string projectname)
 {
-	projectname = strReplace(projectname,"_"," ");
-
-	try 
-	{
-		if (mvNetwork.size() < 1)
-		{
-			return 0;
-		}
-	
+ 	    projectname = strReplace(projectname,"_"," ");
+		if (mvNetwork.size() < 1) 	return 0;
 		StructCPID structcpid = mvNetwork[projectname];
 		if (!structcpid.initialized) return 0;
 		double networkavgrac = structcpid.AverageRAC;
 		return networkavgrac;
-	}
-	catch (std::exception& e)
-	{
-			printf("Error retrieving Network Avg\r\n");
-			return 0;
-	}
-
-
 }
 
+double GetNetworkTotalByProject(std::string projectname)
+{
+ 	    projectname = strReplace(projectname,"_"," ");
+		if (mvNetwork.size() < 1) 	return 0;
+		StructCPID structcpid = mvNetwork[projectname];
+		if (!structcpid.initialized) return 0;
+		double networkavgrac = structcpid.rac;
+		return networkavgrac;
+}
 
 
 bool FindRAC(bool CheckingWork, std::string TargetCPID, std::string TargetProjectName, double pobdiff, bool bCreditNodeVerification,
@@ -963,32 +957,20 @@ std::string ExtractValue(std::string data, std::string delimiter, int pos)
 {
 	std::vector<std::string> vKeys = split(data.c_str(),delimiter);
 	std::string keyvalue = "";
-	if (vKeys.size() >= (unsigned int)pos)
+	if (vKeys.size() > (unsigned int)pos)
 	{
 		keyvalue = vKeys[pos];
 	}
 
 	return keyvalue;
-
-
 }
 
 
 
-
-double GetSuperblockAvgMag(std::string data)
+double GetAverageInList(std::string superblock)
 {
-	std::string superblock = "";
-	if (Contains(data,"<AVERAGES>"))
-	{
-		superblock = ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>");
-	}
-	else
-	{
-		superblock = data;
-	}
-	
 	std::vector<std::string> vSuperblock = split(superblock.c_str(),";");
+	if (vSuperblock.size() < 2) return 0;
 	double rows = 0;
 	double total_mag = 0;
 	for (unsigned int i = 0; i < vSuperblock.size(); i++)
@@ -996,8 +978,8 @@ double GetSuperblockAvgMag(std::string data)
 		// For each CPID in the contract
 		if (vSuperblock[i].length() > 1)
 		{
-				std::string cpid = ExtractValue(vSuperblock[i],",",0);
-				double magnitude = cdbl(ExtractValue(vSuperblock[i],",",1),0);
+				std::string cpid = ExtractValue("0"+vSuperblock[i],",",0);
+				double magnitude = cdbl(ExtractValue("0"+vSuperblock[i],",",1),0);
 				if (cpid.length() > 10)
 				{
 	     			total_mag += magnitude;
@@ -1007,13 +989,27 @@ double GetSuperblockAvgMag(std::string data)
 	}
 	double avg = total_mag/(rows+.01);
 	return avg;
+
 }
 
+
+double GetSuperblockAvgMag(std::string data)
+{
+	std::string mags = ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>");
+	std::string avgs = ExtractXML(data,"<AVERAGES>","</AVERAGES>");
+	//7-16-2015
+	double avg_mag = GetAverageInList(mags);
+	double avg_avg = GetAverageInList(avgs);
+	if (avg_mag < 10 || avg_avg < 10) return 0;
+	return avg_mag + avg_avg;
+}
 
 
 
 bool TallyMagnitudesInSuperblock()
 {
+	if (fDebug3) printf(".40.");
+
 	std::string superblock = ReadCache("superblock","magnitudes");
 	std::vector<std::string> vSuperblock = split(superblock.c_str(),";");
     if (mvDPOR.size() > 0) 	mvDPOR.clear();
@@ -1043,6 +1039,9 @@ bool TallyMagnitudesInSuperblock()
 				}
 			}
 	}
+
+	if (fDebug3) printf(".41.");
+
 	double NetworkAvgMagnitude = TotalNetworkMagnitude / (TotalNetworkEntries+.01);
 	// Store the Total Network Magnitude:
 	StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
@@ -1054,33 +1053,51 @@ bool TallyMagnitudesInSuperblock()
 	double TotalRAC = 0;
 	double AVGRac = 0;
 	// Load boinc project averages from neural network
+	
 	std::string projects = ReadCache("superblock","averages");
+		
 	std::vector<std::string> vProjects = split(projects.c_str(),";");
-	for (unsigned int i = 0; i < vProjects.size(); i++)
+
+	if (vProjects.size() > 0)
 	{
-		// For each Project in the contract
-		if (vProjects[i].length() > 1)
+		double totalRAC = 0;
+		WHITELISTED_PROJECTS = 0;
+
+		for (unsigned int i = 0; i < vProjects.size(); i++)
 		{
-				std::string project = ExtractValue(vProjects[i],",",0);
-				double avg = cdbl(ExtractValue(vProjects[i],",",1),0);
-				if (project.length() > 1)
-				{
-					StructCPID stProject = GetInitializedStructCPID2(project,mvNetwork);
-					stProject.projectname = project;
-	     			stProject.AverageRAC = avg;
-					mvNetwork[project]=stProject;
-					TotalProjects++;
-					TotalRAC += avg;
+			// For each Project in the contract
+
+			if (vProjects[i].length() > 1)
+			{
+					std::string project = ExtractValue(vProjects[i],",",0);
+					double avg = cdbl(ExtractValue("0" + vProjects[i],",",1),0);
+					if (project.length() > 1)
+					{
+						StructCPID stProject = GetInitializedStructCPID2(project,mvNetwork);
+						stProject.projectname = project;
+	     				stProject.AverageRAC = avg;
+						//As of 7-16-2015, start pulling in Total RAC
+						totalRAC = 0;
+						totalRAC = cdbl("0" + ExtractValue(vProjects[i],",",2),0);
+						stProject.rac = totalRAC;
+						mvNetwork[project]=stProject;
+						TotalProjects++;
+						WHITELISTED_PROJECTS++;
+						TotalRAC += avg;
+					}
 				}
-			}
+		}
 	}
+	if (fDebug3) printf(".42.");
 
 	AVGRac = TotalRAC/(TotalProjects+.01);
 	network.AverageRAC = AVGRac;
 	network.rac = TotalRAC;
 	network.NetworkProjects = TotalProjects;
+    
 	mvNetwork["NETWORK"] = network;
-		
+	if (fDebug3) printf(".43.");
+
 	return true;
 }
 
@@ -3022,6 +3039,7 @@ double GetTotalNeuralNetworkHashVotes()
 	{
 				double popularity = mvNeuralNetworkHash[(*ii).first];
 				neural_hash = (*ii).first;
+				// d41d8 is the hash of an empty magnitude contract - don't count it
 				if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity >= .01)
 				{
 					total += popularity;
@@ -3030,6 +3048,7 @@ double GetTotalNeuralNetworkHashVotes()
 	}
 	return total;	 
 }
+
 Array GetJSONNeuralNetworkReport()
 {
 	  Array results;
@@ -3067,7 +3086,7 @@ Array MagnitudeReportCSV(bool detail)
 	       Array results;
 		   Object c;
 		   StructCPID globalmag = mvMagnitudes["global"];
-		   double payment_timespan = 14; //(globalmag.HighLockTime-globalmag.LowLockTime)/86400;  //Lock time window in days
+		   double payment_timespan = 14; 
 		   std::string Narr = "Research Savings Account Report - Generated " + RoundToString(GetAdjustedTime(),0) + " - Timespan: " + RoundToString(payment_timespan,0);
 		   c.push_back(Pair("RSA Report",Narr));
 		   results.push_back(c);
@@ -3266,34 +3285,31 @@ Value listitem(const Array& params, bool fHelp)
 		double ParticipatingProjectCount = 0;
 		double TotalMagnitude = 0;
 		double Mag = 0;
-		double NetworkProjectCountWithRAC = 0;
-
+		
 		Object entry;
 		
-		//Halford 9-28-2014: Note: mvCPIDs[ProjectName] contains StructCPID of Boinc Projects by Project Name
-		//As of survey result held by RTM : https://cryptocointalk.com/topic/16082-gridcoin-research-magnitude-calculation-survey-final/
-		//Switch to Magnitude Calculation Method 2 (Assess magnitude by All whitelisted projects):
 		std::string narr = "";
 		std::string narr_desc = "";
-					
+					double TotalProjectRAC = 0;
+					double TotalUserVerifiedRAC = 0;
+
 		for(map<string,StructCPID>::iterator ibp=mvBoincProjects.begin(); ibp!=mvBoincProjects.end(); ++ibp) 
 		{
 			StructCPID WhitelistedProject = mvBoincProjects[(*ibp).first];
 			if (WhitelistedProject.initialized)
 			{
-				double ProjectRAC = GetNetworkAvgByProject(WhitelistedProject.projectname);
-				if (ProjectRAC > 10) NetworkProjectCountWithRAC++;
+				//7-16-2015
+				double ProjectRAC = GetNetworkTotalByProject(WhitelistedProject.projectname);
 				StructCPID structcpid = mvCPIDs[WhitelistedProject.projectname];
-				bool projectvalid = ProjectIsValid(structcpid.projectname);
 				bool including = false;
 				narr = "";
 				narr_desc = "";
 				double UserVerifiedRAC = 0;
 				if (structcpid.initialized) 
 				{ 
-					if (structcpid.projectname.length() > 2 && projectvalid)
+					if (structcpid.projectname.length() > 1)
 					{
-						including = (ProjectRAC > 0 && structcpid.Iscpidvalid && structcpid.rac > 10);
+						including = (ProjectRAC > 0 && structcpid.Iscpidvalid && structcpid.rac > 1);
 						UserVerifiedRAC = structcpid.rac;
 						narr_desc = "NetRac: " + RoundToString(ProjectRAC,0) + ", CPIDValid: " 
 							+ YesNo(structcpid.Iscpidvalid) + ", RAC: " +RoundToString(structcpid.rac,0);
@@ -3310,44 +3326,36 @@ Value listitem(const Array& params, bool fHelp)
 				mytotalrac = mytotalrac + UserVerifiedRAC;
 				mytotalpct = mytotalpct + projpct;
 				
-				double project_magnitude = UserVerifiedRAC/(ProjectRAC+.01) * 100;
-				
-				
+				double project_magnitude = 
+					((UserVerifiedRAC / (ProjectRAC + 0.01)) / (WHITELISTED_PROJECTS + 0.01)) * NeuralNetworkMultiplier;
+
 				if (including)
 				{
 						TotalMagnitude += project_magnitude;
-					
+						TotalUserVerifiedRAC += UserVerifiedRAC;
+						TotalProjectRAC += ProjectRAC;
 						ParticipatingProjectCount++;
-				
-						//entry.push_back(Pair("Participating Project Count",ParticipatingProjectCount));
+						
 						entry.push_back(Pair("User " + structcpid.projectname + " Verified RAC",UserVerifiedRAC));
 						entry.push_back(Pair(structcpid.projectname + " Network RAC",ProjectRAC));
 						entry.push_back(Pair("Your Project Magnitude",project_magnitude));
 				}
-				else
-				{
-					//std::string NonParticipatingBlurb = "Network RAC: " + RoundToString(ProjectRAC,0);
-					//entry.push_back(Pair("Non Participating Project " + WhitelistedProject.projectname,NonParticipatingBlurb));
-				}
-
-				Mag = ( (TotalMagnitude/WHITELISTED_PROJECTS) * NetworkProjectCountWithRAC);
+		
 				
 		     }
 		}
 		
 
+		entry.push_back(Pair("Whitelisted Project Count",(double)WHITELISTED_PROJECTS));
+		
 		entry.push_back(Pair("Grand-Total Verified RAC",mytotalrac));
 		entry.push_back(Pair("Grand-Total Network RAC",nettotalrac));
-
 		entry.push_back(Pair("Total Magnitude for All Projects",TotalMagnitude));
 		entry.push_back(Pair("Grand-Total Whitelisted Projects",RoundToString(WHITELISTED_PROJECTS,0)));
-
 		entry.push_back(Pair("Participating Project Count",ParticipatingProjectCount));
-						
-		entry.push_back(Pair("Grand-Total Count Of Network Projects With RAC",NetworkProjectCountWithRAC));
-		Mag = (TotalMagnitude/WHITELISTED_PROJECTS) * NetworkProjectCountWithRAC;
+		Mag = TotalMagnitude;
 			
-		std::string babyNarr = RoundToString(TotalMagnitude,2) + "/" + RoundToString(WHITELISTED_PROJECTS,0) + "*" + RoundToString(NetworkProjectCountWithRAC,0) + "=";
+		std::string babyNarr = "(" + RoundToString(TotalUserVerifiedRAC,2) + "/" + RoundToString(TotalProjectRAC,2) + ")/" + RoundToString(WHITELISTED_PROJECTS,0) + "*" + RoundToString(NeuralNetworkMultiplier,0) + "=";
 
 		entry.push_back(Pair(babyNarr,Mag));
 		results.push_back(entry);

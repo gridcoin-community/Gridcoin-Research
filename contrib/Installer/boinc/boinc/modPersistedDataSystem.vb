@@ -53,7 +53,13 @@ Module modPersistedDataSystem
         Public Expiration As Date
     End Structure
     Public msCurrentNeuralHash = ""
-
+    Private Function Num(sData As String) As String
+        'Ensures culture is neutral
+        Dim sOut As String
+        sOut = Trim(Math.Round(RoundedMag(Val("0" + Trim(sData))), 2))
+        sOut = Replace(sOut, ",", ".")
+        Return sOut
+    End Function
     Public Function GetMagnitudeContractDetails() As String
         Dim surrogateRow As New Row
         surrogateRow.Database = "CPID"
@@ -62,9 +68,8 @@ Module modPersistedDataSystem
         lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
         Dim sOut As String = ""
         For Each cpid As Row In lstCPIDs
-            Dim sRow As String = cpid.PrimaryKey + "," + Trim(RoundedMag(Val(Trim("0" + cpid.Magnitude)))) _
-                                 + "," + Trim(Math.Round(Val("0" + Trim(cpid.RAC)), 2)) _
-                                 + "," + Trim(cpid.Expiration) _
+            Dim sRow As String = cpid.PrimaryKey + "," + Num(cpid.Magnitude) _
+                                 + "," + Num(cpid.RAC) _
                                  + "," + Trim(cpid.Synced) + "," + Trim(cpid.DataColumn4) _
                                  + "," + Trim(cpid.DataColumn5) + ";"
             sOut += sRow
@@ -88,8 +93,8 @@ Module modPersistedDataSystem
         For Each cpid As Row In lstCPIDs
             If cpid.DataColumn5 = "True" Then
                 ' If CDate(cpid.Added) < DateAdd(DateInterval.Day, -1, Now) Then
-                Dim sRow As String = cpid.PrimaryKey + "," + Trim(RoundedMag(Val(Trim("0" + cpid.Magnitude)))) + ";"
-                lTotal = lTotal + Val("0" + Trim(cpid.Magnitude))
+                    Dim sRow As String = cpid.PrimaryKey + "," + Num(cpid.Magnitude) + ";"
+                    lTotal = lTotal + Val("0" + Trim(cpid.Magnitude))
                 lRows = lRows + 1
                 sOut += sRow
             End If
@@ -98,19 +103,32 @@ Module modPersistedDataSystem
         Dim avg As Double
         avg = lTotal / (lRows + 0.01)
         If avg < 25 Then Return ""
-        'APPEND the Averages:
+            'APPEND the Averages:
+
+            Dim surrogateWhitelistRow As New Row
+            Dim lstWhitelist As List(Of Row)
+            surrogateWhitelistRow.Database = "Whitelist"
+            surrogateWhitelistRow.Table = "Whitelist"
+            lstWhitelist = GetList(surrogateWhitelistRow, "*")
+
+
         Dim rRow As New Row
         rRow.Database = "Project"
         rRow.Table = "Projects"
         Dim lstP As List(Of Row) = GetList(rRow, "*")
         lstP.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
-        For Each r As Row In lstP
-                If Val("0" + Trim(r.AvgRAC)) > 0 Then
-                    Dim sRow As String = r.PrimaryKey + "," + Trim(RoundedMag(Val(Trim("0" + r.AvgRAC)))) + ";"
-                    lRows = lRows + 1
-                    sOut += sRow
+            For Each r As Row In lstP
+                Dim bIsThisWhitelisted = IsInList(r.PrimaryKey, lstWhitelist, False)
+                If (bIsThisWhitelisted) Then
+                    If Val("0" + Trim(r.AvgRAC)) > 0 Then
+                        Dim sRow As String = r.PrimaryKey + "," + Num(r.AvgRAC) _
+                                             + "," + Num(r.RAC) + ";"
+                        lRows = lRows + 1
+                        sOut += sRow
+                    End If
                 End If
-        Next
+
+            Next
         sOut += "</AVERAGES>"
             Return sOut
 
@@ -1031,10 +1049,10 @@ Module modPersistedDataSystem
 
             Dim sReport As String = ""
             Dim sReportRow As String = ""
-            Dim sHeader As String = "CPID,Magnitude,TotalRAC,Expiration,Synced,Address,CPID_Valid"
+            Dim sHeader As String = "CPID,Magnitude,TotalRAC,Synced Til,Address,CPID_Valid"
             sReport += sHeader + vbCrLf
             Dim grr As New GridcoinReader.GridcoinRow
-            Dim sHeading As String = "CPID;Magnitude;TotalRAC;Expiration;Synced;Address;CPID_Valid"
+            Dim sHeading As String = "CPID;Magnitude;TotalRAC;Synced Til;Address;CPID_Valid"
             Dim vHeading() As String = Split(sHeading, ";")
             Dim sData As String = modPersistedDataSystem.GetMagnitudeContractDetails()
             Dim vData() As String = Split(sData, ";")

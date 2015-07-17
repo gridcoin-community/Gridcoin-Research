@@ -25,9 +25,9 @@ extern int MINOR_VERSION;
 ///////////////////////////////////////////////////////////
 // network protocol versioning                           //
 //                                                       //
-static const int PROTOCOL_VERSION =       180280;        //
+static const int PROTOCOL_VERSION =       180281;        //
 // disconnect from peers older than this proto version   //
-static const int MIN_PEER_PROTO_VERSION = 180280;        // 
+static const int MIN_PEER_PROTO_VERSION = 180281;        // 
 ///////////////////////////////////////////////////////////
 // intial proto version, to be increased after           //
 // version/verack negotiation                            //

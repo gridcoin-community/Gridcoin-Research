@@ -87,11 +87,16 @@ Module modGRC
 
         Next
         For x = 0 To UBound(vHeading)
+            oDGV.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.None
+        Next
+
+    End Sub
+    Public Sub SetAutoSizeMode2(vHeading() As String, oDGV As DataGridView)
+        For x = 0 To UBound(vHeading)
             oDGV.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells
         Next
 
     End Sub
-
     Private Function TruncateHash(ByVal key As String, ByVal length As Integer) As Byte()
         Dim sha1 As New SHA1CryptoServiceProvider
         ' Hash the key. 
