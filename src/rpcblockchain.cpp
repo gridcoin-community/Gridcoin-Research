@@ -2129,6 +2129,20 @@ Value execute(const Array& params, bool fHelp)
 		results.push_back(entry);
 	
 	}
+	else if (sItem == "currentcontractaverage")
+	{
+		//7-17-2015
+		std::string contract = "";
+		#if defined(WIN32) && defined(QT_GUI)
+					contract = qtGetNeuralContract("");
+		#endif
+		entry.push_back(Pair("Contract",contract));
+		double avg = GetSuperblockAvgMag(contract);
+		entry.push_back(Pair("avg",avg));
+		results.push_back(entry);
+	
+		
+	}
 	else if (sItem == "getlistof")
 	{
 		if (params.size() != 2)
