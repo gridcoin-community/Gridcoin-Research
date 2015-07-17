@@ -7415,16 +7415,22 @@ void HarvestCPIDs(bool cleardata)
 
 				if (!structcpid.Iscpidvalid)
 				{
-					structcpid.Iscpidvalid = false;
 					structcpid.errors = "CPID invalid.  Check E-mail address.";
 				}
 
-				if (structcpid.rac < 2)         
+				if (structcpid.rac < 10)         
 				{
 					structcpid.Iscpidvalid = false;
 					structcpid.errors = "RAC too low";
 				}
 
+				if (structcpid.team != "gridcoin")
+				{
+					structcpid.Iscpidvalid = false;
+					structcpid.errors = "Team invalid";
+				}
+				
+				structcpid = mvCPIDs[proj];
 			    if (fDebug) printf("Adding Local Project %s",structcpid.cpid.c_str());
 
 			}
