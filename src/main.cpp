@@ -323,6 +323,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  //Global variables to display current mined project in various places:
  std::string 	msMiningProject = "";
  std::string 	msMiningCPID = "";
+ std::string    msPrimaryCPID = "";
  std::string    msENCboincpublickey = "";
  double      	mdMiningRAC =0;
  double         mdMiningNetworkRAC = 0;
@@ -785,7 +786,8 @@ MiningCPID GetNextProject(bool bForce)
 		for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii) 
 		{
 				StructCPID structcpid = mvCPIDs[(*ii).first];
-				if (structcpid.initialized && structcpid.Iscpidvalid && structcpid.rac > 10)			iValidProjects++;
+				if (		msPrimaryCPID == structcpid.cpid && 
+					structcpid.initialized && structcpid.Iscpidvalid && structcpid.rac > 10)			iValidProjects++;
 		}
 	
 		// Find next available CPU project:
@@ -808,19 +810,25 @@ MiningCPID GetNextProject(bool bForce)
 				StructCPID structcpid = mvCPIDs[(*ii).first];
 				if (structcpid.initialized) 
 				{ 
-					if (structcpid.Iscpidvalid && structcpid.projectname.length() > 1 && structcpid.rac > 10)
+					if (msPrimaryCPID == structcpid.cpid && 
+						structcpid.Iscpidvalid && structcpid.projectname.length() > 1 && structcpid.rac > 10)
 					{
 							iRow++;
 							if (i==4 || iDistributedProject == iRow)
 							{
-								//Pretest magnitude:
-								//double premag = CalculatedMagnitude2(structcpid.cpid,GetAdjustedTime(),false);
 								if (true)
 								{
-									//Only used for global status:
-									msMiningProject = structcpid.projectname;
-									msMiningCPID = structcpid.cpid;
-									mdMiningRAC = structcpid.rac;
+									GlobalCPUMiningCPID.enccpid = structcpid.boincpublickey;
+									bool checkcpid = IsCPIDValid_Retired(structcpid.cpid,GlobalCPUMiningCPID.enccpid);
+									if (!checkcpid) 
+									{
+										printf("CPID invalid %s  1.  ",structcpid.cpid.c_str());
+										continue;
+									}
+
+									if (checkcpid)
+									{
+
 									GlobalCPUMiningCPID.email = email;
 										
 									if (LessVerbose(1) || fDebug) printf("Ready to CPU Mine project %s with CPID %s, RAC(%f) \r\n",	
@@ -831,28 +839,25 @@ MiningCPID GetNextProject(bool bForce)
 									GlobalCPUMiningCPID.projectname = structcpid.projectname;
 									GlobalCPUMiningCPID.rac=structcpid.rac;
 									GlobalCPUMiningCPID.encboincpublickey = structcpid.boincpublickey;
-									GlobalCPUMiningCPID.enccpid = structcpid.boincpublickey;
 									GlobalCPUMiningCPID.encaes = structcpid.boincpublickey;
-									//7-11-2015
-									bool checkcpid = IsCPIDValid_Retired(structcpid.cpid,GlobalCPUMiningCPID.enccpid);
-									if (!checkcpid) 
-									{
-										printf("CPID invalid %s  1.  ",structcpid.cpid.c_str());
-										continue;
-									}
-
+								
 
 									GlobalCPUMiningCPID.boincruntimepublickey = structcpid.cpidhash;
 									uint256 pbh = 1;
 									GlobalCPUMiningCPID.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey, pbh);
 									GlobalCPUMiningCPID.lastblockhash = "0";
-								    if (!IsCPIDValidv2(GlobalCPUMiningCPID,1))
+								    
+									if (!IsCPIDValidv2(GlobalCPUMiningCPID,1))
 									{
 										printf("CPID INVALID 2 %s, %s  ",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.cpidv2.c_str());
 										continue;
 									}
 		
 
+									//Only used for global status:
+									msMiningProject = structcpid.projectname;
+									msMiningCPID = structcpid.cpid;
+									mdMiningRAC = structcpid.rac;
 
 									double ProjectRAC = GetNetworkAvgByProject(GlobalCPUMiningCPID.projectname);
 									GlobalCPUMiningCPID.NetworkRAC = ProjectRAC;
@@ -864,6 +869,7 @@ MiningCPID GetNextProject(bool bForce)
 									GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 									GlobalCPUMiningCPID.LastPaymentTime = GetLastPaymentTimeByCPID(GlobalCPUMiningCPID.cpid);
 									return GlobalCPUMiningCPID;
+									}
 								}
 							}
 						
@@ -6983,39 +6989,11 @@ void InitializeProjectStruct(StructCPID& project)
 	project.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + project.cpid;
 	//Local CPID with struct
 	//Must contain cpidv2, cpid, boincpublickey
-	project.Iscpidvalid = false;
 	project.Iscpidvalid = IsLocalCPIDValid(project);
  	if (fDebug3) printf("Assimilating local project %s, CPID Valid: %s",project.projectname.c_str(),YesNo(project.Iscpidvalid).c_str());
 
-
 }
 
-void AddProjectFromNetSoft(StructCPID& netsoft)
-{
-	if (netsoft.cpid != GlobalCPUMiningCPID.cpid && GlobalCPUMiningCPID.cpid.length() > 3 && GlobalCPUMiningCPID.cpid != "INVESTOR") 
-	{
-		//Dont add it
-		return;
-	}
-	StructCPID NewProject = GetStructCPID();
-	NewProject.cpid = netsoft.cpid;
-	NewProject.projectname = netsoft.projectname;
-	NewProject.rac = netsoft.rac;
-	NewProject.team = netsoft.verifiedteam;
-	NewProject.verifiedteam = netsoft.verifiedteam;
-	NewProject.initialized = true;
-	NewProject.emailhash=netsoft.emailhash;
-	NewProject.cpidhash = GlobalCPUMiningCPID.cpidhash;
-	if (NewProject.verifiedteam != "gridcoin") NewProject.rac = -1;
-	InitializeProjectStruct(NewProject);
-	mvCPIDs.insert(map<string,StructCPID>::value_type(NewProject.projectname,NewProject));
-	if (NewProject.rac > 1 && NewProject.Iscpidvalid)
-	{
-		mvCPIDs[netsoft.projectname] = NewProject;
-		printf("Adding local project missing - from Netsoft %s %s\r\n",NewProject.projectname.c_str(),NewProject.cpid.c_str());
-	}
-    
-}
 
 
 
@@ -7114,7 +7092,6 @@ void CreditCheck(std::string cpid, bool clearcache)
 						if (structcc.verifiedteam != "gridcoin") structcc.rac = -1;
 						structcc.verifiedrectime = cdbl(rectime,0);
 						structcc.rac = cdbl(rac,0);
-						
 						double currenttime =  GetAdjustedTime();
 						double nActualTimespan = currenttime - structcc.verifiedrectime;
 						structcc.verifiedage = nActualTimespan;
@@ -7353,7 +7330,6 @@ void HarvestCPIDs(bool cleardata)
 	if (cleardata)
 	{
 		mvCPIDs.clear();
-		//mvCreditNode.clear();
 		mvCPIDCache.clear();
 	}
 	std::string email = GetArgument("email","");
@@ -7373,7 +7349,6 @@ void HarvestCPIDs(bool cleardata)
 			std::string proj=ExtractXML(vCPID[i],"<project_name>","</project_name>");
 			std::string team=ExtractXML(vCPID[i],"<team_name>","</team_name>");
 			std::string rectime = ExtractXML(vCPID[i],"<rec_time>","</rec_time>");
-			
 			boost::to_lower(proj);
             proj = ToOfficialName(proj);
 			bool projectvalid = ProjectIsValid(proj);			//Is project Valid
@@ -7390,6 +7365,8 @@ void HarvestCPIDs(bool cleardata)
 				structcpid.team = team;
 				InitializeProjectStruct(structcpid);
 				if (fDebug3) printf("Enumerating boinc local project %s cpid %s valid %s",structcpid.projectname.c_str(),structcpid.cpid.c_str(),YesNo(structcpid.Iscpidvalid).c_str());
+				structcpid.rac = cdbl(rac,0);
+				
 				if (!structcpid.Iscpidvalid)
 				{
 					structcpid.errors = "CPID calculation invalid.  Check e-mail + reset project.";
@@ -7399,9 +7376,14 @@ void HarvestCPIDs(bool cleardata)
 						GlobalCPUMiningCPID.cpidhash = cpidhash;
 						GlobalCPUMiningCPID.email = email;
 						GlobalCPUMiningCPID.boincruntimepublickey = cpidhash;
+						if (structcpid.rac > 10 && structcpid.team=="gridcoin")
+
+						{
+							msPrimaryCPID = structcpid.cpid;
+						}
 				}
+
 				structcpid.utc = cdbl(utc,0);
-				structcpid.rac = cdbl(rac,0);
 				structcpid.rectime = cdbl(rectime,0);
 				double currenttime =  GetAdjustedTime();
 				double nActualTimespan = currenttime - structcpid.rectime;
@@ -7412,7 +7394,7 @@ void HarvestCPIDs(bool cleardata)
 				mvCPIDs[proj] = structcpid;	
 	           	CreditCheck(structcpid.cpid,cleardata);
 				structcpid = mvCPIDs[proj];
-
+				
 				if (!structcpid.Iscpidvalid)
 				{
 					structcpid.errors = "CPID invalid.  Check E-mail address.";
@@ -7430,7 +7412,7 @@ void HarvestCPIDs(bool cleardata)
 					structcpid.errors = "Team invalid";
 				}
 				
-				structcpid = mvCPIDs[proj];
+				mvCPIDs[proj] = structcpid;
 			    if (fDebug) printf("Adding Local Project %s",structcpid.cpid.c_str());
 
 			}

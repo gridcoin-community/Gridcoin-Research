@@ -146,6 +146,8 @@ static const uint64_t nMinDiskSpace = 52428800;
 // PoB Miner Global Vars:
 extern std::string 	msMiningProject;
 extern std::string 	msMiningCPID;
+extern std::string  msPrimaryCPID;
+
 extern double    	mdMiningRAC;
 extern double       mdMiningNetworkRAC;
 extern double       mdPORNonce;
