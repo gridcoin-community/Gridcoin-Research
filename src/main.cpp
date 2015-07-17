@@ -785,7 +785,7 @@ MiningCPID GetNextProject(bool bForce)
 		for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii) 
 		{
 				StructCPID structcpid = mvCPIDs[(*ii).first];
-				if (structcpid.initialized && structcpid.Iscpidvalid)			iValidProjects++;
+				if (structcpid.initialized && structcpid.Iscpidvalid && structcpid.rac > 10)			iValidProjects++;
 		}
 	
 		// Find next available CPU project:
@@ -808,7 +808,7 @@ MiningCPID GetNextProject(bool bForce)
 				StructCPID structcpid = mvCPIDs[(*ii).first];
 				if (structcpid.initialized) 
 				{ 
-					if (structcpid.Iscpidvalid && structcpid.projectname.length() > 1)
+					if (structcpid.Iscpidvalid && structcpid.projectname.length() > 1 && structcpid.rac > 10)
 					{
 							iRow++;
 							if (i==4 || iDistributedProject == iRow)
@@ -3592,7 +3592,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 			if (boincblock.cpid != "INVESTOR")
 			{
     			if (boincblock.projectname == "") 	return DoS(1,error("PoR Project Name invalid"));
-	    		if (boincblock.rac < 10) 			return DoS(1,error("RAC too low"));
+	    		//if (boincblock.rac < 10) 			return DoS(1,error("RAC too low"));
 				if (!IsCPIDValidv2(boincblock,height1))
 				{
 						return DoS(100,error("Bad CPID : height %f, bad hashboinc %s",(double)height1,vtx[0].hashBoinc.c_str()));
@@ -7932,6 +7932,9 @@ std::string GetNeuralNetworkSupermajorityHash(double& out_popularity)
 
 
 
+
+
+
 std::string GetNeuralNetworkReport()
 {
 	//Returns a report of the networks neural hashes in order of popularity
@@ -7950,30 +7953,24 @@ std::string GetNeuralNetworkReport()
 }
 
 
-//7-13-2015
 
-bool MemorizeMessages(bool bFullTableScan, const CBlock& block, const CBlockIndex* blockindex)
+
+
+void MemorizeMessage(std::string msg,int64_t nTime)
 {
-	try
-	{
-	BOOST_FOREACH(const CTransaction&tx, block.vtx)
-	{
-		  if (!tx.hashBoinc.empty())
-		  {
-			  if (Contains(tx.hashBoinc,"<MT>"))
-			  {
-			  std::string sMessageType  = ExtractXML(tx.hashBoinc,"<MT>","</MT>");
-  			  std::string sMessageKey   = ExtractXML(tx.hashBoinc,"<MK>","</MK>");
-			  std::string sMessageValue = ExtractXML(tx.hashBoinc,"<MV>","</MV>");
-			  std::string sMessageAction= ExtractXML(tx.hashBoinc,"<MA>","</MA>");
-			  std::string sSignature    = ExtractXML(tx.hashBoinc,"<MS>","</MS>");
+	      if (msg.empty()) return;
+		  if (Contains(msg,"<MT>"))
+	 	  {
+			  std::string sMessageType  = ExtractXML(msg,"<MT>","</MT>");
+  			  std::string sMessageKey   = ExtractXML(msg,"<MK>","</MK>");
+			  std::string sMessageValue = ExtractXML(msg,"<MV>","</MV>");
+			  std::string sMessageAction= ExtractXML(msg,"<MA>","</MA>");
+			  std::string sSignature    = ExtractXML(msg,"<MS>","</MS>");
 			  if (sMessageType=="beacon" && Contains(sMessageValue,"INVESTOR")) 
 			  {
-					printf(".skipping.\r\n");
 					sMessageValue="";
 			  }
 
-							
 			  if (!sMessageType.empty() && !sMessageKey.empty() && !sMessageValue.empty() && !sMessageAction.empty() && !sSignature.empty())
 			  {
 				 
@@ -7983,8 +7980,9 @@ bool MemorizeMessages(bool bFullTableScan, const CBlock& block, const CBlockInde
 				  {
 						if (sMessageAction=="A")
 						{
-								if (fDebug) printf("Adding MessageKey type %s Key %s Value %s\r\n",sMessageType.c_str(),sMessageKey.c_str(),sMessageValue.c_str());
-								WriteCache(sMessageType,sMessageKey,sMessageValue,tx.nTime);
+								if (fDebug) printf("Adding MessageKey type %s Key %s Value %s\r\n",
+									sMessageType.c_str(),sMessageKey.c_str(),sMessageValue.c_str());
+								WriteCache(sMessageType,sMessageKey,sMessageValue,nTime);
 								if (sMessageType=="poll")
 								{
 										msMiningErrors2 = "Poll: " + sMessageKey;
@@ -7998,37 +7996,20 @@ bool MemorizeMessages(bool bFullTableScan, const CBlock& block, const CBlockInde
 				
 						}
 						// If this is a boinc project, load the projects into the coin:
-						if (!bFullTableScan)
+						if (sMessageType=="project" || sMessageType=="projectmapping")
 						{
-							if (sMessageType=="project" || sMessageType=="projectmapping")
-							{
-								if (fDebug3) printf("New project loaded %s",sMessageKey.c_str());
-
-							}
+								//Reserved
 						}
-
+				
 				  }
 
-			  }
-				 
+				}
+
 		  }
-	   }
-	}
-	}
-	catch (std::exception &e) 
-	{
-			printf("Error while memorizing messages [std]");
-			return false;
-	}
-	catch(...)
-	{
-			printf("Error while memorizing messages");
-			return false;
-	}
-
-
-	return false;	
 }
+
+
+
 
 
 
@@ -8217,38 +8198,32 @@ CBlockIndex* GetHistoricalMagnitude(std::string cpid,int nStartHeight)
 
 bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 {
-	int nMaxDepth = nBestHeight;
-    CBlock block;
-	int nMinDepth = fTestNet ? 1 : 164618;
-	if (!bFullTableScan) nMinDepth = nMaxDepth-6;
 
+	int nMaxDepth = nBestHeight;
+    int nMinDepth = fTestNet ? 1 : 164618;
+	if (!bFullTableScan) nMinDepth = nMaxDepth-6;
 	if (nMaxDepth < nMinDepth) return false;
-		
-	out_errors = "";
-	int ii = 0;
-	if (fDebug3 && bFullTableScan) 	printf("LAM Max height %f \r\n",(double)nMaxDepth);
-	    
-	LOCK(cs_main);
+	CBlockIndex* pindex = pindexBest;
+	pindex = FindBlockByHeight(nMinDepth);
+	if (fDebug3) printf("MaxH %f \r\n ",(double)nMaxDepth);
+	//CTxDB txdb("r");
+    while (pindex->nHeight < nMaxDepth)
 	{
-		try
+		if (pindex->pnext == NULL) return false;
+        pindex = pindex->pnext;
+		if (pindex==NULL) continue;
+		if (!pindex || !pindex->IsInMainChain()) continue;
+		CBlock block;
+		if (!block.ReadFromDisk(pindex)) continue;
+		BOOST_FOREACH(const CTransaction &tx, block.vtx)
 		{
-			for (ii = nMinDepth; ii <= nMaxDepth; ii++)
-			{
-     			CBlockIndex* pblockindex = FindBlockByHeight(ii);
-				if (block.ReadFromDisk(pblockindex,true))
-				{
-					MemorizeMessages(bFullTableScan,block,pblockindex);
-				}
-			}
-		}
-		catch (std::exception &e) 
-		{
-			printf("Error loading block index %f",(double)ii);
-			return false;
+			    //uint256 hashTx = tx.GetHash();
+                //CTxIndex txindex;
+                //if (txdb.ReadTxIndex(hashTx, txindex))
+                //{
+			  MemorizeMessage(tx.hashBoinc,tx.nTime);
 		}
 	}
 	return true;
 }
-
-
 

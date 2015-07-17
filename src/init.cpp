@@ -189,62 +189,6 @@ void InitializeBoincProjects()
 		// Retiring:
 
 		/*
-		
-		//Initialize GlobalCPUMiningCPID
-	    GlobalCPUMiningCPID.initialized = true;
-		GlobalCPUMiningCPID.cpid="";
-		GlobalCPUMiningCPID.cpidv2 = "";
-		GlobalCPUMiningCPID.projectname ="";
-		GlobalCPUMiningCPID.rac=0;
-		GlobalCPUMiningCPID.encboincpublickey = "";
-		GlobalCPUMiningCPID.boincruntimepublickey = "";
-		GlobalCPUMiningCPID.pobdifficulty = 0;
-		GlobalCPUMiningCPID.diffbytes = 0;
-		GlobalCPUMiningCPID.email = "";
-		GlobalCPUMiningCPID.RSAWeight = 0;
-		std::string boinc_projects[100];
-
-		// Refreshed Project list - SePulcher - 2/6/2015
-		// Current Projects
-		boinc_projects[0] = "http://www.gridcoin.us/|INVESTOR"; //This is a general project used for inflation only subsidies
-		boinc_projects[1] = "http://boinc.thesonntags.com/collatz/|Collatz Conjecture";
-		boinc_projects[2] = "http://www.cosmologyathome.org/|Cosmology@Home";
-		boinc_projects[3] = "http://einstein.phys.uwm.edu/|Einstein@Home";
-		boinc_projects[4] = "http://moowrap.net/|Moo! Wrapper";
-		boinc_projects[5] = "http://boinc.fzk.de/poem/|POEM@HOME";
-		boinc_projects[6] = "http://www.primegrid.com/|PrimeGrid";
-		boinc_projects[7] = "http://boinc.bakerlab.org/rosetta/|Rosetta@Home";
-		boinc_projects[8] = "http://setiathome.berkeley.edu/|SETI@Home";
-		boinc_projects[9] = "http://pogs.theskynet.org/pogs/|theSkyNet POGS";
-		boinc_projects[10] = "http://www.malariacontrol.net/|malariacontrol.net";
-		boinc_projects[11] = "http://www.worldcommunitygrid.org/|World Community Grid";
-		boinc_projects[12] = "http://asteroidsathome.net/boinc/|Asteroids@home";
-		boinc_projects[13] = "http://climateprediction.net/|climateprediction.net";
-		boinc_projects[14] = "http://milkyway.cs.rpi.edu/milkyway/|MilkyWay@home";
-		boinc_projects[15] = "http://qcn.stanford.edu/sensor/|Quake-Catcher Network";
-		boinc_projects[16] = "http://boinc.gorlaeus.net/|Leiden Classical";
-		boinc_projects[17] = "http://home.edges-grid.eu/home/|EDGeS@Home";
-		boinc_projects[18] = "http://aerospaceresearch.net/constellation/|Constellation";
-		boinc_projects[19] = "http://www.enigmaathome.net/|Enigma@Home";
-		boinc_projects[20] = "http://lhcathomeclassic.cern.ch/sixtrack/|LHC@home 1.0";
-		boinc_projects[21] = "http://escatter11.fullerton.edu/nfs/|NFS@Home";
-		boinc_projects[22] = "http://numberfields.asu.edu/NumberFields/|NumberFields@home";
-		boinc_projects[23] = "http://sat.isa.ru/pdsat/|SAT@home";
-		boinc_projects[24] = "http://szdg.lpds.sztaki.hu/szdg/|SZTAKI Desktop Grid";
-		boinc_projects[25] = "http://www.gpugrid.net/|GPUGRID";
-		boinc_projects[26] = "http://convector.fsv.cvut.cz/|CONVECTOR";
-		boinc_projects[27] = "http://www.rechenkraft.net/yoyo/|yoyo@home";
-		// New Projects
-		boinc_projects[28] = "http://findah.ucd.ie/|FiND@Home";
-		boinc_projects[29] = "http://atlasathome.cern.ch/|ATLAS@Home";
-		boinc_projects[30] = "http://universeathometest.info/universe/|Universe@Home Test";
-		boinc_projects[31] = "http://www.bitcoinutopia.net/bitcoinutopia/|Bitcoin Utopia";
-		boinc_projects[32] = "http://lhcathome2.cern.ch/vLHCathome/vLHCathome/|VirtualLHC@home";
-		boinc_projects[33] = "http://volunteer.cs.und.edu/csg/|Citizen Science Grid";
-		boinc_projects[34] = "http://burp.renderfarming.net/|BURP";
-	    boinc_projects[35] = "http://mindmodeling.org/            |MindModeling@Beta";
-		boinc_projects[36] = "http://radioactiveathome.org/boinc/|Radioactive@Home";
-
 		for (int i = 0; i < 100; i++)
 		{
 			std::string proj = boinc_projects[i];
@@ -1168,7 +1112,7 @@ bool AppInit2()
 
     
 	// ********************************************************* Step 11: start node
-	uiInterface.InitMessage(_("Loading Network Averages..."));
+	uiInterface.InitMessage(_("Loading Persisted Data Cache..."));
 	// 
 	std::string sOut = "";
 	printf("Loading admin Messages");
@@ -1179,7 +1123,8 @@ bool AppInit2()
 
 	InitializeBoincProjects();
 	printf("Done loading boinc projects");
-
+	uiInterface.InitMessage(_("Loading Network Averages..."));
+	
 	TallyNetworkAverages(true);	
 	printf("Starting CPID thread...");
 	LoadCPIDsInBackground();  //This calls HarvesCPIDs(true)
