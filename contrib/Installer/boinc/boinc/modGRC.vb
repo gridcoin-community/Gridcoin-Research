@@ -591,7 +591,7 @@ Module modGRC
         Try
             ExtractZipFile(GetGRCAppDir() + "\galaza.zip", sDestDir)
             UpdateKey("galazaenabled", "true")
-            MsgBox("Installed Gridcoin Galaza Successfully!", MsgBoxStyle.Information)
+            MsgBox("Installed Gridcoin Galaza Successfully! (Next time you restart gridcoin, Galaza will be on the Advanced menu)", MsgBoxStyle.Information)
         Catch ex As Exception
             Log("Error while installing Galaza " + ex.Message)
             MsgBox("Error while installing Galaza " + ex.Message, MsgBoxStyle.Critical)

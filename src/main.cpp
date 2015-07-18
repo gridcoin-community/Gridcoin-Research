@@ -5109,7 +5109,7 @@ bool ComputeNeuralNetworkSupermajorityHashes()
 		for (int ii = nMaxDepth; ii > nMinDepth; ii--)
 		{
      					CBlockIndex* pblockindex = FindBlockByHeight(ii);
-						if (pblockindex == NULL || pblockindex->pnext == NULL || !pblockindex || !pblockindex->IsInMainChain()) break;
+						if (pblockindex == NULL || !pblockindex || !pblockindex->IsInMainChain()) break;
 						block.ReadFromDisk(pblockindex);
 						std::string hashboinc = "";
 						if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
