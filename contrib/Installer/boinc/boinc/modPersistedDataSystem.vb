@@ -92,12 +92,16 @@ Module modPersistedDataSystem
         lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
         For Each cpid As Row In lstCPIDs
             If cpid.DataColumn5 = "True" Then
-                ' If CDate(cpid.Added) < DateAdd(DateInterval.Day, -1, Now) Then
                     Dim sRow As String = cpid.PrimaryKey + "," + Num(cpid.Magnitude) + ";"
                     lTotal = lTotal + Val("0" + Trim(cpid.Magnitude))
-                lRows = lRows + 1
-                sOut += sRow
-            End If
+                    lRows = lRows + 1
+                    sOut += sRow
+                Else
+                    Dim sRow As String = cpid.PrimaryKey + ",00;"
+                    lTotal = lTotal + 0
+                    lRows = lRows + 1
+                    sOut += sRow
+                End If
         Next
         sOut += "</MAGNITUDES><AVERAGES>"
         Dim avg As Double

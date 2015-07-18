@@ -17,6 +17,8 @@ Module modGRC
         Dim Status As Boolean
         Dim OutputError As String
     End Structure
+    Private prodURL As String = "http://download.gridcoin.us/download/downloadstake/"
+    Private testURL As String = "http://download.gridcoin.us/download/downloadstaketestnet/"
 
     Public msGenericDictionary As New Dictionary(Of String, String)
     Public msRPCCommand As String = ""
@@ -547,15 +549,55 @@ Module modGRC
             Dim di As New DirectoryInfo(sBoincDir)
             di.Delete(True)
         Catch ex As Exception
-
         End Try
         Try
             ExtractZipFile(GetGRCAppDir() + "\boinc.zip", sBoincDir)
         Catch ex As Exception
+        End Try
+    End Sub
+    Public Function GetURL() As String
+        Return IIf(mbTestNet, testURL, prodURL)
+
+    End Function
+    Private Sub DownloadFile(ByVal sFile As String, Optional sServerFolder As String = "")
+        Dim sLocalPath As String = GetGRCAppDir()
+        Dim sLocalFile As String = sFile
+        Dim sLocalPathFile As String = sLocalPath + "\" + sLocalFile
+        Try
+            Kill(sLocalPathFile)
+        Catch ex As Exception
+            EventLog.WriteEntry("DownloadFile", "Cant find " + sFile + " " + ex.Message)
+        End Try
+        Dim sURL As String = GetURL() + sServerFolder + sFile
+        Dim myWebClient As New MyWebClient()
+        myWebClient.DownloadFile(sURL, sLocalPathFile)
+        System.Threading.Thread.Sleep(500)
+    End Sub
+
+    Public Sub InstallGalaza()
+        Dim sDestDir As String = GetGRCAppDir() + "\Galaza\"
+     
+        Try
+            System.IO.Directory.CreateDirectory(sDestDir)
+        Catch ex As Exception
 
         End Try
-
+        Try
+            DownloadFile("galaza.zip", "modules/")
+        Catch ex As Exception
+            MsgBox("Unable to download Galaza " + ex.Message, MsgBoxStyle.Critical)
+            Exit Sub
+        End Try
+        Try
+            ExtractZipFile(GetGRCAppDir() + "\galaza.zip", sDestDir)
+            UpdateKey("galazaenabled", "true")
+            MsgBox("Installed Gridcoin Galaza Successfully!", MsgBoxStyle.Information)
+        Catch ex As Exception
+            Log("Error while installing Galaza " + ex.Message)
+            MsgBox("Error while installing Galaza " + ex.Message, MsgBoxStyle.Critical)
+        End Try
     End Sub
+
     Public Function RestartWallet1(sParams As String)
         Dim p As Process = New Process()
         Dim pi As ProcessStartInfo = New ProcessStartInfo()
@@ -781,6 +823,7 @@ Module modGRC
             If sOut = "gridcoinrdtestharness.exe.exe" Or sOut = "gridcoinrdtestharness.exe" Then sOut = ""
             If sOut = "cgminer_base64.zip" Then sOut = ""
             If sOut = "signed" Then sOut = ""
+            If LCase(sOut) = "modules" Then sOut = ""
 
             Return Trim(sOut)
         Catch ex As Exception

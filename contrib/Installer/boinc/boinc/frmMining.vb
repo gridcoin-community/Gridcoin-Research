@@ -430,7 +430,12 @@ Public Class frmMining
 
     Private Sub ContractDetailsToolStripMenuItem_Click(sender As System.Object, e As System.EventArgs) Handles ContractDetailsToolStripMenuItem.Click
         Dim sData As String = GetMagnitudeContract()
-        MsgBox(sData)
+        Dim sMags As String = ExtractXML(sData, "<MAGNITUDE>")
+        Dim vCt() As String = Split(sMags, ";")
+
+        MsgBox(sData + " - Count " + Trim(vCt.Length()))
+
+
 
     End Sub
 
@@ -479,5 +484,14 @@ Public Class frmMining
             If pbSync.Visible = True Then pbSync.Visible = False : PopulateNeuralData()
             pbSync.Visible = False
         End If
+    End Sub
+
+    Private Sub PoolsToolStripMenuItem_Click(sender As System.Object, e As System.EventArgs) Handles PoolsToolStripMenuItem.Click
+
+    End Sub
+
+    Private Sub InstallGridcoinGalazaToolStripMenuItem_Click(sender As System.Object, e As System.EventArgs) Handles InstallGridcoinGalazaToolStripMenuItem.Click
+        InstallGalaza()
+
     End Sub
 End Class

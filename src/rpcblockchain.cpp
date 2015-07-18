@@ -34,7 +34,10 @@ extern std::string MyBeaconExists(std::string cpid);
 extern std::string AdvertiseBeacon(bool force);
 double Round(double d, int place);
 bool UnusualActivityReport();
-extern double GetSuperblockAvgMag(std::string superblock);
+extern double GetCountOf(std::string datatype);
+
+extern double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count);
+
 
 void TestScan();
 void TestScan2();
@@ -967,7 +970,7 @@ std::string ExtractValue(std::string data, std::string delimiter, int pos)
 
 
 
-double GetAverageInList(std::string superblock)
+double GetAverageInList(std::string superblock,double& out_count)
 {
 	std::vector<std::string> vSuperblock = split(superblock.c_str(),";");
 	if (vSuperblock.size() < 2) return 0;
@@ -987,21 +990,27 @@ double GetAverageInList(std::string superblock)
 				}
 			}
 	}
+	out_count = rows;
 	double avg = total_mag/(rows+.01);
 	return avg;
 
 }
 
 
-double GetSuperblockAvgMag(std::string data)
+double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count)
 {
 	std::string mags = ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>");
 	std::string avgs = ExtractXML(data,"<AVERAGES>","</AVERAGES>");
-	//7-16-2015
-	double avg_mag = GetAverageInList(mags);
-	double avg_avg = GetAverageInList(avgs);
-	if (avg_mag < 10 || avg_avg < 10) return 0;
-	return avg_mag + avg_avg;
+	//7-18-2015
+	double mag_count = 0;
+	double avg_count = 0;
+	double avg_of_mag = GetAverageInList(mags,mag_count);
+	double avg_of_avg = GetAverageInList(avgs,avg_count);
+	out_beacon_count = GetCountOf("beacon");
+	out_participant_count = mag_count;
+	if (avg_of_mag < 10 || avg_of_avg < 50000) return 0;
+	if (mag_count < out_beacon_count*.94 || mag_count > out_beacon_count*1.06) return 0;
+	return avg_of_mag + avg_of_avg;
 }
 
 
@@ -1323,6 +1332,12 @@ bool InsertSmartContract(std::string URL, std::string name)
 }
 
 
+double GetCountOf(std::string datatype)
+{
+	std::string data = GetListOf(datatype);
+  	std::vector<std::string> vScratchPad = split(data.c_str(),"<ROW>");
+	return vScratchPad.size()+1;
+}
 
 std::string GetListOf(std::string datatype)
 {
@@ -2123,24 +2138,32 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "superblockaverage")
 	{
-		std::string superblock = ReadCache("superblock","magnitudes");
-		double avg = GetSuperblockAvgMag(superblock);
+		std::string superblock = ReadCache("superblock","all");
+		double out_beacon_count = 0;
+		double out_participant_count = 0;
+		double avg = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count);
 		entry.push_back(Pair("avg",avg));
+		entry.push_back(Pair("beacon_count",out_beacon_count));
+		entry.push_back(Pair("beacon_participant_count",out_participant_count));
 		results.push_back(entry);
 	
 	}
 	else if (sItem == "currentcontractaverage")
 	{
-		//7-17-2015
+		//7-18-2015
 		std::string contract = "";
 		#if defined(WIN32) && defined(QT_GUI)
 					contract = qtGetNeuralContract("");
 		#endif
 		entry.push_back(Pair("Contract",contract));
-		double avg = GetSuperblockAvgMag(contract);
-		entry.push_back(Pair("avg",avg));
-		results.push_back(entry);
+		double out_beacon_count = 0;
+		double out_participant_count = 0;
 	
+		double avg = GetSuperblockAvgMag(contract,out_beacon_count,out_participant_count);
+		entry.push_back(Pair("avg",avg));
+		entry.push_back(Pair("beacon_count",out_beacon_count));
+		entry.push_back(Pair("beacon_participant_count",out_participant_count));
+		results.push_back(entry);
 		
 	}
 	else if (sItem == "getlistof")

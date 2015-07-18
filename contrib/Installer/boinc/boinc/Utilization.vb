@@ -15,7 +15,7 @@ Public Class Utilization
 
     Public ReadOnly Property Version As Double
         Get
-            Return 393
+            Return 394
         End Get
     End Property
 
@@ -66,7 +66,7 @@ Public Class Utilization
     End Sub
     Public Sub StartGalaza()
         Dim p As New Process
-        p = Process.Start(GetGRCAppDir() + "\GridcoinGalaza.exe")
+        p = Process.Start(GetGRCAppDir() + "\Galaza\GridcoinGalaza.exe")
     End Sub
     Public Sub StopWireFrameRenderer()
         If Not mfrmWireFrame Is Nothing Then

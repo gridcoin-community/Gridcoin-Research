@@ -96,6 +96,7 @@ extern void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std
 extern void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double magnitude);
 extern void qtSyncWithDPORNodes(std::string data);
 extern double qtExecuteGenericFunction(std::string function,std::string data);
+std::string GetArgument(std::string arg, std::string defaultvalue);
 
 extern std::string FromQString(QString qs);
 extern std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
@@ -1040,8 +1041,14 @@ void BitcoinGUI::createMenuBar()
 	qmAdvanced->addAction(tickerAction);
 	qmAdvanced->addAction(ticketListAction);
 	qmAdvanced->addAction(newUserWizardAction);
-	qmAdvanced->addSeparator();
-	qmAdvanced->addAction(galazaAction);
+
+
+	std::string GalazaEnabled = GetArgument("galazaenabled", "false");
+	if (GalazaEnabled=="true")
+	{
+    	qmAdvanced->addSeparator();
+		qmAdvanced->addAction(galazaAction);
+	}
 
 
 }

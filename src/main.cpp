@@ -63,7 +63,7 @@ extern bool LoadSuperblock(std::string data, int64_t nTime, double height);
 extern CBlockIndex* GetHistoricalMagnitude(std::string cpid,int nStartHeight);
 
 
-double GetSuperblockAvgMag(std::string superblock);
+double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count);
 
 
 extern StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
@@ -2768,21 +2768,12 @@ std::string PubKeyToAddress(const CScript& scriptPubKey)
 
 bool LoadSuperblock(std::string data, int64_t nTime, double height)
 {
-	if (Contains(data,"<AVERAGES>"))
-	{
 		WriteCache("superblock","magnitudes",ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>"),nTime);
 		WriteCache("superblock","averages",ExtractXML(data,"<AVERAGES>","</AVERAGES>"),nTime);
+		WriteCache("superblock","all",data,nTime);
 		WriteCache("superblock","block_number",RoundToString(height,0),nTime);
 		TallyMagnitudesInSuperblock();
 		return true;
-	}
-	else
-	{
-		WriteCache("superblock","magnitudes",data,nTime);
-		WriteCache("superblock","block_number",RoundToString(height,0),nTime);
-		TallyMagnitudesInSuperblock();
-		return true;
-	}
 }
 
 
@@ -3031,7 +3022,10 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			// Only reject superblock when it is new:
 			if (IsLockTimeWithinMinutes(GetBlockTime(),15))
 			{ 
-				double avg_mag = GetSuperblockAvgMag(bb.superblock);
+				double out_beacon_count=0;
+				double out_participant_count=0;
+
+				double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count);
 				if (avg_mag < 10)
 				{
 					return error("ConnectBlock[] : Superblock avg mag below 10; SuperblockHash: %s, Consensus Hash: %s",
@@ -3043,13 +3037,12 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 										neural_hash.c_str(), consensus_hash.c_str());
 		
 				}
-				//7-16-2015
 	
 			}
 		}
 		/*
 		--Commenting this out as of now, we will let the superblock load in TllyNtworkAverages in approx 15 blocks... so the network loads it in a synchronized fashion
-		double avg_mag = GetSuperblockAvgMag(bb.superblock);
+		double avg_mag = GetSuperlockAvMag(bb.superblock);
 		if (avg_mag > 10)
 		{
 			LoadSuperblock(bb.superblock,GetBlockTime(),(double)pindex->nHeight);
@@ -3932,7 +3925,10 @@ void GridcoinServices()
 				#if defined(WIN32) && defined(QT_GUI)
 					contract = qtGetNeuralContract("");
 				#endif
-				double avg_mag = GetSuperblockAvgMag(contract);
+				double out_beacon_count = 0;
+				double out_participant_count = 0;
+
+				double avg_mag = GetSuperblockAvgMag(contract,out_beacon_count,out_participant_count);
 				if (avg_mag > 10)
 				{
 						bool bResult = AsyncNeuralRequest("quorum","gridcoin",25);
@@ -5113,6 +5109,7 @@ bool ComputeNeuralNetworkSupermajorityHashes()
 		for (int ii = nMaxDepth; ii > nMinDepth; ii--)
 		{
      					CBlockIndex* pblockindex = FindBlockByHeight(ii);
+						if (pblockindex == NULL || pblockindex->pnext == NULL || !pblockindex || !pblockindex->IsInMainChain()) break;
 						block.ReadFromDisk(pblockindex);
 						std::string hashboinc = "";
 						if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
@@ -5140,6 +5137,12 @@ MiningCPID GetBoincBlockByHeight(int ii, double& mint, int64_t& nTime)
 	CBlock block;
 	MiningCPID bb;
 	CBlockIndex* pblockindex = FindBlockByHeight(ii);
+	bb.initialized=false;
+	if (pblockindex == NULL) return bb;
+	if (pblockindex->pnext == NULL) return bb;
+	if (!pblockindex || !pblockindex->IsInMainChain()) return bb;
+	
+
 	if (block.ReadFromDisk(pblockindex))
 	{
 		nTime = block.nTime;
@@ -5147,6 +5150,7 @@ MiningCPID GetBoincBlockByHeight(int ii, double& mint, int64_t& nTime)
 		mint = CoinToDouble(pblockindex->nMint);
 		if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
 		bb = DeserializeBoincBlock(hashboinc);
+		bb.initialized=true;
 		return bb;
 	}
 	return bb;
@@ -5228,23 +5232,25 @@ bool TallyNetworkAverages(bool ColdBoot)
 					{
      					
 						MiningCPID bb = GetBoincBlockByHeight(ii,mint,nTime);
-						NetworkPayments += bb.ResearchSubsidy;
-					    if (!superblockloaded && bb.superblock.length() > 20)
+						if (bb.initialized)
 						{
-							if (fDebug3) printf(".30.");
-							double avg_mag = GetSuperblockAvgMag(bb.superblock);
-							if (fDebug3) printf(".31.");
-							if (avg_mag > 10)
+							NetworkPayments += bb.ResearchSubsidy;
+							if (!superblockloaded && bb.superblock.length() > 20)
 							{
-									LoadSuperblock(bb.superblock,nTime,ii);
-							    	if (fDebug3) printf(".33.");
-									superblockloaded=true;
+								double out_beacon_count = 0;
+								double out_participant_count = 0;
+								double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count);
+								if (avg_mag > 10)
+								{
+										LoadSuperblock(bb.superblock,nTime,ii);
+										superblockloaded=true;
+										if (fDebug3) printf(" SBL ");
+								}
 							}
+							iRow++;
+							// Insert CPID, Magnitude, Payments
+							AddNetworkMagnitude((double)ii,nTime,bb.cpid,bb,mint);
 						}
-						iRow++;
-					    ////////////////////	// Tally the Network Stats for all Projects:
-						// Insert CPID, Magnitude, Payments
-						AddNetworkMagnitude((double)ii,nTime,bb.cpid,bb,mint);
 					}
 						
 				
@@ -6791,7 +6797,7 @@ std::string GetNeuralNetworkSuperBlock()
 			std::string contract = "";
 			#if defined(WIN32) && defined(QT_GUI)
 				contract = qtGetNeuralContract("");
-				if (fDebug3) printf("including superblock %f\r\n",(double)contract.length());
+				if (fDebug && LessVerbose(10)) printf("AppendSB %f\r\n",(double)contract.length());
 			#endif
 			return contract;
 		}
@@ -7043,9 +7049,6 @@ std::string GetNetsoftProjects(std::string cpid)
 
 
 
-
-
-
 void CreditCheck(std::string cpid, bool clearcache)
 {
 	try {
@@ -7069,18 +7072,12 @@ void CreditCheck(std::string cpid, bool clearcache)
 					std::string rac    = ExtractXML(vCC[i],"<expavg_credit>","</expavg_credit>");
 					std::string team   = ExtractXML(vCC[i],"<team_name>","</team_name>");
 					std::string rectime= ExtractXML(vCC[i],"<expavg_time>","</expavg_time>");
+					std::string proj_id= ExtractXML(vCC[i],"<project_id>","</project_id>");
+
 					boost::to_lower(sProj);
 					sProj = ToOfficialName(sProj);
-					//1-11-2015 Rob Halford - List of Exceptions to Map Netsoft Name -> Boinc Client Name
-					//Halford: In this convoluted situation, we found MindModeling@beta in the Boinc client, and MindModeling@Home in the Netsoft XML;
-					if (sProj == "mindmodeling@home") sProj = "mindmodeling@beta";
-					if (sProj == "Quake Catcher Network") sProj = "Quake-Catcher Network";
-		
-					//Is project Valid
-					bool projectvalid = ProjectIsValid(sProj);
-					if (!projectvalid) sProj = "";
-				
-					if (sProj.length() > 3) 
+										
+					if (sProj.length() > 3 && !proj_id.empty())
 					{
 						//7-16-2015
 						StructCPID structcc = GetInitializedStructCPID2(sProj,mvCPIDs);
@@ -7091,6 +7088,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 						structcc.verifiedteam = team;
 						if (structcc.verifiedteam != "gridcoin") structcc.rac = -1;
 						structcc.verifiedrectime = cdbl(rectime,0);
+						structcc.verifiedrac = cdbl(rac,0);
 						structcc.rac = cdbl(rac,0);
 						double currenttime =  GetAdjustedTime();
 						double nActualTimespan = currenttime - structcc.verifiedrectime;
@@ -7132,7 +7130,9 @@ bool ProjectIsValid(std::string project)
 std::string ToOfficialName(std::string proj)
 {
 
-			if (fTestNet) return ToOfficialNameNew(proj);
+			return ToOfficialNameNew(proj);
+
+			/*
 			boost::to_lower(proj);
 			//Convert local XML project name [On the Left] to official [Netsoft] projectname:
 			if (proj=="boincsimap")             proj = "simap";
@@ -7150,6 +7150,7 @@ std::string ToOfficialName(std::string proj)
 			if (proj=="find@home")              proj = "fightmalaria";
 			if (proj=="virtuallhc@home")        proj = "vLHCathome";
 			return proj; 
+			*/
 }
 
 std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr)
@@ -7404,6 +7405,12 @@ void HarvestCPIDs(bool cleardata)
 				{
 					structcpid.Iscpidvalid = false;
 					structcpid.errors = "RAC too low";
+				}
+
+				if (structcpid.verifiedrac < 10)
+				{
+					structcpid.Iscpidvalid = false;
+					structcpid.errors="Verified RAC too low";
 				}
 
 				if (structcpid.team != "gridcoin")

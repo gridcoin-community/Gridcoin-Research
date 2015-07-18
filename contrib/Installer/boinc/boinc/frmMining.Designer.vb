@@ -78,6 +78,7 @@ Partial Class frmMining
         Me.Label3 = New System.Windows.Forms.Label()
         Me.pbSync = New System.Windows.Forms.ProgressBar()
         Me.TimerSync = New System.Windows.Forms.Timer(Me.components)
+        Me.InstallGridcoinGalazaToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         CType(Me.Chart1, System.ComponentModel.ISupportInitialize).BeginInit()
         CType(Me.ChartUtilization, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.MenuStrip1.SuspendLayout()
@@ -262,9 +263,10 @@ Partial Class frmMining
         '
         'PoolsToolStripMenuItem
         '
+        Me.PoolsToolStripMenuItem.DropDownItems.AddRange(New System.Windows.Forms.ToolStripItem() {Me.InstallGridcoinGalazaToolStripMenuItem})
         Me.PoolsToolStripMenuItem.Name = "PoolsToolStripMenuItem"
-        Me.PoolsToolStripMenuItem.Size = New System.Drawing.Size(48, 20)
-        Me.PoolsToolStripMenuItem.Text = "Pools"
+        Me.PoolsToolStripMenuItem.Size = New System.Drawing.Size(114, 20)
+        Me.PoolsToolStripMenuItem.Text = "Optional Modules"
         '
         'TabControl1
         '
@@ -581,6 +583,12 @@ Partial Class frmMining
         Me.TimerSync.Enabled = True
         Me.TimerSync.Interval = 1100
         '
+        'InstallGridcoinGalazaToolStripMenuItem
+        '
+        Me.InstallGridcoinGalazaToolStripMenuItem.Name = "InstallGridcoinGalazaToolStripMenuItem"
+        Me.InstallGridcoinGalazaToolStripMenuItem.Size = New System.Drawing.Size(190, 22)
+        Me.InstallGridcoinGalazaToolStripMenuItem.Text = "Install Gridcoin Galaza"
+        '
         'frmMining
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
@@ -666,4 +674,5 @@ Partial Class frmMining
     Friend WithEvents Label3 As System.Windows.Forms.Label
     Friend WithEvents pbSync As System.Windows.Forms.ProgressBar
     Friend WithEvents TimerSync As System.Windows.Forms.Timer
+    Friend WithEvents InstallGridcoinGalazaToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
 End Class
