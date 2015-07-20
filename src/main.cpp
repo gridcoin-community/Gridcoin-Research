@@ -28,6 +28,13 @@
 #include "cpid.h"
 
 int DownloadBlocks();
+
+
+bool CPIDAcidTest(std::string boincruntimepublickey);
+
+
+double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,bool bIgnoreBeacons);
+
 extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern std::string VectorToString(std::vector<unsigned char> v);
 extern bool UnusualActivityReport();
@@ -63,7 +70,6 @@ extern bool LoadSuperblock(std::string data, int64_t nTime, double height);
 extern CBlockIndex* GetHistoricalMagnitude(std::string cpid,int nStartHeight);
 
 
-double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count);
 
 
 extern StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
@@ -122,6 +128,9 @@ extern void RemoveNetworkMagnitude(double LockTime, std::string cpid, MiningCPID
 unsigned int WHITELISTED_PROJECTS = 0;
 unsigned int CHECKPOINT_VIOLATIONS = 0;
 int64_t nLastTallied = 0;
+
+int64_t nLastTalliedNeural = 0;
+
 int64_t nLastLoadAdminMessages = 0;
 int64_t nCPIDsLoaded = 0;
 int64_t nLastGRCtallied = 0;
@@ -185,7 +194,7 @@ extern bool IsLockTimeWithinMinutes(double locktime, int minutes);
 double GetNetworkProjectCountWithRAC();
 extern double CalculatedMagnitude(int64_t locktime,bool bUseLederstrumpf);
 extern int64_t GetCoinYearReward(int64_t nTime);
-extern void AddNetworkMagnitude(double height,double LockTime, std::string cpid, MiningCPID bb, double mint);
+extern void AddNetworkMagnitude(double height,double LockTime, std::string cpid, MiningCPID bb);
 
 
 map<uint256, CBlockIndex*> mapBlockIndex;
@@ -345,7 +354,9 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    OrganizationKey = "";
  std::string    msNeuralResponse = "";
  //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
- int nGrandfather = fTestNet ? 27444 : 267500;
+ 
+ int nGrandfather = fTestNet ? 27444 : 278000;
+
  int nNewIndex = fTestNet ? 28286 : 271625;
 
  //GPU Projects:
@@ -3025,7 +3036,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 				double out_beacon_count=0;
 				double out_participant_count=0;
 
-				double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count);
+				double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,false);
 				if (avg_mag < 10)
 				{
 					return error("ConnectBlock[] : Superblock avg mag below 10; SuperblockHash: %s, Consensus Hash: %s",
@@ -3882,32 +3893,45 @@ void GridcoinServices()
 		printf("Daily backup results: %s\r\n",backup_results.c_str());
 	}
 
-	//As a team, tally network averages at the exact same time (Either way, tally uses a consensus driven start and end block to assess payments owed)
-	if ((nBestHeight % 20) == 0)
-	{
-			    TallyInBackground();
-	}
-
-	if (TimerMain("ResetVars",15))
+	if (TimerMain("ResetVars",5))
 	{
 		bTallyStarted = false;
 	}
 
-	if ((nBestHeight % 5) == 0)
+	int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+	if (superblock_age > 12*60*60)
 	{
-		ComputeNeuralNetworkSupermajorityHashes();
-	}
+		if ((nBestHeight % 3) == 0)
+		{
+			ComputeNeuralNetworkSupermajorityHashes();
+		}
+		//When superblock is old, Tally every 10 mins:
+		if ((nBestHeight % 10) == 0)
+		{
+		    TallyInBackground();
+		}
 
+	}
+	else
+	{
+		// When superblock is not old, Tally every 20 mins:
+		if ((nBestHeight % 20) == 0)
+		{
+			    TallyInBackground();
+				ComputeNeuralNetworkSupermajorityHashes();
+		}
+
+	}
+	
+	
 	// Every N blocks as a Synchronized TEAM:
 	if ((nBestHeight % 30) == 0)
 	{
 		//Sync RAC with neural network IF superblock is over 24 hours Old, Or if we have No superblock (in case of the latter, age will be 45 years old)
-		int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
 		// Note that nodes will NOT accept superblocks without a supermajority hash, so the last block will not be in memory unless it is a good superblock.
 		// Let's start syncing the neural network as soon as the LAST superblock is over 12 hours old.
 		// Also, lets do this as a TEAM exactly every 30 blocks (~30 minutes) to try to reach an EXACT consensus every half hour:
 		// For effeciency, the network sleeps for 20 hours after a good superblock is accepted
-
 		if (superblock_age > 12*60*60)
 		{
 			FullSyncWithDPORNodes();
@@ -3917,7 +3941,6 @@ void GridcoinServices()
 	if (( (nBestHeight-10) % 30 ) == 0)
 	{
 			// 10 Blocks after the network started syncing the neural network as a team, ask the neural network to come to a quorum
-			int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
 			if (superblock_age > 12*60*60)
 			{
 				// First verify my node has a synced contract
@@ -3928,7 +3951,7 @@ void GridcoinServices()
 				double out_beacon_count = 0;
 				double out_participant_count = 0;
 
-				double avg_mag = GetSuperblockAvgMag(contract,out_beacon_count,out_participant_count);
+				double avg_mag = GetSuperblockAvgMag(contract,out_beacon_count,out_participant_count,false);
 				if (avg_mag > 10)
 				{
 						bool bResult = AsyncNeuralRequest("quorum","gridcoin",25);
@@ -3947,11 +3970,6 @@ void GridcoinServices()
 		}
 	}
 
-	if (TimerMain("TallyDPORMagnitude",20))
-	{
-		bool result = TallyMagnitudesInSuperblock();
-	}
-
 	if (TimerMain("GridcoinPersistedDataSystem",5))
 	{
 		std::string errors1 = "";
@@ -3968,11 +3986,11 @@ void GridcoinServices()
 		}
 	}
 
-	if (TimerMain("gather_cpids",45))
+	if (TimerMain("gather_cpids",1000))
 	{
-			if (fDebug) printf("\r\nReharvesting cpids in background thread...\r\n");
-			LoadCPIDsInBackground();
-			printf(" {CPIDs Re-Loaded} ");
+			//if (fDebug) printf("\r\nReharvesting cpids in background thread...\r\n");
+			//LoadCPIDsInBackground();
+			//printf(" {CPIDs Re-Loaded} ");
 	}
 
 	if (TimerMain("check_for_autoupgrade",240))
@@ -4896,10 +4914,7 @@ void AdjustTimestamps(StructCPID& strCPID, double timestamp, double subsidy)
 
 
 
-
-
-void AddNetworkMagnitude(double height, double LockTime, std::string cpid, 
-		MiningCPID bb, double mint)
+void AddNetworkMagnitude(double height, double LockTime, std::string cpid, MiningCPID bb)
 {
         StructCPID stMag = GetInitializedStructCPID2(cpid,mvMagnitudes);
 		stMag.cpid = cpid;
@@ -4908,12 +4923,9 @@ void AddNetworkMagnitude(double height, double LockTime, std::string cpid,
 		stMag.projectname = bb.projectname;
 		stMag.rac += bb.rac;
 		stMag.entries++;
-
-		double interest = (double)mint - (double)bb.ResearchSubsidy;
 		stMag.payments += bb.ResearchSubsidy;
 		stMag.interestPayments += bb.InterestSubsidy;
 		AdjustTimestamps(stMag,LockTime,bb.ResearchSubsidy);
-		
 		// Per RTM 6-27-2015 - Track detailed payments made to each CPID
 		stMag.PaymentTimestamps         += RoundToString(LockTime,0) + ",";
 		stMag.PaymentAmountsResearch    += RoundToString(bb.ResearchSubsidy,2) + ",";
@@ -4924,92 +4936,11 @@ void AddNetworkMagnitude(double height, double LockTime, std::string cpid,
 	    double total_owed = 0;
 	    stMag.owed = GetOutstandingAmountOwed(stMag,cpid,LockTime,total_owed,bb.Magnitude);
 	    stMag.totalowed = total_owed;
-	    // If CPID is invalid (should not be able to happen since block is rejected) but for security, make total owed 0
-	    bool bValid = IsCPIDValidv2(bb,height);
-	    if (!bValid) 
-	    {
-				stMag.owed=0;
-				stMag.totalowed=0;
-	    }
 	    mvMagnitudes[cpid] = stMag;
 }
 
 
 
-
-
-
-
-
-void AddNetworkMagnitude_Retire(double height,CTransaction& wtxCryptoLottery, double LockTime, std::string cpid, 
-		MiningCPID bb, double mint, bool IsStake)
-{
-       
-		StructCPID structMagnitude = GetInitializedStructCPID2(cpid,mvMagnitudes);
-		structMagnitude.cpid = cpid;
-		structMagnitude.GRCAddress = bb.GRCAddress;
-		structMagnitude.LastBlock = height;
-		structMagnitude.projectname = bb.projectname;
-		structMagnitude.entries++;
-
-		double interest = (double)mint - (double)bb.ResearchSubsidy;
-		structMagnitude.payments += bb.ResearchSubsidy;
-		
-		structMagnitude.interestPayments += bb.InterestSubsidy;
-		AdjustTimestamps(structMagnitude,LockTime,bb.ResearchSubsidy);
-		
-		// Per RTM 6-27-2015 - Track detailed payments made to each CPID
-		structMagnitude.PaymentTimestamps         += RoundToString(LockTime,0) + ",";
-		structMagnitude.PaymentAmountsResearch    += RoundToString(bb.ResearchSubsidy,2) + ",";
-		structMagnitude.PaymentAmountsInterest    += RoundToString(bb.InterestSubsidy,2) + ",";
-		structMagnitude.PaymentAmountsBlocks      += RoundToString((double)height,0) + ",";
-     	mvMagnitudes[cpid] = structMagnitude;
-	    // CryptoLottery : Add amounts PAID through DPOR/CryptoLottery to the CPID 
-	    if (bCryptoLotteryEnabled && height > nGrandfather)
-		{
-				if (wtxCryptoLottery.vout.size() >= 2)
-				{
-					for (unsigned int i = 2; i < wtxCryptoLottery.vout.size();i++)
-					{
-						std::string Recipient = PubKeyToAddress(wtxCryptoLottery.vout[i].scriptPubKey);
-						double      Amount    = CoinToDouble(wtxCryptoLottery.vout[i].nValue);
-						std::string CLcpid    = CPIDByAddress(Recipient);
-						if (!CLcpid.empty() && Amount > 0)
-						{
-							StructCPID structCryptoLottery = GetInitializedStructCPID2(CLcpid,mvMagnitudes);
-							structCryptoLottery.payments += Amount;
-							structCryptoLottery.GRCAddress = Recipient;
-							structCryptoLottery.LastBlock = height;
-							AdjustTimestamps(structCryptoLottery,LockTime,Amount);
-							StructCPID strCLGRC = GetInitializedStructCPID2(Recipient,mvMagnitudes);
-							AdjustTimestamps(strCLGRC,LockTime,Amount);
-							structCryptoLottery.PaymentTimestamps       += RoundToString(LockTime,0)+",";
-							structCryptoLottery.PaymentAmountsResearch  += RoundToString(Amount,2) + ",";
-							structCryptoLottery.PaymentAmountsInterest  += RoundToString(0,2) + ",";
-							structCryptoLottery.PaymentAmountsBlocks    += RoundToString((double)height,0) + ",";
-							structCryptoLottery.cpid = CLcpid;
-							mvMagnitudes[Recipient] = strCLGRC;
-							mvMagnitudes[CLcpid] = structCryptoLottery;
-						}
-					}
-		      }
-	   }
-
-  	   structMagnitude = GetInitializedStructCPID2(cpid,mvMagnitudes);
-	   structMagnitude.AverageRAC = structMagnitude.rac / (structMagnitude.entries+.01);
-	   double total_owed = 0;
-	   mvMagnitudes[cpid] = structMagnitude;
-	   structMagnitude.owed = GetOutstandingAmountOwed(structMagnitude,cpid,LockTime,total_owed,bb.Magnitude);
-	   structMagnitude.totalowed = total_owed;
-	   // If CPID is invalid (should not be able to happen since block is rejected) but for security, make total owed 0
-	   bool bValid = IsCPIDValidv2(bb,height);
-	   if (!bValid) 
-	   {
-				structMagnitude.owed=0;
-				structMagnitude.totalowed=0;
-	   }
-	   mvMagnitudes[cpid] = structMagnitude;
-}
 
 
 
@@ -5063,7 +4994,6 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 
 
 
-
 	
 StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef)
 {
@@ -5092,13 +5022,17 @@ StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, Stru
 bool ComputeNeuralNetworkSupermajorityHashes()
 {
     if (nBestHeight < 15)  return true;
-	
+	if (IsLockTimeWithinMinutes(nLastTalliedNeural,2)) 
+	{
+		return true;
+	}
+
+	nLastTalliedNeural = GetAdjustedTime();
 	//Clear the neural network hash buffer
 	if (mvNeuralNetworkHash.size() > 0)  mvNeuralNetworkHash.clear();
 	//Clear the votes
 	ClearCache("neuralsecurity");
 	if (fDebug3) printf(".10.");
-	LOCK(cs_main);
 	try 
 	{
 		int nMaxDepth = nBestHeight;
@@ -5108,14 +5042,14 @@ bool ComputeNeuralNetworkSupermajorityHashes()
 		CBlock block;
 		for (int ii = nMaxDepth; ii > nMinDepth; ii--)
 		{
-     					CBlockIndex* pblockindex = FindBlockByHeight(ii);
-						if (pblockindex == NULL || !pblockindex || !pblockindex->IsInMainChain()) break;
-						block.ReadFromDisk(pblockindex);
-						std::string hashboinc = "";
-						if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
-						MiningCPID bb = DeserializeBoincBlock(hashboinc);
-						//Increment Neural Network Hashes Supermajority (over the last N blocks)
-						IncrementNeuralNetworkSupermajority(bb.NeuralHash,bb.GRCAddress,(nMaxDepth-ii)+10);
+   				CBlockIndex* pblockindex = FindBlockByHeight(ii);
+				if (pblockindex == NULL || !pblockindex || !pblockindex->IsInMainChain()) break;
+				block.ReadFromDisk(pblockindex);
+				std::string hashboinc = "";
+				if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
+				MiningCPID bb = DeserializeBoincBlock(hashboinc);
+				//Increment Neural Network Hashes Supermajority (over the last N blocks)
+				IncrementNeuralNetworkSupermajority(bb.NeuralHash,bb.GRCAddress,(nMaxDepth-ii)+10);
 		}
 
 		if (fDebug3) printf(".11.");
@@ -5182,56 +5116,36 @@ bool TallyNetworkAverages(bool ColdBoot)
 		return true;
 	}
 
-	if (IsLockTimeWithinMinutes(nLastTallied,10)) 
+	if (IsLockTimeWithinMinutes(nLastTallied,5)) 
 	{
 		bNetAveragesLoaded=true;
 		return true;
 	}
 
 	if (bTallyStarted) return true;
-
 	bTallyStarted = true;
 	printf("Gathering network avgs (begin)\r\n");
 	nLastTallied = GetAdjustedTime();
 	bNetAveragesLoaded = false;
 	bool superblockloaded = false;
-	//Clear the neural network hash buffer
-	if (mvNeuralNetworkHash.size() > 0)  mvNeuralNetworkHash.clear();
-	//Clear the votes
-	ClearCache("neuralsecurity");
-	//ClearCache("stakedbyaddress");
 	double NetworkPayments = 0;
-	//Remove the lock for main, and run this in the background thread.
 	//This function is not thread safe, but the above mutex keeps any 2nd copies from running at the same time.
-
 	//LOCK(cs_main);
 	double mint = 0;
 	try 
 	{
 					//7-5-2015 - R Halford - Start block and End block must be an exact range agreed by the network:
-
 					int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
 					int nLookback = BLOCKS_PER_DAY*14; //Daily block count * Lookback in days = 14 days
 					int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
 					if (fDebug3) printf("START BLOCK %f, END BLOCK %f",(double)nMaxDepth,(double)nMinDepth);
-
 					if (nMinDepth < 2)              nMinDepth = 2;
-					if (mvNetwork.size() > 0)       mvNetwork.clear();
-
-					//mvMagnitudes holds Payments per CPID, and Payment Details per cpid:
 					if (mvMagnitudes.size() > 0) 	mvMagnitudes.clear();
-					if (fDebug3) printf(".1.");
 					int iRow = 0;
-					double NetworkRAC = 0;
-					double NetworkProjects = 0;
-					double NetworkMagnitude = 0;
-					double NetworkAvgMagnitude = 0;
-					double NetworkPayments = 0;
 					int64_t nTime = 0;
 					for (int ii = nMaxDepth; ii > nMinDepth; ii--)
 					{
-     					
-						MiningCPID bb = GetBoincBlockByHeight(ii,mint,nTime);
+     					MiningCPID bb = GetBoincBlockByHeight(ii,mint,nTime);
 						if (bb.initialized)
 						{
 							NetworkPayments += bb.ResearchSubsidy;
@@ -5239,7 +5153,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 							{
 								double out_beacon_count = 0;
 								double out_participant_count = 0;
-								double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count);
+								double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,true);
 								if (avg_mag > 10)
 								{
 										LoadSuperblock(bb.superblock,nTime,ii);
@@ -5249,28 +5163,20 @@ bool TallyNetworkAverages(bool ColdBoot)
 							}
 							iRow++;
 							// Insert CPID, Magnitude, Payments
-							AddNetworkMagnitude((double)ii,nTime,bb.cpid,bb,mint);
+							AddNetworkMagnitude((double)ii,nTime,bb.cpid,bb);
 						}
 					}
-						
-				
-					if (fDebug3) printf("Network consensus..");
-					StructCPID net = GetInitializedStructCPID2("NETWORK",mvNetwork);
-					net.projectname="NETWORK";
-					net.rac = NetworkRAC;
-					net.NetworkProjects = NetworkProjects;
-					net.payments = NetworkPayments;
-					// Total magnitudes for each cpid:
-					mvNetwork["NETWORK"] = net;
+					
+					StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
+					network.projectname="NETWORK";
+					network.payments = NetworkPayments;
+					mvNetwork["NETWORK"] = network;
 					if (fDebug3) printf("TallyMagnitudesInSuperblock()");
 					TallyMagnitudesInSuperblock();
-					if (fDebug3) printf("ComputeNeuralNetworkSupermajorityHashes()");
-					ComputeNeuralNetworkSupermajorityHashes();
 					bNetAveragesLoaded = true;
 					if (fDebug3) printf(".Done.\r\n");
 					bTallyStarted = false;
 					return true;
-		
 	}
 	catch (std::exception &e) 
 	{
@@ -7353,7 +7259,7 @@ void HarvestCPIDs(bool cleardata)
 			boost::to_lower(proj);
             proj = ToOfficialName(proj);
 			bool projectvalid = ProjectIsValid(proj);			//Is project Valid
-
+			int64_t nStart = GetTimeMillis();
 			if (cpidhash.length() > 5 && proj.length() > 3) 
 			{
 				std::string cpid_non = cpidhash+email;
@@ -7365,25 +7271,14 @@ void HarvestCPIDs(bool cleardata)
 				boost::to_lower(team);
 				structcpid.team = team;
 				InitializeProjectStruct(structcpid);
-				if (fDebug3) printf("Enumerating boinc local project %s cpid %s valid %s",structcpid.projectname.c_str(),structcpid.cpid.c_str(),YesNo(structcpid.Iscpidvalid).c_str());
+				int64_t elapsed = GetTimeMillis()-nStart;
+				if (fDebug3) printf("Enumerating boinc local project %s cpid %s valid %s, elapsed %f ",structcpid.projectname.c_str(),structcpid.cpid.c_str(),YesNo(structcpid.Iscpidvalid).c_str(),(double)elapsed);
 				structcpid.rac = cdbl(rac,0);
-				
 				if (!structcpid.Iscpidvalid)
 				{
 					structcpid.errors = "CPID calculation invalid.  Check e-mail + reset project.";
 				}
-				else
-				{
-						GlobalCPUMiningCPID.cpidhash = cpidhash;
-						GlobalCPUMiningCPID.email = email;
-						GlobalCPUMiningCPID.boincruntimepublickey = cpidhash;
-						if (structcpid.rac > 10 && structcpid.team=="gridcoin")
-
-						{
-							msPrimaryCPID = structcpid.cpid;
-						}
-				}
-
+		
 				structcpid.utc = cdbl(utc,0);
 				structcpid.rectime = cdbl(rectime,0);
 				double currenttime =  GetAdjustedTime();
@@ -7418,7 +7313,27 @@ void HarvestCPIDs(bool cleardata)
 					structcpid.Iscpidvalid = false;
 					structcpid.errors = "Team invalid";
 				}
-				
+		
+				bool bAcid = CPIDAcidTest(cpidhash);
+				if (!bAcid)
+				{
+					structcpid.Iscpidvalid = false;
+					structcpid.errors = "CPID corrupted";
+				}
+
+				if (structcpid.Iscpidvalid)
+				{
+						GlobalCPUMiningCPID.cpidhash = cpidhash;
+						GlobalCPUMiningCPID.email = email;
+						GlobalCPUMiningCPID.boincruntimepublickey = cpidhash;
+						if (structcpid.rac > 10 && structcpid.team=="gridcoin")
+						{
+							msPrimaryCPID = structcpid.cpid;
+						}
+				}
+
+
+
 				mvCPIDs[proj] = structcpid;
 			    if (fDebug) printf("Adding Local Project %s",structcpid.cpid.c_str());
 
@@ -7463,7 +7378,7 @@ void ThreadCPIDs()
 	bCPIDsLoaded = true;
 	//Reloads maglevel:
 	printf("Performing 1st credit check (%s)",GlobalCPUMiningCPID.cpid.c_str());
-	CreditCheck(GlobalCPUMiningCPID.cpid,true);
+	CreditCheck(GlobalCPUMiningCPID.cpid,false);
 	printf("Getting first project");
 	GetNextProject(false);
 	printf("Finished getting first project");
@@ -8221,4 +8136,28 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 	}
 	return true;
 }
+
+
+
+
+
+
+MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex)
+{
+	CBlock block;
+	MiningCPID bb;
+	bb.initialized=false;
+	if (pblockindex == NULL) return bb;
+	//	if (!pblockindex || !pblockindex->IsInMainChain()) return bb;
+	if (block.ReadFromDisk(pblockindex))
+	{
+		std::string hashboinc = "";
+		if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
+		bb = DeserializeBoincBlock(hashboinc);
+		bb.initialized=true;
+		return bb;
+	}
+	return bb;
+}
+
 

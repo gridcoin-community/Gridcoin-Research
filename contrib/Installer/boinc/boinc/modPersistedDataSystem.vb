@@ -197,6 +197,12 @@ Module modPersistedDataSystem
         End If
     End Sub
     Public Function ResolveDiscrepanciesInNeuralNetwork(sContract As String) As String
+
+        Dim sContractLocal As String = ""
+        sContractLocal = GetMagnitudeContract()
+        If Len(sContractLocal) = 0 Then Exit Function
+
+
         Dim dr As New Row
         Log("Starting neural network resolution process ...")
         ' Log("Contract " + Left(sContract, 100))

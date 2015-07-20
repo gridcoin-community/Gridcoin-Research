@@ -25,9 +25,9 @@ extern int MINOR_VERSION;
 ///////////////////////////////////////////////////////////
 // network protocol versioning                           //
 //                                                       //
-static const int PROTOCOL_VERSION =       180283;        //
+static const int PROTOCOL_VERSION =       180284;        //
 // disconnect from peers older than this proto version   //
-static const int MIN_PEER_PROTO_VERSION = 180283;        // 
+static const int MIN_PEER_PROTO_VERSION = 180284;        // 
 ///////////////////////////////////////////////////////////
 // intial proto version, to be increased after           //
 // version/verack negotiation                            //
@@ -43,7 +43,7 @@ static const int CADDR_TIME_VERSION = 180275;            //
 // only request blocks from nodes outside this range of  //
 // versions                                              //
 static const int NOBLKS_VERSION_START = 1;               //
-static const int NOBLKS_VERSION_END = 180282;            // 
+static const int NOBLKS_VERSION_END = 180283;            // 
 ///////////////////////////////////////////////////////////
 //
 // database format versioning

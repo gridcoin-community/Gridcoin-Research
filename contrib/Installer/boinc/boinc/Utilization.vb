@@ -15,7 +15,7 @@ Public Class Utilization
 
     Public ReadOnly Property Version As Double
         Get
-            Return 394
+            Return 395
         End Get
     End Property
 

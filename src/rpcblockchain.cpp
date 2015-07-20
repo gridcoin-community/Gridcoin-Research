@@ -18,6 +18,12 @@ double OwedByAddress(std::string address);
 extern std::string YesNo(bool bin);
 double Cap(double dAmt, double Ceiling);
 extern std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, std::string sSig, int64_t MinimumBalance);
+extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
+
+bool TallyNetworkAverages(bool ColdBoot);
+void TallyInBackground();
+double GetNetworkPaymentsTotal();
+
 extern bool CheckMessageSignature(std::string messagetype, std::string sMsg, std::string sSig);
 extern std::string CryptoLottery(int64_t locktime);
 std::string CPIDByAddress(std::string address);
@@ -36,12 +42,13 @@ double Round(double d, int place);
 bool UnusualActivityReport();
 extern double GetCountOf(std::string datatype);
 
-extern double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count);
+extern double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,bool bIgnoreBeacons);
+extern bool CPIDAcidTest(std::string boincruntimepublickey);
+
 
 
 void TestScan();
 void TestScan2();
-void TallyInBackground();
 
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 
@@ -145,7 +152,6 @@ std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string
 extern double GetNetworkAvgByProject(std::string projectname);
 extern bool FindRAC(bool CheckingWork, std::string TargetCPID, std::string TargetProjectName, double pobdiff, bool bCreditNodeVerification, std::string& out_errors, int& out_position);
 void HarvestCPIDs(bool cleardata);
-bool TallyNetworkAverages(bool ColdBoot);
 std::string GetHttpPage(std::string cpid);
 std::string GetHttpPage(std::string cpid, bool usedns, bool clearcache);
 bool GridDecrypt(const std::vector<unsigned char>& vchCiphertext,std::vector<unsigned char>& vchPlaintext);
@@ -997,7 +1003,7 @@ double GetAverageInList(std::string superblock,double& out_count)
 }
 
 
-double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count)
+double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,bool bIgnoreBeacons)
 {
 	std::string mags = ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>");
 	std::string avgs = ExtractXML(data,"<AVERAGES>","</AVERAGES>");
@@ -1006,10 +1012,10 @@ double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out
 	double avg_count = 0;
 	double avg_of_mag = GetAverageInList(mags,mag_count);
 	double avg_of_avg = GetAverageInList(avgs,avg_count);
-	out_beacon_count = GetCountOf("beacon");
+	if (!bIgnoreBeacons) out_beacon_count = GetCountOf("beacon");
 	out_participant_count = mag_count;
 	if (avg_of_mag < 10 || avg_of_avg < 50000) return 0;
-	if (mag_count < out_beacon_count*.94 || mag_count > out_beacon_count*1.06) return 0;
+	if (!bIgnoreBeacons && (mag_count < out_beacon_count*.94 || mag_count > out_beacon_count*1.06)) return 0;
 	return avg_of_mag + avg_of_avg;
 }
 
@@ -1037,14 +1043,19 @@ bool TallyMagnitudesInSuperblock()
 	     			stCPID.TotalMagnitude = magnitude;
 					stCPID.MagnitudeCount++;
 					stCPID.Magnitude = magnitude;
+					stCPID.cpid = cpid;
 					mvDPOR[cpid]=stCPID;
+					
 					StructCPID stMagg = GetInitializedStructCPID2(cpid,mvMagnitudes);
 					stMagg.cpid = cpid;
 					stMagg.Magnitude = stCPID.Magnitude;
 					stMagg.PaymentMagnitude = LederstrumpfMagnitude2(magnitude,GetAdjustedTime());
+					
 					mvMagnitudes[cpid] = stMagg;
 					TotalNetworkMagnitude += stMagg.Magnitude;
 					TotalNetworkEntries++;
+					//					StampTotalPaymentsByCPID(stMagg, GetAdjustedTime(), 0,0,true);
+
 				}
 			}
 	}
@@ -1103,8 +1114,7 @@ bool TallyMagnitudesInSuperblock()
 	network.AverageRAC = AVGRac;
 	network.rac = TotalRAC;
 	network.NetworkProjects = TotalProjects;
-    
-	mvNetwork["NETWORK"] = network;
+    mvNetwork["NETWORK"] = network;
 	if (fDebug3) printf(".43.");
 
 	return true;
@@ -1373,6 +1383,18 @@ std::string AddContract(std::string sType, std::string sName, std::string sContr
 			return result;
 }
 
+
+bool CPIDAcidTest(std::string boincruntimepublickey)
+{
+	uint256 hashRand = GetRandHash();
+    std::string email = GetArgument("email", "NA");
+    boost::to_lower(email);
+	std::string cpidv2 = ComputeCPIDv2(email, boincruntimepublickey, hashRand);
+	bool IsCPIDValid2 = CPID_IsCPIDValid(cpidv2.substr(0,32),cpidv2, hashRand);
+	return IsCPIDValid2;
+}
+
+
 std::string AdvertiseBeacon(bool force)
 {
 	//7-15-2015
@@ -1384,6 +1406,7 @@ std::string AdvertiseBeacon(bool force)
 			std::string myBeacon = MyBeaconExists(GlobalCPUMiningCPID.cpid);
 			//printf("MyBeacon %s",myBeacon.c_str());
 			if (myBeacon.length() > 10 && !force) return "SUCCESS";
+		
 			uint256 hashRand = GetRandHash();
     		std::string email = GetArgument("email", "NA");
         	boost::to_lower(email);
@@ -1395,6 +1418,7 @@ std::string AdvertiseBeacon(bool force)
 
 			GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
 			std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID);
+			
 			std::string GRCAddress = DefaultWalletAddress();
 			std::string contract = GlobalCPUMiningCPID.cpidv2 + ";" + hashRand.GetHex() + ";" + GRCAddress;
 			printf("Creating beacon for cpid %s, %s",GlobalCPUMiningCPID.cpid.c_str(),contract.c_str());
@@ -1504,6 +1528,7 @@ Value execute(const Array& params, bool fHelp)
 				
 		    	std::string sResult = AdvertiseBeacon(true);
 				entry.push_back(Pair("CPID",GlobalCPUMiningCPID.cpid.c_str()));
+				entry.push_back(Pair("Help","Note: if your wallet is locked this command will fail; to solve that unlock the wallet: 'walletpassphrase <yourpassword> <240>' without <>."));
 			    entry.push_back(Pair("Force Beacon",sResult));
 			    results.push_back(entry);
 		
@@ -1897,6 +1922,19 @@ Value execute(const Array& params, bool fHelp)
 
 
 	}
+	else if (sItem == "tally")
+	{
+			TallyNetworkAverages(true);
+			entry.push_back(Pair("Tally Network Averages",1));
+			results.push_back(entry);
+	}
+	else if (sItem == "tallyinbackground")
+	{
+		
+			TallyInBackground();
+			entry.push_back(Pair("Tallying in Background...",1));
+			results.push_back(entry);
+	}
 	else if (sItem == "rac")
 	{
 
@@ -2141,7 +2179,7 @@ Value execute(const Array& params, bool fHelp)
 		std::string superblock = ReadCache("superblock","all");
 		double out_beacon_count = 0;
 		double out_participant_count = 0;
-		double avg = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count);
+		double avg = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,false);
 		entry.push_back(Pair("avg",avg));
 		entry.push_back(Pair("beacon_count",out_beacon_count));
 		entry.push_back(Pair("beacon_participant_count",out_participant_count));
@@ -2159,7 +2197,7 @@ Value execute(const Array& params, bool fHelp)
 		double out_beacon_count = 0;
 		double out_participant_count = 0;
 	
-		double avg = GetSuperblockAvgMag(contract,out_beacon_count,out_participant_count);
+		double avg = GetSuperblockAvgMag(contract,out_beacon_count,out_participant_count,false);
 		entry.push_back(Pair("avg",avg));
 		entry.push_back(Pair("beacon_count",out_beacon_count));
 		entry.push_back(Pair("beacon_participant_count",out_participant_count));
@@ -2396,25 +2434,18 @@ Value execute(const Array& params, bool fHelp)
 			stopWireFrameRenderer();
 			#endif
 	}
-	else if (sItem == "tally")
-	{
-			TallyNetworkAverages(true);
-			entry.push_back(Pair("Tally Network Averages",1));
-			results.push_back(entry);
-	}
-	else if (sItem == "tallyinbackground")
-	{
-		
-			TallyInBackground();
-			entry.push_back(Pair("Tallying in Background...",1));
-			results.push_back(entry);
-	}
 	else if (sItem == "testhash")
 	{
 		    uint256 testhash = 0;
 			testhash = Skein("test1234");
 			entry.push_back(Pair("GMAH",testhash.GetHex()));
     		results.push_back(entry);
+	}
+	else if (sItem == "getnextproject")
+	{
+			GetNextProject(true);
+		    entry.push_back(Pair("GetNext",1));
+			results.push_back(entry);
 	}
 	else if (sItem == "resetcpids")
 	{
@@ -3167,6 +3198,7 @@ Array MagnitudeReportCSV(bool detail)
 							std::vector<std::string> vCPIDPayments   = split(structMag.PaymentAmountsResearch.c_str(),",");
 							std::vector<std::string> vCPIDInterestPayments = split(structMag.PaymentAmountsInterest.c_str(),",");
 							std::vector<std::string> vCPIDPaymentBlocks    = split(structMag.PaymentAmountsBlocks.c_str(),",");
+							
 							for (unsigned int i = 0; i < vCPIDTimestamps.size(); i++)
 							{
 									double dTime = cdbl(vCPIDTimestamps[i],0);
@@ -3174,12 +3206,11 @@ Array MagnitudeReportCSV(bool detail)
 									std::string sPaymentDate = DateTimeStrFormat("%m-%d-%Y %H:%M:%S", dTime);
 									std::string sInterestAmount = vCPIDInterestPayments[i];
 								    std::string sPaymentBlock = vCPIDPaymentBlocks[i];
-
+									//std::string sPaymentHash = vCPIDPaymentBlockHashes[i];
 									if (dTime > 0)
 									{
 										row = " , , , , , , , , , , , , , , , , " + sPaymentDate + "," + sResearchAmount + "," + sInterestAmount + "," + sPaymentBlock + "\n";
 										header += row;
-									
 									}
 							}
 						}
@@ -3507,11 +3538,11 @@ Value listitem(const Array& params, bool fHelp)
 				entry.push_back(Pair("Avg RAC",structcpid.AverageRAC));
 				if (structcpid.projectname=="NETWORK") 
 				{
-						//entry.push_back(Pair("Network Average RAC",structcpid.AverageRAC));
 						entry.push_back(Pair("Network Total Magnitude",structcpid.NetworkMagnitude));
 						entry.push_back(Pair("Network Average Magnitude",structcpid.NetworkAvgMagnitude));
 						double MaximumEmission = BLOCKS_PER_DAY*GetMaximumBoincSubsidy(GetAdjustedTime());
-						entry.push_back(Pair("Network Avg Daily Payments",structcpid.payments/14));
+					
+						entry.push_back(Pair("Network Avg Daily Payments", structcpid.payments/14));
 						entry.push_back(Pair("Network Max Daily Payments",MaximumEmission));
 						double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
 						entry.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));

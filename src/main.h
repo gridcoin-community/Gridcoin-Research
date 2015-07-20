@@ -33,7 +33,7 @@ extern unsigned int CHECKPOINT_VIOLATIONS;
 static const int MAX_NEWBIE_BLOCKS = 200;
 static const int MAX_NEWBIE_BLOCKS_LEVEL2 = 500;
 static const int CHECKPOINT_DISTRIBUTED_MODE = 50;
-static const int CONSENSUS_LOOKBACK = 15;  //Amount of blocks to go back from best block, to avoid counting forked blocks
+static const int CONSENSUS_LOOKBACK = 5;  //Amount of blocks to go back from best block, to avoid counting forked blocks
 static const int BLOCK_GRANULARITY = 10;   //Consensus block divisor 
 
 static const double NeuralNetworkMultiplier = 115000;
@@ -132,6 +132,8 @@ extern int64_t nTransactionFee;
 extern int64_t nReserveBalance;
 extern int64_t nMinimumInputValue;
 extern int64_t nLastTallied;
+extern int64_t nLastTalliedNeural;
+
 extern int64_t nCPIDsLoaded;
 extern int64_t nLastGRCtallied;
 

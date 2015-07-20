@@ -32,7 +32,6 @@ uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
 int64_t GetRSAWeightByCPID(std::string cpid);
 std::string RoundToString(double d, int place);
 bool OutOfSyncByAgeWithChanceOfMining();
-bool TallyNetworkAverages(bool ColdBoot);
 MiningCPID DeserializeBoincBlock(std::string block);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
@@ -811,7 +810,7 @@ Inception:
             fTryToSync = false;
             if (vNodes.size() < 3 || nBestHeight < GetNumBlocksOfPeers())
             {
-				printf("tryingtosync.");
+				if (fDebug) printf("tryingtosync.");
                 MilliSleep(5000);
                 continue;
             }
