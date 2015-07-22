@@ -35,7 +35,8 @@ sudo apt-get install ntp git build-essential libssl-dev libdb-dev libdb++-dev li
 sudo apt-get install qt-sdk qt4-default
 #ATTN: !! New packages required as of 2-4-2015 (Lederstrumpfs additions)
 sudo apt-get install libcurl3-dev
-sudo apt-get install libzip-dev
+sudo apt-get install libzip-dev (or aptitude install libcurl3-dev on Debian + aptitude install libssl-dev on Debian)
+
 
 
 cd ~

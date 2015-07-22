@@ -76,7 +76,21 @@ Module modPersistedDataSystem
         Next
         Return sOut
     End Function
-
+    Private Function SumOfNetworkMagnitude(ByRef dAvg As Double) As Double
+        Dim surrogateRow As New Row
+        surrogateRow.Database = "CPID"
+        surrogateRow.Table = "CPIDS"
+        Dim lstCPIDs As List(Of Row) = GetList(surrogateRow, "*")
+        Dim sOut As String = ""
+        Dim total As Double
+        Dim entries As Double = 0
+        For Each cpid As Row In lstCPIDs
+            total += Val(cpid.Magnitude)
+            entries += 1
+        Next
+        dAvg = total / (entries + 0.01)
+        Return total
+    End Function
     Public Function GetMagnitudeContract() As String
         Try
 
@@ -202,10 +216,8 @@ Module modPersistedDataSystem
         sContractLocal = GetMagnitudeContract()
         If Len(sContractLocal) = 0 Then Exit Function
 
-
         Dim dr As New Row
         Log("Starting neural network resolution process ...")
-        ' Log("Contract " + Left(sContract, 100))
         Dim sResponse As String = ""
         Try
 
@@ -353,8 +365,122 @@ Module modPersistedDataSystem
         bMagsDoneLoading = True
         mdLastSync = Now
         mlPercentComplete = 0
+        '7-21-2015: Store historical magnitude so it can be charted
+        StoreHistoricalMagnitude()
 
     End Sub
+    Private Function GetMagByCPID(sCPID As String) As Row
+        Dim dr As New Row
+        dr.Database = "CPID"
+        dr.Table = "CPIDS"
+        dr.PrimaryKey = sCPID
+        dr = Read(dr)
+        Return dr
+    End Function
+    Private Function GRCDay(dDt As DateTime) As String
+        'Return a culture agnostic date
+        Dim sNeutralDate As String = Trim(Year(dDt)) + "-" + Trim(Month(dDt)) + "-" + Trim(Day(dDt))
+        Return sNeutralDate
+    End Function
+    Private Function GRCDayToDate(sDate As String) As DateTime
+        Dim vDate() As String = Split(sDate, "-")
+        If UBound(vDate) < 2 Then Return Now
+        Dim dt As DateTime = DateSerial(vDate(0), vDate(1), vDate(2))
+        Return dt
+    End Function
+    Private Sub StoreHistoricalMagnitude()
+        Dim sCPID As String = KeyValue("PrimaryCPID")
+        If Len(sCPID) = 0 Then Exit Sub 'If we dont know the primary cpid
+        Dim MyCPID As Row = GetMagByCPID(sCPID)
+        'Store the Historical Magnitude:
+        Dim d As New Row
+        d.Expiration = DateAdd(DateInterval.Day, 30, Now)
+        d.Added = Now
+        d.Database = "Historical"
+        d.Table = "Magnitude"
+        d.PrimaryKey = sCPID + GRCDay(Now)
+        d.Magnitude = MyCPID.Magnitude
+        d.RAC = MyCPID.RAC
+        d.AvgRAC = MyCPID.AvgRAC
+        Store(d)
+        d = New Row
+        d.Database = "Historical"
+        d.Table = "Magnitude"
+        d.PrimaryKey = "Network" + GRCDay(Now)
+        Dim dAvg As Double
+        d.Magnitude = SumOfNetworkMagnitude(dAvg)
+        d.AvgRAC = Trim(Math.Round(dAvg, 3))
+        Store(d)
+        'Update Last Time Synced for SeP
+        d = New Row
+        d.Database = "Historical"
+        d.Table = "Magnitude"
+        d.PrimaryKey = "LastTimeSynced"
+        d.Expiration = DateAdd(DateInterval.Day, 30, Now)
+
+        d.Synced = Now
+        Store(d)
+
+    End Sub
+    Public Function UpdateSuperblockAgeAndQuorumHash(sAge As String, sQuorumHash As String)
+        Dim d As New Row
+        d.Database = "Historical"
+        d.Table = "Magnitude"
+        d.PrimaryKey = "QuorumHash"
+        d.DataColumn1 = Trim(sAge)
+        d.DataColumn2 = Trim(sQuorumHash)
+        d.Expiration = DateAdd(DateInterval.Day, 30, Now)
+
+        Store(d)
+
+
+    End Function
+    Public Sub StoreTestMagnitude()
+        For x = 1 To 25
+            UpdateKey("PrimaryCPID", "784afb35d92503160125feb183157378")
+
+            Dim dtTest As DateTime = DateAdd(DateInterval.Day, -x, Now)
+
+            Dim sCPID As String = KeyValue("PrimaryCPID")
+            If Len(sCPID) = 0 Then Exit Sub 'If we dont know the primary cpid
+            Dim MyCPID As Row = GetMagByCPID(sCPID)
+            'Store the Historical Magnitude:
+            Dim d As New Row
+            d.Expiration = DateAdd(DateInterval.Day, 30, Now)
+            d.Added = Now
+            d.Database = "Historical"
+            d.Table = "Magnitude"
+            d.PrimaryKey = sCPID + GRCDay(dtTest)
+            d.Magnitude = x + 1100
+            d.RAC = MyCPID.RAC
+            d.AvgRAC = MyCPID.AvgRAC
+            Store(d)
+            d.PrimaryKey = "Network" + GRCDay(dtTest)
+            d.AvgRAC = 400 + x
+            d.Magnitude = 500 + x
+            Store(d)
+        Next
+
+    End Sub
+    Public Function GetDataValue(sDB As String, sTable As String, sPK As String) As Row
+        Dim dr As New Row
+        dr.Database = sDB
+        dr.Table = sTable
+        dr.PrimaryKey = sPK
+        dr = Read(dr)
+
+        Return dr
+
+    End Function
+    Public Function GetHistoricalMagnitude(dt As DateTime, sCPID As String, ByRef dAvg As Double) As Double
+        Dim dr As New Row
+        dr.Database = "Historical"
+        dr.Table = "Magnitude"
+        dr.PrimaryKey = sCPID + GRCDay(dt)
+        dr = Read(dr)
+        dAvg = Val(dr.AvgRAC)
+        Return Val(dr.Magnitude)
+    End Function
     Private Function BlowAwayTable(dr As Row)
         Dim sPath As String = GetPath(dr)
         Try
@@ -380,6 +506,11 @@ Module modPersistedDataSystem
             Dim sWhitelist As String
             sWhitelist = ExtractXML(msSyncData, "<WHITELIST>")
             Dim sCPIDData As String = ExtractXML(msSyncData, "<CPIDDATA>")
+            Dim sQuorumData As String = ExtractXML(msSyncData, "<QUORUMDATA>")
+            Dim sAge As String = ExtractXML(sQuorumData, "<AGE>")
+            Dim sQuorumHash As String = ExtractXML(sQuorumData, "<HASH>")
+            Log("QUORUMDATA:" + sQuorumData)
+            Call UpdateSuperblockAgeAndQuorumHash(sAge, sQuorumHash)
 
             Try
                 mlPercentComplete = 2
@@ -1042,7 +1173,7 @@ Module modPersistedDataSystem
                 sOut += sRow + "<ROW>"
             End If
         Next
-        
+
         sRow = "Total Mag: " + Trim(Math.Round(CumulativeMag, 2)) + "," + Trim(TotalRAC) + "," + Trim(Trim(Math.Round(CumulativeMag, 2)))
         sOut += sRow
 

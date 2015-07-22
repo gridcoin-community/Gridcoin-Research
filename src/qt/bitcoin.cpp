@@ -253,7 +253,7 @@ int main(int argc, char *argv[])
         guiref = &window;
 
 		QTimer *timer = new QTimer(guiref);
-		printf("Starting .NET timer\r\n");
+		printf("\r\nStarting Gridcoin\r\n");
 
 		QObject::connect(timer, SIGNAL(timeout()), guiref, SLOT(timerfire()));
   

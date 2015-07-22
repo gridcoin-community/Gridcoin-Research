@@ -145,8 +145,8 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 
 	if (!bNetAveragesLoaded)
 	{
-		if (fDebug) printf("Net averages not yet loaded...");
-		MilliSleep(500);
+		if (fDebug3) printf("CNB: Net averages not yet loaded...");
+		MilliSleep(1000);
 		return NULL;
 	}
 
@@ -786,12 +786,19 @@ Inception:
 		int iFutile=0;
 		while (!bNetAveragesLoaded)
 		{
-			iFutile++;
-			if (iFutile > 50) break;
-			MilliSleep(100);
 			if (LessVerbose(100)) printf("StakeMiner:Net averages not yet loaded...");
+						
+			iFutile++;
+			if (iFutile > 50)
+			{
+				iFutile = 0;
+				goto Inception;				
+			}
+			MilliSleep(250);
 		}
-	
+
+
+			
 
         while (vNodes.empty() || IsInitialBlockDownload())
         {

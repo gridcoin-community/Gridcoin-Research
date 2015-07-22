@@ -520,6 +520,7 @@ std::string qtExecuteDotNetStringFunction(std::string function, std::string data
 {
 	std::string sReturnData = "";
 	#if defined(WIN32) && defined(QT_GUI)
+	    if (!bGlobalcomInitialized) return "?";
 		QString qsData = ToQstring(data);
 		QString qsFunction = ToQstring(function +"(Qstring)");
 		std::string sFunction = function+"(Qstring)";
@@ -537,8 +538,10 @@ void qtSyncWithDPORNodes(std::string data)
 {
 
 	#if defined(WIN32) && defined(QT_GUI)
+	    if (!bGlobalcomInitialized) return;
 		int result = 0;
 		QString qsData = ToQstring(data);
+		if (fDebug3) printf("FullSyncWDporNodes");
 		std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
 		double function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
 		result = globalcom->dynamicCall("SyncCPIDsWithDPORNodes(Qstring)",qsData).toInt();
@@ -563,6 +566,7 @@ std::string qtGetNeuralContract(std::string data)
 	{
 		if (!bGlobalcomInitialized) return "NA";
 		QString qsData = ToQstring(data);
+		if (fDebug3) printf("GNC# ");
 		QString sResult = globalcom->dynamicCall("GetNeuralContract()").toString();
 		std::string result = FromQString(sResult);
 		return result;
@@ -768,13 +772,14 @@ int AddressUser()
 		double out_owed = 0;
 		try
 		{
+			if (fDebug3) printf("Init.");
 		out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid,out_owed);
-	    if (fDebug) printf("Boinc Magnitude %f \r\n",out_magnitude);
+	    if (fDebug3) printf("Boinc Magnitude %f \r\n",out_magnitude);
 		result = globalcom->dynamicCall("AddressUser(Qstring)",IntToQstring((int)out_magnitude)).toInt();
 		}
 		catch(...)
 		{
-
+			printf("Catastrophic Error");
 		}
 		#endif
 		return result;
@@ -2092,7 +2097,7 @@ void ReinstantiateGlobalcom()
 			}
 			else
 			{
-					printf("Instantiating globalcom for Windows");
+					printf("Instantiating globalcom for Windows %f",(double)0);
 					try
 					{
 						globalcom = new QAxObject("BoincStake.Utilization");
@@ -2101,7 +2106,7 @@ void ReinstantiateGlobalcom()
 					{
 						printf("Failed to instantiate globalcom.");
 					}
-					printf("Instantiated globalcom for Windows");
+					printf("Instantiated globalcom for Windows %f",(double)1);
 
 			}
 			if (!bAddressUser)

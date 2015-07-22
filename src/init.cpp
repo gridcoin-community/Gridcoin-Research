@@ -1107,31 +1107,27 @@ bool AppInit2()
             printf("Invalid or missing peers.dat; recreating\n");
     }
 
-    printf("Loaded %i addresses from peers.dat  %"PRId64"ms\n",
-           addrman.size(), GetTimeMillis() - nStart);
+    printf("Loaded %i addresses from peers.dat  %"PRId64"ms\n",  addrman.size(), GetTimeMillis() - nStart);
 
     
 	// ********************************************************* Step 11: start node
 	uiInterface.InitMessage(_("Loading Persisted Data Cache..."));
 	// 
 	std::string sOut = "";
-	printf("Loading admin Messages");
+	if (fDebug3) printf("Loading admin Messages %f",(double)0);
 	bool result = LoadAdminMessages(true,sOut);
-	printf("Done loading Admin messages");
-	
-	printf("Loading boinc projects \r\n");
+	printf("Done loading Admin messages%f",(double)0);
 
 	InitializeBoincProjects();
-	printf("Done loading boinc projects");
+	printf("Done loading boinc projects %f",(double)0);
 	uiInterface.InitMessage(_("Loading Network Averages..."));
-	
+	if (fDebug3) printf("Loading network averages %f",(double)0);	
 	TallyNetworkAverages(true);	
-	printf("Starting CPID thread...");
+	printf("Starting CPID thread...%f",(double)0);
 	LoadCPIDsInBackground();  //This calls HarvesCPIDs(true)
 
 	uiInterface.InitMessage(_("Finding first applicable Research Project..."));
 	
-
 	#if defined(WIN32) && defined(QT_GUI)
 		//stopWireFrameRenderer();
 	#endif

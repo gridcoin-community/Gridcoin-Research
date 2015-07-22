@@ -44,7 +44,7 @@ Partial Class frmMining
         Dim resources As System.ComponentModel.ComponentResourceManager = New System.ComponentModel.ComponentResourceManager(GetType(frmMining))
         Me.btnRefresh = New System.Windows.Forms.Button()
         Me.Chart1 = New System.Windows.Forms.DataVisualization.Charting.Chart()
-        Me.ChartUtilization = New System.Windows.Forms.DataVisualization.Charting.Chart()
+        Me.chtCurCont = New System.Windows.Forms.DataVisualization.Charting.Chart()
         Me.lbltxtAvgCredits = New System.Windows.Forms.Label()
         Me.lblThanks = New System.Windows.Forms.Label()
         Me.lblWhitelistedProjects = New System.Windows.Forms.Label()
@@ -56,6 +56,7 @@ Partial Class frmMining
         Me.ConfigurationToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.ContractDetailsToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.PoolsToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
+        Me.InstallGridcoinGalazaToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.TabControl1 = New System.Windows.Forms.TabControl()
         Me.TabOverview = New System.Windows.Forms.TabPage()
         Me.GroupBox4 = New System.Windows.Forms.GroupBox()
@@ -78,9 +79,12 @@ Partial Class frmMining
         Me.Label3 = New System.Windows.Forms.Label()
         Me.pbSync = New System.Windows.Forms.ProgressBar()
         Me.TimerSync = New System.Windows.Forms.Timer(Me.components)
-        Me.InstallGridcoinGalazaToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
+        Me.lblLastSynced = New System.Windows.Forms.Label()
+        Me.lblCPID = New System.Windows.Forms.Label()
+        Me.lblSuperblockAge = New System.Windows.Forms.Label()
+        Me.lblQuorumHash = New System.Windows.Forms.Label()
         CType(Me.Chart1, System.ComponentModel.ISupportInitialize).BeginInit()
-        CType(Me.ChartUtilization, System.ComponentModel.ISupportInitialize).BeginInit()
+        CType(Me.chtCurCont, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.MenuStrip1.SuspendLayout()
         Me.TabControl1.SuspendLayout()
         Me.TabOverview.SuspendLayout()
@@ -146,30 +150,30 @@ Partial Class frmMining
         Me.Chart1.TabIndex = 2
         Me.Chart1.Text = "Boinc Utilization"
         '
-        'ChartUtilization
+        'chtCurCont
         '
-        Me.ChartUtilization.BackColor = System.Drawing.Color.Transparent
-        Me.ChartUtilization.BackImageTransparentColor = System.Drawing.Color.Black
-        Me.ChartUtilization.BackSecondaryColor = System.Drawing.Color.Black
-        Me.ChartUtilization.BorderlineColor = System.Drawing.Color.Black
+        Me.chtCurCont.BackColor = System.Drawing.Color.Transparent
+        Me.chtCurCont.BackImageTransparentColor = System.Drawing.Color.Black
+        Me.chtCurCont.BackSecondaryColor = System.Drawing.Color.Black
+        Me.chtCurCont.BorderlineColor = System.Drawing.Color.Black
         ChartArea2.Area3DStyle.Enable3D = True
         ChartArea2.BackColor = System.Drawing.Color.FromArgb(CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer))
         ChartArea2.Name = "ChartArea1"
-        Me.ChartUtilization.ChartAreas.Add(ChartArea2)
+        Me.chtCurCont.ChartAreas.Add(ChartArea2)
         Legend2.BackColor = System.Drawing.Color.Transparent
         Legend2.Name = "Legend1"
-        Me.ChartUtilization.Legends.Add(Legend2)
-        Me.ChartUtilization.Location = New System.Drawing.Point(31, 608)
-        Me.ChartUtilization.Name = "ChartUtilization"
-        Me.ChartUtilization.Palette = System.Windows.Forms.DataVisualization.Charting.ChartColorPalette.Bright
+        Me.chtCurCont.Legends.Add(Legend2)
+        Me.chtCurCont.Location = New System.Drawing.Point(31, 608)
+        Me.chtCurCont.Name = "chtCurCont"
+        Me.chtCurCont.Palette = System.Windows.Forms.DataVisualization.Charting.ChartColorPalette.Bright
         Series2.ChartArea = "ChartArea1"
         Series2.Legend = "Legend1"
         Series2.Name = "Series1"
-        Me.ChartUtilization.Series.Add(Series2)
-        Me.ChartUtilization.Size = New System.Drawing.Size(179, 100)
-        Me.ChartUtilization.SuppressExceptions = True
-        Me.ChartUtilization.TabIndex = 3
-        Me.ChartUtilization.Text = "Chart2"
+        Me.chtCurCont.Series.Add(Series2)
+        Me.chtCurCont.Size = New System.Drawing.Size(179, 100)
+        Me.chtCurCont.SuppressExceptions = True
+        Me.chtCurCont.TabIndex = 3
+        Me.chtCurCont.Text = "Chart2"
         '
         'lbltxtAvgCredits
         '
@@ -267,6 +271,12 @@ Partial Class frmMining
         Me.PoolsToolStripMenuItem.Name = "PoolsToolStripMenuItem"
         Me.PoolsToolStripMenuItem.Size = New System.Drawing.Size(114, 20)
         Me.PoolsToolStripMenuItem.Text = "Optional Modules"
+        '
+        'InstallGridcoinGalazaToolStripMenuItem
+        '
+        Me.InstallGridcoinGalazaToolStripMenuItem.Name = "InstallGridcoinGalazaToolStripMenuItem"
+        Me.InstallGridcoinGalazaToolStripMenuItem.Size = New System.Drawing.Size(190, 22)
+        Me.InstallGridcoinGalazaToolStripMenuItem.Text = "Install Gridcoin Galaza"
         '
         'TabControl1
         '
@@ -583,11 +593,49 @@ Partial Class frmMining
         Me.TimerSync.Enabled = True
         Me.TimerSync.Interval = 1100
         '
-        'InstallGridcoinGalazaToolStripMenuItem
+        'lblLastSynced
         '
-        Me.InstallGridcoinGalazaToolStripMenuItem.Name = "InstallGridcoinGalazaToolStripMenuItem"
-        Me.InstallGridcoinGalazaToolStripMenuItem.Size = New System.Drawing.Size(190, 22)
-        Me.InstallGridcoinGalazaToolStripMenuItem.Text = "Install Gridcoin Galaza"
+        Me.lblLastSynced.AutoSize = True
+        Me.lblLastSynced.BackColor = System.Drawing.Color.Transparent
+        Me.lblLastSynced.Font = New System.Drawing.Font("Microsoft Sans Serif", 9.75!)
+        Me.lblLastSynced.Location = New System.Drawing.Point(448, 734)
+        Me.lblLastSynced.Name = "lblLastSynced"
+        Me.lblLastSynced.Size = New System.Drawing.Size(85, 16)
+        Me.lblLastSynced.TabIndex = 68
+        Me.lblLastSynced.Text = "Last Synced:"
+        '
+        'lblCPID
+        '
+        Me.lblCPID.AutoSize = True
+        Me.lblCPID.BackColor = System.Drawing.Color.Transparent
+        Me.lblCPID.Font = New System.Drawing.Font("Microsoft Sans Serif", 9.75!)
+        Me.lblCPID.Location = New System.Drawing.Point(448, 753)
+        Me.lblCPID.Name = "lblCPID"
+        Me.lblCPID.Size = New System.Drawing.Size(42, 16)
+        Me.lblCPID.TabIndex = 69
+        Me.lblCPID.Text = "CPID:"
+        '
+        'lblSuperblockAge
+        '
+        Me.lblSuperblockAge.AutoSize = True
+        Me.lblSuperblockAge.BackColor = System.Drawing.Color.Transparent
+        Me.lblSuperblockAge.Font = New System.Drawing.Font("Microsoft Sans Serif", 9.75!)
+        Me.lblSuperblockAge.Location = New System.Drawing.Point(725, 734)
+        Me.lblSuperblockAge.Name = "lblSuperblockAge"
+        Me.lblSuperblockAge.Size = New System.Drawing.Size(108, 16)
+        Me.lblSuperblockAge.TabIndex = 70
+        Me.lblSuperblockAge.Text = "Superblock Age:"
+        '
+        'lblQuorumHash
+        '
+        Me.lblQuorumHash.AutoSize = True
+        Me.lblQuorumHash.BackColor = System.Drawing.Color.Transparent
+        Me.lblQuorumHash.Font = New System.Drawing.Font("Microsoft Sans Serif", 9.75!)
+        Me.lblQuorumHash.Location = New System.Drawing.Point(725, 753)
+        Me.lblQuorumHash.Name = "lblQuorumHash"
+        Me.lblQuorumHash.Size = New System.Drawing.Size(143, 16)
+        Me.lblQuorumHash.TabIndex = 71
+        Me.lblQuorumHash.Text = "Popular Quorum Hash:"
         '
         'frmMining
         '
@@ -597,6 +645,10 @@ Partial Class frmMining
         Me.BackgroundImage = Global.BoincStake.My.Resources.Resources.GradientU
         Me.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch
         Me.ClientSize = New System.Drawing.Size(1071, 793)
+        Me.Controls.Add(Me.lblQuorumHash)
+        Me.Controls.Add(Me.lblSuperblockAge)
+        Me.Controls.Add(Me.lblCPID)
+        Me.Controls.Add(Me.lblLastSynced)
         Me.Controls.Add(Me.pbSync)
         Me.Controls.Add(Me.lblTotalProjects)
         Me.Controls.Add(Me.Label3)
@@ -611,7 +663,7 @@ Partial Class frmMining
         Me.Controls.Add(Me.lblWhitelistedProjects)
         Me.Controls.Add(Me.lblThanks)
         Me.Controls.Add(Me.lbltxtAvgCredits)
-        Me.Controls.Add(Me.ChartUtilization)
+        Me.Controls.Add(Me.chtCurCont)
         Me.Controls.Add(Me.Chart1)
         Me.Controls.Add(Me.btnRefresh)
         Me.Controls.Add(Me.MenuStrip1)
@@ -620,9 +672,9 @@ Partial Class frmMining
         Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)
         Me.MainMenuStrip = Me.MenuStrip1
         Me.Name = "frmMining"
-        Me.Text = "Gridcoin Neural Network 1.0"
+        Me.Text = "Gridcoin Neural Network 1.1"
         CType(Me.Chart1, System.ComponentModel.ISupportInitialize).EndInit()
-        CType(Me.ChartUtilization, System.ComponentModel.ISupportInitialize).EndInit()
+        CType(Me.chtCurCont, System.ComponentModel.ISupportInitialize).EndInit()
         Me.MenuStrip1.ResumeLayout(False)
         Me.MenuStrip1.PerformLayout()
         Me.TabControl1.ResumeLayout(False)
@@ -640,7 +692,7 @@ Partial Class frmMining
     End Sub
     Friend WithEvents btnRefresh As System.Windows.Forms.Button
     Friend WithEvents Chart1 As System.Windows.Forms.DataVisualization.Charting.Chart
-    Friend WithEvents ChartUtilization As System.Windows.Forms.DataVisualization.Charting.Chart
+    Friend WithEvents chtCurCont As System.Windows.Forms.DataVisualization.Charting.Chart
     Friend WithEvents lbltxtAvgCredits As System.Windows.Forms.Label
     Friend WithEvents lblThanks As System.Windows.Forms.Label
     Friend WithEvents lblWhitelistedProjects As System.Windows.Forms.Label
@@ -675,4 +727,8 @@ Partial Class frmMining
     Friend WithEvents pbSync As System.Windows.Forms.ProgressBar
     Friend WithEvents TimerSync As System.Windows.Forms.Timer
     Friend WithEvents InstallGridcoinGalazaToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
+    Friend WithEvents lblLastSynced As System.Windows.Forms.Label
+    Friend WithEvents lblCPID As System.Windows.Forms.Label
+    Friend WithEvents lblSuperblockAge As System.Windows.Forms.Label
+    Friend WithEvents lblQuorumHash As System.Windows.Forms.Label
 End Class

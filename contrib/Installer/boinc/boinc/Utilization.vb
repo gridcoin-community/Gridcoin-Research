@@ -15,16 +15,26 @@ Public Class Utilization
 
     Public ReadOnly Property Version As Double
         Get
-            Return 395
+            Return 397
         End Get
     End Property
 
     Private lfrmMiningCounter As Long = 0
     Public ReadOnly Property BoincUtilization As Double
         Get
-            ' Return Val(clsGVM.BoincUtilization)
+            'Return Val(clsGVM.BoincUtilization)
         End Get
     End Property
+    Public Function WriteKey(sData As String) As String
+        Try
+            Dim sKey As String = ExtractXML(sData, "<KEY>")
+        Dim sValue As String = ExtractXML(sData, "<VALUE>")
+        UpdateKey(sKey, sValue)
+            Return "True"
+        Catch ex As Exception
+            Return "False"
+        End Try
+    End Function
     Public Function GetDotNetMessages(sDataType As String) As String
         Dim sReply As String = msRPCCommand
         msRPCCommand = ""
@@ -116,17 +126,48 @@ Public Class Utilization
     End Function
    
     Sub New()
-        UpdateKey("UpdatingLeaderboard", "false")
-        PurgeLog()
+
+        mclsUtilization = Me
+
+
+        Log("L1")
 
         Try
-            If Not DatabaseExists("gridcoin_leaderboard") Then ReplicateDatabase("gridcoin_leaderboard")
+
+
+            Try
+                UpdateKey("UpdatingLeaderboard", "false")
+
+            Catch ex As Exception
+                Log(ex.Message)
+
+            End Try
+
+            Try
+                PurgeLog()
+
+            Catch ex As Exception
+
+            End Try
+            Log("Loading...")
+
+            Try
+                If Not DatabaseExists("gridcoin_leaderboard") Then ReplicateDatabase("gridcoin_leaderboard")
+            Catch ex As Exception
+                Log("New:" + ex.Message)
+            End Try
+
+            Try
+                Dim sContract As String = GetMagnitudeContract()
+                If Len(sContract) = 0 Then bMagsDoneLoading = False
+
+            Catch ex As Exception
+                Log("contract err " + ex.Message)
+            End Try
         Catch ex As Exception
-            Log("New:" + ex.Message)
+            Log("While loading clsUtilization : " + ex.Message)
         End Try
-        mclsUtilization = Me
-        Dim sContract As String = GetMagnitudeContract()
-        If Len(sContract) = 0 Then bMagsDoneLoading = False
+        Log("Loaded")
 
     End Sub
     Sub New(bLoadMiningConsole As Boolean)
@@ -382,6 +423,10 @@ Public Class Utilization
         End Try
         Return 1
     End Function
+    Public Function TestMag2015()
+        StoreTestMagnitude()
+
+    End Function
     Public Function SyncCPIDsWithDPORNodes(sData As String) As Double
         'Write the Gridcoin CPIDs to the Persisted Data System
         Try
@@ -401,8 +446,13 @@ Public Class Utilization
     End Sub
     Public Sub AddressUserThread()
 
+        Try
+
         Dim s As New SpeechSynthesis
         s.AddressUserBySurname(mlSpeakMagnitude)
+        Catch ex As Exception
+            Log("Unable to initialize speech")
+        End Try
 
     End Sub
     Public Function AddressUser(sMagnitude As String) As Double

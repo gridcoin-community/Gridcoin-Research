@@ -1005,31 +1005,47 @@ double GetAverageInList(std::string superblock,double& out_count)
 
 double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,bool bIgnoreBeacons)
 {
-	std::string mags = ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>");
-	std::string avgs = ExtractXML(data,"<AVERAGES>","</AVERAGES>");
-	//7-18-2015
-	double mag_count = 0;
-	double avg_count = 0;
-	double avg_of_mag = GetAverageInList(mags,mag_count);
-	double avg_of_avg = GetAverageInList(avgs,avg_count);
-	if (!bIgnoreBeacons) out_beacon_count = GetCountOf("beacon");
-	out_participant_count = mag_count;
-	if (avg_of_mag < 10 || avg_of_avg < 50000) return 0;
-	if (!bIgnoreBeacons && (mag_count < out_beacon_count*.94 || mag_count > out_beacon_count*1.06)) return 0;
-	return avg_of_mag + avg_of_avg;
+	try
+	{
+		std::string mags = ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>");
+		std::string avgs = ExtractXML(data,"<AVERAGES>","</AVERAGES>");
+		double mag_count = 0;
+		double avg_count = 0;
+		double avg_of_mag = GetAverageInList(mags,mag_count);
+		double avg_of_avg = GetAverageInList(avgs,avg_count);
+		if (!bIgnoreBeacons) out_beacon_count = GetCountOf("beacon");
+		out_participant_count = mag_count;
+		if (avg_of_mag < 10 || avg_of_avg < 50000) return 0;
+		if (!bIgnoreBeacons && (mag_count < out_beacon_count*.94 || mag_count > out_beacon_count*1.06)) return 0;
+		return avg_of_mag + avg_of_avg;
+	}
+	catch (std::exception &e) 
+	{
+				printf("Error in GetSuperblockAvgMag.");
+				return 0;
+	}
+	catch(...)
+	{
+				printf("Error in GetSuperblockAvgMag.");
+				return 0;
+	}
+	 
 }
 
 
 
 bool TallyMagnitudesInSuperblock()
 {
+	try
+	{
 	if (fDebug3) printf(".40.");
 
 	std::string superblock = ReadCache("superblock","magnitudes");
 	std::vector<std::string> vSuperblock = split(superblock.c_str(),";");
-    if (mvDPOR.size() > 0) 	mvDPOR.clear();
-	double TotalNetworkMagnitude = 0;
+    double TotalNetworkMagnitude = 0;
 	double TotalNetworkEntries = 0;
+	if (mvDPOR.size() > 0 && vSuperblock.size() > 1) 	mvDPOR.clear();
+	
 	for (unsigned int i = 0; i < vSuperblock.size(); i++)
 	{
 		// For each CPID in the contract
@@ -1054,13 +1070,12 @@ bool TallyMagnitudesInSuperblock()
 					mvMagnitudes[cpid] = stMagg;
 					TotalNetworkMagnitude += stMagg.Magnitude;
 					TotalNetworkEntries++;
-					//					StampTotalPaymentsByCPID(stMagg, GetAdjustedTime(), 0,0,true);
-
+    
 				}
 			}
 	}
 
-	if (fDebug3) printf(".41.");
+	if (fDebug3) printf(".41.%f",(double)0);
 
 	double NetworkAvgMagnitude = TotalNetworkMagnitude / (TotalNetworkEntries+.01);
 	// Store the Total Network Magnitude:
@@ -1108,16 +1123,28 @@ bool TallyMagnitudesInSuperblock()
 				}
 		}
 	}
-	if (fDebug3) printf(".42.");
+	if (fDebug3) printf(".42.%f",(double)0);
 
 	AVGRac = TotalRAC/(TotalProjects+.01);
 	network.AverageRAC = AVGRac;
 	network.rac = TotalRAC;
 	network.NetworkProjects = TotalProjects;
     mvNetwork["NETWORK"] = network;
-	if (fDebug3) printf(".43.");
+	if (fDebug3) printf(".43.%f",(double)0);
 
 	return true;
+	}
+	catch (std::exception &e) 
+	{
+				printf("Error in TallySuperblock.");
+				return false;
+	}
+	catch(...)
+	{
+				printf("Error in TallySuperblock");
+				return false;
+	}
+
 }
 
 
@@ -1426,8 +1453,24 @@ std::string AdvertiseBeacon(bool force)
 			std::string sAction = "add";
 			std::string sType = "beacon";
 			std::string sName = GlobalCPUMiningCPID.cpid;
-			std::string result = AddContract(sType,sName,sBase);
-			return result;
+			try
+			{
+				std::string result = AddContract(sType,sName,sBase);
+				return result;
+			}
+			catch(Object& objError)
+			{
+				return "Error: Unable to send beacon::Wallet Locked::Please enter the wallet passphrase with walletpassphrase first.";
+			}
+			catch (std::exception &e) 
+			{
+				return "Error: Unable to send beacon::Wallet Locked::Please enter the wallet passphrase with walletpassphrase first.";
+			}
+			catch(...)
+			{
+				return "Error: Unable to send beacon::Wallet Locked::Please enter the wallet passphrase with walletpassphrase first.";
+
+			}
 	 }
 }
 

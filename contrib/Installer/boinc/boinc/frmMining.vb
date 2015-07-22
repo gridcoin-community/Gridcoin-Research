@@ -44,6 +44,15 @@ Public Class frmMining
         Try
 
             ChartBoinc()
+            lblCPID.Text = "CPID: " + KeyValue("PrimaryCPID")
+            Dim r As Row = GetDataValue("Historical", "Magnitude", "LastTimeSynced")
+
+            lblLastSynced.Text = "Last Synced: " + Trim(r.Synced)
+            r = GetDataValue("Historical", "Magnitude", "QuorumHash")
+
+            lblSuperblockAge.Text = "Superblock Age: " + Trim(r.DataColumn1)
+            lblQuorumHash.Text = "Popular Quorum Hash: " + Trim(r.DataColumn2)
+            
 
         Catch exx As Exception
             Log("One minute update:" + exx.Message)
@@ -52,9 +61,9 @@ Public Class frmMining
     
 
     Public Sub ChartBoinc()
-        
-        Dim last_total As Double
-        Dim seriesAvgCredits As Series : Dim seriesTotalCredits As Series : Dim seriesProjects As Series
+        'Dim seriesAvgCredits As New Series
+        Dim seriesNetworkMagnitude As New Series
+        Dim seriesUserMagnitude As New Series
 
         Try
             If bCharting Then Exit Sub
@@ -63,7 +72,8 @@ Public Class frmMining
                 Chart1.Series.Clear()
 
                 Chart1.Titles.Clear()
-                Chart1.Titles.Add("Boinc Utilization")
+                Chart1.Titles.Add("Historical Contribution")
+                Chart1.Titles(0).ForeColor = Color.LightGreen
                 Chart1.BackColor = Color.Transparent : Chart1.ForeColor = Color.Lime
                 Chart1.ChartAreas(0).AxisX.IntervalType = DateTimeIntervalType.Weeks : Chart1.ChartAreas(0).AxisX.TitleForeColor = Color.White
                 Chart1.ChartAreas(0).BackSecondaryColor = Color.Transparent : Chart1.ChartAreas(0).AxisX.LabelStyle.ForeColor = Color.Lime
@@ -71,79 +81,109 @@ Public Class frmMining
                 Chart1.ChartAreas(0).BackSecondaryColor = Color.Gray : Chart1.ChartAreas(0).BorderColor = Color.Gray
                 Chart1.Legends(0).ForeColor = Color.Lime
                 Chart1.ChartAreas(0).AxisX.LabelStyle.Format = "MM-dd-yyyy"
-                seriesAvgCredits = New Series
-
-                seriesAvgCredits.Name = "Avg Daily Credits" : seriesAvgCredits.ChartType = SeriesChartType.Line
-                seriesAvgCredits.LabelForeColor = Color.Lime
-                seriesTotalCredits = New Series
-                seriesTotalCredits.ChartType = SeriesChartType.FastLine
-                seriesTotalCredits.Name = "Total Daily Credits"
-                seriesProjects = New Series
-                seriesProjects.Name = "Projects" : Chart1.ChartAreas(0).AxisX.Interval = 1 : seriesProjects.ChartType = SeriesChartType.StepLine
-                Chart1.Series.Add(seriesTotalCredits)
-                Chart1.Series.Add(seriesAvgCredits)
-                Chart1.Series.Add(seriesProjects)
-
+                Chart1.ChartAreas(0).AxisX.Interval = 2
+                Chart1.ForeColor = Color.GreenYellow
+                'Network Magnitude
+                seriesNetworkMagnitude.ChartType = SeriesChartType.FastLine
+                seriesNetworkMagnitude.Name = "Network Magnitude"
+                ' seriesNetworkMagnitude.LabelForeColor = Color.GreenYellow
+                Chart1.Series.Add(seriesNetworkMagnitude)
+                'User Magnitude
+                seriesUserMagnitude.ChartType = SeriesChartType.FastLine
+                seriesUserMagnitude.Name = "User Magnitude"
+                'seriesUserMagnitude.LabelForeColor = Color.GreenYellow
+                Chart1.Series.Add(seriesUserMagnitude)
             End If
-
-            seriesAvgCredits.Points.Clear()
-            seriesTotalCredits.Points.Clear()
-            seriesProjects.Points.Clear()
-
-
-            Dim dProj As Double
-            Dim lookback As Double
-            For x = 30 To 0.5 Step -6
-                lookback = x * 3600 * 24
-
-                Dim l1 As Double
-                Dim l2 As Double
-                Dim l3 As Double
-              
-                l3 = Math.Abs(l2 - last_total)
-                last_total = l2
-                If l3 > (l1 * 5) Then l3 = l1
-                Application.DoEvents()
-                Dim pCreditsAvg As New DataPoint
-                ' dProj = clsGVM.BoincProjects
-                Dim d1 As Date = DateAdd(DateInterval.Day, -x, Now)
-                pCreditsAvg.SetValueXY(d1, l1)
-                seriesAvgCredits.Points.Add(pCreditsAvg)
-                Dim dpProj As New DataPoint()
-                dpProj.SetValueXY(d1, dProj * (l1 / 10))
-                seriesProjects.Points.Add(dpProj)
-                Dim pCreditsTotal As New DataPoint()
-                pCreditsTotal.SetValueXY(d1, l3)
-                seriesTotalCredits.Points.Add(pCreditsTotal)
+            seriesNetworkMagnitude.Points.Clear()
+            seriesUserMagnitude.Points.Clear()
+            '''''''''''''''''''''''''''''' Chart Bar of Historical Contribution ''''''''''''''''''''''''''''''''''''''''
+            Dim lUserMag As Double = 0
+            Dim lNetworkMag As Double = 0
+            Dim lAvgNetMag As Double = 0
+            Dim lAvgUserMag As Double = 0
+            Dim sCPID As String = KeyValue("PrimaryCPID")
+            For x = 30 To 1 Step -1
+                'Dim dpAvgCredits As New DataPoint
+                'dpAvgCredits.SetValueXY(ChartDate, lAvgCredits)
+                'seriesAvgCredits.Points.Add(pCreditsAvg)
+                Dim ChartDate As Date = DateAdd(DateInterval.Day, -x, Now)
+                lUserMag = GetHistoricalMagnitude(ChartDate, sCPID, lAvgUserMag)
+                lNetworkMag = GetHistoricalMagnitude(ChartDate, "Network", lAvgNetMag)
+                Dim dpUserMag As New DataPoint()
+                dpUserMag.SetValueXY(ChartDate, lUserMag)
+                seriesUserMagnitude.Points.Add(dpUserMag)
+                Dim dpNetworkMag As New DataPoint()
+                dpNetworkMag.SetValueXY(ChartDate, lAvgNetMag)
+                seriesNetworkMagnitude.Points.Add(dpNetworkMag)
             Next
+            '''''''''''''''''''''''''''''''  Chart Pie of Current Contribution '''''''''''''''''''''''''''''''''''''''''
+            Call ChartBoincUtilization(lUserMag, lAvgNetMag)
 
         Catch ex As Exception
         End Try
         bCharting = False
     End Sub
-    
-    
+
+    Public Sub ChartBoincUtilization(bu As Long, netBU As Long)
+        Try
+            If chtCurCont.Titles.Count < 1 Then
+                chtCurCont.Series.Clear()
+                chtCurCont.Titles.Clear()
+                chtCurCont.BackColor = Color.Transparent : chtCurCont.ForeColor = Color.Blue
+                chtCurCont.Titles.Add("Contribution")
+                chtCurCont.Titles(0).ForeColor = Color.LightGreen
+                chtCurCont.ChartAreas(0).BackColor = Color.Transparent
+                chtCurCont.ChartAreas(0).BackSecondaryColor = Color.White
+                chtCurCont.Legends(0).BackColor = Color.Transparent
+                chtCurCont.Legends(0).ForeColor = Color.Honeydew
+                Dim sUtilization As New Series
+                sUtilization.Name = "Magnitude" : sUtilization.ChartType = SeriesChartType.Pie
+                sUtilization.LegendText = "Boinc Magnitude"
+                sUtilization.LabelBackColor = Color.Lime : sUtilization.IsValueShownAsLabel = False
+                sUtilization.LabelForeColor = Color.Honeydew
+                chtCurCont.Series.Add(sUtilization)
+            End If
+            chtCurCont.Series(0).Points.Clear()
+            If Not bUICharted Then bUICharted = True : bu = 2
+            chtCurCont.Series(0).Points.AddY(bu)
+            chtCurCont.Series(0).LabelBackColor = Color.Transparent
+            chtCurCont.Series(0).Points(0).Label = Trim(bu)
+            chtCurCont.Series(0).Points(0).Color = Color.Blue
+            chtCurCont.Series(0).Points(0).LegendToolTip = Trim(bu) + " magnitude"
+            chtCurCont.Series(0).Points.AddY(netBU - bu)
+            chtCurCont.Series(0).Points(1).IsVisibleInLegend = False
+            chtCurCont.Series(0)("PointWidth") = "0.5"
+            chtCurCont.Series(0).IsValueShownAsLabel = False
+            chtCurCont.Series(0)("BarLabelStyle") = "Center"
+            chtCurCont.ChartAreas(0).Area3DStyle.Enable3D = True
+            chtCurCont.Series(0)("DrawingStyle") = "Cylinder"
+        Catch ex As Exception
+
+        End Try
+    End Sub
+
+
     Private Sub frmMining_Activated(sender As Object, e As System.EventArgs) Handles Me.Activated
-      
+
     End Sub
     Private Sub frmMining_FormClosing(ByVal sender As Object, ByVal e As System.Windows.Forms.FormClosingEventArgs) Handles Me.FormClosing
 
         Me.Hide()
         e.Cancel = True
     End Sub
-   
-   
+
+
     Private Sub btnHide_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles btnHide.Click
         Me.Hide()
     End Sub
-   
+
     Private Sub HideToolStripMenuItem_Click(sender As System.Object, e As System.EventArgs) Handles HideToolStripMenuItem.Click
         Me.Hide()
     End Sub
 
-   
+
     Public Sub UpdateChartHashRate()
-    
+
         Try
             ChartHashRate.Series.Clear()
             ChartHashRate.Titles.Clear()
@@ -161,14 +201,14 @@ Public Class frmMining
             sHR.IsValueShownAsLabel = False
             sHR.LabelForeColor = Color.Honeydew
             ChartHashRate.Series.Add(sHR)
-           
-        
+
+
         Catch ex As Exception
         End Try
 
     End Sub
     Private Sub frmMining_Load(sender As Object, e As System.EventArgs) Handles Me.Load
-    
+
         Try
 
             Call OneMinuteUpdate()
@@ -181,8 +221,8 @@ Public Class frmMining
 
 
     End Sub
-   
-   
+
+
     Public Sub New()
         InitializeComponent()
     End Sub
@@ -259,7 +299,7 @@ Public Class frmMining
         vHeading = Split(sHeading, ";")
 
         PopulateHeadings(vHeading, dgvProjects)
-       
+
         Dim surrogateRow As New Row
         Dim lstWhitelist As List(Of Row)
         Dim surrogateWhitelistRow As New Row
@@ -269,7 +309,7 @@ Public Class frmMining
         Dim WhitelistedProjects As Double = 0
         Dim PrjCount As Double = 0
         iRow = 0
-        
+
         'Loop through the whitelist
         lstWhitelist.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
         Dim rPRJ As New Row
@@ -293,7 +333,7 @@ Public Class frmMining
             dgvProjects.Rows(iRow).Cells(3).Value = Trim(bIsThisWhitelisted)
             iRow = iRow + 1
         Next
-        
+
         lblTotalProjects.Text = Trim(PrjCount)
         lblWhitelistedProjects.Text = Trim(WhitelistedProjects)
 
@@ -324,7 +364,7 @@ Public Class frmMining
         Dim WhitelistedProjects As Double = GetWhitelistedCount(lstProjects1, lstWhitelist)
         Dim TotalProjects As Double = lstProjects1.Count
         Dim PrjCount As Double = 0
-       
+
         'Loop through the whitelist
         lstWhitelist.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
         Dim TotalRAC As Double = 0
@@ -390,7 +430,7 @@ Public Class frmMining
 
             iRow += 1
             dgvProjects.Rows.Add()
-        
+
             dgvProjects.Rows(iRow - 1).Cells(0).Value = "Total Mag: " + Trim(Math.Round(CumulativeMag, 2))
 
             dgvProjects.Rows(iRow - 1).Cells(3).Value = TotalNetworkRAC
@@ -469,6 +509,8 @@ Public Class frmMining
 
     Private Sub btnRefresh_Click(sender As System.Object, e As System.EventArgs) Handles btnRefresh.Click
         PopulateNeuralData()
+        Call OneMinuteUpdate()
+
     End Sub
 
     Private Sub TimerSync_Tick(sender As System.Object, e As System.EventArgs) Handles TimerSync.Tick
@@ -492,6 +534,12 @@ Public Class frmMining
 
     Private Sub InstallGridcoinGalazaToolStripMenuItem_Click(sender As System.Object, e As System.EventArgs) Handles InstallGridcoinGalazaToolStripMenuItem.Click
         InstallGalaza()
+
+    End Sub
+
+    Private Sub tOneMinute_Tick(sender As System.Object, e As System.EventArgs) Handles tOneMinute.Tick
+        Log("Tick")
+        Call OneMinuteUpdate()
 
     End Sub
 End Class

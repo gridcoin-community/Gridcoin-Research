@@ -546,8 +546,18 @@ bool FullSyncWithDPORNodes()
                 LoadAdminMessages(false,errors1);
 				std::string cpiddata = GetListOf("beacon");
 				std::string whitelist = GetListOf("project");
-				std::string data = "<WHITELIST>" + whitelist + "</WHITELIST><CPIDDATA>" + cpiddata + "</CPIDDATA>";
-				//printf("Syncing neural network %s \r\n",data.c_str());
+				int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+				std::string myNeuralHash = "";
+				double popularity = 0;
+				std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
+				std::string sAge = RoundToString((double)superblock_age,0);
+				std::string data = "<WHITELIST>" + whitelist + "</WHITELIST><CPIDDATA>" 
+					+ cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH></QUORUMDATA>";
+
+				if (fDebug3) printf("Syncing neural network %s \r\n",data.c_str());
+				std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
+				qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
+			
 				qtSyncWithDPORNodes(data);
 			#endif
 			return true;
@@ -3007,7 +3017,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		//Approve first coinstake in DPOR block
 		if (bb.cpid != "INVESTOR" && IsLockTimeWithinMinutes(GetBlockTime(),15))
 		{
-			    if (bb.ResearchSubsidy > GetOwedAmount(bb.cpid))	
+			    if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))	
 				{
 						return DoS(20, error("ConnectBlock[] : Researchers Reward for CPID %s pays too much - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
 										bb.cpid.c_str(), bb.ResearchSubsidy, 
@@ -3886,6 +3896,8 @@ void GridcoinServices()
 	//Dont perform the following functions if out of sync
 	if (OutOfSyncByAge()) return; 
 
+	if (fDebug3) printf("{GS}");
+
 	//Backup the wallet once per 900 blocks:
 	if (TimerMain("backupwallet", 900))
 	{
@@ -3899,15 +3911,18 @@ void GridcoinServices()
 	}
 
 	int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+	if (fDebug3) printf ("SBA %f, BH %f ",(double)superblock_age,(double)nBestHeight);
 	if (superblock_age > 12*60*60)
 	{
 		if ((nBestHeight % 3) == 0)
 		{
+			if (fDebug3) printf("CNNSH ");
 			ComputeNeuralNetworkSupermajorityHashes();
 		}
 		//When superblock is old, Tally every 10 mins:
 		if ((nBestHeight % 10) == 0)
 		{
+			if (fDebug3) printf("TIB ");
 		    TallyInBackground();
 		}
 
@@ -3917,7 +3932,9 @@ void GridcoinServices()
 		// When superblock is not old, Tally every 20 mins:
 		if ((nBestHeight % 20) == 0)
 		{
+			    if (fDebug3) printf("TIB1 ");
 			    TallyInBackground();
+				if (fDebug3) printf("CNNSH2 ");
 				ComputeNeuralNetworkSupermajorityHashes();
 		}
 
@@ -3934,6 +3951,7 @@ void GridcoinServices()
 		// For effeciency, the network sleeps for 20 hours after a good superblock is accepted
 		if (superblock_age > 12*60*60)
 		{
+			if (fDebug3) printf("FSWDPOR ");
 			FullSyncWithDPORNodes();
 		}
 	}
@@ -3973,6 +3991,7 @@ void GridcoinServices()
 	if (TimerMain("GridcoinPersistedDataSystem",5))
 	{
 		std::string errors1 = "";
+		if (fDebug3) printf("GS-LAM");
 		bool result = LoadAdminMessages(false,errors1);
 	}
 
@@ -3995,6 +4014,7 @@ void GridcoinServices()
 
 	if (TimerMain("check_for_autoupgrade",240))
 	{
+		if (fDebug3) printf("Checking for upgrade...");
 		bCheckedForUpgradeLive = true;
 	}
 
@@ -4195,7 +4215,7 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
 			//1-8-2015 Extract solved Key
 			double solvedNonce = cdbl(AppCache(pindexBest->GetBlockHash().GetHex()),0);
 			nNonce=solvedNonce;
-			if (fDebug3) printf("7. Nonce %f, SNonce %f, StakeTime %f, MaxHistTD %f, BBPTL %f, PDBTm %f \r\n",
+			if (fDebug3) printf(".17. Nonce %f, SNonce %f, StakeTime %f, MaxHistTD %f, BBPTL %f, PDBTm %f \r\n",
 				(double)nNonce,(double)solvedNonce,(double)txCoinStake.nTime,
 				(double)max(pindexBest->GetPastTimeLimit()+1, PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1)),
 				(double)pindexBest->GetPastTimeLimit(), (double)PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1)	);
@@ -4776,8 +4796,12 @@ double coalesce(double mag1, double mag2)
 
 double GetOwedAmount(std::string cpid)
 {
-	StructCPID m = mvMagnitudes[cpid];
-	if (m.initialized) return m.owed;
+	if (mvMagnitudes.size() > 1)
+	{
+		StructCPID m = mvMagnitudes[cpid];
+		if (m.initialized) return m.owed;
+		return 0;
+	}
 	return 0;
 }
 
@@ -5124,7 +5148,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 
 	if (bTallyStarted) return true;
 	bTallyStarted = true;
-	printf("Gathering network avgs (begin)\r\n");
+	printf("Gathering network avgs (begin) %f ",(double)0);
 	nLastTallied = GetAdjustedTime();
 	bNetAveragesLoaded = false;
 	bool superblockloaded = false;
@@ -5138,7 +5162,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 					int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
 					int nLookback = BLOCKS_PER_DAY*14; //Daily block count * Lookback in days = 14 days
 					int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
-					if (fDebug3) printf("START BLOCK %f, END BLOCK %f",(double)nMaxDepth,(double)nMinDepth);
+					if (fDebug3) printf("START BLOCK %f, END BLOCK %f ",(double)nMaxDepth,(double)nMinDepth);
 					if (nMinDepth < 2)              nMinDepth = 2;
 					if (mvMagnitudes.size() > 0) 	mvMagnitudes.clear();
 					int iRow = 0;
@@ -5153,29 +5177,41 @@ bool TallyNetworkAverages(bool ColdBoot)
 							{
 								double out_beacon_count = 0;
 								double out_participant_count = 0;
+								if (fDebug3) printf(" GetSBAvgMag %f",(double)0);
+     						
 								double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,true);
+								if (fDebug3) printf(" GOTSBAvgMag ",(double)0);
+     						
 								if (avg_mag > 10)
 								{
-										LoadSuperblock(bb.superblock,nTime,ii);
+	    								if (fDebug3) printf(" LSB %f",(double)0);
+     									LoadSuperblock(bb.superblock,nTime,ii);
 										superblockloaded=true;
-										if (fDebug3) printf(" SBL ");
+										if (fDebug3) printf(" SBL %f",(double)0);
 								}
 							}
 							iRow++;
 							// Insert CPID, Magnitude, Payments
 							AddNetworkMagnitude((double)ii,nTime,bb.cpid,bb);
+					
 						}
 					}
 					
+					if (fDebug3) printf("CNA ");
 					StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
 					network.projectname="NETWORK";
 					network.payments = NetworkPayments;
 					mvNetwork["NETWORK"] = network;
-					if (fDebug3) printf("TallyMagnitudesInSuperblock()");
+					if (fDebug3) printf("TallyMagnitudesInSuperblock() %f",(double)0);
+					
 					TallyMagnitudesInSuperblock();
-					bNetAveragesLoaded = true;
-					if (fDebug3) printf(".Done.\r\n");
+					
+					if (fDebug3) printf(".GNP. %f",(double)0);
+					GetNextProject(false);
+					if (fDebug3) printf(".Done.\r\n %f",(double)0);
 					bTallyStarted = false;
+					bNetAveragesLoaded = true;
+				
 					return true;
 	}
 	catch (std::exception &e) 
@@ -7329,9 +7365,14 @@ void HarvestCPIDs(bool cleardata)
 						if (structcpid.rac > 10 && structcpid.team=="gridcoin")
 						{
 							msPrimaryCPID = structcpid.cpid;
+							#ifdef WIN32
+								//Let the Neural Network know what your CPID is so it can be charted:
+							    std::string sXML = "<KEY>PrimaryCPID</KEY><VALUE>" + msPrimaryCPID + "</VALUE>";
+								std::string sData = qtExecuteDotNetStringFunction("WriteKey",sXML);
+							#endif
+		
 						}
 				}
-
 
 
 				mvCPIDs[proj] = structcpid;
@@ -8116,7 +8157,6 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 	CBlockIndex* pindex = pindexBest;
 	pindex = FindBlockByHeight(nMinDepth);
 	if (fDebug3) printf("MaxH %f \r\n ",(double)nMaxDepth);
-	//CTxDB txdb("r");
     while (pindex->nHeight < nMaxDepth)
 	{
 		if (pindex->pnext == NULL) return false;
@@ -8127,13 +8167,11 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 		if (!block.ReadFromDisk(pindex)) continue;
 		BOOST_FOREACH(const CTransaction &tx, block.vtx)
 		{
-			    //uint256 hashTx = tx.GetHash();
-                //CTxIndex txindex;
-                //if (txdb.ReadTxIndex(hashTx, txindex))
-                //{
+			   
 			  MemorizeMessage(tx.hashBoinc,tx.nTime);
 		}
 	}
+	if (fDebug3) printf("MaxE %f \r\n ",(double)nMaxDepth);
 	return true;
 }
 
