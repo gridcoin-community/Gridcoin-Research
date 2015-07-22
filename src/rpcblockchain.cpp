@@ -23,6 +23,7 @@ extern std::string ExtractValue(std::string data, std::string delimiter, int pos
 bool TallyNetworkAverages(bool ColdBoot);
 void TallyInBackground();
 double GetNetworkPaymentsTotal();
+double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
 
 extern bool CheckMessageSignature(std::string messagetype, std::string sMsg, std::string sSig);
 extern std::string CryptoLottery(int64_t locktime);
@@ -1066,7 +1067,11 @@ bool TallyMagnitudesInSuperblock()
 					stMagg.cpid = cpid;
 					stMagg.Magnitude = stCPID.Magnitude;
 					stMagg.PaymentMagnitude = LederstrumpfMagnitude2(magnitude,GetAdjustedTime());
-					
+					//Adjust total owed - in case they are a newbie:
+					double total_owed = 0;
+				    stMagg.owed = GetOutstandingAmountOwed(stMagg,cpid,(double)GetAdjustedTime(),total_owed,stCPID.Magnitude);
+				    stMagg.totalowed = total_owed;
+
 					mvMagnitudes[cpid] = stMagg;
 					TotalNetworkMagnitude += stMagg.Magnitude;
 					TotalNetworkEntries++;

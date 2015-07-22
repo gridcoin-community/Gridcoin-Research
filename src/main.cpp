@@ -69,6 +69,8 @@ extern bool LoadSuperblock(std::string data, int64_t nTime, double height);
 
 extern CBlockIndex* GetHistoricalMagnitude(std::string cpid,int nStartHeight);
 
+extern double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
+
 
 
 
@@ -2793,7 +2795,7 @@ bool LoadSuperblock(std::string data, int64_t nTime, double height)
 		WriteCache("superblock","averages",ExtractXML(data,"<AVERAGES>","</AVERAGES>"),nTime);
 		WriteCache("superblock","all",data,nTime);
 		WriteCache("superblock","block_number",RoundToString(height,0),nTime);
-		TallyMagnitudesInSuperblock();
+		//TallyMagnitudesInSuperblock(); (Done in TallynetworkAverages)
 		return true;
 }
 
@@ -4812,23 +4814,38 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
 	// Payment date range is stored in HighLockTime-LowLockTime
 	// If newbie has not participated for 14 days, use earliest payment in chain to assess payment window
 	// (Important to prevent e-mail change attacks) - Calculate payment timespan window in days
-	double payment_timespan = (GetAdjustedTime() - mag.EarliestPaymentTime)/38400;
-	if (payment_timespan < 2) payment_timespan =  2;
-	if (payment_timespan > 10) payment_timespan = 14;
-	mag.PaymentTimespan = Round(payment_timespan,0);
-	double research_magnitude = 0;
-	// Get neural network magnitude:
-	StructCPID stDPOR = GetInitializedStructCPID2(cpid,mvDPOR);
-	research_magnitude = LederstrumpfMagnitude2(stDPOR.Magnitude,locktime);
-	double owed_standard = payment_timespan * Cap(research_magnitude*GetMagnitudeMultiplier(locktime), 
-		GetMaximumBoincSubsidy(locktime)*5);
-	double owed_network_cap = payment_timespan * GRCMagnitudeUnit(locktime) * research_magnitude;
-	double owed = Lowest(owed_standard,owed_network_cap);
-	double paid = mag.payments;
-	double outstanding = Lowest(owed-paid, GetMaximumBoincSubsidy(locktime)*5);
-	total_owed = owed;
-	if (outstanding < 0) outstanding=0;
-	return outstanding;
+	try
+	{
+		double payment_timespan = (GetAdjustedTime() - mag.EarliestPaymentTime)/38400;
+		if (payment_timespan < 2) payment_timespan =  2;
+		if (payment_timespan > 10) payment_timespan = 14;
+		mag.PaymentTimespan = Round(payment_timespan,0);
+		double research_magnitude = 0;
+		// Get neural network magnitude:
+		StructCPID stDPOR = GetInitializedStructCPID2(cpid,mvDPOR);
+		research_magnitude = LederstrumpfMagnitude2(stDPOR.Magnitude,locktime);
+		double owed_standard = payment_timespan * Cap(research_magnitude*GetMagnitudeMultiplier(locktime), 
+			GetMaximumBoincSubsidy(locktime)*5);
+		double owed_network_cap = payment_timespan * GRCMagnitudeUnit(locktime) * research_magnitude;
+		double owed = Lowest(owed_standard,owed_network_cap);
+		double paid = mag.payments;
+		double outstanding = Lowest(owed-paid, GetMaximumBoincSubsidy(locktime)*5);
+		total_owed = owed;
+		if (outstanding < 0) outstanding=0;
+		return outstanding;
+	}
+	catch (std::exception &e) 
+	{
+			printf("Error while Getting outstanding amount owed.");
+			return 0;
+	}
+    catch(...)
+	{
+			printf("Error while Getting outstanding amount owed.");
+			return 0;
+	}
+
+
 }
 
 bool IsLockTimeWithin14days(double locktime)
@@ -4940,6 +4957,9 @@ void AdjustTimestamps(StructCPID& strCPID, double timestamp, double subsidy)
 
 void AddNetworkMagnitude(double height, double LockTime, std::string cpid, MiningCPID bb)
 {
+	try
+	{
+		if (!bb.initialized) return;
         StructCPID stMag = GetInitializedStructCPID2(cpid,mvMagnitudes);
 		stMag.cpid = cpid;
 		stMag.GRCAddress = bb.GRCAddress;
@@ -4961,6 +4981,15 @@ void AddNetworkMagnitude(double height, double LockTime, std::string cpid, Minin
 	    stMag.owed = GetOutstandingAmountOwed(stMag,cpid,LockTime,total_owed,bb.Magnitude);
 	    stMag.totalowed = total_owed;
 	    mvMagnitudes[cpid] = stMag;
+	}
+	catch (std::exception &e) 
+	{
+			printf("Error while Adding Network Magnitude.");
+	}
+    catch(...)
+	{
+			printf("Error while Adding Network Magnitude.");
+	}
 }
 
 
@@ -5173,14 +5202,17 @@ bool TallyNetworkAverages(bool ColdBoot)
 						if (bb.initialized)
 						{
 							NetworkPayments += bb.ResearchSubsidy;
+							// Insert CPID, Magnitude, Payments
+							AddNetworkMagnitude((double)ii,nTime,bb.cpid,bb);
+							iRow++;
+					
 							if (!superblockloaded && bb.superblock.length() > 20)
 							{
 								double out_beacon_count = 0;
 								double out_participant_count = 0;
 								if (fDebug3) printf(" GetSBAvgMag %f",(double)0);
-     						
-								double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,true);
-								if (fDebug3) printf(" GOTSBAvgMag ",(double)0);
+     							double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,true);
+								if (fDebug3) printf(" GOTSBAvgMag ");
      						
 								if (avg_mag > 10)
 								{
@@ -5190,9 +5222,6 @@ bool TallyNetworkAverages(bool ColdBoot)
 										if (fDebug3) printf(" SBL %f",(double)0);
 								}
 							}
-							iRow++;
-							// Insert CPID, Magnitude, Payments
-							AddNetworkMagnitude((double)ii,nTime,bb.cpid,bb);
 					
 						}
 					}

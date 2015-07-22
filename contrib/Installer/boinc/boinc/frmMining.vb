@@ -257,15 +257,19 @@ Public Class frmMining
         dgv.AutoResizeColumns(DataGridViewAutoSizeColumnsMode.ColumnHeader)
         dgv.ReadOnly = True
         dgv.EditingPanel.Visible = False
-        '     SendMessage(dgv.Handle, WM_SETREDRAW, False, 0)
-
+  
         For y = 0 To UBound(vData) - 1
             dgv.Rows.Add()
             sReportRow = ""
             For x = 0 To UBound(vHeading)
                 Dim vRow() As String = Split(vData(y), ",")
                 sValue = vRow(x)
-                dgv.Rows(iRow).Cells(x).Value = sValue
+                'Sort numerically:
+                If x = 1 Or x = 2 Then
+                    dgv.Rows(iRow).Cells(x).Value = Val(sValue)
+                Else
+                    dgv.Rows(iRow).Cells(x).Value = sValue
+                End If
                 sReportRow += sValue + ","
             Next x
             sReport += sReportRow + vbCrLf
@@ -273,8 +277,7 @@ Public Class frmMining
             If iRow Mod 10 = 0 Then Application.DoEvents()
 
         Next
-        '  SendMessage(dgv.Handle, WM_SETREDRAW, True, 0)
-
+  
         SetAutoSizeMode2(vHeading, dgv)
 
 
