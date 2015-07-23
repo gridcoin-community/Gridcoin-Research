@@ -33,7 +33,6 @@ double GetBlockDifficulty(unsigned int nBits);
 void WriteAppCache(std::string key, std::string value);
 bool OutOfSyncByAgeWithChanceOfMining();
 int64_t GetRSAWeightByCPID(std::string cpid);
-double ComputeResearchAccrual(std::string cpid, double dCurrentMagnitude, int nStakeHeight, int64_t nStakeTime, double& dAccrualAge, double& dMagnitudeUnit);
 
 
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
@@ -1991,16 +1990,17 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		}
 		//Halford: Use current time since we are creating a new stake
 		double OUT_POR = 0;
-		
-		// ************************************************* CREATE PROOF OF RESEARCH REWARD ****************************** R HALFORD *************** 1/19/2015 *******************************
-
-        int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,
-			GetAdjustedTime(),OUT_POR,out_interest,RSA_WEIGHT);
-		//7-12-2015 Accrual System - Reserved for Future Use
 		double dAccrualAge = 0;
 		double dAccrualMagnitudeUnit = 0;
-		double dAccrualReward = ComputeResearchAccrual(GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.Magnitude,
-			pindexPrev->nHeight,GetAdjustedTime(),dAccrualAge,dAccrualMagnitudeUnit);
+		double dAccrualMagnitude = 0;
+		
+		// ************************************************* CREATE PROOF OF RESEARCH REWARD ****************************** R HALFORD *************** 7-22-2015 *******************************
+
+        int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,
+			GetAdjustedTime(),pindexBest->nHeight,OUT_POR,out_interest,dAccrualAge,dAccrualMagnitudeUnit,dAccrualMagnitude);
+
+		//7-12-2015 Accrual System - Reserved for Future Use
+//		double dAccrualReward = rual(GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.Magnitude,			pindexPrev->nHeight,GetAdjustedTime(),dAccrualAge,dAccrualMagnitudeUnit,dAccrualMagnitude);
 
 		MiningCPID miningcpid = GetNextProject(false);
 		uint256 pbh = 0;
@@ -2009,9 +2009,11 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
 		miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 		miningcpid.ResearchSubsidy = OUT_POR;
-		miningcpid.ResearchSubsidy2 = dAccrualReward;
+		miningcpid.ResearchSubsidy2 = OUT_POR;
 		miningcpid.ResearchAge = dAccrualAge;
 		miningcpid.ResearchMagnitudeUnit = dAccrualMagnitudeUnit;
+		miningcpid.ResearchAverageMagnitude = dAccrualMagnitude;
+
 		miningcpid.InterestSubsidy = out_interest;
 		miningcpid.enccpid = ""; //CPID V1 Boinc RunTime enc key
 		miningcpid.encboincpublickey = "";

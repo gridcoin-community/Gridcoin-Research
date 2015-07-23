@@ -504,6 +504,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("FutureResearchSubsidy",bb.ResearchSubsidy2));
 	result.push_back(Pair("ResearchAge",bb.ResearchAge));
 	result.push_back(Pair("ResearchMagnitudeUnit",bb.ResearchMagnitudeUnit));
+	result.push_back(Pair("ResearchAverageMagnitude",bb.ResearchAverageMagnitude));
 
 	double interest = mint-bb.ResearchSubsidy;
 	result.push_back(Pair("Interest",bb.InterestSubsidy));
@@ -1068,9 +1069,12 @@ bool TallyMagnitudesInSuperblock()
 					stMagg.Magnitude = stCPID.Magnitude;
 					stMagg.PaymentMagnitude = LederstrumpfMagnitude2(magnitude,GetAdjustedTime());
 					//Adjust total owed - in case they are a newbie:
-					double total_owed = 0;
-				    stMagg.owed = GetOutstandingAmountOwed(stMagg,cpid,(double)GetAdjustedTime(),total_owed,stCPID.Magnitude);
-				    stMagg.totalowed = total_owed;
+					if (fTestNet)
+					{
+						double total_owed = 0;
+						stMagg.owed = GetOutstandingAmountOwed(stMagg,cpid,(double)GetAdjustedTime(),total_owed,stCPID.Magnitude);
+						stMagg.totalowed = total_owed;
+					}
 
 					mvMagnitudes[cpid] = stMagg;
 					TotalNetworkMagnitude += stMagg.Magnitude;

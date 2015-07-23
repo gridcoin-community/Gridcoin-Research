@@ -422,10 +422,13 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 		double out_por = 0;
 		double out_interest=0;
-
+		double dAccrualAge = 0;
+		double dMagnitudeUnit = 0;
+		double dAvgMag = 0;
 		//Halford: Use current time since we are creating a new stake
-		int64_t nNewBlockReward = GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),
-			out_por,out_interest,miningcpid.RSAWeight);
+		int64_t nNewBlockReward = GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),pindexBest->nHeight,out_por,out_interest,dAccrualAge,dMagnitudeUnit,dAvgMag);
+		
+
 		miningcpid.ResearchSubsidy = out_por;
 		miningcpid.InterestSubsidy = out_interest;
 		miningcpid.enccpid = ""; //CPID V1 Boinc RunTime enc key

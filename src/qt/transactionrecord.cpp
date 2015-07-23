@@ -164,7 +164,6 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
 						}
 							
 						hashPrev = hash;
-			
 					}
                 }
 

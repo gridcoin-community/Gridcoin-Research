@@ -75,7 +75,7 @@ extern int miningthreadcount;
 		double ResearchSubsidy2;
 		double ResearchAge;
 		double ResearchMagnitudeUnit;
-
+		double ResearchAverageMagnitude;
 		double EarliestPaymentTime;
 		double RSAWeight;
 		double InterestSubsidy;
@@ -153,7 +153,7 @@ extern int miningthreadcount;
 		double ResearchSubsidy2;
 		double ResearchAge;
 		double ResearchMagnitudeUnit;
-
+		double ResearchAverageMagnitude;
 		double InterestSubsidy;
 		int prevBlockType;
 		double Canary;

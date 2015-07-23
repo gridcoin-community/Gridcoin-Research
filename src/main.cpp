@@ -40,7 +40,9 @@ extern std::string VectorToString(std::vector<unsigned char> v);
 extern bool UnusualActivityReport();
 extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
-extern double ComputeResearchAccrual(std::string cpid, double dCurrentMagnitude, int nStakeHeight, int64_t nStakeTime, double& dAccrualAge, double& dMagnitudeUnit);
+extern int64_t ComputeResearchAccrual(std::string cpid, int nStakeHeight, int64_t nStakeTime, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
+
+
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 double qtExecuteGenericFunction(std::string function,std::string data);
 
@@ -2068,34 +2070,71 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 
 // miner's coin stake reward based on coin age spent (coin-days)
 int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, 
-	bool VerifyingBlock, int64_t locktime, double& OUT_POR, double& OUT_INTEREST, double RSA_WEIGHT)
+	bool VerifyingBlock, int64_t locktime, int nStakeHeight, double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
-	int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
-	int64_t nBoinc    = GetProofOfResearchReward(cpid,VerifyingBlock);
-	int64_t nSubsidy  = nInterest + nBoinc;
-    if (fDebug || GetBoolArg("-printcreation"))
-	{
-        printf("GetProofOfStakeReward(): create=%s nCoinAge=%"PRId64" nBoinc=%"PRId64"   \n",
-		FormatMoney(nSubsidy).c_str(), nCoinAge, nBoinc);
-	}
-	int64_t maxStakeReward1 = GetProofOfStakeMaxReward(nCoinAge, nFees, locktime);
-	int64_t maxStakeReward2 = GetProofOfStakeMaxReward(nCoinAge, nFees, GetAdjustedTime());
-	int64_t maxStakeReward = Floor(maxStakeReward1,maxStakeReward2);
-	if ((nSubsidy+nFees) > maxStakeReward) nSubsidy = maxStakeReward-nFees;
-	int64_t nTotalSubsidy = nSubsidy + nFees;
-	if (nBoinc > 1)
-	{
-		std::string sTotalSubsidy = RoundToString(CoinToDouble(nTotalSubsidy)+.00000123,8);
-		if (sTotalSubsidy.length() > 7)
-		{
-			sTotalSubsidy = sTotalSubsidy.substr(0,sTotalSubsidy.length()-4) + "0124";
-			nTotalSubsidy = cdbl(sTotalSubsidy,8)*COIN;
-		}
-	}
 
-	OUT_POR = CoinToDouble(nBoinc);
-	OUT_INTEREST = CoinToDouble(nInterest);
-    return nTotalSubsidy;
+	// 7-22-2015 - PRODUCTION
+	if (!fTestNet)
+	{
+			int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
+			int64_t nBoinc    = GetProofOfResearchReward(cpid,VerifyingBlock);
+			int64_t nSubsidy  = nInterest + nBoinc;
+			if (fDebug || GetBoolArg("-printcreation"))
+			{
+				printf("GetProofOfStakeReward(): create=%s nCoinAge=%"PRId64" nBoinc=%"PRId64"   \n",
+				FormatMoney(nSubsidy).c_str(), nCoinAge, nBoinc);
+			}
+			int64_t maxStakeReward1 = GetProofOfStakeMaxReward(nCoinAge, nFees, locktime);
+			int64_t maxStakeReward2 = GetProofOfStakeMaxReward(nCoinAge, nFees, GetAdjustedTime());
+			int64_t maxStakeReward = Floor(maxStakeReward1,maxStakeReward2);
+			if ((nSubsidy+nFees) > maxStakeReward) nSubsidy = maxStakeReward-nFees;
+			int64_t nTotalSubsidy = nSubsidy + nFees;
+			if (nBoinc > 1)
+			{
+				std::string sTotalSubsidy = RoundToString(CoinToDouble(nTotalSubsidy)+.00000123,8);
+				if (sTotalSubsidy.length() > 7)
+				{
+					sTotalSubsidy = sTotalSubsidy.substr(0,sTotalSubsidy.length()-4) + "0124";
+					nTotalSubsidy = cdbl(sTotalSubsidy,8)*COIN;
+				}
+			}
+
+			OUT_POR = CoinToDouble(nBoinc);
+			OUT_INTEREST = CoinToDouble(nInterest);
+			return nTotalSubsidy;
+	}
+	else
+	{
+			// Future Research Age Subsidy - TESTNET
+			int64_t nBoinc = ComputeResearchAccrual(cpid, nStakeHeight, locktime, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
+			int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
+			int64_t maxStakeReward = GetProofOfStakeMaxReward(nCoinAge, nFees, locktime)*180;
+			if (nBoinc > maxStakeReward) nBoinc = maxStakeReward;
+			int64_t nSubsidy = nInterest + nBoinc;
+
+			if (fDebug || GetBoolArg("-printcreation"))
+			{
+				printf("GetProofOfStakeReward(): create=%s nCoinAge=%"PRId64" nBoinc=%"PRId64"   \n",
+				FormatMoney(nSubsidy).c_str(), nCoinAge, nBoinc);
+			}
+
+			int64_t nTotalSubsidy = nSubsidy + nFees;
+			if (nBoinc > 1)
+			{
+				std::string sTotalSubsidy = RoundToString(CoinToDouble(nTotalSubsidy)+.00000123,8);
+				if (sTotalSubsidy.length() > 7)
+				{
+					sTotalSubsidy = sTotalSubsidy.substr(0,sTotalSubsidy.length()-4) + "0124";
+					nTotalSubsidy = cdbl(sTotalSubsidy,8)*COIN;
+				}
+			}
+
+			OUT_POR = CoinToDouble(nBoinc);
+			OUT_INTEREST = CoinToDouble(nInterest);
+			return nTotalSubsidy;
+
+
+	}
 }
 
 
@@ -2962,7 +3001,13 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		{
 			double OUT_POR = 0;
 			double OUT_INTEREST_OWED = 0;
-			double dCalculatedResearchReward = CoinToDouble(GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR, OUT_INTEREST_OWED,bb.RSAWeight));
+
+			double dAccrualAge = 0;
+    		double dAccrualMagnitudeUnit = 0;
+	    	double dAccrualMagnitude = 0;
+
+			double dCalculatedResearchReward = CoinToDouble(GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, pindex->nHeight, 
+					OUT_POR, OUT_INTEREST_OWED, dAccrualAge, dAccrualMagnitudeUnit, dAccrualMagnitude));
 			if (dStakeReward > (dCalculatedResearchReward+1+nFees) )
 			{
 					return DoS(1, error("ConnectBlock[] : Investor Reward pays too much : cpid %s (actual %f vs calculated %f)",
@@ -3005,7 +3050,13 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 		double OUT_POR = 0;
 		double OUT_INTEREST = 0;
-		int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, OUT_POR, OUT_INTEREST, bb.RSAWeight);
+		double dAccrualAge = 0;
+		double dMagnitudeUnit = 0;
+		double dAvgMagnitude = 0;
+
+	
+		int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, pindex->nHeight, OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+
 		if (bb.cpid != "INVESTOR" && dStakeReward > 1)
 		{
 				if ((bb.ResearchSubsidy+bb.InterestSubsidy+1) < dStakeReward)
@@ -5198,7 +5249,17 @@ bool TallyNetworkAverages(bool ColdBoot)
 					int64_t nTime = 0;
 					for (int ii = nMaxDepth; ii > nMinDepth; ii--)
 					{
-     					MiningCPID bb = GetBoincBlockByHeight(ii,mint,nTime);
+     					
+						if (ii > pindexBest->nHeight) continue;
+						CBlockIndex* pblockindex = FindBlockByHeight(ii);
+						if (pblockindex == NULL) continue;
+						if (pblockindex->pnext == NULL) continue;
+						if (!pblockindex || !pblockindex->IsInMainChain()) continue;
+	
+						
+						MiningCPID bb = GetBoincBlockByHeight(ii,mint,nTime);
+
+
 						if (bb.initialized)
 						{
 							NetworkPayments += bb.ResearchSubsidy;
@@ -6806,7 +6867,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 					+ delim + RoundToString(mcpid.InterestSubsidy,2) + delim + NN(mcpid.Organization) 
 					+ delim + NN(mcpid.OrganizationKey) + delim + mcpid.NeuralHash + delim + mcpid.superblock 
 					+ delim + RoundToString(mcpid.ResearchSubsidy2,2) + delim + RoundToString(mcpid.ResearchAge,6) 
-					+ delim + RoundToString(mcpid.ResearchMagnitudeUnit,6);
+					+ delim + RoundToString(mcpid.ResearchMagnitudeUnit,6) + delim + RoundToString(mcpid.ResearchAverageMagnitude,2);
 
 	return bb;
 }
@@ -6900,6 +6961,10 @@ MiningCPID DeserializeBoincBlock(std::string block)
 		if (s.size() > 25)
 		{
 			surrogate.ResearchMagnitudeUnit = cdbl(s[25],6);
+		}
+		if (s.size() > 26)
+		{
+			surrogate.ResearchAverageMagnitude = cdbl(s[26],2);
 		}
 		
 	}
@@ -7528,7 +7593,7 @@ StructCPID GetStructCPID()
 	c.ResearchSubsidy2 = 0;
 	c.ResearchAge = 0;
 	c.ResearchMagnitudeUnit = 0;
-
+	c.ResearchAverageMagnitude = 0;
 	c.Canary = 0;
 	c.NetsoftRAC = 0;
 	c.interestPayments = 0;
@@ -7581,7 +7646,7 @@ MiningCPID GetMiningCPID()
 	mc.ResearchSubsidy2 = 0;
 	mc.ResearchAge = 0;
 	mc.ResearchMagnitudeUnit = 0;
-
+	mc.ResearchAverageMagnitude = 0;
 	mc.Canary = 0; //Used to test for a memory overflow
 	mc.Organization = "";
 	mc.OrganizationKey = "";
@@ -8137,22 +8202,23 @@ double GRCMagnitudeUnit(int64_t locktime)
 	return MagnitudeUnit;	
 }
 
-double ComputeResearchAccrual(std::string cpid, double dCurrentMagnitude, int nStakeHeight, int64_t nStakeTime, double& dAccrualAge, double& dMagnitudeUnit)
+
+int64_t ComputeResearchAccrual(std::string cpid, int nStakeHeight, int64_t nStakeTime, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
-	CBlockIndex* pHistorical = GetHistoricalMagnitude(cpid,nStakeHeight);
+	double dCurrentMagnitude = CalculatedMagnitude2(cpid, nStakeTime, false);
+	CBlockIndex* pHistorical = GetHistoricalMagnitude(cpid, nStakeHeight);
 	if (pHistorical->nHeight <= nNewIndex || pHistorical->nMagnitude==0 || pHistorical->nTime == 0)
 	{
 		//No prior block exists...
 		return 0;
 	}
-	double AvgMagnitude = (pHistorical->nMagnitude + dCurrentMagnitude) / 2;
+	AvgMagnitude = (pHistorical->nMagnitude + dCurrentMagnitude) / 2;
 	dAccrualAge = ((double)nStakeTime - (double)pHistorical->nTime) / 86400;
 	if (dAccrualAge < 0) dAccrualAge=0;
 	dMagnitudeUnit = GRCMagnitudeUnit(nStakeTime);
 	// TODO: If the accrual age is > 30 days, grab a snapshot from a superblock at the midpoint to make the avg magnitude accurate:
-	double Accrual = dAccrualAge*AvgMagnitude*dMagnitudeUnit;
+	int64_t Accrual = ((int64_t)(dAccrualAge*AvgMagnitude*dMagnitudeUnit)*COIN);
 	//if (fDebug3) printf("Accrual  StakeHeight %f,HistoryHeight%f,  AccrualAge %f, AvgMag %f, MagUnit %f \r\n",(double)nStakeHeight,		(double)pHistorical->nHeight,		dAccrualAge,AvgMagnitude,dMagnitudeUnit);
-
 	return Accrual;
 }
 
