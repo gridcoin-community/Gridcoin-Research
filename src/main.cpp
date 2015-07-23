@@ -558,7 +558,7 @@ bool FullSyncWithDPORNodes()
 				std::string data = "<WHITELIST>" + whitelist + "</WHITELIST><CPIDDATA>" 
 					+ cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH></QUORUMDATA>";
 
-				if (fDebug3) printf("Syncing neural network %s \r\n",data.c_str());
+				//if (fDebug3) printf("Syncing neural network %s \r\n",data.c_str());
 				std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
 				qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
 			
@@ -5130,7 +5130,6 @@ bool ComputeNeuralNetworkSupermajorityHashes()
 	{
 		return true;
 	}
-
 	nLastTalliedNeural = GetAdjustedTime();
 	//Clear the neural network hash buffer
 	if (mvNeuralNetworkHash.size() > 0)  mvNeuralNetworkHash.clear();
@@ -5144,16 +5143,18 @@ bool ComputeNeuralNetworkSupermajorityHashes()
 		int nMinDepth = (nMaxDepth - nLookback);
 		if (nMinDepth < 2)   nMinDepth = 2;
 		CBlock block;
-		for (int ii = nMaxDepth; ii > nMinDepth; ii--)
+		CBlockIndex* pblockindex = pindexBest;
+		//Loop back to the StartHeight:
+		while (pblockindex->nHeight > nMinDepth)
 		{
-   				CBlockIndex* pblockindex = FindBlockByHeight(ii);
-				if (pblockindex == NULL || !pblockindex || !pblockindex->IsInMainChain()) break;
-				block.ReadFromDisk(pblockindex);
-				std::string hashboinc = "";
-				if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
-				MiningCPID bb = DeserializeBoincBlock(hashboinc);
-				//Increment Neural Network Hashes Supermajority (over the last N blocks)
-				IncrementNeuralNetworkSupermajority(bb.NeuralHash,bb.GRCAddress,(nMaxDepth-ii)+10);
+			pblockindex = pblockindex->pprev;
+			if (pblockindex == NULL || !pblockindex || !pblockindex->IsInMainChain()) break;
+			block.ReadFromDisk(pblockindex);
+			std::string hashboinc = "";
+			if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
+			MiningCPID bb = DeserializeBoincBlock(hashboinc);
+			//Increment Neural Network Hashes Supermajority (over the last N blocks)
+			IncrementNeuralNetworkSupermajority(bb.NeuralHash,bb.GRCAddress,(nMaxDepth-pblockindex->nHeight)+10);
 		}
 
 		if (fDebug3) printf(".11.");
@@ -5228,7 +5229,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 
 	if (bTallyStarted) return true;
 	bTallyStarted = true;
-	printf("Gathering network avgs (begin) %f ",(double)0);
+	printf("Gathering network avgs (begin)");
 	nLastTallied = GetAdjustedTime();
 	bNetAveragesLoaded = false;
 	bool superblockloaded = false;
@@ -5246,56 +5247,48 @@ bool TallyNetworkAverages(bool ColdBoot)
 					if (nMinDepth < 2)              nMinDepth = 2;
 					if (mvMagnitudes.size() > 0) 	mvMagnitudes.clear();
 					int iRow = 0;
-					int64_t nTime = 0;
-					for (int ii = nMaxDepth; ii > nMinDepth; ii--)
-					{
-     					
-						if (ii > pindexBest->nHeight) continue;
-						CBlockIndex* pblockindex = FindBlockByHeight(ii);
-						if (pblockindex == NULL) continue;
-						if (pblockindex->pnext == NULL) continue;
-						if (!pblockindex || !pblockindex->IsInMainChain()) continue;
-	
-						
-						MiningCPID bb = GetBoincBlockByHeight(ii,mint,nTime);
-
-
-						if (bb.initialized)
-						{
-							NetworkPayments += bb.ResearchSubsidy;
-							// Insert CPID, Magnitude, Payments
-							AddNetworkMagnitude((double)ii,nTime,bb.cpid,bb);
-							iRow++;
+					CBlock block;
+					CBlockIndex* pblockindex = pindexBest;
 					
-							if (!superblockloaded && bb.superblock.length() > 20)
-							{
+					while (pblockindex->nHeight > nMaxDepth)
+					{
+						pblockindex = pblockindex->pprev;
+					}
+
+					if (fDebug3 && pblockindex != NULL) printf("Max block %f",(double)pblockindex->nHeight);
+
+		    		while (pblockindex->nHeight > nMinDepth)
+					{
+						pblockindex = pblockindex->pprev;
+						if (pblockindex == NULL || !pblockindex || !pblockindex->IsInMainChain()) continue;
+						block.ReadFromDisk(pblockindex);
+						MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
+						NetworkPayments += bb.ResearchSubsidy;
+						// Insert CPID, Magnitude, Payments
+						AddNetworkMagnitude((double)pblockindex->nHeight,pblockindex->nTime,bb.cpid,bb);
+						iRow++;
+					
+						if (!superblockloaded && bb.superblock.length() > 20)
+						{
 								double out_beacon_count = 0;
 								double out_participant_count = 0;
-								if (fDebug3) printf(" GetSBAvgMag %f",(double)0);
-     							double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,true);
-								if (fDebug3) printf(" GOTSBAvgMag ");
-     						
+								double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,true);
 								if (avg_mag > 10)
 								{
-	    								if (fDebug3) printf(" LSB %f",(double)0);
-     									LoadSuperblock(bb.superblock,nTime,ii);
+	    								LoadSuperblock(bb.superblock,pblockindex->nTime,pblockindex->nHeight);
 										superblockloaded=true;
-										if (fDebug3) printf(" SBL %f",(double)0);
+										if (fDebug3) printf(" Superblock Loaded %f \r\n",(double)pblockindex->nHeight);
 								}
-							}
-					
 						}
-					}
 					
-					if (fDebug3) printf("CNA ");
+					}
+					if (fDebug3 && pblockindex != NULL) printf("Min block %f, Rows %f \r\n",(double)pblockindex->nHeight,(double)iRow);
+
 					StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
 					network.projectname="NETWORK";
 					network.payments = NetworkPayments;
 					mvNetwork["NETWORK"] = network;
-					if (fDebug3) printf("TallyMagnitudesInSuperblock() %f",(double)0);
-					
 					TallyMagnitudesInSuperblock();
-					
 					if (fDebug3) printf(".GNP. %f",(double)0);
 					GetNextProject(false);
 					if (fDebug3) printf(".Done.\r\n %f",(double)0);

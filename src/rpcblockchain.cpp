@@ -1063,7 +1063,6 @@ bool TallyMagnitudesInSuperblock()
 					stCPID.Magnitude = magnitude;
 					stCPID.cpid = cpid;
 					mvDPOR[cpid]=stCPID;
-					
 					StructCPID stMagg = GetInitializedStructCPID2(cpid,mvMagnitudes);
 					stMagg.cpid = cpid;
 					stMagg.Magnitude = stCPID.Magnitude;
