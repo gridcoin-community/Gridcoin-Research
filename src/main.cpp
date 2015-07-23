@@ -5010,8 +5010,7 @@ void AddNetworkMagnitude(double height, double LockTime, std::string cpid, Minin
 {
 	try
 	{
-		if (!bb.initialized) return;
-        StructCPID stMag = GetInitializedStructCPID2(cpid,mvMagnitudes);
+	    StructCPID stMag = GetInitializedStructCPID2(cpid,mvMagnitudes);
 		stMag.cpid = cpid;
 		stMag.GRCAddress = bb.GRCAddress;
 		stMag.LastBlock = height;
