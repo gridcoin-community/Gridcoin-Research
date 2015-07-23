@@ -1069,7 +1069,7 @@ bool TallyMagnitudesInSuperblock()
 					stMagg.Magnitude = stCPID.Magnitude;
 					stMagg.PaymentMagnitude = LederstrumpfMagnitude2(magnitude,GetAdjustedTime());
 					//Adjust total owed - in case they are a newbie:
-					if (fTestNet)
+					if (true)
 					{
 						double total_owed = 0;
 						stMagg.owed = GetOutstandingAmountOwed(stMagg,cpid,(double)GetAdjustedTime(),total_owed,stCPID.Magnitude);
