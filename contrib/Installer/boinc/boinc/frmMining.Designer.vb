@@ -390,7 +390,7 @@ Partial Class frmMining
         Me.pbCgminer.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch
         Me.pbCgminer.Location = New System.Drawing.Point(0, 1)
         Me.pbCgminer.Name = "pbCgminer"
-        Me.pbCgminer.Size = New System.Drawing.Size(909, 360)
+        Me.pbCgminer.Size = New System.Drawing.Size(1037, 360)
         Me.pbCgminer.TabIndex = 3
         Me.pbCgminer.TabStop = False
         '

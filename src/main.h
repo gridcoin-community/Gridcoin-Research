@@ -1526,13 +1526,13 @@ public:
         READWRITE(blockHash);
 		//7-11-2015 - Gridcoin - New Accrual Fields
 		
-		if (nHeight > nNewIndex)
-		{
+		//if (nHeight > nNewIndex)
+		//{
 			READWRITE(sCPID);
 			READWRITE(nResearchSubsidy);
 			READWRITE(nInterestSubsidy);
 			READWRITE(nMagnitude);
-		}
+		//}
 
     )
 

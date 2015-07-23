@@ -403,9 +403,9 @@ Public Class frmMining
                     dgvProjects.Rows.Add()
                     dgvProjects.Rows(iRow - 1).Cells(0).Value = sCPID
                     dgvProjects.Rows(iRow - 1).Cells(1).Value = prj.PrimaryKey
-                    dgvProjects.Rows(iRow - 1).Cells(2).Value = Trim(CPIDRAC)
-                    dgvProjects.Rows(iRow - 1).Cells(3).Value = Trim(prj.RAC)
-                    dgvProjects.Rows(iRow - 1).Cells(4).Value = Trim(prj.AvgRAC)
+                    dgvProjects.Rows(iRow - 1).Cells(2).Value = Val(Trim(CPIDRAC))
+                    dgvProjects.Rows(iRow - 1).Cells(3).Value = Val(Trim(prj.RAC))
+                    dgvProjects.Rows(iRow - 1).Cells(4).Value = Val(Trim(prj.AvgRAC))
                     'Cumulative Mag:
                     Dim bIsThisWhitelisted As Boolean = False
                     bIsThisWhitelisted = IsInList(prj.PrimaryKey, lstWhitelist, False)
@@ -420,9 +420,9 @@ Public Class frmMining
                         TotalRAC += CPIDRAC
                         TotalNetworkRAC += PrjRAC
                     End If
-                    dgvProjects.Rows(iRow - 1).Cells(5).Value = IndMag
-                    dgvProjects.Rows(iRow - 1).Cells(6).Value = TotalRAC
-                    dgvProjects.Rows(iRow - 1).Cells(7).Value = CumulativeMag
+                    dgvProjects.Rows(iRow - 1).Cells(5).Value = Val(IndMag)
+                    dgvProjects.Rows(iRow - 1).Cells(6).Value = Val(RoundedMag(TotalRAC))
+                    dgvProjects.Rows(iRow - 1).Cells(7).Value = Val(RoundedMag(CumulativeMag))
 
                 End If
 
@@ -434,13 +434,13 @@ Public Class frmMining
             iRow += 1
             dgvProjects.Rows.Add()
 
-            dgvProjects.Rows(iRow - 1).Cells(0).Value = "Total Mag: " + Trim(Math.Round(CumulativeMag, 2))
+            dgvProjects.Rows(iRow - 1).Cells(0).Value = "Total Mag: " + Trim(RoundedMag(CumulativeMag))
 
-            dgvProjects.Rows(iRow - 1).Cells(3).Value = TotalNetworkRAC
+            dgvProjects.Rows(iRow - 1).Cells(3).Value = RoundedMag(TotalNetworkRAC)
 
 
-            dgvProjects.Rows(iRow - 1).Cells(6).Value = TotalRAC
-            dgvProjects.Rows(iRow - 1).Cells(7).Value = Trim(Math.Round(CumulativeMag, 2))
+            dgvProjects.Rows(iRow - 1).Cells(6).Value = RoundedMag(TotalRAC)
+            dgvProjects.Rows(iRow - 1).Cells(7).Value = RoundedMag(CumulativeMag)
 
             Dim oNewForm As New Form
             oNewForm.Width = Screen.PrimaryScreen.WorkingArea.Width / 1.6

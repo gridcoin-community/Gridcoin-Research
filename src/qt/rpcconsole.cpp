@@ -22,6 +22,7 @@
 // TODO: receive errors and debug messages through ClientModel
 
 std::string RoundToString(double d, int place);
+bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 
 
 const int CONSOLE_SCROLLBACK = 50;
@@ -231,6 +232,8 @@ RPCConsole::RPCConsole(QWidget *parent) :
     startExecutor();
 
     clear();
+
+
 }
 
 RPCConsole::~RPCConsole()
@@ -340,7 +343,15 @@ void RPCConsole::clear()
                 "b { color: #006060; } "
                 );
 
-    message(CMD_REPLY, (tr("Welcome to the GridCoin RPC console.") + "<br>" +
+	//Gridcoin:  Find an open neural node for any neural requests from RPC: (7-23-2015)
+
+    //msNeuralResponse = "";
+	//ool bResult = AsyncNeuralRequest("explainmag",GlobalCPUMiningCPID.cpid,10);
+	//printf("Neural Response: %f",(double)bResult);
+	
+
+
+    message(CMD_REPLY, (tr("Welcome to the Gridcoin RPC console! ") + "<br>" +
                         tr("Use up and down arrows to navigate history, and <b>Ctrl-L</b> to clear screen.") + "<br>" +
                         tr("Type <b>help</b> for an overview of available commands.")), true);
 }
