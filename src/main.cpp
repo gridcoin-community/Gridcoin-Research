@@ -359,7 +359,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msNeuralResponse = "";
  //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
  
- int nGrandfather = fTestNet ? 27444 : 278000;
+ int nGrandfather = fTestNet ? 27444 : 282370;
 
  int nNewIndex = fTestNet ? 28286 : 271625;
 
@@ -2273,8 +2273,7 @@ static unsigned int GetNextTargetRequiredV2(const CBlockIndex* pindexLast, bool 
 
     if (bnNew <= 0 || bnNew > bnTargetLimit)
 	{
-		printf("@v2.2");
-        bnNew = bnTargetLimit;
+	    bnNew = bnTargetLimit;
 	}
 
     return bnNew.GetCompact();
@@ -3072,12 +3071,28 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		{
 			    if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))	
 				{
-						return DoS(20, error("ConnectBlock[] : Researchers Reward for CPID %s pays too much - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
+						TallyNetworkAverages(false);
+					    if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))	
+						{
+							StructCPID strUntrustedHost = GetInitializedStructCPID2(bb.cpid,mvMagnitudes);
+							if (bb.ResearchSubsidy > strUntrustedHost.totalowed)
+							{
+								double deficit = strUntrustedHost.totalowed - bb.ResearchSubsidy;
+								if (deficit < -500 && strUntrustedHost.Accuracy > 10 || deficit < -150 && strUntrustedHost.Accuracy > 5 || deficit < -50)
+								{
+										printf("ConnectBlock[] : Researchers Reward results in deficit of %f for CPID %s with trust level of %f - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
+										 deficit, bb.cpid.c_str(), (double)strUntrustedHost.Accuracy, bb.ResearchSubsidy, 
+										 OUT_POR, vtx[0].hashBoinc.c_str());
+								}
+								else
+								{
+									return error("ConnectBlock[] : Researchers Reward for CPID %s pays too much - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
 										bb.cpid.c_str(), bb.ResearchSubsidy, 
-										OUT_POR, vtx[0].hashBoinc.c_str()));
-		
+										OUT_POR, vtx[0].hashBoinc.c_str());
+								}
+							}
+					}
 				}
-		
 		}
 
 	}
@@ -3271,6 +3286,10 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
         mempool.removeConflicts(tx);
     }
 
+
+	TallyNetworkAverages(false);
+
+
     printf("REORGANIZE: done\n");
     return true;
 }
@@ -3372,6 +3391,8 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 					}
 				txdb.TxnAbort();
 				InvalidChainFound(pindexNew);
+				TallyNetworkAverages(false);
+
 				return error("SetBestChain() : Reorganize failed");
 		}
 		REORGANIZE_FAILED=0;
@@ -4847,6 +4868,12 @@ double coalesce(double mag1, double mag2)
 	return mag2;
 }
 
+double GetTotalOwedAmount(std::string cpid)
+{
+	StructCPID o = GetInitializedStructCPID2(cpid,mvMagnitudes);
+	return o.totalowed;
+}
+
 double GetOwedAmount(std::string cpid)
 {
 	if (mvMagnitudes.size() > 1)
@@ -4882,7 +4909,7 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
 		double paid = mag.payments;
 		double outstanding = Lowest(owed-paid, GetMaximumBoincSubsidy(locktime)*5);
 		total_owed = owed;
-		if (outstanding < 0) outstanding=0;
+		//if (outstanding < 0) outstanding=0;
 		return outstanding;
 	}
 	catch (std::exception &e) 
@@ -6466,7 +6493,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 	{
 			std::string neural_contract = "";
 	        vRecv >> neural_contract;
-			if (fDebug3 && neural_contract.length() > 100) printf("Quorum contract received %s",neural_contract.substr(0,80).c_str());
+			if (fDebug && neural_contract.length() > 100) printf("Quorum contract received %s",neural_contract.substr(0,80).c_str());
 			if (neural_contract.length() > 10)
 			{
 				 std::string results = "";
@@ -6476,7 +6503,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 					qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
 					results = qtExecuteDotNetStringFunction("ResolveDiscrepancies",neural_contract);
 				 #endif
-	  			 if (fDebug3 && !results.empty()) printf("Quorum Resolution: %s \r\n",results.c_str());
+	  			 if (fDebug && !results.empty()) printf("Quorum Resolution: %s \r\n",results.c_str());
 			}
 	}
     else if (strCommand == "pong")

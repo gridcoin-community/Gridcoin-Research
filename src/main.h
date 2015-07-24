@@ -1524,15 +1524,13 @@ public:
         READWRITE(nBits);
         READWRITE(nNonce);
         READWRITE(blockHash);
-		//7-11-2015 - Gridcoin - New Accrual Fields
-		
-		//if (nHeight > nNewIndex)
-		//{
-			READWRITE(sCPID);
-			READWRITE(nResearchSubsidy);
-			READWRITE(nInterestSubsidy);
-			READWRITE(nMagnitude);
-		//}
+		//7-11-2015 - Gridcoin - New Accrual Fields (Note, Removing the determinstic block number to make this happen all the time):
+		//if (nHeight > nNewIndex) { }
+		READWRITE(sCPID);
+		READWRITE(nResearchSubsidy);
+		READWRITE(nInterestSubsidy);
+		READWRITE(nMagnitude);
+	
 
     )
 
