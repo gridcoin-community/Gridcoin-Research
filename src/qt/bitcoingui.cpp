@@ -108,7 +108,9 @@ std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end
 
 extern std::string qtGetNeuralHash(std::string data);
 extern std::string qtGetNeuralContract(std::string data);
-json_spirit::Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export);
+
+json_spirit::Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool bIncludeExpired);
+
 extern int64_t IsNeural();
 void TallyInBackground();
 
@@ -495,7 +497,7 @@ double qtExecuteGenericFunction(std::string function, std::string data)
 	double return_code = 0;
 	int result = 0;
 	#if defined(WIN32) && defined(QT_GUI)
-		printf("Executing generic function %s \r\n",function.c_str());
+		//if (fDebug) printf("Executing generic function %s \r\n",function.c_str());
 		QString qsData = ToQstring(data);
 		QString qsFunction = ToQstring(function +"(Qstring)");
 		std::string sFunction = function+"(Qstring)";
@@ -566,7 +568,7 @@ std::string qtGetNeuralContract(std::string data)
 	{
 		if (!bGlobalcomInitialized) return "NA";
 		QString qsData = ToQstring(data);
-		if (fDebug3) printf("GNC# ");
+		//if (fDebug3) printf("GNC# ");
 		QString sResult = globalcom->dynamicCall("GetNeuralContract()").toString();
 		std::string result = FromQString(sResult);
 		return result;
@@ -1753,7 +1755,7 @@ void BitcoinGUI::votingClicked()
 
 	#ifdef WIN32
 		std::string sVotingPayload = "";
-		GetJSONPollsReport(true,"",sVotingPayload);
+		GetJSONPollsReport(true,"",sVotingPayload,true);
 		double function_call = qtExecuteGenericFunction("SetGenericVotingData",sVotingPayload);
 		std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
 		function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);

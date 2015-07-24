@@ -74,7 +74,8 @@ extern std::string ExecuteRPCCommand(std::string method, std::string arg1, std::
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 
 
-extern Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export);
+extern Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool bIncludeExpired);
+
 
 extern Array GetJsonVoteDetailsReport(std::string pollname);
 extern std::string GetPollXMLElementByPollTitle(std::string pollname, std::string XMLElement1, std::string XMLElement2);
@@ -1856,22 +1857,40 @@ Value execute(const Array& params, bool fHelp)
 	else if (sItem == "listpolls")
 	{
 			std::string out1 = "";
-			Array myPolls = GetJSONPollsReport(false,"",out1);
+			Array myPolls = GetJSONPollsReport(false,"",out1,false);
+			results.push_back(myPolls);
+	}
+	else if (sItem == "listallpolls")
+	{
+			std::string out1 = "";
+			Array myPolls = GetJSONPollsReport(false,"",out1,true);
+			results.push_back(myPolls);
+	}
+	else if (sItem == "listallpolldetails")
+	{
+		    std::string out1 = "";
+			Array myPolls = GetJSONPollsReport(true,"",out1,true);
 			results.push_back(myPolls);
 
 	}
 	else if (sItem=="listpolldetails")
 	{
 		    std::string out1 = "";
-			Array myPolls = GetJSONPollsReport(true,"",out1);
+			Array myPolls = GetJSONPollsReport(true,"",out1,false);
 			results.push_back(myPolls);
-
 	}
 	else if (sItem=="listpollresults")
 	{
-		if (params.size() != 2)
+		bool bIncExpired = false;
+		if (params.size() == 3)
 		{
-			entry.push_back(Pair("Error","You must specify the Poll Title."));
+			std::string include_expired = params[2].get_str();
+			if (include_expired=="true") bIncExpired=true;
+		}
+
+		if (params.size() != 2 && params.size() != 3)
+		{
+			entry.push_back(Pair("Error","You must specify the Poll Title.  Example: listpollresults pollname.  You may also specify execute listpollresults pollname true if you want to see expired polls."));
 			results.push_back(entry);
 		}
 		else
@@ -1888,7 +1907,7 @@ Value execute(const Array& params, bool fHelp)
 			{
 				std::string Title = params[1].get_str();
 				std::string out1 = "";
-				Array myPolls = GetJSONPollsReport(true,Title,out1);
+				Array myPolls = GetJSONPollsReport(true,Title,out1,bIncExpired);
 				results.push_back(myPolls);
 			}
 		}
@@ -3017,7 +3036,7 @@ Array GetJsonVoteDetailsReport(std::string pollname)
 }
 
 
-Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export)
+Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool IncludeExpired)
 {
     	//Title,ExpirationDate, Question, Answers, ShareType(1=Magnitude,2=Balance,3=Both)
         Array results;
@@ -3047,7 +3066,7 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
 								std::string Answers = ExtractXML(contract,"<ANSWERS>","</ANSWERS>");
 								std::string ShareType = ExtractXML(contract,"<SHARETYPE>","</SHARETYPE>");
 								boost::to_lower(Title);
-								if (!PollExpired(Title))
+								if (!PollExpired(Title) || IncludeExpired)
 								{
 									if (QueryByTitle=="" || QueryByTitle == Title)
 									{
@@ -3097,7 +3116,6 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
 											sExportRow += "<TOTALPARTICIPANTS>" + RoundToString(total_participants,0)
 												+ "</TOTALPARTICIPANTS><TOTALSHARES>" + RoundToString(total_shares,0)
 												+ "</TOTALSHARES><BESTANSWER>" + BestAnswer + "</BESTANSWER>";
-
 										
 										}
 										sExportRow += "</POLL>";

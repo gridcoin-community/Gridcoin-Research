@@ -3078,7 +3078,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 							if (bb.ResearchSubsidy > strUntrustedHost.totalowed)
 							{
 								double deficit = strUntrustedHost.totalowed - bb.ResearchSubsidy;
-								if (deficit < -500 && strUntrustedHost.Accuracy > 10 || deficit < -150 && strUntrustedHost.Accuracy > 5 || deficit < -50)
+								if ( (deficit < -500 && strUntrustedHost.Accuracy > 10) || (deficit < -150 && strUntrustedHost.Accuracy > 5) || deficit < -50)
 								{
 										printf("ConnectBlock[] : Researchers Reward results in deficit of %f for CPID %s with trust level of %f - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
 										 deficit, bb.cpid.c_str(), (double)strUntrustedHost.Accuracy, bb.ResearchSubsidy, 
@@ -5103,11 +5103,11 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 						if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
 						MiningCPID bb = DeserializeBoincBlock(hashboinc);
 
-						if (grcaddress==bb.GRCAddress)
+						if (grcaddress==bb.GRCAddress && nGRCTime==0)
 						{
 							nGRCTime = block.nTime;
 						}
-						if (cpid == bb.cpid)
+						if (cpid == bb.cpid && nCPIDTime==0)
 						{
 							nCPIDTime = block.nTime;
 						}
@@ -6436,7 +6436,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 						qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
 						contract = qtGetNeuralContract("");
 				#endif
-				printf("Quorum response %f \r\n",(double)contract.length());
+				//if (fDebug) printf("Quorum response %f \r\n",(double)contract.length());
 	            pfrom->PushMessage("quorum_nresp", contract);
 			}
 			else

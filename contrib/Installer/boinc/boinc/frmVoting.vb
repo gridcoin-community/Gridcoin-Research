@@ -37,7 +37,13 @@ Public Class frmVoting
             Dim sShareType As String = ExtractXML(vPolls(y), "<SHARETYPE>")
             Dim sQuestion As String = ExtractXML(vPolls(y), "<QUESTION>")
             Dim sAnswers As String = ExtractXML(vPolls(y), "<ANSWERS>")
+
             If Len(sTitle) > 0 Then
+
+                Dim lDateDiff As Long = DateDiff(DateInterval.Day, Now, CDate(sExpiration))
+
+
+            If Len(sTitle) > 0 And lDateDiff > -7 Then
                 'Array of answers
                 Dim sArrayOfAnswers As String = ExtractXML(vPolls(y), "<ARRAYANSWERS>")
                 Dim vAnswers() As String = Split(sArrayOfAnswers, "<RESERVED>")
@@ -55,6 +61,8 @@ Public Class frmVoting
                 dgv.Rows(iRow).Cells(0).Value = iRow + 1
                 dgv.Rows(iRow).Cells(1).Value = sTitle
                 dgv.Rows(iRow).Cells(2).Value = sExpiration
+                If lDateDiff < 0 Then dgv.Rows(iRow).Cells(2).Style.BackColor = Drawing.Color.Red
+
                 dgv.Rows(iRow).Cells(3).Value = sShareType
                 dgv.Rows(iRow).Cells(4).Value = sQuestion
                 If Len(sAnswers) > 81 Then sAnswers = Mid(sAnswers, 1, 81) + "..."
@@ -63,7 +71,9 @@ Public Class frmVoting
                 dgv.Rows(iRow).Cells(7).Value = sTotalShares
                 dgv.Rows(iRow).Cells(8).Value = sBestAnswer
                 iRow += 1
+                End If
             End If
+
         Next
     End Sub
 
@@ -86,10 +96,12 @@ Public Class frmVoting
         If _GridRowIndex < 0 Then Exit Sub
 
         Dim sTitle As String = dgv.Rows(_GridRowIndex).Cells(1).Value
-
+    
         If e.Button = Windows.Forms.MouseButtons.Right Then
             If Len(sTitle) > 1 Then
                 Dim _EventList As String = "Chart|Vote"
+                '  If lDateDiff < 0 Then _EventList = "Chart" Else _EventList = "Chart|Vote"
+
                 cms.Items.Clear()
                 Dim vEventList() As String
                 vEventList = Split(_EventList, "|")
@@ -112,6 +124,9 @@ Public Class frmVoting
             Exit Sub
         End If
         Dim sTitle As String = dgv.Rows(_GridRowIndex).Cells(1).Value
+        Dim sExpiration As String = dgv.Rows(_GridRowIndex).Cells(2).Value
+        Dim lDateDiff As Long = DateDiff(DateInterval.Day, Now, CDate(sExpiration))
+
         If tsmi.Text = "Chart" Then
             'Drill into the vote, and chart the vote:
             If Len(sTitle) > 0 Then
@@ -121,6 +136,8 @@ Public Class frmVoting
             End If
 
         ElseIf tsmi.Text = "Vote" Then
+            If lDateDiff < 0 Then MsgBox("You may not vote on an expired poll.", MsgBoxStyle.Critical, "Gridcoin Voting System") : Exit Sub
+
             Dim frmVote As New frmPlaceVote
             frmVote.Show()
             frmVote.PlaceVote(sTitle)
