@@ -24,6 +24,7 @@ bool TallyNetworkAverages(bool ColdBoot);
 void TallyInBackground();
 double GetNetworkPaymentsTotal();
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
+bool ComputeNeuralNetworkSupermajorityHashes();
 
 extern bool CheckMessageSignature(std::string messagetype, std::string sMsg, std::string sSig);
 extern std::string CryptoLottery(int64_t locktime);
@@ -63,6 +64,8 @@ std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 
 std::string GetNeuralNetworkReport();
 Array GetJSONNeuralNetworkReport();
+extern Array GetJSONVersionReport();
+
 extern bool PollExists(std::string pollname);
 extern bool PollExpired(std::string pollname);
 
@@ -1012,6 +1015,7 @@ double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out
 		std::string avgs = ExtractXML(data,"<AVERAGES>","</AVERAGES>");
 		double mag_count = 0;
 		double avg_count = 0;
+		if (mags.empty()) return 0;
 		double avg_of_mag = GetAverageInList(mags,mag_count);
 		double avg_of_avg = GetAverageInList(avgs,avg_count);
 		if (!bIgnoreBeacons) out_beacon_count = GetCountOf("beacon");
@@ -1039,51 +1043,50 @@ bool TallyMagnitudesInSuperblock()
 {
 	try
 	{
-	if (fDebug3) printf(".40.");
-
-	std::string superblock = ReadCache("superblock","magnitudes");
-	std::vector<std::string> vSuperblock = split(superblock.c_str(),";");
-    double TotalNetworkMagnitude = 0;
-	double TotalNetworkEntries = 0;
-	if (mvDPOR.size() > 0 && vSuperblock.size() > 1) 	mvDPOR.clear();
-	
-	for (unsigned int i = 0; i < vSuperblock.size(); i++)
-	{
-		// For each CPID in the contract
-		if (vSuperblock[i].length() > 1)
+		if (fDebug3) printf(".40.");
+						
+		std::string superblock = ReadCache("superblock","magnitudes");
+		if (superblock.empty()) return false;
+		std::vector<std::string> vSuperblock = split(superblock.c_str(),";");
+		double TotalNetworkMagnitude = 0;
+		double TotalNetworkEntries = 0;
+		if (mvDPOR.size() > 0 && vSuperblock.size() > 1) 	mvDPOR.clear();
+		for (unsigned int i = 0; i < vSuperblock.size(); i++)
 		{
-				std::string cpid = ExtractValue(vSuperblock[i],",",0);
-				double magnitude = cdbl(ExtractValue(vSuperblock[i],",",1),0);
-				if (cpid.length() > 10)
-				{
-					StructCPID stCPID = GetInitializedStructCPID2(cpid,mvDPOR);
-	     			stCPID.TotalMagnitude = magnitude;
-					stCPID.MagnitudeCount++;
-					stCPID.Magnitude = magnitude;
-					stCPID.cpid = cpid;
-					mvDPOR[cpid]=stCPID;
-					StructCPID stMagg = GetInitializedStructCPID2(cpid,mvMagnitudes);
-					stMagg.cpid = cpid;
-					stMagg.Magnitude = stCPID.Magnitude;
-					stMagg.PaymentMagnitude = LederstrumpfMagnitude2(magnitude,GetAdjustedTime());
-					//Adjust total owed - in case they are a newbie:
-					if (true)
+			// For each CPID in the contract
+			if (vSuperblock[i].length() > 1)
+			{
+					std::string cpid = ExtractValue(vSuperblock[i],",",0);
+					double magnitude = cdbl(ExtractValue(vSuperblock[i],",",1),0);
+					if (cpid.length() > 10)
 					{
-						double total_owed = 0;
-						stMagg.owed = GetOutstandingAmountOwed(stMagg,cpid,(double)GetAdjustedTime(),total_owed,stCPID.Magnitude);
-						stMagg.totalowed = total_owed;
-					}
+						StructCPID stCPID = GetInitializedStructCPID2(cpid,mvDPOR);
+	     				stCPID.TotalMagnitude = magnitude;
+						stCPID.MagnitudeCount++;
+						stCPID.Magnitude = magnitude;
+						stCPID.cpid = cpid;
+						mvDPOR[cpid]=stCPID;
+						StructCPID stMagg = GetInitializedStructCPID2(cpid,mvMagnitudes);
+						stMagg.cpid = cpid;
+						stMagg.Magnitude = stCPID.Magnitude;
+						stMagg.PaymentMagnitude = LederstrumpfMagnitude2(magnitude,GetAdjustedTime());
+						//Adjust total owed - in case they are a newbie:
+						if (true)
+						{
+							double total_owed = 0;
+							stMagg.owed = GetOutstandingAmountOwed(stMagg,cpid,(double)GetAdjustedTime(),total_owed,stCPID.Magnitude);
+							stMagg.totalowed = total_owed;
+						}
 
-					mvMagnitudes[cpid] = stMagg;
-					TotalNetworkMagnitude += stMagg.Magnitude;
-					TotalNetworkEntries++;
+						mvMagnitudes[cpid] = stMagg;
+						TotalNetworkMagnitude += stMagg.Magnitude;
+						TotalNetworkEntries++;
     
-				}
+					}
 			}
 	}
 
-	if (fDebug3) printf(".41.%f",(double)0);
-
+	if (fDebug3) printf(".41.");
 	double NetworkAvgMagnitude = TotalNetworkMagnitude / (TotalNetworkEntries+.01);
 	// Store the Total Network Magnitude:
 	StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
@@ -1095,20 +1098,16 @@ bool TallyMagnitudesInSuperblock()
 	double TotalRAC = 0;
 	double AVGRac = 0;
 	// Load boinc project averages from neural network
-	
 	std::string projects = ReadCache("superblock","averages");
-		
+	if (projects.empty()) return false;
 	std::vector<std::string> vProjects = split(projects.c_str(),";");
-
 	if (vProjects.size() > 0)
 	{
 		double totalRAC = 0;
 		WHITELISTED_PROJECTS = 0;
-
 		for (unsigned int i = 0; i < vProjects.size(); i++)
 		{
 			// For each Project in the contract
-
 			if (vProjects[i].length() > 1)
 			{
 					std::string project = ExtractValue(vProjects[i],",",0);
@@ -1131,14 +1130,12 @@ bool TallyMagnitudesInSuperblock()
 		}
 	}
 	if (fDebug3) printf(".42.%f",(double)0);
-
 	AVGRac = TotalRAC/(TotalProjects+.01);
 	network.AverageRAC = AVGRac;
 	network.rac = TotalRAC;
 	network.NetworkProjects = TotalProjects;
     mvNetwork["NETWORK"] = network;
 	if (fDebug3) printf(".43.%f",(double)0);
-
 	return true;
 	}
 	catch (std::exception &e) 
@@ -1617,6 +1614,17 @@ Value execute(const Array& params, bool fHelp)
 	else if (sItem == "neuralreport")
 	{
 			Array myNeuralJSON = GetJSONNeuralNetworkReport();
+			results.push_back(myNeuralJSON);
+	}
+	else if (sItem == "tallyneural")
+	{
+			bool result = ComputeNeuralNetworkSupermajorityHashes();
+			entry.push_back(Pair("Ready","."));
+			results.push_back(entry);
+	}
+	else if (sItem == "versionreport")
+	{
+			Array myNeuralJSON = GetJSONVersionReport();
 			results.push_back(myNeuralJSON);
 	}
 	else if (sItem=="myneuralhash")
@@ -3215,9 +3223,51 @@ Array GetJSONNeuralNetworkReport()
 	  }
 	  // If we have a pending superblock, append it to the report:
 	  std::string SuperblockHeight = ReadCache("neuralsecurity","pending");
-	  if (!SuperblockHeight.empty())
+	  if (!SuperblockHeight.empty() && SuperblockHeight != "0")
 	  {
 		  entry.push_back(Pair("Pending",SuperblockHeight));
+	  }
+	  results.push_back(entry);
+	  return results;
+
+}
+
+
+double GetTotalContentsFromVector(map<std::string,double>& v)
+{
+	  double votes = 0;
+	  for(map<std::string,double>::iterator ii=v.begin(); ii!=v.end(); ++ii) 
+	  {
+				double pop = v[(*ii).first];
+				votes += pop;
+	  }
+	  return votes;
+}
+
+Array GetJSONVersionReport()
+{
+	  Array results;
+	  //Returns a report of the GRC Version staking blocks over the last 100 blocks
+	  std::string neural_ver = "";
+	  std::string report = "Version, Popularity\r\n";
+	  std::string row = "";
+	  double pct = 0;
+	  Object entry;
+  	  entry.push_back(Pair("Version","Popularity,Percent %"));
+	  double votes = GetTotalContentsFromVector(mvNeuralVersion);
+		
+	  for(map<std::string,double>::iterator ii=mvNeuralVersion.begin(); ii!=mvNeuralVersion.end(); ++ii) 
+	  {
+				double popularity = mvNeuralVersion[(*ii).first];
+				neural_ver = (*ii).first;
+				//If the hash != empty_hash:
+				if (popularity > 0)
+				{
+					row = neural_ver + "," + RoundToString(popularity,0);
+					report += row + "\r\n";
+					pct = (((double)popularity)/(votes+.01))*100;
+					entry.push_back(Pair(neural_ver,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%"));
+				}
 	  }
 	  results.push_back(entry);
 	  return results;

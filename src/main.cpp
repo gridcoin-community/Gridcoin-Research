@@ -32,6 +32,7 @@ int DownloadBlocks();
 
 bool CPIDAcidTest(std::string boincruntimepublickey);
 
+extern void IncrementVersionCount(std::string Version);
 
 double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,bool bIgnoreBeacons);
 
@@ -245,6 +246,7 @@ int64_t nMinimumInputValue = 0;
 std::map<std::string, std::string> mvApplicationCache;
 std::map<std::string, int64_t> mvApplicationCacheTimestamp;
 std::map<std::string, double> mvNeuralNetworkHash;
+std::map<std::string, double> mvNeuralVersion;
 
 std::map<std::string, StructCPID> mvDPOR;
 
@@ -3099,7 +3101,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 	}
 
-	//Gridcoin: Maintain network consensus for Payments and Neural popularity:  (As of 7-5-2015 this is now done exactly every 50 blocks)
+	//Gridcoin: Maintain network consensus for Payments and Neural popularity:  (As of 7-5-2015 this is now done exactly every 30 blocks)
 
 	//DPOR - 6/12/2015 - Reject superblocks not hashing to the supermajority:
 
@@ -3133,18 +3135,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			}
 		}
 		/*
-		--Commenting this out as of now, we will let the superblock load in TllyNtworkAverages in approx 15 blocks... so the network loads it in a synchronized fashion
-		double avg_mag = GetSuperlockAvMag(bb.superblock);
-		if (avg_mag > 10)
-		{
-			LoadSuperblock(bb.superblock,GetBlockTime(),(double)pindex->nHeight);
-			//Note the incident on 7-11-2015 @ midnight.  The superblock was staked, loaded, accepted for 5 blocks by the majority
-			//then rejected due to nodes coming online and doing TllyNtworkAverages and not actually calling this function 
-			// IE overwriting Their superblock with the historical superblock.  So, technically the Load at this point should be 
-			// commented out.  
-		}
+			--Superblock is loaded 15 blocks later in TallyNetworkAverages();
 		*/
-
 	}
 
 
@@ -3179,7 +3171,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
     return true;
 }
-
 
 
 bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
@@ -5171,7 +5162,9 @@ bool ComputeNeuralNetworkSupermajorityHashes()
 	nLastTalliedNeural = GetAdjustedTime();
 	//Clear the neural network hash buffer
 	if (mvNeuralNetworkHash.size() > 0)  mvNeuralNetworkHash.clear();
+	if (mvNeuralVersion.size() > 0)  mvNeuralVersion.clear();
 	//Clear the votes
+	WriteCache("neuralsecurity","pending","0",GetAdjustedTime());
 	ClearCache("neuralsecurity");
 	try 
 	{
@@ -5181,22 +5174,35 @@ bool ComputeNeuralNetworkSupermajorityHashes()
 		if (nMinDepth < 2)   nMinDepth = 2;
 		CBlock block;
 		CBlockIndex* pblockindex = pindexBest;
-		//Loop back to the StartHeight:
 		while (pblockindex->nHeight > nMinDepth)
 		{
 			pblockindex = pblockindex->pprev;
-			if (pblockindex == NULL || !pblockindex || !pblockindex->IsInMainChain()) break;
+            if (pblockindex == pindexGenesisBlock) return false;
+			if (pblockindex == NULL || !pblockindex->IsInMainChain()) continue;
 			block.ReadFromDisk(pblockindex);
 			std::string hashboinc = "";
 			if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
-			MiningCPID bb = DeserializeBoincBlock(hashboinc);
-			//If block is pending: 7-25-2015
-			if (bb.superblock.length() > 100)
+			if (!hashboinc.empty())
 			{
-				WriteCache("neuralsecurity","pending",RoundToString((double)pblockindex->nHeight,0),GetAdjustedTime());
+				MiningCPID bb = DeserializeBoincBlock(hashboinc);
+				//If block is pending: 7-25-2015
+				if (bb.superblock.length() > 100)
+				{
+					double out_beacon_count = 0;
+					double out_participant_count = 0;
+					double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,true);
+					if (avg_mag > 10)
+					{
+						WriteCache("neuralsecurity","pending",RoundToString((double)pblockindex->nHeight,0),GetAdjustedTime());
+					}
+				}
+				if (!bb.clientversion.empty())
+				{
+					IncrementVersionCount(bb.clientversion);
+				}
+				//Increment Neural Network Hashes Supermajority (over the last N blocks)
+				IncrementNeuralNetworkSupermajority(bb.NeuralHash,bb.GRCAddress,(nMaxDepth-pblockindex->nHeight)+10);
 			}
-			//Increment Neural Network Hashes Supermajority (over the last N blocks)
-			IncrementNeuralNetworkSupermajority(bb.NeuralHash,bb.GRCAddress,(nMaxDepth-pblockindex->nHeight)+10);
 		}
 
 		if (fDebug3) printf(".11.");
@@ -5295,6 +5301,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 					while (pblockindex->nHeight > nMaxDepth)
 					{
 						pblockindex = pblockindex->pprev;
+						if (pblockindex == pindexGenesisBlock) return false;
 					}
 
 					if (fDebug3 && pblockindex != NULL) printf("Max block %f",(double)pblockindex->nHeight);
@@ -5302,29 +5309,36 @@ bool TallyNetworkAverages(bool ColdBoot)
 		    		while (pblockindex->nHeight > nMinDepth)
 					{
 						pblockindex = pblockindex->pprev;
-						if (pblockindex == NULL || !pblockindex || !pblockindex->IsInMainChain()) continue;
+						if (pblockindex == pindexGenesisBlock) return false;
+						if (pblockindex == NULL || !pblockindex->IsInMainChain()) continue;
 						block.ReadFromDisk(pblockindex);
-						MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
-						NetworkPayments += bb.ResearchSubsidy;
-						// Insert CPID, Magnitude, Payments
-						AddNetworkMagnitude((double)pblockindex->nHeight,pblockindex->nTime,bb.cpid,bb);
-						iRow++;
-						if (pblockindex->nHeight % 10 == 0) msMiningErrors3 = RoundToString((double)pblockindex->nHeight,0); //Overview Page Update
-						if (!superblockloaded && bb.superblock.length() > 20)
+						if (!block.vtx[0].hashBoinc.empty())
 						{
-								double out_beacon_count = 0;
-								double out_participant_count = 0;
-								double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,true);
-								if (avg_mag > 10)
-								{
-	    								LoadSuperblock(bb.superblock,pblockindex->nTime,pblockindex->nHeight);
-										superblockloaded=true;
-										if (fDebug3) printf(" Superblock Loaded %f \r\n",(double)pblockindex->nHeight);
-								}
+							MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
+							NetworkPayments += bb.ResearchSubsidy;
+							// Insert CPID, Magnitude, Payments
+							AddNetworkMagnitude((double)pblockindex->nHeight,pblockindex->nTime,bb.cpid,bb);
+							iRow++;
+							if (pblockindex->nHeight % 10 == 0 || pblockindex->nHeight == nMinDepth) msMiningErrors3 = RoundToString((double)pblockindex->nHeight,0); //Overview Page Update
+							if (!superblockloaded && bb.superblock.length() > 20)
+							{
+									double out_beacon_count = 0;
+									double out_participant_count = 0;
+									double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,true);
+									if (avg_mag > 10)
+									{
+	    									LoadSuperblock(bb.superblock,pblockindex->nTime,pblockindex->nHeight);
+											superblockloaded=true;
+											if (fDebug3) printf(" Superblock Loaded %f \r\n",(double)pblockindex->nHeight);
+									}
+							}
 						}
 					
 					}
-					if (fDebug3 && pblockindex != NULL) printf("Min block %f, Rows %f \r\n",(double)pblockindex->nHeight,(double)iRow);
+					if (pblockindex != NULL && pblockindex->IsInMainChain())
+					{
+							if (fDebug) printf("Min block %f, Rows %f \r\n",(double)pblockindex->nHeight,(double)iRow);
+					}
 
 					StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
 					network.projectname="NETWORK";
@@ -7991,6 +8005,24 @@ void IncrementNeuralNetworkSupermajority(std::string NeuralHash, std::string GRC
 	temp_hashcount += votes;
 	mvNeuralNetworkHash[NeuralHash] = temp_hashcount;
 }
+
+
+void IncrementVersionCount(std::string Version)
+{
+	if (Version.empty()) return;
+	double temp_vercount = 0;
+	if (mvNeuralVersion.size() > 0)
+	{
+			temp_vercount = mvNeuralVersion[Version];
+	}
+	if (temp_vercount == 0)
+	{
+		mvNeuralVersion.insert(map<std::string,double>::value_type(Version,0));
+	}
+	temp_vercount += 1;
+	mvNeuralVersion[Version] = temp_vercount;
+}
+
 
 
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity)
