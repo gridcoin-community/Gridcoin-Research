@@ -102,12 +102,12 @@ Public Class Form1
 
         mU = New Utilization
         Dim sTestNet As String = "TESTNET"
-
         mU.SetTestNetFlag(sTestNet)
-        mU.SetGenericVotingData(sVotes)
 
-        mU.ShowVotingConsole()
-      ' mU.ShowMiningConsole()
+        'Test the Quorum Hashing Algorithm
+        Dim sHash As String = mU.GetNeuralHash()
+
+        mU.SetGenericVotingData(sVotes)
         mU.ShowMiningConsole()
 
 

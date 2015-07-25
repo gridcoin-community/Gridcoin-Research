@@ -156,7 +156,6 @@ extern void startWireFrameRenderer();
 extern void stopWireFrameRenderer();
 
 
-
 std::string RetrieveMd5(std::string s1);
 void WriteAppCache(std::string key, std::string value);
 void RestartGridcoin10();

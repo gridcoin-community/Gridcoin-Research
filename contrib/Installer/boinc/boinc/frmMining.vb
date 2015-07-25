@@ -280,13 +280,12 @@ Public Class frmMining
   
         SetAutoSizeMode2(vHeading, dgv)
 
-
         Me.Cursor.Current = Cursors.Default
 
         'Get the Neural Hash
         Dim sMyNeuralHash As String
         Dim sContract = GetMagnitudeContract()
-        sMyNeuralHash = GetMd5String(sContract)
+        sMyNeuralHash = GetQuorumHash(sContract)
         dgv.Rows.Add()
         dgv.Rows(iRow).Cells(0).Value = "Hash: " + sMyNeuralHash + " (" + Trim(iRow) + ")"
         sReport += "Hash: " + sMyNeuralHash + " (" + Trim(iRow) + ")"
@@ -464,43 +463,31 @@ Public Class frmMining
             rtbRac.Text = sXML
             oNewForm.Controls.Add(rtbRac)
             oNewForm.Show()
-
-
         End If
-
-
     End Sub
 
     Private Sub ContractDetailsToolStripMenuItem_Click(sender As System.Object, e As System.EventArgs) Handles ContractDetailsToolStripMenuItem.Click
         Dim sData As String = GetMagnitudeContract()
-        Dim sMags As String = ExtractXML(sData, "<MAGNITUDE>")
+        Dim sMags As String = ExtractXML(sData, "<MAGNITUDES>")
         Dim vCt() As String = Split(sMags, ";")
-
-        MsgBox(sData + " - Count " + Trim(vCt.Length()))
-
-
-
+        Dim sHash As String = GetQuorumHash(sData)
+        MsgBox(sData + " - Count " + Trim(vCt.Length() - 1) + " - Hash " + sHash)
     End Sub
 
     Private Sub btnExport_Click(sender As System.Object, e As System.EventArgs) Handles btnExport.Click
         Dim sWritePath As String = GetGridFolder() + "reports\NeuralMagnitudeReport.csv"
         If Not System.IO.Directory.Exists(GetGridFolder() + "reports") Then MkDir(GetGridFolder() + "reports")
-
         Using objWriter As New System.IO.StreamWriter(sWritePath)
             objWriter.WriteLine(msNeuralReport)
             objWriter.Close()
         End Using
         ExportToCSV2()
-
         MsgBox("Exported to Reports\" + "NeuralMagnitudeReport.csv")
-
     End Sub
-
     Private Sub TextBox1_TextChanged(sender As System.Object, e As System.EventArgs) Handles txtSearch.TextChanged
         Dim sPhrase As String = txtSearch.Text
         For y = 1 To dgv.Rows.Count - 1
             For x = 0 To dgv.Rows(y).Cells.Count - 1
-                'If LCase(Trim("" & dgv.Rows(y).Cells(x).Value)).Contains(LCase(Trim(txtSearch.Text))) Or
                 If LCase(Trim("" & dgv.Rows(y).Cells(x).Value)) Like LCase(Trim(txtSearch.Text)) + "*" Then
                     dgv.Rows(y).Selected = True
                     dgv.CurrentCell = dgv.Rows(y).Cells(0)

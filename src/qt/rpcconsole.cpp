@@ -345,11 +345,6 @@ void RPCConsole::clear()
 
 	//Gridcoin:  Find an open neural node for any neural requests from RPC: (7-23-2015)
 
-    //msNeuralResponse = "";
-	//ool bResult = AsyncNeuralRequest("explainmag",GlobalCPUMiningCPID.cpid,10);
-	//printf("Neural Response: %f",(double)bResult);
-	
-
 
     message(CMD_REPLY, (tr("Welcome to the Gridcoin RPC console! ") + "<br>" +
                         tr("Use up and down arrows to navigate history, and <b>Ctrl-L</b> to clear screen.") + "<br>" +

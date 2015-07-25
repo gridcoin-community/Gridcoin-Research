@@ -94,6 +94,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="clsMailFunctions.vb" />
+    <Compile Include="clsQuorumHashingAlgorithm.cls" />
     <Compile Include="frmPlaceVote.Designer.vb">
       <DependentUpon>frmPlaceVote.vb</DependentUpon>
     </Compile>

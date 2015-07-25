@@ -145,7 +145,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 
 	if (!bNetAveragesLoaded)
 	{
-		if (fDebug3) printf("CNB: Net averages not yet loaded...");
+		if (fDebug) printf("CNB: Net averages not yet loaded...");
 		MilliSleep(1000);
 		return NULL;
 	}

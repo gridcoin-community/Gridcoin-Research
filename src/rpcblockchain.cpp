@@ -19,7 +19,7 @@ extern std::string YesNo(bool bin);
 double Cap(double dAmt, double Ceiling);
 extern std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, std::string sSig, int64_t MinimumBalance);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
-
+std::string GetQuorumHash(std::string data);
 bool TallyNetworkAverages(bool ColdBoot);
 void TallyInBackground();
 double GetNetworkPaymentsTotal();
@@ -527,11 +527,9 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	if (bb.superblock.length() > 20)
 	{
 		result.push_back(Pair("SuperblockLength", RoundToString((double)bb.superblock.length(),0) ));
-
-		std::string neural_hash = RetrieveMd5(bb.superblock);
+		std::string neural_hash = GetQuorumHash(bb.superblock);
 		double popularity = 0;
 		result.push_back(Pair("SuperblockHash", neural_hash));
-
 	}
     return result;
 }
@@ -1628,8 +1626,6 @@ Value execute(const Array& params, bool fHelp)
 			entry.push_back(Pair("My Neural Hash",myNeuralHash.c_str()));
 			results.push_back(entry);
 		#endif
-	
-
 	}
 	else if (sItem == "superblockage")
 	{
@@ -1937,15 +1933,21 @@ Value execute(const Array& params, bool fHelp)
 	else if (sItem=="testnewcontract")
 	{
 		std::string contract = "";
+		std::string myNeuralHash = "";
  		#if defined(WIN32) && defined(QT_GUI)
 			contract = qtGetNeuralContract("");
 		#endif
+		#if defined(WIN32) && defined(QT_GUI)
+			myNeuralHash = qtGetNeuralHash("");
+			entry.push_back(Pair("My Neural Hash",myNeuralHash.c_str()));
+			results.push_back(entry);
+		#endif
   		LoadSuperblock(contract,GetAdjustedTime(),280000);
-
-		entry.push_back(Pair("ContractTest",contract));
+		entry.push_back(Pair("Contract Test",contract));
 		// Hash of current superblock
-		std::string neural_hash = RetrieveMd5(contract);
-		entry.push_back(Pair("Hash",neural_hash));
+		std::string neural_hash = GetQuorumHash(contract);
+		entry.push_back(Pair("Local Core Quorum Hash",neural_hash));
+		entry.push_back(Pair("Neural Network Live Quorum Hash",myNeuralHash));
 		results.push_back(entry);
 	}
 	else if (sItem == "forcequorum")
@@ -3211,6 +3213,12 @@ Array GetJSONNeuralNetworkReport()
 					entry.push_back(Pair(neural_hash,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%"));
 				}
 	  }
+	  // If we have a pending superblock, append it to the report:
+	  std::string SuperblockHeight = ReadCache("neuralsecurity","pending");
+	  if (!SuperblockHeight.empty())
+	  {
+		  entry.push_back(Pair("Pending",SuperblockHeight));
+	  }
 	  results.push_back(entry);
 	  return results;
 
@@ -3410,11 +3418,22 @@ Value listitem(const Array& params, bool fHelp)
 	}
 
 
-
-
 	if (sitem == "explainmagnitude")
 	{
 
+		if (msNeuralResponse.length() > 25)
+		{
+			Object entry;
+			std::vector<std::string> vMag = split(msNeuralResponse.c_str(),"<ROW>");
+			for (unsigned int i = 0; i < vMag.size(); i++)
+			{
+				entry.push_back(Pair(RoundToString(i+1,0),vMag[i].c_str()));
+			}
+			results.push_back(entry);
+		}
+		else
+		{
+	
 		double mytotalrac = 0;
 		double nettotalrac  = 0;
 		double projpct = 0;
@@ -3422,20 +3441,17 @@ Value listitem(const Array& params, bool fHelp)
 		double ParticipatingProjectCount = 0;
 		double TotalMagnitude = 0;
 		double Mag = 0;
-		
 		Object entry;
-		
 		std::string narr = "";
 		std::string narr_desc = "";
-					double TotalProjectRAC = 0;
-					double TotalUserVerifiedRAC = 0;
+		double TotalProjectRAC = 0;
+		double TotalUserVerifiedRAC = 0;
 
 		for(map<string,StructCPID>::iterator ibp=mvBoincProjects.begin(); ibp!=mvBoincProjects.end(); ++ibp) 
 		{
 			StructCPID WhitelistedProject = mvBoincProjects[(*ibp).first];
 			if (WhitelistedProject.initialized)
 			{
-				//7-16-2015
 				double ProjectRAC = GetNetworkTotalByProject(WhitelistedProject.projectname);
 				StructCPID structcpid = mvCPIDs[WhitelistedProject.projectname];
 				bool including = false;
@@ -3477,26 +3493,21 @@ Value listitem(const Array& params, bool fHelp)
 						entry.push_back(Pair(structcpid.projectname + " Network RAC",ProjectRAC));
 						entry.push_back(Pair("Your Project Magnitude",project_magnitude));
 				}
-		
 				
 		     }
 		}
-		
-
 		entry.push_back(Pair("Whitelisted Project Count",(double)WHITELISTED_PROJECTS));
-		
 		entry.push_back(Pair("Grand-Total Verified RAC",mytotalrac));
 		entry.push_back(Pair("Grand-Total Network RAC",nettotalrac));
 		entry.push_back(Pair("Total Magnitude for All Projects",TotalMagnitude));
 		entry.push_back(Pair("Grand-Total Whitelisted Projects",RoundToString(WHITELISTED_PROJECTS,0)));
 		entry.push_back(Pair("Participating Project Count",ParticipatingProjectCount));
 		Mag = TotalMagnitude;
-			
 		std::string babyNarr = "(" + RoundToString(TotalUserVerifiedRAC,2) + "/" + RoundToString(TotalProjectRAC,2) + ")/" + RoundToString(WHITELISTED_PROJECTS,0) + "*" + RoundToString(NeuralNetworkMultiplier,0) + "=";
-
 		entry.push_back(Pair(babyNarr,Mag));
 		results.push_back(entry);
 		return results;
+		}
 
 	}
 

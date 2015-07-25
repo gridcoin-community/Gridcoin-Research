@@ -15,7 +15,7 @@ Public Class Utilization
 
     Public ReadOnly Property Version As Double
         Get
-            Return 397
+            Return 399
         End Get
     End Property
 
@@ -212,7 +212,9 @@ Public Class Utilization
     Public Function GetNeuralHash() As String
         If Len(msCurrentNeuralHash) > 1 Then Return msCurrentNeuralHash 'This is invalidated when it changes
         Dim sContract As String = GetMagnitudeContract()
-        Dim sHash As String = GetMd5String(sContract)
+        '7-25-2015 - Use Quorum Hashing algorithm to get the quorum hash 
+        Dim clsQHA As New clsQuorumHashingAlgorithm
+        Dim sHash As String = clsQHA.QuorumHashingAlgorithm(sContract)
         Return sHash
     End Function
     Public Function GetNeuralContract() As String
@@ -387,10 +389,14 @@ Public Class Utilization
         Return sOut
     End Function
     Public Function ResolveDiscrepancies(sContract As String) As String
-        ' Dim sResult = ResolveDiscrepanciesInNeuralNetwork(sContract)
-        ' Return sResult
-        Call ThreadResolveDiscrepanciesInNeuralNetwork(sContract)
-        Return "Started Async Resolution."
+        
+        '7-25-2015 - Moving to QuorumHashingAlgorithm for this - disable this for the time being
+
+        ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+        'Call ThreadResolveDiscrepanciesInNeuralNetwork(sContract)
+        'Return "Started Async Resolution."
+        Return ""
     End Function
 
     Public Function SetGenericVotingData(sValue As String) As Double

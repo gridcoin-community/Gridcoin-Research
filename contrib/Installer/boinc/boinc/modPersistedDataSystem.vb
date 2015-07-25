@@ -25,6 +25,7 @@ Module modPersistedDataSystem
     Public mlPercentComplete As Double = 0
     Public msContractDataForQuorum As String
     Public NeuralNetworkMultiplier As Double = 115000
+    Private mclsQHA As New clsQuorumHashingAlgorithm
 
     Private lUseCount As Long = 0
     Public Structure Row
@@ -156,43 +157,16 @@ Module modPersistedDataSystem
         End Try
 
     End Function
-    Public Function xReservedForFuture(data As String)
-        Dim sMags As String
-        sMags = ExtractXML(data, "<MAGNITUDES>")
-        Dim vMags() As String
-        vMags = Split(sMags, ";")
-        For x As Integer = 0 To UBound(vMags)
-            If Len(vMags(x)) > 10 Then
-                Dim vRow() As String = Split(vMags(x), ",")
-                If Len(vRow(0)) > 5 Then
-                    Dim sCPID As String = vRow(0)
-                    Dim dMag As Double = Val(vRow(1))
-                End If
-            End If
-        Next x
-    End Function
 
     Public Function RoundedMag(num As Double)
         'Rounds magnitude to nearest Dither Factor
-        Return Math.Round(Math.Round(num * GetDitherMag(num), 0) / GetDitherMag(num), 2)
+        Return Math.Round(Math.Round(num * mclsQHA.GetDitherMag(num), 0) / mclsQHA.GetDitherMag(num), 2)
     End Function
     Public Function RoundedRac(num As Double)
         'Rounds magnitude to nearest Dither Factor
-        Return Math.Round(Math.Round(num * GetDitherMag(num), 0) / GetDitherMag(num), 2)
+        Return Math.Round(Math.Round(num * mclsQHA.GetDitherMag(num), 0) / mclsQHA.GetDitherMag(num), 2)
     End Function
-    Public Function GetDitherMag(Data As Double) As Double
-        'This function is used by the neural network to round a magnitude up or down a small amount so that the whole network agrees on a single number (IE small mags are rounded by .25 while 4 digit mags are rounded by 10)
-        Dim Dither As Double = 0.1
-        If Data > 0 And Data < 25 Then Dither = 0.8 '1.25
-        If Data >= 25 And Data < 500 Then Dither = 0.2 '5
-        If Data >= 500 And Data <= 1000 Then Dither = 0.1 '10
-        If Data >= 1000 And Data <= 10000 Then Dither = 0.025 '40
-        If Data >= 10000 And Data <= 50000 Then Dither = 0.006 '160
-        If Data >= 50000 And Data <= 100000 Then Dither = 0.003 ' 320
-        If Data >= 100000 And Data <= 999999 Then Dither = 0.0015 ' 640
-        If Data >= 1000000 Then Dither = 0.0007 '1428
-        Return Dither
-    End Function
+   
     Public Function WithinBounds(n1 As Double, n2 As Double, percent As Double) As Boolean
         If n2 < (n1 + (n1 * percent)) And n2 > (n1 - (n1 * percent)) Then
             Return True
@@ -1212,7 +1186,7 @@ Module modPersistedDataSystem
             'Get the Neural Hash
             Dim sMyNeuralHash As String
             Dim sContract = GetMagnitudeContract()
-            sMyNeuralHash = GetMd5String(sContract)
+            sMyNeuralHash = GetQuorumHash(sContract)
             sReport += "Hash: " + sMyNeuralHash + " (" + Trim(iRow) + ")"
             Dim sWritePath As String = GetGridFolder() + "reports\DailyNeuralMagnitudeReport.csv"
             If Not System.IO.Directory.Exists(GetGridFolder() + "reports") Then MkDir(GetGridFolder() + "reports")
@@ -1227,6 +1201,9 @@ Module modPersistedDataSystem
 
     End Sub
 
+    Public Function GetQuorumHash(data As String)
+        Return mclsQHA.QuorumHashingAlgorithm(data)
+    End Function
 
 End Module
 

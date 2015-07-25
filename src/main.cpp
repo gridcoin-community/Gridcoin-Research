@@ -46,8 +46,7 @@ extern int64_t ComputeResearchAccrual(std::string cpid, int nStakeHeight, int64_
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 double qtExecuteGenericFunction(std::string function,std::string data);
 
-
-
+extern std::string GetQuorumHash(std::string data);
 extern bool FullSyncWithDPORNodes();
 extern  void TestScan();
 extern void TestScan2();
@@ -351,6 +350,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msHashBoincTxId= "";
  std::string    msMiningErrors = "";
  std::string    msMiningErrors2 = "";
+ std::string    msMiningErrors3 = "";
  std::string    msMiningErrors5 = "";
  std::string    msMiningErrors6 = "";
  std::string    msMiningErrors7 = "";
@@ -631,9 +631,9 @@ std::string GetGlobalStatus()
 			+ RoundToString(PORDiff,3) + "; Net Weight: " + RoundToString(GetPoSKernelPS2(),2)  
 			+ "<br>DPOR Weight: " +  sWeight + "; Status: " + msMiningErrors 
 			+ "<br>Magnitude: " + RoundToString(boincmagnitude,2) + "; Project: " + msMiningProject
-			+ "<br>CPID: " +  GlobalCPUMiningCPID.cpid + " " + msMiningErrors2 + " " +   
-			+ "<br>" + msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 +
-			+ "<br>" + sBoost.str();
+			+ "<br>CPID: " +  GlobalCPUMiningCPID.cpid + " " + msMiningErrors2 + 
+			+ "<br>" + msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 
+			+ "<br>" + "Tally: " + msMiningErrors3 + " " + sBoost.str();
 		//The last line break is for Windows 8.1 Huge Toolbar
 		msGlobalStatus = status;
 		return status;
@@ -1052,7 +1052,7 @@ bool AddOrphanTx(const CTransaction& tx)
 
     size_t nSize = tx.GetSerializeSize(SER_NETWORK, CTransaction::CURRENT_VERSION);
 
-    if (nSize > 5000)
+    if (nSize > 50000)
     {
         printf("ignoring large orphan tx (size: %"PRIszu", hash: %s)\n", nSize, hash.ToString().substr(0,10).c_str());
         return false;
@@ -1062,8 +1062,7 @@ bool AddOrphanTx(const CTransaction& tx)
     BOOST_FOREACH(const CTxIn& txin, tx.vin)
         mapOrphanTransactionsByPrev[txin.prevout.hash].insert(hash);
 
-    printf("stored orphan tx %s (mapsz %"PRIszu")\n", hash.ToString().substr(0,10).c_str(),
-        mapOrphanTransactions.size());
+    if (fDebug) printf("stored orphan tx %s (mapsz %"PRIszu")\n", hash.ToString().substr(0,10).c_str(),   mapOrphanTransactions.size());
     return true;
 }
 
@@ -2432,7 +2431,10 @@ bool CTransaction::FetchInputs(CTxDB& txdb, const map<uint256, CTxIndex>& mapTes
         {
             // Get prev tx from single transactions in memory
             if (!mempool.lookup(prevout.hash, txPrev))
-                return error("FetchInputs() : %s mempool Tx prev not found %s", GetHash().ToString().substr(0,10).c_str(),  prevout.hash.ToString().substr(0,10).c_str());
+			{
+				if (fDebug) printf("FetchInputs() : %s mempool Tx prev not found %s", GetHash().ToString().substr(0,10).c_str(),  prevout.hash.ToString().substr(0,10).c_str());
+				return false;
+			}
             if (!fFound)
                 txindex.vSpent.resize(txPrev.vout.size());
         }
@@ -3105,26 +3107,27 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	{
 		if (pindex->nHeight > nGrandfather)
 		{
-			std::string neural_hash = RetrieveMd5(bb.superblock);
+			//7-25-2015
+			std::string neural_hash = GetQuorumHash(bb.superblock);
+			std::string legacy_neural_hash = RetrieveMd5(bb.superblock);
+			// Note: ToDo: In the next Mandatory upgrade, remove the legacy_neural_hash; left in for current compatibility
 			double popularity = 0;
 			std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-			// Only reject superblock when it is new:
+			// Only reject superblock when it is new And when QuorumHash of Block matches the Popular Quorum Hash:
 			if (IsLockTimeWithinMinutes(GetBlockTime(),15))
 			{ 
 				double out_beacon_count=0;
 				double out_participant_count=0;
-
 				double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,false);
 				if (avg_mag < 10)
 				{
 					return error("ConnectBlock[] : Superblock avg mag below 10; SuperblockHash: %s, Consensus Hash: %s",
 										neural_hash.c_str(), consensus_hash.c_str());
 				}
-				if (consensus_hash != neural_hash)
+				if (consensus_hash != neural_hash && consensus_hash != legacy_neural_hash)
 				{
 					return error("ConnectBlock[] : Superblock hash does not match consensus hash; SuperblockHash: %s, Consensus Hash: %s",
 										neural_hash.c_str(), consensus_hash.c_str());
-		
 				}
 	
 			}
@@ -3925,7 +3928,6 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 }
 
 
-
 uint256 CBlockIndex::GetBlockTrust() const
 {
     CBigNum bnTarget;
@@ -3982,6 +3984,16 @@ void GridcoinServices()
 	if (TimerMain("ResetVars",5))
 	{
 		bTallyStarted = false;
+	}
+
+
+	if (TimerMain("MyNeuralMagnitudeReport",5))
+	{
+		if (msNeuralResponse.length() < 25 && msPrimaryCPID != "INVESTOR" && !msPrimaryCPID.empty())
+		{
+			bool bResult = AsyncNeuralRequest("explainmag",msPrimaryCPID,10);
+			if (fDebug3) printf("Async explainmag sent for %s.",msPrimaryCPID.c_str());
+		}
 	}
 
 	int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
@@ -5161,7 +5173,6 @@ bool ComputeNeuralNetworkSupermajorityHashes()
 	if (mvNeuralNetworkHash.size() > 0)  mvNeuralNetworkHash.clear();
 	//Clear the votes
 	ClearCache("neuralsecurity");
-	if (fDebug3) printf(".10.");
 	try 
 	{
 		int nMaxDepth = nBestHeight;
@@ -5179,6 +5190,11 @@ bool ComputeNeuralNetworkSupermajorityHashes()
 			std::string hashboinc = "";
 			if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
 			MiningCPID bb = DeserializeBoincBlock(hashboinc);
+			//If block is pending: 7-25-2015
+			if (bb.superblock.length() > 100)
+			{
+				WriteCache("neuralsecurity","pending",RoundToString((double)pblockindex->nHeight,0),GetAdjustedTime());
+			}
 			//Increment Neural Network Hashes Supermajority (over the last N blocks)
 			IncrementNeuralNetworkSupermajority(bb.NeuralHash,bb.GRCAddress,(nMaxDepth-pblockindex->nHeight)+10);
 		}
@@ -5293,7 +5309,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 						// Insert CPID, Magnitude, Payments
 						AddNetworkMagnitude((double)pblockindex->nHeight,pblockindex->nTime,bb.cpid,bb);
 						iRow++;
-					
+						if (pblockindex->nHeight % 10 == 0) msMiningErrors3 = RoundToString((double)pblockindex->nHeight,0); //Overview Page Update
 						if (!superblockloaded && bb.superblock.length() > 20)
 						{
 								double out_beacon_count = 0;
@@ -5791,8 +5807,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 		if (!vRecv.empty())
 			vRecv >> pfrom->nNeuralNetwork;
-
-	    //printf("MyNeural Partner = %f\r\n",(double)pfrom->nNeuralNetwork);
 
 		if (GetArgument("autoban2","false") == "true")
 		{
@@ -6400,12 +6414,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
 	else if (strCommand == "neural")
 	{
- 	 	    printf("Received Neural Request \r\n");
+ 	 	    //printf("Received Neural Request \r\n");
 
 			std::string neural_request = "";
 			std::string neural_request_id = "";
 	        vRecv >> neural_request >> neural_request_id;  // foreign node issued neural request with request ID:
-			printf("neural request %s \r\n",neural_request.c_str());
+			//printf("neural request %s \r\n",neural_request.c_str());
 			std::string neural_response = "generic_response";
 
 			if (neural_request=="neural_hash")
@@ -6413,7 +6427,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 				#if defined(WIN32) && defined(QT_GUI)
 					neural_response = qtGetNeuralHash("");
 				#endif
-				printf("Neural response %s",neural_response.c_str());
+				//printf("Neural response %s",neural_response.c_str());
 	            pfrom->PushMessage("hash_nresp", neural_response);
 
 			}
@@ -6423,7 +6437,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 				#if defined(WIN32) && defined(QT_GUI)
 					neural_response = qtExecuteDotNetStringFunction("ExplainMag",neural_request_id);
 				#endif
-				printf("Neural response %s\r\n",neural_response.c_str());
+				//printf("Neural response %s\r\n",neural_response.c_str());
 	            pfrom->PushMessage("expmag_nresp", neural_response);
 
 			}
@@ -6865,11 +6879,15 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 	mcpid.GRCAddress = DefaultWalletAddress();
 	mcpid.Organization = DefaultOrg();
 	mcpid.OrganizationKey = DefaultBlockKey(8); //Only reveal 8 characters
-	
-	#if defined(WIN32) && defined(QT_GUI)
-		mcpid.NeuralHash = qtGetNeuralHash("");
-		mcpid.superblock = GetNeuralNetworkSuperBlock();
-	#endif
+	int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+	//7-25-2015 - Add the neural hash only if necessary
+	if (superblock_age > 12*60*60)
+	{
+		#if defined(WIN32) && defined(QT_GUI)
+			mcpid.NeuralHash = qtGetNeuralHash("");
+			mcpid.superblock = GetNeuralNetworkSuperBlock();
+		#endif
+	}
 
 	if (mcpid.lastblockhash.empty()) mcpid.lastblockhash = "0";
 	std::string bb = mcpid.cpid + delim + mcpid.projectname + delim + mcpid.aesskein + delim + RoundToString(mcpid.rac,0)
@@ -7483,10 +7501,10 @@ void HarvestCPIDs(bool cleardata)
 							    std::string sXML = "<KEY>PrimaryCPID</KEY><VALUE>" + msPrimaryCPID + "</VALUE>";
 								std::string sData = qtExecuteDotNetStringFunction("WriteKey",sXML);
 							#endif
-		
+							//Try to get a neural RAC report 7-25-2015
+							bool bResult = AsyncNeuralRequest("explainmag",msPrimaryCPID,10);
 						}
 				}
-
 
 				mvCPIDs[proj] = structcpid;
 			    if (fDebug) printf("Adding Local Project %s",structcpid.cpid.c_str());
@@ -8292,8 +8310,6 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 
 
 
-
-
 MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex)
 {
 	CBlock block;
@@ -8312,4 +8328,41 @@ MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex)
 	return bb;
 }
 
+std::string CPIDHash(double dMagIn, std::string sCPID) 
+{
+    std::string sMag = RoundToString(dMagIn,0);
+	double dMagLength = (double)sMag.length();
+	double dExponent = pow(dMagLength,5);
+	std::string sMagComponent1 = RoundToString(dMagIn/(dExponent+.01),0);
+	std::string sSuffix = RoundToString(dMagLength * dExponent, 0);
+    std::string sHash = sCPID + sMagComponent1 + sSuffix;
+	//	printf("%s, %s, %f, %f, %s\r\n",sCPID.c_str(), sMagComponent1.c_str(),dMagLength,dExponent,sSuffix.c_str());
+    return sHash;
+}
+
+std::string GetQuorumHash(std::string data)
+{
+		//Data includes the Magnitudes, and the Projects:
+        std::string sMags = ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>");
+		std::vector<std::string> vMags = split(sMags.c_str(),";");
+	    std::string sHashIn = "";
+        for (unsigned int x = 0; x < vMags.size(); x++)
+		{
+			if (vMags[x].length() > 10)
+			{
+				std::vector<std::string> vRow = split(vMags[x].c_str(),",");
+				if (vRow.size() > 0)
+				{
+                  if (vRow[0].length() > 5)
+				  {
+						std::string sCPID = vRow[0];
+						double dMag = cdbl(vRow[1],0);
+                        sHashIn += CPIDHash(dMag, sCPID) + "<COL>";
+				   }
+				}
+			}
+		}
+		std::string sHash = RetrieveMd5(sHashIn);
+		return sHash;
+}
 
