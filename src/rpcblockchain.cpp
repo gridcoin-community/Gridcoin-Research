@@ -27,6 +27,7 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
 bool ComputeNeuralNetworkSupermajorityHashes();
 bool UpdateNeuralNetworkQuorumData();
 
+int64_t GetEarliestWalletTransaction();
 
 extern bool CheckMessageSignature(std::string messagetype, std::string sMsg, std::string sSig);
 extern std::string CryptoLottery(int64_t locktime);
@@ -1935,11 +1936,10 @@ Value execute(const Array& params, bool fHelp)
 	else if (sItem=="staketime")
 	{
 
-				std::string cpid = GlobalCPUMiningCPID.cpid;
-				std::string GRCAddress = DefaultWalletAddress();
-				
+			std::string cpid = GlobalCPUMiningCPID.cpid;
+			std::string GRCAddress = DefaultWalletAddress();
+			
      		bool result = GetEarliestStakeTime(GRCAddress,cpid);
-
 
 			entry.push_back(Pair("GRCTime",mvApplicationCacheTimestamp["nGRCTime"]));
 			entry.push_back(Pair("CPIDTime",mvApplicationCacheTimestamp["nCPIDTime"]));

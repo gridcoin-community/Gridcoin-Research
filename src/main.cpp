@@ -33,6 +33,7 @@ std::string TimestampToHRDate(double dtm);
 
 bool CPIDAcidTest(std::string boincruntimepublickey);
 
+int64_t GetEarliestWalletTransaction();
 extern void IncrementVersionCount(std::string Version);
 
 double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,bool bIgnoreBeacons);
@@ -5113,7 +5114,7 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 		mvApplicationCacheTimestamp["nCPIDTime"] = GetAdjustedTime();
 		return true;
 	}
-	if (IsLockTimeWithinMinutes(nLastGRCtallied,600)) return true;
+	if (IsLockTimeWithinMinutes(nLastGRCtallied,100)) return true;
 	nLastGRCtallied = GetAdjustedTime();
 	int64_t nGRCTime = 0;
 	int64_t nCPIDTime = 0;
@@ -5140,10 +5141,14 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 						if (cpid == bb.cpid && nCPIDTime==0)
 						{
 							nCPIDTime = block.nTime;
+							if (nGRCTime==0) nGRCTime = block.nTime; //CPID can set GRCTime, but GRCTime cant set CPID time
 						}
-						if (nGRCTime > 0 && nCPIDTime > 0) break;
+						if ((nGRCTime > 0) && (nCPIDTime > 0)) break;
 			}
 	}
+	int64_t EarliestStakedWalletTx = GetEarliestWalletTransaction();
+	if (EarliestStakedWalletTx > 0 && EarliestStakedWalletTx < nGRCTime) nGRCTime = EarliestStakedWalletTx;
+	printf("CPIDTime %f, GRCTime %f, WalletTime %f \r\n",(double)nCPIDTime,(double)nGRCTime,(double)EarliestStakedWalletTx);
 
 	if (nGRCTime==0)  nGRCTime = GetAdjustedTime();
 	if (nCPIDTime==0) nCPIDTime = GetAdjustedTime();

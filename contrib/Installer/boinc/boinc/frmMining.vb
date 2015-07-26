@@ -530,7 +530,6 @@ Public Class frmMining
     End Sub
 
     Private Sub tOneMinute_Tick(sender As System.Object, e As System.EventArgs) Handles tOneMinute.Tick
-        Log("Tick")
         Call OneMinuteUpdate()
 
     End Sub

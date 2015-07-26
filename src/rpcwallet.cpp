@@ -23,6 +23,7 @@ std::string RoundToString(double d, int place);
 extern void ThreadCleanWalletPassphrase(void* parg);
 
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spirit::Object& entry);
+extern int64_t GetEarliestWalletTransaction();
 
 static void accountingDeprecationCheck()
 {
@@ -527,6 +528,32 @@ Value getreceivedbyaccount(const Array& params, bool fHelp)
     }
 
     return (double)nAmount / (double)COIN;
+}
+
+
+
+
+int64_t GetEarliestWalletTransaction()
+{
+        int64_t nTime = 999999999999;
+        for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
+        {
+            const CWalletTx& wtx = (*it).second;
+            if (!wtx.IsTrusted())     continue;
+
+            string strSentAccount;
+            list<pair<CTxDestination, int64_t> > listReceived;
+            list<pair<CTxDestination, int64_t> > listSent;
+			int64_t totalFees;
+            wtx.GetAmounts(listReceived, listSent, totalFees, strSentAccount);
+            if (wtx.GetDepthInMainChain() >= 0 && wtx.GetBlocksToMaturity() == 0)
+            {
+				if (wtx.nTime < nTime && wtx.nTime > 0) nTime = wtx.nTime;
+            }
+        }
+        return  nTime;
+    
+
 }
 
 
