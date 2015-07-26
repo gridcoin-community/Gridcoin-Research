@@ -15,7 +15,7 @@ Public Class Utilization
 
     Public ReadOnly Property Version As Double
         Get
-            Return 399
+            Return 401
         End Get
     End Property
 
@@ -25,6 +25,19 @@ Public Class Utilization
             'Return Val(clsGVM.BoincUtilization)
         End Get
     End Property
+    Public Function SetQuorumData(sData As String) As String
+
+        Dim sQuorumData As String = ExtractXML(sData, "<QUORUMDATA>")
+        Dim sAge As String = ExtractXML(sQuorumData, "<AGE>")
+        Dim sQuorumHash As String = ExtractXML(sQuorumData, "<HASH>")
+        Dim TS As String = ExtractXML(sQuorumData, "<TIMESTAMP>")
+        Dim sBlock As String = ExtractXML(sQuorumData, "<BLOCKNUMBER>")
+
+        Log(sData)
+        Call UpdateSuperblockAgeAndQuorumHash(sAge, sQuorumHash, TS, sBlock)
+
+    End Function
+
     Public Function WriteKey(sData As String) As String
         Try
             Dim sKey As String = ExtractXML(sData, "<KEY>")

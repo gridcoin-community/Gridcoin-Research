@@ -29,6 +29,7 @@
 
 int DownloadBlocks();
 
+std::string TimestampToHRDate(double dtm);
 
 bool CPIDAcidTest(std::string boincruntimepublickey);
 
@@ -42,7 +43,7 @@ extern bool UnusualActivityReport();
 extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
 extern int64_t ComputeResearchAccrual(std::string cpid, int nStakeHeight, int64_t nStakeTime, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
-
+extern bool UpdateNeuralNetworkQuorumData();
 
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 double qtExecuteGenericFunction(std::string function,std::string data);
@@ -544,6 +545,27 @@ bool TimerMain(std::string timer_name, int max_ms)
 	return false;
 }
 
+bool UpdateNeuralNetworkQuorumData()
+{
+			#if defined(WIN32) && defined(QT_GUI)
+			    if (!bGlobalcomInitialized) return false;
+				std::string errors1 = "";
+     			int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+				std::string myNeuralHash = "";
+				double popularity = 0;
+				std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
+				std::string sAge = RoundToString((double)superblock_age,0);
+				std::string sBlock = mvApplicationCache["superblock;block_number"];
+				std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
+
+				std::string data = "<QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>" + sTimestamp + "</TIMESTAMP></QUORUMDATA>";
+				std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
+				qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
+				qtExecuteDotNetStringFunction("SetQuorumData",data);
+				return true;
+			#endif
+			return false;
+}
 
 bool FullSyncWithDPORNodes()
 {
@@ -557,8 +579,11 @@ bool FullSyncWithDPORNodes()
 				double popularity = 0;
 				std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
 				std::string sAge = RoundToString((double)superblock_age,0);
+				std::string sBlock = mvApplicationCache["superblock;block_number"];
+				std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
+
 				std::string data = "<WHITELIST>" + whitelist + "</WHITELIST><CPIDDATA>" 
-					+ cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH></QUORUMDATA>";
+					+ cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>" + sTimestamp + "</TIMESTAMP></QUORUMDATA>";
 
 				//if (fDebug3) printf("Syncing neural network %s \r\n",data.c_str());
 				std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
@@ -3982,7 +4007,7 @@ void GridcoinServices()
 	{
 		if (msNeuralResponse.length() < 25 && msPrimaryCPID != "INVESTOR" && !msPrimaryCPID.empty())
 		{
-			bool bResult = AsyncNeuralRequest("explainmag",msPrimaryCPID,10);
+			bool bResult = AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
 			if (fDebug3) printf("Async explainmag sent for %s.",msPrimaryCPID.c_str());
 		}
 	}
@@ -3995,12 +4020,14 @@ void GridcoinServices()
 		{
 			if (fDebug3) printf("CNNSH ");
 			ComputeNeuralNetworkSupermajorityHashes();
+			UpdateNeuralNetworkQuorumData();
 		}
 		//When superblock is old, Tally every 10 mins:
 		if ((nBestHeight % 10) == 0)
 		{
 			if (fDebug3) printf("TIB ");
 		    TallyInBackground();
+			UpdateNeuralNetworkQuorumData();
 		}
 
 	}
@@ -5350,7 +5377,6 @@ bool TallyNetworkAverages(bool ColdBoot)
 					if (fDebug3) printf(".Done.\r\n %f",(double)0);
 					bTallyStarted = false;
 					bNetAveragesLoaded = true;
-				
 					return true;
 	}
 	catch (std::exception &e) 
@@ -6505,7 +6531,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 			// if (pfrom->nNeuralRequestSent != 0) 
 			// nNeuralNonce must match request ID
 			pfrom->NeuralHash = neural_response;
-			printf("Neural Response %s \r\n",neural_response.c_str());
+			if (fDebug) printf("hash_Neural Response %s \r\n",neural_response.c_str());
 	}
 	else if (strCommand == "expmag_nresp")
 	{
@@ -6515,7 +6541,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 			{
 				msNeuralResponse=neural_response;
 			}
-			printf("Neural Response %s \r\n",neural_response.c_str());
+			if (fDebug) printf("expmag_Neural Response %s \r\n",neural_response.c_str());
 	}
 	else if (strCommand == "quorum_nresp")
 	{
@@ -7083,7 +7109,7 @@ void InitializeProjectStruct(StructCPID& project)
 	//Local CPID with struct
 	//Must contain cpidv2, cpid, boincpublickey
 	project.Iscpidvalid = IsLocalCPIDValid(project);
- 	if (fDebug3) printf("Assimilating local project %s, CPID Valid: %s",project.projectname.c_str(),YesNo(project.Iscpidvalid).c_str());
+ 	if (fDebug) printf("Memorizing local project %s, CPID Valid: %s;    ",project.projectname.c_str(),YesNo(project.Iscpidvalid).c_str());
 
 }
 
@@ -7516,12 +7542,12 @@ void HarvestCPIDs(bool cleardata)
 								std::string sData = qtExecuteDotNetStringFunction("WriteKey",sXML);
 							#endif
 							//Try to get a neural RAC report 7-25-2015
-							bool bResult = AsyncNeuralRequest("explainmag",msPrimaryCPID,10);
+							bool bResult = AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
 						}
 				}
 
 				mvCPIDs[proj] = structcpid;
-			    if (fDebug) printf("Adding Local Project %s",structcpid.cpid.c_str());
+			    if (fDebug) printf("Adding Local Project %s \r\n",structcpid.cpid.c_str());
 
 			}
 

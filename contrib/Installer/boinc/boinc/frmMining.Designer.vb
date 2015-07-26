@@ -83,6 +83,8 @@ Partial Class frmMining
         Me.lblCPID = New System.Windows.Forms.Label()
         Me.lblSuperblockAge = New System.Windows.Forms.Label()
         Me.lblQuorumHash = New System.Windows.Forms.Label()
+        Me.lblTimestamp = New System.Windows.Forms.Label()
+        Me.lblBlock = New System.Windows.Forms.Label()
         CType(Me.Chart1, System.ComponentModel.ISupportInitialize).BeginInit()
         CType(Me.chtCurCont, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.MenuStrip1.SuspendLayout()
@@ -637,6 +639,28 @@ Partial Class frmMining
         Me.lblQuorumHash.TabIndex = 71
         Me.lblQuorumHash.Text = "Popular Quorum Hash:"
         '
+        'lblTimestamp
+        '
+        Me.lblTimestamp.AutoSize = True
+        Me.lblTimestamp.BackColor = System.Drawing.Color.Transparent
+        Me.lblTimestamp.Font = New System.Drawing.Font("Microsoft Sans Serif", 9.75!)
+        Me.lblTimestamp.Location = New System.Drawing.Point(725, 772)
+        Me.lblTimestamp.Name = "lblTimestamp"
+        Me.lblTimestamp.Size = New System.Drawing.Size(151, 16)
+        Me.lblTimestamp.TabIndex = 72
+        Me.lblTimestamp.Text = "Superblock Timestamp:"
+        '
+        'lblBlock
+        '
+        Me.lblBlock.AutoSize = True
+        Me.lblBlock.BackColor = System.Drawing.Color.Transparent
+        Me.lblBlock.Font = New System.Drawing.Font("Microsoft Sans Serif", 9.75!)
+        Me.lblBlock.Location = New System.Drawing.Point(448, 772)
+        Me.lblBlock.Name = "lblBlock"
+        Me.lblBlock.Size = New System.Drawing.Size(127, 16)
+        Me.lblBlock.TabIndex = 73
+        Me.lblBlock.Text = "Superblock Block #:"
+        '
         'frmMining
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
@@ -645,6 +669,8 @@ Partial Class frmMining
         Me.BackgroundImage = Global.BoincStake.My.Resources.Resources.GradientU
         Me.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch
         Me.ClientSize = New System.Drawing.Size(1071, 793)
+        Me.Controls.Add(Me.lblBlock)
+        Me.Controls.Add(Me.lblTimestamp)
         Me.Controls.Add(Me.lblQuorumHash)
         Me.Controls.Add(Me.lblSuperblockAge)
         Me.Controls.Add(Me.lblCPID)
@@ -731,4 +757,6 @@ Partial Class frmMining
     Friend WithEvents lblCPID As System.Windows.Forms.Label
     Friend WithEvents lblSuperblockAge As System.Windows.Forms.Label
     Friend WithEvents lblQuorumHash As System.Windows.Forms.Label
+    Friend WithEvents lblTimestamp As System.Windows.Forms.Label
+    Friend WithEvents lblBlock As System.Windows.Forms.Label
 End Class

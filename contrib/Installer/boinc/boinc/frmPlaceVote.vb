@@ -29,7 +29,7 @@ Public Class frmPlaceVote
         Dim sTotalShares As String = ExtractXML(sData, "<TOTALSHARES>")
         Dim sBestAnswer As String = ExtractXML(sData, "<BESTANSWER>")
         'Display each answer
-        Dim yOffset As Long = lblQuestion.Top + 100
+        Dim yOffset As Long = lblQuestion.Top + 25
 
         Dim iRow As Long
         For x As Integer = 0 To vAnswers.Length - 1
@@ -44,16 +44,13 @@ Public Class frmPlaceVote
                 cbAnswer.Font = New Font("Arial", 14)
                 cbAnswer.Text = Trim(iRow) + ". " + sAnswer
                 cbAnswer.Width = Me.Width * 0.75
-
-                cbAnswer.Top = iRow * 40 + yOffset
+                cbAnswer.Top = iRow * 34 + yOffset
                 cbAnswer.Left = lblQuestion.Left + 50
                 cbAnswer.Name = "cb" + Trim(iRow)
                 cbAnswer.Tag = sAnswer
                 AddHandler cbAnswer.Click, AddressOf ClickCheckbox
-
                 cbAnswers(iRow) = cbAnswer
                 Me.Controls.Add(cbAnswer)
-
 
             End If
         Next
@@ -65,27 +62,27 @@ Public Class frmPlaceVote
     End Function
     Private Sub ClickCheckbox(ByVal sender As Object, ByVal e As System.EventArgs)
         Dim cb As CheckBox = sender
-        'Mutually exclusive
+        'Allow Multiple Choice
         For x As Integer = 1 To 20
             If Not cbAnswers(x) Is Nothing Then
                 If cbAnswers(x).Name <> cb.Name Then
-                    cbAnswers(x).Checked = False
+                    'cbAnswers(x).Checked = False
                 End If
             End If
         Next
     End Sub
     Private Function GetVoteValue() As String
+        Dim sAnswer As String = ""
         For x As Integer = 1 To 20
             If Not cbAnswers(x) Is Nothing Then
-                If cbAnswers(x).Checked Then Return cbAnswers(x).Tag
+                If cbAnswers(x).Checked Then sAnswer += cbAnswers(x).Tag + ";"
             End If
         Next
-        Return ""
+        If Len(sAnswer) > 2 Then sAnswer = Mid(sAnswer, 1, Len(sAnswer) - 1)
+        Return sAnswer
     End Function
 
-
     Function GetPollData(sTitle As String) As String
-
         If Not msGenericDictionary.ContainsKey("POLLS") Then
             MsgBox("No voting data exists.")
             Exit Function

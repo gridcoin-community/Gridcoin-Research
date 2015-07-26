@@ -396,13 +396,15 @@ Module modPersistedDataSystem
         Store(d)
 
     End Sub
-    Public Function UpdateSuperblockAgeAndQuorumHash(sAge As String, sQuorumHash As String)
+    Public Function UpdateSuperblockAgeAndQuorumHash(sAge As String, sQuorumHash As String, sTimestamp As String, sBlock As String)
         Dim d As New Row
         d.Database = "Historical"
         d.Table = "Magnitude"
         d.PrimaryKey = "QuorumHash"
         d.DataColumn1 = Trim(sAge)
         d.DataColumn2 = Trim(sQuorumHash)
+        d.DataColumn3 = Trim(sTimestamp)
+        d.DataColumn4 = Trim(sBlock)
         d.Expiration = DateAdd(DateInterval.Day, 30, Now)
 
         Store(d)
@@ -483,8 +485,9 @@ Module modPersistedDataSystem
             Dim sQuorumData As String = ExtractXML(msSyncData, "<QUORUMDATA>")
             Dim sAge As String = ExtractXML(sQuorumData, "<AGE>")
             Dim sQuorumHash As String = ExtractXML(sQuorumData, "<HASH>")
-            Log("QUORUMDATA:" + sQuorumData)
-            Call UpdateSuperblockAgeAndQuorumHash(sAge, sQuorumHash)
+            Dim TS As String = ExtractXML(sQuorumData, "<TIMESTAMP>")
+            Dim sBlock As String = ExtractXML(sQuorumData, "<BLOCKNUMBER>")
+            Call UpdateSuperblockAgeAndQuorumHash(sAge, sQuorumHash, TS, sBlock)
 
             Try
                 mlPercentComplete = 2
@@ -1106,7 +1109,7 @@ Module modPersistedDataSystem
         If Len(sCPID) < 10 Then Exit Function
         Dim sOut As String
 
-        Dim sHeading As String = "CPID,Project,RAC,ProjectAvgRAC,Project Mag,Cumulative RAC,Cumulative Mag"
+        Dim sHeading As String = "CPID,Project,RAC,Project_Total_RAC,Project_Avg_RAC,Project Mag,Cumulative RAC,Cumulative Mag,Errors"
         sOut += sHeading + "<ROW>"
 
         Dim vHeading() As String = Split(sHeading, ",")
@@ -1129,11 +1132,13 @@ Module modPersistedDataSystem
             Dim PrjRAC As Double = Val(prj.RAC)
             If CPIDRAC > 0 Then
                 iRow += 1
-                sRow = sCPID + "," + prj.PrimaryKey + "," + Trim(CPIDRAC) + "," + Trim(PrjRAC)
+                '7-26-2015
+                sRow = sCPID + "," + prj.PrimaryKey + "," + Trim(CPIDRAC) + "," + Trim(PrjRAC) + "," + Trim(prj.AvgRAC)
                 'Cumulative Mag:
                 Dim bIsThisWhitelisted As Boolean = False
                 bIsThisWhitelisted = IsInList(prj.PrimaryKey, lstWhitelist, False)
                 Dim IndMag As Double = 0
+                sErr = ""
                 If Not bIsThisWhitelisted Then
                     sErr = "Not Whitelisted"
                 End If
@@ -1145,14 +1150,18 @@ Module modPersistedDataSystem
                 sRow += "," + Trim(IndMag) + "," + Trim(TotalRAC)
                 sRow += "," + Trim(CumulativeMag) + "," + sErr
                 sOut += sRow + "<ROW>"
+
             End If
         Next
-
-        sRow = "Total Mag: " + Trim(Math.Round(CumulativeMag, 2)) + "," + Trim(TotalRAC) + "," + Trim(Trim(Math.Round(CumulativeMag, 2)))
-        sOut += sRow
-
+        Dim sSignature As String = ""
+        Dim sNeuralCPID As String = KeyValue("PrimaryCPID")
+        If sNeuralCPID = "" Then sNeuralCPID = "Unknown"
+        Dim sNH As String = mclsUtilization.GetNeuralHash
+        If sNeuralCPID = "" Then sNeuralCPID = mclsUtilization.GetNeuralHash
+        sSignature = "NN Host Version: " + Trim(mclsUtilization.Version) + ", NeuralHash: " + sNH + ", CPID: " + sNeuralCPID + ", Time: " + Trim(Now)
+        sRow = "Total RAC: " + Trim(TotalRAC) + "<ROW>" + "Total Mag: " + Trim(Math.Round(CumulativeMag, 2))
+        sOut += sSignature + "<ROW>" + sRow
         sRow += "<ROW>Your Neural Magnitude: " + Trim(Math.Round(CumulativeMag, 2))
-
         'Dim sXML As String = GetXMLOnly(sCPID)
         Return sOut
 

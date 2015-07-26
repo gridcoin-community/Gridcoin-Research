@@ -25,6 +25,8 @@ void TallyInBackground();
 double GetNetworkPaymentsTotal();
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
 bool ComputeNeuralNetworkSupermajorityHashes();
+bool UpdateNeuralNetworkQuorumData();
+
 
 extern bool CheckMessageSignature(std::string messagetype, std::string sMsg, std::string sSig);
 extern std::string CryptoLottery(int64_t locktime);
@@ -1662,6 +1664,12 @@ Value execute(const Array& params, bool fHelp)
 			entry.push_back(Pair("Popular",consensus_hash));
 			results.push_back(entry);
 	}
+	else if (sItem=="updatequorumdata")
+	{
+			UpdateNeuralNetworkQuorumData();
+			entry.push_back(Pair("Updated.",""));
+			results.push_back(entry);
+	}
 	else if (sItem == "vote")
 	{
 		if (params.size() != 3)
@@ -1710,7 +1718,7 @@ Value execute(const Array& params, bool fHelp)
 							if (!PollAcceptableAnswer(Title,Answer))
 							{
 								std::string acceptable_answers = PollAnswers(Title);
-								entry.push_back(Pair("Error","Sorry, Answer " + Answer + " is not one of the acceptable answers, allowable answers are: " + acceptable_answers + "."));
+								entry.push_back(Pair("Error","Sorry, Answer " + Answer + " is not one of the acceptable answers, allowable answers are: " + acceptable_answers + ".  If you are voting multiple choice, please use a semicolon delimited vote string such as : 'dog;cat'."));
 								results.push_back(entry);
 							}
 							else
@@ -2876,20 +2884,19 @@ double GetMoneySupplyFactor()
 
 }		
 
-double PollCalculateShares(std::string contract, double sharetype, double MoneySupplyFactor)
+double PollCalculateShares(std::string contract, double sharetype, double MoneySupplyFactor, unsigned int VoteAnswerCount)
 {
-
 	std::string address = ExtractXML(contract,"<GRCADDRESS>","</GRCADDRESS>");
 	std::string cpid = ExtractXML(contract,"<CPID>","</CPID>");
 	double magnitude = cdbl(ExtractXML(contract,"<MAGNITUDE>","</MAGNITUDE>"),0);
 	double balance = cdbl(ExtractXML(contract,"<BALANCE>","</BALANCE>"),0);
-	if (sharetype==1) return magnitude;
-	if (sharetype==2) return balance;
+	if (VoteAnswerCount < 1) VoteAnswerCount=1;
+	if (sharetype==1) return magnitude/VoteAnswerCount;
+	if (sharetype==2) return balance/VoteAnswerCount;
 	if (sharetype==3)
 	{
-		
 		double UserWeightedMagnitude = MoneySupplyFactor*magnitude;
-		return UserWeightedMagnitude+balance;
+		return (UserWeightedMagnitude+balance) / VoteAnswerCount;
 	}
 	if (sharetype==4) 
 	{
@@ -2927,12 +2934,15 @@ double VotesCount(std::string pollname, std::string answer, double sharetype, do
 								boost::to_lower(pollname);
 								boost::to_lower(VoterAnswer);
 								boost::to_lower(answer);
-
-								if (pollname == Title && answer == VoterAnswer)
+								std::vector<std::string> vVoterAnswers = split(VoterAnswer.c_str(),";");
+								for (unsigned int x = 0; x < vVoterAnswers.size(); x++)
 								{
-									double shares = PollCalculateShares(contract,sharetype,MoneySupplyFactor);
-									total_shares += shares;
-									out_participants++;
+									if (pollname == Title && answer == vVoterAnswers[x])
+									{
+										double shares = PollCalculateShares(contract,sharetype,MoneySupplyFactor,vVoterAnswers.size());
+										total_shares += shares;
+										out_participants += (double)((double)1/(double)vVoterAnswers.size());
+									}
 								}
 					}
 				}
@@ -2955,13 +2965,26 @@ bool PollAcceptableAnswer(std::string pollname, std::string answer)
 	std::string contract = GetPollContractByTitle("poll",pollname);
 	std::string answers = ExtractXML(contract,"<ANSWERS>","</ANSWERS>");
 	std::vector<std::string> vAnswers = split(answers.c_str(),";");
-	for (unsigned int i = 0; i < vAnswers.size(); i++)
-    {
-				boost::to_lower(vAnswers[i]);
-				boost::to_lower(answer);
-				if (answer == vAnswers[i]) return true;
+
+	//Allow multiple choice voting:
+	std::vector<std::string> vUserAnswers = split(answer.c_str(),";");
+	for (unsigned int x = 0; x < vUserAnswers.size(); x++)
+	{
+		bool bFoundAnswer = false;
+		for (unsigned int i = 0; i < vAnswers.size(); i++)
+		{
+				boost::to_lower(vAnswers[i]); //Contains Poll acceptable answers
+				std::string sUserAnswer = vUserAnswers[x];
+				boost::to_lower(sUserAnswer);
+				if (sUserAnswer == vAnswers[i]) 
+				{
+						bFoundAnswer=true;
+						break;
+				}
+		}
+		if (!bFoundAnswer) return false;
 	}
-	return false;
+	return true;
 }
 
 std::string PollAnswers(std::string pollname)
@@ -3026,18 +3049,22 @@ Array GetJsonVoteDetailsReport(std::string pollname)
 							
 								if (pollname == Title)
 								{
-									double shares = PollCalculateShares(contract,dShareType,MoneySupplyFactor);
-									total_shares += shares;
-									participants++;
-									iRow++;
-									std::string voter = GRCAddress + "," + CPID + "," + VoterAnswer + "," + sShareType;
-									entry.push_back(Pair(voter,RoundToString(shares,0)));
+									std::vector<std::string> vVoterAnswers = split(VoterAnswer.c_str(),";");
+									for (unsigned int x = 0; x < vVoterAnswers.size(); x++)
+									{
+										double shares = PollCalculateShares(contract,dShareType,MoneySupplyFactor,vVoterAnswers.size());
+										total_shares += shares;
+										participants += (double)((double)1/(double)vVoterAnswers.size());
+										iRow++;
+										std::string voter = GRCAddress + "," + CPID + "," + vVoterAnswers[x] + "," + sShareType;
+										entry.push_back(Pair(voter,RoundToString(shares,0)));
+									}
 								}
 					}
 			}
 	}
 
-	entry.push_back(Pair("Total Participants",RoundToString(participants,0)));
+	entry.push_back(Pair("Total Participants",RoundToString(participants,2)));
 								
 	
 	results.push_back(entry);
@@ -3109,7 +3136,7 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
 														BestAnswer = vAnswers[i];
 												}
 
-												entry.push_back(Pair("#" + RoundToString((double)i+1,0) + " [" + RoundToString(participants,0) + "]. " 
+												entry.push_back(Pair("#" + RoundToString((double)i+1,0) + " [" + RoundToString(participants,3) + "]. " 
 													+ vAnswers[i],dShares));
 												total_participants += participants;
 												total_shares += dShares;

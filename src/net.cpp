@@ -710,7 +710,7 @@ std::string GetHttpPage(std::string url)
 	
 		std::string domain = ExtractDomainFromURL(url,0);
 		std::string page = ExtractDomainFromURL(url,1);
-		printf("domain %s,    page %s\r\n",domain.c_str(),page.c_str());
+		if (fDebug) printf("domain %s, page %s\r\n",domain.c_str(),page.c_str());
 
 		CService addrConnect;
 

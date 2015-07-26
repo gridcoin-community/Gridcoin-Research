@@ -52,7 +52,9 @@ Public Class frmMining
 
             lblSuperblockAge.Text = "Superblock Age: " + Trim(r.DataColumn1)
             lblQuorumHash.Text = "Popular Quorum Hash: " + Trim(r.DataColumn2)
-            
+            lblTimestamp.Text = "Superblock Timestamp: " + Trim(r.DataColumn3)
+            lblBlock.Text = "Superblock Block #: " + Trim(r.DataColumn4)
+
 
         Catch exx As Exception
             Log("One minute update:" + exx.Message)

@@ -108,7 +108,9 @@ Public Class Form1
         Dim sHash As String = mU.GetNeuralHash()
 
         mU.SetGenericVotingData(sVotes)
-        mU.ShowMiningConsole()
+        mU.ShowVotingConsole()
+
+        'mU.ShowMiningConsole()
 
 
         Exit Sub

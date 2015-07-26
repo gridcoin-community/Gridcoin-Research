@@ -51,7 +51,6 @@
         Dim dExponent As Double = Math.Pow(dMagLength, 5)
         Dim sMagComponent1 As String = Trim(Math.Round(dMagIn / (dExponent + 0.01), 0))
         Dim sSuffix = Trim(Math.Round(dMagLength * dExponent, 0))
-        'Log(sCPID + "," + sMagComponent1 + "," + Trim(dMagLength) + "," + Trim(dExponent) + "," + sSuffix)
         Dim sHash As String = sCPID + sMagComponent1 + sSuffix
         Return sHash
     End Function
