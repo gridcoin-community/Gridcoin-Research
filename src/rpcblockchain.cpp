@@ -1675,7 +1675,7 @@ Value execute(const Array& params, bool fHelp)
 	{
 		if (params.size() != 3)
 		{
-			entry.push_back(Pair("Error","You must specify the Poll Title, and the Vote Value.  For example: execute vote gender male."));
+			entry.push_back(Pair("Error","You must specify the Poll Title, and the Answer.  For example: execute vote gender male."));
 			results.push_back(entry);
 		}
 		else
@@ -1751,12 +1751,15 @@ Value execute(const Array& params, bool fHelp)
 	 	 	                    // Share Type 1 == "Magnitude"
 								// Share Type 2 == "Balance"
 								// Share Type 3 == "Both"
-								if ((dShareType == 1 || dShareType==3) && cpid_age < poll_duration) 
+								if (cpid_age < poll_duration) dmag = 0;
+								if (stake_age < poll_duration) nBalance = 0;
+
+								if ((dShareType == 1) && cpid_age < poll_duration) 
 								{
 									entry.push_back(Pair("Error","Sorry, When voting in a magnitude poll, your CPID must be older than the poll duration."));
 									results.push_back(entry);
 								}
-								else if ( (dShareType==3 || dShareType == 2) && stake_age < poll_duration)
+								else if (dShareType == 2 && stake_age < poll_duration)
 								{
 									entry.push_back(Pair("Error","Sorry, When voting in a Balance poll, your stake age must be older than the poll duration."));
 									results.push_back(entry);
@@ -1770,7 +1773,8 @@ Value execute(const Array& params, bool fHelp)
 									std::string pk = Title+";"+GRCAddress+";"+GlobalCPUMiningCPID.cpid;
 									std::string contract = "<TITLE>" + Title + "</TITLE><ANSWER>" + Answer + "</ANSWER>" + voter;
 									std::string result = AddContract("vote",pk,contract);
-									entry.push_back(Pair("Success","Your vote has been cast for topic " + Title + ": With an Answer of " + Answer + ": " + result.c_str()));
+									std::string narr = "Your CPID weight is " + RoundToString(dmag,0) + " and your Balance weight is " + RoundToString(nBalance,0) + ".";
+									entry.push_back(Pair("Success",narr + " " + "Your vote has been cast for topic " + Title + ": With an Answer of " + Answer + ": " + result.c_str()));
 									results.push_back(entry);
 								}
 							}
@@ -2599,7 +2603,7 @@ Value execute(const Array& params, bool fHelp)
 
 
 
-Array MagnitudeReport(bool bMine)
+Array MagnitudeReport(std::string cpid)
 {
 	       Array results;
 		   Object c;
@@ -2618,7 +2622,7 @@ Array MagnitudeReport(bool bMine)
 				StructCPID structMag = mvMagnitudes[(*ii).first];
 				if (structMag.initialized && structMag.cpid.length() > 2) 
 				{ 
-						if (!bMine || (bMine && structMag.cpid == GlobalCPUMiningCPID.cpid))
+						if (cpid.empty() || (structMag.cpid == cpid))
 						{
 									Object entry;
 									entry.push_back(Pair("CPID",structMag.cpid));
@@ -3425,7 +3429,7 @@ std::string YesNo(bool bin)
 
 Value listitem(const Array& params, bool fHelp)
 {
-    if (fHelp || (params.size() != 1  && params.size() != 2))
+    if (fHelp || (params.size() != 1 && params.size() != 2 && params.size() != 3 && params.size() != 4))
         throw runtime_error(
 		"list <string::itemname>\n"
         "Returns details of a given item by name.");
@@ -3591,9 +3595,21 @@ Value listitem(const Array& params, bool fHelp)
 
 	if (sitem == "magnitude")
 	{
-			results = MagnitudeReport(false);
-			return results;
+		std::string cpid = "";
+		if (params.size() == 2)
+		{
+			cpid = params[1].get_str();
+		}
 
+		if (params.size() > 2)
+		{
+			Object entry;
+			entry.push_back(Pair("Error","You must either specify 'list magnitude' to see the entire report, or 'list magnitude CPID' to see a specific CPID."));
+			results.push_back(entry);
+			return results;
+		}
+		results = MagnitudeReport(cpid);
+		return results;
 	}
 
 	if (sitem == "debug3")
@@ -3637,13 +3653,13 @@ Value listitem(const Array& params, bool fHelp)
 
 	if (sitem == "mymagnitude")
 	{
-			results = MagnitudeReport(true);
+			results = MagnitudeReport(GlobalCPUMiningCPID.cpid);
 			return results;
 	}
 
 	if (sitem == "rsa")
 	{
-	    	results = MagnitudeReport(true);
+	    	results = MagnitudeReport(GlobalCPUMiningCPID.cpid);
 			return results;
 	}
 

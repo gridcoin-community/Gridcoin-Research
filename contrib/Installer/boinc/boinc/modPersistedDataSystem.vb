@@ -683,21 +683,16 @@ Module modPersistedDataSystem
         Return sCompare1
     End Function
     Public Function IsInList(sData As String, lstRows As List(Of Row), bRequireExactMatch As Boolean) As Boolean
-        For Each blah As Row In lstRows
-            If Trim(UCase(blah.PrimaryKey)) = Trim(UCase(sData)) Then
+        For Each oRowIterator As Row In lstRows
+            If Trim(UCase(oRowIterator.PrimaryKey)) = Trim(UCase(sData)) Then
                 Return True
             End If
             If Not bRequireExactMatch Then
-                Dim sCompare1 As String = StringStandardize(blah.PrimaryKey)
+                Dim sCompare1 As String = StringStandardize(oRowIterator.PrimaryKey)
                 Dim sCompare2 As String = StringStandardize(sData)
                 If Left(sCompare1, 8) = Left(sCompare2, 8) Then Return True
             End If
         Next
-        For Each blah As Row In lstRows
-            Dim sCompare1 As String = StringStandardize(blah.PrimaryKey)
-            Dim sCompare2 As String = StringStandardize(sData)
-        Next
-
         Return False
     End Function
     Public Function GetList(DataRow As Row, sWildcard As String) As List(Of Row)

@@ -4028,7 +4028,6 @@ void GridcoinServices()
 		{
 			if (fDebug3) printf("TIB ");
 		    TallyInBackground();
-			UpdateNeuralNetworkQuorumData();
 		}
 
 	}
@@ -4041,6 +4040,11 @@ void GridcoinServices()
 			    TallyInBackground();
 				if (fDebug3) printf("CNNSH2 ");
 				ComputeNeuralNetworkSupermajorityHashes();
+		}
+
+		if ((nBestHeight % 5)==0)
+		{
+					UpdateNeuralNetworkQuorumData();
 		}
 
 	}
@@ -4110,11 +4114,12 @@ void GridcoinServices()
 		}
 	}
 
-	if (TimerMain("gather_cpids",1000))
+	if (TimerMain("gather_cpids",480))
 	{
 			//if (fDebug) printf("\r\nReharvesting cpids in background thread...\r\n");
 			//LoadCPIDsInBackground();
 			//printf(" {CPIDs Re-Loaded} ");
+			msNeuralResponse="";
 	}
 
 	if (TimerMain("check_for_autoupgrade",240))
@@ -5103,11 +5108,9 @@ void AddNetworkMagnitude(double height, double LockTime, std::string cpid, Minin
 
 
 
-
-
-
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 {
+	//7-26-2015
     if (nBestHeight < 15) 
 	{
 		mvApplicationCacheTimestamp["nGRCTime"] = GetAdjustedTime();
@@ -5118,38 +5121,45 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 	nLastGRCtallied = GetAdjustedTime();
 	int64_t nGRCTime = 0;
 	int64_t nCPIDTime = 0;
+	CBlock block;
 	LOCK(cs_main);
 	{
 		    int nMaxDepth = nBestHeight;
 			int nLookback = BLOCKS_PER_DAY*6*30;  //6 months back for performance
 			int nMinDepth = nMaxDepth - nLookback;
 			if (nMinDepth < 2) nMinDepth = 2;
-			CBlock block;
-			int iRow = 0;
-			for (int ii = nMinDepth; ii < nMaxDepth; ii++)
+			// Start at the earliest block index:
+			CBlockIndex* pblockindex = FindBlockByHeight(nMinDepth);
+		    while (pblockindex->nHeight < nMaxDepth-1)
 			{
-     					CBlockIndex* pblockindex = FindBlockByHeight(ii);
-						block.ReadFromDisk(pblockindex);
-						std::string hashboinc = "";
-						if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
-						MiningCPID bb = DeserializeBoincBlock(hashboinc);
-
-						if (grcaddress==bb.GRCAddress && nGRCTime==0)
+						pblockindex = pblockindex->pnext;
+						if (pblockindex == pindexBest) break;
+						if (pblockindex == NULL || !pblockindex->IsInMainChain()) continue;
+						std::string myCPID = "";
+						if (pblockindex->nHeight < nNewIndex)
 						{
-							nGRCTime = block.nTime;
+							//Between block 1 and nNewIndex, unfortunately, we have to read from disk.
+							block.ReadFromDisk(pblockindex);
+							std::string hashboinc = "";
+							if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
+							MiningCPID bb = DeserializeBoincBlock(hashboinc);
+							myCPID = bb.cpid;
 						}
-						if (cpid == bb.cpid && nCPIDTime==0)
+						else
 						{
-							nCPIDTime = block.nTime;
-							if (nGRCTime==0) nGRCTime = block.nTime; //CPID can set GRCTime, but GRCTime cant set CPID time
+							myCPID = pblockindex->sCPID;
 						}
-						if ((nGRCTime > 0) && (nCPIDTime > 0)) break;
+						if (cpid == myCPID && nCPIDTime==0)
+						{
+							nCPIDTime = pblockindex->nTime;
+							nGRCTime = pblockindex->nTime;
+							break;
+						}
 			}
 	}
 	int64_t EarliestStakedWalletTx = GetEarliestWalletTransaction();
 	if (EarliestStakedWalletTx > 0 && EarliestStakedWalletTx < nGRCTime) nGRCTime = EarliestStakedWalletTx;
 	printf("CPIDTime %f, GRCTime %f, WalletTime %f \r\n",(double)nCPIDTime,(double)nGRCTime,(double)EarliestStakedWalletTx);
-
 	if (nGRCTime==0)  nGRCTime = GetAdjustedTime();
 	if (nCPIDTime==0) nCPIDTime = GetAdjustedTime();
 	mvApplicationCacheTimestamp["nGRCTime"] = nGRCTime;
