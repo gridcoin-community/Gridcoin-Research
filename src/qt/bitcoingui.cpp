@@ -354,8 +354,7 @@ BitcoinGUI::~BitcoinGUI()
 
 int ReindexWallet()
 {
-			printf("executing grcrestarter reindex");
-
+			if (!bGlobalcomInitialized) return 0;
 			QString sFilename = "GRCRestarter.exe";
 			QString sArgument = "";
 			QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
@@ -381,8 +380,8 @@ int ReindexWallet()
 
 int CreateRestorePoint()
 {
-			printf("executing grcrestarter createrestorepoint");
-
+			if (!bGlobalcomInitialized) return 0;
+	
 			QString sFilename = "GRCRestarter.exe";
 			QString sArgument = "";
 			QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
@@ -411,7 +410,8 @@ int CreateRestorePoint()
 int DownloadBlocks()
 {
 			printf("executing grcrestarter downloadblocks");
-
+			if (!bGlobalcomInitialized) return 0;
+	
 			QString sFilename = "GRCRestarter.exe";
 			QString sArgument = "";
 			QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
@@ -443,9 +443,7 @@ QString ToQstring(std::string s)
 
 int RestartClient()
 {
-
-	printf("executing grcrestarter restart");
-
+	if (!bGlobalcomInitialized) return 0;
 	QString sFilename = "GRCRestarter.exe";
 			QString sArgument = "";
 			QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
@@ -460,7 +458,8 @@ int RestartClient()
 void qtUpdateConfirm(std::string txid)
 {
 	int result = 0;
-
+	if (!bGlobalcomInitialized) return;
+	
 	#if defined(WIN32) && defined(QT_GUI)
 		QString qsTxid = ToQstring(txid);
 		QString sResult = globalcom->dynamicCall("UpdateConfirm(Qstring)",qsTxid).toString();
@@ -471,7 +470,8 @@ void qtUpdateConfirm(std::string txid)
 
 void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string txid)
 {
-
+	if (!bGlobalcomInitialized) return;
+	
 	#if defined(WIN32) && defined(QT_GUI)
 	try
 	{
@@ -493,6 +493,8 @@ void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::strin
 
 double qtExecuteGenericFunction(std::string function, std::string data)
 {
+	if (!bGlobalcomInitialized) return 0;
+	
 	double return_code = 0;
 	int result = 0;
 	#if defined(WIN32) && defined(QT_GUI)
@@ -520,6 +522,8 @@ double qtExecuteGenericFunction(std::string function, std::string data)
 std::string qtExecuteDotNetStringFunction(std::string function, std::string data)
 {
 	std::string sReturnData = "";
+	if (!bGlobalcomInitialized) return "";
+	
 	#if defined(WIN32) && defined(QT_GUI)
 	    if (!bGlobalcomInitialized) return "?";
 		QString qsData = ToQstring(data);
@@ -611,6 +615,8 @@ std::string qtGetNeuralHash(std::string data)
 void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double magnitude)
 {
 
+	if (!bGlobalcomInitialized) return;
+	
 	#if defined(WIN32) && defined(QT_GUI)
 		int result = 0;
 	 	std::string session = defaultgrcaddress + "<COL>" + cpid + "<COL>" + RoundToString(magnitude,1);
@@ -627,6 +633,8 @@ void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double ma
 int qtTrackConfirm(std::string txid)
 {
 	double result = 0;
+	if (!bGlobalcomInitialized) return 0;
+	
 	#if defined(WIN32) && defined(QT_GUI)
 		QString qsConfirm = ToQstring(txid);
 		printf("@t1");
@@ -642,6 +650,8 @@ int qtTrackConfirm(std::string txid)
 std::string qtGRCCodeExecutionSubsystem(std::string sCommand)
 {
 	std::string sResult = "FAIL";
+	if (!bGlobalcomInitialized) return "FAIL";
+	
 	#if defined(WIN32) && defined(QT_GUI)
 		QString qsParms = ToQstring(sCommand);
 		QString qsResult = globalcom->dynamicCall("GRCCodeExecutionSubsystem(Qstring)",qsParms).toString();
@@ -657,7 +667,8 @@ std::string qtGRCCodeExecutionSubsystem(std::string sCommand)
 int RebootClient()
 {
 			printf("Executing reboot\r\n");
-
+			if (!bGlobalcomInitialized) return 0;
+	
 			QString sFilename = "GRCRestarter.exe";
 			QString sArgument = "reboot";
 			QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
@@ -684,6 +695,8 @@ int RebootClient()
 
 void CheckForUpgrade()
 {
+			if (!bGlobalcomInitialized) return;
+	
 		    if (bCheckedForUpgrade == false && !fTestNet && bProjectsInitialized)
 			{
 				int nNeedsUpgrade = 0;
@@ -732,7 +745,8 @@ int64_t IsNeural()
 int UpgradeClient()
 {
 			printf("Executing upgrade");
-
+			if (!bGlobalcomInitialized) return 0;
+	
 			QString sFilename = "GRCRestarter.exe";
 			QString sArgument = "upgrade";
 			QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
@@ -773,10 +787,10 @@ int AddressUser()
 		double out_owed = 0;
 		try
 		{
-			if (fDebug3) printf("Init.");
-		out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid,out_owed);
-	    if (fDebug3) printf("Boinc Magnitude %f \r\n",out_magnitude);
-		result = globalcom->dynamicCall("AddressUser(Qstring)",IntToQstring((int)out_magnitude)).toInt();
+			if (!bGlobalcomInitialized) return 0;
+			out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid,out_owed);
+		    if (fDebug3) printf("Boinc Magnitude %f \r\n",out_magnitude);
+			result = globalcom->dynamicCall("AddressUser(Qstring)",IntToQstring((int)out_magnitude)).toInt();
 		}
 		catch(...)
 		{
@@ -788,6 +802,8 @@ int AddressUser()
 
 int CloseGuiMiner()
 {
+	if (!bGlobalcomInitialized) return 0;
+	
 	try
 	{
 #ifdef WIN32
@@ -1649,7 +1665,6 @@ void BitcoinGUI::downloadClicked()
 
 void BitcoinGUI::rebootClicked()
 {
-
 	RebootClient();
 }
 
@@ -1657,11 +1672,8 @@ void BitcoinGUI::rebootClicked()
 void BitcoinGUI::sqlClicked()
 {
 #ifdef WIN32
-	if (!globalcom)
-	{
-		globalcom = new QAxObject("BoincStake.Utilization");
-	}
-    globalcom->dynamicCall("ShowSql()");
+	if (!bGlobalcomInitialized) return;
+	globalcom->dynamicCall("ShowSql()");
 #endif
 
 }
@@ -1670,11 +1682,7 @@ void BitcoinGUI::sqlClicked()
 void BitcoinGUI::ticketListClicked()
 {
 #ifdef WIN32
-	if (!globalcom)
-	{
-		globalcom = new QAxObject("BoincStake.Utilization");
-	}
-
+	if (!bGlobalcomInitialized) return;
 	qtSetSessionInfo(DefaultWalletAddress(), GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.Magnitude);
     globalcom->dynamicCall("ShowTicketList()");
 #endif
@@ -1687,11 +1695,7 @@ void BitcoinGUI::ticketListClicked()
 void BitcoinGUI::newUserWizardClicked()
 {
 #ifdef WIN32
-	if (!globalcom)
-	{
-		globalcom = new QAxObject("BoincStake.Utilization");
-	}
-
+	if (!bGlobalcomInitialized) return;
     globalcom->dynamicCall("ShowNewUserWizard()");
 #endif
 }
@@ -1701,11 +1705,7 @@ void BitcoinGUI::newUserWizardClicked()
 void BitcoinGUI::galazaClicked()
 {
 #ifdef WIN32
-	if (!globalcom)
-	{
-		globalcom = new QAxObject("BoincStake.Utilization");
-	}
-
+	if (!bGlobalcomInitialized) return;
     globalcom->dynamicCall("StartGalaza()");
 #endif
 
@@ -1715,29 +1715,12 @@ void BitcoinGUI::galazaClicked()
 void BitcoinGUI::tickerClicked()
 {
 #ifdef WIN32
-	if (!globalcom)
-	{
-		globalcom = new QAxObject("BoincStake.Utilization");
-	}
-    globalcom->dynamicCall("ShowTicker()");
+		if (!bGlobalcomInitialized) return;
+	    globalcom->dynamicCall("ShowTicker()");
 #endif
 
 }
 
-
-/*
-void BitcoinGUI::leaderboardClicked()
-{
-	#ifdef WIN32
-
-	if (globalcom==NULL) {
-		globalcom = new QAxObject("BoincStake.Utilization");
-	}
-
-    globalcom->dynamicCall("ShowLeaderboard()");
-#endif
-}
-*/
 
 
 
@@ -1753,6 +1736,7 @@ void BitcoinGUI::votingClicked()
 {
 
 	#ifdef WIN32
+		if (!bGlobalcomInitialized) return;
 		std::string sVotingPayload = "";
 		GetJSONPollsReport(true,"",sVotingPayload,true);
 		double function_call = qtExecuteGenericFunction("SetGenericVotingData",sVotingPayload);
@@ -1769,6 +1753,7 @@ void BitcoinGUI::miningClicked()
 {
 
 #ifdef WIN32
+	if (!bGlobalcomInitialized) return;
 	std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
 	double function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
 	globalcom->dynamicCall("ShowMiningConsole()");
@@ -2126,8 +2111,7 @@ void ReinstantiateGlobalcom()
 
 void ExecuteCode()
 {
-	printf("Globalcom executing .net code\r\n");
-
+	if (!bGlobalcomInitialized) return;
 	std::string q = "\"";
 	std::string sCode = "For x = 1 to 5:sOut=sOut + " + q + "COUNTING: " + q + "+ trim(x):Next x:MsgBox(" + q + "Hello: "
 		+ q + " + sOut,MsgBoxStyle.Critical," + q + "Message Title" + q + ")";
@@ -2157,6 +2141,8 @@ void BitcoinGUI::timerfire()
 				NewUserWizard();
 			}
 			#ifdef WIN32
+				if (!bGlobalcomInitialized) return;
+	
 				nRegVersion = globalcom->dynamicCall("Version()").toInt();
 				sRegVer = boost::lexical_cast<std::string>(nRegVersion);
 			#endif

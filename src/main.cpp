@@ -364,8 +364,8 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
  
  int nGrandfather = fTestNet ? 27444 : 282370;
-
  int nNewIndex = fTestNet ? 28286 : 271625;
+ int64_t nGenesisSupply = 340569880;
 
  //GPU Projects:
  std::string 	msGPUMiningProject = "";
@@ -1979,7 +1979,7 @@ int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height)
 	//Gridcoin Foundation Block:
 	if (height==10)
 	{
-		nSubsidy = 340569880 * COIN;
+		nSubsidy = nGenesisSupply * COIN;
 	}
 	if (fTestNet) nSubsidy += 1000*COIN;
 
@@ -1994,7 +1994,7 @@ int64_t GetProofOfWorkMaxReward(int64_t nFees, int64_t locktime, int64_t height)
 	{
 		//R.Halford: 10-11-2014: Gridcoin Foundation Block:
 		//Note: Gridcoin Classic emitted these coins.  So we had to add them to block 10.  The coins were burned then given back to the owners that mined them in classic (as research coins).
-		nSubsidy = 340569880 * COIN;
+		nSubsidy = nGenesisSupply * COIN;
 	}
 
 	if (fTestNet) nSubsidy += 1000*COIN;
@@ -2874,6 +2874,44 @@ double ClientVersionNew()
 	return cv;
 }
 
+
+int64_t ReturnCurrentMoneySupply(CBlockIndex* pindexcurrent)
+{
+	if (pindexcurrent->pprev)
+	{  
+		// If previous exists, and previous money supply > Genesis, OK to use it:
+		if (pindexcurrent->pprev->nHeight > 11 && pindexcurrent->pprev->nMoneySupply > nGenesisSupply)
+		{
+			return pindexcurrent->pprev->nMoneySupply;
+		}
+	}
+	// Special case where block height < 12, use standard old logic:
+	if (pindexcurrent->nHeight < 12)
+	{
+		return (pindexcurrent->pprev? pindexcurrent->pprev->nMoneySupply : 0);
+	}
+	// At this point, either the last block pointer was NULL, or the client erased the money supply previously, fix it:
+	CBlockIndex* pblockIndex = pindexcurrent;
+	CBlockIndex* pblockMemory = pindexcurrent;
+	int nMinDepth = (pindexcurrent->nHeight)-1000;
+	if (nMinDepth < 12) nMinDepth=12;
+	while (pblockIndex->nHeight > nMinDepth)
+	{
+			pblockIndex = pblockIndex->pprev;
+			if (pblockIndex == NULL || !pblockIndex->IsInMainChain()) continue;
+	        if (pblockIndex->nMoneySupply > nGenesisSupply) 
+			{
+				//Set index back to original pointer
+				pindexcurrent = pblockMemory;
+				//Return last valid money supply
+				return pblockIndex->nMoneySupply;
+			}
+	}
+	// At this point, we fall back to the old logic with a minimum of the genesis supply (should never happen - if it did, blockchain will need rebuilt anyway due to other fields being invalid):
+	pindexcurrent = pblockMemory;
+	return (pindexcurrent->pprev? pindexcurrent->pprev->nMoneySupply : nGenesisSupply);
+}
+
 bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 {
     // Check it again in case a previous version let a bad block in, but skip BlockSig checking
@@ -2882,8 +2920,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
         printf("ConnectBlock::Failed - \r\n");
 		return false;
 	}
-	//7-5-2015
-    //// issue here: it doesn't know the version
+	//// issue here: it doesn't know the version
     unsigned int nTxPos;
     if (fJustCheck)
         // FetchInputs treats CDiskTxPos(1,1,1) as a special "refer to memorypool" indicator
@@ -3049,7 +3086,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		
     // Track money supply and mint amount info
     pindex->nMint = nValueOut - nValueIn + nFees;
-    pindex->nMoneySupply = (pindex->pprev? pindex->pprev->nMoneySupply : 0) + nValueOut - nValueIn;
+    pindex->nMoneySupply = ReturnCurrentMoneySupply(pindex) + nValueOut - nValueIn;
 
 	// Gridcoin: Store verified magnitude and CPID in block index (7-11-2015)
 	pindex->sCPID  = bb.cpid;
