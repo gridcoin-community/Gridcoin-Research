@@ -24,6 +24,7 @@ volatile bool bCPIDsLoaded;
 volatile bool bProjectsInitialized;
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 
+int64_t GetRSAWeightByCPID(std::string cpid);
 
 Value getsubsidy(const Array& params, bool fHelp)
 {
@@ -44,44 +45,36 @@ Value getmininginfo(const Array& params, bool fHelp)
 
     uint64_t nWeight = 0;
     pwalletMain->GetStakeWeight(nWeight);
-
     Object obj, diff, weight;
     obj.push_back(Pair("blocks",        (int)nBestHeight));
     obj.push_back(Pair("currentblocksize",(uint64_t)nLastBlockSize));
     obj.push_back(Pair("currentblocktx",(uint64_t)nLastBlockTx));
-
     diff.push_back(Pair("proof-of-work",        GetDifficulty()));
     diff.push_back(Pair("proof-of-research",    GetDifficulty(GetLastBlockIndex(pindexBest, true))));
 	diff.push_back(Pair("proof-of-stake",    GetDifficulty(GetLastBlockIndex(pindexBest, true))));
-
     diff.push_back(Pair("search-interval",      (int)nLastCoinStakeSearchInterval));
     obj.push_back(Pair("difficulty",    diff));
-
     obj.push_back(Pair("blockvalue",    (uint64_t)GetProofOfWorkReward(0,  GetAdjustedTime(),1)));
     obj.push_back(Pair("netmhashps",     GetPoWMHashPS()));
     obj.push_back(Pair("netstakeweight", GetPoSKernelPS()));
 	obj.push_back(Pair("netstakeweight2", GetPoSKernelPS2()));
-
     obj.push_back(Pair("errors",        GetWarnings("statusbar")));
     obj.push_back(Pair("pooledtx",      (uint64_t)mempool.size()));
-
     weight.push_back(Pair("minimum",    (uint64_t)nWeight));
     weight.push_back(Pair("maximum",    (uint64_t)0));
     weight.push_back(Pair("combined",  (uint64_t)nWeight));
     obj.push_back(Pair("stakeweight", weight));
 	double nCutoff =  GetAdjustedTime() - (60*60*24*14);
-
     obj.push_back(Pair("stakeinterest",    (uint64_t)GetCoinYearReward( GetAdjustedTime())));
     obj.push_back(Pair("testnet",       fTestNet));
 	double neural_popularity = 0;
 	std::string neural_hash = GetNeuralNetworkSupermajorityHash(neural_popularity);
-	
 	obj.push_back(Pair("NeuralHash", neural_hash));
-
 	obj.push_back(Pair("NeuralPopularity", neural_popularity));
-
 	obj.push_back(Pair("testnet",       fTestNet));
-
+	obj.push_back(Pair("CPID",msPrimaryCPID));
+	obj.push_back(Pair("RSAWeight",(double)GetRSAWeightByCPID(msPrimaryCPID)));
+	obj.push_back(Pair("MiningProject",msMiningProject));
 	obj.push_back(Pair("MiningInfo 1", msMiningErrors));
 	obj.push_back(Pair("MiningInfo 2", msMiningErrors2));
 	obj.push_back(Pair("MiningInfo 5", msMiningErrors5));

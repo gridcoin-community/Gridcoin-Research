@@ -1046,7 +1046,7 @@ bool TallyMagnitudesInSuperblock()
 {
 	try
 	{
-		if (fDebug3) printf(".40.");
+		if (fDebug) printf(".40.");
 						
 		std::string superblock = ReadCache("superblock","magnitudes");
 		if (superblock.empty()) return false;
@@ -1089,7 +1089,7 @@ bool TallyMagnitudesInSuperblock()
 			}
 	}
 
-	if (fDebug3) printf(".41.");
+	if (fDebug) printf(".41.");
 	double NetworkAvgMagnitude = TotalNetworkMagnitude / (TotalNetworkEntries+.01);
 	// Store the Total Network Magnitude:
 	StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
@@ -1132,13 +1132,12 @@ bool TallyMagnitudesInSuperblock()
 				}
 		}
 	}
-	if (fDebug3) printf(".42.%f",(double)0);
 	AVGRac = TotalRAC/(TotalProjects+.01);
 	network.AverageRAC = AVGRac;
 	network.rac = TotalRAC;
 	network.NetworkProjects = TotalProjects;
     mvNetwork["NETWORK"] = network;
-	if (fDebug3) printf(".43.%f",(double)0);
+	if (fDebug) printf(".43.");
 	return true;
 	}
 	catch (std::exception &e) 

@@ -40,9 +40,12 @@ Public Class frmVoting
 
         Dim vHeading() As String = Split(sHeading, ";")
 
-        PopulateHeadings(vHeading, dgv)
+        PopulateHeadings(vHeading, dgv, True)
+
         Dim iRow As Long = 0
         Dim vPolls() As String = Split(sVoting, "<POLL>")
+        'Autofit headings 7-28-2015
+
 
         For y As Integer = 0 To vPolls.Length - 1
             vPolls(y) = Replace(vPolls(y), "_", " ")

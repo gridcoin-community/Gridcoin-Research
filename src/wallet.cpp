@@ -34,6 +34,7 @@ void WriteAppCache(std::string key, std::string value);
 bool OutOfSyncByAgeWithChanceOfMining();
 int64_t GetRSAWeightByCPID(std::string cpid);
 
+double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
 
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 std::string CryptoLottery(int64_t locktime);
@@ -2000,7 +2001,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 			GetAdjustedTime(),pindexBest->nHeight,OUT_POR,out_interest,dAccrualAge,dAccrualMagnitudeUnit,dAccrualMagnitude);
 
 		//7-12-2015 Accrual System - Reserved for Future Use
-//		double dAccrualReward = rual(GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.Magnitude,			pindexPrev->nHeight,GetAdjustedTime(),dAccrualAge,dAccrualMagnitudeUnit,dAccrualMagnitude);
+		//double dAccrualReward = Accrual(GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.Magnitude,pindexPrev->nHeight,GetAdjustedTime(),dAccrualAge,dAccrualMagnitudeUnit,dAccrualMagnitude);
 
 		MiningCPID miningcpid = GetNextProject(false);
 		uint256 pbh = 0;
@@ -2013,7 +2014,9 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		miningcpid.ResearchAge = dAccrualAge;
 		miningcpid.ResearchMagnitudeUnit = dAccrualMagnitudeUnit;
 		miningcpid.ResearchAverageMagnitude = dAccrualMagnitude;
+		miningcpid.Magnitude = CalculatedMagnitude2(GlobalCPUMiningCPID.cpid, GetAdjustedTime(), false);
 
+		//7-29-2015
 		miningcpid.InterestSubsidy = out_interest;
 		miningcpid.enccpid = ""; //CPID V1 Boinc RunTime enc key
 		miningcpid.encboincpublickey = "";

@@ -40,10 +40,10 @@ Partial Class frmVoting
         Me.gbResultsPane.ForeColor = System.Drawing.Color.Lime
         Me.gbResultsPane.Location = New System.Drawing.Point(12, 23)
         Me.gbResultsPane.Name = "gbResultsPane"
-        Me.gbResultsPane.Size = New System.Drawing.Size(1429, 592)
+        Me.gbResultsPane.Size = New System.Drawing.Size(1503, 592)
         Me.gbResultsPane.TabIndex = 2
         Me.gbResultsPane.TabStop = False
-        Me.gbResultsPane.Text = "Active Polls"
+        Me.gbResultsPane.Text = "Active Polls (Right Click to Vote)"
         '
         'dgv
         '
@@ -93,11 +93,11 @@ Partial Class frmVoting
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.BackColor = System.Drawing.Color.Black
-        Me.ClientSize = New System.Drawing.Size(1453, 665)
+        Me.ClientSize = New System.Drawing.Size(1527, 665)
         Me.Controls.Add(Me.gbResultsPane)
         Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)
         Me.Name = "frmVoting"
-        Me.Text = "Gridcoin Voting System 1.0"
+        Me.Text = "Gridcoin Voting System 1.1"
         Me.gbResultsPane.ResumeLayout(False)
         CType(Me.dgv, System.ComponentModel.ISupportInitialize).EndInit()
         Me.ResumeLayout(False)

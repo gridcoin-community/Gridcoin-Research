@@ -68,7 +68,7 @@ Module modGRC
         End Try
 
     End Function
-    Public Sub PopulateHeadings(vHeading() As String, oDGV As DataGridView)
+    Public Sub PopulateHeadings(vHeading() As String, oDGV As DataGridView, bAutoFit As Boolean)
 
         For x = 0 To UBound(vHeading)
             Dim dc As New System.Windows.Forms.DataGridViewColumn
@@ -89,7 +89,13 @@ Module modGRC
 
         Next
         For x = 0 To UBound(vHeading)
-            oDGV.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.None
+            If bAutoFit Then
+                oDGV.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.ColumnHeader
+
+            Else
+                oDGV.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.None
+
+            End If
         Next
 
     End Sub

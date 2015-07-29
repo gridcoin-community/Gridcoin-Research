@@ -247,7 +247,7 @@ Public Class frmMining
 
         Dim vHeading() As String = Split(sHeading, ";")
 
-        PopulateHeadings(vHeading, dgv)
+        PopulateHeadings(vHeading, dgv, False)
 
         Dim sData As String = modPersistedDataSystem.GetMagnitudeContractDetails()
 
@@ -302,7 +302,7 @@ Public Class frmMining
         sHeading = "Project Name;Total RAC;Avg RAC;Whitelisted"
         vHeading = Split(sHeading, ";")
 
-        PopulateHeadings(vHeading, dgvProjects)
+        PopulateHeadings(vHeading, dgvProjects, False)
 
         Dim surrogateRow As New Row
         Dim lstWhitelist As List(Of Row)
@@ -382,7 +382,7 @@ Public Class frmMining
             Dim dgvProjects As New DataGridView
             Dim sHeading As String = "CPID,Project,RAC,Project Total RAC,Project Avg RAC,Project Mag,Cumulative RAC,Cumulative Mag"
             Dim vHeading() As String = Split(sHeading, ",")
-            PopulateHeadings(vHeading, dgvProjects)
+            PopulateHeadings(vHeading, dgvProjects, True)
             Dim surrogatePrj As New Row
             surrogatePrj.Database = "Project"
             surrogatePrj.Table = "Projects"

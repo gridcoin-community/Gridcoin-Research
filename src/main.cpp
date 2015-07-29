@@ -33,6 +33,7 @@ std::string TimestampToHRDate(double dtm);
 
 bool CPIDAcidTest(std::string boincruntimepublickey);
 
+
 int64_t GetEarliestWalletTransaction();
 extern void IncrementVersionCount(std::string Version);
 
@@ -1080,9 +1081,9 @@ bool AddOrphanTx(const CTransaction& tx)
 
     size_t nSize = tx.GetSerializeSize(SER_NETWORK, CTransaction::CURRENT_VERSION);
 
-    if (nSize > 50000)
+    if (nSize > 90000)
     {
-        printf("ignoring large orphan tx (size: %"PRIszu", hash: %s)\n", nSize, hash.ToString().substr(0,10).c_str());
+        if (fDebug3) printf("ignoring large orphan tx (size: %"PRIszu", hash: %s)\n", nSize, hash.ToString().substr(0,10).c_str());
         return false;
     }
 
@@ -2893,7 +2894,7 @@ int64_t ReturnCurrentMoneySupply(CBlockIndex* pindexcurrent)
 	// At this point, either the last block pointer was NULL, or the client erased the money supply previously, fix it:
 	CBlockIndex* pblockIndex = pindexcurrent;
 	CBlockIndex* pblockMemory = pindexcurrent;
-	int nMinDepth = (pindexcurrent->nHeight)-1000;
+	int nMinDepth = (pindexcurrent->nHeight)-140000;
 	if (nMinDepth < 12) nMinDepth=12;
 	while (pblockIndex->nHeight > nMinDepth)
 	{
@@ -4051,19 +4052,19 @@ void GridcoinServices()
 	}
 
 	int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-	if (fDebug3) printf ("SBA %f, BH %f ",(double)superblock_age,(double)nBestHeight);
+	if (fDebug) printf ("Superblockage %f, BH %f ",(double)superblock_age,(double)nBestHeight);
 	if (superblock_age > 12*60*60)
 	{
 		if ((nBestHeight % 3) == 0)
 		{
-			if (fDebug3) printf("CNNSH ");
+			if (fDebug) printf("CNNSH ");
 			ComputeNeuralNetworkSupermajorityHashes();
 			UpdateNeuralNetworkQuorumData();
 		}
 		//When superblock is old, Tally every 10 mins:
 		if ((nBestHeight % 10) == 0)
 		{
-			if (fDebug3) printf("TIB ");
+			if (fDebug) printf("TIB ");
 		    TallyInBackground();
 		}
 
@@ -4137,7 +4138,6 @@ void GridcoinServices()
 	if (TimerMain("GridcoinPersistedDataSystem",5))
 	{
 		std::string errors1 = "";
-		if (fDebug3) printf("GS-LAM");
 		bool result = LoadAdminMessages(false,errors1);
 	}
 
@@ -8398,7 +8398,6 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 	if (nMaxDepth < nMinDepth) return false;
 	CBlockIndex* pindex = pindexBest;
 	pindex = FindBlockByHeight(nMinDepth);
-	if (fDebug3) printf("MaxH %f \r\n ",(double)nMaxDepth);
     while (pindex->nHeight < nMaxDepth)
 	{
 		if (pindex->pnext == NULL) return false;
@@ -8413,7 +8412,6 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 			  MemorizeMessage(tx.hashBoinc,tx.nTime);
 		}
 	}
-	if (fDebug3) printf("MaxE %f \r\n ",(double)nMaxDepth);
 	return true;
 }
 

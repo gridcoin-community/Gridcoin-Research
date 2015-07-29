@@ -690,7 +690,7 @@ Module modPersistedDataSystem
             If Not bRequireExactMatch Then
                 Dim sCompare1 As String = StringStandardize(oRowIterator.PrimaryKey)
                 Dim sCompare2 As String = StringStandardize(sData)
-                If Left(sCompare1, 8) = Left(sCompare2, 8) Then Return True
+                If Left(sCompare1, 12) = Left(sCompare2, 12) Then Return True
             End If
         Next
         Return False
