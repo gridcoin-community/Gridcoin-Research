@@ -354,7 +354,7 @@ int64_t GetRSAWeightByCPID(std::string cpid)
 			if (UntrustedHost.initialized)
 			{
 						double mag_accuracy = UntrustedHost.Accuracy;
-						if (mag_accuracy > 0 && mag_accuracy <= 5)
+						if (mag_accuracy >= 0 && mag_accuracy <= 5)
 						{
 							owed=25000;
 						}	
