@@ -753,6 +753,63 @@ int CWalletTx::GetRequestCount() const
     return nRequests;
 }
 
+
+void CWalletTx::GetAmounts2(list<COutputEntry>& listReceived,
+                           list<COutputEntry>& listSent, int64_t& nFee, string& strSentAccount, bool ismine) const
+{
+    nFee = 0;
+    listReceived.clear();
+    listSent.clear();
+    strSentAccount = strFromAccount;
+
+    // Compute fee:
+    int64_t nDebit = GetDebit();
+    if (nDebit > 0) // debit>0 means we signed/sent this transaction
+    {
+        int64_t nValueOut = GetValueOut();
+        nFee = nDebit - nValueOut;
+    }
+
+    // Sent/received.
+    for (unsigned int i = 0; i < vout.size(); ++i)
+    {
+        const CTxOut& txout = vout[i];
+        bool fIsMine = pwallet->IsMine(txout);
+        // Only need to handle txouts if AT LEAST one of these is true:
+        //   1) they debit from us (sent)
+        //   2) the output is to us (received)
+        if (nDebit > 0)
+        {
+            // Don't report 'change' txouts
+            if (pwallet->IsChange(txout))
+                continue;
+        }
+        else if (!(fIsMine && ismine))
+            continue;
+
+        // In either case, we need to get the destination address
+        CTxDestination address;
+        if (!ExtractDestination(txout.scriptPubKey, address))
+        {
+            printf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s\n",
+                     this->GetHash().ToString().c_str());
+            address = CNoDestination();
+        }
+
+        COutputEntry output = {address, txout.nValue, i};
+
+        // If we are debited by the transaction, add the output as a "sent" entry
+        if (nDebit > 0)
+            listSent.push_back(output);
+
+        // If we are receiving the output, add it as a "received" entry
+        if (fIsMine && ismine)
+            listReceived.push_back(output);
+    }
+
+}
+
+
 void CWalletTx::GetAmounts(list<pair<CTxDestination, int64_t> >& listReceived,
                            list<pair<CTxDestination, int64_t> >& listSent, int64_t& nFee, string& strSentAccount) const
 {

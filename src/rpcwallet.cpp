@@ -1041,6 +1041,83 @@ static void MaybePushAddress(Object & entry, const CTxDestination &dest)
         entry.push_back(Pair("address", addr.ToString()));
 }
 
+
+
+
+
+ void ListTransactions2(const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, Array& ret, bool isminefilter)
+{
+    int64_t nFee;
+    string strSentAccount;
+    list<COutputEntry> listReceived;
+    list<COutputEntry> listSent;
+
+    wtx.GetAmounts2(listReceived, listSent, nFee, strSentAccount, isminefilter);
+
+    bool fAllAccounts = (strAccount == string("*"));
+    bool involvesWatchonly = wtx.IsFromMe();
+	// Use Bitcoin's ListTransactions For Gridcoin
+    // Sent
+    if ((!listSent.empty() || nFee != 0) && (fAllAccounts || strAccount == strSentAccount))
+    {
+        BOOST_FOREACH(const COutputEntry& s, listSent)
+        {
+            Object entry;
+            if(false && involvesWatchonly || (::IsMine(*pwalletMain, s.destination) && isminefilter))           entry.push_back(Pair("involvesWatchonly", true));
+            entry.push_back(Pair("account", strSentAccount));
+            MaybePushAddress(entry, s.destination);
+            entry.push_back(Pair("category", "send"));
+            entry.push_back(Pair("amount", ValueFromAmount(-s.amount)));
+            entry.push_back(Pair("vout", s.vout));
+            entry.push_back(Pair("fee", ValueFromAmount(-nFee)));
+            if (fLong)
+                WalletTxToJSON(wtx, entry);
+            ret.push_back(entry);
+        }
+    }
+
+    // Received
+    if (listReceived.size() > 0 && wtx.GetDepthInMainChain() >= nMinDepth)
+    {
+        BOOST_FOREACH(const COutputEntry& r, listReceived)
+        {
+            string account;
+            if (pwalletMain->mapAddressBook.count(r.destination))
+                account = pwalletMain->mapAddressBook[r.destination];
+            if (fAllAccounts || (account == strAccount))
+            {
+                Object entry;
+                if(false && involvesWatchonly || (::IsMine(*pwalletMain, r.destination) && isminefilter))                  entry.push_back(Pair("involvesWatchonly", true));
+                entry.push_back(Pair("account", account));
+                MaybePushAddress(entry, r.destination);
+                if (wtx.IsCoinBase())
+                {
+                    if (wtx.GetDepthInMainChain() < 1)
+                        entry.push_back(Pair("category", "orphan"));
+                    else if (wtx.GetBlocksToMaturity() > 0)
+                        entry.push_back(Pair("category", "immature"));
+                    else
+                        entry.push_back(Pair("category", "generate"));
+                }
+                else
+                {
+                    entry.push_back(Pair("category", "receive"));
+                }
+                entry.push_back(Pair("amount", ValueFromAmount(r.amount)));
+                entry.push_back(Pair("vout", r.vout));
+                if (fLong)
+                    WalletTxToJSON(wtx, entry);
+                ret.push_back(entry);
+            }
+        }
+    }
+}
+
+
+
+
+
+
 void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, Array& ret)
 {
     int64_t nFee;
@@ -1162,7 +1239,7 @@ Value listtransactions(const Array& params, bool fHelp)
     {
         CWalletTx *const pwtx = (*it).second.first;
         if (pwtx != 0)
-            ListTransactions(*pwtx, strAccount, 0, true, ret);
+            ListTransactions2(*pwtx, strAccount, 0, true, ret, false);
         CAccountingEntry *const pacentry = (*it).second.second;
         if (pacentry != 0)
             AcentryToJSON(*pacentry, strAccount, ret);
