@@ -7590,7 +7590,7 @@ void HarvestCPIDs(bool cleardata)
 						if (structcpid.rac > 10 && structcpid.team=="gridcoin")
 						{
 							msPrimaryCPID = structcpid.cpid;
-							#ifdef WIN32
+							#if defined(WIN32) && defined(QT_GUI)
 								//Let the Neural Network know what your CPID is so it can be charted:
 							    std::string sXML = "<KEY>PrimaryCPID</KEY><VALUE>" + msPrimaryCPID + "</VALUE>";
 								std::string sData = qtExecuteDotNetStringFunction("WriteKey",sXML);
