@@ -560,7 +560,8 @@ bool UpdateNeuralNetworkQuorumData()
 				std::string sBlock = mvApplicationCache["superblock;block_number"];
 				std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
 
-				std::string data = "<QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>" + sTimestamp + "</TIMESTAMP></QUORUMDATA>";
+				std::string data = "<QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>" 
+					+ sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
 				std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
 				qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
 				qtExecuteDotNetStringFunction("SetQuorumData",data);
@@ -585,7 +586,8 @@ bool FullSyncWithDPORNodes()
 				std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
 
 				std::string data = "<WHITELIST>" + whitelist + "</WHITELIST><CPIDDATA>" 
-					+ cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>" + sTimestamp + "</TIMESTAMP></QUORUMDATA>";
+					+ cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>" 
+					+ sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
 
 				//if (fDebug3) printf("Syncing neural network %s \r\n",data.c_str());
 				std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";

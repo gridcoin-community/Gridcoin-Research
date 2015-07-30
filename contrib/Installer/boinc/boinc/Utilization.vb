@@ -32,9 +32,10 @@ Public Class Utilization
         Dim sQuorumHash As String = ExtractXML(sQuorumData, "<HASH>")
         Dim TS As String = ExtractXML(sQuorumData, "<TIMESTAMP>")
         Dim sBlock As String = ExtractXML(sQuorumData, "<BLOCKNUMBER>")
+        Dim sPrimaryCPID As String = ExtractXML(sQuorumData, "<PRIMARYCPID>")
 
         Log(sData)
-        Call UpdateSuperblockAgeAndQuorumHash(sAge, sQuorumHash, TS, sBlock)
+        Call UpdateSuperblockAgeAndQuorumHash(sAge, sQuorumHash, TS, sBlock, sPrimaryCPID)
 
     End Function
 

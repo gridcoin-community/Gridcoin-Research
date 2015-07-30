@@ -396,7 +396,7 @@ Module modPersistedDataSystem
         Store(d)
 
     End Sub
-    Public Function UpdateSuperblockAgeAndQuorumHash(sAge As String, sQuorumHash As String, sTimestamp As String, sBlock As String)
+    Public Function UpdateSuperblockAgeAndQuorumHash(sAge As String, sQuorumHash As String, sTimestamp As String, sBlock As String, sCPID As String)
         Dim d As New Row
         d.Database = "Historical"
         d.Table = "Magnitude"
@@ -406,10 +406,10 @@ Module modPersistedDataSystem
         d.DataColumn3 = Trim(sTimestamp)
         d.DataColumn4 = Trim(sBlock)
         d.Expiration = DateAdd(DateInterval.Day, 30, Now)
-
         Store(d)
-
-
+        If Len(sCPID) > 5 Then
+            UpdateKey("PrimaryCPID", sCPID)
+        End If
     End Function
     Public Sub StoreTestMagnitude()
         For x = 1 To 25
@@ -444,9 +444,7 @@ Module modPersistedDataSystem
         dr.Table = sTable
         dr.PrimaryKey = sPK
         dr = Read(dr)
-
         Return dr
-
     End Function
     Public Function GetHistoricalMagnitude(dt As DateTime, sCPID As String, ByRef dAvg As Double) As Double
         Dim dr As New Row
@@ -487,7 +485,9 @@ Module modPersistedDataSystem
             Dim sQuorumHash As String = ExtractXML(sQuorumData, "<HASH>")
             Dim TS As String = ExtractXML(sQuorumData, "<TIMESTAMP>")
             Dim sBlock As String = ExtractXML(sQuorumData, "<BLOCKNUMBER>")
-            Call UpdateSuperblockAgeAndQuorumHash(sAge, sQuorumHash, TS, sBlock)
+            Dim sPrimaryCPID As String = ExtractXML(sQuorumData, "<PRIMARYCPID>")
+
+            Call UpdateSuperblockAgeAndQuorumHash(sAge, sQuorumHash, TS, sBlock, sPrimaryCPID)
 
             Try
                 mlPercentComplete = 2
