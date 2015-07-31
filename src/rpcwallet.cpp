@@ -17,7 +17,6 @@ int64_t nWalletUnlockTime;
 static CCriticalSection cs_nWalletUnlockTime;
 
 extern void ThreadTopUpKeyPool(void* parg);
-bool IsPoR(double amt);
 
 double CoinToDouble(double surrogate);
 
@@ -53,6 +52,19 @@ void EnsureWalletIsUnlocked()
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
     if (fWalletUnlockStakingOnly)
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Wallet is unlocked for staking only.");
+}
+
+bool IsPoR2(double amt)
+{
+	std::string sAmt = RoundToString(amt,8);
+	if (sAmt.length() > 8)
+	{
+		if (sAmt.substr(sAmt.length()-4,4)=="0124")
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 void WalletTxToJSON(const CWalletTx& wtx, Object& entry)
@@ -1109,7 +1121,7 @@ void ListTransactions2(const CWalletTx& wtx, const string& strAccount, int nMinD
                     else
                         entry.push_back(Pair("category", "generate"));
 
-					std::string type = IsPoR(CoinToDouble(r.amount)) ? "POR" : "Interest";
+					std::string type = IsPoR2(CoinToDouble(r.amount)) ? "POR" : "Interest";
 					{
 						entry.push_back(Pair("Type", type));
                  	}
@@ -1191,7 +1203,7 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
 						entry.push_back(Pair("category", "generate"));
 					
 					}
-					std::string type = IsPoR(-nFee) ? "POR" : "Interest";
+					std::string type = IsPoR2(-nFee) ? "POR" : "Interest";
 					{
 						entry.push_back(Pair("Type", type));
                  	}
