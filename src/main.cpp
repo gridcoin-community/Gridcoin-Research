@@ -364,7 +364,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msNeuralResponse = "";
  //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
  
- int nGrandfather = fTestNet ? 27444 : 282370;
+ int nGrandfather = fTestNet ? 288930 : 282370;
  int nNewIndex = fTestNet ? 28286 : 271625;
  int64_t nGenesisSupply = 340569880;
 
@@ -3077,10 +3077,10 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 			double dCalculatedResearchReward = CoinToDouble(GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, pindex->nHeight, 
 					OUT_POR, OUT_INTEREST_OWED, dAccrualAge, dAccrualMagnitudeUnit, dAccrualMagnitude));
-			if (dStakeReward > (dCalculatedResearchReward+1+nFees) )
+			if (dStakeReward > (OUT_INTEREST_OWED+1+nFees) )
 			{
-					return DoS(1, error("ConnectBlock[] : Investor Reward pays too much : cpid %s (actual %f vs calculated %f)",
-					bb.cpid.c_str(), dStakeReward, OUT_INTEREST_OWED));
+					return DoS(1, error("ConnectBlock[] : Investor Reward pays too much : cpid %s (actual %f vs calculated %f), dCalcResearchReward %f, Fees %f",
+					bb.cpid.c_str(), dStakeReward, OUT_INTEREST_OWED, dCalculatedResearchReward, (double)nFees));
 			}
 		}
 
