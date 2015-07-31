@@ -281,6 +281,7 @@ public:
     void SetBestChain(const CBlockLocator& loc);
 
     DBErrors LoadWallet(bool& fFirstRunRet);
+    DBErrors ZapWalletTx(std::vector<CWalletTx>& vWtx);
 
     bool SetAddressBookName(const CTxDestination& address, const std::string& strName);
 
@@ -659,7 +660,7 @@ public:
                     std::list<std::pair<CTxDestination, int64_t> >& listSent, int64_t& nFee, std::string& strSentAccount) const;
 
 
-	void GetAmounts2(std::list<COutputEntry>& listReceived, std::list<COutputEntry>& listSent, int64_t& nFee, std::string& strSentAccount, bool ismine) const;
+	void GetAmounts2(std::list<COutputEntry>& listReceived, std::list<COutputEntry>& listSent, int64_t& nFee, std::string& strSentAccount, bool ismine,CTxDB& txdb) const;
 
 
     void GetAccountAmounts(const std::string& strAccount, int64_t& nReceived,

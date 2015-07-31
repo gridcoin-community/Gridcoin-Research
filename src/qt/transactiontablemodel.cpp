@@ -21,6 +21,8 @@
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 std::string RoundToString(double d, int place);
 double CoinToDouble(double surrogate);
+extern bool IsPoR(double amt);
+
 
 
 // Amount column is right-aligned it contains numbers
@@ -382,7 +384,7 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
     case TransactionRecord::SendToSelf:
         return tr("Payment to yourself");
     case TransactionRecord::Generated:
-	    if (wtx->RemoteFlag==1)
+	    if (wtx->RemoteFlag==1 && false)
 		{
 
 			double reward = CoinToDouble(wtx->credit + wtx->debit);
@@ -418,7 +420,7 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
 	switch(wtx->type)
     {
     case TransactionRecord::Generated:
-		    if (wtx->RemoteFlag==1)
+		    if (false && wtx->RemoteFlag==1)
 			{
 				return QIcon(":/icons/cpumined_blue");
 			}

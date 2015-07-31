@@ -754,8 +754,34 @@ int CWalletTx::GetRequestCount() const
 }
 
 
+CTxDestination GetCoinstakeDestination(const CWalletTx* wtx,CTxDB& txdb)
+{
+   // For Coinstakes, extract the address from the input
+   BOOST_FOREACH(const CTxIn& txin, wtx->vin)
+   {
+            COutPoint prevout = txin.prevout;
+            CTransaction prev;
+            if(txdb.ReadDiskTx(prevout.hash, prev))
+            {
+                if (prevout.n < prev.vout.size())
+                {
+  			    	//Inputs: 
+                    const CTxOut &vout = prev.vout[prevout.n];
+			        CTxDestination address;
+                    if (ExtractDestination(vout.scriptPubKey, address))
+                    {
+						return address;
+                    }
+                }
+            }
+    }
+   	return CNoDestination();
+}
+
+
+
 void CWalletTx::GetAmounts2(list<COutputEntry>& listReceived,
-                           list<COutputEntry>& listSent, int64_t& nFee, string& strSentAccount, bool ismine) const
+                           list<COutputEntry>& listSent, int64_t& nFee, string& strSentAccount, bool ismine,CTxDB& txdb) const
 {
     nFee = 0;
     listReceived.clear();
@@ -781,33 +807,60 @@ void CWalletTx::GetAmounts2(list<COutputEntry>& listReceived,
         if (nDebit > 0)
         {
             // Don't report 'change' txouts
-            if (pwallet->IsChange(txout))
-                continue;
+            if (pwallet->IsChange(txout)) continue;
         }
-        else if (!(fIsMine && ismine))
-            continue;
+        else
+		{
+		 	if (!fIsMine) continue;
+		}
 
         // In either case, we need to get the destination address
         CTxDestination address;
-        if (!ExtractDestination(txout.scriptPubKey, address))
-        {
-            printf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s\n",
+		if (IsCoinStake())
+		{
+			// R Halford - For CoinStake we must extract the address from the input	
+			address = GetCoinstakeDestination(this,txdb);
+		}
+		else
+		{
+	        if (!ExtractDestination(txout.scriptPubKey, address))
+		    {
+			    printf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s\n",
                      this->GetHash().ToString().c_str());
-            address = CNoDestination();
-        }
+				address = CNoDestination();
+			}
+		}
 
-        COutputEntry output = {address, txout.nValue, i};
-
+	    COutputEntry output = {address, txout.nValue, i};
         // If we are debited by the transaction, add the output as a "sent" entry
-        if (nDebit > 0)
+        if (nDebit > 0 && !IsCoinStake())
+		{
             listSent.push_back(output);
+		}
 
         // If we are receiving the output, add it as a "received" entry
-        if (fIsMine && ismine)
-            listReceived.push_back(output);
+        if (fIsMine || IsCoinStake())
+		{	
+			if (IsCoinStake())
+			{   
+				// For CoinStake, we must calculate the subsidy based on Net Earned due to splitstakes and empty stakes
+				output.amount += -nFee;
+				nFee=0;
+				if (output.amount != 0) 
+				{
+						listReceived.push_back(output);
+						break;
+				}
+			}
+			else
+			{
+				listReceived.push_back(output);
+			}
+		}
     }
 
 }
+
 
 
 void CWalletTx::GetAmounts(list<pair<CTxDestination, int64_t> >& listReceived,
@@ -852,7 +905,7 @@ void CWalletTx::GetAmounts(list<pair<CTxDestination, int64_t> >& listReceived,
         if (!ExtractDestination(txout.scriptPubKey, address))
         {
             printf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s\n",
-                   this->GetHash().ToString().c_str());
+                     this->GetHash().ToString().c_str());
             address = CNoDestination();
         }
 
@@ -866,6 +919,8 @@ void CWalletTx::GetAmounts(list<pair<CTxDestination, int64_t> >& listReceived,
     }
 
 }
+
+
 
 void CWalletTx::GetAccountAmounts(const string& strAccount, int64_t& nReceived,
                                   int64_t& nSent, int64_t& nFee) const
@@ -2366,6 +2421,32 @@ DBErrors CWallet::LoadWallet(bool& fFirstRunRet)
     NewThread(ThreadFlushWalletDB, &strWalletFile);
     return DB_LOAD_OK;
 }
+
+
+
+DBErrors CWallet::ZapWalletTx(std::vector<CWalletTx>& vWtx)
+{
+    if (!fFileBacked)
+        return DB_LOAD_OK;
+    DBErrors nZapWalletTxRet = CWalletDB(strWalletFile,"cr+").ZapWalletTx(this, vWtx);
+    if (nZapWalletTxRet == DB_NEED_REWRITE)
+    {
+        if (CDB::Rewrite(strWalletFile, "\x04pool"))
+        {
+            LOCK(cs_wallet);
+            setKeyPool.clear();
+            // Note: can't top-up keypool here, because wallet is locked.
+            // User will be prompted to unlock wallet the next operation
+            // that requires a new key.
+        }
+    }
+
+    if (nZapWalletTxRet != DB_LOAD_OK)
+        return nZapWalletTxRet;
+
+    return DB_LOAD_OK;
+}
+
 
 
 bool CWallet::SetAddressBookName(const CTxDestination& address, const string& strName)
