@@ -22,13 +22,14 @@ Public Class frmSQL
         
 
         'Query available tables
-        Dim dr As New GridcoinReader
+        Dim dr As New DataTable
+
 
         lvTables.View = Windows.Forms.View.Details
         Dim h1 As New System.Windows.Forms.ColumnHeader
 
         Try
-            dr = mData.GetGridcoinReader("SELECT * FROM INTERNALTABLES", 0)
+            dr = mGRCData.GetDataTable("SELECT * FROM INTERNALTABLES")
 
         Catch ex As Exception
             Log("Error while select internaltables " + ex.Message)
@@ -66,14 +67,13 @@ Public Class frmSQL
             Exit Sub
 
         End If
-        For y = 1 To dr.Rows
-            grr = dr.GetRow(y)
-            Dim sTable As String = grr.Values(0)
-            Dim lvItem As New System.Windows.Forms.ListViewItem(sTable)
-            Dim rc As String
-            rc = grr.Values(1)
-            lvItem.SubItems.Add(Trim(rc))
+        Dim y As Integer = 0
 
+        For y = 0 To dr.Rows.Count - 1
+            Dim sTable As String = dr.Rows(y)(0)
+            Dim lvItem As New System.Windows.Forms.ListViewItem(sTable)
+            Dim rc As String = dr.Rows(y - 1)(1)
+            lvItem.SubItems.Add(Trim(rc))
             lvItem.BackColor = Drawing.Color.Black
             lvItem.ForeColor = Drawing.Color.Lime
             lvTables.Items.Add(lvItem)
@@ -98,33 +98,16 @@ Public Class frmSQL
         Dim sInsert As String
         sInsert = "<INSERT><TABLE>Confirm</TABLE><FIELDS>GRCFrom,GRCTo,txid,amount,Confirmed</FIELDS><VALUES>'" + Trim(sFrom) + "','" + Trim(sTo) + "','" + Trim(sTXID) + "','" + Trim(dAmt) + "','0'</VALUES></INSERT>"
         Dim sErr As String
-        sErr = mData.ExecuteP2P(sInsert, Nothing, 2)
+        sErr = mGRCData.Insert(sInsert)
         Return sErr
     End Function
     Public Function UpdateConfirm(sTXID As String, iStatus As Long) As String
-        Dim sUpdate As String
-        sUpdate = "<UPDATE><TABLE>Confirm</TABLE><FIELDS>Confirmed</FIELDS><VALUES>'" + Trim(iStatus) + "'</VALUES><WHEREFIELDS>txid</WHEREFIELDS><WHEREVALUES>'" + sTXID + "'</WHEREVALUES></UPDATE>"
-        Dim sErr As String
-        sErr = mData.ExecuteP2P(sUpdate, Nothing, 2)
-        Return sErr
+        Return mGRCData.UpdateConfirm(sTXID, iStatus)
 
     End Function
     Public Function TrackConfirm(sTXID As String) As Integer
 
-        Dim dr As GridcoinReader
-        Dim sql As String
-        sql = "Select Confirmed from Confirm where TXID='" + sTXID + "'"
-        Try
-            dr = mData.GetGridcoinReader(sql, 10)
-
-        Catch ex As Exception
-            Return -1
-        End Try
-
-        Dim grr As New GridcoinReader.GridcoinRow
-        grr = dr.GetRow(1)
-        If grr.Values(0) = "1" Then Return 1
-        Return 0
+        Return mGRCData.TrackConfirm(sTXID)
 
     End Function
 
@@ -132,10 +115,10 @@ Public Class frmSQL
 
         If mData Is Nothing Then mData = New Sql
 
-        Dim dr As GridcoinReader
+        Dim dr As DataTable
         mData.bThrowUIErrors = True
         Try
-            dr = mData.GetGridcoinReader(rtbQuery.Text, 0)
+            dr = mGRCData.GetDataTable(rtbQuery.Text)
         Catch ex As Exception
             MsgBox(ex.Message, vbCritical, "Gridcoin Query Analayzer")
             Exit Sub
@@ -146,16 +129,14 @@ Public Class frmSQL
         dgv.ForeColor = Drawing.Color.Lime
         Dim sValue As String
         Dim iRow As Long
-        If dr.Rows = 0 Then Exit Sub
+        If dr.Rows.Count = 0 Then Exit Sub
 
         Try
-            Dim grr As New GridcoinReader.GridcoinRow
-            grr = dr.GetRow(1)
-
-            For x = 0 To grr.FieldNames.Count - 1
+          
+            For x = 0 To dr.Columns.Count - 1
 
                 Dim dc As New System.Windows.Forms.DataGridViewColumn
-                dc.Name = grr.FieldNames(x)
+                dc.Name = dr.Columns(x).ColumnName
                 Dim dgvct As New System.Windows.Forms.DataGridViewTextBoxCell
                 dgvct.Style.BackColor = Drawing.Color.Black
                 dgvct.Style.ForeColor = Drawing.Color.Lime
@@ -166,21 +147,19 @@ Public Class frmSQL
 
             dgcc.ForeColor = System.Drawing.Color.SandyBrown
             dgv.ColumnHeadersDefaultCellStyle = dgcc
-            For x = 0 To grr.FieldNames.Count - 1
+            For x = 0 To dr.Columns.Count - 1
                 dgv.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.None
             Next
 
-            For y = 1 To dr.Rows
-                grr = dr.GetRow(y)
+            For y As Integer = 0 To dr.Rows.Count - 1
                 dgv.Rows.Add()
-                For x = 0 To grr.FieldNames.Count - 1
-                    sValue = ("" & grr.Values(x)).ToString
-
+                For x = 0 To dr.Columns.Count - 1
+                    sValue = ("" & dr.Rows(y)(x)).ToString
                     dgv.Rows(iRow).Cells(x).Value = sValue
                 Next x
                 iRow = iRow + 1
             Next
-            For x = 0 To grr.FieldNames.Count - 1
+            For x = 0 To dr.Columns.Count - 1
                 dgv.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells
             Next
 
@@ -191,30 +170,7 @@ Public Class frmSQL
         End Try
 
     End Sub
-    Public Function SerializeTable(sTable As String, lStartRow As Long, lEndRow As Long) As StringBuilder
-        Dim sql As String
-        sql = "Select * From " + sTable + " WHERE ID >= " + Trim(lStartRow) + " AND ID <= " + Trim(lEndRow)
-        Dim dr As GridcoinReader
-
-        dr = mData.GetGridcoinReader(sql, 11)
-        Dim iRow As Long
-        Dim sbOut As New StringBuilder
-        Dim sRow As String
-        Dim sValue As String
-        Dim grr As GridcoinReader.GridcoinRow
-
-        For y = 1 To dr.Rows
-            grr = dr.GetRow(y)
-            iRow = iRow + 1
-            sRow = ""
-            For x = 0 To grr.FieldNames.Count - 1
-                sValue = "" & grr.Values(x).ToString
-                sRow = sRow & sValue & "|"
-            Next x
-            sbOut.AppendLine(sRow)
-        Next
-        Return sbOut
-    End Function
+  
     Public Function GetManifestForTable(sTable As String) As String
         Dim sql As String
         sql = "Select min(id) as lmin From " + sTable
@@ -228,34 +184,7 @@ Public Class frmSQL
         Return sOut
 
     End Function
-    Public Function CreateManifest() As StringBuilder
-        Dim dr As GridcoinReader
 
-        dr = mData.GetGridcoinReader("SELECT * FROM sqlite_master WHERE type='table';", 10)
-        'todo order by
-        Dim iRow As Long
-        Dim sRow As String
-        Dim sbManifest As New StringBuilder
-        Dim grr As GridcoinReader.GridcoinRow
-
-        For y = 1 To dr.Rows
-            grr = dr.GetRow(y)
-            Dim sTable As String = grr.Values(1)
-            sRow = GetManifestForTable(sTable)
-            sbManifest.AppendLine(sRow)
-            iRow = iRow + 1
-        Next
-
-        Return sbManifest
-
-    End Function
-
-    Private Sub Button1_Click(sender As System.Object, e As System.EventArgs)
-        Dim s As New StringBuilder
-        s = CreateManifest()
-        s = SerializeTable("peers", 1, 1)
-        s = SerializeTable("system", 1, 1)
-    End Sub
     Private Sub rtbQuery_KeyDown(sender As Object, e As System.Windows.Forms.KeyEventArgs) Handles rtbQuery.KeyDown
         If e.KeyCode = Keys.F5 Then
             Call btnExec_Click(Nothing, Nothing)

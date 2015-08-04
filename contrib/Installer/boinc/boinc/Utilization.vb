@@ -220,6 +220,9 @@ Public Class Utilization
     Public Function cGetMd5(sData As String) As String
         Return GetMd5String(sData)
     End Function
+    Public Function GetMd5FromBytes(b() As Byte) As String
+        Return GetMd5String(b)
+    End Function
     Public Function StrToMd5Hash(s As String) As String
         Return CalcMd5(s)
     End Function
@@ -261,6 +264,18 @@ Public Class Utilization
             Log("Error while transitioning to frmTicketAdd" + ex.Message)
         End Try
     End Function
+    Public Function muFileToBytes(SourceFile As String) As Byte()
+        Return FileToBytes(SourceFile)
+    End Function
+    Public Function ShowFoundation()
+        Try
+            mfrmFoundation = New frmFoundation
+            mfrmFoundation.Show()
+        Catch ex As Exception
+            Log("Error while showing frmFoundation " + ex.Message)
+        End Try
+    End Function
+
     Public Function ShowTicketList()
         Try
             mfrmLogin = New frmLogin

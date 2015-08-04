@@ -118,7 +118,7 @@ Public Class frmPlaceVote
         Dim sTitle As String = lblTitle.Text
         sVote = Replace(sVote, " ", "_")
         sTitle = Replace(sTitle, " ", "_")
-        Dim sResult As String = ExecuteRPCCommand("vote", sTitle, sVote)
+        Dim sResult As String = ExecuteRPCCommand("vote", sTitle, sVote, "", "", "")
         MsgBox(sResult, MsgBoxStyle.Information, "Gridcoin Voting System")
 
     End Sub
@@ -129,7 +129,7 @@ Public Class frmPlaceVote
         Dim sVote As String = "TEST"
 
         sTitle = Replace(sTitle, " ", "_")
-        Dim sResult As String = ExecuteRPCCommand("vote", sTitle, sVote)
+        Dim sResult As String = ExecuteRPCCommand("vote", sTitle, sVote, "", "", "")
         MsgBox(sResult, MsgBoxStyle.Information, "Gridcoin Voting System")
 
     End Sub

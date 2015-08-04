@@ -1,39 +1,41 @@
 ﻿Imports System.Windows.Forms
+Imports System.Data.SqlClient
 
 Public Class frmTicketAdd
     Public myGuid As String
     Public Mode As String
     Public WithEvents cms As New ContextMenuStrip
-    Private drHistory As GridcoinReader
+    Private drHistory As DataTable
+
     Public sHandle As String = ""
 
     Private sHistoryGuid As String
 
     Private Sub frmTicketAdd_Load(sender As System.Object, e As System.EventArgs) Handles MyBase.Load
-        sHandle = GetHandle()
-
+        
+        sHandle = mGRCData.GetHandle(GetSessionGuid())
 
         Try
-            If sHandle = "" Or IsAuthenticated() = False Then
+            If sHandle = "" Or mGRCData.IsAuthenticated(GetSessionGuid()) = False Then
                 If mfrmLogin Is Nothing Then
                     mfrmLogin = New frmLogin
-
                 End If
                 mfrmLogin.Show()
                 Me.Dispose()
-
                 Exit Sub
             End If
             cmbAssignedTo.Items.Clear()
-            mInsertUser(sHandle, "", "", "")
+            ' mInsertUser(sHandle, "", "", "")
             txtSubmittedBy.Text = sHandle
-            Dim gr As GridcoinReader = mGetUsers()
+            Dim gr As SqlDataReader = mGRCData.mGetUsers()
             cmbAssignedTo.Items.Add("Gridcoin")
             cmbAssignedTo.Items.Add("All")
             If gr Is Nothing Then Exit Sub
-            For y As Integer = 1 To gr.Rows
-                cmbAssignedTo.Items.Add("" & gr.Value(y, "handle"))
-            Next
+            If gr.HasRows Then
+                Do While gr.Read
+                    cmbAssignedTo.Items.Add("" & gr("handle"))
+                Loop
+            End If
 
             'Dispositions
             cmbDisposition.Items.Clear()
@@ -57,10 +59,8 @@ Public Class frmTicketAdd
 
         Catch ex As Exception
             Me.Dispose()
-
-
         End Try
-          End Sub
+    End Sub
 
     Private Sub TicketHistoryRightClick(ByVal sender As Object, ByVal e As MouseEventArgs)
         If e.Button = Windows.Forms.MouseButtons.Left Then
@@ -81,11 +81,17 @@ Public Class frmTicketAdd
     Private Sub TicketHistorySelected(ByVal sender As Object, ByVal e As TreeViewEventArgs)
         Dim sID As String = tvTicketHistory.SelectedNode.Tag
         'Show the history for this selected row
-        rtbNotes.Text = NormalizeNote(drHistory.Value(Val(sID), "Notes"))
-        cmbAssignedTo.Text = drHistory.Value(Val(sID), "AssignedTo")
-        cmbDisposition.Text = drHistory.Value(Val(sID), "Disposition")
-        txtAttachment.Text = drHistory.Value(Val(sID), "BlobName")
-        txtUpdatedBy.Text = drHistory.Value(Val(sID), "SubmittedBy")
+        rtbNotes.Text = NormalizeNote(drHistory.Rows(Val(sID))("Notes"))
+
+        cmbAssignedTo.Text = drHistory.Rows(Val(sID))("AssignedTo")
+
+        cmbDisposition.Text = drHistory.Rows(Val(sID))("Disposition")
+
+
+        txtAttachment.Text = "" & drHistory.Rows(Val(sID))("BlobName")
+
+        txtUpdatedBy.Text = "" & drHistory.Rows(Val(sID))("SubmittedBy")
+
     End Sub
     Public Function NormalizeNote(sData As String)
         Dim sOut As String
@@ -103,14 +109,14 @@ Public Class frmTicketAdd
         Call frmTicketAdd_Load(Me, Nothing)
         PopulateHistory()
         Me.Show()
-        Dim dr As GridcoinReader = mGetTicket(txtTicketId.Text)
+        Dim dr As DataTable = mGetTicket(txtTicketId.Text)
         If dr Is Nothing Then Exit Sub
-        cmbAssignedTo.Text = dr.Value(1, "AssignedTo")
-        cmbDisposition.Text = dr.Value(1, "Disposition")
-        cmbType.Text = dr.Value(1, "Type")
-        txtSubmittedBy.Text = dr.Value(1, "SubmittedBy")
+        cmbAssignedTo.Text = dr.Rows(0)("AssignedTo")
+        cmbDisposition.Text = dr.Rows(0)("Disposition")
+        cmbType.Text = dr.Rows(0)("Type")
+        txtSubmittedBy.Text = dr.Rows(0)("SubmittedBy")
         txtTicketId.Text = sId
-        txtDescription.Text = dr.Value(1, "Descript")
+        txtDescription.Text = dr.Rows(0)("Descript")
         Call PopulateHistory()
         SetViewMode()
         Me.TopMost = True
@@ -128,7 +134,7 @@ Public Class frmTicketAdd
         Mode = "Add"
         If Mode = "Add" Then
             If Val(txtTicketId.Text) = 0 Then
-                Dim maxTick As Double = P2PMax("TicketId", "Ticket", "", "")
+                Dim maxTick As Double = mGRCData.P2PMax("TicketId", "Ticket", "", "")
                 txtTicketId.Text = Trim(maxTick + 1)
             End If
         End If
@@ -156,14 +162,15 @@ Public Class frmTicketAdd
 
         If cmbAssignedTo.Text <> sHandle Then
             If tvTicketHistory.Nodes.Count > 0 Then
-                MsgBox("Unable to submit changes unless ticket is assigned to you.", vbCritical)
-                Exit Sub
+                '  MsgBox("Unable to submit changes unless ticket is assigned to you.", vbCritical)
+                '  Exit Sub
             End If
 
         End If
 
         txtSubmittedBy.Text = sHandle
-        mInsertTicket(Mode, txtSubmittedBy.Text, txtTicketId.Text, cmbAssignedTo.Text, cmbDisposition.Text, txtDescription.Text, cmbType.Text, rtbNotes.Text, KeyValue("TicketPassword"))
+        mInsertTicket(Mode, txtSubmittedBy.Text, txtTicketId.Text, cmbAssignedTo.Text, cmbDisposition.Text, txtDescription.Text, cmbType.Text, rtbNotes.Text, _
+                      GetSessionGuid())
         PopulateHistory()
         SetViewMode()
         mfrmTicketList.PopulateTickets()
@@ -178,11 +185,11 @@ Public Class frmTicketAdd
         Dim sAttach As String = ""
         Dim grcSecurity As New GRCSec.GRCSec
 
-        For i As Integer = 1 To drHistory.Rows
-            Dim sRow As String = drHistory.Value(i, "Disposition") + " - " _
-                                 + Mid(NormalizeNoteRow(drHistory.Value(i, "notes")), 1, 80) _
-                                + " - " + drHistory.Value(i, "AssignedTo") + " - " + drHistory.Value(i, "updated")
-            sAttach = drHistory.Value(i, "BlobName")
+        For i As Integer = 0 To drHistory.Rows.Count - 1
+            Dim sRow As String = drHistory.Rows(i)("Disposition") + " - " _
+                                 + Mid(NormalizeNoteRow(drHistory.Rows(i)("notes")), 1, 80) _
+                                + " - " + drHistory.Rows(i)("AssignedTo") + " - " + drHistory.Rows(i)("updated")
+            sAttach = "" & drHistory.Rows(i)("BlobName")
             txtAttachment.Text = sAttach
             If Len(sAttach) > 1 Then sAttach = " - [" + sAttach + "]"
             sRow += sAttach
@@ -190,15 +197,15 @@ Public Class frmTicketAdd
             Dim node As TreeNode = New TreeNode(sRow)
             node.Tag = i
             tvTicketHistory.Nodes.Add(node)
-            rtbNotes.Text = NormalizeNote(drHistory.Value(i, "Notes"))
-            cmbAssignedTo.Text = drHistory.Value(i, "AssignedTo")
-            cmbDisposition.Text = drHistory.Value(i, "Disposition")
+            rtbNotes.Text = NormalizeNote(drHistory.Rows(i)("Notes"))
+            cmbAssignedTo.Text = drHistory.Rows(i)("AssignedTo")
+            cmbDisposition.Text = drHistory.Rows(i)("Disposition")
 
             'Verify security hash:
             Dim lAuthentic As Long = 0
-            lAuthentic = grcSecurity.IsHashAuthentic("" & drHistory.Value(i, "SecurityGuid"), _
-                                                     "" & drHistory.Value(i, "SecurityHash"), "" & drHistory.Value(i, "PasswordHash"))
-            If lAuthentic <> 0 Then node.ForeColor = Drawing.Color.Red
+            lAuthentic = grcSecurity.IsHashAuthentic("" & drHistory.Rows(i)("SecurityGuid"), _
+                                                     "" & drHistory.Rows(i)("SecurityHash"), "" & drHistory.Rows(i)("PasswordHash"))
+            'If lAuthentic <> 0 Then node.ForeColor = Drawing.Color.Red
         Next i
 
     End Sub
@@ -213,14 +220,12 @@ Public Class frmTicketAdd
     End Sub
     Private Sub btnAddAttachment_Click(sender As System.Object, e As System.EventArgs) Handles btnAddAttachment.Click
         If tvTicketHistory.SelectedNode Is Nothing Then MsgBox("You must select a historical ticket history item before attaching.", MsgBoxStyle.Critical) : Exit Sub
-
+        
         Dim sID As String = tvTicketHistory.SelectedNode.Tag
-        If KeyValue("AttachmentPassword") = "" Then
-            MsgBox("You must set attachmentpassword in your gridcoinresearch.conf to send attachments.", MsgBoxStyle.Critical)
-            Exit Sub
-        End If
         Dim sBlobGuid As String
-        sBlobGuid = drHistory.Value(Val(sID), "id")
+        sBlobGuid = drHistory.Rows(Val(sID))("id").ToString()
+
+
         If Len(sBlobGuid) < 5 Then MsgBox("You must select a historical ticket history item before attaching.", MsgBoxStyle.Critical) : Exit Sub
 
         Dim OFD As New OpenFileDialog()
@@ -235,8 +240,8 @@ Public Class frmTicketAdd
                 Dim b As Byte()
                 b = FileToBytes(OFD.FileName)
                 'Encrypt
-                b = AES512EncryptData(b, KeyValue("AttachmentPassword"))
-                Dim sSuccess As String = mInsertAttachment(sBlobGuid, OFD.SafeFileName, b, KeyValue("TicketPassword"), GetHandle())
+                b = AES512EncryptData(b, MerkleRoot)
+                Dim sSuccess As String = mGRCData.mInsertAttachment(sBlobGuid, OFD.SafeFileName, b, GetSessionGuid(), mGRCData.GetHandle(GetSessionGuid))
                 PopulateHistory()
             Catch Ex As Exception
                 MessageBox.Show("Cannot read file from disk. Original error: " & Ex.Message)
@@ -245,10 +250,8 @@ Public Class frmTicketAdd
         End If
     End Sub
     Private Function DownloadAttachment() As String
-        If KeyValue("AttachmentPassword") = "" Then
-            MsgBox("You must set AttachmentPassword in your gridcoinresearch.conf to send attachments.", MsgBoxStyle.Critical)
-            Exit Function
-        End If
+        If tvTicketHistory.SelectedNode Is Nothing Then MsgBox("You must select a historical row.", vbCritical) : Exit Function
+
         If Len(txtAttachment.Text) > 1 Then
             'First does it exist already?
             Dim sDir As String = ""
@@ -261,9 +264,11 @@ Public Class frmTicketAdd
                 Dim sID As String = tvTicketHistory.SelectedNode.Tag
                 'Show the history for this selected row
                 Dim sBlobGuid As String
-                sBlobGuid = drHistory.Value(Val(sID), "BlobGuid")
+                sBlobGuid = drHistory.Rows(Val(sID))("BlobGuid").ToString()
+
+
                 If Len(sBlobGuid) < 5 Then MsgBox("Attachment has been removed from the P2P server", MsgBoxStyle.Critical) : Exit Function
-                sFullPath = mRetrieveAttachment(sBlobGuid, txtAttachment.Text, KeyValue("AttachmentPassword"))
+                sFullPath = mRetrieveAttachment(sBlobGuid, txtAttachment.Text, MerkleRoot)
             End If
             Return sFullPath
         End If
@@ -275,9 +280,11 @@ Public Class frmTicketAdd
 
         Dim sBlobGuid As String
         Dim sID As String = tvTicketHistory.SelectedNode.Tag
-        sBlobGuid = drHistory.Value(Val(sID), "BlobGuid")
+            sBlobGuid = drHistory.Rows(Val(sID))("BlobGuid").ToString()
+
+
         Dim bSuccess = mAttachmentSecurityScan(sBlobGuid)
-        If Not bSuccess Then MsgBox("! WARNING !   Attachment came from an unverifiable source.  Virus scan the file and use extreme caution before opening it.", MsgBoxStyle.Critical, "Authenticity Scan Failed")
+            If Not bSuccess And False Then MsgBox("! WARNING !   Attachment came from an unverifiable source.  Virus scan the file and use extreme caution before opening it.", MsgBoxStyle.Critical, "Authenticity Scan Failed")
             Return bSuccess
         Catch ex As Exception
             MsgBox("Document has been removed from the P2P server", MsgBoxStyle.Critical)
@@ -287,8 +294,11 @@ Public Class frmTicketAdd
        
         Try
             Dim sFullpath As String = DownloadAttachment()
-            Dim bAuthScan As Boolean = AttachmentSecurityScan()
-            If Not bAuthScan Then Exit Sub 'dont let the user open it
+            'Dim bAuthScan As Boolean = AttachmentSecurityScan()
+            'If Not bAuthScan And False Then Exit Sub 'dont let the user open it
+
+
+
             If System.IO.File.Exists(sFullpath) Then
                 'Launch
                 Process.Start(sFullpath)
@@ -309,5 +319,15 @@ Public Class frmTicketAdd
         Else
             MsgBox("File has been removed from the P2P Server", MsgBoxStyle.Critical)
         End If
+    End Sub
+
+    Private Sub btnVirusScan_Click(sender As System.Object, e As System.EventArgs) Handles btnVirusScan.Click
+        '8-3-2015
+        Dim sFullpath As String = DownloadAttachment()
+        Dim sMd5 As String = GetMd5OfFile(sFullpath)
+        Dim webAddress As String = "https://www.virustotal.com/latest-scan/" + sMd5
+
+        Process.Start(webAddress)
+
     End Sub
 End Class

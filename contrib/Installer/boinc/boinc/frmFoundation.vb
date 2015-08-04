@@ -3,36 +3,33 @@ Imports System.Text
 Imports System.Data
 Imports System.Data.SqlClient
 
-Public Class frmVoting
+Public Class frmFoundation
 
     Public WithEvents cms As New ContextMenuStrip
     Public _GridRowIndex As Long = 0
     Private Function GlobalCDate(sDate As String) As DateTime
         Try
 
-        Dim year As Long = Val(Mid(sDate, 7, 4))
-        Dim day As Long = Val(Mid(sDate, 4, 2))
-        Dim m As Long = Val(Mid(sDate, 1, 2))
-        Dim dt As DateTime = DateSerial(year, m, day)
-        Return dt
+            Dim year As Long = Val(Mid(sDate, 7, 4))
+            Dim day As Long = Val(Mid(sDate, 4, 2))
+            Dim m As Long = Val(Mid(sDate, 1, 2))
+            Dim dt As DateTime = DateSerial(year, m, day)
+            Return dt
         Catch ex As Exception
             Return CDate(Format(sDate, "mm-dd-yyyy"))
         End Try
 
     End Function
 
-
-    Private Sub frmVoting_Load(sender As System.Object, e As System.EventArgs) Handles MyBase.Load
-
-        If Not msGenericDictionary.ContainsKey("POLLS") Then
-            MsgBox("No voting data exists.")
-            Exit Sub
-        End If
+    Private Sub frmFoundation_Load(sender As System.Object, e As System.EventArgs) Handles MyBase.Load
         Dim sVoting As String = msGenericDictionary("POLLS")
-        If Len(sVoting) = 0 Then Exit Sub
+        Log(sVoting)
+        mGRCData = New GRCSec.GridcoinData
 
-        'List the active polls in windows
-        Dim sHeading As String = "#;Title;Expiration;Share Type;Question;Answers;Total Participants;Total Shares;Best Answer"
+        If Len(sVoting) = 0 Then Exit Sub
+        
+        'List the active Foundation Expenses
+        Dim sHeading As String = "#;Title;Expiration;Share Type;Question;Answers;Total Participants;Total Shares;Best Answer;Type;Amount"
         dgv.Rows.Clear()
         dgv.Columns.Clear()
         dgv.SelectionMode = DataGridViewSelectionMode.FullRowSelect
@@ -46,22 +43,22 @@ Public Class frmVoting
 
         Dim iRow As Long = 0
         Dim vPolls() As String = Split(sVoting, "<POLL>")
-        'Autofit headings 7-28-2015
 
+        Try
 
-        For y As Integer = 0 To vPolls.Length - 1
+        For y As Integer = 0 To UBound(vPolls)
             vPolls(y) = Replace(vPolls(y), "_", " ")
             Dim sTitle As String = ExtractXML(vPolls(y), "<TITLE>", "</TITLE>")
             Dim sExpiration As String = ExtractXML(vPolls(y), "<EXPIRATION>")
             Dim sShareType As String = ExtractXML(vPolls(y), "<SHARETYPE>")
             Dim sQuestion As String = ExtractXML(vPolls(y), "<QUESTION>")
             Dim sAnswers As String = ExtractXML(vPolls(y), "<ANSWERS>")
-            Dim bHide As Boolean = False
             Dim sId As String = GetFoundationGuid(sTitle)
 
-            If Len(sTitle) > 0 And Len(sId) = 0 Then
+            If Len(sId) > 0 Then
 
                 Dim lDateDiff As Long = DateDiff(DateInterval.Day, Now, GlobalCDate(sExpiration))
+
 
                 If Len(sTitle) > 0 And lDateDiff > -7 Then
                     'Array of answers
@@ -90,11 +87,26 @@ Public Class frmVoting
                     dgv.Rows(iRow).Cells(6).Value = sTotalParticipants
                     dgv.Rows(iRow).Cells(7).Value = sTotalShares
                     dgv.Rows(iRow).Cells(8).Value = sBestAnswer
-                    iRow += 1
-                End If
-            End If
+                    'Retrieve the Campaign from GFS
+                        Dim oExpense As SqlDataReader = mGRCData.GetBusinessObject("Expense", sId, "ExpenseId")
+                        If Not oExpense Is Nothing Then
+                            If oExpense.HasRows Then
+                                dgv.Rows(iRow).Cells(9).Value = oExpense("Type")
+                                dgv.Rows(iRow).Cells(10).Value = oExpense("Amount")
+                            End If
 
-        Next
+                        End If
+
+                        iRow += 1
+                    End If
+                End If
+
+            Next
+        Catch ex As Exception
+            Log(ex.Message)
+
+        End Try
+
     End Sub
 
     Private Sub dgv_CellContentDoubleClick(sender As Object, e As System.Windows.Forms.DataGridViewCellEventArgs) Handles dgv.CellContentDoubleClick
@@ -119,9 +131,8 @@ Public Class frmVoting
 
         If e.Button = Windows.Forms.MouseButtons.Right Then
             If Len(sTitle) > 1 Then
-                Dim _EventList As String = "Chart|Vote"
-                '  If lDateDiff < 0 Then _EventList = "Chart" Else _EventList = "Chart|Vote"
-
+                Dim _EventList As String = "Chart|Vote|View"
+               
                 cms.Items.Clear()
                 Dim vEventList() As String
                 vEventList = Split(_EventList, "|")
@@ -161,12 +172,33 @@ Public Class frmVoting
             Dim frmVote As New frmPlaceVote
             frmVote.Show()
             frmVote.PlaceVote(sTitle)
+        ElseIf tsmi.Text = "View" Then
+            If Len(sTitle) > 0 Then
+                Dim frmE As New frmAddExpense
+                frmE.Mode = "View"
+                frmE.myGuid = GetFoundationGuid(sTitle)
+                frmE.Show()
+
+            End If
 
         End If
+
 
     End Sub
 
     Private Sub dgv_CellContentClick(sender As System.Object, e As System.Windows.Forms.DataGridViewCellEventArgs) Handles dgv.CellContentClick
+
+    End Sub
+
+    Private Sub SubmitExpenseToolStripMenuItem_Click(sender As System.Object, e As System.EventArgs) Handles SubmitExpenseToolStripMenuItem.Click
+        Dim fExp As New frmAddExpense
+        fExp.Mode = "Add"
+        fExp.Show()
+
+    End Sub
+
+    Private Sub LogOffToolStripMenuItem_Click(sender As System.Object, e As System.EventArgs) Handles LogOffToolStripMenuItem.Click
+        mGRCData.LogOff(GetSessionGuid)
 
     End Sub
 End Class

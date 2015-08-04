@@ -76,7 +76,7 @@ extern bool PollAcceptableAnswer(std::string pollname, std::string answer);
 extern std::string PollAnswers(std::string pollname);
 
 extern std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2);
-
+extern std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5);
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 
 
@@ -1023,7 +1023,7 @@ double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out
 		double avg_of_avg = GetAverageInList(avgs,avg_count);
 		if (!bIgnoreBeacons) out_beacon_count = GetCountOf("beacon");
 		out_participant_count = mag_count;
-		if (avg_of_mag < 10 || avg_of_avg < 50000) return 0;
+		if (avg_of_mag < 10 || avg_of_mag > 4000 || avg_of_avg < 50000) return 0;
 		if (!bIgnoreBeacons && (mag_count < out_beacon_count*.94 || mag_count > out_beacon_count*1.06)) return 0;
 		return avg_of_mag + avg_of_avg;
 	}
@@ -1480,6 +1480,42 @@ std::string AdvertiseBeacon(bool force)
 	 }
 }
 
+
+
+std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5)
+{
+	 Array params;
+	 params.push_back(method);
+	 params.push_back(arg1);
+	 params.push_back(arg2);
+	 params.push_back(arg3);
+	 params.push_back(arg4);
+	 params.push_back(arg5);
+
+	 printf("Executing method %s\r\n",method.c_str());
+	 Value vResult;
+	 try
+	 {
+ 		vResult = execute(params,false);
+	 }
+ 	 catch (std::exception& e)
+	 {
+		 printf("Std exception %s \r\n",method.c_str());
+		 
+		 std::string caught = e.what();
+		 return "Exception " + caught;
+
+	 } 
+	 catch (...) 
+	 {
+		    printf("Generic exception %s \r\n",method.c_str());
+			return "Generic Exception";
+	 }
+	 std::string sResult = "";
+	 sResult = write_string(vResult, false) + "\n";
+	 printf("Response %s",sResult.c_str());
+	 return sResult;
+}
 
 
 std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2)

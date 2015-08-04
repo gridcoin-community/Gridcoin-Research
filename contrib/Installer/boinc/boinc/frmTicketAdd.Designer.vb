@@ -47,6 +47,7 @@ Partial Class frmTicketAdd
         Me.btnOpenFolder = New System.Windows.Forms.Button()
         Me.txtUpdatedBy = New System.Windows.Forms.TextBox()
         Me.Label10 = New System.Windows.Forms.Label()
+        Me.btnVirusScan = New System.Windows.Forms.Button()
         Me.SuspendLayout()
         '
         'Label1
@@ -301,12 +302,24 @@ Partial Class frmTicketAdd
         Me.Label10.TabIndex = 23
         Me.Label10.Text = "Updated By:"
         '
+        'btnVirusScan
+        '
+        Me.btnVirusScan.BackColor = System.Drawing.Color.Gray
+        Me.btnVirusScan.ForeColor = System.Drawing.Color.Red
+        Me.btnVirusScan.Location = New System.Drawing.Point(666, 165)
+        Me.btnVirusScan.Name = "btnVirusScan"
+        Me.btnVirusScan.Size = New System.Drawing.Size(112, 29)
+        Me.btnVirusScan.TabIndex = 24
+        Me.btnVirusScan.Text = "Virus Scan Attchmnt"
+        Me.btnVirusScan.UseVisualStyleBackColor = False
+        '
         'frmTicketAdd
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.BackColor = System.Drawing.Color.Black
         Me.ClientSize = New System.Drawing.Size(937, 666)
+        Me.Controls.Add(Me.btnVirusScan)
         Me.Controls.Add(Me.txtUpdatedBy)
         Me.Controls.Add(Me.Label10)
         Me.Controls.Add(Me.btnOpenFolder)
@@ -334,10 +347,10 @@ Partial Class frmTicketAdd
         Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)
         Me.Name = "frmTicketAdd"
         Me.Text = "Gridcoin - Add or Edit Ticket v1.1"
-        Me.ResumeLayout(false)
-        Me.PerformLayout
+        Me.ResumeLayout(False)
+        Me.PerformLayout()
 
-End Sub
+    End Sub
     Friend WithEvents Label1 As System.Windows.Forms.Label
     Friend WithEvents cmbAssignedTo As System.Windows.Forms.ComboBox
     Friend WithEvents Label2 As System.Windows.Forms.Label
@@ -362,4 +375,5 @@ End Sub
     Friend WithEvents btnOpenFolder As System.Windows.Forms.Button
     Friend WithEvents txtUpdatedBy As System.Windows.Forms.TextBox
     Friend WithEvents Label10 As System.Windows.Forms.Label
+    Friend WithEvents btnVirusScan As System.Windows.Forms.Button
 End Class

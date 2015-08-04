@@ -167,38 +167,6 @@ Public Class Sql
         Next
     End Function
 
-    Public Function ExecuteP2P(sCommand As String, sParams() As Byte, lSource As Long) As String
-        Dim sHost As String
-        Dim sData As String = ""
-        System.Windows.Forms.Cursor.Current = Cursors.WaitCursor
-
-        Dim sToken As String = GetSecurityToken(lSource)
-        For x = 1 To 3
-            Try
-                sHost = GetMasterNodeURL()
-                sData = SQLQuery(sHost, sCommand, sParams, sToken)
-                If sData = "" Then
-                    System.Windows.Forms.Cursor.Current = Cursors.Default
-                    Return sData
-
-                End If
-                If sData <> "" And x = 3 Then
-                    System.Windows.Forms.Cursor.Current = Cursors.Default
-
-                    Return sData
-
-                End If
-
-            Catch ex As Exception
-                Log(ex.Message)
-                'Throw ex
-                System.Windows.Forms.Cursor.Current = Cursors.Default
-
-                If x = 3 Then Return ex.Message
-            End Try
-        Next x
-        System.Windows.Forms.Cursor.Current = Cursors.Default
-    End Function
     Public Function BoincBlob(sBlobId As String) As String
         Dim sBlob As String
         sBlob = BoincHarmonyP2PExecute("select BlobData from attachment where id = '" + sBlobId + "' and deleted=0")
@@ -238,79 +206,49 @@ Public Class Sql
 
     End Function
 
-    Public Function GetGridcoinReader(Sql As String, lSource As Long) As GridcoinReader
+    Public Function GetGridcoinReader(Sql As String, lSource As Long) As DataTable
+
+
 
         Try
             System.Windows.Forms.Cursor.Current = Cursors.WaitCursor
 
             Dim g As New GridcoinReader
-
             Dim sData As String
             Dim sHost As String
-            sHost = GetMasterNodeURL()
-            
+            Dim dt As New DataTable
+            dt = mGRCData.GetDataTable(Sql)
+
             Dim sToken As String = GetSecurityToken(lSource)
-
-            sData = SQLQuery(sHost, Sql, Nothing, sToken)
-
-            Dim vData() As String
-            vData = Split(sData, "<ROW>")
-            Dim vHeader() As String
-            vHeader = Split(vData(0), "<COL>")
-
-            For z = 1 To UBound(vData) - 1
-                Dim gr As New GridcoinReader.GridcoinRow
-                Dim sRow As String
-                sRow = vData(z)
-                Dim vRow() As String
-                vRow = Split(sRow, "<COL>")
-
-                For y = 0 To UBound(vRow) - 1
-                    If gr.FieldNames Is Nothing Then gr.FieldNames = New Dictionary(Of Integer, Object)
-                    Dim vDataType() As String
-                    vDataType = Split(vHeader(y), "<TYPE>")
-                    Dim sType As String = UCase(vDataType(1))
-                    Dim sFieldName As String = vDataType(0)
-                    gr.FieldNames.Add(y, sFieldName)
-                    If gr.Values Is Nothing Then gr.Values = New Dictionary(Of Integer, Object)
+            
+            '        If gr.Values Is Nothing Then gr.Values = New Dictionary(Of Integer, Object)
                     'Cast string back to type
-                    Dim oValue As Object
-                    If sType = "SYSTEM.STRING" Then
-                        oValue = vRow(y).ToString()
-                        oValue = UnCleanBody(oValue)
-                    ElseIf sType = "SYSTEM.INTEGER" Then
-                        oValue = CInt(vRow(y))
-                    ElseIf sType = "SYSTEM.DATETIME" Then
-                        '12-17-2014 - Add support for dd-mm-yyyy date format for global cultures
-                        'Dim global_date_style As System.Globalization.DateTimeStyles
-                        'Dim culture As Globalization.CultureInfo = Globalization.CultureInfo.CreateSpecificCulture("en-US")
-                        'oValue = CDate(vRow(y))
-                        oValue = ConvertGlobalDate(vRow(y))
-                        'Dim good_date As Boolean = DateTime.TryParseExact(vRow(y), "MM/dd/yyyy hh:mm:ss tt", culture, Globalization.DateTimeStyles.None, oValue)
+            '         Dim oValue As Object
+            '        If sType = "SYSTEM.STRING" Then
+            'oValue = vRow(y).ToString()
+            ' oValue = UnCleanBody(oValue)
+            '        ElseIf sType = "SYSTEM.INTEGER" Then
+            'oValue = CInt(vRow(y))
+            ' oValue = ConvertGlobalDate(vRow(y))
+            'Dim good_date As Boolean = DateTime.TryParseExact(vRow(y), "MM/dd/yyyy hh:mm:ss tt", culture, Globalization.DateTimeStyles.None, oValue)
+            '            gr.Values.Add(y, oValue)
+            '               Next
+            '          g.AddRow(gr)
+            '         Next z
 
-                    ElseIf sType = "SYSTEM.DECIMAL" Then
-                        oValue = CDbl("0" & vRow(y))
 
-                    ElseIf sType = "SYSTEM.GUID" Then
-                        oValue = Trim(vRow(y).ToString())
-
-                    End If
-                    gr.Values.Add(y, oValue)
-                Next
-                g.AddRow(gr)
-            Next z
             System.Windows.Forms.Cursor.Current = Cursors.Default
 
-            Return g
+            Return dt
         Catch ex As Exception
             Log("GetGridcoinReader:" + Sql + ":" + ex.Message)
             System.Windows.Forms.Cursor.Current = Cursors.Default
-
 
             If bThrowUIErrors Then Throw ex
         End Try
         System.Windows.Forms.Cursor.Current = Cursors.Default
 
+        Return Nothing
 
     End Function
     Public Function ConvertGlobalDate(ByVal strdate As String) As DateTime
@@ -452,13 +390,10 @@ Public Class Sql
     End Function
     Public Function QueryFirstRow(ByVal sSql As String, sCol As String) As Object
         Dim o As Object
-
         Try
-            Dim gr As New GridcoinReader
-            gr = GetGridcoinReader(sSql, 10)
-
-            If gr.Rows = 0 Then Exit Function
-            o = gr.Value(1, sCol)
+            Dim dt As DataTable = GetGridcoinReader(sSql, 10)
+            If dt.Rows.Count = 0 Then Return o
+            o = dt.Rows(1)(sCol)
             Return o
         Catch ex As Exception
             Log("Sql.QueryFirstRow:" + CONNECTION_STR() + ":" + sSql + ":" + ex.Message)

@@ -103,6 +103,7 @@ extern std::string qtExecuteDotNetStringFunction(std::string function, std::stri
 
 
 std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2);
+std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5);
 
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 
@@ -948,6 +949,11 @@ void BitcoinGUI::createActions()
 	galazaAction->setMenuRole(QAction::TextHeuristicRole);
 
 
+	foundationAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Foundation"), this);
+	foundationAction->setStatusTip(tr("Foundation"));
+	foundationAction->setMenuRole(QAction::TextHeuristicRole);
+
+
     optionsAction = new QAction(QIcon(":/icons/options"), tr("&Options..."), this);
     optionsAction->setToolTip(tr("Modify configuration options for GridCoin"));
     optionsAction->setMenuRole(QAction::PreferencesRole);
@@ -994,9 +1000,10 @@ void BitcoinGUI::createActions()
 
 	connect(tickerAction, SIGNAL(triggered()), this, SLOT(tickerClicked()));
 	connect(ticketListAction, SIGNAL(triggered()), this, SLOT(ticketListClicked()));
+
+	connect(foundationAction, SIGNAL(triggered()), this, SLOT(foundationClicked()));
 	connect(galazaAction, SIGNAL(triggered()), this, SLOT(galazaClicked()));
 	connect(newUserWizardAction, SIGNAL(triggered()), this, SLOT(newUserWizardClicked()));
-
 
 }
 
@@ -1069,6 +1076,10 @@ void BitcoinGUI::createMenuBar()
     	qmAdvanced->addSeparator();
 		qmAdvanced->addAction(galazaAction);
 	}
+
+	qmAdvanced->addSeparator();
+	qmAdvanced->addAction(foundationAction);
+	
 
 
 }
@@ -1689,6 +1700,22 @@ void BitcoinGUI::ticketListClicked()
 }
 
 
+void BitcoinGUI::foundationClicked()
+{
+#ifdef WIN32
+	if (!bGlobalcomInitialized) return;
+	std::string sVotingPayload = "";
+	GetJSONPollsReport(true,"",sVotingPayload,true);
+	double function_call = qtExecuteGenericFunction("SetGenericVotingData",sVotingPayload);
+	std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
+	function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
+	qtSetSessionInfo(DefaultWalletAddress(), GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.Magnitude);
+    globalcom->dynamicCall("ShowFoundation()");
+#endif
+
+}
+
+
 
 
 void BitcoinGUI::newUserWizardClicked()
@@ -1742,7 +1769,6 @@ void BitcoinGUI::votingClicked()
 		std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
 		function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
 		function_call = qtExecuteGenericFunction("ShowVotingConsole","");
-		//printf("votingpayload %s %f",sVotingPayload.c_str(),function_call);
 	#endif
 
 }
@@ -2165,8 +2191,20 @@ void BitcoinGUI::timerfire()
 							double function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
 							std::string response = ExecuteRPCCommand("vote",Argument1,Argument2);
 							double resultcode = qtExecuteGenericFunction("SetRPCResponse"," "+response);
-														
 						}
+						else if (RPCCommand=="addpoll")
+						{
+							std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
+							double function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
+							std::string Argument3 = ExtractXML(sData,"<ARG3>","</ARG3>");
+    						std::string Argument4 = ExtractXML(sData,"<ARG4>","</ARG4>");
+							std::string Argument5 = ExtractXML(sData,"<ARG5>","</ARG5>");
+
+							std::string response = ExecuteRPCCommand("addpoll",Argument1,Argument2,Argument3,Argument4,Argument5);
+
+							double resultcode = qtExecuteGenericFunction("SetRPCResponse"," "+response);
+						}
+
 					}
 				#endif
 		}

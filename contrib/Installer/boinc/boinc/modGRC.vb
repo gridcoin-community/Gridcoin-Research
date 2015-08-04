@@ -28,6 +28,8 @@ Module modGRC
     Public mfrmProjects As frmNewUserWizard
     Public mfrmSql As frmSQL
     Public mfrmTicketAdd As frmTicketAdd
+    Public mfrmFoundation As frmFoundation
+
     Public mfrmTicketList As frmTicketList
     Public mfrmLogin As frmLogin
     Public mfrmTicker As frmLiveTicker
@@ -43,12 +45,18 @@ Module modGRC
         Public Shared intensity As String = "13"
         Public Shared lookup_gap As String = "2"
     End Structure
-    Public Function ExecuteRPCCommand(sCommand As String, sArg1 As String, sArg2 As String) As String
+    Public Function GetFoundationGuid(sTitle As String) As String
+        Dim lPos As Long = InStr(1, LCase(sTitle), "[foundation ")
+        Dim sId As String = ""
+        If lPos > 0 Then sId = Mid(sTitle, lPos + Len("[foundation "), 36)
+        If Len(Trim(sId)) <> 36 Then Return ""
+        Return sId
+    End Function
+
+    Public Function ExecuteRPCCommand(sCommand As String, sArg1 As String, sArg2 As String, sArg3 As String, sArg4 As String, sArg5 As String) As String
         Dim sReply As String = ""
-
         Try
-
-            Dim sPayload As String = "<COMMAND>" + sCommand + "</COMMAND><ARG1>" + sArg1 + "</ARG1><ARG2>" + sArg2 + "</ARG2>"
+            Dim sPayload As String = "<COMMAND>" + sCommand + "</COMMAND><ARG1>" + sArg1 + "</ARG1><ARG2>" + sArg2 + "</ARG2><ARG3>" + sArg3 + "</ARG3><ARG4>" + sArg4 + "</ARG4><ARG5>" + sArg5 + "</ARG5>"
             SetRPCReply("")
             msRPCReply = ""
             msRPCCommand = sPayload
@@ -61,12 +69,10 @@ Module modGRC
             Next
             sReply = "Unable to reach Gridcoin RPC."
             Return sReply
-
         Catch ex As Exception
             Log("EXCEPTION: ExecuteRPCCommand : " + ex.Message)
             Return "Unable to execute vote, " + ex.Message
         End Try
-
     End Function
     Public Sub PopulateHeadings(vHeading() As String, oDGV As DataGridView, bAutoFit As Boolean)
 
@@ -82,19 +88,14 @@ Module modGRC
         Dim dgcc As New DataGridViewCellStyle
         dgcc.ForeColor = System.Drawing.Color.SandyBrown
         oDGV.ColumnHeadersDefaultCellStyle = dgcc
-        For x = 0 To UBound(vHeading)
-            oDGV.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.None
-
-            oDGV.Columns(x).SortMode = DataGridViewColumnSortMode.Automatic
-
-        Next
+    
         For x = 0 To UBound(vHeading)
             If bAutoFit Then
-                oDGV.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.ColumnHeader
-
+                oDGV.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells
+                oDGV.Columns(x).SortMode = DataGridViewColumnSortMode.Automatic
             Else
                 oDGV.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.None
-
+                oDGV.Columns(x).SortMode = DataGridViewColumnSortMode.Automatic
             End If
         Next
 
@@ -424,10 +425,18 @@ Module modGRC
     End Function
 
     Public Function FileToBytes(sSourceFileName As String) As Byte()
+        If sSourceFileName Is Nothing Then Exit Function
+
+        Try
+
         Dim sFilePath As String = sSourceFileName
         Dim b() As Byte
         b = System.IO.File.ReadAllBytes(sFilePath)
         Return b
+        Catch ex As Exception
+            MsgBox("File may be open in another program, please close it first.", MsgBoxStyle.Critical)
+
+        End Try
 
     End Function
 
@@ -438,6 +447,26 @@ Module modGRC
         Return True
     End Function
 
+    Public Function GetMd5String(b As Byte()) As String
+        Try
+            Dim objMD5 As New System.Security.Cryptography.MD5CryptoServiceProvider
+            Dim arrHash() As Byte
+            arrHash = objMD5.ComputeHash(b)
+            objMD5 = Nothing
+            Dim sOut As String = ByteArrayToHexString2(arrHash)
+            Return sOut
+
+        Catch ex As Exception
+            Return "MD5Error"
+        End Try
+    End Function
+    Public Function GetMd5OfFile(sFile As String) As String
+         Dim b() As Byte
+        b = FileToBytes(sFile)
+        Dim bHash As String
+        bHash = GetMd5String(b)
+        Return bHash
+    End Function
     Public Function GetMd5String(ByVal sData As String) As String
         Try
             Dim objMD5 As New System.Security.Cryptography.MD5CryptoServiceProvider
