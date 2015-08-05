@@ -2392,7 +2392,6 @@ Value execute(const Array& params, bool fHelp)
 			std::string sParam2 = params[2].get_str();
 			entry.push_back(Pair("OrgName",sParam2));
 
-			//12-28-2014
 			std::string sboinchashargs = LegacyDefaultBoincHashArgs();
 			if (sParam1 != sboinchashargs)
 			{
@@ -2400,7 +2399,6 @@ Value execute(const Array& params, bool fHelp)
 			}
 			else
 			{
-				//ClientVersionNew()
 				std::string modulus = sboinchashargs.substr(0,12);
 				std::string key = sParam2 + "," + AdvancedCryptWithSalt(modulus,sParam2);
 				entry.push_back(Pair("OrgKey",key));

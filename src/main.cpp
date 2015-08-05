@@ -362,8 +362,8 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msNeuralResponse = "";
  //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
  
- int nGrandfather = fTestNet ? 30000 : 288930;
- int nNewIndex = fTestNet ? 28286 : 271625;
+ int nGrandfather = 288930;
+ int nNewIndex = 271625;
  int64_t nGenesisSupply = 340569880;
 
  //GPU Projects:
@@ -3760,8 +3760,8 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock(): Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3425) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
+					if (bv < 3464 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
 			}
-
 
 
 			if (boincblock.cpid != "INVESTOR")
@@ -4072,7 +4072,12 @@ void GridcoinServices()
 		}
 	}
 	//Dont perform the following functions if out of sync
-	if (OutOfSyncByAge() || (pindexBest->nHeight < nGrandfather)) return;
+	if (OutOfSyncByAge() || ((double)pindexBest->nHeight < (double)nGrandfather))
+	{
+		if (fDebug3 && OutOfSyncByAge()) printf(" OOSBA #     ");
+		if (fDebug3) printf(" PIB<NR # Best %f  Grand %f   ",(double)pindexBest->nHeight,(double)nGrandfather);
+		return;
+	}
 
 	if (fDebug3) printf("{GS}");
 
@@ -4099,19 +4104,19 @@ void GridcoinServices()
 	}
 
 	int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-	if (fDebug) printf ("Superblockage %f, BH %f ",(double)superblock_age,(double)nBestHeight);
-	if (superblock_age > 12*60*60)
+	if (fDebug3) printf ("Superblockage %f, BH %f ",(double)superblock_age,(double)nBestHeight);
+	if ((double)superblock_age > (double)(12*60*60))
 	{
 		if ((nBestHeight % 3) == 0)
 		{
-			if (fDebug) printf("CNNSH ");
+			if (fDebug3) printf("#CNNSH# ");
 			ComputeNeuralNetworkSupermajorityHashes();
 			UpdateNeuralNetworkQuorumData();
 		}
 		//When superblock is old, Tally every 10 mins:
 		if ((nBestHeight % 10) == 0)
 		{
-			if (fDebug) printf("TIB ");
+			if (fDebug) printf("#TIB# ");
 		    TallyInBackground();
 		}
 
@@ -4143,7 +4148,7 @@ void GridcoinServices()
 		// Let's start syncing the neural network as soon as the LAST superblock is over 12 hours old.
 		// Also, lets do this as a TEAM exactly every 30 blocks (~30 minutes) to try to reach an EXACT consensus every half hour:
 		// For effeciency, the network sleeps for 20 hours after a good superblock is accepted
-		if (superblock_age > 12*60*60)
+		if ((double)superblock_age > (double)(12*60*60))
 		{
 			if (fDebug3) printf("FSWDPOR ");
 			FullSyncWithDPORNodes();
@@ -4153,7 +4158,7 @@ void GridcoinServices()
 	if (( (nBestHeight-10) % 30 ) == 0)
 	{
 			// 10 Blocks after the network started syncing the neural network as a team, ask the neural network to come to a quorum
-			if (superblock_age > 12*60*60)
+			if ((double)superblock_age > (double)(12*60*60))
 			{
 				// First verify my node has a synced contract
 				std::string contract = "";
@@ -4510,7 +4515,14 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
+		nGrandfather = 31628;
+		nNewIndex = 28286;
     }
+
+	
+	std::string mode = fTestNet ? "TestNet" : "Prod";
+	printf("Mode=%s\r\n",mode.c_str());
+	
     
     //
     // Load block index
@@ -5871,11 +5883,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
 
-		// Ensure testnet users are running latest version as of 5-29-2015
-		if (pfrom->nVersion < 180263 && fTestNet)
+		// Ensure testnet users are running latest version as of 8-5-2015
+		if (pfrom->nVersion < 180285 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
-            if (fDebug) printf("partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
+            if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
             pfrom->fDisconnect = true;
             return false;
         }
@@ -6984,7 +6996,7 @@ std::string GetNeuralNetworkSuperBlock()
 	//Only try to stake a superblock if the contract expired in the coin And the superblock is the highest popularity block
 	
 	int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-	if (superblock_age > 12*60*60)
+	if ((double)superblock_age > (double)(12*60*60))
 	{
 		std::string myNeuralHash = "";
 		#if defined(WIN32) && defined(QT_GUI)
@@ -7019,7 +7031,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 	mcpid.OrganizationKey = DefaultBlockKey(8); //Only reveal 8 characters
 	int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
 	//7-25-2015 - Add the neural hash only if necessary
-	if (superblock_age > 12*60*60)
+	if ((double)superblock_age > (double)(12*60*60))
 	{
 		#if defined(WIN32) && defined(QT_GUI)
 			mcpid.NeuralHash = qtGetNeuralHash("");
@@ -8429,7 +8441,8 @@ CBlockIndex* GetHistoricalMagnitude(std::string cpid,int nStartHeight)
     while (pindex->nHeight > nNewIndex)
 	{
         pindex = pindex->pprev;
-		if (pindex->sCPID == cpid) return pindex;
+		//8-5-2015; R HALFORD; Find the last block the CPID staked with a research subsidy (IE dont count interest blocks)
+		if (pindex->sCPID == cpid && (pindex->nResearchSubsidy > 0)) return pindex;
 	}
     return pindexGenesisBlock;
   
