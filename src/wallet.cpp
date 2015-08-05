@@ -1772,6 +1772,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 
 void NetworkTimer()
 {
+	if (GetArg("-fullbore", "false") != "true")	MilliSleep(20);
 	if (mdMachineTimerLast == 0) mdMachineTimerLast = GetAdjustedTime();
 	double elapsed = GetAdjustedTime() - mdMachineTimerLast;
 	mdPORNonce += 1;
@@ -1959,7 +1960,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		
 			//1-12-2015 - Add PoW nonce to POR - Halford
 			NetworkTimer();
-				
+
             if (CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, 
 				*pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, 
 				targetProofOfStake, hashBoinc, false, true, mdPORNonce))

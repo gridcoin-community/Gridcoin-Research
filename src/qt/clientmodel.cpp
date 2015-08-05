@@ -91,7 +91,10 @@ void ClientModel::updateTimer()
 		
         emit numBlocksChanged(newNumBlocks, newNumBlocksOfPeers);
 	}
-	emit bytesChanged(getTotalBytesRecv(), getTotalBytesSent());
+	if (GetArg("-suppressnetworkgraph", "false") != "true")
+	{
+		emit bytesChanged(getTotalBytesRecv(), getTotalBytesSent());
+	}
     
 }
 

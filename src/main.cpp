@@ -777,6 +777,18 @@ MiningCPID GetInitializedGlobalCPUMiningCPID(std::string cpid)
 MiningCPID GetNextProject(bool bForce)
 {
 
+
+	
+	if (GlobalCPUMiningCPID.projectname.length() > 3   &&  GlobalCPUMiningCPID.projectname != "INVESTOR"  && GlobalCPUMiningCPID.Magnitude > 1)
+	{
+				if (!Timer_Main("globalcpuminingcpid",10))
+				{
+					//Prevent Thrashing
+					return GlobalCPUMiningCPID;
+				}
+	}
+
+	
 	std::string sBoincKey = GetArgument("boinckey","");
     if (!sBoincKey.empty())
 	{ 
@@ -799,16 +811,6 @@ MiningCPID GetNextProject(bool bForce)
 
 
 
-	if (GlobalCPUMiningCPID.projectname.length() > 3   &&   !bForce  && GlobalCPUMiningCPID.projectname != "INVESTOR")
-	{
-				if (!Timer_Main("globalcpuminingcpid",5))
-				{
-					//Prevent Thrashing
-					return GlobalCPUMiningCPID;
-				}
-	}
-
-	
 
 	msMiningProject = "";
 	msMiningCPID = "";
@@ -865,6 +867,8 @@ MiningCPID GetNextProject(bool bForce)
 			{
 
 				StructCPID structcpid = mvCPIDs[(*ii).first];
+				if (GetArg("-fullbore", "false") != "true")	MilliSleep(25);
+	
 				if (structcpid.initialized) 
 				{ 
 					if (msPrimaryCPID == structcpid.cpid && 
@@ -6251,7 +6255,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (pindex)
             pindex = pindex->pnext;
         int nLimit = 2000;
-        if (fDebug) printf("getblocks %d to %s limit %d\n", (pindex ? pindex->nHeight : -1), hashStop.ToString().substr(0,20).c_str(), nLimit);
+        //if (fDebug) printf("getblocks %d to %s limit %d\n", (pindex ? pindex->nHeight : -1), hashStop.ToString().substr(0,20).c_str(), nLimit);
         for (; pindex; pindex = pindex->pnext)
         {
             if (pindex->GetBlockHash() == hashStop)
@@ -6268,7 +6272,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             {
                 // When this block is requested, we'll send an inv that'll make them
                 // getblocks the next batch of inventory.
-                printf("  getblocks stopping at limit %d %s\n", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20).c_str());
+                if (fDebug) printf("  getblocks stopping at limit %d %s\n", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20).c_str());
                 pfrom->hashContinue = pindex->GetBlockHash();
                 break;
             }

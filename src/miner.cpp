@@ -730,17 +730,8 @@ void StakeMiner(CWallet *pwallet)
     RenameThread("grc-stake-miner");
 
     bool fTryToSync = true;
-
-    while (true)
-    {
-Inception:
-        if (fShutdown)
-		{
-			printf("StakeMiner:ShuttingDown..");
-            return;
-		}
-
-		if (pwallet->IsLocked())
+	///////////////////////  Auto Unlock Feature for Stake Miner
+	if (pwallet->IsLocked())
 		{
 			//11-5-2014 R Halford - If wallet is locked - see if user has an encrypted password stored:
 			std::string passphrase = "";
@@ -773,8 +764,19 @@ Inception:
 			}
 		}
 	
-		// End of encrypted pass feature
+	// End of AutoUnlock Feature
 
+
+    while (true)
+    {
+Inception:
+        if (fShutdown)
+		{
+			printf("StakeMiner:ShuttingDown..");
+            return;
+		}
+
+		
         while (pwallet->IsLocked())
         {
             nLastCoinStakeSearchInterval = 0;
@@ -826,8 +828,9 @@ Inception:
             }
         }
 Begin:
-		MilliSleep(500);
-
+		
+		if (GetArg("-fullbore", "false") != "true")	MilliSleep(1000);
+		
         //
         // Create new block
         //
@@ -845,10 +848,10 @@ Begin:
 
 		//Verify we are still on the main chain
 	
-		if (IsLockTimeWithinMinutes(nLastBlockSolved,30)) 
+		if (IsLockTimeWithinMinutes(nLastBlockSolved,10)) 
 		{
 				if (fDebug) printf("=");
-				MilliSleep(200);
+				MilliSleep(500);
 				goto Begin;
 		}
 
