@@ -102,6 +102,7 @@ vector<CNode*> vNodes;
 CCriticalSection cs_vNodes;
 
 
+
 vector<std::string> vAddedNodes;
 CCriticalSection cs_vAddedNodes;
 
@@ -1446,8 +1447,13 @@ void ThreadSocketHandler2(void* parg)
                             TRY_LOCK(pnode->cs_vRecvMsg, lockRecv);
                             if (lockRecv)
                             {
+                                TRY_LOCK(pnode->cs_mapRequests, lockReq);
+                                if (lockReq)
+                                {
                                     TRY_LOCK(pnode->cs_inventory, lockInv);
-                                    if (lockInv) fDelete = true;
+                                    if (lockInv)
+                                        fDelete = true;
+                                }
                             }
                         }
                     }

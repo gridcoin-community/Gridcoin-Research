@@ -227,14 +227,9 @@ CMedianFilter<int> cPeerBlockCounts(5, 0); // Amount of blocks that other nodes 
 
 
 
-struct COrphanBlock {
-    uint256 hashBlock;
-    uint256 hashPrev;
-    std::pair<COutPoint, unsigned int> stake;
-    vector<unsigned char> vchBlock;
-};
-map<uint256, COrphanBlock*> mapOrphanBlocks;
-multimap<uint256, COrphanBlock*> mapOrphanBlocksByPrev;
+
+map<uint256, CBlock*> mapOrphanBlocks;
+multimap<uint256, CBlock*> mapOrphanBlocksByPrev;
 set<pair<COutPoint, unsigned int> > setStakeSeenOrphan;
 
 map<uint256, CTransaction> mapOrphanTransactions;
@@ -367,7 +362,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msNeuralResponse = "";
  //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
  
- int nGrandfather = fTestNet ? 288930 : 282370;
+ int nGrandfather = fTestNet ? 30000 : 288930;
  int nNewIndex = fTestNet ? 28286 : 271625;
  int64_t nGenesisSupply = 340569880;
 
@@ -1216,30 +1211,6 @@ bool CTransaction::ReadFromDisk(COutPoint prevout)
 
 
 
-void static PruneOrphanBlocks()
-{
-    if (mapOrphanBlocksByPrev.size() <= MAX_ORPHAN_BLOCKS)
-        return;
-
-    // Pick a random orphan block.
-    int pos = insecure_rand() % mapOrphanBlocksByPrev.size();
-    std::multimap<uint256, COrphanBlock*>::iterator it = mapOrphanBlocksByPrev.begin();
-    while (pos--) it++;
-
-    // As long as this block has other orphans depending on it, move to one of those successors.
-    do {
-        std::multimap<uint256, COrphanBlock*>::iterator it2 = mapOrphanBlocksByPrev.find(it->second->hashBlock);
-        if (it2 == mapOrphanBlocksByPrev.end())
-            break;
-        it = it2;
-    } while(1);
-
-    uint256 hash = it->second->hashBlock;
-    delete it->second;
-    mapOrphanBlocksByPrev.erase(it);
-    mapOrphanBlocks.erase(hash);
-}
-
 
 
 bool IsStandardTx(const CTransaction& tx)
@@ -1974,30 +1945,23 @@ bool CBlock::ReadFromDisk(const CBlockIndex* pindex, bool fReadTransactions)
     return true;
 }
 
-uint256 static GetOrphanRoot(const uint256& hash)
-{
-    map<uint256, COrphanBlock*>::iterator it = mapOrphanBlocks.find(hash);
-    if (it == mapOrphanBlocks.end())
-        return hash;
-
-    // Work back to the first block in the orphan chain
-    do {
-        map<uint256, COrphanBlock*>::iterator it2 = mapOrphanBlocks.find(it->second->hashPrev);
-        if (it2 == mapOrphanBlocks.end())
-            return it->first;
-        it = it2;
-    } while(true);
-}
-
-
-// Gridcoin: find block wanted by given orphan block
-uint256 WantedByOrphan(const COrphanBlock* pblockOrphan)
+uint256 static GetOrphanRoot(const CBlock* pblock)
 {
     // Work back to the first block in the orphan chain
-    while (mapOrphanBlocks.count(pblockOrphan->hashPrev))
-        pblockOrphan = mapOrphanBlocks[pblockOrphan->hashPrev];
-    return pblockOrphan->hashPrev;
+    while (mapOrphanBlocks.count(pblock->hashPrevBlock))
+        pblock = mapOrphanBlocks[pblock->hashPrevBlock];
+    return pblock->GetHash();
 }
+
+// ppcoin: find block wanted by given orphan block
+uint256 WantedByOrphan(const CBlock* pblockOrphan)
+{
+    // Work back to the first block in the orphan chain
+    while (mapOrphanBlocks.count(pblockOrphan->hashPrevBlock))
+        pblockOrphan = mapOrphanBlocks[pblockOrphan->hashPrevBlock];
+    return pblockOrphan->hashPrevBlock;
+}
+
 
 static CBigNum GetProofOfStakeLimit(int nHeight)
 {
@@ -3957,7 +3921,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 				if (IsProofOfStake())
 				{
 					uint256 targetProofOfStake;
-					if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me, nNonce))
+					if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me, nNonce) && IsLockTimeWithinMinutes(GetBlockTime(),600))
 					{
 						return error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    \n", hash.ToString().c_str(),(double)nNonce);
 					}
@@ -4061,17 +4025,6 @@ bool CBlockIndex::IsSuperMajority(int minVersion, const CBlockIndex* pstart, uns
 }
 
 
-void PushGetBlocks(CNode* pnode, CBlockIndex* pindexBegin, uint256 hashEnd)
-{
-    // Filter out duplicate requests
-    if (pindexBegin == pnode->pindexLastGetBlocksBegin && hashEnd == pnode->hashLastGetBlocksEnd)
-        return;
-    pnode->pindexLastGetBlocksBegin = pindexBegin;
-    pnode->hashLastGetBlocksEnd = hashEnd;
-
-    pnode->PushMessage("getblocks", CBlockLocator(pindexBegin), hashEnd);
-}
-
 bool static ReserealizeBlockSignature(CBlock* pblock)
 {
     if (pblock->IsProofOfWork()) {
@@ -4084,9 +4037,23 @@ bool static ReserealizeBlockSignature(CBlock* pblock)
 
 void GridcoinServices()
 {
-	
+
+
+	//Dont do this on headless-SePulcher 12-4-2014 (Halford)
+	#if defined(QT_GUI)
+	   if ((nBestHeight % 100) == 0)
+	   {
+			GetGlobalStatus();
+			bForceUpdate=true;
+			uiInterface.NotifyBlocksChanged();
+			MilliSleep(50); //Update UI
+	   }
+    #endif
+
+
+
 	//This is Gridcoins Service thread; called once per block	
-	if (nBestHeight > 100 && nBestHeight < 1000)
+	if (nBestHeight > 100 && nBestHeight < 200)
 	{
 		if (GetArg("-suppressdownloadblocks", "true") == "false")
 		{
@@ -4101,7 +4068,7 @@ void GridcoinServices()
 		}
 	}
 	//Dont perform the following functions if out of sync
-	if (OutOfSyncByAge()) return; 
+	if (OutOfSyncByAge() || (pindexBest->nHeight < nGrandfather)) return;
 
 	if (fDebug3) printf("{GS}");
 
@@ -4242,15 +4209,6 @@ void GridcoinServices()
 	}
 
 
-	//Dont do this on headless-SePulcher 12-4-2014 (Halford)
-	#if defined(QT_GUI)
-	   if ((nBestHeight % 5) == 0)
-	   {
-			GetGlobalStatus();
-			bForceUpdate=true;
-			uiInterface.NotifyBlocksChanged();
-	   }
-    #endif
 
 	#if defined(WIN32) && defined(QT_GUI)
 	if (bCheckedForUpgradeLive == true && !fTestNet && bProjectsInitialized && bGlobalcomInitialized)
@@ -4277,16 +4235,13 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     if (mapOrphanBlocks.count(hash))
         return error("ProcessBlock[]: already have block (orphan) %s", hash.ToString().substr(0,20).c_str());
 
-    // ppcoin: check proof-of-stake
-
-
-
-	 // ppcoin: check proof-of-stake
+   
     // Limited duplicity on stake: prevents block flood attack
     // Duplicate stake allowed only when there is orphan child block
     if (pblock->IsProofOfStake() && setStakeSeen.count(pblock->GetProofOfStake()) && !mapOrphanBlocksByPrev.count(hash) && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
-        return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for block %s", pblock->GetProofOfStake().first.ToString().c_str(), pblock->GetProofOfStake().second, hash.ToString().c_str());
-
+        return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for block %s", pblock->GetProofOfStake().first.ToString().c_str(),
+		pblock->GetProofOfStake().second, 
+		hash.ToString().c_str());
     CBlockIndex* pcheckpoint = Checkpoints::GetLastSyncCheckpoint();
     if (pcheckpoint && pblock->hashPrevBlock != hashBestChain && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
     {
@@ -4303,11 +4258,10 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     }
 
 
-	
     // Block signature can be malleated in such a way that it increases block size up to maximum allowed by protocol
     // For now we just strip garbage from newly received blocks
-    if (!ReserealizeBlockSignature(pblock))
-        printf("WARNING: ProcessBlock() : ReserealizeBlockSignature FAILED\n");
+    //if (!ReserealizeBlockSignature(pblock))        printf("WARNING: ProcessBlock() : ReserealizeBlockSignature FAILED\n");
+
 
 
     // Preliminary checks 1-19-2015 ** Note: Mint is zero before block is signed
@@ -4319,39 +4273,28 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
         Checkpoints::AskForPendingSyncCheckpoint(pfrom);
 
 
-
-	 // If we don't already have its previous block, shunt it off to holding area until we get it
+	 // If don't already have its previous block, shunt it off to holding area until we get it
     if (!mapBlockIndex.count(pblock->hashPrevBlock))
     {
-        printf("ProcessBlock: ORPHAN BLOCK %lu, prev=%s\n", (unsigned long)mapOrphanBlocks.size(), pblock->hashPrevBlock.ToString().c_str());
-
-        // Accept orphans as long as there is a node to request its parents from
-        if (pfrom) {
-            // ppcoin: check proof-of-stake
-            if (pblock->IsProofOfStake())
-            {
-                // Limited duplicity on stake: prevents block flood attack
-                // Duplicate stake allowed only when there is orphan child block
-                if (setStakeSeenOrphan.count(pblock->GetProofOfStake()) && !mapOrphanBlocksByPrev.count(hash) && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
-                    return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for orphan block %s", 
-					pblock->GetProofOfStake().first.ToString().c_str(), pblock->GetProofOfStake().second, hash.ToString().c_str());
-            }
-            PruneOrphanBlocks();
-            COrphanBlock* pblock2 = new COrphanBlock();
-            {
-                CDataStream ss(SER_DISK, CLIENT_VERSION);
-                ss << *pblock;
-                pblock2->vchBlock = std::vector<unsigned char>(ss.begin(), ss.end());
-            }
-            pblock2->hashBlock = hash;
-            pblock2->hashPrev = pblock->hashPrevBlock;
-            mapOrphanBlocks.insert(make_pair(hash, pblock2));
-            mapOrphanBlocksByPrev.insert(make_pair(pblock2->hashPrev, pblock2));
-            if (pblock->IsProofOfStake())
+        printf("ProcessBlock: ORPHAN BLOCK, prev=%s\n", pblock->hashPrevBlock.ToString().c_str());
+        // ppcoin: check proof-of-stake
+        if (pblock->IsProofOfStake())
+        {
+            // Limited duplicity on stake: prevents block flood attack
+            // Duplicate stake allowed only when there is orphan child block
+            if (setStakeSeenOrphan.count(pblock->GetProofOfStake()) && !mapOrphanBlocksByPrev.count(hash) && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
+                return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for orphan block %s", pblock->GetProofOfStake().first.ToString().c_str(), pblock->GetProofOfStake().second, hash.ToString().c_str());
+            else
                 setStakeSeenOrphan.insert(pblock->GetProofOfStake());
+        }
+        CBlock* pblock2 = new CBlock(*pblock);
+        mapOrphanBlocks.insert(make_pair(hash, pblock2));
+        mapOrphanBlocksByPrev.insert(make_pair(pblock2->hashPrevBlock, pblock2));
 
-            // Ask this guy to fill in what we're missing
-            PushGetBlocks(pfrom, pindexBest, GetOrphanRoot(hash));
+        // Ask this guy to fill in what we're missing
+        if (pfrom)
+        {
+            pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2));
             // ppcoin: getblocks may not obtain the ancestor block rejected
             // earlier by duplicate-stake check so we ask for it again directly
             if (!IsInitialBlockDownload())
@@ -4361,59 +4304,33 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     }
 
    
-   //     CBlock* pblock2 = new CBlock(*pblock);
-     //   mapOrphanBlocks.insert(make_pair(hash, pblock2));
-      //  mapOrphanBlocksByPrev.insert(make_pair(pblock2->hashPrevBlock, pblock2));
-
-        // Ask this guy to fill in what we're missing
-    //        pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2));
-    
-
-
-
-    // Store to disk
+   
+	// Store to disk
     if (!pblock->AcceptBlock(generated_by_me))
-        return error("ProcessBlock[] : AcceptBlock FAILED");
+        return error("ProcessBlock() : AcceptBlock FAILED");
 
-     // Recursively process any orphan blocks that depended on this one
+    // Recursively process any orphan blocks that depended on this one
     vector<uint256> vWorkQueue;
     vWorkQueue.push_back(hash);
     for (unsigned int i = 0; i < vWorkQueue.size(); i++)
     {
         uint256 hashPrev = vWorkQueue[i];
-        for (multimap<uint256, COrphanBlock*>::iterator mi = mapOrphanBlocksByPrev.lower_bound(hashPrev);
+        for (multimap<uint256, CBlock*>::iterator mi = mapOrphanBlocksByPrev.lower_bound(hashPrev);
              mi != mapOrphanBlocksByPrev.upper_bound(hashPrev);
              ++mi)
         {
-            CBlock block;
-            {
-                CDataStream ss(mi->second->vchBlock, SER_DISK, CLIENT_VERSION);
-                ss >> block;
-            }
-            block.BuildMerkleTree();
-            if (block.AcceptBlock(generated_by_me))
-                vWorkQueue.push_back(mi->second->hashBlock);
-            mapOrphanBlocks.erase(mi->second->hashBlock);
-            setStakeSeenOrphan.erase(block.GetProofOfStake());
-            delete mi->second;
+            CBlock* pblockOrphan = (*mi).second;
+            if (pblockOrphan->AcceptBlock(generated_by_me))
+                vWorkQueue.push_back(pblockOrphan->GetHash());
+            mapOrphanBlocks.erase(pblockOrphan->GetHash());
+            setStakeSeenOrphan.erase(pblockOrphan->GetProofOfStake());
+            delete pblockOrphan;
         }
         mapOrphanBlocksByPrev.erase(hashPrev);
     }
 
-
-	double nBalance = GetTotalBalance();
-	std::string SendingWalletAddress = DefaultWalletAddress();
+   
 	printf("{PB}: ACC; \r\n");
-	
-	if (CHECKPOINT_DISTRIBUTED_MODE==0)
-	{
-		// If we are in centralized mode, follow peercoins model: if responsible for sync-checkpoint send it
-		if (pfrom && !CSyncCheckpoint::strMasterPrivKey.empty())        
-		{
-			printf("Sending sync checkpoint...\r\n");
-				Checkpoints::SendSyncCheckpoint(Checkpoints::AutoSelectSyncCheckpoint());
-		}
-	}
 
 	GridcoinServices();
     return true;
@@ -6212,7 +6129,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 break;
             }
         }
-        CTxDB txdb("r");
+       CTxDB txdb("r");
         for (unsigned int nInv = 0; nInv < vInv.size(); nInv++)
         {
             const CInv &inv = vInv[nInv];
@@ -6227,10 +6144,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
             if (!fAlreadyHave)
                 pfrom->AskFor(inv);
-            else if (inv.type == MSG_BLOCK && mapOrphanBlocks.count(inv.hash)) 
-			{
-                 // pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(mapOrphanBlocks[inv.hash]));
-				 PushGetBlocks(pfrom, pindexBest, GetOrphanRoot(inv.hash));
+            else if (inv.type == MSG_BLOCK && mapOrphanBlocks.count(inv.hash)) {
+                pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(mapOrphanBlocks[inv.hash]));
             } else if (nInv == nLastBlock) {
                 // In case we are on a very long side-chain, it is possible that we already have
                 // the last block in an inv bundle sent in response to getblocks. Try to detect
@@ -6295,7 +6210,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     }
                 }
             }
-            else if (inv.IsKnownType())
+             else if (inv.IsKnownType())
             {
                 // Send stream from relay memory
                 bool pushed = false;
@@ -6320,16 +6235,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
             // Track requests for our stuff
             Inventory(inv.hash);
-            if (inv.type == MSG_BLOCK /* || inv.type == MSG_FILTERED_BLOCK */)
-                break;
- 
-
-
         }
     }
 
-
-    else if (strCommand == "getblocks")
+	 else if (strCommand == "getblocks")
     {
         CBlockLocator locator;
         uint256 hashStop;
@@ -6342,15 +6251,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (pindex)
             pindex = pindex->pnext;
         int nLimit = 2000;
-		
-
-        if (fDebug)    printf("getblocks %d to %s limit %d\n", (pindex ? pindex->nHeight : -1), hashStop.ToString().substr(0,20).c_str(), nLimit);
-
+        if (fDebug) printf("getblocks %d to %s limit %d\n", (pindex ? pindex->nHeight : -1), hashStop.ToString().substr(0,20).c_str(), nLimit);
         for (; pindex; pindex = pindex->pnext)
         {
             if (pindex->GetBlockHash() == hashStop)
             {
-                if (fDebug) printf("getblocks stopping at %d %s\n", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20).c_str());
+                if (fDebug) printf("  getblocks stopping at %d %s\n", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20).c_str());
                 // ppcoin: tell downloading node about the latest block if it's
                 // without risk being rejected due to stake connection check
                 if (hashStop != hashBestChain && pindex->GetBlockTime() + nStakeMinAge > pindexBest->GetBlockTime())
@@ -6362,7 +6268,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             {
                 // When this block is requested, we'll send an inv that'll make them
                 // getblocks the next batch of inventory.
-                if (fDebug) printf("  getblocks stopping at limit %d %s\n", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20).c_str());
+                printf("  getblocks stopping at limit %d %s\n", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20).c_str());
                 pfrom->hashContinue = pindex->GetBlockHash();
                 break;
             }
@@ -6515,7 +6421,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         uint256 hashBlock = block.GetHash();
 		if (fDebug) printf("Acid %s, Validity %s ",acid.c_str(),YesNo(block_valid).c_str());
 
-        printf("Received block %s ; ", hashBlock.ToString().c_str());
+        printf("Received block %s ; \r\n", hashBlock.ToString().c_str());
         if (fDebug) block.print();
 
         CInv inv(MSG_BLOCK, hashBlock);
@@ -6524,18 +6430,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (ProcessBlock(pfrom, &block, false))
             mapAlreadyAskedFor.erase(inv);
         if (block.nDoS) pfrom->Misbehaving(block.nDoS);
-
-
-		#if defined(QT_GUI)
-	    if ((nBestHeight % 5) == 0)
-		{
-				GetGlobalStatus();
-				bForceUpdate=true;
-				uiInterface.NotifyBlocksChanged();
-				MilliSleep(20);
-		}
-	    #endif
-
 
     }
 
@@ -6565,6 +6459,25 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
         if (vInv.size() > 0)
             pfrom->PushMessage("inv", vInv);
+    }
+	
+    else if (strCommand == "reply")
+    {
+        uint256 hashReply;
+        vRecv >> hashReply;
+
+        CRequestTracker tracker;
+        {
+            LOCK(pfrom->cs_mapRequests);
+            map<uint256, CRequestTracker>::iterator mi = pfrom->mapRequests.find(hashReply);
+            if (mi != pfrom->mapRequests.end())
+            {
+                tracker = (*mi).second;
+                pfrom->mapRequests.erase(mi);
+            }
+        }
+        if (!tracker.IsNull())
+            tracker.fn(tracker.param1, vRecv);
     }
 	else if (strCommand == "neural")
 	{
@@ -6622,7 +6535,20 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             vRecv >> nonce >> acid;
 			bool pong_valid = AcidTest(strCommand,acid,pfrom);
 			if (!pong_valid) return false;
-		    pfrom->PushMessage("pong", nonce);
+			if (fDebug) printf("pong valid %s",YesNo(pong_valid).c_str());
+
+            // Echo the message back with the nonce. This allows for two useful features:
+            //
+            // 1) A remote node can quickly check if the connection is operational
+            // 2) Remote nodes can measure the latency of the network thread. If this node
+            //    is overloaded it won't respond to pings quickly and the remote node can
+            //    avoid sending us more work, like chain download requests.
+            //
+            // The nonce stops the remote getting confused between different pings: without
+            // it, if the remote node sends a ping once per second and this node takes 5
+            // seconds to respond to each, the 5th ping the remote sends would appear to
+            // return very quickly.
+            pfrom->PushMessage("pong", nonce);
         }
 	}
 	else if (strCommand == "pong")
@@ -6812,7 +6738,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // do that because they want to know about (and store and rebroadcast and
         // risk analyze) the dependencies of transactions relevant to them, without
         // having to download the entire memory pool.
-        pfrom->PushMessage("notfound", vNotFound);
+      
 
     }
 

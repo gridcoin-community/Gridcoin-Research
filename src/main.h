@@ -124,11 +124,7 @@ extern int64_t nTimeBestReceived;
 extern CCriticalSection cs_setpwalletRegistered;
 extern std::set<CWallet*> setpwalletRegistered;
 extern unsigned char pchMessageStart[4];
-//extern std::map<uint256, CBlock*> mapOrphanBlocks;
-
-struct COrphanBlock;
-extern std::map<uint256, COrphanBlock*> mapOrphanBlocks;
-
+extern std::map<uint256, CBlock*> mapOrphanBlocks;
 
 extern int64_t COIN_YEAR_REWARD;
 extern bool bCryptoLotteryEnabled;
@@ -235,7 +231,7 @@ int GetNumBlocksOfPeers();
 bool IsInitialBlockDownload();
 std::string GetWarnings(std::string strFor);
 bool GetTransaction(const uint256 &hash, CTransaction &tx, uint256 &hashBlock);
-uint256 WantedByOrphan(const COrphanBlock* pblockOrphan);
+uint256 WantedByOrphan(const CBlock* pblockOrphan);
 
 const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfStake);
 void StakeMiner(CWallet *pwallet);

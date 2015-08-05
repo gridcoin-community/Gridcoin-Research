@@ -283,7 +283,7 @@ int main(int argc, char *argv[])
                 {
                     window.show();
                 }
-				timer->start(4000);
+				timer->start(5000);
 	
                 // Place this here as guiref has to be defined if we don't want to lose URIs
                 ipcInit(argc, argv);
