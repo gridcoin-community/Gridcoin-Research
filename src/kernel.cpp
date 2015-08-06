@@ -361,6 +361,7 @@ int64_t GetRSAWeightByCPID(std::string cpid)
 						else if (mag_accuracy > 5) 
 						{
 								owed = (UntrustedHost.owed*14) + UntrustedHost.Magnitude;
+								if (owed < 0) owed = 0;
 						}
 			}
 			else
@@ -423,6 +424,7 @@ int64_t GetRSAWeightByBlock(MiningCPID boincblock)
 	{
 		rsa_weight = boincblock.RSAWeight + boincblock.Magnitude;
 	}
+	if (rsa_weight < 0) rsa_weight = 0;
 	return rsa_weight;
 }
 

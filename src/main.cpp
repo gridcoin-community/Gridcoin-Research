@@ -3763,14 +3763,16 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					if (bv < 3464 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
 			}
 
-
+			//8-5-2015
 			if (boincblock.cpid != "INVESTOR")
 			{
     			if (boincblock.projectname == "") 	return DoS(1,error("PoR Project Name invalid"));
 	    		//if (boincblock.rac < 10) 			return DoS(1,error("RAC too low"));
 				if (!IsCPIDValidv2(boincblock,height1))
 				{
-						return DoS(100,error("Bad CPID : height %f, bad hashboinc %s",(double)height1,vtx[0].hashBoinc.c_str()));
+						return error("Bad CPID : height %f, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc %s",(double)height1,
+							boincblock.cpid.c_str(),boincblock.cpidv2.c_str(),
+							boincblock.lastblockhash.c_str(), vtx[0].hashBoinc.c_str());
 				}
 
 			}
@@ -4863,7 +4865,8 @@ bool IsCPIDValidv2(MiningCPID& mc, int height)
 	//12-24-2014 Halford - Transition to CPIDV2
 	if (height < nGrandfather) return true;
 	bool result = false;
-	if (height < 97000)
+	int cpidV2CutOverHeight = fTestNet ? 25000 : 97000;
+	if (height < cpidV2CutOverHeight)
 	{
 			result = IsCPIDValid_Retired(mc.cpid,mc.enccpid);
 	}
@@ -5884,7 +5887,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 8-5-2015
-		if (pfrom->nVersion < 180285 && fTestNet)
+		if (pfrom->nVersion < 180286 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
