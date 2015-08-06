@@ -510,8 +510,6 @@ Public Class Utilization
     Public Sub SetBestBlock(ByVal nBlock As Integer)
 
     End Sub
-
-
     Public Function GetLanIP() As String
         Return GetLocalLanIP1()
     End Function

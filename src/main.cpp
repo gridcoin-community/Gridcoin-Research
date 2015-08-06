@@ -167,6 +167,8 @@ bool bNewUserWizardNotified = false;
 int64_t nLastBlockSolved = 0;  //Future timestamp
 int64_t nLastBlockSubmitted = 0;
 
+
+
 uint256 muGlobalCheckpointHash = 0;
 uint256 muGlobalCheckpointHashRelayed = 0;
 int muGlobalCheckpointHashCounter = 0;
@@ -213,6 +215,7 @@ unsigned int nStakeMaxAge = -1; // unlimited
 unsigned int nModifierInterval = 10 * 60; // time to elapse before new modifier is computed
 bool bCryptoLotteryEnabled = true;
 bool bRemotePaymentsEnabled = false;
+bool bResearchAgeEnabled = false;
 
 // Gridcoin:
 int nCoinbaseMaturity = 100;
@@ -3084,7 +3087,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 		double dCalcStakeReward = CoinToDouble(GetProofOfStakeMaxReward(nCoinAge, nFees, nTime));
 
-		if (dStakeReward > dCalcStakeReward+1)
+		if (dStakeReward > dCalcStakeReward+1 && !bResearchAgeEnabled)
             return DoS(1, error("ConnectBlock[] : coinstake pays above maximum (actual= %f, vs calculated=%f )", dStakeReward, dCalcStakeReward));
 		
 		if (bb.cpid=="INVESTOR" && dStakeReward > 1)
@@ -3158,7 +3161,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		}
 
 		//Approve first coinstake in DPOR block
-		if (bb.cpid != "INVESTOR" && IsLockTimeWithinMinutes(GetBlockTime(),15))
+		if (bb.cpid != "INVESTOR" && IsLockTimeWithinMinutes(GetBlockTime(),15) && !bResearchAgeEnabled)
 		{
 			    if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))	
 				{
@@ -3760,7 +3763,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock(): Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3425) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-					if (bv < 3464 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
+					if (bv < 3467 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
 			}
 
 			//8-5-2015
@@ -4510,6 +4513,7 @@ bool LoadBlockIndex(bool fAllowNew)
 
     if (fTestNet)
     {
+		// GLOBAL TESTNET SETTINGS - R HALFORD
         pchMessageStart[0] = 0xcd;
         pchMessageStart[1] = 0xf2;
         pchMessageStart[2] = 0xc0;
@@ -4519,6 +4523,8 @@ bool LoadBlockIndex(bool fAllowNew)
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
 		nGrandfather = 31628;
 		nNewIndex = 28286;
+		bResearchAgeEnabled = true;
+
     }
 
 	
@@ -5887,7 +5893,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 8-5-2015
-		if (pfrom->nVersion < 180286 && fTestNet)
+		if (pfrom->nVersion < 180287 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -7007,7 +7013,7 @@ std::string GetNeuralNetworkSuperBlock()
 		#endif
  	    double popularity = 0;
 		std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-		//if (fDebug3) printf("superblock age %f, myNeuralHash %s, consensus_hash %s",(double)superblock_age,myNeuralHash.c_str(),consensus_hash.c_str());
+		if (fDebug2 && LessVerbose(5)) printf("SB Age %f, MyHash %s, ConsensusHash %s",(double)superblock_age,myNeuralHash.c_str(),consensus_hash.c_str());
 
 		if (consensus_hash==myNeuralHash)
 		{
@@ -7015,7 +7021,7 @@ std::string GetNeuralNetworkSuperBlock()
 			std::string contract = "";
 			#if defined(WIN32) && defined(QT_GUI)
 				contract = qtGetNeuralContract("");
-				if (fDebug && LessVerbose(10)) printf("AppendSB %f\r\n",(double)contract.length());
+				if (fDebug2 && LessVerbose(5)) printf("Appending SuperBlock %f\r\n",(double)contract.length());
 			#endif
 			return contract;
 		}

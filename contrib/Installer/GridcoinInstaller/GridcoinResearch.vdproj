@@ -988,7 +988,7 @@
         "Name" = "8:Microsoft Visual Studio"
         "ProductName" = "8:Gridcoin Research"
         "ProductCode" = "8:{80A9855E-4879-4940-994E-579D14B94828}"
-        "PackageCode" = "8:{8A73B789-F35C-4E56-9123-039A1F6B8823}"
+        "PackageCode" = "8:{B8D0EE00-25D9-42B2-ACAE-37BD325EEB46}"
         "UpgradeCode" = "8:{9617E9EA-252F-43CE-B53E-B48C85F71192}"
         "AspNetVersion" = "8:4.0.30319.0"
         "RestartWWWService" = "11:FALSE"

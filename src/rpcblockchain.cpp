@@ -1023,7 +1023,7 @@ double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out
 		double avg_of_avg = GetAverageInList(avgs,avg_count);
 		if (!bIgnoreBeacons) out_beacon_count = GetCountOf("beacon");
 		out_participant_count = mag_count;
-		if (avg_of_mag < 10 || avg_of_mag > 4000 || avg_of_avg < 50000) return 0;
+		if (avg_of_mag < 10 || avg_of_mag > 70000 || avg_of_avg < 50000) return 0;
 		if (!bIgnoreBeacons && (mag_count < out_beacon_count*.94 || mag_count > out_beacon_count*1.06)) return 0;
 		return avg_of_mag + avg_of_avg;
 	}
