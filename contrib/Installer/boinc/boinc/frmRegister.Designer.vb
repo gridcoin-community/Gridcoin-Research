@@ -59,7 +59,7 @@ Partial Class frmRegister
         Me.btnRegister.Location = New System.Drawing.Point(21, 408)
         Me.btnRegister.Name = "btnRegister"
         Me.btnRegister.Size = New System.Drawing.Size(85, 42)
-        Me.btnRegister.TabIndex = 4
+        Me.btnRegister.TabIndex = 8
         Me.btnRegister.Text = "Register"
         Me.btnRegister.UseVisualStyleBackColor = False
         '
@@ -104,14 +104,14 @@ Partial Class frmRegister
         Me.txtMessage.Name = "txtMessage"
         Me.txtMessage.Size = New System.Drawing.Size(392, 62)
         Me.txtMessage.TabIndex = 8
-        Me.txtMessage.Text = "."
+        Me.txtMessage.Text = " "
         '
         'txtEmail
         '
         Me.txtEmail.BackColor = System.Drawing.Color.FromArgb(CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer))
         Me.txtEmail.Font = New System.Drawing.Font("Microsoft Sans Serif", 14.25!, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
         Me.txtEmail.ForeColor = System.Drawing.Color.Lime
-        Me.txtEmail.Location = New System.Drawing.Point(139, 220)
+        Me.txtEmail.Location = New System.Drawing.Point(139, 216)
         Me.txtEmail.Name = "txtEmail"
         Me.txtEmail.Size = New System.Drawing.Size(270, 29)
         Me.txtEmail.TabIndex = 4
@@ -206,7 +206,7 @@ Partial Class frmRegister
         Me.txtPassword2.BackColor = System.Drawing.Color.FromArgb(CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer))
         Me.txtPassword2.Font = New System.Drawing.Font("Microsoft Sans Serif", 14.25!, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
         Me.txtPassword2.ForeColor = System.Drawing.Color.Lime
-        Me.txtPassword2.Location = New System.Drawing.Point(139, 180)
+        Me.txtPassword2.Location = New System.Drawing.Point(139, 159)
         Me.txtPassword2.Name = "txtPassword2"
         Me.txtPassword2.PasswordChar = Global.Microsoft.VisualBasic.ChrW(42)
         Me.txtPassword2.Size = New System.Drawing.Size(270, 29)

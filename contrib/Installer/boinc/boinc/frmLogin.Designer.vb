@@ -31,6 +31,7 @@ Partial Class frmLogin
         Me.txtPassword = New System.Windows.Forms.TextBox()
         Me.Label1 = New System.Windows.Forms.Label()
         Me.txtMessage = New System.Windows.Forms.Label()
+        Me.btnRecoverPass = New System.Windows.Forms.Button()
         Me.SuspendLayout()
         '
         'btnLogOff
@@ -70,7 +71,7 @@ Partial Class frmLogin
         '
         Me.btnRegister.BackColor = System.Drawing.Color.FromArgb(CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer))
         Me.btnRegister.ForeColor = System.Drawing.Color.Aqua
-        Me.btnRegister.Location = New System.Drawing.Point(178, 112)
+        Me.btnRegister.Location = New System.Drawing.Point(139, 112)
         Me.btnRegister.Name = "btnRegister"
         Me.btnRegister.Size = New System.Drawing.Size(85, 42)
         Me.btnRegister.TabIndex = 4
@@ -118,7 +119,18 @@ Partial Class frmLogin
         Me.txtMessage.Name = "txtMessage"
         Me.txtMessage.Size = New System.Drawing.Size(392, 34)
         Me.txtMessage.TabIndex = 8
-        Me.txtMessage.Text = "."
+        Me.txtMessage.Text = " "
+        '
+        'btnRecoverPass
+        '
+        Me.btnRecoverPass.BackColor = System.Drawing.Color.FromArgb(CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer))
+        Me.btnRecoverPass.ForeColor = System.Drawing.Color.Aqua
+        Me.btnRecoverPass.Location = New System.Drawing.Point(233, 112)
+        Me.btnRecoverPass.Name = "btnRecoverPass"
+        Me.btnRecoverPass.Size = New System.Drawing.Size(85, 42)
+        Me.btnRecoverPass.TabIndex = 9
+        Me.btnRecoverPass.Text = "Recover Password"
+        Me.btnRecoverPass.UseVisualStyleBackColor = False
         '
         'frmLogin
         '
@@ -128,6 +140,7 @@ Partial Class frmLogin
         Me.BackgroundImage = CType(resources.GetObject("$this.BackgroundImage"), System.Drawing.Image)
         Me.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Center
         Me.ClientSize = New System.Drawing.Size(436, 163)
+        Me.Controls.Add(Me.btnRecoverPass)
         Me.Controls.Add(Me.txtMessage)
         Me.Controls.Add(Me.txtUserName)
         Me.Controls.Add(Me.Label1)
@@ -139,7 +152,7 @@ Partial Class frmLogin
         Me.DoubleBuffered = True
         Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)
         Me.Name = "frmLogin"
-        Me.Text = "Portal Authentication System"
+        Me.Text = "Gridcoin Portal Authentication System"
         Me.ResumeLayout(False)
         Me.PerformLayout()
 
@@ -152,4 +165,5 @@ Partial Class frmLogin
     Friend WithEvents txtPassword As System.Windows.Forms.TextBox
     Friend WithEvents Label1 As System.Windows.Forms.Label
     Friend WithEvents txtMessage As System.Windows.Forms.Label
+    Friend WithEvents btnRecoverPass As System.Windows.Forms.Button
 End Class

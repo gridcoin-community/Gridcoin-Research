@@ -129,6 +129,7 @@ extern std::map<uint256, CBlock*> mapOrphanBlocks;
 extern int64_t COIN_YEAR_REWARD;
 extern bool bCryptoLotteryEnabled;
 extern bool bRemotePaymentsEnabled;
+extern bool bResearchAgeEnabled;
 
 // Settings
 extern int64_t nTransactionFee;

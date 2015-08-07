@@ -517,6 +517,11 @@ Public Class Utilization
         Get
         End Get
     End Property
+    Public Sub clsLogOff()
+        If mGRCData Is Nothing Then mGRCData = New GRCSec.GridcoinData
+
+        mGRCData.LogOff(GetSessionGuid)
+    End Sub
     Public ReadOnly Property BoincTotalHostAverageCredits As Double
         Get
         End Get

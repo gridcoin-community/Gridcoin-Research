@@ -70,4 +70,22 @@
     Private Sub txtMessage_Click(sender As System.Object, e As System.EventArgs) Handles txtMessage.Click
 
     End Sub
+
+    Private Sub btnRecoverPass_Click(sender As System.Object, e As System.EventArgs) Handles btnRecoverPass.Click
+        Dim bSuccess As Boolean
+        mGRCData = New GRCSec.GridcoinData
+        If Len(txtUserName.Text) = 0 Then
+            MsgBox("Username must be known", MsgBoxStyle.Critical)
+            Exit Sub
+        End If
+        bSuccess = mGRCData.RecoverPassword(txtUserName.Text)
+        If bSuccess Then
+            MsgBox("Your password has been recovered and a message has been sent to your inbox.  ", MsgBoxStyle.Exclamation)
+            Exit Sub
+        Else
+            MsgBox("Unable to recover password.  Possible reasons: Bad e-mail address on file.", MsgBoxStyle.Critical)
+            Exit Sub
+
+        End If
+    End Sub
 End Class

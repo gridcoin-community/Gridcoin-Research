@@ -650,14 +650,14 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 			}
 	 }
 
-
+	
 
 	//1-20-2015 Ensure this stake is above the minimum threshhold; otherwise, vehemently reject
 	double PORDiff = GetBlockDifficulty(pblock->nBits);
 	//double mint1 = CoinToDouble(Mint);
 	MiningCPID boincblock = DeserializeBoincBlock(pblock->vtx[0].hashBoinc);
 
-	//8-5-2015
+	//8-7-2015
 	if (boincblock.cpid != "INVESTOR")
 	{
     		if (boincblock.projectname == "") 	return error("PoR Project Name invalid");
@@ -668,6 +668,34 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 							boincblock.lastblockhash.c_str(), pblock->vtx[0].hashBoinc.c_str());
 				}
 	}
+
+	//Verify research age in case we staked back to back blocks
+	double out_por = 0;
+	double out_interest=0;
+	double dAccrualAge = 0;
+	double dMagnitudeUnit = 0;
+	double dAvgMagnitude = 0;
+	int64_t nCoinAge = 0;
+	int64_t nFees = 0;		
+	int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, boincblock.cpid, true, pblock->nTime, 
+		pindexBest->nHeight, out_por, out_interest, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+	if (boincblock.cpid != "INVESTOR" && out_por > 1)
+	{
+			// Research Age 8-7-2015
+			if (bResearchAgeEnabled)
+			{
+					//if (!pblock->vtx[1].GetCoinAge(txdb, nCoinAge))        return error("CheckStake[] : %s unable to get coin age for coinstake", pblock->vtx[1].GetHash().ToString().substr(0,10).c_str());
+					if (boincblock.ResearchSubsidy > (out_por+out_interest+1))
+					{
+							return error("CheckStake[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and out_por %f with Out_Interest %f for CPID %s ",
+								(double)boincblock.InterestSubsidy,
+								(double)boincblock.ResearchSubsidy,(double)out_por,(double)out_interest,boincblock.cpid.c_str());
+				
+					}
+		
+			}
+	}
+	
 		
 
 	double total_subsidy = boincblock.ResearchSubsidy + boincblock.InterestSubsidy;

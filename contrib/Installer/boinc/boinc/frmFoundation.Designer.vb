@@ -34,6 +34,8 @@ Partial Class frmFoundation
         Me.ExpensesToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.SubmitExpenseToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.AuthenticationToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
+        Me.ChangePasswordToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
+        Me.LogOnToolStripMenuItem1 = New System.Windows.Forms.ToolStripMenuItem()
         Me.LogOffToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.gbResultsPane.SuspendLayout()
         CType(Me.dgv, System.ComponentModel.ISupportInitialize).BeginInit()
@@ -118,15 +120,27 @@ Partial Class frmFoundation
         '
         'AuthenticationToolStripMenuItem
         '
-        Me.AuthenticationToolStripMenuItem.DropDownItems.AddRange(New System.Windows.Forms.ToolStripItem() {Me.LogOffToolStripMenuItem})
+        Me.AuthenticationToolStripMenuItem.DropDownItems.AddRange(New System.Windows.Forms.ToolStripItem() {Me.ChangePasswordToolStripMenuItem, Me.LogOnToolStripMenuItem1, Me.LogOffToolStripMenuItem})
         Me.AuthenticationToolStripMenuItem.Name = "AuthenticationToolStripMenuItem"
         Me.AuthenticationToolStripMenuItem.Size = New System.Drawing.Size(98, 20)
         Me.AuthenticationToolStripMenuItem.Text = "Authentication"
         '
+        'ChangePasswordToolStripMenuItem
+        '
+        Me.ChangePasswordToolStripMenuItem.Name = "ChangePasswordToolStripMenuItem"
+        Me.ChangePasswordToolStripMenuItem.Size = New System.Drawing.Size(168, 22)
+        Me.ChangePasswordToolStripMenuItem.Text = "Change Password"
+        '
+        'LogOnToolStripMenuItem1
+        '
+        Me.LogOnToolStripMenuItem1.Name = "LogOnToolStripMenuItem1"
+        Me.LogOnToolStripMenuItem1.Size = New System.Drawing.Size(168, 22)
+        Me.LogOnToolStripMenuItem1.Text = "Log On"
+        '
         'LogOffToolStripMenuItem
         '
         Me.LogOffToolStripMenuItem.Name = "LogOffToolStripMenuItem"
-        Me.LogOffToolStripMenuItem.Size = New System.Drawing.Size(152, 22)
+        Me.LogOffToolStripMenuItem.Size = New System.Drawing.Size(168, 22)
         Me.LogOffToolStripMenuItem.Text = "Log Off"
         '
         'frmFoundation
@@ -157,4 +171,6 @@ Partial Class frmFoundation
     Friend WithEvents SubmitExpenseToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents AuthenticationToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents LogOffToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
+    Friend WithEvents ChangePasswordToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
+    Friend WithEvents LogOnToolStripMenuItem1 As System.Windows.Forms.ToolStripMenuItem
 End Class

@@ -1772,7 +1772,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 
 void NetworkTimer()
 {
-	if (GetArg("-fullbore", "false") != "true")	MilliSleep(20);
+	if (GetArg("-fullbore", "false") != "true")	MilliSleep(40);
 	if (mdMachineTimerLast == 0) mdMachineTimerLast = GetAdjustedTime();
 	double elapsed = GetAdjustedTime() - mdMachineTimerLast;
 	mdPORNonce += 1;
@@ -2280,7 +2280,7 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
 {
     {
         LOCK2(cs_main, cs_wallet);
-        printf("CommitTransaction:\n%s", wtxNew.ToString().c_str());
+        if (fDebug) printf("CommitTransaction:\n%s", wtxNew.ToString().c_str());
         {
             // This is only to keep the database open to defeat the auto-flush for the
             // duration of this scope.  This is the only place where this optimization

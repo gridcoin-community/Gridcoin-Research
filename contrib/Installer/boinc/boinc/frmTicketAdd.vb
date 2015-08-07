@@ -107,21 +107,27 @@ Public Class frmTicketAdd
     Public Sub ShowTicket(sId As String)
         txtTicketId.Text = sId
         Call frmTicketAdd_Load(Me, Nothing)
-        PopulateHistory()
-        Me.Show()
-        Dim dr As DataTable = mGetTicket(txtTicketId.Text)
-        If dr Is Nothing Then Exit Sub
-        cmbAssignedTo.Text = dr.Rows(0)("AssignedTo")
-        cmbDisposition.Text = dr.Rows(0)("Disposition")
-        cmbType.Text = dr.Rows(0)("Type")
-        txtSubmittedBy.Text = dr.Rows(0)("SubmittedBy")
-        txtTicketId.Text = sId
-        txtDescription.Text = dr.Rows(0)("Descript")
-        Call PopulateHistory()
-        SetViewMode()
-        Me.TopMost = True
-        Me.Refresh()
-        Me.TopMost = False
+        Try
+
+            PopulateHistory()
+            Me.Show()
+            Dim dr As DataTable = mGetTicket(txtTicketId.Text)
+            If dr Is Nothing Then Exit Sub
+            cmbAssignedTo.Text = dr.Rows(0)("AssignedTo")
+            cmbDisposition.Text = dr.Rows(0)("Disposition")
+            cmbType.Text = dr.Rows(0)("Type")
+            txtSubmittedBy.Text = dr.Rows(0)("SubmittedBy")
+            txtTicketId.Text = sId
+            txtDescription.Text = dr.Rows(0)("Descript")
+            Call PopulateHistory()
+            SetViewMode()
+            Me.TopMost = True
+            Me.Refresh()
+            Me.TopMost = False
+        Catch ex As Exception
+            Log(ex.Message)
+
+        End Try
 
     End Sub
     Private Sub SetViewMode()

@@ -870,7 +870,7 @@ MiningCPID GetNextProject(bool bForce)
 			{
 
 				StructCPID structcpid = mvCPIDs[(*ii).first];
-				if (GetArg("-fullbore", "false") != "true")	MilliSleep(25);
+				if (GetArg("-fullbore", "false") != "true")	MilliSleep(35);
 	
 				if (structcpid.initialized) 
 				{ 
@@ -3089,6 +3089,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 		if (dStakeReward > dCalcStakeReward+1 && !bResearchAgeEnabled)
             return DoS(1, error("ConnectBlock[] : coinstake pays above maximum (actual= %f, vs calculated=%f )", dStakeReward, dCalcStakeReward));
+		if (dStakeReward > dCalcStakeReward*180 && bResearchAgeEnabled)
+            return DoS(1, error("ConnectBlock[ResearchAge] : coinstake pays above maximum (actual= %f, vs calculated=%f )", dStakeReward, dCalcStakeReward*180));
 		
 		if (bb.cpid=="INVESTOR" && dStakeReward > 1)
 		{
@@ -3157,6 +3159,17 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 						return error("ConnectBlock[] : Researchers Interest %f and Research %f and Mint %f with Out_Interest %f for CPID %s does not match calculated research subsidy",
 							(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,(double)mint,(double)OUT_INTEREST,bb.cpid.c_str());
 				
+				}
+				// Research Age 8-7-2015
+				if (bResearchAgeEnabled)
+				{
+						if (mint > (OUT_POR+OUT_INTEREST+1+CoinToDouble(nFees)))
+						{
+							return error("ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and Mint %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
+								(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,(double)mint,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str());
+				
+						}
+		
 				}
 		}
 
@@ -4521,7 +4534,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 31628;
+		nGrandfather = 31895;
 		nNewIndex = 28286;
 		bResearchAgeEnabled = true;
 

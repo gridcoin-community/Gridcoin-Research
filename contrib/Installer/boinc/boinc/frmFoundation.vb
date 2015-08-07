@@ -201,4 +201,15 @@ Public Class frmFoundation
         mGRCData.LogOff(GetSessionGuid)
 
     End Sub
+
+    Private Sub ChangePasswordToolStripMenuItem_Click(sender As System.Object, e As System.EventArgs) Handles ChangePasswordToolStripMenuItem.Click
+        Dim frmP As New frmChangePassword
+        frmP.Show()
+    End Sub
+
+
+    Private Sub LogOnToolStripMenuItem1_Click(sender As System.Object, e As System.EventArgs) Handles LogOnToolStripMenuItem1.Click
+        Dim frmLogon As New frmLogin
+        frmLogon.Show()
+    End Sub
 End Class

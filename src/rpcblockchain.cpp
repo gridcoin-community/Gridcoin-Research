@@ -1023,8 +1023,11 @@ double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out
 		double avg_of_avg = GetAverageInList(avgs,avg_count);
 		if (!bIgnoreBeacons) out_beacon_count = GetCountOf("beacon");
 		out_participant_count = mag_count;
-		if (avg_of_mag < 10 || avg_of_mag > 70000 || avg_of_avg < 50000) return 0;
-		if (!bIgnoreBeacons && (mag_count < out_beacon_count*.94 || mag_count > out_beacon_count*1.06)) return 0;
+		if (avg_of_mag < 10) return -1;
+		if (avg_of_mag > 170000) return -2;
+		if (avg_of_avg < 50000) return -3;
+
+		if (!bIgnoreBeacons && (mag_count < out_beacon_count*.90 || mag_count > out_beacon_count*1.10)) return -4;
 		return avg_of_mag + avg_of_avg;
 	}
 	catch (std::exception &e) 
@@ -1843,11 +1846,18 @@ Value execute(const Array& params, bool fHelp)
 				}
 				else
 				{
+				if (days < 7) 
+				{
+						entry.push_back(Pair("Error","Minimum duration is 7 days; please specify a longer poll duration."));
+						results.push_back(entry);
+				}
+				else
+				{
 					double nBalance = GetTotalBalance();
 				
-					if (nBalance < 10000)
+					if (nBalance < 100000)
 					{
-						entry.push_back(Pair("Error","You must have a balance > 10,000 GRC to create a poll."));
+						entry.push_back(Pair("Error","You must have a balance > 100,000 GRC to create a poll.  Please post the desired poll on cryptocointalk or PM RTM with the poll."));
 						results.push_back(entry);
 					}
 					else
@@ -1877,6 +1887,7 @@ Value execute(const Array& params, bool fHelp)
 
 						}
 				  }
+			   }
 			}
 		}
 
@@ -2649,6 +2660,8 @@ Array MagnitudeReport(std::string cpid)
 		   entry.push_back(Pair("Payment Window",payment_timespan));
 		   results.push_back(entry);
 		   double total_owed = 0;
+		   double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
+		
 		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
 		   {
 				// For each CPID on the network, report:
@@ -2658,26 +2671,52 @@ Array MagnitudeReport(std::string cpid)
 						if (cpid.empty() || (structMag.cpid == cpid))
 						{
 									Object entry;
-									entry.push_back(Pair("CPID",structMag.cpid));
-									entry.push_back(Pair("GRCAddress",structMag.GRCAddress));
-									entry.push_back(Pair("Last Block Paid",structMag.LastBlock));
-									StructCPID DPOR = mvDPOR[structMag.cpid];
-									entry.push_back(Pair("DPOR Magnitude",	structMag.Magnitude));
-									entry.push_back(Pair("Payment Magnitude",structMag.PaymentMagnitude));
-									entry.push_back(Pair("Payment Timespan (Days)",structMag.PaymentTimespan));
-									entry.push_back(Pair("Total Earned (14 days)",structMag.totalowed));
-									entry.push_back(Pair("DPOR Payments (14 days)",structMag.payments));
-									double outstanding = Round(structMag.totalowed - structMag.payments,2);
-									total_owed += outstanding;
-									entry.push_back(Pair("Outstanding Owed (14 days)",outstanding));
-									entry.push_back(Pair("InterestPayments (14 days)",structMag.interestPayments));
-									entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
-									entry.push_back(Pair("Owed",structMag.owed));
-									double nep = Cap(structMag.owed/2, GetMaximumBoincSubsidy(GetAdjustedTime()));
+									//8-7-2015
+									if (bResearchAgeEnabled)
+									{
+										entry.push_back(Pair("CPID",structMag.cpid));
+										entry.push_back(Pair("GRCAddress",structMag.GRCAddress));
+										entry.push_back(Pair("Last Block Paid",structMag.LastBlock));
+										entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
 									
-									entry.push_back(Pair("Daily Paid",structMag.payments/14));
-									entry.push_back(Pair("Daily Owed",structMag.totalowed/14));
-									results.push_back(entry);
+										StructCPID DPOR = mvDPOR[structMag.cpid];
+										entry.push_back(Pair("Magnitude",	structMag.Magnitude));
+										entry.push_back(Pair("Payment Timespan (Days)",structMag.PaymentTimespan));
+										//entry.push_back(Pair("Total Earned (14 days)",structMag.totalowed));
+										entry.push_back(Pair("Research Payments (14 days)",structMag.payments));
+										entry.push_back(Pair("Interest Payments (14 days)",structMag.interestPayments));
+										//entry.push_back(Pair("Owed",structMag.owed));
+									    entry.push_back(Pair("Daily Paid",structMag.payments/14));
+										// Research Age - Calculate Expected 14 Day Owed, and Daily Owed:
+										double dExpected14 = magnitude_unit * structMag.Magnitude * 14;
+										entry.push_back(Pair("Expected Earnings (14 days)", dExpected14));
+										entry.push_back(Pair("Expected Earnings (Daily)", dExpected14/14));
+										results.push_back(entry);
+
+									}
+									else
+									{
+										entry.push_back(Pair("CPID",structMag.cpid));
+										entry.push_back(Pair("GRCAddress",structMag.GRCAddress));
+										entry.push_back(Pair("Last Block Paid",structMag.LastBlock));
+										StructCPID DPOR = mvDPOR[structMag.cpid];
+										entry.push_back(Pair("DPOR Magnitude",	structMag.Magnitude));
+										entry.push_back(Pair("Payment Magnitude",structMag.PaymentMagnitude));
+										entry.push_back(Pair("Payment Timespan (Days)",structMag.PaymentTimespan));
+										entry.push_back(Pair("Total Earned (14 days)",structMag.totalowed));
+										entry.push_back(Pair("DPOR Payments (14 days)",structMag.payments));
+										double outstanding = Round(structMag.totalowed - structMag.payments,2);
+										total_owed += outstanding;
+										entry.push_back(Pair("Outstanding Owed (14 days)",outstanding));
+										entry.push_back(Pair("InterestPayments (14 days)",structMag.interestPayments));
+										entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
+										entry.push_back(Pair("Owed",structMag.owed));
+										//double nep = Cap(structMag.owed/2, GetMaximumBoincSubsidy(GetAdjustedTime()));
+									
+										entry.push_back(Pair("Daily Paid",structMag.payments/14));
+										entry.push_back(Pair("Daily Owed",structMag.totalowed/14));
+										results.push_back(entry);
+									}
 						}
 				}
 
@@ -2685,17 +2724,19 @@ Array MagnitudeReport(std::string cpid)
 							
 	   		Object entry2;
 
-	   		double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
-			entry2.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
-			entry2.push_back(Pair("Grand Total Outstanding Owed",total_owed));
+	   		entry2.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
+
+			if (!bResearchAgeEnabled && cpid.empty()) 			entry2.push_back(Pair("Grand Total Outstanding Owed",total_owed));
 
 			int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
 			int nLookback = BLOCKS_PER_DAY*14; //Daily block count * Lookback in days = 14 days
 			int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
-			entry2.push_back(Pair("Start Block",nMinDepth));
-			entry2.push_back(Pair("End Block",nMaxDepth));
-	
-			results.push_back(entry2);
+			if (cpid.empty())
+			{
+				entry2.push_back(Pair("Start Block",nMinDepth));
+				entry2.push_back(Pair("End Block",nMaxDepth));
+				results.push_back(entry2);
+			}
 									
 			return results;
 }
@@ -3186,6 +3227,8 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
 											//Totals:
 											entry.push_back(Pair("Participants",total_participants));
 											entry.push_back(Pair("Total Shares",total_shares));
+											if (total_participants < 3) BestAnswer = "";
+
 											entry.push_back(Pair("Best Answer",BestAnswer));
 											sExportRow += "<TOTALPARTICIPANTS>" + RoundToString(total_participants,0)
 												+ "</TOTALPARTICIPANTS><TOTALSHARES>" + RoundToString(total_shares,0)
@@ -3686,13 +3729,14 @@ Value listitem(const Array& params, bool fHelp)
 
 	if (sitem == "mymagnitude")
 	{
-			results = MagnitudeReport(GlobalCPUMiningCPID.cpid);
+			results = MagnitudeReport(msPrimaryCPID);
 			return results;
 	}
 
 	if (sitem == "rsa")
 	{
-	    	results = MagnitudeReport(GlobalCPUMiningCPID.cpid);
+	
+	    	results = MagnitudeReport(msPrimaryCPID);
 			return results;
 	}
 

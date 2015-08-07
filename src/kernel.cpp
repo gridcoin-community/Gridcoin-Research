@@ -380,6 +380,8 @@ int64_t GetRSAWeightByCPID(std::string cpid)
 				owed = 5000;
 		}
 	}
+	//Prod ToDo: Update all fTestNet lines to move this to prod; refactor to be nice
+	if (fTestNet && owed > 25000) owed = 25000;
 	int64_t RSA_WEIGHT = owed;
 	return RSA_WEIGHT;
 }
