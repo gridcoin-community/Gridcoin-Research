@@ -427,7 +427,8 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		double dMagnitudeUnit = 0;
 		double dAvgMag = 0;
 		//Halford: Use current time since we are creating a new stake
-		int64_t nNewBlockReward = GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,GetAdjustedTime(),pindexBest->nHeight,out_por,out_interest,dAccrualAge,dMagnitudeUnit,dAvgMag);
+		int64_t nNewBlockReward = GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,pindexBest->nTime,pindexBest->nHeight,"createnewblock",
+			out_por,out_interest,dAccrualAge,dMagnitudeUnit,dAvgMag);
 		
 
 		miningcpid.ResearchSubsidy = out_por;
@@ -677,8 +678,9 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	double dAvgMagnitude = 0;
 	int64_t nCoinAge = 0;
 	int64_t nFees = 0;		
+	//Checking Stake for Create CoinStake 
 	int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, boincblock.cpid, true, pblock->nTime, 
-		pindexBest->nHeight, out_por, out_interest, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+		pindexBest->nHeight,"checkstake", out_por, out_interest, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 	if (boincblock.cpid != "INVESTOR" && out_por > 1)
 	{
 			// Research Age 8-7-2015

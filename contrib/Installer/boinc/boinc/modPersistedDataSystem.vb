@@ -28,6 +28,15 @@ Module modPersistedDataSystem
     Private mclsQHA As New clsQuorumHashingAlgorithm
 
     Private lUseCount As Long = 0
+
+    Public Structure NeuralStructure
+        Public PK As String
+        Public NeuralValue As Double
+        Public Witnesses As Double
+        Public Updated As DateTime
+    End Structure
+    Public mdictNeuralNetworkMemories As Dictionary(Of String, GRCSec.GridcoinData.NeuralStructure)
+
     Public Structure Row
         Public Database As String
         Public Table As String
@@ -61,7 +70,26 @@ Module modPersistedDataSystem
         sOut = Replace(sOut, ",", ".")
         Return sOut
     End Function
+    Public Sub ReconnectToNeuralNetwork()
+        Try
+            mGRCData = New GRCSec.GridcoinData
+
+        Catch ex As Exception
+            Log("Unable to connect to neural network.")
+        End Try
+    End Sub
     Public Function GetMagnitudeContractDetails() As String
+        '8-8-2015: Retrieve true magnitude average from all nodes
+
+        If mdictNeuralNetworkMemories Is Nothing Then
+            Try
+                ReconnectToNeuralNetwork()
+                mdictNeuralNetworkMemories = mGRCData.GetNeuralNetworkQuorumData("magnitudes")
+            Catch ex As Exception
+                Log("Unable to connect to neural network for memories.")
+            End Try
+        End If
+
         Dim surrogateRow As New Row
         surrogateRow.Database = "CPID"
         surrogateRow.Table = "CPIDS"
@@ -69,8 +97,13 @@ Module modPersistedDataSystem
         lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
         Dim sOut As String = ""
         For Each cpid As Row In lstCPIDs
+            Dim dNeuralMagnitude As Double = 0
+            Try
+                dNeuralMagnitude = mdictNeuralNetworkMemories(cpid.PrimaryKey).NeuralValue
+            Catch ex As Exception
+            End Try
             Dim sRow As String = cpid.PrimaryKey + "," + Num(cpid.Magnitude) _
-                                 + "," + Num(cpid.RAC) _
+                                 + "," + Num(dNeuralMagnitude) + "," + Num(cpid.RAC) _
                                  + "," + Trim(cpid.Synced) + "," + Trim(cpid.DataColumn4) _
                                  + "," + Trim(cpid.DataColumn5) + ";"
             sOut += sRow
@@ -309,6 +342,13 @@ Module modPersistedDataSystem
             bMagsDoneLoading = False
 
             Try
+                mGRCData = New GRCSec.GridcoinData
+
+            Catch ex As Exception
+
+            End Try
+           
+            Try
                 mlPercentComplete = 1
                 UpdateMagnitudesPhase1()
 
@@ -394,7 +434,13 @@ Module modPersistedDataSystem
 
         d.Synced = Now
         Store(d)
-
+        Try
+            'Let the neural network know we are updated
+            If sCPID = "" Then sCPID = "INVESTOR"
+            mGRCData.CheckInWithNeuralNetwork(sCPID, "")
+        Catch ex As Exception
+            Log(ex.Message)
+        End Try
     End Sub
     Public Function UpdateSuperblockAgeAndQuorumHash(sAge As String, sQuorumHash As String, sTimestamp As String, sBlock As String, sCPID As String)
         Dim d As New Row
@@ -629,7 +675,13 @@ Module modPersistedDataSystem
 
         lstWhitelist = GetWPC(WhitelistedProjects, ProjCount)
         lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
+        Try
+            mGRCData = New GRCSec.GridcoinData
 
+        Catch ex As Exception
+
+        End Try
+       
         'Update all researchers magnitudes:
         Try
             Dim iRow2 As Long
@@ -665,7 +717,13 @@ Module modPersistedDataSystem
                 cpid.Database = "CPID"
                 cpid.Table = "CPIDS"
                 cpid.Magnitude = Trim(Math.Round(TotalMagnitude, 2))
-                If TotalMagnitude < 1 And TotalMagnitude > 0.25 Then cpid.Magnitude = 1
+                If TotalMagnitude < 1 And TotalMagnitude > 0.25 Then cpid.Magnitude = Trim(1)
+
+                Try
+                    mGRCData.BroadcastNeuralNetworkMemoryValue("magnitudes", cpid.PrimaryKey, Val(cpid.Magnitude), False)
+                Catch ex As Exception
+
+                End Try
                 Store(cpid)
             Next
             mlPercentComplete = 0
@@ -1168,10 +1226,10 @@ Module modPersistedDataSystem
 
             Dim sReport As String = ""
             Dim sReportRow As String = ""
-            Dim sHeader As String = "CPID,Magnitude,TotalRAC,Synced Til,Address,CPID_Valid"
+            Dim sHeader As String = "CPID,LocalMagnitude,NeuralMagnitude,TotalRAC,Synced Til,Address,CPID_Valid"
             sReport += sHeader + vbCrLf
             Dim grr As New GridcoinReader.GridcoinRow
-            Dim sHeading As String = "CPID;Magnitude;TotalRAC;Synced Til;Address;CPID_Valid"
+            Dim sHeading As String = "CPID;LocalMagnitude;NeuralMagnitude;TotalRAC;Synced Til;Address;CPID_Valid"
             Dim vHeading() As String = Split(sHeading, ";")
             Dim sData As String = modPersistedDataSystem.GetMagnitudeContractDetails()
             Dim vData() As String = Split(sData, ";")

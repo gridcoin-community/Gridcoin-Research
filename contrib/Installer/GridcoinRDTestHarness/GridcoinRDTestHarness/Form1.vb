@@ -103,7 +103,6 @@ Public Class Form1
         'Get Md5 Bytes
 
 
-        'https://www.virustotal.com/latest-scan/md5
 
         mU = New Utilization
         mU.clsLogOff()
@@ -113,12 +112,10 @@ Public Class Form1
 
         Dim sTestNet As String = "TESTNET"
         mU.SetTestNetFlag(sTestNet)
-        mU.ShowFoundation()
-        mU.ShowVotingConsole()
-        mU.ShowTicketList()
-
-
-        'mU.ShowMiningConsole()
+        '  mU.ShowFoundation()
+        '  mU.ShowVotingConsole()
+        '  mU.ShowTicketList()
+     
 
 
         Exit Sub

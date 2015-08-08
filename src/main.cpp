@@ -44,7 +44,7 @@ extern std::string VectorToString(std::vector<unsigned char> v);
 extern bool UnusualActivityReport();
 extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
-extern int64_t ComputeResearchAccrual(std::string cpid, int nStakeHeight, int64_t nStakeTime, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
+extern int64_t ComputeResearchAccrual(std::string cpid, int nStakeHeight, int64_t nStakeTime, std::string operation, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
 extern bool UpdateNeuralNetworkQuorumData();
 
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
@@ -2123,8 +2123,9 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 
 
 // miner's coin stake reward based on coin age spent (coin-days)
+
 int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, 
-	bool VerifyingBlock, int64_t locktime, int nStakeHeight, double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
+	bool VerifyingBlock, int64_t locktime, int nStakeHeight, std::string operation, double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
 
 	// 7-22-2015 - PRODUCTION
@@ -2160,7 +2161,7 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 	else
 	{
 			// Future Research Age Subsidy - TESTNET
-			int64_t nBoinc = ComputeResearchAccrual(cpid, nStakeHeight, locktime, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
+			int64_t nBoinc = ComputeResearchAccrual(cpid, nStakeHeight, locktime, operation, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
 			int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
 			// ToDo For Prod: For any subsidy < 30 day duration, ensure 100% that we have a start magnitude and an end magnitude, otherwise make subsidy 0
 			// ToDo For Prod: For any subsidy > 30 day duration, ensure 100% that we have a midpoint magnitude in Every Period, otherwise, make subsidy 0
@@ -3105,7 +3106,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
     		double dAccrualMagnitudeUnit = 0;
 	    	double dAccrualMagnitude = 0;
 
-			double dCalculatedResearchReward = CoinToDouble(GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, pindex->nHeight, 
+			double dCalculatedResearchReward = CoinToDouble(GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, pindex->nHeight, "connectblock_investor",
 					OUT_POR, OUT_INTEREST_OWED, dAccrualAge, dAccrualMagnitudeUnit, dAccrualMagnitude));
 			if (dStakeReward > (OUT_INTEREST_OWED+1+nFees) )
 			{
@@ -3154,8 +3155,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		double dAvgMagnitude = 0;
 
 	    // ResearchAge 1: 8-8-2015
-		int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, pindex->nHeight, OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
-
+		int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, pindex->nHeight, "connectblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 		if (bb.cpid != "INVESTOR" && dStakeReward > 1)
 		{
 				if ((bb.ResearchSubsidy+bb.InterestSubsidy+1) < dStakeReward)
@@ -3164,9 +3164,9 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 							(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,(double)mint,(double)OUT_INTEREST,bb.cpid.c_str());
 				
 				}
-				if (bResearchAgeEnabled)
+				if (bResearchAgeEnabled && IsLockTimeWithinMinutes(GetBlockTime(),60))
 				{
-						if (dStakeReward > (OUT_POR+OUT_INTEREST+1+CoinToDouble(nFees)))
+						if (dStakeReward > ((OUT_POR*1.15)+OUT_INTEREST+1+CoinToDouble(nFees)))
 						{
 							return error("ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
 								(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str());
@@ -4537,7 +4537,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 31920;
+		nGrandfather = 31966;
 		nNewIndex = 28286;
 		bResearchAgeEnabled = true;
 
@@ -5913,7 +5913,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 8-5-2015
-		if (pfrom->nVersion < 180290 && fTestNet)
+		if (pfrom->nVersion < 180291 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -8437,7 +8437,7 @@ double GRCMagnitudeUnit(int64_t locktime)
 }
 
 
-int64_t ComputeResearchAccrual(std::string cpid, int nStakeHeight, int64_t nStakeTime, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
+int64_t ComputeResearchAccrual(std::string cpid, int nStakeHeight, int64_t nStakeTime, std::string operation, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
 	double dCurrentMagnitude = CalculatedMagnitude2(cpid, nStakeTime, false);
 	CBlockIndex* pHistorical = GetHistoricalMagnitude(cpid, nStakeHeight);
@@ -8452,8 +8452,9 @@ int64_t ComputeResearchAccrual(std::string cpid, int nStakeHeight, int64_t nStak
 	dMagnitudeUnit = GRCMagnitudeUnit(nStakeTime);
 	// TODO: If the accrual age is > 30 days, grab a snapshot from a superblock at the midpoint to make the avg magnitude accurate:
 	int64_t Accrual = ((int64_t)(dAccrualAge*AvgMagnitude*dMagnitudeUnit)*COIN);
-	if (fDebug3 && LessVerbose(50)) printf("Accrual %f, StakeHeight %f,HistoryHeight%f,  AccrualAge %f, AvgMag %f, MagUnit %f \r\n",
-		CoinToDouble(Accrual),(double)nStakeHeight,		
+	double verbosity = (operation == "createnewblock" || operation == "createcoinstake") ? 10 : 1000;
+	if (fDebug3 && LessVerbose(verbosity)) printf(" Operation %s, Accrual %f, StakeHeight %f, HistoryHeight%f,  AccrualAge %f, AvgMag %f, MagUnit %f \r\n",
+		operation.c_str(),CoinToDouble(Accrual),(double)nStakeHeight,		
 		(double)pHistorical->nHeight,	dAccrualAge,AvgMagnitude,dMagnitudeUnit);
 	return Accrual;
 }

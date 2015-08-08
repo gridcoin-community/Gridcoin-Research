@@ -229,28 +229,23 @@ Public Class frmMining
         InitializeComponent()
     End Sub
 
-
+    
     Public Sub PopulateNeuralData()
 
         Dim sReport As String = ""
         Dim sReportRow As String = ""
 
-        Dim sHeader As String = "CPID,Magnitude,Total RAC,Synced Til,Address,CPID Valid"
+        Dim sHeader As String = "CPID,Local Magnitude,Neural Magnitude,Total RAC,Synced Til,Address,CPID Valid"
         sReport += sHeader + vbCrLf
-
         dgv.Rows.Clear()
         dgv.Columns.Clear()
         dgv.BackgroundColor = Drawing.Color.Black
         dgv.ForeColor = Drawing.Color.Lime
         Dim grr As New GridcoinReader.GridcoinRow
-        Dim sHeading As String = "CPID;Magnitude;Total RAC;Synced Til;Address;CPID Valid"
-
+        Dim sHeading As String = "CPID;Local Magnitude;Neural Magnitude;Total RAC;Synced Til;Address;CPID Valid"
         Dim vHeading() As String = Split(sHeading, ";")
-
         PopulateHeadings(vHeading, dgv, False)
-
         Dim sData As String = modPersistedDataSystem.GetMagnitudeContractDetails()
-
         Dim vData() As String = Split(sData, ";")
         Dim iRow As Long = 0
         Dim sValue As String
@@ -267,7 +262,7 @@ Public Class frmMining
                 Dim vRow() As String = Split(vData(y), ",")
                 sValue = vRow(x)
                 'Sort numerically:
-                If x = 1 Or x = 2 Then
+                If x = 1 Or x = 2 Or x = 3 Then
                     dgv.Rows(iRow).Cells(x).Value = Val(sValue)
                 Else
                     dgv.Rows(iRow).Cells(x).Value = sValue
