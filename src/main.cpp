@@ -4537,7 +4537,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 31895;
+		nGrandfather = 31920;
 		nNewIndex = 28286;
 		bResearchAgeEnabled = true;
 
@@ -5913,7 +5913,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 8-5-2015
-		if (pfrom->nVersion < 180288 && fTestNet)
+		if (pfrom->nVersion < 180290 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -8443,8 +8443,8 @@ int64_t ComputeResearchAccrual(std::string cpid, int nStakeHeight, int64_t nStak
 	CBlockIndex* pHistorical = GetHistoricalMagnitude(cpid, nStakeHeight);
 	if (pHistorical->nHeight <= nNewIndex || pHistorical->nMagnitude==0 || pHistorical->nTime == 0)
 	{
-		//No prior block exists...
-		return 0;
+		//No prior block exists... Newbies get .01 age to bootstrap the CPID (otherwise they will not have any prior block to refer to, thus cannot get started):
+		return dCurrentMagnitude > 0 ? ((dCurrentMagnitude/100)*COIN) : 0;
 	}
 	AvgMagnitude = (pHistorical->nMagnitude + dCurrentMagnitude) / 2;
 	dAccrualAge = ((double)nStakeTime - (double)pHistorical->nTime) / 86400;
@@ -8452,9 +8452,9 @@ int64_t ComputeResearchAccrual(std::string cpid, int nStakeHeight, int64_t nStak
 	dMagnitudeUnit = GRCMagnitudeUnit(nStakeTime);
 	// TODO: If the accrual age is > 30 days, grab a snapshot from a superblock at the midpoint to make the avg magnitude accurate:
 	int64_t Accrual = ((int64_t)(dAccrualAge*AvgMagnitude*dMagnitudeUnit)*COIN);
-	if (fDebug3 && LessVerbose(25)) printf("Accrual %f, StakeHeight %f,HistoryHeight%f,  AccrualAge %f, AvgMag %f, MagUnit %f \r\n",
+	if (fDebug3 && LessVerbose(50)) printf("Accrual %f, StakeHeight %f,HistoryHeight%f,  AccrualAge %f, AvgMag %f, MagUnit %f \r\n",
 		CoinToDouble(Accrual),(double)nStakeHeight,		
-		(double)pHistorical->nHeight,		dAccrualAge,AvgMagnitude,dMagnitudeUnit);
+		(double)pHistorical->nHeight,	dAccrualAge,AvgMagnitude,dMagnitudeUnit);
 	return Accrual;
 }
 
