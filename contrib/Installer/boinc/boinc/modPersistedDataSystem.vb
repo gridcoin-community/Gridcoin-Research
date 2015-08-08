@@ -84,7 +84,8 @@ Module modPersistedDataSystem
         If mdictNeuralNetworkMemories Is Nothing Then
             Try
                 ReconnectToNeuralNetwork()
-                mdictNeuralNetworkMemories = mGRCData.GetNeuralNetworkQuorumData("magnitudes")
+                Dim sMemoryName = IIf(mbTestNet, "magnitudes_testnet", "magnitudes")
+                mdictNeuralNetworkMemories = mGRCData.GetNeuralNetworkQuorumData(sMemoryName)
             Catch ex As Exception
                 Log("Unable to connect to neural network for memories.")
             End Try
@@ -681,7 +682,8 @@ Module modPersistedDataSystem
         Catch ex As Exception
 
         End Try
-       
+        Dim sMemoryName = IIf(mbTestNet, "magnitudes_testnet", "magnitudes")
+
         'Update all researchers magnitudes:
         Try
             Dim iRow2 As Long
@@ -720,7 +722,7 @@ Module modPersistedDataSystem
                 If TotalMagnitude < 1 And TotalMagnitude > 0.25 Then cpid.Magnitude = Trim(1)
 
                 Try
-                    mGRCData.BroadcastNeuralNetworkMemoryValue("magnitudes", cpid.PrimaryKey, Val(cpid.Magnitude), False)
+                    mGRCData.BroadcastNeuralNetworkMemoryValue(sMemoryName, cpid.PrimaryKey, Val(cpid.Magnitude), False)
                 Catch ex As Exception
 
                 End Try
