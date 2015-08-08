@@ -1925,6 +1925,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	msMiningErrors5="";
 	msMiningErrors6="";
 	
+	int64_t nBlockTime = 0;
 
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
     {
@@ -1943,7 +1944,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
                 continue;
         }
 
-	
+		nBlockTime = block.GetBlockTime();
+
         static int nMaxStakeSearchInterval = 60;
         if (block.GetBlockTime() + nStakeMinAge > txNew.nTime - nMaxStakeSearchInterval)
             continue; // only count coins meeting min age requirement
@@ -2108,10 +2110,11 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		double dAccrualMagnitudeUnit = 0;
 		double dAccrualMagnitude = 0;
 		
-		// ************************************************* CREATE PROOF OF RESEARCH REWARD ****************************** R HALFORD *************** 7-22-2015 *******************************
-
+		// ************************************************* CREATE PROOF OF RESEARCH REWARD ****************************** R HALFORD *************** 8-8-2015 *******************************
+		// ResearchAge 2
+		// Note: Since research Age must be exact, we need to transmit the Block nTime here so it matches AcceptBlock
         int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,
-			GetAdjustedTime(),pindexBest->nHeight,OUT_POR,out_interest,dAccrualAge,dAccrualMagnitudeUnit,dAccrualMagnitude);
+			nBlockTime,pindexBest->nHeight,OUT_POR,out_interest,dAccrualAge,dAccrualMagnitudeUnit,dAccrualMagnitude);
 
 		//7-12-2015 Accrual System - Reserved for Future Use
 		//double dAccrualReward = Accrual(GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.Magnitude,pindexPrev->nHeight,GetAdjustedTime(),dAccrualAge,dAccrualMagnitudeUnit,dAccrualMagnitude);

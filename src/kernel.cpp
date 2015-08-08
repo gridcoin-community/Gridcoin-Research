@@ -345,7 +345,7 @@ double OwedByAddress(std::string address)
 
 int64_t GetRSAWeightByCPID(std::string cpid)
 {
-	double owed = 0;
+	double weight = 0;
 	if (cpid=="") return 0;
 	if (mvMagnitudes.size() > 0)
 	{
@@ -356,20 +356,22 @@ int64_t GetRSAWeightByCPID(std::string cpid)
 						double mag_accuracy = UntrustedHost.Accuracy;
 						if (mag_accuracy >= 0 && mag_accuracy <= 5)
 						{
-							owed=25000;
+							weight=25000;
 						}	
 						else if (mag_accuracy > 5) 
 						{
-								owed = (UntrustedHost.owed*14) + UntrustedHost.Magnitude;
+								weight = (UntrustedHost.owed*14) + UntrustedHost.Magnitude;
 								//Prod ToDo: Move this line to prod during next mandatory
-								if (fTestNet && owed < 0) owed = 0;
+								if (fTestNet && weight < 0) weight = 0;
 						}
+
+						if (bResearchAgeEnabled) weight = UntrustedHost.Magnitude;
 			}
 			else
 			{
 				if (cpid.length() > 5 && cpid != "INVESTOR")
 				{
-						owed = 25000;
+						weight = 25000;
 				}
 			}
 	}
@@ -377,12 +379,13 @@ int64_t GetRSAWeightByCPID(std::string cpid)
 	{
 		if (cpid.length() > 5 && cpid != "INVESTOR")
 		{
-				owed = 5000;
+				weight = 5000;
 		}
 	}
 	//Prod ToDo: Update all fTestNet lines to move this to prod; refactor to be nice
-	if (fTestNet && owed > 25000) owed = 25000;
-	int64_t RSA_WEIGHT = owed;
+	if (fTestNet && weight > 25000) weight = 25000;
+	
+	int64_t RSA_WEIGHT = weight;
 	return RSA_WEIGHT;
 }
 

@@ -2128,7 +2128,7 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 {
 
 	// 7-22-2015 - PRODUCTION
-	if (!fTestNet)
+	if (!bResearchAgeEnabled)
 	{
 			int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
 			int64_t nBoinc    = GetProofOfResearchReward(cpid,VerifyingBlock);
@@ -2162,6 +2162,10 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 			// Future Research Age Subsidy - TESTNET
 			int64_t nBoinc = ComputeResearchAccrual(cpid, nStakeHeight, locktime, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
 			int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
+			// ToDo For Prod: For any subsidy < 30 day duration, ensure 100% that we have a start magnitude and an end magnitude, otherwise make subsidy 0
+			// ToDo For Prod: For any subsidy > 30 day duration, ensure 100% that we have a midpoint magnitude in Every Period, otherwise, make subsidy 0
+			// ToDo For Prod: Ensure no magnitudes are out of bounds to ensure we do not generate an insane payment
+			// ToDo For Prod: Any subsidy with a duration wider than 6 months should not be paid
 			int64_t maxStakeReward = GetProofOfStakeMaxReward(nCoinAge, nFees, locktime)*180;
 			if (nBoinc > maxStakeReward) nBoinc = maxStakeReward;
 			int64_t nSubsidy = nInterest + nBoinc;
@@ -3149,7 +3153,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		double dMagnitudeUnit = 0;
 		double dAvgMagnitude = 0;
 
-	
+	    // ResearchAge 1: 8-8-2015
 		int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, pindex->nHeight, OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 
 		if (bb.cpid != "INVESTOR" && dStakeReward > 1)
@@ -3160,13 +3164,12 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 							(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,(double)mint,(double)OUT_INTEREST,bb.cpid.c_str());
 				
 				}
-				// Research Age 8-7-2015
 				if (bResearchAgeEnabled)
 				{
-						if (mint > (OUT_POR+OUT_INTEREST+1+CoinToDouble(nFees)))
+						if (dStakeReward > (OUT_POR+OUT_INTEREST+1+CoinToDouble(nFees)))
 						{
-							return error("ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and Mint %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-								(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,(double)mint,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str());
+							return error("ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
+								(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str());
 				
 						}
 		
@@ -5191,7 +5194,7 @@ void AddNetworkMagnitude(double height, double LockTime, std::string cpid, Minin
 
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 {
-	//7-26-2015
+	//8-8-2015
     if (nBestHeight < 15) 
 	{
 		mvApplicationCacheTimestamp["nGRCTime"] = GetAdjustedTime();
@@ -5203,6 +5206,7 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 	int64_t nGRCTime = 0;
 	int64_t nCPIDTime = 0;
 	CBlock block;
+	int64_t nStart = GetTimeMillis();
 	LOCK(cs_main);
 	{
 		    int nMaxDepth = nBestHeight;
@@ -5240,6 +5244,9 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 	}
 	int64_t EarliestStakedWalletTx = GetEarliestWalletTransaction();
 	if (EarliestStakedWalletTx > 0 && EarliestStakedWalletTx < nGRCTime) nGRCTime = EarliestStakedWalletTx;
+	
+	printf("Loaded staketime from index in %f", (double)(GetTimeMillis() - nStart));
+    
 	printf("CPIDTime %f, GRCTime %f, WalletTime %f \r\n",(double)nCPIDTime,(double)nGRCTime,(double)EarliestStakedWalletTx);
 	if (nGRCTime==0)  nGRCTime = GetAdjustedTime();
 	if (nCPIDTime==0) nCPIDTime = GetAdjustedTime();
@@ -5570,7 +5577,7 @@ void PrintBlockTree()
 bool LoadExternalBlockFile(FILE* fileIn)
 {
     int64_t nStart = GetTimeMillis();
-
+	
     int nLoaded = 0;
     {
         LOCK(cs_main);
@@ -5906,7 +5913,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 8-5-2015
-		if (pfrom->nVersion < 180287 && fTestNet)
+		if (pfrom->nVersion < 180288 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -8445,7 +8452,9 @@ int64_t ComputeResearchAccrual(std::string cpid, int nStakeHeight, int64_t nStak
 	dMagnitudeUnit = GRCMagnitudeUnit(nStakeTime);
 	// TODO: If the accrual age is > 30 days, grab a snapshot from a superblock at the midpoint to make the avg magnitude accurate:
 	int64_t Accrual = ((int64_t)(dAccrualAge*AvgMagnitude*dMagnitudeUnit)*COIN);
-	//if (fDebug3) printf("Accrual  StakeHeight %f,HistoryHeight%f,  AccrualAge %f, AvgMag %f, MagUnit %f \r\n",(double)nStakeHeight,		(double)pHistorical->nHeight,		dAccrualAge,AvgMagnitude,dMagnitudeUnit);
+	if (fDebug3 && LessVerbose(25)) printf("Accrual %f, StakeHeight %f,HistoryHeight%f,  AccrualAge %f, AvgMag %f, MagUnit %f \r\n",
+		CoinToDouble(Accrual),(double)nStakeHeight,		
+		(double)pHistorical->nHeight,		dAccrualAge,AvgMagnitude,dMagnitudeUnit);
 	return Accrual;
 }
 
@@ -8460,11 +8469,15 @@ CBlockIndex* GetHistoricalMagnitude(std::string cpid,int nStartHeight)
        pindex = pindex->pprev;
 	}
 	// Starting at the block prior to StartHeight, find the last instance of the CPID in the chain:
-    while (pindex->nHeight > nNewIndex)
+	// Limit lookback to 6 months
+	int nMinIndex = pindexBest->nHeight-(6*30*1000);
+	if (nMinIndex < 2) nMinIndex=2;
+    while (pindex->nHeight > nNewIndex && pindex->nHeight > nMinIndex)
 	{
-        pindex = pindex->pprev;
-		//8-5-2015; R HALFORD; Find the last block the CPID staked with a research subsidy (IE dont count interest blocks)
+  	    //8-5-2015; R HALFORD; Find the last block the CPID staked with a research subsidy (IE dont count interest blocks)
 		if (pindex->sCPID == cpid && (pindex->nResearchSubsidy > 0)) return pindex;
+	    pindex = pindex->pprev;
+	
 	}
     return pindexGenesisBlock;
   
