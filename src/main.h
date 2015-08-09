@@ -101,6 +101,8 @@ extern std::map<std::string, double> mvNeuralNetworkHash;
 extern std::map<std::string, double> mvNeuralVersion;
 
 extern std::map<std::string, StructCPID> mvDPOR;
+extern std::map<std::string, StructCPID> mvResearchAge;
+
 extern CScript COINBASE_FLAGS;
 extern CCriticalSection cs_main;
 extern std::map<uint256, CBlockIndex*> mapBlockIndex;
@@ -223,7 +225,11 @@ unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfS
 int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height);
 
 int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, 
-	bool VerifyingBlock, int64_t locktime, int nStakeHeight, std::string operation, double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
+	bool VerifyingBlock, int64_t locktime, CBlockIndex* pindexLast,
+	std::string operation, double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
+
+
+
 
 unsigned int ComputeMinWork(unsigned int nBase, int64_t nTime);
 unsigned int ComputeMinStake(unsigned int nBase, int64_t nTime, unsigned int nBlockTime);

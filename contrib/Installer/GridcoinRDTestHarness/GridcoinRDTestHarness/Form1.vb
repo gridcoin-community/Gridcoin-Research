@@ -115,7 +115,8 @@ Public Class Form1
         '  mU.ShowFoundation()
         '  mU.ShowVotingConsole()
         '  mU.ShowTicketList()
-     
+        mU.ShowMiningConsole()
+
 
 
         Exit Sub

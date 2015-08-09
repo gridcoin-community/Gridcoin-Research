@@ -427,7 +427,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		double dMagnitudeUnit = 0;
 		double dAvgMag = 0;
 		//Halford: Use current time since we are creating a new stake
-		int64_t nNewBlockReward = GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,pindexBest->nTime,pindexBest->nHeight,"createnewblock",
+		int64_t nNewBlockReward = GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,pindexBest->nTime,pindexBest,"createnewblock",
 			out_por,out_interest,dAccrualAge,dMagnitudeUnit,dAvgMag);
 		
 
@@ -658,7 +658,6 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	//double mint1 = CoinToDouble(Mint);
 	MiningCPID boincblock = DeserializeBoincBlock(pblock->vtx[0].hashBoinc);
 
-	//8-7-2015
 	if (boincblock.cpid != "INVESTOR")
 	{
     		if (boincblock.projectname == "") 	return error("PoR Project Name invalid");
@@ -679,16 +678,23 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	int64_t nCoinAge = 0;
 	int64_t nFees = 0;		
 	//Checking Stake for Create CoinStake 
-	int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, boincblock.cpid, true, pblock->nTime, 
-		pindexBest->nHeight,"checkstake", out_por, out_interest, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+	int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, boincblock.cpid, true, pindexBest->nTime, 
+		pindexBest,"checkstake", out_por, out_interest, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+
+
+
 	if (boincblock.cpid != "INVESTOR" && out_por > 1)
 	{
-			// Research Age 8-7-2015
+			// Research Age 8-9-2015
 			if (bResearchAgeEnabled)
 			{
 					//if (!pblock->vtx[1].GetCoinAge(txdb, nCoinAge))        return error("CheckStake[] : %s unable to get coin age for coinstake", pblock->vtx[1].GetHash().ToString().substr(0,10).c_str());
 					if (boincblock.ResearchSubsidy > (out_por+out_interest+1))
 					{
+						    if (fDebug3) printf("CheckStake[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and out_por %f with Out_Interest %f for CPID %s ",
+								(double)boincblock.InterestSubsidy,
+								(double)boincblock.ResearchSubsidy,(double)out_por,(double)out_interest,boincblock.cpid.c_str());
+			
 							return error("CheckStake[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and out_por %f with Out_Interest %f for CPID %s ",
 								(double)boincblock.InterestSubsidy,
 								(double)boincblock.ResearchSubsidy,(double)out_por,(double)out_interest,boincblock.cpid.c_str());
@@ -719,8 +725,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
         return error("CheckStake() : proof-of-stake checking failed");
 	}
 
-
-
+	
 	
 
 
@@ -740,8 +745,8 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
         LOCK(cs_main);
         if (pblock->hashPrevBlock != hashBestChain)
 		{
-			msMiningErrors6="CheckStake(): Generated block is stale.";
-            return error("CheckStake() : generated block is stale");
+			msMiningErrors6="CheckStake[]: Generated block is stale.";
+            return error("CheckStake[] : generated block is stale");
 		}
 
 		
@@ -759,7 +764,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 			if (!ProcessBlock(NULL, pblock, true))
 			{
 				msMiningErrors6="Block vehemently rejected.";
-				return error("CheckStake() : ProcessBlock (by me), but block not accepted");
+				return error("CheckStake[] : ProcessBlock (by me), but block not accepted");
 			}
 		}
     }

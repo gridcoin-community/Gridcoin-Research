@@ -2114,11 +2114,10 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		// ResearchAge 2
 		// Note: Since research Age must be exact, we need to transmit the Block nTime here so it matches AcceptBlock
         int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,
-			pindexBest->nTime,pindexBest->nHeight,"createcoinstake",OUT_POR,out_interest,dAccrualAge,dAccrualMagnitudeUnit,dAccrualMagnitude);
+			pindexBest->nTime,pindexBest,"createcoinstake",OUT_POR,out_interest,dAccrualAge,dAccrualMagnitudeUnit,dAccrualMagnitude);
 
 		//7-12-2015 Accrual System - Reserved for Future Use
-		//double dAccrualReward = Accrual(GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.Magnitude,pindexPrev->nHeight,GetAdjustedTime(),dAccrualAge,dAccrualMagnitudeUnit,dAccrualMagnitude);
-
+	
 		MiningCPID miningcpid = GetNextProject(false);
 		uint256 pbh = 0;
 		if (pindexPrev) pbh=pindexPrev->GetBlockHash();

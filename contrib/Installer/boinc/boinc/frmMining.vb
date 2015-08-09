@@ -497,7 +497,23 @@ Public Class frmMining
     Private Sub btnRefresh_Click(sender As System.Object, e As System.EventArgs) Handles btnRefresh.Click
         PopulateNeuralData()
         Call OneMinuteUpdate()
+        If ((Rnd(1) * 1000) < 333) Then
+            'Ask the other nodes what the averages are...
+            pbSync.Visible = True
+            pbSync.Maximum = 100
+            pbSync.Value = 50
+            Try
+                ReconnectToNeuralNetwork()
+                Dim sMemoryName = IIf(mbTestNet, "magnitudes_testnet", "magnitudes")
+                mdictNeuralNetworkMemories = mGRCData.GetNeuralNetworkQuorumData(sMemoryName)
+            Catch ex As Exception
+                Log("Unable to connect to neural network for memories.")
+            End Try
+            Threading.Thread.Sleep(10)
+            pbSync.Value = 0
+            pbSync.Visible = False
 
+        End If
     End Sub
 
     Private Sub TimerSync_Tick(sender As System.Object, e As System.EventArgs) Handles TimerSync.Tick

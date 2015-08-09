@@ -2671,12 +2671,10 @@ Array MagnitudeReport(std::string cpid)
 						if (cpid.empty() || (structMag.cpid == cpid))
 						{
 									Object entry;
-									//8-7-2015
 									if (bResearchAgeEnabled)
 									{
 										entry.push_back(Pair("CPID",structMag.cpid));
 										entry.push_back(Pair("GRCAddress",structMag.GRCAddress));
-										entry.push_back(Pair("Last Block Paid",structMag.LastBlock));
 										entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
 									
 										StructCPID DPOR = mvDPOR[structMag.cpid];
@@ -2691,6 +2689,12 @@ Array MagnitudeReport(std::string cpid)
 										double dExpected14 = magnitude_unit * structMag.Magnitude * 14;
 										entry.push_back(Pair("Expected Earnings (14 days)", dExpected14));
 										entry.push_back(Pair("Expected Earnings (Daily)", dExpected14/14));
+										StructCPID stCPID = GetInitializedStructCPID2(structMag.cpid,mvResearchAge);
+										entry.push_back(Pair("Lifetime Interest Paid", stCPID.InterestSubsidy));
+										entry.push_back(Pair("Lifetime Research Paid", stCPID.ResearchSubsidy));
+										entry.push_back(Pair("Last Blockhash Paid", stCPID.BlockHash));
+										entry.push_back(Pair("Last Block Paid",stCPID.LastBlock));
+										
 										results.push_back(entry);
 
 									}
@@ -3099,7 +3103,8 @@ Array GetJsonVoteDetailsReport(std::string pollname)
     entry.push_back(Pair("Votes","Votes Report " + pollname));
 	entry.push_back(Pair("MoneySupplyFactor",RoundToString(MoneySupplyFactor,2)));
 
-	std::string header = "GRCAddress,CPID,Answer,ShareType";
+	std::string header = "GRCAddress,CPID,Question,Answer,ShareType";
+
 	entry.push_back(Pair(header,"Shares"));
 									
 	int iRow = 0;
@@ -3112,6 +3117,10 @@ Array GetJsonVoteDetailsReport(std::string pollname)
 					{
 								std::string contract = mvApplicationCache[(*ii).first];
 								std::string Title = ExtractXML(contract,"<TITLE>","</TITLE>");
+
+								std::string OriginalContract = GetPollContractByTitle("poll",Title);
+								std::string Question = ExtractXML(OriginalContract,"<QUESTION>","</QUESTION>");
+
 								std::string VoterAnswer = ExtractXML(contract,"<ANSWER>","</ANSWER>");
 								std::string GRCAddress = ExtractXML(contract,"<GRCADDRESS>","</GRCADDRESS>");
 								std::string CPID = ExtractXML(contract,"<CPID>","</CPID>");
@@ -3134,7 +3143,7 @@ Array GetJsonVoteDetailsReport(std::string pollname)
 										total_shares += shares;
 										participants += (double)((double)1/(double)vVoterAnswers.size());
 										iRow++;
-										std::string voter = GRCAddress + "," + CPID + "," + vVoterAnswers[x] + "," + sShareType;
+										std::string voter = GRCAddress + "," + CPID + "," + Question + "," + vVoterAnswers[x] + "," + sShareType;
 										entry.push_back(Pair(voter,RoundToString(shares,0)));
 									}
 								}

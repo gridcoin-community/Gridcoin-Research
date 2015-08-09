@@ -44,7 +44,12 @@ extern std::string VectorToString(std::vector<unsigned char> v);
 extern bool UnusualActivityReport();
 extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
-extern int64_t ComputeResearchAccrual(std::string cpid, int nStakeHeight, int64_t nStakeTime, std::string operation, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
+
+
+extern int64_t ComputeResearchAccrual(std::string cpid, std::string operation,CBlockIndex* pindexLast, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
+
+
+
 extern bool UpdateNeuralNetworkQuorumData();
 
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
@@ -72,10 +77,12 @@ extern std::string PubKeyToAddress(const CScript& scriptPubKey);
 extern void IncrementNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress,double distance);
 extern bool LoadSuperblock(std::string data, int64_t nTime, double height);
 
-extern CBlockIndex* GetHistoricalMagnitude(std::string cpid,int nStartHeight);
+
+extern CBlockIndex* GetHistoricalMagnitude(std::string cpid);
 
 extern double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
 extern StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
+
 extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 extern double GetOwedAmount(std::string cpid);
 extern double Round(double d, int place);
@@ -253,6 +260,7 @@ std::map<std::string, double> mvNeuralNetworkHash;
 std::map<std::string, double> mvNeuralVersion;
 
 std::map<std::string, StructCPID> mvDPOR;
+std::map<std::string, StructCPID> mvResearchAge;
 
 extern enum Checkpoints::CPMode CheckpointsMode;
 
@@ -2125,7 +2133,8 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 // miner's coin stake reward based on coin age spent (coin-days)
 
 int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, 
-	bool VerifyingBlock, int64_t locktime, int nStakeHeight, std::string operation, double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
+	bool VerifyingBlock, int64_t locktime, CBlockIndex* pindexLast, std::string operation, 
+	double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
 
 	// 7-22-2015 - PRODUCTION
@@ -2161,7 +2170,9 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 	else
 	{
 			// Future Research Age Subsidy - TESTNET
-			int64_t nBoinc = ComputeResearchAccrual(cpid, nStakeHeight, locktime, operation, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
+			int64_t nBoinc = ComputeResearchAccrual(cpid, operation, pindexLast, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
+
+
 			int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
 			// ToDo For Prod: For any subsidy < 30 day duration, ensure 100% that we have a start magnitude and an end magnitude, otherwise make subsidy 0
 			// ToDo For Prod: For any subsidy > 30 day duration, ensure 100% that we have a midpoint magnitude in Every Period, otherwise, make subsidy 0
@@ -2834,6 +2845,27 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
 bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 {
     
+	// Gridcoin - Remove the payment
+	if (!pindex->sCPID.empty() && pindex->sCPID != "INVESTOR")
+	{
+		StructCPID stCPID = GetInitializedStructCPID2(pindex->sCPID,mvResearchAge);
+		stCPID.InterestSubsidy -= pindex->nInterestSubsidy;
+		stCPID.ResearchSubsidy -= pindex->nResearchSubsidy;
+		stCPID.Accuracy--;
+		if (((double)pindex->nHeight) == stCPID.LastBlock) 
+		{
+				stCPID.LastBlock = 0;
+				stCPID.BlockHash = "";
+		}
+	
+		if (stCPID.BlockHash == pindex->GetBlockHash().GetHex())
+		{
+			stCPID.BlockHash = "";
+		}
+		mvResearchAge[pindex->sCPID]=stCPID;
+	}
+
+
 	// Disconnect in reverse order
     for (int i = vtx.size()-1; i >= 0; i--)
         if (!vtx[i].DisconnectInputs(txdb))
@@ -2854,7 +2886,7 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
     BOOST_FOREACH(CTransaction& tx, vtx)
         SyncWithWallets(tx, this, false, false);
 	
-
+	
     return true;
 }
 
@@ -2997,7 +3029,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
         nSigOps += tx.GetLegacySigOpCount();
         if (nSigOps > MAX_BLOCK_SIGOPS)
-            return DoS(100, error("ConnectBlock() : too many sigops"));
+            return DoS(100, error("ConnectBlock[] : too many sigops"));
 
         CDiskTxPos posThisTx(pindex->nFile, pindex->nBlockPos, nTxPos);
         if (!fJustCheck)
@@ -3017,7 +3049,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
             // an incredibly-expensive-to-validate block.
             nSigOps += tx.GetP2SHSigOpCount(mapInputs);
             if (nSigOps > MAX_BLOCK_SIGOPS)
-                return DoS(100, error("ConnectBlock() : too many sigops"));
+                return DoS(100, error("ConnectBlock[] : too many sigops"));
 
             int64_t nTxValueIn = tx.GetValueIn(mapInputs);
             int64_t nTxValueOut = tx.GetValueOut();
@@ -3106,7 +3138,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
     		double dAccrualMagnitudeUnit = 0;
 	    	double dAccrualMagnitude = 0;
 
-			double dCalculatedResearchReward = CoinToDouble(GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, pindex->nHeight, "connectblock_investor",
+			double dCalculatedResearchReward = CoinToDouble(GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, 
+				    pindex, "connectblock_investor",
 					OUT_POR, OUT_INTEREST_OWED, dAccrualAge, dAccrualMagnitudeUnit, dAccrualMagnitude));
 			if (dStakeReward > (OUT_INTEREST_OWED+1+nFees) )
 			{
@@ -3128,6 +3161,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	pindex->nResearchSubsidy = bb.ResearchSubsidy;
 	pindex->nInterestSubsidy = bb.InterestSubsidy;
 	
+
 	double mint = CoinToDouble(pindex->nMint);
     double PORDiff = GetBlockDifficulty(nBits);
 		
@@ -3155,7 +3189,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		double dAvgMagnitude = 0;
 
 	    // ResearchAge 1: 8-8-2015
-		int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, pindex->nHeight, "connectblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+		int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, 
+			pindex, "connectblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 		if (bb.cpid != "INVESTOR" && dStakeReward > 1)
 		{
 				if ((bb.ResearchSubsidy+bb.InterestSubsidy+1) < dStakeReward)
@@ -3168,6 +3203,9 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 				{
 						if (dStakeReward > ((OUT_POR*1.15)+OUT_INTEREST+1+CoinToDouble(nFees)))
 						{
+							if (fDebug3) printf("ConnectBlockError[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
+								(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str());
+	
 							return error("ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
 								(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str());
 				
@@ -3245,8 +3283,25 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		*/
 	}
 
-
 	//  End of Network Consensus
+
+	// Gridcoin: 8-9-2015 - Track payments to CPID, and last block paid
+	if (!bb.cpid.empty() && bb.cpid != "INVESTOR")
+	{
+		StructCPID stCPID = GetInitializedStructCPID2(bb.cpid,mvResearchAge);
+		stCPID.InterestSubsidy += bb.InterestSubsidy;
+		stCPID.ResearchSubsidy += bb.ResearchSubsidy;
+		stCPID.Accuracy++;
+				
+		if (((double)pindex->nHeight) > stCPID.LastBlock && pindex->nResearchSubsidy > 0) 
+		{
+				stCPID.LastBlock = (double)pindex->nHeight;
+				stCPID.BlockHash = pindex->GetBlockHash().GetHex();
+		}
+	
+		mvResearchAge[bb.cpid]=stCPID;
+	}
+
 
     if (!txdb.WriteBlockIndex(CDiskBlockIndex(pindex)))
         return error("Connect() : WriteBlockIndex for pindex failed");
@@ -3777,7 +3832,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					double bv = BlockVersion(boincblock.clientversion);
 					double cvn = ClientVersionNew();
 					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
-					//if (bv+10 < cvn) return error("ConnectBlock(): Old client version after mandatory upgrade - block rejected\r\n");
+					//if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3425) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
 					if (bv < 3467 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
 			}
@@ -4537,7 +4592,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 31966;
+		nGrandfather = 32213;
 		nNewIndex = 28286;
 		bResearchAgeEnabled = true;
 
@@ -5160,7 +5215,10 @@ void AddNetworkMagnitude(double height, double LockTime, std::string cpid, Minin
 	    StructCPID stMag = GetInitializedStructCPID2(cpid,mvMagnitudes);
 		stMag.cpid = cpid;
 		stMag.GRCAddress = bb.GRCAddress;
-		stMag.LastBlock = height;
+		if (height > stMag.LastBlock)
+		{
+			stMag.LastBlock = height;
+		}
 		stMag.projectname = bb.projectname;
 		stMag.rac += bb.rac;
 		stMag.entries++;
@@ -5254,7 +5312,6 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 	mvApplicationCacheTimestamp["nCPIDTime"] = nCPIDTime;
 	return true;
 }
-
 
 
 	
@@ -5913,7 +5970,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 8-5-2015
-		if (pfrom->nVersion < 180291 && fTestNet)
+		if (pfrom->nVersion < 180292 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -8437,52 +8494,78 @@ double GRCMagnitudeUnit(int64_t locktime)
 }
 
 
-int64_t ComputeResearchAccrual(std::string cpid, int nStakeHeight, int64_t nStakeTime, std::string operation, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
+int64_t ComputeResearchAccrual(std::string cpid, std::string operation, CBlockIndex* pindexLast, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
-	double dCurrentMagnitude = CalculatedMagnitude2(cpid, nStakeTime, false);
-	CBlockIndex* pHistorical = GetHistoricalMagnitude(cpid, nStakeHeight);
+	double dCurrentMagnitude = CalculatedMagnitude2(cpid, pindexLast->nTime, false);
+	CBlockIndex* pHistorical = GetHistoricalMagnitude(cpid);
 	if (pHistorical->nHeight <= nNewIndex || pHistorical->nMagnitude==0 || pHistorical->nTime == 0)
 	{
 		//No prior block exists... Newbies get .01 age to bootstrap the CPID (otherwise they will not have any prior block to refer to, thus cannot get started):
 		return dCurrentMagnitude > 0 ? ((dCurrentMagnitude/100)*COIN) : 0;
 	}
 	AvgMagnitude = (pHistorical->nMagnitude + dCurrentMagnitude) / 2;
-	dAccrualAge = ((double)nStakeTime - (double)pHistorical->nTime) / 86400;
+	dAccrualAge = ((double)pindexLast->nTime - (double)pHistorical->nTime) / 86400;
 	if (dAccrualAge < 0) dAccrualAge=0;
-	dMagnitudeUnit = GRCMagnitudeUnit(nStakeTime);
+	dMagnitudeUnit = GRCMagnitudeUnit(pindexLast->nTime);
 	// TODO: If the accrual age is > 30 days, grab a snapshot from a superblock at the midpoint to make the avg magnitude accurate:
 	int64_t Accrual = ((int64_t)(dAccrualAge*AvgMagnitude*dMagnitudeUnit)*COIN);
 	double verbosity = (operation == "createnewblock" || operation == "createcoinstake") ? 10 : 1000;
 	if (fDebug3 && LessVerbose(verbosity)) printf(" Operation %s, Accrual %f, StakeHeight %f, HistoryHeight%f,  AccrualAge %f, AvgMag %f, MagUnit %f \r\n",
-		operation.c_str(),CoinToDouble(Accrual),(double)nStakeHeight,		
+		operation.c_str(),CoinToDouble(Accrual),(double)pindexLast->nHeight,		
 		(double)pHistorical->nHeight,	dAccrualAge,AvgMagnitude,dMagnitudeUnit);
 	return Accrual;
 }
 
-CBlockIndex* GetHistoricalMagnitude(std::string cpid,int nStartHeight)
+
+
+CBlockIndex* GetHistoricalMagnitude(std::string cpid)
 {
-	CBlockIndex* pindex = pindexBest;
-	// If we do not specify a start height, start at pindexBest:
-	if (nStartHeight==0) nStartHeight = pindexBest->nHeight;
-	//Loop back to the StartHeight:
-	while (pindex->nHeight > nNewIndex && pindex->nHeight >= nStartHeight)
-	{
-       pindex = pindex->pprev;
-	}
+	if (cpid=="INVESTOR") return pindexGenesisBlock;
 	// Starting at the block prior to StartHeight, find the last instance of the CPID in the chain:
 	// Limit lookback to 6 months
-	int nMinIndex = pindexBest->nHeight-(6*30*1000);
+	int nMinIndex = pindexBest->nHeight-(6*30*BLOCKS_PER_DAY);
+	if (nMinIndex < 2) nMinIndex=2;
+	// Last block Hash paid to researcher
+	StructCPID stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
+	if (!stCPID.BlockHash.empty())
+	{
+		uint256 hash(stCPID.BlockHash);
+		if (mapBlockIndex.count(hash) == 0) return pindexGenesisBlock;
+		CBlockIndex* pblockindex = mapBlockIndex[hash];
+		if ((double)pblockindex->nHeight < nMinIndex)
+		{
+			// In this case, the last staked block was Found, but it is over 6 months old....
+			printf("Last staked block found at height %f, but cannot verify magnitude older than 6 months! \r\n",(double)pblockindex->nHeight);
+			return pindexGenesisBlock;
+		}
+    
+		return pblockindex;
+	}
+	else
+	{
+		return pindexGenesisBlock;
+	}
+}
+
+
+CBlockIndex* GetHistoricalMagnitude_Retire(std::string cpid)
+{
+	CBlockIndex* pindex = pindexBest;
+	if (cpid=="INVESTOR") return pindexGenesisBlock;
+
+	// Starting at the block prior to StartHeight, find the last instance of the CPID in the chain:
+	// Limit lookback to 6 months
+	int nMinIndex = pindexBest->nHeight-(6*30*BLOCKS_PER_DAY);
 	if (nMinIndex < 2) nMinIndex=2;
     while (pindex->nHeight > nNewIndex && pindex->nHeight > nMinIndex)
 	{
   	    //8-5-2015; R HALFORD; Find the last block the CPID staked with a research subsidy (IE dont count interest blocks)
 		if (pindex->sCPID == cpid && (pindex->nResearchSubsidy > 0)) return pindex;
 	    pindex = pindex->pprev;
-	
 	}
     return pindexGenesisBlock;
-  
 }
+
 
 bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 {

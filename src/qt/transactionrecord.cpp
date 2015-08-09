@@ -56,7 +56,7 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx)
 	       //Orphaned tx
 		   return (ShowOrphans=="true" ? true : false);
     }
-
+	
     if (wtx.IsCoinBase())
     {
         // Ensures we show generated coins / mined transactions at depth 1

@@ -24,6 +24,7 @@ using namespace std;
 using namespace boost;
 
 leveldb::DB *txdb; // global pointer for LevelDB object instance
+StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
 
 static leveldb::Options GetOptions() {
     leveldb::Options options;
@@ -386,6 +387,22 @@ bool CTxDB::LoadBlockIndex()
 			pindexNew->nMagnitude        = diskindex.nMagnitude;
 		}
 
+		if (!diskindex.sCPID.empty())
+		{
+			if (diskindex.sCPID != "INVESTOR")
+			{
+				StructCPID stCPID = GetInitializedStructCPID2(diskindex.sCPID,mvResearchAge);
+	     		stCPID.InterestSubsidy += diskindex.nInterestSubsidy;
+				stCPID.ResearchSubsidy += diskindex.nResearchSubsidy;
+				stCPID.Accuracy++;
+				if (((double)pindexNew->nHeight) > stCPID.LastBlock && diskindex.nResearchSubsidy > 0) 
+				{
+						stCPID.LastBlock = (double)pindexNew->nHeight;
+						stCPID.BlockHash = blockHash.GetHex();
+				}
+				mvResearchAge[diskindex.sCPID]=stCPID;
+			}	
+		}
 		dBlockCount++;
         // Watch for genesis block
         if (pindexGenesisBlock == NULL && blockHash == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
