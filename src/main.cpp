@@ -2171,8 +2171,6 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 	{
 			// Future Research Age Subsidy - TESTNET
 			int64_t nBoinc = ComputeResearchAccrual(cpid, operation, pindexLast, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
-
-
 			int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
 			// ToDo For Prod: For any subsidy < 30 day duration, ensure 100% that we have a start magnitude and an end magnitude, otherwise make subsidy 0
 			// ToDo For Prod: For any subsidy > 30 day duration, ensure 100% that we have a midpoint magnitude in Every Period, otherwise, make subsidy 0
@@ -3303,8 +3301,17 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	}
 
 
+	
+
+
     if (!txdb.WriteBlockIndex(CDiskBlockIndex(pindex)))
         return error("Connect() : WriteBlockIndex for pindex failed");
+
+	if (pindex->nHeight % 5 == 0)
+	{
+		std::string errors1 = "";
+		bool result = LoadAdminMessages(false,errors1);
+	}
 
     if (fJustCheck)
         return true;
@@ -3834,7 +3841,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3425) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-					if (bv < 3467 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
+					if (bv < 3473 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
 			}
 
 			//8-5-2015
@@ -3858,16 +3865,16 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 				double PORDiff = GetBlockDifficulty(nBits);
 				double mint1 = CoinToDouble(Mint);
 				double total_subsidy = boincblock.ResearchSubsidy + boincblock.InterestSubsidy;
-				if (fDebug) printf("CheckBlock[]: TotalSubsidy %f, Height %f, %s, %f, Res %f, Interest %f, hb: %s \r\n",
+				if (fDebug3) printf("CheckBlock[]: TotalSubsidy %f, Height %f, %s, %f, Res %f, Interest %f, hb: %s \r\n",
 					    (double)total_subsidy,(double)height1,    boincblock.cpid.c_str(),
 						(double)mint1,boincblock.ResearchSubsidy,boincblock.InterestSubsidy,vtx[0].hashBoinc.c_str());
 				if (total_subsidy < MintLimiter(PORDiff,boincblock.RSAWeight,boincblock.cpid,GetBlockTime()))
 				{
-					printf("****CheckBlock[]: Total Mint too Small %s, mint %f, Res %f, Interest %f, hash %s \r\n",boincblock.cpid.c_str(),
+					if (fDebug3) printf("****CheckBlock[]: Total Mint too Small %s, mint %f, Res %f, Interest %f, hash %s \r\n",boincblock.cpid.c_str(),
 						(double)mint1,boincblock.ResearchSubsidy,boincblock.InterestSubsidy,vtx[0].hashBoinc.c_str());
 					//1-21-2015 - Prevent Hackers from spamming the network with small blocks
-					return DoS(30, 	error("****CheckBlock[]: Total Mint too Small %s, mint %f, Res %f, Interest %f, hash %s \r\n",boincblock.cpid.c_str(),
-							(double)mint1,boincblock.ResearchSubsidy,boincblock.InterestSubsidy,vtx[0].hashBoinc.c_str()));
+					return error("****CheckBlock[]: Total Mint too Small %s, mint %f, Res %f, Interest %f, hash %s \r\n",boincblock.cpid.c_str(),
+							(double)mint1,boincblock.ResearchSubsidy,boincblock.InterestSubsidy,vtx[0].hashBoinc.c_str());
 				}
 			
 	    		if (fCheckSig && !CheckBlockSignature())
@@ -4263,7 +4270,7 @@ void GridcoinServices()
 		}
 	}
 
-	if (TimerMain("GridcoinPersistedDataSystem",5))
+	if (false && TimerMain("GridcoinPersistedDataSystem",5))
 	{
 		std::string errors1 = "";
 		bool result = LoadAdminMessages(false,errors1);
@@ -5970,7 +5977,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 8-5-2015
-		if (pfrom->nVersion < 180292 && fTestNet)
+		if (pfrom->nVersion < 180293 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -6092,15 +6099,31 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         // Ask the first connected node for block updates
         static int nAskedForBlocks = 0;
-        if (!pfrom->fClient && !pfrom->fOneShot &&
-            (pfrom->nStartingHeight > (nBestHeight - 144)) &&
-            (pfrom->nVersion < NOBLKS_VERSION_START ||
-             pfrom->nVersion >= NOBLKS_VERSION_END) &&
-             (nAskedForBlocks < 1 || vNodes.size() <= 1))
-        {
-            nAskedForBlocks++;
-            pfrom->PushGetBlocks(pindexBest, uint256(0));
-        }
+		if (!fTestNet)
+		{
+			if (!pfrom->fClient && !pfrom->fOneShot &&
+				(pfrom->nStartingHeight > (nBestHeight - 144)) &&
+				(pfrom->nVersion < NOBLKS_VERSION_START ||
+				 pfrom->nVersion >= NOBLKS_VERSION_END) &&
+				 (nAskedForBlocks < 1 || vNodes.size() <= 1))
+			{
+				nAskedForBlocks++;
+				pfrom->PushGetBlocks(pindexBest, uint256(0));
+			}
+		}
+		else
+		{
+			if (!pfrom->fClient && !pfrom->fOneShot &&
+				(pfrom->nStartingHeight > (nBestHeight - 144)) &&
+				(pfrom->nVersion < TESTNET_NOBLKS_VERSION_START ||
+				 pfrom->nVersion >= TESTNET_NOBLKS_VERSION_END) &&
+				 (nAskedForBlocks < 1 || vNodes.size() <= 1))
+			{
+				nAskedForBlocks++;
+				pfrom->PushGetBlocks(pindexBest, uint256(0));
+			}
+
+		}
 
         // Relay alerts
         {
@@ -8490,6 +8513,7 @@ double GRCMagnitudeUnit(int64_t locktime)
 	if (Kitty < 1) Kitty = 1;
 	double MagnitudeUnit = Kitty/TotalNetworkMagnitude;
 	//if (fDebug3) printf("MagUnit  dailypayments %f, kitty %f, netmag %f, MaxEmission %f, mag unit %f \r\n",network.payments/14,Kitty,TotalNetworkMagnitude,MaximumEmission,MagnitudeUnit);
+	if (MagnitudeUnit > 5) MagnitudeUnit = 5; //Just in case we lose a superblock or something strange happens.
 	return MagnitudeUnit;	
 }
 
@@ -8497,6 +8521,7 @@ double GRCMagnitudeUnit(int64_t locktime)
 int64_t ComputeResearchAccrual(std::string cpid, std::string operation, CBlockIndex* pindexLast, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
 	double dCurrentMagnitude = CalculatedMagnitude2(cpid, pindexLast->nTime, false);
+	if (dCurrentMagnitude > 20000) dCurrentMagnitude = 20000;
 	CBlockIndex* pHistorical = GetHistoricalMagnitude(cpid);
 	if (pHistorical->nHeight <= nNewIndex || pHistorical->nMagnitude==0 || pHistorical->nTime == 0)
 	{

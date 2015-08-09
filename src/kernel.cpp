@@ -763,7 +763,7 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
 		{
 			uint256 diff1 = hashProofOfStake - targetProofOfStake;
 			uint256 diff2 = targetProofOfStake - hashProofOfStake;
-			if (fDebug) printf("CheckProofOfStake() : INFO: check kernel failed on coinstake %s, Nonce %f, hashProof=%s, target=%s, offby1: %s, OffBy2: %s",
+			if (fDebug3) printf("CheckProofOfStake() : INFO: check kernel failed on coinstake %s, Nonce %f, hashProof=%s, target=%s, offby1: %s, OffBy2: %s",
 				tx.GetHash().ToString().c_str(), (double)por_nonce, hashProofOfStake.ToString().c_str(), targetProofOfStake.ToString().c_str(), 
 				diff1.ToString().c_str(), diff2.ToString().c_str()); 
 		    return false;
