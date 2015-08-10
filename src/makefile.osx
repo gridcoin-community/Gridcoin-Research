@@ -43,6 +43,7 @@ LIBS += \
  -lboost_thread-mt \
  -lssl \
  -lcrypto \
+ -lcurl \
  -lz
 endif
 
@@ -59,7 +60,7 @@ endif
 
 # ppc doesn't work because we don't support big-endian
 CFLAGS += -Wall -Wextra -Wformat -Wno-ignored-qualifiers -Wformat-security -Wno-unused-parameter \
-    $(DEBUGFLAGS) $(DEFS) $(INCLUDEPATHS)
+	  $(DEBUGFLAGS) $(DEFS) $(INCLUDEPATHS) $(shell pkg-config --cflags --libs libzip)
 
 OBJS= \
     obj/alert.o \
@@ -95,7 +96,8 @@ OBJS= \
     obj/scrypt.o \
     obj/scrypt-x86.o \
     obj/scrypt-x86_64.o \
-    obj/cpid.o 
+    obj/cpid.o \
+    obj/upgrader.o
 
 ifndef USE_UPNP
 	override USE_UPNP = -
