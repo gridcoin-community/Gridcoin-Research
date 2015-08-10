@@ -206,6 +206,7 @@ HEADERS += src/qt/bitcoingui.h \
     src/qt/guiutil.h \
     src/qt/transactionrecord.h \
     src/qt/guiconstants.h \
+	src/qt/trafficgraphwidget.h \
     src/qt/optionsmodel.h \
     src/qt/monitoreddatamapper.h \
     src/qt/transactiondesc.h \
@@ -271,6 +272,7 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/clientmodel.cpp \
     src/qt/guiutil.cpp \
     src/qt/transactionrecord.cpp \
+	src/qt/trafficgraphwidget.cpp \
     src/qt/optionsmodel.cpp \
     src/qt/monitoreddatamapper.cpp \
     src/qt/transactiondesc.cpp \

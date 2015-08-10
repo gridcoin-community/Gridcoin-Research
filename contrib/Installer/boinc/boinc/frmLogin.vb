@@ -3,7 +3,8 @@
 
     Private Sub btnLogin_Click(sender As System.Object, e As System.EventArgs) Handles btnLogin.Click
         txtMessage.Text = GetSessionGuid()
-        Dim bLogged As Boolean = Authenticate(txtUserName.Text, GetMd5String(txtPassword.Text))
+        
+        Dim bLogged As Boolean = mGRCData.Authenticate(txtMessage.Text, txtUserName.Text, GetMd5String(txtPassword.Text))
         If bLogged Then
             Me.Hide()
             txtMessage.Text = ""
@@ -20,7 +21,7 @@
 
     Private Sub btnLogOff_Click(sender As System.Object, e As System.EventArgs) Handles btnLogOff.Click
         txtMessage.Text = "Logged Out"
-        LogOff()
+        mGRCData.LogOff(GetSessionGuid)
     End Sub
 
     Private Sub frmLogin_Activated(sender As Object, e As System.EventArgs) Handles Me.Activated
@@ -37,12 +38,12 @@
         Try
 
             txtMessage.Text = "" + GetSessionGuid()
-            If IsAuthenticated() Then
+            If mGRCData.IsAuthenticated(GetSessionGuid) Then
                 mfrmTicketList.Show()
                 Me.Dispose()
 
             End If
-            If UserAgent Like "*iphone*" Then
+            If UserAgent() Like "*iphone*" Then
                 Me.Width = Me.Width - 100
                 btnRegister.Left = btnRegister.Left - 50
                 btnLogOff.Left = btnLogOff.Left - 100
@@ -61,12 +62,30 @@
     End Sub
 
     Private Sub btnRegister_Click(sender As System.Object, e As System.EventArgs) Handles btnRegister.Click
-        System.Diagnostics.Process.Start("http://support.gridcoin.us")
-
+        Dim r As New frmRegister
+        r.Show()
 
     End Sub
 
     Private Sub txtMessage_Click(sender As System.Object, e As System.EventArgs) Handles txtMessage.Click
 
+    End Sub
+
+    Private Sub btnRecoverPass_Click(sender As System.Object, e As System.EventArgs) Handles btnRecoverPass.Click
+        Dim bSuccess As Boolean
+        mGRCData = New GRCSec.GridcoinData
+        If Len(txtUserName.Text) = 0 Then
+            MsgBox("Username must be known", MsgBoxStyle.Critical)
+            Exit Sub
+        End If
+        bSuccess = mGRCData.RecoverPassword(txtUserName.Text)
+        If bSuccess Then
+            MsgBox("Your password has been recovered and a message has been sent to your inbox.  ", MsgBoxStyle.Exclamation)
+            Exit Sub
+        Else
+            MsgBox("Unable to recover password.  Possible reasons: Bad e-mail address on file.", MsgBoxStyle.Critical)
+            Exit Sub
+
+        End If
     End Sub
 End Class

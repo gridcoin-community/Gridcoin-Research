@@ -129,9 +129,7 @@ void DetectShutdownThread(boost::thread_group* threadGroup)
 
 void InitializeBoincProjectsNew()
 {
-		//3-13-2015
-	    // ToDo TestNet:  Ensure that we test both Projects and ProjectMappings
-		//Initialize GlobalCPUMiningCPID
+	   //Initialize GlobalCPUMiningCPID
 	    GlobalCPUMiningCPID.initialized = true;
 		GlobalCPUMiningCPID.cpid="";
 		GlobalCPUMiningCPID.cpidv2 = "";
@@ -158,7 +156,9 @@ void InitializeBoincProjectsNew()
 							std::vector<std::string> vKey = split(key_name,";");
 							if (vKey.size() > 0)
 							{
+
 								std::string project_name = vKey[1];
+								printf("Proj %s ",project_name.c_str());
 								std::string project_value = key_value;
 								boost::to_lower(project_name);
 								std::string mainProject = ToOfficialName(project_name);
@@ -182,68 +182,13 @@ void InitializeBoincProjectsNew()
 
 void InitializeBoincProjects()
 {
-	    if (fTestNet)
-		{
-			InitializeBoincProjectsNew();
+	    	InitializeBoincProjectsNew();
 			return;
-		}
-
 		
-		//Initialize GlobalCPUMiningCPID
-	    GlobalCPUMiningCPID.initialized = true;
-		GlobalCPUMiningCPID.cpid="";
-		GlobalCPUMiningCPID.cpidv2 = "";
-		GlobalCPUMiningCPID.projectname ="";
-		GlobalCPUMiningCPID.rac=0;
-		GlobalCPUMiningCPID.encboincpublickey = "";
-		GlobalCPUMiningCPID.boincruntimepublickey = "";
-		GlobalCPUMiningCPID.pobdifficulty = 0;
-		GlobalCPUMiningCPID.diffbytes = 0;
-		GlobalCPUMiningCPID.email = "";
-		GlobalCPUMiningCPID.RSAWeight = 0;
-		std::string boinc_projects[100];
 
-		// Refreshed Project list - SePulcher - 2/6/2015
-		// Current Projects
-		boinc_projects[0] = "http://www.gridcoin.us/|INVESTOR"; //This is a general project used for inflation only subsidies
-		boinc_projects[1] = "http://boinc.thesonntags.com/collatz/|Collatz Conjecture";
-		boinc_projects[2] = "http://www.cosmologyathome.org/|Cosmology@Home";
-		boinc_projects[3] = "http://einstein.phys.uwm.edu/|Einstein@Home";
-		boinc_projects[4] = "http://moowrap.net/|Moo! Wrapper";
-		boinc_projects[5] = "http://boinc.fzk.de/poem/|POEM@HOME";
-		boinc_projects[6] = "http://www.primegrid.com/|PrimeGrid";
-		boinc_projects[7] = "http://boinc.bakerlab.org/rosetta/|Rosetta@Home";
-		boinc_projects[8] = "http://setiathome.berkeley.edu/|SETI@Home";
-		boinc_projects[9] = "http://pogs.theskynet.org/pogs/|theSkyNet POGS";
-		boinc_projects[10] = "http://www.malariacontrol.net/|malariacontrol.net";
-		boinc_projects[11] = "http://www.worldcommunitygrid.org/|World Community Grid";
-		boinc_projects[12] = "http://asteroidsathome.net/boinc/|Asteroids@home";
-		boinc_projects[13] = "http://climateprediction.net/|climateprediction.net";
-		boinc_projects[14] = "http://milkyway.cs.rpi.edu/milkyway/|MilkyWay@home";
-		boinc_projects[15] = "http://qcn.stanford.edu/sensor/|Quake-Catcher Network";
-		boinc_projects[16] = "http://boinc.gorlaeus.net/|Leiden Classical";
-		boinc_projects[17] = "http://home.edges-grid.eu/home/|EDGeS@Home";
-		boinc_projects[18] = "http://aerospaceresearch.net/constellation/|Constellation";
-		boinc_projects[19] = "http://www.enigmaathome.net/|Enigma@Home";
-		boinc_projects[20] = "http://lhcathomeclassic.cern.ch/sixtrack/|LHC@home 1.0";
-		boinc_projects[21] = "http://escatter11.fullerton.edu/nfs/|NFS@Home";
-		boinc_projects[22] = "http://numberfields.asu.edu/NumberFields/|NumberFields@home";
-		boinc_projects[23] = "http://sat.isa.ru/pdsat/|SAT@home";
-		boinc_projects[24] = "http://szdg.lpds.sztaki.hu/szdg/|SZTAKI Desktop Grid";
-		boinc_projects[25] = "http://www.gpugrid.net/|GPUGRID";
-		boinc_projects[26] = "http://convector.fsv.cvut.cz/|CONVECTOR";
-		boinc_projects[27] = "http://www.rechenkraft.net/yoyo/|yoyo@home";
-		// New Projects
-		boinc_projects[28] = "http://findah.ucd.ie/|FiND@Home";
-		boinc_projects[29] = "http://atlasathome.cern.ch/|ATLAS@Home";
-		boinc_projects[30] = "http://universeathometest.info/universe/|Universe@Home Test";
-		boinc_projects[31] = "http://www.bitcoinutopia.net/bitcoinutopia/|Bitcoin Utopia";
-		boinc_projects[32] = "http://lhcathome2.cern.ch/vLHCathome/vLHCathome/|VirtualLHC@home";
-		boinc_projects[33] = "http://volunteer.cs.und.edu/csg/|Citizen Science Grid";
-		boinc_projects[34] = "http://burp.renderfarming.net/|BURP";
-	    boinc_projects[35] = "http://mindmodeling.org/            |MindModeling@Beta";
-		boinc_projects[36] = "http://radioactiveathome.org/boinc/|Radioactive@Home";
+		// Retiring:
 
+		/*
 		for (int i = 0; i < 100; i++)
 		{
 			std::string proj = boinc_projects[i];
@@ -265,6 +210,10 @@ void InitializeBoincProjects()
 
 			} 
 		}
+		*/
+
+
+
 }
 
 
@@ -375,9 +324,9 @@ bool AppInit(int argc, char* argv[])
             return false;
         }
 
-        // Command-line RPC
+        // Command-line RPC  - Test this - ensure single commands execute and exit please.
         for (int i = 1; i < argc; i++)
-            if (!IsSwitchChar(argv[i][0]) && !boost::algorithm::istarts_with(argv[i], "gridcoin:"))
+            if (!IsSwitchChar(argv[i][0]) && !boost::algorithm::istarts_with(argv[i], "gridcoinresearchd"))
                 fCommandLine = true;
 
         if (fCommandLine)
@@ -518,6 +467,7 @@ std::string HelpMessage()
         "  -keypool=<n>           " + _("Set key pool size to <n> (default: 100)") + "\n" +
         "  -rescan                " + _("Rescan the block chain for missing wallet transactions") + "\n" +
         "  -salvagewallet         " + _("Attempt to recover private keys from a corrupt wallet.dat") + "\n" +
+		"  -zapwallettxes=<mode>  " + _("Delete all wallet transactions and only recover those parts of the blockchain through -rescan on startup\n") +
         "  -checkblocks=<n>       " + _("How many blocks to check at startup (default: 2500, 0 = all)") + "\n" +
         "  -checklevel=<n>        " + _("How thorough the block verification is (0-6, default: 1)") + "\n" +
         "  -loadblock=<file>      " + _("Imports blocks from external blk000?.dat file") + "\n" +
@@ -531,7 +481,7 @@ std::string HelpMessage()
         "  -rpcssl                                  " + _("Use OpenSSL (https) for JSON-RPC connections") + "\n" +
         "  -rpcsslcertificatechainfile=<file.cert>  " + _("Server certificate file (default: server.cert)") + "\n" +
         "  -rpcsslprivatekeyfile=<file.pem>         " + _("Server private key (default: server.pem)") + "\n" +
-        "  -rpcsslciphers=<ciphers>                 " + _("Acceptable ciphers (default: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)") + "\n";
+        "  -rpcsslciphers=<ciphers>                 " + _("Acceptable ciphers (default: TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH)") + "\n";
 
     return strUsage;
 }
@@ -689,6 +639,13 @@ bool AppInit2()
         // Rewrite just private keys: rescan to find transactions
         SoftSetBoolArg("-rescan", true);
     }
+
+	 if (GetBoolArg("-zapwallettxes", false)) {
+        // -zapwallettx implies a rescan
+        SoftSetBoolArg("-rescan", true);
+    }
+
+
 
     // ********************************************************* Step 3: parameter-to-internal-flags
 
@@ -1158,26 +1115,27 @@ bool AppInit2()
             printf("Invalid or missing peers.dat; recreating\n");
     }
 
-    printf("Loaded %i addresses from peers.dat  %"PRId64"ms\n",
-           addrman.size(), GetTimeMillis() - nStart);
+    printf("Loaded %i addresses from peers.dat  %"PRId64"ms\n",  addrman.size(), GetTimeMillis() - nStart);
 
     
 	// ********************************************************* Step 11: start node
-	uiInterface.InitMessage(_("Loading Network Averages..."));
+	uiInterface.InitMessage(_("Loading Persisted Data Cache..."));
 	// 
-	
-	printf("Loading boinc projects \r\n");
 	std::string sOut = "";
-	bool result = 	LoadAdminMessages(true,sOut);
+	if (fDebug3) printf("Loading admin Messages %f",(double)0);
+	bool result = LoadAdminMessages(true,sOut);
+	printf("Done loading Admin messages%f",(double)0);
 
 	InitializeBoincProjects();
+	printf("Done loading boinc projects %f",(double)0);
+	uiInterface.InitMessage(_("Loading Network Averages..."));
+	if (fDebug3) printf("Loading network averages %f",(double)0);	
 	TallyNetworkAverages(true);	
-	printf("Starting CPID thread...");
-	LoadCPIDsInBackground();
+	printf("Starting CPID thread...%f",(double)0);
+	LoadCPIDsInBackground();  //This calls HarvesCPIDs(true)
 
 	uiInterface.InitMessage(_("Finding first applicable Research Project..."));
 	
-
 	#if defined(WIN32) && defined(QT_GUI)
 		//stopWireFrameRenderer();
 	#endif

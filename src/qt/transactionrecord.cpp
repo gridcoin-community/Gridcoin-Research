@@ -31,7 +31,7 @@ bool IsSmartContractForDPOR(const CWalletTx &wtx)
                     sub.type = TransactionRecord::SendToAddress;
                     sub.address = CBitcoinAddress(address).ToString();
 					int64_t nDebit = wtx.GetDebit();
-				    if (nDebit=.00001 && sub.address =="S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB")
+				    if (nDebit==.00001)
 					{
 						return true;
 					}
@@ -49,25 +49,14 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx)
 {
 	
 	std::string ShowOrphans = GetArg("-showorphans", "false");
-	if (ShowOrphans=="false" && !wtx.IsInMainChain()) return false;
 
-	//R Halford - Discard Orphans after Y mins:
-	if (wtx.IsCoinStake())
+	//R Halford - POS Transactions - If Orphaned follow showorphans directive:
+	if (wtx.IsCoinStake() && !wtx.IsInMainChain())
 	{
-		if (!wtx.IsInMainChain())
-		{
-			//Orphaned tx
-			if (ShowOrphans=="true"  && IsLockTimeWithinMinutes(wtx.nTimeReceived,15)) 
-			{
-				return true;
-			}
-			else
-			{
-				return false;
-			}
-		}
+	       //Orphaned tx
+		   return (ShowOrphans=="true" ? true : false);
     }
-
+	
     if (wtx.IsCoinBase())
     {
         // Ensures we show generated coins / mined transactions at depth 1
@@ -164,7 +153,6 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
 						}
 							
 						hashPrev = hash;
-			
 					}
                 }
 

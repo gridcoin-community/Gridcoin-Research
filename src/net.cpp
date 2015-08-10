@@ -98,7 +98,15 @@ static std::vector<SOCKET> vhListenSocket;
 CAddrMan addrman;
 
 vector<CNode*> vNodes;
+
 CCriticalSection cs_vNodes;
+
+
+
+vector<std::string> vAddedNodes;
+CCriticalSection cs_vAddedNodes;
+
+
 map<CInv, CDataStream> mapRelay;
 deque<pair<int64_t, CInv> > vRelayExpiration;
 CCriticalSection cs_mapRelay;
@@ -710,7 +718,7 @@ std::string GetHttpPage(std::string url)
 	
 		std::string domain = ExtractDomainFromURL(url,0);
 		std::string page = ExtractDomainFromURL(url,1);
-		printf("domain %s,    page %s\r\n",domain.c_str(),page.c_str());
+		if (fDebug) printf("domain %s, page %s\r\n",domain.c_str(),page.c_str());
 
 		CService addrConnect;
 
@@ -961,7 +969,10 @@ void AddressCurrentlyConnected(const CService& addr)
 
 
 
-
+uint64_t CNode::nTotalBytesRecv = 0;
+uint64_t CNode::nTotalBytesSent = 0;
+CCriticalSection CNode::cs_totalBytesRecv;
+CCriticalSection CNode::cs_totalBytesSent;
 
 
 
@@ -1232,6 +1243,8 @@ void CNode::copyStats(CNodeStats &stats)
     // Raw ping time is in microseconds, but show it to user as whole seconds (Bitcoin users should be well used to small numbers with many decimal places by now :)
     stats.dPingTime = (((double)nPingUsecTime) / 1e6);
     stats.dPingWait = (((double)nPingUsecWait) / 1e6);
+	stats.addrLocal = addrLocal.IsValid() ? addrLocal.ToString() : "";
+
 }
 #undef X
 
@@ -1329,6 +1342,7 @@ void SocketSendData(CNode *pnode)
         if (nBytes > 0) {
             pnode->nLastSend = GetAdjustedTime();
             pnode->nSendOffset += nBytes;
+			pnode->RecordBytesSent(nBytes);
             if (pnode->nSendOffset == data.size()) {
                 pnode->nSendOffset = 0;
                 pnode->nSendSize -= data.size();
@@ -1451,10 +1465,11 @@ void ThreadSocketHandler2(void* parg)
                 }
             }
         }
-        if (vNodes.size() != nPrevNodeCount)
-        {
+
+		if(vNodes.size() != nPrevNodeCount) 
+		{
             nPrevNodeCount = vNodes.size();
-            uiInterface.NotifyNumConnectionsChanged(vNodes.size());
+            uiInterface.NotifyNumConnectionsChanged(nPrevNodeCount);
         }
 
 
@@ -1612,6 +1627,7 @@ void ThreadSocketHandler2(void* parg)
                             if (!pnode->ReceiveMsgBytes(pchBuf, nBytes))
                                 pnode->CloseSocketDisconnect();
                             pnode->nLastRecv = GetAdjustedTime();
+							pnode->RecordBytesRecv(nBytes);
                         }
                         else if (nBytes == 0)
                         {
@@ -2043,6 +2059,32 @@ void static ThreadStakeMiner(void* parg)
         PrintException(NULL, "ThreadStakeMiner()");
     }
     printf("ThreadStakeMiner exiting, %d threads remaining\n", vnThreadsRunning[THREAD_STAKE_MINER]);
+}
+
+
+
+void CNode::RecordBytesRecv(uint64_t bytes)
+{
+    LOCK(cs_totalBytesRecv);
+    nTotalBytesRecv += bytes;
+}
+
+void CNode::RecordBytesSent(uint64_t bytes)
+{
+    LOCK(cs_totalBytesSent);
+    nTotalBytesSent += bytes;
+}
+
+uint64_t CNode::GetTotalBytesRecv()
+{
+    LOCK(cs_totalBytesRecv);
+    return nTotalBytesRecv;
+}
+
+uint64_t CNode::GetTotalBytesSent()
+{
+    LOCK(cs_totalBytesSent);
+    return nTotalBytesSent;
 }
 
 void ThreadOpenConnections2(void* parg)

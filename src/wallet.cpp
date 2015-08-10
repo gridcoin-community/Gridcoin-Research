@@ -34,6 +34,8 @@ void WriteAppCache(std::string key, std::string value);
 bool OutOfSyncByAgeWithChanceOfMining();
 int64_t GetRSAWeightByCPID(std::string cpid);
 
+double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
+
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 std::string CryptoLottery(int64_t locktime);
 std::string SerializeBoincBlock(MiningCPID mcpid);
@@ -751,6 +753,116 @@ int CWalletTx::GetRequestCount() const
     return nRequests;
 }
 
+
+CTxDestination GetCoinstakeDestination(const CWalletTx* wtx,CTxDB& txdb)
+{
+   // For Coinstakes, extract the address from the input
+   BOOST_FOREACH(const CTxIn& txin, wtx->vin)
+   {
+            COutPoint prevout = txin.prevout;
+            CTransaction prev;
+            if(txdb.ReadDiskTx(prevout.hash, prev))
+            {
+                if (prevout.n < prev.vout.size())
+                {
+  			    	//Inputs: 
+                    const CTxOut &vout = prev.vout[prevout.n];
+			        CTxDestination address;
+                    if (ExtractDestination(vout.scriptPubKey, address))
+                    {
+						return address;
+                    }
+                }
+            }
+    }
+   	return CNoDestination();
+}
+
+
+
+void CWalletTx::GetAmounts2(list<COutputEntry>& listReceived,
+                           list<COutputEntry>& listSent, int64_t& nFee, string& strSentAccount, bool ismine,CTxDB& txdb) const
+{
+    nFee = 0;
+    listReceived.clear();
+    listSent.clear();
+    strSentAccount = strFromAccount;
+
+    // Compute fee:
+    int64_t nDebit = GetDebit();
+    if (nDebit > 0) // debit>0 means we signed/sent this transaction
+    {
+        int64_t nValueOut = GetValueOut();
+        nFee = nDebit - nValueOut;
+    }
+
+    // Sent/received.
+    for (unsigned int i = 0; i < vout.size(); ++i)
+    {
+        const CTxOut& txout = vout[i];
+        bool fIsMine = pwallet->IsMine(txout);
+        // Only need to handle txouts if AT LEAST one of these is true:
+        //   1) they debit from us (sent)
+        //   2) the output is to us (received)
+        if (nDebit > 0)
+        {
+            // Don't report 'change' txouts
+            if (pwallet->IsChange(txout)) continue;
+        }
+        else
+		{
+		 	if (!fIsMine) continue;
+		}
+
+        // In either case, we need to get the destination address
+        CTxDestination address;
+		if (IsCoinStake())
+		{
+			// R Halford - For CoinStake we must extract the address from the input	
+			address = GetCoinstakeDestination(this,txdb);
+		}
+		else
+		{
+	        if (!ExtractDestination(txout.scriptPubKey, address))
+		    {
+			    printf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s\n",
+                     this->GetHash().ToString().c_str());
+				address = CNoDestination();
+			}
+		}
+
+	    COutputEntry output = {address, txout.nValue, i};
+        // If we are debited by the transaction, add the output as a "sent" entry
+        if (nDebit > 0 && !IsCoinStake())
+		{
+            listSent.push_back(output);
+		}
+
+        // If we are receiving the output, add it as a "received" entry
+        if (fIsMine || IsCoinStake())
+		{	
+			if (IsCoinStake())
+			{   
+				// For CoinStake, we must calculate the subsidy based on Net Earned due to splitstakes and empty stakes
+				output.amount += -nFee;
+				nFee=0;
+				if (output.amount != 0) 
+				{
+						listReceived.push_back(output);
+						break;
+				}
+			}
+			else
+			{
+				listReceived.push_back(output);
+			}
+		}
+    }
+
+}
+
+
+
 void CWalletTx::GetAmounts(list<pair<CTxDestination, int64_t> >& listReceived,
                            list<pair<CTxDestination, int64_t> >& listSent, int64_t& nFee, string& strSentAccount) const
 {
@@ -793,7 +905,7 @@ void CWalletTx::GetAmounts(list<pair<CTxDestination, int64_t> >& listReceived,
         if (!ExtractDestination(txout.scriptPubKey, address))
         {
             printf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s\n",
-                   this->GetHash().ToString().c_str());
+                     this->GetHash().ToString().c_str());
             address = CNoDestination();
         }
 
@@ -807,6 +919,8 @@ void CWalletTx::GetAmounts(list<pair<CTxDestination, int64_t> >& listReceived,
     }
 
 }
+
+
 
 void CWalletTx::GetAccountAmounts(const string& strAccount, int64_t& nReceived,
                                   int64_t& nSent, int64_t& nFee) const
@@ -1622,7 +1736,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
     CTxDB txdb("r");
 	//Retrieve CPID RSA_WEIGHT
 	int64_t RSA_WEIGHT = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-	////////////////////////////////////////////////////////////////////////////////msMiningErrors3 = "L R S A: " + RoundToString(RSA_WEIGHT,0);
+	////////////////////////////////////////////////////////////////////////////////
 	
     LOCK2(cs_main, cs_wallet);
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
@@ -1658,6 +1772,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 
 void NetworkTimer()
 {
+	if (GetArg("-fullbore", "false") != "true")	MilliSleep(40);
 	if (mdMachineTimerLast == 0) mdMachineTimerLast = GetAdjustedTime();
 	double elapsed = GetAdjustedTime() - mdMachineTimerLast;
 	mdPORNonce += 1;
@@ -1745,9 +1860,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
     if (setCoins.empty())
 	{
-		msMiningErrors7="Coins Empty";
-		if (fDebug) if (LessVerbose(100)) printf("Coins empty.");
-        return false;
+		return false;
 	}
 
     int64_t nCredit = 0;
@@ -1758,21 +1871,35 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 	try
 	{
-		 miningcpid = GetNextProject(false);
-		 uint256 pbh = 0;
-		 if (pindexPrev) pbh=pindexPrev->GetBlockHash();
-		 miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pbh);
-		 miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
-	     miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-		 hashBoinc = SerializeBoincBlock(miningcpid);
-		 if (!IsCPIDValidv2(miningcpid,pindexBest->nHeight))
+		 for (int i = 0; i < 10; i++)
 		 {
-			 msMiningErrors7="CPID INVALID";
-			 printf("Unable to create boinc block->CPID INVALID");
-			 MilliSleep(500);
-			 return false;
+			 miningcpid = GetNextProject(true);
+			 uint256 pbh = 0;
+			 if (pindexPrev) pbh=pindexPrev->GetBlockHash();
+			 miningcpid.cpidv2 = ComputeCPIDv2(miningcpid.email, miningcpid.boincruntimepublickey, pbh);
+			 miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
+			 miningcpid.RSAWeight = GetRSAWeightByCPID(miningcpid.cpid);
+			 hashBoinc = SerializeBoincBlock(miningcpid);
+			 if (!IsCPIDValidv2(miningcpid,pindexPrev->nHeight))
+			 {
+				 printf("Unable to create boinc block->CPID INVALID cpid %s %s %s",miningcpid.cpid.c_str(),miningcpid.boincruntimepublickey.c_str(),miningcpid.email.c_str());
+				 MilliSleep(300);
+			 }
+			 else
+			 {
+				 msMiningErrors7="+";
+				 break;
+			 }
+			 if (i==9)
+			 {
+				msMiningErrors7="CPID INVALID";
+				return false;
+			 }
+
 		 }
-			
+
+		 
+
 	}
 	catch (std::exception &e) 
 	{
@@ -1795,6 +1922,10 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	//Search
 
 	msMiningErrors7=""; //Clear errors; ready to roll...
+	msMiningErrors5="";
+	msMiningErrors6="";
+	
+	int64_t nBlockTime = 0;
 
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
     {
@@ -1813,7 +1944,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
                 continue;
         }
 
-	
+		nBlockTime = block.GetBlockTime();
+
         static int nMaxStakeSearchInterval = 60;
         if (block.GetBlockTime() + nStakeMinAge > txNew.nTime - nMaxStakeSearchInterval)
             continue; // only count coins meeting min age requirement
@@ -1830,14 +1962,14 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		
 			//1-12-2015 - Add PoW nonce to POR - Halford
 			NetworkTimer();
-				
+
             if (CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, 
 				*pcoin.first, prevoutStake, txNew.nTime - n, hashProofOfStake, 
 				targetProofOfStake, hashBoinc, false, true, mdPORNonce))
             {
 			
                 // Found a kernel
-                if (fDebug3)   printf("CCS:K;");
+                if (fDebug)   printf("CCS:K;");
 				WriteAppCache(pindexPrev->GetBlockHash().GetHex(),RoundToString(mdPORNonce,0));
 		        vector<valtype> vSolutions;
                 txnouttype whichType;
@@ -1921,12 +2053,12 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	if (nCredit > nBalance - nReserveBalance)
 	{
 		if (fDebug) printf("StakeMiner: Credit below reserve balance. %f",(double)nCredit);
-		msMiningErrors7="Credit below reserve balance";
+		msMiningErrors7="";
 		msMiningErrors = msMiningErrors7;
 		return false;
 	}
 
-	printf("K+");
+	if (fDebug) printf("K+");
 
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
     {
@@ -1962,6 +2094,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	double MaxSubsidy = GetMaximumBoincSubsidy(GetAdjustedTime());
 
     // Calculate coin age reward
+	double out_interest = 0;
+
     {
         uint64_t nCoinAge;
         CTxDB txdb("r");
@@ -1972,12 +2106,17 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		}
 		//Halford: Use current time since we are creating a new stake
 		double OUT_POR = 0;
-		double out_interest = 0;
-
-		// ************************************************* CREATE PROOF OF RESEARCH REWARD ****************************** R HALFORD *************** 1/19/2015 *******************************
-
+		double dAccrualAge = 0;
+		double dAccrualMagnitudeUnit = 0;
+		double dAccrualMagnitude = 0;
+		
+		// ************************************************* CREATE PROOF OF RESEARCH REWARD ****************************** R HALFORD *************** 8-8-2015 *******************************
+		// ResearchAge 2
+		// Note: Since research Age must be exact, we need to transmit the Block nTime here so it matches AcceptBlock
         int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,
-			GetAdjustedTime(),OUT_POR,out_interest,RSA_WEIGHT);
+			pindexBest->nTime,pindexBest,"createcoinstake",OUT_POR,out_interest,dAccrualAge,dAccrualMagnitudeUnit,dAccrualMagnitude);
+
+		//7-12-2015 Accrual System - Reserved for Future Use
 	
 		MiningCPID miningcpid = GetNextProject(false);
 		uint256 pbh = 0;
@@ -1986,6 +2125,13 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
 		miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 		miningcpid.ResearchSubsidy = OUT_POR;
+		miningcpid.ResearchSubsidy2 = OUT_POR;
+		miningcpid.ResearchAge = dAccrualAge;
+		miningcpid.ResearchMagnitudeUnit = dAccrualMagnitudeUnit;
+		miningcpid.ResearchAverageMagnitude = dAccrualMagnitude;
+		miningcpid.Magnitude = CalculatedMagnitude2(GlobalCPUMiningCPID.cpid, GetAdjustedTime(), false);
+
+		//7-29-2015
 		miningcpid.InterestSubsidy = out_interest;
 		miningcpid.enccpid = ""; //CPID V1 Boinc RunTime enc key
 		miningcpid.encboincpublickey = "";
@@ -1997,21 +2143,19 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		double mint = CoinToDouble(nReward);
 		double PORDiff = GetBlockDifficulty(nBits);
 	
-		if (fDebug2) printf("Creating POS Reward for %s  amt  %f  {RSAWeight %f}  Research %f, Interest %f \r\n",
+		if (fDebug2 && LessVerbose(5)) printf("Creating POS Reward for %s  amt  %f  {RSAWeight %f}  Research %f, Interest %f \r\n",
 			GlobalCPUMiningCPID.cpid.c_str(), mint, (double)RSA_WEIGHT,miningcpid.ResearchSubsidy,miningcpid.InterestSubsidy);
 	
 		//INVESTORS
 		if (mint < MintLimiter(PORDiff,RSA_WEIGHT,GlobalCPUMiningCPID.cpid,GetAdjustedTime())) 
 		{
-				if (fDebug2) printf("CreateStake()::Mint %f of %f too small",(double)mint,(double)MintLimiter(PORDiff,RSA_WEIGHT,miningcpid.cpid,GetAdjustedTime()));
-				msMiningErrors7="Mint too small";
+				if (fDebug) printf("CreateStake()::Mint %f of %f too small",(double)mint,(double)MintLimiter(PORDiff,RSA_WEIGHT,miningcpid.cpid,GetAdjustedTime()));
 				return false; 
 		}
 		
 		if (nReward == 0)
 		{
-			if (fDebug3) printf("CreateBlock():Mint is zero");
-			msMiningErrors7="Mint is zero";  //Newbie
+			if (fDebug) printf("CreateBlock():Mint is zero");
 			return false;   
 		}
 	    nCredit += nReward;
@@ -2026,19 +2170,17 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		return false;
 	}
 
-	if (fDebug) printf("Staking Block \r\n");
+	if (fDebug3) printf("Staking Block \r\n");
 	
-	
-    // Set output amount - 4-3-2015 - Expand Coinstake to pay Top 10 Researchers in CryptoLottery
-	if (fTestNet && bCryptoLotteryEnabled)
+	// Set output amount - 4-3-2015 - Expand Coinstake to pay DPOR Researchers in CryptoLottery
+	if (bCryptoLotteryEnabled)
 	{
-		    printf("Creating cryptolottery coinstake...\r\n");
-
+		 
 		    std::string recipients = CryptoLottery(GetAdjustedTime());
 		    std::vector<std::string> vRecipients = split(recipients.c_str(),"<COL>");
 		    unsigned int LotterySize = vRecipients.size();
 			if (LotterySize < 3) LotterySize=0;  //Lottery returns a size of 1 when empty
-			printf("Lottery size %f\r\n",(double)vRecipients.size());
+			printf("DPOR size %f\r\n",(double)vRecipients.size());
 
 		  	int iPos = 0;
 			if (txNew.vout.size() == 3)
@@ -2058,10 +2200,11 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 			}
 
 	
+
 		   if (LotterySize > 1)
 		   {
 			  
-			  for (int i=0;i < vRecipients.size(); i++)
+			  for (unsigned int i=0;i < vRecipients.size(); i++)
 			  {
 					std::vector<std::string> vPayments = split(vRecipients[i].c_str(),";");
 					//0=script Pub Key, 1=negative amount, 2=coinstake
@@ -2071,7 +2214,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 						std::string grc_address = vPayments[1];
 						double amt = cdbl(vPayments[2],2);
 			 			CScript RewardPublicKey;
-				     	printf("Adding POR Reward for cpid %s, grcaddress %s, amount %f \r\n",cpid.c_str(),grc_address.c_str(),amt);
+				     	if (fDebug) printf("Adding POR Reward for cpid %s, grcaddress %s, amount %f \r\n",cpid.c_str(),grc_address.c_str(),amt);
 						CBitcoinAddress address(grc_address);
 						RewardPublicKey.SetDestination(address.Get());
 						txNew.vout[iPos].scriptPubKey = RewardPublicKey;
@@ -2139,7 +2282,7 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
 {
     {
         LOCK2(cs_main, cs_wallet);
-        printf("CommitTransaction:\n%s", wtxNew.ToString().c_str());
+        if (fDebug) printf("CommitTransaction:\n%s", wtxNew.ToString().c_str());
         {
             // This is only to keep the database open to defeat the auto-flush for the
             // duration of this scope.  This is the only place where this optimization
@@ -2281,6 +2424,32 @@ DBErrors CWallet::LoadWallet(bool& fFirstRunRet)
     NewThread(ThreadFlushWalletDB, &strWalletFile);
     return DB_LOAD_OK;
 }
+
+
+
+DBErrors CWallet::ZapWalletTx(std::vector<CWalletTx>& vWtx)
+{
+    if (!fFileBacked)
+        return DB_LOAD_OK;
+    DBErrors nZapWalletTxRet = CWalletDB(strWalletFile,"cr+").ZapWalletTx(this, vWtx);
+    if (nZapWalletTxRet == DB_NEED_REWRITE)
+    {
+        if (CDB::Rewrite(strWalletFile, "\x04pool"))
+        {
+            LOCK(cs_wallet);
+            setKeyPool.clear();
+            // Note: can't top-up keypool here, because wallet is locked.
+            // User will be prompted to unlock wallet the next operation
+            // that requires a new key.
+        }
+    }
+
+    if (nZapWalletTxRet != DB_LOAD_OK)
+        return nZapWalletTxRet;
+
+    return DB_LOAD_OK;
+}
+
 
 
 bool CWallet::SetAddressBookName(const CTxDestination& address, const string& strName)

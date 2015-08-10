@@ -735,6 +735,8 @@ Public Class GridcoinUpgrader
             If sOut = "gridcoinrdtestharness.exe.exe" Or sOut = "gridcoinrdtestharness.exe" Then sOut = ""
             If sOut = "cgminer_base64.zip" Then sOut = ""
             If sOut = "signed" Then sOut = ""
+            If LCase(sOut) = "modules" Then sOut = ""
+
             If sOut = "setup.exe" Or LCase(sOut) = "gridcoinresearch.msi" Then sOut = ""
             If InStr(1, sOut, "libstdc") > 0 Then sOut = ""
             If sOut = "testnet" Then sOut = ""

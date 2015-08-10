@@ -305,7 +305,7 @@ double GetMagnitudeByHashBoinc(std::string hashBoinc, int height)
 
 std::string CPIDByAddress(std::string address)
 {
-		   //4-2-2015 - CryptoLottery
+		   //CryptoLottery
 		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
 		   {
 				StructCPID structMag = GetStructCPID();
@@ -326,7 +326,6 @@ std::string CPIDByAddress(std::string address)
 
 double OwedByAddress(std::string address)
 {
-		   //4-2-2015 - CryptoLottery
 		   double outstanding = 0;
 		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
 		   {
@@ -346,7 +345,8 @@ double OwedByAddress(std::string address)
 
 int64_t GetRSAWeightByCPID(std::string cpid)
 {
-	double owed = 0;
+	double weight = 0;
+	if (cpid=="") return 0;
 	if (mvMagnitudes.size() > 0)
 	{
 			StructCPID UntrustedHost = GetStructCPID();
@@ -354,20 +354,24 @@ int64_t GetRSAWeightByCPID(std::string cpid)
 			if (UntrustedHost.initialized)
 			{
 						double mag_accuracy = UntrustedHost.Accuracy;
-						if (mag_accuracy > 0 && mag_accuracy <= 5)
+						if (mag_accuracy >= 0 && mag_accuracy <= 5)
 						{
-							owed=25000;
+							weight=25000;
 						}	
 						else if (mag_accuracy > 5) 
 						{
-								owed = (UntrustedHost.owed*14) + UntrustedHost.Magnitude;
+								weight = (UntrustedHost.owed*14) + UntrustedHost.Magnitude;
+								//Prod ToDo: Move this line to prod during next mandatory
+								if (fTestNet && weight < 0) weight = 0;
 						}
+
+						if (bResearchAgeEnabled) weight = UntrustedHost.Magnitude;
 			}
 			else
 			{
 				if (cpid.length() > 5 && cpid != "INVESTOR")
 				{
-						owed = 25000;
+						weight = 25000;
 				}
 			}
 	}
@@ -375,10 +379,13 @@ int64_t GetRSAWeightByCPID(std::string cpid)
 	{
 		if (cpid.length() > 5 && cpid != "INVESTOR")
 		{
-				owed = 5000;
+				weight = 5000;
 		}
 	}
-	int64_t RSA_WEIGHT = owed;
+	//Prod ToDo: Update all fTestNet lines to move this to prod; refactor to be nice
+	if (fTestNet && weight > 25000) weight = 25000;
+	
+	int64_t RSA_WEIGHT = weight;
 	return RSA_WEIGHT;
 }
 
@@ -423,6 +430,8 @@ int64_t GetRSAWeightByBlock(MiningCPID boincblock)
 	{
 		rsa_weight = boincblock.RSAWeight + boincblock.Magnitude;
 	}
+	//Prod ToDo: Move this to prod during mandatory
+	if (fTestNet && rsa_weight < 0) rsa_weight = 0;
 	return rsa_weight;
 }
 
@@ -520,7 +529,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	{
 		printf("Check stake kernelhash: CPID Invalid: RSA Weight = 0");
 		oNC=0;
-		if (checking_local) msMiningErrors2="CPID_INVALID";
+		if (checking_local) msMiningErrors6="CPID_INVALID";
 	}
 
     targetProofOfStake = (bnCoinDayWeight * bnTargetPerCoinDay).getuint256();
@@ -624,21 +633,22 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 		std::string narr = "";
 		if (boincblock.cpid != "INVESTOR")
 		{
-			if (boincblock.Magnitude < 2)     narr += "Magnitude too low to stake.";
+			if (boincblock.Magnitude < .25)   narr += "Magnitude too low for POR reward.";
 			if (payment_age < 60*60)          narr += " Last Payment too recent: " + RoundToString(payment_age,0);
 			if (payment_age < BitsAge)        narr += " Payment < Diff: " + RoundToString(payment_age,0) + "; " + RoundToString(BitsAge,0);
 			if (coin_age < 4*60*60)           narr += " Coin Age (immature): " + RoundToString(coin_age,0);
 			if (coin_age < RSA_WEIGHT)        narr += " Coin Age < RSA_Weight: " + RoundToString(coin_age,0) + " " + RoundToString(RSA_WEIGHT,0);
-			if (RSA_WEIGHT/14 < MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid,nTimeTx)) narr += " RSAWeight < MintLimiter: "+ RoundToString(RSA_WEIGHT/14,0) + "; " 
-				+ RoundToString(MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid,nTimeTx),0);
+			if (RSA_WEIGHT/14 < MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid,nTimeTx) && narr.empty())
+			{ 
+				narr += " RSAWeight<MintLimiter: "+ RoundToString(RSA_WEIGHT/14,0) + "; " + RoundToString(MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid,nTimeTx),0);
+			}
 		}
 	
 		if (RSA_WEIGHT >= 24999)        msMiningErrors7="Newbie block being generated.";
 		msMiningErrors5 = narr;
 	}
 
-	if (checking_local) msMiningErrors2 = "RSA Weight: " + RoundToString(RSA_WEIGHT,0);
-
+	
 	if (fDebug && !checking_local)
 	{
 		printf("{CheckStakeKernelHashV3::INFO::} PaymentAge %f, BitsAge %f, Magnitude %f, Coin_Age %f, RSAWeight %f \r\n",
@@ -753,7 +763,7 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
 		{
 			uint256 diff1 = hashProofOfStake - targetProofOfStake;
 			uint256 diff2 = targetProofOfStake - hashProofOfStake;
-			if (fDebug) printf("CheckProofOfStake() : INFO: check kernel failed on coinstake %s, Nonce %f, hashProof=%s, target=%s, offby1: %s, OffBy2: %s",
+			if (fDebug3) printf("CheckProofOfStake() : INFO: check kernel failed on coinstake %s, Nonce %f, hashProof=%s, target=%s, offby1: %s, OffBy2: %s",
 				tx.GetHash().ToString().c_str(), (double)por_nonce, hashProofOfStake.ToString().c_str(), targetProofOfStake.ToString().c_str(), 
 				diff1.ToString().c_str(), diff2.ToString().c_str()); 
 		    return false;

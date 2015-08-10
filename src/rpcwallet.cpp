@@ -3,6 +3,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "txdb.h"
 #include "wallet.h"
 #include "walletdb.h"
 #include "bitcoinrpc.h"
@@ -17,12 +18,14 @@ static CCriticalSection cs_nWalletUnlockTime;
 
 extern void ThreadTopUpKeyPool(void* parg);
 
+double CoinToDouble(double surrogate);
 
 std::string RoundToString(double d, int place);
 
 extern void ThreadCleanWalletPassphrase(void* parg);
 
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spirit::Object& entry);
+extern int64_t GetEarliestWalletTransaction();
 
 static void accountingDeprecationCheck()
 {
@@ -49,6 +52,19 @@ void EnsureWalletIsUnlocked()
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
     if (fWalletUnlockStakingOnly)
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Wallet is unlocked for staking only.");
+}
+
+bool IsPoR2(double amt)
+{
+	std::string sAmt = RoundToString(amt,8);
+	if (sAmt.length() > 8)
+	{
+		if (sAmt.substr(sAmt.length()-4,4)=="0124")
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 void WalletTxToJSON(const CWalletTx& wtx, Object& entry)
@@ -112,6 +128,7 @@ Value getinfo(const Array& params, bool fHelp)
     obj.push_back(Pair("keypoololdest", (int64_t)pwalletMain->GetOldestKeyPoolTime()));
     obj.push_back(Pair("keypoolsize",   (int)pwalletMain->GetKeyPoolSize()));
     obj.push_back(Pair("paytxfee",      ValueFromAmount(nTransactionFee)));
+	obj.push_back(Pair("tally",  msMiningErrors3));
     obj.push_back(Pair("mininput",      ValueFromAmount(nMinimumInputValue)));
     if (pwalletMain->IsCrypted())
         obj.push_back(Pair("unlocked_until", (int64_t)nWalletUnlockTime / 1000));
@@ -526,6 +543,32 @@ Value getreceivedbyaccount(const Array& params, bool fHelp)
     }
 
     return (double)nAmount / (double)COIN;
+}
+
+
+
+
+int64_t GetEarliestWalletTransaction()
+{
+        int64_t nTime = 999999999999;
+        for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
+        {
+            const CWalletTx& wtx = (*it).second;
+            if (!wtx.IsTrusted())     continue;
+
+            string strSentAccount;
+            list<pair<CTxDestination, int64_t> > listReceived;
+            list<pair<CTxDestination, int64_t> > listSent;
+			int64_t totalFees;
+            wtx.GetAmounts(listReceived, listSent, totalFees, strSentAccount);
+            if (wtx.GetDepthInMainChain() >= 0 && wtx.GetBlocksToMaturity() == 0)
+            {
+				if (wtx.nTime < nTime && wtx.nTime > 0) nTime = wtx.nTime;
+            }
+        }
+        return  nTime;
+    
+
 }
 
 
@@ -1009,9 +1052,98 @@ Value listreceivedbyaccount(const Array& params, bool fHelp)
 static void MaybePushAddress(Object & entry, const CTxDestination &dest)
 {
     CBitcoinAddress addr;
-    if (addr.Set(dest))
-        entry.push_back(Pair("address", addr.ToString()));
+    if (addr.Set(dest))    
+	{
+			entry.push_back(Pair("address", addr.ToString()));
+	}
+	else
+	{
+			std::string 	grcaddress = CBitcoinAddress(addr).ToString();
+			entry.push_back(Pair("address?", grcaddress));
+	}
 }
+
+
+
+void ListTransactions2(const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, Array& ret, CTxDB& txdb)
+{
+    int64_t nFee;
+    string strSentAccount;
+    list<COutputEntry> listReceived;
+    list<COutputEntry> listSent;
+    
+    wtx.GetAmounts2(listReceived, listSent, nFee, strSentAccount, true,txdb);
+
+    bool fAllAccounts = (strAccount == string("*") || strAccount.empty());
+    bool involvesWatchonly = wtx.IsFromMe();
+	// R Halford - Upgrade Bitcoin's ListTransactions to work with Gridcoin
+	// Ensure CoinStake addresses are deserialized, convert CoinStake split stake rewards to subsidies, Show POR vs Interest breakout
+
+    // List: Sent
+    if ((!listSent.empty() || nFee != 0) && (fAllAccounts || strAccount == strSentAccount))
+    {
+        BOOST_FOREACH(const COutputEntry& s, listSent)
+        {
+            Object entry;
+            entry.push_back(Pair("account", strSentAccount));
+            MaybePushAddress(entry, s.destination);
+            entry.push_back(Pair("category", "send"));
+            entry.push_back(Pair("amount", ValueFromAmount(-s.amount)));
+            //  entry.push_back(Pair("vout", s.vout));
+            entry.push_back(Pair("fee", ValueFromAmount(-nFee)));
+            if (fLong)
+                WalletTxToJSON(wtx, entry);
+            ret.push_back(entry);
+        }
+    }
+
+    // List: Received
+    if (listReceived.size() > 0 && wtx.GetDepthInMainChain() >= nMinDepth)
+    {
+        BOOST_FOREACH(const COutputEntry& r, listReceived)
+        {
+            string account;
+            
+		    if (pwalletMain->mapAddressBook.count(r.destination))
+                account = pwalletMain->mapAddressBook[r.destination];
+        
+            if (fAllAccounts || (account == strAccount))
+            {
+                Object entry;
+                entry.push_back(Pair("account", account));
+                MaybePushAddress(entry, r.destination);
+                if (wtx.IsCoinBase() || wtx.IsCoinStake())
+                {
+                    if (wtx.GetDepthInMainChain() < 1)
+                        entry.push_back(Pair("category", "orphan"));
+                    else if (wtx.GetBlocksToMaturity() > 0)
+                        entry.push_back(Pair("category", "immature"));
+                    else
+                        entry.push_back(Pair("category", "generate"));
+
+					std::string type = IsPoR2(CoinToDouble(r.amount)) ? "POR" : "Interest";
+					{
+						entry.push_back(Pair("Type", type));
+                 	}
+       
+                }
+                else
+                {
+                    entry.push_back(Pair("category", "receive"));
+                }
+			    entry.push_back(Pair("fee", ValueFromAmount(-nFee)));
+                entry.push_back(Pair("amount", ValueFromAmount(r.amount)));
+                if (fLong)
+                    WalletTxToJSON(wtx, entry);
+                ret.push_back(entry);
+            }
+        }
+    }
+}
+
+
+
+
 
 void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, Array& ret)
 {
@@ -1022,7 +1154,7 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
 
     wtx.GetAmounts(listReceived, listSent, nFee, strSentAccount);
 
-    bool fAllAccounts = (strAccount == string("*"));
+    bool fAllAccounts = (strAccount == string("*") || strAccount.empty() || strAccount == "");
 
     // Sent
     if ((!wtx.IsCoinStake()) && (!listSent.empty() || nFee != 0) && (fAllAccounts || strAccount == strSentAccount))
@@ -1050,19 +1182,31 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
             string account;
             if (pwalletMain->mapAddressBook.count(r.first))
                 account = pwalletMain->mapAddressBook[r.first];
-            if (fAllAccounts || (account == strAccount))
+            if (true || (account == strAccount))
             {
                 Object entry;
                 entry.push_back(Pair("account", account));
                 MaybePushAddress(entry, r.first);
                 if (wtx.IsCoinBase() || wtx.IsCoinStake())
                 {
-                    if (wtx.GetDepthInMainChain() < 1)
+					double subsidy = CoinToDouble(r.second);
+		            if (wtx.GetDepthInMainChain() < 1)
+					{
                         entry.push_back(Pair("category", "orphan"));
-                    else if (wtx.GetBlocksToMaturity() > 0)
-                        entry.push_back(Pair("category", "immature"));
-                    else
-                        entry.push_back(Pair("category", "generate"));
+					}
+					else if (wtx.GetBlocksToMaturity() > 0)
+                    {
+						entry.push_back(Pair("category", "immature"));
+					}
+					else
+                    {
+						entry.push_back(Pair("category", "generate"));
+					
+					}
+					std::string type = IsPoR2(-nFee) ? "POR" : "Interest";
+					{
+						entry.push_back(Pair("Type", type));
+                 	}
                 }
                 else
                 {
@@ -1079,8 +1223,7 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
                     WalletTxToJSON(wtx, entry);
                 ret.push_back(entry);
             }
-            if (stop)
-                break;
+            if (stop)                 break;
         }
     }
 }
@@ -1101,6 +1244,10 @@ void AcentryToJSON(const CAccountingEntry& acentry, const string& strAccount, Ar
         ret.push_back(entry);
     }
 }
+
+
+
+
 
 Value listtransactions(const Array& params, bool fHelp)
 {
@@ -1128,13 +1275,14 @@ Value listtransactions(const Array& params, bool fHelp)
 
     std::list<CAccountingEntry> acentries;
     CWallet::TxItems txOrdered = pwalletMain->OrderedTxItems(acentries, strAccount);
-
+	CTxDB txdb("r");
+       
     // iterate backwards until we have nCount items to return:
     for (CWallet::TxItems::reverse_iterator it = txOrdered.rbegin(); it != txOrdered.rend(); ++it)
     {
         CWalletTx *const pwtx = (*it).second.first;
         if (pwtx != 0)
-            ListTransactions(*pwtx, strAccount, 0, true, ret);
+            ListTransactions2(*pwtx, strAccount, 0, true, ret,txdb);
         CAccountingEntry *const pacentry = (*it).second.second;
         if (pacentry != 0)
             AcentryToJSON(*pacentry, strAccount, ret);

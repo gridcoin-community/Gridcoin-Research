@@ -253,7 +253,7 @@ int main(int argc, char *argv[])
         guiref = &window;
 
 		QTimer *timer = new QTimer(guiref);
-		printf("Starting .NET timer\r\n");
+		printf("\r\nStarting Gridcoin\r\n");
 
 		QObject::connect(timer, SIGNAL(timeout()), guiref, SLOT(timerfire()));
   
@@ -283,7 +283,7 @@ int main(int argc, char *argv[])
                 {
                     window.show();
                 }
-				timer->start(4000);
+				timer->start(5000);
 	
                 // Place this here as guiref has to be defined if we don't want to lose URIs
                 ipcInit(argc, argv);

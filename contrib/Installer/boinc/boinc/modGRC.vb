@@ -17,6 +17,8 @@ Module modGRC
         Dim Status As Boolean
         Dim OutputError As String
     End Structure
+    Private prodURL As String = "http://download.gridcoin.us/download/downloadstake/"
+    Private testURL As String = "http://download.gridcoin.us/download/downloadstaketestnet/"
 
     Public msGenericDictionary As New Dictionary(Of String, String)
     Public msRPCCommand As String = ""
@@ -26,6 +28,8 @@ Module modGRC
     Public mfrmProjects As frmNewUserWizard
     Public mfrmSql As frmSQL
     Public mfrmTicketAdd As frmTicketAdd
+    Public mfrmFoundation As frmFoundation
+
     Public mfrmTicketList As frmTicketList
     Public mfrmLogin As frmLogin
     Public mfrmTicker As frmLiveTicker
@@ -41,24 +45,36 @@ Module modGRC
         Public Shared intensity As String = "13"
         Public Shared lookup_gap As String = "2"
     End Structure
-    Public Function ExecuteRPCCommand(sCommand As String, sArg1 As String, sArg2 As String)
-        Dim sPayload As String = "<COMMAND>" + sCommand + "</COMMAND><ARG1>" + sArg1 + "</ARG1><ARG2>" + sArg2 + "</ARG2>"
-        SetRPCReply("")
-        msRPCReply = ""
-        msRPCCommand = sPayload
-        'Busy Wait
-        Dim sReply As String = ""
-        For x As Integer = 1 To 60
-            'sReply = GetRPCReply("RPC")
-            sReply = msRPCReply
-            If sReply <> "" Then Exit For
-            Threading.Thread.Sleep(250) '1/4 sec sleep
-            Application.DoEvents()
-        Next
-        Return sReply
-
+    Public Function GetFoundationGuid(sTitle As String) As String
+        Dim lPos As Long = InStr(1, LCase(sTitle), "[foundation ")
+        Dim sId As String = ""
+        If lPos > 0 Then sId = Mid(sTitle, lPos + Len("[foundation "), 36)
+        If Len(Trim(sId)) <> 36 Then Return ""
+        Return sId
     End Function
-    Public Sub PopulateHeadings(vHeading() As String, oDGV As DataGridView)
+
+    Public Function ExecuteRPCCommand(sCommand As String, sArg1 As String, sArg2 As String, sArg3 As String, sArg4 As String, sArg5 As String) As String
+        Dim sReply As String = ""
+        Try
+            Dim sPayload As String = "<COMMAND>" + sCommand + "</COMMAND><ARG1>" + sArg1 + "</ARG1><ARG2>" + sArg2 + "</ARG2><ARG3>" + sArg3 + "</ARG3><ARG4>" + sArg4 + "</ARG4><ARG5>" + sArg5 + "</ARG5>"
+            SetRPCReply("")
+            msRPCReply = ""
+            msRPCCommand = sPayload
+            'Busy Wait
+            For x As Integer = 1 To 60
+                sReply = msRPCReply
+                If sReply <> "" Then Return sReply
+                Threading.Thread.Sleep(250) '1/4 sec sleep
+                Application.DoEvents()
+            Next
+            sReply = "Unable to reach Gridcoin RPC."
+            Return sReply
+        Catch ex As Exception
+            Log("EXCEPTION: ExecuteRPCCommand : " + ex.Message)
+            Return "Unable to execute vote, " + ex.Message
+        End Try
+    End Function
+    Public Sub PopulateHeadings(vHeading() As String, oDGV As DataGridView, bAutoFit As Boolean)
 
         For x = 0 To UBound(vHeading)
             Dim dc As New System.Windows.Forms.DataGridViewColumn
@@ -72,15 +88,24 @@ Module modGRC
         Dim dgcc As New DataGridViewCellStyle
         dgcc.ForeColor = System.Drawing.Color.SandyBrown
         oDGV.ColumnHeadersDefaultCellStyle = dgcc
+    
         For x = 0 To UBound(vHeading)
-            oDGV.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.None
+            If bAutoFit Then
+                oDGV.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells
+                oDGV.Columns(x).SortMode = DataGridViewColumnSortMode.Automatic
+            Else
+                oDGV.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.None
+                oDGV.Columns(x).SortMode = DataGridViewColumnSortMode.Automatic
+            End If
         Next
+
+    End Sub
+    Public Sub SetAutoSizeMode2(vHeading() As String, oDGV As DataGridView)
         For x = 0 To UBound(vHeading)
             oDGV.Columns(x).AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells
         Next
 
     End Sub
-
     Private Function TruncateHash(ByVal key As String, ByVal length As Integer) As Byte()
         Dim sha1 As New SHA1CryptoServiceProvider
         ' Hash the key. 
@@ -400,10 +425,18 @@ Module modGRC
     End Function
 
     Public Function FileToBytes(sSourceFileName As String) As Byte()
+        If sSourceFileName Is Nothing Then Exit Function
+
+        Try
+
         Dim sFilePath As String = sSourceFileName
         Dim b() As Byte
         b = System.IO.File.ReadAllBytes(sFilePath)
         Return b
+        Catch ex As Exception
+            MsgBox("File may be open in another program, please close it first.", MsgBoxStyle.Critical)
+
+        End Try
 
     End Function
 
@@ -414,6 +447,26 @@ Module modGRC
         Return True
     End Function
 
+    Public Function GetMd5String(b As Byte()) As String
+        Try
+            Dim objMD5 As New System.Security.Cryptography.MD5CryptoServiceProvider
+            Dim arrHash() As Byte
+            arrHash = objMD5.ComputeHash(b)
+            objMD5 = Nothing
+            Dim sOut As String = ByteArrayToHexString2(arrHash)
+            Return sOut
+
+        Catch ex As Exception
+            Return "MD5Error"
+        End Try
+    End Function
+    Public Function GetMd5OfFile(sFile As String) As String
+         Dim b() As Byte
+        b = FileToBytes(sFile)
+        Dim bHash As String
+        bHash = GetMd5String(b)
+        Return bHash
+    End Function
     Public Function GetMd5String(ByVal sData As String) As String
         Try
             Dim objMD5 As New System.Security.Cryptography.MD5CryptoServiceProvider
@@ -531,15 +584,55 @@ Module modGRC
             Dim di As New DirectoryInfo(sBoincDir)
             di.Delete(True)
         Catch ex As Exception
-
         End Try
         Try
             ExtractZipFile(GetGRCAppDir() + "\boinc.zip", sBoincDir)
         Catch ex As Exception
+        End Try
+    End Sub
+    Public Function GetURL() As String
+        Return IIf(mbTestNet, testURL, prodURL)
+
+    End Function
+    Private Sub DownloadFile(ByVal sFile As String, Optional sServerFolder As String = "")
+        Dim sLocalPath As String = GetGRCAppDir()
+        Dim sLocalFile As String = sFile
+        Dim sLocalPathFile As String = sLocalPath + "\" + sLocalFile
+        Try
+            Kill(sLocalPathFile)
+        Catch ex As Exception
+            EventLog.WriteEntry("DownloadFile", "Cant find " + sFile + " " + ex.Message)
+        End Try
+        Dim sURL As String = GetURL() + sServerFolder + sFile
+        Dim myWebClient As New MyWebClient()
+        myWebClient.DownloadFile(sURL, sLocalPathFile)
+        System.Threading.Thread.Sleep(500)
+    End Sub
+
+    Public Sub InstallGalaza()
+        Dim sDestDir As String = GetGRCAppDir() + "\Galaza\"
+     
+        Try
+            System.IO.Directory.CreateDirectory(sDestDir)
+        Catch ex As Exception
 
         End Try
-
+        Try
+            DownloadFile("galaza.zip", "modules/")
+        Catch ex As Exception
+            MsgBox("Unable to download Galaza " + ex.Message, MsgBoxStyle.Critical)
+            Exit Sub
+        End Try
+        Try
+            ExtractZipFile(GetGRCAppDir() + "\galaza.zip", sDestDir)
+            UpdateKey("galazaenabled", "true")
+            MsgBox("Installed Gridcoin Galaza Successfully! (Next time you restart gridcoin, Galaza will be on the Advanced menu)", MsgBoxStyle.Information)
+        Catch ex As Exception
+            Log("Error while installing Galaza " + ex.Message)
+            MsgBox("Error while installing Galaza " + ex.Message, MsgBoxStyle.Critical)
+        End Try
     End Sub
+
     Public Function RestartWallet1(sParams As String)
         Dim p As Process = New Process()
         Dim pi As ProcessStartInfo = New ProcessStartInfo()
@@ -663,8 +756,18 @@ Module modGRC
             sw.WriteLine(Trim(DateStamp) + ", " + sData)
             sw.Close()
         Catch ex As Exception
+
         End Try
 
+    End Sub
+    Public Sub PurgeLog()
+        Try
+            Dim sPath As String
+            sPath = GetGridFolder() + "debug2.log"
+            Kill(sPath)
+        Catch ex As Exception
+
+        End Try
     End Sub
 
 
@@ -755,6 +858,7 @@ Module modGRC
             If sOut = "gridcoinrdtestharness.exe.exe" Or sOut = "gridcoinrdtestharness.exe" Then sOut = ""
             If sOut = "cgminer_base64.zip" Then sOut = ""
             If sOut = "signed" Then sOut = ""
+            If LCase(sOut) = "modules" Then sOut = ""
 
             Return Trim(sOut)
         Catch ex As Exception
@@ -932,7 +1036,7 @@ Module modGRC
             Return ex.Message
         End Try
     End Function
-    Public Function GetRPCReply(sType As String) As String
+    Public Function xGetRPCReply(sType As String) As String
         Dim d As New Row
         d.Database = "RPC"
         d.Table = "RPC"
@@ -941,19 +1045,15 @@ Module modGRC
         Return d.DataColumn1
     End Function
     Public Function SetRPCReply(sData As String) As Double
+        Try
 
-        msRPCReply = sData
-        Log("Received QT RPC Reply: " + sData)
+            msRPCReply = sData
+            Log("Received QT RPC Reply: " + sData)
+            Return 1
+        Catch ex As Exception
+            Return 0
+        End Try
 
-        Dim d As New Row
-        d.Table = "RPC"
-        d.Database = "RPC"
-        d.PrimaryKey = "RPC"
-        'd.Added = DateAdd(DateInterval.Day, 1, Now)
-        'd.Expiration = DateAdd(DateInterval.Day, 1, Now)
-        d.DataColumn1 = sData
-        '  Store(d)
-        Return 1
     End Function
 
 End Module

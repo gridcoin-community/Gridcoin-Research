@@ -149,6 +149,10 @@ public:
     // This is only slightly more CPU intensive than just verifying it.
     // If this function succeeds, the recovered public key is guaranteed to be valid
     // (the signature is a valid signature of the given data for that key)
+		
+    // Ensure that signature is DER-encoded
+    static bool ReserealizeSignature(std::vector<unsigned char>& vchSig);
+
     bool SetCompactSignature(uint256 hash, const std::vector<unsigned char>& vchSig);
 
     bool Verify(uint256 hash, const std::vector<unsigned char>& vchSig);

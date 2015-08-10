@@ -24,6 +24,7 @@ using namespace std;
 using namespace boost;
 
 leveldb::DB *txdb; // global pointer for LevelDB object instance
+StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
 
 static leveldb::Options GetOptions() {
     leveldb::Options options;
@@ -323,7 +324,7 @@ bool CTxDB::LoadBlockIndex()
 {
 
 	int64_t nStart = GetTimeMillis();
-
+	double dBlockCount = 0;
 
     if (mapBlockIndex.size() > 0) {
         // Already loaded once in this session. It can happen during migration
@@ -376,6 +377,33 @@ bool CTxDB::LoadBlockIndex()
         pindexNew->nBits          = diskindex.nBits;
         pindexNew->nNonce         = diskindex.nNonce;
 
+		//7-11-2015 - Gridcoin - New Accrual Fields
+
+		if (diskindex.nHeight > nNewIndex)
+		{
+			pindexNew->sCPID             = diskindex.sCPID;
+			pindexNew->nResearchSubsidy  = diskindex.nResearchSubsidy;
+			pindexNew->nInterestSubsidy  = diskindex.nInterestSubsidy;
+			pindexNew->nMagnitude        = diskindex.nMagnitude;
+		}
+
+		if (!diskindex.sCPID.empty())
+		{
+			if (diskindex.sCPID != "INVESTOR")
+			{
+				StructCPID stCPID = GetInitializedStructCPID2(diskindex.sCPID,mvResearchAge);
+	     		stCPID.InterestSubsidy += diskindex.nInterestSubsidy;
+				stCPID.ResearchSubsidy += diskindex.nResearchSubsidy;
+				stCPID.Accuracy++;
+				if (((double)pindexNew->nHeight) > stCPID.LastBlock && diskindex.nResearchSubsidy > 0) 
+				{
+						stCPID.LastBlock = (double)pindexNew->nHeight;
+						stCPID.BlockHash = blockHash.GetHex();
+				}
+				mvResearchAge[diskindex.sCPID]=stCPID;
+			}	
+		}
+		dBlockCount++;
         // Watch for genesis block
         if (pindexGenesisBlock == NULL && blockHash == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
             pindexGenesisBlock = pindexNew;
@@ -393,13 +421,10 @@ bool CTxDB::LoadBlockIndex()
     }
     delete iterator;
 
-
-
-	printf("Time to memorize diskindex %15"PRId64"ms\n", GetTimeMillis() - nStart);
+	
+	printf("Time to memorize diskindex containing %f blocks : %15"PRId64"ms\n", dBlockCount, GetTimeMillis() - nStart);
 	nStart = GetTimeMillis();
-
-
-
+	
 
     if (fRequestShutdown)
         return true;

@@ -33,6 +33,7 @@ INPUT(
 ./build/clientmodel.o
 ./build/guiutil.o
 ./build/transactionrecord.o
+./build/trafficgraphwidget.o
 ./build/optionsmodel.o
 ./build/monitoreddatamapper.o
 ./build/transactiondesc.o
@@ -88,6 +89,7 @@ INPUT(
 ./build/moc_bitcoinaddressvalidator.o
 ./build/moc_clientmodel.o
 ./build/moc_guiutil.o
+./build/moc_trafficgraphwidget.o
 ./build/moc_optionsmodel.o
 ./build/moc_monitoreddatamapper.o
 ./build/moc_transactiondesc.o

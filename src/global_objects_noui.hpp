@@ -27,9 +27,9 @@ extern volatile bool bCheckedForUpgradeLive;
 extern volatile bool bGlobalcomInitialized;
 extern volatile bool bAllowBackToBack;
 extern volatile bool CreatingCPUBlock;
-extern volatile double nGlobalNonce;
+
 extern volatile double nGlobalHashCounter;
-extern volatile double nGlobalSolutionNonce;
+
 extern int miningthreadcount;
 	
     struct StructCPID 
@@ -66,15 +66,16 @@ extern int miningthreadcount;
 		double MagnitudeCount;
 		double LowLockTime;
 		double HighLockTime;
-		double ConsensusTotalMagnitude;
-		double ConsensusMagnitudeCount;
 		double Accuracy;
-		double ConsensusMagnitude;
 		double totalowed;
 		double longtermtotalowed;
 		double longtermowed;
 		double LastPaymentTime;
 		double ResearchSubsidy;
+		double ResearchSubsidy2;
+		double ResearchAge;
+		double ResearchMagnitudeUnit;
+		double ResearchAverageMagnitude;
 		double EarliestPaymentTime;
 		double RSAWeight;
 		double InterestSubsidy;
@@ -100,6 +101,8 @@ extern int miningthreadcount;
 		std::string PaymentTimestamps;
 		std::string PaymentAmountsResearch;
 		std::string PaymentAmountsInterest;
+		std::string PaymentAmountsBlocks;
+		std::string BlockHash;
 		std::string GRCAddress;
 		
 	};
@@ -143,13 +146,14 @@ extern int miningthreadcount;
 		double VouchedRAC;
 		double VouchedNetworkRAC;
 		double Magnitude;
-		double ConsensusTotalMagnitude;
-		double ConsensusMagnitudeCount;
 		double Accuracy;
-		double ConsensusMagnitude;
 		double RSAWeight;
 		double LastPaymentTime;
 		double ResearchSubsidy;
+		double ResearchSubsidy2;
+		double ResearchAge;
+		double ResearchMagnitudeUnit;
+		double ResearchAverageMagnitude;
 		double InterestSubsidy;
 		int prevBlockType;
 		double Canary;

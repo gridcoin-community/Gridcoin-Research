@@ -51,6 +51,17 @@ int ClientModel::getNumBlocksAtStartup()
     return numBlocksAtStartup;
 }
 
+
+quint64 ClientModel::getTotalBytesRecv() const
+{
+    return CNode::GetTotalBytesRecv();
+}
+
+quint64 ClientModel::getTotalBytesSent() const
+{
+    return CNode::GetTotalBytesSent();
+}
+
 QDateTime ClientModel::getLastBlockDate() const
 {
     LOCK(cs_main);
@@ -77,9 +88,14 @@ void ClientModel::updateTimer()
     {
         cachedNumBlocks = newNumBlocks;
         cachedNumBlocksOfPeers = newNumBlocksOfPeers;
-
+		
         emit numBlocksChanged(newNumBlocks, newNumBlocksOfPeers);
-    }
+	}
+	if (GetArg("-suppressnetworkgraph", "false") != "true")
+	{
+		emit bytesChanged(getTotalBytesRecv(), getTotalBytesSent());
+	}
+    
 }
 
 void ClientModel::updateNumConnections(int numConnections)
@@ -180,6 +196,7 @@ static void NotifyBlocksChanged(ClientModel *clientmodel)
 {
     // This notification is too frequent. Don't trigger a signal.
     // Don't remove it, though, as it might be useful later.
+	
 }
 
 static void NotifyNumConnectionsChanged(ClientModel *clientmodel, int newNumConnections)

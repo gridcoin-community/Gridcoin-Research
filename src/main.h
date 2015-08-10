@@ -22,7 +22,6 @@ class CReserveKey;
 class COutPoint;
 class CAddress;
 class CInv;
-class CRequestTracker;
 class CNode;
 class CTxMemPool;
 
@@ -33,6 +32,11 @@ extern unsigned int CHECKPOINT_VIOLATIONS;
 static const int MAX_NEWBIE_BLOCKS = 200;
 static const int MAX_NEWBIE_BLOCKS_LEVEL2 = 500;
 static const int CHECKPOINT_DISTRIBUTED_MODE = 50;
+static const int CONSENSUS_LOOKBACK = 5;  //Amount of blocks to go back from best block, to avoid counting forked blocks
+static const int BLOCK_GRANULARITY = 10;   //Consensus block divisor 
+
+static const double NeuralNetworkMultiplier = 115000;
+
 extern int64_t nLastBlockSolved;
 extern int64_t nLastBlockSubmitted;
 
@@ -50,7 +54,9 @@ extern bool bNewUserWizardNotified;
 
 /** The maximum allowed size for a serialized block, in bytes (network rule) */
 static const unsigned int MAX_BLOCK_SIZE = 1000000;
-static const double TOLERANCE_PERCENT = 1.40;  // The amount a network consensus magnitude can be skewed by before calling Netsoft
+/** Target Blocks Per day */
+static const unsigned int BLOCKS_PER_DAY = 1000;
+static const double TOLERANCE_PERCENT = 0;  // The amount a network consensus magnitude can be skewed by before calling Netsoft (Removed as of 7/3/2015 - NeuralNetwork)
 /** The maximum size for mined blocks */
 static const unsigned int MAX_BLOCK_SIZE_GEN = MAX_BLOCK_SIZE/2;
 /** The maximum size for transactions we're willing to relay/mine **/
@@ -59,6 +65,8 @@ static const unsigned int MAX_STANDARD_TX_SIZE = MAX_BLOCK_SIZE_GEN/5;
 static const unsigned int MAX_BLOCK_SIGOPS = MAX_BLOCK_SIZE/50;
 /** The maximum number of orphan transactions kept in memory */
 static const unsigned int MAX_ORPHAN_TRANSACTIONS = MAX_BLOCK_SIZE/100;
+/** The maximum number of orphan blocks kept in memory */
+static const unsigned int MAX_ORPHAN_BLOCKS = 750;
 /** The maximum number of entries in an 'inv' protocol message */
 static const unsigned int MAX_INV_SZ = 50000;
 /** Fees smaller than this (in satoshi) are considered zero fee (for transaction creation) */
@@ -90,8 +98,11 @@ inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight)
 extern std::map<std::string, std::string> mvApplicationCache;
 extern std::map<std::string, int64_t> mvApplicationCacheTimestamp;
 extern std::map<std::string, double> mvNeuralNetworkHash;
+extern std::map<std::string, double> mvNeuralVersion;
 
 extern std::map<std::string, StructCPID> mvDPOR;
+extern std::map<std::string, StructCPID> mvResearchAge;
+
 extern CScript COINBASE_FLAGS;
 extern CCriticalSection cs_main;
 extern std::map<uint256, CBlockIndex*> mapBlockIndex;
@@ -116,15 +127,19 @@ extern CCriticalSection cs_setpwalletRegistered;
 extern std::set<CWallet*> setpwalletRegistered;
 extern unsigned char pchMessageStart[4];
 extern std::map<uint256, CBlock*> mapOrphanBlocks;
+
 extern int64_t COIN_YEAR_REWARD;
 extern bool bCryptoLotteryEnabled;
-
+extern bool bRemotePaymentsEnabled;
+extern bool bResearchAgeEnabled;
 
 // Settings
 extern int64_t nTransactionFee;
 extern int64_t nReserveBalance;
 extern int64_t nMinimumInputValue;
 extern int64_t nLastTallied;
+extern int64_t nLastTalliedNeural;
+
 extern int64_t nCPIDsLoaded;
 extern int64_t nLastGRCtallied;
 
@@ -139,6 +154,8 @@ static const uint64_t nMinDiskSpace = 52428800;
 // PoB Miner Global Vars:
 extern std::string 	msMiningProject;
 extern std::string 	msMiningCPID;
+extern std::string  msPrimaryCPID;
+
 extern double    	mdMiningRAC;
 extern double       mdMiningNetworkRAC;
 extern double       mdPORNonce;
@@ -153,11 +170,10 @@ extern std::string  msHashBoincTxId;
 extern std::string  msMiningErrors;
 extern std::string  msMiningErrors2;
 extern std::string  msMiningErrors3;
-extern std::string  msMiningErrors4;
 extern std::string  msMiningErrors5;
 extern std::string  msMiningErrors6;
 extern std::string  msMiningErrors7;
-
+extern std::string  msNeuralResponse;
 extern bool         mbBlocksDownloaded;
 
 
@@ -165,6 +181,7 @@ extern std::string  Organization;
 extern std::string  OrganizationKey;
 
 extern int nGrandfather;
+extern int nNewIndex;
 
 // PoB GPU Miner Global Vars:
 extern std::string 	msGPUMiningProject;
@@ -206,7 +223,13 @@ bool LoadExternalBlockFile(FILE* fileIn);
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfStake);
 int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height);
-int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, bool VerifyingBlock,int64_t locktime,double& OUT_POR, double& OUT_INTEREST,double RSAWeight);
+
+int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, 
+	bool VerifyingBlock, int64_t locktime, CBlockIndex* pindexLast,
+	std::string operation, double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
+
+
+
 
 unsigned int ComputeMinWork(unsigned int nBase, int64_t nTime);
 unsigned int ComputeMinStake(unsigned int nBase, int64_t nTime, unsigned int nBlockTime);
@@ -215,6 +238,7 @@ bool IsInitialBlockDownload();
 std::string GetWarnings(std::string strFor);
 bool GetTransaction(const uint256 &hash, CTransaction &tx, uint256 &hashBlock);
 uint256 WantedByOrphan(const CBlock* pblockOrphan);
+
 const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfStake);
 void StakeMiner(CWallet *pwallet);
 void ResendWalletTransactions(bool fForce = false);
@@ -1231,6 +1255,12 @@ public:
 
     int64_t nMint;
     int64_t nMoneySupply;
+	// Gridcoin (7-11-2015) Add new Accrual Fields to block index
+	std::string sCPID;
+	double nResearchSubsidy;
+	double nInterestSubsidy;
+	double nMagnitude;
+	//
 
     unsigned int nFlags;  // ppcoin: block index flags
     enum  
@@ -1279,6 +1309,11 @@ public:
         nTime          = 0;
         nBits          = 0;
         nNonce         = 0;
+		//7-11-2015 - Gridcoin - New Accrual Fields
+		sCPID = "";
+		nResearchSubsidy = 0;
+		nInterestSubsidy = 0;
+		nMagnitude = 0;
     }
 
     CBlockIndex(unsigned int nFileIn, unsigned int nBlockPosIn, CBlock& block)
@@ -1500,6 +1535,13 @@ public:
         READWRITE(nBits);
         READWRITE(nNonce);
         READWRITE(blockHash);
+		//7-11-2015 - Gridcoin - New Accrual Fields (Note, Removing the determinstic block number to make this happen all the time):
+		READWRITE(sCPID);
+		READWRITE(nResearchSubsidy);
+		READWRITE(nInterestSubsidy);
+		READWRITE(nMagnitude);
+	
+
     )
 
     uint256 GetBlockHash() const

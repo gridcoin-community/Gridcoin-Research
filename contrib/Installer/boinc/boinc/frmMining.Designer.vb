@@ -36,13 +36,18 @@ Partial Class frmMining
         Dim DataGridViewCellStyle3 As System.Windows.Forms.DataGridViewCellStyle = New System.Windows.Forms.DataGridViewCellStyle()
         Dim DataGridViewCellStyle4 As System.Windows.Forms.DataGridViewCellStyle = New System.Windows.Forms.DataGridViewCellStyle()
         Dim DataGridViewCellStyle5 As System.Windows.Forms.DataGridViewCellStyle = New System.Windows.Forms.DataGridViewCellStyle()
+        Dim DataGridViewCellStyle6 As System.Windows.Forms.DataGridViewCellStyle = New System.Windows.Forms.DataGridViewCellStyle()
+        Dim DataGridViewCellStyle7 As System.Windows.Forms.DataGridViewCellStyle = New System.Windows.Forms.DataGridViewCellStyle()
+        Dim DataGridViewCellStyle8 As System.Windows.Forms.DataGridViewCellStyle = New System.Windows.Forms.DataGridViewCellStyle()
+        Dim DataGridViewCellStyle9 As System.Windows.Forms.DataGridViewCellStyle = New System.Windows.Forms.DataGridViewCellStyle()
+        Dim DataGridViewCellStyle10 As System.Windows.Forms.DataGridViewCellStyle = New System.Windows.Forms.DataGridViewCellStyle()
         Dim resources As System.ComponentModel.ComponentResourceManager = New System.ComponentModel.ComponentResourceManager(GetType(frmMining))
         Me.btnRefresh = New System.Windows.Forms.Button()
         Me.Chart1 = New System.Windows.Forms.DataVisualization.Charting.Chart()
-        Me.ChartUtilization = New System.Windows.Forms.DataVisualization.Charting.Chart()
+        Me.chtCurCont = New System.Windows.Forms.DataVisualization.Charting.Chart()
         Me.lbltxtAvgCredits = New System.Windows.Forms.Label()
         Me.lblThanks = New System.Windows.Forms.Label()
-        Me.lblAvgCredits = New System.Windows.Forms.Label()
+        Me.lblWhitelistedProjects = New System.Windows.Forms.Label()
         Me.tOneMinute = New System.Windows.Forms.Timer(Me.components)
         Me.btnHide = New System.Windows.Forms.Button()
         Me.MenuStrip1 = New System.Windows.Forms.MenuStrip()
@@ -51,6 +56,7 @@ Partial Class frmMining
         Me.ConfigurationToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.ContractDetailsToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.PoolsToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
+        Me.InstallGridcoinGalazaToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.TabControl1 = New System.Windows.Forms.TabControl()
         Me.TabOverview = New System.Windows.Forms.TabPage()
         Me.GroupBox4 = New System.Windows.Forms.GroupBox()
@@ -68,8 +74,19 @@ Partial Class frmMining
         Me.txtSearch = New System.Windows.Forms.TextBox()
         Me.Label1 = New System.Windows.Forms.Label()
         Me.lblTestnet = New System.Windows.Forms.Label()
+        Me.dgvProjects = New System.Windows.Forms.DataGridView()
+        Me.lblTotalProjects = New System.Windows.Forms.Label()
+        Me.Label3 = New System.Windows.Forms.Label()
+        Me.pbSync = New System.Windows.Forms.ProgressBar()
+        Me.TimerSync = New System.Windows.Forms.Timer(Me.components)
+        Me.lblLastSynced = New System.Windows.Forms.Label()
+        Me.lblCPID = New System.Windows.Forms.Label()
+        Me.lblSuperblockAge = New System.Windows.Forms.Label()
+        Me.lblQuorumHash = New System.Windows.Forms.Label()
+        Me.lblTimestamp = New System.Windows.Forms.Label()
+        Me.lblBlock = New System.Windows.Forms.Label()
         CType(Me.Chart1, System.ComponentModel.ISupportInitialize).BeginInit()
-        CType(Me.ChartUtilization, System.ComponentModel.ISupportInitialize).BeginInit()
+        CType(Me.chtCurCont, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.MenuStrip1.SuspendLayout()
         Me.TabControl1.SuspendLayout()
         Me.TabOverview.SuspendLayout()
@@ -79,11 +96,12 @@ Partial Class frmMining
         CType(Me.pbCgminer, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.TabPage2.SuspendLayout()
         CType(Me.dgv, System.ComponentModel.ISupportInitialize).BeginInit()
+        CType(Me.dgvProjects, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.SuspendLayout()
         '
         'btnRefresh
         '
-        Me.btnRefresh.Location = New System.Drawing.Point(31, 734)
+        Me.btnRefresh.Location = New System.Drawing.Point(18, 734)
         Me.btnRefresh.Name = "btnRefresh"
         Me.btnRefresh.Size = New System.Drawing.Size(118, 35)
         Me.btnRefresh.TabIndex = 0
@@ -116,7 +134,7 @@ Partial Class frmMining
         Legend1.TitleForeColor = System.Drawing.Color.FromArgb(CType(CType(128, Byte), Integer), CType(CType(255, Byte), Integer), CType(CType(128, Byte), Integer))
         Legend1.TitleSeparatorColor = System.Drawing.Color.Lime
         Me.Chart1.Legends.Add(Legend1)
-        Me.Chart1.Location = New System.Drawing.Point(11, 426)
+        Me.Chart1.Location = New System.Drawing.Point(229, 617)
         Me.Chart1.Name = "Chart1"
         Me.Chart1.Palette = System.Windows.Forms.DataVisualization.Charting.ChartColorPalette.Fire
         Series1.BackImageTransparentColor = System.Drawing.Color.Transparent
@@ -129,46 +147,46 @@ Partial Class frmMining
         Series1.Name = "Series1"
         Series1.Palette = System.Windows.Forms.DataVisualization.Charting.ChartColorPalette.Bright
         Me.Chart1.Series.Add(Series1)
-        Me.Chart1.Size = New System.Drawing.Size(917, 128)
+        Me.Chart1.Size = New System.Drawing.Size(823, 81)
         Me.Chart1.SuppressExceptions = True
         Me.Chart1.TabIndex = 2
         Me.Chart1.Text = "Boinc Utilization"
         '
-        'ChartUtilization
+        'chtCurCont
         '
-        Me.ChartUtilization.BackColor = System.Drawing.Color.Transparent
-        Me.ChartUtilization.BackImageTransparentColor = System.Drawing.Color.Black
-        Me.ChartUtilization.BackSecondaryColor = System.Drawing.Color.Black
-        Me.ChartUtilization.BorderlineColor = System.Drawing.Color.Black
+        Me.chtCurCont.BackColor = System.Drawing.Color.Transparent
+        Me.chtCurCont.BackImageTransparentColor = System.Drawing.Color.Black
+        Me.chtCurCont.BackSecondaryColor = System.Drawing.Color.Black
+        Me.chtCurCont.BorderlineColor = System.Drawing.Color.Black
         ChartArea2.Area3DStyle.Enable3D = True
         ChartArea2.BackColor = System.Drawing.Color.FromArgb(CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer))
         ChartArea2.Name = "ChartArea1"
-        Me.ChartUtilization.ChartAreas.Add(ChartArea2)
+        Me.chtCurCont.ChartAreas.Add(ChartArea2)
         Legend2.BackColor = System.Drawing.Color.Transparent
         Legend2.Name = "Legend1"
-        Me.ChartUtilization.Legends.Add(Legend2)
-        Me.ChartUtilization.Location = New System.Drawing.Point(11, 560)
-        Me.ChartUtilization.Name = "ChartUtilization"
-        Me.ChartUtilization.Palette = System.Windows.Forms.DataVisualization.Charting.ChartColorPalette.Bright
+        Me.chtCurCont.Legends.Add(Legend2)
+        Me.chtCurCont.Location = New System.Drawing.Point(31, 608)
+        Me.chtCurCont.Name = "chtCurCont"
+        Me.chtCurCont.Palette = System.Windows.Forms.DataVisualization.Charting.ChartColorPalette.Bright
         Series2.ChartArea = "ChartArea1"
         Series2.Legend = "Legend1"
         Series2.Name = "Series1"
-        Me.ChartUtilization.Series.Add(Series2)
-        Me.ChartUtilization.Size = New System.Drawing.Size(227, 148)
-        Me.ChartUtilization.SuppressExceptions = True
-        Me.ChartUtilization.TabIndex = 3
-        Me.ChartUtilization.Text = "Chart2"
+        Me.chtCurCont.Series.Add(Series2)
+        Me.chtCurCont.Size = New System.Drawing.Size(179, 100)
+        Me.chtCurCont.SuppressExceptions = True
+        Me.chtCurCont.TabIndex = 3
+        Me.chtCurCont.Text = "Chart2"
         '
         'lbltxtAvgCredits
         '
         Me.lbltxtAvgCredits.AutoSize = True
         Me.lbltxtAvgCredits.BackColor = System.Drawing.Color.Transparent
         Me.lbltxtAvgCredits.Font = New System.Drawing.Font("Microsoft Sans Serif", 9.75!)
-        Me.lbltxtAvgCredits.Location = New System.Drawing.Point(539, 578)
+        Me.lbltxtAvgCredits.Location = New System.Drawing.Point(15, 578)
         Me.lbltxtAvgCredits.Name = "lbltxtAvgCredits"
-        Me.lbltxtAvgCredits.Size = New System.Drawing.Size(151, 16)
+        Me.lbltxtAvgCredits.Size = New System.Drawing.Size(129, 16)
         Me.lbltxtAvgCredits.TabIndex = 7
-        Me.lbltxtAvgCredits.Text = "Boinc Avg Daily Credits:"
+        Me.lbltxtAvgCredits.Text = "Whitelisted Projects:"
         '
         'lblThanks
         '
@@ -179,18 +197,18 @@ Partial Class frmMining
         Me.lblThanks.Name = "lblThanks"
         Me.lblThanks.Size = New System.Drawing.Size(10, 13)
         Me.lblThanks.TabIndex = 8
-        Me.lblThanks.Text = "."
+        Me.lblThanks.Text = " "
         '
-        'lblAvgCredits
+        'lblWhitelistedProjects
         '
-        Me.lblAvgCredits.AutoSize = True
-        Me.lblAvgCredits.BackColor = System.Drawing.Color.Transparent
-        Me.lblAvgCredits.Font = New System.Drawing.Font("Microsoft Sans Serif", 15.75!)
-        Me.lblAvgCredits.Location = New System.Drawing.Point(761, 571)
-        Me.lblAvgCredits.Name = "lblAvgCredits"
-        Me.lblAvgCredits.Size = New System.Drawing.Size(24, 25)
-        Me.lblAvgCredits.TabIndex = 11
-        Me.lblAvgCredits.Text = "0"
+        Me.lblWhitelistedProjects.AutoSize = True
+        Me.lblWhitelistedProjects.BackColor = System.Drawing.Color.Transparent
+        Me.lblWhitelistedProjects.Font = New System.Drawing.Font("Microsoft Sans Serif", 14.25!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        Me.lblWhitelistedProjects.Location = New System.Drawing.Point(141, 572)
+        Me.lblWhitelistedProjects.Name = "lblWhitelistedProjects"
+        Me.lblWhitelistedProjects.Size = New System.Drawing.Size(20, 24)
+        Me.lblWhitelistedProjects.TabIndex = 11
+        Me.lblWhitelistedProjects.Text = "0"
         '
         'tOneMinute
         '
@@ -251,9 +269,16 @@ Partial Class frmMining
         '
         'PoolsToolStripMenuItem
         '
+        Me.PoolsToolStripMenuItem.DropDownItems.AddRange(New System.Windows.Forms.ToolStripItem() {Me.InstallGridcoinGalazaToolStripMenuItem})
         Me.PoolsToolStripMenuItem.Name = "PoolsToolStripMenuItem"
-        Me.PoolsToolStripMenuItem.Size = New System.Drawing.Size(48, 20)
-        Me.PoolsToolStripMenuItem.Text = "Pools"
+        Me.PoolsToolStripMenuItem.Size = New System.Drawing.Size(114, 20)
+        Me.PoolsToolStripMenuItem.Text = "Optional Modules"
+        '
+        'InstallGridcoinGalazaToolStripMenuItem
+        '
+        Me.InstallGridcoinGalazaToolStripMenuItem.Name = "InstallGridcoinGalazaToolStripMenuItem"
+        Me.InstallGridcoinGalazaToolStripMenuItem.Size = New System.Drawing.Size(190, 22)
+        Me.InstallGridcoinGalazaToolStripMenuItem.Text = "Install Gridcoin Galaza"
         '
         'TabControl1
         '
@@ -367,7 +392,7 @@ Partial Class frmMining
         Me.pbCgminer.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch
         Me.pbCgminer.Location = New System.Drawing.Point(0, 1)
         Me.pbCgminer.Name = "pbCgminer"
-        Me.pbCgminer.Size = New System.Drawing.Size(909, 360)
+        Me.pbCgminer.Size = New System.Drawing.Size(1037, 360)
         Me.pbCgminer.TabIndex = 3
         Me.pbCgminer.TabStop = False
         '
@@ -449,7 +474,7 @@ Partial Class frmMining
         '
         'btnExport
         '
-        Me.btnExport.Location = New System.Drawing.Point(292, 734)
+        Me.btnExport.Location = New System.Drawing.Point(304, 734)
         Me.btnExport.Name = "btnExport"
         Me.btnExport.Size = New System.Drawing.Size(118, 35)
         Me.btnExport.TabIndex = 56
@@ -472,7 +497,7 @@ Partial Class frmMining
         Me.Label1.BackColor = System.Drawing.Color.Gainsboro
         Me.Label1.Font = New System.Drawing.Font("Microsoft Sans Serif", 9.75!)
         Me.Label1.ForeColor = System.Drawing.Color.Green
-        Me.Label1.Location = New System.Drawing.Point(700, 42)
+        Me.Label1.Location = New System.Drawing.Point(700, 40)
         Me.Label1.Name = "Label1"
         Me.Label1.Size = New System.Drawing.Size(54, 16)
         Me.Label1.TabIndex = 62
@@ -490,6 +515,152 @@ Partial Class frmMining
         Me.lblTestnet.TabIndex = 63
         Me.lblTestnet.Text = " "
         '
+        'dgvProjects
+        '
+        DataGridViewCellStyle6.BackColor = System.Drawing.Color.Black
+        DataGridViewCellStyle6.ForeColor = System.Drawing.Color.Lime
+        DataGridViewCellStyle6.SelectionBackColor = System.Drawing.Color.Gray
+        DataGridViewCellStyle6.SelectionForeColor = System.Drawing.Color.FromArgb(CType(CType(128, Byte), Integer), CType(CType(255, Byte), Integer), CType(CType(128, Byte), Integer))
+        Me.dgvProjects.AlternatingRowsDefaultCellStyle = DataGridViewCellStyle6
+        Me.dgvProjects.BackgroundColor = System.Drawing.Color.Black
+        DataGridViewCellStyle7.Alignment = System.Windows.Forms.DataGridViewContentAlignment.MiddleLeft
+        DataGridViewCellStyle7.BackColor = System.Drawing.Color.Black
+        DataGridViewCellStyle7.Font = New System.Drawing.Font("Microsoft Sans Serif", 8.25!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        DataGridViewCellStyle7.ForeColor = System.Drawing.Color.Lime
+        DataGridViewCellStyle7.SelectionBackColor = System.Drawing.SystemColors.Highlight
+        DataGridViewCellStyle7.SelectionForeColor = System.Drawing.SystemColors.HighlightText
+        DataGridViewCellStyle7.WrapMode = System.Windows.Forms.DataGridViewTriState.[True]
+        Me.dgvProjects.ColumnHeadersDefaultCellStyle = DataGridViewCellStyle7
+        Me.dgvProjects.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize
+        DataGridViewCellStyle8.Alignment = System.Windows.Forms.DataGridViewContentAlignment.MiddleLeft
+        DataGridViewCellStyle8.BackColor = System.Drawing.Color.Black
+        DataGridViewCellStyle8.Font = New System.Drawing.Font("Microsoft Sans Serif", 8.25!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        DataGridViewCellStyle8.ForeColor = System.Drawing.Color.Lime
+        DataGridViewCellStyle8.SelectionBackColor = System.Drawing.SystemColors.Highlight
+        DataGridViewCellStyle8.SelectionForeColor = System.Drawing.SystemColors.HighlightText
+        DataGridViewCellStyle8.WrapMode = System.Windows.Forms.DataGridViewTriState.[False]
+        Me.dgvProjects.DefaultCellStyle = DataGridViewCellStyle8
+        Me.dgvProjects.EnableHeadersVisualStyles = False
+        Me.dgvProjects.GridColor = System.Drawing.Color.FromArgb(CType(CType(0, Byte), Integer), CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer))
+        Me.dgvProjects.Location = New System.Drawing.Point(14, 428)
+        Me.dgvProjects.Name = "dgvProjects"
+        DataGridViewCellStyle9.Alignment = System.Windows.Forms.DataGridViewContentAlignment.MiddleLeft
+        DataGridViewCellStyle9.BackColor = System.Drawing.Color.Black
+        DataGridViewCellStyle9.Font = New System.Drawing.Font("Microsoft Sans Serif", 8.25!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        DataGridViewCellStyle9.ForeColor = System.Drawing.Color.Lime
+        DataGridViewCellStyle9.SelectionBackColor = System.Drawing.SystemColors.Highlight
+        DataGridViewCellStyle9.SelectionForeColor = System.Drawing.Color.FromArgb(CType(CType(0, Byte), Integer), CType(CType(64, Byte), Integer), CType(CType(0, Byte), Integer))
+        DataGridViewCellStyle9.WrapMode = System.Windows.Forms.DataGridViewTriState.[True]
+        Me.dgvProjects.RowHeadersDefaultCellStyle = DataGridViewCellStyle9
+        DataGridViewCellStyle10.BackColor = System.Drawing.Color.Black
+        DataGridViewCellStyle10.ForeColor = System.Drawing.Color.Lime
+        Me.dgvProjects.RowsDefaultCellStyle = DataGridViewCellStyle10
+        Me.dgvProjects.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect
+        Me.dgvProjects.Size = New System.Drawing.Size(1045, 138)
+        Me.dgvProjects.TabIndex = 64
+        '
+        'lblTotalProjects
+        '
+        Me.lblTotalProjects.AutoSize = True
+        Me.lblTotalProjects.BackColor = System.Drawing.Color.Transparent
+        Me.lblTotalProjects.Font = New System.Drawing.Font("Microsoft Sans Serif", 14.25!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        Me.lblTotalProjects.Location = New System.Drawing.Point(369, 572)
+        Me.lblTotalProjects.Name = "lblTotalProjects"
+        Me.lblTotalProjects.Size = New System.Drawing.Size(20, 24)
+        Me.lblTotalProjects.TabIndex = 66
+        Me.lblTotalProjects.Text = "0"
+        Me.lblTotalProjects.Visible = False
+        '
+        'Label3
+        '
+        Me.Label3.AutoSize = True
+        Me.Label3.BackColor = System.Drawing.Color.Transparent
+        Me.Label3.Font = New System.Drawing.Font("Microsoft Sans Serif", 9.75!)
+        Me.Label3.Location = New System.Drawing.Point(269, 578)
+        Me.Label3.Name = "Label3"
+        Me.Label3.Size = New System.Drawing.Size(94, 16)
+        Me.Label3.TabIndex = 65
+        Me.Label3.Text = "Total Projects:"
+        Me.Label3.Visible = False
+        '
+        'pbSync
+        '
+        Me.pbSync.Location = New System.Drawing.Point(477, 575)
+        Me.pbSync.Name = "pbSync"
+        Me.pbSync.Size = New System.Drawing.Size(578, 18)
+        Me.pbSync.TabIndex = 67
+        '
+        'TimerSync
+        '
+        Me.TimerSync.Enabled = True
+        Me.TimerSync.Interval = 1100
+        '
+        'lblLastSynced
+        '
+        Me.lblLastSynced.AutoSize = True
+        Me.lblLastSynced.BackColor = System.Drawing.Color.Transparent
+        Me.lblLastSynced.Font = New System.Drawing.Font("Microsoft Sans Serif", 9.75!)
+        Me.lblLastSynced.Location = New System.Drawing.Point(448, 734)
+        Me.lblLastSynced.Name = "lblLastSynced"
+        Me.lblLastSynced.Size = New System.Drawing.Size(85, 16)
+        Me.lblLastSynced.TabIndex = 68
+        Me.lblLastSynced.Text = "Last Synced:"
+        '
+        'lblCPID
+        '
+        Me.lblCPID.AutoSize = True
+        Me.lblCPID.BackColor = System.Drawing.Color.Transparent
+        Me.lblCPID.Font = New System.Drawing.Font("Microsoft Sans Serif", 9.75!)
+        Me.lblCPID.Location = New System.Drawing.Point(448, 753)
+        Me.lblCPID.Name = "lblCPID"
+        Me.lblCPID.Size = New System.Drawing.Size(42, 16)
+        Me.lblCPID.TabIndex = 69
+        Me.lblCPID.Text = "CPID:"
+        '
+        'lblSuperblockAge
+        '
+        Me.lblSuperblockAge.AutoSize = True
+        Me.lblSuperblockAge.BackColor = System.Drawing.Color.Transparent
+        Me.lblSuperblockAge.Font = New System.Drawing.Font("Microsoft Sans Serif", 9.75!)
+        Me.lblSuperblockAge.Location = New System.Drawing.Point(725, 734)
+        Me.lblSuperblockAge.Name = "lblSuperblockAge"
+        Me.lblSuperblockAge.Size = New System.Drawing.Size(108, 16)
+        Me.lblSuperblockAge.TabIndex = 70
+        Me.lblSuperblockAge.Text = "Superblock Age:"
+        '
+        'lblQuorumHash
+        '
+        Me.lblQuorumHash.AutoSize = True
+        Me.lblQuorumHash.BackColor = System.Drawing.Color.Transparent
+        Me.lblQuorumHash.Font = New System.Drawing.Font("Microsoft Sans Serif", 9.75!)
+        Me.lblQuorumHash.Location = New System.Drawing.Point(725, 753)
+        Me.lblQuorumHash.Name = "lblQuorumHash"
+        Me.lblQuorumHash.Size = New System.Drawing.Size(143, 16)
+        Me.lblQuorumHash.TabIndex = 71
+        Me.lblQuorumHash.Text = "Popular Quorum Hash:"
+        '
+        'lblTimestamp
+        '
+        Me.lblTimestamp.AutoSize = True
+        Me.lblTimestamp.BackColor = System.Drawing.Color.Transparent
+        Me.lblTimestamp.Font = New System.Drawing.Font("Microsoft Sans Serif", 9.75!)
+        Me.lblTimestamp.Location = New System.Drawing.Point(725, 772)
+        Me.lblTimestamp.Name = "lblTimestamp"
+        Me.lblTimestamp.Size = New System.Drawing.Size(151, 16)
+        Me.lblTimestamp.TabIndex = 72
+        Me.lblTimestamp.Text = "Superblock Timestamp:"
+        '
+        'lblBlock
+        '
+        Me.lblBlock.AutoSize = True
+        Me.lblBlock.BackColor = System.Drawing.Color.Transparent
+        Me.lblBlock.Font = New System.Drawing.Font("Microsoft Sans Serif", 9.75!)
+        Me.lblBlock.Location = New System.Drawing.Point(448, 772)
+        Me.lblBlock.Name = "lblBlock"
+        Me.lblBlock.Size = New System.Drawing.Size(127, 16)
+        Me.lblBlock.TabIndex = 73
+        Me.lblBlock.Text = "Superblock Block #:"
+        '
         'frmMining
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
@@ -498,6 +669,16 @@ Partial Class frmMining
         Me.BackgroundImage = Global.BoincStake.My.Resources.Resources.GradientU
         Me.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch
         Me.ClientSize = New System.Drawing.Size(1071, 793)
+        Me.Controls.Add(Me.lblBlock)
+        Me.Controls.Add(Me.lblTimestamp)
+        Me.Controls.Add(Me.lblQuorumHash)
+        Me.Controls.Add(Me.lblSuperblockAge)
+        Me.Controls.Add(Me.lblCPID)
+        Me.Controls.Add(Me.lblLastSynced)
+        Me.Controls.Add(Me.pbSync)
+        Me.Controls.Add(Me.lblTotalProjects)
+        Me.Controls.Add(Me.Label3)
+        Me.Controls.Add(Me.dgvProjects)
         Me.Controls.Add(Me.lblTestnet)
         Me.Controls.Add(Me.txtSearch)
         Me.Controls.Add(Me.Label1)
@@ -505,10 +686,10 @@ Partial Class frmMining
         Me.Controls.Add(Me.lblWarning)
         Me.Controls.Add(Me.TabControl1)
         Me.Controls.Add(Me.btnHide)
-        Me.Controls.Add(Me.lblAvgCredits)
+        Me.Controls.Add(Me.lblWhitelistedProjects)
         Me.Controls.Add(Me.lblThanks)
         Me.Controls.Add(Me.lbltxtAvgCredits)
-        Me.Controls.Add(Me.ChartUtilization)
+        Me.Controls.Add(Me.chtCurCont)
         Me.Controls.Add(Me.Chart1)
         Me.Controls.Add(Me.btnRefresh)
         Me.Controls.Add(Me.MenuStrip1)
@@ -517,9 +698,9 @@ Partial Class frmMining
         Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)
         Me.MainMenuStrip = Me.MenuStrip1
         Me.Name = "frmMining"
-        Me.Text = "Gridcoin Neural Network 1.0"
+        Me.Text = "Gridcoin Neural Network 1.1"
         CType(Me.Chart1, System.ComponentModel.ISupportInitialize).EndInit()
-        CType(Me.ChartUtilization, System.ComponentModel.ISupportInitialize).EndInit()
+        CType(Me.chtCurCont, System.ComponentModel.ISupportInitialize).EndInit()
         Me.MenuStrip1.ResumeLayout(False)
         Me.MenuStrip1.PerformLayout()
         Me.TabControl1.ResumeLayout(False)
@@ -530,16 +711,17 @@ Partial Class frmMining
         CType(Me.pbCgminer, System.ComponentModel.ISupportInitialize).EndInit()
         Me.TabPage2.ResumeLayout(False)
         CType(Me.dgv, System.ComponentModel.ISupportInitialize).EndInit()
+        CType(Me.dgvProjects, System.ComponentModel.ISupportInitialize).EndInit()
         Me.ResumeLayout(False)
         Me.PerformLayout()
 
     End Sub
     Friend WithEvents btnRefresh As System.Windows.Forms.Button
     Friend WithEvents Chart1 As System.Windows.Forms.DataVisualization.Charting.Chart
-    Friend WithEvents ChartUtilization As System.Windows.Forms.DataVisualization.Charting.Chart
+    Friend WithEvents chtCurCont As System.Windows.Forms.DataVisualization.Charting.Chart
     Friend WithEvents lbltxtAvgCredits As System.Windows.Forms.Label
     Friend WithEvents lblThanks As System.Windows.Forms.Label
-    Friend WithEvents lblAvgCredits As System.Windows.Forms.Label
+    Friend WithEvents lblWhitelistedProjects As System.Windows.Forms.Label
     Friend WithEvents tOneMinute As System.Windows.Forms.Timer
     Friend WithEvents btnHide As System.Windows.Forms.Button
     Friend WithEvents MenuStrip1 As System.Windows.Forms.MenuStrip
@@ -565,4 +747,16 @@ Partial Class frmMining
     Friend WithEvents txtSearch As System.Windows.Forms.TextBox
     Friend WithEvents Label1 As System.Windows.Forms.Label
     Friend WithEvents lblTestnet As System.Windows.Forms.Label
+    Friend WithEvents dgvProjects As System.Windows.Forms.DataGridView
+    Friend WithEvents lblTotalProjects As System.Windows.Forms.Label
+    Friend WithEvents Label3 As System.Windows.Forms.Label
+    Friend WithEvents pbSync As System.Windows.Forms.ProgressBar
+    Friend WithEvents TimerSync As System.Windows.Forms.Timer
+    Friend WithEvents InstallGridcoinGalazaToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
+    Friend WithEvents lblLastSynced As System.Windows.Forms.Label
+    Friend WithEvents lblCPID As System.Windows.Forms.Label
+    Friend WithEvents lblSuperblockAge As System.Windows.Forms.Label
+    Friend WithEvents lblQuorumHash As System.Windows.Forms.Label
+    Friend WithEvents lblTimestamp As System.Windows.Forms.Label
+    Friend WithEvents lblBlock As System.Windows.Forms.Label
 End Class

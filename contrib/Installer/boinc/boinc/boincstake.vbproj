@@ -94,6 +94,25 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="clsMailFunctions.vb" />
+    <Compile Include="clsQuorumHashingAlgorithm.cls" />
+    <Compile Include="frmChangePassword.Designer.vb">
+      <DependentUpon>frmChangePassword.vb</DependentUpon>
+    </Compile>
+    <Compile Include="frmChangePassword.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmFoundation.Designer.vb">
+      <DependentUpon>frmFoundation.vb</DependentUpon>
+    </Compile>
+    <Compile Include="frmFoundation.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmAddExpense.Designer.vb">
+      <DependentUpon>frmAddExpense.vb</DependentUpon>
+    </Compile>
+    <Compile Include="frmAddExpense.vb">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="frmPlaceVote.Designer.vb">
       <DependentUpon>frmPlaceVote.vb</DependentUpon>
     </Compile>
@@ -104,6 +123,12 @@
       <DependentUpon>frmChartVotes.vb</DependentUpon>
     </Compile>
     <Compile Include="frmChartVotes.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmRegister.Designer.vb">
+      <DependentUpon>frmRegister.vb</DependentUpon>
+    </Compile>
+    <Compile Include="frmRegister.vb">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="frmVoting.Designer.vb">
@@ -218,11 +243,24 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="frmChangePassword.resx">
+      <DependentUpon>frmChangePassword.vb</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="frmFoundation.resx">
+      <DependentUpon>frmFoundation.vb</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="frmAddExpense.resx">
+      <DependentUpon>frmAddExpense.vb</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="frmPlaceVote.resx">
       <DependentUpon>frmPlaceVote.vb</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="frmChartVotes.resx">
       <DependentUpon>frmChartVotes.vb</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="frmRegister.resx">
+      <DependentUpon>frmRegister.vb</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="frmVoting.resx">
       <DependentUpon>frmVoting.vb</DependentUpon>

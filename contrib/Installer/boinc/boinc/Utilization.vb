@@ -15,17 +15,40 @@ Public Class Utilization
 
     Public ReadOnly Property Version As Double
         Get
-            Return 374
-
+            Return 403
         End Get
     End Property
 
     Private lfrmMiningCounter As Long = 0
     Public ReadOnly Property BoincUtilization As Double
         Get
-            ' Return Val(clsGVM.BoincUtilization)
+            'Return Val(clsGVM.BoincUtilization)
         End Get
     End Property
+    Public Function SetQuorumData(sData As String) As String
+
+        Dim sQuorumData As String = ExtractXML(sData, "<QUORUMDATA>")
+        Dim sAge As String = ExtractXML(sQuorumData, "<AGE>")
+        Dim sQuorumHash As String = ExtractXML(sQuorumData, "<HASH>")
+        Dim TS As String = ExtractXML(sQuorumData, "<TIMESTAMP>")
+        Dim sBlock As String = ExtractXML(sQuorumData, "<BLOCKNUMBER>")
+        Dim sPrimaryCPID As String = ExtractXML(sQuorumData, "<PRIMARYCPID>")
+
+        Log(sData)
+        Call UpdateSuperblockAgeAndQuorumHash(sAge, sQuorumHash, TS, sBlock, sPrimaryCPID)
+
+    End Function
+
+    Public Function WriteKey(sData As String) As String
+        Try
+            Dim sKey As String = ExtractXML(sData, "<KEY>")
+        Dim sValue As String = ExtractXML(sData, "<VALUE>")
+        UpdateKey(sKey, sValue)
+            Return "True"
+        Catch ex As Exception
+            Return "False"
+        End Try
+    End Function
     Public Function GetDotNetMessages(sDataType As String) As String
         Dim sReply As String = msRPCCommand
         msRPCCommand = ""
@@ -33,7 +56,6 @@ Public Class Utilization
     End Function
     Public Function SetRPCResponse(sResponse) As Double
         SetRPCReply(sResponse)
-
         Return 1
     End Function
     Public Function FromBase64String(sData As String) As String
@@ -68,7 +90,7 @@ Public Class Utilization
     End Sub
     Public Sub StartGalaza()
         Dim p As New Process
-        p = Process.Start(GetGRCAppDir() + "\GridcoinGalaza.exe")
+        p = Process.Start(GetGRCAppDir() + "\Galaza\GridcoinGalaza.exe")
     End Sub
     Public Sub StopWireFrameRenderer()
         If Not mfrmWireFrame Is Nothing Then
@@ -80,9 +102,7 @@ Public Class Utilization
         SetRPCReply(sData)
     End Sub
     Public Function TestnetGetGenericRPCValue() As String
-        Return GetRPCReply("RPC")
-
-
+       
     End Function
     Public ReadOnly Property ClientNeedsUpgrade As Double
         Get
@@ -118,19 +138,51 @@ Public Class Utilization
     Public Function NeuralNetwork() As Double
         Return 1999
     End Function
-    Public ReadOnly Property BoincThreads As Double
-        Get
-
-        End Get
-    End Property
+   
     Sub New()
-        UpdateKey("UpdatingLeaderboard", "false")
-        Try
-            If Not DatabaseExists("gridcoin_leaderboard") Then ReplicateDatabase("gridcoin_leaderboard")
-        Catch ex As Exception
-            Log("New:" + ex.Message)
-        End Try
+
         mclsUtilization = Me
+
+
+        Log("L1")
+
+        Try
+
+
+            Try
+                UpdateKey("UpdatingLeaderboard", "false")
+
+            Catch ex As Exception
+                Log(ex.Message)
+
+            End Try
+
+            Try
+                PurgeLog()
+
+            Catch ex As Exception
+
+            End Try
+            Log("Loading...")
+
+            Try
+                If Not DatabaseExists("gridcoin_leaderboard") Then ReplicateDatabase("gridcoin_leaderboard")
+            Catch ex As Exception
+                Log("New:" + ex.Message)
+            End Try
+
+            Try
+                Dim sContract As String = GetMagnitudeContract()
+                If Len(sContract) = 0 Then bMagsDoneLoading = False
+
+            Catch ex As Exception
+                Log("contract err " + ex.Message)
+            End Try
+        Catch ex As Exception
+            Log("While loading clsUtilization : " + ex.Message)
+        End Try
+        Log("Loaded")
+
     End Sub
     Sub New(bLoadMiningConsole As Boolean)
         If bLoadMiningConsole Then ShowMiningConsole()
@@ -165,13 +217,11 @@ Public Class Utilization
     Public Sub CreateRestorePointTestNet()
         Call RestartWallet1("createrestorepointtestnet")
     End Sub
-    Public ReadOnly Property BoincMD5 As String
-        Get
-            '   Return clsGVM.BoincMD5()
-        End Get
-    End Property
     Public Function cGetMd5(sData As String) As String
         Return GetMd5String(sData)
+    End Function
+    Public Function GetMd5FromBytes(b() As Byte) As String
+        Return GetMd5String(b)
     End Function
     Public Function StrToMd5Hash(s As String) As String
         Return CalcMd5(s)
@@ -179,7 +229,9 @@ Public Class Utilization
     Public Function GetNeuralHash() As String
         If Len(msCurrentNeuralHash) > 1 Then Return msCurrentNeuralHash 'This is invalidated when it changes
         Dim sContract As String = GetMagnitudeContract()
-        Dim sHash As String = GetMd5String(sContract)
+        '7-25-2015 - Use Quorum Hashing algorithm to get the quorum hash 
+        Dim clsQHA As New clsQuorumHashingAlgorithm
+        Dim sHash As String = clsQHA.QuorumHashingAlgorithm(sContract)
         Return sHash
     End Function
     Public Function GetNeuralContract() As String
@@ -187,40 +239,6 @@ Public Class Utilization
         Return sContract
     End Function
 
-    Public ReadOnly Property RetrieveWin32BoincHash() As String
-        Get
-
-        End Get
-    End Property
-    Public ReadOnly Property RetrieveSqlHighBlock As Double
-
-        Get
-        
-        End Get
-    End Property
-    Public ReadOnly Property BoincDeltaOverTime As String
-        Get
-
-        End Get
-    End Property
-    Public ReadOnly Property BoincTotalCreditsAvg As Double
-        Get
-
-        End Get
-    End Property
-    Public ReadOnly Property BoincTotalCredits As Double
-        Get
-
-        End Get
-    End Property
-    Public Function Des3Encrypt(ByVal s As String) As String
-
-    End Function
-    Public Function Des3Decrypt(ByVal sData As String) As String
-
-    End Function
-    Public Function ShowProjects()
-    End Function
     Public Function ShowVotingConsole()
         Dim fmVoting As New frmVoting
         fmVoting.Show()
@@ -246,6 +264,18 @@ Public Class Utilization
             Log("Error while transitioning to frmTicketAdd" + ex.Message)
         End Try
     End Function
+    Public Function muFileToBytes(SourceFile As String) As Byte()
+        Return FileToBytes(SourceFile)
+    End Function
+    Public Function ShowFoundation()
+        Try
+            mfrmFoundation = New frmFoundation
+            mfrmFoundation.Show()
+        Catch ex As Exception
+            Log("Error while showing frmFoundation " + ex.Message)
+        End Try
+    End Function
+
     Public Function ShowTicketList()
         Try
             mfrmLogin = New frmLogin
@@ -272,7 +302,7 @@ Public Class Utilization
     Public Function ShowMiningConsole()
         Try
             lfrmMiningCounter = lfrmMiningCounter + 1
-            
+
             If mfrmMining Is Nothing Then
                 mfrmMining = New frmMining
             End If
@@ -282,7 +312,7 @@ Public Class Utilization
         Catch ex As Exception
         End Try
     End Function
-   
+
     Public ReadOnly Property SourceBlock As String
         Get
 
@@ -308,14 +338,14 @@ Public Class Utilization
         msSentence = sSentence
         Dim t As New Threading.Thread(AddressOf SpeakOnBackgroundThread)
         t.Start()
-    
+
     End Sub
     Public Sub SpeakOnBackgroundThread()
         Dim S As New SpeechSynthesis
         S.Speak(msSentence)
     End Sub
     Public Function UpdateConfirm(sTxId As String) As String
-        msTxId = sTxId
+        msTXID = sTxId
         Dim thUpdate As New System.Threading.Thread(AddressOf mUpdateConfirmAsync)
         thUpdate.Start()
         Return "1"
@@ -376,14 +406,34 @@ Public Class Utilization
 
         End Try
     End Function
+    Public Function ExplainMag(sCPID As String) As String
+        Log("Neural request for " + sCPID)
+        If bMagsDoneLoading = False Then
+            Log("This node is still syncing.")
+            Return ""
+        End If
+        Dim sOut As String = ""
+        sOut = ExplainNeuralNetworkMagnitudeByCPID(sCPID)
+        Log("Responding to neural request for " + sCPID + " " + sOut)
+        Return sOut
+    End Function
+    Public Function ResolveDiscrepancies(sContract As String) As String
+        
+        '7-25-2015 - Moving to QuorumHashingAlgorithm for this - disable this for the time being
+
+        ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+        'Call ThreadResolveDiscrepanciesInNeuralNetwork(sContract)
+        'Return "Started Async Resolution."
+        Return ""
+    End Function
+
     Public Function SetGenericVotingData(sValue As String) As Double
         Return SetGenericData("POLLS", sValue)
     End Function
     Public Function SetGenericData(sKey As String, sValue As String) As Double
         Try
-
             If msGenericDictionary.ContainsKey(sKey) Then
-
                 msGenericDictionary(sKey) = sValue
             Else
                 msGenericDictionary.Add(sKey, sValue)
@@ -408,6 +458,10 @@ Public Class Utilization
         End Try
         Return 1
     End Function
+    Public Function TestMag2015()
+        StoreTestMagnitude()
+
+    End Function
     Public Function SyncCPIDsWithDPORNodes(sData As String) As Double
         'Write the Gridcoin CPIDs to the Persisted Data System
         Try
@@ -422,10 +476,18 @@ Public Class Utilization
         Return 0
 
     End Function
+    Public Sub UpdateMagnitudesOnly()
+        Call UpdateMagnitudes()
+    End Sub
     Public Sub AddressUserThread()
+
+        Try
 
         Dim s As New SpeechSynthesis
         s.AddressUserBySurname(mlSpeakMagnitude)
+        Catch ex As Exception
+            Log("Unable to initialize speech")
+        End Try
 
     End Sub
     Public Function AddressUser(sMagnitude As String) As Double
@@ -445,18 +507,9 @@ Public Class Utilization
         Catch ex As Exception
         End Try
     End Sub
-    Public Sub SetLastBlockHash(ByVal data As String)
-        ' clsGVM.LastBlockHash = Trim(data)
-    End Sub
-    Public Sub SetPublicWalletAddress(ByVal data As String)
-
-    End Sub
     Public Sub SetBestBlock(ByVal nBlock As Integer)
 
-
     End Sub
-   
-  
     Public Function GetLanIP() As String
         Return GetLocalLanIP1()
     End Function
@@ -464,6 +517,11 @@ Public Class Utilization
         Get
         End Get
     End Property
+    Public Sub clsLogOff()
+        If mGRCData Is Nothing Then mGRCData = New GRCSec.GridcoinData
+
+        mGRCData.LogOff(GetSessionGuid)
+    End Sub
     Public ReadOnly Property BoincTotalHostAverageCredits As Double
         Get
         End Get

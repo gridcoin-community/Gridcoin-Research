@@ -115,6 +115,7 @@ private:
 
 	QAction *galazaAction;
 	QAction *newUserWizardAction;
+	QAction *foundationAction;
 
     QAction *verifyMessageAction;
     QAction *aboutAction;
@@ -199,6 +200,8 @@ private slots:
     void optionsClicked();
     /** Show about dialog */
     void aboutClicked();
+
+	void foundationClicked();
 
 	void bxClicked();
 	void websiteClicked();

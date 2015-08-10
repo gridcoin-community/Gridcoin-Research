@@ -6,11 +6,13 @@ Public Class frmTicketList
     Public sHandle As String
 
     Private Sub frmTicketList_Load(sender As System.Object, e As System.EventArgs) Handles MyBase.Load
+        mGRCData = New GRCSec.GridcoinData
+        
         cmbFilter.Items.Add("My Tickets")
         cmbFilter.Items.Add("Notices")
         cmbFilter.Items.Add("All Tickets")
         cmbFilter.Text = "My Tickets"
-        sHandle = GetHandle()
+        sHandle = mGRCData.GetHandle(GetSessionGuid)
         AddHandler tvTicketHistory.MouseDown, AddressOf TicketRightClick
         PopulateTickets()
     End Sub
@@ -40,10 +42,11 @@ Public Class frmTicketList
 
     End Sub
     Public Sub PopulateTickets()
+
         tvTicketHistory.Nodes.Clear()
         Dim sFilter As String = ""
-        sHandle = GetHandle
-
+        sHandle = mGRCData.GetHandle(GetSessionGuid)
+        
         Dim sAssignedTo As String = ""
 
         Select Case cmbFilter.Text
@@ -56,18 +59,18 @@ Public Class frmTicketList
             Case "Notices"
                 sFilter = " where Type = 'Notice' "
         End Select
-        Dim dr As GridcoinReader = mGetFilteredTickets(sFilter, sAssignedTo)
+        Dim dr As DataTable = mGetFilteredTickets(sFilter, sAssignedTo)
 
         If dr Is Nothing Then Exit Sub
-        For i As Integer = 1 To dr.Rows
+        For i As Integer = 0 To dr.Rows.Count - 1
             'Dim Grr As GridcoinReader.GridcoinRow = dr.GetRow(i)
-            Dim sRow As String = dr.Value(i, "TicketId").ToString() + " - " + dr.Value(i, "SubmittedBy") _
-                                 + " - " + dr.Value(i, "Type") + " - " + dr.Value(i, "Disposition") _
-                                 + " - " + Mid(dr.Value(i, "Descript"), 1, 80) _
-                                 + " - " + dr.Value(i, "AssignedTo") + " - " + dr.Value(i, "Added")
+            Dim sRow As String = dr.Rows(i)("TicketId").ToString() + " - " + dr.Rows(i)("SubmittedBy") _
+                                 + " - " + dr.Rows(i)("Type") + " - " + dr.Rows(i)("Disposition") _
+                                 + " - " + Mid(dr.Rows(i)("Descript"), 1, 80) _
+                                 + " - " + dr.Rows(i)("AssignedTo") + " - " + dr.Rows(i)("Added")
             Dim node As TreeNode = New TreeNode(sRow)
-            ' node.Tag = dr.Value(i, "id").ToString()
-            node.Tag = dr.Value(i, "ticketId").ToString()
+            
+            node.Tag = dr.Rows(i)("ticketId").ToString()
 
             tvTicketHistory.Nodes.Add(node)
         Next i
@@ -103,7 +106,7 @@ Public Class frmTicketList
     End Sub
 
     Private Sub btnLogOut_Click(sender As System.Object, e As System.EventArgs) Handles btnLogOut.Click
-        LogOff()
+        mGRCData.LogOff(GetSessionGuid)
         mfrmLogin.Show()
         Me.Hide()
 
