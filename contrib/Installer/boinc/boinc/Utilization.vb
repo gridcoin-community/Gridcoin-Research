@@ -407,14 +407,14 @@ Public Class Utilization
         End Try
     End Function
     Public Function ExplainMag(sCPID As String) As String
-        Log("Neural request for " + sCPID)
+        '  Log("Neural request for " + sCPID)
         If bMagsDoneLoading = False Then
             Log("This node is still syncing.")
             Return ""
         End If
         Dim sOut As String = ""
         sOut = ExplainNeuralNetworkMagnitudeByCPID(sCPID)
-        Log("Responding to neural request for " + sCPID + " " + sOut)
+        '  Log("Responding to neural request for " + sCPID + " " + sOut)
         Return sOut
     End Function
     Public Function ResolveDiscrepancies(sContract As String) As String

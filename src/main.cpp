@@ -44,6 +44,8 @@ extern std::string VectorToString(std::vector<unsigned char> v);
 extern bool UnusualActivityReport();
 extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
+extern CBlockIndex* GetHistoricalMagnitude_ScanChain(std::string cpid);
+
 
 
 extern int64_t ComputeResearchAccrual(std::string cpid, std::string operation,CBlockIndex* pindexLast, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
@@ -2844,21 +2846,23 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 {
     
 	// Gridcoin - Remove the payment
+	bool bPrune = false;
+	std::string sCPID = "";
 	if (!pindex->sCPID.empty() && pindex->sCPID != "INVESTOR")
 	{
 		StructCPID stCPID = GetInitializedStructCPID2(pindex->sCPID,mvResearchAge);
-		stCPID.InterestSubsidy -= pindex->nInterestSubsidy;
-		stCPID.ResearchSubsidy -= pindex->nResearchSubsidy;
-		stCPID.Accuracy--;
-		if (((double)pindex->nHeight) == stCPID.LastBlock) 
+		if (ReadCache("disconnectedblocks",pindex->GetBlockHash().GetHex()).empty())
 		{
-				stCPID.LastBlock = 0;
-				stCPID.BlockHash = "";
+			stCPID.InterestSubsidy -= pindex->nInterestSubsidy;
+			stCPID.ResearchSubsidy -= pindex->nResearchSubsidy;
+			//8-10-2015 - Only subtract research payments up to once for a disconnected block
+			WriteCache("disconnectedblocks",pindex->GetBlockHash().GetHex(),"true",pindex->nTime);
+			stCPID.Accuracy--;
 		}
-	
-		if (stCPID.BlockHash == pindex->GetBlockHash().GetHex())
+		if ((((double)pindex->nHeight) == stCPID.LastBlock)  ||   stCPID.BlockHash == pindex->GetBlockHash().GetHex() ||  (double)pindex->nHeight < stCPID.LastBlock)
 		{
-			stCPID.BlockHash = "";
+			bPrune=true;
+			sCPID = pindex->sCPID;
 		}
 		mvResearchAge[pindex->sCPID]=stCPID;
 	}
@@ -2884,6 +2888,15 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
     BOOST_FOREACH(CTransaction& tx, vtx)
         SyncWithWallets(tx, this, false, false);
 	
+	//Gridcoin - Reassess last block paid
+	if (bPrune)
+	{
+			StructCPID stCPID = GetInitializedStructCPID2(sCPID,mvResearchAge);
+			CBlockIndex* pindex_historical = GetHistoricalMagnitude_ScanChain(sCPID);
+			stCPID.LastBlock = pindex_historical->nHeight;
+			stCPID.BlockHash = pindex_historical->GetBlockHash().GetHex();
+			mvResearchAge[sCPID]=stCPID;
+	}
 	
     return true;
 }
@@ -3525,11 +3538,19 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 
         // Reorganize is costly in terms of db load, as it works in a single db transaction.
         // Try to limit how much needs to be done inside
-        while (pindexIntermediate->pprev && pindexIntermediate->pprev->nChainTrust > pindexBest->nChainTrust)
+		int rollback = 0;
+		if (REORGANIZE_FAILED > 2)
+		{
+			rollback += (REORGANIZE_FAILED*100);
+		}
+		int rolled_back = 1;
+        while (pindexIntermediate->pprev && pindexIntermediate->pprev->nChainTrust > pindexBest->nChainTrust && rolled_back > rollback)
         {
             vpindexSecondary.push_back(pindexIntermediate);
             pindexIntermediate = pindexIntermediate->pprev;
-        }
+			if (pindexIntermediate==pindexGenesisBlock) break;
+			rolled_back++;
+	    }
 
         if (!vpindexSecondary.empty())
             printf("Postponing %"PRIszu" reconnects\n", vpindexSecondary.size());
@@ -3540,6 +3561,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 					//10-30-2014 - Halford - Reboot when reorganize fails 100 times
 					REORGANIZE_FAILED++;
 					std::string suppressreboot = GetArg("-suppressreboot", "true");
+					/*
 					if (suppressreboot!="true")
 					{
 						if (REORGANIZE_FAILED==100)
@@ -3551,6 +3573,9 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 							printf("Rebooting... %f",(double)nResult);
 						}
 					}
+					*/
+
+
 				txdb.TxnAbort();
 				InvalidChainFound(pindexNew);
 				TallyNetworkAverages(false);
@@ -3841,7 +3866,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3425) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-					if (bv < 3473 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
+					if (bv < 3474 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
 			}
 
 			//8-5-2015
@@ -4111,7 +4136,7 @@ bool CBlockIndex::IsSuperMajority(int minVersion, const CBlockIndex* pstart, uns
     return (nFound >= nRequired);
 }
 
-
+/*
 bool static ReserealizeBlockSignature(CBlock* pblock)
 {
     if (pblock->IsProofOfWork()) {
@@ -4121,6 +4146,8 @@ bool static ReserealizeBlockSignature(CBlock* pblock)
 
     return CKey::ReserealizeSignature(pblock->vchBlockSig);
 }
+*/
+
 
 void GridcoinServices()
 {
@@ -4599,7 +4626,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 32213;
+		nGrandfather = 32706;
 		nNewIndex = 28286;
 		bResearchAgeEnabled = true;
 
@@ -5977,7 +6004,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 8-5-2015
-		if (pfrom->nVersion < 180293 && fTestNet)
+		if (pfrom->nVersion < 180294 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -8573,7 +8600,7 @@ CBlockIndex* GetHistoricalMagnitude(std::string cpid)
 }
 
 
-CBlockIndex* GetHistoricalMagnitude_Retire(std::string cpid)
+CBlockIndex* GetHistoricalMagnitude_ScanChain(std::string cpid)
 {
 	CBlockIndex* pindex = pindexBest;
 	if (cpid=="INVESTOR") return pindexGenesisBlock;
@@ -8585,6 +8612,8 @@ CBlockIndex* GetHistoricalMagnitude_Retire(std::string cpid)
     while (pindex->nHeight > nNewIndex && pindex->nHeight > nMinIndex)
 	{
   	    //8-5-2015; R HALFORD; Find the last block the CPID staked with a research subsidy (IE dont count interest blocks)
+		if (pindex==NULL || !pindex->IsInMainChain()) continue;
+		if (pindex == pindexGenesisBlock) return pindexGenesisBlock;
 		if (pindex->sCPID == cpid && (pindex->nResearchSubsidy > 0)) return pindex;
 	    pindex = pindex->pprev;
 	}

@@ -89,7 +89,10 @@ static const uint256 hashGenesisBlock("0x000005a247b397eadfefa58e872bc967c261479
 //TestNet Genesis:
 static const uint256 hashGenesisBlockTestNet("0x00006e037d7b84104208ecf2a8638d23149d712ea810da604ee2f2cb39bae713");
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-inline bool IsProtocolV2(int nHeight) { return nHeight > 85400; }
+inline bool IsProtocolV2(int nHeight) 
+{ 
+	return (fTestNet ?  nHeight > 32706 : nHeight > 85400); 
+}
 
 inline int64_t PastDrift(int64_t nTime, int nHeight)   { return IsProtocolV2(nHeight) ? nTime - 20 * 60  : nTime - 20 * 60; }
 inline int64_t FutureDrift(int64_t nTime, int nHeight) { return IsProtocolV2(nHeight) ? nTime + 20 * 60  : nTime + 20 * 60; }

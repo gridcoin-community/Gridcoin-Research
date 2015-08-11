@@ -395,7 +395,7 @@ bool CTxDB::LoadBlockIndex()
 	     		stCPID.InterestSubsidy += diskindex.nInterestSubsidy;
 				stCPID.ResearchSubsidy += diskindex.nResearchSubsidy;
 				stCPID.Accuracy++;
-				if (((double)pindexNew->nHeight) > stCPID.LastBlock && diskindex.nResearchSubsidy > 0) 
+				if (((double)pindexNew->nHeight) > stCPID.LastBlock && diskindex.nResearchSubsidy > 0 && pindexNew->IsInMainChain()) 
 				{
 						stCPID.LastBlock = (double)pindexNew->nHeight;
 						stCPID.BlockHash = blockHash.GetHex();
