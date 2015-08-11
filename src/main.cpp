@@ -3544,7 +3544,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 			rollback += (REORGANIZE_FAILED*100);
 		}
 		int rolled_back = 1;
-        while (pindexIntermediate->pprev && pindexIntermediate->pprev->nChainTrust > pindexBest->nChainTrust && rolled_back > rollback)
+        while (pindexIntermediate->pprev && pindexIntermediate->pprev->nChainTrust > pindexBest->nChainTrust && rolled_back < rollback)
         {
             vpindexSecondary.push_back(pindexIntermediate);
             pindexIntermediate = pindexIntermediate->pprev;
