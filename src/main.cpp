@@ -34,6 +34,9 @@ std::string TimestampToHRDate(double dtm);
 bool CPIDAcidTest(std::string boincruntimepublickey);
 
 
+extern void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector<CBlockIndex*> vConnect);
+
+
 int64_t GetEarliestWalletTransaction();
 extern void IncrementVersionCount(std::string Version);
 
@@ -2845,28 +2848,6 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
 bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 {
     
-	// Gridcoin - Remove the payment
-	bool bPrune = false;
-	std::string sCPID = "";
-	if (!pindex->sCPID.empty() && pindex->sCPID != "INVESTOR")
-	{
-		StructCPID stCPID = GetInitializedStructCPID2(pindex->sCPID,mvResearchAge);
-		if (ReadCache("disconnectedblocks",pindex->GetBlockHash().GetHex()).empty())
-		{
-			stCPID.InterestSubsidy -= pindex->nInterestSubsidy;
-			stCPID.ResearchSubsidy -= pindex->nResearchSubsidy;
-			//8-10-2015 - Only subtract research payments up to once for a disconnected block
-			WriteCache("disconnectedblocks",pindex->GetBlockHash().GetHex(),"true",pindex->nTime);
-			stCPID.Accuracy--;
-		}
-		if ((((double)pindex->nHeight) == stCPID.LastBlock)  ||   stCPID.BlockHash == pindex->GetBlockHash().GetHex() ||  (double)pindex->nHeight < stCPID.LastBlock)
-		{
-			bPrune=true;
-			sCPID = pindex->sCPID;
-		}
-		mvResearchAge[pindex->sCPID]=stCPID;
-	}
-
 
 	// Disconnect in reverse order
     for (int i = vtx.size()-1; i >= 0; i--)
@@ -2888,15 +2869,6 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
     BOOST_FOREACH(CTransaction& tx, vtx)
         SyncWithWallets(tx, this, false, false);
 	
-	//Gridcoin - Reassess last block paid
-	if (bPrune)
-	{
-			StructCPID stCPID = GetInitializedStructCPID2(sCPID,mvResearchAge);
-			CBlockIndex* pindex_historical = GetHistoricalMagnitude_ScanChain(sCPID);
-			stCPID.LastBlock = pindex_historical->nHeight;
-			stCPID.BlockHash = pindex_historical->GetBlockHash().GetHex();
-			mvResearchAge[sCPID]=stCPID;
-	}
 	
     return true;
 }
@@ -3309,6 +3281,10 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 				stCPID.LastBlock = (double)pindex->nHeight;
 				stCPID.BlockHash = pindex->GetBlockHash().GetHex();
 		}
+
+		if (((double)pindex->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime = (double)pindex->nTime;
+		if (((double)pindex->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pindex->nTime;
+			
 	
 		mvResearchAge[bb.cpid]=stCPID;
 	}
@@ -3357,7 +3333,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
 {
     printf("REORGANIZE\n");
-
+	// 8-11-2015
     // Find the fork
     CBlockIndex* pfork = pindexBest;
     CBlockIndex* plonger = pindexNew;
@@ -3461,6 +3437,8 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
         mempool.removeConflicts(tx);
     }
 
+	// Gridcoin: Now that the chain is back in order, Fix the researchers who were disrupted:
+	FixInvalidResearchTotals(vDisconnect,vConnect);
 
 	TallyNetworkAverages(false);
 
@@ -3866,7 +3844,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3425) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-					if (bv < 3474 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
+					if (bv < 3475 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
 			}
 
 			//8-5-2015
@@ -6004,7 +5982,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 8-5-2015
-		if (pfrom->nVersion < 180294 && fTestNet)
+		if (pfrom->nVersion < 180295 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -8561,10 +8539,18 @@ int64_t ComputeResearchAccrual(std::string cpid, std::string operation, CBlockIn
 	dMagnitudeUnit = GRCMagnitudeUnit(pindexLast->nTime);
 	// TODO: If the accrual age is > 30 days, grab a snapshot from a superblock at the midpoint to make the avg magnitude accurate:
 	int64_t Accrual = ((int64_t)(dAccrualAge*AvgMagnitude*dMagnitudeUnit)*COIN);
+	// Double check researcher lifetime paid
+	StructCPID stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
+	
+	double days = (((double)pindexLast->nTime) - stCPID.LowLockTime)/86400;
+	double PPD = stCPID.ResearchSubsidy/(days+.01);
+	double ReferencePPD = dMagnitudeUnit*dCurrentMagnitude;
+	if ((PPD > ReferencePPD*2) && fDebug3) printf("Researcher PPD %f > Reference PPD %f for CPID %s\r\n",PPD,ReferencePPD,cpid.c_str());
+
 	double verbosity = (operation == "createnewblock" || operation == "createcoinstake") ? 10 : 1000;
-	if (fDebug3 && LessVerbose(verbosity)) printf(" Operation %s, Accrual %f, StakeHeight %f, HistoryHeight%f,  AccrualAge %f, AvgMag %f, MagUnit %f \r\n",
+	if (fDebug3 && LessVerbose(verbosity)) printf(" Operation %s, Accrual %f, StakeHeight %f, HistoryHeight%f,  AccrualAge %f, AvgMag %f, MagUnit %f, PPD %f, Reference PPD %f  \r\n",
 		operation.c_str(),CoinToDouble(Accrual),(double)pindexLast->nHeight,		
-		(double)pHistorical->nHeight,	dAccrualAge,AvgMagnitude,dMagnitudeUnit);
+		(double)pHistorical->nHeight,	dAccrualAge,AvgMagnitude,dMagnitudeUnit, PPD, ReferencePPD);
 	return Accrual;
 }
 
@@ -8599,6 +8585,72 @@ CBlockIndex* GetHistoricalMagnitude(std::string cpid)
 	}
 }
 
+void ZeroOutResearcherTotals(std::string cpid)
+{
+	if (!cpid.empty())
+	{
+		
+				StructCPID stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
+				stCPID.LastBlock = 0;
+				stCPID.BlockHash = "";
+				stCPID.InterestSubsidy = 0;
+				stCPID.ResearchSubsidy = 0;
+				stCPID.Accuracy = 0;
+				stCPID.LowLockTime = 99999999999;
+				stCPID.HighLockTime = 0;
+
+				mvResearchAge[cpid]=stCPID;
+	}
+
+}
+
+void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector<CBlockIndex*> vConnect)
+{
+	//8-11-2015
+	// Halford : Zero out the researcher totals:
+	BOOST_FOREACH(CBlockIndex* pdiscoindex, vDisconnect)
+	{
+		ZeroOutResearcherTotals(pdiscoindex->sCPID);
+	}
+	BOOST_FOREACH(CBlockIndex* pconnectindex, vConnect)
+	{
+		ZeroOutResearcherTotals(pconnectindex->sCPID);
+	}
+
+	CBlockIndex* pindex = FindBlockByHeight(nNewIndex+1);
+	while (pindex->nHeight < pindexBest->nHeight)
+	{
+	    pindex = pindex->pnext;
+		if (pindex==NULL || !pindex->IsInMainChain()) continue;
+		if (pindex == pindexBest) break;
+		bool bResearcherHosed = false;
+		if (!pindex->sCPID.empty() && pindex->nResearchSubsidy > 0)
+		{
+			BOOST_FOREACH(CBlockIndex* pdiscoindex, vDisconnect)
+			{
+					if (pindex == pdiscoindex) bResearcherHosed=true;
+			}
+			BOOST_FOREACH(CBlockIndex* pconnectindex, vConnect)
+			{
+					if (pindex == pconnectindex) bResearcherHosed=true;
+			}
+			if (bResearcherHosed)
+			{
+
+				StructCPID stCPID = GetInitializedStructCPID2(pindex->sCPID,mvResearchAge);
+				stCPID.LastBlock = (double)pindex->nHeight;
+				stCPID.BlockHash = pindex->GetBlockHash().GetHex();
+				stCPID.InterestSubsidy += pindex->nInterestSubsidy;
+				stCPID.ResearchSubsidy += pindex->nResearchSubsidy;
+				stCPID.Accuracy++;
+				if (((double)pindex->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime = (double)pindex->nTime;
+				if (((double)pindex->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pindex->nTime;
+				mvResearchAge[pindex->sCPID]=stCPID;
+
+			}
+		}
+	}
+}
 
 CBlockIndex* GetHistoricalMagnitude_ScanChain(std::string cpid)
 {

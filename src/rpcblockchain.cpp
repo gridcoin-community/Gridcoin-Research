@@ -26,6 +26,8 @@ double GetNetworkPaymentsTotal();
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
 bool ComputeNeuralNetworkSupermajorityHashes();
 bool UpdateNeuralNetworkQuorumData();
+extern Array LifetimeReport(std::string cpid);
+
 
 int64_t GetEarliestWalletTransaction();
 
@@ -2647,6 +2649,36 @@ Value execute(const Array& params, bool fHelp)
 
 
 
+
+Array LifetimeReport(std::string cpid)
+{
+
+	   Array results;
+	   Object c;
+	   std::string Narr = "Lifetime Payments Report - Generated " + RoundToString(GetAdjustedTime(),0);
+	   c.push_back(Pair("RSA Report",Narr));
+	   results.push_back(c);
+	   Object entry;
+	   CBlockIndex* pindex = pindexBest;
+	
+	   while (pindex->nHeight > nNewIndex && pindex->nHeight > 1)
+	   {
+  			if (pindex==NULL || !pindex->IsInMainChain()) continue;
+			if (pindex == pindexGenesisBlock) break;
+			if (pindex->sCPID == cpid && (pindex->nResearchSubsidy > 0)) 
+			{
+						entry.push_back(Pair(RoundToString((double)pindex->nHeight,0), (double)pindex->nResearchSubsidy));
+								
+			}
+			pindex = pindex->pprev;
+	   }
+	   results.push_back(entry);
+	   return results;
+
+}
+
+
+
 Array MagnitudeReport(std::string cpid)
 {
 	       Array results;
@@ -2656,9 +2688,7 @@ Array MagnitudeReport(std::string cpid)
 		   results.push_back(c);
 		   StructCPID globalmag = mvMagnitudes["global"];
 		   double payment_timespan = 14; 
-		   Object entry;
-		   entry.push_back(Pair("Payment Window",payment_timespan));
-		   results.push_back(entry);
+		   
 		   double total_owed = 0;
 		   double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
 		
@@ -2692,9 +2722,10 @@ Array MagnitudeReport(std::string cpid)
 										StructCPID stCPID = GetInitializedStructCPID2(structMag.cpid,mvResearchAge);
 										entry.push_back(Pair("Lifetime Interest Paid", stCPID.InterestSubsidy));
 										entry.push_back(Pair("Lifetime Research Paid", stCPID.ResearchSubsidy));
+										double days = (GetAdjustedTime() - stCPID.LowLockTime)/86400;
+										entry.push_back(Pair("Lifetime Payments Per Day", stCPID.ResearchSubsidy/days));
 										entry.push_back(Pair("Last Blockhash Paid", stCPID.BlockHash));
 										entry.push_back(Pair("Last Block Paid",stCPID.LastBlock));
-										
 										results.push_back(entry);
 
 									}
@@ -2727,19 +2758,20 @@ Array MagnitudeReport(std::string cpid)
 			}
 							
 	   		Object entry2;
-
 	   		entry2.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
-
-			if (!bResearchAgeEnabled && cpid.empty()) 			entry2.push_back(Pair("Grand Total Outstanding Owed",total_owed));
+			if (!bResearchAgeEnabled && cpid.empty()) entry2.push_back(Pair("Grand Total Outstanding Owed",total_owed));
+			results.push_back(entry2);
 
 			int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
 			int nLookback = BLOCKS_PER_DAY*14; //Daily block count * Lookback in days = 14 days
 			int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
 			if (cpid.empty())
 			{
-				entry2.push_back(Pair("Start Block",nMinDepth));
-				entry2.push_back(Pair("End Block",nMaxDepth));
-				results.push_back(entry2);
+				Object entry3;
+				entry3.push_back(Pair("Start Block",nMinDepth));
+				entry3.push_back(Pair("End Block",nMaxDepth));
+				results.push_back(entry3);
+		
 			}
 									
 			return results;
@@ -3694,6 +3726,17 @@ Value listitem(const Array& params, bool fHelp)
 			return results;
 		}
 		results = MagnitudeReport(cpid);
+		return results;
+	}
+	if (sitem == "lifetime")
+	{
+		std::string cpid = msPrimaryCPID;
+		if (params.size() == 2)
+		{
+			cpid = params[1].get_str();
+		}
+
+		results = LifetimeReport(cpid);
 		return results;
 	}
 

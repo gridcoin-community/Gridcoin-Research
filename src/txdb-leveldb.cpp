@@ -400,6 +400,10 @@ bool CTxDB::LoadBlockIndex()
 						stCPID.LastBlock = (double)pindexNew->nHeight;
 						stCPID.BlockHash = blockHash.GetHex();
 				}
+
+				if (((double)pindexNew->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime = (double)pindexNew->nTime;
+				if (((double)pindexNew->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pindexNew->nTime;
+			
 				mvResearchAge[diskindex.sCPID]=stCPID;
 			}	
 		}
