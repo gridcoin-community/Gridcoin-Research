@@ -4604,7 +4604,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 32706;
+		nGrandfather = 327810;
 		nNewIndex = 28286;
 		bResearchAgeEnabled = true;
 
@@ -8606,37 +8606,52 @@ void ZeroOutResearcherTotals(std::string cpid)
 
 void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector<CBlockIndex*> vConnect)
 {
-	//8-11-2015
+
+	if (!bResearchAgeEnabled) return;
 	// Halford : Zero out the researcher totals:
-	BOOST_FOREACH(CBlockIndex* pdiscoindex, vDisconnect)
+	if (vDisconnect.size() > 0)
 	{
-		ZeroOutResearcherTotals(pdiscoindex->sCPID);
-	}
-	BOOST_FOREACH(CBlockIndex* pconnectindex, vConnect)
-	{
-		ZeroOutResearcherTotals(pconnectindex->sCPID);
+		BOOST_FOREACH(CBlockIndex* pdiscoindex, vDisconnect)
+		{
+			ZeroOutResearcherTotals(pdiscoindex->sCPID);
+		}
 	}
 
-	CBlockIndex* pindex = FindBlockByHeight(nNewIndex+1);
-	while (pindex->nHeight < pindexBest->nHeight)
+	if (vConnect.size() > 0)
+	{
+		BOOST_FOREACH(CBlockIndex* pconnectindex, vConnect)
+		{
+			ZeroOutResearcherTotals(pconnectindex->sCPID);
+		}
+	}
+
+	CBlockIndex* pindex = FindBlockByHeight(nNewIndex);
+	while (pindex->nHeight < (pindexBest->nHeight-1))
 	{
 	    pindex = pindex->pnext;
 		if (pindex==NULL || !pindex->IsInMainChain()) continue;
-		if (pindex == pindexBest) break;
-		bool bResearcherHosed = false;
+		if (pindex == pindexBest) return;
 		if (!pindex->sCPID.empty() && pindex->nResearchSubsidy > 0)
 		{
-			BOOST_FOREACH(CBlockIndex* pdiscoindex, vDisconnect)
+			bool bResearcherHosed = false;
+	
+			if (vDisconnect.size() > 0)
 			{
-					if (pindex == pdiscoindex) bResearcherHosed=true;
+				BOOST_FOREACH(CBlockIndex* pdiscoindex, vDisconnect)
+				{
+						if (pindex == pdiscoindex) bResearcherHosed=true;
+				}
 			}
-			BOOST_FOREACH(CBlockIndex* pconnectindex, vConnect)
+
+			if (vConnect.size() > 0)
 			{
-					if (pindex == pconnectindex) bResearcherHosed=true;
+				BOOST_FOREACH(CBlockIndex* pconnectindex, vConnect)
+				{
+						if (pindex == pconnectindex) bResearcherHosed=true;
+				}
 			}
 			if (bResearcherHosed)
 			{
-
 				StructCPID stCPID = GetInitializedStructCPID2(pindex->sCPID,mvResearchAge);
 				stCPID.LastBlock = (double)pindex->nHeight;
 				stCPID.BlockHash = pindex->GetBlockHash().GetHex();

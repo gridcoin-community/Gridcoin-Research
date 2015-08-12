@@ -2656,7 +2656,7 @@ Array LifetimeReport(std::string cpid)
 	   Array results;
 	   Object c;
 	   std::string Narr = "Lifetime Payments Report - Generated " + RoundToString(GetAdjustedTime(),0);
-	   c.push_back(Pair("RSA Report",Narr));
+	   c.push_back(Pair("Lifetime Payments Report",Narr));
 	   results.push_back(c);
 	   Object entry;
 	   CBlockIndex* pindex = pindexBest;
