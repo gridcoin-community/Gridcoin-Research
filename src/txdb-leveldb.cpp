@@ -387,26 +387,6 @@ bool CTxDB::LoadBlockIndex()
 			pindexNew->nMagnitude        = diskindex.nMagnitude;
 		}
 
-		if (!diskindex.sCPID.empty() && false)
-		{
-			if (diskindex.sCPID != "INVESTOR" && pindexNew->IsInMainChain())
-			{
-				StructCPID stCPID = GetInitializedStructCPID2(diskindex.sCPID,mvResearchAge);
-	     		stCPID.InterestSubsidy += diskindex.nInterestSubsidy;
-				stCPID.ResearchSubsidy += diskindex.nResearchSubsidy;
-				stCPID.Accuracy++;
-				if (((double)pindexNew->nHeight) > stCPID.LastBlock && diskindex.nResearchSubsidy > 0) 
-				{
-						stCPID.LastBlock = (double)pindexNew->nHeight;
-						stCPID.BlockHash = blockHash.GetHex();
-				}
-
-				if (((double)pindexNew->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime = (double)pindexNew->nTime;
-				if (((double)pindexNew->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pindexNew->nTime;
-			
-				mvResearchAge[diskindex.sCPID]=stCPID;
-			}	
-		}
 		dBlockCount++;
         // Watch for genesis block
         if (pindexGenesisBlock == NULL && blockHash == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
@@ -622,7 +602,7 @@ bool CTxDB::LoadBlockIndex()
 
 
 
-	//8-13-2015 - Gridcoin - In order, set up Research Age hashes
+	//8-13-2015 - Gridcoin - In order, set up Research Age hashes and lifetime fields
     CBlockIndex* pindex = pindexGenesisBlock;
 	while (pindex->nHeight < pindexBest->nHeight)
 	{
@@ -635,6 +615,11 @@ bool CTxDB::LoadBlockIndex()
 	     		stCPID.InterestSubsidy += pindex->nInterestSubsidy;
 				stCPID.ResearchSubsidy += pindex->nResearchSubsidy;
 				stCPID.Accuracy++;
+				if (pindex->nMagnitude > 0)
+				{
+					stCPID.TotalMagnitude += pindex->nMagnitude;
+					stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
+				}
 				if (((double)pindex->nHeight) > stCPID.LastBlock && pindex->nResearchSubsidy > 0) 
 				{
 						stCPID.LastBlock = (double)pindex->nHeight;

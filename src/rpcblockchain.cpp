@@ -2668,11 +2668,13 @@ Array LifetimeReport(std::string cpid)
 			if (pindex == pindexBest) break;
 			if (pindex->sCPID == cpid && (pindex->nResearchSubsidy > 0)) 
 			{
-				entry.push_back(Pair(RoundToString((double)pindex->nHeight,0), (double)pindex->nResearchSubsidy));
-								
+				entry.push_back(Pair(RoundToString((double)pindex->nHeight,0), RoundToString(pindex->nResearchSubsidy,2)));
 			}
 			
 	   }
+	   //8-14-2015
+	   StructCPID stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
+	   entry.push_back(Pair("Average Magnitude",stCPID.ResearchAverageMagnitude));
 	   results.push_back(entry);
 	   return results;
 
@@ -2723,6 +2725,8 @@ Array MagnitudeReport(std::string cpid)
 										StructCPID stCPID = GetInitializedStructCPID2(structMag.cpid,mvResearchAge);
 										entry.push_back(Pair("Lifetime Interest Paid", stCPID.InterestSubsidy));
 										entry.push_back(Pair("Lifetime Research Paid", stCPID.ResearchSubsidy));
+										entry.push_back(Pair("Lifetime Avg Magnitude", stCPID.ResearchAverageMagnitude));
+										
 										double days = (GetAdjustedTime() - stCPID.LowLockTime)/86400;
 										entry.push_back(Pair("Earliest Payment",TimestampToHRDate(stCPID.LowLockTime)));
 										

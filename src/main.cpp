@@ -373,6 +373,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors5 = "";
  std::string    msMiningErrors6 = "";
  std::string    msMiningErrors7 = "";
+ std::string    msMiningErrors8 = "";
  std::string    Organization = "";
  std::string    OrganizationKey = "";
  std::string    msNeuralResponse = "";
@@ -680,7 +681,7 @@ std::string GetGlobalStatus()
 			+ "<br>DPOR Weight: " +  sWeight + "; Status: " + msMiningErrors 
 			+ "<br>Magnitude: " + RoundToString(boincmagnitude,2) + "; Project: " + msMiningProject
 			+ "<br>CPID: " +  GlobalCPUMiningCPID.cpid + " " + msMiningErrors2 + 
-			+ "<br>" + msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 
+			+ "<br>" + msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + msMiningErrors8 
 			+ "<br>" + "Tally: " + msMiningErrors3 + " " + sBoost.str();
 		//The last line break is for Windows 8.1 Huge Toolbar
 		msGlobalStatus = status;
@@ -3282,6 +3283,12 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 				stCPID.BlockHash = pindex->GetBlockHash().GetHex();
 		}
 
+		if (pindex->nMagnitude > 0)
+		{
+				stCPID.TotalMagnitude += pindex->nMagnitude;
+				stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
+		}
+
 		if (((double)pindex->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime = (double)pindex->nTime;
 		if (((double)pindex->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pindex->nTime;
 			
@@ -4604,7 +4611,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 327810;
+		nGrandfather = 32880;
 		nNewIndex = 28286;
 		bResearchAgeEnabled = true;
 
@@ -8560,8 +8567,13 @@ int64_t ComputeResearchAccrual(std::string cpid, std::string operation, CBlockIn
 	
 	double days = (((double)pindexLast->nTime) - stCPID.LowLockTime)/86400;
 	double PPD = stCPID.ResearchSubsidy/(days+.01);
-	double ReferencePPD = dMagnitudeUnit*dCurrentMagnitude;
-	if ((PPD > ReferencePPD*2) && fDebug3) printf("Researcher PPD %f > Reference PPD %f for CPID %s\r\n",PPD,ReferencePPD,cpid.c_str());
+	double dAvgMag = stCPID.ResearchAverageMagnitude;
+	double ReferencePPD = dMagnitudeUnit*dAvgMag;
+	if ((PPD > ReferencePPD*5))
+	{
+			printf("Researcher PPD %f > Reference PPD %f for CPID %s with Lifetime Avg Mag of %f \r\n",PPD,ReferencePPD,cpid.c_str(),dAvgMag);
+			Accrual=0;
+	}
 
 	double verbosity = (operation == "createnewblock" || operation == "createcoinstake") ? 10 : 1000;
 	if (fDebug3 && LessVerbose(verbosity)) printf(" Operation %s, Accrual %f, StakeHeight %f, HistoryHeight%f,  AccrualAge %f, AvgMag %f, MagUnit %f, PPD %f, Reference PPD %f  \r\n",
@@ -8614,7 +8626,9 @@ void ZeroOutResearcherTotals(std::string cpid)
 				stCPID.Accuracy = 0;
 				stCPID.LowLockTime = 99999999999;
 				stCPID.HighLockTime = 0;
-
+				stCPID.TotalMagnitude = 0;
+				stCPID.ResearchAverageMagnitude = 0;
+				
 				mvResearchAge[cpid]=stCPID;
 	}
 
@@ -8678,6 +8692,12 @@ void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector
 				stCPID.InterestSubsidy += pindex->nInterestSubsidy;
 				stCPID.ResearchSubsidy += pindex->nResearchSubsidy;
 				stCPID.Accuracy++;
+				if (pindex->nMagnitude > 0)
+				{
+					stCPID.TotalMagnitude += pindex->nMagnitude;
+					stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
+				}
+
 				if (((double)pindex->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime = (double)pindex->nTime;
 				if (((double)pindex->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pindex->nTime;
 				mvResearchAge[pindex->sCPID]=stCPID;

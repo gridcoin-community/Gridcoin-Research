@@ -1704,6 +1704,7 @@ double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid, int64_t l
 	double por_min = (cpid != "INVESTOR") ? (MaxSubsidy/40) : 0;
 	if (RSA_WEIGHT >= 24999) return 0;
 	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
+	if (fTestNet && (PORDiff >=0 && PORDiff < 1)) return .00001;
 	if (PORDiff >= 0   && PORDiff < 1)   return 1;
 	if (PORDiff >= 1   && PORDiff < 6)   return por_min + (MaxSubsidy/400);
 	if (PORDiff >= 6   && PORDiff < 10)  return por_min + (MaxSubsidy/80);
@@ -1891,6 +1892,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 			 if (!IsCPIDValidv2(miningcpid,pindexPrev->nHeight))
 			 {
 				 printf("Unable to create boinc block->CPID INVALID cpid %s %s %s",miningcpid.cpid.c_str(),miningcpid.boincruntimepublickey.c_str(),miningcpid.email.c_str());
+				
 				 MilliSleep(300);
 			 }
 			 else
@@ -1912,12 +1914,16 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	catch (std::exception &e) 
 	{
 	    printf("Error while retrieving next project\r\n");
+		msMiningErrors7="Unable to Stake [Project Error]";
+
 		MilliSleep(500);
 		return false;
 	}
     catch(...)
 	{
 		printf("Error while retrieving next project[1].\r\n");
+		msMiningErrors7="Unable to Stake [Project Error]";
+
 		MilliSleep(500);
 		return false;
 	}
@@ -1932,8 +1938,10 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	msMiningErrors7=""; //Clear errors; ready to roll...
 	msMiningErrors5="";
 	msMiningErrors6="";
+	msMiningErrors8="";
 	
 	int64_t nBlockTime = 0;
+	msMiningErrors7="";
 
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
     {
@@ -1959,7 +1967,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             continue; // only count coins meeting min age requirement
 
         bool fKernelFound = false;
-	
+	    
         for (unsigned int n=0; n<min(nSearchInterval,(int64_t)nMaxStakeSearchInterval) && !fKernelFound && !fShutdown && pindexPrev == pindexBest; n++)
         {
             // Search backward in time from the given txNew timestamp 
@@ -2039,6 +2047,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
                 if (fDebug && GetBoolArg("-printcoinstake"))
                     printf("CreateCoinStake : added kernel type=%d\n", whichType);
 				fKernelFound = true;
+				msMiningErrors8 = "Kernal " + RoundToString(CoinToDouble(nCredit),0);
 				break;
             }
         }
@@ -2157,12 +2166,14 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		//INVESTORS
 		if (mint < MintLimiter(PORDiff,RSA_WEIGHT,GlobalCPUMiningCPID.cpid,GetAdjustedTime())) 
 		{
+			    msMiningErrors8="Mint too small.";
 				if (fDebug) printf("CreateStake()::Mint %f of %f too small",(double)mint,(double)MintLimiter(PORDiff,RSA_WEIGHT,miningcpid.cpid,GetAdjustedTime()));
 				return false; 
 		}
 		
 		if (nReward == 0)
 		{
+			msMiningErrors8="Mint zero.";
 			if (fDebug) printf("CreateBlock():Mint is zero");
 			return false;   
 		}

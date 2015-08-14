@@ -346,7 +346,7 @@ double OwedByAddress(std::string address)
 int64_t GetRSAWeightByCPID(std::string cpid)
 {
 	double weight = 0;
-	if (cpid=="") return 0;
+	if (cpid=="" || cpid=="INVESTOR") return 5000;
 	if (mvMagnitudes.size() > 0)
 	{
 			StructCPID UntrustedHost = GetStructCPID();

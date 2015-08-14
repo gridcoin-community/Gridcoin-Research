@@ -176,6 +176,7 @@ extern std::string  msMiningErrors3;
 extern std::string  msMiningErrors5;
 extern std::string  msMiningErrors6;
 extern std::string  msMiningErrors7;
+extern std::string  msMiningErrors8;
 extern std::string  msNeuralResponse;
 extern bool         mbBlocksDownloaded;
 
