@@ -59,7 +59,8 @@ bool IsPoR2(double amt)
 	std::string sAmt = RoundToString(amt,8);
 	if (sAmt.length() > 8)
 	{
-		if (sAmt.substr(sAmt.length()-4,4)=="0124")
+		std::string suffix = sAmt.substr(sAmt.length()-4,4);
+		if (suffix == "0124" || suffix=="0123")
 		{
 			return true;
 		}
