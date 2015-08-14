@@ -510,10 +510,12 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("RSAWeight",bb.RSAWeight));
 	result.push_back(Pair("LastPaymentTime",TimestampToHRDate(bb.LastPaymentTime)));
 	result.push_back(Pair("ResearchSubsidy",bb.ResearchSubsidy));
-	result.push_back(Pair("FutureResearchSubsidy",bb.ResearchSubsidy2));
 	result.push_back(Pair("ResearchAge",bb.ResearchAge));
 	result.push_back(Pair("ResearchMagnitudeUnit",bb.ResearchMagnitudeUnit));
 	result.push_back(Pair("ResearchAverageMagnitude",bb.ResearchAverageMagnitude));
+	result.push_back(Pair("LastPORBlockHash",bb.LastPORBlockHash));
+
+	
 
 	double interest = mint-bb.ResearchSubsidy;
 	result.push_back(Pair("Interest",bb.InterestSubsidy));
@@ -2652,25 +2654,24 @@ Value execute(const Array& params, bool fHelp)
 
 Array LifetimeReport(std::string cpid)
 {
-
 	   Array results;
 	   Object c;
-	   std::string Narr = "Lifetime Payments Report - Generated " + RoundToString(GetAdjustedTime(),0);
+	   std::string Narr = RoundToString(GetAdjustedTime(),0);
 	   c.push_back(Pair("Lifetime Payments Report",Narr));
 	   results.push_back(c);
 	   Object entry;
-	   CBlockIndex* pindex = pindexBest;
-	
-	   while (pindex->nHeight > nNewIndex && pindex->nHeight > 1)
+	   CBlockIndex* pindex = pindexGenesisBlock;
+	   while (pindex->nHeight < pindexBest->nHeight)
 	   {
+		    pindex = pindex->pnext;
   			if (pindex==NULL || !pindex->IsInMainChain()) continue;
-			if (pindex == pindexGenesisBlock) break;
+			if (pindex == pindexBest) break;
 			if (pindex->sCPID == cpid && (pindex->nResearchSubsidy > 0)) 
 			{
-						entry.push_back(Pair(RoundToString((double)pindex->nHeight,0), (double)pindex->nResearchSubsidy));
+				entry.push_back(Pair(RoundToString((double)pindex->nHeight,0), (double)pindex->nResearchSubsidy));
 								
 			}
-			pindex = pindex->pprev;
+			
 	   }
 	   results.push_back(entry);
 	   return results;
@@ -2683,7 +2684,7 @@ Array MagnitudeReport(std::string cpid)
 {
 	       Array results;
 		   Object c;
-		   std::string Narr = "Research Savings Account Report - Generated " + RoundToString(GetAdjustedTime(),0);
+		   std::string Narr = RoundToString(GetAdjustedTime(),0);
 		   c.push_back(Pair("RSA Report",Narr));
 		   results.push_back(c);
 		   StructCPID globalmag = mvMagnitudes["global"];
@@ -2723,9 +2724,13 @@ Array MagnitudeReport(std::string cpid)
 										entry.push_back(Pair("Lifetime Interest Paid", stCPID.InterestSubsidy));
 										entry.push_back(Pair("Lifetime Research Paid", stCPID.ResearchSubsidy));
 										double days = (GetAdjustedTime() - stCPID.LowLockTime)/86400;
+										entry.push_back(Pair("Earliest Payment",TimestampToHRDate(stCPID.LowLockTime)));
+										
 										entry.push_back(Pair("Lifetime Payments Per Day", stCPID.ResearchSubsidy/days));
 										entry.push_back(Pair("Last Blockhash Paid", stCPID.BlockHash));
 										entry.push_back(Pair("Last Block Paid",stCPID.LastBlock));
+										entry.push_back(Pair("Tx Count",stCPID.Accuracy));
+
 										results.push_back(entry);
 
 									}

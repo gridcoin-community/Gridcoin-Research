@@ -5910,7 +5910,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 {
     static map<CService, CPubKey> mapReuseKey;
     RandAddSeedPerfmon();
-    if (fDebug)
+    if (fDebug10)
         printf("received: %s (%"PRIszu" bytes)\n", strCommand.c_str(), vRecv.size());
     if (mapArgs.count("-dropmessagestest") && GetRand(atoi(mapArgs["-dropmessagestest"])) == 0)
     {
@@ -5944,7 +5944,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 		//Halford - 12-26-2014 - Thwart Hackers
 		bool ver_valid = AcidTest(strCommand,acid,pfrom);
-        if (fDebug) printf("Ver Acid %s, Validity %s ",acid.c_str(),YesNo(ver_valid).c_str());
+        if (fDebug10) printf("Ver Acid %s, Validity %s ",acid.c_str(),YesNo(ver_valid).c_str());
 		if (!ver_valid)
 		{
 		    pfrom->Misbehaving(100);
@@ -7136,6 +7136,12 @@ std::string GetNeuralNetworkSuperBlock()
 	
 }
 
+std::string GetLastPORBlockHash(std::string cpid)
+{
+	StructCPID stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
+	return stCPID.BlockHash;
+}
+
 std::string SerializeBoincBlock(MiningCPID mcpid)
 {
 	std::string delim = "<|>";
@@ -7153,7 +7159,10 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 		#endif
 	}
 
+	mcpid.LastPORBlockHash = GetLastPORBlockHash(mcpid.cpid);
+
 	if (mcpid.lastblockhash.empty()) mcpid.lastblockhash = "0";
+	if (mcpid.LastPORBlockHash.empty()) mcpid.LastPORBlockHash="0";
 	std::string bb = mcpid.cpid + delim + mcpid.projectname + delim + mcpid.aesskein + delim + RoundToString(mcpid.rac,0)
 					+ delim + RoundToString(mcpid.pobdifficulty,5) + delim + RoundToString((double)mcpid.diffbytes,0) 
 					+ delim + NN(mcpid.enccpid) 
@@ -7168,7 +7177,8 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 					+ delim + RoundToString(mcpid.InterestSubsidy,2) + delim + NN(mcpid.Organization) 
 					+ delim + NN(mcpid.OrganizationKey) + delim + mcpid.NeuralHash + delim + mcpid.superblock 
 					+ delim + RoundToString(mcpid.ResearchSubsidy2,2) + delim + RoundToString(mcpid.ResearchAge,6) 
-					+ delim + RoundToString(mcpid.ResearchMagnitudeUnit,6) + delim + RoundToString(mcpid.ResearchAverageMagnitude,2);
+					+ delim + RoundToString(mcpid.ResearchMagnitudeUnit,6) + delim + RoundToString(mcpid.ResearchAverageMagnitude,2)
+					+ delim + NN(mcpid.LastPORBlockHash);
 
 	return bb;
 }
@@ -7266,6 +7276,10 @@ MiningCPID DeserializeBoincBlock(std::string block)
 		if (s.size() > 26)
 		{
 			surrogate.ResearchAverageMagnitude = cdbl(s[26],2);
+		}
+		if (s.size() > 27)
+		{
+			surrogate.LastPORBlockHash = s[27];
 		}
 		
 	}
@@ -7895,6 +7909,7 @@ StructCPID GetStructCPID()
 	c.ResearchAge = 0;
 	c.ResearchMagnitudeUnit = 0;
 	c.ResearchAverageMagnitude = 0;
+	c.LastPORBlockHash = "";
 	c.Canary = 0;
 	c.NetsoftRAC = 0;
 	c.interestPayments = 0;
@@ -7948,6 +7963,7 @@ MiningCPID GetMiningCPID()
 	mc.ResearchAge = 0;
 	mc.ResearchMagnitudeUnit = 0;
 	mc.ResearchAverageMagnitude = 0;
+	mc.LastPORBlockHash = "";
 	mc.Canary = 0; //Used to test for a memory overflow
 	mc.Organization = "";
 	mc.OrganizationKey = "";
@@ -8624,8 +8640,12 @@ void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector
 			ZeroOutResearcherTotals(pconnectindex->sCPID);
 		}
 	}
+	//8-13-2015
+	int nMinIndex = pindexBest->nHeight-(6*30*BLOCKS_PER_DAY);
+	if (nMinIndex < 2) nMinIndex = 2;
+	if (nMinIndex < nNewIndex) nMinIndex = nNewIndex;
 
-	CBlockIndex* pindex = FindBlockByHeight(nNewIndex);
+	CBlockIndex* pindex = FindBlockByHeight(nMinIndex);
 	while (pindex->nHeight < (pindexBest->nHeight-1))
 	{
 	    pindex = pindex->pnext;

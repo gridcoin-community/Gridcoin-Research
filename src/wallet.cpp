@@ -1521,7 +1521,12 @@ bool CWallet::SelectCoinsForStaking(int64_t nTargetValueIn, unsigned int nSpendT
     nValueRet = 0;
 	//2-13-2015 R HALFORD - If this is a POR block, set the Target Coin Value to be 1/2
 	int64_t nTargetValue = nTargetValueIn;
-	if (GlobalCPUMiningCPID.cpid != "INVESTOR") nTargetValue = nTargetValueIn/2;
+
+	
+	if (GlobalCPUMiningCPID.cpid != "INVESTOR"  && msMiningErrors7 != "Probing coin age") 
+	{
+			nTargetValue = nTargetValueIn/2;
+	}
 
     BOOST_FOREACH(COutput output, vCoins)
     {
@@ -1860,6 +1865,9 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
     if (setCoins.empty())
 	{
+		msMiningErrors7="No coins to stake";
+		printf("No coins to stake.");
+    
 		return false;
 	}
 
@@ -1969,7 +1977,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             {
 			
                 // Found a kernel
-                if (fDebug)   printf("CCS:K;");
+                if (fDebug)   printf("CCS:FoundKernel;");
 				WriteAppCache(pindexPrev->GetBlockHash().GetHex(),RoundToString(mdPORNonce,0));
 		        vector<valtype> vSolutions;
                 txnouttype whichType;
@@ -1977,7 +1985,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
                 scriptPubKeyKernel = pcoin.first->vout[pcoin.second].scriptPubKey;
                 if (!Solver(scriptPubKeyKernel, whichType, vSolutions))
                 {
-                    if (fDebug && GetBoolArg("-printcoinstake"))
+                    if (fDebug)
                         printf("CreateCoinStake : failed to parse kernel\n");
                     break;
                 }

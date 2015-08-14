@@ -377,7 +377,7 @@ bool CTxDB::LoadBlockIndex()
         pindexNew->nBits          = diskindex.nBits;
         pindexNew->nNonce         = diskindex.nNonce;
 
-		//7-11-2015 - Gridcoin - New Accrual Fields
+		//8-13-2015 - Gridcoin - New Accrual Fields
 
 		if (diskindex.nHeight > nNewIndex)
 		{
@@ -387,15 +387,15 @@ bool CTxDB::LoadBlockIndex()
 			pindexNew->nMagnitude        = diskindex.nMagnitude;
 		}
 
-		if (!diskindex.sCPID.empty())
+		if (!diskindex.sCPID.empty() && false)
 		{
-			if (diskindex.sCPID != "INVESTOR")
+			if (diskindex.sCPID != "INVESTOR" && pindexNew->IsInMainChain())
 			{
 				StructCPID stCPID = GetInitializedStructCPID2(diskindex.sCPID,mvResearchAge);
 	     		stCPID.InterestSubsidy += diskindex.nInterestSubsidy;
 				stCPID.ResearchSubsidy += diskindex.nResearchSubsidy;
 				stCPID.Accuracy++;
-				if (((double)pindexNew->nHeight) > stCPID.LastBlock && diskindex.nResearchSubsidy > 0 && pindexNew->IsInMainChain()) 
+				if (((double)pindexNew->nHeight) > stCPID.LastBlock && diskindex.nResearchSubsidy > 0) 
 				{
 						stCPID.LastBlock = (double)pindexNew->nHeight;
 						stCPID.BlockHash = blockHash.GetHex();
@@ -424,6 +424,7 @@ bool CTxDB::LoadBlockIndex()
         iterator->Next();
     }
     delete iterator;
+	
 
 	
 	printf("Time to memorize diskindex containing %f blocks : %15"PRId64"ms\n", dBlockCount, GetTimeMillis() - nStart);
@@ -617,6 +618,40 @@ bool CTxDB::LoadBlockIndex()
         CTxDB txdb;
         block.SetBestChain(txdb, pindexFork);
     }
+
+
+
+
+	//8-13-2015 - Gridcoin - In order, set up Research Age hashes
+    CBlockIndex* pindex = pindexGenesisBlock;
+	while (pindex->nHeight < pindexBest->nHeight)
+	{
+		    pindex = pindex->pnext;
+  			if (pindex==NULL || !pindex->IsInMainChain()) continue;
+			if (pindex == pindexBest) break;
+			if (pindex->sCPID != "INVESTOR"  && !pindex->sCPID.empty() && (pindex->nResearchSubsidy > 0)) 
+			{
+				StructCPID stCPID = GetInitializedStructCPID2(pindex->sCPID, mvResearchAge);
+	     		stCPID.InterestSubsidy += pindex->nInterestSubsidy;
+				stCPID.ResearchSubsidy += pindex->nResearchSubsidy;
+				stCPID.Accuracy++;
+				if (((double)pindex->nHeight) > stCPID.LastBlock && pindex->nResearchSubsidy > 0) 
+				{
+						stCPID.LastBlock = (double)pindex->nHeight;
+						stCPID.BlockHash = pindex->GetBlockHash().GetHex();
+				}
+
+				if (((double)pindex->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime = (double)pindex->nTime;
+				if (((double)pindex->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pindex->nTime;
+			
+				mvResearchAge[pindex->sCPID]=stCPID;
+								
+			}
+			
+	}
+
+
+
 
     return true;
 }

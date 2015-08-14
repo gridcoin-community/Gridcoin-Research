@@ -438,7 +438,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		miningcpid.encaes = "";
 		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
 		std::string hashBoinc = SerializeBoincBlock(miningcpid);
-	    if (fDebug)  printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
+	    if (fDebug && LessVerbose(10))  printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
 		pblock->vtx[0].hashBoinc = hashBoinc;
 
         if (!fProofOfStake)
@@ -465,7 +465,6 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
             pblock->UpdateTime(pindexPrev);
         pblock->nNonce         = 0;
     }
-	if (fDebug) printf("ZX271");
 
     return pblock.release();
 }

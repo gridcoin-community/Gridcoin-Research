@@ -512,7 +512,6 @@ double qtExecuteGenericFunction(std::string function, std::string data)
 		{
 			result = globalcom->dynamicCall(sFunction.c_str(),qsData).toInt();
 		}
-		//printf(".NET returned result code %f\r\n",(double)result);
 		return (double)result;
 	#endif
  	return (double)result;
@@ -532,7 +531,6 @@ std::string qtExecuteDotNetStringFunction(std::string function, std::string data
 		std::string sFunction = function+"(Qstring)";
 		QString qsReturnData = globalcom->dynamicCall(sFunction.c_str(),qsData).toString();
 		sReturnData = FromQString(qsReturnData);
-		if (fDebug) printf(".NET returned %s \r\n",sReturnData.c_str());
 		return sReturnData;
 	#endif
  	return sReturnData;

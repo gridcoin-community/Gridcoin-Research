@@ -104,7 +104,7 @@ extern int miningthreadcount;
 		std::string PaymentAmountsBlocks;
 		std::string BlockHash;
 		std::string GRCAddress;
-		
+		std::string LastPORBlockHash;
 	};
 
 
@@ -176,7 +176,7 @@ extern int miningthreadcount;
 		std::string OrganizationKey;
 		std::string NeuralHash;
 		std::string superblock;
-
+		std::string LastPORBlockHash;
 	};
 
 	

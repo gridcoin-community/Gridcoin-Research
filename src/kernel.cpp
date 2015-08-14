@@ -768,9 +768,10 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
 				byme.c_str(),
 				tx.GetHash().ToString().c_str(), (double)por_nonce, hashProofOfStake.ToString().c_str(), targetProofOfStake.ToString().c_str(), 
 				diff1.ToString().c_str(), diff2.ToString().c_str());
+			
 			if (checking_local) return false;
-			//return false; 
-			tx.DoS(1, error("CheckProofOfStake[%s] : INFO: check kernel failed on coinstake %s",byme.c_str(),tx.GetHash().ToString().c_str()));
+			return false; 
+			//return error("CheckProofOfStake[%s] : INFO: check kernel failed on coinstake %s",byme.c_str(),tx.GetHash().ToString().c_str()));
 			// may occur during initial download or if behind on block chain sync
 
 		}

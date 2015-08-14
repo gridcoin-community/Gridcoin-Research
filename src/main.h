@@ -1263,7 +1263,11 @@ public:
 	double nResearchSubsidy;
 	double nInterestSubsidy;
 	double nMagnitude;
-	//
+	// Memory Only (8-13-2015):
+	double nLastPORBlock;
+	std::string sLastPORBlockHash;
+	double nTotalPORPayments;
+
 
     unsigned int nFlags;  // ppcoin: block index flags
     enum  
@@ -1317,6 +1321,10 @@ public:
 		nResearchSubsidy = 0;
 		nInterestSubsidy = 0;
 		nMagnitude = 0;
+		nLastPORBlock=0;
+		sLastPORBlockHash = "";
+		nTotalPORPayments = 0;
+
     }
 
     CBlockIndex(unsigned int nFileIn, unsigned int nBlockPosIn, CBlock& block)
