@@ -609,23 +609,24 @@ bool CTxDB::LoadBlockIndex()
 		    pindex = pindex->pnext;
   			if (pindex==NULL || !pindex->IsInMainChain()) continue;
 			if (pindex == pindexBest) break;
-			if (pindex->sCPID != "INVESTOR"  && !pindex->sCPID.empty() && (pindex->nResearchSubsidy > 0)) 
+			if (pindex->sCPID != "INVESTOR" && !pindex->sCPID.empty()) 
 			{
 				StructCPID stCPID = GetInitializedStructCPID2(pindex->sCPID, mvResearchAge);
 	     		stCPID.InterestSubsidy += pindex->nInterestSubsidy;
 				stCPID.ResearchSubsidy += pindex->nResearchSubsidy;
-				stCPID.Accuracy++;
-				if (pindex->nMagnitude > 0)
-				{
-					stCPID.TotalMagnitude += pindex->nMagnitude;
-					stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
-				}
 				if (((double)pindex->nHeight) > stCPID.LastBlock && pindex->nResearchSubsidy > 0) 
 				{
 						stCPID.LastBlock = (double)pindex->nHeight;
 						stCPID.BlockHash = pindex->GetBlockHash().GetHex();
 				}
 
+				if (pindex->nMagnitude > 0 && pindex->nResearchSubsidy > 0)
+				{
+					stCPID.Accuracy++;
+					stCPID.TotalMagnitude += pindex->nMagnitude;
+					stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
+				}
+		
 				if (((double)pindex->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime = (double)pindex->nTime;
 				if (((double)pindex->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pindex->nTime;
 			
@@ -635,8 +636,6 @@ bool CTxDB::LoadBlockIndex()
 			
 	}
 
-
-
-
+	
     return true;
 }

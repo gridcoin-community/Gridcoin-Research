@@ -27,6 +27,9 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
 bool ComputeNeuralNetworkSupermajorityHashes();
 bool UpdateNeuralNetworkQuorumData();
 extern Array LifetimeReport(std::string cpid);
+Array StakingReport();
+extern std::string AddContract(std::string sType, std::string sName, std::string sContract);
+
 
 
 int64_t GetEarliestWalletTransaction();
@@ -44,7 +47,7 @@ std::string ExtractHTML(std::string HTMLdata, std::string tagstartprefix,  std::
 extern  std::string GetNetsoftProjects(std::string cpid);
 std::string NeuralRequest(std::string MyNeuralRequest);
 extern std::string MyBeaconExists(std::string cpid);
-extern std::string AdvertiseBeacon(bool force);
+extern std::string AdvertiseBeacon(bool force,bool neurally);
 double Round(double d, int place);
 bool UnusualActivityReport();
 extern double GetCountOf(std::string datatype);
@@ -123,6 +126,7 @@ std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash)
 uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 extern std::string TimestampToHRDate(double dtm);
+
 std::string qtGRCCodeExecutionSubsystem(std::string sCommand);
 std::string LegacyDefaultBoincHashArgs();
 std::string GetHttpPage(std::string url);
@@ -1435,9 +1439,9 @@ bool CPIDAcidTest(std::string boincruntimepublickey)
 }
 
 
-std::string AdvertiseBeacon(bool force)
+std::string AdvertiseBeacon(bool force, bool bUseNeuralNetwork)
 {
-	//7-15-2015
+  	 //8-15-2015
 	 LOCK(cs_main);
 	 {
 			GetNextProject(false);
@@ -1446,7 +1450,6 @@ std::string AdvertiseBeacon(bool force)
 			std::string myBeacon = MyBeaconExists(GlobalCPUMiningCPID.cpid);
 			//printf("MyBeacon %s",myBeacon.c_str());
 			if (myBeacon.length() > 10 && !force) return "SUCCESS";
-		
 			uint256 hashRand = GetRandHash();
     		std::string email = GetArgument("email", "NA");
         	boost::to_lower(email);
@@ -1468,8 +1471,17 @@ std::string AdvertiseBeacon(bool force)
 			std::string sName = GlobalCPUMiningCPID.cpid;
 			try
 			{
-				std::string result = AddContract(sType,sName,sBase);
-				return result;
+				if (bUseNeuralNetwork)
+				{
+					std::string payload = GlobalCPUMiningCPID.cpid + "|" + sBase;
+					bool bResult = AsyncNeuralRequest("addbeacon",payload,10);
+					return "Advertising Beacon on Neural Network for " + payload;
+				}
+				else
+				{
+					std::string result = AddContract(sType,sName,sBase);
+					return result;
+				}
 			}
 			catch(Object& objError)
 			{
@@ -1610,25 +1622,34 @@ Value execute(const Array& params, bool fHelp)
 		{
 			std::string optional = params[1].get_str();
 			boost::to_lower(optional);
-			if (optional != "force")
+			if (optional != "force" && optional != "neural")
 			{
 				entry.push_back(Pair("Error","You must specify force to force the beacon in."));
 				results.push_back(entry);
 			}
 			else
 			{
-				
-		    	std::string sResult = AdvertiseBeacon(true);
-				entry.push_back(Pair("CPID",GlobalCPUMiningCPID.cpid.c_str()));
-				entry.push_back(Pair("Help","Note: if your wallet is locked this command will fail; to solve that unlock the wallet: 'walletpassphrase <yourpassword> <240>' without <>."));
-			    entry.push_back(Pair("Force Beacon",sResult));
-			    results.push_back(entry);
+				if (optional=="neural")
+				{
+					std::string sResult = AdvertiseBeacon(true,true);
+					entry.push_back(Pair("CPID",GlobalCPUMiningCPID.cpid.c_str()));
+					entry.push_back(Pair("Send Neural Beacon",sResult));
+					results.push_back(entry);
+				}
+				else
+				{
+					std::string sResult = AdvertiseBeacon(true,false);
+					entry.push_back(Pair("CPID",GlobalCPUMiningCPID.cpid.c_str()));
+					entry.push_back(Pair("Help","Note: if your wallet is locked this command will fail; to solve that unlock the wallet: 'walletpassphrase <yourpassword> <240>' without <>."));
+					entry.push_back(Pair("Force Beacon",sResult));
+					results.push_back(entry);
+				}
 		
 			}
 		}
 		else
 		{
-		    	std::string sResult = AdvertiseBeacon(false);
+		    	std::string sResult = AdvertiseBeacon(false,false);
 				entry.push_back(Pair("CPID",GlobalCPUMiningCPID.cpid.c_str()));
 
 			    entry.push_back(Pair("Beacon",sResult));
@@ -2650,8 +2671,6 @@ Value execute(const Array& params, bool fHelp)
 }
 
 
-
-
 Array LifetimeReport(std::string cpid)
 {
 	   Array results;
@@ -2723,14 +2742,14 @@ Array MagnitudeReport(std::string cpid)
 										entry.push_back(Pair("Expected Earnings (14 days)", dExpected14));
 										entry.push_back(Pair("Expected Earnings (Daily)", dExpected14/14));
 										StructCPID stCPID = GetInitializedStructCPID2(structMag.cpid,mvResearchAge);
-										entry.push_back(Pair("Lifetime Interest Paid", stCPID.InterestSubsidy));
-										entry.push_back(Pair("Lifetime Research Paid", stCPID.ResearchSubsidy));
-										entry.push_back(Pair("Lifetime Avg Magnitude", stCPID.ResearchAverageMagnitude));
+										entry.push_back(Pair("CPID Lifetime Interest Paid", stCPID.InterestSubsidy));
+										entry.push_back(Pair("CPID Lifetime Research Paid", stCPID.ResearchSubsidy));
+										entry.push_back(Pair("CPID Lifetime Avg Magnitude", stCPID.ResearchAverageMagnitude));
 										
 										double days = (GetAdjustedTime() - stCPID.LowLockTime)/86400;
 										entry.push_back(Pair("Earliest Payment",TimestampToHRDate(stCPID.LowLockTime)));
 										
-										entry.push_back(Pair("Lifetime Payments Per Day", stCPID.ResearchSubsidy/days));
+										entry.push_back(Pair("CPID Lifetime Payments Per Day", stCPID.ResearchSubsidy/days));
 										entry.push_back(Pair("Last Blockhash Paid", stCPID.BlockHash));
 										entry.push_back(Pair("Last Block Paid",stCPID.LastBlock));
 										entry.push_back(Pair("Tx Count",stCPID.Accuracy));
@@ -3746,6 +3765,11 @@ Value listitem(const Array& params, bool fHelp)
 		}
 
 		results = LifetimeReport(cpid);
+		return results;
+	}
+	if (sitem == "staking")
+	{
+		results = StakingReport();
 		return results;
 	}
 
