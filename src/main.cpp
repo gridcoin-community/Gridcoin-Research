@@ -6667,7 +6667,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 							{
 								bIgnore=true;
 								result = "Beacon already exists; ignoring request.";
-								printf("Add neural beacon: %s ",result.c_str());
+								if (fDebug) printf("Add neural beacon: %s ",result.c_str());
+		  				        pfrom->Misbehaving(10);
+      
 							}
 							if (s.size() >= 3)
 							{
@@ -6679,15 +6681,18 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 								if (!IsCPIDValid2) 
 								{
 									result = "Unable to sponsor beacon for invalid CPID " + cpid;
-									printf("Add Neural Beacon: %s",result.c_str());
-									bIgnore = true;
+									if (fDebug) printf("Add Neural Beacon: %s",result.c_str());
+		  					        pfrom->Misbehaving(10);
+     								bIgnore = true;
 								}
 							}
 							// Have we already sponsored beacon before?
 							if (ReadCache("sponsored",cpid)=="true")
 							{
 								result = "Unable to sponsor beacon for CPID " + cpid + ": already sponsored previously.";
-								printf("Add neural beacon : %s",result.c_str());
+								if (fDebug) printf("Add neural beacon : %s",result.c_str());
+		 				        pfrom->Misbehaving(10);
+      
 								bIgnore = true;
 							}
 							
