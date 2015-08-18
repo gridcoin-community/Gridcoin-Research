@@ -30,6 +30,9 @@ extern Array LifetimeReport(std::string cpid);
 Array StakingReport();
 extern std::string AddContract(std::string sType, std::string sName, std::string sContract);
 
+void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
+extern std::string MyBeaconExists(std::string cpid);
+
 
 
 int64_t GetEarliestWalletTransaction();
@@ -1147,6 +1150,26 @@ bool TallyMagnitudesInSuperblock()
 	network.AverageRAC = AVGRac;
 	network.rac = TotalRAC;
 	network.NetworkProjects = TotalProjects;
+	//8-16-2015 Store the quotes
+	std::string q = ReadCache("superblock","quotes");
+	std::vector<std::string> vQ = split(q.c_str(),";");
+	if (vQ.size() > 0)
+	{
+		for (unsigned int i = 0; i < vQ.size(); i++)
+		{
+			// For each quote in the contract
+			if (vQ[i].length() > 1)
+			{
+					std::string symbol = ExtractValue(vQ[i],",",0);
+					double price = cdbl(ExtractValue("0" + vQ[i],",",1),0);
+					
+					WriteCache("quotes",symbol,RoundToString(price,2),GetAdjustedTime());
+			}
+		}
+	}
+
+	network.GRCQuote = cdbl(ReadCache("quotes","GRC"),4);
+	network.BTCQuote = cdbl(ReadCache("quotes","BTC"),4);
     mvNetwork["NETWORK"] = network;
 	if (fDebug) printf(".43.");
 	return true;
@@ -1441,15 +1464,14 @@ bool CPIDAcidTest(std::string boincruntimepublickey)
 
 std::string AdvertiseBeacon(bool force, bool bUseNeuralNetwork)
 {
-  	 //8-15-2015
 	 LOCK(cs_main);
 	 {
 			GetNextProject(false);
 			if (GlobalCPUMiningCPID.cpid=="INVESTOR") return "SUCCESS";
 			//If beacon is already in the chain, exit early
 			std::string myBeacon = MyBeaconExists(GlobalCPUMiningCPID.cpid);
-			//printf("MyBeacon %s",myBeacon.c_str());
 			if (myBeacon.length() > 10 && !force) return "SUCCESS";
+			
 			uint256 hashRand = GetRandHash();
     		std::string email = GetArgument("email", "NA");
         	boost::to_lower(email);
@@ -1473,7 +1495,7 @@ std::string AdvertiseBeacon(bool force, bool bUseNeuralNetwork)
 			{
 				if (bUseNeuralNetwork)
 				{
-					std::string payload = GlobalCPUMiningCPID.cpid + "|" + sBase;
+					std::string payload = GlobalCPUMiningCPID.cpid + "|" + sBase + "|" + GlobalCPUMiningCPID.cpidv2 + "|" + hashRand.GetHex();
 					bool bResult = AsyncNeuralRequest("addbeacon",payload,10);
 					return "Advertising Beacon on Neural Network for " + payload;
 				}
@@ -3864,23 +3886,26 @@ Value listitem(const Array& params, bool fHelp)
 		for(map<string,StructCPID>::iterator ii=mvNetwork.begin(); ii!=mvNetwork.end(); ++ii) 
 		{
 
-			StructCPID structcpid = mvNetwork[(*ii).first];
+			StructCPID stNet = mvNetwork[(*ii).first];
 
-	        if (structcpid.initialized) 
+	        if (stNet.initialized) 
 			{ 
 				Object entry;
-				entry.push_back(Pair("Project",structcpid.projectname));
-				entry.push_back(Pair("Avg RAC",structcpid.AverageRAC));
-				if (structcpid.projectname=="NETWORK") 
+				entry.push_back(Pair("Project",stNet.projectname));
+				entry.push_back(Pair("Avg RAC",stNet.AverageRAC));
+				if (stNet.projectname=="NETWORK") 
 				{
-						entry.push_back(Pair("Network Total Magnitude",structcpid.NetworkMagnitude));
-						entry.push_back(Pair("Network Average Magnitude",structcpid.NetworkAvgMagnitude));
+						entry.push_back(Pair("Network Total Magnitude",stNet.NetworkMagnitude));
+						entry.push_back(Pair("Network Average Magnitude",stNet.NetworkAvgMagnitude));
 						double MaximumEmission = BLOCKS_PER_DAY*GetMaximumBoincSubsidy(GetAdjustedTime());
 					
-						entry.push_back(Pair("Network Avg Daily Payments", structcpid.payments/14));
+						entry.push_back(Pair("Network Avg Daily Payments", stNet.payments/14));
 						entry.push_back(Pair("Network Max Daily Payments",MaximumEmission));
 						double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
 						entry.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
+						entry.push_back(Pair("GRC Quote", stNet.GRCQuote));
+						entry.push_back(Pair("BTC Quote", stNet.BTCQuote));
+
 				}
 				results.push_back(entry);
 

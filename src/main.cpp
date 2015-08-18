@@ -32,6 +32,7 @@ int DownloadBlocks();
 std::string TimestampToHRDate(double dtm);
 std::string AddContract(std::string sType, std::string sName, std::string sContract);
 bool CPIDAcidTest(std::string boincruntimepublickey);
+std::string MyBeaconExists(std::string cpid);
 
 
 extern void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector<CBlockIndex*> vConnect);
@@ -97,6 +98,7 @@ extern void DeleteCache(std::string section, std::string keyname);
 extern void ClearCache(std::string section);
 bool TallyMagnitudesInSuperblock();
 extern void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
+
 std::string qtGetNeuralContract(std::string data);
 
 extern  std::string GetNetsoftProjects(std::string cpid);
@@ -2909,6 +2911,7 @@ bool LoadSuperblock(std::string data, int64_t nTime, double height)
 {
 		WriteCache("superblock","magnitudes",ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>"),nTime);
 		WriteCache("superblock","averages",ExtractXML(data,"<AVERAGES>","</AVERAGES>"),nTime);
+		WriteCache("superblock","quotes",ExtractXML(data,"<QUOTES>","</QUOTES>"),nTime);
 		WriteCache("superblock","all",data,nTime);
 		WriteCache("superblock","block_number",RoundToString(height,0),nTime);
 		//TallyMagnitudesInSuperblock(); (Done in TallynetworkAverages)
@@ -3345,8 +3348,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
 {
     printf("REORGANIZE\n");
-	// 8-11-2015
-    // Find the fork
+	// Find the fork
     CBlockIndex* pfork = pindexBest;
     CBlockIndex* plonger = pindexNew;
     while (pfork != plonger)
@@ -6655,10 +6657,46 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 				    //8-15-2015
 					std::vector<std::string> s = split(neural_request_id,"|");
 					std::string result = "Malformed Beacon";
+					bool bIgnore = false;
+						
 					if (s.size() > 1)
 					{
 							std::string cpid = s[0];
-							result = AddContract("beacon",cpid,s[1]);
+							std::string myBeacon = MyBeaconExists(cpid);
+							if (myBeacon.length() > 10)
+							{
+								bIgnore=true;
+								result = "Beacon already exists; ignoring request.";
+								printf("Add neural beacon: %s ",result.c_str());
+							}
+							if (s.size() >= 3)
+							{
+								std::string cpidv2 = s[2];
+								std::string hashRand = s[3];
+								uint256 uHash(hashRand);
+
+								bool IsCPIDValid2 = CPID_IsCPIDValid(cpid,cpidv2,uHash);
+								if (!IsCPIDValid2) 
+								{
+									result = "Unable to sponsor beacon for invalid CPID " + cpid;
+									printf("Add Neural Beacon: %s",result.c_str());
+									bIgnore = true;
+								}
+							}
+							// Have we already sponsored beacon before?
+							if (ReadCache("sponsored",cpid)=="true")
+							{
+								result = "Unable to sponsor beacon for CPID " + cpid + ": already sponsored previously.";
+								printf("Add neural beacon : %s",result.c_str());
+								bIgnore = true;
+							}
+							
+							if (!bIgnore) 
+							{
+									result = AddContract("beacon",cpid,s[1]);
+									WriteCache("sponsored",cpid,"true",GetAdjustedTime());
+
+							}
 							if (fDebug3) printf("Acting as Sponsor for CPID %s : adding beacon %s; result %s", cpid.c_str(), s[1].c_str(), result.c_str());
 					}
 					pfrom->PushMessage("addbeac_nresp", result);
@@ -7936,6 +7974,8 @@ StructCPID GetStructCPID()
 	c.PaymentTimespan=0;
 	c.ResearchSubsidy = 0;
 	c.InterestSubsidy = 0;
+	c.BTCQuote = 0;
+	c.GRCQuote = 0;
 	c.ResearchSubsidy2 = 0;
 	c.ResearchAge = 0;
 	c.ResearchMagnitudeUnit = 0;
@@ -7990,6 +8030,8 @@ MiningCPID GetMiningCPID()
 	mc.LastPaymentTime=0;
 	mc.ResearchSubsidy = 0;
 	mc.InterestSubsidy = 0;
+	mc.GRCQuote = 0;
+	mc.BTCQuote = 0;
 	mc.ResearchSubsidy2 = 0;
 	mc.ResearchAge = 0;
 	mc.ResearchMagnitudeUnit = 0;
@@ -8585,7 +8627,7 @@ int64_t ComputeResearchAccrual(std::string cpid, std::string operation, CBlockIn
 	if (dAccrualAge < 0) dAccrualAge=0;
 	dMagnitudeUnit = GRCMagnitudeUnit(pindexLast->nTime);
 	// TODO: If the accrual age is > 30 days, grab a snapshot from a superblock at the midpoint to make the avg magnitude accurate:
-	int64_t Accrual = ((int64_t)(dAccrualAge*AvgMagnitude*dMagnitudeUnit)*COIN);
+	int64_t Accrual = (int64_t)(dAccrualAge*AvgMagnitude*dMagnitudeUnit*COIN);
 	// Double check researcher lifetime paid
 	StructCPID stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
 	
@@ -8595,8 +8637,8 @@ int64_t ComputeResearchAccrual(std::string cpid, std::string operation, CBlockIn
 	double ReferencePPD = dMagnitudeUnit*dAvgMag;
 	if ((PPD > ReferencePPD*5))
 	{
-			printf("Researcher PPD %f > Reference PPD %f for CPID %s with Lifetime Avg Mag of %f \r\n",PPD,ReferencePPD,cpid.c_str(),dAvgMag);
-			Accrual=0;
+			printf("Researcher PPD %f > Reference PPD %f for CPID %s with Lifetime Avg Mag of %f, Days %f \r\n",PPD,ReferencePPD,cpid.c_str(),dAvgMag,days);
+			Accrual=.01*COIN;
 	}
 
 	double verbosity = (operation == "createnewblock" || operation == "createcoinstake") ? 10 : 1000;

@@ -19,6 +19,8 @@ int64_t GetCoinYearReward(int64_t nTime);
 static boost::thread_group* postThreads = NULL;
 
 double GetPoSKernelPS2();
+StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
+double GRCMagnitudeUnit(int64_t locktime);
 
 volatile bool bCPIDsLoaded;
 volatile bool bProjectsInitialized;
@@ -74,6 +76,12 @@ Value getmininginfo(const Array& params, bool fHelp)
 	obj.push_back(Pair("testnet",       fTestNet));
 	obj.push_back(Pair("CPID",msPrimaryCPID));
 	obj.push_back(Pair("RSAWeight",(double)GetRSAWeightByCPID(msPrimaryCPID)));
+	StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
+	obj.push_back(Pair("GRCQuote",network.GRCQuote));
+	obj.push_back(Pair("BTCQuote",network.BTCQuote));
+	double dMagnitudeUnit = GRCMagnitudeUnit(GetAdjustedTime());
+	obj.push_back(Pair("Magnitude Unit",dMagnitudeUnit));
+	
 	obj.push_back(Pair("MiningProject",msMiningProject));
 	obj.push_back(Pair("MiningInfo 1", msMiningErrors));
 	obj.push_back(Pair("MiningInfo 2", msMiningErrors2));

@@ -85,6 +85,8 @@ extern int miningthreadcount;
 		double NetworkMagnitude;
 		double NetworkAvgMagnitude;
 		double NetsoftRAC;
+		double GRCQuote;
+		double BTCQuote;
 		double Canary;
 		std::string cpid;
 		std::string emailhash;
@@ -155,6 +157,8 @@ extern int miningthreadcount;
 		double ResearchMagnitudeUnit;
 		double ResearchAverageMagnitude;
 		double InterestSubsidy;
+		double GRCQuote;
+		double BTCQuote;
 		int prevBlockType;
 		double Canary;
 		

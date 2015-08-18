@@ -70,6 +70,7 @@ Module modPersistedDataSystem
         sOut = Replace(sOut, ",", ".")
         Return sOut
     End Function
+
     Public Sub ReconnectToNeuralNetwork()
         Try
             mGRCData = New GRCSec.GridcoinData
@@ -109,6 +110,19 @@ Module modPersistedDataSystem
                                  + "," + Trim(cpid.DataColumn5) + ";"
             sOut += sRow
         Next
+        surrogateRow.Database = "Prices"
+        surrogateRow.Table = "Quotes"
+        lstCPIDs = GetList(surrogateRow, "*")
+
+        For Each cpid As Row In lstCPIDs
+            Dim dNeuralMagnitude As Double = 0
+            Dim sRow As String = cpid.PrimaryKey + "," + Num(cpid.Magnitude) _
+                                 + "," + Num(dNeuralMagnitude) + "," + Num(cpid.RAC) _
+                                 + "," + Trim(cpid.Synced) + "," + Trim(cpid.DataColumn4) _
+                                 + "," + Trim(cpid.DataColumn5) + ";"
+            sOut += sRow
+        Next
+
         Return sOut
     End Function
     Private Function SumOfNetworkMagnitude(ByRef dAvg As Double) As Double
@@ -152,7 +166,21 @@ Module modPersistedDataSystem
                     sOut += sRow
                 End If
         Next
-        sOut += "</MAGNITUDES><AVERAGES>"
+            sOut += "</MAGNITUDES><QUOTES>"
+
+            surrogateRow.Database = "Prices"
+            surrogateRow.Table = "Quotes"
+            lstCPIDs = GetList(surrogateRow, "*")
+
+            For Each cpid As Row In lstCPIDs
+                Dim dNeuralMagnitude As Double = 0
+                Dim sRow As String = cpid.PrimaryKey + "," + Num(cpid.Magnitude) + ";"
+                lTotal = lTotal + Val("0" + Trim(cpid.Magnitude))
+                lRows = lRows + 1
+                sOut += sRow
+            Next
+
+            sOut += "</QUOTES><AVERAGES>"
         Dim avg As Double
         avg = lTotal / (lRows + 0.01)
         If avg < 25 Then Return ""
@@ -683,6 +711,29 @@ Module modPersistedDataSystem
 
         End Try
         Dim sMemoryName = IIf(mbTestNet, "magnitudes_testnet", "magnitudes")
+        'Get CryptoCurrency Quotes:
+        Dim dBTC As Double = GetCryptoPrice("BTC").Price * 100
+        Dim dGRC As Double = GetCryptoPrice("GRC").Price * 10000000000
+        '8-16-2015
+        Dim q As New Row
+        q.Database = "Prices"
+        q.Table = "Quotes"
+        q.PrimaryKey = "BTC"
+        q.Expiration = DateAdd(DateInterval.Day, 1, Now)
+        q.Synced = q.Expiration
+
+        q.Magnitude = Trim(Math.Round(dBTC, 2))
+        Store(q)
+        q = New Row
+        q.Database = "Prices"
+        q.Table = "Quotes"
+        q.Expiration = DateAdd(DateInterval.Day, 1, Now)
+        q.PrimaryKey = "GRC"
+        q.Magnitude = Trim(Math.Round(dGRC, 2))
+        q.Synced = q.Expiration
+
+        Store(q)
+
 
         'Update all researchers magnitudes:
         Try
@@ -1264,6 +1315,50 @@ Module modPersistedDataSystem
         End Try
 
     End Sub
+
+    Private Function NiceTicker(sSymbol As String)
+        sSymbol = Replace(Replace(sSymbol, "$", ""), "^", "")
+        Return sSymbol
+    End Function
+
+    Public Function GetCryptoPrice(sSymbol As String) As Quote
+
+        Try
+
+            'Sample Ticker Format :  {"ticker":{"high":0.00003796,"low":0.0000365,"avg":0.00003723,"lastbuy":0.0000371,"lastsell":0.00003795,"buy":0.00003794,"sell":0.00003795,"lastprice":0.00003795,"updated":1420369200}}
+            Dim sSymbol1 As String
+            sSymbol1 = NiceTicker(sSymbol)
+            Dim ccxPage As String = ""
+            If sSymbol1 = "BTC" Then
+                ccxPage = "btc-usd.json"
+            Else
+                ccxPage = LCase(sSymbol1) + "-btc.json"
+            End If
+            Dim sURL As String = "https://c-cex.com/t/" + ccxPage
+            Dim w As New MyWebClient
+            Dim sJSON As String = w.DownloadString(sURL)
+            Dim sLast As String = ExtractValue(sJSON, "lastprice", "updated")
+            Dim dprice As Double
+            dprice = CDbl(sLast)
+            Dim qBitcoin As Quote
+            qBitcoin = GetQuote("$BTC")
+            If sSymbol1 <> "BTC" And qBitcoin.Price > 0 Then dprice = dprice * qBitcoin.Price
+            Dim q As Quote
+            q = GetQuote(sSymbol)
+            q.Symbol = sSymbol
+            q.PreviousClose = q.Price
+            Dim Variance As Double
+            Variance = Math.Round(dprice, 3) - q.PreviousClose
+            q.Variance = Variance
+            q.Price = Math.Round(dprice, 11)
+            Return q
+
+        Catch ex As Exception
+            Log("Unable to get quote data probably due to SSL being blocked: " + ex.Message)
+        End Try
+
+    End Function
+
 
     Public Function GetQuorumHash(data As String)
         Return mclsQHA.QuorumHashingAlgorithm(data)

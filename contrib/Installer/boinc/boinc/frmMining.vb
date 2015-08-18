@@ -235,14 +235,14 @@ Public Class frmMining
         Dim sReport As String = ""
         Dim sReportRow As String = ""
 
-        Dim sHeader As String = "CPID,Local Magnitude,Neural Magnitude,Total RAC,Synced Til,Address,CPID Valid"
+        Dim sHeader As String = "CPID,Magnitude,Avg Magnitude,Total RAC,Synced Til,Address,CPID Valid"
         sReport += sHeader + vbCrLf
         dgv.Rows.Clear()
         dgv.Columns.Clear()
         dgv.BackgroundColor = Drawing.Color.Black
         dgv.ForeColor = Drawing.Color.Lime
         Dim grr As New GridcoinReader.GridcoinRow
-        Dim sHeading As String = "CPID;Local Magnitude;Neural Magnitude;Total RAC;Synced Til;Address;CPID Valid"
+        Dim sHeading As String = "CPID;Magnitude;Avg Magnitude;Total RAC;Synced Til;Address;CPID Valid"
         Dim vHeading() As String = Split(sHeading, ";")
         PopulateHeadings(vHeading, dgv, False)
         Dim sData As String = modPersistedDataSystem.GetMagnitudeContractDetails()

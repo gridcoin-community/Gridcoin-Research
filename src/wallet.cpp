@@ -1813,6 +1813,11 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     txNew.vin.clear();
     txNew.vout.clear();
 
+	MiningCPID miningcpid = GetMiningCPID();
+	int64_t RSA = GetRSAWeightByCPID(miningcpid.cpid);
+	bool bNewbieFreePass = (RSA > 24999 && bResearchAgeEnabled);
+		
+
     // Mark coin stake transaction
     CScript scriptEmpty;
     scriptEmpty.clear();
@@ -1821,7 +1826,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     // Choose coins to use
     int64_t nBalance = GetBalance();
 	
-    if (nBalance <= nReserveBalance)
+    if (nBalance <= nReserveBalance && !bNewbieFreePass)
 	{
 		msMiningErrors7 = "No Reserve Balance to Stake";
         return false;
@@ -1857,14 +1862,14 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 
     // Select coins with suitable depth
-    if (!SelectCoinsForStaking(nBalance - nReserveBalance, txNew.nTime, setCoins, nValueIn))
+    if (!SelectCoinsForStaking(nBalance - nReserveBalance, txNew.nTime, setCoins, nValueIn) && !bNewbieFreePass)
 	{
 		msMiningErrors7="No coins to stake";
 		printf("No coins to stake.");
         return false;
 	}
 
-    if (setCoins.empty())
+    if (setCoins.empty() && !bNewbieFreePass)
 	{
 		msMiningErrors7="No coins to stake";
 		printf("No coins to stake.");
@@ -1875,7 +1880,6 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     int64_t nCredit = 0;
     CScript scriptPubKeyKernel;
     CTxDB txdb("r");
-	MiningCPID miningcpid = GetMiningCPID();
 	std::string hashBoinc = "";
 
 	try
@@ -2059,7 +2063,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 	int64_t RSA_WEIGHT  = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 	
-    if (nCredit == 0)
+    if (nCredit == 0 && !bNewbieFreePass)
 	{
 		//if (fDebug) printf("StakeMiner: Credit below reserve balance (zero).");
 		msMiningErrors7="Probing coin age";
@@ -2067,7 +2071,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		return false;
 	}
 
-	if (nCredit > nBalance - nReserveBalance)
+	if (nCredit > nBalance - nReserveBalance && !bNewbieFreePass)
 	{
 		if (fDebug) printf("StakeMiner: Credit below reserve balance. %f",(double)nCredit);
 		msMiningErrors7="";

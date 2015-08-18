@@ -106,9 +106,14 @@ Public Class Form1
 
         mU = New Utilization
         mU.clsLogOff()
+        
+        Dim dQuote As Double
+        Dim q As BoincStake.modGridcoinTicker.Quote
+        q = mU.cqGetCryptoPrice("GRC")
 
+        q = mU.cqGetCryptoPrice("BTC")
 
-        mU.SetGenericVotingData(sVotes)
+        
 
         Dim sTestNet As String = "TESTNET"
         mU.SetTestNetFlag(sTestNet)
@@ -117,6 +122,7 @@ Public Class Form1
         '  mU.ShowTicketList()
         mU.ShowMiningConsole()
 
+        mU.UpdateMagnitudesOnly()
 
 
         Exit Sub

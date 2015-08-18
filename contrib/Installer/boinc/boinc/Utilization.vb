@@ -15,7 +15,7 @@ Public Class Utilization
 
     Public ReadOnly Property Version As Double
         Get
-            Return 403
+            Return 404
         End Get
     End Property
 
@@ -25,6 +25,15 @@ Public Class Utilization
             'Return Val(clsGVM.BoincUtilization)
         End Get
     End Property
+
+    Public Function cGetCryptoPrice(sSymbol As String) As Double
+        Return GetCryptoPrice(sSymbol).Price
+    End Function
+    Public Function cqGetCryptoPrice(sSymbol As String) As Quote
+        Return GetCryptoPrice(sSymbol)
+    End Function
+
+
     Public Function SetQuorumData(sData As String) As String
 
         Dim sQuorumData As String = ExtractXML(sData, "<QUORUMDATA>")
@@ -42,8 +51,8 @@ Public Class Utilization
     Public Function WriteKey(sData As String) As String
         Try
             Dim sKey As String = ExtractXML(sData, "<KEY>")
-        Dim sValue As String = ExtractXML(sData, "<VALUE>")
-        UpdateKey(sKey, sValue)
+            Dim sValue As String = ExtractXML(sData, "<VALUE>")
+            UpdateKey(sKey, sValue)
             Return "True"
         Catch ex As Exception
             Return "False"
@@ -102,7 +111,7 @@ Public Class Utilization
         SetRPCReply(sData)
     End Sub
     Public Function TestnetGetGenericRPCValue() As String
-       
+
     End Function
     Public ReadOnly Property ClientNeedsUpgrade As Double
         Get
@@ -113,12 +122,12 @@ Public Class Utilization
                 If Len(sLastUpgraded) > 0 Then
                     Log("Found key AutoUpgrade " + Trim(sLastUpgraded))
 
-                        Dim dDiff As Long
-                        dDiff = DateDiff(DateInterval.Day, Now, CDate(sLastUpgraded))
-                        If Math.Abs(dDiff) < 1 Then
+                    Dim dDiff As Long
+                    dDiff = DateDiff(DateInterval.Day, Now, CDate(sLastUpgraded))
+                    If Math.Abs(dDiff) < 1 Then
                         Log("Upgraded too recently. Aborting. " + Trim(dDiff))
-                            Return 0
-                        End If
+                        Return 0
+                    End If
                 End If
                 Log("Ready for upgrade")
 
@@ -138,7 +147,7 @@ Public Class Utilization
     Public Function NeuralNetwork() As Double
         Return 1999
     End Function
-   
+
     Sub New()
 
         mclsUtilization = Me
@@ -418,7 +427,7 @@ Public Class Utilization
         Return sOut
     End Function
     Public Function ResolveDiscrepancies(sContract As String) As String
-        
+
         '7-25-2015 - Moving to QuorumHashingAlgorithm for this - disable this for the time being
 
         ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
@@ -483,8 +492,8 @@ Public Class Utilization
 
         Try
 
-        Dim s As New SpeechSynthesis
-        s.AddressUserBySurname(mlSpeakMagnitude)
+            Dim s As New SpeechSynthesis
+            s.AddressUserBySurname(mlSpeakMagnitude)
         Catch ex As Exception
             Log("Unable to initialize speech")
         End Try

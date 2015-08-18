@@ -1,4 +1,4 @@
-﻿Module modGridcoinTicker
+﻿Public Module modGridcoinTicker
 
     Public msTickers As String = ""
     Public mvTickers() As String
@@ -28,7 +28,7 @@
             Return (w)
         End Function
     End Class
-    Public Function GetQuote(sSymbol As String)
+    Public Function GetQuote(sSymbol As String) As Quote
         Dim q As Quote
         If mdPrices.ContainsKey(sSymbol) = False Then
             q = New Quote
