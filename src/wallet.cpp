@@ -2195,8 +2195,9 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 	if (fDebug3) printf("Staking Block \r\n");
 	
+	// PROD TODO DURING NEXT MANDATORY - Remove Crypto Lottery code and reimplement original split stakes and split stake in checkblock
 	// Set output amount - 4-3-2015 - Expand Coinstake to pay DPOR Researchers in CryptoLottery
-	if (bCryptoLotteryEnabled)
+	if (bCryptoLotteryEnabled && !bResearchAgeEnabled)
 	{
 		 
 		    std::string recipients = CryptoLottery(GetAdjustedTime());

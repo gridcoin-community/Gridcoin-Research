@@ -468,6 +468,8 @@ bool CTxDB::LoadBlockIndex()
     // Verify blocks in the best chain
     int nCheckLevel = GetArg("-checklevel", 1);
     int nCheckDepth = GetArg( "-checkblocks", 1000);
+	if (fTestNet) nCheckDepth = 45000; //Check the last 45000 blocks in TestNet since we want to rebuild the chain (8-19-2015)
+
     if (nCheckDepth == 0)
         nCheckDepth = 1000000000; // suffices until the year 19000
     if (nCheckDepth > nBestHeight)

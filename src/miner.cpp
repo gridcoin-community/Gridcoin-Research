@@ -25,6 +25,8 @@ double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t lo
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 std::string GetBestBlockHash(std::string sCPID);
 double CoinToDouble(double surrogate);
+void FixIndividualResearchTotals(std::string cpid);
+
 void ThreadTopUpKeyPool(void* parg);
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 double GetDifficulty(const CBlockIndex* blockindex = NULL);
@@ -687,13 +689,13 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 			// Research Age 8-9-2015
 			if (bResearchAgeEnabled)
 			{
-					//if (!pblock->vtx[1].GetCoinAge(txdb, nCoinAge))        return error("CheckStake[] : %s unable to get coin age for coinstake", pblock->vtx[1].GetHash().ToString().substr(0,10).c_str());
 					if (boincblock.ResearchSubsidy > (out_por+out_interest+1))
 					{
 						    if (fDebug3) printf("CheckStake[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and out_por %f with Out_Interest %f for CPID %s ",
 								(double)boincblock.InterestSubsidy,
 								(double)boincblock.ResearchSubsidy,(double)out_por,(double)out_interest,boincblock.cpid.c_str());
-			
+							FixIndividualResearchTotals(boincblock.cpid);
+
 							return error("CheckStake[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and out_por %f with Out_Interest %f for CPID %s ",
 								(double)boincblock.InterestSubsidy,
 								(double)boincblock.ResearchSubsidy,(double)out_por,(double)out_interest,boincblock.cpid.c_str());

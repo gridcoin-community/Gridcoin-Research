@@ -91,7 +91,7 @@ static const uint256 hashGenesisBlockTestNet("0x00006e037d7b84104208ecf2a8638d23
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 inline bool IsProtocolV2(int nHeight) 
 { 
-	return (fTestNet ?  nHeight > 32706 : nHeight > 85400); 
+	return (fTestNet ?  nHeight > 2060 : nHeight > 85400); 
 }
 
 inline int64_t PastDrift(int64_t nTime, int nHeight)   { return IsProtocolV2(nHeight) ? nTime - 20 * 60  : nTime - 20 * 60; }
