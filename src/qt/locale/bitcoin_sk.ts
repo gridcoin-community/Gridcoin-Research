@@ -3,22 +3,22 @@
     <name>AboutDialog</name>
     <message>
         <location filename="../forms/aboutdialog.ui" line="+14"/>
-        <source>About GridCoin</source>
-        <translation>O GridCoine</translation>
+        <source>About Gridcoin</source>
+        <translation>O Gridcoine</translation>
     </message>
     <message>
         <location line="+39"/>
-        <source>&lt;b&gt;GridCoin&lt;/b&gt; version</source>
-        <translation>verzia &lt;b&gt;GridCoinu&lt;/b&gt;</translation>
+        <source>&lt;b&gt;Gridcoin&lt;/b&gt; version</source>
+        <translation>verzia &lt;b&gt;Gridcoinu&lt;/b&gt;</translation>
     </message>
     <message>
         <location line="+41"/>
         <source>Copyright © 2009-2014 The Bitcoin developers
 Copyright © 2012-2014 The NovaCoin developers
-Copyright © 2014 The GridCoin developers</source>
+Copyright © 2014 The Gridcoin developers</source>
         <translation>Copyright © 2009-2014 The Bitcoin developers
 Copyright © 2012-2014 The NovaCoin developers
-Copyright © 2014 The GridCoin developers</translation>
+Copyright © 2014 The Gridcoin developers</translation>
     </message>
     <message>
         <location line="+15"/>
@@ -65,8 +65,8 @@ Tento produkt obsahuje softvér vyvinutý projektom OpenSSL Project pre použiti
     </message>
     <message>
         <location line="-46"/>
-        <source>These are your GridCoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
-        <translation>Toto sú vaše GridCoin adresy pre príjem platieb. Možno budete chcie? da? inú každému odosielate?ovi, aby ste mohli sledova?, kto Vám platí.</translation>
+        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
+        <translation>Toto sú vaše Gridcoin adresy pre príjem platieb. Možno budete chcie? da? inú každému odosielate?ovi, aby ste mohli sledova?, kto Vám platí.</translation>
     </message>
     <message>
         <location line="+60"/>
@@ -80,8 +80,8 @@ Tento produkt obsahuje softvér vyvinutý projektom OpenSSL Project pre použiti
     </message>
     <message>
         <location line="+11"/>
-        <source>Sign a message to prove you own a GridCoin address</source>
-        <translation>Podpísa? správu ako dôkaz, že vlastníte túto GridCoin adresu</translation>
+        <source>Sign a message to prove you own a Gridcoin address</source>
+        <translation>Podpísa? správu ako dôkaz, že vlastníte túto Gridcoin adresu</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -95,8 +95,8 @@ Tento produkt obsahuje softvér vyvinutý projektom OpenSSL Project pre použiti
     </message>
     <message>
         <location line="-14"/>
-        <source>Verify a message to ensure it was signed with a specified GridCoin address</source>
-        <translation>Overte správu, aby ste zabezpe?ili, že bola podpísaná s ur?itou GridCoin adresou</translation>
+        <source>Verify a message to ensure it was signed with a specified Gridcoin address</source>
+        <translation>Overte správu, aby ste zabezpe?ili, že bola podpísaná s ur?itou Gridcoin adresou</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -263,8 +263,8 @@ Tento produkt obsahuje softvér vyvinutý projektom OpenSSL Project pre použiti
     </message>
     <message>
         <location line="-58"/>
-        <source>GridCoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
-        <translation>GridCoin sa teraz zavrie aby dokon?il proces zašifrovania. Nezabudnite, že zašifrovanie vašej pe?aženky nemôže plne chráni? vaše mince pred krádežou malwarom napadnutím vašeho po?íta?a.</translation>
+        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
+        <translation>Gridcoin sa teraz zavrie aby dokon?il proces zašifrovania. Nezabudnite, že zašifrovanie vašej pe?aženky nemôže plne chráni? vaše mince pred krádežou malwarom napadnutím vašeho po?íta?a.</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -377,8 +377,8 @@ Tento produkt obsahuje softvér vyvinutý projektom OpenSSL Project pre použiti
     </message>
     <message>
         <location line="+4"/>
-        <source>Show information about GridCoin</source>
-        <translation>Zobrazi? informácie o GridCoin</translation>
+        <source>Show information about Gridcoin</source>
+        <translation>Zobrazi? informácie o Gridcoin</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -427,13 +427,13 @@ Tento produkt obsahuje softvér vyvinutý projektom OpenSSL Project pre použiti
     </message>
     <message>
         <location line="-62"/>
-        <source>Send coins to a GridCoin address</source>
-        <translation>Posla? mince na GridCoin adresu</translation>
+        <source>Send coins to a Gridcoin address</source>
+        <translation>Posla? mince na Gridcoin adresu</translation>
     </message>
     <message>
         <location line="+45"/>
-        <source>Modify configuration options for GridCoin</source>
-        <translation>Upravi? možnosti konfigurácie pre GridCoin</translation>
+        <source>Modify configuration options for Gridcoin</source>
+        <translation>Upravi? možnosti konfigurácie pre Gridcoin</translation>
     </message>
     <message>
         <location line="+18"/>
@@ -472,8 +472,8 @@ Tento produkt obsahuje softvér vyvinutý projektom OpenSSL Project pre použiti
     </message>
     <message>
         <location line="-200"/>
-        <source>GridCoin</source>
-        <translation>GridCoin</translation>
+        <source>Gridcoin</source>
+        <translation>Gridcoin</translation>
     </message>
     <message>
         <location line="+0"/>
@@ -482,8 +482,8 @@ Tento produkt obsahuje softvér vyvinutý projektom OpenSSL Project pre použiti
     </message>
     <message>
         <location line="+178"/>
-        <source>&amp;About GridCoin</source>
-        <translation>&amp;O GridCoin</translation>
+        <source>&amp;About Gridcoin</source>
+        <translation>&amp;O Gridcoin</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -539,13 +539,13 @@ Tento produkt obsahuje softvér vyvinutý projektom OpenSSL Project pre použiti
     <message>
         <location line="+0"/>
         <location line="+60"/>
-        <source>GridCoin client</source>
-        <translation>GridCoin klient</translation>
+        <source>Gridcoin client</source>
+        <translation>Gridcoin klient</translation>
     </message>
     <message numerus="yes">
         <location line="+70"/>
-        <source>%n active connection(s) to GridCoin network</source>
-        <translation><numerusform>%n aktívne spojenie s GridCoin sie?ov</numerusform><numerusform>%n aktívnych spojení s GridCoin sie?ov</numerusform><numerusform>%n aktívnych spojení s GridCoin sie?ou</numerusform></translation>
+        <source>%n active connection(s) to Gridcoin network</source>
+        <translation><numerusform>%n aktívne spojenie s Gridcoin sie?ov</numerusform><numerusform>%n aktívnych spojení s Gridcoin sie?ov</numerusform><numerusform>%n aktívnych spojení s Gridcoin sie?ou</numerusform></translation>
     </message>
     <message>
         <location line="+40"/>
@@ -658,8 +658,8 @@ Adresa: %4</translation>
     <message>
         <location line="-15"/>
         <location line="+15"/>
-        <source>URI can not be parsed! This can be caused by an invalid GridCoin address or malformed URI parameters.</source>
-        <translation>URI nemožno analyzova?! Toto môže by? spôsobené neplatnou GridCoin adresu alebo chybnými URI parametrami.</translation>
+        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
+        <translation>URI nemožno analyzova?! Toto môže by? spôsobené neplatnou Gridcoin adresu alebo chybnými URI parametrami.</translation>
     </message>
     <message>
         <location line="+18"/>
@@ -718,8 +718,8 @@ Adresa: %4</translation>
     </message>
     <message>
         <location filename="../bitcoin.cpp" line="+109"/>
-        <source>A fatal error occurred. GridCoin can no longer continue safely and will quit.</source>
-        <translation>Došlo k závažnej chybe. GridCoin už nemôže pokra?ova? bezpe?ne a bude ukon?ený.</translation>
+        <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
+        <translation>Došlo k závažnej chybe. Gridcoin už nemôže pokra?ova? bezpe?ne a bude ukon?ený.</translation>
     </message>
 </context>
 <context>
@@ -1052,8 +1052,8 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     </message>
     <message>
         <location line="-5"/>
-        <source>The entered address &quot;%1&quot; is not a valid GridCoin address.</source>
-        <translation>Zadaná adresa &quot;%1&quot; nie je platnou GridCoin adresou.</translation>
+        <source>The entered address &quot;%1&quot; is not a valid Gridcoin address.</source>
+        <translation>Zadaná adresa &quot;%1&quot; nie je platnou Gridcoin adresou.</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -1071,8 +1071,8 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     <message>
         <location filename="../guiutil.cpp" line="+420"/>
         <location line="+12"/>
-        <source>GridCoin-Qt</source>
-        <translation>GridCoin-Qt</translation>
+        <source>Gridcoin-Qt</source>
+        <translation>Gridcoin-Qt</translation>
     </message>
     <message>
         <location line="-12"/>
@@ -1144,13 +1144,13 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     </message>
     <message>
         <location line="+31"/>
-        <source>Automatically start GridCoin after logging in to the system.</source>
-        <translation>Automaticky spusti? GridCoin po prihlásení sa do systému.</translation>
+        <source>Automatically start Gridcoin after logging in to the system.</source>
+        <translation>Automaticky spusti? Gridcoin po prihlásení sa do systému.</translation>
     </message>
     <message>
         <location line="+3"/>
-        <source>&amp;Start GridCoin on system login</source>
-        <translation>&amp;Spusti? GridCoin pri prihlásení do systému</translation>
+        <source>&amp;Start Gridcoin on system login</source>
+        <translation>&amp;Spusti? Gridcoin pri prihlásení do systému</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -1169,8 +1169,8 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     </message>
     <message>
         <location line="+6"/>
-        <source>Automatically open the GridCoin client port on the router. This only works when your router supports UPnP and it is enabled.</source>
-        <translation>Automaticky otvori? port klienta GridCoin na routeri. To funguje iba vtedy, ak váš router podporuje UPnP a je povolené.</translation>
+        <source>Automatically open the Gridcoin client port on the router. This only works when your router supports UPnP and it is enabled.</source>
+        <translation>Automaticky otvori? port klienta Gridcoin na routeri. To funguje iba vtedy, ak váš router podporuje UPnP a je povolené.</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1179,8 +1179,8 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Connect to the GridCoin network through a SOCKS proxy (e.g. when connecting through Tor).</source>
-        <translation>Pripojenie k sieti GridCoin cez SOCKS proxy server (napr. pri pripojení cez Tor).</translation>
+        <source>Connect to the Gridcoin network through a SOCKS proxy (e.g. when connecting through Tor).</source>
+        <translation>Pripojenie k sieti Gridcoin cez SOCKS proxy server (napr. pri pripojení cez Tor).</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1254,8 +1254,8 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     </message>
     <message>
         <location line="+13"/>
-        <source>The user interface language can be set here. This setting will take effect after restarting GridCoin.</source>
-        <translation>Tu môžete nastavi? jazyk používate?ského rozhrania. Toto nastavenie sa prejaví až po reštartovaní GridCoin.</translation>
+        <source>The user interface language can be set here. This setting will take effect after restarting Gridcoin.</source>
+        <translation>Tu môžete nastavi? jazyk používate?ského rozhrania. Toto nastavenie sa prejaví až po reštartovaní Gridcoin.</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -1269,8 +1269,8 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     </message>
     <message>
         <location line="+9"/>
-        <source>Whether to show GridCoin addresses in the transaction list or not.</source>
-        <translation>?i chcete zobrazi? GridCoin adresy v zozname transakcií alebo nie.</translation>
+        <source>Whether to show Gridcoin addresses in the transaction list or not.</source>
+        <translation>?i chcete zobrazi? Gridcoin adresy v zozname transakcií alebo nie.</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1316,8 +1316,8 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     <message>
         <location line="-9"/>
         <location line="+9"/>
-        <source>This setting will take effect after restarting GridCoin.</source>
-        <translation>Toto nastavenie sa prejaví až po reštartovaní GridCoin.</translation>
+        <source>This setting will take effect after restarting Gridcoin.</source>
+        <translation>Toto nastavenie sa prejaví až po reštartovaní Gridcoin.</translation>
     </message>
     <message>
         <location line="+29"/>
@@ -1335,8 +1335,8 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     <message>
         <location line="+33"/>
         <location line="+231"/>
-        <source>The displayed information may be out of date. Your wallet automatically synchronizes with the GridCoin network after a connection is established, but this process has not completed yet.</source>
-        <translation>Zobrazené informácie môžu by? zastaralé. Vaša pe?aženka sa automaticky synchronizuje so sie?ou GridCoin po nadviazaní spojenia, ale tento proces nie je ešte dokon?ený.</translation>
+        <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</source>
+        <translation>Zobrazené informácie môžu by? zastaralé. Vaša pe?aženka sa automaticky synchronizuje so sie?ou Gridcoin po nadviazaní spojenia, ale tento proces nie je ešte dokon?ený.</translation>
     </message>
     <message>
         <location line="-160"/>
@@ -1551,8 +1551,8 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Show the GridCoin-Qt help message to get a list with possible GridCoin command-line options.</source>
-        <translation>Zobrazi? GridCoin-Qt nápovedu k získaniu zoznamu pre možnosti  príkazového riadku GridCoin.</translation>
+        <source>Show the Gridcoin-Qt help message to get a list with possible Gridcoin command-line options.</source>
+        <translation>Zobrazi? Gridcoin-Qt nápovedu k získaniu zoznamu pre možnosti  príkazového riadku Gridcoin.</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1571,13 +1571,13 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     </message>
     <message>
         <location line="-104"/>
-        <source>GridCoin - Debug window</source>
-        <translation>GridCoin - Ladiace okno</translation>
+        <source>Gridcoin - Debug window</source>
+        <translation>Gridcoin - Ladiace okno</translation>
     </message>
     <message>
         <location line="+25"/>
-        <source>GridCoin Core</source>
-        <translation>Jadro GridCoin</translation>
+        <source>Gridcoin Core</source>
+        <translation>Jadro Gridcoin</translation>
     </message>
     <message>
         <location line="+279"/>
@@ -1586,8 +1586,8 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Open the GridCoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
-        <translation>Otvorte GridCoin súbor denníku ladenia z aktuálneho adresára dát. To môže trva? nieko?ko sekúnd pre ve?ké súbory denníka.</translation>
+        <source>Open the Gridcoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
+        <translation>Otvorte Gridcoin súbor denníku ladenia z aktuálneho adresára dát. To môže trva? nieko?ko sekúnd pre ve?ké súbory denníka.</translation>
     </message>
     <message>
         <location line="+102"/>
@@ -1596,8 +1596,8 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     </message>
     <message>
         <location filename="../rpcconsole.cpp" line="-33"/>
-        <source>Welcome to the GridCoin RPC console.</source>
-        <translation>Vitajte v konzole GridCoin RPC.</translation>
+        <source>Welcome to the Gridcoin RPC console.</source>
+        <translation>Vitajte v konzole Gridcoin RPC.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1755,8 +1755,8 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     </message>
     <message>
         <location filename="../sendcoinsdialog.cpp" line="-173"/>
-        <source>Enter a GridCoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Zadajte GridCoin adresu (napr. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <translation>Zadajte Gridcoin adresu (napr. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
     <message>
         <location line="+15"/>
@@ -1855,8 +1855,8 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     </message>
     <message>
         <location line="+251"/>
-        <source>WARNING: Invalid GridCoin address</source>
-        <translation>UPOZORNENIE: Neplatná GridCoin adresa</translation>
+        <source>WARNING: Invalid Gridcoin address</source>
+        <translation>UPOZORNENIE: Neplatná Gridcoin adresa</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -1929,8 +1929,8 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     </message>
     <message>
         <location filename="../sendcoinsentry.cpp" line="+1"/>
-        <source>Enter a GridCoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Zadajte GridCoin adresu (napr. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <translation>Zadajte Gridcoin adresu (napr. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
 </context>
 <context>
@@ -1990,8 +1990,8 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     </message>
     <message>
         <location line="+21"/>
-        <source>Sign the message to prove you own this GridCoin address</source>
-        <translation>Podpísa? správu ako dôkaz, že vlastníte túto GridCoin adresu</translation>
+        <source>Sign the message to prove you own this Gridcoin address</source>
+        <translation>Podpísa? správu ako dôkaz, že vlastníte túto Gridcoin adresu</translation>
     </message>
     <message>
         <location line="+17"/>
@@ -2022,8 +2022,8 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     </message>
     <message>
         <location line="+40"/>
-        <source>Verify the message to ensure it was signed with the specified GridCoin address</source>
-        <translation>Overte správu, aby ste sa ubezpe?ili, že bola podpísaná s danou GridCoin adresou</translation>
+        <source>Verify the message to ensure it was signed with the specified Gridcoin address</source>
+        <translation>Overte správu, aby ste sa ubezpe?ili, že bola podpísaná s danou Gridcoin adresou</translation>
     </message>
     <message>
         <location line="+17"/>
@@ -2033,8 +2033,8 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     <message>
         <location filename="../signverifymessagedialog.cpp" line="+27"/>
         <location line="+3"/>
-        <source>Enter a GridCoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Zadajte GridCoin adresu (napr. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <translation>Zadajte Gridcoin adresu (napr. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
     <message>
         <location line="-2"/>
@@ -2043,8 +2043,8 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     </message>
     <message>
         <location line="+3"/>
-        <source>Enter GridCoin signature</source>
-        <translation>Zadajte GridCoin podpis</translation>
+        <source>Enter Gridcoin signature</source>
+        <translation>Zadajte Gridcoin podpis</translation>
     </message>
     <message>
         <location line="+82"/>
@@ -2614,8 +2614,8 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     <name>bitcoin-core</name>
     <message>
         <location filename="../bitcoinstrings.cpp" line="+33"/>
-        <source>GridCoin version</source>
-        <translation>GridCoin verzia</translation>
+        <source>Gridcoin version</source>
+        <translation>Gridcoin verzia</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2624,8 +2624,8 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Send command to -server or GridCoind</source>
-        <translation>Pošli príkaz na -server alebo GridCoind</translation>
+        <source>Send command to -server or Gridcoind</source>
+        <translation>Pošli príkaz na -server alebo Gridcoind</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2644,13 +2644,13 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <source>Specify configuration file (default: GridCoin.conf)</source>
-        <translation>Zadajte konfigura?ný súbor (predvolené: GridCoin.conf)</translation>
+        <source>Specify configuration file (default: Gridcoin.conf)</source>
+        <translation>Zadajte konfigura?ný súbor (predvolené: Gridcoin.conf)</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Specify pid file (default: GridCoind.pid)</source>
-        <translation>Zadajte pid súbor (predvolené: GridCoind.pid)</translation>
+        <source>Specify pid file (default: Gridcoind.pid)</source>
+        <translation>Zadajte pid súbor (predvolené: Gridcoind.pid)</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -2799,8 +2799,8 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
     </message>
     <message>
         <location line="+61"/>
-        <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong GridCoin will not work properly.</source>
-        <translation>Upozornenie: Skontrolujte, že dátum a ?as po?íta?a sú správne! Ak je Váš ?as nesprávny GridCoin nebude pracova? správne.</translation>
+        <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
+        <translation>Upozornenie: Skontrolujte, že dátum a ?as po?íta?a sú správne! Ak je Váš ?as nesprávny Gridcoin nebude pracova? správne.</translation>
     </message>
     <message>
         <location line="-31"/>
@@ -2989,24 +2989,24 @@ To znamená, že je potrebný poplatok aspo? %2.</translation>
         <source>%s, you must set a rpcpassword in the configuration file:
  %s
 It is recommended you use the following random password:
-rpcuser=GridCoinrpc
+rpcuser=Gridcoinrpc
 rpcpassword=%s
 (you do not need to remember this password)
 The username and password MUST NOT be the same.
 If the file does not exist, create it with owner-readable-only file permissions.
 It is also recommended to set alertnotify so you are notified of problems;
-for example: alertnotify=echo %%s | mail -s &quot;GridCoin Alert&quot; admin@foo.com
+for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
 </source>
         <translation>%s, musíte nastavi? rpcpassword v konfigura?nom súbore:
  %s
 Je odporú?ané použi? nasledujúce náhodné heslo:
-rpcuser=GridCoinrpc
+rpcuser=Gridcoinrpc
 rpcpassword=%s
 (Nemusíte si pamäta? toto heslo)
 Užívate?ské meno a heslo nesmú by? rovnaké. 
 Ak súbor neexistuje, vytvorte ho s oprávneniami súborov vlastníkov iba na ?ítatanie.
 Odporú?a sa tiež nastavi? alertnotify, takže budete upozornení na problémy;
-napríklad: alertnotify=echo %%s | mail -s &quot;GridCoin Alert&quot; admin@foo.com</translation>
+napríklad: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com</translation>
     </message>
     <message>
         <location line="+51"/>
@@ -3130,13 +3130,13 @@ napríklad: alertnotify=echo %%s | mail -s &quot;GridCoin Alert&quot; admin@foo.
     </message>
     <message>
         <location line="+1"/>
-        <source>Cannot obtain a lock on data directory %s.  GridCoin is probably already running.</source>
-        <translation>Nemožno získa? zámok na dátový adresár %s. GridCoin už pravdepodobne beží.</translation>
+        <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
+        <translation>Nemožno získa? zámok na dátový adresár %s. Gridcoin už pravdepodobne beží.</translation>
     </message>
     <message>
         <location line="-98"/>
-        <source>GridCoin</source>
-        <translation>GridCoin</translation>
+        <source>Gridcoin</source>
+        <translation>Gridcoin</translation>
     </message>
     <message>
         <location line="+140"/>
@@ -3170,13 +3170,13 @@ napríklad: alertnotify=echo %%s | mail -s &quot;GridCoin Alert&quot; admin@foo.
     </message>
     <message>
         <location line="+4"/>
-        <source>Error loading wallet.dat: Wallet requires newer version of GridCoin</source>
-        <translation>Chyba pri na?ítaní wallet.dat: Pe?aženka vyžaduje novšiu verziu GridCoin</translation>
+        <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
+        <translation>Chyba pri na?ítaní wallet.dat: Pe?aženka vyžaduje novšiu verziu Gridcoin</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Wallet needed to be rewritten: restart GridCoin to complete</source>
-        <translation>Pe?aženka potrebuje by? prepísaná: reštartujte GridCoin k dokon?eniu</translation>
+        <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
+        <translation>Pe?aženka potrebuje by? prepísaná: reštartujte Gridcoin k dokon?eniu</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3245,8 +3245,8 @@ napríklad: alertnotify=echo %%s | mail -s &quot;GridCoin Alert&quot; admin@foo.
     </message>
     <message>
         <location line="+122"/>
-        <source>Unable to bind to %s on this computer. GridCoin is probably already running.</source>
-        <translation>Nemôžem sa pripoji? na %s na tomto po?íta?i. GridCoin je pravdepodobne už beží.</translation>
+        <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
+        <translation>Nemôžem sa pripoji? na %s na tomto po?íta?i. Gridcoin je pravdepodobne už beží.</translation>
     </message>
     <message>
         <location line="-97"/>

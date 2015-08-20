@@ -17,7 +17,7 @@ cd src/
 make -f makefile.unix            # Headless gridcoinresearchd
 
 See readme-qt.rst for instructions on building gridcoinresearch,
-the graphical GridCoin.
+the graphical Gridcoin.
 
 Dependencies
 ------------

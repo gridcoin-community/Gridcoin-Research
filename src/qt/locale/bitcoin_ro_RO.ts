@@ -3,22 +3,22 @@
     <name>AboutDialog</name>
     <message>
         <location filename="../forms/aboutdialog.ui" line="+14"/>
-        <source>About GridCoin</source>
-        <translation>Despre GridCoin</translation>
+        <source>About Gridcoin</source>
+        <translation>Despre Gridcoin</translation>
     </message>
     <message>
         <location line="+39"/>
-        <source>&lt;b&gt;GridCoin&lt;/b&gt; version</source>
-        <translation>Versiune &lt;b&gt;GridCoin&lt;/b&gt;</translation>
+        <source>&lt;b&gt;Gridcoin&lt;/b&gt; version</source>
+        <translation>Versiune &lt;b&gt;Gridcoin&lt;/b&gt;</translation>
     </message>
     <message>
         <location line="+41"/>
         <source>Copyright © 2009-2014 The Bitcoin developers
 Copyright © 2012-2014 The NovaCoin developers
-Copyright © 2014 The GridCoin developers</source>
+Copyright © 2014 The Gridcoin developers</source>
         <translation>Copyright © 2009-2014 The Bitcoin developers
 Copyright © 2012-2014 The NovaCoin developers
-Copyright © 2014 The GridCoin developers</translation>
+Copyright © 2014 The Gridcoin developers</translation>
     </message>
     <message>
         <location line="+15"/>
@@ -65,8 +65,8 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
     </message>
     <message>
         <location line="-46"/>
-        <source>These are your GridCoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
-        <translation>Acestea sunt adresele GridCoin pentru a primi pl??i. Poate dori?i sa da?i o adresa noua fiecarui expeditor pentru a putea ?ine eviden?a la cine efectueaz? pl?ti.</translation>
+        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
+        <translation>Acestea sunt adresele Gridcoin pentru a primi pl??i. Poate dori?i sa da?i o adresa noua fiecarui expeditor pentru a putea ?ine eviden?a la cine efectueaz? pl?ti.</translation>
     </message>
     <message>
         <location line="+60"/>
@@ -80,8 +80,8 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
     </message>
     <message>
         <location line="+11"/>
-        <source>Sign a message to prove you own a GridCoin address</source>
-        <translation>Semneaz? un mesaj pentru a dovedi c? de?ineti o adres? GridCoin</translation>
+        <source>Sign a message to prove you own a Gridcoin address</source>
+        <translation>Semneaz? un mesaj pentru a dovedi c? de?ineti o adres? Gridcoin</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -95,8 +95,8 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
     </message>
     <message>
         <location line="-14"/>
-        <source>Verify a message to ensure it was signed with a specified GridCoin address</source>
-        <translation>Verific? un mesaj pentru a v? asigura c? a fost semnat cu o anumit? adres? GridCoin</translation>
+        <source>Verify a message to ensure it was signed with a specified Gridcoin address</source>
+        <translation>Verific? un mesaj pentru a v? asigura c? a fost semnat cu o anumit? adres? Gridcoin</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -263,8 +263,8 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
     </message>
     <message>
         <location line="-58"/>
-        <source>GridCoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
-        <translation>GridCoin se va inchide pentru a termina procesul de encriptie. Aminti?i-v?, criptarea portofelul dumneavoastr? nu poate proteja pe deplin monedele dvs. de a fi furate de  infectarea cu malware a computerului.</translation>
+        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
+        <translation>Gridcoin se va inchide pentru a termina procesul de encriptie. Aminti?i-v?, criptarea portofelul dumneavoastr? nu poate proteja pe deplin monedele dvs. de a fi furate de  infectarea cu malware a computerului.</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -377,8 +377,8 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
     </message>
     <message>
         <location line="+4"/>
-        <source>Show information about GridCoin</source>
-        <translation>Arat? informa?ii despre GridCoin</translation>
+        <source>Show information about Gridcoin</source>
+        <translation>Arat? informa?ii despre Gridcoin</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -427,13 +427,13 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
     </message>
     <message>
         <location line="-62"/>
-        <source>Send coins to a GridCoin address</source>
-        <translation>Trimite monede c?tre o adres? GridCoin</translation>
+        <source>Send coins to a Gridcoin address</source>
+        <translation>Trimite monede c?tre o adres? Gridcoin</translation>
     </message>
     <message>
         <location line="+45"/>
-        <source>Modify configuration options for GridCoin</source>
-        <translation>Modific? op?iuni de configurare pentru GridCoin</translation>
+        <source>Modify configuration options for Gridcoin</source>
+        <translation>Modific? op?iuni de configurare pentru Gridcoin</translation>
     </message>
     <message>
         <location line="+18"/>
@@ -472,8 +472,8 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
     </message>
     <message>
         <location line="-200"/>
-        <source>GridCoin</source>
-        <translation>GridCoin</translation>
+        <source>Gridcoin</source>
+        <translation>Gridcoin</translation>
     </message>
     <message>
         <location line="+0"/>
@@ -482,8 +482,8 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
     </message>
     <message>
         <location line="+178"/>
-        <source>&amp;About GridCoin</source>
-        <translation>Despre GridCoin</translation>
+        <source>&amp;About Gridcoin</source>
+        <translation>Despre Gridcoin</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -539,13 +539,13 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
     <message>
         <location line="+0"/>
         <location line="+60"/>
-        <source>GridCoin client</source>
-        <translation>Clientul GridCoin</translation>
+        <source>Gridcoin client</source>
+        <translation>Clientul Gridcoin</translation>
     </message>
     <message numerus="yes">
         <location line="+70"/>
-        <source>%n active connection(s) to GridCoin network</source>
-        <translation><numerusform>%n conexiune activ? la reteaua GridCoin</numerusform><numerusform>%n conexiuni active la reteaua GridCoin</numerusform><numerusform>%n conexiuni active la reteaua GridCoin</numerusform></translation>
+        <source>%n active connection(s) to Gridcoin network</source>
+        <translation><numerusform>%n conexiune activ? la reteaua Gridcoin</numerusform><numerusform>%n conexiuni active la reteaua Gridcoin</numerusform><numerusform>%n conexiuni active la reteaua Gridcoin</numerusform></translation>
     </message>
     <message>
         <location line="+40"/>
@@ -659,8 +659,8 @@ Adresa: %4
     <message>
         <location line="-15"/>
         <location line="+15"/>
-        <source>URI can not be parsed! This can be caused by an invalid GridCoin address or malformed URI parameters.</source>
-        <translation>URI nu poate fi parsatt! Cauza poate fi o adresa GridCoin invalid? sau parametrii URI malforma?i.</translation>
+        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
+        <translation>URI nu poate fi parsatt! Cauza poate fi o adresa Gridcoin invalid? sau parametrii URI malforma?i.</translation>
     </message>
     <message>
         <location line="+18"/>
@@ -719,8 +719,8 @@ Adresa: %4
     </message>
     <message>
         <location filename="../bitcoin.cpp" line="+109"/>
-        <source>A fatal error occurred. GridCoin can no longer continue safely and will quit.</source>
-        <translation>A ap?rut o eroare fatal?. GridCoin nu mai poate continua în condi?ii de siguran?? ?i va iesi.</translation>
+        <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
+        <translation>A ap?rut o eroare fatal?. Gridcoin nu mai poate continua în condi?ii de siguran?? ?i va iesi.</translation>
     </message>
 </context>
 <context>
@@ -1053,8 +1053,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location line="-5"/>
-        <source>The entered address &quot;%1&quot; is not a valid GridCoin address.</source>
-        <translation>Adresa introdus? &quot;%1&quot; nu este o adres? GridCoin valid?</translation>
+        <source>The entered address &quot;%1&quot; is not a valid Gridcoin address.</source>
+        <translation>Adresa introdus? &quot;%1&quot; nu este o adres? Gridcoin valid?</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -1072,8 +1072,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     <message>
         <location filename="../guiutil.cpp" line="+420"/>
         <location line="+12"/>
-        <source>GridCoin-Qt</source>
-        <translation>GridCoin-Qt</translation>
+        <source>Gridcoin-Qt</source>
+        <translation>Gridcoin-Qt</translation>
     </message>
     <message>
         <location line="-12"/>
@@ -1145,13 +1145,13 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location line="+31"/>
-        <source>Automatically start GridCoin after logging in to the system.</source>
-        <translation>Porne?te GridCoin imdiat dup? logarea în sistem</translation>
+        <source>Automatically start Gridcoin after logging in to the system.</source>
+        <translation>Porne?te Gridcoin imdiat dup? logarea în sistem</translation>
     </message>
     <message>
         <location line="+3"/>
-        <source>&amp;Start GridCoin on system login</source>
-        <translation>$Porne?te GridCoin la logarea în sistem</translation>
+        <source>&amp;Start Gridcoin on system login</source>
+        <translation>$Porne?te Gridcoin la logarea în sistem</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -1170,8 +1170,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location line="+6"/>
-        <source>Automatically open the GridCoin client port on the router. This only works when your router supports UPnP and it is enabled.</source>
-        <translation>Deschide automat portul pentru cientul GridCoin pe router. Aces lucru este posibil doara daca routerul suporta UPnP si este activat</translation>
+        <source>Automatically open the Gridcoin client port on the router. This only works when your router supports UPnP and it is enabled.</source>
+        <translation>Deschide automat portul pentru cientul Gridcoin pe router. Aces lucru este posibil doara daca routerul suporta UPnP si este activat</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1180,8 +1180,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Connect to the GridCoin network through a SOCKS proxy (e.g. when connecting through Tor).</source>
-        <translation>Conecteaza la reteaua GridCoin prinr-un proxy SOCKS(ex. cand te conectezi prin Tor)</translation>
+        <source>Connect to the Gridcoin network through a SOCKS proxy (e.g. when connecting through Tor).</source>
+        <translation>Conecteaza la reteaua Gridcoin prinr-un proxy SOCKS(ex. cand te conectezi prin Tor)</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1255,8 +1255,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location line="+13"/>
-        <source>The user interface language can be set here. This setting will take effect after restarting GridCoin.</source>
-        <translation>Limba interfe?ei utilizator poate fi setat aici. Aceast? setare va avea efect dup? repornirea GridCoin.</translation>
+        <source>The user interface language can be set here. This setting will take effect after restarting Gridcoin.</source>
+        <translation>Limba interfe?ei utilizator poate fi setat aici. Aceast? setare va avea efect dup? repornirea Gridcoin.</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -1270,8 +1270,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location line="+9"/>
-        <source>Whether to show GridCoin addresses in the transaction list or not.</source>
-        <translation>Dac? s? arate adrese GridCoin din lista de tranzac?ie sau nu.</translation>
+        <source>Whether to show Gridcoin addresses in the transaction list or not.</source>
+        <translation>Dac? s? arate adrese Gridcoin din lista de tranzac?ie sau nu.</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1317,8 +1317,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     <message>
         <location line="-9"/>
         <location line="+9"/>
-        <source>This setting will take effect after restarting GridCoin.</source>
-        <translation>Aceasta setare va avea efect dupa repornirea GridCoin.</translation>
+        <source>This setting will take effect after restarting Gridcoin.</source>
+        <translation>Aceasta setare va avea efect dupa repornirea Gridcoin.</translation>
     </message>
     <message>
         <location line="+29"/>
@@ -1336,8 +1336,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     <message>
         <location line="+33"/>
         <location line="+231"/>
-        <source>The displayed information may be out of date. Your wallet automatically synchronizes with the GridCoin network after a connection is established, but this process has not completed yet.</source>
-        <translation>Informatia afisata poate fi depasita.  Portofel se sincronizeaz? automat cu re?eaua GridCoin dup? ce se stabile?te o conexiune, dar acest proces nu s-a finalizat înc?.</translation>
+        <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</source>
+        <translation>Informatia afisata poate fi depasita.  Portofel se sincronizeaz? automat cu re?eaua Gridcoin dup? ce se stabile?te o conexiune, dar acest proces nu s-a finalizat înc?.</translation>
     </message>
     <message>
         <location line="-160"/>
@@ -1552,8 +1552,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Show the GridCoin-Qt help message to get a list with possible GridCoin command-line options.</source>
-        <translation>Afi?a mesajul de ajutor GridCoin-Qt pentru a ob?ine o list? cu posibile op?iuni de linie de comand? GridCoin.</translation>
+        <source>Show the Gridcoin-Qt help message to get a list with possible Gridcoin command-line options.</source>
+        <translation>Afi?a mesajul de ajutor Gridcoin-Qt pentru a ob?ine o list? cu posibile op?iuni de linie de comand? Gridcoin.</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1572,13 +1572,13 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location line="-104"/>
-        <source>GridCoin - Debug window</source>
-        <translation>GridCoin - fereastr? depanare</translation>
+        <source>Gridcoin - Debug window</source>
+        <translation>Gridcoin - fereastr? depanare</translation>
     </message>
     <message>
         <location line="+25"/>
-        <source>GridCoin Core</source>
-        <translation>GridCoin Core</translation>
+        <source>Gridcoin Core</source>
+        <translation>Gridcoin Core</translation>
     </message>
     <message>
         <location line="+279"/>
@@ -1587,8 +1587,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Open the GridCoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
-        <translation>Deschideti fisierul de depanare GridCoin din folderul curent. Acest lucru poate dura cateva secunde pentru fisiere de log mari.</translation>
+        <source>Open the Gridcoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
+        <translation>Deschideti fisierul de depanare Gridcoin din folderul curent. Acest lucru poate dura cateva secunde pentru fisiere de log mari.</translation>
     </message>
     <message>
         <location line="+102"/>
@@ -1597,8 +1597,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location filename="../rpcconsole.cpp" line="-33"/>
-        <source>Welcome to the GridCoin RPC console.</source>
-        <translation>Bine ati venit la consola GridCoin RPC.</translation>
+        <source>Welcome to the Gridcoin RPC console.</source>
+        <translation>Bine ati venit la consola Gridcoin RPC.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1756,8 +1756,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location filename="../sendcoinsdialog.cpp" line="-173"/>
-        <source>Enter a GridCoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Introduce?i o adres? GridCoin(ex:B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <translation>Introduce?i o adres? Gridcoin(ex:B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
     <message>
         <location line="+15"/>
@@ -1856,8 +1856,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location line="+251"/>
-        <source>WARNING: Invalid GridCoin address</source>
-        <translation>Aten?ie: Adres? GridCoin invalid?</translation>
+        <source>WARNING: Invalid Gridcoin address</source>
+        <translation>Aten?ie: Adres? Gridcoin invalid?</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -1930,8 +1930,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location filename="../sendcoinsentry.cpp" line="+1"/>
-        <source>Enter a GridCoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Introduce?i o adres? GridCoin(ex:B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <translation>Introduce?i o adres? Gridcoin(ex:B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
 </context>
 <context>
@@ -1991,8 +1991,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location line="+21"/>
-        <source>Sign the message to prove you own this GridCoin address</source>
-        <translation>Semneaz? un mesaj pentru a dovedi c? de?ineti o adres? GridCoin</translation>
+        <source>Sign the message to prove you own this Gridcoin address</source>
+        <translation>Semneaz? un mesaj pentru a dovedi c? de?ineti o adres? Gridcoin</translation>
     </message>
     <message>
         <location line="+17"/>
@@ -2023,8 +2023,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location line="+40"/>
-        <source>Verify the message to ensure it was signed with the specified GridCoin address</source>
-        <translation>Verific? un mesaj pentru a v? asigura c? a fost semnat cu o anumit? adres? GridCoin</translation>
+        <source>Verify the message to ensure it was signed with the specified Gridcoin address</source>
+        <translation>Verific? un mesaj pentru a v? asigura c? a fost semnat cu o anumit? adres? Gridcoin</translation>
     </message>
     <message>
         <location line="+17"/>
@@ -2034,8 +2034,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     <message>
         <location filename="../signverifymessagedialog.cpp" line="+27"/>
         <location line="+3"/>
-        <source>Enter a GridCoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Introduce?i o adres? GridCoin(ex:B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <translation>Introduce?i o adres? Gridcoin(ex:B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
     <message>
         <location line="-2"/>
@@ -2044,8 +2044,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location line="+3"/>
-        <source>Enter GridCoin signature</source>
-        <translation>Introduceti semnatura GridCoin</translation>
+        <source>Enter Gridcoin signature</source>
+        <translation>Introduceti semnatura Gridcoin</translation>
     </message>
     <message>
         <location line="+82"/>
@@ -2615,8 +2615,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     <name>bitcoin-core</name>
     <message>
         <location filename="../bitcoinstrings.cpp" line="+33"/>
-        <source>GridCoin version</source>
-        <translation>Versiune GridCoin</translation>
+        <source>Gridcoin version</source>
+        <translation>Versiune Gridcoin</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2625,8 +2625,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Send command to -server or GridCoind</source>
-        <translation>Trimite comanda catre server sau GridCoind</translation>
+        <source>Send command to -server or Gridcoind</source>
+        <translation>Trimite comanda catre server sau Gridcoind</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2645,13 +2645,13 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location line="+2"/>
-        <source>Specify configuration file (default: GridCoin.conf)</source>
-        <translation>Specifica fisier de configurare(implicit: GridCoin.conf)</translation>
+        <source>Specify configuration file (default: Gridcoin.conf)</source>
+        <translation>Specifica fisier de configurare(implicit: Gridcoin.conf)</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Specify pid file (default: GridCoind.pid)</source>
-        <translation>Speficica fisier pid(implicit: GridCoin.pid)</translation>
+        <source>Specify pid file (default: Gridcoind.pid)</source>
+        <translation>Speficica fisier pid(implicit: Gridcoin.pid)</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -2800,8 +2800,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location line="+61"/>
-        <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong GridCoin will not work properly.</source>
-        <translation>Atentie: Va rugam verificati ca timpul si data calculatorului sunt corete. Daca timpul este gresit GridCoin nu va functiona corect.</translation>
+        <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
+        <translation>Atentie: Va rugam verificati ca timpul si data calculatorului sunt corete. Daca timpul este gresit Gridcoin nu va functiona corect.</translation>
     </message>
     <message>
         <location line="-31"/>
@@ -2990,22 +2990,22 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <source>%s, you must set a rpcpassword in the configuration file:
  %s
 It is recommended you use the following random password:
-rpcuser=GridCoinrpc
+rpcuser=Gridcoinrpc
 rpcpassword=%s
 (you do not need to remember this password)
 The username and password MUST NOT be the same.
 If the file does not exist, create it with owner-readable-only file permissions.
 It is also recommended to set alertnotify so you are notified of problems;
-for example: alertnotify=echo %%s | mail -s &quot;GridCoin Alert&quot; admin@foo.com
+for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
 </source>
         <translation>%s, trebuie s? configura?i o parol? rpc în fi?ierul de configurare: %s
-Este recomandat s? folosi?i urm?toarea parol? generat? aleator: rpcuser=GridCoinrpc
+Este recomandat s? folosi?i urm?toarea parol? generat? aleator: rpcuser=Gridcoinrpc
 rpcpassword=%s
 (nu trebuie s? ?ine?i minte aceast? parol?)
 Username-ul ?i parola NU TREBUIE s? fie acelea?i.
 Dac? fi?ierul nu exist?, crea?i-l cu drepturi de citire doar de c?tre de?in?tor.
 Este deasemenea recomandat s? seta?i alertnotify pentru a fi notificat de probleme;
-de exemplu: alertnotify=echo %%s | mail -s &quot;GridCoin Alert&quot; admin@foo.com
+de exemplu: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
 </translation>
     </message>
     <message>
@@ -3130,13 +3130,13 @@ de exemplu: alertnotify=echo %%s | mail -s &quot;GridCoin Alert&quot; admin@foo.
     </message>
     <message>
         <location line="+1"/>
-        <source>Cannot obtain a lock on data directory %s.  GridCoin is probably already running.</source>
+        <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
         <translation>Nu se poate obtine un lock pe directorul de date &amp;s. Blackoin probabil ruleaza deja.</translation>
     </message>
     <message>
         <location line="-98"/>
-        <source>GridCoin</source>
-        <translation>GridCoin</translation>
+        <source>Gridcoin</source>
+        <translation>Gridcoin</translation>
     </message>
     <message>
         <location line="+140"/>
@@ -3170,13 +3170,13 @@ de exemplu: alertnotify=echo %%s | mail -s &quot;GridCoin Alert&quot; admin@foo.
     </message>
     <message>
         <location line="+4"/>
-        <source>Error loading wallet.dat: Wallet requires newer version of GridCoin</source>
-        <translation>Eroare la înc?rcarea wallet.dat: Portofelul necesita o versiune mai noua de GridCoin</translation>
+        <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
+        <translation>Eroare la înc?rcarea wallet.dat: Portofelul necesita o versiune mai noua de Gridcoin</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Wallet needed to be rewritten: restart GridCoin to complete</source>
-        <translation>A fost nevoie de rescrierea portofelului: restarta?i GridCoin pentru a finaliza</translation>
+        <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
+        <translation>A fost nevoie de rescrierea portofelului: restarta?i Gridcoin pentru a finaliza</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3245,8 +3245,8 @@ de exemplu: alertnotify=echo %%s | mail -s &quot;GridCoin Alert&quot; admin@foo.
     </message>
     <message>
         <location line="+122"/>
-        <source>Unable to bind to %s on this computer. GridCoin is probably already running.</source>
-        <translation>Imposibil de conectat %s pe acest computer. Cel mai probabil GridCoin ruleaza</translation>
+        <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
+        <translation>Imposibil de conectat %s pe acest computer. Cel mai probabil Gridcoin ruleaza</translation>
     </message>
     <message>
         <location line="-97"/>

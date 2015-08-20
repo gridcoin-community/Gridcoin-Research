@@ -1,8 +1,8 @@
 #ifndef QTIPCSERVER_H
 #define QTIPCSERVER_H
 
-// Define GridCoin-Qt message queue name
-#define BITCOINURI_QUEUE_NAME "GridCoinURI"
+// Define Gridcoin-Qt message queue name
+#define BITCOINURI_QUEUE_NAME "GridcoinURI"
 
 void ipcScanRelay(int argc, char *argv[]);
 void ipcInit(int argc, char *argv[]);

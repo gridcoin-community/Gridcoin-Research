@@ -3,19 +3,19 @@
     <name>AboutDialog</name>
     <message>
         <location filename="../forms/aboutdialog.ui" line="+14"/>
-        <source>About GridCoin</source>
-        <translation>GridCoin Hakk?nda</translation>
+        <source>About Gridcoin</source>
+        <translation>Gridcoin Hakk?nda</translation>
     </message>
     <message>
         <location line="+39"/>
-        <source>&lt;b&gt;GridCoin&lt;/b&gt; version</source>
-        <translation>&lt;b&gt;GridCoin&lt;/b&gt; versiyonu</translation>
+        <source>&lt;b&gt;Gridcoin&lt;/b&gt; version</source>
+        <translation>&lt;b&gt;Gridcoin&lt;/b&gt; versiyonu</translation>
     </message>
     <message>
         <location line="+41"/>
         <source>Copyright © 2009-2014 The Bitcoin developers
 Copyright © 2012-2014 The NovaCoin developers
-Copyright © 2014 The GridCoin developers</source>
+Copyright © 2014 The Gridcoin developers</source>
         <translation type="unfinished"/>
     </message>
     <message>
@@ -63,8 +63,8 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="-46"/>
-        <source>These are your GridCoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
-        <translation>Bunlar, ödeme almak için GridCoin adreslerinizdir. Her bir göndericiye farkl? birini verebilir, böylece size kimin ödeme yapt???n? takip edebilirsiniz.</translation>
+        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
+        <translation>Bunlar, ödeme almak için Gridcoin adreslerinizdir. Her bir göndericiye farkl? birini verebilir, böylece size kimin ödeme yapt???n? takip edebilirsiniz.</translation>
     </message>
     <message>
         <location line="+60"/>
@@ -78,8 +78,8 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="+11"/>
-        <source>Sign a message to prove you own a GridCoin address</source>
-        <translation>Bir GridCoin adresine sahip oldu?unu ispatlamak için bir mesaj imzala</translation>
+        <source>Sign a message to prove you own a Gridcoin address</source>
+        <translation>Bir Gridcoin adresine sahip oldu?unu ispatlamak için bir mesaj imzala</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -93,8 +93,8 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="-14"/>
-        <source>Verify a message to ensure it was signed with a specified GridCoin address</source>
-        <translation>Mesaj?n, belirli bir GridCoin adresiyle imzaland???ndan emin olmak için onu do?rula</translation>
+        <source>Verify a message to ensure it was signed with a specified Gridcoin address</source>
+        <translation>Mesaj?n, belirli bir Gridcoin adresiyle imzaland???ndan emin olmak için onu do?rula</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -261,8 +261,8 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="-58"/>
-        <source>GridCoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
-        <translation>GridCoin, ?ifreleme i?lemini tamamlamak için ?imdi kapat?lacak. Cüzdan?n?z? ?ifrelemenin; coinlerinizin, bilgisayar?n?z? etkileyen zararl? yaz?l?mlar taraf?ndan çal?nmas?n? bütünüyle engelleyemeyebilece?ini unutmay?n?z.</translation>
+        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
+        <translation>Gridcoin, ?ifreleme i?lemini tamamlamak için ?imdi kapat?lacak. Cüzdan?n?z? ?ifrelemenin; coinlerinizin, bilgisayar?n?z? etkileyen zararl? yaz?l?mlar taraf?ndan çal?nmas?n? bütünüyle engelleyemeyebilece?ini unutmay?n?z.</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -375,8 +375,8 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="+4"/>
-        <source>Show information about GridCoin</source>
-        <translation>GridCoin hakk?ndaki bilgiyi göster</translation>
+        <source>Show information about Gridcoin</source>
+        <translation>Gridcoin hakk?ndaki bilgiyi göster</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -425,13 +425,13 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="-62"/>
-        <source>Send coins to a GridCoin address</source>
-        <translation>Bir GridCoin adresine coin gönder</translation>
+        <source>Send coins to a Gridcoin address</source>
+        <translation>Bir Gridcoin adresine coin gönder</translation>
     </message>
     <message>
         <location line="+45"/>
-        <source>Modify configuration options for GridCoin</source>
-        <translation>GridCoin yap?land?rma seçeneklerini de?i?tir</translation>
+        <source>Modify configuration options for Gridcoin</source>
+        <translation>Gridcoin yap?land?rma seçeneklerini de?i?tir</translation>
     </message>
     <message>
         <location line="+18"/>
@@ -470,8 +470,8 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="-200"/>
-        <source>GridCoin</source>
-        <translation>GridCoin</translation>
+        <source>Gridcoin</source>
+        <translation>Gridcoin</translation>
     </message>
     <message>
         <location line="+0"/>
@@ -480,8 +480,8 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="+178"/>
-        <source>&amp;About GridCoin</source>
-        <translation>GridCoin &amp;Hakk?nda</translation>
+        <source>&amp;About Gridcoin</source>
+        <translation>Gridcoin &amp;Hakk?nda</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -537,13 +537,13 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+0"/>
         <location line="+60"/>
-        <source>GridCoin client</source>
-        <translation>GridCoin istemcisi</translation>
+        <source>Gridcoin client</source>
+        <translation>Gridcoin istemcisi</translation>
     </message>
     <message numerus="yes">
         <location line="+70"/>
-        <source>%n active connection(s) to GridCoin network</source>
-        <translation><numerusform>GridCoin a??na %n etkin ba?lant?</numerusform><numerusform>GridCoin a??na %n etkin ba?lant?</numerusform></translation>
+        <source>%n active connection(s) to Gridcoin network</source>
+        <translation><numerusform>Gridcoin a??na %n etkin ba?lant?</numerusform><numerusform>Gridcoin a??na %n etkin ba?lant?</numerusform></translation>
     </message>
     <message>
         <location line="+40"/>
@@ -657,8 +657,8 @@ Adres: %4
     <message>
         <location line="-15"/>
         <location line="+15"/>
-        <source>URI can not be parsed! This can be caused by an invalid GridCoin address or malformed URI parameters.</source>
-        <translation>URI ayr??t?r?lamad?! Bu, geçersiz bir GridCoin adresi veya hatal? URI parametreleri nedeniyle olabilir.</translation>
+        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
+        <translation>URI ayr??t?r?lamad?! Bu, geçersiz bir Gridcoin adresi veya hatal? URI parametreleri nedeniyle olabilir.</translation>
     </message>
     <message>
         <location line="+18"/>
@@ -717,8 +717,8 @@ Adres: %4
     </message>
     <message>
         <location filename="../bitcoin.cpp" line="+109"/>
-        <source>A fatal error occurred. GridCoin can no longer continue safely and will quit.</source>
-        <translation>Önemli bir hata olu?tu. GridCoin art?k güvenli bir ?ekilde devam edemez ve ?imdi kapat?lacak.</translation>
+        <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
+        <translation>Önemli bir hata olu?tu. Gridcoin art?k güvenli bir ?ekilde devam edemez ve ?imdi kapat?lacak.</translation>
     </message>
 </context>
 <context>
@@ -1051,8 +1051,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="-5"/>
-        <source>The entered address &quot;%1&quot; is not a valid GridCoin address.</source>
-        <translation>Girilen %1 adresi, geçerli bir GridCoin adresi de?ildir.</translation>
+        <source>The entered address &quot;%1&quot; is not a valid Gridcoin address.</source>
+        <translation>Girilen %1 adresi, geçerli bir Gridcoin adresi de?ildir.</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -1070,8 +1070,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../guiutil.cpp" line="+420"/>
         <location line="+12"/>
-        <source>GridCoin-Qt</source>
-        <translation>GridCoin-Qt</translation>
+        <source>Gridcoin-Qt</source>
+        <translation>Gridcoin-Qt</translation>
     </message>
     <message>
         <location line="-12"/>
@@ -1143,13 +1143,13 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+31"/>
-        <source>Automatically start GridCoin after logging in to the system.</source>
-        <translation>Sisteme giri? yapt?ktan sonra GridCoin&apos;i otomatik olarak ba?lat</translation>
+        <source>Automatically start Gridcoin after logging in to the system.</source>
+        <translation>Sisteme giri? yapt?ktan sonra Gridcoin&apos;i otomatik olarak ba?lat</translation>
     </message>
     <message>
         <location line="+3"/>
-        <source>&amp;Start GridCoin on system login</source>
-        <translation>Sisteme giri?te GridCoin&apos;i &amp;ba?lat</translation>
+        <source>&amp;Start Gridcoin on system login</source>
+        <translation>Sisteme giri?te Gridcoin&apos;i &amp;ba?lat</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -1168,8 +1168,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+6"/>
-        <source>Automatically open the GridCoin client port on the router. This only works when your router supports UPnP and it is enabled.</source>
-        <translation>Yönelticide GridCoin istemci portunu otomatik olarak aç. Bu, sadece yönelticiniz UPnP&apos;i destekledi?inde ve etkin oldu?unda çal???r.</translation>
+        <source>Automatically open the Gridcoin client port on the router. This only works when your router supports UPnP and it is enabled.</source>
+        <translation>Yönelticide Gridcoin istemci portunu otomatik olarak aç. Bu, sadece yönelticiniz UPnP&apos;i destekledi?inde ve etkin oldu?unda çal???r.</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1178,8 +1178,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+7"/>
-        <source>Connect to the GridCoin network through a SOCKS proxy (e.g. when connecting through Tor).</source>
-        <translation>GridCoin a??na bir SOCKS vekil sunucusu yoluyla ba?lan (örn. Tor yoluyla ba?lan?ld???nda)</translation>
+        <source>Connect to the Gridcoin network through a SOCKS proxy (e.g. when connecting through Tor).</source>
+        <translation>Gridcoin a??na bir SOCKS vekil sunucusu yoluyla ba?lan (örn. Tor yoluyla ba?lan?ld???nda)</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1253,8 +1253,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+13"/>
-        <source>The user interface language can be set here. This setting will take effect after restarting GridCoin.</source>
-        <translation>Kullan?c? arabirimi dili buradan ayarlanabilir. Ayar, GridCoin yeniden ba?lat?ld???nda etkin olacakt?r.</translation>
+        <source>The user interface language can be set here. This setting will take effect after restarting Gridcoin.</source>
+        <translation>Kullan?c? arabirimi dili buradan ayarlanabilir. Ayar, Gridcoin yeniden ba?lat?ld???nda etkin olacakt?r.</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -1268,8 +1268,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+9"/>
-        <source>Whether to show GridCoin addresses in the transaction list or not.</source>
-        <translation>GridCoin adresinin i?lem listesinde gösterilmesi veya gösterilmemesi</translation>
+        <source>Whether to show Gridcoin addresses in the transaction list or not.</source>
+        <translation>Gridcoin adresinin i?lem listesinde gösterilmesi veya gösterilmemesi</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1315,8 +1315,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="-9"/>
         <location line="+9"/>
-        <source>This setting will take effect after restarting GridCoin.</source>
-        <translation>Bu ayar, GridCoin&apos;i yeniden ba?latt?ktan sonra etkin olacakt?r.</translation>
+        <source>This setting will take effect after restarting Gridcoin.</source>
+        <translation>Bu ayar, Gridcoin&apos;i yeniden ba?latt?ktan sonra etkin olacakt?r.</translation>
     </message>
     <message>
         <location line="+29"/>
@@ -1334,8 +1334,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+33"/>
         <location line="+231"/>
-        <source>The displayed information may be out of date. Your wallet automatically synchronizes with the GridCoin network after a connection is established, but this process has not completed yet.</source>
-        <translation>Görüntülenen bilginin tarihi geçmi? olabilir. Cüzdan?n?z, ba?lant? kurulduktan sonra otomatik olarak GridCoin a?? ile senkronize olur ancak bu süreç, henüz tamamlanmam??t?r.</translation>
+        <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</source>
+        <translation>Görüntülenen bilginin tarihi geçmi? olabilir. Cüzdan?n?z, ba?lant? kurulduktan sonra otomatik olarak Gridcoin a?? ile senkronize olur ancak bu süreç, henüz tamamlanmam??t?r.</translation>
     </message>
     <message>
         <location line="-160"/>
@@ -1550,8 +1550,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+7"/>
-        <source>Show the GridCoin-Qt help message to get a list with possible GridCoin command-line options.</source>
-        <translation>Muhtemel GridCoin komut sat?r? seçeneklerinin bir listesini getirmek için GridCoin-Qt yard?m mesaj?n? göster</translation>
+        <source>Show the Gridcoin-Qt help message to get a list with possible Gridcoin command-line options.</source>
+        <translation>Muhtemel Gridcoin komut sat?r? seçeneklerinin bir listesini getirmek için Gridcoin-Qt yard?m mesaj?n? göster</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1570,13 +1570,13 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="-104"/>
-        <source>GridCoin - Debug window</source>
-        <translation>GridCoin - Hata ay?klama penceresi</translation>
+        <source>Gridcoin - Debug window</source>
+        <translation>Gridcoin - Hata ay?klama penceresi</translation>
     </message>
     <message>
         <location line="+25"/>
-        <source>GridCoin Core</source>
-        <translation>GridCoin Core</translation>
+        <source>Gridcoin Core</source>
+        <translation>Gridcoin Core</translation>
     </message>
     <message>
         <location line="+279"/>
@@ -1585,8 +1585,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+7"/>
-        <source>Open the GridCoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
-        <translation>GridCoin hata ay?klama günlük kütü?ü dosyas?n?, mevcut veri klasöründen aç. Bu i?lem, büyük günlük kütü?ü dosyalar? için birkaç saniye sürebilir.</translation>
+        <source>Open the Gridcoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
+        <translation>Gridcoin hata ay?klama günlük kütü?ü dosyas?n?, mevcut veri klasöründen aç. Bu i?lem, büyük günlük kütü?ü dosyalar? için birkaç saniye sürebilir.</translation>
     </message>
     <message>
         <location line="+102"/>
@@ -1595,8 +1595,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location filename="../rpcconsole.cpp" line="-33"/>
-        <source>Welcome to the GridCoin RPC console.</source>
-        <translation>GridCoin RPC konsoluna ho? geldiniz.</translation>
+        <source>Welcome to the Gridcoin RPC console.</source>
+        <translation>Gridcoin RPC konsoluna ho? geldiniz.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1754,8 +1754,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location filename="../sendcoinsdialog.cpp" line="-173"/>
-        <source>Enter a GridCoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Bir GridCoin adresi gir (örn: B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <translation>Bir Gridcoin adresi gir (örn: B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
     <message>
         <location line="+15"/>
@@ -1854,8 +1854,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+251"/>
-        <source>WARNING: Invalid GridCoin address</source>
-        <translation>UYARI: Geçersiz GridCoin adresi</translation>
+        <source>WARNING: Invalid Gridcoin address</source>
+        <translation>UYARI: Geçersiz Gridcoin adresi</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -1928,8 +1928,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location filename="../sendcoinsentry.cpp" line="+1"/>
-        <source>Enter a GridCoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Bir GridCoin adresi girin (örn: B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <translation>Bir Gridcoin adresi girin (örn: B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
 </context>
 <context>
@@ -1989,8 +1989,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+21"/>
-        <source>Sign the message to prove you own this GridCoin address</source>
-        <translation>Bu GridCoin adresine sahip oldu?unuzu ispatlamak için mesaj? imzala</translation>
+        <source>Sign the message to prove you own this Gridcoin address</source>
+        <translation>Bu Gridcoin adresine sahip oldu?unuzu ispatlamak için mesaj? imzala</translation>
     </message>
     <message>
         <location line="+17"/>
@@ -2021,8 +2021,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+40"/>
-        <source>Verify the message to ensure it was signed with the specified GridCoin address</source>
-        <translation>Mesaj?n, belirtilen GridCoin adresiyle imzaland???ndan emin olmak için onu do?rula</translation>
+        <source>Verify the message to ensure it was signed with the specified Gridcoin address</source>
+        <translation>Mesaj?n, belirtilen Gridcoin adresiyle imzaland???ndan emin olmak için onu do?rula</translation>
     </message>
     <message>
         <location line="+17"/>
@@ -2032,8 +2032,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../signverifymessagedialog.cpp" line="+27"/>
         <location line="+3"/>
-        <source>Enter a GridCoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Bir GridCoin adresi girin (örn: B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <translation>Bir Gridcoin adresi girin (örn: B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
     <message>
         <location line="-2"/>
@@ -2042,8 +2042,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+3"/>
-        <source>Enter GridCoin signature</source>
-        <translation>GridCoin imzas? gir</translation>
+        <source>Enter Gridcoin signature</source>
+        <translation>Gridcoin imzas? gir</translation>
     </message>
     <message>
         <location line="+82"/>
@@ -2613,8 +2613,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <name>bitcoin-core</name>
     <message>
         <location filename="../bitcoinstrings.cpp" line="+33"/>
-        <source>GridCoin version</source>
-        <translation>GridCoin versiyonu</translation>
+        <source>Gridcoin version</source>
+        <translation>Gridcoin versiyonu</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2623,8 +2623,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+1"/>
-        <source>Send command to -server or GridCoind</source>
-        <translation>-sunucu veya GridCoind&apos;ye komut gönder</translation>
+        <source>Send command to -server or Gridcoind</source>
+        <translation>-sunucu veya Gridcoind&apos;ye komut gönder</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2643,13 +2643,13 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+2"/>
-        <source>Specify configuration file (default: GridCoin.conf)</source>
-        <translation>Konfigürasyon dosyas?n? belirt (varsay?lan: GridCoin.conf)</translation>
+        <source>Specify configuration file (default: Gridcoin.conf)</source>
+        <translation>Konfigürasyon dosyas?n? belirt (varsay?lan: Gridcoin.conf)</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Specify pid file (default: GridCoind.pid)</source>
-        <translation>pid dosyas?n? belirt (varsay?lan: GridCoin.pid)</translation>
+        <source>Specify pid file (default: Gridcoind.pid)</source>
+        <translation>pid dosyas?n? belirt (varsay?lan: Gridcoin.pid)</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -2798,8 +2798,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+61"/>
-        <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong GridCoin will not work properly.</source>
-        <translation>Uyar?: Lütfen bilgisayar?n?z?n tarih ve saatinin do?ru oldu?unu kontrol ediniz! Saatiniz yanl?? ise, GridCoin düzgün çal??mayacakt?r.</translation>
+        <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
+        <translation>Uyar?: Lütfen bilgisayar?n?z?n tarih ve saatinin do?ru oldu?unu kontrol ediniz! Saatiniz yanl?? ise, Gridcoin düzgün çal??mayacakt?r.</translation>
     </message>
     <message>
         <location line="-31"/>
@@ -2988,24 +2988,24 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <source>%s, you must set a rpcpassword in the configuration file:
  %s
 It is recommended you use the following random password:
-rpcuser=GridCoinrpc
+rpcuser=Gridcoinrpc
 rpcpassword=%s
 (you do not need to remember this password)
 The username and password MUST NOT be the same.
 If the file does not exist, create it with owner-readable-only file permissions.
 It is also recommended to set alertnotify so you are notified of problems;
-for example: alertnotify=echo %%s | mail -s &quot;GridCoin Alert&quot; admin@foo.com
+for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
 </source>
         <translation>%s, konfigürasyon dosyas?nda bir rpcpassword belirlemelisiniz:
  %s
 A?a??daki rastgele parolay? kullanman?z tavsiye edilir:
-rpcuser=GridCoinrpc
+rpcuser=Gridcoinrpc
 rpcpassword=%s
 (bu parolay? hat?rlaman?z gerekmemektedir)
 Kullan?c? ad? ve parola ayn? OLMAMALIDIR.
 Dosya mevcut de?ilse, dosyay? sadece-kullan?c?-okuyabilir dosya izniyle yarat?n?z.
 alertnotify ayarlaman?z da ayr?ca tavsiye edilir böylece sorunlar, size bildirilir;
-örne?in: alertnotify=echo %%s | mail -s &quot;GridCoin Uyar?s?&quot; admin@foo.com
+örne?in: alertnotify=echo %%s | mail -s &quot;Gridcoin Uyar?s?&quot; admin@foo.com
 </translation>
     </message>
     <message>
@@ -3130,12 +3130,12 @@ alertnotify ayarlaman?z da ayr?ca tavsiye edilir böylece sorunlar, size bildiri
     </message>
     <message>
         <location line="+1"/>
-        <source>Cannot obtain a lock on data directory %s.  GridCoin is probably already running.</source>
+        <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
         <translation type="unfinished"/>
     </message>
     <message>
         <location line="-98"/>
-        <source>GridCoin</source>
+        <source>Gridcoin</source>
         <translation type="unfinished"/>
     </message>
     <message>
@@ -3170,12 +3170,12 @@ alertnotify ayarlaman?z da ayr?ca tavsiye edilir böylece sorunlar, size bildiri
     </message>
     <message>
         <location line="+4"/>
-        <source>Error loading wallet.dat: Wallet requires newer version of GridCoin</source>
+        <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
         <translation type="unfinished"/>
     </message>
     <message>
         <location line="+1"/>
-        <source>Wallet needed to be rewritten: restart GridCoin to complete</source>
+        <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
         <translation type="unfinished"/>
     </message>
     <message>
@@ -3245,7 +3245,7 @@ alertnotify ayarlaman?z da ayr?ca tavsiye edilir böylece sorunlar, size bildiri
     </message>
     <message>
         <location line="+122"/>
-        <source>Unable to bind to %s on this computer. GridCoin is probably already running.</source>
+        <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
         <translation type="unfinished"/>
     </message>
     <message>

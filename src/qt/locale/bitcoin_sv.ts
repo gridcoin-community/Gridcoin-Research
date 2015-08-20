@@ -3,22 +3,22 @@
     <name>AboutDialog</name>
     <message>
         <location filename="../forms/aboutdialog.ui" line="+14"/>
-        <source>About GridCoin</source>
-        <translation>Vad du behöver veta om GridCoin</translation>
+        <source>About Gridcoin</source>
+        <translation>Vad du behöver veta om Gridcoin</translation>
     </message>
     <message>
         <location line="+39"/>
-        <source>&lt;b&gt;GridCoin&lt;/b&gt; version</source>
-        <translation>&lt;b&gt;GridCoin&lt;/b&gt; version</translation>
+        <source>&lt;b&gt;Gridcoin&lt;/b&gt; version</source>
+        <translation>&lt;b&gt;Gridcoin&lt;/b&gt; version</translation>
     </message>
     <message>
         <location line="+41"/>
         <source>Copyright © 2009-2014 The Bitcoin developers
 Copyright © 2012-2014 The NovaCoin developers
-Copyright © 2014 The GridCoin developers</source>
+Copyright © 2014 The Gridcoin developers</source>
         <translation>Copyright © 2009-2014 The Bitcoin developers
 Copyright © 2012-2014 The NovaCoin developers
-Copyright © 2014 The GridCoin developers</translation>
+Copyright © 2014 The Gridcoin developers</translation>
     </message>
     <message>
         <location line="+15"/>
@@ -66,8 +66,8 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
     </message>
     <message>
         <location line="-46"/>
-        <source>These are your GridCoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
-        <translation>Dessa är dina GridCoin adesser för att mottaga betalningsförsändelser. Du kan även använda olika adresser för varje avsändare för att enkelt hålla koll på vem som har skickat en betalning.</translation>
+        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
+        <translation>Dessa är dina Gridcoin adesser för att mottaga betalningsförsändelser. Du kan även använda olika adresser för varje avsändare för att enkelt hålla koll på vem som har skickat en betalning.</translation>
     </message>
     <message>
         <location line="+60"/>
@@ -81,8 +81,8 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
     </message>
     <message>
         <location line="+11"/>
-        <source>Sign a message to prove you own a GridCoin address</source>
-        <translation>Signera ett meddelande för att bevisa att du äger GridCoin adressen</translation>
+        <source>Sign a message to prove you own a Gridcoin address</source>
+        <translation>Signera ett meddelande för att bevisa att du äger Gridcoin adressen</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -96,8 +96,8 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
     </message>
     <message>
         <location line="-14"/>
-        <source>Verify a message to ensure it was signed with a specified GridCoin address</source>
-        <translation>Verifiera ett meddelande för att försäkra dig över att det var signerat av en specifik GridCoin adress</translation>
+        <source>Verify a message to ensure it was signed with a specified Gridcoin address</source>
+        <translation>Verifiera ett meddelande för att försäkra dig över att det var signerat av en specifik Gridcoin adress</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -264,8 +264,8 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
     </message>
     <message>
         <location line="-58"/>
-        <source>GridCoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
-        <translation>GridCoin plånboken kommer nu att stängas för att slutföra krypteringen: Kom ihåg att även en krypterad plånboks säkerhet kan äventyras genom keyloggers eller dylika malwares.</translation>
+        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
+        <translation>Gridcoin plånboken kommer nu att stängas för att slutföra krypteringen: Kom ihåg att även en krypterad plånboks säkerhet kan äventyras genom keyloggers eller dylika malwares.</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -378,8 +378,8 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
     </message>
     <message>
         <location line="+4"/>
-        <source>Show information about GridCoin</source>
-        <translation>Visa information om GridCoin</translation>
+        <source>Show information about Gridcoin</source>
+        <translation>Visa information om Gridcoin</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -428,13 +428,13 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
     </message>
     <message>
         <location line="-62"/>
-        <source>Send coins to a GridCoin address</source>
-        <translation>Skicka coins till en GridCoin adress</translation>
+        <source>Send coins to a Gridcoin address</source>
+        <translation>Skicka coins till en Gridcoin adress</translation>
     </message>
     <message>
         <location line="+45"/>
-        <source>Modify configuration options for GridCoin</source>
-        <translation>Modifiera konfigurations-alternativ för GridCoin</translation>
+        <source>Modify configuration options for Gridcoin</source>
+        <translation>Modifiera konfigurations-alternativ för Gridcoin</translation>
     </message>
     <message>
         <location line="+18"/>
@@ -473,8 +473,8 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
     </message>
     <message>
         <location line="-200"/>
-        <source>GridCoin</source>
-        <translation>GridCoin</translation>
+        <source>Gridcoin</source>
+        <translation>Gridcoin</translation>
     </message>
     <message>
         <location line="+0"/>
@@ -483,8 +483,8 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
     </message>
     <message>
         <location line="+178"/>
-        <source>&amp;About GridCoin</source>
-        <translation>&amp;Om GridCoin</translation>
+        <source>&amp;About Gridcoin</source>
+        <translation>&amp;Om Gridcoin</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -540,13 +540,13 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
     <message>
         <location line="+0"/>
         <location line="+60"/>
-        <source>GridCoin client</source>
-        <translation>GridCoin klient</translation>
+        <source>Gridcoin client</source>
+        <translation>Gridcoin klient</translation>
     </message>
     <message numerus="yes">
         <location line="+70"/>
-        <source>%n active connection(s) to GridCoin network</source>
-        <translation><numerusform>%n aktiv anslutning till GridCoin nätverket</numerusform><numerusform>%n aktiva anslutning till GridCoin nätverket</numerusform></translation>
+        <source>%n active connection(s) to Gridcoin network</source>
+        <translation><numerusform>%n aktiv anslutning till Gridcoin nätverket</numerusform><numerusform>%n aktiva anslutning till Gridcoin nätverket</numerusform></translation>
     </message>
     <message>
         <location line="+40"/>
@@ -660,8 +660,8 @@ Adress: %4
     <message>
         <location line="-15"/>
         <location line="+15"/>
-        <source>URI can not be parsed! This can be caused by an invalid GridCoin address or malformed URI parameters.</source>
-        <translation>URI:n kan inte tolkas! Detta kan bero på en ogiltig GridCoin adress eller felaktiga URI parametrar.</translation>
+        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
+        <translation>URI:n kan inte tolkas! Detta kan bero på en ogiltig Gridcoin adress eller felaktiga URI parametrar.</translation>
     </message>
     <message>
         <location line="+18"/>
@@ -720,8 +720,8 @@ Adress: %4
     </message>
     <message>
         <location filename="../bitcoin.cpp" line="+109"/>
-        <source>A fatal error occurred. GridCoin can no longer continue safely and will quit.</source>
-        <translation>Ett fatalt fel uppstod. GridCoin kan inte fortsätta och stänger programmet.</translation>
+        <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
+        <translation>Ett fatalt fel uppstod. Gridcoin kan inte fortsätta och stänger programmet.</translation>
     </message>
 </context>
 <context>
@@ -1015,7 +1015,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+10"/>
         <source>The label associated with this address book entry</source>
-        <translation>Namnet som kopplats till denna GridCoin-adress</translation>
+        <translation>Namnet som kopplats till denna Gridcoin-adress</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -1054,8 +1054,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="-5"/>
-        <source>The entered address &quot;%1&quot; is not a valid GridCoin address.</source>
-        <translation>Den inslagna adressen &quot;%1&quot; är inte en giltig GridCoin adress.</translation>
+        <source>The entered address &quot;%1&quot; is not a valid Gridcoin address.</source>
+        <translation>Den inslagna adressen &quot;%1&quot; är inte en giltig Gridcoin adress.</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -1073,8 +1073,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location filename="../guiutil.cpp" line="+420"/>
         <location line="+12"/>
-        <source>GridCoin-Qt</source>
-        <translation>GridCoin-Qt</translation>
+        <source>Gridcoin-Qt</source>
+        <translation>Gridcoin-Qt</translation>
     </message>
     <message>
         <location line="-12"/>
@@ -1146,13 +1146,13 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+31"/>
-        <source>Automatically start GridCoin after logging in to the system.</source>
-        <translation>Starta GridCoin automatiskt vid inloggning.</translation>
+        <source>Automatically start Gridcoin after logging in to the system.</source>
+        <translation>Starta Gridcoin automatiskt vid inloggning.</translation>
     </message>
     <message>
         <location line="+3"/>
-        <source>&amp;Start GridCoin on system login</source>
-        <translation>&amp;Starta GridCoin vid inloggning</translation>
+        <source>&amp;Start Gridcoin on system login</source>
+        <translation>&amp;Starta Gridcoin vid inloggning</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -1171,8 +1171,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+6"/>
-        <source>Automatically open the GridCoin client port on the router. This only works when your router supports UPnP and it is enabled.</source>
-        <translation>Öppna automatiskt GridCoin klientens port på routern. Detta fungerar endast om din router stödjer UPnP och det är aktiverat.</translation>
+        <source>Automatically open the Gridcoin client port on the router. This only works when your router supports UPnP and it is enabled.</source>
+        <translation>Öppna automatiskt Gridcoin klientens port på routern. Detta fungerar endast om din router stödjer UPnP och det är aktiverat.</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1181,8 +1181,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Connect to the GridCoin network through a SOCKS proxy (e.g. when connecting through Tor).</source>
-        <translation>Anslut till GridCoin nätverket via en SOCKS proxy (t.ex. när du ansluter genom Tor).</translation>
+        <source>Connect to the Gridcoin network through a SOCKS proxy (e.g. when connecting through Tor).</source>
+        <translation>Anslut till Gridcoin nätverket via en SOCKS proxy (t.ex. när du ansluter genom Tor).</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1256,8 +1256,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+13"/>
-        <source>The user interface language can be set here. This setting will take effect after restarting GridCoin.</source>
-        <translation>Användargränssnittets språk kan ställas in här. Inställningen börjar gälla efter omstart av GridCoin.</translation>
+        <source>The user interface language can be set here. This setting will take effect after restarting Gridcoin.</source>
+        <translation>Användargränssnittets språk kan ställas in här. Inställningen börjar gälla efter omstart av Gridcoin.</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -1271,8 +1271,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+9"/>
-        <source>Whether to show GridCoin addresses in the transaction list or not.</source>
-        <translation>Om GridCoin adresser skall visas i transaktionslistan eller inte.</translation>
+        <source>Whether to show Gridcoin addresses in the transaction list or not.</source>
+        <translation>Om Gridcoin adresser skall visas i transaktionslistan eller inte.</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1318,8 +1318,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="-9"/>
         <location line="+9"/>
-        <source>This setting will take effect after restarting GridCoin.</source>
-        <translation>Inställningen börjar gälla efter omstart av GridCoin.</translation>
+        <source>This setting will take effect after restarting Gridcoin.</source>
+        <translation>Inställningen börjar gälla efter omstart av Gridcoin.</translation>
     </message>
     <message>
         <location line="+29"/>
@@ -1337,8 +1337,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+33"/>
         <location line="+231"/>
-        <source>The displayed information may be out of date. Your wallet automatically synchronizes with the GridCoin network after a connection is established, but this process has not completed yet.</source>
-        <translation>Den visade informationen kan vara gammal. Din plånbok synkroniseras automatiskt med GridCoin nätverket efter att en anslutning skapats, men denna process är inte klar än.</translation>
+        <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</source>
+        <translation>Den visade informationen kan vara gammal. Din plånbok synkroniseras automatiskt med Gridcoin nätverket efter att en anslutning skapats, men denna process är inte klar än.</translation>
     </message>
     <message>
         <location line="-160"/>
@@ -1553,8 +1553,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Show the GridCoin-Qt help message to get a list with possible GridCoin command-line options.</source>
-        <translation>Visa GridCoin-Qt hjälp meddelandet för att få en lista över möjliga GridCoin kommandoradsalternativ.</translation>
+        <source>Show the Gridcoin-Qt help message to get a list with possible Gridcoin command-line options.</source>
+        <translation>Visa Gridcoin-Qt hjälp meddelandet för att få en lista över möjliga Gridcoin kommandoradsalternativ.</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1573,13 +1573,13 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="-104"/>
-        <source>GridCoin - Debug window</source>
-        <translation>GridCoin - Felsökningsfönster</translation>
+        <source>Gridcoin - Debug window</source>
+        <translation>Gridcoin - Felsökningsfönster</translation>
     </message>
     <message>
         <location line="+25"/>
-        <source>GridCoin Core</source>
-        <translation>GridCoin Core</translation>
+        <source>Gridcoin Core</source>
+        <translation>Gridcoin Core</translation>
     </message>
     <message>
         <location line="+279"/>
@@ -1588,8 +1588,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Open the GridCoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
-        <translation>Öppna GridCoin felsöknings-loggfilen från nuvarande data mapp. Detta kan kan ta ett par minuter för stora log filer.</translation>
+        <source>Open the Gridcoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
+        <translation>Öppna Gridcoin felsöknings-loggfilen från nuvarande data mapp. Detta kan kan ta ett par minuter för stora log filer.</translation>
     </message>
     <message>
         <location line="+102"/>
@@ -1598,8 +1598,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location filename="../rpcconsole.cpp" line="-33"/>
-        <source>Welcome to the GridCoin RPC console.</source>
-        <translation>Välkommen till GridCoin RPC konsoll.</translation>
+        <source>Welcome to the Gridcoin RPC console.</source>
+        <translation>Välkommen till Gridcoin RPC konsoll.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1757,8 +1757,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location filename="../sendcoinsdialog.cpp" line="-173"/>
-        <source>Enter a GridCoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Fyll i en GridCoin adress (t.ex. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <translation>Fyll i en Gridcoin adress (t.ex. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
     <message>
         <location line="+15"/>
@@ -1857,8 +1857,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+251"/>
-        <source>WARNING: Invalid GridCoin address</source>
-        <translation>VARNING: Ogiltig GridCoin adress</translation>
+        <source>WARNING: Invalid Gridcoin address</source>
+        <translation>VARNING: Ogiltig Gridcoin adress</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -1931,8 +1931,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location filename="../sendcoinsentry.cpp" line="+1"/>
-        <source>Enter a GridCoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Fyll i en GridCoin adress (t.ex. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <translation>Fyll i en Gridcoin adress (t.ex. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
 </context>
 <context>
@@ -1992,8 +1992,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+21"/>
-        <source>Sign the message to prove you own this GridCoin address</source>
-        <translation>Signera meddelandet för att verifiera att du äger denna GridCoin adressen</translation>
+        <source>Sign the message to prove you own this Gridcoin address</source>
+        <translation>Signera meddelandet för att verifiera att du äger denna Gridcoin adressen</translation>
     </message>
     <message>
         <location line="+17"/>
@@ -2024,8 +2024,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+40"/>
-        <source>Verify the message to ensure it was signed with the specified GridCoin address</source>
-        <translation>Verifiera meddelandet för att vara säker på att det var signerat med den angivna GridCoin adressen</translation>
+        <source>Verify the message to ensure it was signed with the specified Gridcoin address</source>
+        <translation>Verifiera meddelandet för att vara säker på att det var signerat med den angivna Gridcoin adressen</translation>
     </message>
     <message>
         <location line="+17"/>
@@ -2035,8 +2035,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location filename="../signverifymessagedialog.cpp" line="+27"/>
         <location line="+3"/>
-        <source>Enter a GridCoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Fyll i en GridCoin adress (t.ex. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <translation>Fyll i en Gridcoin adress (t.ex. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
     <message>
         <location line="-2"/>
@@ -2045,8 +2045,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+3"/>
-        <source>Enter GridCoin signature</source>
-        <translation>Fyll i GridCoin signatur</translation>
+        <source>Enter Gridcoin signature</source>
+        <translation>Fyll i Gridcoin signatur</translation>
     </message>
     <message>
         <location line="+82"/>
@@ -2616,8 +2616,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <name>bitcoin-core</name>
     <message>
         <location filename="../bitcoinstrings.cpp" line="+33"/>
-        <source>GridCoin version</source>
-        <translation>GridCoin version</translation>
+        <source>Gridcoin version</source>
+        <translation>Gridcoin version</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2626,8 +2626,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Send command to -server or GridCoind</source>
-        <translation>Skicka kommando till -server eller GridCoind</translation>
+        <source>Send command to -server or Gridcoind</source>
+        <translation>Skicka kommando till -server eller Gridcoind</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2646,13 +2646,13 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <source>Specify configuration file (default: GridCoin.conf)</source>
-        <translation>Ange konfigurationsfilen (standard: GridCoin.conf)</translation>
+        <source>Specify configuration file (default: Gridcoin.conf)</source>
+        <translation>Ange konfigurationsfilen (standard: Gridcoin.conf)</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Specify pid file (default: GridCoind.pid)</source>
-        <translation>Ange pid filen (standard GridCoind.pid)</translation>
+        <source>Specify pid file (default: Gridcoind.pid)</source>
+        <translation>Ange pid filen (standard Gridcoind.pid)</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -2801,8 +2801,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+61"/>
-        <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong GridCoin will not work properly.</source>
-        <translation>Varning: Kolla att din dators tid och datum är rätt. GridCoin kan inte fungera ordentligt om tiden i datorn är fel.</translation>
+        <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
+        <translation>Varning: Kolla att din dators tid och datum är rätt. Gridcoin kan inte fungera ordentligt om tiden i datorn är fel.</translation>
     </message>
     <message>
         <location line="-31"/>
@@ -2991,24 +2991,24 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <source>%s, you must set a rpcpassword in the configuration file:
  %s
 It is recommended you use the following random password:
-rpcuser=GridCoinrpc
+rpcuser=Gridcoinrpc
 rpcpassword=%s
 (you do not need to remember this password)
 The username and password MUST NOT be the same.
 If the file does not exist, create it with owner-readable-only file permissions.
 It is also recommended to set alertnotify so you are notified of problems;
-for example: alertnotify=echo %%s | mail -s &quot;GridCoin Alert&quot; admin@foo.com
+for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
 </source>
         <translation>%s, du måste sätta rpcpassword i konfigurationsfilen:
  %s
 Det är rekommenderat att du använder följande slumpmässiga lösenord:
-rpcuser=GridCoinrpc
+rpcuser=Gridcoinrpc
 rpcpassword=%s
 (du behöver inte komma ihåg detta lösenord)
 Användarnamnet och lösenordet FÅR INTE vara samma.
 Om filen inte finns, skapa den med endast ägarrättigheter.
 Det är också rekommenderat att sätta alertnotify så du blir notifierad om problem;
-till exempel: alertnotify=echo %%s | mail -s &quot;GridCoin Varning&quot; admin@foo.com
+till exempel: alertnotify=echo %%s | mail -s &quot;Gridcoin Varning&quot; admin@foo.com
 </translation>
     </message>
     <message>
@@ -3133,13 +3133,13 @@ till exempel: alertnotify=echo %%s | mail -s &quot;GridCoin Varning&quot; admin@
     </message>
     <message>
         <location line="+1"/>
-        <source>Cannot obtain a lock on data directory %s.  GridCoin is probably already running.</source>
-        <translation>Kan inte låsa datan i mappen %s. GridCoin är kanske redan startad.</translation>
+        <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
+        <translation>Kan inte låsa datan i mappen %s. Gridcoin är kanske redan startad.</translation>
     </message>
     <message>
         <location line="-98"/>
-        <source>GridCoin</source>
-        <translation>GridCoin</translation>
+        <source>Gridcoin</source>
+        <translation>Gridcoin</translation>
     </message>
     <message>
         <location line="+140"/>
@@ -3173,13 +3173,13 @@ till exempel: alertnotify=echo %%s | mail -s &quot;GridCoin Varning&quot; admin@
     </message>
     <message>
         <location line="+4"/>
-        <source>Error loading wallet.dat: Wallet requires newer version of GridCoin</source>
-        <translation>Kunde inte ladda wallet.dat: En nyare version av GridCoin krävs</translation>
+        <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
+        <translation>Kunde inte ladda wallet.dat: En nyare version av Gridcoin krävs</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Wallet needed to be rewritten: restart GridCoin to complete</source>
-        <translation>Plånboken måste skrivas om: Starta om GridCoin för att slutföra</translation>
+        <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
+        <translation>Plånboken måste skrivas om: Starta om Gridcoin för att slutföra</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3248,8 +3248,8 @@ till exempel: alertnotify=echo %%s | mail -s &quot;GridCoin Varning&quot; admin@
     </message>
     <message>
         <location line="+122"/>
-        <source>Unable to bind to %s on this computer. GridCoin is probably already running.</source>
-        <translation>Kan inte binda till %s på denna dator. GridCoin är sannolikt redan startad.</translation>
+        <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
+        <translation>Kan inte binda till %s på denna dator. Gridcoin är sannolikt redan startad.</translation>
     </message>
     <message>
         <location line="-97"/>
