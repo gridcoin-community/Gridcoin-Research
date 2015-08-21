@@ -1849,6 +1849,11 @@ Value execute(const Array& params, bool fHelp)
 									entry.push_back(Pair("Error","Sorry, When voting in a Balance poll, your stake age must be older than the poll duration."));
 									results.push_back(entry);
 								}
+								else if (dShareType == 3 && stake_age < poll_duration && cpid_age < poll_duration)
+								{
+									entry.push_back(Pair("Error","Sorry, When voting in a Both Share Type poll, your stake age Or your CPID age must be older than the poll duration."));
+									results.push_back(entry);
+								}
 								else
 								{
 									std::string voter = "<CPIDV2>"+GlobalCPUMiningCPID.cpidv2 + "</CPIDV2><CPID>" 

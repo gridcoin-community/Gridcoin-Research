@@ -644,7 +644,7 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 			}
 		}
 		if (fDebug3 && fTestNet && LessVerbose(100)) printf("{v3}");
-		if (RSA_WEIGHT >= 24999)        msMiningErrors7="Newbie block being generated.";
+		if (RSA_WEIGHT >= 24999 && boincblock.Magnitude > .25)        msMiningErrors7="Newbie block being generated.";
 		msMiningErrors5 = narr;
 	}
 

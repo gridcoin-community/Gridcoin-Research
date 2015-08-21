@@ -935,7 +935,7 @@ MiningCPID GetNextProject(bool bForce)
 										printf("CPID INVALID 2 %s, %s  ",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.cpidv2.c_str());
 										continue;
 									}
-		
+									
 
 									//Only used for global status:
 									msMiningProject = structcpid.projectname;
@@ -3055,37 +3055,25 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
             if (tx.IsCoinStake())
 			{
                 nStakeReward = nTxValueOut - nTxValueIn;
-				if (tx.vout.size() > 2 && pindex->nHeight > nGrandfather) bIsDPOR = true;
-				//DPOR Verification of each recipient (Recipients start at output position 2 (0=Coinstake flag, 1=coinstake)
+				if (tx.vout.size() > 3 && pindex->nHeight > nGrandfather) bIsDPOR = true;
+				// Prod ToDo for next mandatory: Add one extra check when CoinStake=true: SumOf all vOut-vIn=CoinStake Amount, and nTxValueOut = sum of all vouts
+				// Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
 				if (bIsDPOR && pindex->nHeight > nGrandfather)
 				{
-					for (unsigned int i = 2; i < tx.vout.size(); i++)
+					for (unsigned int i = 3; i < tx.vout.size(); i++)
 					{
 						std::string Recipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
 						double      Amount    = CoinToDouble(tx.vout[i].nValue);
-						double      Owed      = OwedByAddress(Recipient);
-						if (fDebug) printf("Iterating Recipient #%f  %s with Amount %f \r\n,",(double)i,Recipient.c_str(),Amount);
-
-						if (Amount > GetMaximumBoincSubsidy(nTime)) 
-						{
-								return DoS(50,error("POR Payment greater than max block subsidy; Recipient %s, Amount %f, Owed %f \r\n",
-										Recipient.c_str(), Amount, Owed));
-						}
-			
-						if (Amount > 0 && (Amount > (Owed*1.25)  || !bRemotePaymentsEnabled  )) 
+						if (fDebug10) printf("Iterating Recipient #%f  %s with Amount %f \r\n,",(double)i,Recipient.c_str(),Amount);
+  			  		    if (Amount > 0) 
 						{
 								if (fDebug3) printf("Iterating Recipient #%f  %s with Amount %f \r\n,",(double)i,Recipient.c_str(),Amount);
-
-								printf("POR Payment results in an overpayment; Recipient %s, Amount %f, Owed %f \r\n",Recipient.c_str(), Amount, Owed);
-		        				return DoS(1,error("POR Payment results in an overpayment; Recipient %s, Amount %f, Owed %f \r\n",
-										Recipient.c_str(), Amount, Owed));
+								printf("POR Payment results in an overpayment; Recipient %s, Amount %f \r\n",Recipient.c_str(), Amount);
+		        				return DoS(50,error("POR Payment results in an overpayment; Recipient %s, Amount %f \r\n",
+										Recipient.c_str(), Amount));
 						}
-						DPOR_Paid += Amount;
 					}
-					//We will check the coinstake master recipient below
-
 				}
-	
 			}
 
             if (!tx.ConnectInputs(txdb, mapInputs, mapQueuedChanges, posThisTx, pindex, true, false))
@@ -3890,7 +3878,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3425) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-					if (bv < 3481 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
+					if (bv < 3482 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
 			}
 
 			if (bb.cpid != "INVESTOR")
@@ -4648,7 +4636,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 1;
+		nGrandfather = 2063;
 		nNewIndex = 10;
 		bResearchAgeEnabled = true;
 		bRemotePaymentsEnabled = false;
@@ -5278,7 +5266,6 @@ void AddNetworkMagnitude(double height, double LockTime, std::string cpid, Minin
 
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 {
-	//8-8-2015
     if (nBestHeight < 15) 
 	{
 		mvApplicationCacheTimestamp["nGRCTime"] = GetAdjustedTime();
@@ -5328,12 +5315,12 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 	}
 	int64_t EarliestStakedWalletTx = GetEarliestWalletTransaction();
 	if (EarliestStakedWalletTx > 0 && EarliestStakedWalletTx < nGRCTime) nGRCTime = EarliestStakedWalletTx;
-	
+	if (fTestNet) nGRCTime -= (86400*30);
+	if (nGRCTime <= 0)  nGRCTime = GetAdjustedTime();
+	if (nCPIDTime <= 0) nCPIDTime = GetAdjustedTime();
+		
 	printf("Loaded staketime from index in %f", (double)(GetTimeMillis() - nStart));
-    
 	printf("CPIDTime %f, GRCTime %f, WalletTime %f \r\n",(double)nCPIDTime,(double)nGRCTime,(double)EarliestStakedWalletTx);
-	if (nGRCTime==0)  nGRCTime = GetAdjustedTime();
-	if (nCPIDTime==0) nCPIDTime = GetAdjustedTime();
 	mvApplicationCacheTimestamp["nGRCTime"] = nGRCTime;
 	mvApplicationCacheTimestamp["nCPIDTime"] = nCPIDTime;
 	return true;
@@ -5996,7 +5983,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 8-5-2015
-		if (pfrom->nVersion < 180297 && fTestNet)
+		if (pfrom->nVersion < 180298 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
