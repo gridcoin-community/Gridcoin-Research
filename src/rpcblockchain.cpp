@@ -1038,7 +1038,7 @@ double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out
 		if (avg_of_mag > 170000) return -2;
 		if (avg_of_avg < 50000) return -3;
 
-		if (!bIgnoreBeacons && (mag_count < out_beacon_count*.90 || mag_count > out_beacon_count*1.10)) return -4;
+		if (!fTestNet && !bIgnoreBeacons && (mag_count < out_beacon_count*.90 || mag_count > out_beacon_count*1.10)) return -4;
 		return avg_of_mag + avg_of_avg;
 	}
 	catch (std::exception &e) 
