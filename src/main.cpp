@@ -3313,7 +3313,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
     if (!txdb.WriteBlockIndex(CDiskBlockIndex(pindex)))
         return error("Connect() : WriteBlockIndex for pindex failed");
 
-	if (pindex->nHeight % 5 == 0 && pindex->nHeight > 1)
+	if (pindex->nHeight % 5 == 0 && pindex->nHeight > 100)
 	{
 		std::string errors1 = "";
 		bool result = LoadAdminMessages(false,errors1);
