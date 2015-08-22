@@ -3266,6 +3266,27 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 				}
 	
 			}
+
+
+			//If we are out of sync, and research age is enabled, and the superblock is valid, load it now, so we can continue checking blocks accurately
+			if (OutOfSyncByAge() && bResearchAgeEnabled)
+			{
+					double out_beacon_count = 0;
+					double out_participant_count = 0;
+					double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,true);
+					if (avg_mag > 10)
+					{
+	    								LoadSuperblock(bb.superblock,pindex->nTime,pindex->nHeight);
+										if (fDebug3) printf("ConnectBlock(): Superblock Loaded %f \r\n",(double)pindex->nHeight);
+										bNetAveragesLoaded=false;
+										nLastTallied = 0;
+										TallyNetworkAverages(true);
+
+					}
+			}
+
+
+			
 		}
 		/*
 			--Superblock is loaded 15 blocks later in TallyNetworkAverages();
@@ -3841,7 +3862,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 	//Research Age
 	MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc);
 	//8-19-2015
-	//For higher security, plus lets catch these bad blocks before adding them to the chain to prevent reorgs:
+	//For higher security, plus lets catch these bad blocks before adding them to the chain to prevent reorgs: 
 	double OUT_POR = 0;
 	double OUT_INTEREST = 0;
 	double dAccrualAge = 0;
@@ -3854,14 +3875,21 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 	{
 			int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, 
 				pindexBest, "checkblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
-	
+			
 						if (bb.ResearchSubsidy > (OUT_POR*1.25))
 						{
 							FixIndividualResearchTotals(bb.cpid);
-
-							return DoS(10,error("CheckBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-								(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,(double)nCalculatedResearch,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
+							nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, 
+								pindexBest, "checkblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+							if (bb.ResearchSubsidy > (OUT_POR*1.25))
+							{
+								if (fDebug3) printf("CheckBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
+									(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,(double)nCalculatedResearch,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str());
 				
+								return DoS(10,error("CheckBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
+									(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,(double)nCalculatedResearch,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
+				
+							}
 						}
 		
 	}
@@ -5376,9 +5404,10 @@ bool ComputeNeuralNetworkSupermajorityHashes()
 		CBlockIndex* pblockindex = pindexBest;
 		while (pblockindex->nHeight > nMinDepth)
 		{
+			if (!pblockindex || !pblockindex->pprev) return false;
 			pblockindex = pblockindex->pprev;
             if (pblockindex == pindexGenesisBlock) return false;
-			if (pblockindex == NULL || !pblockindex->IsInMainChain()) continue;
+			if (!pblockindex->IsInMainChain()) continue;
 			block.ReadFromDisk(pblockindex);
 			std::string hashboinc = "";
 			if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
@@ -5500,6 +5529,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 					
 					while (pblockindex->nHeight > nMaxDepth)
 					{
+						if (!pblockindex || !pblockindex->pprev) return false;  
 						pblockindex = pblockindex->pprev;
 						if (pblockindex == pindexGenesisBlock) return false;
 					}
@@ -5508,6 +5538,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 
 		    		while (pblockindex->nHeight > nMinDepth)
 					{
+						if (!pblockindex || !pblockindex->pprev) return false;   //Avoid segfault
 						pblockindex = pblockindex->pprev;
 						if (pblockindex == pindexGenesisBlock) return false;
 						if (pblockindex == NULL || !pblockindex->IsInMainChain()) continue;
@@ -5519,7 +5550,7 @@ bool TallyNetworkAverages(bool ColdBoot)
 							// Insert CPID, Magnitude, Payments
 							AddNetworkMagnitude((double)pblockindex->nHeight,pblockindex->nTime,bb.cpid,bb);
 							iRow++;
-							if (pblockindex->nHeight % 10 == 0 || pblockindex->nHeight == nMinDepth) msMiningErrors3 = RoundToString((double)pblockindex->nHeight,0); //Overview Page Update
+							//if (pblockindex->nHeight % 10 == 0 || pblockindex->nHeight == nMinDepth) msMiningErrors3 = RoundToString((double)pblockindex->nHeight,0); //Overview Page Update
 							if (!superblockloaded && bb.superblock.length() > 20)
 							{
 									double out_beacon_count = 0;
@@ -8713,7 +8744,7 @@ void FixIndividualResearchTotals(std::string cpid)
 	{
 		while (pindex->nHeight < (pindexBest->nHeight-1))
 		{
-			if (!pindex->pnext) break;
+			if (!pindex || !pindex->pnext) break;
 			pindex = pindex->pnext;
 			if (pindex==NULL || !pindex->IsInMainChain()) continue;
 			if (pindex == pindexBest) return;
@@ -8776,7 +8807,7 @@ void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector
 	{
 	while (pindex->nHeight < (pindexBest->nHeight-1))
 	{
-		if (!pindex->pnext) break;
+		if (!pindex || !pindex->pnext) break;
 	    pindex = pindex->pnext;
 		if (pindex==NULL || !pindex->IsInMainChain()) continue;
 		if (pindex == pindexBest) return;
@@ -8835,7 +8866,8 @@ CBlockIndex* GetHistoricalMagnitude_ScanChain(std::string cpid)
     while (pindex->nHeight > nNewIndex && pindex->nHeight > nMinIndex)
 	{
   	    //8-5-2015; R HALFORD; Find the last block the CPID staked with a research subsidy (IE dont count interest blocks)
-		if (pindex==NULL || !pindex->IsInMainChain()) continue;
+		if (!pindex || !pindex->pprev) return pindexGenesisBlock;
+		if (!pindex->IsInMainChain()) continue;
 		if (pindex == pindexGenesisBlock) return pindexGenesisBlock;
 		if (pindex->sCPID == cpid && (pindex->nResearchSubsidy > 0)) return pindex;
 	    pindex = pindex->pprev;
@@ -8855,15 +8887,14 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 	pindex = FindBlockByHeight(nMinDepth);
     while (pindex->nHeight < nMaxDepth)
 	{
-		if (pindex->pnext == NULL) return false;
-        pindex = pindex->pnext;
+		if (!pindex || !pindex->pnext) return false;  
+	    pindex = pindex->pnext;
 		if (pindex==NULL) continue;
 		if (!pindex || !pindex->IsInMainChain()) continue;
 		CBlock block;
 		if (!block.ReadFromDisk(pindex)) continue;
 		BOOST_FOREACH(const CTransaction &tx, block.vtx)
 		{
-			   
 			  MemorizeMessage(tx.hashBoinc,tx.nTime);
 		}
 	}

@@ -1707,6 +1707,7 @@ Value execute(const Array& params, bool fHelp)
 	else if (sItem == "tallyneural")
 	{
 			bool result = ComputeNeuralNetworkSupermajorityHashes();
+			UpdateNeuralNetworkQuorumData();
 			entry.push_back(Pair("Ready","."));
 			results.push_back(entry);
 	}
@@ -1725,14 +1726,12 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "superblockage")
 	{
-
 		int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
 		entry.push_back(Pair("Superblock Age",superblock_age));
 		std::string timestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
 		entry.push_back(Pair("Superblock Timestamp",timestamp));
 		entry.push_back(Pair("Superblock Block Number",mvApplicationCache["superblock;block_number"]));
 		results.push_back(entry);
-
 	}
 	else if (sItem == "unusual")
 	{
@@ -3430,9 +3429,22 @@ Array GetJSONNeuralNetworkReport()
 	  {
 		  entry.push_back(Pair("Pending",SuperblockHeight));
 	  }
-	  results.push_back(entry);
-	  return results;
-
+	  //8-22-2015
+	  int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+	  entry.push_back(Pair("Superblock Age",superblock_age));
+	  if (superblock_age > 38400)
+	  {
+		  int iRoot = 30;
+		  int iModifier = (nBestHeight % iRoot);
+		  int iQuorumModifier = (nBestHeight % 10);
+		  int iLastNeuralSync = nBestHeight - iModifier;
+		  int iNextNeuralSync = iLastNeuralSync + iRoot;
+		  int iLastQuorum = nBestHeight - iQuorumModifier;
+		  int iNextQuorum = iLastQuorum + 10;
+		  entry.push_back(Pair("Last Sync", iLastNeuralSync));
+		  entry.push_back(Pair("Next Sync", iNextNeuralSync));
+		  entry.push_back(Pair("Next Quorum", iNextQuorum));
+	  }
 }
 
 
