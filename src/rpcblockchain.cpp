@@ -3441,10 +3441,11 @@ Array GetJSONNeuralNetworkReport()
 		  int iNextNeuralSync = iLastNeuralSync + iRoot;
 		  int iLastQuorum = nBestHeight - iQuorumModifier;
 		  int iNextQuorum = iLastQuorum + 10;
-		  entry.push_back(Pair("Last Sync", iLastNeuralSync));
-		  entry.push_back(Pair("Next Sync", iNextNeuralSync));
-		  entry.push_back(Pair("Next Quorum", iNextQuorum));
+		  entry.push_back(Pair("Last Sync", (double)iLastNeuralSync));
+		  entry.push_back(Pair("Next Sync", (double)iNextNeuralSync));
+		  entry.push_back(Pair("Next Quorum", (double)iNextQuorum));
 	  }
+	  return results;
 }
 
 
