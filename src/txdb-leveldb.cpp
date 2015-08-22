@@ -25,6 +25,9 @@ using namespace boost;
 
 leveldb::DB *txdb; // global pointer for LevelDB object instance
 StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
+bool IsLockTimeWithin14days(double locktime);
+MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID> vRef);
+MiningCPID DeserializeBoincBlock(std::string block);
 
 static leveldb::Options GetOptions() {
     leveldb::Options options;
@@ -377,7 +380,7 @@ bool CTxDB::LoadBlockIndex()
         pindexNew->nBits          = diskindex.nBits;
         pindexNew->nNonce         = diskindex.nNonce;
 
-		//8-13-2015 - Gridcoin - New Accrual Fields
+		//8-22-2015 - Gridcoin - New Accrual Fields
 
 		if (diskindex.nHeight > nNewIndex)
 		{
@@ -608,6 +611,7 @@ bool CTxDB::LoadBlockIndex()
 
 	//8-13-2015 - Gridcoin - In order, set up Research Age hashes and lifetime fields
     CBlockIndex* pindex = pindexGenesisBlock;
+	int lookback = 14*24*60*60;
 	if (pindex && pindexBest && pindexBest->nHeight > 10  && pindex->pnext)
 	{
 		printf(" RA Starting %f %f %f ",(double)pindex->nHeight,(double)pindex->pnext->nHeight,(double)pindexBest->nHeight);
@@ -618,6 +622,15 @@ bool CTxDB::LoadBlockIndex()
 				if (pindex == pindexBest) break;
 				if (pindex==NULL || !pindex->IsInMainChain()) continue;
 				//if (fDebug3) printf("h %f ",(double)pindex->nHeight);
+				//8-22-2015
+				if (IsLockTimeWithin14days((double)pindex->nTime)) 
+				{
+					CBlock block;
+					if (!block.ReadFromDisk(pindex)) return false;
+					MiningCPID bb = GetInitializedMiningCPID(pindex->GetBlockHash().GetHex(), mvBlockIndex);
+	     			bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
+					mvBlockIndex[pindex->GetBlockHash().GetHex()] = bb;
+				}
 
 				if (!pindex->sCPID.empty())
 				{

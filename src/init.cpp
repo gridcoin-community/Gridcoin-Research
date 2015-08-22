@@ -44,7 +44,7 @@ bool IsConfigFileEmpty();
 void GetNextProject(bool bForce);
 void HarvestCPIDs(bool cleardata);
 std::string ToOfficialName(std::string proj);
-bool TallyNetworkAverages(bool ColdBoot);
+bool TallyNetworkAverages(bool Force);
 std::string RestoreGridcoinBackupWallet();
 std::string BackupGridcoinWallet();
 void WriteAppCache(std::string key, std::string value);

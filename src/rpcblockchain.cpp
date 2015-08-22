@@ -165,9 +165,9 @@ bool IsCPIDValidv2(MiningCPID& mc, int height);
 std::string RetrieveMd5(std::string s1);
 std::string getfilecontents(std::string filename);
 MiningCPID DeserializeBoincBlock(std::string block);
+
 std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string urlPage, bool bUseDNS);
 extern double GetNetworkAvgByProject(std::string projectname);
-extern bool FindRAC(bool CheckingWork, std::string TargetCPID, std::string TargetProjectName, double pobdiff, bool bCreditNodeVerification, std::string& out_errors, int& out_position);
 void HarvestCPIDs(bool cleardata);
 std::string GetHttpPage(std::string cpid);
 std::string GetHttpPage(std::string cpid, bool usedns, bool clearcache);
@@ -212,120 +212,6 @@ double GetNetworkTotalByProject(std::string projectname)
 		if (!structcpid.initialized) return 0;
 		double networkavgrac = structcpid.rac;
 		return networkavgrac;
-}
-
-
-bool FindRAC(bool CheckingWork, std::string TargetCPID, std::string TargetProjectName, double pobdiff, bool bCreditNodeVerification,
-	std::string& out_errors, int& out_position)
-{
-
-	try 
-	{
-		
-					//Gridcoin; Find CPID+Project+RAC in chain
-					int nMaxDepth = nBestHeight-1;
-
-					if (nMaxDepth < 3) nMaxDepth=3;
-
-					double pobdifficulty;
-					if (bCreditNodeVerification)
-					{
-							pobdifficulty=14;
-					}
-					else
-					{
-							pobdifficulty = pobdiff;
-					}
-
-	
-
-					if (pobdifficulty < .002) pobdifficulty=.002;
-					int nLookback = 576*pobdifficulty; //Daily block count * Lookback in days
-					int nMinDepth = nMaxDepth - nLookback;
-					if (nMinDepth < 2) nMinDepth = 2;
-					out_position = 0;
-
-	
-					////////////////////////////
-					if (CheckingWork) nMinDepth=nMinDepth+10;
-					if (nMinDepth > nBestHeight) nMinDepth=nBestHeight-1;
-
-					////////////////////////////
-					if (nMinDepth > nMaxDepth) 
-					{
-						nMinDepth = nMaxDepth-1;
-					}
-	
-					if (nMaxDepth < 5 || nMinDepth < 5) return false;
-	
-	
-					//Check the cache first:
-					StructCPIDCache cache;
-					std::string sKey = TargetCPID + ":" + TargetProjectName;
-					cache = mvCPIDCache[sKey]; 
-					double cachedblocknumber = 0;
-					if (cache.initialized)
-					{
-						cachedblocknumber=cache.blocknumber;
-					}
-					if (cachedblocknumber > 0 && cachedblocknumber >= nMinDepth && cachedblocknumber <= nMaxDepth && cache.cpidproject==sKey) 
-					{
-	
-						out_position = cache.blocknumber;
-							if (CheckingWork) printf("Project %s  found at position %i   PoBLevel %f    Start depth %i     end depth %i   \r\n",
-							TargetProjectName.c_str(),out_position,pobdifficulty,nMaxDepth,nMinDepth);
-
-						return true;
-					}
-	
-					CBlock block;
-					out_errors = "";
-
-					for (int ii = nMaxDepth; ii > nMinDepth; ii--)
-					{
-     					CBlockIndex* pblockindex = FindBlockByHeight(ii);
-						int out_height = 0;
-						bool result1 = GetBlockNew(pblockindex->GetBlockHash(), out_height, block, false);
-						
-						if (result1)
-						{
-		
-							
-				    			MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
-			
-								if (bb.cpid==TargetCPID && bb.projectname==TargetProjectName && block.nVersion==3)
-								{
-									out_position = ii;
-									//Cache this:
-									cache = mvCPIDCache[sKey]; 
-									if (!cache.initialized)
-									{
-											StructCPIDCache cache;
-											cache.initialized = true;
-											mvCPIDCache.insert(map<string,StructCPIDCache>::value_type(sKey, cache));
-									}
-									cache.cpid = TargetCPID;
-									cache.cpidproject = sKey;
-									cache.blocknumber = ii;
-									if (CheckingWork) printf("Project %s  found at position %i   PoBLevel %f    Start depth %i     end depth %i   \r\n",TargetProjectName.c_str(),ii,pobdifficulty,nMaxDepth,nMinDepth);
-
-    								mvCPIDCache[sKey]=cache;
-									return true;
-								}
-						}
-
-					}
-
-					printf("Start depth %i end depth %i",nMaxDepth,nMinDepth);
-					out_errors = out_errors + "Start depth " + RoundToString(nMaxDepth,0) + "; ";
-					out_errors = out_errors + "Not found; ";
-					return false;
-		}
-	catch (std::exception& e)
-	{
-		return false;
-	}
-	
 }
 
 
@@ -2113,6 +1999,8 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "tally")
 	{
+			bNetAveragesLoaded = false;
+			nLastTallied = 0;
 			TallyNetworkAverages(true);
 			entry.push_back(Pair("Tally Network Averages",1));
 			results.push_back(entry);
@@ -2675,17 +2563,6 @@ Value execute(const Array& params, bool fHelp)
 		    entry.push_back(Pair("Execute Encrypt result2",s1dec));
 			entry.push_back(Pair("Execute Encrypt result3",s1out));
 			results.push_back(entry);
-	}
-	else if (sItem == "findrac")
-	{
-			int position = 0;
-			std::string out_errors = "";
-	    	std::string TargetCPID = "123";
-			std::string TargetProjectName="Docking";
-			bool result = FindRAC(false,TargetCPID, TargetProjectName, 1, false,out_errors, position);
-			entry.push_back(Pair("TargetCPID",TargetCPID));
-			entry.push_back(Pair("Errors",out_errors));
-		   	results.push_back(entry);
 	}
 	else
 	{
