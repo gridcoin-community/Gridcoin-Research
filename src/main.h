@@ -105,6 +105,7 @@ extern std::map<std::string, double> mvNeuralVersion;
 
 extern std::map<std::string, StructCPID> mvDPOR;
 extern std::map<std::string, StructCPID> mvResearchAge;
+extern std::map<std::string, MiningCPID> mvBlockIndex;
 
 extern CScript COINBASE_FLAGS;
 extern CCriticalSection cs_main;

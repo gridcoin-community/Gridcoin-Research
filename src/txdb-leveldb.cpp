@@ -25,6 +25,9 @@ using namespace boost;
 
 leveldb::DB *txdb; // global pointer for LevelDB object instance
 StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
+bool IsLockTimeWithin14days(double locktime);
+MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID> vRef);
+MiningCPID DeserializeBoincBlock(std::string block);
 
 static leveldb::Options GetOptions() {
     leveldb::Options options;
@@ -377,7 +380,7 @@ bool CTxDB::LoadBlockIndex()
         pindexNew->nBits          = diskindex.nBits;
         pindexNew->nNonce         = diskindex.nNonce;
 
-		//8-13-2015 - Gridcoin - New Accrual Fields
+		//8-22-2015 - Gridcoin - New Accrual Fields
 
 		if (diskindex.nHeight > nNewIndex)
 		{
@@ -602,42 +605,64 @@ bool CTxDB::LoadBlockIndex()
     }
 
 
+	printf("Set up RA ");
+
 
 
 	//8-13-2015 - Gridcoin - In order, set up Research Age hashes and lifetime fields
     CBlockIndex* pindex = pindexGenesisBlock;
-	while (pindex->nHeight < pindexBest->nHeight)
+	int lookback = 14*24*60*60;
+	if (pindex && pindexBest && pindexBest->nHeight > 10  && pindex->pnext)
 	{
-		    pindex = pindex->pnext;
-  			if (pindex==NULL || !pindex->IsInMainChain()) continue;
-			if (pindex == pindexBest) break;
-			if (pindex->sCPID != "INVESTOR" && !pindex->sCPID.empty()) 
-			{
-				StructCPID stCPID = GetInitializedStructCPID2(pindex->sCPID, mvResearchAge);
-	     		stCPID.InterestSubsidy += pindex->nInterestSubsidy;
-				stCPID.ResearchSubsidy += pindex->nResearchSubsidy;
-				if (((double)pindex->nHeight) > stCPID.LastBlock && pindex->nResearchSubsidy > 0) 
+		printf(" RA Starting %f %f %f ",(double)pindex->nHeight,(double)pindex->pnext->nHeight,(double)pindexBest->nHeight);
+		while (pindex->nHeight < pindexBest->nHeight)
+		{
+				if (!pindex || !pindex->pnext) break;  // <-- Note, this line is the fix for all of the past historical crashes in TallyNetworkAverages regarding segafaults... Oh my. 
+				pindex = pindex->pnext;
+				if (pindex == pindexBest) break;
+				if (pindex==NULL || !pindex->IsInMainChain()) continue;
+				//if (fDebug3) printf("h %f ",(double)pindex->nHeight);
+				//8-22-2015
+				if (IsLockTimeWithin14days((double)pindex->nTime)) 
 				{
-						stCPID.LastBlock = (double)pindex->nHeight;
-						stCPID.BlockHash = pindex->GetBlockHash().GetHex();
+					CBlock block;
+					if (!block.ReadFromDisk(pindex)) return false;
+					MiningCPID bb = GetInitializedMiningCPID(pindex->GetBlockHash().GetHex(), mvBlockIndex);
+	     			bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
+					mvBlockIndex[pindex->GetBlockHash().GetHex()] = bb;
 				}
 
-				if (pindex->nMagnitude > 0 && pindex->nResearchSubsidy > 0)
+				if (!pindex->sCPID.empty())
 				{
-					stCPID.Accuracy++;
-					stCPID.TotalMagnitude += pindex->nMagnitude;
-					stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
-				}
+				if (pindex->sCPID != "INVESTOR") 
+				{
+			
+					StructCPID stCPID = GetInitializedStructCPID2(pindex->sCPID, mvResearchAge);
+	     			stCPID.InterestSubsidy += pindex->nInterestSubsidy;
+					stCPID.ResearchSubsidy += pindex->nResearchSubsidy;
+					if (((double)pindex->nHeight) > stCPID.LastBlock && pindex->nResearchSubsidy > 0) 
+					{
+							stCPID.LastBlock = (double)pindex->nHeight;
+							stCPID.BlockHash = pindex->GetBlockHash().GetHex();
+					}
+
+					if (pindex->nMagnitude > 0 && pindex->nResearchSubsidy > 0)
+					{
+						stCPID.Accuracy++;
+						stCPID.TotalMagnitude += pindex->nMagnitude;
+						stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
+					}
 		
-				if (((double)pindex->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime = (double)pindex->nTime;
-				if (((double)pindex->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pindex->nTime;
+					if (((double)pindex->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime = (double)pindex->nTime;
+					if (((double)pindex->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pindex->nTime;
 			
-				mvResearchAge[pindex->sCPID]=stCPID;
-								
-			}
-			
+					mvResearchAge[pindex->sCPID]=stCPID;
+					//if (fDebug3) printf("h %f ",(double)pindex->nHeight);
+				
+				}
+				}
+		}
 	}
-
-	
+	printf("RA Complete ");
     return true;
 }

@@ -139,7 +139,7 @@ void ThreadCPIDs();
 int Races(int iMax1000);
 std::string GetGlobalStatus();
 std::string GetHttpPage(std::string cpid);
-bool TallyNetworkAverages(bool ColdBoot);
+bool TallyNetworkAverages(bool Force);
 void LoadCPIDsInBackground();
 void InitializeCPIDs();
 void RestartGridcoinMiner();
