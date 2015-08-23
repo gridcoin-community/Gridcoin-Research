@@ -643,7 +643,6 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 				narr += " RSAWeight<MintLimiter: "+ RoundToString(RSA_WEIGHT/14,0) + "; " + RoundToString(MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid,nTimeTx),0);
 			}
 		}
-		if (fDebug3 && fTestNet && LessVerbose(100)) printf("{v3}");
 		if (RSA_WEIGHT >= 24999 && boincblock.Magnitude > .25)        msMiningErrors7="Newbie block being generated.";
 		msMiningErrors5 = narr;
 	}

@@ -3434,6 +3434,12 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
             vDelete.push_back(tx);
 		// Gridcoin: fix individual researchers totals
 		FixIndividualResearchTotals(pindex->sCPID);
+
+		MiningCPID bb = GetInitializedMiningCPID(pindex->GetBlockHash().GetHex(), mvBlockIndex);
+	   	bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
+		mvBlockIndex[pindex->GetBlockHash().GetHex()] = bb;
+			
+
     }
     if (!txdb.WriteHashBestChain(pindexNew->GetBlockHash()))
         return error("Reorganize() : WriteHashBestChain failed");
@@ -3561,25 +3567,24 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
         // Switch to new best branch
         if (!Reorganize(txdb, pindexIntermediate))
         {
-					//10-30-2014 - Halford - Reboot when reorganize fails 100 times
-					REORGANIZE_FAILED++;
-					std::string suppressreboot = GetArg("-suppressreboot", "true");
-					/*
-					if (suppressreboot!="true")
-					{
-						if (REORGANIZE_FAILED==100)
-						{
-							int nResult = 0;
-							#if defined(WIN32) && defined(QT_GUI)
-								nResult = RebootClient();
-							#endif
-							printf("Rebooting... %f",(double)nResult);
-						}
-					}
-					*/
-
-
+			 	REORGANIZE_FAILED++;
+				std::string suppressreboot = GetArg("-suppressreboot", "true");
+				
 				txdb.TxnAbort();
+				// Shave 100 blocks off the chain here
+				if (pindexBest)
+				{
+					int nNewIndex = pindexBest->nHeight - 250;
+					if (nNewIndex < 1) nNewIndex = 1;
+					CBlockIndex* pblockindex = FindBlockByHeight(nNewIndex);
+					if (pblockindex)
+					{
+						pindexNew = pblockindex;
+						pindexBest = pblockindex;
+						printf("Shaving 250 blocks off of the chain\r\n");
+					}
+				}
+				// End of Shaving 100 blocks off of the chain
 				InvalidChainFound(pindexNew);
 				TallyNetworkAverages(false);
 
@@ -3865,7 +3870,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 	int64_t nCoinAge = 0;
 	int64_t nFees = 0;
 	
-	if (bb.cpid != "INVESTOR" && IsProofOfStake() && height1 > nGrandfather && bResearchAgeEnabled && BlockNeedsChecked(nTime))
+	if (bb.cpid != "INVESTOR" && IsProofOfStake() && height1 > nGrandfather && bResearchAgeEnabled && BlockNeedsChecked(nTime) && !fLoadingIndex)
 	{
 			int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, 
 				pindexBest, "checkblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
@@ -5512,8 +5517,8 @@ bool TallyNetworkAverages(bool Forcefully)
 	}
 
 	if (Forcefully) nLastTallied = 0;
-
-	if (IsLockTimeWithinMinutes(nLastTallied,1)) 
+	int timespan = fTestNet ? 1 : 5;
+	if (IsLockTimeWithinMinutes(nLastTallied,timespan)) 
 	{
 		bNetAveragesLoaded=true;
 		return true;
@@ -5554,12 +5559,20 @@ bool TallyNetworkAverages(bool Forcefully)
 						pblockindex = pblockindex->pprev;
 						if (pblockindex == pindexGenesisBlock) return false;
 						if (pblockindex == NULL || !pblockindex->IsInMainChain()) continue;
-						MiningCPID bb = mvBlockIndex[pblockindex->GetBlockHash().GetHex()];
+						MiningCPID bb;
 
-						//block.ReadFromDisk(pblockindex);
+						if (bResearchAgeEnabled)
+						{
+							bb = mvBlockIndex[pblockindex->GetBlockHash().GetHex()];
+						}
+						else
+						{
+							block.ReadFromDisk(pblockindex);
+							bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
+						}
+
 						if (true)
 						{
-							//MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
 							NetworkPayments += bb.ResearchSubsidy;
 							// Insert CPID, Magnitude, Payments
 							AddNetworkMagnitude((double)pblockindex->nHeight,pblockindex->nTime,bb.cpid,bb);
@@ -8478,7 +8491,7 @@ void MemorizeMessage(std::string msg,int64_t nTime)
 				  {
 						if (sMessageAction=="A")
 						{
-								if (fDebug) printf("Adding MessageKey type %s Key %s Value %s\r\n",
+								if (fDebug10) printf("Adding MessageKey type %s Key %s Value %s\r\n",
 									sMessageType.c_str(),sMessageKey.c_str(),sMessageValue.c_str());
 								WriteCache(sMessageType,sMessageKey,sMessageValue,nTime);
 								if (sMessageType=="poll")
