@@ -2636,6 +2636,15 @@ bool ClientOutOfSync()
 
 
 
+bool OutOfSyncByMoreThan(double dMinutes) 
+{
+	double lastblockage = PreviousBlockAge();
+	if (lastblockage > (60*dMinutes)) return true;
+	if (fReindex || fImporting ) return true;
+	return false;
+}
+
+
 
 bool OutOfSyncByAge() 
 {
@@ -3194,7 +3203,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		{
 			    if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))	
 				{
-						TallyNetworkAverages(true);
+						TallyNetworkAverages(false);
 					    if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))	
 						{
 							StructCPID strUntrustedHost = GetInitializedStructCPID2(bb.cpid,mvMagnitudes);
@@ -3275,7 +3284,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			
 		}
 		/*
-			--Superblock is loaded 15 blocks later in TallyNetworkAverages();
+			--Superblock is loaded 15 blocks later in TllyNetworkAverages();
 		*/
 	}
 
@@ -3471,7 +3480,7 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
 	// Gridcoin: Now that the chain is back in order, Fix the researchers who were disrupted:
 	FixInvalidResearchTotals(vDisconnect,vConnect);
 
-	TallyNetworkAverages(true);
+	TallyNetworkAverages(false);
 
 
     printf("REORGANIZE: done\n");
@@ -5166,7 +5175,15 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
 
 bool BlockNeedsChecked(int64_t BlockTime)
 {
-	return IsLockTimeWithin14days((double)BlockTime);
+	if (IsLockTimeWithin14days((double)BlockTime))
+	{
+		bool fOut = OutOfSyncByMoreThan(60);
+		return !fOut;
+	}
+	else
+	{
+		return false;
+	}
 }
 
 bool IsLockTimeWithin14days(double locktime)
@@ -5567,8 +5584,13 @@ bool TallyNetworkAverages(bool Forcefully)
 						}
 						else
 						{
-							block.ReadFromDisk(pblockindex);
-							bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
+							if (!block.ReadFromDisk(pblockindex)) continue;
+							if (block.vtx.size() > 0)
+							{
+								if (block.vtx[0].hashBoinc.empty()) continue;
+								bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
+							}
+							else continue;
 						}
 
 						if (true)

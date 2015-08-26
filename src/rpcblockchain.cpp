@@ -1037,7 +1037,10 @@ bool TallyMagnitudesInSuperblock()
 	network.rac = TotalRAC;
 	network.NetworkProjects = TotalProjects;
 	//8-16-2015 Store the quotes
+	
+
 	std::string q = ReadCache("superblock","quotes");
+	if (fDebug3) printf("q %s",q.c_str());
 	std::vector<std::string> vQ = split(q.c_str(),";");
 	if (vQ.size() > 0)
 	{
@@ -1050,12 +1053,14 @@ bool TallyMagnitudesInSuperblock()
 					double price = cdbl(ExtractValue("0" + vQ[i],",",1),0);
 					
 					WriteCache("quotes",symbol,RoundToString(price,2),GetAdjustedTime());
+					if (fDebug3) printf("symbol %s price %f ",symbol.c_str(),price);
 			}
 		}
 	}
 
-	network.GRCQuote = cdbl(ReadCache("quotes","GRC"),4);
-	network.BTCQuote = cdbl(ReadCache("quotes","BTC"),4);
+	network.GRCQuote = cdbl(ReadCache("quotes","grc"),4);
+	network.BTCQuote = cdbl(ReadCache("quotes","btc"),4);
+	if (fDebug3) printf(" GRC %f ",network.GRCQuote);
     mvNetwork["NETWORK"] = network;
 	if (fDebug) printf(".43.");
 	return true;
@@ -2628,30 +2633,29 @@ Array MagnitudeReport(std::string cpid)
 									Object entry;
 									if (bResearchAgeEnabled)
 									{
+										StructCPID DPOR = mvDPOR[structMag.cpid];
+										StructCPID stCPID = GetInitializedStructCPID2(structMag.cpid,mvResearchAge);
+										double days = (GetAdjustedTime() - stCPID.LowLockTime)/86400;
 										entry.push_back(Pair("CPID",structMag.cpid));
 										entry.push_back(Pair("GRCAddress",structMag.GRCAddress));
 										entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
+										entry.push_back(Pair("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime)));
 									
-										StructCPID DPOR = mvDPOR[structMag.cpid];
 										entry.push_back(Pair("Magnitude",	structMag.Magnitude));
-										entry.push_back(Pair("Payment Timespan (Days)",structMag.PaymentTimespan));
-										//entry.push_back(Pair("Total Earned (14 days)",structMag.totalowed));
 										entry.push_back(Pair("Research Payments (14 days)",structMag.payments));
 										entry.push_back(Pair("Interest Payments (14 days)",structMag.interestPayments));
-										//entry.push_back(Pair("Owed",structMag.owed));
 									    entry.push_back(Pair("Daily Paid",structMag.payments/14));
 										// Research Age - Calculate Expected 14 Day Owed, and Daily Owed:
 										double dExpected14 = magnitude_unit * structMag.Magnitude * 14;
 										entry.push_back(Pair("Expected Earnings (14 days)", dExpected14));
 										entry.push_back(Pair("Expected Earnings (Daily)", dExpected14/14));
-										StructCPID stCPID = GetInitializedStructCPID2(structMag.cpid,mvResearchAge);
+										// Fulfillment %
+										double fulfilled = ((structMag.payments/14) / ((dExpected14/14)+.01)) * 100;
+										entry.push_back(Pair("Fulfillment %", fulfilled));
+
 										entry.push_back(Pair("CPID Lifetime Interest Paid", stCPID.InterestSubsidy));
 										entry.push_back(Pair("CPID Lifetime Research Paid", stCPID.ResearchSubsidy));
 										entry.push_back(Pair("CPID Lifetime Avg Magnitude", stCPID.ResearchAverageMagnitude));
-										
-										double days = (GetAdjustedTime() - stCPID.LowLockTime)/86400;
-										entry.push_back(Pair("Earliest Payment",TimestampToHRDate(stCPID.LowLockTime)));
-										
 										entry.push_back(Pair("CPID Lifetime Payments Per Day", stCPID.ResearchSubsidy/days));
 										entry.push_back(Pair("Last Blockhash Paid", stCPID.BlockHash));
 										entry.push_back(Pair("Last Block Paid",stCPID.LastBlock));
@@ -3793,13 +3797,12 @@ Value listitem(const Array& params, bool fHelp)
 						entry.push_back(Pair("Network Total Magnitude",stNet.NetworkMagnitude));
 						entry.push_back(Pair("Network Average Magnitude",stNet.NetworkAvgMagnitude));
 						double MaximumEmission = BLOCKS_PER_DAY*GetMaximumBoincSubsidy(GetAdjustedTime());
-					
 						entry.push_back(Pair("Network Avg Daily Payments", stNet.payments/14));
 						entry.push_back(Pair("Network Max Daily Payments",MaximumEmission));
 						double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
 						entry.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
-						entry.push_back(Pair("GRC Quote", stNet.GRCQuote));
-						entry.push_back(Pair("BTC Quote", stNet.BTCQuote));
+						entry.push_back(Pair("GRC Quote", stNet.GRCQuote/10000000000));
+						entry.push_back(Pair("BTC Quote", stNet.BTCQuote/100));
 
 				}
 				results.push_back(entry);

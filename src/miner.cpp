@@ -632,8 +632,9 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	}
 
 
+	/*
 	// 6-28-2015 : Verify all the cryptolottery recipients are still valid
-	if (bCryptoLotteryEnabled)
+	if (bCryptoLotteryEnabled && false)
 	{
 			if (pblock->vtx[0].vout.size() > 2)
 			{
@@ -651,7 +652,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 				}
 			}
 	 }
-
+	 */
 	
 
 	//1-20-2015 Ensure this stake is above the minimum threshhold; otherwise, vehemently reject
@@ -798,7 +799,7 @@ void StakeMiner(CWallet *pwallet)
 			if (passphrase.length() > 1)
 			{
 				std::string decrypted = AdvancedDecrypt(passphrase);
-				//Unlock the wallet for 10 days (Equivalent to: walletpassphrase mylongpass 999999)
+				//Unlock the wallet for 10 days (Equivalent to: walletpassphrase mylongpass 999999) FOR STAKING ONLY!
 				int64_t nSleepTime = 9999999;
 				SecureString strWalletPass;
 				strWalletPass.reserve(100);
@@ -814,8 +815,8 @@ void StakeMiner(CWallet *pwallet)
 						NewThread(ThreadTopUpKeyPool,NULL);
 						int64_t* pnSleepTime = new int64_t(nSleepTime);
 						NewThread(ThreadCleanWalletPassphrase, pnSleepTime);
+						fWalletUnlockStakingOnly = true;
 					}
-   
 				}
 			}
 		}

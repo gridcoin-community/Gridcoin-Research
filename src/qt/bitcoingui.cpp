@@ -1027,8 +1027,8 @@ void BitcoinGUI::createMenuBar()
     QMenu *settings = appMenuBar->addMenu(tr("&Settings"));
     settings->addAction(encryptWalletAction);
     settings->addAction(changePassphraseAction);
-//    settings->addAction(unlockWalletAction);
-//    settings->addAction(lockWalletAction);
+    settings->addAction(unlockWalletAction);
+    settings->addAction(lockWalletAction);
     settings->addSeparator();
     settings->addAction(optionsAction);
 
