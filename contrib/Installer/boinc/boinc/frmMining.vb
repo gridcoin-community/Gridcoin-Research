@@ -486,16 +486,23 @@ Public Class frmMining
         MsgBox("Exported to Reports\" + "NeuralMagnitudeReport.csv")
     End Sub
     Private Sub TextBox1_TextChanged(sender As System.Object, e As System.EventArgs) Handles txtSearch.TextChanged
-        Dim sPhrase As String = txtSearch.Text
-        For y = 1 To dgv.Rows.Count - 1
-            For x = 0 To dgv.Rows(y).Cells.Count - 1
-                If LCase(Trim("" & dgv.Rows(y).Cells(x).Value)) Like LCase(Trim(txtSearch.Text)) + "*" Then
-                    dgv.Rows(y).Selected = True
-                    dgv.CurrentCell = dgv.Rows(y).Cells(0)
-                    Exit Sub
-                End If
-            Next
-        Next
+        Try
+
+            Dim sPhrase As String = txtSearch.Text
+            For y = 1 To dgv.Rows.Count - 1
+                For x = 0 To dgv.Rows(y).Cells.Count - 1
+                    If LCase(Trim("" & dgv.Rows(y).Cells(x).Value)) Like LCase(Trim(txtSearch.Text)) + "*" Then
+                        dgv.Rows(y).Selected = True
+                        dgv.CurrentCell = dgv.Rows(y).Cells(0)
+                        Exit Sub
+                    End If
+                Next x
+            Next y
+
+        Catch ex As Exception
+            MsgBox("Slow down.", MsgBoxStyle.Critical)
+        End Try
+
     End Sub
 
     Private Sub btnRefresh_Click(sender As System.Object, e As System.EventArgs) Handles btnRefresh.Click

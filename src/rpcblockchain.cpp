@@ -30,6 +30,10 @@ extern Array LifetimeReport(std::string cpid);
 Array StakingReport();
 extern std::string AddContract(std::string sType, std::string sName, std::string sContract);
 StructCPID GetLifetimeCPID(std::string cpid);
+double getCpuHash();
+extern std::string getHardwareID();
+
+std::string getMacAddress();
 
 void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
 extern std::string MyBeaconExists(std::string cpid);
@@ -164,6 +168,7 @@ std::string TxToString(const CTransaction& tx, const uint256 hashBlock, int64_t&
 bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
 std::string RetrieveMd5(std::string s1);
+
 std::string getfilecontents(std::string filename);
 MiningCPID DeserializeBoincBlock(std::string block);
 
@@ -2084,10 +2089,9 @@ Value execute(const Array& params, bool fHelp)
 		else
 		{
 			std::string sParam = params[1].get_str();
-			std::string encrypted = AdvancedCrypt(sParam);
+			std::string encrypted = AdvancedCryptWithHWID(sParam);
 			entry.push_back(Pair("Passphrase",encrypted));
 			entry.push_back(Pair("[Specify in config file] autounlock=",encrypted));
-
 			results.push_back(entry);
 		}
 	
@@ -3535,6 +3539,19 @@ Value listitem(const Array& params, bool fHelp)
 		entry.push_back(Pair("RSA Owed",out_owed));
 		results.push_back(entry);
 
+	}
+	if (sitem == "betatest")
+	{
+		Object entry;
+		std::string enc = AdvancedCryptWithHWID("beta");
+		printf("enc %s",enc.c_str());
+		std::string dec = AdvancedDecryptWithHWID(enc);
+		printf("dec %s",dec.c_str());
+		//std::string h  = get___();
+		entry.push_back(Pair("pass1",enc));
+		entry.push_back(Pair("pass2",dec));
+		//entry.push_back(Pair("h",h));
+		results.push_back(entry);
 	}
     if (sitem == "lottery")
 	{

@@ -128,6 +128,8 @@ std::string AdvancedCrypt(std::string boinchash);
 std::string AdvancedDecrypt(std::string boinchash_encrypted);
 std::string AdvancedCryptWithSalt(std::string boinchash, std::string salt);
 std::string AdvancedDecryptWithSalt(std::string boinchash_encrypted, std::string salt);
+std::string AdvancedCryptWithHWID(std::string data);
+std::string AdvancedDecryptWithHWID(std::string data);
 
 bool GridDecrypt(const std::vector<unsigned char>& vchCiphertext,std::vector<unsigned char>& vchPlaintext);
 bool GridEncrypt(std::vector<unsigned char> vchPlaintext, std::vector<unsigned char> &vchCiphertext);

@@ -14,10 +14,11 @@
 #include "scrypt.h"
 
 
-
 unsigned char chKeyGridcoin[256];
 unsigned char chIVGridcoin[256];
 bool fKeySetGridcoin;
+std::string getHardwareID();
+std::string RetrieveMd5(std::string s1);
 
 bool CCrypter::SetKeyFromPassphrase(const SecureString& strKeyData, const std::vector<unsigned char>& chSalt, const unsigned int nRounds, const unsigned int nDerivationMethod)
 {
@@ -310,8 +311,32 @@ std::string AdvancedDecrypt(std::string boinchash_encrypted)
 }
      
 
+std::string AdvancedCryptWithHWID(std::string data)
+{
+	std::string HWID = getHardwareID();
+	std::string enc = "";
+	std::string salt = HWID;
+	for (unsigned int i = 0; i < 9; i++)
+	{
+		std::string old_salt = salt;
+		salt = RetrieveMd5(old_salt);
+	}
+	enc = AdvancedCryptWithSalt(data,salt);
+	return enc;
+}
 
-
+std::string AdvancedDecryptWithHWID(std::string data)
+{
+	std::string HWID = getHardwareID();
+	std::string salt = HWID;
+	for (unsigned int i = 0; i < 9; i++)
+	{
+		std::string old_salt = salt;
+		salt = RetrieveMd5(old_salt);
+	}
+	std::string dec = AdvancedDecryptWithSalt(data,salt);
+	return dec;
+}
 
 std::string AdvancedCryptWithSalt(std::string boinchash, std::string salt)
 {

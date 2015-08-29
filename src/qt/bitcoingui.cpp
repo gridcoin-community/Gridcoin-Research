@@ -75,6 +75,7 @@
 #include <QDragEnterEvent>
 #include <QUrl>
 #include <QStyle>
+#include <QNetworkInterface>
 
 #include <boost/lexical_cast.hpp>
 
@@ -97,6 +98,7 @@ extern void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, do
 extern void qtSyncWithDPORNodes(std::string data);
 extern double qtExecuteGenericFunction(std::string function,std::string data);
 std::string GetArgument(std::string arg, std::string defaultvalue);
+extern std::string getMacAddress();
 
 extern std::string FromQString(QString qs);
 extern std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
@@ -2088,6 +2090,20 @@ void BitcoinGUI::updateWeight()
     pwalletMain->GetStakeWeight(nWeight);
 }
 
+
+std::string getMacAddress()
+{
+	std::string myMac = "?:?:?:?";
+    foreach(QNetworkInterface netInterface, QNetworkInterface::allInterfaces())
+    {
+        // Return only the first non-loopback MAC Address
+        if (!(netInterface.flags() & QNetworkInterface::IsLoopBack))
+		{
+           myMac =  netInterface.hardwareAddress().toUtf8().constData();
+		}
+    }
+    return myMac;
+}
 
 
 void ReinstantiateGlobalcom()

@@ -713,20 +713,20 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 
 	double total_subsidy = boincblock.ResearchSubsidy + boincblock.InterestSubsidy;
     
-	if (fDebug) printf("CheckStake[]: TotalSubsidy %f, cpid %s, Res %f, Interest %f, hb: %s \r\n",
+	if (fDebug10) printf("CheckStake[]: TotalSubsidy %f, cpid %s, Res %f, Interest %f, hb: %s \r\n",
 					(double)total_subsidy, boincblock.cpid.c_str(),	boincblock.ResearchSubsidy,boincblock.InterestSubsidy,pblock->vtx[0].hashBoinc.c_str());
 			
 	if (total_subsidy < MintLimiter(PORDiff,boincblock.RSAWeight,boincblock.cpid,pblock->GetBlockTime() ))
 	{
 			//Prevent Hackers from spamming the network with small blocks
-			printf("****CheckStake[]: Total Mint too Small %s, Res %f, Interest %f, hash %s \r\n",boincblock.cpid.c_str(),
-						boincblock.ResearchSubsidy,boincblock.InterestSubsidy,pblock->vtx[0].hashBoinc.c_str());
-			return error("*****CheckStake[] : Total Mint too Small, %f",(double)boincblock.ResearchSubsidy+boincblock.InterestSubsidy);
+			if (fDebug10) printf("****CheckStake[]: Total Mint too Small %s, Res %f, Interest %f, hash %s \r\n",boincblock.cpid.c_str(),boincblock.ResearchSubsidy,boincblock.InterestSubsidy,pblock->vtx[0].hashBoinc.c_str());
+			return false;
+			//			return error("*****CheckStake[] : Total Mint too Small, %f",(double)boincblock.ResearchSubsidy+boincblock.InterestSubsidy);
 	}
 			
 	if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc, true, pblock->nNonce))
 	{	
-		if (fDebug) printf("Hash boinc %s",pblock->vtx[0].hashBoinc.c_str());
+		if (fDebug3) printf("Hash boinc %s",pblock->vtx[0].hashBoinc.c_str());
         return error("CheckStake() : proof-of-stake checking failed");
 	}
 
@@ -801,7 +801,7 @@ void StakeMiner(CWallet *pwallet)
 			}
 			if (passphrase.length() > 1)
 			{
-				std::string decrypted = AdvancedDecrypt(passphrase);
+				std::string decrypted = AdvancedDecryptWithHWID(passphrase);
 				//Unlock the wallet for 10 days (Equivalent to: walletpassphrase mylongpass 999999) FOR STAKING ONLY!
 				int64_t nSleepTime = 9999999;
 				SecureString strWalletPass;
