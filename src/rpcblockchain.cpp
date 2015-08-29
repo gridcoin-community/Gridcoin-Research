@@ -30,9 +30,8 @@ extern Array LifetimeReport(std::string cpid);
 Array StakingReport();
 extern std::string AddContract(std::string sType, std::string sName, std::string sContract);
 StructCPID GetLifetimeCPID(std::string cpid);
-double getCpuHash();
+std::string getCpuHash();
 extern std::string getHardwareID();
-
 std::string getMacAddress();
 
 void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);

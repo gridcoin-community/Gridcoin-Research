@@ -26,13 +26,14 @@
 #include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
 #include <boost/algorithm/string/join.hpp>
 #include "cpid.h"
+#include <boost/asio.hpp>
 
 int DownloadBlocks();
 extern MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID> vRef);
 extern void AddCPIDBlockHash(std::string cpid, std::string blockhash);
 extern void ZeroOutResearcherTotals(std::string cpid);
 extern StructCPID GetLifetimeCPID(std::string cpid);
-extern double getCpuHash();
+extern std::string getCpuHash();
 std::string getMacAddress();
 std::string TimestampToHRDate(double dtm);
 std::string AddContract(std::string sType, std::string sName, std::string sContract);
@@ -9093,7 +9094,7 @@ std::string getHardwareID()
 	#ifdef QT_GUI
 	    ele1 = getMacAddress();
 	#endif
-	ele1 += ":" + RoundToString(getCpuHash(),0);
+	ele1 += ":" + getCpuHash();
 	std::string hwid = RetrieveMd5(ele1);
 	return hwid;
 }
@@ -9110,8 +9111,10 @@ static void getCpuid( unsigned int* p, unsigned int ax )
     );     
  }         
 
- double getCpuHash()            
- {         
+ std::string getCpuHash()            
+ {      
+    std::string n = boost::asio::ip::host_name();
+	#ifdef WIN32
     unsigned int cpuinfo[4] = { 0, 0, 0, 0 };          
     getCpuid( cpuinfo, 0 );  
     unsigned short hash = 0;            
@@ -9119,7 +9122,10 @@ static void getCpuid( unsigned int* p, unsigned int ax )
     for ( unsigned int i = 0; i < 4; i++ )             
        hash += (ptr[i] & 0xFFFF) + ( ptr[i] >> 16 );   
 	double dHash = (double)hash;
-    return dHash;
+    return n + ";" + RoundToString(dHash,0);
+	#else
+	return n;
+	#endif
  }         
 
 
