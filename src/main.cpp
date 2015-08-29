@@ -29,7 +29,9 @@
 
 int DownloadBlocks();
 extern MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID> vRef);
-
+extern void AddCPIDBlockHash(std::string cpid, std::string blockhash);
+extern void ZeroOutResearcherTotals(std::string cpid);
+extern StructCPID GetLifetimeCPID(std::string cpid);
 
 std::string TimestampToHRDate(double dtm);
 std::string AddContract(std::string sType, std::string sName, std::string sContract);
@@ -37,7 +39,6 @@ bool CPIDAcidTest(std::string boincruntimepublickey);
 std::string MyBeaconExists(std::string cpid);
 extern bool BlockNeedsChecked(int64_t BlockTime);
 extern void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector<CBlockIndex*> vConnect);
-extern void FixIndividualResearchTotals(std::string cpid);
 int64_t GetEarliestWalletTransaction();
 extern void IncrementVersionCount(std::string Version);
 double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,bool bIgnoreBeacons);
@@ -259,8 +260,8 @@ std::map<std::string, double> mvNeuralVersion;
 
 std::map<std::string, StructCPID> mvDPOR;
 std::map<std::string, StructCPID> mvResearchAge;
-
 std::map<std::string, MiningCPID> mvBlockIndex;
+std::map<std::string, std::string> mvCPIDBlockHashes;
 
 extern enum Checkpoints::CPMode CheckpointsMode;
 
@@ -397,6 +398,8 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  bool fReindex = false;
  bool fBenchmark = false;
  bool fTxIndex = false;
+ bool fColdBoot = false;
+
  int nBestAccepted = -1;
 
 
@@ -2869,8 +2872,6 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
     BOOST_FOREACH(CTransaction& tx, vtx)
         SyncWithWallets(tx, this, false, false);
 	
-	// Gridcoin: fix individual researchers totals
-	FixIndividualResearchTotals(pindex->sCPID);
 
     return true;
 }
@@ -3129,7 +3130,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
  	}
 		
 	
-
+	AddCPIDBlockHash(bb.cpid,pindex->GetBlockHash().GetHex());
 
     // Track money supply and mint amount info
     pindex->nMint = nValueOut - nValueIn + nFees;
@@ -3185,12 +3186,12 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 				}
 				if (bResearchAgeEnabled && BlockNeedsChecked(nTime))
 				{
+						StructCPID st1 = GetLifetimeCPID(pindex->sCPID);
 						if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
 						{
 							if (fDebug3) printf("ConnectBlockError[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
 								(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str());
-							FixIndividualResearchTotals(bb.cpid);
-
+							
 							return DoS(10,error("ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
 								(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
 						}
@@ -3333,6 +3334,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			TallyNetworkAverages(true);
 	}
 					
+	
+	if (bResearchAgeEnabled && !OutOfSyncByAge()) fColdBoot = false;
 
     if (fJustCheck)
         return true;
@@ -3441,9 +3444,7 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
         // Queue memory transactions to delete
         BOOST_FOREACH(const CTransaction& tx, block.vtx)
             vDelete.push_back(tx);
-		// Gridcoin: fix individual researchers totals
-		FixIndividualResearchTotals(pindex->sCPID);
-
+		
 		MiningCPID bb = GetInitializedMiningCPID(pindex->GetBlockHash().GetHex(), mvBlockIndex);
 	   	bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
 		mvBlockIndex[pindex->GetBlockHash().GetHex()] = bb;
@@ -3478,10 +3479,9 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
     }
 
 	// Gridcoin: Now that the chain is back in order, Fix the researchers who were disrupted:
-	FixInvalidResearchTotals(vDisconnect,vConnect);
+	//FixInvalidResearchTotals(vDisconnect,vConnect); <- To decommission 
 
 	TallyNetworkAverages(false);
-
 
     printf("REORGANIZE: done\n");
     return true;
@@ -3881,16 +3881,17 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 	
 	if (bb.cpid != "INVESTOR" && IsProofOfStake() && height1 > nGrandfather && bResearchAgeEnabled && BlockNeedsChecked(nTime) && !fLoadingIndex)
 	{
+			if (bResearchAgeEnabled) 	StructCPID st1 = GetLifetimeCPID(bb.cpid);
+			
 			int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, 
 				pindexBest, "checkblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 			if (bb.ResearchSubsidy > (OUT_POR*1.25))
 			{
-							FixIndividualResearchTotals(bb.cpid);
 							if (fDebug3) printf("CheckBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-									(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,(double)nCalculatedResearch,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str());
+									(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,CoinToDouble(nCalculatedResearch),(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str());
 				
 							return DoS(10,error("CheckBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-									(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,(double)nCalculatedResearch,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
+									(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,CoinToDouble(nCalculatedResearch),(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
 				
 			}
 		
@@ -3908,7 +3909,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3425) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-					if (bv < 3484 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
+					if (bv < 3487 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
 			}
 
 			if (bb.cpid != "INVESTOR")
@@ -4666,7 +4667,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 2350;
+		nGrandfather = 6750;
 		nNewIndex = 10;
 		bResearchAgeEnabled = true;
 		bRemotePaymentsEnabled = false;
@@ -5177,6 +5178,7 @@ bool BlockNeedsChecked(int64_t BlockTime)
 {
 	if (IsLockTimeWithin14days((double)BlockTime))
 	{
+		if (fColdBoot) return false;
 		bool fOut = OutOfSyncByMoreThan(60);
 		return !fOut;
 	}
@@ -5367,6 +5369,75 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 	return true;
 }
 
+std::string GetCPIDBlockHashes(std::string cpid)
+{
+	return mvCPIDBlockHashes[cpid];
+}
+
+void AddCPIDBlockHash(std::string cpid, std::string blockhash)
+{
+	std::string blockhashes = mvCPIDBlockHashes[cpid];
+	if (blockhashes.empty()) 
+	{
+			mvCPIDBlockHashes.insert(map<std::string,std::string>::value_type(cpid,""));
+	}
+	if (!Contains(blockhashes,blockhash))
+	{
+		blockhashes += ";" + blockhash;
+		mvCPIDBlockHashes[cpid] = blockhashes;
+	}
+}
+
+StructCPID GetLifetimeCPID(std::string cpid)
+{
+	//Eliminates issues with reorgs, disconnects, double counting, etc.. (8-28-2015)
+	std::string hashes = GetCPIDBlockHashes(cpid);
+	std::vector<std::string> vHashes = split(hashes,";");
+    ZeroOutResearcherTotals(cpid);
+
+	for (unsigned int i=0; i < vHashes.size(); i++)
+	{
+		std::string myBlockHash = vHashes[i];
+		if (myBlockHash.length() > 5)
+		{
+		    uint256 uHash(myBlockHash);
+			if (!(mapBlockIndex.count(uHash) == 0))
+			{
+				CBlockIndex* pblockindex = mapBlockIndex[uHash];
+				if (pblockindex)
+				{
+					if (pblockindex->IsInMainChain())
+					{
+						if (pblockindex->sCPID == cpid)
+						{
+							StructCPID stCPID = GetInitializedStructCPID2(pblockindex->sCPID,mvResearchAge);
+							if (((double)pblockindex->nHeight) > stCPID.LastBlock)
+							{
+								stCPID.LastBlock = (double)pblockindex->nHeight;
+								stCPID.BlockHash = pblockindex->GetBlockHash().GetHex();
+							}
+							stCPID.InterestSubsidy += pblockindex->nInterestSubsidy;
+							stCPID.ResearchSubsidy += pblockindex->nResearchSubsidy;
+							stCPID.Accuracy++;
+							if (pblockindex->nMagnitude > 0)
+							{
+								stCPID.TotalMagnitude += pblockindex->nMagnitude;
+								stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
+							}
+
+							if (((double)pblockindex->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime = (double)pblockindex->nTime;
+							if (((double)pblockindex->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pblockindex->nTime;
+							mvResearchAge[pblockindex->sCPID]=stCPID;
+														
+						}
+					}
+				}
+			}
+		}
+	}
+	StructCPID st1 = GetInitializedStructCPID2(cpid,mvResearchAge);
+	return st1;
+}
 
 MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID> vRef)
 {
@@ -5375,10 +5446,7 @@ MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, Minin
 	{
 			    cpid = GetMiningCPID();
 				cpid.initialized=true;
-				//cpid.LowLockTime = 99999999999;
-				//cpid.HighLockTime = 0;
 				cpid.LastPaymentTime = 0;
-				//cpid.EarliestPaymentTime = 99999999999;
 				vRef.insert(map<string,MiningCPID>::value_type(name,cpid));
 				vRef[name]=cpid;
 				return cpid;
@@ -6063,7 +6131,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 8-5-2015
-		if (pfrom->nVersion < 180299 && fTestNet)
+		if (pfrom->nVersion < 180300 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -6467,7 +6535,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             if (pindex->GetBlockHash() == hashStop)
             {
-                if (fDebug) printf("  getblocks stopping at %d %s\n", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20).c_str());
+                if (fDebug10) printf("  getblocks stopping at %d %s\n", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20).c_str());
                 // ppcoin: tell downloading node about the latest block if it's
                 // without risk being rejected due to stake connection check
                 if (hashStop != hashBestChain && pindex->GetBlockTime() + nStakeMinAge > pindexBest->GetBlockTime())
@@ -6479,7 +6547,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             {
                 // When this block is requested, we'll send an inv that'll make them
                 // getblocks the next batch of inventory.
-                if (fDebug) printf("  getblocks stopping at limit %d %s\n", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20).c_str());
+                if (fDebug10) printf("  getblocks stopping at limit %d %s\n", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20).c_str());
                 pfrom->hashContinue = pindex->GetBlockHash();
                 break;
             }
@@ -8635,7 +8703,8 @@ bool UnusualActivityReport()
 						MiningCPID bb = DeserializeBoincBlock(hb);
 						if (bb.cpid != "INVESTOR")
 						{
-								printf("Block #%f:%f, Recipient %s, CPID %s, Paid %f, StakeReward %f \r\n",(double)ii,(double)0, bb.GRCAddress.c_str(), bb.cpid.c_str(), subsidy,(double)nStakeReward);
+								printf("Block #%f:%f, Recipient %s, CPID %s, Paid %f, StakeReward %f \r\n",(double)ii,(double)0, 
+									bb.GRCAddress.c_str(), bb.cpid.c_str(), subsidy,(double)nStakeReward);
 						}
 				}
 
@@ -8781,7 +8850,7 @@ void ZeroOutResearcherTotals(std::string cpid)
 }
 
 
-void FixIndividualResearchTotals(std::string cpid)
+void FixIndividualResearchTotals_Retired(std::string cpid)
 {
 	if (!bResearchAgeEnabled || pindexBest->nHeight < nNewIndex) return;
 	// Halford : Zero out the researcher totals:
@@ -8822,7 +8891,7 @@ void FixIndividualResearchTotals(std::string cpid)
 }
 
 
-
+/*
 void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector<CBlockIndex*> vConnect)
 {
 	if (!bResearchAgeEnabled || pindexBest->nHeight < nNewIndex) return;
@@ -8902,6 +8971,9 @@ void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector
 	}
   }
 }
+*/
+
+
 
 CBlockIndex* GetHistoricalMagnitude_ScanChain(std::string cpid)
 {

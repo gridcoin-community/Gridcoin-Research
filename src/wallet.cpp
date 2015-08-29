@@ -20,6 +20,7 @@ static unsigned int GetStakeSplitAge() { return IsProtocolV2(nBestHeight) ? (10 
 static int64_t GetStakeCombineThreshold() { return IsProtocolV2(nBestHeight) ? (50 * COIN) : (1000 * COIN); }
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 std::vector<std::string> split(std::string s, std::string delim);
+StructCPID GetLifetimeCPID(std::string cpid);
 double cdbl(std::string s, int place);
 void qtUpdateConfirm(std::string txid);
 bool Contains(std::string data, std::string instring);
@@ -2134,6 +2135,9 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		// ************************************************* CREATE PROOF OF RESEARCH REWARD ****************************** R HALFORD *************** 8-8-2015 *******************************
 		// ResearchAge 2
 		// Note: Since research Age must be exact, we need to transmit the Block nTime here so it matches AcceptBlock
+		StructCPID st1 = GetLifetimeCPID(GlobalCPUMiningCPID.cpid);
+
+
         int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,
 			pindexBest->nTime,pindexBest,"createcoinstake",OUT_POR,out_interest,dAccrualAge,dAccrualMagnitudeUnit,dAccrualMagnitude);
 

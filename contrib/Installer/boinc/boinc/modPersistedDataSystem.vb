@@ -1338,6 +1338,8 @@ Module modPersistedDataSystem
             Dim w As New MyWebClient
             Dim sJSON As String = w.DownloadString(sURL)
             Dim sLast As String = ExtractValue(sJSON, "lastprice", "updated")
+            sLast = Replace(sLast, ",", ".")
+
             Dim dprice As Double
             dprice = CDbl(sLast)
             Dim qBitcoin As Quote

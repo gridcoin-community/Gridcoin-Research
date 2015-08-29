@@ -29,6 +29,7 @@ bool UpdateNeuralNetworkQuorumData();
 extern Array LifetimeReport(std::string cpid);
 Array StakingReport();
 extern std::string AddContract(std::string sType, std::string sName, std::string sContract);
+StructCPID GetLifetimeCPID(std::string cpid);
 
 void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
 extern std::string MyBeaconExists(std::string cpid);
@@ -2633,8 +2634,9 @@ Array MagnitudeReport(std::string cpid)
 									Object entry;
 									if (bResearchAgeEnabled)
 									{
+
 										StructCPID DPOR = mvDPOR[structMag.cpid];
-										StructCPID stCPID = GetInitializedStructCPID2(structMag.cpid,mvResearchAge);
+										StructCPID stCPID = GetLifetimeCPID(structMag.cpid);
 										double days = (GetAdjustedTime() - stCPID.LowLockTime)/86400;
 										entry.push_back(Pair("CPID",structMag.cpid));
 										entry.push_back(Pair("GRCAddress",structMag.GRCAddress));

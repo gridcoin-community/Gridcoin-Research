@@ -269,9 +269,12 @@ Public Class frmMining
                 End If
                 sReportRow += sValue + ","
             Next x
+            If LCase(dgv.Rows(iRow).Cells(0).Value) = "grc" Or LCase(dgv.Rows(iRow).Cells(0).Value) = "btc" Then
+                dgv.Rows(iRow).Visible = False 'No need to polute the view page with quotes
+            End If
             sReport += sReportRow + vbCrLf
             iRow = iRow + 1
-            If iRow Mod 10 = 0 Then Application.DoEvents()
+            If iRow Mod 50 = 0 Then Application.DoEvents()
 
         Next
   
@@ -330,6 +333,7 @@ Public Class frmMining
             dgvProjects.Rows(iRow).Cells(2).Value = prj.AvgRAC
 
             dgvProjects.Rows(iRow).Cells(3).Value = Trim(bIsThisWhitelisted)
+
             iRow = iRow + 1
         Next
 

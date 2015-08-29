@@ -28,6 +28,7 @@ StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, Stru
 bool IsLockTimeWithin14days(double locktime);
 MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID> vRef);
 MiningCPID DeserializeBoincBlock(std::string block);
+void AddCPIDBlockHash(std::string cpid, std::string blockhash);
 
 static leveldb::Options GetOptions() {
     leveldb::Options options;
@@ -617,12 +618,10 @@ bool CTxDB::LoadBlockIndex()
 		printf(" RA Starting %f %f %f ",(double)pindex->nHeight,(double)pindex->pnext->nHeight,(double)pindexBest->nHeight);
 		while (pindex->nHeight < pindexBest->nHeight)
 		{
-				if (!pindex || !pindex->pnext) break;  // <-- Note, this line is the fix for all of the past historical crashes in TallyNetworkAverages regarding segafaults... Oh my. 
+				if (!pindex || !pindex->pnext) break;  
 				pindex = pindex->pnext;
 				if (pindex == pindexBest) break;
 				if (pindex==NULL || !pindex->IsInMainChain()) continue;
-				//if (fDebug3) printf("h %f ",(double)pindex->nHeight);
-				//8-22-2015
 				if (IsLockTimeWithin14days((double)pindex->nTime)) 
 				{
 					CBlock block;
@@ -657,8 +656,8 @@ bool CTxDB::LoadBlockIndex()
 					if (((double)pindex->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pindex->nTime;
 			
 					mvResearchAge[pindex->sCPID]=stCPID;
-					//if (fDebug3) printf("h %f ",(double)pindex->nHeight);
-				
+					AddCPIDBlockHash(pindex->sCPID,pindex->GetBlockHash().GetHex());
+
 				}
 				}
 		}
