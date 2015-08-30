@@ -234,6 +234,7 @@ Public Class frmMining
 
         Dim sReport As String = ""
         Dim sReportRow As String = ""
+        Dim sMemoryName = IIf(mbTestNet, "magnitudes_testnet", "magnitudes")
 
         Dim sHeader As String = "CPID,Magnitude,Avg Magnitude,Total RAC,Synced Til,Address,CPID Valid"
         sReport += sHeader + vbCrLf
@@ -269,6 +270,11 @@ Public Class frmMining
                 End If
                 sReportRow += sValue + ","
             Next x
+            If Val(dgv.Rows(iRow).Cells(2).Value) = 0 And Val(dgv.Rows(iRow).Cells(1).Value) > 0 Then
+                mGRCData = New GRCSec.GridcoinData
+                mGRCData.BroadcastNeuralNetworkMemoryValue(sMemoryName, dgv.Rows(iRow).Cells(0).Value, Val(dgv.Rows(iRow).Cells(1).Value), True)
+            End If
+
             If LCase(dgv.Rows(iRow).Cells(0).Value) = "grc" Or LCase(dgv.Rows(iRow).Cells(0).Value) = "btc" Then
                 dgv.Rows(iRow).Visible = False 'No need to polute the view page with quotes
             End If

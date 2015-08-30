@@ -28,10 +28,16 @@
 #include "cpid.h"
 #include <boost/asio.hpp>
 
+
 int DownloadBlocks();
 extern MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID> vRef);
+extern std::string getHardDriveSerial();
+
 extern void AddCPIDBlockHash(std::string cpid, std::string blockhash);
 extern void ZeroOutResearcherTotals(std::string cpid);
+extern bool ShaveChain(CTxDB& txdb);
+
+
 extern StructCPID GetLifetimeCPID(std::string cpid);
 extern std::string getCpuHash();
 std::string getMacAddress();
@@ -371,6 +377,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    Organization = "";
  std::string    OrganizationKey = "";
  std::string    msNeuralResponse = "";
+ std::string    msHDDSerial = "";
  //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
  
  int nGrandfather = 288930;
@@ -2855,9 +2862,14 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 {
    
 	// Disconnect in reverse order
+	bool bDiscTxFailed = false;
     for (int i = vtx.size()-1; i >= 0; i--)
+	{
         if (!vtx[i].DisconnectInputs(txdb))
-            return false;
+		{
+            bDiscTxFailed = true;
+		}
+	}
 
     // Update block index on disk without changing it in memory.
     // The memory index structure will be changed after the db commits.
@@ -2869,11 +2881,12 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
             return error("DisconnectBlock() : WriteBlockIndex failed");
     }
 
-
     // ppcoin: clean up wallet after disconnecting coinstake
     BOOST_FOREACH(CTransaction& tx, vtx)
         SyncWithWallets(tx, this, false, false);
 	
+	StructCPID stCPID = GetLifetimeCPID(pindex->sCPID);
+	// We normally fail to disconnect a block if we can't find the previous input due to "DisconnectInputs() : ReadTxIndex failed".  Imo, I believe we should let this call succeed, otherwise a chain can never be re-organized in this circumstance.
 
     return true;
 }
@@ -3248,7 +3261,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			// Note: ToDo: In the next Mandatory upgrade, remove the legacy_neural_hash; left in for current compatibility
 			double popularity = 0;
 			std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-			// Only reject superblock when it is new And when QuorumHash of Block matches the Popular Quorum Hash:
+			// Only reject superblock when it is new And when QuorumHash of Block != the Popular Quorum Hash:
 			if (IsLockTimeWithinMinutes(GetBlockTime(),15))
 			{ 
 				double out_beacon_count=0;
@@ -3367,6 +3380,110 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
     return true;
 }
+
+
+
+bool ShaveChain(CTxDB& txdb)
+{
+	int iHaircut = 100;
+	int iTarget = 0;
+	int iStart = 0;
+    printf("Shaving %f blocks off of main chain\n",(double)iHaircut);
+	CBlockIndex* pHaircut;
+    CBlockIndex* pBarber = pindexBest;
+
+	if (!pBarber) 
+	{
+		printf("We have no best block.  This is not a good situation.  \r\n");
+		iStart = GetNumBlocksOfPeers() - 250;
+	}
+	else
+	{
+		iStart = pindexBest->nHeight;
+	}
+
+	if (iStart < 1) iStart=1;
+	iTarget = iStart-iHaircut;
+	if (iTarget < 1) iTarget=1;
+	pBarber = FindBlockByHeight(iStart);
+    list<CTransaction> vResurrect;
+	vector<CBlockIndex*> vDisconnect;
+   	if (!pBarber)
+	{
+		printf("ShaveChain(): Cant find start block. Failed. \r\n");
+		return false;
+	}
+
+	bool bHaircutFailed = false;
+
+	while (pBarber && pBarber->nHeight > iTarget)
+	{
+			if (!pBarber || !pBarber->pprev) break;
+	
+			// Remove the block
+		    CBlock block;
+		    if (!block.ReadFromDisk(pBarber)) 
+			{
+					pBarber = pBarber->pprev;
+					continue;
+			}
+		    if (!block.DisconnectBlock(txdb, pBarber))
+			{
+				printf("ShaveChain() : DisconnectBlock %s failed", pBarber->GetBlockHash().ToString().substr(0,20).c_str());
+				pBarber = pBarber->pprev;
+				bHaircutFailed = true;
+				continue;
+			}
+		    // Queue memory transactions to resurrect.
+		    BOOST_REVERSE_FOREACH(const CTransaction& tx, block.vtx)
+			    if (!(tx.IsCoinBase() || tx.IsCoinStake()) && pBarber->nHeight > Checkpoints::GetTotalBlocksEstimate())
+				    vResurrect.push_front(tx);
+ 	        vDisconnect.push_back(pBarber);
+			pBarber = pBarber->pprev;
+			pHaircut = pBarber;
+			printf("Shaving block %f; ",(double)pBarber->nHeight);
+	}
+	
+	if (!pHaircut)
+	{
+		printf("ShaveChain(): No new best; failed.");
+		return false;
+	}
+	
+    if (!txdb.WriteHashBestChain(pHaircut->GetBlockHash()))
+        return error("ShaveChain() : WriteHashBestChain failed");
+
+    // Make sure it's successfully written to disk before changing memory structure
+    //if (!txdb.TxnCommit())        return error("ShaveChain() : TxnCommit failed");
+	
+    // Buzz each block pointer
+    BOOST_FOREACH(CBlockIndex* pindex, vDisconnect)
+        if (pindex->pprev)
+            pindex->pprev->pnext = NULL;
+
+    // Resurrect memory transactions that were in the disconnected branch
+    BOOST_FOREACH(CTransaction& tx, vResurrect)
+        AcceptToMemoryPool(mempool, tx, NULL);
+
+	CBlock block;
+	if (!block.ReadFromDisk(pHaircut)) 
+	{
+		printf("ShaveChain(): Fatal Error while reading new best block.\r\n");
+		return false;
+	}
+	
+	if (!block.SetBestChain(txdb, pHaircut))
+    {
+		printf("ShaveChain(): Fatal Error while setting best chain inner.\r\n");
+		return false;
+	}
+    
+	if (bHaircutFailed) return false;
+
+    printf("ShaveChain: done\n");
+    return true;
+}
+
 
 
 bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
@@ -3580,28 +3697,23 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
         // Switch to new best branch
         if (!Reorganize(txdb, pindexIntermediate))
         {
-			 	REORGANIZE_FAILED++;
 				std::string suppressreboot = GetArg("-suppressreboot", "true");
-				
 				txdb.TxnAbort();
-				// Shave 100 blocks off the chain here
-				if (pindexBest)
+				// Since we failed to re-organize, we must try to shave blocks off the chain:
+				bool fResult = false;
+				if (bResearchAgeEnabled) fResult = ShaveChain(txdb);
+				if (!fResult)
 				{
-					int nNewIndex = pindexBest->nHeight - 250;
-					if (nNewIndex < 1) nNewIndex = 1;
-					CBlockIndex* pblockindex = FindBlockByHeight(nNewIndex);
-					if (pblockindex)
-					{
-						pindexNew = pblockindex;
-						pindexBest = pblockindex;
-						printf("Shaving 250 blocks off of the chain\r\n");
-					}
+					InvalidChainFound(pindexNew);
+					TallyNetworkAverages(false);
+				 	REORGANIZE_FAILED++;
+					return error("SetBestChain() : Reorganize failed");
 				}
-				// End of Shaving 100 blocks off of the chain
-				InvalidChainFound(pindexNew);
-				TallyNetworkAverages(false);
-
-				return error("SetBestChain() : Reorganize failed");
+				else
+				{
+					printf("Successfully shaved blocks off of the chain.");
+					return true;
+				}
 		}
 		REORGANIZE_FAILED=0;
 			
@@ -3913,7 +4025,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3425) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-					if (bv < 3488 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
+					if (bv < 3490 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
 			}
 
 			if (bb.cpid != "INVESTOR")
@@ -4671,7 +4783,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 7285;
+		nGrandfather = 7852;
 		nNewIndex = 10;
 		bResearchAgeEnabled = true;
 		bRemotePaymentsEnabled = false;
@@ -5415,7 +5527,7 @@ StructCPID GetLifetimeCPID(std::string cpid)
 						if (pblockindex->sCPID == cpid)
 						{
 							StructCPID stCPID = GetInitializedStructCPID2(pblockindex->sCPID,mvResearchAge);
-							if (((double)pblockindex->nHeight) > stCPID.LastBlock)
+							if (((double)pblockindex->nHeight) > stCPID.LastBlock && pblockindex->nResearchSubsidy > 0)
 							{
 								stCPID.LastBlock = (double)pblockindex->nHeight;
 								stCPID.BlockHash = pblockindex->GetBlockHash().GetHex();
@@ -5429,7 +5541,7 @@ StructCPID GetLifetimeCPID(std::string cpid)
 								stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
 							}
 
-							if (((double)pblockindex->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime = (double)pblockindex->nTime;
+							if (((double)pblockindex->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime  = (double)pblockindex->nTime;
 							if (((double)pblockindex->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pblockindex->nTime;
 							mvResearchAge[pblockindex->sCPID]=stCPID;
 														
@@ -6135,7 +6247,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 8-5-2015
-		if (pfrom->nVersion < 180301 && fTestNet)
+		if (pfrom->nVersion < 180302 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -7328,7 +7440,7 @@ std::string NN(std::string value)
 
 std::string GetNeuralNetworkSuperBlock()
 {
-	//Only try to stake a superblock if the contract expired in the coin And the superblock is the highest popularity block
+	//Only try to stake a superblock if the contract expired And the superblock is the highest popularity block
 	
 	int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
 	if ((double)superblock_age > (double)(12*60*60))
@@ -7516,17 +7628,8 @@ MiningCPID DeserializeBoincBlock(std::string block)
 
 void printbool(std::string comment, bool boo)
 {
-	if (boo)
-	{
-
-		printf("%s : TRUE",comment.c_str());
-	}
-	else
-	{
-		printf("%s : FALSE",comment.c_str());
-
-	}
-
+	std::string b = boo ? "TRUE" : "FALSE";
+	printf("%s : %s",comment.c_str(),b.c_str());
 }
 
  
@@ -7738,10 +7841,7 @@ std::string strReplace(std::string& str, const std::string& oldStr, const std::s
 std::string LowerUnderscore(std::string data)
 {
 	boost::to_lower(data);
-//	printf("before %s",data.c_str();
-
 	data = strReplace(data,"_"," ");
-	//printf("after %s\r\n",data.c_str());
 	return data;
 }
 
@@ -9095,6 +9195,8 @@ std::string getHardwareID()
 	    ele1 = getMacAddress();
 	#endif
 	ele1 += ":" + getCpuHash();
+	ele1 += ":" + getHardDriveSerial();
+
 	std::string hwid = RetrieveMd5(ele1);
 	return hwid;
 }
@@ -9130,3 +9232,32 @@ static void getCpuid( unsigned int* p, unsigned int ax )
 
 
 
+std::string SystemCommand(const char* cmd) 
+{
+    FILE* pipe = popen(cmd, "r");
+    if (!pipe) return "ERROR";
+    char buffer[128];
+    std::string result = "";
+    while(!feof(pipe)) {
+    	if(fgets(buffer, 128, pipe) != NULL)
+    		result += buffer;
+    }
+    pclose(pipe);
+    return result;
+}
+
+
+std::string getHardDriveSerial()
+{
+	if (!msHDDSerial.empty()) return msHDDSerial;
+	std::string cmd1 = "";
+	#ifdef WIN32
+		cmd1 = "wmic path win32_physicalmedia get SerialNumber";
+	#else
+		cmd1 = "hdparm -i /dev/hda | grep -i serial";
+	#endif
+	std::string result = SystemCommand(cmd1.c_str());
+	printf("result %s",result.c_str());
+	msHDDSerial = result;
+	return result;
+}

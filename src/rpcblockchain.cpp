@@ -11,11 +11,14 @@
 #include "init.h" // for pwalletMain
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
+#include "txdb.h"
 
 using namespace json_spirit;
 using namespace std;
 double OwedByAddress(std::string address);
 extern std::string YesNo(bool bin);
+std::string getHardDriveSerial();
+
 double Cap(double dAmt, double Ceiling);
 extern std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, std::string sSig, int64_t MinimumBalance);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
@@ -26,6 +29,7 @@ double GetNetworkPaymentsTotal();
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
 bool ComputeNeuralNetworkSupermajorityHashes();
 bool UpdateNeuralNetworkQuorumData();
+bool ShaveChain(CTxDB& txdb);
 extern Array LifetimeReport(std::string cpid);
 Array StakingReport();
 extern std::string AddContract(std::string sType, std::string sName, std::string sContract);
@@ -1650,6 +1654,20 @@ Value execute(const Array& params, bool fHelp)
 			UpdateNeuralNetworkQuorumData();
 			entry.push_back(Pair("Updated.",""));
 			results.push_back(entry);
+	}
+	else if (sItem == "shavechain")
+	{
+		 CTxDB txdb;
+		 if (ShaveChain(txdb))
+		 {
+		 	entry.push_back(Pair("Shave Succeeded.",(double)pindexBest->nHeight));
+   			results.push_back(entry);
+		 }
+		 else
+		 {
+			entry.push_back(Pair("Shave Failed.",(double)pindexBest->nHeight));
+   			results.push_back(entry);
+		 }
 	}
 	else if (sItem == "vote")
 	{
@@ -3757,6 +3775,13 @@ Value listitem(const Array& params, bool fHelp)
 			return results;
 	}
 
+	if (sitem == "harddriveserial")
+	{
+		Object entry;
+		std::string response = getHardDriveSerial();
+		entry.push_back(Pair("Serial",response));
+		results.push_back(entry);
+	}
 	if (sitem == "rsa")
 	{
 	
