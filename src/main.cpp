@@ -3569,9 +3569,8 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
 		MiningCPID bb = GetInitializedMiningCPID(pindex->GetBlockHash().GetHex(), mvBlockIndex);
 	   	bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
 		mvBlockIndex[pindex->GetBlockHash().GetHex()] = bb;
-			
-
     }
+
     if (!txdb.WriteHashBestChain(pindexNew->GetBlockHash()))
         return error("Reorganize() : WriteHashBestChain failed");
 
@@ -3581,26 +3580,36 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
 
     // Disconnect shorter branch
     BOOST_FOREACH(CBlockIndex* pindex, vDisconnect)
+	{
         if (pindex->pprev)
+		{
             pindex->pprev->pnext = NULL;
+			if (bResearchAgeEnabled) 	StructCPID st1 = GetLifetimeCPID(pindex->pprev->sCPID);
+		}
+	}
 
     // Connect longer branch
     BOOST_FOREACH(CBlockIndex* pindex, vConnect)
+	{
         if (pindex->pprev)
+		{
             pindex->pprev->pnext = pindex;
+			if (bResearchAgeEnabled) 	StructCPID st2 = GetLifetimeCPID(pindex->pprev->sCPID);
+		}
+	}
 
     // Resurrect memory transactions that were in the disconnected branch
     BOOST_FOREACH(CTransaction& tx, vResurrect)
         AcceptToMemoryPool(mempool, tx, NULL);
 
     // Delete redundant memory transactions that are in the connected branch
-    BOOST_FOREACH(CTransaction& tx, vDelete) {
+    BOOST_FOREACH(CTransaction& tx, vDelete) 
+	{
         mempool.remove(tx);
         mempool.removeConflicts(tx);
     }
 
 	// Gridcoin: Now that the chain is back in order, Fix the researchers who were disrupted:
-	//FixInvalidResearchTotals(vDisconnect,vConnect); <- To decommission 
 
 	TallyNetworkAverages(false);
 
@@ -4025,7 +4034,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3425) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-					if (bv < 3490 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
+					if (bv < 3491 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
 			}
 
 			if (bb.cpid != "INVESTOR")
@@ -4783,7 +4792,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 7852;
+		nGrandfather = 9689;
 		nNewIndex = 10;
 		bResearchAgeEnabled = true;
 		bRemotePaymentsEnabled = false;
@@ -5507,6 +5516,12 @@ void AddCPIDBlockHash(std::string cpid, std::string blockhash)
 StructCPID GetLifetimeCPID(std::string cpid)
 {
 	//Eliminates issues with reorgs, disconnects, double counting, etc.. (8-28-2015)
+	if (cpid.empty() || cpid=="INVESTOR") 
+	{
+		StructCPID stDummy = GetInitializedStructCPID2("INVESTOR",mvResearchAge);
+		return stDummy;
+	}
+
 	std::string hashes = GetCPIDBlockHashes(cpid);
 	std::vector<std::string> vHashes = split(hashes,";");
     ZeroOutResearcherTotals(cpid);
@@ -6247,7 +6262,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 8-5-2015
-		if (pfrom->nVersion < 180302 && fTestNet)
+		if (pfrom->nVersion < 180303 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -8875,6 +8890,9 @@ int64_t ComputeResearchAccrual(std::string cpid, std::string operation, CBlockIn
 		//No prior block exists... Newbies get .01 age to bootstrap the CPID (otherwise they will not have any prior block to refer to, thus cannot get started):
 		return dCurrentMagnitude > 0 ? ((dCurrentMagnitude/100)*COIN) : 0;
 	}
+	// To prevent reorgs and checkblock errors, ensure the research age is > 10 blocks wide:
+	int iRABlockSpan = pindexLast->nHeight - pHistorical->nHeight;
+
 	AvgMagnitude = (pHistorical->nMagnitude + dCurrentMagnitude) / 2;
 	dAccrualAge = ((double)pindexLast->nTime - (double)pHistorical->nTime) / 86400;
 	if (dAccrualAge < 0) dAccrualAge=0;
@@ -8893,10 +8911,12 @@ int64_t ComputeResearchAccrual(std::string cpid, std::string operation, CBlockIn
 			printf("Researcher PPD %f > Reference PPD %f for CPID %s with Lifetime Avg Mag of %f, Days %f \r\n",PPD,ReferencePPD,cpid.c_str(),dAvgMag,days);
 			Accrual=.01*COIN;
 	}
+	// Note that if the RA Block Span < 10, we want to return 0 for the Accrual Amount so the CPID can still receive an accurate accrual in the future
+	if (iRABlockSpan < 10) Accrual = 0;
 
 	double verbosity = (operation == "createnewblock" || operation == "createcoinstake") ? 10 : 1000;
-	if (fDebug3 && LessVerbose(verbosity)) printf(" Operation %s, Accrual %f, StakeHeight %f, HistoryHeight%f,  AccrualAge %f, AvgMag %f, MagUnit %f, PPD %f, Reference PPD %f  \r\n",
-		operation.c_str(),CoinToDouble(Accrual),(double)pindexLast->nHeight,		
+	if (fDebug3 && LessVerbose(verbosity)) printf(" Operation %s, ComputedAccrual %f, StakeHeight %f, RABlockSpan %f, HistoryHeight%f, AccrualAge %f, AvgMag %f, MagUnit %f, PPD %f, Reference PPD %f  \r\n",
+		operation.c_str(),CoinToDouble(Accrual),(double)pindexLast->nHeight,(double)iRABlockSpan,		
 		(double)pHistorical->nHeight,	dAccrualAge,AvgMagnitude,dMagnitudeUnit, PPD, ReferencePPD);
 	return Accrual;
 }
