@@ -2152,7 +2152,7 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 			int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
 			int64_t nBoinc    = GetProofOfResearchReward(cpid,VerifyingBlock);
 			int64_t nSubsidy  = nInterest + nBoinc;
-			if (fDebug || GetBoolArg("-printcreation"))
+			if (fDebug10 || GetBoolArg("-printcreation"))
 			{
 				printf("GetProofOfStakeReward(): create=%s nCoinAge=%"PRId64" nBoinc=%"PRId64"   \n",
 				FormatMoney(nSubsidy).c_str(), nCoinAge, nBoinc);
@@ -2185,11 +2185,13 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 			// ToDo For Prod: For any subsidy > 30 day duration, ensure 100% that we have a midpoint magnitude in Every Period, otherwise, make subsidy 0
 			// ToDo For Prod: Ensure no magnitudes are out of bounds to ensure we do not generate an insane payment
 			// ToDo For Prod: Any subsidy with a duration wider than 6 months should not be paid
-			int64_t maxStakeReward = GetProofOfStakeMaxReward(nCoinAge, nFees, locktime)*180;
+			
+			int64_t maxStakeReward = GetMaximumBoincSubsidy(locktime) * COIN * 255;
+
 			if (nBoinc > maxStakeReward) nBoinc = maxStakeReward;
 			int64_t nSubsidy = nInterest + nBoinc;
 
-			if (fDebug || GetBoolArg("-printcreation"))
+			if (fDebug10 || GetBoolArg("-printcreation"))
 			{
 				printf("GetProofOfStakeReward(): create=%s nCoinAge=%"PRId64" nBoinc=%"PRId64"   \n",
 				FormatMoney(nSubsidy).c_str(), nCoinAge, nBoinc);
@@ -4034,7 +4036,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3425) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-					if (bv < 3491 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
+					if (bv < 3492 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
 			}
 
 			if (bb.cpid != "INVESTOR")
@@ -4792,7 +4794,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 9689;
+		nGrandfather = 10465;
 		nNewIndex = 10;
 		bResearchAgeEnabled = true;
 		bRemotePaymentsEnabled = false;
@@ -6262,7 +6264,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 8-5-2015
-		if (pfrom->nVersion < 180303 && fTestNet)
+		if (pfrom->nVersion < 180304 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -9274,10 +9276,10 @@ std::string getHardDriveSerial()
 	#ifdef WIN32
 		cmd1 = "wmic path win32_physicalmedia get SerialNumber";
 	#else
-		cmd1 = "hdparm -i /dev/hda | grep -i serial";
+		cmd1 = "ls /dev/disk/by-uuid";
 	#endif
 	std::string result = SystemCommand(cmd1.c_str());
-	printf("result %s",result.c_str());
+	if (fDebug3) printf("result %s",result.c_str());
 	msHDDSerial = result;
 	return result;
 }

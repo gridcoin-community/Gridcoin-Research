@@ -2141,7 +2141,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
         int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,
 			pindexBest->nTime,pindexBest,"createcoinstake",OUT_POR,out_interest,dAccrualAge,dAccrualMagnitudeUnit,dAccrualMagnitude);
 
-		//7-12-2015 Accrual System - Reserved for Future Use
+		//9-2-2015 Accrual System - Reserved for Future Use
 	
 		MiningCPID miningcpid = GetNextProject(false);
 		uint256 pbh = 0;
