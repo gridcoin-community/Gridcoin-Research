@@ -953,6 +953,9 @@ void BitcoinGUI::createActions()
 	foundationAction->setStatusTip(tr("Foundation"));
 	foundationAction->setMenuRole(QAction::TextHeuristicRole);
 
+	faqAction = new QAction(QIcon(":/icons/bitcoin"), tr("FA&Q"), this);
+	faqAction->setStatusTip(tr("Interactive FAQ"));
+	faqAction->setMenuRole(QAction::TextHeuristicRole);
 
     optionsAction = new QAction(QIcon(":/icons/options"), tr("&Options..."), this);
     optionsAction->setToolTip(tr("Modify configuration options for GridCoin"));
@@ -1002,6 +1005,8 @@ void BitcoinGUI::createActions()
 	connect(ticketListAction, SIGNAL(triggered()), this, SLOT(ticketListClicked()));
 
 	connect(foundationAction, SIGNAL(triggered()), this, SLOT(foundationClicked()));
+	connect(faqAction, SIGNAL(triggered()), this, SLOT(faqClicked()));
+
 	connect(galazaAction, SIGNAL(triggered()), this, SLOT(galazaClicked()));
 	connect(newUserWizardAction, SIGNAL(triggered()), this, SLOT(newUserWizardClicked()));
 
@@ -1078,6 +1083,7 @@ void BitcoinGUI::createMenuBar()
 	}
 
 	qmAdvanced->addSeparator();
+	qmAdvanced->addAction(faqAction);
 	qmAdvanced->addAction(foundationAction);
 	
 
@@ -1696,7 +1702,6 @@ void BitcoinGUI::ticketListClicked()
 	qtSetSessionInfo(DefaultWalletAddress(), GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.Magnitude);
     globalcom->dynamicCall("ShowTicketList()");
 #endif
-
 }
 
 
@@ -1712,10 +1717,18 @@ void BitcoinGUI::foundationClicked()
 	qtSetSessionInfo(DefaultWalletAddress(), GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.Magnitude);
     globalcom->dynamicCall("ShowFoundation()");
 #endif
-
 }
 
 
+void BitcoinGUI::faqClicked()
+{
+#ifdef WIN32
+	if (!bGlobalcomInitialized) return;
+	std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
+	double function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
+	globalcom->dynamicCall("ShowFAQ()");
+#endif
+}
 
 
 void BitcoinGUI::newUserWizardClicked()

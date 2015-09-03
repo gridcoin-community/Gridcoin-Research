@@ -19,6 +19,7 @@ Module modGRC
     End Structure
     Private prodURL As String = "http://download.gridcoin.us/download/downloadstake/"
     Private testURL As String = "http://download.gridcoin.us/download/downloadstaketestnet/"
+    Public mRowIndex As Long = 0
 
     Public msGenericDictionary As New Dictionary(Of String, String)
     Public msRPCCommand As String = ""
@@ -27,6 +28,7 @@ Module modGRC
     Public mfrmMining As frmMining
     Public mfrmProjects As frmNewUserWizard
     Public mfrmSql As frmSQL
+    Public mfrmFAQ As frmFAQ
     Public mfrmTicketAdd As frmTicketAdd
     Public mfrmFoundation As frmFoundation
 
@@ -74,6 +76,25 @@ Module modGRC
             Return "Unable to execute vote, " + ex.Message
         End Try
     End Function
+    Public Sub AddHeading(iPosition As Integer, sName As String, oDGV As DataGridView, bAutoFit As Boolean)
+
+        Dim dc As New System.Windows.Forms.DataGridViewColumn
+        dc.Name = sName
+        Dim dgvct As New System.Windows.Forms.DataGridViewTextBoxCell
+        dgvct.Style.BackColor = Drawing.Color.Black
+        dgvct.Style.ForeColor = Drawing.Color.Lime
+        dc.CellTemplate = dgvct
+        oDGV.Columns.Add(dc)
+
+        Dim dgcc As New DataGridViewCellStyle
+        dgcc.ForeColor = System.Drawing.Color.SandyBrown
+        oDGV.ColumnHeadersDefaultCellStyle = dgcc
+
+        oDGV.Columns(iPosition).AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells
+        oDGV.Columns(iPosition).SortMode = DataGridViewColumnSortMode.Automatic
+
+    End Sub
+
     Public Sub PopulateHeadings(vHeading() As String, oDGV As DataGridView, bAutoFit As Boolean)
 
         For x = 0 To UBound(vHeading)
@@ -966,7 +987,19 @@ Module modGRC
         End Try
     End Function
 
+    Public Function GlobalCDate(sDate As String) As DateTime
+        Try
 
+            Dim year As Long = Val(Mid(sDate, 7, 4))
+            Dim day As Long = Val(Mid(sDate, 4, 2))
+            Dim m As Long = Val(Mid(sDate, 1, 2))
+            Dim dt As DateTime = DateSerial(year, m, day)
+            Return dt
+        Catch ex As Exception
+            Return CDate(Format(sDate, "mm-dd-yyyy"))
+        End Try
+
+    End Function
 
     Public Function AES512EncryptData(b() As Byte, Pass As String) As Byte()
         Try
@@ -1076,4 +1109,53 @@ Public Class MyWebClient
     End Function
 End Class
 
+
+Namespace GridcoinRichUI
+    Public Class DataGridViewRichTextBoxColumn
+        Inherits DataGridViewColumn
+        Public Sub New()
+
+            MyBase.New(New DataGridViewRichTextBoxCell())
+        End Sub
+    End Class
+
+    Public Class DataGridViewRichTextBoxCell
+        Inherits DataGridViewTextBoxCell
+
+        Public Overrides ReadOnly Property FormattedValueType() As Type
+            Get
+                Return GetType(String)
+            End Get
+        End Property
+
+        Protected Overrides Sub Paint(graphics As Graphics, clipBounds As Rectangle, cellBounds As Rectangle, _
+                                      rowIndex As Integer, cellState As DataGridViewElementStates, value As Object, _
+         formattedValue As Object, errorText As String, cellStyle As DataGridViewCellStyle, _
+         advancedBorderStyle As DataGridViewAdvancedBorderStyle, paintParts As DataGridViewPaintParts)
+            MyBase.Paint(graphics, clipBounds, cellBounds, rowIndex, cellState, Nothing, _
+             Nothing, errorText, cellStyle, advancedBorderStyle, paintParts)
+            Dim rtb = New RichTextBox()
+
+            'rtb.BackColor = Color.Black
+            'rtb.ForeColor = Color.LimeGreen
+
+            If value.ToString().StartsWith("{\rtf") Then
+                rtb.Rtf = value.ToString()
+            Else
+                rtb.Text = value.ToString()
+            End If
+            Dim b As System.Drawing.Brush
+            If rowIndex = mRowIndex Then
+                b = Brushes.Yellow
+            Else
+                b = Brushes.Yellow
+            End If
+            If rtb.Text <> String.Empty Then
+                ' graphics.DrawString(rtb.Text, DataGridView.DefaultFont, Brushes.LimeGreen, cellBounds.Left, cellBounds.Top)
+                graphics.DrawString(rtb.Text, DataGridView.DefaultFont, b, cellBounds.Left, cellBounds.Top)
+
+            End If
+        End Sub
+    End Class
+End Namespace
 

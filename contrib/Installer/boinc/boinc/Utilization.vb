@@ -265,6 +265,15 @@ Public Class Utilization
             Log("Error while transitioning to frmSQL" + ex.Message)
         End Try
     End Function
+    Public Function ShowFAQ()
+        Try
+            mfrmFaq = New frmFAQ
+            mfrmFaq.show()
+
+        Catch ex As Exception
+            Log("Error:FAQ")
+        End Try
+    End Function
     Public Function ShowTicketAdd()
         Try
             mfrmTicketAdd = New frmTicketAdd

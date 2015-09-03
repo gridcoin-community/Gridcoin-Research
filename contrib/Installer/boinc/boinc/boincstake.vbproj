@@ -95,6 +95,30 @@
   <ItemGroup>
     <Compile Include="clsMailFunctions.vb" />
     <Compile Include="clsQuorumHashingAlgorithm.cls" />
+    <Compile Include="frmFaqAnswerView.Designer.vb">
+      <DependentUpon>frmFaqAnswerView.vb</DependentUpon>
+    </Compile>
+    <Compile Include="frmFaqAnswerView.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmAddFaqQuestion.Designer.vb">
+      <DependentUpon>frmAddFaqQuestion.vb</DependentUpon>
+    </Compile>
+    <Compile Include="frmAddFaqQuestion.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmAddFaqAnswer.Designer.vb">
+      <DependentUpon>frmAddFaqAnswer.vb</DependentUpon>
+    </Compile>
+    <Compile Include="frmAddFaqAnswer.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmFAQ.Designer.vb">
+      <DependentUpon>frmFAQ.vb</DependentUpon>
+    </Compile>
+    <Compile Include="frmFAQ.vb">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="frmChangePassword.Designer.vb">
       <DependentUpon>frmChangePassword.vb</DependentUpon>
     </Compile>
@@ -243,6 +267,18 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="frmFaqAnswerView.resx">
+      <DependentUpon>frmFaqAnswerView.vb</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="frmAddFaqQuestion.resx">
+      <DependentUpon>frmAddFaqQuestion.vb</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="frmAddFaqAnswer.resx">
+      <DependentUpon>frmAddFaqAnswer.vb</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="frmFAQ.resx">
+      <DependentUpon>frmFAQ.vb</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="frmChangePassword.resx">
       <DependentUpon>frmChangePassword.vb</DependentUpon>
       <SubType>Designer</SubType>

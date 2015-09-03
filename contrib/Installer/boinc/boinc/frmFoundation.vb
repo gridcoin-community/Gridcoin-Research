@@ -7,20 +7,7 @@ Public Class frmFoundation
 
     Public WithEvents cms As New ContextMenuStrip
     Public _GridRowIndex As Long = 0
-    Private Function GlobalCDate(sDate As String) As DateTime
-        Try
-
-            Dim year As Long = Val(Mid(sDate, 7, 4))
-            Dim day As Long = Val(Mid(sDate, 4, 2))
-            Dim m As Long = Val(Mid(sDate, 1, 2))
-            Dim dt As DateTime = DateSerial(year, m, day)
-            Return dt
-        Catch ex As Exception
-            Return CDate(Format(sDate, "mm-dd-yyyy"))
-        End Try
-
-    End Function
-
+  
     Private Sub frmFoundation_Load(sender As System.Object, e As System.EventArgs) Handles MyBase.Load
         Dim sVoting As String = msGenericDictionary("POLLS")
         Log(sVoting)

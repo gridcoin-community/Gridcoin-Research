@@ -116,6 +116,7 @@ private:
 	QAction *galazaAction;
 	QAction *newUserWizardAction;
 	QAction *foundationAction;
+	QAction *faqAction;
 
     QAction *verifyMessageAction;
     QAction *aboutAction;
@@ -215,6 +216,7 @@ private slots:
 	void sqlClicked();
 	void miningClicked();
 	void votingClicked();
+	void faqClicked();
 
 	void tickerClicked();
 	void ticketListClicked();
