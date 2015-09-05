@@ -94,7 +94,7 @@ Public Class frmFaqAnswerView
     Private Sub frmFaqAnswerView_Load(sender As System.Object, e As System.EventArgs) Handles MyBase.Load
         If mGRCData Is Nothing Then mGRCData = New GRCSec.GridcoinData
 
-        'List the active Foundation Expenses
+        'List the Answers
         Dim sHeading As String = "#;Answer;Added"
 
         dgv.Rows.Clear()
@@ -129,8 +129,7 @@ Public Class frmFaqAnswerView
         dr = mGRCData.mGetFAQAnswers(_id)
         If dr Is Nothing Then mbEmpty = True : Exit Sub
 
-
-        dgv.Columns(1).MinimumWidth = 750
+        dgv.Columns(1).MinimumWidth = 800
         lblTitle.Text = ""
         Try
             While dr.Read

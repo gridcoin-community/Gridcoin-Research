@@ -4045,7 +4045,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 
 			if (bb.cpid != "INVESTOR")
 			{
-    			if (bb.projectname == "") 	return DoS(1,error("PoR Project Name invalid"));
+    			if (bb.projectname.empty() && !bResearchAgeEnabled) 	return DoS(1,error("PoR Project Name invalid"));
 	    		if (!IsCPIDValidv2(bb,height1))
 				{
 						return error("Bad CPID : height %f, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc %s",(double)height1,
@@ -4551,9 +4551,6 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 
     // Block signature can be malleated in such a way that it increases block size up to maximum allowed by protocol
     // For now we just strip garbage from newly received blocks
-    //if (!ReserealizeBlockSignature(pblock))        printf("WARNING: ProcessBlock() : ReserealizeBlockSignature FAILED\n");
-
-
 
     // Preliminary checks 1-19-2015 ** Note: Mint is zero before block is signed
     if (!pblock->CheckBlock(pindexBest->nHeight, 100*COIN))
@@ -7501,8 +7498,19 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 	std::string delim = "<|>";
 	std::string version = FormatFullVersion();
 	mcpid.GRCAddress = DefaultWalletAddress();
-	mcpid.Organization = DefaultOrg();
-	mcpid.OrganizationKey = DefaultBlockKey(8); //Only reveal 8 characters
+	//9-4-2015
+	if (!bResearchAgeEnabled)
+	{
+		mcpid.Organization = DefaultOrg();
+		mcpid.OrganizationKey = DefaultBlockKey(8); //Only reveal 8 characters
+	}
+
+	if (bResearchAgeEnabled)
+	{
+		mcpid.projectname = "";
+		mcpid.rac = 0;
+		mcpid.NetworkRAC = 0;
+	}
 	int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
 	//7-25-2015 - Add the neural hash only if necessary
 	if ((double)superblock_age > (double)(12*60*60))

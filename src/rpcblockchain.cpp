@@ -403,21 +403,24 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
     if (block.IsProofOfStake())
         result.push_back(Pair("signature", HexStr(block.vchBlockSig.begin(), block.vchBlockSig.end())));
 	result.push_back(Pair("CPID", bb.cpid));
-	result.push_back(Pair("ProjectName", bb.projectname));
-	result.push_back(Pair("RAC", bb.rac));
-	result.push_back(Pair("NetworkRAC", bb.NetworkRAC));
+	if (!bResearchAgeEnabled)
+	{
+		result.push_back(Pair("ProjectName", bb.projectname));
+		result.push_back(Pair("RAC", bb.rac));
+		result.push_back(Pair("NetworkRAC", bb.NetworkRAC));
+		result.push_back(Pair("RSAWeight",bb.RSAWeight));
+	}
+	
 	result.push_back(Pair("Magnitude", bb.Magnitude));
 	if (fDebug3) result.push_back(Pair("BoincHash",block.vtx[0].hashBoinc));
-
-	result.push_back(Pair("RSAWeight",bb.RSAWeight));
 	result.push_back(Pair("LastPaymentTime",TimestampToHRDate(bb.LastPaymentTime)));
+
 	result.push_back(Pair("ResearchSubsidy",bb.ResearchSubsidy));
 	result.push_back(Pair("ResearchAge",bb.ResearchAge));
 	result.push_back(Pair("ResearchMagnitudeUnit",bb.ResearchMagnitudeUnit));
 	result.push_back(Pair("ResearchAverageMagnitude",bb.ResearchAverageMagnitude));
 	result.push_back(Pair("LastPORBlockHash",bb.LastPORBlockHash));
-
-	
+		
 
 	double interest = mint-bb.ResearchSubsidy;
 	result.push_back(Pair("Interest",bb.InterestSubsidy));
