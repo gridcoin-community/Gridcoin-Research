@@ -2690,7 +2690,7 @@ Array MagnitudeReport(std::string cpid)
 										entry.push_back(Pair("Tx Count",stCPID.Accuracy));
 
 										results.push_back(entry);
-										if (cpid==msPrimaryCPID)
+										if (cpid==msPrimaryCPID && !msPrimaryCPID.empty() && msPrimaryCPID != "INVESTOR")
 										{
 											msRSAOverview = "Exp PPD: " + RoundToString(dExpected14/14,0) 
 												+ ", Act PPD: " + RoundToString(structMag.payments/14,0) 

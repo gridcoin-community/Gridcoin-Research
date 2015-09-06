@@ -3192,7 +3192,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		double staked = cdbl("0" + ReadCache("stakedbyaddress",bb.GRCAddress),0);
 		if (staked > 60)
 		{
-					//Client should not have staked more than 60 blocks in the last 500 blocks after efficient version mandatory upgrade
 					//return error("Client staked more than 60 blocks over the last 500 blocks; block rejected\r\n");
 		}
 
@@ -3207,10 +3206,15 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			pindex, "connectblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 		if (bb.cpid != "INVESTOR" && dStakeReward > 1)
 		{
-				if ((bb.ResearchSubsidy+bb.InterestSubsidy+1) < dStakeRewardWithoutFees)
+			    //ResearchAge: Since the best block may increment before the RA is connected but After the RA is computed, the ResearchSubsidy can sometimes be slightly smaller than we calculate here due to the RA timespan increasing.  So we will allow for time shift before rejecting the block.
+			    double dDrift = bResearchAgeEnabled ? bb.ResearchSubsidy*.15 : 1;
+				if (bResearchAgeEnabled && dDrift < 10) dDrift = 10;
+
+				if ((bb.ResearchSubsidy + bb.InterestSubsidy + dDrift) < dStakeRewardWithoutFees)
 				{
-						return error("ConnectBlock[] : Researchers Interest %f + Research %f and total Mint %f, [StakeReward] <> %f, with Out_Interest %f for CPID %s does not match calculated research subsidy",
-							(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,CoinToDouble(mint),dStakeReward,(double)OUT_INTEREST,bb.cpid.c_str());
+						return error("ConnectBlock[] : Researchers Interest %f + Research %f + TimeDrift %f and total Mint %f, [StakeReward] <> %f, with Out_Interest %f, OUT_POR %f, Fees %f, DPOR %f  for CPID %s does not match calculated research subsidy",
+							(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dDrift,CoinToDouble(mint),dStakeRewardWithoutFees,
+							(double)OUT_INTEREST,(double)OUT_POR,CoinToDouble(nFees),(double)DPOR_Paid,bb.cpid.c_str());
 				
 				}
 				if (bResearchAgeEnabled && BlockNeedsChecked(nTime))
@@ -4046,7 +4050,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3425) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-					if (bv < 3496 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
+					if (bv < 3497 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
 			}
 
 			if (bb.cpid != "INVESTOR")
@@ -4804,7 +4808,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 12985;
+		nGrandfather = 13155;
 		nNewIndex = 10;
 		bResearchAgeEnabled = true;
 		bRemotePaymentsEnabled = false;
@@ -6274,7 +6278,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 8-5-2015
-		if (pfrom->nVersion < 180307 && fTestNet)
+		if (pfrom->nVersion < 180308 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
