@@ -256,7 +256,7 @@ bool RecvLine2(SOCKET hSocket, string& strLine)
             {
                 // socket error
 	            int nErr = WSAGetLastError();
-                printf("recv failed: %d\n", nErr);
+                if (fDebug3) printf("recv socket err: %d\n", nErr);
                 return false;
             }
         }
@@ -320,7 +320,7 @@ bool RecvLine(SOCKET hSocket, string& strLine)
             {
                 // socket error
                 int nErr = WSAGetLastError();
-                printf("recv failed: %d\n", nErr);
+                if (fDebug10) printf("recv err: %d\n", nErr);
                 return false;
             }
         }
@@ -844,7 +844,10 @@ bool GetMyExternalIP2(const CService& addrConnect, const char* pszGet, const cha
 {
     SOCKET hSocket;
     if (!ConnectSocket(addrConnect, hSocket))
-        return error("GetMyExternalIP() : connection to %s failed", addrConnect.ToString().c_str());
+	{
+        if (fDebug10) printf("GetMyExternalIP() : unable to connect to %s ", addrConnect.ToString().c_str());
+		return false;
+	}
 
     send(hSocket, pszGet, strlen(pszGet), MSG_NOSIGNAL);
 
@@ -1034,10 +1037,10 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
 #ifdef WIN32
         u_long nOne = 1;
         if (ioctlsocket(hSocket, FIONBIO, &nOne) == SOCKET_ERROR)
-            printf("ConnectSocket() : ioctlsocket non-blocking setting failed, error %d\n", WSAGetLastError());
+            printf("ConnectSocket() : ioctlsocket non-blocking setting error %d\n", WSAGetLastError());
 #else
         if (fcntl(hSocket, F_SETFL, O_NONBLOCK) == SOCKET_ERROR)
-            printf("ConnectSocket() : fcntl non-blocking setting failed, error %d\n", errno);
+            printf("ConnectSocket() : fcntl non-blocking setting error %d\n", errno);
 #endif
 
         // Add node
@@ -1564,7 +1567,7 @@ void ThreadSocketHandler2(void* parg)
             {
                 int nErr = WSAGetLastError();
                 if (nErr != WSAEWOULDBLOCK)
-                    printf("socket error accept failed: %d\n", nErr);
+                    printf("socket error accept INVALID_SOCKET: %d\n", nErr);
             }
             else if (nInbound >= GetArg("-maxconnections", 250) - MAX_OUTBOUND_CONNECTIONS)
             {
@@ -1786,7 +1789,7 @@ void ThreadMapPort2(void* parg)
                     AddLocal(CNetAddr(externalIPAddress), LOCAL_UPNP);
                 }
                 else
-                    printf("UPnP: GetExternalIPAddress failed.\n");
+                    printf("UPnP: GetExternalIPAddress not successful.\n");
             }
         }
 
@@ -1802,7 +1805,7 @@ void ThreadMapPort2(void* parg)
 #endif
 
         if(r!=UPNPCOMMAND_SUCCESS)
-            printf("AddPortMapping(%s, %s, %s) failed with code %d (%s)\n",
+            printf("AddPortMapping(%s, %s, %s) unsuccessful with code %d (%s)\n",
                 port.c_str(), port.c_str(), lanaddr, r, strupnperror(r));
         else
             printf("UPnP Port Mapping successful.\n");
@@ -1830,7 +1833,7 @@ void ThreadMapPort2(void* parg)
 #endif
 
                 if(r!=UPNPCOMMAND_SUCCESS)
-                    printf("AddPortMapping(%s, %s, %s) failed with code %d (%s)\n",
+                    printf("AddPortMapping(%s, %s, %s) was not successful - code %d (%s)\n",
                         port.c_str(), port.c_str(), lanaddr, r, strupnperror(r));
                 else
                     printf("UPnP Port Mapping successful.\n");;
@@ -1857,7 +1860,7 @@ void MapPort()
     if (fUseUPnP && vnThreadsRunning[THREAD_UPNP] < 1)
     {
         if (!NewThread(ThreadMapPort, NULL))
-            printf("Error: ThreadMapPort(ThreadMapPort) failed\n");
+            printf("Error: ThreadMapPort(ThreadMapPort) did not succeed\n");
     }
 }
 #else
@@ -2432,7 +2435,7 @@ bool BindListenPort(const CService &addrBind, string& strError)
     int ret = WSAStartup(MAKEWORD(2,2), &wsadata);
     if (ret != NO_ERROR)
     {
-        strError = strprintf("Error: TCP/IP socket library failed to start (WSAStartup returned error %d)", ret);
+        strError = strprintf("Error: TCP/IP socket library refused to start (WSAStartup returned error %d)", ret);
         printf("%s\n", strError.c_str());
         return false;
     }
@@ -2513,7 +2516,7 @@ bool BindListenPort(const CService &addrBind, string& strError)
     // Listen for incoming connections
     if (listen(hListenSocket, SOMAXCONN) == SOCKET_ERROR)
     {
-        strError = strprintf("Error: Listening for incoming connections failed (listen returned error %d)", WSAGetLastError());
+        strError = strprintf("Error: Listening for incoming connections died with %d", WSAGetLastError());
         printf("%s\n", strError.c_str());
         return false;
     }
@@ -2702,7 +2705,7 @@ public:
         BOOST_FOREACH(SOCKET hListenSocket, vhListenSocket)
             if (hListenSocket != INVALID_SOCKET)
                 if (closesocket(hListenSocket) == SOCKET_ERROR)
-                    printf("closesocket(hListenSocket) failed with error %d\n", WSAGetLastError());
+                    printf("closesocket(hListenSocket) died with error %d\n", WSAGetLastError());
 
 #ifdef WIN32
         // Shutdown Windows Sockets

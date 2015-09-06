@@ -233,7 +233,7 @@ void ThreadIRCSeed2(void* parg)
         SOCKET hSocket;
         if (!ConnectSocket(addrConnect, hSocket))
         {
-            printf("IRC connect failed\n");
+            if (fDebug10) printf("IRC connection problem \r\n");
             nErrorWait = nErrorWait * 11 / 10;
             if (Wait(nErrorWait += 60))
                 continue;
@@ -335,7 +335,7 @@ void ThreadIRCSeed2(void* parg)
                 // index 7 is limited to 16 characters
                 // could get full length name at index 10, but would be different from join messages
                 strlcpy(pszName, vWords[7].c_str(), sizeof(pszName));
-                printf("IRC got who\n");
+                if (fDebug10) printf("IRC got who\n");
             }
 
             if (vWords[1] == "JOIN" && vWords[0].size() > 1)

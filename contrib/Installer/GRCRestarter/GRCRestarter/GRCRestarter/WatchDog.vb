@@ -46,7 +46,7 @@
                 If p.ProcessName Like sWildcard Then
                     Dim sMetrics As String
                     sMetrics = Trim(p.ProcessName) + ";" + Trim(p.StartTime) + ";" + Trim(p.Handle)
-                    'ToDo:Log Memory use here
+                    'Log Memory use here
                     Log(sMetrics)
                     Return True
                 End If

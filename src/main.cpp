@@ -32,6 +32,7 @@
 int DownloadBlocks();
 extern MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID> vRef);
 extern std::string getHardDriveSerial();
+json_spirit::Array MagnitudeReport(std::string cpid);
 
 extern void AddCPIDBlockHash(std::string cpid, std::string blockhash);
 extern void ZeroOutResearcherTotals(std::string cpid);
@@ -374,6 +375,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors6 = "";
  std::string    msMiningErrors7 = "";
  std::string    msMiningErrors8 = "";
+ std::string    msRSAOverview = "";
  std::string    Organization = "";
  std::string    OrganizationKey = "";
  std::string    msNeuralResponse = "";
@@ -667,14 +669,8 @@ std::string GetGlobalStatus()
 		nBoincUtilization = boincmagnitude; //Legacy Support for the about screen
 		double weight = nWeight/COIN;
 		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-		std::string boost_version = "";
-		std::ostringstream sBoost;
-		sBoost << boost_version  << "Using Boost "     
-			  << BOOST_VERSION / 100000     << "."  // major version
-			  << BOOST_VERSION / 100 % 1000 << "."  // minior version
-			  << BOOST_VERSION % 100                // patch level
-			  << "";
 		std::string sWeight = RoundToString((double)weight,0);
+		//9-6-2015 Add RSA fields to overview
 		if ((double)weight > 100000000000000) 
 		{
 				sWeight = sWeight.substr(0,13) + "E" + RoundToString((double)sWeight.length()-13,0);
@@ -685,7 +681,7 @@ std::string GetGlobalStatus()
 			+ "<br>Magnitude: " + RoundToString(boincmagnitude,2) + "; Project: " + msMiningProject
 			+ "<br>CPID: " +  GlobalCPUMiningCPID.cpid + " " + msMiningErrors2 + 
 			+ "<br>" + msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + msMiningErrors8 
-			+ "<br>" + "Tally: " + msMiningErrors3 + " " + sBoost.str();
+			+ "<br>" + msRSAOverview;
 		//The last line break is for Windows 8.1 Huge Toolbar
 		msGlobalStatus = status;
 		return status;
@@ -2181,11 +2177,12 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 			// Future Research Age Subsidy - TESTNET
 			int64_t nBoinc = ComputeResearchAccrual(cpid, operation, pindexLast, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
 			int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
-			// ToDo For Prod: For any subsidy < 30 day duration, ensure 100% that we have a start magnitude and an end magnitude, otherwise make subsidy 0
-			// ToDo For Prod: For any subsidy > 30 day duration, ensure 100% that we have a midpoint magnitude in Every Period, otherwise, make subsidy 0
-			// ToDo For Prod: Ensure no magnitudes are out of bounds to ensure we do not generate an insane payment
-			// ToDo For Prod: Any subsidy with a duration wider than 6 months should not be paid
-			
+
+			// TestNet: For any subsidy < 30 day duration, ensure 100% that we have a start magnitude and an end magnitude, otherwise make subsidy 0 : PASS
+			// TestNet: For any subsidy > 30 day duration, ensure 100% that we have a midpoint magnitude in Every Period, otherwise, make subsidy 0 : In Test as of 09-06-2015
+			// TestNet: Ensure no magnitudes are out of bounds to ensure we do not generate an insane payment : PASS (Lifetime PPD takes care of this)
+			// TestNet: Any subsidy with a duration wider than 6 months should not be paid : PASS
+						
 			int64_t maxStakeReward = GetMaximumBoincSubsidy(locktime) * COIN * 255;
 
 			if (nBoinc > maxStakeReward) nBoinc = maxStakeReward;
@@ -2211,7 +2208,6 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 			OUT_POR = CoinToDouble(nBoinc);
 			OUT_INTEREST = CoinToDouble(nInterest);
 			return nTotalSubsidy;
-
 
 	}
 }
@@ -2889,7 +2885,7 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 	
 	StructCPID stCPID = GetLifetimeCPID(pindex->sCPID);
 	// We normally fail to disconnect a block if we can't find the previous input due to "DisconnectInputs() : ReadTxIndex failed".  Imo, I believe we should let this call succeed, otherwise a chain can never be re-organized in this circumstance.
-
+	if (bDiscTxFailed && fDebug3) printf("!DisconnectBlock()::Failed, recovering. ");
     return true;
 }
 
@@ -3069,7 +3065,17 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			{
                 nStakeReward = nTxValueOut - nTxValueIn;
 				if (tx.vout.size() > 3 && pindex->nHeight > nGrandfather) bIsDPOR = true;
-				// Prod ToDo for next mandatory: Add one extra check when CoinStake=true: SumOf all vOut-vIn=CoinStake Amount, and nTxValueOut = sum of all vouts
+				// ResearchAge: Verify vouts cannot contain any other payments except coinstake: PASS (GetValueOut returns the sum of all spent coins in the coinstake) 
+				if (bResearchAgeEnabled && fDebug10)
+				{
+					int64_t nTotalCoinstake = 0;
+					for (unsigned int i = 0; i < tx.vout.size(); i++)
+					{
+						nTotalCoinstake += tx.vout[i].nValue;
+					}
+					if (fDebug10) 	printf(" nHeight %f; nTCS %f; nTxValueOut %f     ",
+						(double)pindex->nHeight,CoinToDouble(nTotalCoinstake),CoinToDouble(nTxValueOut));
+				}
 				// Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
 				if (bIsDPOR && pindex->nHeight > nGrandfather)
 				{
@@ -3264,7 +3270,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			//7-25-2015
 			std::string neural_hash = GetQuorumHash(bb.superblock);
 			std::string legacy_neural_hash = RetrieveMd5(bb.superblock);
-			// Note: ToDo: In the next Mandatory upgrade, remove the legacy_neural_hash; left in for current compatibility
+			// Note: Prod ToDo: In the next Mandatory upgrade, remove the legacy_neural_hash; left in for current compatibility
 			double popularity = 0;
 			std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
 			// Only reject superblock when it is new And when QuorumHash of Block != the Popular Quorum Hash:
@@ -4040,12 +4046,12 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3425) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-					if (bv < 3494 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
+					if (bv < 3496 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
 			}
 
 			if (bb.cpid != "INVESTOR")
 			{
-    			if (bb.projectname.empty() && !bResearchAgeEnabled) 	return DoS(1,error("PoR Project Name invalid"));
+    			if (bb.projectname.empty() && !bResearchAgeEnabled) 	return DoS(1,error("CheckBlock::PoR Project Name invalid"));
 	    		if (!IsCPIDValidv2(bb,height1))
 				{
 						return error("Bad CPID : height %f, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc %s",(double)height1,
@@ -4375,7 +4381,7 @@ void GridcoinServices()
 		bTallyStarted = false;
 	}
 
-
+	
 	if (TimerMain("MyNeuralMagnitudeReport",5))
 	{
 		if (msNeuralResponse.length() < 25 && msPrimaryCPID != "INVESTOR" && !msPrimaryCPID.empty())
@@ -4383,6 +4389,9 @@ void GridcoinServices()
 			bool bResult = AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
 			if (fDebug3) printf("Async explainmag sent for %s.",msPrimaryCPID.c_str());
 		}
+		// Run the RSA report for the overview page:
+		
+		json_spirit::Array results = MagnitudeReport(msPrimaryCPID);
 	}
 
 	int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
@@ -4795,7 +4804,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 11003;
+		nGrandfather = 12985;
 		nNewIndex = 10;
 		bResearchAgeEnabled = true;
 		bRemotePaymentsEnabled = false;
@@ -6265,7 +6274,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 8-5-2015
-		if (pfrom->nVersion < 180306 && fTestNet)
+		if (pfrom->nVersion < 180307 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -8897,7 +8906,6 @@ double GRCMagnitudeUnit(int64_t locktime)
 int64_t ComputeResearchAccrual(std::string cpid, std::string operation, CBlockIndex* pindexLast, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
 	double dCurrentMagnitude = CalculatedMagnitude2(cpid, pindexLast->nTime, false);
-	if (dCurrentMagnitude > 20000) dCurrentMagnitude = 20000;
 	CBlockIndex* pHistorical = GetHistoricalMagnitude(cpid);
 	if (pHistorical->nHeight <= nNewIndex || pHistorical->nMagnitude==0 || pHistorical->nTime == 0)
 	{
@@ -8906,24 +8914,32 @@ int64_t ComputeResearchAccrual(std::string cpid, std::string operation, CBlockIn
 	}
 	// To prevent reorgs and checkblock errors, ensure the research age is > 10 blocks wide:
 	int iRABlockSpan = pindexLast->nHeight - pHistorical->nHeight;
-
-	AvgMagnitude = (pHistorical->nMagnitude + dCurrentMagnitude) / 2;
+	StructCPID stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
+	double dAvgMag = stCPID.ResearchAverageMagnitude;
+	// ResearchAge: If the accrual age is > 20 days, add in the midpoint lifetime average magnitude to ensure the overall avg magnitude accurate:
+	if (iRABlockSpan > (int)(BLOCKS_PER_DAY*20))
+	{
+			AvgMagnitude = (pHistorical->nMagnitude + dAvgMag + dCurrentMagnitude) / 3;
+	}
+	else
+	{
+			AvgMagnitude = (pHistorical->nMagnitude + dCurrentMagnitude) / 2;
+	}
+	if (AvgMagnitude > 20000) AvgMagnitude = 20000;
+	
 	dAccrualAge = ((double)pindexLast->nTime - (double)pHistorical->nTime) / 86400;
 	if (dAccrualAge < 0) dAccrualAge=0;
 	dMagnitudeUnit = GRCMagnitudeUnit(pindexLast->nTime);
-	// TODO: If the accrual age is > 30 days, grab a snapshot from a superblock at the midpoint to make the avg magnitude accurate:
+	
 	int64_t Accrual = (int64_t)(dAccrualAge*AvgMagnitude*dMagnitudeUnit*COIN);
 	// Double check researcher lifetime paid
-	StructCPID stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
-	
 	double days = (((double)pindexLast->nTime) - stCPID.LowLockTime)/86400;
 	double PPD = stCPID.ResearchSubsidy/(days+.01);
-	double dAvgMag = stCPID.ResearchAverageMagnitude;
 	double ReferencePPD = dMagnitudeUnit*dAvgMag;
 	if ((PPD > ReferencePPD*5))
 	{
 			printf("Researcher PPD %f > Reference PPD %f for CPID %s with Lifetime Avg Mag of %f, Days %f \r\n",PPD,ReferencePPD,cpid.c_str(),dAvgMag,days);
-			Accrual=.01*COIN;
+			Accrual = 0; //Since this condition can occur when a user ramps up computing power, lets return 0 so as to not shortchange the researcher, but instead, owed will continue to accrue and will be paid later when PPD falls below 5
 	}
 	// Note that if the RA Block Span < 10, we want to return 0 for the Accrual Amount so the CPID can still receive an accurate accrual in the future
 	if (iRABlockSpan < 10) Accrual = 0;

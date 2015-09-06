@@ -367,7 +367,7 @@ static void ReadOrderPos(int64_t& nOrderPos, mapValue_t& mapValue)
 {
     if (!mapValue.count("n"))
     {
-        nOrderPos = -1; // TODO: calculate elsewhere
+        nOrderPos = -1; // TODO : calculate elsewhere
         return;
     }
     nOrderPos = atoi64(mapValue["n"].c_str());

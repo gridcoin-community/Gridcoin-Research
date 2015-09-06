@@ -180,6 +180,7 @@ extern std::string  msMiningErrors5;
 extern std::string  msMiningErrors6;
 extern std::string  msMiningErrors7;
 extern std::string  msMiningErrors8;
+extern std::string  msRSAOverview;
 extern std::string  msNeuralResponse;
 extern std::string  msHDDSerial;
 extern bool         mbBlocksDownloaded;

@@ -496,6 +496,6 @@ bool ECC_InitSanityCheck() {
         return false;
     EC_KEY_free(pkey);
 
-    // TODO Is there more EC functionality that could be missing?
+    // Is there more EC functionality that could be missing?
     return true;
 }

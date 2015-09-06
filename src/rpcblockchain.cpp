@@ -18,6 +18,8 @@ using namespace std;
 double OwedByAddress(std::string address);
 extern std::string YesNo(bool bin);
 std::string getHardDriveSerial();
+extern Array MagnitudeReport(std::string cpid);
+
 
 double Cap(double dAmt, double Ceiling);
 extern std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, std::string sSig, int64_t MinimumBalance);
@@ -1453,7 +1455,7 @@ std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string 
 	 catch (...) 
 	 {
 		    printf("Generic exception %s \r\n",method.c_str());
-			return "Generic Exception";
+			return "Generic Exception (Please try unlocking the wallet).";
 	 }
 	 std::string sResult = "";
 	 sResult = write_string(vResult, false) + "\n";
@@ -2643,10 +2645,10 @@ Array MagnitudeReport(std::string cpid)
 		   results.push_back(c);
 		   StructCPID globalmag = mvMagnitudes["global"];
 		   double payment_timespan = 14; 
-		   
 		   double total_owed = 0;
 		   double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
-		
+		   msRSAOverview = "";
+
 		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
 		   {
 				// For each CPID on the network, report:
@@ -2688,7 +2690,13 @@ Array MagnitudeReport(std::string cpid)
 										entry.push_back(Pair("Tx Count",stCPID.Accuracy));
 
 										results.push_back(entry);
-
+										if (cpid==msPrimaryCPID)
+										{
+											msRSAOverview = "Exp PPD: " + RoundToString(dExpected14/14,0) 
+												+ ", Act PPD: " + RoundToString(structMag.payments/14,0) 
+												+ ", Fulf %: " + RoundToString(fulfilled,2) 
+												+ ", GRCMagUnit: " + RoundToString(magnitude_unit,4);
+										}
 									}
 									else
 									{

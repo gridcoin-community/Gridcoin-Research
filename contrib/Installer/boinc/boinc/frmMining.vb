@@ -217,6 +217,9 @@ Public Class frmMining
             Me.TabControl1.SelectedIndex = 2
             If mbTestNet Then lblTestnet.Text = "TESTNET"
 
+            PopulateNeuralData()
+
+
         Catch ex As Exception
 
         End Try
@@ -229,7 +232,7 @@ Public Class frmMining
         InitializeComponent()
     End Sub
 
-    
+
     Public Sub PopulateNeuralData()
 
         Dim sReport As String = ""
@@ -255,7 +258,7 @@ Public Class frmMining
         dgv.AutoResizeColumns(DataGridViewAutoSizeColumnsMode.ColumnHeader)
         dgv.ReadOnly = True
         dgv.EditingPanel.Visible = False
-  
+
         For y = 0 To UBound(vData) - 1
             dgv.Rows.Add()
             sReportRow = ""
@@ -270,20 +273,17 @@ Public Class frmMining
                 End If
                 sReportRow += sValue + ","
             Next x
-            If Val(dgv.Rows(iRow).Cells(2).Value) = 0 And Val(dgv.Rows(iRow).Cells(1).Value) > 0 Then
-                mGRCData = New GRCSec.GridcoinData
-                mGRCData.BroadcastNeuralNetworkMemoryValue(sMemoryName, dgv.Rows(iRow).Cells(0).Value, Val(dgv.Rows(iRow).Cells(1).Value), True)
-            End If
 
             If LCase(dgv.Rows(iRow).Cells(0).Value) = "grc" Or LCase(dgv.Rows(iRow).Cells(0).Value) = "btc" Then
-                dgv.Rows(iRow).Visible = False 'No need to polute the view page with quotes
+                dgv.Rows(iRow).Visible = False 'No need to pollute the view page with quotes
             End If
+
             sReport += sReportRow + vbCrLf
             iRow = iRow + 1
             If iRow Mod 50 = 0 Then Application.DoEvents()
 
         Next
-  
+
         SetAutoSizeMode2(vHeading, dgv)
 
         Me.Cursor.Current = Cursors.Default

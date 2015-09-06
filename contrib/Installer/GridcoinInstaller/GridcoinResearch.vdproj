@@ -196,25 +196,7 @@
         "Entry"
         {
         "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_32F2DC723F30362B0B78F9A291EC0098"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
-        "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_DEB886DE05C496A5AD26B43C4B1B90B9"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
-        "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_5644D8F767F33372E534FBD5A2384D12"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
-        "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_6AEABB5004EC4B57225B51B085DB5625"
+        "OwnerKey" = "8:_D0966638AB084779AFD69795C33FC8EB"
         "MsmSig" = "8:_UNDEFINED"
         }
         "Entry"
@@ -226,7 +208,25 @@
         "Entry"
         {
         "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_D0966638AB084779AFD69795C33FC8EB"
+        "OwnerKey" = "8:_6AEABB5004EC4B57225B51B085DB5625"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_UNDEFINED"
+        "OwnerKey" = "8:_5644D8F767F33372E534FBD5A2384D12"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_UNDEFINED"
+        "OwnerKey" = "8:_DEB886DE05C496A5AD26B43C4B1B90B9"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_UNDEFINED"
+        "OwnerKey" = "8:_32F2DC723F30362B0B78F9A291EC0098"
         "MsmSig" = "8:_UNDEFINED"
         }
     }
@@ -381,6 +381,11 @@
             "AssemblyAsmDisplayName" = "8:GRCSec, Version=1.0.0.2, Culture=neutral, processorArchitecture=MSIL"
                 "ScatterAssemblies"
                 {
+                    "_32F2DC723F30362B0B78F9A291EC0098"
+                    {
+                    "Name" = "8:GRCSec.dll"
+                    "Attributes" = "3:512"
+                    }
                 }
             "SourcePath" = "8:GRCSec.dll"
             "TargetName" = "8:"
@@ -478,6 +483,11 @@
             "AssemblyAsmDisplayName" = "8:OpenPop, Version=2.0.5.0, Culture=neutral, processorArchitecture=MSIL"
                 "ScatterAssemblies"
                 {
+                    "_5644D8F767F33372E534FBD5A2384D12"
+                    {
+                    "Name" = "8:openpopstake.dll"
+                    "Attributes" = "3:512"
+                    }
                 }
             "SourcePath" = "8:openpopstake.dll"
             "TargetName" = "8:"
@@ -504,6 +514,11 @@
             "AssemblyAsmDisplayName" = "8:SQLite.NET, Version=0.21.1869.3794, Culture=neutral, PublicKeyToken=c273bd375e695f9c"
                 "ScatterAssemblies"
                 {
+                    "_6AEABB5004EC4B57225B51B085DB5625"
+                    {
+                    "Name" = "8:sqlitestake.net.dll"
+                    "Attributes" = "3:512"
+                    }
                 }
             "SourcePath" = "8:sqlitestake.net.dll"
             "TargetName" = "8:"
@@ -761,6 +776,11 @@
             "AssemblyAsmDisplayName" = "8:ICSharpCode.SharpZipLib, Version=0.86.0.518, Culture=neutral, PublicKeyToken=1b03e6acf1164f73"
                 "ScatterAssemblies"
                 {
+                    "_DEB886DE05C496A5AD26B43C4B1B90B9"
+                    {
+                    "Name" = "8:icsharpcode.sharpziplib.dll"
+                    "Attributes" = "3:512"
+                    }
                 }
             "SourcePath" = "8:icsharpcode.sharpziplib.dll"
             "TargetName" = "8:"
@@ -967,19 +987,19 @@
         {
         "Name" = "8:Microsoft Visual Studio"
         "ProductName" = "8:Gridcoin Research"
-        "ProductCode" = "8:{78DFDBD8-6633-4890-AC3D-9438AF194314}"
-        "PackageCode" = "8:{65274FA6-2ED0-40AF-AA77-D2E5707E59CB}"
+        "ProductCode" = "8:{DA68EDB7-7E16-41B2-8675-A20ECB87B744}"
+        "PackageCode" = "8:{B5732395-E11D-4AD1-B634-CCF7D8148698}"
         "UpgradeCode" = "8:{9617E9EA-252F-43CE-B53E-B48C85F71192}"
         "AspNetVersion" = "8:4.0.30319.0"
         "RestartWWWService" = "11:FALSE"
         "RemovePreviousVersions" = "11:TRUE"
         "DetectNewerInstalledVersion" = "11:FALSE"
         "InstallAllUsers" = "11:TRUE"
-        "ProductVersion" = "8:30.0"
+        "ProductVersion" = "8:30.1"
         "Manufacturer" = "8:GridcoinResearch"
         "ARPHELPTELEPHONE" = "8:"
         "ARPHELPLINK" = "8:"
-        "Title" = "8:Gridcoin Research 30.0"
+        "Title" = "8:Gridcoin Research 30.1"
         "Subject" = "8:"
         "ARPCONTACT" = "8:The Gridcoin Developers"
         "Keywords" = "8:Gridcoin Research"

@@ -693,7 +693,7 @@ bool CWallet::IsChange(const CTxOut& txout) const
 {
     CTxDestination address;
 
-    // TODO: fix handling of 'change' outputs. The assumption is that any
+    // TODO : fix handling of 'change' outputs. The assumption is that any
     // payment to a TX_PUBKEYHASH that is mine but isn't in the address book
     // is change. That assumption is likely to break when we implement multisignature
     // wallets that return change back into a multi-signature-protected address;
@@ -1107,7 +1107,7 @@ void CWallet::ReacceptWalletTransactions()
         }
         if (!vMissingTx.empty())
         {
-            // TODO: optimize this to scan just part of the block chain?
+            // TODO : optimize this to scan just part of the block chain?
             if (ScanForWalletTransactions(pindexGenesisBlock))
                 fRepeat = true;  // Found missing transactions: re-do re-accept.
         }
@@ -1620,7 +1620,7 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 if (nChange > 0)
                 {
                     // Fill a vout to ourself
-                    // TODO: pass in scriptChange instead of reservekey so
+                    // TODO : pass in scriptChange instead of reservekey so
                     // change transaction isn't always pay-to-bitcoin-address
                     CScript scriptChange;
 
@@ -2254,6 +2254,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	}
 	else
 	{	
+		//Research Age
 		if (txNew.vout.size() == 3)
 		{
 			txNew.vout[1].nValue = (nCredit / 2 / CENT) * CENT;

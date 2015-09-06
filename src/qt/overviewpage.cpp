@@ -252,7 +252,7 @@ void OverviewPage::on_btnWebsite_pressed()
 
 void OverviewPage::on_btnBX_pressed()
 {
-    QDesktopServices::openUrl(QUrl("http://www.cryptoblox.com/coins/GridcoinResearch/"));
+    QDesktopServices::openUrl(QUrl("http://www.gridresearchcorp.com/gridcoin/"));
 }
 
 

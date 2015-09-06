@@ -288,6 +288,7 @@
     </EmbeddedResource>
     <EmbeddedResource Include="frmAddExpense.resx">
       <DependentUpon>frmAddExpense.vb</DependentUpon>
+      <SubType>Designer</SubType>
     </EmbeddedResource>
     <EmbeddedResource Include="frmPlaceVote.resx">
       <DependentUpon>frmPlaceVote.vb</DependentUpon>

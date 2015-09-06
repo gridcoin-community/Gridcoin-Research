@@ -737,7 +737,7 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol, 
 
     AcceptedConnectionImpl<ip::tcp>* tcp_conn = dynamic_cast< AcceptedConnectionImpl<ip::tcp>* >(conn);
 
-    // TODO: Actually handle errors
+    // TODO : Actually handle errors
     if (error)
     {
         delete conn;

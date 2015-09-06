@@ -498,7 +498,7 @@ bool InitSanityCheck(void)
         return false;
     }
 
-    // TODO: remaining sanity checks, see #4081
+    // Remaining sanity checks, see #4081
 
     return true;
 }
