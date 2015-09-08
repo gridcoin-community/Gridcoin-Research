@@ -30,6 +30,8 @@ void startWireFrameRenderer();
 void stopWireFrameRenderer();
 void ShutdownGridcoinMiner();
 void ThreadCPIDs();
+bool ComputeNeuralNetworkSupermajorityHashes();
+
 void LoadCPIDsInBackground();
 std::string GetPoolKey(std::string sMiningProject,double dMiningRAC,
 	std::string ENCBoincpublickey,std::string xcpid, std::string messagetype, 
@@ -1131,6 +1133,8 @@ bool AppInit2()
 	uiInterface.InitMessage(_("Loading Network Averages..."));
 	if (fDebug3) printf("Loading network averages %f",(double)0);	
 	TallyNetworkAverages(true);	
+	ComputeNeuralNetworkSupermajorityHashes();
+
 	printf("Starting CPID thread...%f",(double)0);
 	LoadCPIDsInBackground();  //This calls HarvesCPIDs(true)
 

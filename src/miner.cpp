@@ -224,6 +224,8 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
         ParseMoney(mapArgs["-mintxfee"], nMinTxFee);
 
     pblock->nBits = GetNextTargetRequired(pindexPrev, fProofOfStake);
+	msMiningErrorsIncluded = "";
+	msMiningErrorsExcluded = "";
 
     // Collect memory pool transactions into the block
     int64_t nFees = 0;
@@ -253,6 +255,10 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
                 // Read prev transaction
                 CTransaction txPrev;
                 CTxIndex txindex;
+				//9-8-2015
+
+				if (fDebug10) printf("Enumerating tx %s ",tx.GetHash().GetHex().c_str());
+
                 if (!txPrev.ReadFromDisk(txdb, txin.prevout, txindex))
                 {
                     // This should never happen; all transactions in the memory
@@ -274,6 +280,8 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
                         // Use list for automatic deletion
                         vOrphan.push_back(COrphan(&tx));
                         porphan = &vOrphan.back();
+						if (fDebug10) printf("Orphan tx %s ",tx.GetHash().GetHex().c_str());
+						msMiningErrorsExcluded += tx.GetHash().GetHex() + ":ORPHAN;";
                     }
                     mapDependers[txin.prevout.hash].push_back(porphan);
                     porphan->setDependsOn.insert(txin.prevout.hash);
@@ -328,17 +336,35 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 
             // Size limits
             unsigned int nTxSize = ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);
+			if (fDebug10) printf("Tx Size for %s  %f",tx.GetHash().GetHex().c_str(),(double)nTxSize);
+
             if (nBlockSize + nTxSize >= nBlockMaxSize)
+			{
+				if (fDebug10) printf("Tx size too large for tx %s  blksize %f , tx siz %f",tx.GetHash().GetHex().c_str(),(double)nBlockSize,(double)nTxSize);
+			 	msMiningErrorsExcluded += tx.GetHash().GetHex() + ":SizeTooLarge(" 
+					+ RoundToString((double)nBlockSize,0) + "," +RoundToString((double)nTxSize,0) + ")(" 
+					+ RoundToString((double)nBlockSize,0) + ");";
+            
                 continue;
+			}
 
             // Legacy limits on sigOps:
             unsigned int nTxSigOps = tx.GetLegacySigOpCount();
             if (nBlockSigOps + nTxSigOps >= MAX_BLOCK_SIGOPS)
+			{
+     		 	msMiningErrorsExcluded += tx.GetHash().GetHex() + ":LegacySigOpLimit(" + 
+					RoundToString((double)nBlockSigOps,0) + "," +RoundToString((double)nTxSigOps,0) + ")(" 
+					+ RoundToString((double)MAX_BLOCK_SIGOPS,0) + ");";
                 continue;
+			}
 
             // Timestamp limit
             if (tx.nTime > GetAdjustedTime() || (fProofOfStake && tx.nTime > pblock->vtx[0].nTime))
+			{
+				msMiningErrorsExcluded += tx.GetHash().GetHex() + ":TimestampLimit(" + RoundToString((double)tx.nTime,0) + "," 
+					+RoundToString((double)pblock->vtx[0].nTime,0) + ");";
                 continue;
+			}
 
             // Transaction fee
             int64_t nMinFee = tx.GetMinFee(nBlockSize, GMF_BLOCK);
@@ -363,34 +389,56 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
             MapPrevTx mapInputs;
             bool fInvalid;
             if (!tx.FetchInputs(txdb, mapTestPoolTmp, false, true, mapInputs, fInvalid))
+			{
+				if (fDebug10) printf("Unable to fetch inputs for tx %s ",tx.GetHash().GetHex().c_str());
+				msMiningErrorsExcluded += tx.GetHash().GetHex() + ":UnableToFetchInputs;";
                 continue;
+			}
 
             int64_t nTxFees = tx.GetValueIn(mapInputs)-tx.GetValueOut();
             if (nTxFees < nMinFee)
+			{
+				if (fDebug10) printf("Not including tx %s  due to TxFees of %f ; bare min fee is %f",tx.GetHash().GetHex().c_str(),(double)nTxFees,(double)nMinFee);
+				msMiningErrorsExcluded += tx.GetHash().GetHex() + ":FeeTooSmall(" 
+					+ RoundToString(CoinToDouble(nFees),8) + "," +RoundToString(CoinToDouble(nMinFee),8) + ");";
                 continue;
+			}
 
             nTxSigOps += tx.GetP2SHSigOpCount(mapInputs);
             if (nBlockSigOps + nTxSigOps >= MAX_BLOCK_SIGOPS)
+			{
+				if (fDebug10) printf("Not including tx %s  due to exceeding max sigops of %f ; sigops is %f",
+					tx.GetHash().GetHex().c_str(),(double)(nBlockSigOps+nTxSigOps),(double)MAX_BLOCK_SIGOPS);
+				msMiningErrorsExcluded += tx.GetHash().GetHex() + ":ExceededSigOps(" 
+					+ RoundToString((double)nBlockSigOps,0) + "," +RoundToString((double)nTxSigOps,0) + ")(" 
+					+ RoundToString((double)MAX_BLOCK_SIGOPS,0) + ");";
+            
                 continue;
+			}
 
             if (!tx.ConnectInputs(txdb, mapInputs, mapTestPoolTmp, CDiskTxPos(1,1,1), pindexPrev, false, true))
+			{
+				if (fDebug10) printf("Unable to connect inputs for tx %s ",tx.GetHash().GetHex().c_str());
+				msMiningErrorsExcluded += tx.GetHash().GetHex() + ":UnableToConnectInputs();";
                 continue;
+			}
             mapTestPoolTmp[tx.GetHash()] = CTxIndex(CDiskTxPos(1,1,1), tx.vout.size());
             swap(mapTestPool, mapTestPoolTmp);
 
             // Added
+			msMiningErrorsIncluded += tx.GetHash().GetHex() + ";";
             pblock->vtx.push_back(tx);
             nBlockSize += nTxSize;
             ++nBlockTx;
             nBlockSigOps += nTxSigOps;
             nFees += nTxFees;
 
-            if (fDebug && GetBoolArg("-printpriority"))
+            if (fDebug10 || GetBoolArg("-printpriority"))
             {
                 printf("priority %.1f feeperkb %.1f txid %s\n",
                        dPriority, dFeePerKb, tx.GetHash().ToString().c_str());
-            }
-
+		    }
+		
             // Add transactions that depend on this one to the priority queue
             uint256 hash = tx.GetHash();
             if (mapDependers.count(hash))
@@ -413,7 +461,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
         nLastBlockTx = nBlockTx;
         nLastBlockSize = nBlockSize;
 
-        if (fDebug && GetBoolArg("-printpriority"))
+        if (fDebug10 || GetBoolArg("-printpriority"))
             printf("CreateNewBlock(): total size %"PRIu64"\n", nBlockSize);
 		//Add Boinc Hash - R HALFORD - 11-28-2014 - Add CPID v2
 		MiningCPID miningcpid = GetNextProject(false);

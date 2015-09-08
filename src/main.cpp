@@ -375,6 +375,9 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors6 = "";
  std::string    msMiningErrors7 = "";
  std::string    msMiningErrors8 = "";
+ std::string    msMiningErrorsIncluded = "";
+ std::string    msMiningErrorsExcluded = "";
+
  std::string    msRSAOverview = "";
  std::string    Organization = "";
  std::string    OrganizationKey = "";
@@ -2797,13 +2800,14 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
             // for an attacker to attempt to split the network.
             if (!txindex.vSpent[prevout.n].IsNull())
 			{
-				if (fMiner) return false;
-				//This could be due to mismatched coins in wallet: 12-28-2014
-				int nMismatchSpent;
-				int64_t nBalanceInQuestion;
-				pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
-    
-				//return error("ConnectInputs() : %s prev tx already used at %s", GetHash().ToString().substr(0,10).c_str(), txindex.vSpent[prevout.n].ToString().c_str());
+				if (fMiner) 
+				{
+					msMiningErrorsExcluded += " ConnectInputs() : " + GetHash().GetHex() + " used at " 
+						+ txindex.vSpent[prevout.n].ToString() + ";   ";
+					return false;
+				}
+				if (!txindex.vSpent[prevout.n].IsNull())
+					return fMiner ? false : error("ConnectInputs() : %s prev tx already used at %s", GetHash().ToString().c_str(), txindex.vSpent[prevout.n].ToString().c_str());
 
 			}
 
@@ -2811,7 +2815,7 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
             // before the last blockchain checkpoint. This is safe because block merkle hashes are
             // still computed and checked, and any change will be caught at the next checkpoint.
 			
-            if (!(fBlock && (nBestHeight < GetNumBlocksOfPeers())))
+            if (!(fBlock && (nBestHeight < Checkpoints::GetTotalBlocksEstimate())))
             {
                 // Verify signature
                 if (!VerifySignature(txPrev, *this, i, 0))
@@ -3278,7 +3282,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			double popularity = 0;
 			std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
 			// Only reject superblock when it is new And when QuorumHash of Block != the Popular Quorum Hash:
-			if (IsLockTimeWithinMinutes(GetBlockTime(),15))
+			if (IsLockTimeWithinMinutes(GetBlockTime(),15)  && !fColdBoot)
 			{ 
 				double out_beacon_count=0;
 				double out_participant_count=0;
@@ -4385,6 +4389,12 @@ void GridcoinServices()
 		bTallyStarted = false;
 	}
 
+	if (false && TimerMain("FixSpentCoins",60))
+	{
+			int nMismatchSpent;
+			int64_t nBalanceInQuestion;
+			pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
+    }
 	
 	if (TimerMain("MyNeuralMagnitudeReport",5))
 	{

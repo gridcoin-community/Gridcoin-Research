@@ -3793,6 +3793,13 @@ Value listitem(const Array& params, bool fHelp)
 		entry.push_back(Pair("Serial",response));
 		results.push_back(entry);
 	}
+	if (sitem == "memorypool")
+	{
+		Object entry;
+		entry.push_back(Pair("Excluded Tx",msMiningErrorsExcluded));
+		entry.push_back(Pair("Included Tx",msMiningErrorsIncluded));
+		results.push_back(entry);
+	}
 	if (sitem == "rsa")
 	{
 	
