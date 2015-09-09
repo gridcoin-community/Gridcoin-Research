@@ -32,6 +32,8 @@
 int DownloadBlocks();
 extern MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID> vRef);
 extern std::string getHardDriveSerial();
+std::string ExtractValue(std::string data, std::string delimiter, int pos);
+
 json_spirit::Array MagnitudeReport(std::string cpid);
 
 extern void AddCPIDBlockHash(std::string cpid, std::string blockhash);
@@ -4059,7 +4061,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3425) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-					if (bv < 3499 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
+					if (bv < 3500 && fTestNet) return DoS(25, error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n"));
 			}
 
 			if (bb.cpid != "INVESTOR")
@@ -4823,7 +4825,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 15295;
+		nGrandfather = 15750;
 		nNewIndex = 10;
 		bResearchAgeEnabled = true;
 		bRemotePaymentsEnabled = false;
@@ -6293,7 +6295,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 8-5-2015
-		if (pfrom->nVersion < 180309 && fTestNet)
+		if (pfrom->nVersion < 180310 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -8714,7 +8716,12 @@ std::string GetNeuralNetworkReport()
 	return report;
 }
 
-
+std::string GetOrgSymbolFromFeedKey(std::string feedkey)
+{
+	std::string Symbol = ExtractValue(feedkey,"-",0);
+	return Symbol;
+						
+}
 
 
 
@@ -8738,41 +8745,51 @@ void MemorizeMessage(std::string msg,int64_t nTime)
 			  {
 
 				  // If this is a DAO, ensure the contents are protected:
-				  if (sMessageType=="dao" && !sMessagePublicKey.empty())
+				  if ((sMessageType=="dao" || sMessageType=="daoclient") && !sMessagePublicKey.empty())
 				  {
 					        if (fDebug3) printf("DAO Message %s",msg.c_str());
 
-							std::string Org = sMessageKey;
+							//std::string Org = sMessageKey;
 							if (sMessageAction=="A")
 							{
-								std::string daoPubKey = ReadCache("daopubkey",Org);
+								std::string daoPubKey = ReadCache(sMessageType + "pubkey",sMessageKey);
 								if (daoPubKey.empty())
 								{
 									//We only accept the first message
-									WriteCache("daopubkey",Org,sMessagePublicKey,nTime);
+									WriteCache(sMessageType + "pubkey",sMessageKey,sMessagePublicKey,nTime);
 									std::string OrgSymbol = ExtractXML(sMessageValue,"<SYMBOL>","</SYMBOL>");
 									std::string OrgName = ExtractXML(sMessageValue,"<NAME>","</NAME>");
-									WriteCache("daosymbol",OrgName,OrgSymbol,nTime);
-									WriteCache("daoname",OrgSymbol,OrgName,nTime);
+									WriteCache(sMessageType+"symbol",sMessageKey,OrgSymbol,nTime);
+									WriteCache(sMessageType + "name",OrgSymbol,sMessageKey,nTime);
 								}
 							}
 				  }
-
-				  if (sMessageType=="dao" || sMessageType == "daofeed")
+				 
+				  if (sMessageType=="dao" || sMessageType=="daoclient")
 				  {
-						sMessagePublicKey = ReadCache("daopubkey",sMessageKey);
+						sMessagePublicKey = ReadCache(sMessageType+"pubkey",sMessageKey);
 				  }
-				
+				  if (sMessageType == "daofeed")
+				  {
+			  			sMessagePublicKey = ReadCache("daopubkey",GetOrgSymbolFromFeedKey(sMessageKey));
+				  }
 				  
 				  //Verify sig first
 				  bool Verified = CheckMessageSignature(sMessageType,sMessageType+sMessageKey+sMessageValue,
 					  sSignature,sMessagePublicKey);
+
+				  if ( (sMessageType=="dao" || sMessageType == "daofeed") && !Verified && fDebug3)
+				  {
+						printf("Message type %s: %s was not verified successfully. PubKey %s \r\n",sMessageType.c_str(),msg.c_str(),sMessagePublicKey.c_str());
+				  }
+
 				  if (Verified)
 				  {
 					
 						if (sMessageAction=="A")
 						{
-								if (fDebug10) printf("Adding MessageKey type %s Key %s Value %s\r\n",
+								if ( (sMessageType=="dao" || sMessageType == "daofeed")	&& fDebug3 ) 
+									printf("Adding MessageKey type %s Key %s Value %s\r\n",
 									sMessageType.c_str(),sMessageKey.c_str(),sMessageValue.c_str());
 								WriteCache(sMessageType,sMessageKey,sMessageValue,nTime);
 								if (sMessageType=="poll")

@@ -25,6 +25,7 @@ double Cap(double dAmt, double Ceiling);
 extern std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, 
 	std::string sSig, int64_t MinimumBalance, double dFees, std::string sPublicKey);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
+
 std::string GetQuorumHash(std::string data);
 bool TallyNetworkAverages(bool ColdBoot);
 void TallyInBackground();
@@ -1672,6 +1673,71 @@ Value execute(const Array& params, bool fHelp)
    			results.push_back(entry);
 		 }
 	}
+	else if (sItem == "joindao")
+	{
+		//execute joindao dao_symbol your_receive_grc_address your_email
+
+		if (params.size() != 5)
+		{
+			entry.push_back(Pair("Error","You must specify the DAO_CURRENCY_SYMBOL, your nickname, your GRC_RECEIVING_ADDRESS, and Your_Email (do not use your boinc email; this is used for emergency communication from the DAO to clients).  For example: execute joindao CRG jondoe SKBQaegxasEyBVxmsTMg3HnasNg77CtjLo myemail@mail.com"));
+			results.push_back(entry);
+		}
+		else
+		{
+				std::string symbol       = params[1].get_str();
+				std::string nickname     = params[2].get_str();
+				std::string grc          = params[3].get_str();
+				std::string client_email = params[4].get_str();
+				boost::to_upper(grc);
+				boost::to_upper(symbol);
+				boost::to_upper(client_email);
+
+			    CBitcoinAddress address(grc);
+				bool isValid = address.IsValid();
+				std::string               err = "";
+				if (symbol.length() != 3) err = "Symbol must be 3 characters.";
+				if (nickname.empty())     err = "You must specify a nickname.";
+				if (!isValid)             err = "You must specify a valid GRC receiving address.";
+				std::string OrgPubKey    = ReadCache("daopubkey",symbol);
+				std::string CachedSymbol = ReadCache("daosymbol",symbol);
+				std::string CachedName   = ReadCache("daoname",CachedSymbol);
+				if (CachedSymbol.empty())  err = "DAO does not exist.  Please choose a different symbol.";
+				if (OrgPubKey.empty() || CachedName.empty())  err = "DAO does not exist or cannot be found.  Please choose a different DAO Symbol.";
+
+				
+				if (!err.empty())
+				{
+					entry.push_back(Pair("Error",err));
+					results.push_back(entry);
+				}
+				else
+				{
+					//Generate the key pair for the client
+					CKey key;
+					key.MakeNewKey(false);
+					CPrivKey vchPrivKey = key.GetPrivKey();
+					std::string PrivateKey =  HexStr<CPrivKey::iterator>(vchPrivKey.begin(), vchPrivKey.end());
+					std::string PubKey = HexStr(key.GetPubKey().Raw());
+				    std::string sAction = "add";
+					std::string sType = "daoclient";
+					std::string sPass = PrivateKey;
+					std::string sName = nickname + "-" + symbol;
+					std::string contract = "<NAME>" + nickname + "</NAME><SYMBOL>" + symbol + "</SYMBOL><ADDRESS>" + grc + "</ADDRESS><PUBKEY>" + PubKey + "</PUBKEY><EMAIL>" + client_email + "</EMAIL>";
+
+					std::string result = AddMessage(true,sType,sName,contract,sPass,AmountFromValue(2500),.1,PubKey);
+					entry.push_back(Pair("Nickname",nickname));
+					entry.push_back(Pair("SYMBOL",symbol));
+					entry.push_back(Pair("Default Receive Address",grc));
+
+					std::string sKeyNarr = "daoclient" + nickname + "-" + symbol + "=" + PrivateKey;
+					entry.push_back(Pair("PrivateKey",sKeyNarr));
+					entry.push_back(Pair("Warning!","Do not lose your private key.  It is non-recoverable.  You may add it to your config file as noted above OR specify it manually via RPC commands."));
+					results.push_back(entry);
+	
+				}
+			}
+	}
+	
 	else if (sItem == "adddao")
 	{
 		//execute adddao org_name dao_currency_symbol org_receive_grc_address
@@ -1729,7 +1795,6 @@ Value execute(const Array& params, bool fHelp)
 					std::string sKeyNarr = "dao" + symbol + "=" + PrivateKey;
 					entry.push_back(Pair("PrivateKey",sKeyNarr));
 					entry.push_back(Pair("Warning!","Do not lose your private key.  It is non-recoverable.  You may add it to your config file as noted above OR specify it manually via RPC commands."));
-					entry.push_back(Pair("Note","After you add your private key to your config, you may 'execute readconfig' to read the key back in to memory (only necessary for this session; after a restart it will be memorized automatically)."));
 					results.push_back(entry);
 	
 				}
@@ -1766,7 +1831,7 @@ Value execute(const Array& params, bool fHelp)
 				{
 					//Get the latest feed value (daofeed,symbol-feedkey)
 					std::string contract = ReadCache("daofeed",symbol+"-"+feedkey);
-					std::string OrgPubKey = ReadCache("daopubkey",symbol);
+					std::string OrgPubKey = ReadCache("daopubkey",orgname);
 					std::string feed_value = ExtractXML(contract,"<FEEDVALUE>","</FEEDVALUE>");
 					entry.push_back(Pair("Contract",contract));
 					entry.push_back(Pair(feedkey,feed_value));
@@ -1775,6 +1840,67 @@ Value execute(const Array& params, bool fHelp)
 		}
 
 	}
+	else if (sItem == "daowithdrawalrequest")
+	{
+		//execute sendfeed org_name feed_key feed_value
+		if (params.size() != 4)
+		{
+			entry.push_back(Pair("Error","You must specify your nickname, the dao_symbol and amount: Ex.: execute daowithdrawalrequest jondoe CLG 10000"));
+			results.push_back(entry);
+		}
+		else
+		{
+				
+				std::string nickname  = params[1].get_str();
+				std::string symbol    = params[2].get_str();
+				std::string sAmount   = params[3].get_str();
+				boost::to_upper(symbol);
+				std::string orgname   = ReadCache("daoname",symbol);
+			
+				if (orgname.empty())
+				{
+					entry.push_back(Pair("Error","DAO does not exist."));
+					results.push_back(entry);
+				}
+				else
+				{
+					ReadConfigFile(mapArgs, mapMultiArgs);
+										
+					std::string privkey   = GetArgument("daoclient" + nickname+"-"+symbol, "");
+					std::string OrgPubKey = ReadCache("daoclientpubkey",nickname+"-"+symbol);
+		
+					if (OrgPubKey.empty())
+					{
+						entry.push_back(Pair("Error","Public Key is missing. Org is corrupted or not yet synchronized."));
+						results.push_back(entry);
+					}
+					else
+					{
+		
+						if (privkey.empty())
+						{
+							entry.push_back(Pair("Error","Private Key is missing.  To send a message to a dao, you must set the private key." 
+							+ symbol + " key."));
+							results.push_back(entry);
+						}
+						else
+						{
+							std::string sAction = "add";
+							std::string sType = "daowithdrawalrequest";
+							std::string contract = "<NAME>" + nickname + "</NAME><AMOUNT>" + sAmount + "</AMOUNT>";
+							std::string result = AddMessage(true,sType,nickname+"-"+symbol,
+								contract,privkey,AmountFromValue(2500),.01,OrgPubKey);
+							entry.push_back(Pair("SYMBOL",symbol));
+							entry.push_back(Pair("PrivKeyPrefix",privkey.substr(0,10)));
+							entry.push_back(Pair("Amount",sAmount));
+							entry.push_back(Pair("Results",result));
+							results.push_back(entry);
+						}
+					}
+				}
+		}
+	}
+	
 	else if (sItem == "sendfeed")
 	{
 		//execute sendfeed org_name feed_key feed_value
@@ -1788,12 +1914,13 @@ Value execute(const Array& params, bool fHelp)
 				std::string orgname   = params[1].get_str();
 				std::string feedkey   = params[2].get_str();
 				std::string feedvalue = params[3].get_str();
-				std::string symbol    = ReadCache("daosymbol",orgname);
 				boost::to_upper(orgname);
+				std::string symbol    = ReadCache("daosymbol",orgname);
+		
 				boost::to_upper(feedkey);
 				boost::to_upper(symbol);
 				boost::to_upper(feedvalue);
-		
+			
 				if (symbol.empty())
 				{
 					entry.push_back(Pair("Error","DAO does not exist."));
@@ -1801,31 +1928,92 @@ Value execute(const Array& params, bool fHelp)
 				}
 				else
 				{
+					ReadConfigFile(mapArgs, mapMultiArgs);
 					std::string privkey   = GetArgument("dao" + symbol, "");
-					std::string OrgPubKey = ReadCache("daopubkey",symbol);
+					std::string OrgPubKey = ReadCache("daopubkey",orgname);
 		
-					if (privkey.empty())
+					if (OrgPubKey.empty())
 					{
-						entry.push_back(Pair("Error","Private Key is missing.  To update a feed value, you must set the dao" 
-							+ symbol + " key."));
+						entry.push_back(Pair("Error","Public Key is missing. Org is corrupted or not yet synchronized."));
 						results.push_back(entry);
 					}
 					else
 					{
-					    std::string sAction = "add";
-						std::string sType = "daofeed";
-						std::string contract = "<FEEDKEY>" + feedkey + "</FEEDKEY><FEEDVALUE>" + feedvalue + "</FEEDVALUE>";
-						std::string result = AddMessage(true,sType,symbol+"-"+feedkey,
-							contract,privkey,AmountFromValue(2500),.01,OrgPubKey);
-						entry.push_back(Pair("SYMBOL",symbol));
-						entry.push_back(Pair("Feed Key Field",feedkey));
-						entry.push_back(Pair("Feed Key Value",feedvalue));
-						entry.push_back(Pair("Results",result));
-						results.push_back(entry);
+		
+						if (privkey.empty())
+						{
+							entry.push_back(Pair("Error","Private Key is missing.  To update a feed value, you must set the dao" 
+							+ symbol + " key."));
+							results.push_back(entry);
+						}
+						else
+						{
+							std::string sAction = "add";
+							std::string sType = "daofeed";
+							std::string contract = "<FEEDKEY>" + feedkey + "</FEEDKEY><FEEDVALUE>" + feedvalue + "</FEEDVALUE>";
+							std::string result = AddMessage(true,sType,symbol+"-"+feedkey,
+								contract,privkey,AmountFromValue(2500),.01,OrgPubKey);
+							entry.push_back(Pair("SYMBOL",symbol));
+							entry.push_back(Pair("Feed Key Field",feedkey));
+							entry.push_back(Pair("PrivKeyPrefix",privkey.substr(0,10)));
+
+							entry.push_back(Pair("Feed Key Value",feedvalue));
+							entry.push_back(Pair("Results",result));
+							results.push_back(entry);
+						}
 					}
 				}
 		}
 	}
+	else if (sItem == "writedata")
+	{
+		if (params.size() != 3)
+		{
+			entry.push_back(Pair("Error","You must specify the Key and Value.  For example execute writedata dog_color black."));
+			results.push_back(entry);
+		}
+		else
+		{
+				std::string sKey = params[1].get_str();
+				std::string sValue = params[2].get_str();
+				//CTxDB txdb("rw");
+				CTxDB txdb;
+				txdb.TxnBegin();
+				std::string result = "Success.";
+				if (!txdb.WriteGenericData(sKey,sValue)) result = "Unable to write.";
+			    if (!txdb.TxnCommit()) result = "Unable to Commit.";
+				entry.push_back(Pair("Result",result));
+				results.push_back(entry);
+		}
+			
+	}
+	else if (sItem == "readdata")
+	{
+		if (params.size() != 2)
+		{
+			entry.push_back(Pair("Error","You must specify the Key.  For example execute readdata dog_color."));
+			results.push_back(entry);
+		}
+		else
+		{
+				std::string sKey = params[1].get_str();
+				std::string sValue = "?";
+				//CTxDB txdb("cr");
+				CTxDB txdb;
+		 		if (!txdb.ReadGenericData(sKey,sValue)) 
+				{
+						entry.push_back(Pair("Error",sValue));
+			
+						sValue = "Failed to read from disk.";
+				}
+				entry.push_back(Pair("Key",sKey));
+				
+				entry.push_back(Pair("Result",sValue));
+				results.push_back(entry);
+		}
+			
+	}
+	
 	else if (sItem == "vote")
 	{
 		if (params.size() != 3)
@@ -3957,7 +4145,7 @@ Value listitem(const Array& params, bool fHelp)
 	    	results = MagnitudeReport(msPrimaryCPID);
 			return results;
 	}
-
+	
 	if (sitem == "projects") 
 	{
 		for(map<string,StructCPID>::iterator ii=mvBoincProjects.begin(); ii!=mvBoincProjects.end(); ++ii) 

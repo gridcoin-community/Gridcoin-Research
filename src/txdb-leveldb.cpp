@@ -302,6 +302,18 @@ bool CTxDB::WriteCheckpointPubKey(const string& strPubKey)
     return Write(string("strCheckpointPubKey"), strPubKey);
 }
 
+bool CTxDB::ReadGenericData(std::string KeyName, std::string& strValue)
+{
+    return Read(string(KeyName.c_str()), strValue);
+}
+
+bool CTxDB::WriteGenericData(const std::string& strKey,const std::string& strData)
+{
+    return Write(string(strKey), strData);
+}
+
+
+
 static CBlockIndex *InsertBlockIndex(uint256 hash)
 {
     if (hash == 0)

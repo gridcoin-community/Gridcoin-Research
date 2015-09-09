@@ -201,6 +201,11 @@ public:
     bool WriteSyncCheckpoint(uint256 hashCheckpoint);
     bool ReadCheckpointPubKey(std::string& strPubKey);
     bool WriteCheckpointPubKey(const std::string& strPubKey);
+
+	bool ReadGenericData(std::string KeyName, std::string& strValue);
+	bool WriteGenericData(const std::string& strKey,const std::string& strData);
+
+
     bool LoadBlockIndex();
 private:
     bool LoadBlockIndexGuts();

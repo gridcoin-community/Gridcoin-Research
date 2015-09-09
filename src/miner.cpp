@@ -713,7 +713,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 			if (bResearchAgeEnabled)
 			{
 					StructCPID st1 = GetLifetimeCPID(boincblock.cpid);
-					if (boincblock.ResearchSubsidy > out_por)
+					if (boincblock.ResearchSubsidy > (out_por+1))
 					{
 						    if (fDebug3) printf("CheckStake[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and out_por %f with Out_Interest %f for CPID %s ",
 								(double)boincblock.InterestSubsidy,
@@ -748,8 +748,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 		if (fDebug3) printf("Hash boinc %s",pblock->vtx[0].hashBoinc.c_str());
         return error("CheckStake() : proof-of-stake checking failed");
 	}
-
-	
+		
 
     //// debug print
 	double block_value = CoinToDouble(pblock->vtx[1].GetValueOut());
