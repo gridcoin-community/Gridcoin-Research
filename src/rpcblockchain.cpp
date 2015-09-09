@@ -1686,15 +1686,20 @@ Value execute(const Array& params, bool fHelp)
 				std::string org    = params[1].get_str();
 				std::string symbol = params[2].get_str();
 				std::string grc    = params[3].get_str();
+				boost::to_upper(org);
+				boost::to_upper(symbol);
+
+				//9-9-2015
+
 			    CBitcoinAddress address(grc);
 				bool isValid = address.IsValid();
 				std::string               err = "";
 				if (org.empty())          err = "Org must be specified.";
 				if (symbol.length() != 3) err = "Symbol must be 3 characters.";
 				if (!isValid)             err = "You must specify a valid GRC receiving address.";
-				std::string OrgPubKey    = ReadCache("daopubkey",symbol);
-				std::string CachedSymbol = ReadCache("daosymbol",symbol);
-				std::string CachedName   = ReadCache("daoname",org);
+				std::string OrgPubKey    = ReadCache("daopubkey",org);
+				std::string CachedSymbol = ReadCache("daosymbol",org);
+				std::string CachedName   = ReadCache("daoname",CachedSymbol);
 				if (!CachedSymbol.empty())                         err = "DAO Symbol already exists.  Please choose a different symbol.";
 				if (!OrgPubKey.empty() || !CachedName.empty())     err = "DAO already exists.  Please choose a different Org Name.";
 				
@@ -1724,10 +1729,51 @@ Value execute(const Array& params, bool fHelp)
 					std::string sKeyNarr = "dao" + symbol + "=" + PrivateKey;
 					entry.push_back(Pair("PrivateKey",sKeyNarr));
 					entry.push_back(Pair("Warning!","Do not lose your private key.  It is non-recoverable.  You may add it to your config file as noted above OR specify it manually via RPC commands."));
+					entry.push_back(Pair("Note","After you add your private key to your config, you may 'execute readconfig' to read the key back in to memory (only necessary for this session; after a restart it will be memorized automatically)."));
 					results.push_back(entry);
 	
 				}
 			}
+	}
+	else if (sItem == "readconfig")
+	{
+		ReadConfigFile(mapArgs, mapMultiArgs);
+
+	}
+	else if (sItem == "readfeedvalue")
+	{
+		//execute readfeedvalue org_name feed_key
+		if (params.size() != 3)
+		{
+			entry.push_back(Pair("Error","You must specify the org_name, and feed_key: Ex.: execute readfeedvalue COOLORG shares."));
+			results.push_back(entry);
+		}
+		else
+		{
+				std::string orgname   = params[1].get_str();
+				std::string feedkey   = params[2].get_str();
+				std::string symbol    = ReadCache("daosymbol",orgname);
+				boost::to_upper(orgname);
+				boost::to_upper(feedkey);
+				boost::to_upper(symbol);
+
+				if (symbol.empty())
+				{
+					entry.push_back(Pair("Error","DAO does not exist."));
+					results.push_back(entry);
+				}
+				else
+				{
+					//Get the latest feed value (daofeed,symbol-feedkey)
+					std::string contract = ReadCache("daofeed",symbol+"-"+feedkey);
+					std::string OrgPubKey = ReadCache("daopubkey",symbol);
+					std::string feed_value = ExtractXML(contract,"<FEEDVALUE>","</FEEDVALUE>");
+					entry.push_back(Pair("Contract",contract));
+					entry.push_back(Pair(feedkey,feed_value));
+					results.push_back(entry);
+				}
+		}
+
 	}
 	else if (sItem == "sendfeed")
 	{
@@ -1743,7 +1789,11 @@ Value execute(const Array& params, bool fHelp)
 				std::string feedkey   = params[2].get_str();
 				std::string feedvalue = params[3].get_str();
 				std::string symbol    = ReadCache("daosymbol",orgname);
-				
+				boost::to_upper(orgname);
+				boost::to_upper(feedkey);
+				boost::to_upper(symbol);
+				boost::to_upper(feedvalue);
+		
 				if (symbol.empty())
 				{
 					entry.push_back(Pair("Error","DAO does not exist."));
@@ -1765,7 +1815,8 @@ Value execute(const Array& params, bool fHelp)
 					    std::string sAction = "add";
 						std::string sType = "daofeed";
 						std::string contract = "<FEEDKEY>" + feedkey + "</FEEDKEY><FEEDVALUE>" + feedvalue + "</FEEDVALUE>";
-						std::string result = AddMessage(true,sType,symbol,contract,privkey,AmountFromValue(2500),.01,OrgPubKey);
+						std::string result = AddMessage(true,sType,symbol+"-"+feedkey,
+							contract,privkey,AmountFromValue(2500),.01,OrgPubKey);
 						entry.push_back(Pair("SYMBOL",symbol));
 						entry.push_back(Pair("Feed Key Field",feedkey));
 						entry.push_back(Pair("Feed Key Value",feedvalue));
@@ -2434,7 +2485,6 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "listdata")
 	{
-
 		if (params.size() != 2)
 		{
 			entry.push_back(Pair("Error","You must specify a keytype (IE execute dumpkeys project)"));
@@ -3613,7 +3663,7 @@ std::string AddMessage(bool bAdd, std::string sType, std::string sPrimaryKey, st
 	//Sign Message
 	std::string sSig = SignMessage(sType+sPrimaryKey+sValue,sMasterKey);
 	std::string sMessageSignature = "<MS>" + sSig + "</MS>";
-	wtx.hashBoinc = sMessageType+sMessageKey+sMessageValue+sMessageAction+sMessageSignature;
+	wtx.hashBoinc = sMessageType+sMessageKey+sMessageValue+sMessageAction+sMessagePublicKey+sMessageSignature;
     string strError = pwalletMain->SendMoneyToDestinationWithMinimumBalance(address.Get(), nAmount, MinimumBalance, wtx);
 		
     if (strError != "")        throw JSONRPCError(RPC_WALLET_ERROR, strError);

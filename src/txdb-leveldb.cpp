@@ -608,6 +608,7 @@ bool CTxDB::LoadBlockIndex()
 
 	printf("Set up RA ");
 
+	nStart = GetTimeMillis();
 
 
 	//8-13-2015 - Gridcoin - In order, set up Research Age hashes and lifetime fields
@@ -662,6 +663,7 @@ bool CTxDB::LoadBlockIndex()
 				}
 		}
 	}
-	printf("RA Complete ");
+	printf("RA Complete - RA Time %15"PRId64"ms\n", GetTimeMillis() - nStart);
+
     return true;
 }

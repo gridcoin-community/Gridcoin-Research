@@ -4059,7 +4059,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3425) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-					if (bv < 3498 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
+					if (bv < 3499 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
 			}
 
 			if (bb.cpid != "INVESTOR")
@@ -4823,7 +4823,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 15030;
+		nGrandfather = 15295;
 		nNewIndex = 10;
 		bResearchAgeEnabled = true;
 		bRemotePaymentsEnabled = false;
@@ -6293,7 +6293,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 8-5-2015
-		if (pfrom->nVersion < 180308 && fTestNet)
+		if (pfrom->nVersion < 180309 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -8738,8 +8738,10 @@ void MemorizeMessage(std::string msg,int64_t nTime)
 			  {
 
 				  // If this is a DAO, ensure the contents are protected:
-				  if (sMessageType=="dao")
+				  if (sMessageType=="dao" && !sMessagePublicKey.empty())
 				  {
+					        if (fDebug3) printf("DAO Message %s",msg.c_str());
+
 							std::string Org = sMessageKey;
 							if (sMessageAction=="A")
 							{
@@ -8750,8 +8752,8 @@ void MemorizeMessage(std::string msg,int64_t nTime)
 									WriteCache("daopubkey",Org,sMessagePublicKey,nTime);
 									std::string OrgSymbol = ExtractXML(sMessageValue,"<SYMBOL>","</SYMBOL>");
 									std::string OrgName = ExtractXML(sMessageValue,"<NAME>","</NAME>");
-									WriteCache("daosymbol",OrgSymbol,OrgSymbol,nTime);
-									WriteCache("daoname",OrgName,OrgName,nTime);
+									WriteCache("daosymbol",OrgName,OrgSymbol,nTime);
+									WriteCache("daoname",OrgSymbol,OrgName,nTime);
 								}
 							}
 				  }
