@@ -27,6 +27,8 @@ extern volatile bool bCheckedForUpgradeLive;
 extern volatile bool bGlobalcomInitialized;
 extern volatile bool bAllowBackToBack;
 extern volatile bool CreatingCPUBlock;
+extern volatile bool bStakeMinerOutOfSyncWithNetwork;
+
 
 extern volatile double nGlobalHashCounter;
 

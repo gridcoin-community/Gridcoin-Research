@@ -22,7 +22,8 @@ extern Array MagnitudeReport(std::string cpid);
 
 
 double Cap(double dAmt, double Ceiling);
-extern std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, std::string sSig, int64_t MinimumBalance);
+extern std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, 
+	std::string sSig, int64_t MinimumBalance, double dFees, std::string sPublicKey);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
 std::string GetQuorumHash(std::string data);
 bool TallyNetworkAverages(bool ColdBoot);
@@ -39,15 +40,10 @@ StructCPID GetLifetimeCPID(std::string cpid);
 std::string getCpuHash();
 extern std::string getHardwareID();
 std::string getMacAddress();
-
 void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
 extern std::string MyBeaconExists(std::string cpid);
-
-
-
 int64_t GetEarliestWalletTransaction();
-
-extern bool CheckMessageSignature(std::string messagetype, std::string sMsg, std::string sSig);
+extern bool CheckMessageSignature(std::string messagetype, std::string sMsg, std::string sSig, std::string opt_pubkey);
 extern std::string CryptoLottery(int64_t locktime);
 std::string CPIDByAddress(std::string address);
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
@@ -858,7 +854,7 @@ std::string SignMessage(std::string sMsg, std::string sPrivateKey)
 	 return SignedMessage;
 }
 
-bool CheckMessageSignature(std::string messagetype, std::string sMsg, std::string sSig)
+bool CheckMessageSignature(std::string messagetype, std::string sMsg, std::string sSig, std::string strMessagePublicKey)
 {
 	 std::string strMasterPubKey = "";
 	 if (messagetype=="project" || messagetype=="projectmapping")
@@ -869,6 +865,8 @@ bool CheckMessageSignature(std::string messagetype, std::string sMsg, std::strin
 	 {
 		 strMasterPubKey = msMasterMessagePublicKey;
 	 }
+	 if (!strMessagePublicKey.empty()) strMasterPubKey = strMessagePublicKey;
+
 	 std::string db64 = DecodeBase64(sSig);
 	 CKey key;
 	 if (!key.SetPubKey(ParseHex(strMasterPubKey)))	return false;
@@ -1269,7 +1267,7 @@ void QueryWorldCommunityGridRAC()
 			std::string sName = "world_community_grid";
 			std::string sValue = contract;
 			printf("Contract %s\r\n",contract.c_str());
-			std::string result = AddMessage(true,sType,sName,sValue,sPass,AmountFromValue(2500));
+			std::string result = AddMessage(true,sType,sName,sValue,sPass,AmountFromValue(2500),.00001,"");
 			printf("Results %s",result.c_str());
    }
 
@@ -1308,7 +1306,7 @@ bool InsertSmartContract(std::string URL, std::string name)
 
 			if (vUsers.size() > 1 && total_rac > 10)
 			{
-				std::string result = AddMessage(true,sType,sName,sValue,sPass,AmountFromValue(2500));
+				std::string result = AddMessage(true,sType,sName,sValue,sPass,AmountFromValue(2500),.00001,"");
 			}
 			return (vUsers.size() > 1 && total_rac > 10) ? true : false;
 }
@@ -1351,7 +1349,7 @@ std::string GetListOf(std::string datatype)
 std::string AddContract(std::string sType, std::string sName, std::string sContract)
 {
 			std::string sPass = (sType=="project" || sType=="projectmapping" || sType=="smart_contract") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
-			std::string result = AddMessage(true,sType,sName,sContract,sPass,AmountFromValue(1));
+			std::string result = AddMessage(true,sType,sName,sContract,sPass,AmountFromValue(1),.00001,"");
 			return result;
 }
 
@@ -1673,6 +1671,109 @@ Value execute(const Array& params, bool fHelp)
 			entry.push_back(Pair("Shave Failed.",(double)pindexBest->nHeight));
    			results.push_back(entry);
 		 }
+	}
+	else if (sItem == "adddao")
+	{
+		//execute adddao org_name dao_currency_symbol org_receive_grc_address
+
+		if (params.size() != 4)
+		{
+			entry.push_back(Pair("Error","You must specify the Organization_Name, DAO_CURRENCY_SYMBOL, and ORG_RECEIVING_ADDRESS.  For example: execute adddao COOLORG CRG SKBQaegxasEyBVxmsTMg3HnasNg77CtjLo"));
+			results.push_back(entry);
+		}
+		else
+		{
+				std::string org    = params[1].get_str();
+				std::string symbol = params[2].get_str();
+				std::string grc    = params[3].get_str();
+			    CBitcoinAddress address(grc);
+				bool isValid = address.IsValid();
+				std::string               err = "";
+				if (org.empty())          err = "Org must be specified.";
+				if (symbol.length() != 3) err = "Symbol must be 3 characters.";
+				if (!isValid)             err = "You must specify a valid GRC receiving address.";
+				std::string OrgPubKey    = ReadCache("daopubkey",symbol);
+				std::string CachedSymbol = ReadCache("daosymbol",symbol);
+				std::string CachedName   = ReadCache("daoname",org);
+				if (!CachedSymbol.empty())                         err = "DAO Symbol already exists.  Please choose a different symbol.";
+				if (!OrgPubKey.empty() || !CachedName.empty())     err = "DAO already exists.  Please choose a different Org Name.";
+				
+				if (!err.empty())
+				{
+					entry.push_back(Pair("Error",err));
+					results.push_back(entry);
+	
+				}
+				else
+				{
+					//Generate the key pair for the org
+					CKey key;
+					key.MakeNewKey(false);
+					CPrivKey vchPrivKey = key.GetPrivKey();
+					std::string PrivateKey =  HexStr<CPrivKey::iterator>(vchPrivKey.begin(), vchPrivKey.end());
+					std::string PubKey = HexStr(key.GetPubKey().Raw());
+				    std::string sAction = "add";
+					std::string sType = "dao";
+					std::string sPass = PrivateKey;
+					std::string sName = symbol;
+					std::string contract = "<NAME>" + org + "</NAME><SYMBOL>" + symbol + "</SYMBOL><ADDRESS>" + grc + "</ADDRESS><PUBKEY>" + PubKey + "</PUBKEY>";
+					std::string result = AddMessage(true,sType,sName,contract,sPass,AmountFromValue(2500),1,PubKey);
+					entry.push_back(Pair("DAO Name",org));
+					entry.push_back(Pair("SYMBOL",symbol));
+					entry.push_back(Pair("Default Receive Address",grc));
+					std::string sKeyNarr = "dao" + symbol + "=" + PrivateKey;
+					entry.push_back(Pair("PrivateKey",sKeyNarr));
+					entry.push_back(Pair("Warning!","Do not lose your private key.  It is non-recoverable.  You may add it to your config file as noted above OR specify it manually via RPC commands."));
+					results.push_back(entry);
+	
+				}
+			}
+	}
+	else if (sItem == "sendfeed")
+	{
+		//execute sendfeed org_name feed_key feed_value
+		if (params.size() != 4)
+		{
+			entry.push_back(Pair("Error","You must specify the orgname, feed_key and feed_value: Ex.: execute sendfeed COOLORG shares 10000"));
+			results.push_back(entry);
+		}
+		else
+		{
+				std::string orgname   = params[1].get_str();
+				std::string feedkey   = params[2].get_str();
+				std::string feedvalue = params[3].get_str();
+				std::string symbol    = ReadCache("daosymbol",orgname);
+				
+				if (symbol.empty())
+				{
+					entry.push_back(Pair("Error","DAO does not exist."));
+					results.push_back(entry);
+				}
+				else
+				{
+					std::string privkey   = GetArgument("dao" + symbol, "");
+					std::string OrgPubKey = ReadCache("daopubkey",symbol);
+		
+					if (privkey.empty())
+					{
+						entry.push_back(Pair("Error","Private Key is missing.  To update a feed value, you must set the dao" 
+							+ symbol + " key."));
+						results.push_back(entry);
+					}
+					else
+					{
+					    std::string sAction = "add";
+						std::string sType = "daofeed";
+						std::string contract = "<FEEDKEY>" + feedkey + "</FEEDKEY><FEEDVALUE>" + feedvalue + "</FEEDVALUE>";
+						std::string result = AddMessage(true,sType,symbol,contract,privkey,AmountFromValue(2500),.01,OrgPubKey);
+						entry.push_back(Pair("SYMBOL",symbol));
+						entry.push_back(Pair("Feed Key Field",feedkey));
+						entry.push_back(Pair("Feed Key Value",feedvalue));
+						entry.push_back(Pair("Results",result));
+						results.push_back(entry);
+					}
+				}
+		}
 	}
 	else if (sItem == "vote")
 	{
@@ -2125,21 +2226,21 @@ Value execute(const Array& params, bool fHelp)
 		std::string strMasterPrivateKey = (sType=="project" || sType=="projectmapping") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
 		std::string sig = SignMessage("hello",strMasterPrivateKey);
 		entry.push_back(Pair("hello",sig));
-		bool r1 = CheckMessageSignature(sType,"hello",sig);
+		bool r1 = CheckMessageSignature(sType,"hello",sig,"");
 		entry.push_back(Pair("Check1",r1));
-		bool r2 = CheckMessageSignature(sType,"hello1",sig);
+		bool r2 = CheckMessageSignature(sType,"hello1",sig,"");
 		entry.push_back(Pair("Check2",r2));
-		bool r3 = CheckMessageSignature(sType,"hello",sig+"1");
+		bool r3 = CheckMessageSignature(sType,"hello",sig+"1","");
 		entry.push_back(Pair("Check3",r3));
 		//Forged Key
 		std::string forgedKey = "3082011302010104202b1c9faef66d42218eefb7c66fb6e49292972c8992b4100bb48835d325ec2d34a081a53081a2020101302c06072a8648ce3d0101022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f300604010004010704410479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141020101a144034200040cb218ee7495c2ba5d6ba069f97810e85dae8b446c0e4a1c6dec7fe610ab0fa4378bda5320f00e7a08a8e428489f41ad79d0428a091aa548aca18adbbbe64d41";
 		std::string sig2 = SignMessage("hello",forgedKey);
-		bool r10 = CheckMessageSignature(sType,"hello",sig2);
+		bool r10 = CheckMessageSignature(sType,"hello",sig2,"");
 		entry.push_back(Pair("FK10",r10));
 		std::string sig3 = SignMessage("hi",strMasterPrivateKey);
-		bool r11 = CheckMessageSignature("project","hi",sig3);
+		bool r11 = CheckMessageSignature("project","hi",sig3,"");
 		entry.push_back(Pair("FK11",r11));
-		bool r12 = CheckMessageSignature("general","1",sig3);
+		bool r12 = CheckMessageSignature("general","1",sig3,"");
 		entry.push_back(Pair("FK12",r12));
 		results.push_back(entry);
 	
@@ -2270,7 +2371,7 @@ Value execute(const Array& params, bool fHelp)
 			entry.push_back(Pair("Name",sName));
 			std::string sValue = params[4].get_str();
 			entry.push_back(Pair("Value",sValue));
-			std::string result = AddMessage(bAdd,sType,sName,sValue,sPass,AmountFromValue(5));
+			std::string result = AddMessage(bAdd,sType,sName,sValue,sPass,AmountFromValue(5),.1,"");
 			entry.push_back(Pair("Results",result));
 			results.push_back(entry);
 		}
@@ -3494,26 +3595,27 @@ Array MagnitudeReportCSV(bool detail)
 
 
 
-std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, std::string sMasterKey, int64_t MinimumBalance)
+std::string AddMessage(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, 
+					std::string sMasterKey, int64_t MinimumBalance, double dFees, std::string strPublicKey)
 {
     std::string foundation = fTestNet ? "mk1e432zWKH1MW57ragKywuXaWAtHy1AHZ" : "S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB";
     CBitcoinAddress address(foundation);
     if (!address.IsValid())       throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
-    int64_t nAmount = AmountFromValue(.00001);
+    int64_t nAmount = AmountFromValue(dFees);
     // Wallet comments
     CWalletTx wtx;
     if (pwalletMain->IsLocked())  throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
 	std::string sMessageType      = "<MT>" + sType  + "</MT>";  //Project or Smart Contract
-    std::string sMessageKey       = "<MK>" + sKey   + "</MK>";
+    std::string sMessageKey       = "<MK>" + sPrimaryKey   + "</MK>";
 	std::string sMessageValue     = "<MV>" + sValue + "</MV>";
+	std::string sMessagePublicKey = "<MPK>"+ strPublicKey + "</MPK>";
 	std::string sMessageAction    = bAdd ? "<MA>A</MA>" : "<MA>D</MA>"; //Add or Delete
 	//Sign Message
-	std::string sSig = SignMessage(sType+sKey+sValue,sMasterKey);
+	std::string sSig = SignMessage(sType+sPrimaryKey+sValue,sMasterKey);
 	std::string sMessageSignature = "<MS>" + sSig + "</MS>";
 	wtx.hashBoinc = sMessageType+sMessageKey+sMessageValue+sMessageAction+sMessageSignature;
     string strError = pwalletMain->SendMoneyToDestinationWithMinimumBalance(address.Get(), nAmount, MinimumBalance, wtx);
-
-	
+		
     if (strError != "")        throw JSONRPCError(RPC_WALLET_ERROR, strError);
     return wtx.GetHash().GetHex().c_str();
 }
@@ -3802,7 +3904,6 @@ Value listitem(const Array& params, bool fHelp)
 	}
 	if (sitem == "rsa")
 	{
-	
 	    	results = MagnitudeReport(msPrimaryCPID);
 			return results;
 	}

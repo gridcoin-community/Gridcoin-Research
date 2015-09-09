@@ -255,8 +255,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
                 // Read prev transaction
                 CTransaction txPrev;
                 CTxIndex txindex;
-				//9-8-2015
-
+			
 				if (fDebug10) printf("Enumerating tx %s ",tx.GetHash().GetHex().c_str());
 
                 if (!txPrev.ReadFromDisk(txdb, txin.prevout, txindex))
@@ -682,34 +681,9 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	}
 
 
-	/*
-	// 6-28-2015 : Verify all the cryptolottery recipients are still valid
-	if (bCryptoLotteryEnabled && false)
-	{
-			if (pblock->vtx[0].vout.size() > 2)
-			{
-				for (unsigned int i = 2; i < pblock->vtx[0].vout.size(); i++)
-				{
-					std::string Recipient = PubKeyToAddress(pblock->vtx[0].vout[i].scriptPubKey);
-					double      Amount    = CoinToDouble(pblock->vtx[0].vout[i].nValue);
-					double      Owed      = OwedByAddress(Recipient);
-					if (Amount > 0 && (Amount > Owed || Amount > GetMaximumBoincSubsidy(pblock->nTime))) 
-					{
-				        printf("POR Payment results in an overpayment; Recipient %s, Amount %f, Owed %f \r\n",Recipient.c_str(), Amount, Owed);
-		        		return error("POR Payment results in an overpayment; Recipient %s, Amount %f, Owed %f \r\n",
-							Recipient.c_str(), Amount, Owed);
-					}
-				}
-			}
-	 }
-	 */
-	
-
 	//1-20-2015 Ensure this stake is above the minimum threshhold; otherwise, vehemently reject
 	double PORDiff = GetBlockDifficulty(pblock->nBits);
-	//double mint1 = CoinToDouble(Mint);
 	MiningCPID boincblock = DeserializeBoincBlock(pblock->vtx[0].hashBoinc);
-
 	if (boincblock.cpid != "INVESTOR")
 	{
     		if (boincblock.projectname.empty() && !bResearchAgeEnabled) 	return error("CheckStake()::PoR Project Name invalid");
@@ -733,17 +707,14 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, boincblock.cpid, true, pindexBest->nTime, 
 		pindexBest,"checkstake", out_por, out_interest, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 
-
-
 	if (boincblock.cpid != "INVESTOR" && out_por > 1)
 	{
 			// Research Age 8-9-2015
 			if (bResearchAgeEnabled)
 			{
-					if (boincblock.ResearchSubsidy > (out_por+out_interest+1))
+					StructCPID st1 = GetLifetimeCPID(boincblock.cpid);
+					if (boincblock.ResearchSubsidy > out_por)
 					{
-							StructCPID st1 = GetLifetimeCPID(boincblock.cpid);
-
 						    if (fDebug3) printf("CheckStake[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and out_por %f with Out_Interest %f for CPID %s ",
 								(double)boincblock.InterestSubsidy,
 								(double)boincblock.ResearchSubsidy,(double)out_por,(double)out_interest,boincblock.cpid.c_str());
@@ -757,8 +728,8 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 			}
 	}
 	
-		
 
+	
 	double total_subsidy = boincblock.ResearchSubsidy + boincblock.InterestSubsidy;
     
 	if (fDebug10) printf("CheckStake[]: TotalSubsidy %f, cpid %s, Res %f, Interest %f, hb: %s \r\n",
@@ -769,7 +740,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 			//Prevent Hackers from spamming the network with small blocks
 			if (fDebug10) printf("****CheckStake[]: Total Mint too Small %s, Res %f, Interest %f, hash %s \r\n",boincblock.cpid.c_str(),boincblock.ResearchSubsidy,boincblock.InterestSubsidy,pblock->vtx[0].hashBoinc.c_str());
 			return false;
-			//			return error("*****CheckStake[] : Total Mint too Small, %f",(double)boincblock.ResearchSubsidy+boincblock.InterestSubsidy);
+			//	return error("*****CheckStake[] : Total Mint too Small, %f",(double)boincblock.ResearchSubsidy+boincblock.InterestSubsidy);
 	}
 			
 	if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc, true, pblock->nNonce))
@@ -779,8 +750,6 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	}
 
 	
-	
-
 
     //// debug print
 	double block_value = CoinToDouble(pblock->vtx[1].GetValueOut());
@@ -822,9 +791,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 		}
     }
 	nLastBlockSolved = GetAdjustedTime();
-	
     return true;
-
 
 }
 
@@ -910,8 +877,7 @@ Inception:
 			MilliSleep(250);
 		}
 
-
-			
+					
 
         while (vNodes.empty() || IsInitialBlockDownload())
         {

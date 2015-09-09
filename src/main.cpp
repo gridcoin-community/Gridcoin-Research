@@ -72,7 +72,7 @@ extern void TestScan2();
 std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
 
 
-bool CheckMessageSignature(std::string sMessageType, std::string sMsg, std::string sSig);
+bool CheckMessageSignature(std::string sMessageType, std::string sMsg, std::string sSig,std::string opt_pubkey);
 bool TallyMagnitudesByContract();
 bool SynchronizeRacForDPOR(bool SyncEntireCoin);
 extern std::string ReadCache(std::string section, std::string key);
@@ -289,6 +289,7 @@ volatile bool bAddressUser = false;
 volatile bool bCheckedForUpgrade = false;
 volatile bool bCheckedForUpgradeLive = false;
 volatile bool bGlobalcomInitialized = false;
+volatile bool bStakeMinerOutOfSyncWithNetwork = false;
 
 extern bool CheckWorkCPU(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey);
 extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
@@ -3409,7 +3410,7 @@ bool ShaveChain(CTxDB& txdb)
 	int iTarget = 0;
 	int iStart = 0;
     printf("Shaving %f blocks off of main chain\n",(double)iHaircut);
-	CBlockIndex* pHaircut;
+	CBlockIndex* pHaircut = NULL;
     CBlockIndex* pBarber = pindexBest;
 
 	if (!pBarber) 
@@ -4034,7 +4035,11 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 			{
 							if (fDebug3) printf("CheckBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
 									(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,CoinToDouble(nCalculatedResearch),(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str());
-				
+							if (msPrimaryCPID == bb.cpid)
+							{
+								bStakeMinerOutOfSyncWithNetwork=true;
+								return false;
+							}
 							return DoS(10,error("CheckBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
 									(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,CoinToDouble(nCalculatedResearch),(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
 				
@@ -4054,7 +4059,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3425) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-					if (bv < 3497 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
+					if (bv < 3498 && fTestNet) return error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n");
 			}
 
 			if (bb.cpid != "INVESTOR")
@@ -4818,7 +4823,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 13155;
+		nGrandfather = 15030;
 		nNewIndex = 10;
 		bResearchAgeEnabled = true;
 		bRemotePaymentsEnabled = false;
@@ -8718,11 +8723,12 @@ void MemorizeMessage(std::string msg,int64_t nTime)
 	      if (msg.empty()) return;
 		  if (Contains(msg,"<MT>"))
 	 	  {
-			  std::string sMessageType  = ExtractXML(msg,"<MT>","</MT>");
-  			  std::string sMessageKey   = ExtractXML(msg,"<MK>","</MK>");
-			  std::string sMessageValue = ExtractXML(msg,"<MV>","</MV>");
-			  std::string sMessageAction= ExtractXML(msg,"<MA>","</MA>");
-			  std::string sSignature    = ExtractXML(msg,"<MS>","</MS>");
+			  std::string sMessageType      = ExtractXML(msg,"<MT>","</MT>");
+  			  std::string sMessageKey       = ExtractXML(msg,"<MK>","</MK>");
+			  std::string sMessageValue     = ExtractXML(msg,"<MV>","</MV>");
+			  std::string sMessageAction    = ExtractXML(msg,"<MA>","</MA>");
+			  std::string sSignature        = ExtractXML(msg,"<MS>","</MS>");
+			  std::string sMessagePublicKey = ExtractXML(msg,"<MPK>","</MPK>");
 			  if (sMessageType=="beacon" && Contains(sMessageValue,"INVESTOR")) 
 			  {
 					sMessageValue="";
@@ -8730,11 +8736,38 @@ void MemorizeMessage(std::string msg,int64_t nTime)
 
 			  if (!sMessageType.empty() && !sMessageKey.empty() && !sMessageValue.empty() && !sMessageAction.empty() && !sSignature.empty())
 			  {
-				 
+
+				  // If this is a DAO, ensure the contents are protected:
+				  if (sMessageType=="dao")
+				  {
+							std::string Org = sMessageKey;
+							if (sMessageAction=="A")
+							{
+								std::string daoPubKey = ReadCache("daopubkey",Org);
+								if (daoPubKey.empty())
+								{
+									//We only accept the first message
+									WriteCache("daopubkey",Org,sMessagePublicKey,nTime);
+									std::string OrgSymbol = ExtractXML(sMessageValue,"<SYMBOL>","</SYMBOL>");
+									std::string OrgName = ExtractXML(sMessageValue,"<NAME>","</NAME>");
+									WriteCache("daosymbol",OrgSymbol,OrgSymbol,nTime);
+									WriteCache("daoname",OrgName,OrgName,nTime);
+								}
+							}
+				  }
+
+				  if (sMessageType=="dao" || sMessageType == "daofeed")
+				  {
+						sMessagePublicKey = ReadCache("daopubkey",sMessageKey);
+				  }
+				
+				  
 				  //Verify sig first
-				  bool Verified = CheckMessageSignature(sMessageType,sMessageType+sMessageKey+sMessageValue,sSignature);
+				  bool Verified = CheckMessageSignature(sMessageType,sMessageType+sMessageKey+sMessageValue,
+					  sSignature,sMessagePublicKey);
 				  if (Verified)
 				  {
+					
 						if (sMessageAction=="A")
 						{
 								if (fDebug10) printf("Adding MessageKey type %s Key %s Value %s\r\n",
