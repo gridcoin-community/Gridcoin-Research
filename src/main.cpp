@@ -1674,10 +1674,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         // This is done last to help prevent CPU exhaustion denial-of-service attacks.
         if (!tx.ConnectInputs(txdb, mapInputs, mapUnused, CDiskTxPos(1,1,1), pindexBest, false, false))
         {
-			if (fDebug) printf("AcceptToMemoryPool : ConnectInputs failed %s", hash.ToString().c_str());
-			return false;
-
-        }
+			return error("AcceptToMemoryPool : ConnectInputs failed %s", hash.ToString().c_str());
+	    }
     }
 
     // Store transaction in memory
@@ -3733,7 +3731,9 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 				txdb.TxnAbort();
 				// Since we failed to re-organize, we must try to shave blocks off the chain:
 				bool fResult = false;
-				if (bResearchAgeEnabled) fResult = ShaveChain(txdb);
+				bool fOkToPerformModernReorganize = (GetArg("-modernreorg", "true")=="true");
+	
+				if (bResearchAgeEnabled || fOkToPerformModernReorganize) fResult = ShaveChain(txdb);
 				if (!fResult)
 				{
 					InvalidChainFound(pindexNew);
@@ -6827,7 +6827,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     }
                     else if (!fMissingInputs2)
                     {
-                        // invalid orphan
+                        // invalid orphan 9-11-2015
                         vEraseQueue.push_back(orphanTxHash);
                         printf("   removed invalid orphan tx %s\n", orphanTxHash.ToString().substr(0,10).c_str());
                     }
