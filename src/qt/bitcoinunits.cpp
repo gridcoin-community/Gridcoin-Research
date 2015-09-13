@@ -45,9 +45,9 @@ QString BitcoinUnits::description(int unit)
 {
     switch(unit)
     {
-    case BTC: return QString("GridCoins");
-    case mBTC: return QString("Milli-GridCoins (1 / 1,000)");
-    case uBTC: return QString("Micro-GridCoins (1 / 1,000,000)");
+    case BTC: return QString("Gridcoins");
+    case mBTC: return QString("Milli-Gridcoins (1 / 1,000)");
+    case uBTC: return QString("Micro-Gridcoins (1 / 1,000,000)");
     default: return QString("???");
     }
 }
