@@ -25,7 +25,7 @@ extern int MINOR_VERSION;
 ///////////////////////////////////////////////////////////
 // network protocol versioning                           //
 //                                                       //
-static const int PROTOCOL_VERSION =       180310;        //
+static const int PROTOCOL_VERSION =       180311;        //
 // disconnect from peers older than this proto version   //
 static const int MIN_PEER_PROTO_VERSION = 180284;        // 
 ///////////////////////////////////////////////////////////
@@ -46,7 +46,7 @@ static const int NOBLKS_VERSION_START = 1;               //
 static const int NOBLKS_VERSION_END = 180283;            // 
 // TESTNET:      										 //
 static const int TESTNET_NOBLKS_VERSION_START = 1;       //
-static const int TESTNET_NOBLKS_VERSION_END = 180309;    // 
+static const int TESTNET_NOBLKS_VERSION_END = 180310;    // 
 ///////////////////////////////////////////////////////////
 //
 // database format versioning

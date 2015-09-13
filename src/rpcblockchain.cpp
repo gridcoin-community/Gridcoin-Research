@@ -959,8 +959,6 @@ bool TallyMagnitudesInSuperblock()
 {
 	try
 	{
-		if (fDebug) printf(".40.");
-						
 		std::string superblock = ReadCache("superblock","magnitudes");
 		if (superblock.empty()) return false;
 		std::vector<std::string> vSuperblock = split(superblock.c_str(),";");
@@ -1050,8 +1048,6 @@ bool TallyMagnitudesInSuperblock()
 	network.rac = TotalRAC;
 	network.NetworkProjects = TotalProjects;
 	//8-16-2015 Store the quotes
-	
-
 	std::string q = ReadCache("superblock","quotes");
 	if (fDebug3) printf("q %s",q.c_str());
 	std::vector<std::string> vQ = split(q.c_str(),";");
@@ -3004,7 +3000,7 @@ Array MagnitudeReport(std::string cpid)
 										StructCPID stCPID = GetLifetimeCPID(structMag.cpid);
 										double days = (GetAdjustedTime() - stCPID.LowLockTime)/86400;
 										entry.push_back(Pair("CPID",structMag.cpid));
-										entry.push_back(Pair("GRCAddress",structMag.GRCAddress));
+									//	entry.push_back(Pair("GRCAddress",structMag.GRCAddress));
 										entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
 										entry.push_back(Pair("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime)));
 									
@@ -3040,7 +3036,7 @@ Array MagnitudeReport(std::string cpid)
 									else
 									{
 										entry.push_back(Pair("CPID",structMag.cpid));
-										entry.push_back(Pair("GRCAddress",structMag.GRCAddress));
+									//	entry.push_back(Pair("GRCAddress",structMag.GRCAddress));
 										entry.push_back(Pair("Last Block Paid",structMag.LastBlock));
 										StructCPID DPOR = mvDPOR[structMag.cpid];
 										entry.push_back(Pair("DPOR Magnitude",	structMag.Magnitude));

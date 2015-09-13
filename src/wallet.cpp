@@ -1943,10 +1943,10 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	msMiningErrors7=""; //Clear errors; ready to roll...
 	msMiningErrors5="";
 	msMiningErrors6="";
+	msMiningErrors7="";
 	msMiningErrors8="";
 	
-	int64_t nBlockTime = 0;
-	msMiningErrors7="";
+	//int64_t nBlockTime = 0;
 
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
     {
@@ -1965,7 +1965,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
                 continue;
         }
 
-		nBlockTime = block.GetBlockTime();
+		//nBlockTime = block.GetBlockTime();
 
         static int nMaxStakeSearchInterval = 60;
         if (block.GetBlockTime() + nStakeMinAge > txNew.nTime - nMaxStakeSearchInterval)

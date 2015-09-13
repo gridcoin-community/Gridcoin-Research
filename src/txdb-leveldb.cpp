@@ -29,6 +29,7 @@ bool IsLockTimeWithin14days(double locktime);
 MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID> vRef);
 MiningCPID DeserializeBoincBlock(std::string block);
 void AddCPIDBlockHash(std::string cpid, std::string blockhash);
+void SetUpExtendedBlockIndexFieldsOnce();
 
 static leveldb::Options GetOptions() {
     leveldb::Options options;
@@ -338,7 +339,6 @@ static CBlockIndex *InsertBlockIndex(uint256 hash)
 
 bool CTxDB::LoadBlockIndex()
 {
-
 	int64_t nStart = GetTimeMillis();
 	double dBlockCount = 0;
 
@@ -484,7 +484,7 @@ bool CTxDB::LoadBlockIndex()
     // Verify blocks in the best chain
     int nCheckLevel = GetArg("-checklevel", 1);
     int nCheckDepth = GetArg( "-checkblocks", 1000);
-	if (fTestNet) nCheckDepth = 45000; //Check the last 45000 blocks in TestNet since we want to rebuild the chain (8-19-2015)
+	if (fTestNet) nCheckDepth = 3000; //Check the last 3000 blocks in TestNet since we want to rebuild the chain (8-19-2015)
 
     if (nCheckDepth == 0)
         nCheckDepth = 1000000000; // suffices until the year 19000
@@ -635,14 +635,14 @@ bool CTxDB::LoadBlockIndex()
 				pindex = pindex->pnext;
 				if (pindex == pindexBest) break;
 				if (pindex==NULL || !pindex->IsInMainChain()) continue;
-				if (IsLockTimeWithin14days((double)pindex->nTime)) 
-				{
-					CBlock block;
-					if (!block.ReadFromDisk(pindex)) return false;
-					MiningCPID bb = GetInitializedMiningCPID(pindex->GetBlockHash().GetHex(), mvBlockIndex);
-	     			bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
-					mvBlockIndex[pindex->GetBlockHash().GetHex()] = bb;
-				}
+				//if (IsLockTimeWithin14days((double)pindex->nTime) && !bResearchAgeEnabled) 
+				//{
+				//	CBlock block;
+				//	if (!block.ReadFromDisk(pindex)) return false;
+				//	MiningCPID bb = GetInitializedMiningCPID(pindex->GetBlockHash().GetHex(), mvBlockIndex);
+	     		//	bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
+				//	mvBlockIndex[pindex->GetBlockHash().GetHex()] = bb;
+				//}
 
 				if (!pindex->sCPID.empty())
 				{
@@ -676,6 +676,9 @@ bool CTxDB::LoadBlockIndex()
 		}
 	}
 	printf("RA Complete - RA Time %15"PRId64"ms\n", GetTimeMillis() - nStart);
+	nStart = GetTimeMillis();
+	SetUpExtendedBlockIndexFieldsOnce();
+	printf("SetUpExtendedBlockIndexFieldsOnce Complete - Time %15"PRId64"ms\n", GetTimeMillis() - nStart);
 
     return true;
 }

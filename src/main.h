@@ -182,6 +182,8 @@ extern std::string  msMiningErrors7;
 extern std::string  msMiningErrors8;
 extern std::string  msMiningErrorsIncluded;
 extern std::string  msMiningErrorsExcluded;
+extern std::string  msSuperBlockHashes;
+extern std::string  msContracts;
 
 extern std::string  msRSAOverview;
 extern std::string  msNeuralResponse;
@@ -194,6 +196,7 @@ extern std::string  OrganizationKey;
 
 extern int nGrandfather;
 extern int nNewIndex;
+extern int nNewIndex2;
 
 // PoB GPU Miner Global Vars:
 extern std::string 	msGPUMiningProject;
@@ -1276,7 +1279,11 @@ public:
 	double nLastPORBlock;
 	std::string sLastPORBlockHash;
 	double nTotalPORPayments;
-	
+	// Indicators (9-13-2015)
+	unsigned int nIsSuperBlock;
+	unsigned int nIsContract;
+	std::string sGRCAddress;
+	std::string sReserved;
 
     unsigned int nFlags;  // ppcoin: block index flags
     enum  
@@ -1333,7 +1340,10 @@ public:
 		nLastPORBlock=0;
 		sLastPORBlockHash = "";
 		nTotalPORPayments = 0;
-
+		nIsSuperBlock = 0;
+		nIsContract = 0;
+		sGRCAddress = "";
+		sReserved = "";
     }
 
     CBlockIndex(unsigned int nFileIn, unsigned int nBlockPosIn, CBlock& block)
@@ -1560,7 +1570,15 @@ public:
 		READWRITE(nResearchSubsidy);
 		READWRITE(nInterestSubsidy);
 		READWRITE(nMagnitude);
-	
+	    //9-13-2015 - Indicators
+		if (this->nHeight > nNewIndex2)
+		{
+			READWRITE(nIsSuperBlock);
+			READWRITE(nIsContract);
+			READWRITE(sGRCAddress);
+			READWRITE(sReserved);
+		}
+
 
     )
 

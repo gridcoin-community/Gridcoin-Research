@@ -107,7 +107,7 @@ protected:
         ssKey.reserve(1000);
         ssKey << key;
         CDataStream ssValue(SER_DISK, CLIENT_VERSION);
-        ssValue.reserve(10000);
+        ssValue.reserve(90000);
         ssValue << value;
 
         if (activeBatch) {

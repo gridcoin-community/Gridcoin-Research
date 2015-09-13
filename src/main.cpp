@@ -32,7 +32,11 @@
 int DownloadBlocks();
 extern MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID> vRef);
 extern std::string getHardDriveSerial();
+extern void SetUpExtendedBlockIndexFieldsOnce();
+extern bool IsContract(CBlockIndex* pIndex);
 std::string ExtractValue(std::string data, std::string delimiter, int pos);
+extern bool IsSuperBlock(CBlockIndex* pIndex);
+extern MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 
 json_spirit::Array MagnitudeReport(std::string cpid);
 
@@ -380,6 +384,8 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors8 = "";
  std::string    msMiningErrorsIncluded = "";
  std::string    msMiningErrorsExcluded = "";
+ std::string    msSuperBlockHashes = "";
+ std::string    msContracts = "";
 
  std::string    msRSAOverview = "";
  std::string    Organization = "";
@@ -390,6 +396,8 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  
  int nGrandfather = 288930;
  int nNewIndex = 271625;
+ int nNewIndex2 = 350000;
+
  int64_t nGenesisSupply = 340569880;
 
  //GPU Projects:
@@ -2808,7 +2816,13 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
 					return false;
 				}
 				if (!txindex.vSpent[prevout.n].IsNull())
+				{
+					if (fTestNet && pindexBlock->nHeight < nGrandfather)
+					{
+						return fMiner ? false : true;
+					}
 					return fMiner ? false : error("ConnectInputs() : %s prev tx already used at %s", GetHash().ToString().c_str(), txindex.vSpent[prevout.n].ToString().c_str());
+				}
 
 			}
 
@@ -2932,7 +2946,6 @@ bool LoadSuperblock(std::string data, int64_t nTime, double height)
 		WriteCache("superblock","quotes",ExtractXML(data,"<QUOTES>","</QUOTES>"),nTime);
 		WriteCache("superblock","all",data,nTime);
 		WriteCache("superblock","block_number",RoundToString(height,0),nTime);
-		//TallyMagnitudesInSuperblock(); (Done in TallynetworkAverages)
 		return true;
 }
 
@@ -3179,6 +3192,17 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		pindex->nMagnitude = bb.Magnitude;
 		pindex->nResearchSubsidy = bb.ResearchSubsidy;
 		pindex->nInterestSubsidy = bb.InterestSubsidy;
+		pindex->nIsSuperBlock =  (bb.superblock.length() > 20) ? 1 : 0;
+		BOOST_FOREACH(const CTransaction &tx, vtx)
+		{
+			if (tx.hashBoinc.length() > 20)
+			{
+				pindex->nIsContract = 1;
+				break;
+			}
+		}
+		pindex->sGRCAddress = bb.GRCAddress;
+		pindex->sReserved = "";
 	}
 
 	double mint = CoinToDouble(pindex->nMint);
@@ -3355,8 +3379,11 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		mvResearchAge[bb.cpid]=stCPID;
 	}
 
-	MiningCPID myInit = GetInitializedMiningCPID(pindex->GetBlockHash().GetHex(), mvBlockIndex);
-	mvBlockIndex[pindex->GetBlockHash().GetHex()] = bb;
+	if (!bResearchAgeEnabled)
+	{
+			MiningCPID myInit = GetInitializedMiningCPID(pindex->GetBlockHash().GetHex(), mvBlockIndex);
+			mvBlockIndex[pindex->GetBlockHash().GetHex()] = bb;
+	}
 
     if (!txdb.WriteBlockIndex(CDiskBlockIndex(pindex)))
         return error("Connect() : WriteBlockIndex for pindex failed");
@@ -3586,10 +3613,13 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
         // Queue memory transactions to delete
         BOOST_FOREACH(const CTransaction& tx, block.vtx)
             vDelete.push_back(tx);
-		
-		MiningCPID bb = GetInitializedMiningCPID(pindex->GetBlockHash().GetHex(), mvBlockIndex);
-	   	bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
-		mvBlockIndex[pindex->GetBlockHash().GetHex()] = bb;
+	
+		if (!bResearchAgeEnabled)
+		{
+			MiningCPID bb = GetInitializedMiningCPID(pindex->GetBlockHash().GetHex(), mvBlockIndex);
+	   		bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
+			mvBlockIndex[pindex->GetBlockHash().GetHex()] = bb;
+		}
     }
 
     if (!txdb.WriteHashBestChain(pindexNew->GetBlockHash()))
@@ -4061,7 +4091,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3425) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-					if (bv < 3500 && fTestNet) return DoS(25, error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n"));
+					if (bv < 3502 && fTestNet) return DoS(25, error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n"));
 			}
 
 			if (bb.cpid != "INVESTOR")
@@ -4825,8 +4855,9 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 15750;
+		nGrandfather = 19160;
 		nNewIndex = 10;
+		nNewIndex2 = 20000;
 		bResearchAgeEnabled = true;
 		bRemotePaymentsEnabled = false;
     }
@@ -5423,6 +5454,36 @@ void AdjustTimestamps(StructCPID& strCPID, double timestamp, double subsidy)
 
 
 
+void AddResearchMagnitude(CBlockIndex* pIndex)
+{
+	    StructCPID stMag = GetInitializedStructCPID2(pIndex->sCPID,mvMagnitudes);
+		stMag.cpid = pIndex->sCPID;
+		stMag.GRCAddress = pIndex->sGRCAddress;
+		if ((double)pIndex->nHeight > stMag.LastBlock)
+		{
+			stMag.LastBlock = (double)pIndex->nHeight;
+		}
+		stMag.entries++;
+		stMag.payments += pIndex->nResearchSubsidy;
+		stMag.interestPayments += pIndex->nInterestSubsidy;
+
+		AdjustTimestamps(stMag,(double)pIndex->nTime,pIndex->nResearchSubsidy);
+		// Track detailed payments made to each CPID
+		stMag.PaymentTimestamps         += RoundToString((double)pIndex->nTime,0) + ",";
+		stMag.PaymentAmountsResearch    += RoundToString(pIndex->nResearchSubsidy,2) + ",";
+		stMag.PaymentAmountsInterest    += RoundToString(pIndex->nInterestSubsidy,2) + ",";
+		stMag.PaymentAmountsBlocks      += RoundToString((double)pIndex->nHeight,0) + ",";
+     	stMag.Accuracy++;
+	    stMag.AverageRAC = stMag.rac / (stMag.entries+.01);
+	    double total_owed = 0;
+	    stMag.owed = GetOutstandingAmountOwed(stMag,pIndex->sCPID,(double)pIndex->nTime,total_owed,pIndex->nMagnitude);
+	    stMag.totalowed = total_owed;
+	    mvMagnitudes[pIndex->sCPID] = stMag;
+}
+
+
+
+
 void AddNetworkMagnitude(double height, double LockTime, std::string cpid, MiningCPID bb)
 {
 	try
@@ -5756,8 +5817,110 @@ void AddProjectRAC(MiningCPID bb,double& NetworkRAC, double& NetworkMagnitude)
 }
 
 
+bool TallyResearchAverages(bool Forcefully)
+{
+	//Iterate throught last 14 days, tally network averages
+    if (nBestHeight < 15) 
+	{
+		bNetAveragesLoaded = true;
+		return true;
+	}
+
+	if (Forcefully) nLastTallied = 0;
+	int timespan = fTestNet ? 1 : 5;
+	if (IsLockTimeWithinMinutes(nLastTallied,timespan)) 
+	{
+		bNetAveragesLoaded=true;
+		return true;
+	}
+
+	printf("Gathering network avgs (begin)");
+	nLastTallied = GetAdjustedTime();
+	bNetAveragesLoaded = false;
+	bool superblockloaded = false;
+	double NetworkPayments = 0;
+	
+	double mint = 0;
+	try 
+	{
+					//Consensus Start/End block:
+					int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
+					int nLookback = BLOCKS_PER_DAY*14; //Daily block count * Lookback in days = 14 days
+					int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
+					if (fDebug3) printf("START BLOCK %f, END BLOCK %f ",(double)nMaxDepth,(double)nMinDepth);
+					if (nMinDepth < 2)              nMinDepth = 2;
+					if (mvMagnitudes.size() > 0) 	mvMagnitudes.clear();
+					int iRow = 0;
+					//CBlock block;
+					CBlockIndex* pblockindex = pindexBest;
+					while (pblockindex->nHeight > nMaxDepth)
+					{
+						if (!pblockindex || !pblockindex->pprev) return false;  
+						pblockindex = pblockindex->pprev;
+						if (pblockindex == pindexGenesisBlock) return false;
+					}
+
+					if (fDebug3) printf("Max block %f",(double)pblockindex->nHeight);
+
+					while (pblockindex->nHeight > nMinDepth)
+					{
+						if (!pblockindex || !pblockindex->pprev) return false;  
+						pblockindex = pblockindex->pprev;
+						if (pblockindex == pindexGenesisBlock) return false;
+						if (pblockindex == NULL || !pblockindex->IsInMainChain()) continue;
+						NetworkPayments += pblockindex->nResearchSubsidy;
+						AddResearchMagnitude(pblockindex);
+						iRow++;
+						if (IsSuperBlock(pblockindex) && !superblockloaded)
+						{
+								MiningCPID bb = GetBoincBlockByIndex(pblockindex);
+								double out_beacon_count = 0;
+								double out_participant_count = 0;
+								double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,true);
+								if (avg_mag > 10)
+								{
+	    								LoadSuperblock(bb.superblock,pblockindex->nTime,pblockindex->nHeight);
+										superblockloaded=true;
+										if (fDebug3) printf(" Superblock Loaded %f \r\n",(double)pblockindex->nHeight);
+								}
+						}
+					
+					}
+					if (pblockindex && fDebug10) printf("Min block %f, Rows %f \r\n",(double)pblockindex->nHeight,(double)iRow);
+					StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
+					network.projectname="NETWORK";
+					network.payments = NetworkPayments;
+					mvNetwork["NETWORK"] = network;
+					TallyMagnitudesInSuperblock();
+					GetNextProject(false);
+					bTallyStarted = false;
+					bNetAveragesLoaded = true;
+					return true;
+	}
+	catch (std::exception &e) 
+	{
+	    printf("Error while tallying network averages.\r\n");
+		bNetAveragesLoaded=true;
+	}
+    catch(...)
+	{
+		printf("Error while tallying network averages. [1]\r\n");
+		bNetAveragesLoaded=true;
+	}
+	bNetAveragesLoaded=true;
+	return false;
+}
+
+
+
 bool TallyNetworkAverages(bool Forcefully)
 {
+
+	if (bResearchAgeEnabled && (pindexBest->nHeight > nNewIndex2))
+	{
+		return TallyResearchAverages(Forcefully);
+	}
+
 	//Iterate throught last 14 days, tally network averages
     if (nBestHeight < 15) 
 	{
@@ -5810,12 +5973,12 @@ bool TallyNetworkAverages(bool Forcefully)
 						if (pblockindex == NULL || !pblockindex->IsInMainChain()) continue;
 						MiningCPID bb;
 
-						if (bResearchAgeEnabled)
-						{
-							bb = mvBlockIndex[pblockindex->GetBlockHash().GetHex()];
-						}
-						else
-						{
+						//if (bResearchAgeEnabled)
+						//{
+						//	bb = mvBlockIndex[pblockindex->GetBlockHash().GetHex()];
+						//}
+						//else
+						//{
 							if (!block.ReadFromDisk(pblockindex)) continue;
 							if (block.vtx.size() > 0)
 							{
@@ -5823,15 +5986,12 @@ bool TallyNetworkAverages(bool Forcefully)
 								bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
 							}
 							else continue;
-						}
+						//}
 
-						if (true)
-						{
 							NetworkPayments += bb.ResearchSubsidy;
 							// Insert CPID, Magnitude, Payments
 							AddNetworkMagnitude((double)pblockindex->nHeight,pblockindex->nTime,bb.cpid,bb);
 							iRow++;
-							//if (pblockindex->nHeight % 10 == 0 || pblockindex->nHeight == nMinDepth) msMiningErrors3 = RoundToString((double)pblockindex->nHeight,0); //Overview Page Update
 							if (!superblockloaded && bb.superblock.length() > 20)
 							{
 									double out_beacon_count = 0;
@@ -5844,20 +6004,16 @@ bool TallyNetworkAverages(bool Forcefully)
 											if (fDebug3) printf(" Superblock Loaded %f \r\n",(double)pblockindex->nHeight);
 									}
 							}
-						}
 					
 					}
-					if (pblockindex != NULL && pblockindex->IsInMainChain())
-					{
-							if (fDebug) printf("Min block %f, Rows %f \r\n",(double)pblockindex->nHeight,(double)iRow);
-					}
+					if (pblockindex && fDebug10)				printf("Min block %f, Rows %f \r\n",(double)pblockindex->nHeight,(double)iRow);
 
+					
 					StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
 					network.projectname="NETWORK";
 					network.payments = NetworkPayments;
 					mvNetwork["NETWORK"] = network;
 					TallyMagnitudesInSuperblock();
-					if (fDebug3) printf(".GNP. %f",(double)0);
 					GetNextProject(false);
 					if (fDebug3) printf(".Done.\r\n %f",(double)0);
 					bTallyStarted = false;
@@ -6295,7 +6451,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 8-5-2015
-		if (pfrom->nVersion < 180310 && fTestNet)
+		if (pfrom->nVersion < 180311 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -8725,9 +8881,11 @@ std::string GetOrgSymbolFromFeedKey(std::string feedkey)
 
 
 
-void MemorizeMessage(std::string msg,int64_t nTime)
+bool MemorizeMessage(std::string msg,int64_t nTime)
 {
-	      if (msg.empty()) return;
+	      if (msg.empty()) return false;
+		  bool fMessageLoaded = false;
+
 		  if (Contains(msg,"<MT>"))
 	 	  {
 			  std::string sMessageType      = ExtractXML(msg,"<MT>","</MT>");
@@ -8747,7 +8905,7 @@ void MemorizeMessage(std::string msg,int64_t nTime)
 				  // If this is a DAO, ensure the contents are protected:
 				  if ((sMessageType=="dao" || sMessageType=="daoclient") && !sMessagePublicKey.empty())
 				  {
-					        if (fDebug3) printf("DAO Message %s",msg.c_str());
+					        if (fDebug10) printf("DAO Message %s",msg.c_str());
 
 							//std::string Org = sMessageKey;
 							if (sMessageAction=="A")
@@ -8792,6 +8950,7 @@ void MemorizeMessage(std::string msg,int64_t nTime)
 									printf("Adding MessageKey type %s Key %s Value %s\r\n",
 									sMessageType.c_str(),sMessageKey.c_str(),sMessageValue.c_str());
 								WriteCache(sMessageType,sMessageKey,sMessageValue,nTime);
+								fMessageLoaded = true;
 								if (sMessageType=="poll")
 								{
 										msMiningErrors2 = "Poll: " + sMessageKey;
@@ -8802,12 +8961,13 @@ void MemorizeMessage(std::string msg,int64_t nTime)
 						{
 								if (fDebug) printf("Deleting key type %s Key %s Value %s\r\n",sMessageType.c_str(),sMessageKey.c_str(),sMessageValue.c_str());
 								DeleteCache(sMessageType,sMessageKey);
-				
+								fMessageLoaded = true;
 						}
 						// If this is a boinc project, load the projects into the coin:
 						if (sMessageType=="project" || sMessageType=="projectmapping")
 						{
-								//Reserved
+							//Reserved
+							fMessageLoaded = true;
 						}
 				
 				  }
@@ -8815,6 +8975,7 @@ void MemorizeMessage(std::string msg,int64_t nTime)
 				}
 
 		  }
+	return fMessageLoaded;
 }
 
 
@@ -9070,129 +9231,6 @@ void ZeroOutResearcherTotals(std::string cpid)
 }
 
 
-void FixIndividualResearchTotals_Retired(std::string cpid)
-{
-	if (!bResearchAgeEnabled || pindexBest->nHeight < nNewIndex) return;
-	// Halford : Zero out the researcher totals:
-	ZeroOutResearcherTotals(cpid);
-	int nMinIndex = pindexGenesisBlock->nHeight;
-	if (nMinIndex < nNewIndex) nMinIndex = nNewIndex;
-	CBlockIndex* pindex = FindBlockByHeight(nMinIndex);
-	if (pindex)
-	{
-		while (pindex->nHeight < (pindexBest->nHeight-1))
-		{
-			if (!pindex || !pindex->pnext) break;
-			pindex = pindex->pnext;
-			if (pindex==NULL || !pindex->IsInMainChain()) continue;
-			if (pindex == pindexBest) return;
-			if (!pindex->sCPID.empty() && pindex->nResearchSubsidy > 0 && pindex->sCPID==cpid)
-			{
-				StructCPID stCPID = GetInitializedStructCPID2(pindex->sCPID,mvResearchAge);
-				stCPID.LastBlock = (double)pindex->nHeight;
-				stCPID.BlockHash = pindex->GetBlockHash().GetHex();
-				stCPID.InterestSubsidy += pindex->nInterestSubsidy;
-				stCPID.ResearchSubsidy += pindex->nResearchSubsidy;
-				stCPID.Accuracy++;
-				if (pindex->nMagnitude > 0)
-				{
-					stCPID.TotalMagnitude += pindex->nMagnitude;
-					stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
-				}
-
-				if (((double)pindex->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime = (double)pindex->nTime;
-				if (((double)pindex->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pindex->nTime;
-				mvResearchAge[pindex->sCPID]=stCPID;
-
-			}
-		}
-	}
-  
-}
-
-
-/*
-void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector<CBlockIndex*> vConnect)
-{
-	if (!bResearchAgeEnabled || pindexBest->nHeight < nNewIndex) return;
-	// Halford : Zero out the researcher totals:
-	if (vDisconnect.size() > 0)
-	{
-		BOOST_FOREACH(CBlockIndex* pdiscoindex, vDisconnect)
-		{
-			if (!pdiscoindex->sCPID.empty())
-			{
-				ZeroOutResearcherTotals(pdiscoindex->sCPID);
-			}
-		}
-	}
-
-	if (vConnect.size() > 0)
-	{
-		BOOST_FOREACH(CBlockIndex* pconnectindex, vConnect)
-		{
-			if (!pconnectindex->sCPID.empty())
-			{
-				ZeroOutResearcherTotals(pconnectindex->sCPID);
-			}
-		}
-	}
-	int nMinIndex = pindexGenesisBlock->nHeight;
-	if (nMinIndex < nNewIndex) nMinIndex = nNewIndex;
-
-	CBlockIndex* pindex = FindBlockByHeight(nMinIndex);
-	if (pindex)
-	{
-	while (pindex->nHeight < (pindexBest->nHeight-1))
-	{
-		if (!pindex || !pindex->pnext) break;
-	    pindex = pindex->pnext;
-		if (pindex==NULL || !pindex->IsInMainChain()) continue;
-		if (pindex == pindexBest) return;
-		if (!pindex->sCPID.empty() && pindex->nResearchSubsidy > 0)
-		{
-			bool bResearcherHosed = false;
-	
-			if (vDisconnect.size() > 0)
-			{
-				BOOST_FOREACH(CBlockIndex* pdiscoindex, vDisconnect)
-				{
-						if (pindex == pdiscoindex) bResearcherHosed=true;
-				}
-			}
-
-			if (vConnect.size() > 0)
-			{
-				BOOST_FOREACH(CBlockIndex* pconnectindex, vConnect)
-				{
-						if (pindex == pconnectindex) bResearcherHosed=true;
-				}
-			}
-			if (bResearcherHosed && !pindex->sCPID.empty())
-			{
-				StructCPID stCPID = GetInitializedStructCPID2(pindex->sCPID,mvResearchAge);
-				stCPID.LastBlock = (double)pindex->nHeight;
-				stCPID.BlockHash = pindex->GetBlockHash().GetHex();
-				stCPID.InterestSubsidy += pindex->nInterestSubsidy;
-				stCPID.ResearchSubsidy += pindex->nResearchSubsidy;
-				stCPID.Accuracy++;
-				if (pindex->nMagnitude > 0)
-				{
-					stCPID.TotalMagnitude += pindex->nMagnitude;
-					stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
-				}
-
-				if (((double)pindex->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime = (double)pindex->nTime;
-				if (((double)pindex->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pindex->nTime;
-				mvResearchAge[pindex->sCPID]=stCPID;
-
-			}
-		}
-	}
-  }
-}
-*/
-
 
 
 CBlockIndex* GetHistoricalMagnitude_ScanChain(std::string cpid)
@@ -9234,11 +9272,15 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 	    pindex = pindex->pnext;
 		if (pindex==NULL) continue;
 		if (!pindex || !pindex->IsInMainChain()) continue;
-		CBlock block;
-		if (!block.ReadFromDisk(pindex)) continue;
-		BOOST_FOREACH(const CTransaction &tx, block.vtx)
+		if (IsContract(pindex))
 		{
-			  MemorizeMessage(tx.hashBoinc,tx.nTime);
+			if (fDebug3) printf("[.]");
+			CBlock block;
+			if (!block.ReadFromDisk(pindex)) continue;
+			BOOST_FOREACH(const CTransaction &tx, block.vtx)
+			{
+				  MemorizeMessage(tx.hashBoinc,tx.nTime);
+			}
 		}
 	}
 	return true;
@@ -9252,8 +9294,7 @@ MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex)
 	CBlock block;
 	MiningCPID bb;
 	bb.initialized=false;
-	if (pblockindex == NULL) return bb;
-	//	if (!pblockindex || !pblockindex->IsInMainChain()) return bb;
+	if (!pblockindex || !pblockindex->IsInMainChain()) return bb;
 	if (block.ReadFromDisk(pblockindex))
 	{
 		std::string hashboinc = "";
@@ -9376,4 +9417,114 @@ std::string getHardDriveSerial()
 	if (fDebug3) printf("result %s",result.c_str());
 	msHDDSerial = result;
 	return result;
+}
+
+std::string GetBlockIndexData(std::string sKey)
+{
+  	CTxDB txdb;
+	std::string sValue = "";
+	if (!txdb.ReadGenericData(sKey,sValue)) return "";
+	return sValue;
+}
+
+bool SetBlockIndexData(std::string sKey, std::string sValue)
+{
+		CTxDB txdb;
+		txdb.TxnBegin();
+		if (!txdb.WriteGenericData(sKey,sValue)) return false;
+		if (!txdb.TxnCommit()) return false;
+		return true;
+}
+
+bool IsContract(CBlockIndex* pIndex)
+{
+	if (pIndex->nHeight < nNewIndex2)
+	{
+		return (Contains(msContracts,pIndex->GetBlockHash().GetHex())) ? true : false;
+	}
+	else
+	{
+		return pIndex->nIsContract==1 ? true : false;
+	}
+}
+
+bool IsSuperBlock(CBlockIndex* pIndex)
+{
+	if (pIndex->nHeight < nNewIndex2)
+	{
+		return (Contains(msSuperBlockHashes,pIndex->GetBlockHash().GetHex())) ? true : false;
+	}
+	else
+	{
+		return pIndex->nIsSuperBlock==1 ? true : false;
+	}
+}
+
+void SetUpExtendedBlockIndexFieldsOnce()
+{
+	//9-13-2015: The goal is to write nContract and nIsSuperBlock to the database for blocks with height < nNewIndex2 to save Initial Chain Load Time
+
+	CTxDB txdb;
+	std::string sValue = GetBlockIndexData("nNewIndex2");
+	if (sValue != "initialized")
+	{
+		printf("Unable to read from database.  Assuming fields need updated.   ");
+	}
+	else
+	{
+			msSuperBlockHashes = GetBlockIndexData("superblocks");
+			msContracts = GetBlockIndexData("contracts");
+			return; 
+	}
+	std::string sSuperblocks = "";
+	std::string sContracts   = "";
+    CBlockIndex* pindex = pindexGenesisBlock;
+	if (pindex && pindex->pnext)
+	{
+		while (pindex->nHeight < (nNewIndex2 + 1))
+		{
+				if (!pindex || !pindex->pnext) break;  
+				pindex = pindex->pnext;
+				if (pindex==NULL || !pindex->IsInMainChain()) continue;
+				CBlock block;
+				if (!block.ReadFromDisk(pindex)) continue;
+				//MiningCPID bb = GetInitializedMiningCPID(pindex->GetBlockHash().GetHex(), mvBlockIndex);
+	     		MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
+				if (bb.superblock.length() > 20) 
+				{
+						sSuperblocks += pindex->GetBlockHash().GetHex() + ",";
+				}
+
+				BOOST_FOREACH(const CTransaction &tx, block.vtx)
+				{
+						if (tx.hashBoinc.length() > 20)
+						{
+							bool fMemorized = MemorizeMessage(tx.hashBoinc,tx.nTime);
+							if (fMemorized) 
+							{
+								sContracts += pindex->GetBlockHash().GetHex() + ",";
+								break;
+							}
+						}
+				}
+		}		
+	}
+	msSuperBlockHashes = sSuperblocks;
+	msContracts = sContracts;
+
+	if (fDebug3) printf("\r\n\r\n SB %s size %f \r\n",sSuperblocks.substr(0,100).c_str(),(double)sSuperblocks.length());
+	if (fDebug3) printf("\r\n\r\n Contract %s size %f \r\n",sContracts.substr(0,100).c_str(),(double)sContracts.length());
+	
+	SetBlockIndexData("superblocks",sSuperblocks);
+	SetBlockIndexData("contracts",sContracts);
+	std::string TempSuperblock = GetBlockIndexData("superblocks");
+	std::string TempContracts = GetBlockIndexData("contracts");
+	if (fDebug3) printf("Temp SB %s size %f \r\n",TempSuperblock.substr(0,100).c_str(),(double)TempSuperblock.length());
+	if (fDebug3) printf("Temp Contract %s size %f \r\n",TempContracts.substr(0,100).c_str(),(double)TempContracts.length());
+	if (nBestHeight > nNewIndex2)
+	{
+		//We made it past the new index, so mark as complete.
+		SetBlockIndexData("nNewIndex2","initialized");
+	}
+
 }

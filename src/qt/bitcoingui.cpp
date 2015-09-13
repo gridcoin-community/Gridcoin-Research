@@ -1711,9 +1711,9 @@ void BitcoinGUI::foundationClicked()
 	if (!bGlobalcomInitialized) return;
 	std::string sVotingPayload = "";
 	GetJSONPollsReport(true,"",sVotingPayload,true);
-	double function_call = qtExecuteGenericFunction("SetGenericVotingData",sVotingPayload);
+	qtExecuteGenericFunction("SetGenericVotingData",sVotingPayload);
 	std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-	function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
+	qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
 	qtSetSessionInfo(DefaultWalletAddress(), GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.Magnitude);
     globalcom->dynamicCall("ShowFoundation()");
 #endif
@@ -1780,8 +1780,8 @@ void BitcoinGUI::votingClicked()
 		GetJSONPollsReport(true,"",sVotingPayload,true);
 		double function_call = qtExecuteGenericFunction("SetGenericVotingData",sVotingPayload);
 		std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-		function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-		function_call = qtExecuteGenericFunction("ShowVotingConsole","");
+		qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
+		qtExecuteGenericFunction("ShowVotingConsole","");
 	#endif
 
 }
