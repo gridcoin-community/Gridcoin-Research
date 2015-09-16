@@ -152,8 +152,6 @@ extern int64_t nLastGRCtallied;
 extern bool fUseFastIndex;
 extern unsigned int nDerivationMethodIndex;
 
-extern bool fEnforceCanonical;
-
 // Minimum disk space required - used in CheckDiskSpace()
 static const uint64_t nMinDiskSpace = 52428800;
 
