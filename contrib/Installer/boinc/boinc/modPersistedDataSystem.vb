@@ -1264,7 +1264,7 @@ Module modPersistedDataSystem
         If sNeuralCPID = "" Then sNeuralCPID = "Unknown"
         Dim sNH As String = mclsUtilization.GetNeuralHash
         If sNeuralCPID = "" Then sNeuralCPID = mclsUtilization.GetNeuralHash
-        sSignature = "NN Host Version: " + Trim(mclsUtilization.Version) + ", NeuralHash: " + sNH + ", CPID: " + sNeuralCPID + ", Time: " + Trim(Now)
+        sSignature = "NN Host Version: " + Trim(mclsUtilization.Version) + ", NeuralHash: " + sNH + ", SignatureCPID: " + sNeuralCPID + ", Time: " + Trim(Now)
         sRow = "Total RAC: " + Trim(TotalRAC) + "<ROW>" + "Total Mag: " + Trim(Math.Round(CumulativeMag, 2))
         sOut += sSignature + "<ROW>" + sRow
         sRow += "<ROW>Your Neural Magnitude: " + Trim(Math.Round(CumulativeMag, 2))
