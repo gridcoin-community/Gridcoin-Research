@@ -176,6 +176,8 @@ extern std::string  msMiningErrors5;
 extern std::string  msMiningErrors6;
 extern std::string  msMiningErrors7;
 extern std::string  msMiningErrors8;
+extern std::string  msAttachmentGuid;
+
 extern std::string  msMiningErrorsIncluded;
 extern std::string  msMiningErrorsExcluded;
 extern std::string  msSuperBlockHashes;

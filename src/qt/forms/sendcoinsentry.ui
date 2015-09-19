@@ -184,6 +184,13 @@
      </property>
     </widget>
    </item>
+   <item row="5" column="2">
+    <widget class="QPushButton" name="btnAddAttachment">
+     <property name="text">
+      <string>Add Attachment</string>
+     </property>
+    </widget>
+   </item>
   </layout>
  </widget>
  <customwidgets>

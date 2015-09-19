@@ -47,7 +47,7 @@
      <widget class="QDialogButtonBox" name="buttonBox">
       <property name="geometry">
        <rect>
-        <x>660</x>
+        <x>670</x>
         <y>10</y>
         <width>222</width>
         <height>23</height>
@@ -78,7 +78,7 @@
      <widget class="QPushButton" name="btnExecute">
       <property name="geometry">
        <rect>
-        <x>520</x>
+        <x>540</x>
         <y>10</y>
         <width>111</width>
         <height>23</height>
@@ -91,7 +91,7 @@
      <widget class="QPushButton" name="btnTrack">
       <property name="geometry">
        <rect>
-        <x>420</x>
+        <x>450</x>
         <y>10</y>
         <width>75</width>
         <height>23</height>
@@ -99,6 +99,19 @@
       </property>
       <property name="text">
        <string>Track Coins</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="btnViewAttachment">
+      <property name="geometry">
+       <rect>
+        <x>350</x>
+        <y>10</y>
+        <width>91</width>
+        <height>23</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>View Attachment</string>
       </property>
      </widget>
     </widget>

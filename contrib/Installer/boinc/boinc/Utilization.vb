@@ -1,6 +1,7 @@
 ﻿Imports Microsoft.VisualBasic
 Imports System.Timers
 Imports System.IO
+Imports System.Windows.Forms
 
 Public Class Utilization
     Implements IGridCoinMining
@@ -251,6 +252,32 @@ Public Class Utilization
     Public Function ShowVotingConsole()
         Dim fmVoting As New frmVoting
         fmVoting.Show()
+    End Function
+
+    Public Function ShowForm(sFormName As String) As String
+        Try
+            Dim vFormName() As String
+            vFormName = Split(sFormName, ",")
+            Log("Showing " + sFormName)
+
+            If UBound(vFormName) > 0 Then
+                sFormName = vFormName(0)
+                msPayload = vFormName(1)
+                Log("Showing form with payload " + msPayload)
+
+            Else
+                msPayload = ""
+            End If
+
+            Dim sMyName As String = System.Reflection.Assembly.GetExecutingAssembly.GetName.Name
+            Dim obj As Object = Activator.CreateInstance(Type.GetType(sMyName + "." + sFormName))
+            obj.Show()
+            Return "1"
+        Catch ex As Exception
+            Log("Unable to show " + sFormName + " because of " + ex.Message)
+            Return "0"
+        End Try
+
     End Function
 
     Public Function ShowNewUserWizard()

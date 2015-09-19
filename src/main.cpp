@@ -32,6 +32,7 @@
 int DownloadBlocks();
 extern MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID> vRef);
 extern std::string getHardDriveSerial();
+extern double SnapToGrid(double d);
 extern void SetUpExtendedBlockIndexFieldsOnce();
 extern bool IsContract(CBlockIndex* pIndex);
 std::string ExtractValue(std::string data, std::string delimiter, int pos);
@@ -382,6 +383,8 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors6 = "";
  std::string    msMiningErrors7 = "";
  std::string    msMiningErrors8 = "";
+ std::string    msAttachmentGuid = "";
+
  std::string    msMiningErrorsIncluded = "";
  std::string    msMiningErrorsExcluded = "";
  std::string    msSuperBlockHashes = "";
@@ -3337,11 +3340,11 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 					double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,true);
 					if (avg_mag > 10)
 					{
-	    								LoadSuperblock(bb.superblock,pindex->nTime,pindex->nHeight);
-										if (fDebug3) printf("ConnectBlock(): Superblock Loaded %f \r\n",(double)pindex->nHeight);
-										bNetAveragesLoaded=false;
-										nLastTallied = 0;
-										TallyNetworkAverages(true);
+	    						LoadSuperblock(bb.superblock,pindex->nTime,pindex->nHeight);
+								if (fDebug3) printf("ConnectBlock(): Superblock Loaded %f \r\n",(double)pindex->nHeight);
+								bNetAveragesLoaded=false;
+								nLastTallied = 0;
+								TallyNetworkAverages(true);
 
 					}
 			}
@@ -3350,7 +3353,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 			
 		}
 		/*
-			--Superblock is loaded 15 blocks later in TllyNetworkAverages();
+			--Superblock is loaded 15 blocks later
 		*/
 	}
 
@@ -3397,7 +3400,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		bool result = LoadAdminMessages(false,errors1);
 	}
 
-	if (pindex->nHeight % 10 == 0 && bResearchAgeEnabled && BlockNeedsChecked(pindex->nTime))
+	// 9-19-2015; Slow down Retallying when in RA mode so we minimize disruption of the network
+	if (pindex->nHeight % 60 == 0 && bResearchAgeEnabled && BlockNeedsChecked(pindex->nTime))
 	{
 			TallyNetworkAverages(true);
 	}
@@ -4094,7 +4098,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3425) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-					if (bv < 3502 && fTestNet) return DoS(25, error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n"));
+					if (bv < 3503 && fTestNet) return DoS(25, error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n"));
 			}
 
 			if (bb.cpid != "INVESTOR")
@@ -4410,8 +4414,8 @@ void GridcoinServices()
 	//Dont perform the following functions if out of sync
 	if (OutOfSyncByAge() || ((double)pindexBest->nHeight < (double)nGrandfather))
 	{
-		if (fDebug3 && OutOfSyncByAge()) printf(" OOSBA #     ");
-		if (fDebug3) printf(" PIB<NR # Best %f  Grand %f   ",(double)pindexBest->nHeight,(double)nGrandfather);
+		if (fDebug10 && OutOfSyncByAge()) printf(" OOSBA #     ");
+		if (fDebug10) printf(" PIB<NR # Best %f  Grand %f   ",(double)pindexBest->nHeight,(double)nGrandfather);
 		return;
 	}
 
@@ -4468,8 +4472,9 @@ void GridcoinServices()
 	}
 	else
 	{
-		// When superblock is not old, Tally every 20 mins:
-		if ((nBestHeight % 20) == 0)
+		// When superblock is not old, Tally every N mins:
+		int nTallyGranularity = fTestNet ? 60 : 20;
+		if ((nBestHeight % nTallyGranularity) == 0)
 		{
 			    if (fDebug3) printf("TIB1 ");
 			    TallyInBackground();
@@ -4858,7 +4863,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 21577;
+		nGrandfather = 23910;
 		nNewIndex = 10;
 		nNewIndex2 = 20000;
 		bResearchAgeEnabled = true;
@@ -5976,12 +5981,6 @@ bool TallyNetworkAverages(bool Forcefully)
 						if (pblockindex == NULL || !pblockindex->IsInMainChain()) continue;
 						MiningCPID bb;
 
-						//if (bResearchAgeEnabled)
-						//{
-						//	bb = mvBlockIndex[pblockindex->GetBlockHash().GetHex()];
-						//}
-						//else
-						//{
 							if (!block.ReadFromDisk(pblockindex)) continue;
 							if (block.vtx.size() > 0)
 							{
@@ -5989,8 +5988,7 @@ bool TallyNetworkAverages(bool Forcefully)
 								bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
 							}
 							else continue;
-						//}
-
+			
 							NetworkPayments += bb.ResearchSubsidy;
 							// Insert CPID, Magnitude, Payments
 							AddNetworkMagnitude((double)pblockindex->nHeight,pblockindex->nTime,bb.cpid,bb);
@@ -6454,7 +6452,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 8-5-2015
-		if (pfrom->nVersion < 180311 && fTestNet)
+		if (pfrom->nVersion < 180312 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -9127,8 +9125,8 @@ double GRCMagnitudeUnit(int64_t locktime)
 	double Kitty = MaximumEmission - (network.payments/14);
 	if (Kitty < 1) Kitty = 1;
 	double MagnitudeUnit = Kitty/TotalNetworkMagnitude;
-	//if (fDebug3) printf("MagUnit  dailypayments %f, kitty %f, netmag %f, MaxEmission %f, mag unit %f \r\n",network.payments/14,Kitty,TotalNetworkMagnitude,MaximumEmission,MagnitudeUnit);
 	if (MagnitudeUnit > 5) MagnitudeUnit = 5; //Just in case we lose a superblock or something strange happens.
+	MagnitudeUnit = SnapToGrid(MagnitudeUnit); //Snaps the value into .025 increments
 	return MagnitudeUnit;	
 }
 
@@ -9277,7 +9275,7 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 		if (!pindex || !pindex->IsInMainChain()) continue;
 		if (IsContract(pindex))
 		{
-			if (fDebug3) printf("[.]");
+			//if (fDebug3) printf("[.]");
 			CBlock block;
 			if (!block.ReadFromDisk(pindex)) continue;
 			BOOST_FOREACH(const CTransaction &tx, block.vtx)
@@ -9541,3 +9539,12 @@ void SetUpExtendedBlockIndexFieldsOnce()
 	}
 
 }
+
+
+double SnapToGrid(double d)
+{
+	double dDither = .04;
+	double dOut = cdbl(RoundToString(d*dDither,3),3) / dDither;
+	return dOut;
+}
+   

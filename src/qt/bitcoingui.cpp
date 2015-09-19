@@ -103,10 +103,8 @@ extern std::string getMacAddress();
 extern std::string FromQString(QString qs);
 extern std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
 
-
 std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2);
 std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5);
-
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 
 extern std::string qtGetNeuralHash(std::string data);
@@ -2206,7 +2204,7 @@ void BitcoinGUI::timerfire()
 				//R Halford - Allow .NET to talk to Core: 6-21-2015
 				#ifdef WIN32
 					std::string sData = qtExecuteDotNetStringFunction("GetDotNetMessages","");
-					if (sData != "")
+					if (!sData.empty())
 					{
 						std::string RPCCommand = ExtractXML(sData,"<COMMAND>","</COMMAND>");
 						std::string Argument1 = ExtractXML(sData,"<ARG1>","</ARG1>");
@@ -2226,10 +2224,13 @@ void BitcoinGUI::timerfire()
 							std::string Argument3 = ExtractXML(sData,"<ARG3>","</ARG3>");
     						std::string Argument4 = ExtractXML(sData,"<ARG4>","</ARG4>");
 							std::string Argument5 = ExtractXML(sData,"<ARG5>","</ARG5>");
-
 							std::string response = ExecuteRPCCommand("addpoll",Argument1,Argument2,Argument3,Argument4,Argument5);
-
 							double resultcode = qtExecuteGenericFunction("SetRPCResponse"," "+response);
+						}
+						else if (RPCCommand == "addattachment")
+						{
+							msAttachmentGuid = Argument1;
+							printf("\r\n attachment added %s \r\n",msAttachmentGuid.c_str());
 						}
 
 					}

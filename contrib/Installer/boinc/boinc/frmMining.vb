@@ -183,7 +183,6 @@ Public Class frmMining
         Me.Hide()
     End Sub
 
-
     Public Sub UpdateChartHashRate()
 
         Try
@@ -216,9 +215,7 @@ Public Class frmMining
             Call OneMinuteUpdate()
             Me.TabControl1.SelectedIndex = 2
             If mbTestNet Then lblTestnet.Text = "TESTNET"
-
             PopulateNeuralData()
-
 
         Catch ex As Exception
 
@@ -342,20 +339,15 @@ Public Class frmMining
 
             iRow = iRow + 1
         Next
-
         lblTotalProjects.Text = Trim(PrjCount)
         lblWhitelistedProjects.Text = Trim(WhitelistedProjects)
-
-
     End Sub
-
     Private Sub TabControl1_SelectedIndexChanged(sender As Object, e As System.EventArgs) Handles TabControl1.SelectedIndexChanged
         If TabControl1.SelectedIndex = 2 Then
             PopulateNeuralData()
 
         End If
     End Sub
-
     Private Sub dgv_CellContentDoubleClick(sender As Object, e As System.Windows.Forms.DataGridViewCellEventArgs) Handles dgv.CellContentDoubleClick
         'Drill into CPID
         If e.RowIndex < 0 Then Exit Sub
@@ -439,12 +431,8 @@ Public Class frmMining
 
             iRow += 1
             dgvProjects.Rows.Add()
-
             dgvProjects.Rows(iRow - 1).Cells(0).Value = "Total Mag: " + Trim(RoundedMag(CumulativeMag))
-
             dgvProjects.Rows(iRow - 1).Cells(3).Value = RoundedMag(TotalNetworkRAC)
-
-
             dgvProjects.Rows(iRow - 1).Cells(6).Value = RoundedMag(TotalRAC)
             dgvProjects.Rows(iRow - 1).Cells(7).Value = RoundedMag(CumulativeMag)
 
@@ -452,7 +440,6 @@ Public Class frmMining
             oNewForm.Width = Screen.PrimaryScreen.WorkingArea.Width / 1.6
             oNewForm.Height = Screen.PrimaryScreen.WorkingArea.Height / 2.2
             oNewForm.Text = "CPID Magnitude Details - Gridcoin Neural Network - (Red=Blacklisted)"
-
             oNewForm.Controls.Add(dgvProjects)
             dgvProjects.Left = 5
             dgvProjects.Top = 5

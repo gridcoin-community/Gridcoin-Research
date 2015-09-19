@@ -10,6 +10,10 @@
 #include <QApplication>
 #include <QClipboard>
 
+
+
+std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
+
 SendCoinsEntry::SendCoinsEntry(QWidget *parent) :
     QFrame(parent),
     ui(new Ui::SendCoinsEntry),
@@ -55,6 +59,19 @@ void SendCoinsEntry::on_addressBookButton_clicked()
         ui->payTo->setText(dlg.getReturnValue());
         ui->payAmount->setFocus();
     }
+}
+
+
+void SendCoinsEntry::on_btnAddAttachment_clicked()
+{
+    if(!model)
+        return;
+	// 9-19-2015; Show Add document attachment dialog
+	// msAttachmentGuid = "";
+		
+	#if defined(WIN32) && defined(QT_GUI)
+			std::string sData = qtExecuteDotNetStringFunction("ShowForm","frmAddAttachment");
+	#endif
 }
 
 

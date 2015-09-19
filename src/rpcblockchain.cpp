@@ -64,16 +64,10 @@ extern double GetCountOf(std::string datatype);
 
 extern double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,bool bIgnoreBeacons);
 extern bool CPIDAcidTest(std::string boincruntimepublickey);
-
-
-
 void TestScan();
 void TestScan2();
-
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
-
 bool FullSyncWithDPORNodes();
-
 bool LoadSuperblock(std::string data, int64_t nTime, double height);
 
 StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);

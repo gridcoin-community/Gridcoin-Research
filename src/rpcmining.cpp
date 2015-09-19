@@ -21,7 +21,7 @@ static boost::thread_group* postThreads = NULL;
 double GetPoSKernelPS2();
 StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
 double GRCMagnitudeUnit(int64_t locktime);
-
+std::string qtGetNeuralHash(std::string data);
 volatile bool bCPIDsLoaded;
 volatile bool bProjectsInitialized;
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
@@ -71,7 +71,14 @@ Value getmininginfo(const Array& params, bool fHelp)
     obj.push_back(Pair("testnet",       fTestNet));
 	double neural_popularity = 0;
 	std::string neural_hash = GetNeuralNetworkSupermajorityHash(neural_popularity);
-	obj.push_back(Pair("NeuralHash", neural_hash));
+	obj.push_back(Pair("PopularNeuralHash", neural_hash));
+	//9-19-2015 - CM
+	std::string myNeuralHash = "";
+	#if defined(WIN32) && defined(QT_GUI)
+	           myNeuralHash = qtGetNeuralHash("");
+			   obj.push_back(Pair("MyNeuralHash", myNeuralHash));
+	#endif
+ 	
 	obj.push_back(Pair("NeuralPopularity", neural_popularity));
 	obj.push_back(Pair("testnet",       fTestNet));
 	obj.push_back(Pair("CPID",msPrimaryCPID));

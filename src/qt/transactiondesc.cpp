@@ -314,6 +314,10 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
 		std::string sGRCMessage = AdvancedDecrypt(eGRCMessage);
 
 		strHTML += "<br><b>Notes: " + QString::fromStdString(sGRCMessage) + "</b><p><br>";
+		if (fDebug3)
+		{
+				strHTML += "<br><b>Contracts:</b> " + QString::fromStdString(wtx.hashBoinc) + "<p><br>";
+		}
 		msHashBoinc += wtx.hashBoinc;
         strHTML += "<br><b>" + tr("Inputs") + ":</b>";
         strHTML += "<ul>";
