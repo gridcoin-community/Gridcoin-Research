@@ -148,17 +148,27 @@ Module modPersistedDataSystem
         surrogateRow.Table = "CPIDS"
         Dim lTotal As Long
         Dim lRows As Long
-        If bMagsDoneLoading = False Then Return ""
+            If bMagsDoneLoading = False Then Return ""
+            'If Last synced older than 1 day, delete the contract - 10-2-2015
+
         Dim sOut As String = ""
         sOut = "<MAGNITUDES>"
         Dim lstCPIDs As List(Of Row) = GetList(surrogateRow, "*")
-        lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
+            lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
+            Dim dMagAge As Long = 0
         For Each cpid As Row In lstCPIDs
             If cpid.DataColumn5 = "True" Then
                     Dim sRow As String = cpid.PrimaryKey + "," + Num(cpid.Magnitude) + ";"
                     lTotal = lTotal + Val("0" + Trim(cpid.Magnitude))
                     lRows = lRows + 1
                     sOut += sRow
+                    dMagAge = 0
+                    Try
+                        dMagAge = Math.Abs(DateDiff(DateInterval.Minute, Now, cpid.Synced))
+                    Catch ex As Exception
+                    End Try
+                    If dMagAge > (60 * 12) Then Return ""
+
                 Else
                     Dim sRow As String = cpid.PrimaryKey + ",00;"
                     lTotal = lTotal + 0

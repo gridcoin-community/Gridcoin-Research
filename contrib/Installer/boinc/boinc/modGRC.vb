@@ -54,6 +54,28 @@ Module modGRC
         If Len(Trim(sId)) <> 36 Then Return ""
         Return sId
     End Function
+    Public Function NeedsUpgrade() As Boolean
+        Try
+            Dim sLocalPath As String = GetGRCAppDir() + "\"
+            Dim dr As SqlClient.SqlDataReader
+            Dim oGrcData As New GRCSec.GridcoinData
+            dr = oGrcData.mGetUpgradeFiles
+            Dim bNeedsUpgraded As Boolean = False
+            Do While dr.Read
+                Dim sFile As String = LCase("" & dr("filename"))
+                If sFile Like "*gridcoinresearch.exe*" Or sFile Like "*boincstake.dll*" Then
+                    'Get local hash
+                    Dim sLocalHash As String = GetMd5OfFile(sLocalPath + sFile)
+                    Dim sRemoteHash As String = dr("Hash")
+                    Dim bNeeds As Boolean = sLocalHash <> sRemoteHash
+                    If bNeeds Then bNeedsUpgraded = True
+                End If
+            Loop
+            Return bNeedsUpgraded
+        Catch ex As Exception
+            Return False
+        End Try
+    End Function
 
     Public Function ExecuteRPCCommand(sCommand As String, sArg1 As String, sArg2 As String, sArg3 As String, sArg4 As String, sArg5 As String) As String
         Dim sReply As String = ""
@@ -906,85 +928,6 @@ Module modGRC
         End If
         Return CDate("1-1-2031")
 
-    End Function
-
-    Public Function NeedsUpgrade() As Boolean
-        Try
-
-            Dim sMsg As String
-            Dim sURL As String = "http://download.gridcoin.us/download/downloadstake/"
-
-            Dim w As New MyWebClient
-            Dim sFiles As String
-            sFiles = w.DownloadString(sURL)
-            Dim vFiles() As String = Split(sFiles, "<br>")
-            If UBound(vFiles) < 10 Then
-                Return False
-            End If
-
-            sMsg = ""
-            For iRow As Integer = 0 To UBound(vFiles)
-                Dim sRow As String = vFiles(iRow)
-                Dim sFile As String = ExtractFilename("<a", "</a>", sRow, 5)
-                If Len(sFile) > 1 Then
-                    If sFile = "boincstake.dll" Then
-                        Dim sDT As String
-                        sDT = Mid(sRow, 1, 20)
-                        sDT = Trim(sDT)
-
-                        Dim dDt As DateTime
-                        dDt = ParseDate(Trim(sDT))
-                        'dDt = CDate(sDT)
-                        Dim PSTTimeZoneInfo As TimeZoneInfo
-                        'Server is in PST Time Zone
-                        PSTTimeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById("Pacific SA Standard Time")
-
-                        'dDt = TimeZoneInfo.ConvertTime(dDt, System.TimeZoneInfo.Utc)
-                        dDt = TimeZoneInfo.ConvertTime(dDt, PSTTimeZoneInfo)
-                        dDt = DateAdd(DateInterval.Hour, -2, dDt)
-                        'This value is Not correct
-                        Log("Gridcoin.us boincstake.dll timestamp in PST : " + DateStamp(dDt))
-
-                        'Now we have boincstake.dll timestamp in PST, convert to UTC
-                        dDt = TimeZoneInfo.ConvertTime(dDt, System.TimeZoneInfo.Utc)
-                        'This value is correct in Germany
-                        Log("Gridcoin.us boincstake.dll timestamp in UTC : " + DateStamp(dDt))
-
-
-                        'Pad time by 15 mins to delay the auto upgrade
-                        dDt = DateAdd(DateInterval.Minute, -15, dDt)
-
-                        'local file time
-                        Dim sLocalPath As String = GetGRCAppDir()
-                        Dim sLocalFile As String = sFile
-                        If LCase(sLocalFile) = "grcrestarter.exe" Then sLocalFile = "grcrestarter_copy.exe"
-                        Dim sLocalPathFile As String = sLocalPath + "\" + sLocalFile
-                        Dim dtLocal As DateTime
-                        Try
-                            dtLocal = System.IO.File.GetLastWriteTime(sLocalPathFile)
-                            dtLocal = TimeZoneInfo.ConvertTime(dtLocal, System.TimeZoneInfo.Utc)
-                            Log("Gridcoin.us boincstake.dll timestamp (UTC) : " + DateStamp(dDt) _
-                                + ", VS : Local boincstake.dll timestamp (UTC) : " + DateStamp(dtLocal))
-                            If dDt < dtLocal Then
-                                Log("Not upgrading.")
-                            End If
-
-                        Catch ex As Exception
-                            Return False
-                        End Try
-                        If dDt > dtLocal Then
-                            Log("Client needs upgrade.")
-
-                            Return True
-                        End If
-
-                    End If
-                End If
-            Next iRow
-        Catch ex As Exception
-            Return False
-
-        End Try
     End Function
 
     Public Function GlobalCDate(sDate As String) As DateTime

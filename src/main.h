@@ -46,7 +46,7 @@ extern int muGlobalCheckpointHashCounter;
 extern std::string msMasterProjectPublicKey;
 extern std::string msMasterMessagePublicKey;
 extern std::string msMasterMessagePrivateKey;
-extern std::string msTestNetSeedSuperblocks;extern std::string msTestNetSeedContracts;extern bool bNewUserWizardNotified;
+extern std::string msTestNetSeedSuperblocks;extern std::string msTestNetSeedContracts;extern std::string msProdSeedSuperblocks;extern std::string msProdSeedContracts237579;extern std::string msProdSeedContracts237853;extern std::string msProdSeedContracts238844;extern std::string msProdSeedContracts239718;extern std::string msProdSeedContracts246130;extern std::string msProdSeedContracts265924;extern std::string msProdSeedContracts282719;extern std::string msProdSeedContracts298010;extern std::string msProdSeedContracts333606;extern std::string msProdSeedContracts340200;extern std::string msProdSeedContracts342797;extern bool bNewUserWizardNotified;
 
 /** The maximum allowed size for a serialized block, in bytes (network rule) */
 static const unsigned int MAX_BLOCK_SIZE = 1000000;
@@ -195,6 +195,7 @@ extern std::string  OrganizationKey;
 extern int nGrandfather;
 extern int nNewIndex;
 extern int nNewIndex2;
+extern int nSuperblockAgeSpacing;
 
 // PoB GPU Miner Global Vars:
 extern std::string 	msGPUMiningProject;

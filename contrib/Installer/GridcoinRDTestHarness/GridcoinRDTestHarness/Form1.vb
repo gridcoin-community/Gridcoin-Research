@@ -104,12 +104,13 @@ Public Class Form1
         'ToDo: Pass TestNet flag into FAQ section
 
         mU = New Utilization
-        mU.ShowForm("frmAddAttachment")
-
-        Dim dQuote As Double
-        Dim sTestNet As String = "TESTNET"
-        mU.SetTestNetFlag(sTestNet)
         
+        
+        ' Dim dQuote As Double
+        Dim sTestNet As String = "TESTNET"
+        '  mU.SetTestNetFlag(sTestNet)
+        mU.ShowMiningConsole()
+
         
         Exit Sub
 
