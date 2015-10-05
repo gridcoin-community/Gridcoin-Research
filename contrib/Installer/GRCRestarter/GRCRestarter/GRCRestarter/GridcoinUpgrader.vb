@@ -626,16 +626,7 @@ Public Class GridcoinUpgrader
         End If
         Return CDate("1-1-2031")
     End Function
-    Public Sub Log(sData As String)
-        Try
-            Dim sPath As String
-            sPath = "grcrestarter.log"
-            Dim sw As New System.IO.StreamWriter(sPath, True)
-            sw.WriteLine(Trim(Now) + ", " + sData)
-            sw.Close()
-        Catch ex As Exception
-        End Try
-    End Sub
+   
     Public Function DynamicUpgradeWithManifest() As String
         Dim sMsg As String = ""
         Dim iRow As Long = 1
@@ -663,6 +654,7 @@ Public Class GridcoinUpgrader
                         Dim bNeedsUpgraded As Boolean = sLocalHash <> sRemoteHash
                         Dim iSignatureOK As Integer = oGRCSec.IsHashAuthentic(sRemoteHash, dr("SecurityHash"), dr("PublicKey"))
                         UpdateUI(iRow, sFile, dr("comments"), True, False)
+
                         If bNeedsUpgraded And iSignatureOK = 0 Then
                             UpdateUI(iRow, sFile, dr("comments"), True, True)
                             If LCase(sFile) = "grcrestarter.exe" Then sFile = "grcrestarter_copy.exe"
@@ -674,17 +666,32 @@ Public Class GridcoinUpgrader
                             End If
                   
                             mRetrieveUpgrade(oGRCData, dr("id").ToString(), sLocalPath, sFile, MerkleRoot)
-                          
+                            Application.DoEvents()
+                            Threading.Thread.Sleep(2000) 'Wait until file is closed (this is supposedly synchronous, but some users must have a delayed write)
+                            Application.DoEvents()
+
                             'Verify the downloaded blob matches record hash
                             Dim sVerifiedHash As String = GetMd5OfFile(sLocalPath + sFile)
+                            Dim sNarr As String = "Remote hash " + sRemoteHash + ", Downloaded hash " + sVerifiedHash + ", Download path : " + sLocalPath + sFile + "."
+
                             If sVerifiedHash <> sRemoteHash Then
-                                If File.Exists(sLocalPath + sFile) Then Kill(sLocalPath + sFile)
-                                MsgBox("Downloaded File " + sFile + " security hash does not match signed remote hash.  Discarding File.  Upgrade failed.  Please report this to Gridcoin: contact@gridcoin.us", MsgBoxStyle.Critical)
+                                Threading.Thread.Sleep(4000)
+                                Dim sVerified2 As String = GetMd5OfFile(sLocalPath + sFile)
+                                If Not Command() Like "*nodelete*" Then
+                                    If File.Exists(sLocalPath + sFile) Then Kill(sLocalPath + sFile)
+                                End If
+
+                                Dim sLongNarr As String = "Downloaded File " + sFile + " security hash does not match signed remote hash.  " + sNarr + ".  After four seconds, hash of file is : " + sVerified2 + ", Discarding File.  Upgrade failed.  Please report this to Gridcoin: contact@gridcoin.us"
+                                Log(sLongNarr)
+                                MsgBox(sLongNarr, MsgBoxStyle.Critical)
                                 Return "-9"
                             End If
                         End If
                         If iSignatureOK <> 0 Then
-                            MsgBox("File " + sFile + " security hash does not match signed hash!  Please report this to Gridcoin immediately: contact@gridcoin.us", MsgBoxStyle.Critical)
+                            Dim sNarr As String = "Remote hash " + sRemoteHash + ", Security Hash " + dr("SecurityHash") + ",Download path : " + sLocalPath + sFile + "."
+                            Dim sLongNarr As String = "File " + sFile + " signature invalid!  " + sNarr + ", Please report this to Gridcoin immediately: contact@gridcoin.us"
+                            Log(sLongNarr)
+                            MsgBox(sLongNarr, MsgBoxStyle.Critical)
                             Return "-8"
                         End If
                         Threading.Thread.Sleep(30)
@@ -767,8 +774,8 @@ Public Class GridcoinUpgrader
             txtStatus.Refresh() : txtStatus.Update() : Application.DoEvents()
         End If
         If bShowComments Then rtbNotes.Text = sComments
-        Threading.Thread.Sleep(100)
-
+        Threading.Thread.Sleep(200)
+        Application.DoEvents()
 
     End Function
     Public Function ExtractFilename(ByVal sStartElement As String, ByVal sEndElement As String, ByVal sData As String, ByVal minOutLength As Integer) As String

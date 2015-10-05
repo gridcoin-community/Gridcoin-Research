@@ -24,15 +24,36 @@ Module GrcRestarterFunctions
         Dim sOut As String = Mid(sData, iPos1, iPos2 - iPos1)
         Return sOut
     End Function
-
+    Public Sub Log(sData As String)
+        Try
+            Dim sPath As String
+            sPath = "grcrestarter.log"
+            Dim sw As New System.IO.StreamWriter(sPath, True)
+            sw.WriteLine(Trim(Now) + ", " + sData)
+            sw.Close()
+        Catch ex As Exception
+        End Try
+    End Sub
     Public Function mRetrieveUpgrade(ByVal mData As GRCSec.GridcoinData, ByVal sId As String, _
                                         ByVal sTargetPath As String, ByVal sName As String, ByVal sPass As String) As String
+        Try
+
         Dim sFullPath As String = sTargetPath + "\" + sName
         Dim sData As String = mData.UpgradeBlob2(sId)
-        If InStr(1, sData, "<ERROR>") > 0 Then MsgBox(sData, MsgBoxStyle.Critical) : Return ""
-        Dim sBase64 As String = ExtractXML(sData, "<BLOB>", "</BLOB>")
+            If InStr(1, sData, "<ERROR>") > 0 Then
+                MsgBox(sData, MsgBoxStyle.Critical) : Return ""
+            End If
+            Dim sBase64 As String = ExtractXML(sData, "<BLOB>", "</BLOB>")
+
+            Log("Downloaded blob containing " + Trim(Len(sData)) + " for file with Merkle Root " + sPass + " for file " + sName + " starting with " + Left(sData, 1000))
+
+
         mData.DecryptAES512AttachmentToFile(sFullPath, sBase64, sPass)
-        Return sFullPath
+            Return sFullPath
+        Catch ex As Exception
+            Log("While retrieving " + sName + ": " + ex.Message)
+        End Try
+
     End Function
 
     Public Function GetMd5OfFile(ByVal sFN As String) As String

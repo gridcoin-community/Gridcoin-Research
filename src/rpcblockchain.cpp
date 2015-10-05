@@ -19,6 +19,8 @@ double OwedByAddress(std::string address);
 extern std::string YesNo(bool bin);
 std::string getHardDriveSerial();
 extern Array MagnitudeReport(std::string cpid);
+bool NeuralNodeParticipates();
+bool StrLessThanReferenceHash(std::string rh);
 
 
 double Cap(double dAmt, double Ceiling);
@@ -439,6 +441,9 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 		double popularity = 0;
 		result.push_back(Pair("SuperblockHash", neural_hash));
 	}
+	result.push_back(Pair("IsSuperBlock", (double)blockindex->nIsSuperBlock));
+	result.push_back(Pair("IsContract", (double)blockindex->nIsContract));
+	
     return result;
 }
 
@@ -2003,7 +2008,25 @@ Value execute(const Array& params, bool fHelp)
 		}
 			
 	}
-	
+	else if (sItem == "refhash")
+	{
+		if (params.size() != 2)
+		{
+			entry.push_back(Pair("Error","You must specify the Reference Hash."));
+			results.push_back(entry);
+		}
+		else
+		{
+				std::string rh = params[1].get_str();
+				bool r1 = StrLessThanReferenceHash(rh);
+				bool r2 = NeuralNodeParticipates();
+				entry.push_back(Pair("<Ref Hash",r1));
+				entry.push_back(Pair("WalletAddress<Ref Hash",r2));
+				results.push_back(entry);
+
+		}
+		
+	}
 	else if (sItem == "vote")
 	{
 		if (params.size() != 3)

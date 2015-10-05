@@ -9,6 +9,7 @@
 #include "version.h"
 #include "ui_interface.h"
 #include <boost/algorithm/string/join.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>  //For day of year
 
 // Work around clang compilation problem in Boost 1.46:
 // /usr/include/boost/program_options/detail/config_file.hpp:163:17: error: call to function 'to_internal' that is neither visible in the template definition nor found by argument-dependent lookup
@@ -88,6 +89,8 @@ std::string RoundToString(double d, int place);
 int64_t IsNeural();
 
 extern std::string GetBoincDataDir();
+extern int GetDayOfYear();
+
 
 // Init OpenSSL library multithreading support
 static CCriticalSection** ppmutexOpenSSL;
@@ -344,6 +347,23 @@ string real_strprintf(const std::string &format, int dummy, ...)
     va_end(arg_ptr);
     return str;
 }
+
+int GetDayOfYear()
+{
+	try 
+	{
+		boost::gregorian::date d=boost::posix_time::from_time_t(GetAdjustedTime()).date();
+		//		boost::gregorian::date d(year, month, day);
+		int dayNumber = d.day_of_year();
+		return dayNumber;
+	}
+	catch (std::out_of_range& e) 
+	{
+    // Alternatively catch bad_year etc exceptions.
+		return 0;
+    }
+}
+
 
 bool error(const char *format, ...)
 {
