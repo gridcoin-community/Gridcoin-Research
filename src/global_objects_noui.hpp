@@ -28,7 +28,8 @@ extern volatile bool bGlobalcomInitialized;
 extern volatile bool bAllowBackToBack;
 extern volatile bool CreatingCPUBlock;
 extern volatile bool bStakeMinerOutOfSyncWithNetwork;
-
+extern volatile bool bDoTally;
+extern volatile bool bTallyFinished;
 
 extern volatile double nGlobalHashCounter;
 

@@ -31,6 +31,7 @@ void stopWireFrameRenderer();
 void ShutdownGridcoinMiner();
 void ThreadCPIDs();
 bool ComputeNeuralNetworkSupermajorityHashes();
+void BusyWaitForTally();
 
 void LoadCPIDsInBackground();
 std::string GetPoolKey(std::string sMiningProject,double dMiningRAC,
@@ -46,7 +47,7 @@ bool IsConfigFileEmpty();
 void GetNextProject(bool bForce);
 void HarvestCPIDs(bool cleardata);
 std::string ToOfficialName(std::string proj);
-bool TallyNetworkAverages(bool Force);
+
 std::string RestoreGridcoinBackupWallet();
 std::string BackupGridcoinWallet();
 void WriteAppCache(std::string key, std::string value);
@@ -1132,7 +1133,8 @@ bool AppInit2()
 	printf("Done loading boinc projects %f",(double)0);
 	uiInterface.InitMessage(_("Loading Network Averages..."));
 	if (fDebug3) printf("Loading network averages %f",(double)0);	
-	TallyNetworkAverages(true);	
+	BusyWaitForTally();
+
 	ComputeNeuralNetworkSupermajorityHashes();
 
 	printf("Starting CPID thread...%f",(double)0);

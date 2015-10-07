@@ -113,7 +113,6 @@ extern std::string qtGetNeuralContract(std::string data);
 json_spirit::Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool bIncludeExpired);
 
 extern int64_t IsNeural();
-void TallyInBackground();
 
 double cdbl(std::string s, int place);
 std::string getfilecontents(std::string filename);
@@ -139,7 +138,7 @@ void ThreadCPIDs();
 int Races(int iMax1000);
 std::string GetGlobalStatus();
 std::string GetHttpPage(std::string cpid);
-bool TallyNetworkAverages(bool Force);
+
 void LoadCPIDsInBackground();
 void InitializeCPIDs();
 void RestartGridcoinMiner();

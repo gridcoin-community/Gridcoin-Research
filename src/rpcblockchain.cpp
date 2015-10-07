@@ -21,16 +21,14 @@ std::string getHardDriveSerial();
 extern Array MagnitudeReport(std::string cpid);
 bool NeuralNodeParticipates();
 bool StrLessThanReferenceHash(std::string rh);
-
-
+void BusyWaitForTally();
 double Cap(double dAmt, double Ceiling);
 extern std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, 
 	std::string sSig, int64_t MinimumBalance, double dFees, std::string sPublicKey);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
 
 std::string GetQuorumHash(std::string data);
-bool TallyNetworkAverages(bool ColdBoot);
-void TallyInBackground();
+
 double GetNetworkPaymentsTotal();
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
 bool ComputeNeuralNetworkSupermajorityHashes();
@@ -1582,6 +1580,11 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "syncdpor2")
 	{
+		std::string sOut = "";
+		//10-7-2015 for CM
+		double dBC = GetCountOf("beacon");
+		bool bFull = dBC < 50 ? true : false;
+		bool result = 	LoadAdminMessages(bFull,sOut);
 		FullSyncWithDPORNodes();
 		entry.push_back(Pair("Syncing",1));
 		results.push_back(entry);
@@ -2388,14 +2391,8 @@ Value execute(const Array& params, bool fHelp)
 	{
 			bNetAveragesLoaded = false;
 			nLastTallied = 0;
-			TallyNetworkAverages(true);
+			BusyWaitForTally();
 			entry.push_back(Pair("Tally Network Averages",1));
-			results.push_back(entry);
-	}
-	else if (sItem == "tallyinbackground")
-	{
-			TallyInBackground();
-			entry.push_back(Pair("Tallying in Background...",1));
 			results.push_back(entry);
 	}
 	else if (sItem == "rac")

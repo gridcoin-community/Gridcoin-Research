@@ -26,7 +26,9 @@
 
 using namespace std;
 using namespace boost;
-
+bool TallyNetworkAverages(bool ColdBoot);
+extern void BusyWaitForTally();
+extern void DoTallyResearchAverages(void* parg);
 
 #ifndef QT_GUI
  boost::thread_group threadGroup;
@@ -1972,6 +1974,66 @@ void DumpAddresses()
 
 }
 
+void ThreadTallyResearchAverages(void* parg)
+{
+    // Make this thread recognisable as the address dumping thread
+    RenameThread("grc-tallyresearchaverages");
+
+begin:
+    try
+    {
+        DoTallyResearchAverages(parg);
+    }
+    catch (std::exception& e) 
+	{
+        PrintException(&e, "ThreadTallyNetworkAverages()");
+    }
+	catch(...)
+	{
+		printf("Error in ThreadTallyResearchAverages... Recovering ");
+	}
+    printf("Thread TallyReasearchAverages exited, Restarting.. \r\n");
+	goto begin;
+}
+
+
+void BusyWaitForTally()
+{
+	bTallyFinished=false;
+	bDoTally=true;
+	int iTimeout = 0;
+	while(!bTallyFinished)
+	{
+		MilliSleep(10);
+		iTimeout+=10;
+		if (iTimeout > 15000) break;
+	}
+}
+
+
+void DoTallyResearchAverages(void* parg)
+{
+    vnThreadsRunning[THREAD_TALLY]++;
+    while (!fShutdown)
+    {
+        vnThreadsRunning[THREAD_TALLY]--;
+        MilliSleep(20);
+		if (bDoTally)
+		{
+			bTallyFinished = false;
+			bDoTally=false;
+			printf("\r\nDoTallyRA started ... ");
+			TallyNetworkAverages(false);
+			printf("DoTallyRA Ending ... \r\n");
+			bTallyFinished = true;
+		}
+        vnThreadsRunning[THREAD_TALLY]++;
+    }
+    vnThreadsRunning[THREAD_TALLY]--;
+}
+
+
+
 void ThreadDumpAddress2(void* parg)
 {
     vnThreadsRunning[THREAD_DUMPADDRESS]++;
@@ -2643,6 +2705,10 @@ void StartNode(void* parg)
     if (!NewThread(ThreadDumpAddress, NULL))
         printf("Error; NewThread(ThreadDumpAddress) failed\n");
 
+	// Tally network averages
+	if (!NewThread(ThreadTallyResearchAverages, NULL))
+        printf("Error; NewThread(ThreadTally) failed\n");
+
     // Mine proof-of-stake blocks in the background
     if (!GetBoolArg("-staking", true))
         printf("Staking disabled\n");
@@ -2671,18 +2737,19 @@ bool StopNode()
             break;
         MilliSleep(20);
     } while(true);
-    if (vnThreadsRunning[THREAD_SOCKETHANDLER] > 0) printf("ThreadSocketHandler still running\n");
-    if (vnThreadsRunning[THREAD_OPENCONNECTIONS] > 0) printf("ThreadOpenConnections still running\n");
-    if (vnThreadsRunning[THREAD_MESSAGEHANDLER] > 0) printf("ThreadMessageHandler still running\n");
-    if (vnThreadsRunning[THREAD_RPCLISTENER] > 0) printf("ThreadRPCListener still running\n");
-    if (vnThreadsRunning[THREAD_RPCHANDLER] > 0) printf("ThreadsRPCServer still running\n");
+    if (vnThreadsRunning[THREAD_SOCKETHANDLER] > 0)    printf("ThreadSocketHandler still running\n");
+    if (vnThreadsRunning[THREAD_OPENCONNECTIONS] > 0)  printf("ThreadOpenConnections still running\n");
+    if (vnThreadsRunning[THREAD_MESSAGEHANDLER] > 0)   printf("ThreadMessageHandler still running\n");
+    if (vnThreadsRunning[THREAD_RPCLISTENER] > 0)      printf("ThreadRPCListener still running\n");
+    if (vnThreadsRunning[THREAD_RPCHANDLER] > 0)       printf("ThreadsRPCServer still running\n");
 #ifdef USE_UPNP
-    if (vnThreadsRunning[THREAD_UPNP] > 0) printf("ThreadMapPort still running\n");
+    if (vnThreadsRunning[THREAD_UPNP] > 0)             printf("ThreadMapPort still running\n");
 #endif
-    if (vnThreadsRunning[THREAD_DNSSEED] > 0) printf("ThreadDNSAddressSeed still running\n");
+    if (vnThreadsRunning[THREAD_DNSSEED] > 0)          printf("ThreadDNSAddressSeed still running\n");
     if (vnThreadsRunning[THREAD_ADDEDCONNECTIONS] > 0) printf("ThreadOpenAddedConnections still running\n");
-    if (vnThreadsRunning[THREAD_DUMPADDRESS] > 0) printf("ThreadDumpAddresses still running\n");
-    if (vnThreadsRunning[THREAD_STAKE_MINER] > 0) printf("ThreadStakeMiner still running\n");
+    if (vnThreadsRunning[THREAD_DUMPADDRESS] > 0)      printf("ThreadDumpAddresses still running\n");
+	if (vnThreadsRunning[THREAD_TALLY] > 0)            printf("ThreadTally still running\n");
+    if (vnThreadsRunning[THREAD_STAKE_MINER] > 0)      printf("ThreadStakeMiner still running\n");
     while (vnThreadsRunning[THREAD_MESSAGEHANDLER] > 0 || vnThreadsRunning[THREAD_RPCHANDLER] > 0)
         MilliSleep(20);
     MilliSleep(50);

@@ -36,6 +36,9 @@ extern std::string getHardDriveSerial();
 extern double SnapToGrid(double d);
 extern bool NeuralNodeParticipates();
 extern bool StrLessThanReferenceHash(std::string rh);
+void BusyWaitForTally();
+
+extern bool TallyNetworkAverages(bool Forcefully);
 
 
 extern void SetUpExtendedBlockIndexFieldsOnce();
@@ -210,7 +213,6 @@ std::string msProdSeedContracts237579 = "54c3258d2ce32782da6c2a209c5afb923ae9bbf
 
 std::string BackupGridcoinWallet();
 extern double GetPoSKernelPS2();
-extern void TallyInBackground();
 extern std::string GetBoincDataDir2();
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 
@@ -298,7 +300,7 @@ extern enum Checkpoints::CPMode CheckpointsMode;
 extern std::string GetHttpPage(std::string cpid, bool usedns, bool clearcache);
 extern std::string RetrieveMd5(std::string s1);
 extern std::string aes_complex_hash(uint256 scrypt_hash);
-extern  bool TallyNetworkAverages(bool ColdBoot);
+
 volatile bool bNetAveragesLoaded = false;
 volatile bool bTallyStarted      = false;
 volatile bool bRestartGridcoinMiner = false;
@@ -309,6 +311,8 @@ volatile bool bCheckedForUpgrade = false;
 volatile bool bCheckedForUpgradeLive = false;
 volatile bool bGlobalcomInitialized = false;
 volatile bool bStakeMinerOutOfSyncWithNetwork = false;
+volatile bool bDoTally = false;
+volatile bool bTallyFinished = false;
 
 extern bool CheckWorkCPU(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey);
 extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
@@ -357,7 +361,7 @@ extern void ShutdownGridcoinMiner();
 extern bool OutOfSync();
 extern MiningCPID GetNextProject(bool bForce);
 extern void HarvestCPIDs(bool cleardata);
-extern  bool TallyNetworkAverages(bool ColdBoot);
+
 bool FindTransactionSlow(uint256 txhashin, CTransaction& txout,  std::string& out_errors);
 std::string msCurrentRAC = "";
 static boost::thread_group* cpidThreads = NULL;
@@ -3280,7 +3284,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 		{
 			    if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))	
 				{
-						TallyNetworkAverages(false);
+						BusyWaitForTally();
 					    if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))	
 						{
 							StructCPID strUntrustedHost = GetInitializedStructCPID2(bb.cpid,mvMagnitudes);
@@ -3353,8 +3357,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 								if (fDebug3) printf("ConnectBlock(): Superblock Loaded %f \r\n",(double)pindex->nHeight);
 								bNetAveragesLoaded=false;
 								nLastTallied = 0;
-								TallyNetworkAverages(false);
-
+								BusyWaitForTally();
 					}
 			}
 
@@ -3411,7 +3414,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 	// 9-19-2015; Slow down Retallying when in RA mode so we minimize disruption of the network
 	if (pindex->nHeight % 60 == 0 && bResearchAgeEnabled && BlockNeedsChecked(pindex->nTime))
 	{
-			TallyNetworkAverages(false);
+		BusyWaitForTally();
 	}
 					
 	
@@ -3676,9 +3679,8 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
     }
 
 	// Gridcoin: Now that the chain is back in order, Fix the researchers who were disrupted:
-
-	TallyNetworkAverages(false);
-
+	BusyWaitForTally();
+					    
     printf("REORGANIZE: done\n");
     return true;
 }
@@ -3766,7 +3768,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 			}
 
 			if (!vpindexSecondary.empty())
-			printf("Reorganizing Attempt #%f, regression to block #%f \r\n",(double)iRegression+1,(double)pindexIntermediate->nHeight);
+			printf("\r\nReorganizing Attempt #%f, regression to block #%f \r\n",(double)iRegression+1,(double)pindexIntermediate->nHeight);
 
             printf("Postponing %"PRIszu" reconnects\n", vpindexSecondary.size());
 			if (iRegression==4 && !Reorganize(txdb, pindexIntermediate))
@@ -3774,7 +3776,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 					printf("Failed to Reorganize during Attempt #%f \r\n",(double)iRegression+1);
 					txdb.TxnAbort();
 					InvalidChainFound(pindexNew);
-					TallyNetworkAverages(false);
+					BusyWaitForTally();
 				 	REORGANIZE_FAILED++;
 					return error("SetBestChain() : Reorganize failed");
 			}
@@ -4462,7 +4464,7 @@ void GridcoinServices()
 		if ((nBestHeight % 10) == 0)
 		{
 			if (fDebug) printf("#TIB# ");
-		    TallyInBackground();
+			bDoTally = true;
 		}
 
 	}
@@ -4473,7 +4475,7 @@ void GridcoinServices()
 		if ((nBestHeight % nTallyGranularity) == 0)
 		{
 			    if (fDebug3) printf("TIB1 ");
-			    TallyInBackground();
+			    bDoTally = true;
 				if (fDebug3) printf("CNNSH2 ");
 				ComputeNeuralNetworkSupermajorityHashes();
 		}
@@ -5844,12 +5846,8 @@ bool TallyResearchAverages(bool Forcefully)
 	bool superblockloaded = false;
 	double NetworkPayments = 0;
 	double mint = 0;
-
-    LOCK(cs_main);
-    {
-      
-		try 
-		{
+ 	try 
+	{
 						//Consensus Start/End block:
 						int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
 						int nLookback = BLOCKS_PER_DAY * 14; //Daily block count * Lookback in days
@@ -5879,9 +5877,9 @@ bool TallyResearchAverages(bool Forcefully)
 							iRow++;
 							if (IsSuperBlock(pblockindex) && !superblockloaded)
 							{
-									MiningCPID bb = GetBoincBlockByIndex(pblockindex);
-									if (bb.superblock.length() > 20)
-									{
+								MiningCPID bb = GetBoincBlockByIndex(pblockindex);
+								if (bb.superblock.length() > 20)
+								{
 										double out_beacon_count = 0;
 										double out_participant_count = 0;
 										double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,true);
@@ -5891,11 +5889,11 @@ bool TallyResearchAverages(bool Forcefully)
 												superblockloaded=true;
 												if (fDebug3) printf(" Superblock Loaded %f \r\n",(double)pblockindex->nHeight);
 										}
-									}
+								}
 							}
 					
 						}
-						if (fDebug10) printf("Min block %f, Rows %f \r\n",(double)pblockindex->nHeight,(double)iRow);
+						if (fDebug3) printf("Min block %f, Rows %f \r\n",(double)pblockindex->nHeight,(double)iRow);
 						StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
 						network.projectname="NETWORK";
 						network.payments = NetworkPayments;
@@ -5910,8 +5908,9 @@ bool TallyResearchAverages(bool Forcefully)
 		{
 			printf("Error while tallying network averages. [1]\r\n");
 			bNetAveragesLoaded=true;
+            nLastTallied = 0;
 		}
-	}
+	
 	bNetAveragesLoaded=true;
 	return false;
 }
@@ -6004,8 +6003,6 @@ bool TallyNetworkAverages(bool Forcefully)
 					
 					}
 					if (pblockindex && fDebug10)				printf("Min block %f, Rows %f \r\n",(double)pblockindex->nHeight,(double)iRow);
-
-					
 					StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
 					network.projectname="NETWORK";
 					network.payments = NetworkPayments;
@@ -6023,9 +6020,7 @@ bool TallyNetworkAverages(bool Forcefully)
 		bNetAveragesLoaded=true;
 	}
 	bNetAveragesLoaded=true;
-	if (fDebug3) printf(".4.");
 	return false;
-
 }
 
 
@@ -8337,15 +8332,6 @@ void HarvestCPIDs(bool cleardata)
 
 
 
-void ThreadTally()
-{
-	printf(" Tallying.. ");
-	TallyNetworkAverages(false);
-	GetNextProject(false);
-	if (fDebug) printf("Completed with Tallying()");
-}
-
-
 void ThreadCPIDs()
 {
 	//SetThreadPriority(THREAD_PRIORITY_LOWEST);
@@ -8369,28 +8355,6 @@ void LoadCPIDsInBackground()
 	  nCPIDsLoaded = GetAdjustedTime();
 	  cpidThreads = new boost::thread_group();
 	  cpidThreads->create_thread(boost::bind(&ThreadCPIDs));
-}
-
-void TallyInBackground()
-{
-	if (!bResearchAgeEnabled)
-	{
-		// Legacy support to run in the background until 10-20-2015
-		tallyThreads = new boost::thread_group();
-		tallyThreads->create_thread(boost::bind(&ThreadTally));
-	}
-	else
-	{
-		// Run in foreground with wallet locked
-		try
-		{
-			TallyNetworkAverages(false);
-		}
-		catch(...)
-		{
-			printf("Error while Tallying in foreground. \r\n");
-		}
-	}
 }
 
 StructCPID GetStructCPID()
@@ -9594,3 +9558,5 @@ bool StrLessThanReferenceHash(std::string rh)
 	uint256 uADH = uint256("0x" + address_day_hash);
 	return (uADH < uRef);
 }
+
+
