@@ -3018,7 +3018,7 @@ int64_t ReturnCurrentMoneySupply(CBlockIndex* pindexcurrent)
 	return (pindexcurrent->pprev? pindexcurrent->pprev->nMoneySupply : nGenesisSupply);
 }
 
-bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
+bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, bool fReorganizing)
 {
     // Check it again in case a previous version let a bad block in, but skip BlockSig checking
     if (!CheckBlock(pindex->pprev->nHeight, 395*COIN, !fJustCheck, !fJustCheck, false,false))
@@ -3228,7 +3228,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	double mint = CoinToDouble(pindex->nMint);
     double PORDiff = GetBlockDifficulty(nBits);
 		
-	if (pindex->nHeight > nGrandfather)
+	if (pindex->nHeight > nGrandfather && !fReorganizing)
 	{
 		// Block Spamming 
 		if (mint < MintLimiter(PORDiff,bb.RSAWeight,bb.cpid,GetBlockTime())) 
@@ -3237,12 +3237,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 		}
 
 		if (mint == 0) return error("CheckProofOfStake[] : Mint is ZERO! %f",(double)mint);
-
-		double staked = cdbl("0" + ReadCache("stakedbyaddress",bb.GRCAddress),0);
-		if (staked > 60)
-		{
-					//return error("Client staked more than 60 blocks over the last 500 blocks; block rejected\r\n");
-		}
 
 		double OUT_POR = 0;
 		double OUT_INTEREST = 0;
@@ -3318,7 +3312,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 	if (bb.superblock.length() > 20) 
 	{
-		if (pindex->nHeight > nGrandfather)
+		if (pindex->nHeight > nGrandfather && !fReorganizing)
 		{
 			//7-25-2015
 			std::string neural_hash = GetQuorumHash(bb.superblock);
@@ -3348,7 +3342,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
 
 			//If we are out of sync, and research age is enabled, and the superblock is valid, load it now, so we can continue checking blocks accurately
-			if ((OutOfSyncByAge() || fColdBoot) && bResearchAgeEnabled)
+			if ((OutOfSyncByAge() || fColdBoot|| fReorganizing) && bResearchAgeEnabled)
 			{
 					double out_beacon_count = 0;
 					double out_participant_count = 0;
@@ -3359,7 +3353,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 								if (fDebug3) printf("ConnectBlock(): Superblock Loaded %f \r\n",(double)pindex->nHeight);
 								bNetAveragesLoaded=false;
 								nLastTallied = 0;
-								TallyNetworkAverages(true);
+								TallyNetworkAverages(false);
 
 					}
 			}
@@ -3417,7 +3411,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 	// 9-19-2015; Slow down Retallying when in RA mode so we minimize disruption of the network
 	if (pindex->nHeight % 60 == 0 && bResearchAgeEnabled && BlockNeedsChecked(pindex->nTime))
 	{
-			TallyNetworkAverages(true);
+			TallyNetworkAverages(false);
 	}
 					
 	
@@ -3625,7 +3619,7 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
         CBlock block;
         if (!block.ReadFromDisk(pindex))
             return error("Reorganize() : ReadFromDisk for connect failed");
-        if (!block.ConnectBlock(txdb, pindex))
+        if (!block.ConnectBlock(txdb, pindex, false, true))
         {
             // Invalid block
             return error("Reorganize() : ConnectBlock %s failed", pindex->GetBlockHash().ToString().substr(0,20).c_str());
@@ -3702,12 +3696,12 @@ bool InAdvisory()
 }
 
 // Called from inside SetBestChain: attaches a block to the new best chain being built
-bool CBlock::SetBestChainInner(CTxDB& txdb, CBlockIndex *pindexNew)
+bool CBlock::SetBestChainInner(CTxDB& txdb, CBlockIndex *pindexNew, bool fReorganizing)
 {
     uint256 hash = GetHash();
 
     // Adding to current best branch
-    if (!ConnectBlock(txdb, pindexNew) || !txdb.WriteHashBestChain(hash))
+    if (!ConnectBlock(txdb, pindexNew, false, fReorganizing) || !txdb.WriteHashBestChain(hash))
     {
         txdb.TxnAbort();
         InvalidChainFound(pindexNew);
@@ -3742,7 +3736,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
     }
     else if (hashPrevBlock == hashBestChain)
     {
-        if (!SetBestChainInner(txdb, pindexNew))
+        if (!SetBestChainInner(txdb, pindexNew, false))
 		{
 			int nResult = 0;
             return error("SetBestChain() : SetBestChainInner failed");
@@ -3752,52 +3746,40 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
     {
         // the first block in the new chain that will cause it to become the new best chain
         CBlockIndex *pindexIntermediate = pindexNew;
-
-        // list of blocks that need to be connected afterwards
+		// list of blocks that need to be connected afterwards
         std::vector<CBlockIndex*> vpindexSecondary;
-
-        // Reorganize is costly in terms of db load, as it works in a single db transaction.
-        // Try to limit how much needs to be done inside
-		int rollback = 0;
-		if (REORGANIZE_FAILED > 2)
+        
+		//10-6-2015 Make Reorganize work more gracefully - try up to 5 times to reorganize, each with an intermediate further back
+        for (int iRegression = 0; iRegression < 5; iRegression++)
 		{
-			rollback += (REORGANIZE_FAILED*100);
-		}
-		int rolled_back = 1;
-        while (pindexIntermediate->pprev && pindexIntermediate->pprev->nChainTrust > pindexBest->nChainTrust && rolled_back < rollback)
-        {
-            vpindexSecondary.push_back(pindexIntermediate);
-            pindexIntermediate = pindexIntermediate->pprev;
-			if (pindexIntermediate==pindexGenesisBlock) break;
-			rolled_back++;
-	    }
+			int rollback = iRegression*200;
+		
+		    // Reorganize is costly in terms of db load, as it works in a single db transaction.
+			// Try to limit how much needs to be done inside
+			int rolled_back = 1;
+			while (pindexIntermediate->pprev && pindexIntermediate->pprev->nChainTrust > pindexBest->nChainTrust && rolled_back < rollback)
+			{
+				vpindexSecondary.push_back(pindexIntermediate);
+				pindexIntermediate = pindexIntermediate->pprev;
+				if (pindexIntermediate==pindexGenesisBlock) break;
+				rolled_back++;
+			}
 
-        if (!vpindexSecondary.empty())
+			if (!vpindexSecondary.empty())
+			printf("Reorganizing Attempt #%f, regression to block #%f \r\n",(double)iRegression+1,(double)pindexIntermediate->nHeight);
+
             printf("Postponing %"PRIszu" reconnects\n", vpindexSecondary.size());
-
-        // Switch to new best branch
-        if (!Reorganize(txdb, pindexIntermediate))
-        {
-				std::string suppressreboot = GetArg("-suppressreboot", "true");
-				txdb.TxnAbort();
-				// Since we failed to re-organize, we must try to shave blocks off the chain:
-				bool fResult = false;
-				bool fOkToPerformModernReorganize = (GetArg("-modernreorg", "true")=="true");
-	
-				if (fOkToPerformModernReorganize) fResult = ShaveChain(txdb);
-				if (!fResult)
-				{
+			if (iRegression==4 && !Reorganize(txdb, pindexIntermediate))
+			{
+					printf("Failed to Reorganize during Attempt #%f \r\n",(double)iRegression+1);
+					txdb.TxnAbort();
 					InvalidChainFound(pindexNew);
 					TallyNetworkAverages(false);
 				 	REORGANIZE_FAILED++;
 					return error("SetBestChain() : Reorganize failed");
-				}
-				else
-				{
-					printf("Successfully shaved blocks off of the chain.");
-					return true;
-				}
+			}
 		}
+		// Switch to new best branch
 		REORGANIZE_FAILED=0;
 			
         // Connect further blocks
@@ -3814,7 +3796,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
                 break;
             }
             // errors now are not fatal, we still did a reorganisation to a new chain in a valid way
-            if (!block.SetBestChainInner(txdb, pindex))
+            if (!block.SetBestChainInner(txdb, pindex, true))
                 break;
         }
     }
@@ -5835,8 +5817,7 @@ void AddProjectRAC(MiningCPID bb,double& NetworkRAC, double& NetworkMagnitude)
 	network.TotalRAC = NetworkRAC;
 	NetworkMagnitude += bb.Magnitude;
 	network.entries++;
-	mvNetwork[bb.projectname] = network;
-						
+	mvNetwork[bb.projectname] = network;		
 }
 
 
@@ -5850,85 +5831,86 @@ bool TallyResearchAverages(bool Forcefully)
 	}
 
 	if (Forcefully) nLastTallied = 0;
-	int timespan = fTestNet ? 1 : 5;
+	int timespan = fTestNet ? 2 : 6;
 	if (IsLockTimeWithinMinutes(nLastTallied,timespan)) 
 	{
 		bNetAveragesLoaded=true;
 		return true;
 	}
 
-	printf("Gathering network avgs (begin)");
+	printf("Tallying Research Averages (begin) ");
 	nLastTallied = GetAdjustedTime();
 	bNetAveragesLoaded = false;
 	bool superblockloaded = false;
 	double NetworkPayments = 0;
-	
 	double mint = 0;
-	try 
-	{
-					//Consensus Start/End block:
-					int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
-					int nLookback = BLOCKS_PER_DAY*14; //Daily block count * Lookback in days = 14 days
-					int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
-					if (fDebug3) printf("START BLOCK %f, END BLOCK %f ",(double)nMaxDepth,(double)nMinDepth);
-					if (nMinDepth < 2)              nMinDepth = 2;
-					if (mvMagnitudes.size() > 0) 	mvMagnitudes.clear();
-					int iRow = 0;
-					//CBlock block;
-					CBlockIndex* pblockindex = pindexBest;
-					while (pblockindex->nHeight > nMaxDepth)
-					{
-						if (!pblockindex || !pblockindex->pprev) return false;  
-						pblockindex = pblockindex->pprev;
-						if (pblockindex == pindexGenesisBlock) return false;
-					}
 
-					if (fDebug3) printf("Max block %f",(double)pblockindex->nHeight);
-
-					while (pblockindex->nHeight > nMinDepth)
-					{
-						if (!pblockindex || !pblockindex->pprev) return false;  
-						pblockindex = pblockindex->pprev;
-						if (pblockindex == pindexGenesisBlock) return false;
-						if (pblockindex == NULL || !pblockindex->IsInMainChain()) continue;
-						NetworkPayments += pblockindex->nResearchSubsidy;
-						AddResearchMagnitude(pblockindex);
-						iRow++;
-						if (IsSuperBlock(pblockindex) && !superblockloaded)
+    LOCK(cs_main);
+    {
+      
+		try 
+		{
+						//Consensus Start/End block:
+						int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
+						int nLookback = BLOCKS_PER_DAY * 14; //Daily block count * Lookback in days
+						int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
+						if (fDebug3) printf("START BLOCK %f, END BLOCK %f ",(double)nMaxDepth,(double)nMinDepth);
+						if (nMinDepth < 2)              nMinDepth = 2;
+						if (mvMagnitudes.size() > 0) 	mvMagnitudes.clear();
+						int iRow = 0;
+						//CBlock block;
+						CBlockIndex* pblockindex = pindexBest;
+						while (pblockindex->nHeight > nMaxDepth)
 						{
-								MiningCPID bb = GetBoincBlockByIndex(pblockindex);
-								double out_beacon_count = 0;
-								double out_participant_count = 0;
-								double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,true);
-								if (avg_mag > 10)
-								{
-	    								LoadSuperblock(bb.superblock,pblockindex->nTime,pblockindex->nHeight);
-										superblockloaded=true;
-										if (fDebug3) printf(" Superblock Loaded %f \r\n",(double)pblockindex->nHeight);
-								}
+							if (!pblockindex || !pblockindex->pprev || pblockindex == pindexGenesisBlock) return false;  
+							pblockindex = pblockindex->pprev;
 						}
+
+						if (fDebug3) printf("Max block %f",(double)pblockindex->nHeight);
+
+						while (pblockindex->nHeight > nMinDepth)
+						{
+							if (!pblockindex || !pblockindex->pprev) return false;  
+							pblockindex = pblockindex->pprev;
+							if (pblockindex == pindexGenesisBlock) return false;
+							if (!pblockindex->IsInMainChain()) continue;
+							NetworkPayments += pblockindex->nResearchSubsidy;
+							AddResearchMagnitude(pblockindex);
+							iRow++;
+							if (IsSuperBlock(pblockindex) && !superblockloaded)
+							{
+									MiningCPID bb = GetBoincBlockByIndex(pblockindex);
+									if (bb.superblock.length() > 20)
+									{
+										double out_beacon_count = 0;
+										double out_participant_count = 0;
+										double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,true);
+										if (avg_mag > 10)
+										{
+	    										LoadSuperblock(bb.superblock,pblockindex->nTime,pblockindex->nHeight);
+												superblockloaded=true;
+												if (fDebug3) printf(" Superblock Loaded %f \r\n",(double)pblockindex->nHeight);
+										}
+									}
+							}
 					
-					}
-					if (pblockindex && fDebug10) printf("Min block %f, Rows %f \r\n",(double)pblockindex->nHeight,(double)iRow);
-					StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
-					network.projectname="NETWORK";
-					network.payments = NetworkPayments;
-					mvNetwork["NETWORK"] = network;
-					TallyMagnitudesInSuperblock();
-					GetNextProject(false);
-					bTallyStarted = false;
-					bNetAveragesLoaded = true;
-					return true;
-	}
-	catch (std::exception &e) 
-	{
-	    printf("Error while tallying network averages.\r\n");
-		bNetAveragesLoaded=true;
-	}
-    catch(...)
-	{
-		printf("Error while tallying network averages. [1]\r\n");
-		bNetAveragesLoaded=true;
+						}
+						if (fDebug10) printf("Min block %f, Rows %f \r\n",(double)pblockindex->nHeight,(double)iRow);
+						StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
+						network.projectname="NETWORK";
+						network.payments = NetworkPayments;
+						mvNetwork["NETWORK"] = network;
+						TallyMagnitudesInSuperblock();
+						GetNextProject(false);
+						bTallyStarted = false;
+						bNetAveragesLoaded = true;
+						return true;
+		}
+		catch(...)
+		{
+			printf("Error while tallying network averages. [1]\r\n");
+			bNetAveragesLoaded=true;
+		}
 	}
 	bNetAveragesLoaded=true;
 	return false;
@@ -5938,7 +5920,6 @@ bool TallyResearchAverages(bool Forcefully)
 
 bool TallyNetworkAverages(bool Forcefully)
 {
-
 	if (bResearchAgeEnabled)
 	{
 		return TallyResearchAverages(Forcefully);
@@ -6036,12 +6017,7 @@ bool TallyNetworkAverages(bool Forcefully)
 					bNetAveragesLoaded = true;
 					return true;
 	}
-	catch (std::exception &e) 
-	{
-	    printf("Error while tallying network averages.\r\n");
-		bNetAveragesLoaded=true;
-	}
-    catch(...)
+	catch(...)
 	{
 		printf("Error while tallying network averages. [1]\r\n");
 		bNetAveragesLoaded=true;
@@ -8363,7 +8339,7 @@ void HarvestCPIDs(bool cleardata)
 
 void ThreadTally()
 {
-	printf("Tallying..");
+	printf(" Tallying.. ");
 	TallyNetworkAverages(false);
 	GetNextProject(false);
 	if (fDebug) printf("Completed with Tallying()");
@@ -8397,8 +8373,24 @@ void LoadCPIDsInBackground()
 
 void TallyInBackground()
 {
-	tallyThreads = new boost::thread_group();
-	tallyThreads->create_thread(boost::bind(&ThreadTally));
+	if (!bResearchAgeEnabled)
+	{
+		// Legacy support to run in the background until 10-20-2015
+		tallyThreads = new boost::thread_group();
+		tallyThreads->create_thread(boost::bind(&ThreadTally));
+	}
+	else
+	{
+		// Run in foreground with wallet locked
+		try
+		{
+			TallyNetworkAverages(false);
+		}
+		catch(...)
+		{
+			printf("Error while Tallying in foreground. \r\n");
+		}
+	}
 }
 
 StructCPID GetStructCPID()

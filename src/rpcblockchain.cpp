@@ -1659,6 +1659,7 @@ Value execute(const Array& params, bool fHelp)
 		 CTxDB txdb;
 		 if (ShaveChain(txdb))
 		 {
+		 	entry.push_back(Pair("Warning!","This command is deprecated and can cause temporary instability.  It is not recommended any longer. You may have to reboot the wallet to recover. "));
 		 	entry.push_back(Pair("Shave Succeeded.",(double)pindexBest->nHeight));
    			results.push_back(entry);
 		 }
@@ -2393,7 +2394,6 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "tallyinbackground")
 	{
-		
 			TallyInBackground();
 			entry.push_back(Pair("Tallying in Background...",1));
 			results.push_back(entry);

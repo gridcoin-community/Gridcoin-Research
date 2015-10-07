@@ -545,7 +545,7 @@ Module modPersistedDataSystem
         Try
             Kill(sPath)
         Catch ex As Exception
-            Log("Neural updatemagnitudesphase1:" + ex.Message)
+            Log("Neural UpdateMagnitudesPhase1:" + ex.Message)
         End Try
 
     End Function

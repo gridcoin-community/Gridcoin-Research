@@ -1230,7 +1230,7 @@ public:
 
 
     bool DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex);
-    bool ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck=false);
+    bool ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck=false, bool fReorganizing=false);
     bool ReadFromDisk(const CBlockIndex* pindex, bool fReadTransactions=true);
     bool SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew);
     bool AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof);
@@ -1241,7 +1241,7 @@ public:
     bool CheckBlockSignature() const;
 
 private:
-    bool SetBestChainInner(CTxDB& txdb, CBlockIndex *pindexNew);
+    bool SetBestChainInner(CTxDB& txdb, CBlockIndex *pindexNew, bool fReorganizing);
 };
 
 
