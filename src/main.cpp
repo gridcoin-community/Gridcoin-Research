@@ -33,6 +33,10 @@ int GetDayOfYear();
 int DownloadBlocks();
 extern MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID> vRef);
 extern std::string getHardDriveSerial();
+extern bool IsSuperBlock(CBlockIndex* pIndex);
+extern bool NeedASuperblock();
+
+
 extern double SnapToGrid(double d);
 extern bool NeuralNodeParticipates();
 extern bool StrLessThanReferenceHash(std::string rh);
@@ -4376,10 +4380,25 @@ bool static ReserealizeBlockSignature(CBlock* pblock)
 }
 */
 
+bool NeedASuperblock()
+{
+		//10-8-2015
+		double out_beacon_count=0;
+		double out_participant_count=0;
+		bool bDireNeedOfSuperblock = false;
+		std::string superblock = ReadCache("superblock","all");
+		if (superblock.length() > 20 && !OutOfSyncByAge())
+		{
+			double avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,false);
+			if (avg_mag < 10) bDireNeedOfSuperblock = true;
+		}
+		int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+		if (NeuralNodeParticipates() && ((double)superblock_age > (double)(nSuperblockAgeSpacing))) bDireNeedOfSuperblock = true;
+		return bDireNeedOfSuperblock;
+}
 
 void GridcoinServices()
 {
-
 
 	//Dont do this on headless-SePulcher 12-4-2014 (Halford)
 	#if defined(QT_GUI)
@@ -4452,7 +4471,7 @@ void GridcoinServices()
 
 	int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
 	if (fDebug3) printf ("Superblockage %f, BH %f ",(double)superblock_age,(double)nBestHeight);
-	if ((double)superblock_age > (double)(nSuperblockAgeSpacing))
+	if (NeedASuperblock())
 	{
 		if ((nBestHeight % 3) == 0)
 		{
@@ -4496,7 +4515,7 @@ void GridcoinServices()
 		// Let's start syncing the neural network as soon as the LAST superblock is over 12 hours old.
 		// Also, lets do this as a TEAM exactly every 30 blocks (~30 minutes) to try to reach an EXACT consensus every half hour:
 		// For effeciency, the network sleeps for 20 hours after a good superblock is accepted
-		if (NeuralNodeParticipates() && ((double)superblock_age > (double)(nSuperblockAgeSpacing)))
+		if (NeedASuperblock())
 		{
 			if (fDebug3) printf("FSWDPOR ");
 			FullSyncWithDPORNodes();
@@ -4506,7 +4525,7 @@ void GridcoinServices()
 	if (( (nBestHeight-10) % 30 ) == 0)
 	{
 			// 10 Blocks after the network started syncing the neural network as a team, ask the neural network to come to a quorum
-			if (NeuralNodeParticipates() && (double)superblock_age > (double)(nSuperblockAgeSpacing))
+			if (NeedASuperblock())
 			{
 				// First verify my node has a synced contract
 				std::string contract = "";
@@ -7686,7 +7705,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 	}
 	int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
 	//7-25-2015 - Add the neural hash only if necessary
-	if (NeuralNodeParticipates() && ((double)superblock_age > (double)(nSuperblockAgeSpacing)) && !OutOfSyncByAge())
+	if (NeedASuperblock() && !OutOfSyncByAge())
 	{
 		#if defined(WIN32) && defined(QT_GUI)
 			mcpid.NeuralHash = qtGetNeuralHash("");
@@ -9541,7 +9560,9 @@ bool NeuralNodeParticipates()
 	std::string address_day_hash = RetrieveMd5(address_day);
 	// For now, let's call for a 25% participation rate (approx. 125 nodes) so we don't ddos the project sites:
 	// ToDo: Make this dynamic as our network grows...
-	uint256 uRef = fTestNet ? uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b") : uint256("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
+	// ToDo: RA Release - Update with dynamic hashes
+    //	uint256 uRef = fTestNet ? uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b") : uint256("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
+	uint256 uRef = fTestNet ? uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b") : uint256("0x00000000000000000000000000000000fd182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
 	uint256 uADH = uint256("0x" + address_day_hash);
 	//uint256 uTest = uint256("0x00000000000000000000000000000000ffffff81388f317df738fd9994e7020b");
 	//printf("%s < %s : %s",uADH.GetHex().c_str() ,uRef.GetHex().c_str(), YesNo(uADH  < uRef).c_str());

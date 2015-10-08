@@ -26,6 +26,11 @@ double Cap(double dAmt, double Ceiling);
 extern std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, 
 	std::string sSig, int64_t MinimumBalance, double dFees, std::string sPublicKey);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
+extern Array SuperblockReport(std::string cpid);
+bool IsSuperBlock(CBlockIndex* pIndex);
+MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
+extern double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid);
+bool NeedASuperblock();
 
 std::string GetQuorumHash(std::string data);
 
@@ -916,6 +921,38 @@ double GetAverageInList(std::string superblock,double& out_count)
 
 }
 
+
+double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid)
+{
+		std::string mags = ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>");
+		std::vector<std::string> vSuperblock = split(mags.c_str(),";");
+		if  (vSuperblock.size() < 2) return -2;
+		if  (cpid.length() < 31) return -3;
+
+
+		for (unsigned int i = 0; i < vSuperblock.size(); i++)
+		{
+			// For each CPID in the contract
+			printf(".");
+			if (vSuperblock[i].length() > 1)
+			{
+				std::string sTempCPID = ExtractValue(vSuperblock[i],",",0);
+				double magnitude = cdbl(ExtractValue("0"+vSuperblock[i],",",1),0);
+				boost::to_lower(sTempCPID);
+				boost::to_lower(cpid);
+				
+				if (sTempCPID.length() > 31 && cpid.length() > 31)
+				{
+					if (sTempCPID.substr(0,31) == cpid.substr(0,31))
+					{
+						return magnitude;
+					}
+				}
+			}
+		}
+
+		return -1;
+}
 
 double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,bool bIgnoreBeacons)
 {
@@ -2642,6 +2679,8 @@ Value execute(const Array& params, bool fHelp)
 		entry.push_back(Pair("avg",avg));
 		entry.push_back(Pair("beacon_count",out_beacon_count));
 		entry.push_back(Pair("beacon_participant_count",out_participant_count));
+		bool bDireNeed = NeedASuperblock();
+		entry.push_back(Pair("Dire Need of Superblock",bDireNeed));
 		results.push_back(entry);
 	
 	}
@@ -2984,6 +3023,68 @@ Array LifetimeReport(std::string cpid)
 }
 
 
+
+Array SuperblockReport(std::string cpid)
+{
+
+	  Array results;
+      Object c;
+	  std::string Narr = RoundToString(GetAdjustedTime(),0);
+	  c.push_back(Pair("SuperBlock Report (14 days)",Narr));
+	  if (!cpid.empty()) 	  c.push_back(Pair("CPID",cpid));
+
+      results.push_back(c);
+		 
+      int nMaxDepth = nBestHeight;
+	  int nLookback = BLOCKS_PER_DAY * 14;
+	  int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
+      int iRow = 0;
+	  CBlockIndex* pblockindex = pindexBest;
+   	  while (pblockindex->nHeight > nMaxDepth)
+	  {
+				if (!pblockindex || !pblockindex->pprev || pblockindex == pindexGenesisBlock) return results;
+				pblockindex = pblockindex->pprev;
+	  }
+
+						
+	  while (pblockindex->nHeight > nMinDepth)
+	  {
+							if (!pblockindex || !pblockindex->pprev) return results;  
+							pblockindex = pblockindex->pprev;
+							if (pblockindex == pindexGenesisBlock) return results;
+							if (!pblockindex->IsInMainChain()) continue;
+							if (IsSuperBlock(pblockindex))
+							{
+								MiningCPID bb = GetBoincBlockByIndex(pblockindex);
+								if (bb.superblock.length() > 20)
+								{
+										double out_beacon_count = 0;
+										double out_participant_count = 0;
+										double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,true);
+										if (avg_mag > 10)
+										{
+											    //10-8-2015
+	    										Object c;
+												c.push_back(Pair("Block #" + RoundToString(pblockindex->nHeight,0),pblockindex->GetBlockHash().GetHex()));
+												c.push_back(Pair("Date",TimestampToHRDate(pblockindex->nTime)));
+												c.push_back(Pair("Wallet Version",bb.clientversion));
+
+												double mag = GetSuperblockMagnitudeByCPID(bb.superblock, cpid);
+												if (!cpid.empty())
+												{
+													c.push_back(Pair("Magnitude",mag));
+												}
+
+												results.push_back(c);
+		
+										}
+								}
+							}
+					
+						}
+	  return results;
+
+}
 
 Array MagnitudeReport(std::string cpid)
 {
@@ -4055,6 +4156,17 @@ Value listitem(const Array& params, bool fHelp)
 
 	}
 
+	if (sitem == "superblocks")
+	{
+		std::string cpid = "";
+		if (params.size() == 2)
+		{
+			cpid = params[1].get_str();
+		}
+
+		results = SuperblockReport(cpid);
+		return results;
+	}
 
 	if (sitem == "magnitude")
 	{

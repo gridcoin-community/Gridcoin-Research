@@ -1976,7 +1976,7 @@ void DumpAddresses()
 
 void ThreadTallyResearchAverages(void* parg)
 {
-    // Make this thread recognisable as the address dumping thread
+    // Make this thread recognisable
     RenameThread("grc-tallyresearchaverages");
 
 begin:
