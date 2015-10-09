@@ -35,7 +35,7 @@ Module modPersistedDataSystem
         Public Witnesses As Double
         Public Updated As DateTime
     End Structure
-    Public mdictNeuralNetworkMemories As Dictionary(Of String, GRCSec.GridcoinData.NeuralStructure)
+    'Public mdictNeuralNetworkMemories As Dictionary(Of String, GRCSec.GridcoinData.NeuralStructure)
 
     Public Structure Row
         Public Database As String
@@ -82,15 +82,15 @@ Module modPersistedDataSystem
     Public Function GetMagnitudeContractDetails() As String
         '8-8-2015: Retrieve true magnitude average from all nodes
 
-        If mdictNeuralNetworkMemories Is Nothing Then
-            Try
-                ReconnectToNeuralNetwork()
-                Dim sMemoryName = IIf(mbTestNet, "magnitudes_testnet", "magnitudes")
-                mdictNeuralNetworkMemories = mGRCData.GetNeuralNetworkQuorumData(sMemoryName)
-            Catch ex As Exception
-                Log("Unable to connect to neural network for memories.")
-            End Try
-        End If
+        ' If mdictNeuralNetworkMemories Is Nothing Then
+        ' Try
+        ' ReconnectToNeuralNetwork()
+        ' Dim sMemoryName = IIf(mbTestNet, "magnitudes_testnet", "magnitudes")
+        ' mdictNeuralNetworkMemories = mGRCData.GetNeuralNetworkQuorumData(sMemoryName)
+        ' Catch ex As Exception
+        ' Log("Unable to connect to neural network for memories.")
+        ' End Try
+        ' End If
 
         Dim surrogateRow As New Row
         surrogateRow.Database = "CPID"
@@ -100,10 +100,10 @@ Module modPersistedDataSystem
         Dim sOut As String = ""
         For Each cpid As Row In lstCPIDs
             Dim dNeuralMagnitude As Double = 0
-            Try
-                dNeuralMagnitude = mdictNeuralNetworkMemories(cpid.PrimaryKey).NeuralValue
-            Catch ex As Exception
-            End Try
+            '   Try
+            'dNeuralMagnitude = mdictNeuralNetworkMemories(cpid.PrimaryKey).NeuralValue
+            'Catch ex As Exception
+            'End Try
             Dim sRow As String = cpid.PrimaryKey + "," + Num(cpid.Magnitude) _
                                  + "," + Num(dNeuralMagnitude) + "," + Num(cpid.RAC) _
                                  + "," + Trim(cpid.Synced) + "," + Trim(cpid.DataColumn4) _
@@ -148,7 +148,7 @@ Module modPersistedDataSystem
         surrogateRow.Table = "CPIDS"
         Dim lTotal As Long
         Dim lRows As Long
-            If bMagsDoneLoading = False Then Return ""
+            If mlPercentComplete > 0 Then Return ""
             'If Last synced older than 1 day, delete the contract - 10-2-2015
 
         Dim sOut As String = ""
@@ -164,7 +164,8 @@ Module modPersistedDataSystem
                     sOut += sRow
                     dMagAge = 0
                     Try
-                        dMagAge = Math.Abs(DateDiff(DateInterval.Minute, Now, cpid.Synced))
+                        dMagAge = Math.Abs(DateDiff(DateInterval.Minute, Now, cpid.Added))
+
                     Catch ex As Exception
                     End Try
                     If dMagAge > (60 * 12) Then Return ""
@@ -782,11 +783,10 @@ Module modPersistedDataSystem
                 cpid.Magnitude = Trim(Math.Round(TotalMagnitude, 2))
                 If TotalMagnitude < 1 And TotalMagnitude > 0.25 Then cpid.Magnitude = Trim(1)
 
-                Try
-                    mGRCData.BroadcastNeuralNetworkMemoryValue(sMemoryName, cpid.PrimaryKey, Val(cpid.Magnitude), False)
-                Catch ex As Exception
-
-                End Try
+                'Try
+                'mGRCData.BroadcastNeuralNetworkMemoryValue(sMemoryName, cpid.PrimaryKey, Val(cpid.Magnitude), False)
+                'Catch ex As Exception
+                'End Try
                 Store(cpid)
             Next
             mlPercentComplete = 0

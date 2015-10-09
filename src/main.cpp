@@ -7653,7 +7653,7 @@ std::string GetNeuralNetworkSuperBlock()
 	//Only try to stake a superblock if the contract expired And the superblock is the highest popularity block
 	
 	int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-	if ((double)superblock_age > (double)(nSuperblockAgeSpacing))
+	if (NeedASuperblock())
 	{
 		std::string myNeuralHash = "";
 		#if defined(WIN32) && defined(QT_GUI)

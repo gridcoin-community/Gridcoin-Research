@@ -246,6 +246,8 @@ Public Class frmMining
         Dim sHeading As String = "CPID;Magnitude;Avg Magnitude;Total RAC;Synced Til;Address;CPID Valid"
         Dim vHeading() As String = Split(sHeading, ";")
         PopulateHeadings(vHeading, dgv, False)
+        dgv.Columns(2).Visible = False
+
         Dim sData As String = modPersistedDataSystem.GetMagnitudeContractDetails()
         Dim vData() As String = Split(sData, ";")
         Dim iRow As Long = 0
@@ -501,28 +503,12 @@ Public Class frmMining
     Private Sub btnRefresh_Click(sender As System.Object, e As System.EventArgs) Handles btnRefresh.Click
         PopulateNeuralData()
         Call OneMinuteUpdate()
-        If ((Rnd(1) * 1000) < 333) Then
-            'Ask the other nodes what the averages are...
-            pbSync.Visible = True
-            pbSync.Maximum = 100
-            pbSync.Value = 50
-            Try
-                ReconnectToNeuralNetwork()
-                Dim sMemoryName = IIf(mbTestNet, "magnitudes_testnet", "magnitudes")
-                mdictNeuralNetworkMemories = mGRCData.GetNeuralNetworkQuorumData(sMemoryName)
-            Catch ex As Exception
-                Log("Unable to connect to neural network for memories.")
-            End Try
-            Threading.Thread.Sleep(10)
-            pbSync.Value = 0
-            pbSync.Visible = False
-
-        End If
     End Sub
 
     Private Sub TimerSync_Tick(sender As System.Object, e As System.EventArgs) Handles TimerSync.Tick
         If mlPercentComplete <> 0 Then
             pbSync.Visible = True
+            Me.Enabled = False
             pbSync.Maximum = 100
             If mlPercentComplete <= pbSync.Maximum Then pbSync.Value = mlPercentComplete
             Application.DoEvents()
@@ -532,6 +518,7 @@ Public Class frmMining
         Else
             If pbSync.Visible = True Then pbSync.Visible = False : PopulateNeuralData()
             pbSync.Visible = False
+            Me.Enabled = True
         End If
     End Sub
 
