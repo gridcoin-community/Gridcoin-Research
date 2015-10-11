@@ -3350,7 +3350,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
 
 			//If we are out of sync, and research age is enabled, and the superblock is valid, load it now, so we can continue checking blocks accurately
-			if ((OutOfSyncByAge() || fColdBoot|| fReorganizing) && bResearchAgeEnabled)
+			if ((OutOfSyncByAge() || fColdBoot || fReorganizing) && bResearchAgeEnabled)
 			{
 					double out_beacon_count = 0;
 					double out_participant_count = 0;
@@ -4480,7 +4480,7 @@ void GridcoinServices()
 			UpdateNeuralNetworkQuorumData();
 		}
 		//When superblock is old, Tally every 10 mins:
-		if ((nBestHeight % 10) == 0)
+		if ((nBestHeight % 20) == 0)
 		{
 			if (fDebug) printf("#TIB# ");
 			bDoTally = true;
@@ -5865,9 +5865,7 @@ bool TallyResearchAverages(bool Forcefully)
 	bool superblockloaded = false;
 	double NetworkPayments = 0;
 	double mint = 0;
- 	try 
-	{
-						//Consensus Start/End block:
+ 						//Consensus Start/End block:
 						int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
 						int nLookback = BLOCKS_PER_DAY * 14; //Daily block count * Lookback in days
 						int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
@@ -5922,13 +5920,13 @@ bool TallyResearchAverages(bool Forcefully)
 						bTallyStarted = false;
 						bNetAveragesLoaded = true;
 						return true;
-		}
-		catch(...)
-		{
-			printf("Error while tallying network averages. [1]\r\n");
-			bNetAveragesLoaded=true;
-            nLastTallied = 0;
-		}
+		
+		//catch(...)
+		//{
+		//	printf("Error while tallying network averages. [1]\r\n");
+		//	bNetAveragesLoaded=true;
+        //   nLastTallied = 0;
+		//}
 	
 	bNetAveragesLoaded=true;
 	return false;
@@ -5965,8 +5963,6 @@ bool TallyNetworkAverages(bool Forcefully)
 	double NetworkPayments = 0;
 	
 	double mint = 0;
-	try 
-	{
 					//7-5-2015 - R Halford - Start block and End block must be an exact range agreed by the network:
 					int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
 					int nLookback = BLOCKS_PER_DAY*14; //Daily block count * Lookback in days = 14 days
@@ -6032,12 +6028,12 @@ bool TallyNetworkAverages(bool Forcefully)
 					bTallyStarted = false;
 					bNetAveragesLoaded = true;
 					return true;
-	}
-	catch(...)
-	{
-		printf("Error while tallying network averages. [1]\r\n");
-		bNetAveragesLoaded=true;
-	}
+	
+	//catch(...)
+	//{
+	//	printf("Error while tallying network averages. [1]\r\n");
+	//	bNetAveragesLoaded=true;
+	//}
 	bNetAveragesLoaded=true;
 	return false;
 }

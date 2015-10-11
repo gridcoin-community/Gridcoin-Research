@@ -1992,6 +1992,7 @@ begin:
 	{
 		printf("Error in ThreadTallyResearchAverages... Recovering ");
 	}
+	MilliSleep(10000);
     printf("Thread TallyReasearchAverages exited, Restarting.. \r\n");
 	goto begin;
 }
@@ -2022,9 +2023,16 @@ void DoTallyResearchAverages(void* parg)
 		{
 			bTallyFinished = false;
 			bDoTally=false;
-			printf("\r\nDoTallyRA started ... ");
-			TallyNetworkAverages(false);
-			printf("DoTallyRA Ending ... \r\n");
+			printf("\r\n[DoTallyRA_START] ");
+			try
+			{
+				TallyNetworkAverages(false);
+			}
+			catch(...)
+			{
+				printf("\r\nError occurred in DoTallyResearchAverages...Recovering\r\n");
+			}
+			printf(" [DoTallyRA_END] \r\n");
 			bTallyFinished = true;
 		}
         vnThreadsRunning[THREAD_TALLY]++;
