@@ -2028,6 +2028,10 @@ void DoTallyResearchAverages(void* parg)
 			{
 				TallyNetworkAverages(false);
 			}
+			catch (std::exception& e) 
+			{
+				PrintException(&e, "ThreadTallyNetworkAverages()");
+			}
 			catch(...)
 			{
 				printf("\r\nError occurred in DoTallyResearchAverages...Recovering\r\n");
