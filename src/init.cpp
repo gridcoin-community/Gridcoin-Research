@@ -559,7 +559,6 @@ bool AppInit2()
 	// Gridcoin - Check to see if config is empty?
 	if (IsConfigFileEmpty()) 
 	{
-
 		   uiInterface.ThreadSafeMessageBox(
                  "Configuration file empty.  \r\n" + _("Please wait for new user wizard to start..."), "", 0);
 	}

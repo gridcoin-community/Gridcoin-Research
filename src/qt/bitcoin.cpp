@@ -158,8 +158,9 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
 	//uint SEM_FAILCRITICALERRORS= 0x0001;
 	//uint SEM_NOGPFAULTERRORBOX = 0x0002;
-	
+#ifdef WIN32
 	SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+#endif
 
     // Install global event filter that makes sure that long tooltips can be word-wrapped
     app.installEventFilter(new GUIUtil::ToolTipToRichTextFilter(TOOLTIP_WRAP_THRESHOLD, &app));

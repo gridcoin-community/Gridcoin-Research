@@ -1464,8 +1464,25 @@ bool CreateNewConfigFile(std::string boinc_email)
 	myConfig << row;
 	row = "addnode=gridcoin.asia \r\n";
 	myConfig << row;
+	row = "addnode=sepulcher.wha.la \r\n";
+    myConfig << row;
+	row = "addnode=grcmagnitude.com \r\n";
+	myConfig << row;
 	myConfig.close();
 	return true;
+}
+
+
+bool ForceInAddNode(std::string sMyAddNode)
+{
+		LOCK(cs_vAddedNodes);
+		std::vector<std::string>::iterator it = vAddedNodes.begin();
+		for(; it != vAddedNodes.end(); it++)
+			if (sMyAddNode == *it)
+            break;
+        if (it != vAddedNodes.end()) return false;
+		vAddedNodes.push_back(sMyAddNode);
+		return true;
 }
 
 void BitcoinGUI::NewUserWizard()
@@ -1496,21 +1513,28 @@ void BitcoinGUI::NewUserWizard()
 		{
 			std::string new_email = tostdstring(boincemail);
 			boost::to_lower(new_email);
-
 			printf("User entered %s \r\n",new_email.c_str());
 			//Create Config File
 			CreateNewConfigFile(new_email);
  		    QString strMessage = tr("Created new Configuration File Successfully. ");
 			QMessageBox::warning(this, tr("New Account Created - Welcome Aboard!"), strMessage);
-
 			//Load CPIDs:
 			HarvestCPIDs(true);
  		}
 		else
 		{
+			//Create Config File
+			CreateNewConfigFile("investor");
 		    QString strMessage = tr("To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. ");
 			QMessageBox::warning(this, tr("New User Wizard - Skipped"), strMessage);
 		}
+		// Read in the mapargs, and set the seed nodes 10-13-2015
+        ReadConfigFile(mapArgs, mapMultiArgs);
+		//Force some addnodes in to get user started
+		ForceInAddNode("node.gridcoin.us");
+		ForceInAddNode("gridcoin.asia");
+		ForceInAddNode("sepulcher.wha.la");
+		ForceInAddNode("grcmagnitude.com");
 
 		if (sBoincNarr != "")
 		{

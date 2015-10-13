@@ -69,7 +69,7 @@ extern bool BlockNeedsChecked(int64_t BlockTime);
 extern void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector<CBlockIndex*> vConnect);
 int64_t GetEarliestWalletTransaction();
 extern void IncrementVersionCount(std::string Version);
-double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,bool bIgnoreBeacons);
+double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_avg,bool bIgnoreBeacons);
 extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern std::string VectorToString(std::vector<unsigned char> v);
 extern bool UnusualActivityReport();
@@ -3333,7 +3333,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 			{ 
 				double out_beacon_count=0;
 				double out_participant_count=0;
-				double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,false);
+				double out_avg = 0;
+				double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,out_avg,false);
 				if (avg_mag < 10)
 				{
 					return error("ConnectBlock[] : Superblock avg mag below 10; SuperblockHash: %s, Consensus Hash: %s",
@@ -3354,7 +3355,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 			{
 					double out_beacon_count = 0;
 					double out_participant_count = 0;
-					double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,true);
+					double out_avg = 0;
+					double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,out_avg,true);
 					if (avg_mag > 10)
 					{
 	    						LoadSuperblock(bb.superblock,pindex->nTime,pindex->nHeight);
@@ -4385,12 +4387,15 @@ bool NeedASuperblock()
 		//10-8-2015
 		double out_beacon_count=0;
 		double out_participant_count=0;
+		double out_avg = 0;
 		bool bDireNeedOfSuperblock = false;
 		std::string superblock = ReadCache("superblock","all");
 		if (superblock.length() > 20 && !OutOfSyncByAge())
 		{
-			double avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,false);
-			if (avg_mag < 10) bDireNeedOfSuperblock = true;
+			double avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,false);
+			if (out_avg < 10 && fTestNet)  bDireNeedOfSuperblock = true;
+			if (out_avg < 90 && !fTestNet) bDireNeedOfSuperblock = true;
+			if (avg_mag < 10)              bDireNeedOfSuperblock = true;
 		}
 		int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
 		if (NeuralNodeParticipates() && ((double)superblock_age > (double)(nSuperblockAgeSpacing))) bDireNeedOfSuperblock = true;
@@ -4534,8 +4539,8 @@ void GridcoinServices()
 				#endif
 				double out_beacon_count = 0;
 				double out_participant_count = 0;
-
-				double avg_mag = GetSuperblockAvgMag(contract,out_beacon_count,out_participant_count,false);
+				double out_avg = 0;
+				double avg_mag = GetSuperblockAvgMag(contract,out_beacon_count,out_participant_count,out_avg,false);
 				if (avg_mag > 10)
 				{
 						bool bResult = AsyncNeuralRequest("quorum","gridcoin",25);
@@ -5773,7 +5778,8 @@ bool ComputeNeuralNetworkSupermajorityHashes()
 				{
 					double out_beacon_count = 0;
 					double out_participant_count = 0;
-					double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,true);
+					double out_avg = 0;
+					double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,out_avg,true);
 					if (avg_mag > 10)
 					{
 						WriteCache("neuralsecurity","pending",RoundToString((double)pblockindex->nHeight,0),GetAdjustedTime());
@@ -5899,7 +5905,8 @@ bool TallyResearchAverages(bool Forcefully)
 								{
 										double out_beacon_count = 0;
 										double out_participant_count = 0;
-										double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,true);
+										double out_avg = 0;
+										double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,out_avg,true);
 										if (avg_mag > 10)
 										{
 	    										LoadSuperblock(bb.superblock,pblockindex->nTime,pblockindex->nHeight);
@@ -6007,7 +6014,8 @@ bool TallyNetworkAverages(bool Forcefully)
 							{
 									double out_beacon_count = 0;
 									double out_participant_count = 0;
-									double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,true);
+									double out_avg = 0;
+									double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,out_avg,true);
 									if (avg_mag > 10)
 									{
 	    									LoadSuperblock(bb.superblock,pblockindex->nTime,pblockindex->nHeight);

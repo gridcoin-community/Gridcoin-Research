@@ -67,7 +67,10 @@ double Round(double d, int place);
 bool UnusualActivityReport();
 extern double GetCountOf(std::string datatype);
 
-extern double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,bool bIgnoreBeacons);
+
+extern double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons);
+
+
 extern bool CPIDAcidTest(std::string boincruntimepublickey);
 void TestScan();
 void TestScan2();
@@ -954,7 +957,7 @@ double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid)
 		return -1;
 }
 
-double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,bool bIgnoreBeacons)
+double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons)
 {
 	try
 	{
@@ -967,11 +970,13 @@ double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out
 		double avg_of_avg = GetAverageInList(avgs,avg_count);
 		if (!bIgnoreBeacons) out_beacon_count = GetCountOf("beacon");
 		out_participant_count = mag_count;
+		out_average = avg_of_mag;
 		if (avg_of_mag < 10) return -1;
 		if (avg_of_mag > 170000) return -2;
 		if (avg_of_avg < 50000) return -3;
 
 		if (!fTestNet && !bIgnoreBeacons && (mag_count < out_beacon_count*.90 || mag_count > out_beacon_count*1.10)) return -4;
+		
 		return avg_of_mag + avg_of_avg;
 	}
 	catch (std::exception &e) 
@@ -2675,10 +2680,12 @@ Value execute(const Array& params, bool fHelp)
 		std::string superblock = ReadCache("superblock","all");
 		double out_beacon_count = 0;
 		double out_participant_count = 0;
-		double avg = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,false);
+		double out_avg = 0;
+		double avg = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,false);
 		entry.push_back(Pair("avg",avg));
 		entry.push_back(Pair("beacon_count",out_beacon_count));
 		entry.push_back(Pair("beacon_participant_count",out_participant_count));
+		entry.push_back(Pair("average_magnitude",out_avg));
 		bool bDireNeed = NeedASuperblock();
 		entry.push_back(Pair("Dire Need of Superblock",bDireNeed));
 		results.push_back(entry);
@@ -2694,10 +2701,11 @@ Value execute(const Array& params, bool fHelp)
 		entry.push_back(Pair("Contract",contract));
 		double out_beacon_count = 0;
 		double out_participant_count = 0;
-	
-		double avg = GetSuperblockAvgMag(contract,out_beacon_count,out_participant_count,false);
+	    double out_avg = 0;
+		double avg = GetSuperblockAvgMag(contract,out_beacon_count,out_participant_count,out_avg,false);
 		entry.push_back(Pair("avg",avg));
 		entry.push_back(Pair("beacon_count",out_beacon_count));
+		entry.push_back(Pair("avg_mag",out_avg));
 		entry.push_back(Pair("beacon_participant_count",out_participant_count));
 		results.push_back(entry);
 		
@@ -3060,15 +3068,16 @@ Array SuperblockReport(std::string cpid)
 								{
 										double out_beacon_count = 0;
 										double out_participant_count = 0;
-										double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,true);
+										double out_avg = 0;
+										double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,out_avg,true);
 										if (avg_mag > 10)
 										{
 											    //10-8-2015
 	    										Object c;
 												c.push_back(Pair("Block #" + RoundToString(pblockindex->nHeight,0),pblockindex->GetBlockHash().GetHex()));
 												c.push_back(Pair("Date",TimestampToHRDate(pblockindex->nTime)));
+												c.push_back(Pair("Average Mag",out_avg));
 												c.push_back(Pair("Wallet Version",bb.clientversion));
-
 												double mag = GetSuperblockMagnitudeByCPID(bb.superblock, cpid);
 												if (!cpid.empty())
 												{
