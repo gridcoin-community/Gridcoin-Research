@@ -158,7 +158,7 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
 	//uint SEM_FAILCRITICALERRORS= 0x0001;
 	//uint SEM_NOGPFAULTERRORBOX = 0x0002;
-#ifdef WIN32
+#if defined(WIN32) && defined(QT_GUI)
 	SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
 #endif
 
