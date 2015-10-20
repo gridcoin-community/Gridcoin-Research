@@ -12,7 +12,7 @@
 @set LEVELDB=leveldb
 @rem If you wonder why there is no -s- see: https://github.com/bitcoin/bitcoin/pull/2835#issuecomment-21231694
 @set BOOSTSUFFIX=-mgw46-mt-1_55
-@set MINIUPNPC=miniupnpc-1.8
+@set MINIUPNPC=miniupnpc-1.9
 
 @set EWBLIBS=libs
 

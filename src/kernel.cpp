@@ -365,7 +365,7 @@ int64_t GetRSAWeightByCPID(std::string cpid)
 								if (fTestNet && weight < 0) weight = 0;
 						}
 
-						if (bResearchAgeEnabled) weight = UntrustedHost.Magnitude;
+						if (IsResearchAgeEnabled(pindexBest->nHeight)) weight = UntrustedHost.Magnitude;
 			}
 			else
 			{

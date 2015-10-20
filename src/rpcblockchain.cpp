@@ -31,6 +31,7 @@ bool IsSuperBlock(CBlockIndex* pIndex);
 MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 extern double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid);
 bool NeedASuperblock();
+bool VerifySuperblock(std::string superblock, int nHeight);
 
 std::string GetQuorumHash(std::string data);
 
@@ -66,11 +67,7 @@ extern std::string AdvertiseBeacon(bool force,bool neurally);
 double Round(double d, int place);
 bool UnusualActivityReport();
 extern double GetCountOf(std::string datatype);
-
-
 extern double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons);
-
-
 extern bool CPIDAcidTest(std::string boincruntimepublickey);
 void TestScan();
 void TestScan2();
@@ -404,7 +401,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
     if (block.IsProofOfStake())
         result.push_back(Pair("signature", HexStr(block.vchBlockSig.begin(), block.vchBlockSig.end())));
 	result.push_back(Pair("CPID", bb.cpid));
-	if (!bResearchAgeEnabled)
+	if (!IsResearchAgeEnabled(blockindex->nHeight))
 	{
 		result.push_back(Pair("ProjectName", bb.projectname));
 		result.push_back(Pair("RAC", bb.rac));
@@ -966,18 +963,16 @@ double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out
 		double mag_count = 0;
 		double avg_count = 0;
 		if (mags.empty()) return 0;
-		double avg_of_mag = GetAverageInList(mags,mag_count);
-		double avg_of_avg = GetAverageInList(avgs,avg_count);
+		double avg_of_magnitudes = GetAverageInList(mags,mag_count);
+		double avg_of_projects   = GetAverageInList(avgs,avg_count);
 		if (!bIgnoreBeacons) out_beacon_count = GetCountOf("beacon");
 		out_participant_count = mag_count;
-		out_average = avg_of_mag;
-		if (avg_of_mag < 10) return -1;
-		if (avg_of_mag > 170000) return -2;
-		if (avg_of_avg < 50000) return -3;
-
+		out_average = avg_of_magnitudes;
+		if (avg_of_magnitudes < 000010)  return -1;
+		if (avg_of_magnitudes > 170000)  return -2;
+		if (avg_of_projects   < 050000)  return -3;
 		if (!fTestNet && !bIgnoreBeacons && (mag_count < out_beacon_count*.90 || mag_count > out_beacon_count*1.10)) return -4;
-		
-		return avg_of_mag + avg_of_avg;
+		return avg_of_magnitudes + avg_of_projects;
 	}
 	catch (std::exception &e) 
 	{
@@ -2398,7 +2393,7 @@ Value execute(const Array& params, bool fHelp)
 		{
 			std::string optional = params[1].get_str();
 			boost::to_lower(optional);
-			if (optional != "force") force = true;
+			if (optional == "force") force = true;
 		}
 
 		if (force) msNeuralResponse = "";
@@ -2686,6 +2681,7 @@ Value execute(const Array& params, bool fHelp)
 		entry.push_back(Pair("beacon_count",out_beacon_count));
 		entry.push_back(Pair("beacon_participant_count",out_participant_count));
 		entry.push_back(Pair("average_magnitude",out_avg));
+		entry.push_back(Pair("superblock_valid",VerifySuperblock(superblock,pindexBest->nHeight)));
 		bool bDireNeed = NeedASuperblock();
 		entry.push_back(Pair("Dire Need of Superblock",bDireNeed));
 		results.push_back(entry);
@@ -2703,10 +2699,12 @@ Value execute(const Array& params, bool fHelp)
 		double out_participant_count = 0;
 	    double out_avg = 0;
 		double avg = GetSuperblockAvgMag(contract,out_beacon_count,out_participant_count,out_avg,false);
+		bool bValid = VerifySuperblock(contract,pindexBest->nHeight);
 		entry.push_back(Pair("avg",avg));
 		entry.push_back(Pair("beacon_count",out_beacon_count));
 		entry.push_back(Pair("avg_mag",out_avg));
 		entry.push_back(Pair("beacon_participant_count",out_participant_count));
+		entry.push_back(Pair("superblock_valid",bValid));
 		results.push_back(entry);
 		
 	}
@@ -3117,7 +3115,7 @@ Array MagnitudeReport(std::string cpid)
 						if (cpid.empty() || (structMag.cpid == cpid))
 						{
 									Object entry;
-									if (bResearchAgeEnabled)
+									if (IsResearchAgeEnabled(pindexBest->nHeight))
 									{
 
 										StructCPID DPOR = mvDPOR[structMag.cpid];
@@ -3187,7 +3185,7 @@ Array MagnitudeReport(std::string cpid)
 							
 	   		Object entry2;
 	   		entry2.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
-			if (!bResearchAgeEnabled && cpid.empty()) entry2.push_back(Pair("Grand Total Outstanding Owed",total_owed));
+			if (!IsResearchAgeEnabled(pindexBest->nHeight) && cpid.empty()) entry2.push_back(Pair("Grand Total Outstanding Owed",total_owed));
 			results.push_back(entry2);
 
 			int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);

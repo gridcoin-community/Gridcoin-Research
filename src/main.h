@@ -46,7 +46,7 @@ extern int muGlobalCheckpointHashCounter;
 extern std::string msMasterProjectPublicKey;
 extern std::string msMasterMessagePublicKey;
 extern std::string msMasterMessagePrivateKey;
-extern std::string msTestNetSeedSuperblocks;extern std::string msTestNetSeedContracts;extern std::string msProdSeedSuperblocks;extern std::string msProdSeedContracts237579;extern std::string msProdSeedContracts237853;extern std::string msProdSeedContracts238844;extern std::string msProdSeedContracts239718;extern std::string msProdSeedContracts246130;extern std::string msProdSeedContracts265924;extern std::string msProdSeedContracts282719;extern std::string msProdSeedContracts298010;extern std::string msProdSeedContracts333606;extern std::string msProdSeedContracts340200;extern std::string msProdSeedContracts342797;extern bool bNewUserWizardNotified;
+extern std::string msTestNetSeedSuperblocks;extern std::string msTestNetSeedContracts;extern std::string msProdSeedSuperblocks;extern std::string msProdSeedContracts237579;extern std::string msProdSeedContracts237853;extern std::string msProdSeedContracts238844;extern std::string msProdSeedContracts239718;extern std::string msProdSeedContracts246130;extern std::string msProdSeedContracts265924;extern std::string msProdSeedContracts282719;extern std::string msProdSeedContracts298010;extern std::string msProdSeedContracts333606;extern std::string msProdSeedContracts340200;extern std::string msProdSeedContracts342797;extern std::string msProdSeedContracts361873;extern bool bNewUserWizardNotified;
 
 /** The maximum allowed size for a serialized block, in bytes (network rule) */
 static const unsigned int MAX_BLOCK_SIZE = 1000000;
@@ -88,6 +88,16 @@ static const uint256 hashGenesisBlockTestNet("0x00006e037d7b84104208ecf2a8638d23
 inline bool IsProtocolV2(int nHeight) 
 { 
 	return (fTestNet ?  nHeight > 2060 : nHeight > 85400); 
+}
+
+inline bool IsResearchAgeEnabled(int nHeight)
+{
+	return (fTestNet ?  nHeight > 0 : nHeight > 364500); 
+}
+
+inline int GetSuperblockAgeSpacing(int nHeight)
+{
+	return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);
 }
 
 inline int64_t PastDrift(int64_t nTime, int nHeight)   { return IsProtocolV2(nHeight) ? nTime - 20 * 60  : nTime - 20 * 60; }
@@ -133,7 +143,6 @@ extern std::map<uint256, CBlock*> mapOrphanBlocks;
 extern int64_t COIN_YEAR_REWARD;
 extern bool bCryptoLotteryEnabled;
 extern bool bRemotePaymentsEnabled;
-extern bool bResearchAgeEnabled;
 
 // Settings
 extern int64_t nTransactionFee;
@@ -195,7 +204,6 @@ extern std::string  OrganizationKey;
 extern int nGrandfather;
 extern int nNewIndex;
 extern int nNewIndex2;
-extern int nSuperblockAgeSpacing;
 
 // PoB GPU Miner Global Vars:
 extern std::string 	msGPUMiningProject;

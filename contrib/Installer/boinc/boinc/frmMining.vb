@@ -68,8 +68,8 @@ Public Class frmMining
         Dim seriesUserMagnitude As New Series
 
         Try
-            If bCharting Then Exit Sub
-            bCharting = True
+            'If bCharting Then Exit Sub
+            'bCharting = True
             If Chart1.Titles.Count < 1 Then
                 Chart1.Series.Clear()
 
@@ -104,6 +104,12 @@ Public Class frmMining
             Dim lAvgNetMag As Double = 0
             Dim lAvgUserMag As Double = 0
             Dim sCPID As String = KeyValue("PrimaryCPID")
+            Dim lAvgUserMagH As Long = 0
+            Dim lAvgUserMagHCount As Long = 0
+            Dim lAvgNetworkMag As Long = 0
+            Dim lAvgNetworkMagCount As Long = 0
+            Dim lAUM As Long = 0
+            Dim lANM As Long = 0
             For x = 30 To 1 Step -1
                 'Dim dpAvgCredits As New DataPoint
                 'dpAvgCredits.SetValueXY(ChartDate, lAvgCredits)
@@ -111,23 +117,37 @@ Public Class frmMining
                 Dim ChartDate As Date = DateAdd(DateInterval.Day, -x, Now)
                 lUserMag = GetHistoricalMagnitude(ChartDate, sCPID, lAvgUserMag)
                 lNetworkMag = GetHistoricalMagnitude(ChartDate, "Network", lAvgNetMag)
+                If lUserMag > 0 Then
+                    lAvgUserMagH += lUserMag
+                    lAvgUserMagHCount += 1
+                    lAUM = lAvgUserMagH / lAvgUserMagHCount
+                End If
+                If lNetworkMag > 0 Then
+                    lAvgNetworkMag += lNetworkMag
+                    lAvgNetworkMagCount += 1
+                    lANM = lAvgNetworkMag / lAvgNetworkMagCount
+                End If
                 Dim dpUserMag As New DataPoint()
-                dpUserMag.SetValueXY(ChartDate, lUserMag)
+                dpUserMag.SetValueXY(ChartDate, lAUM)
                 seriesUserMagnitude.Points.Add(dpUserMag)
                 Dim dpNetworkMag As New DataPoint()
-                dpNetworkMag.SetValueXY(ChartDate, lAvgNetMag)
+                dpNetworkMag.SetValueXY(ChartDate, lANM)
                 seriesNetworkMagnitude.Points.Add(dpNetworkMag)
             Next
             '''''''''''''''''''''''''''''''  Chart Pie of Current Contribution '''''''''''''''''''''''''''''''''''''''''
-            Call ChartBoincUtilization(lUserMag, lAvgNetMag)
+
+            Call ChartBoincUtilization(lAUM, lANM)
 
         Catch ex As Exception
+
         End Try
-        bCharting = False
+        'bCharting = False
     End Sub
 
     Public Sub ChartBoincUtilization(bu As Long, netBU As Long)
         Try
+            chtCurCont.Titles.Clear()
+
             If chtCurCont.Titles.Count < 1 Then
                 chtCurCont.Series.Clear()
                 chtCurCont.Titles.Clear()
@@ -160,6 +180,7 @@ Public Class frmMining
             chtCurCont.ChartAreas(0).Area3DStyle.Enable3D = True
             chtCurCont.Series(0)("DrawingStyle") = "Cylinder"
         Catch ex As Exception
+            Dim sMsg As String = ex.Message
 
         End Try
     End Sub
@@ -503,25 +524,39 @@ Public Class frmMining
     Private Sub btnRefresh_Click(sender As System.Object, e As System.EventArgs) Handles btnRefresh.Click
         PopulateNeuralData()
         Call OneMinuteUpdate()
+        'ChartBoinc()
+
     End Sub
 
     Private Sub TimerSync_Tick(sender As System.Object, e As System.EventArgs) Handles TimerSync.Tick
         If mlPercentComplete <> 0 Then
             pbSync.Visible = True
-            Me.Enabled = False
-            pbSync.Maximum = 100
+            DisableForm(False)
+            pbSync.Maximum = 101
             If mlPercentComplete <= pbSync.Maximum Then pbSync.Value = mlPercentComplete
             Application.DoEvents()
-            If mlPercentComplete < 50 Then pbSync.ForeColor = Color.Red
-            If mlPercentComplete > 50 And mlPercentComplete < 90 Then pbSync.ForeColor = Color.Yellow
-            If mlPercentComplete > 90 Then pbSync.ForeColor = Color.Green
+            If mlPercentComplete < 50 Then pbSync.ForeColor = Color.Red : pbSync.Height = 18 + (mlPercentComplete / 20)
+            If mlPercentComplete > 50 And mlPercentComplete < 90 Then pbSync.ForeColor = Color.Yellow : pbSync.Height = 18 + (mlPercentComplete / 20)
+            If mlPercentComplete > 90 Then pbSync.ForeColor = Color.Green : pbSync.Height = 18 + (mlPercentComplete / 20)
         Else
-            If pbSync.Visible = True Then pbSync.Visible = False : PopulateNeuralData()
-            pbSync.Visible = False
-            Me.Enabled = True
+            If pbSync.Visible = True Then pbSync.Visible = False : PopulateNeuralData() : Application.DoEvents()
+            pbSync.Visible = False : pbSync.Height = 18
+            DisableForm(True)
         End If
     End Sub
+    Private Sub DisableForm(bEnabled As Boolean)
+        'Lock the controls, but allow the user to move the screen around so we dont appear Frozen.
+        dgv.Enabled = bEnabled
+        btnExport.Enabled = bEnabled
+        btnRefresh.Enabled = bEnabled
+        chtCurCont.Enabled = bEnabled
+        If bEnabled Then
+            Me.BackColor = Color.Black
+        Else
+            Me.BackColor = Color.Green
+        End If
 
+    End Sub
     Private Sub PoolsToolStripMenuItem_Click(sender As System.Object, e As System.EventArgs) Handles PoolsToolStripMenuItem.Click
 
     End Sub

@@ -1816,8 +1816,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 	MiningCPID miningcpid = GetMiningCPID();
 	int64_t RSA = GetRSAWeightByCPID(miningcpid.cpid);
-	bool bNewbieFreePass = (RSA > 24999 && bResearchAgeEnabled);
-		
+	bool bNewbieFreePass = (RSA > 24999 && IsResearchAgeEnabled(pindexPrev->nHeight));
 
     // Mark coin stake transaction
     CScript scriptEmpty;
@@ -2201,7 +2200,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	
 	// PROD TODO DURING NEXT MANDATORY - Remove Crypto Lottery code and reimplement original split stakes and split stake in checkblock
 	// Set output amount - 4-3-2015 - Expand Coinstake to pay DPOR Researchers in CryptoLottery
-	if (bCryptoLotteryEnabled && !bResearchAgeEnabled)
+	if (bCryptoLotteryEnabled && !IsResearchAgeEnabled(pindexPrev->nHeight))
 	{
 		 
 		    std::string recipients = CryptoLottery(GetAdjustedTime());

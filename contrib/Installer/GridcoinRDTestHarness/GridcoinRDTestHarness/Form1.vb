@@ -104,16 +104,17 @@ Public Class Form1
         'ToDo: Pass TestNet flag into FAQ section
 
         mU = New Utilization
-       
-        
+
         ' Dim dQuote As Double
         Dim sTestNet As String = "TESTNET"
         mU.SetTestNetFlag(sTestNet)
         Dim sCurrentContract As String = mU.GetNeuralContract
 
         mU.ShowMiningConsole()
+        Dim sMag As String = mU.ExplainMag("784afb35d92503160125feb183157378")
 
-        
+        Dim sCopy As String = sMag
+
         Exit Sub
 
 

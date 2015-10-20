@@ -375,31 +375,24 @@ Module modPersistedDataSystem
         End If
 
         mbForcefullySyncAllRac = True
+        Log("Starting complete Neural Network Sync.")
 
         Try
             msCurrentNeuralHash = ""
-
             bMagsDoneLoading = False
 
             Try
-                mGRCData = New GRCSec.GridcoinData
-
-            Catch ex As Exception
-
-            End Try
-           
-            Try
                 mlPercentComplete = 1
+                Log("Starting Phase I")
                 UpdateMagnitudesPhase1()
 
             Catch ex As Exception
                 Log("Err in completesync" + ex.Message)
 
             End Try
-            Log("Updating mags")
+            Log("Complete Sync: Updating mags")
             Try
-                mlPercentComplete = 10
-
+                mlPercentComplete = 2
                 UpdateMagnitudes()
                 mlPercentComplete = 0
 
@@ -477,7 +470,6 @@ Module modPersistedDataSystem
         Try
             'Let the neural network know we are updated
             If sCPID = "" Then sCPID = "INVESTOR"
-            mGRCData.CheckInWithNeuralNetwork(sCPID, "")
         Catch ex As Exception
             Log(ex.Message)
         End Try
@@ -554,6 +546,7 @@ Module modPersistedDataSystem
         Try
             'Blow away the projects
             Dim surrogateRow1 As New Row
+            Log("Deleting Projects")
 
             surrogateRow1.Database = "Project"
             surrogateRow1.Table = "Projects"
@@ -591,13 +584,13 @@ Module modPersistedDataSystem
                         dr = Read(dr)
                         dr.Expiration = DateAdd(DateInterval.Day, 14, Now)
                         dr.Synced = DateAdd(DateInterval.Day, -1, Now)
+                        Log("Storing Project " + Trim(x))
                         Store(dr)
                     End If
                 Next x
             Catch ex As Exception
                 Log("UM Phase 1: While loading projects " + ex.Message)
             End Try
-            mlPercentComplete = 5
             Dim vCPIDs() As String = Split(sCPIDData, "<ROW>")
             Dim vTestNet() As String
             vTestNet = Split(vCPIDs(0), "<COL>")
@@ -635,6 +628,7 @@ Module modPersistedDataSystem
 
                         bValid = clsMD5.CompareCPID(sCPID, cpidv2, BlockHash)
                         dr.DataColumn5 = Trim(bValid)
+                        Log("UpdMagnitudePhaseI: Storing CPID " + Trim(x) + "; cpid " + dr.PrimaryKey)
                         Store(dr)
 
                     End If
@@ -685,7 +679,7 @@ Module modPersistedDataSystem
         Dim WhitelistedProjects As Double = 0
         Dim ProjCount As Double = 0
         Dim lstWhitelist As List(Of Row)
-
+        Log("Updating Magnitudes")
         Dim iRow As Long = 0
         Try
             'Loop through the researchers
@@ -700,7 +694,10 @@ Module modPersistedDataSystem
                 End If
                 iRow += 1
                 Dim p As Double = (iRow / (lstCPIDs.Count + 0.01)) * 100
-                mlPercentComplete = p
+                mlPercentComplete = p + 5
+                If mlPercentComplete > 97 Then mlPercentComplete = 97
+                Log("Percent complete " + Trim(mlPercentComplete) + "%: Gathering Magnitude for CPID " + cpid.PrimaryKey)
+
 
             Next
         Catch ex As Exception
@@ -715,12 +712,7 @@ Module modPersistedDataSystem
 
         lstWhitelist = GetWPC(WhitelistedProjects, ProjCount)
         lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
-        Try
-            mGRCData = New GRCSec.GridcoinData
 
-        Catch ex As Exception
-
-        End Try
         Dim sMemoryName = IIf(mbTestNet, "magnitudes_testnet", "magnitudes")
         'Get CryptoCurrency Quotes:
         Dim dBTC As Double = GetCryptoPrice("BTC").Price * 100
@@ -734,6 +726,7 @@ Module modPersistedDataSystem
         q.Synced = q.Expiration
 
         q.Magnitude = Trim(Math.Round(dBTC, 2))
+        Log("Storing Bitcoin price quote")
         Store(q)
         q = New Row
         q.Database = "Prices"
@@ -742,7 +735,7 @@ Module modPersistedDataSystem
         q.PrimaryKey = "GRC"
         q.Magnitude = Trim(Math.Round(dGRC, 2))
         q.Synced = q.Expiration
-
+        Log("Storing Gridcoin Price Quote")
         Store(q)
 
 
@@ -782,11 +775,8 @@ Module modPersistedDataSystem
                 cpid.Table = "CPIDS"
                 cpid.Magnitude = Trim(Math.Round(TotalMagnitude, 2))
                 If TotalMagnitude < 1 And TotalMagnitude > 0.25 Then cpid.Magnitude = Trim(1)
+                Log("Storing CPID " + Trim(cpid.PrimaryKey) + " magnitude " + Trim(cpid.Magnitude))
 
-                'Try
-                'mGRCData.BroadcastNeuralNetworkMemoryValue(sMemoryName, cpid.PrimaryKey, Val(cpid.Magnitude), False)
-                'Catch ex As Exception
-                'End Try
                 Store(cpid)
             Next
             mlPercentComplete = 0
