@@ -361,8 +361,8 @@ int64_t GetRSAWeightByCPID(std::string cpid)
 						else if (mag_accuracy > 5) 
 						{
 								weight = (UntrustedHost.owed*14) + UntrustedHost.Magnitude;
-								//Prod ToDo: Move this line to prod during next mandatory
 								if (fTestNet && weight < 0) weight = 0;
+								if (IsResearchAgeEnabled(pindexBest->nHeight) && weight < 0) weight=0;
 						}
 
 						if (IsResearchAgeEnabled(pindexBest->nHeight)) weight = UntrustedHost.Magnitude;
@@ -382,9 +382,7 @@ int64_t GetRSAWeightByCPID(std::string cpid)
 				weight = 5000;
 		}
 	}
-	//Prod ToDo: Update all fTestNet lines to move this to prod; refactor to be nice
 	if (fTestNet && weight > 25000) weight = 25000;
-	
 	int64_t RSA_WEIGHT = weight;
 	return RSA_WEIGHT;
 }
@@ -430,8 +428,9 @@ int64_t GetRSAWeightByBlock(MiningCPID boincblock)
 	{
 		rsa_weight = boincblock.RSAWeight + boincblock.Magnitude;
 	}
-	//Prod ToDo: Move this to prod during mandatory
+
 	if (fTestNet && rsa_weight < 0) rsa_weight = 0;
+	if (IsResearchAgeEnabled(pindexBest->nHeight) && rsa_weight < 0) rsa_weight = 0;
 	return rsa_weight;
 }
 

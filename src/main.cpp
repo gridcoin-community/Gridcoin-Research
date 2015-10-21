@@ -3326,7 +3326,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 			//7-25-2015
 			std::string neural_hash = GetQuorumHash(bb.superblock);
 			std::string legacy_neural_hash = RetrieveMd5(bb.superblock);
-			// Note: Prod ToDo: In the next Mandatory upgrade, remove the legacy_neural_hash; left in for current compatibility
 			double popularity = 0;
 			std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
 			// Only reject superblock when it is new And when QuorumHash of Block != the Popular Quorum Hash:
@@ -3337,10 +3336,21 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 					return error("ConnectBlock[] : Superblock avg mag below 10; SuperblockHash: %s, Consensus Hash: %s",
 										neural_hash.c_str(), consensus_hash.c_str());
 				}
-				if (consensus_hash != neural_hash && consensus_hash != legacy_neural_hash)
+				if (!IsResearchAgeEnabled(pindex->nHeight))
 				{
-					return error("ConnectBlock[] : Superblock hash does not match consensus hash; SuperblockHash: %s, Consensus Hash: %s",
+					if (consensus_hash != neural_hash && consensus_hash != legacy_neural_hash)
+					{
+						return error("ConnectBlock[] : Superblock hash does not match consensus hash; SuperblockHash: %s, Consensus Hash: %s",
 										neural_hash.c_str(), consensus_hash.c_str());
+					}
+				}
+				else
+				{
+					if (consensus_hash != neural_hash)
+					{
+						return error("ConnectBlock[] : Superblock hash does not match consensus hash; SuperblockHash: %s, Consensus Hash: %s",
+										neural_hash.c_str(), consensus_hash.c_str());
+					}
 				}
 	
 			}
@@ -9528,8 +9538,8 @@ void SetUpExtendedBlockIndexFieldsOnce()
 	std::string sSuperblocks = "";
 	std::string sContracts   = "";
     CBlockIndex* pindex = pindexGenesisBlock;
-	int iStartHeight = fTestNet ? 20000 : 342799;
-	//Prod TODO : cutover change value to 361873
+	int iStartHeight = fTestNet ? 20000 : 361873;
+	
 	pindex = FindBlockByHeight(iStartHeight);
     if (!pindex) return;
 
@@ -9542,7 +9552,6 @@ void SetUpExtendedBlockIndexFieldsOnce()
 				if (pindex==NULL || !pindex->IsInMainChain()) continue;
 				CBlock block;
 				if (!block.ReadFromDisk(pindex)) continue;
-				//MiningCPID bb = GetInitializedMiningCPID(pindex->GetBlockHash().GetHex(), mvBlockIndex);
 	     		MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
 				if (bb.superblock.length() > 20) 
 				{
