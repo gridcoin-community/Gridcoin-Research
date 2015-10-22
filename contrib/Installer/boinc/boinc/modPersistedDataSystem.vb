@@ -26,7 +26,8 @@ Module modPersistedDataSystem
     Public msContractDataForQuorum As String
     Public NeuralNetworkMultiplier As Double = 115000
     Private mclsQHA As New clsQuorumHashingAlgorithm
-
+    Private Const MINIMUM_WITNESSES_REQUIRED_TESTNET As Long = 2
+    Private Const MINIMUM_WITNESSES_REQUIRED_PROD As Long = 10
     Private lUseCount As Long = 0
 
     Public Structure NeuralStructure
@@ -35,7 +36,7 @@ Module modPersistedDataSystem
         Public Witnesses As Double
         Public Updated As DateTime
     End Structure
-    'Public mdictNeuralNetworkMemories As Dictionary(Of String, GRCSec.GridcoinData.NeuralStructure)
+    Public mdictNeuralNetworkQuorumData As Dictionary(Of String, GRCSec.GridcoinData.NeuralStructure)
 
     Public Structure Row
         Public Database As String
@@ -50,11 +51,10 @@ Module modPersistedDataSystem
         Public DataColumn4 As String
         Public DataColumn5 As String
         Public Magnitude As String
-
         Public RAC As String
         Public AvgRAC As String
         Public Found As Boolean
-
+        Public Witnesses As Long
     End Structure
     Public Structure CPID
         Public cpid As String
@@ -80,18 +80,6 @@ Module modPersistedDataSystem
         End Try
     End Sub
     Public Function GetMagnitudeContractDetails() As String
-        '8-8-2015: Retrieve true magnitude average from all nodes
-
-        ' If mdictNeuralNetworkMemories Is Nothing Then
-        ' Try
-        ' ReconnectToNeuralNetwork()
-        ' Dim sMemoryName = IIf(mbTestNet, "magnitudes_testnet", "magnitudes")
-        ' mdictNeuralNetworkMemories = mGRCData.GetNeuralNetworkQuorumData(sMemoryName)
-        ' Catch ex As Exception
-        ' Log("Unable to connect to neural network for memories.")
-        ' End Try
-        ' End If
-
         Dim surrogateRow As New Row
         surrogateRow.Database = "CPID"
         surrogateRow.Table = "CPIDS"
@@ -100,28 +88,23 @@ Module modPersistedDataSystem
         Dim sOut As String = ""
         For Each cpid As Row In lstCPIDs
             Dim dNeuralMagnitude As Double = 0
-            '   Try
-            'dNeuralMagnitude = mdictNeuralNetworkMemories(cpid.PrimaryKey).NeuralValue
-            'Catch ex As Exception
-            'End Try
             Dim sRow As String = cpid.PrimaryKey + "," + Num(cpid.Magnitude) _
                                  + "," + Num(dNeuralMagnitude) + "," + Num(cpid.RAC) _
                                  + "," + Trim(cpid.Synced) + "," + Trim(cpid.DataColumn4) _
-                                 + "," + Trim(cpid.DataColumn5) + ";"
+                                 + "," + Trim(cpid.DataColumn5) + "," + Trim(cpid.Witnesses) + ";"
             sOut += sRow
         Next
-        surrogateRow.Database = "Prices"
-        surrogateRow.Table = "Quotes"
-        lstCPIDs = GetList(surrogateRow, "*")
-
-        For Each cpid As Row In lstCPIDs
-            Dim dNeuralMagnitude As Double = 0
-            Dim sRow As String = cpid.PrimaryKey + "," + Num(cpid.Magnitude) _
-                                 + "," + Num(dNeuralMagnitude) + "," + Num(cpid.RAC) _
-                                 + "," + Trim(cpid.Synced) + "," + Trim(cpid.DataColumn4) _
-                                 + "," + Trim(cpid.DataColumn5) + ";"
-            sOut += sRow
-        Next
+        'surrogateRow.Database = "Prices"
+        'surrogateRow.Table = "Quotes"
+        'lstCPIDs = GetList(surrogateRow, "*")
+        'For Each cpid As Row In lstCPIDs
+        'Dim dNeuralMagnitude As Double = 0
+        'Dim sRow As String = CPID.PrimaryKey + "," + Num(CPID.Magnitude) _
+        '                     + "," + Num(dNeuralMagnitude) + "," + Num(CPID.RAC) _
+        '                     + "," + Trim(CPID.Synced) + "," + Trim(CPID.DataColumn4) _
+        '                     + "," + Trim(CPID.DataColumn5) + "," + trim(cpid.witnesses) + ";"
+        'sOut += sRow
+        'Next
 
         Return sOut
     End Function
@@ -289,7 +272,6 @@ Module modPersistedDataSystem
                         '7-13-2015 Intelligently resolve disputes between neural network nodes
                         If dLocalMag > 0 And dForeignMag > 0 And RoundedMag(dForeignMag) <> RoundedMag(dLocalMag) Then
                             If WithinBounds(dLocalMag, dForeignMag, 0.15) And dForeignMag < dLocalMag Then
-                                'Dim bResult As Boolean = GetRacViaNetsoft(dr.PrimaryKey)
                                 dr.Magnitude = RoundedMag(dForeignMag)
                                 Store(dr)
                                 iUpdated += 1
@@ -392,7 +374,6 @@ Module modPersistedDataSystem
             End Try
             Log("Complete Sync: Updating mags")
             Try
-                mlPercentComplete = 2
                 UpdateMagnitudes()
                 mlPercentComplete = 0
 
@@ -567,7 +548,7 @@ Module modPersistedDataSystem
             Dim sPrimaryCPID As String = ExtractXML(sQuorumData, "<PRIMARYCPID>")
 
             Call UpdateSuperblockAgeAndQuorumHash(sAge, sQuorumHash, TS, sBlock, sPrimaryCPID)
-
+           
             Try
                 mlPercentComplete = 2
                 Dim vWhitelist() As String = Split(sWhitelist, "<ROW>")
@@ -680,6 +661,10 @@ Module modPersistedDataSystem
         Dim ProjCount As Double = 0
         Dim lstWhitelist As List(Of Row)
         Log("Updating Magnitudes")
+        ReconnectToNeuralNetwork()
+        mdictNeuralNetworkQuorumData = mGRCData.GetNeuralNetworkQuorumData2("quorumdata", mbTestNet, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD))
+
+
         Dim iRow As Long = 0
         Try
             'Loop through the researchers
@@ -695,10 +680,8 @@ Module modPersistedDataSystem
                 iRow += 1
                 Dim p As Double = (iRow / (lstCPIDs.Count + 0.01)) * 100
                 mlPercentComplete = p + 5
-                If mlPercentComplete > 97 Then mlPercentComplete = 97
+                If mlPercentComplete > 95 Then mlPercentComplete = 95
                 Log("Percent complete " + Trim(mlPercentComplete) + "%: Gathering Magnitude for CPID " + cpid.PrimaryKey)
-
-
             Next
         Catch ex As Exception
             Log("UpdateMagnitudes:GatherRAC: " + ex.Message)
@@ -741,7 +724,7 @@ Module modPersistedDataSystem
 
         'Update all researchers magnitudes:
         Try
-            Dim iRow2 As Long
+            Dim iRow2 As Long = 0
 
             lstCPIDs = GetList(surrogateRow, "*")
             For Each cpid As Row In lstCPIDs
@@ -769,6 +752,11 @@ Module modPersistedDataSystem
                             TotalMagnitude += IndMag
                         End If
                     End If
+                    iRow2 += 1
+                    Dim p As Double = (iRow2 / (lstProjects.Count + 0.01)) * 5
+                    mlPercentComplete = p + 95
+                    If mlPercentComplete > 99 Then mlPercentComplete = 99
+
                 Next
                 'Now we can store the magnitude - Formula for Network Magnitude per CPID:
                 cpid.Database = "CPID"
@@ -871,13 +859,46 @@ Module modPersistedDataSystem
         End Try
 
     End Function
+    Public Function GetSupermajorityVoteStatus(sCPID As String, lMinimumWitnessesRequired As Long) As Boolean
+        If mdictNeuralNetworkQuorumData Is Nothing Then Return False
+        Try
+            For Each NS In mdictNeuralNetworkQuorumData
+                If NS.Value.CPID = sCPID Then
+                    If NS.Value.Witnesses > (NS.Value.Participants * 0.51) And NS.Value.Witnesses > lMinimumWitnessesRequired Then
+                        Return True
+                    End If
+                End If
+            Next
+            Return False
+        Catch ex As Exception
+            Return False
+        End Try
+        Return False
+    End Function
     Public Function GetRACViaNetsoft_Resilient(sCPID As String) As Boolean
 
         If sCPID = "" Then Return False
         msCurrentNeuralHash = ""
+        Dim TotalRAC As Double = 0
+
+        'If more than 51% of the network voted on this CPIDs projects today, use that value
+        If GetSupermajorityVoteStatus(sCPID, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD)) Then
+            'Use the Neural Network Quorum Data since we have over 51% witnesses for this CPID on file:
+            Dim lWitnesses As Long = 0
+            For Each nNeuralStructure In mdictNeuralNetworkQuorumData
+                If nNeuralStructure.Value.CPID = sCPID Then
+                    If nNeuralStructure.Value.RAC > 10 Then
+                        PersistProjectRAC(sCPID, nNeuralStructure.Value.RAC, nNeuralStructure.Value.Project)
+                        TotalRAC += nNeuralStructure.Value.RAC
+                        If nNeuralStructure.Value.Witnesses > lWitnesses Then lWitnesses = nNeuralStructure.Value.Witnesses
+                    End If
+                End If
+            Next
+            UpdateCPIDStatus(sCPID, TotalRAC, lWitnesses)
+            Return True
+        End If
 
         Try
-
             Dim sURL As String = "http://boinc.netsoft-online.com/get_user.php?cpid=" + sCPID
             Dim w As New MyWebClient2
             Dim sData As String = w.DownloadString(sURL)
@@ -887,11 +908,9 @@ Module modPersistedDataSystem
             Dim sName As String
             Dim Rac As Double
             Dim Team As String
-
             If InStr(1, sData, "<error>") > 0 Then
                 Return False
             End If
-            Dim TotalRAC As Double = 0
             For y As Integer = 0 To UBound(vData)
                 'For each project
                 sName = ExtractXML(vData(y), "<name>", "</name>")
@@ -899,23 +918,14 @@ Module modPersistedDataSystem
                 Team = LCase(Trim(ExtractXML(vData(y), "<team_name>", "</team_name>")))
                 'Store the :  PROJECT_CPID, RAC
                 If Rac > 10 And Team = "gridcoin" Then
-                    PersistProjectRAC(sCPID, Rac, sName)
+                    PersistProjectRAC(sCPID, Val(Num(Trim(Rac))), sName)
                     TotalRAC += Rac
                 End If
             Next y
-
-
-            Dim d As Row = New Row
-            d.Expiration = Tomorrow()
-            d.Added = Now
-            d.Database = "CPID"
-            d.Table = "CPIDS"
-            d.PrimaryKey = sCPID
-            d = Read(d)
-            d.Expiration = DateAdd(DateInterval.Day, 14, Now)
-            d.Synced = Tomorrow()
-            d.RAC = TotalRAC
-            Store(d)
+            If TotalRAC = 0 Then
+                PersistProjectRAC(sCPID, 0, "NeuralNetwork")
+            End If
+            UpdateCPIDStatus(sCPID, TotalRAC, 1)
             Return True
 
         Catch ex As Exception
@@ -923,6 +933,21 @@ Module modPersistedDataSystem
         End Try
 
 
+    End Function
+    Private Function UpdateCPIDStatus(sCPID As String, TotalRAC As Double, lWitnesses As Long) As Boolean
+        Dim d As Row = New Row
+        d.Expiration = Tomorrow()
+        d.Added = Now
+        d.Database = "CPID"
+        d.Table = "CPIDS"
+        d.PrimaryKey = sCPID
+        d = Read(d)
+        d.Expiration = DateAdd(DateInterval.Day, 14, Now)
+        d.Synced = Tomorrow()
+        d.RAC = TotalRAC
+        d.Witnesses = lWitnesses
+        Store(d)
+        Return True
     End Function
     Public Function Tomorrow() As Date
         Dim dt As Date = DateAdd(DateInterval.Day, 1, Now)
@@ -953,6 +978,8 @@ Module modPersistedDataSystem
         ' (Infinity Error)
         If Not d.Found Then
             Store(d)
+            'Vote on the RAC for the project for the CPID (Once we verify > 51% of the NN agrees (by distinct IP-CPID per vote), the nodes can use this project RAC for the day to increase performance)
+            mGRCData.VoteOnProjectRAC(sCPID, rac, Project, mbTestNet)
         End If
 
         Return True
@@ -973,19 +1000,15 @@ Module modPersistedDataSystem
     End Function
     Public Function DeserializeDate(s As String) As Date
         If s = "" Then Return CDate("1-1-1900")
-
         Dim vDate() As String
         vDate = Split(s, "/")
         Dim dtOut As Date
         dtOut = New Date(Val(vDate(0)), Val(vDate(1)), Val(vDate(2)), Val(vDate(3)), Val(vDate(4)), Val(vDate(5)))
-
         Return dtOut
-
     End Function
     Public Function DataToRow(sData As String) As Row
         Dim vData() As String
         Dim d As String = "<COL>"
-
         vData = Split(sData, d)
         Dim r As New Row
         r.Added = DeserializeDate(vData(0))
@@ -1004,7 +1027,7 @@ Module modPersistedDataSystem
         If UBound(vData) >= 9 Then r.Magnitude = "" & vData(9)
         If UBound(vData) >= 10 Then r.RAC = "" & vData(10)
         If UBound(vData) >= 11 Then r.AvgRAC = "" & vData(11)
-
+        If UBound(vData) >= 12 Then r.Witnesses = "" & vData(12)
         Return r
 
     End Function
@@ -1134,8 +1157,7 @@ Module modPersistedDataSystem
             + d + SerializeDate(dataRow.Synced) + d + LCase(dataRow.PrimaryKey) + d _
             + SerStr(dataRow.DataColumn1) + d + SerStr(dataRow.DataColumn2) _
             + d + SerStr(dataRow.DataColumn3) + d + SerStr(dataRow.DataColumn4) + d + SerStr(dataRow.DataColumn5) _
-            + d + SerStr(dataRow.Magnitude) + d + SerStr(dataRow.RAC) + d + SerStr(dataRow.AvgRAC)
-
+            + d + SerStr(dataRow.Magnitude) + d + SerStr(dataRow.RAC) + d + SerStr(dataRow.AvgRAC) + d + SerStr(dataRow.Witnesses)
         Return sSerialized
     End Function
 
@@ -1145,7 +1167,6 @@ Module modPersistedDataSystem
         If Not System.IO.Directory.Exists(sPath) Then
             Try
                 MkDir(sPath)
-
             Catch ex As Exception
                 Log("Unable to create neural network directory " + sPath)
                 Return False
@@ -1279,10 +1300,10 @@ Module modPersistedDataSystem
 
             Dim sReport As String = ""
             Dim sReportRow As String = ""
-            Dim sHeader As String = "CPID,LocalMagnitude,NeuralMagnitude,TotalRAC,Synced Til,Address,CPID_Valid"
+            Dim sHeader As String = "CPID,LocalMagnitude,NeuralMagnitude,TotalRAC,Synced Til,Address,CPID_Valid;Witnesses"
             sReport += sHeader + vbCrLf
             Dim grr As New GridcoinReader.GridcoinRow
-            Dim sHeading As String = "CPID;LocalMagnitude;NeuralMagnitude;TotalRAC;Synced Til;Address;CPID_Valid"
+            Dim sHeading As String = "CPID;LocalMagnitude;NeuralMagnitude;TotalRAC;Synced Til;Address;CPID_Valid;Witnesses"
             Dim vHeading() As String = Split(sHeading, ";")
             Dim sData As String = modPersistedDataSystem.GetMagnitudeContractDetails()
             Dim vData() As String = Split(sData, ";")

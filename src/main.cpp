@@ -35,6 +35,8 @@ extern MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string
 extern std::string getHardDriveSerial();
 extern bool IsSuperBlock(CBlockIndex* pIndex);
 extern bool VerifySuperblock(std::string superblock, int nHeight);
+extern double ExtractMagnitudeFromExplainMagnitude();
+
 
 extern bool NeedASuperblock();
 extern double SnapToGrid(double d);
@@ -6383,31 +6385,58 @@ std::string NodeAddress(CNode* pfrom)
 	return ip;
 }
 
+double ExtractMagnitudeFromExplainMagnitude()
+{
+	    if (msNeuralResponse.empty()) return 0;
+		try
+		{
+			std::vector<std::string> vMag = split(msNeuralResponse.c_str(),"<ROW>");
+			for (unsigned int i = 0; i < vMag.size(); i++)
+			{
+				if (Contains(vMag[i],"Total Mag:"))
+				{
+					std::vector<std::string> vMyMag = split(vMag[i].c_str(),":");
+					if (vMyMag.size() > 0)
+					{
+						std::string sSubMag = vMyMag[1];
+						sSubMag = strReplace(sSubMag," ","");
+						double dMag = cdbl("0"+sSubMag,0);
+						return dMag;
+					}
+				}
+			}
+			return 0;
+		}
+		catch(...)
+		{
+			return 0;
+		}
+		return 0;
+}
+
 bool VerifyExplainMagnitudeResponse()
 {
 		if (msNeuralResponse.empty()) return false;
-		std::vector<std::string> vMag = split(msNeuralResponse.c_str(),"<ROW>");
-		for (unsigned int i = 0; i < vMag.size(); i++)
+		try
 		{
-			if (Contains(vMag[i],"Total Mag:"))
+			double dMag = ExtractMagnitudeFromExplainMagnitude();
+			if (dMag==0)
 			{
-				std::vector<std::string> vMyMag = split(vMag[i].c_str(),":");
-				std::string sSubMag = vMyMag[1];
-				sSubMag = strReplace(sSubMag," ","");
-				double dMag = cdbl(sSubMag,0);
-				//10-20-2015
-				if (dMag == 0)
-				{
 					WriteCache("maginvalid","invalid",RoundToString(cdbl("0"+ReadCache("maginvalid","invalid"),0),0),GetAdjustedTime());
-					double failures = cdbl(ReadCache("maginvalid","invalid"),0);
+					double failures = cdbl("0"+ReadCache("maginvalid","invalid"),0);
 					if (failures < 10)
 					{
 						msNeuralResponse = "";
 					}
-					return false;
-				}
+			}
+			else
+			{
 				return true;
 			}
+		}
+		catch(...)
+		{
+			return false;
 		}
 		return false;
 }

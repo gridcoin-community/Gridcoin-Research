@@ -257,18 +257,17 @@ Public Class frmMining
         Dim sReportRow As String = ""
         Dim sMemoryName = IIf(mbTestNet, "magnitudes_testnet", "magnitudes")
 
-        Dim sHeader As String = "CPID,Magnitude,Avg Magnitude,Total RAC,Synced Til,Address,CPID Valid"
+        Dim sHeader As String = "CPID,Magnitude,Avg Magnitude,Total RAC,Synced Til,Address,CPID Valid;Witnesses"
         sReport += sHeader + vbCrLf
         dgv.Rows.Clear()
         dgv.Columns.Clear()
         dgv.BackgroundColor = Drawing.Color.Black
         dgv.ForeColor = Drawing.Color.Lime
         Dim grr As New GridcoinReader.GridcoinRow
-        Dim sHeading As String = "CPID;Magnitude;Avg Magnitude;Total RAC;Synced Til;Address;CPID Valid"
+        Dim sHeading As String = "CPID;Magnitude;Avg Magnitude;Total RAC;Synced Til;Address;CPID Valid;Witnesses"
         Dim vHeading() As String = Split(sHeading, ";")
         PopulateHeadings(vHeading, dgv, False)
         dgv.Columns(2).Visible = False
-
         Dim sData As String = modPersistedDataSystem.GetMagnitudeContractDetails()
         Dim vData() As String = Split(sData, ";")
         Dim iRow As Long = 0
@@ -316,7 +315,6 @@ Public Class frmMining
         dgv.Rows(iRow).Cells(0).Value = "Hash: " + sMyNeuralHash + " (" + Trim(iRow) + ")"
         sReport += "Hash: " + sMyNeuralHash + " (" + Trim(iRow) + ")"
         msNeuralReport = sReport
-
         'Populate Projects
 
         dgvProjects.Rows.Clear()
@@ -353,14 +351,14 @@ Public Class frmMining
             If bIsThisWhitelisted Then
                 WhitelistedProjects += 1
             End If
-            dgvProjects.Rows.Add()
-            dgvProjects.Rows(iRow).Cells(0).Value = prj.PrimaryKey
-            dgvProjects.Rows(iRow).Cells(1).Value = prj.RAC
-            dgvProjects.Rows(iRow).Cells(2).Value = prj.AvgRAC
-
-            dgvProjects.Rows(iRow).Cells(3).Value = Trim(bIsThisWhitelisted)
-
-            iRow = iRow + 1
+            If prj.PrimaryKey <> "neuralnetwork" Then
+                dgvProjects.Rows.Add()
+                dgvProjects.Rows(iRow).Cells(0).Value = prj.PrimaryKey
+                dgvProjects.Rows(iRow).Cells(1).Value = prj.RAC
+                dgvProjects.Rows(iRow).Cells(2).Value = prj.AvgRAC
+                dgvProjects.Rows(iRow).Cells(3).Value = Trim(bIsThisWhitelisted)
+                iRow = iRow + 1
+            End If
         Next
         lblTotalProjects.Text = Trim(PrjCount)
         lblWhitelistedProjects.Text = Trim(WhitelistedProjects)
@@ -536,17 +534,19 @@ Public Class frmMining
             If mlPercentComplete <= pbSync.Maximum Then pbSync.Value = mlPercentComplete
             Application.DoEvents()
             If mlPercentComplete < 50 Then pbSync.ForeColor = Color.Red : pbSync.Height = 18 + (mlPercentComplete / 20)
-            If mlPercentComplete > 50 And mlPercentComplete < 90 Then pbSync.ForeColor = Color.Yellow : pbSync.Height = 18 + (mlPercentComplete / 20)
-            If mlPercentComplete > 90 Then pbSync.ForeColor = Color.Green : pbSync.Height = 18 + (mlPercentComplete / 20)
+            If mlPercentComplete > 50 And mlPercentComplete < 80 Then pbSync.ForeColor = Color.Yellow : pbSync.Height = 18 + (mlPercentComplete / 20)
+            If mlPercentComplete > 80 And mlPercentComplete < 90 Then pbSync.ForeColor = Color.Orange : pbSync.Height = 19 + (mlPercentComplete / 20)
+            If mlPercentComplete > 90 Then pbSync.ForeColor = Color.Green : pbSync.Height = 20 + (mlPercentComplete / 20)
         Else
             If pbSync.Visible = True Then pbSync.Visible = False : PopulateNeuralData() : Application.DoEvents()
             pbSync.Visible = False : pbSync.Height = 18
             DisableForm(True)
+            Application.DoEvents()
         End If
     End Sub
     Private Sub DisableForm(bEnabled As Boolean)
         'Lock the controls, but allow the user to move the screen around so we dont appear Frozen.
-        dgv.Enabled = bEnabled
+        'dgv.Enabled = bEnabled - dont lock the grid
         btnExport.Enabled = bEnabled
         btnRefresh.Enabled = bEnabled
         chtCurCont.Enabled = bEnabled

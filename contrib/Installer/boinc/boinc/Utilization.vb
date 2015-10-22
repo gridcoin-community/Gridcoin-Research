@@ -522,6 +522,10 @@ Public Class Utilization
 
     End Function
     Public Sub UpdateMagnitudesOnly()
+        mbForcefullySyncAllRac = True
+
+
+
         Call UpdateMagnitudes()
     End Sub
     Public Sub AddressUserThread()

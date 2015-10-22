@@ -32,6 +32,7 @@ MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 extern double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid);
 bool NeedASuperblock();
 bool VerifySuperblock(std::string superblock, int nHeight);
+double ExtractMagnitudeFromExplainMagnitude();
 
 std::string GetQuorumHash(std::string data);
 
@@ -4069,7 +4070,13 @@ Value listitem(const Array& params, bool fHelp)
 		results.push_back(entry);
 	}
 
-
+	if (sitem == "debugexplainmagnitude")
+	{
+		double dMag = ExtractMagnitudeFromExplainMagnitude();
+		Object entry;
+		entry.push_back(Pair("Mag",dMag));
+		results.push_back(entry);
+	}
 	if (sitem == "explainmagnitude")
 	{
 
