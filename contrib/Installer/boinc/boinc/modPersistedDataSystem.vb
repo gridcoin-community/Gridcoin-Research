@@ -661,8 +661,13 @@ Module modPersistedDataSystem
         Dim ProjCount As Double = 0
         Dim lstWhitelist As List(Of Row)
         Log("Updating Magnitudes")
+        Try
+
         ReconnectToNeuralNetwork()
         mdictNeuralNetworkQuorumData = mGRCData.GetNeuralNetworkQuorumData2("quorumdata", mbTestNet, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD))
+        Catch ex As Exception
+
+        End Try
 
 
         Dim iRow As Long = 0
@@ -888,7 +893,7 @@ Module modPersistedDataSystem
             For Each nNeuralStructure In mdictNeuralNetworkQuorumData
                 If nNeuralStructure.Value.CPID = sCPID Then
                     If nNeuralStructure.Value.RAC > 10 Then
-                        PersistProjectRAC(sCPID, nNeuralStructure.Value.RAC, nNeuralStructure.Value.Project)
+                        PersistProjectRAC(sCPID, nNeuralStructure.Value.RAC, nNeuralStructure.Value.Project, False)
                         TotalRAC += nNeuralStructure.Value.RAC
                         If nNeuralStructure.Value.Witnesses > lWitnesses Then lWitnesses = nNeuralStructure.Value.Witnesses
                     End If
@@ -918,12 +923,12 @@ Module modPersistedDataSystem
                 Team = LCase(Trim(ExtractXML(vData(y), "<team_name>", "</team_name>")))
                 'Store the :  PROJECT_CPID, RAC
                 If Rac > 10 And Team = "gridcoin" Then
-                    PersistProjectRAC(sCPID, Val(Num(Trim(Rac))), sName)
+                    PersistProjectRAC(sCPID, Val(Num(Trim(Rac))), sName, True)
                     TotalRAC += Rac
                 End If
             Next y
             If TotalRAC = 0 Then
-                PersistProjectRAC(sCPID, 0, "NeuralNetwork")
+                PersistProjectRAC(sCPID, 0, "NeuralNetwork", True)
             End If
             UpdateCPIDStatus(sCPID, TotalRAC, 1)
             Return True
@@ -955,7 +960,7 @@ Module modPersistedDataSystem
         Return dtTomorrow
 
     End Function
-    Public Function PersistProjectRAC(sCPID As String, rac As Double, Project As String) As Boolean
+    Public Function PersistProjectRAC(sCPID As String, rac As Double, Project As String, bGenData As Boolean) As Boolean
         'Store the CPID_PROJECT RAC:
         Dim d As New Row
         d.Expiration = Tomorrow()
@@ -979,7 +984,12 @@ Module modPersistedDataSystem
         If Not d.Found Then
             Store(d)
             'Vote on the RAC for the project for the CPID (Once we verify > 51% of the NN agrees (by distinct IP-CPID per vote), the nodes can use this project RAC for the day to increase performance)
-            mGRCData.VoteOnProjectRAC(sCPID, rac, Project, mbTestNet)
+            Try
+                If bGenData Then mGRCData.VoteOnProjectRAC(sCPID, rac, Project, mbTestNet)
+            Catch ex As Exception
+
+            End Try
+
         End If
 
         Return True

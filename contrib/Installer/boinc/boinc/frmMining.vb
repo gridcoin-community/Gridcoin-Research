@@ -534,9 +534,9 @@ Public Class frmMining
             If mlPercentComplete <= pbSync.Maximum Then pbSync.Value = mlPercentComplete
             Application.DoEvents()
             If mlPercentComplete < 50 Then pbSync.ForeColor = Color.Red : pbSync.Height = 18 + (mlPercentComplete / 20)
-            If mlPercentComplete > 50 And mlPercentComplete < 80 Then pbSync.ForeColor = Color.Yellow : pbSync.Height = 18 + (mlPercentComplete / 20)
-            If mlPercentComplete > 80 And mlPercentComplete < 90 Then pbSync.ForeColor = Color.Orange : pbSync.Height = 19 + (mlPercentComplete / 20)
-            If mlPercentComplete > 90 Then pbSync.ForeColor = Color.Green : pbSync.Height = 20 + (mlPercentComplete / 20)
+            If mlPercentComplete > 50 And mlPercentComplete < 80 Then pbSync.ForeColor = Color.Orange : pbSync.Height = 18 + (mlPercentComplete / 20)
+            If mlPercentComplete > 80 And mlPercentComplete < 90 Then pbSync.ForeColor = Color.Yellow : pbSync.Height = 19 + (mlPercentComplete / 20)
+            If mlPercentComplete > 90 Then pbSync.ForeColor = Color.White : pbSync.Height = 20 + (mlPercentComplete / 20)
         Else
             If pbSync.Visible = True Then pbSync.Visible = False : PopulateNeuralData() : Application.DoEvents()
             pbSync.Visible = False : pbSync.Height = 18
