@@ -64,7 +64,7 @@ std::string msPubKey = "";
 std::string RoundToString(double d, int place);
 
 
-static const int MAX_OUTBOUND_CONNECTIONS = 16;
+static const int MAX_OUTBOUND_CONNECTIONS = 300;
 
 void ThreadMessageHandler2(void* parg);
 void ThreadSocketHandler2(void* parg);

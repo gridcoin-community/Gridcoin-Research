@@ -2,8 +2,10 @@
 
 
     Private Sub btnLogin_Click(sender As System.Object, e As System.EventArgs) Handles btnLogin.Click
+        mGRCData = New GRCSec.GridcoinData
+
         txtMessage.Text = GetSessionGuid()
-        
+
         Dim bLogged As Boolean = mGRCData.Authenticate(txtMessage.Text, txtUserName.Text, GetMd5String(txtPassword.Text))
         If bLogged Then
             Me.Hide()

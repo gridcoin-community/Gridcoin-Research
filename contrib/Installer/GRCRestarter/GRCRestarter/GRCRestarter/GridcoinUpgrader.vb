@@ -281,7 +281,12 @@ Public Class GridcoinUpgrader
                 End If
                 txtStatus.Text = "Upgrade Successful."
                 For x = ProgressBar1.Value To ProgressBar1.Maximum
-                    ProgressBar1.Value = x
+                    Try
+                        ProgressBar1.Value = x
+
+                    Catch ex As Exception
+
+                    End Try
                     RefreshScreen()
                 Next
                 StartGridcoin()
@@ -764,8 +769,8 @@ Public Class GridcoinUpgrader
 
     End Function
     Public Function UpdateUI(iRow As Long, sFN As String, sComments As String, bShowComments As Boolean, bUpgrading As Boolean)
-
-        ProgressBar1.Value = iRow : ProgressBar1.Update() : ProgressBar1.Refresh() : Me.Refresh() : Application.DoEvents() : RefreshScreen()
+        If iRow > ProgressBar1.Minimum And iRow <= ProgressBar1.Maximum Then ProgressBar1.Value = iRow
+        ProgressBar1.Update() : ProgressBar1.Refresh() : Me.Refresh() : Application.DoEvents() : RefreshScreen()
         If Len(sFN) > 1 Then
             Dim sPrefix As String = IIf(bUpgrading, "Upgrading", "Verifying")
             If LCase(sFN) = "success" Then sPrefix = ""
@@ -838,7 +843,8 @@ Public Class GridcoinUpgrader
         ProgressBar1.Maximum = ProgressBar1.Maximum + 1
         Dim v As Long = ProgressBar1.Value
         If v > ProgressBar1.Maximum Then v = ProgressBar1.Maximum
-        ProgressBar1.Value = v
+        If v < ProgressBar1.Maximum And v > ProgressBar1.Minimum Then ProgressBar1.Value = v
+
         RefreshScreen()
     End Sub
 End Class

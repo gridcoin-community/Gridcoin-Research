@@ -653,40 +653,58 @@ Module modPersistedDataSystem
         Return lstWhitelist
 
     End Function
+    Private Function GetConsensusData()
+        For x As Integer = 1 To 5
+            Try
+                ReconnectToNeuralNetwork()
+                mdictNeuralNetworkQuorumData = mGRCData.GetNeuralNetworkQuorumData2("quorumdata", mbTestNet, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD))
+                If mdictNeuralNetworkQuorumData.Count > IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD) Then
+                    Return True
+                End If
 
+            Catch ex As Exception
+                Threading.Thread.Sleep(1000)
+            End Try
+        Next x
+        Return False
+    End Function
     Public Function UpdateMagnitudes() As Boolean
         Dim lstCPIDs As List(Of Row)
         Dim surrogateRow As New Row
         Dim WhitelistedProjects As Double = 0
         Dim ProjCount As Double = 0
         Dim lstWhitelist As List(Of Row)
-        Log("Updating Magnitudes")
-        Try
-
-        ReconnectToNeuralNetwork()
-        mdictNeuralNetworkQuorumData = mGRCData.GetNeuralNetworkQuorumData2("quorumdata", mbTestNet, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD))
-        Catch ex As Exception
-
-        End Try
-
-
+        Dim bConsensus As Boolean = GetConsensusData()
+        Log("Updating Magnitudes " + IIf(bConsensus, "With consensus data", "Without consensus data"))
         Dim iRow As Long = 0
         Try
             'Loop through the researchers
             surrogateRow.Database = "CPID"
             surrogateRow.Table = "CPIDS"
             lstCPIDs = GetList(surrogateRow, "*")
-            lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
-            Dim lstProjectsCt As List(Of Row) = GetList(surrogateRow, "*")
             For Each cpid As Row In lstCPIDs
+                Log("Before sorting: " + Trim(cpid.PrimaryKey))
+            Next
+            lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
+            For Each cpid As Row In lstCPIDs
+                Log("After sorting: " + Trim(cpid.PrimaryKey))
+            Next
+
+            For Each cpid As Row In lstCPIDs
+                Try
+
                 If NeedsSynced(cpid) Or mbForcefullySyncAllRac Then
                     Dim bResult As Boolean = GetRacViaNetsoft(cpid.PrimaryKey)
                 End If
                 iRow += 1
                 Dim p As Double = (iRow / (lstCPIDs.Count + 0.01)) * 100
                 mlPercentComplete = p + 5
-                If mlPercentComplete > 95 Then mlPercentComplete = 95
-                Log("Percent complete " + Trim(mlPercentComplete) + "%: Gathering Magnitude for CPID " + cpid.PrimaryKey)
+                If mlPercentComplete > 90 Then mlPercentComplete = 90
+                    Log(Trim(mlPercentComplete) + "%: #" + Trim(iRow) + ", Gathering Magnitude for CPID " + cpid.PrimaryKey + ", RAC: " + Trim(cpid.RAC))
+                Catch ex As Exception
+                    Log("Error in UpdateMagnitudes: " + ex.Message + " while processing CPID " + Trim(cpid.PrimaryKey))
+                End Try
+
             Next
         Catch ex As Exception
             Log("UpdateMagnitudes:GatherRAC: " + ex.Message)
@@ -757,11 +775,7 @@ Module modPersistedDataSystem
                             TotalMagnitude += IndMag
                         End If
                     End If
-                    iRow2 += 1
-                    Dim p As Double = (iRow2 / (lstProjects.Count + 0.01)) * 5
-                    mlPercentComplete = p + 95
-                    If mlPercentComplete > 99 Then mlPercentComplete = 99
-
+              
                 Next
                 'Now we can store the magnitude - Formula for Network Magnitude per CPID:
                 cpid.Database = "CPID"
@@ -771,6 +785,11 @@ Module modPersistedDataSystem
                 Log("Storing CPID " + Trim(cpid.PrimaryKey) + " magnitude " + Trim(cpid.Magnitude))
 
                 Store(cpid)
+                iRow2 += 1
+                Dim p As Double = (iRow2 / (lstCPIDs.Count + 0.01)) * 9.9
+                mlPercentComplete = p + 90
+                If mlPercentComplete > 99 Then mlPercentComplete = 99
+
             Next
             mlPercentComplete = 0
             Return True
@@ -892,11 +911,9 @@ Module modPersistedDataSystem
             Dim lWitnesses As Long = 0
             For Each nNeuralStructure In mdictNeuralNetworkQuorumData
                 If nNeuralStructure.Value.CPID = sCPID Then
-                    If nNeuralStructure.Value.RAC > 10 Then
-                        PersistProjectRAC(sCPID, nNeuralStructure.Value.RAC, nNeuralStructure.Value.Project, False)
+                        If nNeuralStructure.Value.RAC > 10 Then PersistProjectRAC(sCPID, nNeuralStructure.Value.RAC, nNeuralStructure.Value.Project, False)
                         TotalRAC += nNeuralStructure.Value.RAC
                         If nNeuralStructure.Value.Witnesses > lWitnesses Then lWitnesses = nNeuralStructure.Value.Witnesses
-                    End If
                 End If
             Next
             UpdateCPIDStatus(sCPID, TotalRAC, lWitnesses)
@@ -1009,11 +1026,14 @@ Module modPersistedDataSystem
         Return sOut
     End Function
     Public Function DeserializeDate(s As String) As Date
-        If s = "" Then Return CDate("1-1-1900")
+        If Trim(s) = "" Then Return CDate("1-1-1900")
         Dim vDate() As String
         vDate = Split(s, "/")
-        Dim dtOut As Date
-        dtOut = New Date(Val(vDate(0)), Val(vDate(1)), Val(vDate(2)), Val(vDate(3)), Val(vDate(4)), Val(vDate(5)))
+        Dim dtOut As Date = CDate("1-1-1900")
+        If UBound(vDate) >= 5 Then
+            dtOut = New Date(Val(vDate(0)), Val(vDate(1)), Val(vDate(2)), Val(vDate(3)), Val(vDate(4)), Val(vDate(5)))
+        End If
+
         Return dtOut
     End Function
     Public Function DataToRow(sData As String) As Row
@@ -1021,14 +1041,14 @@ Module modPersistedDataSystem
         Dim d As String = "<COL>"
         vData = Split(sData, d)
         Dim r As New Row
-        r.Added = DeserializeDate(vData(0))
-        r.Expiration = DeserializeDate(vData(1))
-        r.Synced = DeserializeDate(vData(2))
-        r.PrimaryKey = vData(3)
         r.Magnitude = "0"
         r.RAC = "0"
         r.AvgRAC = "0"
 
+        If UBound(vData) >= 0 Then r.Added = DeserializeDate(vData(0))
+        If UBound(vData) >= 1 Then r.Expiration = DeserializeDate(vData(1))
+        If UBound(vData) >= 2 Then r.Synced = DeserializeDate(vData(2))
+        If UBound(vData) >= 3 Then r.PrimaryKey = vData(3)
         If UBound(vData) >= 4 Then r.DataColumn1 = "" & vData(4)
         If UBound(vData) >= 5 Then r.DataColumn2 = "" & vData(5)
         If UBound(vData) >= 6 Then r.DataColumn3 = "" & vData(6)
@@ -1105,6 +1125,7 @@ Module modPersistedDataSystem
 
     End Function
     Public Function Insert(dataRow As Row, bOnlyWriteIfNotFound As Boolean)
+        Try
 
         Dim sPath As String = GetPath(dataRow)
         Dim sWritePath As String = sPath + ".backup"
@@ -1139,6 +1160,7 @@ Module modPersistedDataSystem
                 Try
                     Kill(sPath)
                 Catch ex As Exception
+                    Dim sMsg As String = ex.Message
 
                 End Try
 
@@ -1154,6 +1176,14 @@ Module modPersistedDataSystem
         FileCopy(sWritePath, sPath)
         Kill(sWritePath)
         Return True
+
+
+        Catch ex As Exception
+            Return False
+        End Try
+
+        Return False
+
 
     End Function
     Public Function SerStr(sData As String) As String
@@ -1194,7 +1224,7 @@ Module modPersistedDataSystem
 
             Catch ex As Exception
                 sErr = ex.Message
-                System.Threading.Thread.Sleep(2000)
+                System.Threading.Thread.Sleep(333)
             End Try
         Next x
 
