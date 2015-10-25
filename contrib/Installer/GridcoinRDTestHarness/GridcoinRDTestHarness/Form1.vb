@@ -104,9 +104,12 @@ Public Class Form1
         mU = New Utilization
         Dim sTestNet As String = "TESTNET"
         sTestNet = "PROD"
+
         mU.SetTestNetFlag(sTestNet)
         Dim sCurrentContract As String = mU.GetNeuralContract
-        mU.ShowFoundation()
+        'mU.ShowFoundation()
+        'mU.ShowMiningConsole()
+        'mU.UpdateMagnitudesOnly()
         mU.ShowTicketList()
         Exit Sub
         End

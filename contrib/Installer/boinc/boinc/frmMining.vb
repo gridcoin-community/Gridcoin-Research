@@ -456,28 +456,32 @@ Public Class frmMining
             dgvProjects.Rows(iRow - 1).Cells(3).Value = RoundedMag(TotalNetworkRAC)
             dgvProjects.Rows(iRow - 1).Cells(6).Value = RoundedMag(TotalRAC)
             dgvProjects.Rows(iRow - 1).Cells(7).Value = RoundedMag(CumulativeMag)
-
+            System.Windows.Forms.Cursor.Current = Cursors.WaitCursor
             Dim oNewForm As New Form
-            oNewForm.Width = Screen.PrimaryScreen.WorkingArea.Width / 1.6
-            oNewForm.Height = Screen.PrimaryScreen.WorkingArea.Height / 2.2
+            oNewForm.Width = Screen.PrimaryScreen.WorkingArea.Width / 2
+            oNewForm.Height = Screen.PrimaryScreen.WorkingArea.Height / 1.2
+            oNewForm.BackColor = Color.Black
             oNewForm.Text = "CPID Magnitude Details - Gridcoin Neural Network - (Red=Blacklisted)"
             oNewForm.Controls.Add(dgvProjects)
             dgvProjects.Left = 5
             dgvProjects.Top = 5
             Dim TotalControlHeight As Long = (dgvProjects.RowTemplate.Height * (iRow + 2)) + 20
-            dgvProjects.Height = TotalControlHeight
+            dgvProjects.Height = TotalControlHeight + 50
             oNewForm.Height = dgvProjects.Height + 285
             dgvProjects.Width = oNewForm.Width - 25
             Dim rtbRac As New System.Windows.Forms.RichTextBox
-
             Dim sXML As String = GetXMLOnly(sCPID)
+            rtbRac.Font = New Font("Verdana", 12)
             rtbRac.Left = 5
             rtbRac.Top = dgvProjects.Height + 8
             rtbRac.Height = 245
-            rtbRac.Width = oNewForm.Width - 5
+            rtbRac.Width = oNewForm.Width - 30
             rtbRac.Text = sXML
+            rtbRac.BackColor = Color.Black
+            rtbRac.ForeColor = Color.Green
             oNewForm.Controls.Add(rtbRac)
             oNewForm.Show()
+            System.Windows.Forms.Cursor.Current = Cursors.Default
         End If
     End Sub
 
@@ -550,6 +554,7 @@ Public Class frmMining
         btnExport.Enabled = bEnabled
         btnRefresh.Enabled = bEnabled
         chtCurCont.Enabled = bEnabled
+        btnSync.Enabled = bEnabled
         If bEnabled Then
             Me.BackColor = Color.Black
         Else
@@ -569,5 +574,15 @@ Public Class frmMining
     Private Sub tOneMinute_Tick(sender As System.Object, e As System.EventArgs) Handles tOneMinute.Tick
         Call OneMinuteUpdate()
 
+    End Sub
+
+    Private Sub dgv_CellContentClick(sender As System.Object, e As System.Windows.Forms.DataGridViewCellEventArgs) Handles dgv.CellContentClick
+
+    End Sub
+    Private Sub Sync()
+        mclsUtilization.UpdateMagnitudesOnly()
+    End Sub
+    Private Sub btnSync_Click(sender As System.Object, e As System.EventArgs) Handles btnSync.Click
+        Dim thSync As New Threading.Thread(AddressOf Sync) : thSync.Start() : mdLastNeuralNetworkSync = Now
     End Sub
 End Class

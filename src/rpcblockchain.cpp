@@ -1484,7 +1484,7 @@ std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string 
 	 } 
 	 catch (...) 
 	 {
-		    printf("Generic exception %s \r\n",method.c_str());
+		    printf("Generic exception (Please try unlocking the wallet) %s \r\n",method.c_str());
 			return "Generic Exception (Please try unlocking the wallet).";
 	 }
 	 std::string sResult = "";
@@ -1516,8 +1516,8 @@ std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string 
 	 } 
 	 catch (...) 
 	 {
-		    printf("Generic exception %s \r\n",method.c_str());
-			return "Generic Exception";
+		    printf("Generic exception (Please try unlocking the wallet). %s \r\n",method.c_str());
+			return "Generic Exception (Please try unlocking the wallet).";
 	 }
 	 std::string sResult = "";
 	 sResult = write_string(vResult, false) + "\n";
@@ -3805,7 +3805,7 @@ Array GetJSONNeuralNetworkReport()
 	  //8-22-2015
 	  int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
 	  entry.push_back(Pair("Superblock Age",superblock_age));
-	  if (superblock_age > 38400)
+	  if (superblock_age > GetSuperblockAgeSpacing(nBestHeight))
 	  {
 		  int iRoot = 30;
 		  int iModifier = (nBestHeight % iRoot);

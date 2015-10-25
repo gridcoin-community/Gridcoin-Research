@@ -323,6 +323,7 @@ Public Class Utilization
 
     Public Function ShowTicketList()
         Try
+            mGRCData = New GRCSec.GridcoinData
             mfrmLogin = New frmLogin
             mfrmTicketList = New frmTicketList
             mfrmTicketList.Show()

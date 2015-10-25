@@ -28,6 +28,7 @@ Module modPersistedDataSystem
     Private mclsQHA As New clsQuorumHashingAlgorithm
     Private Const MINIMUM_WITNESSES_REQUIRED_TESTNET As Long = 2
     Private Const MINIMUM_WITNESSES_REQUIRED_PROD As Long = 10
+    Public mdLastNeuralNetworkSync As DateTime
     Private lUseCount As Long = 0
 
     Public Structure NeuralStructure

@@ -85,6 +85,7 @@ Partial Class frmMining
         Me.lblQuorumHash = New System.Windows.Forms.Label()
         Me.lblTimestamp = New System.Windows.Forms.Label()
         Me.lblBlock = New System.Windows.Forms.Label()
+        Me.btnSync = New System.Windows.Forms.Button()
         CType(Me.Chart1, System.ComponentModel.ISupportInitialize).BeginInit()
         CType(Me.chtCurCont, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.MenuStrip1.SuspendLayout()
@@ -101,9 +102,9 @@ Partial Class frmMining
         '
         'btnRefresh
         '
-        Me.btnRefresh.Location = New System.Drawing.Point(18, 734)
+        Me.btnRefresh.Location = New System.Drawing.Point(14, 734)
         Me.btnRefresh.Name = "btnRefresh"
-        Me.btnRefresh.Size = New System.Drawing.Size(118, 35)
+        Me.btnRefresh.Size = New System.Drawing.Size(60, 35)
         Me.btnRefresh.TabIndex = 0
         Me.btnRefresh.Text = "Refresh"
         Me.btnRefresh.UseVisualStyleBackColor = False
@@ -217,9 +218,9 @@ Partial Class frmMining
         '
         'btnHide
         '
-        Me.btnHide.Location = New System.Drawing.Point(159, 734)
+        Me.btnHide.Location = New System.Drawing.Point(80, 734)
         Me.btnHide.Name = "btnHide"
-        Me.btnHide.Size = New System.Drawing.Size(118, 35)
+        Me.btnHide.Size = New System.Drawing.Size(60, 35)
         Me.btnHide.TabIndex = 23
         Me.btnHide.Text = "Hide"
         Me.btnHide.UseVisualStyleBackColor = False
@@ -474,7 +475,7 @@ Partial Class frmMining
         '
         'btnExport
         '
-        Me.btnExport.Location = New System.Drawing.Point(304, 734)
+        Me.btnExport.Location = New System.Drawing.Point(146, 734)
         Me.btnExport.Name = "btnExport"
         Me.btnExport.Size = New System.Drawing.Size(118, 35)
         Me.btnExport.TabIndex = 56
@@ -661,6 +662,15 @@ Partial Class frmMining
         Me.lblBlock.TabIndex = 73
         Me.lblBlock.Text = "Superblock Block #:"
         '
+        'btnSync
+        '
+        Me.btnSync.Location = New System.Drawing.Point(272, 734)
+        Me.btnSync.Name = "btnSync"
+        Me.btnSync.Size = New System.Drawing.Size(118, 35)
+        Me.btnSync.TabIndex = 74
+        Me.btnSync.Text = "Sync"
+        Me.btnSync.UseVisualStyleBackColor = False
+        '
         'frmMining
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
@@ -669,6 +679,7 @@ Partial Class frmMining
         Me.BackgroundImage = Global.BoincStake.My.Resources.Resources.GradientU
         Me.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch
         Me.ClientSize = New System.Drawing.Size(1071, 793)
+        Me.Controls.Add(Me.btnSync)
         Me.Controls.Add(Me.lblBlock)
         Me.Controls.Add(Me.lblTimestamp)
         Me.Controls.Add(Me.lblQuorumHash)
@@ -759,4 +770,5 @@ Partial Class frmMining
     Friend WithEvents lblQuorumHash As System.Windows.Forms.Label
     Friend WithEvents lblTimestamp As System.Windows.Forms.Label
     Friend WithEvents lblBlock As System.Windows.Forms.Label
+    Friend WithEvents btnSync As System.Windows.Forms.Button
 End Class
