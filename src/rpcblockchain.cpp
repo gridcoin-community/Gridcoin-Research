@@ -1402,7 +1402,10 @@ std::string AdvertiseBeacon(bool force, bool bUseNeuralNetwork)
 	 LOCK(cs_main);
 	 {
 			GetNextProject(false);
-			if (GlobalCPUMiningCPID.cpid=="INVESTOR") return "SUCCESS";
+			if (GlobalCPUMiningCPID.cpid=="INVESTOR")
+			{
+					return "INVESTORS_CANNOT_SEND_BEACONS";
+			}
 			//If beacon is already in the chain, exit early
 			std::string myBeacon = MyBeaconExists(GlobalCPUMiningCPID.cpid);
 			if (myBeacon.length() > 10 && !force) return "SUCCESS";
@@ -1608,9 +1611,7 @@ Value execute(const Array& params, bool fHelp)
 		{
 		    	std::string sResult = AdvertiseBeacon(false,false);
 				entry.push_back(Pair("CPID",GlobalCPUMiningCPID.cpid.c_str()));
-
 			    entry.push_back(Pair("Beacon",sResult));
-				
 			    results.push_back(entry);
 
 		}

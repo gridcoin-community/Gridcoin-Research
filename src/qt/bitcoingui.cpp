@@ -2364,7 +2364,6 @@ void BitcoinGUI::updateStakingIcon()
         else if (vNodes.empty())
 		{
             labelStakingIcon->setToolTip(tr("Not staking because wallet is offline"));
-			msMiningErrors6 = "Offline";
 		}
         else if (IsInitialBlockDownload())
 		{

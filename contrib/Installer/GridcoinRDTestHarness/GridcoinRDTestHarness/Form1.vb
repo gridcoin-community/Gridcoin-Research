@@ -108,8 +108,8 @@ Public Class Form1
         mU.SetTestNetFlag(sTestNet)
         Dim sCurrentContract As String = mU.GetNeuralContract
         'mU.ShowFoundation()
-        'mU.ShowMiningConsole()
-        'mU.UpdateMagnitudesOnly()
+        mU.ShowMiningConsole()
+        mU.UpdateMagnitudesOnly()
         mU.ShowTicketList()
         Exit Sub
         End

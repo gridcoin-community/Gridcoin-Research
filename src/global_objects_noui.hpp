@@ -30,6 +30,7 @@ extern volatile bool CreatingCPUBlock;
 extern volatile bool bStakeMinerOutOfSyncWithNetwork;
 extern volatile bool bDoTally;
 extern volatile bool bTallyFinished;
+extern volatile bool bGridcoinGUILoaded;
 
 extern volatile double nGlobalHashCounter;
 

@@ -642,6 +642,12 @@ Public Class GridcoinUpgrader
             bCleanIteration = True
             Try
                 dr = oGRCData.mGetUpgradeFiles
+
+                If dr Is Nothing Then
+                    Dim sNarr As String = "Unable to retrieve upgrade files from Azure cluster.  Try to open port 1433."
+                    Log(sNarr)
+                    MsgBox(sNarr)
+                End If
                 If dr.HasRows = False Then
                     MsgBox("Upgrade failed; No files stored in Gridcoin Research mirror.", MsgBoxStyle.Critical)
                     Return "FAIL"
@@ -669,10 +675,16 @@ Public Class GridcoinUpgrader
                                     Rename(sLocalPath + sFile, "grcsec_old.dll")
                                 End If
                             End If
-                  
-                            mRetrieveUpgrade(oGRCData, dr("id").ToString(), sLocalPath, sFile, MerkleRoot)
+
+                            Try
+                                mRetrieveUpgrade(oGRCData, dr("id").ToString(), sLocalPath, sFile, MerkleRoot)
+
+                            Catch ex As Exception
+                                Log("Error retrieving blob " + Trim(dr("id").ToString()) + " for " + sFile + ".")
+
+                            End Try
                             Application.DoEvents()
-                            Threading.Thread.Sleep(2000) 'Wait until file is closed (this is supposedly synchronous, but some users must have a delayed write)
+                            Threading.Thread.Sleep(20) 'Wait until file is closed (this is supposedly synchronous, but some users must have a delayed write)
                             Application.DoEvents()
 
                             'Verify the downloaded blob matches record hash
@@ -704,8 +716,6 @@ Public Class GridcoinUpgrader
                 Loop
             Catch ex As Exception
                 iErrorCount += 1 : iIterationErrorCount += 1
-                Stop
-
                 If bCleanIteration Then MsgBox("Error -11: " + ex.Message + "; Retrying " + Trim(5 - iIterationErrorCount) + " more times before failing.")
                 bCleanIteration = False
             End Try

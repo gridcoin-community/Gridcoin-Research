@@ -32,6 +32,7 @@ void ShutdownGridcoinMiner();
 void ThreadCPIDs();
 bool ComputeNeuralNetworkSupermajorityHashes();
 void BusyWaitForTally();
+extern void ThreadAppInit2(void* parg);
 
 void LoadCPIDsInBackground();
 std::string GetPoolKey(std::string sMiningProject,double dMiningRAC,
@@ -506,7 +507,25 @@ bool InitSanityCheck(void)
     return true;
 }
 
-/** Initialize bitcoin.
+
+
+
+void ThreadAppInit2(void* parg)
+{
+    // Make this thread recognisable
+    RenameThread("grc-appinit2");
+	bGridcoinGUILoaded=false;
+	printf("Initializing GUI...");
+	bool result = AppInit2();
+	printf("GUI Loaded...");
+	bGridcoinGUILoaded = true;
+}
+
+
+
+
+
+/** Initialize Gridcoin.
  *  @pre Parameters should be parsed and config file should be read.
  */
 bool AppInit2()

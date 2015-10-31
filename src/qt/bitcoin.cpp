@@ -37,6 +37,7 @@ Q_IMPORT_PLUGIN(qtaccessiblewidgets)
 static BitcoinGUI *guiref;
 static QSplashScreen *splashref;
 
+void ThreadAppInit2(void* parg);
 
 boost::thread_group threadGroup;
 //Global reference to globalcom
@@ -263,9 +264,20 @@ int main(int argc, char *argv[])
 		QObject::connect(timer, SIGNAL(timeout()), guiref, SLOT(timerfire()));
   
 	    //Start globalcom
+		if (!NewThread(ThreadAppInit2, NULL))
+		{
+				printf("Error; NewThread(ThreadAppInit2) failed\n");
+		        return 1;
+		}
+		else
+	    {
+			 //10-31-2015
+			while (!bGridcoinGUILoaded)
+			{
+				app.processEvents();
+				MilliSleep(300);
+			}
 
-        if(AppInit2())
-        {
             {
                 // Put this in a block, so that the Model objects are cleaned up before
                 // calling Shutdown().
@@ -303,13 +315,14 @@ int main(int argc, char *argv[])
             // Shutdown the core and its threads, but don't exit Bitcoin-Qt here
             Shutdown(NULL);
         }
-        else
-        {
-            return 1;
-        }
-    } catch (std::exception& e) {
+        
+    } 
+	catch (std::exception& e) 
+	{
         handleRunawayException(&e);
-    } catch (...) {
+    }
+	catch (...) 
+	{
         handleRunawayException(NULL);
     }
     return 0;

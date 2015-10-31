@@ -317,6 +317,7 @@ volatile bool bGlobalcomInitialized = false;
 volatile bool bStakeMinerOutOfSyncWithNetwork = false;
 volatile bool bDoTally = false;
 volatile bool bTallyFinished = false;
+volatile bool bGridcoinGUILoaded = false;
 
 extern bool CheckWorkCPU(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey);
 extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
@@ -713,8 +714,8 @@ std::string GetGlobalStatus()
 			+ RoundToString(PORDiff,3) + "; Net Weight: " + RoundToString(GetPoSKernelPS2(),2)  
 			+ "<br>DPOR Weight: " +  sWeight + "; Status: " + msMiningErrors 
 			+ "<br>Magnitude: " + RoundToString(boincmagnitude,2) + "; Project: " + msMiningProject
-			+ "<br>CPID: " +  GlobalCPUMiningCPID.cpid + " " + msMiningErrors2 + 
-			+ "<br>" + msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + msMiningErrors8 
+			+ "<br>CPID: " +  GlobalCPUMiningCPID.cpid + " " +  
+			+ "<br>" + msMiningErrors2 + " " + msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + msMiningErrors8 
 			+ "<br>" + msRSAOverview;
 		//The last line break is for Windows 8.1 Huge Toolbar
 		msGlobalStatus = status;
@@ -1210,7 +1211,8 @@ std::string DefaultWalletAddress()
     		 const CBitcoinAddress& address = item.first;
 			 //const std::string& strName = item.second;
 			 bool fMine = IsMine(*pwalletMain, address.Get());
-			 if (fMine) {
+			 if (fMine) 
+			 {
 				 sDefaultWalletAddress=CBitcoinAddress(address).ToString();
 				 return sDefaultWalletAddress;
 			 }
@@ -1222,8 +1224,6 @@ std::string DefaultWalletAddress()
 	}
     return "NA";
 }
-
-
 
 
 
@@ -2174,7 +2174,7 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 	double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
 
-	// 7-22-2015 - PRODUCTION
+	// Non Research Age - RSA Mode - Legacy (before 10-20-2015) 
 	if (!IsResearchAgeEnabled(pindexLast->nHeight))
 	{
 			int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
@@ -2206,7 +2206,7 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 	}
 	else
 	{
-			// Future Research Age Subsidy - TESTNET
+			// Research Age Subsidy - PROD
 			int64_t nBoinc = ComputeResearchAccrual(cpid, operation, pindexLast, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
 			int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
 
@@ -9017,7 +9017,15 @@ bool MemorizeMessage(std::string msg,int64_t nTime)
 								fMessageLoaded = true;
 								if (sMessageType=="poll")
 								{
-										msMiningErrors2 = "Poll: " + sMessageKey;
+									    if (Contains(sMessageKey,"[Foundation"))
+										{
+												msMiningErrors2 = "Foundation Poll: " + sMessageKey;
+						
+										}
+										else
+										{
+						    					msMiningErrors2 = "Poll: " + sMessageKey;
+										}
 								}
 	
 						}
