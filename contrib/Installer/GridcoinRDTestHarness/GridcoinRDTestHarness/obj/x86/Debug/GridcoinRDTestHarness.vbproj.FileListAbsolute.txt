@@ -77,3 +77,6 @@ A:\Gridcoin-Research\contrib\Installer\GridcoinRDTestHarness\GridcoinRDTestHarne
 A:\Gridcoin-Research\contrib\Installer\GridcoinRDTestHarness\GridcoinRDTestHarness\obj\x86\Debug\GridcoinRDTestHarness.pdb
 A:\Gridcoin-Research\contrib\Installer\GridcoinRDTestHarness\GridcoinRDTestHarness\bin\Debug\GRCSec.pdb
 A:\Gridcoin-Research\contrib\Installer\GridcoinRDTestHarness\GridcoinRDTestHarness\bin\Debug\GRCSec.xml
+A:\Gridcoin-Research\contrib\Installer\GridcoinRDTestHarness\GridcoinRDTestHarness\bin\Debug\ucGridcoinProgressBar.dll
+A:\Gridcoin-Research\contrib\Installer\GridcoinRDTestHarness\GridcoinRDTestHarness\bin\Debug\ucGridcoinProgressBar.pdb
+A:\Gridcoin-Research\contrib\Installer\GridcoinRDTestHarness\GridcoinRDTestHarness\bin\Debug\ucGridcoinProgressBar.xml

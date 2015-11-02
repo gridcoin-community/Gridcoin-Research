@@ -24,6 +24,7 @@ Partial Class Form1
     Private Sub InitializeComponent()
         Me.Button1 = New System.Windows.Forms.Button()
         Me.Button2 = New System.Windows.Forms.Button()
+        Me.UcProgressBar1 = New ucGridcoinProgressBar.ucProgressBar()
         Me.SuspendLayout()
         '
         'Button1
@@ -44,11 +45,23 @@ Partial Class Form1
         Me.Button2.Text = "Button2"
         Me.Button2.UseVisualStyleBackColor = True
         '
+        'UcProgressBar1
+        '
+        Me.UcProgressBar1.Location = New System.Drawing.Point(49, 201)
+        Me.UcProgressBar1.Maximum = 100
+        Me.UcProgressBar1.Minimum = 0
+        Me.UcProgressBar1.Name = "UcProgressBar1"
+        Me.UcProgressBar1.ProgressBarColor = System.Drawing.Color.Blue
+        Me.UcProgressBar1.Size = New System.Drawing.Size(326, 40)
+        Me.UcProgressBar1.TabIndex = 2
+        Me.UcProgressBar1.Value = 0
+        '
         'Form1
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
-        Me.ClientSize = New System.Drawing.Size(284, 262)
+        Me.ClientSize = New System.Drawing.Size(452, 262)
+        Me.Controls.Add(Me.UcProgressBar1)
         Me.Controls.Add(Me.Button2)
         Me.Controls.Add(Me.Button1)
         Me.Name = "Form1"
@@ -58,5 +71,6 @@ Partial Class Form1
     End Sub
     Friend WithEvents Button1 As System.Windows.Forms.Button
     Friend WithEvents Button2 As System.Windows.Forms.Button
+    Friend WithEvents UcProgressBar1 As ucGridcoinProgressBar.ucProgressBar
 
 End Class

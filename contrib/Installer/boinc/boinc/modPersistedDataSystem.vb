@@ -1,5 +1,6 @@
 ﻿
 Imports Microsoft.VisualBasic
+Imports System.IO
 
 Module modPersistedDataSystem
 
@@ -9,15 +10,15 @@ Module modPersistedDataSystem
     'The system must be fast, preserve data integrity, and must come to a true consensus with other nodes
     'When the node shuts down, the neural network needs to save its state
     'It must have the ability to restore state upon startup
-
     'Store data on the file system, with base64 encoding, and use the primary key as the filename for fast indexing
-
     'Stale data older than the Expiration shall be purged automatically
-
     'Data is stored across all Gridcoin windows nodes, in a decentralized store
     Public msSyncData As String = ""
     Public mbForcefullySyncAllRac = False
     Public mbTestNet As Boolean = False
+    Public msThreadedCPID As String = ""
+    Public mlQueue As Long = 0
+    Public bDatabaseInUse As Boolean = False
     'Minimum RAC percentage required for RAC to be counted in magnitude:
     Public mdMinimumRacPercentage As Double = 0.06
     Public bMagsDoneLoading As Boolean = True
@@ -38,7 +39,6 @@ Module modPersistedDataSystem
         Public Updated As DateTime
     End Structure
     Public mdictNeuralNetworkQuorumData As Dictionary(Of String, GRCSec.GridcoinData.NeuralStructure)
-
     Public Structure Row
         Public Database As String
         Public Table As String
@@ -71,11 +71,11 @@ Module modPersistedDataSystem
         sOut = Replace(sOut, ",", ".")
         Return sOut
     End Function
-
+    Public Sub TestPDS1()
+    End Sub
     Public Sub ReconnectToNeuralNetwork()
         Try
             mGRCData = New GRCSec.GridcoinData
-
         Catch ex As Exception
             Log("Unable to connect to neural network.")
         End Try
@@ -95,18 +95,6 @@ Module modPersistedDataSystem
                                  + "," + Trim(cpid.DataColumn5) + "," + Trim(cpid.Witnesses) + ";"
             sOut += sRow
         Next
-        'surrogateRow.Database = "Prices"
-        'surrogateRow.Table = "Quotes"
-        'lstCPIDs = GetList(surrogateRow, "*")
-        'For Each cpid As Row In lstCPIDs
-        'Dim dNeuralMagnitude As Double = 0
-        'Dim sRow As String = CPID.PrimaryKey + "," + Num(CPID.Magnitude) _
-        '                     + "," + Num(dNeuralMagnitude) + "," + Num(CPID.RAC) _
-        '                     + "," + Trim(CPID.Synced) + "," + Trim(CPID.DataColumn4) _
-        '                     + "," + Trim(CPID.DataColumn5) + "," + trim(cpid.witnesses) + ";"
-        'sOut += sRow
-        'Next
-
         Return sOut
     End Function
     Private Function SumOfNetworkMagnitude(ByRef dAvg As Double) As Double
@@ -127,21 +115,20 @@ Module modPersistedDataSystem
     Public Function GetMagnitudeContract() As String
         Try
 
-        Dim surrogateRow As New Row
-        surrogateRow.Database = "CPID"
-        surrogateRow.Table = "CPIDS"
-        Dim lTotal As Long
-        Dim lRows As Long
+            Dim surrogateRow As New Row
+            surrogateRow.Database = "CPID"
+            surrogateRow.Table = "CPIDS"
+            Dim lTotal As Long
+            Dim lRows As Long
             If mlPercentComplete > 0 Then Return ""
             'If Last synced older than 1 day, delete the contract - 10-2-2015
-
-        Dim sOut As String = ""
-        sOut = "<MAGNITUDES>"
-        Dim lstCPIDs As List(Of Row) = GetList(surrogateRow, "*")
+            Dim sOut As String = ""
+            sOut = "<MAGNITUDES>"
+            Dim lstCPIDs As List(Of Row) = GetList(surrogateRow, "*")
             lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
             Dim dMagAge As Long = 0
-        For Each cpid As Row In lstCPIDs
-            If cpid.DataColumn5 = "True" Then
+            For Each cpid As Row In lstCPIDs
+                If cpid.DataColumn5 = "True" Then
                     Dim sRow As String = cpid.PrimaryKey + "," + Num(cpid.Magnitude) + ";"
                     lTotal = lTotal + Val("0" + Trim(cpid.Magnitude))
                     lRows = lRows + 1
@@ -160,7 +147,7 @@ Module modPersistedDataSystem
                     lRows = lRows + 1
                     sOut += sRow
                 End If
-        Next
+            Next
             sOut += "</MAGNITUDES><QUOTES>"
 
             surrogateRow.Database = "Prices"
@@ -176,9 +163,9 @@ Module modPersistedDataSystem
             Next
 
             sOut += "</QUOTES><AVERAGES>"
-        Dim avg As Double
-        avg = lTotal / (lRows + 0.01)
-        If avg < 25 Then Return ""
+            Dim avg As Double
+            avg = lTotal / (lRows + 0.01)
+            If avg < 25 Then Return ""
             'APPEND the Averages:
 
             Dim surrogateWhitelistRow As New Row
@@ -186,13 +173,11 @@ Module modPersistedDataSystem
             surrogateWhitelistRow.Database = "Whitelist"
             surrogateWhitelistRow.Table = "Whitelist"
             lstWhitelist = GetList(surrogateWhitelistRow, "*")
-
-
-        Dim rRow As New Row
-        rRow.Database = "Project"
-        rRow.Table = "Projects"
-        Dim lstP As List(Of Row) = GetList(rRow, "*")
-        lstP.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
+            Dim rRow As New Row
+            rRow.Database = "Project"
+            rRow.Table = "Projects"
+            Dim lstP As List(Of Row) = GetList(rRow, "*")
+            lstP.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
             For Each r As Row In lstP
                 Dim bIsThisWhitelisted = IsInList(r.PrimaryKey, lstWhitelist, False)
                 If (bIsThisWhitelisted) Then
@@ -205,7 +190,7 @@ Module modPersistedDataSystem
                 End If
 
             Next
-        sOut += "</AVERAGES>"
+            sOut += "</AVERAGES>"
             Return sOut
 
         Catch ex As Exception
@@ -214,7 +199,6 @@ Module modPersistedDataSystem
         End Try
 
     End Function
-
     Public Function RoundedMag(num As Double)
         'Rounds magnitude to nearest Dither Factor
         Return Math.Round(Math.Round(num * mclsQHA.GetDitherMag(num), 0) / mclsQHA.GetDitherMag(num), 2)
@@ -223,7 +207,6 @@ Module modPersistedDataSystem
         'Rounds magnitude to nearest Dither Factor
         Return Math.Round(Math.Round(num * mclsQHA.GetDitherMag(num), 0) / mclsQHA.GetDitherMag(num), 2)
     End Function
-   
     Public Function WithinBounds(n1 As Double, n2 As Double, percent As Double) As Boolean
         If n2 < (n1 + (n1 * percent)) And n2 > (n1 - (n1 * percent)) Then
             Return True
@@ -242,20 +225,16 @@ Module modPersistedDataSystem
         End If
     End Sub
     Public Function ResolveDiscrepanciesInNeuralNetwork(sContract As String) As String
-
         Dim sContractLocal As String = ""
         sContractLocal = GetMagnitudeContract()
         If Len(sContractLocal) = 0 Then Exit Function
-
         Dim dr As New Row
         Log("Starting neural network resolution process ...")
         Dim sResponse As String = ""
         Try
-
             Dim iUpdated As Long = 0
             Dim iMagnitudeDrift As Long = 0
             Dim iTimeStart As Double = Timer
-
             Dim sMags As String = ExtractXML(sContract, "<MAGNITUDES>")
             Dim vMags As String() = Split(sMags, ";")
             For x As Integer = 0 To UBound(vMags)
@@ -301,7 +280,6 @@ Module modPersistedDataSystem
         'loop through all projects on file, persist network averages
         'Get a collection of Projects
         Try
-
             Dim surrogateRow As New Row
             surrogateRow.Database = "Project"
             surrogateRow.Table = "Projects"
@@ -337,15 +315,12 @@ Module modPersistedDataSystem
             Return False
 
         End Try
-
     End Function
     Public Sub SyncDPOR2()
         Dim t As New Threading.Thread(AddressOf CompleteSync)
         t.Start()
-
     End Sub
     Public Function NeedsSynced(dr As Row) As Boolean
-
         If Now > dr.Synced Then Return True Else Return False
     End Function
     Public Sub CompleteSync()
@@ -368,19 +343,15 @@ Module modPersistedDataSystem
                 mlPercentComplete = 1
                 Log("Starting Phase I")
                 UpdateMagnitudesPhase1()
-
             Catch ex As Exception
                 Log("Err in completesync" + ex.Message)
-
             End Try
             Log("Complete Sync: Updating mags")
             Try
                 UpdateMagnitudes()
                 mlPercentComplete = 0
-
             Catch ex As Exception
                 Log("Err in UpdateMagnitudes in completesync" + ex.Message)
-
             End Try
             mbForcefullySyncAllRac = False
 
@@ -446,7 +417,6 @@ Module modPersistedDataSystem
         d.Table = "Magnitude"
         d.PrimaryKey = "LastTimeSynced"
         d.Expiration = DateAdd(DateInterval.Day, 30, Now)
-
         d.Synced = Now
         Store(d)
         Try
@@ -496,7 +466,6 @@ Module modPersistedDataSystem
             d.Magnitude = 500 + x
             Store(d)
         Next
-
     End Sub
     Public Function GetDataValue(sDB As String, sTable As String, sPK As String) As Row
         Dim dr As New Row
@@ -515,29 +484,25 @@ Module modPersistedDataSystem
         dAvg = Val(dr.AvgRAC)
         Return Val(dr.Magnitude)
     End Function
-    Private Function BlowAwayTable(dr As Row)
-        Dim sPath As String = GetPath(dr)
+    Private Sub EraseNeuralNetwork(sDatabase As String)
         Try
-            Kill(sPath)
+            Dim sNN As String = GetGridFolder() + "NeuralNetwork\"
+            Kill(sDatabase + "*.dat")
         Catch ex As Exception
-            Log("Neural UpdateMagnitudesPhase1:" + ex.Message)
+            Log("EraseNeuralNetwork:" + ex.Message)
         End Try
+    End Sub
 
-    End Function
     Public Function UpdateMagnitudesPhase1()
         Try
-            'Blow away the projects
             Dim surrogateRow1 As New Row
             Log("Deleting Projects")
-
             surrogateRow1.Database = "Project"
             surrogateRow1.Table = "Projects"
-            BlowAwayTable(surrogateRow1)
-
+            EraseNeuralNetwork("project")
             surrogateRow1.Database = "Whitelist"
             surrogateRow1.Table = "Whitelist"
-            BlowAwayTable(surrogateRow1)
-
+            EraseNeuralNetwork("whitelist")
             Dim sWhitelist As String
             sWhitelist = ExtractXML(msSyncData, "<WHITELIST>")
             Dim sCPIDData As String = ExtractXML(msSyncData, "<CPIDDATA>")
@@ -547,9 +512,7 @@ Module modPersistedDataSystem
             Dim TS As String = ExtractXML(sQuorumData, "<TIMESTAMP>")
             Dim sBlock As String = ExtractXML(sQuorumData, "<BLOCKNUMBER>")
             Dim sPrimaryCPID As String = ExtractXML(sQuorumData, "<PRIMARYCPID>")
-
             Call UpdateSuperblockAgeAndQuorumHash(sAge, sQuorumHash, TS, sBlock, sPrimaryCPID)
-           
             Try
                 mlPercentComplete = 2
                 Dim vWhitelist() As String = Split(sWhitelist, "<ROW>")
@@ -566,7 +529,7 @@ Module modPersistedDataSystem
                         dr = Read(dr)
                         dr.Expiration = DateAdd(DateInterval.Day, 14, Now)
                         dr.Synced = DateAdd(DateInterval.Day, -1, Now)
-                        Log("Storing Project " + Trim(x))
+                        ' Log("Storing Project " + Trim(x))
                         Store(dr)
                     End If
                 Next x
@@ -580,7 +543,7 @@ Module modPersistedDataSystem
             'Delete any CPIDs that are in the neural network that no longer have beacons:
             surrogateRow1.Database = "CPID"
             surrogateRow1.Table = "CPIDS"
-            BlowAwayTable(surrogateRow1)
+            EraseNeuralNetwork("cpid")
 
             For x As Integer = 0 To UBound(vCPIDs)
                 If Len(vCPIDs(x)) > 20 Then
@@ -610,7 +573,7 @@ Module modPersistedDataSystem
 
                         bValid = clsMD5.CompareCPID(sCPID, cpidv2, BlockHash)
                         dr.DataColumn5 = Trim(bValid)
-                        Log("UpdMagnitudePhaseI: Storing CPID " + Trim(x) + "; cpid " + dr.PrimaryKey)
+                        'Log("UpdMagnitudePhaseI: Storing CPID " + Trim(x) + "; cpid " + dr.PrimaryKey)
                         Store(dr)
 
                     End If
@@ -627,7 +590,6 @@ Module modPersistedDataSystem
     End Function
     Public Function GetWhitelistedCount(lstProjects As List(Of Row), lstWhitelist As List(Of Row))
         Dim WhitelistedProjects As Double = 0
-
         For Each prj As Row In lstProjects
             Dim bIsThisWhitelisted = IsInList(prj.PrimaryKey, lstWhitelist, False)
             If bIsThisWhitelisted Then
@@ -648,11 +610,9 @@ Module modPersistedDataSystem
         rPRJ.Database = "Project"
         rPRJ.Table = "Projects"
         Dim lstProjects1 As List(Of Row) = GetList(rPRJ, "*")
-
         WhitelistedProjects = GetWhitelistedCount(lstProjects1, lstWhitelist)
         CountOfAllProjects = lstProjects1.Count
         Return lstWhitelist
-
     End Function
     Private Function GetConsensusData()
         For x As Integer = 1 To 5
@@ -669,6 +629,16 @@ Module modPersistedDataSystem
         Next x
         Return False
     End Function
+    Private Function GuiDoEvents()
+        Try
+            If Not mfrmMining Is Nothing Then
+                mfrmMining.DoEvents()
+            End If
+        Catch
+
+        End Try
+
+    End Function
     Public Function UpdateMagnitudes() As Boolean
         Dim lstCPIDs As List(Of Row)
         Dim surrogateRow As New Row
@@ -683,25 +653,20 @@ Module modPersistedDataSystem
             surrogateRow.Database = "CPID"
             surrogateRow.Table = "CPIDS"
             lstCPIDs = GetList(surrogateRow, "*")
-            For Each cpid As Row In lstCPIDs
-                Log("Before sorting: " + Trim(cpid.PrimaryKey))
-            Next
             lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
-            For Each cpid As Row In lstCPIDs
-                Log("After sorting: " + Trim(cpid.PrimaryKey))
-            Next
-
+            mlQueue = 0
             For Each cpid As Row In lstCPIDs
                 Try
+                    If NeedsSynced(cpid) Or mbForcefullySyncAllRac Then
+                        Dim bResult As Boolean = GetRacViaNetsoft(cpid.PrimaryKey, 75)
+                        GuiDoEvents()
+                    End If
 
-                If NeedsSynced(cpid) Or mbForcefullySyncAllRac Then
-                    Dim bResult As Boolean = GetRacViaNetsoft(cpid.PrimaryKey)
-                End If
-                iRow += 1
-                Dim p As Double = (iRow / (lstCPIDs.Count + 0.01)) * 100
-                mlPercentComplete = p + 5
-                If mlPercentComplete > 90 Then mlPercentComplete = 90
-                    Log(Trim(mlPercentComplete) + "%: #" + Trim(iRow) + ", Gathering Magnitude for CPID " + cpid.PrimaryKey + ", RAC: " + Trim(cpid.RAC))
+                    iRow += 1
+                    Dim p As Double = (iRow / (lstCPIDs.Count + 0.01)) * 100
+                    mlPercentComplete = p + 5
+                    If mlPercentComplete > 90 Then mlPercentComplete = 90
+                    'Log(Trim(mlPercentComplete) + "%: #" + Trim(iRow) + ", Gathering Magnitude for CPID " + cpid.PrimaryKey + ", RAC: " + Trim(cpid.RAC))
                 Catch ex As Exception
                     Log("Error in UpdateMagnitudes: " + ex.Message + " while processing CPID " + Trim(cpid.PrimaryKey))
                 End Try
@@ -711,6 +676,13 @@ Module modPersistedDataSystem
             Log("UpdateMagnitudes:GatherRAC: " + ex.Message)
         End Try
 
+        'Thread.Join
+        For x As Integer = 1 To 500
+            If mlQueue = 0 Then Exit For
+            GuiDoEvents()
+            Threading.Thread.Sleep(1000)
+        Next
+
         Try
             UpdateNetworkAverages()
         Catch ex As Exception
@@ -719,7 +691,6 @@ Module modPersistedDataSystem
 
         lstWhitelist = GetWPC(WhitelistedProjects, ProjCount)
         lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
-
         Dim sMemoryName = IIf(mbTestNet, "magnitudes_testnet", "magnitudes")
         'Get CryptoCurrency Quotes:
         Dim dBTC As Double = GetCryptoPrice("BTC").Price * 100
@@ -776,14 +747,14 @@ Module modPersistedDataSystem
                             TotalMagnitude += IndMag
                         End If
                     End If
-              
+
                 Next
                 'Now we can store the magnitude - Formula for Network Magnitude per CPID:
                 cpid.Database = "CPID"
                 cpid.Table = "CPIDS"
                 cpid.Magnitude = Trim(Math.Round(TotalMagnitude, 2))
                 If TotalMagnitude < 1 And TotalMagnitude > 0.25 Then cpid.Magnitude = Trim(1)
-                Log("Storing CPID " + Trim(cpid.PrimaryKey) + " magnitude " + Trim(cpid.Magnitude))
+                'Log("Storing CPID " + Trim(cpid.PrimaryKey) + " magnitude " + Trim(cpid.Magnitude))
 
                 Store(cpid)
                 iRow2 += 1
@@ -819,17 +790,17 @@ Module modPersistedDataSystem
         Next
         Return False
     End Function
-    Public Function GetList(DataRow As Row, sWildcard As String) As List(Of Row)
+    Public Function xGetList(DataRow As Row, sWildcard As String) As List(Of Row)
         Dim xx As New List(Of Row)
         Dim sErr As String = ""
 
         For x As Integer = 1 To 10
             Try
-                xx = GetList_Safe(DataRow, sWildcard)
+                ' xx = GetList_Safe(DataRow, sWildcard)
                 Return xx
             Catch ex As Exception
                 sErr = ex.Message
-                System.Threading.Thread.Sleep(2000)
+                System.Threading.Thread.Sleep(100)
             End Try
         Next
 
@@ -839,46 +810,65 @@ Module modPersistedDataSystem
 
     End Function
 
-    Public Function GetList_Safe(DataRow As Row, sWildcard As String) As List(Of Row)
-        Dim sPath As String = GetPath(DataRow)
+    Public Function GetList(DataRow As Row, sWildcard As String) As List(Of Row)
+        '   Dim sPath As String = GetPath(DataRow)
         Dim sTemp As String = ""
         Dim d As String = "<COL>"
         Dim x As New List(Of Row)
-        If System.IO.File.Exists(sPath) Then
-            Using objReader As New System.IO.StreamReader(sPath)
-                While objReader.EndOfStream = False
-                    sTemp = objReader.ReadLine
-                    Dim r As Row = DataToRow(sTemp)
-                    r.Database = DataRow.Database
-                    r.Table = DataRow.Table
-                    If LCase(r.PrimaryKey) Like LCase(sWildcard) Then
-                        x.Add(r)
-                    End If
-                End While
-                objReader.Close()
-            End Using
-
-        End If
+        Dim oLock As New Object
+        Dim sNNFolder As String = GetGridFolder() + "NeuralNetwork\"
+        SyncLock oLock
+            Dim di As New DirectoryInfo(sNNFolder)
+            Dim fiArr As FileInfo() = di.GetFiles()
+            Dim fi As FileInfo
+            Dim sPrefix = GetEntryPrefix(DataRow)
+            For Each fi In fiArr
+                If Left(fi.Name, Len(sPrefix)) = sPrefix Then
+                    Using Stream As New System.IO.FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
+                        Dim objReader As New System.IO.StreamReader(Stream)
+                        While objReader.EndOfStream = False
+                            sTemp = objReader.ReadLine
+                            Dim r As Row = DataToRow(sTemp)
+                            r.Database = DataRow.Database
+                            r.Table = DataRow.Table
+                            If LCase(r.PrimaryKey) Like LCase(sWildcard) Then
+                                x.Add(r)
+                            End If
+                        End While
+                        objReader.Close()
+                    End Using
+                End If
+            Next fi
+        End SyncLock
         Return x
     End Function
-    Public Function GetRacViaNetsoft(sCPID As String) As Boolean
-        For x = 1 To 5
-            Dim bResult As Boolean = GetRACViaNetsoft_Resilient(sCPID)
-            If bResult Then Return bResult
-        Next
-        Return False
+    Public Function GetRacViaNetsoft(sCPID As String, lMsWait As Long) As Boolean
+        msThreadedCPID = sCPID
+        Dim th As New Threading.Thread(AddressOf ThreadGetRac)
+        mlQueue += 1
+        th.Start()
+        If mlQueue > 100 Then Threading.Thread.Sleep(lMsWait)
     End Function
+    Public Sub ThreadGetRac()
+        Dim sLocalCPID As String = msThreadedCPID
+        Dim bResult As Boolean = False
+        For x = 1 To 12
+            Try
+                bResult = GetRACViaNetsoft_Resilient(sLocalCPID)
+                If bResult Then Exit For
+            Catch ex As Exception
+                Log("Attempt # " + Trim(x) + ": Error in ThreadGetRAC : " + ex.Message + ", Trying again.")
+            End Try
+        Next x
+        mlQueue -= 1
+    End Sub
     Public Function GetXMLOnly(sCPID As String)
-
         If sCPID = "" Then Return False
-
         Try
-
             Dim sURL As String = "http://boinc.netsoft-online.com/get_user.php?cpid=" + sCPID
             Dim w As New MyWebClient2
             Dim sData As String = w.DownloadString(sURL)
             Return sData
-
         Catch
 
         End Try
@@ -901,25 +891,28 @@ Module modPersistedDataSystem
         Return False
     End Function
     Public Function GetRACViaNetsoft_Resilient(sCPID As String) As Boolean
-
         If sCPID = "" Then Return False
         msCurrentNeuralHash = ""
         Dim TotalRAC As Double = 0
+        Try
 
-        'If more than 51% of the network voted on this CPIDs projects today, use that value
-        If GetSupermajorityVoteStatus(sCPID, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD)) Then
-            'Use the Neural Network Quorum Data since we have over 51% witnesses for this CPID on file:
-            Dim lWitnesses As Long = 0
-            For Each nNeuralStructure In mdictNeuralNetworkQuorumData
-                If nNeuralStructure.Value.CPID = sCPID Then
+            'If more than 51% of the network voted on this CPIDs projects today, use that value
+            If GetSupermajorityVoteStatus(sCPID, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD)) Then
+                'Use the Neural Network Quorum Data since we have over 51% witnesses for this CPID on file:
+                Dim lWitnesses As Long = 0
+                For Each nNeuralStructure In mdictNeuralNetworkQuorumData
+                    If nNeuralStructure.Value.CPID = sCPID Then
                         If nNeuralStructure.Value.RAC > 10 Then PersistProjectRAC(sCPID, nNeuralStructure.Value.RAC, nNeuralStructure.Value.Project, False)
                         TotalRAC += nNeuralStructure.Value.RAC
                         If nNeuralStructure.Value.Witnesses > lWitnesses Then lWitnesses = nNeuralStructure.Value.Witnesses
-                End If
-            Next
-            UpdateCPIDStatus(sCPID, TotalRAC, lWitnesses)
-            Return True
-        End If
+                    End If
+                Next
+                UpdateCPIDStatus(sCPID, TotalRAC, lWitnesses)
+                Return True
+            End If
+        Catch ex As Exception
+            Log("Error while updating CPID - Resorting to gather online rac for " + sCPID)
+        End Try
 
         Try
             Dim sURL As String = "http://boinc.netsoft-online.com/get_user.php?cpid=" + sCPID
@@ -976,7 +969,6 @@ Module modPersistedDataSystem
         Dim dt As Date = DateAdd(DateInterval.Day, 1, Now)
         Dim dtTomorrow As Date = New Date(Year(dt), Month(dt), Day(dt), 6, 0, 0)
         Return dtTomorrow
-
     End Function
     Public Function PersistProjectRAC(sCPID As String, rac As Double, Project As String, bGenData As Boolean) As Boolean
         'Store the CPID_PROJECT RAC:
@@ -1034,7 +1026,6 @@ Module modPersistedDataSystem
         If UBound(vDate) >= 5 Then
             dtOut = New Date(Val(vDate(0)), Val(vDate(1)), Val(vDate(2)), Val(vDate(3)), Val(vDate(4)), Val(vDate(5)))
         End If
-
         Return dtOut
     End Function
     Public Function DataToRow(sData As String) As Row
@@ -1046,20 +1037,29 @@ Module modPersistedDataSystem
         r.RAC = "0"
         r.AvgRAC = "0"
 
-        If UBound(vData) >= 0 Then r.Added = DeserializeDate(vData(0))
-        If UBound(vData) >= 1 Then r.Expiration = DeserializeDate(vData(1))
-        If UBound(vData) >= 2 Then r.Synced = DeserializeDate(vData(2))
-        If UBound(vData) >= 3 Then r.PrimaryKey = vData(3)
-        If UBound(vData) >= 4 Then r.DataColumn1 = "" & vData(4)
-        If UBound(vData) >= 5 Then r.DataColumn2 = "" & vData(5)
-        If UBound(vData) >= 6 Then r.DataColumn3 = "" & vData(6)
-        If UBound(vData) >= 7 Then r.DataColumn4 = "" & vData(7)
-        If UBound(vData) >= 8 Then r.DataColumn5 = "" & vData(8)
-        If UBound(vData) >= 9 Then r.Magnitude = "" & vData(9)
-        If UBound(vData) >= 10 Then r.RAC = "" & vData(10)
-        If UBound(vData) >= 11 Then r.AvgRAC = "" & vData(11)
-        If UBound(vData) >= 12 Then r.Witnesses = "" & vData(12)
+        Try
+
+            If UBound(vData) >= 0 Then r.Added = DeserializeDate(vData(0))
+            If UBound(vData) >= 1 Then r.Expiration = DeserializeDate(vData(1))
+            If UBound(vData) >= 2 Then r.Synced = DeserializeDate(vData(2))
+            If UBound(vData) >= 3 Then r.PrimaryKey = vData(3)
+            If UBound(vData) >= 4 Then r.DataColumn1 = "" & vData(4)
+            If UBound(vData) >= 5 Then r.DataColumn2 = "" & vData(5)
+            If UBound(vData) >= 6 Then r.DataColumn3 = "" & vData(6)
+            If UBound(vData) >= 7 Then r.DataColumn4 = "" & vData(7)
+            If UBound(vData) >= 8 Then r.DataColumn5 = "" & vData(8)
+            If UBound(vData) >= 9 Then r.Magnitude = "" & vData(9)
+            If UBound(vData) >= 10 Then r.RAC = "" & vData(10)
+            If UBound(vData) >= 11 Then r.AvgRAC = "" & vData(11)
+            Try
+                If UBound(vData) >= 12 Then r.Witnesses = Val("" & vData(12))
+            Catch ex As Exception
+
+            End Try
         Return r
+        Catch ex As Exception
+            Dim sMsg As String = ex.Message
+        End Try
 
     End Function
     Public Function GetCPID(cpid As String) As CPID
@@ -1081,36 +1081,18 @@ Module modPersistedDataSystem
         End If
 
     End Function
+
     Public Function Read(dataRow As Row) As Row
-        Dim oRow As Row
-        Dim sErr As String
-        For x As Integer = 1 To 10
-            Try
-                oRow = Read_Surrogate(dataRow)
-                Return oRow
-            Catch ex As Exception
-                sErr = ex.Message
-                System.Threading.Thread.Sleep(1000)
-            End Try
-        Next
-        Log("Read: " + sErr)
-        Return dataRow
-
-    End Function
-
-    Public Function Read_Surrogate(dataRow As Row) As Row
-        Dim sPath As String = GetPath(dataRow)
+        Dim sPath As String = GetEntryName(dataRow, dataRow.PrimaryKey)
         Dim sTemp As String = ""
         Dim d As String = "<COL>"
         If System.IO.File.Exists(sPath) Then
-
             Using objReader As New System.IO.StreamReader(sPath)
                 While objReader.EndOfStream = False
                     sTemp = objReader.ReadLine
                     Dim r As Row = DataToRow(sTemp)
                     r.Database = dataRow.Database
                     r.Table = dataRow.Table
-
                     If LCase(dataRow.PrimaryKey) = LCase(r.PrimaryKey) Then
                         r.Found = True
                         Return r
@@ -1125,67 +1107,40 @@ Module modPersistedDataSystem
         Return dataRow
 
     End Function
-    Public Function Insert(dataRow As Row, bOnlyWriteIfNotFound As Boolean)
+    Private Function OverwriteOriginal(sSource As String, sTarget As String)
         Try
 
-        Dim sPath As String = GetPath(dataRow)
-        Dim sWritePath As String = sPath + ".backup"
+            Dim sTargetProxy As String = sTarget + ".backup_" + Guid.NewGuid().ToString() + ".txt"
+            If File.Exists(sTarget) Then
+                Rename(sTarget, sTargetProxy)
+            End If
+            If File.Exists(sSource) Then
+                FileCopy(sSource, sTarget)
+            End If
+            'Clean up
+            Try
+                Kill(sTargetProxy)
+            Catch ex As Exception
+            End Try
+        Catch ex As Exception
+            Dim sMsg As String = ex.Message
+        End Try
+    End Function
+    Public Function Insert(dataRow As Row, bOnlyWriteIfNotFound As Boolean)
+        Dim sPath As String = GetEntryName(dataRow, dataRow.PrimaryKey)
+        Dim oLock As New Object
+        Dim sNewFileName As String
         Dim sTemp As String = ""
         Dim d As String = "<COL>"
         Dim bFound As Boolean
         If dataRow.Added = New Date Then dataRow.Added = Now
-
-
-        Using objWriter As New System.IO.StreamWriter(sWritePath)
-
-            If System.IO.File.Exists(sPath) Then
-                Dim stream As New System.IO.FileStream(sPath, IO.FileMode.Open)
-                Using objReader As New System.IO.StreamReader(stream)
-                    While objReader.EndOfStream = False
-                        sTemp = objReader.ReadLine
-                        Dim r As Row = DataToRow(sTemp)
-                        If r.Expiration < Now Then
-                            'Purge
-                            Dim sExpired As String = ""
-                        Else
-                            If LCase(dataRow.PrimaryKey) <> LCase(r.PrimaryKey) Then
-                                Dim sNewData As String = SerializeRow(r)
-                                objWriter.WriteLine(sNewData)
-                            Else
-                                bFound = True
-                            End If
-                        End If
-                    End While
-                    objReader.Close()
-                End Using
-                Try
-                    Kill(sPath)
-                Catch ex As Exception
-                    Dim sMsg As String = ex.Message
-
-                End Try
-
-            End If
-            If (bOnlyWriteIfNotFound And Not bFound) Or Not bOnlyWriteIfNotFound Then
-                objWriter.WriteLine(SerializeRow(dataRow))
-            End If
-
+        SyncLock oLock
+            Dim oFileOutStream As New System.IO.FileStream(sPath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite)
+            Dim objWriter As New System.IO.StreamWriter(oFileOutStream)
+            objWriter.WriteLine(SerializeRow(dataRow))
             objWriter.Close()
-
-        End Using
-
-        FileCopy(sWritePath, sPath)
-        Kill(sWritePath)
+        End SyncLock
         Return True
-
-
-        Catch ex As Exception
-            Return False
-        End Try
-
-        Return False
-
-
     End Function
     Public Function SerStr(sData As String) As String
         sData = "" & sData
@@ -1193,7 +1148,6 @@ Module modPersistedDataSystem
     End Function
     Public Function SerializeRow(dataRow As Row) As String
         Dim d As String = "<COL>"
-
         Dim sSerialized As String = SerializeDate(dataRow.Added) + d + SerializeDate(dataRow.Expiration) _
             + d + SerializeDate(dataRow.Synced) + d + LCase(dataRow.PrimaryKey) + d _
             + SerStr(dataRow.DataColumn1) + d + SerStr(dataRow.DataColumn2) _
@@ -1215,24 +1169,32 @@ Module modPersistedDataSystem
         End If
         Return sPath + sFilename
     End Function
+    Public Function GetEntryName(dataRow As Row, sPrimaryKey As String) As String
+        Dim sFilename As String = LCase(dataRow.Database) + "_" + LCase(dataRow.Table) + "_" + sPrimaryKey + ".dat"
+        Dim sPath As String = GetGridFolder() + "NeuralNetwork\"
+        Return sPath + sFilename
+    End Function
+    Public Function GetEntryPrefix(dataRow As Row) As String
+        Dim sFilename As String = LCase(dataRow.Database) + "_" + LCase(dataRow.Table) + "_"
+        Return sFilename
+    End Function
+
     Public Function Store(dataRow As Row) As Boolean
         Dim sErr As String = ""
-
-        For x As Integer = 1 To 10
-            Try
-                Insert(dataRow, False)
-                Return True
-
-            Catch ex As Exception
-                sErr = ex.Message
-                System.Threading.Thread.Sleep(333)
-            End Try
-        Next x
-
-        Log("While storing data row " + dataRow.Table + "," + dataRow.Database + ", PK: " + dataRow.PrimaryKey + " : " + sErr)
-
-
-        Return False
+        Dim lFailCount As Long = 0
+        Try
+Retry:
+            Insert(dataRow, False)
+        Catch ex As Exception
+            Log("While storing data row " + dataRow.Table + "," + dataRow.Database + ", PK: " + dataRow.PrimaryKey + " : " + sErr)
+            lFailCount += 1
+            If lFailCount < 100 Then
+                GoTo Retry
+                Threading.Thread.Sleep(25)
+            End If
+            Return False
+        End Try
+        Return True
     End Function
     Public Function GetMd5String2(ByVal sData As String) As String
         Try
@@ -1420,14 +1382,10 @@ Module modPersistedDataSystem
         Catch ex As Exception
             Log("Unable to get quote data probably due to SSL being blocked: " + ex.Message)
         End Try
-
     End Function
-
-
     Public Function GetQuorumHash(data As String)
         Return mclsQHA.QuorumHashingAlgorithm(data)
     End Function
-
 End Module
 
 Public Class MyWebClient2
@@ -1438,5 +1396,4 @@ Public Class MyWebClient2
         w.Timeout = timeout
         Return (w)
     End Function
-
 End Class

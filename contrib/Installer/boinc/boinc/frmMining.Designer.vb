@@ -86,6 +86,7 @@ Partial Class frmMining
         Me.lblTimestamp = New System.Windows.Forms.Label()
         Me.lblBlock = New System.Windows.Forms.Label()
         Me.btnSync = New System.Windows.Forms.Button()
+        Me.lblQueue = New System.Windows.Forms.Label()
         CType(Me.Chart1, System.ComponentModel.ISupportInitialize).BeginInit()
         CType(Me.chtCurCont, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.MenuStrip1.SuspendLayout()
@@ -671,6 +672,17 @@ Partial Class frmMining
         Me.btnSync.Text = "Sync"
         Me.btnSync.UseVisualStyleBackColor = False
         '
+        'lblQueue
+        '
+        Me.lblQueue.AutoSize = True
+        Me.lblQueue.BackColor = System.Drawing.Color.Transparent
+        Me.lblQueue.Font = New System.Drawing.Font("Microsoft Sans Serif", 9.75!)
+        Me.lblQueue.Location = New System.Drawing.Point(474, 598)
+        Me.lblQueue.Name = "lblQueue"
+        Me.lblQueue.Size = New System.Drawing.Size(61, 16)
+        Me.lblQueue.TabIndex = 75
+        Me.lblQueue.Text = "Queue: 0"
+        '
         'frmMining
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
@@ -679,6 +691,7 @@ Partial Class frmMining
         Me.BackgroundImage = Global.BoincStake.My.Resources.Resources.GradientU
         Me.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch
         Me.ClientSize = New System.Drawing.Size(1071, 793)
+        Me.Controls.Add(Me.lblQueue)
         Me.Controls.Add(Me.btnSync)
         Me.Controls.Add(Me.lblBlock)
         Me.Controls.Add(Me.lblTimestamp)
@@ -709,7 +722,7 @@ Partial Class frmMining
         Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)
         Me.MainMenuStrip = Me.MenuStrip1
         Me.Name = "frmMining"
-        Me.Text = "Gridcoin Neural Network 1.42"
+        Me.Text = "Gridcoin Neural Network 2.0"
         CType(Me.Chart1, System.ComponentModel.ISupportInitialize).EndInit()
         CType(Me.chtCurCont, System.ComponentModel.ISupportInitialize).EndInit()
         Me.MenuStrip1.ResumeLayout(False)
@@ -771,4 +784,5 @@ Partial Class frmMining
     Friend WithEvents lblTimestamp As System.Windows.Forms.Label
     Friend WithEvents lblBlock As System.Windows.Forms.Label
     Friend WithEvents btnSync As System.Windows.Forms.Button
+    Friend WithEvents lblQueue As System.Windows.Forms.Label
 End Class

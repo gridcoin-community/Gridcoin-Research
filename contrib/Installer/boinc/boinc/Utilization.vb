@@ -508,6 +508,10 @@ Public Class Utilization
         StoreTestMagnitude()
 
     End Function
+    Public Function TestPDS()
+        TestPDS1()
+
+    End Function
     Public Function SyncCPIDsWithDPORNodes(sData As String) As Double
         'Write the Gridcoin CPIDs to the Persisted Data System
         Try
