@@ -5,12 +5,8 @@ Imports ICSharpCode.SharpZipLib.Core
 
 Public Class GridcoinUpgrader
     Public oGRCData As GRCSec.GridcoinData
-
     Public oGRCSec As GRCSec.GRCSec
-
     Public iErrorCount As Long = 0
-
-
     Private bDebug As Boolean = False
     Private prodURL As String = "http://download.gridcoin.us/download/downloadstake/"
     Private testURL As String = "http://download.gridcoin.us/download/downloadstaketestnet/"
@@ -719,9 +715,9 @@ Public Class GridcoinUpgrader
                 If bCleanIteration Then MsgBox("Error -11: " + ex.Message + "; Retrying " + Trim(5 - iIterationErrorCount) + " more times before failing.")
                 bCleanIteration = False
             End Try
-            If iErrorCount = 0 Then Exit For
+            If bCleanIteration Then Exit For
         Next iTry
-        If iErrorCount = 0 Then
+        If bCleanIteration Then
             UpdateUI(50, "Success.", "Success", False, False)
             Threading.Thread.Sleep(1000)
         Else

@@ -442,8 +442,8 @@ Public Class frmMining
                         TotalNetworkRAC += PrjRAC
                     End If
                     dgvDrillProjects.Rows(iRow - 1).Cells(5).Value = Val(IndMag)
-                    dgvDrillProjects.Rows(iRow - 1).Cells(6).Value = Val(RoundedMag(TotalRAC))
-                    dgvDrillProjects.Rows(iRow - 1).Cells(7).Value = Val(RoundedMag(CumulativeMag))
+                    dgvDrillProjects.Rows(iRow - 1).Cells(6).Value = Val(Math.Round(TotalRAC, 2))
+                    dgvDrillProjects.Rows(iRow - 1).Cells(7).Value = Val(Math.Round(CumulativeMag, 2))
 
                 End If
 

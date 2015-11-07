@@ -31,6 +31,7 @@ Module modPersistedDataSystem
     Private Const MINIMUM_WITNESSES_REQUIRED_PROD As Long = 10
     Public mdLastNeuralNetworkSync As DateTime
     Private lUseCount As Long = 0
+    Private MAX_NEURAL_NETWORK_THREADS = 25
 
     Public Structure NeuralStructure
         Public PK As String
@@ -324,13 +325,11 @@ Module modPersistedDataSystem
         If Now > dr.Synced Then Return True Else Return False
     End Function
     Public Sub CompleteSync()
-        If bMagsDoneLoading = False Then
-            If Math.Abs(DateDiff(DateInterval.Second, Now, mdLastSync)) > 60 * 10 Then
-                bMagsDoneLoading = True
-            Else
-                Exit Sub
-            End If
-        End If
+        If Math.Abs(DateDiff(DateInterval.Second, Now, mdLastSync)) > 60 * 10 Then bMagsDoneLoading = True
+        If bMagsDoneLoading = False Then Exit Sub
+
+        'Ensure neural network directory exists
+
 
         mbForcefullySyncAllRac = True
         Log("Starting complete Neural Network Sync.")
@@ -487,7 +486,14 @@ Module modPersistedDataSystem
     Private Sub EraseNeuralNetwork(sDatabase As String)
         Try
             Dim sNN As String = GetGridFolder() + "NeuralNetwork\"
-            Kill(sDatabase + "*.dat")
+            If Directory.Exists(sNN) = False Then
+                Try
+                    MkDir(sNN)
+                Catch ex As Exception
+                    Log("Unable to create neural network directory.")
+                End Try
+            End If
+            Kill(sNN + sDatabase + "*.dat")
         Catch ex As Exception
             Log("EraseNeuralNetwork:" + ex.Message)
         End Try
@@ -529,7 +535,6 @@ Module modPersistedDataSystem
                         dr = Read(dr)
                         dr.Expiration = DateAdd(DateInterval.Day, 14, Now)
                         dr.Synced = DateAdd(DateInterval.Day, -1, Now)
-                        ' Log("Storing Project " + Trim(x))
                         Store(dr)
                     End If
                 Next x
@@ -570,12 +575,9 @@ Module modPersistedDataSystem
                         dr.DataColumn4 = Address
                         Dim bValid As Boolean = False
                         Dim clsMD5 As New MD5
-
                         bValid = clsMD5.CompareCPID(sCPID, cpidv2, BlockHash)
                         dr.DataColumn5 = Trim(bValid)
-                        'Log("UpdMagnitudePhaseI: Storing CPID " + Trim(x) + "; cpid " + dr.PrimaryKey)
                         Store(dr)
-
                     End If
                 End If
             Next
@@ -639,6 +641,36 @@ Module modPersistedDataSystem
         End Try
 
     End Function
+    Public Function CPIDCountWithNoWitnesses()
+        'Loop through the researchers
+        Dim r As Row
+        Dim lstCPIDs As List(Of Row)
+        r.Database = "CPID"
+        r.Table = "CPIDS"
+        lstCPIDs = GetList(r, "*")
+        Dim lNoWitnesses As Long = 0
+
+        For Each cpid As Row In lstCPIDs
+                If cpid.Witnesses = 0 Then
+                    lNoWitnesses += 1
+            End If
+        Next
+        Return lNoWitnesses
+
+    End Function
+    Public Sub ResetCPIDsForManualSync()
+        Dim r As Row
+        Dim lstCPIDs As List(Of Row)
+        r.Database = "CPID"
+        r.Table = "CPIDS"
+        lstCPIDs = GetList(r, "*")
+        Dim lNoWitnesses As Long = 0
+        For Each cpid As Row In lstCPIDs
+            cpid.Witnesses = 0
+            Store(cpid)
+        Next
+    End Sub
+
     Public Function UpdateMagnitudes() As Boolean
         Dim lstCPIDs As List(Of Row)
         Dim surrogateRow As New Row
@@ -647,41 +679,52 @@ Module modPersistedDataSystem
         Dim lstWhitelist As List(Of Row)
         Dim bConsensus As Boolean = GetConsensusData()
         Log("Updating Magnitudes " + IIf(bConsensus, "With consensus data", "Without consensus data"))
-        Dim iRow As Long = 0
-        Try
-            'Loop through the researchers
-            surrogateRow.Database = "CPID"
-            surrogateRow.Table = "CPIDS"
-            lstCPIDs = GetList(surrogateRow, "*")
-            lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
-            mlQueue = 0
-            For Each cpid As Row In lstCPIDs
-                Try
-                    If NeedsSynced(cpid) Or mbForcefullySyncAllRac Then
-                        Dim bResult As Boolean = GetRacViaNetsoft(cpid.PrimaryKey, 75)
-                        GuiDoEvents()
-                    End If
+        Dim lStartingWitnesses As Long = CPIDCountWithNoWitnesses()
+        Log(Trim(lStartingWitnesses) + " CPIDs starting out with clean slate.")
 
-                    iRow += 1
-                    Dim p As Double = (iRow / (lstCPIDs.Count + 0.01)) * 100
-                    mlPercentComplete = p + 5
-                    If mlPercentComplete > 90 Then mlPercentComplete = 90
-                    'Log(Trim(mlPercentComplete) + "%: #" + Trim(iRow) + ", Gathering Magnitude for CPID " + cpid.PrimaryKey + ", RAC: " + Trim(cpid.RAC))
-                Catch ex As Exception
-                    Log("Error in UpdateMagnitudes: " + ex.Message + " while processing CPID " + Trim(cpid.PrimaryKey))
-                End Try
+        For z As Integer = 1 To 5
+            Dim iRow As Long = 0
 
+            Try
+                'Loop through the researchers
+                surrogateRow.Database = "CPID"
+                surrogateRow.Table = "CPIDS"
+                lstCPIDs = GetList(surrogateRow, "*")
+                lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
+                mlQueue = 0
+                For Each cpid As Row In lstCPIDs
+                    Try
+
+                        If cpid.Witnesses = 0 Then
+                            Dim bResult As Boolean = GetRacViaNetsoft(cpid.PrimaryKey, 75)
+                            GuiDoEvents()
+                        End If
+
+                        iRow += 1
+                        Dim p As Double = (iRow / (lstCPIDs.Count + 0.01)) * 100
+                        mlPercentComplete = p + 5
+                        If mlPercentComplete > 90 Then mlPercentComplete = 90
+                        'Log(Trim(mlPercentComplete) + "%: #" + Trim(iRow) + ", Gathering Magnitude for CPID " + cpid.PrimaryKey + ", RAC: " + Trim(cpid.RAC))
+                    Catch ex As Exception
+                        Log("Error in UpdateMagnitudes: " + ex.Message + " while processing CPID " + Trim(cpid.PrimaryKey))
+                    End Try
+
+                Next
+            Catch ex As Exception
+                Log("UpdateMagnitudes:GatherRAC: " + ex.Message)
+            End Try
+
+            'Thread.Join
+            For x As Integer = 1 To 120
+                If mlQueue = 0 Then Exit For
+                GuiDoEvents()
+                Threading.Thread.Sleep(1000)
+                mlPercentComplete -= 1
+                If mlPercentComplete < 10 Then mlPercentComplete = 10
             Next
-        Catch ex As Exception
-            Log("UpdateMagnitudes:GatherRAC: " + ex.Message)
-        End Try
-
-        'Thread.Join
-        For x As Integer = 1 To 500
-            If mlQueue = 0 Then Exit For
-            GuiDoEvents()
-            Threading.Thread.Sleep(1000)
-        Next
+            Dim lNoWitnesses As Long = CPIDCountWithNoWitnesses()
+            If mlQueue = 0 And lNoWitnesses = 0 Then Exit For Else Log(Trim(lNoWitnesses) + " CPIDs remaining with no witnesses.  Cleaning up problem.")
+        Next z
 
         Try
             UpdateNetworkAverages()
@@ -843,18 +886,59 @@ Module modPersistedDataSystem
         Return x
     End Function
     Public Function GetRacViaNetsoft(sCPID As String, lMsWait As Long) As Boolean
-        msThreadedCPID = sCPID
-        Dim th As New Threading.Thread(AddressOf ThreadGetRac)
-        mlQueue += 1
-        th.Start()
-        If mlQueue > 100 Then Threading.Thread.Sleep(lMsWait)
+        Dim lCatastrophicFailures As Long = 0
+
+TryAgain:
+        'msThreadedCPID = sCPID
+        Try
+
+            Dim oNeuralType As New NeuralStructure
+            oNeuralType.PK = sCPID
+            'Dim th As New Threading.Thread(AddressOf ThreadGetRac, oNeuralType)
+            'th.Start()
+
+            Threading.ThreadPool.QueueUserWorkItem(AddressOf ThreadGetRac, oNeuralType)
+
+
+
+ThreadStarted:
+            mlQueue += 1
+            If lCatastrophicFailures > 0 Then
+                Log("Successfully recovered from catastrophic failures.")
+            End If
+        Catch ex As Exception
+            Log("Panic: Threading error: " + ex.Message) 'Handle out of memory errors on small nodes.
+
+            If lCatastrophicFailures > 10 Then
+                'This node may not have enough RAM to sync the NN... Fail
+                Log("Node does not have enough RAM to sync with Neural Network.  Failing.")
+                Return False
+            End If
+            Threading.Thread.Sleep(1000)
+            If mlQueue > 5 Then
+                Dim iPointInTime = mlQueue
+                For x As Integer = 1 To 100
+                    Threading.Thread.Sleep(1000)
+                    If mlQueue < iPointInTime - 2 Then Exit For 'Allow two to fall off the stack
+                Next x
+                lCatastrophicFailures += 1
+                Log("Trying to sync this CPID again (" + sCPID + ").  Attempt # " + Trim(lCatastrophicFailures) + ".")
+                GoTo TryAgain
+            End If
+        End Try
+        If mlQueue > MAX_NEURAL_NETWORK_THREADS Then
+            For x As Integer = 1 To 100
+                Threading.Thread.Sleep(1000)
+                If mlQueue < MAX_NEURAL_NETWORK_THREADS Then Exit For
+            Next x
+        End If
     End Function
-    Public Sub ThreadGetRac()
-        Dim sLocalCPID As String = msThreadedCPID
+    Public Sub ThreadGetRac(oNeuralType As NeuralStructure)
+        'Dim sLocalCPID As String = msThreadedCPID
         Dim bResult As Boolean = False
         For x = 1 To 12
             Try
-                bResult = GetRACViaNetsoft_Resilient(sLocalCPID)
+                bResult = GetRACViaNetsoft_Resilient(oNeuralType.PK)
                 If bResult Then Exit For
             Catch ex As Exception
                 Log("Attempt # " + Trim(x) + ": Error in ThreadGetRAC : " + ex.Message + ", Trying again.")
@@ -892,8 +976,12 @@ Module modPersistedDataSystem
     End Function
     Public Function GetRACViaNetsoft_Resilient(sCPID As String) As Boolean
         If sCPID = "" Then Return False
+     
+Retry:
         msCurrentNeuralHash = ""
         Dim TotalRAC As Double = 0
+        Dim lFailCount As Long = 0
+
         Try
 
             'If more than 51% of the network voted on this CPIDs projects today, use that value
@@ -911,7 +999,13 @@ Module modPersistedDataSystem
                 Return True
             End If
         Catch ex As Exception
-            Log("Error while updating CPID - Resorting to gather online rac for " + sCPID)
+            lFailCount += 1
+            If lFailCount < 12 Then
+                'Log("Retrying Attempt #" + Trim(lFailCount) + " update RAC with witnesses.")
+                Threading.Thread.Sleep(400)
+                GoTo Retry
+            End If
+            Log("Error while updating CPID  (Attempts: 12) - Resorting to gather online rac for " + sCPID)
         End Try
 
         Try
@@ -951,19 +1045,22 @@ Module modPersistedDataSystem
 
     End Function
     Private Function UpdateCPIDStatus(sCPID As String, TotalRAC As Double, lWitnesses As Long) As Boolean
-        Dim d As Row = New Row
-        d.Expiration = Tomorrow()
-        d.Added = Now
-        d.Database = "CPID"
-        d.Table = "CPIDS"
-        d.PrimaryKey = sCPID
-        d = Read(d)
-        d.Expiration = DateAdd(DateInterval.Day, 14, Now)
-        d.Synced = Tomorrow()
-        d.RAC = TotalRAC
-        d.Witnesses = lWitnesses
-        Store(d)
-        Return True
+        Dim oLock As New Object
+        SyncLock oLock
+            Dim d As Row = New Row
+            d.Expiration = Tomorrow()
+            d.Added = Now
+            d.Database = "CPID"
+            d.Table = "CPIDS"
+            d.PrimaryKey = sCPID
+            d = Read(d)
+            d.Expiration = DateAdd(DateInterval.Day, 14, Now)
+            d.Synced = Tomorrow()
+            d.RAC = TotalRAC
+            d.Witnesses = lWitnesses
+            Store(d)
+            Return True
+        End SyncLock
     End Function
     Public Function Tomorrow() As Date
         Dim dt As Date = DateAdd(DateInterval.Day, 1, Now)
@@ -1136,9 +1233,10 @@ Module modPersistedDataSystem
         If dataRow.Added = New Date Then dataRow.Added = Now
         SyncLock oLock
             Dim oFileOutStream As New System.IO.FileStream(sPath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite)
-            Dim objWriter As New System.IO.StreamWriter(oFileOutStream)
-            objWriter.WriteLine(SerializeRow(dataRow))
-            objWriter.Close()
+            Using objWriter As New System.IO.StreamWriter(oFileOutStream)
+                objWriter.WriteLine(SerializeRow(dataRow))
+                objWriter.Close()
+            End Using
         End SyncLock
         Return True
     End Function
@@ -1182,15 +1280,19 @@ Module modPersistedDataSystem
     Public Function Store(dataRow As Row) As Boolean
         Dim sErr As String = ""
         Dim lFailCount As Long = 0
-        Try
 Retry:
-            Insert(dataRow, False)
+        Dim oLock As New Object
+        Try
+            SyncLock oLock
+                Insert(dataRow, False)
+            End SyncLock
+
         Catch ex As Exception
-            Log("While storing data row " + dataRow.Table + "," + dataRow.Database + ", PK: " + dataRow.PrimaryKey + " : " + sErr)
+            Log("Attempt #" + Trim(lFailCount) + " While storing data row " + dataRow.Table + "," + dataRow.Database + ", PK: " + dataRow.PrimaryKey + " : " + ex.Message + ", Retrying.")
             lFailCount += 1
             If lFailCount < 100 Then
                 GoTo Retry
-                Threading.Thread.Sleep(25)
+                Threading.Thread.Sleep(100)
             End If
             Return False
         End Try
