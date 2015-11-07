@@ -7732,12 +7732,17 @@ std::string NN(std::string value)
 	return value.empty() ? "" : value;
 }
 
+double PendingSuperblockHeight()
+{
+	double height = cdbl(ReadCache("neuralsecurity","pending"),0);
+	return height;
+}
+
 std::string GetNeuralNetworkSuperBlock()
 {
-	//Only try to stake a superblock if the contract expired And the superblock is the highest popularity block
-	
+	//Only try to stake a superblock if the contract expired And the superblock is the highest popularity block And we do not have a pending superblock
 	int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-	if (NeedASuperblock() && NeuralNodeParticipates())
+	if (NeedASuperblock() && NeuralNodeParticipates() && PendingSuperblockHeight()==0)
 	{
 		std::string myNeuralHash = "";
 		#if defined(WIN32) && defined(QT_GUI)

@@ -31,7 +31,7 @@ Module modPersistedDataSystem
     Private Const MINIMUM_WITNESSES_REQUIRED_PROD As Long = 10
     Public mdLastNeuralNetworkSync As DateTime
     Private lUseCount As Long = 0
-    Private MAX_NEURAL_NETWORK_THREADS = 25
+    Private MAX_NEURAL_NETWORK_THREADS = 100
 
     Public Structure NeuralStructure
         Public PK As String
@@ -839,7 +839,6 @@ Module modPersistedDataSystem
 
         For x As Integer = 1 To 10
             Try
-                ' xx = GetList_Safe(DataRow, sWildcard)
                 Return xx
             Catch ex As Exception
                 sErr = ex.Message
@@ -887,19 +886,12 @@ Module modPersistedDataSystem
     End Function
     Public Function GetRacViaNetsoft(sCPID As String, lMsWait As Long) As Boolean
         Dim lCatastrophicFailures As Long = 0
-
 TryAgain:
-        'msThreadedCPID = sCPID
         Try
 
             Dim oNeuralType As New NeuralStructure
             oNeuralType.PK = sCPID
-            'Dim th As New Threading.Thread(AddressOf ThreadGetRac, oNeuralType)
-            'th.Start()
-
             Threading.ThreadPool.QueueUserWorkItem(AddressOf ThreadGetRac, oNeuralType)
-
-
 
 ThreadStarted:
             mlQueue += 1
@@ -914,11 +906,11 @@ ThreadStarted:
                 Log("Node does not have enough RAM to sync with Neural Network.  Failing.")
                 Return False
             End If
-            Threading.Thread.Sleep(1000)
-            If mlQueue > 5 Then
+            Threading.Thread.Sleep(333)
+            If mlQueue > (MAX_NEURAL_NETWORK_THREADS * 0.9) Then
                 Dim iPointInTime = mlQueue
                 For x As Integer = 1 To 100
-                    Threading.Thread.Sleep(1000)
+                    Threading.Thread.Sleep(333)
                     If mlQueue < iPointInTime - 2 Then Exit For 'Allow two to fall off the stack
                 Next x
                 lCatastrophicFailures += 1
@@ -928,7 +920,7 @@ ThreadStarted:
         End Try
         If mlQueue > MAX_NEURAL_NETWORK_THREADS Then
             For x As Integer = 1 To 100
-                Threading.Thread.Sleep(1000)
+                Threading.Thread.Sleep(333)
                 If mlQueue < MAX_NEURAL_NETWORK_THREADS Then Exit For
             Next x
         End If
@@ -1001,7 +993,6 @@ Retry:
         Catch ex As Exception
             lFailCount += 1
             If lFailCount < 12 Then
-                'Log("Retrying Attempt #" + Trim(lFailCount) + " update RAC with witnesses.")
                 Threading.Thread.Sleep(400)
                 GoTo Retry
             End If
@@ -1435,7 +1426,29 @@ Retry:
                 objWriter.WriteLine(sReport)
                 objWriter.Close()
             End Using
-
+            'Mass Export for RTM 11-7-2015
+            Dim sMassWritePath As String = GetGridFolder() + "reports\MassExport.dat"
+            Dim sTemp As String = ""
+            Dim oLock As New Object
+            Using objWriter As New System.IO.StreamWriter(sMassWritePath)
+                Dim sNNFolder As String = GetGridFolder() + "NeuralNetwork\"
+                SyncLock oLock
+                    Dim di As New DirectoryInfo(sNNFolder)
+                    Dim fiArr As FileInfo() = di.GetFiles()
+                    Dim fi As FileInfo
+                    For Each fi In fiArr
+                            Using Stream As New System.IO.FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
+                                Dim objReader As New System.IO.StreamReader(Stream)
+                            While objReader.EndOfStream = False
+                                sTemp = objReader.ReadLine
+                                Dim sExport As String = fi.Name + "<COL>" + sTemp
+                                objWriter.WriteLine(sExport)
+                            End While
+                                objReader.Close()
+                            End Using
+                    Next fi
+                End SyncLock
+            End Using
         Catch ex As Exception
             Log("Error while exportingToCSV2: " + ex.Message)
         End Try

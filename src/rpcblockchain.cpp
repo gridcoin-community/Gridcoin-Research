@@ -1672,6 +1672,8 @@ Value execute(const Array& params, bool fHelp)
 		std::string timestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
 		entry.push_back(Pair("Superblock Timestamp",timestamp));
 		entry.push_back(Pair("Superblock Block Number",mvApplicationCache["superblock;block_number"]));
+		double height = cdbl(ReadCache("neuralsecurity","pending"),0);
+		entry.push_back(Pair("Pending Superblock Height",height));
 		results.push_back(entry);
 	}
 	else if (sItem == "unusual")
@@ -2684,10 +2686,11 @@ Value execute(const Array& params, bool fHelp)
 		entry.push_back(Pair("beacon_participant_count",out_participant_count));
 		entry.push_back(Pair("average_magnitude",out_avg));
 		entry.push_back(Pair("superblock_valid",VerifySuperblock(superblock,pindexBest->nHeight)));
+		int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+		entry.push_back(Pair("Superblock Age",superblock_age));
 		bool bDireNeed = NeedASuperblock();
 		entry.push_back(Pair("Dire Need of Superblock",bDireNeed));
 		results.push_back(entry);
-	
 	}
 	else if (sItem == "currentcontractaverage")
 	{
@@ -3788,8 +3791,8 @@ Array GetJSONNeuralNetworkReport()
 	  {
 				double popularity = mvNeuralNetworkHash[(*ii).first];
 				neural_hash = (*ii).first;
-				//If the hash != empty_hash:
-				if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity >= .01)
+				//If the hash != empty_hash: >= .01
+				if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity > 0)
 				{
 					row = neural_hash + "," + RoundToString(popularity,0);
 					report += row + "\r\n";
