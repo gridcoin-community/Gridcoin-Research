@@ -617,14 +617,14 @@ Module modPersistedDataSystem
         Return lstWhitelist
     End Function
     Private Function GetConsensusData()
-        For x As Integer = 1 To 5
+        For x As Integer = 1 To 12
             Try
                 ReconnectToNeuralNetwork()
                 mdictNeuralNetworkQuorumData = mGRCData.GetNeuralNetworkQuorumData2("quorumdata", mbTestNet, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD))
                 If mdictNeuralNetworkQuorumData.Count > IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD) Then
                     Return True
                 End If
-
+                Threading.Thread.Sleep(500)
             Catch ex As Exception
                 Threading.Thread.Sleep(1000)
             End Try

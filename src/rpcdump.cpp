@@ -120,7 +120,10 @@ Value importprivkey(const Array& params, bool fHelp)
 	 // Whether to perform rescan after import
     bool fRescan = true;
     if (params.size() > 2)
-        fRescan = params[2].get_bool();
+	{
+		string strRescan = params[2].get_str();
+		fRescan = (strRescan=="true") ? true : false;
+	}
 
 
     CBitcoinSecret vchSecret;
