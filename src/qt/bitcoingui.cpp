@@ -1535,6 +1535,9 @@ void BitcoinGUI::NewUserWizard()
 		ForceInAddNode("gridcoin.asia");
 		ForceInAddNode("sepulcher.wha.la");
 		ForceInAddNode("grcmagnitude.com");
+		ForceInAddNode("amsterdam.grcnode.co.uk");
+		ForceInAddNode("london.grcnode.co.uk");
+		ForceInAddNode("frankfurt.grcnode.co.uk");
 
 		if (sBoincNarr != "")
 		{

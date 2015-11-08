@@ -1889,8 +1889,11 @@ void MapPort()
 // The first name is used as information source for addrman.
 // The second name should resolve to a list of seed addresses.
 static const char *strDNSSeed[][2] = {
-    {"dnsseed.gridcoin.us", "supernode.gridcoin.us"},
-    {"gridcoin.asia", ""},
+    {"node.gridcoin.us", "node.gridcoin.us"},
+    {"gridcoin.asia", "gridcoin.asis"},
+	{"amsterdam.grcnode.co.uk", "amsterdam.grcnode.co.uk"},
+	{"london.grcnode.co.uk", "london.grcnode.co.uk"},
+	{"frankfurt.grcnode.co.uk", "frankfurt.grcnode.co.uk"},
     {"", ""},
 };
 
@@ -2019,10 +2022,12 @@ void BusyWaitForTally()
 void DoTallyResearchAverages(void* parg)
 {
     vnThreadsRunning[THREAD_TALLY]++;
+	printf("\r\nStarting dedicated Tally thread...\r\n");
+
     while (!fShutdown)
     {
-        vnThreadsRunning[THREAD_TALLY]--;
-        MilliSleep(20);
+        //vnThreadsRunning[THREAD_TALLY]--;
+        MilliSleep(100);
 		if (bDoTally)
 		{
 			bTallyFinished = false;
@@ -2043,7 +2048,7 @@ void DoTallyResearchAverages(void* parg)
 			printf(" [DoTallyRA_END] \r\n");
 			bTallyFinished = true;
 		}
-        vnThreadsRunning[THREAD_TALLY]++;
+        //vnThreadsRunning[THREAD_TALLY]++;
     }
     vnThreadsRunning[THREAD_TALLY]--;
 }

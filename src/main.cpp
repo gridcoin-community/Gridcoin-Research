@@ -3423,7 +3423,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 	}
 
 	// 9-19-2015; Slow down Retallying when in RA mode so we minimize disruption of the network
-	if (pindex->nHeight % 60 == 0 && IsResearchAgeEnabled(pindex->nHeight) && BlockNeedsChecked(pindex->nTime))
+	if ( (pindex->nHeight % 60 == 0) && IsResearchAgeEnabled(pindex->nHeight) && BlockNeedsChecked(pindex->nTime))
 	{
 		BusyWaitForTally();
 	}
@@ -3690,7 +3690,10 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
     }
 
 	// Gridcoin: Now that the chain is back in order, Fix the researchers who were disrupted:
-	BusyWaitForTally();
+	if (vDisconnect.size() > 25)
+	{
+		BusyWaitForTally();
+	}
 					    
     printf("REORGANIZE: done\n");
     return true;
@@ -5914,6 +5917,7 @@ bool TallyResearchAverages(bool Forcefully)
 							if (!pblockindex->IsInMainChain()) continue;
 							NetworkPayments += pblockindex->nResearchSubsidy;
 							AddResearchMagnitude(pblockindex);
+							MilliSleep(1);
 							iRow++;
 							if (IsSuperBlock(pblockindex) && !superblockloaded)
 							{

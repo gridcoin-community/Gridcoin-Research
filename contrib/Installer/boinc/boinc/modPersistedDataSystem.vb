@@ -40,6 +40,7 @@ Module modPersistedDataSystem
         Public Updated As DateTime
     End Structure
     Public mdictNeuralNetworkQuorumData As Dictionary(Of String, GRCSec.GridcoinData.NeuralStructure)
+    Public mdictNeuralNetworkAdditionalQuorumData As Dictionary(Of String, GRCSec.GridcoinData.NeuralStructure)
     Public Structure Row
         Public Database As String
         Public Table As String
@@ -621,6 +622,8 @@ Module modPersistedDataSystem
             Try
                 ReconnectToNeuralNetwork()
                 mdictNeuralNetworkQuorumData = mGRCData.GetNeuralNetworkQuorumData2("quorumdata", mbTestNet, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD))
+                mdictNeuralNetworkAdditionalQuorumData = mGRCData.GetNeuralNetworkQuorumData3("quorumconsensusdata", mbTestNet, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD))
+
                 If mdictNeuralNetworkQuorumData.Count > IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD) Then
                     Return True
                 End If
@@ -727,7 +730,11 @@ Module modPersistedDataSystem
         Next z
 
         Try
+            Log("UpdNetworkAvgs Start Time ")
+
             UpdateNetworkAverages()
+            Log("UpdNetworkAvgs End Time")
+
         Catch ex As Exception
             Log("UpdateMagnitudes:UpdateNetworkAverages: " + ex.Message)
         End Try
@@ -759,52 +766,51 @@ Module modPersistedDataSystem
         Log("Storing Gridcoin Price Quote")
         Store(q)
 
-
-        'Update all researchers magnitudes:
+        'Update all researchers magnitudes (Final Calculation Phase):
         Try
             Dim iRow2 As Long = 0
-
             lstCPIDs = GetList(surrogateRow, "*")
             For Each cpid As Row In lstCPIDs
-                Dim surrogatePrj As New Row
-                surrogatePrj.Database = "Project"
-                surrogatePrj.Table = "Projects"
-                Dim lstProjects As List(Of Row) = GetList(surrogatePrj, "*")
-                Dim TotalRAC As Double = 0
-                Dim TotalNetworkRAC As Double = 0
-                Dim TotalMagnitude As Double = 0
-                'Dim TotalRAC As Double = 0
-                For Each prj As Row In lstProjects
-                    Dim surrogatePrjCPID As New Row
-                    If IsInList(prj.PrimaryKey, lstWhitelist, False) Then
-                        surrogatePrjCPID.Database = "Project"
-                        surrogatePrjCPID.Table = prj.PrimaryKey + "CPID"
-                        surrogatePrjCPID.PrimaryKey = prj.PrimaryKey + "_" + cpid.PrimaryKey
-                        Dim rowRAC = Read(surrogatePrjCPID)
-                        Dim CPIDRAC As Double = Val(Trim("0" + rowRAC.RAC))
-                        Dim PrjTotalRAC As Double = Val(Trim("0" + prj.RAC))
-                        If CPIDRAC > 0 Then
-                            TotalRAC += CPIDRAC
-                            TotalNetworkRAC += PrjTotalRAC
-                            Dim IndMag As Double = Math.Round(((CPIDRAC / (PrjTotalRAC + 0.01)) / (WhitelistedProjects + 0.01)) * NeuralNetworkMultiplier, 2)
-                            TotalMagnitude += IndMag
+                Dim dResearcherMagnitude As Double = 0
+                Dim bQuorum As Boolean = GetSupermajorityVoteStatusForResearcher(cpid.PrimaryKey, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD), dResearcherMagnitude)
+                If (bQuorum) Then
+                    PersistMagnitude(cpid, dResearcherMagnitude, False)
+                Else
+                    Dim surrogatePrj As New Row
+                    surrogatePrj.Database = "Project"
+                    surrogatePrj.Table = "Projects"
+                    Dim lstProjects As List(Of Row) = GetList(surrogatePrj, "*")
+                    Dim TotalRAC As Double = 0
+                    Dim TotalNetworkRAC As Double = 0
+                    Dim TotalMagnitude As Double = 0
+                    'Dim TotalRAC As Double = 0
+                    For Each prj As Row In lstProjects
+                        Dim surrogatePrjCPID As New Row
+                        If IsInList(prj.PrimaryKey, lstWhitelist, False) Then
+                            surrogatePrjCPID.Database = "Project"
+                            surrogatePrjCPID.Table = prj.PrimaryKey + "CPID"
+                            surrogatePrjCPID.PrimaryKey = prj.PrimaryKey + "_" + cpid.PrimaryKey
+                            Dim rowRAC = Read(surrogatePrjCPID)
+                            Dim CPIDRAC As Double = Val(Trim("0" + rowRAC.RAC))
+                            Dim PrjTotalRAC As Double = Val(Trim("0" + prj.RAC))
+                            If CPIDRAC > 0 Then
+                                TotalRAC += CPIDRAC
+                                TotalNetworkRAC += PrjTotalRAC
+                                Dim IndMag As Double = Math.Round(((CPIDRAC / (PrjTotalRAC + 0.01)) / (WhitelistedProjects + 0.01)) * NeuralNetworkMultiplier, 2)
+                                TotalMagnitude += IndMag
+                            End If
                         End If
-                    End If
 
-                Next
-                'Now we can store the magnitude - Formula for Network Magnitude per CPID:
-                cpid.Database = "CPID"
-                cpid.Table = "CPIDS"
-                cpid.Magnitude = Trim(Math.Round(TotalMagnitude, 2))
-                If TotalMagnitude < 1 And TotalMagnitude > 0.25 Then cpid.Magnitude = Trim(1)
-                'Log("Storing CPID " + Trim(cpid.PrimaryKey) + " magnitude " + Trim(cpid.Magnitude))
-
-                Store(cpid)
-                iRow2 += 1
-                Dim p As Double = (iRow2 / (lstCPIDs.Count + 0.01)) * 9.9
-                mlPercentComplete = p + 90
-                If mlPercentComplete > 99 Then mlPercentComplete = 99
-
+                    Next
+                    'Now we can store the magnitude - Formula for Network Magnitude per CPID:
+                    Dim dCalculatedResearcherMagnitude As Double = Math.Round(TotalMagnitude, 2)
+                    If TotalMagnitude < 1 And TotalMagnitude > 0.25 Then dCalculatedResearcherMagnitude = 1
+                    PersistMagnitude(cpid, dCalculatedResearcherMagnitude, True)
+                    iRow2 += 1
+                    Dim p As Double = (iRow2 / (lstCPIDs.Count + 0.01)) * 9.9
+                    mlPercentComplete = p + 90
+                    If mlPercentComplete > 99 Then mlPercentComplete = 99
+                End If
             Next
             mlPercentComplete = 0
             Return True
@@ -966,9 +972,26 @@ ThreadStarted:
         End Try
         Return False
     End Function
+    Public Function GetSupermajorityVoteStatusForResearcher(sCPID As String, lMinimumWitnessesRequired As Long, ByRef ResearcherMagnitude As Double) As Boolean
+        If mdictNeuralNetworkAdditionalQuorumData Is Nothing Then Return False
+        Try
+            If mdictNeuralNetworkAdditionalQuorumData.ContainsKey(sCPID) Then
+                Dim NS As GRCSec.GridcoinData.NeuralStructure = mdictNeuralNetworkAdditionalQuorumData(sCPID)
+                If NS.Witnesses > (NS.Participants * 0.51) And NS.Witnesses > lMinimumWitnessesRequired Then
+                    ResearcherMagnitude = NS.Magnitude
+                    Return True
+                End If
+                Return False
+            else
+                Return False
+            End  if
+        Catch ex As Exception
+            Return False
+        End Try
+        Return False
+    End Function
     Public Function GetRACViaNetsoft_Resilient(sCPID As String) As Boolean
         If sCPID = "" Then Return False
-     
 Retry:
         msCurrentNeuralHash = ""
         Dim TotalRAC As Double = 0
@@ -1033,7 +1056,6 @@ Retry:
             Return False
         End Try
 
-
     End Function
     Private Function UpdateCPIDStatus(sCPID As String, TotalRAC As Double, lWitnesses As Long) As Boolean
         Dim oLock As New Object
@@ -1058,7 +1080,17 @@ Retry:
         Dim dtTomorrow As Date = New Date(Year(dt), Month(dt), Day(dt), 6, 0, 0)
         Return dtTomorrow
     End Function
-    Public Function PersistProjectRAC(sCPID As String, rac As Double, Project As String, bGenData As Boolean) As Boolean
+    Private Function PersistMagnitude(CPID As Row, Magnitude As Double, bGenData As Boolean) As Boolean
+        CPID.Database = "CPID"
+        CPID.Table = "CPIDS"
+        CPID.Magnitude = Trim(Math.Round(Magnitude, 2))
+        Store(CPID)
+        Try
+            If bGenData Then mGRCData.VoteOnMagnitude(CPID.PrimaryKey, Magnitude, mbTestNet)
+        Catch ex As Exception
+        End Try
+    End Function
+    Private Function PersistProjectRAC(sCPID As String, rac As Double, Project As String, bGenData As Boolean) As Boolean
         'Store the CPID_PROJECT RAC:
         Dim d As New Row
         d.Expiration = Tomorrow()
@@ -1068,7 +1100,6 @@ Retry:
         d.PrimaryKey = Project + "_" + sCPID
         d.RAC = Trim(RoundedRac(rac))
         Store(d)
-
         'Store the Project record
         d = New Row
         d.Expiration = Tomorrow()
@@ -1085,11 +1116,8 @@ Retry:
             Try
                 If bGenData Then mGRCData.VoteOnProjectRAC(sCPID, rac, Project, mbTestNet)
             Catch ex As Exception
-
             End Try
-
         End If
-
         Return True
     End Function
 
@@ -1144,7 +1172,7 @@ Retry:
             Catch ex As Exception
 
             End Try
-        Return r
+            Return r
         Catch ex As Exception
             Dim sMsg As String = ex.Message
         End Try
@@ -1437,15 +1465,15 @@ Retry:
                     Dim fiArr As FileInfo() = di.GetFiles()
                     Dim fi As FileInfo
                     For Each fi In fiArr
-                            Using Stream As New System.IO.FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
-                                Dim objReader As New System.IO.StreamReader(Stream)
+                        Using Stream As New System.IO.FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
+                            Dim objReader As New System.IO.StreamReader(Stream)
                             While objReader.EndOfStream = False
                                 sTemp = objReader.ReadLine
                                 Dim sExport As String = fi.Name + "<COL>" + sTemp
                                 objWriter.WriteLine(sExport)
                             End While
-                                objReader.Close()
-                            End Using
+                            objReader.Close()
+                        End Using
                     Next fi
                 End SyncLock
             End Using
