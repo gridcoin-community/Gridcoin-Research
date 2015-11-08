@@ -2026,7 +2026,6 @@ void DoTallyResearchAverages(void* parg)
 
     while (!fShutdown)
     {
-        //vnThreadsRunning[THREAD_TALLY]--;
         MilliSleep(100);
 		if (bDoTally)
 		{
@@ -2048,7 +2047,6 @@ void DoTallyResearchAverages(void* parg)
 			printf(" [DoTallyRA_END] \r\n");
 			bTallyFinished = true;
 		}
-        //vnThreadsRunning[THREAD_TALLY]++;
     }
     vnThreadsRunning[THREAD_TALLY]--;
 }
@@ -2462,7 +2460,10 @@ void ThreadMessageHandler2(void* parg)
             pnodeTrickle = vNodesCopy[GetRand(vNodesCopy.size())];
         BOOST_FOREACH(CNode* pnode, vNodesCopy)
         {
-            if (pnode->fDisconnect)
+            
+			MilliSleep(1);
+
+			if (pnode->fDisconnect)
                 continue;
 
             // Receive messages
