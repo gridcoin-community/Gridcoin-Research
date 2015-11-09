@@ -149,6 +149,8 @@ extern int64_t nTransactionFee;
 extern int64_t nReserveBalance;
 extern int64_t nMinimumInputValue;
 extern int64_t nLastTallied;
+extern int64_t nLastPing;
+
 extern int64_t nLastTalliedNeural;
 
 extern int64_t nCPIDsLoaded;

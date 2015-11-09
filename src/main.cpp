@@ -166,6 +166,7 @@ extern void RemoveNetworkMagnitude(double LockTime, std::string cpid, MiningCPID
 unsigned int WHITELISTED_PROJECTS = 0;
 unsigned int CHECKPOINT_VIOLATIONS = 0;
 int64_t nLastTallied = 0;
+int64_t nLastPing = 0;
 
 int64_t nLastTalliedNeural = 0;
 
@@ -7284,6 +7285,22 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 	}
     else if (strCommand == "ping")
     {
+
+		std::string sPingConfig = GetArgument("suppresspings", "false");
+		if (sPingConfig=="true")
+		{
+				if ((GetAdjustedTime() - nLastPing) < 1)
+				{
+					nLastPing = GetAdjustedTime();
+					return false;
+				}
+				else
+				{
+					nLastPing = GetAdjustedTime();
+				}
+		}
+
+
 		std::string acid = "";
         if (pfrom->nVersion > BIP0031_VERSION)
         {
@@ -7291,7 +7308,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             vRecv >> nonce >> acid;
 			bool pong_valid = AcidTest(strCommand,acid,pfrom);
 			if (!pong_valid) return false;
-			if (fDebug) printf("pong valid %s",YesNo(pong_valid).c_str());
+			//if (fDebug) printf("pong valid %s",YesNo(pong_valid).c_str());
 
             // Echo the message back with the nonce. This allows for two useful features:
             //
@@ -7304,7 +7321,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             // it, if the remote node sends a ping once per second and this node takes 5
             // seconds to respond to each, the 5th ping the remote sends would appear to
             // return very quickly.
-            pfrom->PushMessage("pong", nonce);
+			pfrom->PushMessage("pong", nonce);
         }
 	}
 	else if (strCommand == "pong")
@@ -7602,6 +7619,7 @@ bool ProcessMessages(CNode* pfrom)
                 LOCK(cs_main);
                 fRet = ProcessMessage(pfrom, strCommand, vRecv, msg.nTime);
             }
+			MilliSleep(1);
             if (fShutdown)
                 break;
         }
@@ -8745,7 +8763,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                         continue;
                     }
                 }
-
+				MilliSleep(1);
                 // returns true if wasn't already contained in the set
                 if (pto->setInventoryKnown.insert(inv).second)
                 {
