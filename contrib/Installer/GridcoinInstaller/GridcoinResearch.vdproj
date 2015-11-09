@@ -75,6 +75,18 @@
         }
         "Entry"
         {
+        "MsmKey" = "8:_6408A3D03D15E306A4C3FC5FD95ADA69"
+        "OwnerKey" = "8:_32F2DC723F30362B0B78F9A291EC0098"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_6408A3D03D15E306A4C3FC5FD95ADA69"
+        "OwnerKey" = "8:_7A0EA93E644A4D9E8037FBB3C062DD65"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
         "MsmKey" = "8:_6AEABB5004EC4B57225B51B085DB5625"
         "OwnerKey" = "8:_7A0EA93E644A4D9E8037FBB3C062DD65"
         "MsmSig" = "8:_UNDEFINED"
@@ -183,18 +195,6 @@
         }
         "Entry"
         {
-        "MsmKey" = "8:_E1FE5A0E6E6091E2732293858842B048"
-        "OwnerKey" = "8:_32F2DC723F30362B0B78F9A291EC0098"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
-        "MsmKey" = "8:_E1FE5A0E6E6091E2732293858842B048"
-        "OwnerKey" = "8:_7A0EA93E644A4D9E8037FBB3C062DD65"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
         "MsmKey" = "8:_E61EE4BEE6D94A3BBD05AC392646D360"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
@@ -262,7 +262,7 @@
         "Entry"
         {
         "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_E1FE5A0E6E6091E2732293858842B048"
+        "OwnerKey" = "8:_6408A3D03D15E306A4C3FC5FD95ADA69"
         "MsmSig" = "8:_UNDEFINED"
         }
     }
@@ -566,6 +566,37 @@
                     }
                 }
             "SourcePath" = "8:openpopstake.dll"
+            "TargetName" = "8:"
+            "Tag" = "8:"
+            "Folder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
+            "Condition" = "8:"
+            "Transitive" = "11:FALSE"
+            "Vital" = "11:TRUE"
+            "ReadOnly" = "11:FALSE"
+            "Hidden" = "11:FALSE"
+            "System" = "11:FALSE"
+            "Permanent" = "11:FALSE"
+            "SharedLegacy" = "11:FALSE"
+            "PackageAs" = "3:1"
+            "Register" = "3:1"
+            "Exclude" = "11:FALSE"
+            "IsDependency" = "11:TRUE"
+            "IsolateTo" = "8:"
+            }
+            "{9F6F8455-1EF1-4B85-886A-4223BCC8E7F7}:_6408A3D03D15E306A4C3FC5FD95ADA69"
+            {
+            "AssemblyRegister" = "3:1"
+            "AssemblyIsInGAC" = "11:FALSE"
+            "AssemblyAsmDisplayName" = "8:MySql.Data, Version=6.6.4.0, Culture=neutral, PublicKeyToken=c5687fc88969c44d, processorArchitecture=MSIL"
+                "ScatterAssemblies"
+                {
+                    "_6408A3D03D15E306A4C3FC5FD95ADA69"
+                    {
+                    "Name" = "8:MySql.Data.dll"
+                    "Attributes" = "3:512"
+                    }
+                }
+            "SourcePath" = "8:MySql.Data.dll"
             "TargetName" = "8:"
             "Tag" = "8:"
             "Folder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
@@ -916,37 +947,6 @@
             "IsDependency" = "11:FALSE"
             "IsolateTo" = "8:"
             }
-            "{9F6F8455-1EF1-4B85-886A-4223BCC8E7F7}:_E1FE5A0E6E6091E2732293858842B048"
-            {
-            "AssemblyRegister" = "3:1"
-            "AssemblyIsInGAC" = "11:FALSE"
-            "AssemblyAsmDisplayName" = "8:MySql.Data, Version=6.6.4.0, Culture=neutral, PublicKeyToken=c5687fc88969c44d, processorArchitecture=MSIL"
-                "ScatterAssemblies"
-                {
-                    "_E1FE5A0E6E6091E2732293858842B048"
-                    {
-                    "Name" = "8:MySql.Data.dll"
-                    "Attributes" = "3:512"
-                    }
-                }
-            "SourcePath" = "8:MySql.Data.dll"
-            "TargetName" = "8:"
-            "Tag" = "8:"
-            "Folder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
-            "Condition" = "8:"
-            "Transitive" = "11:FALSE"
-            "Vital" = "11:TRUE"
-            "ReadOnly" = "11:FALSE"
-            "Hidden" = "11:FALSE"
-            "System" = "11:FALSE"
-            "Permanent" = "11:FALSE"
-            "SharedLegacy" = "11:FALSE"
-            "PackageAs" = "3:1"
-            "Register" = "3:1"
-            "Exclude" = "11:FALSE"
-            "IsDependency" = "11:TRUE"
-            "IsolateTo" = "8:"
-            }
             "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_E61EE4BEE6D94A3BBD05AC392646D360"
             {
             "SourcePath" = "8:..\\..\\..\\release\\curl.dll"
@@ -1094,19 +1094,19 @@
         {
         "Name" = "8:Microsoft Visual Studio"
         "ProductName" = "8:Gridcoin Research"
-        "ProductCode" = "8:{86833A04-13A4-4D19-B09F-D55353B91762}"
-        "PackageCode" = "8:{D08AF6A9-2A9B-4EFB-8186-F57D910619BE}"
+        "ProductCode" = "8:{81F7C795-3A5D-4D35-A443-AA97CB249BF1}"
+        "PackageCode" = "8:{907C4722-19CD-476D-AC3A-2C37AEE8B548}"
         "UpgradeCode" = "8:{9617E9EA-252F-43CE-B53E-B48C85F71192}"
         "AspNetVersion" = "8:4.0.30319.0"
         "RestartWWWService" = "11:FALSE"
         "RemovePreviousVersions" = "11:TRUE"
         "DetectNewerInstalledVersion" = "11:FALSE"
         "InstallAllUsers" = "11:TRUE"
-        "ProductVersion" = "8:36.6"
+        "ProductVersion" = "8:36.7"
         "Manufacturer" = "8:GridcoinResearch"
         "ARPHELPTELEPHONE" = "8:"
         "ARPHELPLINK" = "8:"
-        "Title" = "8:Gridcoin Research Beta 36.6"
+        "Title" = "8:Gridcoin Research Beta 36.7"
         "Subject" = "8:"
         "ARPCONTACT" = "8:The Gridcoin Developers"
         "Keywords" = "8:Gridcoin Research"

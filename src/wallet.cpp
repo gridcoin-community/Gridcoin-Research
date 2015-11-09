@@ -34,6 +34,7 @@ double GetBlockDifficulty(unsigned int nBits);
 void WriteAppCache(std::string key, std::string value);
 bool OutOfSyncByAgeWithChanceOfMining();
 int64_t GetRSAWeightByCPID(std::string cpid);
+void AddPeek(std::string data);
 
 double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
 
@@ -1123,7 +1124,10 @@ void CWalletTx::RelayWalletTransaction(CTxDB& txdb)
         {
             uint256 hash = tx.GetHash();
             if (!txdb.ContainsTx(hash))
+			{
                 RelayTransaction((CTransaction)tx, hash);
+				AddPeek("Relaying wallet transaction " + tx.GetHash().ToString());
+			}
         }
     }
     if (!(IsCoinBase() || IsCoinStake()))
@@ -1133,6 +1137,8 @@ void CWalletTx::RelayWalletTransaction(CTxDB& txdb)
         {
             if (fDebug) printf("Relaying wtx %s\n", hash.ToString().substr(0,10).c_str());
             RelayTransaction((CTransaction)*this, hash);
+			AddPeek("Relaying wallet transaction " + hash.ToString());
+
         }
     }
 }
@@ -1165,7 +1171,7 @@ void CWallet::ResendWalletTransactions(bool fForce)
     }
 
     // Rebroadcast any of our txes that aren't in a block yet
-    if (fDebug) printf("ResendWalletTransactions()\n");
+    //if (fDebug) printf("ResendWalletTransactions()\n");
     CTxDB txdb("r");
     {
         LOCK(cs_wallet);

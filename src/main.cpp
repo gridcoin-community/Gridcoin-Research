@@ -36,6 +36,7 @@ extern std::string getHardDriveSerial();
 extern bool IsSuperBlock(CBlockIndex* pIndex);
 extern bool VerifySuperblock(std::string superblock, int nHeight);
 extern double ExtractMagnitudeFromExplainMagnitude();
+extern void AddPeek(std::string data);
 
 
 extern bool NeedASuperblock();
@@ -404,6 +405,8 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors6 = "";
  std::string    msMiningErrors7 = "";
  std::string    msMiningErrors8 = "";
+ std::string    msPeek = "";
+
  std::string    msAttachmentGuid = "";
 
  std::string    msMiningErrorsIncluded = "";
@@ -4407,7 +4410,7 @@ bool VerifySuperblock(std::string superblock, int nHeight)
 			}
 			// New rules added here:
 			if (out_avg < 10 && fTestNet)  bPassed = false;
-			if (out_avg < 90 && !fTestNet) bPassed = false;
+			if (out_avg < 70 && !fTestNet) bPassed = false;
 			if (avg_mag < 10)              bPassed = false;
 		}
 		return bPassed;
@@ -7512,7 +7515,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 }
 
 
-
+void AddPeek(std::string data)
+{
+	std::string buffer = RoundToString((double)GetAdjustedTime(),0) + ":" + data + "<CR>";
+	msPeek += buffer;
+	if (msPeek.length() > 60000) msPeek = "";
+}
 
 
 // requires LOCK(cs_vRecvMsg)
@@ -7564,9 +7572,15 @@ bool ProcessMessages(CNode* pfrom)
             continue;
         }
         string strCommand = hdr.GetCommand();
+		
 
         // Message size
         unsigned int nMessageSize = hdr.nMessageSize;
+
+		//11-9-2015 Have a peek into what this node is doing
+		std::string Peek = strCommand + ":" + RoundToString((double)nMessageSize,0);
+		AddPeek(Peek);
+
 
         // Checksum
         CDataStream& vRecv = msg.vRecv;
@@ -8617,6 +8631,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         }
         if (pingSend) 
 		{
+			AddPeek("ping");
             uint64_t nonce = 0;
             while (nonce == 0) {
                 RAND_bytes((unsigned char*)&nonce, sizeof(nonce));
@@ -8637,8 +8652,8 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         }
 
         // Resend wallet transactions that haven't gotten in a block yet
-        ResendWalletTransactions();
-
+	    ResendWalletTransactions();
+	
         // Address refresh broadcast
         static int64_t nLastRebroadcast;
         if (!IsInitialBlockDownload() && ( GetAdjustedTime() - nLastRebroadcast > 24 * 60 * 60))
@@ -8726,7 +8741,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
 
                     if (fTrickleWait)
                     {
-                        vInvWait.push_back(inv);
+				        vInvWait.push_back(inv);
                         continue;
                     }
                 }
@@ -8737,6 +8752,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                     vInv.push_back(inv);
                     if (vInv.size() >= 1000)
                     {
+						AddPeek("PushInv");
                         pto->PushMessage("inv", vInv);
                         vInv.clear();
                     }
@@ -8759,8 +8775,8 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
             const CInv& inv = (*pto->mapAskFor.begin()).second;
             if (!AlreadyHave(txdb, inv))
             {
-                if (fDebugNet)
-                    printf("sending getdata: %s\n", inv.ToString().c_str());
+                if (fDebugNet)        printf("sending getdata: %s\n", inv.ToString().c_str());
+				AddPeek("Getdata " + inv.ToString());
                 vGetData.push_back(inv);
                 if (vGetData.size() >= 1000)
                 {
@@ -8772,7 +8788,10 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
             pto->mapAskFor.erase(pto->mapAskFor.begin());
         }
         if (!vGetData.empty())
+		{
             pto->PushMessage("getdata", vGetData);
+			AddPeek("GetData");
+		}
 
     }
     return true;
