@@ -7286,6 +7286,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     else if (strCommand == "ping")
     {
 
+		/*
 		std::string sPingConfig = GetArgument("suppresspings", "false");
 		if (sPingConfig=="true")
 		{
@@ -7299,6 +7300,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 					nLastPing = GetAdjustedTime();
 				}
 		}
+		*/
+
 
 
 		std::string acid = "";
@@ -7771,6 +7774,7 @@ std::string NN(std::string value)
 double PendingSuperblockHeight()
 {
 	double height = cdbl(ReadCache("neuralsecurity","pending"),0);
+	if (height < (double)(pindexBest->nHeight-200)) height = 0;
 	return height;
 }
 

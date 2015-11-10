@@ -973,6 +973,7 @@ ThreadStarted:
         Return False
     End Function
     Public Function GetSupermajorityVoteStatusForResearcher(sCPID As String, lMinimumWitnessesRequired As Long, ByRef ResearcherMagnitude As Double) As Boolean
+        Return False
         If mdictNeuralNetworkAdditionalQuorumData Is Nothing Then Return False
         Try
             If mdictNeuralNetworkAdditionalQuorumData.ContainsKey(sCPID) Then
@@ -982,9 +983,9 @@ ThreadStarted:
                     Return True
                 End If
                 Return False
-            else
+            Else
                 Return False
-            End  if
+            End If
         Catch ex As Exception
             Return False
         End Try
