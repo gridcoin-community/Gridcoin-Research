@@ -719,7 +719,7 @@ std::string GetGlobalStatus()
 			+ "<br>DPOR Weight: " +  sWeight + "; Status: " + msMiningErrors 
 			+ "<br>Magnitude: " + RoundToString(boincmagnitude,2) + "; Project: " + msMiningProject
 			+ "<br>CPID: " +  GlobalCPUMiningCPID.cpid + " " +  
-			+ "<br>" + msMiningErrors2 + " " + msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + msMiningErrors8 
+			+ "<br>" + msMiningErrors2 + " " + msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + msMiningErrors8 + " "
 			+ "<br>" + msRSAOverview;
 		//The last line break is for Windows 8.1 Huge Toolbar
 		msGlobalStatus = status;
@@ -3228,13 +3228,19 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 			if (tx.hashBoinc.length() > 20)
 			{
 				pindex->nIsContract = 1;
-				if(pindex->nHeight < nNewIndex2) msContracts += pindex->GetBlockHash().GetHex() + ",";
+				if(pindex->nHeight < nNewIndex2) 
+				{
+						//msContracts += pindex->GetBlockHash().GetHex() + ",";
+				}
 				break;
 			}
 		}
 		if (pindex->nHeight < nNewIndex2)
 		{
-			if (bb.superblock.length() > 20) msSuperBlockHashes += pindex->GetBlockHash().GetHex() + ",";
+			if (bb.superblock.length() > 20) 
+			{
+					//msSuperBlockHashes += pindex->GetBlockHash().GetHex() + ",";
+			}
 		}
 		pindex->sGRCAddress = bb.GRCAddress;
 		pindex->sReserved = "";
@@ -4099,6 +4105,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 									(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,CoinToDouble(nCalculatedResearch),(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
 				
 			}
+			if (fDebug3) printf(".EOCBR.");
 		
 	}
 
@@ -4216,6 +4223,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
     if (fCheckMerkleRoot && hashMerkleRoot != BuildMerkleTree())
         return DoS(100, error("CheckBlock[] : hashMerkleRoot mismatch"));
 
+	if (fDebug3) printf(".EOCB.");
     return true;
 }
 

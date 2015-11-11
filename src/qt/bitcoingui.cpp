@@ -1538,6 +1538,7 @@ void BitcoinGUI::NewUserWizard()
 		ForceInAddNode("amsterdam.grcnode.co.uk");
 		ForceInAddNode("london.grcnode.co.uk");
 		ForceInAddNode("frankfurt.grcnode.co.uk");
+		ForceInAddNode("nyc.grcnode.co.uk");
 
 		if (sBoincNarr != "")
 		{
