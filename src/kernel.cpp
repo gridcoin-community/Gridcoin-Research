@@ -633,7 +633,7 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits, 
 		if (boincblock.cpid != "INVESTOR")
 		{
 			if (boincblock.Magnitude < .25)   narr += "Magnitude too low for POR reward.";
-			if (payment_age < 60*60)          narr += " Last Payment too recent: " + RoundToString(payment_age,0);
+			//if (payment_age < 60*60)          narr += "Recent: " + RoundToString(payment_age,0);
 			if (payment_age < BitsAge)        narr += " Payment < Diff: " + RoundToString(payment_age,0) + "; " + RoundToString(BitsAge,0);
 			if (coin_age < 4*60*60)           narr += " Coin Age (immature): " + RoundToString(coin_age,0);
 			if (coin_age < RSA_WEIGHT)        narr += " Coin Age < RSA_Weight: " + RoundToString(coin_age,0) + " " + RoundToString(RSA_WEIGHT,0);

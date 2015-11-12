@@ -278,6 +278,7 @@ Public Class frmMining
         dgv.AutoResizeColumns(DataGridViewAutoSizeColumnsMode.ColumnHeader)
         dgv.ReadOnly = True
         dgv.EditingPanel.Visible = False
+        dgv.Columns(7).Visible = False
 
         For y = 0 To UBound(vData) - 1
             dgv.Rows.Add()
@@ -483,7 +484,7 @@ Public Class frmMining
             dgvDrillProjects.Width = oNewForm.Width - 25
 
             rtbDrillRAC = New System.Windows.Forms.RichTextBox
-            Dim sXML As String = GetXMLOnly(sCPID)
+            Dim sXML As String = GetRAC(sCPID)
             rtbDrillRAC.Font = New Font("Verdana", 12)
             rtbDrillRAC.Left = 5
             rtbDrillRAC.Top = dgvDrillProjects.Height + 8
@@ -590,15 +591,16 @@ Public Class frmMining
             pbSync.Maximum = 101
             lblQueue.Text = "Queue: " + Trim(mlQueue) : lblQueue.Visible = True
             If mlPercentComplete <= pbSync.Maximum Then pbSync.Value = mlPercentComplete
-            Application.DoEvents()
             If mlPercentComplete < 50 Then pbSync.ForeColor = Color.Red
             If mlPercentComplete > 50 And mlPercentComplete < 80 Then pbSync.ForeColor = Color.Orange
             If mlPercentComplete > 80 And mlPercentComplete < 90 Then pbSync.ForeColor = Color.Yellow
             If mlPercentComplete > 90 Then pbSync.ForeColor = Color.White : lblQueue.Text = "Queue: Final calculation phase"
+            If mlPercentComplete = 1 Then pbSync.ForeColor = Color.Brown : lblQueue.Text = "Data gathering phase" : lblNeuralDetail.Text = msNeuralDetail
+            Application.DoEvents()
         Else
             If pbSync.Visible = True Then pbSync.Visible = False : PopulateNeuralData() : Application.DoEvents()
             pbSync.Visible = False : pbSync.Height = 18
-            DisableForm(True)
+            DisableForm(True) : lblNeuralDetail.Text = ""
             lblQueue.Visible = False
             Application.DoEvents()
         End If

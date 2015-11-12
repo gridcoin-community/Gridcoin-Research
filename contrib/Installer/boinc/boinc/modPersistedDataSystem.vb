@@ -32,6 +32,10 @@ Module modPersistedDataSystem
     Public mdLastNeuralNetworkSync As DateTime
     Private lUseCount As Long = 0
     Private MAX_NEURAL_NETWORK_THREADS = 100
+    Public msNeuralDetail As String = ""
+    Public SYNC_THRESHOLD As Double = 60 * 12 '12 hours
+    Public TEAM_SYNC_THRESHOLD As Double = 60 * 24 * 7 '1 WEEK
+    Public PROJECT_SYNC_THRESHOLD As Double = 60 * 24 '12 HOURS
 
     Public Structure NeuralStructure
         Public PK As String
@@ -141,7 +145,10 @@ Module modPersistedDataSystem
 
                     Catch ex As Exception
                     End Try
-                    If dMagAge > (60 * 12) Then Return ""
+                    If dMagAge > (PROJECT_SYNC_THRESHOLD) Then
+                        Return ""
+                    End If
+
 
                 Else
                     Dim sRow As String = cpid.PrimaryKey + ",00;"
@@ -319,17 +326,56 @@ Module modPersistedDataSystem
         End Try
     End Function
     Public Sub SyncDPOR2()
+        If Math.Abs(DateDiff(DateInterval.Second, Now, mdLastSync)) > 60 * 10 Then bMagsDoneLoading = True
+        If bMagsDoneLoading = False Then
+            Log("Blocked call.")
+            Exit Sub
+        End If
+       
         Dim t As New Threading.Thread(AddressOf CompleteSync)
+        t.Priority = Threading.ThreadPriority.BelowNormal
         t.Start()
     End Sub
     Public Function NeedsSynced(dr As Row) As Boolean
         If Now > dr.Synced Then Return True Else Return False
     End Function
+
+    Public Sub EnsureTeamIsSynchronized()
+        Dim sCPIDData As String = ExtractXML(msSyncData, "<CPIDDATA>")
+        Dim sQuorumData As String = ExtractXML(msSyncData, "<QUORUMDATA>")
+        Dim dAge As Double = Val(ExtractXML(sQuorumData, "<AGE>"))
+        Log("EnsureTeamIsSynchronized: " + Trim(dAge))
+        Dim dWindow As Double = 60 * 60 '1 hour before and 1 hour after superblock expires:
+        If dAge > (86400 - dWindow) And dAge < (86400 + dWindow) Then
+
+            Dim lAgeOfMaster = GetFileAge(GetGridFolder() + "NeuralNetwork\db.dat")
+            If lAgeOfMaster > dWindow Then
+                'Clear out this nodes project data, so the node can sync with the team at the same exact time:
+                Log("Clearing project data so we can synchronize as a team.")
+                ClearProjectData()
+            End If
+        End If
+
+    End Sub
+    Private Sub SoftKill(sFile As String)
+        Try
+            Kill(sFile)
+        Catch ex As Exception
+
+        End Try
+    End Sub
+    Private Sub ClearProjectData()
+        Dim sPath As String = GetFileAge(GetGridFolder() + "NeuralNetwork\")
+        SoftKill(sPath + "db.dat")
+        'Erase the projects
+        SoftKill(sPath + "*.gz")
+        SoftKill(sPath + "*master.dat")
+        SoftKill(sPath + "*team.xml")
+        SoftKill(sPath + "*team.gz")
+    End Sub
     Public Sub CompleteSync()
         If Math.Abs(DateDiff(DateInterval.Second, Now, mdLastSync)) > 60 * 10 Then bMagsDoneLoading = True
         If bMagsDoneLoading = False Then Exit Sub
-
-        'Ensure neural network directory exists
 
 
         mbForcefullySyncAllRac = True
@@ -341,7 +387,14 @@ Module modPersistedDataSystem
 
             Try
                 mlPercentComplete = 1
-                Log("Starting Phase I")
+                EnsureTeamIsSynchronized()
+
+                Log("Starting Phase I: Gather gzip files")
+                Dim c As New clsBoincProjectDownload
+                c.DownloadGZipFiles()
+
+                mlPercentComplete = 2
+                Log("Starting Phase II")
                 UpdateMagnitudesPhase1()
             Catch ex As Exception
                 Log("Err in completesync" + ex.Message)
@@ -618,7 +671,7 @@ Module modPersistedDataSystem
         Return lstWhitelist
     End Function
     Private Function GetConsensusData()
-        For x As Integer = 1 To 12
+        For x As Integer = 1 To 1
             Try
                 ReconnectToNeuralNetwork()
                 mdictNeuralNetworkQuorumData = mGRCData.GetNeuralNetworkQuorumData2("quorumdata", mbTestNet, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD))
@@ -627,14 +680,12 @@ Module modPersistedDataSystem
                 If mdictNeuralNetworkQuorumData.Count > IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD) Then
                     Return True
                 End If
-                Threading.Thread.Sleep(500)
             Catch ex As Exception
-                Threading.Thread.Sleep(1000)
             End Try
         Next x
         Return False
     End Function
-    Private Function GuiDoEvents()
+    Public Function GuiDoEvents()
         Try
             If Not mfrmMining Is Nothing Then
                 mfrmMining.DoEvents()
@@ -680,7 +731,8 @@ Module modPersistedDataSystem
         Dim WhitelistedProjects As Double = 0
         Dim ProjCount As Double = 0
         Dim lstWhitelist As List(Of Row)
-        Dim bConsensus As Boolean = GetConsensusData()
+        Dim bConsensus As Boolean
+        '= GetConsensusData()
         Log("Updating Magnitudes " + IIf(bConsensus, "With consensus data", "Without consensus data"))
         Dim lStartingWitnesses As Long = CPIDCountWithNoWitnesses()
         Log(Trim(lStartingWitnesses) + " CPIDs starting out with clean slate.")
@@ -699,7 +751,7 @@ Module modPersistedDataSystem
                     Try
 
                         If cpid.Witnesses = 0 Then
-                            Dim bResult As Boolean = GetRacViaNetsoft(cpid.PrimaryKey, 75)
+                            Dim bResult As Boolean = GetRacFromNeuralNetwork(cpid.PrimaryKey, 0)
                             GuiDoEvents()
                         End If
 
@@ -721,7 +773,7 @@ Module modPersistedDataSystem
             For x As Integer = 1 To 120
                 If mlQueue = 0 Then Exit For
                 GuiDoEvents()
-                Threading.Thread.Sleep(1000)
+                Threading.Thread.Sleep(200)
                 mlPercentComplete -= 1
                 If mlPercentComplete < 10 Then mlPercentComplete = 10
             Next
@@ -767,50 +819,55 @@ Module modPersistedDataSystem
         Store(q)
 
         'Update all researchers magnitudes (Final Calculation Phase):
+        Dim surrogatePrj As New Row
+        surrogatePrj.Database = "Project"
+        surrogatePrj.Table = "Projects"
+        Dim lstProjects As List(Of Row) = GetList(surrogatePrj, "*")
+        'Remove blacklisted projects first
+        For x As Integer = 0 To lstProjects.Count - 1
+            If Not IsInList(lstProjects(x).PrimaryKey, lstWhitelist, False) Then
+                Dim dr As Row = lstProjects(x)
+                dr.PrimaryKey = ""
+                lstProjects(x) = dr
+            End If
+        Next
+        'Update individual CPIDs with calculated magnitude:
         Try
             Dim iRow2 As Long = 0
             lstCPIDs = GetList(surrogateRow, "*")
             For Each cpid As Row In lstCPIDs
                 Dim dResearcherMagnitude As Double = 0
-                Dim bQuorum As Boolean = GetSupermajorityVoteStatusForResearcher(cpid.PrimaryKey, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD), dResearcherMagnitude)
-                If (bQuorum) Then
-                    PersistMagnitude(cpid, dResearcherMagnitude, False)
-                Else
-                    Dim surrogatePrj As New Row
-                    surrogatePrj.Database = "Project"
-                    surrogatePrj.Table = "Projects"
-                    Dim lstProjects As List(Of Row) = GetList(surrogatePrj, "*")
-                    Dim TotalRAC As Double = 0
-                    Dim TotalNetworkRAC As Double = 0
-                    Dim TotalMagnitude As Double = 0
-                    'Dim TotalRAC As Double = 0
-                    For Each prj As Row In lstProjects
-                        Dim surrogatePrjCPID As New Row
-                        If IsInList(prj.PrimaryKey, lstWhitelist, False) Then
-                            surrogatePrjCPID.Database = "Project"
-                            surrogatePrjCPID.Table = prj.PrimaryKey + "CPID"
-                            surrogatePrjCPID.PrimaryKey = prj.PrimaryKey + "_" + cpid.PrimaryKey
-                            Dim rowRAC = Read(surrogatePrjCPID)
-                            Dim CPIDRAC As Double = Val(Trim("0" + rowRAC.RAC))
-                            Dim PrjTotalRAC As Double = Val(Trim("0" + prj.RAC))
-                            If CPIDRAC > 0 Then
-                                TotalRAC += CPIDRAC
-                                TotalNetworkRAC += PrjTotalRAC
-                                Dim IndMag As Double = Math.Round(((CPIDRAC / (PrjTotalRAC + 0.01)) / (WhitelistedProjects + 0.01)) * NeuralNetworkMultiplier, 2)
-                                TotalMagnitude += IndMag
-                            End If
+                Dim TotalRAC As Double = 0
+                Dim TotalNetworkRAC As Double = 0
+                Dim TotalMagnitude As Double = 0
+                'Dim TotalRAC As Double = 0
+                For Each prj As Row In lstProjects
+                    Dim surrogatePrjCPID As New Row
+                    '   If IsInList(prj.PrimaryKey, lstWhitelist, False) Then
+                    If prj.PrimaryKey <> "" Then
+                        surrogatePrjCPID.Database = "Project"
+                        surrogatePrjCPID.Table = prj.PrimaryKey + "CPID"
+                        surrogatePrjCPID.PrimaryKey = prj.PrimaryKey + "_" + cpid.PrimaryKey
+                        Dim rowRAC = Read(surrogatePrjCPID)
+                        Dim CPIDRAC As Double = Val(Trim("0" + rowRAC.RAC))
+                        Dim PrjTotalRAC As Double = Val(Trim("0" + prj.RAC))
+                        If CPIDRAC > 0 Then
+                            TotalRAC += CPIDRAC
+                            TotalNetworkRAC += PrjTotalRAC
+                            Dim IndMag As Double = Math.Round(((CPIDRAC / (PrjTotalRAC + 0.01)) / (WhitelistedProjects + 0.01)) * NeuralNetworkMultiplier, 2)
+                            TotalMagnitude += IndMag
                         End If
+                    End If
 
-                    Next
-                    'Now we can store the magnitude - Formula for Network Magnitude per CPID:
-                    Dim dCalculatedResearcherMagnitude As Double = Math.Round(TotalMagnitude, 2)
-                    If TotalMagnitude < 1 And TotalMagnitude > 0.25 Then dCalculatedResearcherMagnitude = 1
-                    PersistMagnitude(cpid, dCalculatedResearcherMagnitude, True)
-                    iRow2 += 1
-                    Dim p As Double = (iRow2 / (lstCPIDs.Count + 0.01)) * 9.9
-                    mlPercentComplete = p + 90
-                    If mlPercentComplete > 99 Then mlPercentComplete = 99
-                End If
+                Next
+                'Now we can store the magnitude - Formula for Network Magnitude per CPID:
+                Dim dCalculatedResearcherMagnitude As Double = Math.Round(TotalMagnitude, 2)
+                If TotalMagnitude < 1 And TotalMagnitude > 0.25 Then dCalculatedResearcherMagnitude = 1
+                PersistMagnitude(cpid, dCalculatedResearcherMagnitude, True)
+                iRow2 += 1
+                Dim p As Double = (iRow2 / (lstCPIDs.Count + 0.01)) * 9.9
+                mlPercentComplete = p + 90
+                If mlPercentComplete > 99 Then mlPercentComplete = 99
             Next
             mlPercentComplete = 0
             Return True
@@ -831,6 +888,11 @@ Module modPersistedDataSystem
             If Trim(UCase(oRowIterator.PrimaryKey)) = Trim(UCase(sData)) Then
                 Return True
             End If
+            'One-off exceptions due to differences between project sites & Ntsoft (Will adjust via voting shortly then we can remove the code)
+            If sData Like "*the lattice proj*" Then Return False
+            If sData Like "*lhc@home classic" Then Return True
+            If sData Like "*moowrap*" Then Return True
+
             If Not bRequireExactMatch Then
                 Dim sCompare1 As String = StringStandardize(oRowIterator.PrimaryKey)
                 Dim sCompare2 As String = StringStandardize(sData)
@@ -865,6 +927,8 @@ Module modPersistedDataSystem
         Dim x As New List(Of Row)
         Dim oLock As New Object
         Dim sNNFolder As String = GetGridFolder() + "NeuralNetwork\"
+        Dim bBlacklist As Boolean
+
         SyncLock oLock
             Dim di As New DirectoryInfo(sNNFolder)
             Dim fiArr As FileInfo() = di.GetFiles()
@@ -880,7 +944,10 @@ Module modPersistedDataSystem
                             r.Database = DataRow.Database
                             r.Table = DataRow.Table
                             If LCase(r.PrimaryKey) Like LCase(sWildcard) Then
-                                x.Add(r)
+                                'Differences between Project Sites and Ntsoft:
+                                bBlacklist = False
+                                If Not bBlacklist Then x.Add(r)
+
                             End If
                         End While
                         objReader.Close()
@@ -890,7 +957,13 @@ Module modPersistedDataSystem
         End SyncLock
         Return x
     End Function
-    Public Function GetRacViaNetsoft(sCPID As String, lMsWait As Long) As Boolean
+    Public Function GetRacFromNeuralNetworkRetired(sCPID As String) As Boolean
+        Dim oNeuralType As New NeuralStructure
+        oNeuralType.PK = sCPID
+        Call ThreadGetRac(oNeuralType)
+        Return True
+    End Function
+    Public Function GetRacFromNeuralNetwork(sCPID As String, lMsWait As Long) As Boolean
         Dim lCatastrophicFailures As Long = 0
 TryAgain:
         Try
@@ -936,7 +1009,7 @@ ThreadStarted:
         Dim bResult As Boolean = False
         For x = 1 To 12
             Try
-                bResult = GetRACViaNetsoft_Resilient(oNeuralType.PK)
+                bResult = GetRAC_Resilient(oNeuralType.PK)
                 If bResult Then Exit For
             Catch ex As Exception
                 Log("Attempt # " + Trim(x) + ": Error in ThreadGetRAC : " + ex.Message + ", Trying again.")
@@ -944,18 +1017,6 @@ ThreadStarted:
         Next x
         mlQueue -= 1
     End Sub
-    Public Function GetXMLOnly(sCPID As String)
-        If sCPID = "" Then Return False
-        Try
-            Dim sURL As String = "http://boinc.netsoft-online.com/get_user.php?cpid=" + sCPID
-            Dim w As New MyWebClient2
-            Dim sData As String = w.DownloadString(sURL)
-            Return sData
-        Catch
-
-        End Try
-
-    End Function
     Public Function GetSupermajorityVoteStatus(sCPID As String, lMinimumWitnessesRequired As Long) As Boolean
         If mdictNeuralNetworkQuorumData Is Nothing Then Return False
         Try
@@ -991,42 +1052,70 @@ ThreadStarted:
         End Try
         Return False
     End Function
-    Public Function GetRACViaNetsoft_Resilient(sCPID As String) As Boolean
+    Public Function GetRAC(sCPID As String) As String
+        'First try the project database:
+        Dim sData As String
+        Dim sNNFolder As String = GetGridFolder() + "NeuralNetwork\"
+        Dim sDB As String = sNNFolder + "db.dat"
+        If File.Exists(sDB) Then
+            Using oStream As New System.IO.FileStream(sDB, FileMode.Open, FileAccess.Read, FileShare.Read)
+                Using objReader As New System.IO.StreamReader(oStream)
+                    While objReader.EndOfStream = False
+                        Dim sTemp As String = objReader.ReadLine
+                        Dim sLocalCPID As String = ExtractXML(sTemp, "<cpid>", "</cpid>")
+                        If sLocalCPID = sCPID Then
+                            sData += sTemp + vbCrLf
+                        End If
+                    End While
+                    objReader.Close()
+                End Using
+            End Using
+            Return sData
+        End If
+
+        'Then as a last resort, fall back to ntsoft:
+        sData = ""
+        Dim sURL As String = "http://boinc.netsoft-online.com/get_user.php?cpid=" + sCPID
+        Dim w As New MyWebClient2
+        sData = w.DownloadString(sURL)
+        Return sData
+    End Function
+    Public Function GetRAC_Resilient(sCPID As String) As Boolean
         If sCPID = "" Then Return False
 Retry:
         msCurrentNeuralHash = ""
         Dim TotalRAC As Double = 0
         Dim lFailCount As Long = 0
+        If 1 = 0 Then
+
+            Try
+                'If more than 51% of the network voted on this CPIDs projects today, use that value
+                If GetSupermajorityVoteStatus(sCPID, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD)) Then
+                    'Use the Neural Network Quorum Data since we have over 51% witnesses for this CPID on file:
+                    Dim lWitnesses As Long = 0
+                    For Each nNeuralStructure In mdictNeuralNetworkQuorumData
+                        If nNeuralStructure.Value.CPID = sCPID Then
+                            If nNeuralStructure.Value.RAC > 10 Then PersistProjectRAC(sCPID, nNeuralStructure.Value.RAC, nNeuralStructure.Value.Project, False)
+                            TotalRAC += nNeuralStructure.Value.RAC
+                            If nNeuralStructure.Value.Witnesses > lWitnesses Then lWitnesses = nNeuralStructure.Value.Witnesses
+                        End If
+                    Next
+                    UpdateCPIDStatus(sCPID, TotalRAC, lWitnesses)
+                    Return True
+                End If
+            Catch ex As Exception
+                lFailCount += 1
+                If lFailCount < 12 Then
+                    Threading.Thread.Sleep(400)
+                    GoTo Retry
+                End If
+                Log("Error while updating CPID  (Attempts: 12) - Resorting to gather online rac for " + sCPID)
+            End Try
+        End If
 
         Try
+            Dim sData As String = GetRAC(sCPID)
 
-            'If more than 51% of the network voted on this CPIDs projects today, use that value
-            If GetSupermajorityVoteStatus(sCPID, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD)) Then
-                'Use the Neural Network Quorum Data since we have over 51% witnesses for this CPID on file:
-                Dim lWitnesses As Long = 0
-                For Each nNeuralStructure In mdictNeuralNetworkQuorumData
-                    If nNeuralStructure.Value.CPID = sCPID Then
-                        If nNeuralStructure.Value.RAC > 10 Then PersistProjectRAC(sCPID, nNeuralStructure.Value.RAC, nNeuralStructure.Value.Project, False)
-                        TotalRAC += nNeuralStructure.Value.RAC
-                        If nNeuralStructure.Value.Witnesses > lWitnesses Then lWitnesses = nNeuralStructure.Value.Witnesses
-                    End If
-                Next
-                UpdateCPIDStatus(sCPID, TotalRAC, lWitnesses)
-                Return True
-            End If
-        Catch ex As Exception
-            lFailCount += 1
-            If lFailCount < 12 Then
-                Threading.Thread.Sleep(400)
-                GoTo Retry
-            End If
-            Log("Error while updating CPID  (Attempts: 12) - Resorting to gather online rac for " + sCPID)
-        End Try
-
-        Try
-            Dim sURL As String = "http://boinc.netsoft-online.com/get_user.php?cpid=" + sCPID
-            Dim w As New MyWebClient2
-            Dim sData As String = w.DownloadString(sURL)
             'Push all team gridcoin rac in
             Dim vData() As String
             vData = Split(sData, "<project>")
@@ -1043,12 +1132,12 @@ Retry:
                 Team = LCase(Trim(ExtractXML(vData(y), "<team_name>", "</team_name>")))
                 'Store the :  PROJECT_CPID, RAC
                 If Rac > 10 And Team = "gridcoin" Then
-                    PersistProjectRAC(sCPID, Val(Num(Trim(Rac))), sName, True)
+                    PersistProjectRAC(sCPID, Val(Num(Trim(Rac))), sName, False)
                     TotalRAC += Rac
                 End If
             Next y
             If TotalRAC = 0 Then
-                PersistProjectRAC(sCPID, 0, "NeuralNetwork", True)
+                PersistProjectRAC(sCPID, 0, "NeuralNetwork", False)
             End If
             UpdateCPIDStatus(sCPID, TotalRAC, 1)
             Return True
@@ -1087,7 +1176,7 @@ Retry:
         CPID.Magnitude = Trim(Math.Round(Magnitude, 2))
         Store(CPID)
         Try
-            If bGenData Then mGRCData.VoteOnMagnitude(CPID.PrimaryKey, Magnitude, mbTestNet)
+            ' If bGenData Then mGRCData.VoteOnMagnitude(CPID.PrimaryKey, Magnitude, mbTestNet)
         Catch ex As Exception
         End Try
     End Function
@@ -1115,7 +1204,7 @@ Retry:
             Store(d)
             'Vote on the RAC for the project for the CPID (Once we verify > 51% of the NN agrees (by distinct IP-CPID per vote), the nodes can use this project RAC for the day to increase performance)
             Try
-                If bGenData Then mGRCData.VoteOnProjectRAC(sCPID, rac, Project, mbTestNet)
+                '    If bGenData Then mGRCData.VoteOnProjectRAC(sCPID, rac, Project, mbTestNet)
             Catch ex As Exception
             End Try
         End If
@@ -1527,6 +1616,14 @@ Retry:
             Log("Unable to get quote data probably due to SSL being blocked: " + ex.Message)
         End Try
     End Function
+    Public Function GetFileAge(sPath As String) As Double
+        If File.Exists(sPath) = False Then Return 1000000
+        Dim fi As New FileInfo(sPath)
+        If fi.Length = 0 Then Return 1000000
+        Dim iMins As Long = DateDiff(DateInterval.Minute, fi.LastWriteTime, Now)
+        Return iMins
+    End Function
+
     Public Function GetQuorumHash(data As String)
         Return mclsQHA.QuorumHashingAlgorithm(data)
     End Function

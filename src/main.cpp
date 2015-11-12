@@ -718,9 +718,9 @@ std::string GetGlobalStatus()
 			+ RoundToString(PORDiff,3) + "; Net Weight: " + RoundToString(GetPoSKernelPS2(),2)  
 			+ "<br>DPOR Weight: " +  sWeight + "; Status: " + msMiningErrors 
 			+ "<br>Magnitude: " + RoundToString(boincmagnitude,2) + "; Project: " + msMiningProject
-			+ "<br>CPID: " +  GlobalCPUMiningCPID.cpid + " " +  
-			+ "<br>" + msMiningErrors2 + " " + msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + msMiningErrors8 + " "
-			+ "<br>" + msRSAOverview;
+			+ "<br>CPID: " +  GlobalCPUMiningCPID.cpid + " " +  msMiningErrors2 + " "
+			+ "<br>" + msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + msMiningErrors8 + " "
+			+ "<br>&nbsp;" + msRSAOverview + "<br>&nbsp;";
 		//The last line break is for Windows 8.1 Huge Toolbar
 		msGlobalStatus = status;
 		return status;
@@ -3376,9 +3376,12 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 					{
 								LoadSuperblock(bb.superblock,pindex->nTime,pindex->nHeight);
 								if (fDebug3) printf("ConnectBlock(): Superblock Loaded %f \r\n",(double)pindex->nHeight);
-								bNetAveragesLoaded=false;
-								nLastTallied = 0;
-								BusyWaitForTally();
+								/*  Reserved for future use:
+									bNetAveragesLoaded=false;
+									nLastTallied = 0;
+									BusyWaitForTally();
+								*/
+								bDoTally = true;
 					}
 			}
 
@@ -8326,7 +8329,7 @@ void HarvestCPIDs(bool cleardata)
 			structcpid.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + structcpid.cpid;
 			structcpid.Iscpidvalid = true;
 			mvCPIDs.insert(map<string,StructCPID>::value_type(structcpid.projectname,structcpid));
-			//7-10-2015
+			//11-12-2015
 			CreditCheck(structcpid.cpid,false);
 			GetNextProject(false);
 			if (fDebug) printf("GCMCPI %s",GlobalCPUMiningCPID.cpid.c_str());
@@ -8394,6 +8397,8 @@ void HarvestCPIDs(bool cleardata)
 				int64_t elapsed = GetTimeMillis()-nStart;
 				if (fDebug3) printf("Enumerating boinc local project %s cpid %s valid %s, elapsed %f ",structcpid.projectname.c_str(),structcpid.cpid.c_str(),YesNo(structcpid.Iscpidvalid).c_str(),(double)elapsed);
 				structcpid.rac = cdbl(rac,0);
+				structcpid.verifiedrac = cdbl(rac,0);
+
 				if (!structcpid.Iscpidvalid)
 				{
 					structcpid.errors = "CPID calculation invalid.  Check e-mail + reset project.";
@@ -8408,8 +8413,8 @@ void HarvestCPIDs(bool cleardata)
 				//If not, Call out to credit check node:
 				std::string sKey = structcpid.cpid + ":" + proj;
 				mvCPIDs[proj] = structcpid;	
-	           	CreditCheck(structcpid.cpid,cleardata);
-				structcpid = mvCPIDs[proj];
+	           	//CreditCheck(structcpid.cpid,cleardata);
+				//structcpid = mvCPIDs[proj];
 				
 				if (!structcpid.Iscpidvalid)
 				{

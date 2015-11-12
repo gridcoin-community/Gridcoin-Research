@@ -48,7 +48,11 @@ Public Class Utilization
         Call UpdateSuperblockAgeAndQuorumHash(sAge, sQuorumHash, TS, sBlock, sPrimaryCPID)
 
     End Function
+    Public Sub TestGZIPBoincDownload()
+        Dim c As New clsBoincProjectDownload
+        c.DownloadGZipFiles()
 
+    End Sub
     Public Function WriteKey(sData As String) As String
         Try
             Dim sKey As String = ExtractXML(sData, "<KEY>")
@@ -176,7 +180,7 @@ Public Class Utilization
             Log("Loading...")
 
             Try
-                If Not DatabaseExists("gridcoin_leaderboard") Then ReplicateDatabase("gridcoin_leaderboard")
+                ' If Not DatabaseExists("gridcoin_leaderboard") Then ReplicateDatabase("gridcoin_leaderboard")
             Catch ex As Exception
                 Log("New:" + ex.Message)
             End Try

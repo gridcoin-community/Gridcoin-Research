@@ -7,3 +7,4 @@ A:\Gridcoin-Research\contrib\Installer\ucGridcoinProgressBar\obj\Debug\ucGridcoi
 A:\Gridcoin-Research\contrib\Installer\ucGridcoinProgressBar\obj\Debug\ucGridcoinProgressBar.dll
 A:\Gridcoin-Research\contrib\Installer\ucGridcoinProgressBar\obj\Debug\ucGridcoinProgressBar.xml
 A:\Gridcoin-Research\contrib\Installer\ucGridcoinProgressBar\obj\Debug\ucGridcoinProgressBar.pdb
+A:\Gridcoin-Research\contrib\Installer\ucGridcoinProgressBar\obj\Debug\ucGridcoinProgressBar.vbprojResolveAssemblyReference.cache

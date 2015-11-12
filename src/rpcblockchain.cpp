@@ -112,8 +112,6 @@ extern std::string GetListOf(std::string datatype);
 void qtSyncWithDPORNodes(std::string data);
 
 extern bool SynchronizeRacForDPOR(bool SyncEntireCoin);
-
-extern void QueryWorldCommunityGridRAC();
 std::string qtGetNeuralHash(std::string data);
 std::string qtGetNeuralContract(std::string data);
 
@@ -1199,7 +1197,6 @@ bool SynchronizeRacForDPOR(bool SyncEntireCoin)
 			if (vProjs[i]=="world_community_grid")
 			{
 				
-				QueryWorldCommunityGridRAC();
 				if (!SyncEntireCoin)				break;
 			}
 			else
@@ -1247,63 +1244,6 @@ std::string GetTeamURLs(bool bMissingOnly, bool bReturnProjectNames)
 
 }
 
-
-void QueryWorldCommunityGridRAC()
-{
-	int gridcoin_team_id = 30513;
-	int max_pages = 1100;
-	int page_size = 100;
-	std::string q = "\"";
-	std::string contract = "";
-		
-	for (int i = 0; i < max_pages; i = i + page_size)
-	{
-			std::string URL = "http://stats.kwsn.info/team.php?proj=wcg&teamid=" + RoundToString(gridcoin_team_id,0) + "&sort_order=total_credit&sort_direction=DESC&offset=" + RoundToString(i,0);
-			std::string results = GetHttpPage(URL);
-
-			int iRow = 0;
-			std::vector<std::string> vUsers = split(results.c_str(),"<tr>");
-			for (unsigned int i = 0; i < vUsers.size(); i++)
-			{
-			
-				if (Contains(vUsers[i],"cpid="))
-				{
-					std::string cpid = ExtractXML(vUsers[i],"cpid=",q);
-					printf("cpid %s \r\n",cpid.c_str());
-					std::vector<std::string> vTD = split(vUsers[i].c_str(),"<td");
-					if (vTD.size() > 3)
-					{
-						for (unsigned int j = 0; j < vTD.size(); j++)
-						{
-							vTD[j] = "<td" + vTD[j];
-						}
-						std::string rac = ExtractHTML(vTD[5],"<td",">","</td>");
-						if (rac=="") rac = "0";
-						double dRac = cdbl(rac,0);
-						if (dRac > 10)
-						{
-							printf("WCG cpid %s rac %f\r\n",cpid.c_str(),dRac);
-							contract += cpid + "," + RoundToString(dRac,0) + ";";
-						}
-					}
-				}
-		}
-   }
-
-   if (contract.length() > 20)
-   {
-		    std::string sAction = "add";
-			std::string sType = "contract";
-			std::string sPass = "";
-			sPass = (sType=="project" || sType=="projectmapping" || sType=="smart_contract") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
-			std::string sName = "world_community_grid";
-			std::string sValue = contract;
-			printf("Contract %s\r\n",contract.c_str());
-			std::string result = AddMessage(true,sType,sName,sValue,sPass,AmountFromValue(2500),.00001,"");
-			printf("Results %s",result.c_str());
-   }
-
-}
 
 
 bool InsertSmartContract(std::string URL, std::string name)
@@ -2610,7 +2550,6 @@ Value execute(const Array& params, bool fHelp)
 	else if (sItem == "wcgtest")
 	{
 		
-			QueryWorldCommunityGridRAC();
 			entry.push_back(Pair("Done","Done"));
 			results.push_back(entry);
 		

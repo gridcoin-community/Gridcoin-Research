@@ -764,6 +764,7 @@ std::string GetHttpPage(std::string url)
 
 std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache)
 {
+	return "";
 
 	try 
 	{
@@ -791,9 +792,9 @@ std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache)
 
 
 		CService addrConnect;
-   		std::string url = "http://boinc.netsoft-online.com/get_user.php?cpid=";
+   		std::string url = "http://boinc.etsoft-online.com/get_user.php?cpid=";
 		std::string url2 = "216.165.179.26";
-		std::string url3 = "boinc.netsoft-online.com";
+		std::string url3 = "boinc.etsoft-online.com";
 		std::string url4 = "get_user.php?cpid=" + cpid;
 
 		if (fDebug) printf("HTTP Request\r\n %s \r\n",url4.c_str());
@@ -813,7 +814,7 @@ std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache)
 		}
 
 		std::string getdata = "GET /" + url4 + " HTTP/1.1\r\n"
-                     "Host: boinc.netsoft-online.com\r\n"
+                     "Host: boinc.etsoft-online.com\r\n"
   				     "User-Agent: Mozilla/4.0\r\n"
                      "\r\n";
              
