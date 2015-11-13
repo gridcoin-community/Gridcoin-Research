@@ -70,6 +70,9 @@ bool UnusualActivityReport();
 extern double GetCountOf(std::string datatype);
 extern double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons);
 extern bool CPIDAcidTest(std::string boincruntimepublickey);
+extern bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
+
+
 void TestScan();
 void TestScan2();
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
@@ -1336,6 +1339,15 @@ bool CPIDAcidTest(std::string boincruntimepublickey)
 	return IsCPIDValid2;
 }
 
+bool CPIDAcidTest2(std::string bpk, std::string externalcpid)
+{
+	uint256 hashRand = GetRandHash();
+    std::string email = GetArgument("email", "NA");
+    boost::to_lower(email);
+	std::string cpidv2 = ComputeCPIDv2(email, bpk, hashRand);
+	std::string cpidv1 = cpidv2.substr(0,32);
+	return (externalcpid==cpidv1);
+}
 
 std::string AdvertiseBeacon(bool force, bool bUseNeuralNetwork)
 {
@@ -4230,6 +4242,8 @@ Value listitem(const Array& params, bool fHelp)
 	}
 	if (sitem == "rsa")
 	{
+		    if (msPrimaryCPID=="") msPrimaryCPID="INVESTOR";
+
 	    	results = MagnitudeReport(msPrimaryCPID);
 			return results;
 	}

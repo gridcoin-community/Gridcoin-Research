@@ -21,6 +21,12 @@
         }
         "Entry"
         {
+        "MsmKey" = "8:_1F7D757BF031E15D44C47B631F994972"
+        "OwnerKey" = "8:_7A0EA93E644A4D9E8037FBB3C062DD65"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
         "MsmKey" = "8:_2C7D9AF4C6E04C06A26314A95B1FF010"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
@@ -101,12 +107,6 @@
         {
         "MsmKey" = "8:_7A0EA93E644A4D9E8037FBB3C062DD65"
         "OwnerKey" = "8:_UNDEFINED"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
-        "MsmKey" = "8:_7EFEAD66FF864CE6AB4AE36FCBA65659"
-        "OwnerKey" = "8:_7A0EA93E644A4D9E8037FBB3C062DD65"
         "MsmSig" = "8:_UNDEFINED"
         }
         "Entry"
@@ -390,6 +390,26 @@
             "IsDependency" = "11:FALSE"
             "IsolateTo" = "8:"
             }
+            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_1F7D757BF031E15D44C47B631F994972"
+            {
+            "SourcePath" = "8:BoincStake.tlb"
+            "TargetName" = "8:BoincStake.tlb"
+            "Tag" = "8:"
+            "Folder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
+            "Condition" = "8:"
+            "Transitive" = "11:FALSE"
+            "Vital" = "11:TRUE"
+            "ReadOnly" = "11:FALSE"
+            "Hidden" = "11:FALSE"
+            "System" = "11:FALSE"
+            "Permanent" = "11:FALSE"
+            "SharedLegacy" = "11:FALSE"
+            "PackageAs" = "3:1"
+            "Register" = "3:2"
+            "Exclude" = "11:FALSE"
+            "IsDependency" = "11:TRUE"
+            "IsolateTo" = "8:"
+            }
             "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_2C7D9AF4C6E04C06A26314A95B1FF010"
             {
             "SourcePath" = "8:..\\..\\..\\share\\pixmaps\\GrcInstallBanner.jpg"
@@ -663,26 +683,6 @@
             "Register" = "3:1"
             "Exclude" = "11:FALSE"
             "IsDependency" = "11:FALSE"
-            "IsolateTo" = "8:"
-            }
-            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_7EFEAD66FF864CE6AB4AE36FCBA65659"
-            {
-            "SourcePath" = "8:BoincStake.tlb"
-            "TargetName" = "8:BoincStake.tlb"
-            "Tag" = "8:"
-            "Folder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
-            "Condition" = "8:"
-            "Transitive" = "11:FALSE"
-            "Vital" = "11:TRUE"
-            "ReadOnly" = "11:FALSE"
-            "Hidden" = "11:FALSE"
-            "System" = "11:FALSE"
-            "Permanent" = "11:FALSE"
-            "SharedLegacy" = "11:FALSE"
-            "PackageAs" = "3:1"
-            "Register" = "3:2"
-            "Exclude" = "11:FALSE"
-            "IsDependency" = "11:TRUE"
             "IsolateTo" = "8:"
             }
             "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_88C4C520DC26489AAE9A79AE2F7F22EB"
@@ -1094,19 +1094,19 @@
         {
         "Name" = "8:Microsoft Visual Studio"
         "ProductName" = "8:Gridcoin Research"
-        "ProductCode" = "8:{4831B844-8301-4103-A929-066739D6C6A1}"
-        "PackageCode" = "8:{CC1B286E-DD68-419C-A131-1469838A7260}"
+        "ProductCode" = "8:{6BCE1E10-65F1-4C5C-B376-A09A78DA85D2}"
+        "PackageCode" = "8:{96687171-6208-4453-AF03-FF01C4B036C0}"
         "UpgradeCode" = "8:{9617E9EA-252F-43CE-B53E-B48C85F71192}"
         "AspNetVersion" = "8:4.0.30319.0"
         "RestartWWWService" = "11:FALSE"
         "RemovePreviousVersions" = "11:TRUE"
         "DetectNewerInstalledVersion" = "11:FALSE"
         "InstallAllUsers" = "11:TRUE"
-        "ProductVersion" = "8:37.1"
+        "ProductVersion" = "8:37.2"
         "Manufacturer" = "8:GridcoinResearch"
         "ARPHELPTELEPHONE" = "8:"
         "ARPHELPLINK" = "8:"
-        "Title" = "8:Gridcoin Research Beta 37.1"
+        "Title" = "8:Gridcoin Research Beta 37.2"
         "Subject" = "8:"
         "ARPCONTACT" = "8:The Gridcoin Developers"
         "Keywords" = "8:Gridcoin Research"

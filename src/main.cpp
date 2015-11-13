@@ -67,6 +67,8 @@ std::string getMacAddress();
 std::string TimestampToHRDate(double dtm);
 std::string AddContract(std::string sType, std::string sName, std::string sContract);
 bool CPIDAcidTest(std::string boincruntimepublickey);
+bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
+
 std::string MyBeaconExists(std::string cpid);
 extern bool BlockNeedsChecked(int64_t BlockTime);
 extern void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector<CBlockIndex*> vConnect);
@@ -8374,6 +8376,8 @@ void HarvestCPIDs(bool cleardata)
 		{
 			std::string email_hash = ExtractXML(vCPID[i],"<email_hash>","</email_hash>");
 			std::string cpidhash = ExtractXML(vCPID[i],"<cross_project_id>","</cross_project_id>");
+			std::string externalcpid = ExtractXML(vCPID[i],"<external_cpid>","</external_cpid>");
+
 			std::string utc=ExtractXML(vCPID[i],"<user_total_credit>","</user_total_credit>");
 			std::string rac=ExtractXML(vCPID[i],"<user_expavg_credit>","</user_expavg_credit>");
 			std::string proj=ExtractXML(vCPID[i],"<project_name>","</project_name>");
@@ -8413,8 +8417,7 @@ void HarvestCPIDs(bool cleardata)
 				//If not, Call out to credit check node:
 				std::string sKey = structcpid.cpid + ":" + proj;
 				mvCPIDs[proj] = structcpid;	
-	           	//CreditCheck(structcpid.cpid,cleardata);
-				//structcpid = mvCPIDs[proj];
+	         	//structcpid = mvCPIDs[proj];
 				
 				if (!structcpid.Iscpidvalid)
 				{
@@ -8439,13 +8442,17 @@ void HarvestCPIDs(bool cleardata)
 					structcpid.errors = "Team invalid";
 				}
 		
-				bool bAcid = CPIDAcidTest(cpidhash);
+				
+				bool bAcid = CPIDAcidTest2(cpidhash,externalcpid);
 				if (!bAcid)
 				{
 					structcpid.Iscpidvalid = false;
 					structcpid.errors = "CPID corrupted";
+					printf("Primary cpid corrupted\r\n");
 				}
+				
 
+				//11-12-2015
 				if (structcpid.Iscpidvalid)
 				{
 						GlobalCPUMiningCPID.cpidhash = cpidhash;
@@ -8472,6 +8479,7 @@ void HarvestCPIDs(bool cleardata)
 		}
 
 	}
+	if (msPrimaryCPID=="") msPrimaryCPID="INVESTOR";
 
 	}
 	
