@@ -4390,7 +4390,7 @@ Value listitem(const Array& params, bool fHelp)
 					entry.push_back(Pair("Team",structcpid.team));
 					//entry.push_back(Pair("Is my CPID Valid?",structcpid.Iscpidvalid));
 					entry.push_back(Pair("CPID Link",structcpid.link));
-					//entry.push_back(Pair("Errors",structcpid.errors));
+					entry.push_back(Pair("Debug Info",structcpid.errors));
 					results.push_back(entry);
 				}
 

@@ -8383,6 +8383,12 @@ void HarvestCPIDs(bool cleardata)
 			std::string proj=ExtractXML(vCPID[i],"<project_name>","</project_name>");
 			std::string team=ExtractXML(vCPID[i],"<team_name>","</team_name>");
 			std::string rectime = ExtractXML(vCPID[i],"<rec_time>","</rec_time>");
+
+			if (Contains(vCPID[i],"<external_cpid>") && externalcpid.empty())
+			{
+				externalcpid="?";
+			}
+
 			boost::to_lower(proj);
             proj = ToOfficialName(proj);
 			bool projectvalid = ProjectIsValid(proj);			//Is project Valid
@@ -8441,19 +8447,23 @@ void HarvestCPIDs(bool cleardata)
 					structcpid.Iscpidvalid = false;
 					structcpid.errors = "Team invalid";
 				}
-		
-				
-				bool bAcid = CPIDAcidTest2(cpidhash,externalcpid);
-				if (!bAcid)
+		        bool bAcid = true;
+
+				if (!externalcpid.empty())
 				{
-					structcpid.Iscpidvalid = false;
-					structcpid.errors = "CPID corrupted";
-					printf("Primary cpid corrupted\r\n");
-				}
-				
+					bAcid = CPIDAcidTest2(cpidhash,externalcpid);
+					if (!bAcid)
+					{
+						structcpid.Iscpidvalid = false;
+						structcpid.errors = "CPID corrupted (ext cpid) ";
+						printf("Primary cpid corrupted %s \r\n",externalcpid.c_str());
+					}
+					mvCPIDs[proj] = structcpid;
+			   }
+
 
 				//11-12-2015
-				if (structcpid.Iscpidvalid)
+				if (structcpid.Iscpidvalid && bAcid)
 				{
 						GlobalCPUMiningCPID.cpidhash = cpidhash;
 						GlobalCPUMiningCPID.email = email;
@@ -8479,7 +8489,7 @@ void HarvestCPIDs(bool cleardata)
 		}
 
 	}
-	if (msPrimaryCPID=="") msPrimaryCPID="INVESTOR";
+	if (msPrimaryCPID.empty()) msPrimaryCPID="INVESTOR";
 
 	}
 	
