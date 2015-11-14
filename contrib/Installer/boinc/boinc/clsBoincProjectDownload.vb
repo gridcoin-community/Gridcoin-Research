@@ -7,114 +7,115 @@ Imports ICSharpCode.SharpZipLib.GZip
 Public Class clsBoincProjectDownload
 
 
-    Public msSeedProjects As String = "Bitcoin Utopia;http://www.bitcoinutopia.net/bitcoinutopia/,Citizen Science Grid;" _
-                                      & "http://csgrid.org/csg/stats/,enigma@home;http://www.enigmaathome.net/,denis@home;http://denis.usj.es/denisathome/,universe@home;http://universeathome.pl/universe/,wuprop@home;http://wuprop.boinc-af.org/,World Community Grid;http://www.worldcommunitygrid.org/boinc/,yafu;http://yafu.myfirewall.org/yafu/,Gridcoin Finance;" _
-                                      & "http://finance.gridcoin.us/finance/,seti@home;http://setiathome.berkeley.edu/,Rosetta@Home;" _
-                                      & "http://boinc.bakerlab.org/," _
-                                      & "Einstein@Home;http://einstein.phys.uwm.edu/," _
-                                      & "MilkyWay@home;http://milkyway.cs.rpi.edu/milkyway/,PrimeGrid;" _
-                                      & "http://www.primegrid.com/," _
-                                      & "theSkyNet POGS;http://pogs.theskynet.org/pogs/,Asteroids@home;" _
-                                      & "http://asteroidsathome.net/boinc/;http://www.enigmaathome.net/," _
-                                      & "SZTAKI Desktop Grid;http://szdg.lpds.sztaki.hu/szdg/," _
-                                      & "Climate Prediction;http://climateapps2.oerc.ox.ac.uk/cpdnboinc/," _
-                                      & "POEM@HOME;http://boinc.fzk.de/poem/," _
-                                      & "Malaria Control;http://malariacontrol.net/,LHC@Home Classic;http://lhcathomeclassic.cern.ch/sixtrack/,yoyo@home;http://www.rechenkraft.net/yoyo/," _
-                                      & "Cosmology@Home;http://www.cosmologyathome.org/,SAT@home;http://sat.isa.ru/pdsat/," _
-                                      & "CAS@HOME;http://casathome.ihep.ac.cn/,NFS@Home;http://escatter11.fullerton.edu/nfs/," _
-                                      & "NumberFields@home;http://numberfields.asu.edu/NumberFields/,Leiden Classical;http://boinc.gorlaeus.net/," _
-                                      & "GPUGRID;http://www.gpugrid.net/," _
-                                      & "DistributedDataMining;http://www.distributeddatamining.org/DistributedDataMining/," _
-                                      & "EDGeS@Home;http://home.edges-grid.eu/home/," _
-                                      & "Albert@Home;http://albert.phys.uwm.edu/," _
-                                      & "The Lattice Project;http://boinc.umiacs.umd.edu/," _
-                                      & "Collatz Conjecture;http://boinc.thesonntags.com/collatz/," _
-                                      & "MindModeling@Home;http://mindmodeling.org/," _
-                                      & "vLHCathome;http://lhcathome2.cern.ch/vLHCathome/," _
-                                      & "FiND@Home;http://findah.ucd.ie/,ATLAS@Home;http://atlasathome.cern.ch/,Moowrap;http://moowrap.net/,BURP;http://burp.renderfarming.net/"
+    'Public msSeedProjects As String = "Bitcoin Utopia;http://www.bitcoinutopia.net/bitcoinutopia/,Citizen Science Grid;"                                       & "http://csgrid.org/csg/stats/,enigma@home;http://www.enigmaathome.net/,denis@home;http://denis.usj.es/denisathome/,universe@home;http://universeathome.pl/universe/,wuprop@home;http://wuprop.boinc-af.org/,World Community Grid;http://www.worldcommunitygrid.org/boinc/,yafu;http://yafu.myfirewall.org/yafu/,Gridcoin Finance;"                                       & "http://finance.gridcoin.us/finance/,seti@home;http://setiathome.berkeley.edu/,Rosetta@Home;"                                       & "http://boinc.bakerlab.org/,"                                       & "Einstein@Home;http://einstein.phys.uwm.edu/,"                                       & "MilkyWay@home;http://milkyway.cs.rpi.edu/milkyway/,PrimeGrid;"                                       & "http://www.primegrid.com/,"                                       & "theSkyNet POGS;http://pogs.theskynet.org/pogs/,Asteroids@home;"                                       & "http://asteroidsathome.net/boinc/;http://www.enigmaathome.net/,"                                       & "SZTAKI Desktop Grid;http://szdg.lpds.sztaki.hu/szdg/,"                                       & "Climate Prediction;http://climateapps2.oerc.ox.ac.uk/cpdnboinc/,"                                       & "POEM@HOME;http://boinc.fzk.de/poem/,"                                       & "Malaria Control;http://malariacontrol.net/,LHC@Home Classic;http://lhcathomeclassic.cern.ch/sixtrack/,yoyo@home;http://www.rechenkraft.net/yoyo/,"                                       & "Cosmology@Home;http://www.cosmologyathome.org/,SAT@home;http://sat.isa.ru/pdsat/,"                                       & "CAS@HOME;http://casathome.ihep.ac.cn/,NFS@Home;http://escatter11.fullerton.edu/nfs/,"                                       & "NumberFields@home;http://numberfields.asu.edu/NumberFields/,Leiden Classical;http://boinc.gorlaeus.net/,"                                       & "GPUGRID;http://www.gpugrid.net/,"                                       & "DistributedDataMining;http://www.distributeddatamining.org/DistributedDataMining/,"                                       & "EDGeS@Home;http://home.edges-grid.eu/home/,"                                       & "Albert@Home;http://albert.phys.uwm.edu/,"                                       & "The Lattice Project;http://boinc.umiacs.umd.edu/,"                                       & "Collatz Conjecture;http://boinc.thesonntags.com/collatz/,"                                       & "MindModeling@Home;http://mindmodeling.org/,"                                       & "vLHCathome;http://lhcathome2.cern.ch/vLHCathome/,"                                       & "FiND@Home;http://findah.ucd.ie/,ATLAS@Home;http://atlasathome.cern.ch/,Moowrap;http://moowrap.net/,BURP;http://burp.renderfarming.net/
 
 
-    Public Function DownloadGZipFiles()
-        Dim vProjects() As String = Split(msSeedProjects, ",")
+
+    Public Function DownloadGZipFiles() As Boolean
+
+
+        Dim lAgeOfMaster = GetFileAge(GetGridFolder() + "NeuralNetwork\db.dat")
+        If lAgeOfMaster < SYNC_THRESHOLD Then Return True
+
+        Dim rWhiteListedProjects As New Row
+        rWhiteListedProjects.Database = "Whitelist"
+        rWhiteListedProjects.Table = "Whitelist"
+        Dim lstWhitelist As List(Of Row) = GetList(rWhiteListedProjects, "*")
+        Dim sProjectURL As String = ""
         Dim sProject As String = ""
-        For iProject As Integer = 0 To UBound(vProjects)
 
-            Try
+        Dim sNNFolder1 As String = GetGridFolder() + "NeuralNetwork\"
+        If Directory.Exists(sNNFolder1) = False Then
+            Directory.CreateDirectory(sNNFolder1)
+        End If
 
-                Dim lAgeOfMaster = GetFileAge(GetGridFolder() + "NeuralNetwork\db.dat")
-                If lAgeOfMaster < SYNC_THRESHOLD Then Exit Function
-                'Gather GZ Files:
-                Dim vTemp() As String = Split(vProjects(iProject), ";")
-                sProject = vTemp(0)
-                Dim sURL As String = vTemp(1)
-                Dim vURLGzip As String()
-                vURLGzip = Split(sURL, "/")
-                Dim sGzipURL As String = vURLGzip(0) + "//" + vURLGzip(1) + vURLGzip(2) + "/stats/user.gz"
-                'One Off Rules
-                sGzipURL = vURLGzip(0) + "//" + vURLGzip(1) + vURLGzip(2) + "/" + vURLGzip(3) + "/stats/user.gz"
-                If sGzipURL Like "*einstein*" Then sGzipURL = Replace(sGzipURL, "user.gz", "user_id.gz")
-                If sGzipURL Like "*burp*" Then sGzipURL = Replace(sGzipURL, "user.gz", "user_id.gz")
-                If sGzipURL Like "*gorlaeus*" Then sGzipURL = Replace(sGzipURL, "user.gz", "user.xml.gz")
-                'Download the Team file
-                Dim sPath As String = GetGridFolder() + "NeuralNetwork\" + sProject + ".gz"
-                Dim sTeamPath As String = Replace(sPath, ".gz", "team.gz")
-                Dim sTeamGzipURL As String = Replace(sGzipURL, "user.gz", "team.gz")
-                sTeamGzipURL = Replace(sTeamGzipURL, "user_id.gz", "team_id.gz")
-                sTeamGzipURL = Replace(sTeamGzipURL, "user.xml.gz", "team.xml.gz")
-                Dim sTeamPathUnzipped As String = Replace(sTeamPath, ".gz", ".xml")
-                Dim sGzipPathUnzipped As String = Replace(sPath, ".gz", ".xml")
-                'If older than 7 days, download the team files again:
-                GuiDoEvents()
-                If GetFileAge(sTeamPathUnzipped) > TEAM_SYNC_THRESHOLD Then
-                    Dim w As New MyWebClient
-                    For iRetry As Integer = 1 To 5
-                        Try
-                            'Find out what our team ID is
-                            msNeuralDetail = "Gathering Team " + sProject
-                            w.DownloadFile(sTeamGzipURL, sTeamPath)
-                            GuiDoEvents()
+        For Each rProject As Row In lstWhitelist
+            sProject = LCase(Trim(rProject.PrimaryKey))
+            sProjectURL = Trim(rProject.DataColumn1)
 
-                            'un-gzip the file
-                            ExtractGZipInnerArchive(sTeamPath, GetGridFolder() + "NeuralNetwork\")
-                            Exit For
-                            Stop
-                        Catch ex As Exception
-                            Dim sMsg As String = ex.Message
-                        End Try
-                    Next
-                End If
+            If Right(sProjectURL, 1) = "@" Then
+                sProjectURL = Mid(sProjectURL, 1, Len(sProjectURL) - 1)
+                sProject = Replace(sProject, "_", " ")
+                sProjectURL = Replace(sProjectURL, "_", " ")
+                ' If LCase(sProjectURL) Like "*http://www.distributeddatamining.org/distributeddatamining/*" Then
+                'sProjectURL = "http://www.distributeddatamining.org/DistributedDataMining/"
+                'End If
+                Try
 
-                'Sync the main RAC gz file            
+                    'Gather GZ Files:
+                    Dim vURLGzip As String()
+                    vURLGzip = Split(sProjectURL, "/")
+                    Dim sGzipURL As String = vURLGzip(0) + "//" + vURLGzip(1) + vURLGzip(2) + "/stats/user.gz"
+                    'One Off Rules
+                    sGzipURL = vURLGzip(0) + "//" + vURLGzip(1) + vURLGzip(2) + "/" + vURLGzip(3) + "/stats/user.gz"
+                    If sGzipURL Like "*einstein*" Then sGzipURL = Replace(sGzipURL, "user.gz", "user_id.gz")
+                    If sGzipURL Like "*burp*" Then sGzipURL = Replace(sGzipURL, "user.gz", "user_id.gz")
+                    If sGzipURL Like "*gorlaeus*" Then sGzipURL = Replace(sGzipURL, "user.gz", "user.xml.gz")
+                    'Download the Team file
+                    Dim sPath As String = GetGridFolder() + "NeuralNetwork\" + sProject + ".gz"
+                    Dim sTeamPath As String = Replace(sPath, ".gz", "team.gz")
+                    Dim sTeamGzipURL As String = Replace(sGzipURL, "user.gz", "team.gz")
+                    sTeamGzipURL = Replace(sTeamGzipURL, "user_id.gz", "team_id.gz")
+                    sTeamGzipURL = Replace(sTeamGzipURL, "user.xml.gz", "team.xml.gz")
+                    Dim sTeamPathUnzipped As String = Replace(sTeamPath, ".gz", ".xml")
+                    Dim sGzipPathUnzipped As String = Replace(sPath, ".gz", ".xml")
+                    'If older than 7 days, download the team files again:
+                    GuiDoEvents()
+                    If GetFileAge(sTeamPathUnzipped) > TEAM_SYNC_THRESHOLD Then
+                        Dim w As New MyWebClient
+                        For iRetry As Integer = 1 To 5
+                            Try
+                                'Find out what our team ID is
+                                msNeuralDetail = "Gathering Team " + sProject
+                                Log("Syncing Team " + sProject + " " + sTeamGzipURL)
+                                w.DownloadFile(sTeamGzipURL, sTeamPath)
+                                GuiDoEvents()
+                                'un-gzip the file
+                                ExtractGZipInnerArchive(sTeamPath, GetGridFolder() + "NeuralNetwork\")
+                                Exit For
+                            Catch ex As Exception
+                                Log("Error while downloading master team gz file: " + ex.Message + ", Retrying.")
+                            End Try
+                        Next
+                    End If
 
-                If GetFileAge(sGzipPathUnzipped) > PROJECT_SYNC_THRESHOLD Then
-                    Dim w As New MyWebClient
-                    For iRetry As Integer = 1 To 5
-                        Try
-                            'Find out what our team ID is
-                            msNeuralDetail = "Gather Project " + sProject
-                            w.DownloadFile(sGzipURL, sPath)
-                            GuiDoEvents()
-                            'un-gzip the file
-                            ExtractGZipInnerArchive(sPath, GetGridFolder() + "NeuralNetwork\")
-                            Exit For
-                            Stop
-                        Catch ex As Exception
-                            Dim sMsg As String = ex.Message
-                        End Try
-                    Next
-                End If
-                'Scan for the Gridcoin team inside this project:
-                Dim lTeamID As Long = GetTeamID(sTeamPathUnzipped)
+                    'Sync the main RAC gz file            
 
-                'Create the project master file
-                If File.Exists(GetGridFolder() + "NeuralNetwork\" + sProject + ".master.dat") = False Then
-                    EmitProjectFile(sGzipPathUnzipped, GetGridFolder() + "NeuralNetwork\", sProject, lTeamID)
-                End If
+                    If GetFileAge(sGzipPathUnzipped) > PROJECT_SYNC_THRESHOLD Then
+                        Dim w As New MyWebClient
+                        For iRetry As Integer = 1 To 5
+                            Try
+                                'Find out what our team ID is
+                                msNeuralDetail = "Gather Project " + sProject
+                                Log("Syncing Project " + sProject + " " + sGzipURL)
+                                w.DownloadFile(sGzipURL, sPath)
+                                GuiDoEvents()
+                                'un-gzip the file
+                                ExtractGZipInnerArchive(sPath, GetGridFolder() + "NeuralNetwork\")
+                                'Delete the Project master.dat file
+                                If File.Exists(GetGridFolder() + "NeuralNetwork\" + sProject + ".master.dat") Then
+                                    File.Delete(GetGridFolder() + "NeuralNetwork\" + sProject + ".master.dat")
+                                End If
+                                Exit For
+                            Catch ex As Exception
+                                Dim sMsg As String = ex.Message
+                                Log("Error while downloading master project rac gz file : " + ex.Message + ", Retrying.")
+                            End Try
+                        Next
+                    End If
+                    'Scan for the Gridcoin team inside this project:
+                    Dim lTeamID As Long = GetTeamID(sTeamPathUnzipped)
 
-                Debug.Print(sProject)
-            Catch ex As Exception
-                Log("Error while syncing " + sProject + ": " + ex.Message)
-            End Try
+                    'Create the project master file
+                    If File.Exists(GetGridFolder() + "NeuralNetwork\" + sProject + ".master.dat") = False Then
+                        EmitProjectFile(sGzipPathUnzipped, GetGridFolder() + "NeuralNetwork\", sProject, lTeamID)
+                    End If
+
+                    Debug.Print(sProject)
+                Catch ex As Exception
+                    Log("Error while syncing " + sProject + ": " + ex.Message)
+                End Try
+            End If
 
         Next
         'Verify all the files exist
@@ -150,8 +151,8 @@ Public Class clsBoincProjectDownload
         Next fi
         oSW.Close()
         msNeuralDetail = ""
-        If iTotalProjectsSynced < vProjects.Length Then
-            Log("Total Projects Synced: " + Trim(iTotalProjectsSynced) + ", Project Count " + Trim(vProjects.Length) + ": FAILURE")
+        If iTotalProjectsSynced < lstWhitelist.Count Then
+            Log("Total Projects Synced: " + Trim(iTotalProjectsSynced) + ", Project Count " + Trim(lstWhitelist.Count) + ": FAILURE")
             If File.Exists(GetGridFolder() + "NeuralNetwork\db.dat") Then
                 'Conundrum here.  Although we would like to delete the database, what if one project site is down for the day
                 'for all nodes?  If we do this, no one will be able to sync.  For robustness, let the network sync with a missing project.
@@ -160,6 +161,7 @@ Public Class clsBoincProjectDownload
             ' Log("Database deleted.")
         End If
 
+        Return True
 
     End Function
     Private Sub AppendUser(swProj As StreamWriter, dTeamId As Double, vChunk() As String)

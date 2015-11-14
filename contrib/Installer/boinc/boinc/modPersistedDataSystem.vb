@@ -347,7 +347,6 @@ Module modPersistedDataSystem
         Log("EnsureTeamIsSynchronized: " + Trim(dAge))
         Dim dWindow As Double = 60 * 60 '1 hour before and 1 hour after superblock expires:
         If dAge > (86400 - dWindow) And dAge < (86400 + dWindow) Then
-
             Dim lAgeOfMaster = GetFileAge(GetGridFolder() + "NeuralNetwork\db.dat")
             If lAgeOfMaster > dWindow Then
                 'Clear out this nodes project data, so the node can sync with the team at the same exact time:
@@ -373,6 +372,10 @@ Module modPersistedDataSystem
         SoftKill(sPath + "*team.xml")
         SoftKill(sPath + "*team.gz")
     End Sub
+    Private Sub ClearWhitelistData()
+        Dim sPath As String = GetFileAge(GetGridFolder() + "NeuralNetwork\")
+        SoftKill(sPath + "whitelist*.dat")
+    End Sub
     Public Sub CompleteSync()
         If Math.Abs(DateDiff(DateInterval.Second, Now, mdLastSync)) > 60 * 10 Then bMagsDoneLoading = True
         If bMagsDoneLoading = False Then Exit Sub
@@ -388,13 +391,6 @@ Module modPersistedDataSystem
             Try
                 mlPercentComplete = 1
                 EnsureTeamIsSynchronized()
-
-                Log("Starting Phase I: Gather gzip files")
-                Dim c As New clsBoincProjectDownload
-                c.DownloadGZipFiles()
-
-                mlPercentComplete = 2
-                Log("Starting Phase II")
                 UpdateMagnitudesPhase1()
             Catch ex As Exception
                 Log("Err in completesync" + ex.Message)
@@ -407,7 +403,6 @@ Module modPersistedDataSystem
                 Log("Err in UpdateMagnitudes in completesync" + ex.Message)
             End Try
             mbForcefullySyncAllRac = False
-
             If LCase(KeyValue("exportmagnitude")) = "true" Then
                 ExportToCSV2()
             End If
@@ -560,6 +555,7 @@ Module modPersistedDataSystem
             surrogateRow1.Database = "Project"
             surrogateRow1.Table = "Projects"
             EraseNeuralNetwork("project")
+            EraseNeuralNetwork("projects")
             surrogateRow1.Database = "Whitelist"
             surrogateRow1.Table = "Whitelist"
             EraseNeuralNetwork("whitelist")
@@ -580,21 +576,27 @@ Module modPersistedDataSystem
                     If Len(vWhitelist(x)) > 1 Then
                         Dim vRow() As String
                         vRow = Split(vWhitelist(x), "<COL>")
-                        Dim sProject As String = vRow(0)
-                        Dim sURL As String = vRow(1)
-                        Dim dr As New Row
-                        dr.Database = "Whitelist"
-                        dr.Table = "Whitelist"
-                        dr.PrimaryKey = sProject
-                        dr = Read(dr)
-                        dr.Expiration = DateAdd(DateInterval.Day, 14, Now)
-                        dr.Synced = DateAdd(DateInterval.Day, -1, Now)
-                        Store(dr)
+                        If UBound(vRow) > 0 Then
+                            Dim sProject As String = vRow(0)
+                            Dim sURL As String = Trim(vRow(1))
+                            If Right(sURL, 1) = "@" Then
+                                Dim dr As New Row
+                                dr.Database = "Whitelist"
+                                dr.Table = "Whitelist"
+                                dr.DataColumn1 = sURL
+                                dr.PrimaryKey = sProject
+                                dr = Read(dr)
+                                dr.Expiration = DateAdd(DateInterval.Day, 14, Now)
+                                dr.Synced = DateAdd(DateInterval.Day, -1, Now)
+                                Store(dr)
+                            End If
+                        End If
                     End If
                 Next x
             Catch ex As Exception
                 Log("UM Phase 1: While loading projects " + ex.Message)
             End Try
+
             Dim vCPIDs() As String = Split(sCPIDData, "<ROW>")
             Dim vTestNet() As String
             vTestNet = Split(vCPIDs(0), "<COL>")
@@ -635,7 +637,12 @@ Module modPersistedDataSystem
                     End If
                 End If
             Next
-            mlPercentComplete = 6
+
+            mlPercentComplete = 1
+            Dim c As New clsBoincProjectDownload
+            c.DownloadGZipFiles()
+            mlPercentComplete = 2
+            Log("Starting Phase II")
 
         Catch ex As Exception
             Log("UpdateMagnitudesPhase1: " + ex.Message)
@@ -883,6 +890,15 @@ Module modPersistedDataSystem
         sCompare1 = UCase(sCompare1)
         Return sCompare1
     End Function
+    Public Function IsInListExact(sData As String, lstRows As List(Of Row)) As Boolean
+        For Each oRowIterator As Row In lstRows
+            If Trim(UCase(oRowIterator.PrimaryKey)) = Trim(UCase(sData)) Then
+                Return True
+            End If
+        Next
+        Return False
+    End Function
+
     Public Function IsInList(sData As String, lstRows As List(Of Row), bRequireExactMatch As Boolean) As Boolean
         For Each oRowIterator As Row In lstRows
             If Trim(UCase(oRowIterator.PrimaryKey)) = Trim(UCase(sData)) Then
@@ -946,8 +962,11 @@ Module modPersistedDataSystem
                             If LCase(r.PrimaryKey) Like LCase(sWildcard) Then
                                 'Differences between Project Sites and Ntsoft:
                                 bBlacklist = False
+                                If LCase(r.Table) = "project" Or LCase(r.Table) = "whitelist" Or LCase(r.Table) = "projects" Then
+                                    r.PrimaryKey = Replace(r.PrimaryKey, "_", " ")
+                                    If IsInListExact(r.PrimaryKey, x) Then bBlacklist = True
+                                End If
                                 If Not bBlacklist Then x.Add(r)
-
                             End If
                         End While
                         objReader.Close()
@@ -957,6 +976,7 @@ Module modPersistedDataSystem
         End SyncLock
         Return x
     End Function
+
     Public Function GetRacFromNeuralNetworkRetired(sCPID As String) As Boolean
         Dim oNeuralType As New NeuralStructure
         oNeuralType.PK = sCPID
@@ -1554,17 +1574,20 @@ Retry:
                     Dim di As New DirectoryInfo(sNNFolder)
                     Dim fiArr As FileInfo() = di.GetFiles()
                     Dim fi As FileInfo
-                    For Each fi In fiArr
-                        Using Stream As New System.IO.FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
-                            Dim objReader As New System.IO.StreamReader(Stream)
-                            While objReader.EndOfStream = False
-                                sTemp = objReader.ReadLine
-                                Dim sExport As String = fi.Name + "<COL>" + sTemp
-                                objWriter.WriteLine(sExport)
-                            End While
-                            objReader.Close()
-                        End Using
-                    Next fi
+                    If fi.Name Like "cpid_*" Or fi.Name Like "project_*" Then
+                        For Each fi In fiArr
+                            Using Stream As New System.IO.FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
+                                Dim objReader As New System.IO.StreamReader(Stream)
+                                While objReader.EndOfStream = False
+                                    sTemp = objReader.ReadLine
+                                    Dim sExport As String = fi.Name + "<COL>" + sTemp
+                                    objWriter.WriteLine(sExport)
+                                End While
+                                objReader.Close()
+                            End Using
+                        Next fi
+                    End If
+
                 End SyncLock
             End Using
         Catch ex As Exception

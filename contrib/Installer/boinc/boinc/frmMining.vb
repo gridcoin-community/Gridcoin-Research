@@ -371,6 +371,24 @@ Public Class frmMining
 
         End If
     End Sub
+    Private Shared Function InlineAssignHelper(Of T)(ByRef target As T, ByVal value As T) As T
+        target = value
+        Return value
+    End Function
+    Private Sub HighlightKeyword(o As RichTextBox, color__1 As Color, startIndex As Integer, sFind As String)
+        If o.Text.Contains(sFind) Then
+            Dim index As Integer = -1
+            Dim selectStart As Integer = o.SelectionStart
+
+            While (InlineAssignHelper(index, o.Text.IndexOf(sFind, (index + 1)))) <> -1
+                o.[Select]((index + startIndex), sFind.Length)
+                o.SelectionColor = color__1
+                o.[Select](selectStart, 0)
+                o.SelectionColor = Color.Black
+            End While
+        End If
+    End Sub
+
     Private Sub dgv_CellContentDoubleClick(sender As Object, e As System.Windows.Forms.DataGridViewCellEventArgs) Handles dgv.CellContentDoubleClick
         'Drill into CPID
         If e.RowIndex < 0 Then Exit Sub
@@ -493,6 +511,7 @@ Public Class frmMining
             rtbDrillRAC.Text = sXML
             rtbDrillRAC.BackColor = Color.Black
             rtbDrillRAC.ForeColor = Color.Green
+            HighlightKeyword(rtbDrillRAC, Color.Brown, 0, "<project>")
 
             oNewForm.Controls.Add(rtbDrillRAC)
             oNewForm.Show()
@@ -649,5 +668,5 @@ Public Class frmMining
         Next
     End Sub
 
-    
+
 End Class

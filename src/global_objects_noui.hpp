@@ -29,6 +29,7 @@ extern volatile bool bAllowBackToBack;
 extern volatile bool CreatingCPUBlock;
 extern volatile bool bStakeMinerOutOfSyncWithNetwork;
 extern volatile bool bDoTally;
+extern volatile bool bExecuteGridcoinServices;
 extern volatile bool bTallyFinished;
 extern volatile bool bGridcoinGUILoaded;
 

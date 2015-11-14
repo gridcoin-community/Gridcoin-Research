@@ -37,6 +37,8 @@ extern bool IsSuperBlock(CBlockIndex* pIndex);
 extern bool VerifySuperblock(std::string superblock, int nHeight);
 extern double ExtractMagnitudeFromExplainMagnitude();
 extern void AddPeek(std::string data);
+extern void GridcoinServices();
+
 
 
 extern bool NeedASuperblock();
@@ -320,6 +322,7 @@ volatile bool bCheckedForUpgradeLive = false;
 volatile bool bGlobalcomInitialized = false;
 volatile bool bStakeMinerOutOfSyncWithNetwork = false;
 volatile bool bDoTally = false;
+volatile bool bExecuteGridcoinServices = false;
 volatile bool bTallyFinished = false;
 volatile bool bGridcoinGUILoaded = false;
 
@@ -640,7 +643,7 @@ bool FullSyncWithDPORNodes()
 				std::string errors1 = "";
                 LoadAdminMessages(false,errors1);
 				std::string cpiddata = GetListOf("beacon");
-				std::string whitelist = GetListOf("project");
+				std::string sWhitelist = GetListOf("project");
 				int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
 				std::string myNeuralHash = "";
 				double popularity = 0;
@@ -649,7 +652,7 @@ bool FullSyncWithDPORNodes()
 				std::string sBlock = mvApplicationCache["superblock;block_number"];
 				std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
 
-				std::string data = "<WHITELIST>" + whitelist + "</WHITELIST><CPIDDATA>" 
+				std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>" 
 					+ cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>" 
 					+ sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
 
@@ -3303,7 +3306,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 		{
 			    if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))	
 				{
-						BusyWaitForTally();
+						bDoTally=true;
 					    if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))	
 						{
 							StructCPID strUntrustedHost = GetInitializedStructCPID2(bb.cpid,mvMagnitudes);
@@ -3381,7 +3384,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 								/*  Reserved for future use:
 									bNetAveragesLoaded=false;
 									nLastTallied = 0;
-									BusyWaitForTally();
+									BsyWaitForTally();
 								*/
 								bDoTally = true;
 					}
@@ -3437,7 +3440,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 		bool result = LoadAdminMessages(false,errors1);
 	}
 
-	// 9-19-2015; Slow down Retallying when in RA mode so we minimize disruption of the network
+	// Slow down Retallying when in RA mode so we minimize disruption of the network
 	if ( (pindex->nHeight % 60 == 0) && IsResearchAgeEnabled(pindex->nHeight) && BlockNeedsChecked(pindex->nTime))
 	{
 		BusyWaitForTally();
@@ -3707,7 +3710,8 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
 	// Gridcoin: Now that the chain is back in order, Fix the researchers who were disrupted:
 	if (vDisconnect.size() > 25)
 	{
-		BusyWaitForTally();
+		//BsyWaitForTally();
+		bDoTally=true;
 	}
 					    
     printf("REORGANIZE: done\n");
@@ -4443,10 +4447,14 @@ bool NeedASuperblock()
 		return bDireNeedOfSuperblock;
 }
 
+
+
+
 void GridcoinServices()
 {
 
-	//Dont do this on headless-SePulcher 12-4-2014 (Halford)
+	
+	//Dont do this on headless - SeP
 	#if defined(QT_GUI)
 	   if ((nBestHeight % 100) == 0)
 	   {
@@ -4456,8 +4464,8 @@ void GridcoinServices()
 			MilliSleep(50); //Update UI
 	   }
     #endif
-
-
+	// Services thread activity
+	if (fDebug3) printf("^^");
 
 	//This is Gridcoins Service thread; called once per block	
 	if (nBestHeight > 100 && nBestHeight < 200)
@@ -4482,7 +4490,6 @@ void GridcoinServices()
 		return;
 	}
 
-	if (fDebug3) printf("{GS}");
 
 	//Backup the wallet once per 900 blocks:
 	if (TimerMain("backupwallet", 900))
@@ -4491,7 +4498,7 @@ void GridcoinServices()
 		printf("Daily backup results: %s\r\n",backup_results.c_str());
 	}
 
-	if (TimerMain("ResetVars",5))
+	if (TimerMain("ResetVars",30))
 	{
 		bTallyStarted = false;
 	}
@@ -4503,7 +4510,7 @@ void GridcoinServices()
 			pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
     }
 	
-	if (TimerMain("MyNeuralMagnitudeReport",5))
+	if (TimerMain("MyNeuralMagnitudeReport",30))
 	{
 		if (msNeuralResponse.length() < 25 && msPrimaryCPID != "INVESTOR" && !msPrimaryCPID.empty())
 		{
@@ -4635,17 +4642,17 @@ void GridcoinServices()
 
 
 	#if defined(WIN32) && defined(QT_GUI)
-	if (bCheckedForUpgradeLive == true && !fTestNet && bProjectsInitialized && bGlobalcomInitialized)
-	{
-		bCheckedForUpgradeLive=false;
-		printf("{Checking for Upgrade} ");
-		CheckForUpgrade();
-		printf("{Done checking for upgrade} ");
-	}
+		if (bCheckedForUpgradeLive == true && !fTestNet && bProjectsInitialized && bGlobalcomInitialized)
+		{
+			bCheckedForUpgradeLive=false;
+			printf("{Checking for Upgrade} ");
+			CheckForUpgrade();
+			printf("{Done checking for upgrade} ");
+		}
 	#endif
-
-
 }
+
+
 
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 {
@@ -4750,10 +4757,8 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
         mapOrphanBlocksByPrev.erase(hashPrev);
     }
 
-   
 	printf("{PB}: ACC; \r\n");
-
-	GridcoinServices();
+	bExecuteGridcoinServices = true;
     return true;
 }
 

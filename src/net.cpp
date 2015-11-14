@@ -29,6 +29,9 @@ using namespace boost;
 bool TallyNetworkAverages(bool ColdBoot);
 extern void BusyWaitForTally();
 extern void DoTallyResearchAverages(void* parg);
+extern void ExecGridcoinServices(void* parg);
+void GridcoinServices();
+
 
 #ifndef QT_GUI
  boost::thread_group threadGroup;
@@ -2006,8 +2009,35 @@ begin:
 }
 
 
+
+
+void ThreadExecuteGridcoinServices(void* parg)
+{
+    RenameThread("grc-services");
+
+begin:
+    try
+    {
+        ExecGridcoinServices(parg);
+    }
+    catch (std::exception& e) 
+	{
+        PrintException(&e, "ThreadExecuteGridcoinServices()");
+    }
+	catch(...)
+	{
+		printf("Error in ThreadExecuteGridcoinServices... Recovering ");
+	}
+	MilliSleep(10000);
+    printf("Services Exited, Restarting.. \r\n");
+	goto begin;
+}
+
+
+
 void BusyWaitForTally()
 {
+	printf("\r\n ** Busy Wait for Tally ** \r\n");
 	bTallyFinished=false;
 	bDoTally=true;
 	int iTimeout = 0;
@@ -2051,6 +2081,37 @@ void DoTallyResearchAverages(void* parg)
     }
     vnThreadsRunning[THREAD_TALLY]--;
 }
+
+
+void ExecGridcoinServices(void* parg)
+{
+    vnThreadsRunning[THREAD_SERVICES]++;
+	printf("\r\nStarting dedicated Gridcoin Services thread...\r\n");
+
+    while (!fShutdown)
+    {
+        MilliSleep(100);
+		if (bExecuteGridcoinServices)
+		{
+			bExecuteGridcoinServices=false;
+			//printf("\r\n[DoTallyRA_START] ");
+			try
+			{
+				GridcoinServices();
+			}
+			catch (std::exception& e) 
+			{
+				PrintException(&e, "ExecGridcoinServices()");
+			}
+			catch(...)
+			{
+				printf("\r\nError occurred in ExecGridcoinServices...Recovering\r\n");
+			}
+		}
+    }
+    vnThreadsRunning[THREAD_SERVICES]--;
+}
+
 
 
 
@@ -2732,6 +2793,10 @@ void StartNode(void* parg)
 	if (!NewThread(ThreadTallyResearchAverages, NULL))
         printf("Error; NewThread(ThreadTally) failed\n");
 
+	// Services
+	if (!NewThread(ThreadExecuteGridcoinServices, NULL))
+	   printf("Error; NewThread(ThreadExecuteGridcoinServices) failed\r\n");
+
     // Mine proof-of-stake blocks in the background
     if (!GetBoolArg("-staking", true))
         printf("Staking disabled\n");
@@ -2772,6 +2837,7 @@ bool StopNode()
     if (vnThreadsRunning[THREAD_ADDEDCONNECTIONS] > 0) printf("ThreadOpenAddedConnections still running\n");
     if (vnThreadsRunning[THREAD_DUMPADDRESS] > 0)      printf("ThreadDumpAddresses still running\n");
 	if (vnThreadsRunning[THREAD_TALLY] > 0)            printf("ThreadTally still running\n");
+	if (vnThreadsRunning[THREAD_SERVICES] > 0)         printf("ThreadServices still running\n");
     if (vnThreadsRunning[THREAD_STAKE_MINER] > 0)      printf("ThreadStakeMiner still running\n");
     while (vnThreadsRunning[THREAD_MESSAGEHANDLER] > 0 || vnThreadsRunning[THREAD_RPCHANDLER] > 0)
         MilliSleep(20);
