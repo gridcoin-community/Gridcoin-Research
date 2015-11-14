@@ -8369,130 +8369,141 @@ void HarvestCPIDs(bool cleardata)
 
 	int iRow = 0;
 	std::vector<std::string> vCPID = split(sout.c_str(),"<project>");
-	if (vCPID.size() > 0)
+	std::string investor = GetArgument("investor","false");
+
+	if (investor=="true")
 	{
+			msPrimaryCPID="INVESTOR";
+	}
+	else
+	{
+
+
+			if (vCPID.size() > 0)
+			{
 	
-		for (unsigned int i = 0; i < vCPID.size(); i++)
-		{
-			std::string email_hash = ExtractXML(vCPID[i],"<email_hash>","</email_hash>");
-			std::string cpidhash = ExtractXML(vCPID[i],"<cross_project_id>","</cross_project_id>");
-			std::string externalcpid = ExtractXML(vCPID[i],"<external_cpid>","</external_cpid>");
-
-			std::string utc=ExtractXML(vCPID[i],"<user_total_credit>","</user_total_credit>");
-			std::string rac=ExtractXML(vCPID[i],"<user_expavg_credit>","</user_expavg_credit>");
-			std::string proj=ExtractXML(vCPID[i],"<project_name>","</project_name>");
-			std::string team=ExtractXML(vCPID[i],"<team_name>","</team_name>");
-			std::string rectime = ExtractXML(vCPID[i],"<rec_time>","</rec_time>");
-
-			if (Contains(vCPID[i],"<external_cpid>") && externalcpid.empty())
-			{
-				externalcpid="?";
-			}
-
-			boost::to_lower(proj);
-            proj = ToOfficialName(proj);
-			bool projectvalid = ProjectIsValid(proj);			//Is project Valid
-			int64_t nStart = GetTimeMillis();
-			if (cpidhash.length() > 5 && proj.length() > 3) 
-			{
-				std::string cpid_non = cpidhash+email;
-				to_lower(cpid_non);
-				StructCPID structcpid = GetInitializedStructCPID2(proj,mvCPIDs);
-				iRow++;
-				structcpid.cpidhash = cpidhash;
-				structcpid.projectname = proj;
-				boost::to_lower(team);
-				structcpid.team = team;
-				InitializeProjectStruct(structcpid);
-				int64_t elapsed = GetTimeMillis()-nStart;
-				if (fDebug3) printf("Enumerating boinc local project %s cpid %s valid %s, elapsed %f ",structcpid.projectname.c_str(),structcpid.cpid.c_str(),YesNo(structcpid.Iscpidvalid).c_str(),(double)elapsed);
-				structcpid.rac = cdbl(rac,0);
-				structcpid.verifiedrac = cdbl(rac,0);
-
-				if (!structcpid.Iscpidvalid)
+				for (unsigned int i = 0; i < vCPID.size(); i++)
 				{
-					structcpid.errors = "CPID calculation invalid.  Check e-mail + reset project.";
-				}
-		
-				structcpid.utc = cdbl(utc,0);
-				structcpid.rectime = cdbl(rectime,0);
-				double currenttime =  GetAdjustedTime();
-				double nActualTimespan = currenttime - structcpid.rectime;
-				structcpid.age = nActualTimespan;
-				//Have credits been verified yet?
-				//If not, Call out to credit check node:
-				std::string sKey = structcpid.cpid + ":" + proj;
-				mvCPIDs[proj] = structcpid;	
-	         	//structcpid = mvCPIDs[proj];
-				
-				if (!structcpid.Iscpidvalid)
-				{
-					structcpid.errors = "CPID invalid.  Check E-mail address.";
-				}
+					std::string email_hash = ExtractXML(vCPID[i],"<email_hash>","</email_hash>");
+					std::string cpidhash = ExtractXML(vCPID[i],"<cross_project_id>","</cross_project_id>");
+					std::string externalcpid = ExtractXML(vCPID[i],"<external_cpid>","</external_cpid>");
 
-				if (structcpid.rac < 10)         
-				{
-					structcpid.Iscpidvalid = false;
-					structcpid.errors = "RAC too low";
-				}
+					std::string utc=ExtractXML(vCPID[i],"<user_total_credit>","</user_total_credit>");
+					std::string rac=ExtractXML(vCPID[i],"<user_expavg_credit>","</user_expavg_credit>");
+					std::string proj=ExtractXML(vCPID[i],"<project_name>","</project_name>");
+					std::string team=ExtractXML(vCPID[i],"<team_name>","</team_name>");
+					std::string rectime = ExtractXML(vCPID[i],"<rec_time>","</rec_time>");
 
-				if (structcpid.verifiedrac < 10)
-				{
-					structcpid.Iscpidvalid = false;
-					structcpid.errors="Verified RAC too low";
-				}
-
-				if (structcpid.team != "gridcoin")
-				{
-					structcpid.Iscpidvalid = false;
-					structcpid.errors = "Team invalid";
-				}
-		        bool bAcid = true;
-
-				if (!externalcpid.empty())
-				{
-					bAcid = CPIDAcidTest2(cpidhash,externalcpid);
-					if (!bAcid)
+					if (Contains(vCPID[i],"<external_cpid>") && externalcpid.empty())
 					{
-						structcpid.Iscpidvalid = false;
-						structcpid.errors = "CPID corrupted (ext cpid) ";
-						printf("Primary cpid corrupted %s \r\n",externalcpid.c_str());
+						//externalcpid="?";
 					}
-					mvCPIDs[proj] = structcpid;
-			   }
 
+					boost::to_lower(proj);
+					proj = ToOfficialName(proj);
+					bool projectvalid = ProjectIsValid(proj);			//Is project Valid
+					int64_t nStart = GetTimeMillis();
+					if (cpidhash.length() > 5 && proj.length() > 3) 
+					{
+						std::string cpid_non = cpidhash+email;
+						to_lower(cpid_non);
+						StructCPID structcpid = GetInitializedStructCPID2(proj,mvCPIDs);
+						iRow++;
+						structcpid.cpidhash = cpidhash;
+						structcpid.projectname = proj;
+						boost::to_lower(team);
+						structcpid.team = team;
+						InitializeProjectStruct(structcpid);
+						int64_t elapsed = GetTimeMillis()-nStart;
+						if (fDebug3) printf("Enumerating boinc local project %s cpid %s valid %s, elapsed %f ",structcpid.projectname.c_str(),structcpid.cpid.c_str(),YesNo(structcpid.Iscpidvalid).c_str(),(double)elapsed);
+						structcpid.rac = cdbl(rac,0);
+						structcpid.verifiedrac = cdbl(rac,0);
 
-				//11-12-2015
-				if (structcpid.Iscpidvalid && bAcid)
-				{
-						GlobalCPUMiningCPID.cpidhash = cpidhash;
-						GlobalCPUMiningCPID.email = email;
-						GlobalCPUMiningCPID.boincruntimepublickey = cpidhash;
-						if (structcpid.rac > 10 && structcpid.team=="gridcoin")
+						if (!structcpid.Iscpidvalid)
 						{
-							msPrimaryCPID = structcpid.cpid;
-							#if defined(WIN32) && defined(QT_GUI)
-								//Let the Neural Network know what your CPID is so it can be charted:
-							    std::string sXML = "<KEY>PrimaryCPID</KEY><VALUE>" + msPrimaryCPID + "</VALUE>";
-								std::string sData = qtExecuteDotNetStringFunction("WriteKey",sXML);
-							#endif
-							//Try to get a neural RAC report 7-25-2015
-							bool bResult = AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
+							structcpid.errors = "CPID calculation invalid.  Check e-mail + reset project.";
 						}
+		
+						structcpid.utc = cdbl(utc,0);
+						structcpid.rectime = cdbl(rectime,0);
+						double currenttime =  GetAdjustedTime();
+						double nActualTimespan = currenttime - structcpid.rectime;
+						structcpid.age = nActualTimespan;
+						//Have credits been verified yet?
+						//If not, Call out to credit check node:
+						std::string sKey = structcpid.cpid + ":" + proj;
+						mvCPIDs[proj] = structcpid;	
+	         			//structcpid = mvCPIDs[proj];
+				
+						if (!structcpid.Iscpidvalid)
+						{
+							structcpid.errors = "CPID invalid.  Check E-mail address.";
+						}
+
+						if (structcpid.rac < 10)         
+						{
+							structcpid.Iscpidvalid = false;
+							structcpid.errors = "RAC too low";
+						}
+
+						if (structcpid.verifiedrac < 10)
+						{
+							structcpid.Iscpidvalid = false;
+							structcpid.errors="Verified RAC too low";
+						}
+
+						if (structcpid.team != "gridcoin")
+						{
+							structcpid.Iscpidvalid = false;
+							structcpid.errors = "Team invalid";
+						}
+						bool bAcid = true;
+
+						if (!externalcpid.empty())
+						{
+							bAcid = CPIDAcidTest2(cpidhash,externalcpid);
+							if (!bAcid)
+							{
+								structcpid.Iscpidvalid = false;
+								structcpid.errors = "CPID corrupted (ext cpid) ";
+								printf("Primary cpid corrupted %s \r\n",externalcpid.c_str());
+							}
+							mvCPIDs[proj] = structcpid;
+					   }
+
+
+						//11-12-2015
+						if (structcpid.Iscpidvalid && bAcid)
+						{
+								GlobalCPUMiningCPID.cpidhash = cpidhash;
+								GlobalCPUMiningCPID.email = email;
+								GlobalCPUMiningCPID.boincruntimepublickey = cpidhash;
+								if (structcpid.rac > 10 && structcpid.team=="gridcoin")
+								{
+									msPrimaryCPID = structcpid.cpid;
+									#if defined(WIN32) && defined(QT_GUI)
+										//Let the Neural Network know what your CPID is so it can be charted:
+										std::string sXML = "<KEY>PrimaryCPID</KEY><VALUE>" + msPrimaryCPID + "</VALUE>";
+										std::string sData = qtExecuteDotNetStringFunction("WriteKey",sXML);
+									#endif
+									//Try to get a neural RAC report 7-25-2015
+									bool bResult = AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
+								}
+						}
+
+						mvCPIDs[proj] = structcpid;
+						if (fDebug) printf("Adding Local Project %s \r\n",structcpid.cpid.c_str());
+
+					}
+
 				}
 
-				mvCPIDs[proj] = structcpid;
-			    if (fDebug) printf("Adding Local Project %s \r\n",structcpid.cpid.c_str());
-
 			}
+			// If no valid boinc projects were found:
+			if (msPrimaryCPID.empty()) msPrimaryCPID="INVESTOR";
 
 		}
-
 	}
-	if (msPrimaryCPID.empty()) msPrimaryCPID="INVESTOR";
-
-	}
-	
 	catch (std::exception &e) 
 	{
 			 printf("Error while harvesting CPIDs.\r\n");
