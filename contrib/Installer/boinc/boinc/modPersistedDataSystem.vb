@@ -1574,8 +1574,9 @@ Retry:
                     Dim di As New DirectoryInfo(sNNFolder)
                     Dim fiArr As FileInfo() = di.GetFiles()
                     Dim fi As FileInfo
-                    If fi.Name Like "cpid_*" Or fi.Name Like "project_*" Then
-                        For Each fi In fiArr
+                    For Each fi In fiArr
+                        If LCase(fi.Name) Like "cpid_*" Or LCase(fi.Name) Like "project_*" Then
+
                             Using Stream As New System.IO.FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
                                 Dim objReader As New System.IO.StreamReader(Stream)
                                 While objReader.EndOfStream = False
@@ -1585,8 +1586,9 @@ Retry:
                                 End While
                                 objReader.Close()
                             End Using
-                        Next fi
-                    End If
+                        End If
+
+                    Next fi
 
                 End SyncLock
             End Using
