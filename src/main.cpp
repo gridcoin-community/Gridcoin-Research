@@ -3443,6 +3443,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 	// Slow down Retallying when in RA mode so we minimize disruption of the network
 	if ( (pindex->nHeight % 60 == 0) && IsResearchAgeEnabled(pindex->nHeight) && BlockNeedsChecked(pindex->nTime))
 	{
+		if (fDebug3) printf("\r\n*BusyWaitForTally*\r\n");
 		BusyWaitForTally();
 	}
 					
@@ -3809,6 +3810,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 					printf("Failed to Reorganize during Attempt #%f \r\n",(double)iRegression+1);
 					txdb.TxnAbort();
 					InvalidChainFound(pindexNew);
+					printf("\r\nReorg BusyWait\r\n");
 					BusyWaitForTally();
 				 	REORGANIZE_FAILED++;
 					return error("SetBestChain() : Reorganize failed");
@@ -4512,14 +4514,25 @@ void GridcoinServices()
 	
 	if (TimerMain("MyNeuralMagnitudeReport",30))
 	{
-		if (msNeuralResponse.length() < 25 && msPrimaryCPID != "INVESTOR" && !msPrimaryCPID.empty())
+		try
 		{
-			bool bResult = AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
-			if (fDebug3) printf("Async explainmag sent for %s.",msPrimaryCPID.c_str());
-		}
-		// Run the RSA report for the overview page:
+			if (msNeuralResponse.length() < 25 && msPrimaryCPID != "INVESTOR" && !msPrimaryCPID.empty())
+			{
+				bool bResult = AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
+				if (fDebug3) printf("Async explainmag sent for %s.",msPrimaryCPID.c_str());
+			}
+			// Run the RSA report for the overview page:
 		
-		json_spirit::Array results = MagnitudeReport(msPrimaryCPID);
+			json_spirit::Array results = MagnitudeReport(msPrimaryCPID);
+		}
+		catch (std::exception &e) 
+		{
+			printf("Error in MyNeuralMagnitudeReport1.");
+		}
+		catch(...)
+		{
+			printf("Error in MyNeuralMagnitudeReport.");
+		}
 	}
 
 	int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
@@ -5533,29 +5546,42 @@ void AdjustTimestamps(StructCPID& strCPID, double timestamp, double subsidy)
 
 void AddResearchMagnitude(CBlockIndex* pIndex)
 {
-	    StructCPID stMag = GetInitializedStructCPID2(pIndex->sCPID,mvMagnitudes);
-		stMag.cpid = pIndex->sCPID;
-		stMag.GRCAddress = pIndex->sGRCAddress;
-		if ((double)pIndex->nHeight > stMag.LastBlock)
+	    // Headless critical section
+	    try
 		{
-			stMag.LastBlock = (double)pIndex->nHeight;
-		}
-		stMag.entries++;
-		stMag.payments += pIndex->nResearchSubsidy;
-		stMag.interestPayments += pIndex->nInterestSubsidy;
+			StructCPID stMag = GetInitializedStructCPID2(pIndex->sCPID,mvMagnitudes);
+			stMag.cpid = pIndex->sCPID;
+			stMag.GRCAddress = pIndex->sGRCAddress;
+			if ((double)pIndex->nHeight > stMag.LastBlock)
+			{
+				stMag.LastBlock = (double)pIndex->nHeight;
+			}
+			stMag.entries++;
+			stMag.payments += pIndex->nResearchSubsidy;
+			stMag.interestPayments += pIndex->nInterestSubsidy;
 
-		AdjustTimestamps(stMag,(double)pIndex->nTime,pIndex->nResearchSubsidy);
-		// Track detailed payments made to each CPID
-		stMag.PaymentTimestamps         += RoundToString((double)pIndex->nTime,0) + ",";
-		stMag.PaymentAmountsResearch    += RoundToString(pIndex->nResearchSubsidy,2) + ",";
-		stMag.PaymentAmountsInterest    += RoundToString(pIndex->nInterestSubsidy,2) + ",";
-		stMag.PaymentAmountsBlocks      += RoundToString((double)pIndex->nHeight,0) + ",";
-     	stMag.Accuracy++;
-	    stMag.AverageRAC = stMag.rac / (stMag.entries+.01);
-	    double total_owed = 0;
-	    stMag.owed = GetOutstandingAmountOwed(stMag,pIndex->sCPID,(double)pIndex->nTime,total_owed,pIndex->nMagnitude);
-	    stMag.totalowed = total_owed;
-	    mvMagnitudes[pIndex->sCPID] = stMag;
+			AdjustTimestamps(stMag,(double)pIndex->nTime,pIndex->nResearchSubsidy);
+			// Track detailed payments made to each CPID
+			stMag.PaymentTimestamps         += RoundToString((double)pIndex->nTime,0) + ",";
+			stMag.PaymentAmountsResearch    += RoundToString(pIndex->nResearchSubsidy,2) + ",";
+			stMag.PaymentAmountsInterest    += RoundToString(pIndex->nInterestSubsidy,2) + ",";
+			stMag.PaymentAmountsBlocks      += RoundToString((double)pIndex->nHeight,0) + ",";
+     		stMag.Accuracy++;
+			stMag.AverageRAC = stMag.rac / (stMag.entries+.01);
+			double total_owed = 0;
+			stMag.owed = GetOutstandingAmountOwed(stMag,pIndex->sCPID,(double)pIndex->nTime,total_owed,pIndex->nMagnitude);
+			stMag.totalowed = total_owed;
+			mvMagnitudes[pIndex->sCPID] = stMag;
+		}
+		catch (bad_alloc ba)
+		{
+			printf("\r\nBad Allocation in AddResearchMagnitude() \r\n");
+		}
+		catch(...)
+		{
+			printf("Exception in AddResearchMagnitude() \r\n");
+		}
+		
 }
 
 
@@ -5763,24 +5789,38 @@ MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, Minin
 	
 StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef)
 {
-	StructCPID cpid = vRef[name];
-	if (!cpid.initialized)
+	try
 	{
-			    cpid = GetStructCPID();
-				cpid.initialized=true;
-				cpid.LowLockTime = 99999999999;
-				cpid.HighLockTime = 0;
-				cpid.LastPaymentTime = 0;
-				cpid.EarliestPaymentTime = 99999999999;
-				vRef.insert(map<string,StructCPID>::value_type(name,cpid));
-				vRef[name]=cpid;
+		StructCPID cpid = vRef[name];
+		if (!cpid.initialized)
+		{
+					cpid = GetStructCPID();
+					cpid.initialized=true;
+					cpid.LowLockTime = 99999999999;
+					cpid.HighLockTime = 0;
+					cpid.LastPaymentTime = 0;
+					cpid.EarliestPaymentTime = 99999999999;
+					vRef.insert(map<string,StructCPID>::value_type(name,cpid));
+					vRef[name]=cpid;
+					return cpid;
+		}
+		else
+		{
 				return cpid;
+		}
 	}
-	else
+	catch (bad_alloc ba)
 	{
-			return cpid;
+		printf("Bad alloc caught in GetInitializedStructCpid2 for %s",name.c_str());
+		StructCPID cpid = GetStructCPID();
+		return cpid;
 	}
-
+	catch(...)
+	{
+		printf("Exception caught in GetInitializedStructCpid2 for %s",name.c_str());
+		StructCPID cpid = GetStructCPID();
+		return cpid;
+	}
 }
 
 
@@ -5930,7 +5970,9 @@ bool TallyResearchAverages(bool Forcefully)
 						}
 
 						if (fDebug3) printf("Max block %f",(double)pblockindex->nHeight);
-
+						// Headless critical section (11-15-2015)
+		try
+		{
 						while (pblockindex->nHeight > nMinDepth)
 						{
 							if (!pblockindex || !pblockindex->pprev) return false;  
@@ -5943,11 +5985,14 @@ bool TallyResearchAverages(bool Forcefully)
 							iRow++;
 							if (IsSuperBlock(pblockindex) && !superblockloaded)
 							{
+								if (fDebug3) printf(" LSB1 ");
 								MiningCPID bb = GetBoincBlockByIndex(pblockindex);
 								if (bb.superblock.length() > 20)
 								{
+									    if (fDebug3) printf(" VSB1 ");
 										if (VerifySuperblock(bb.superblock,pblockindex->nHeight))
 										{
+											    if (fDebug3) printf(" LSB2 ");
 	    										LoadSuperblock(bb.superblock,pblockindex->nTime,pblockindex->nHeight);
 												superblockloaded=true;
 												if (fDebug3) printf(" Superblock Loaded %f \r\n",(double)pblockindex->nHeight);
@@ -5956,6 +6001,7 @@ bool TallyResearchAverages(bool Forcefully)
 							}
 					
 						}
+						// End of critical section
 						if (fDebug3) printf("Min block %f, Rows %f \r\n",(double)pblockindex->nHeight,(double)iRow);
 						StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
 						network.projectname="NETWORK";
@@ -5966,16 +6012,23 @@ bool TallyResearchAverages(bool Forcefully)
 						bTallyStarted = false;
 						bNetAveragesLoaded = true;
 						return true;
-		
-		//catch(...)
-		//{
-		//	printf("Error while tallying network averages. [1]\r\n");
-		//	bNetAveragesLoaded=true;
-        //   nLastTallied = 0;
-		//}
+		}
+		catch (bad_alloc ba)
+		{
+			printf("Bad Alloc while tallying network averages. [1]\r\n");
+			bNetAveragesLoaded=true;
+            nLastTallied = 0;
+		}
+		catch(...)
+		{
+			printf("Error while tallying network averages. [1]\r\n");
+			bNetAveragesLoaded=true;
+            nLastTallied = 0;
+		}
 	
-	bNetAveragesLoaded=true;
-	return false;
+	
+	    bNetAveragesLoaded=true;
+	    return false;
 }
 
 

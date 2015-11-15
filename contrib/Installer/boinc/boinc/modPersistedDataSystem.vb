@@ -1522,7 +1522,8 @@ Retry:
         sSignature = "NN Host Version: " + Trim(mclsUtilization.Version) + ", NeuralHash: " + sNH + ", SignatureCPID: " + sNeuralCPID + ", Time: " + Trim(Now)
         sRow = "Total RAC: " + Trim(TotalRAC) + "<ROW>" + "Total Mag: " + Trim(Math.Round(CumulativeMag, 2))
         sOut += sSignature + "<ROW>" + sRow
-        sRow += "<ROW>Your Neural Magnitude: " + Trim(Math.Round(CumulativeMag, 2))
+        '11-15-2015
+        sRow += "<ROW>Your Neural Magnitude: " + Trim(RoundedMag(CumulativeMag))
         'Dim sXML As String = GetXMLOnly(sCPID)
         Return sOut
 

@@ -2024,6 +2024,10 @@ begin:
 	{
         PrintException(&e, "ThreadExecuteGridcoinServices()");
     }
+	catch (bad_alloc ba)
+	{
+		printf("\r\nBad Allocation Error in ThreadExecuteGridcoinServices... Recovering \r\n");
+	}
 	catch(...)
 	{
 		printf("Error in ThreadExecuteGridcoinServices... Recovering ");
