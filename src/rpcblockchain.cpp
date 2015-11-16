@@ -3088,6 +3088,9 @@ Array MagnitudeReport(std::string cpid)
 										double days = (GetAdjustedTime() - stCPID.LowLockTime)/86400;
 										entry.push_back(Pair("CPID",structMag.cpid));
 									//	entry.push_back(Pair("GRCAddress",structMag.GRCAddress));
+										double dWeight = (double)GetRSAWeightByCPID(structMag.cpid);
+										entry.push_back(Pair("RSA Weight",dWeight));
+								
 										entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
 										entry.push_back(Pair("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime)));
 									

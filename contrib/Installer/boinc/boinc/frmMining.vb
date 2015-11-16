@@ -264,6 +264,8 @@ Public Class frmMining
         dgv.Columns.Clear()
         dgv.BackgroundColor = Drawing.Color.Black
         dgv.ForeColor = Drawing.Color.Lime
+        dgv.ReadOnly = True
+
         Dim grr As New GridcoinReader.GridcoinRow
         Dim sHeading As String = "CPID;Magnitude;Avg Magnitude;Total RAC;Synced Til;Address;CPID Valid;Witnesses"
         Dim vHeading() As String = Split(sHeading, ";")
@@ -428,6 +430,7 @@ Public Class frmMining
             Dim lstProjects As List(Of Row) = GetList(surrogatePrj, "*")
             Dim iRow As Long = 0
             dgvDrillProjects.Rows.Clear()
+            dgvDrillProjects.ReadOnly = True
 
             Dim CumulativeMag As Double = 0
             For Each prj As Row In lstProjects

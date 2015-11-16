@@ -2036,14 +2036,16 @@ static CBigNum GetProofOfStakeLimit(int nHeight)
 double CalculatedMagnitude(int64_t locktime,bool bUseLederstrumpf)
 {
 	// Get neural network magnitude:
-	StructCPID stDPOR = mvDPOR[GlobalCPUMiningCPID.cpid];
+	std::string cpid = "";
+	if (GlobalCPUMiningCPID.initialized && !GlobalCPUMiningCPID.cpid.empty()) cpid = GlobalCPUMiningCPID.cpid;
+	StructCPID stDPOR = GetInitializedStructCPID2(cpid,mvDPOR);
 	return bUseLederstrumpf ? LederstrumpfMagnitude2(stDPOR.Magnitude,locktime) : stDPOR.Magnitude;
 }
 
 double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf)
 {
 	// Get neural network magnitude:
-	StructCPID stDPOR = mvDPOR[cpid];
+	StructCPID stDPOR = GetInitializedStructCPID2(cpid,mvDPOR);
 	return bUseLederstrumpf ? LederstrumpfMagnitude2(stDPOR.Magnitude,locktime) : stDPOR.Magnitude;
 }
 
@@ -2144,7 +2146,9 @@ int64_t GetProofOfStakeMaxReward(int64_t nCoinAge, int64_t nFees, int64_t lockti
 
 double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 {
-		StructCPID mag = mvMagnitudes[cpid];
+		
+		StructCPID mag = GetInitializedStructCPID2(cpid,mvMagnitudes);
+
 		if (!mag.initialized) return 0;
 		double owed = (mag.owed*1.0);
 		if (owed < 0) owed = 0;
@@ -2216,6 +2220,7 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 	else
 	{
 			// Research Age Subsidy - PROD
+		    if (fDebug3) printf(" *2 ");
 			int64_t nBoinc = ComputeResearchAccrual(cpid, operation, pindexLast, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
 			int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
 
@@ -2248,6 +2253,7 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 
 			OUT_POR = CoinToDouble(nBoinc);
 			OUT_INTEREST = CoinToDouble(nInterest);
+			if (fDebug3) printf(" *3");
 			return nTotalSubsidy;
 
 	}
@@ -3271,10 +3277,12 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 		double dAvgMagnitude = 0;
 
 	    // ResearchAge 1: 8-8-2015
-		int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, 
+		GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, 
 			pindex, "connectblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 		if (bb.cpid != "INVESTOR" && dStakeReward > 1)
 		{
+			//11-15-2015
+			    
 			    //ResearchAge: Since the best block may increment before the RA is connected but After the RA is computed, the ResearchSubsidy can sometimes be slightly smaller than we calculate here due to the RA timespan increasing.  So we will allow for time shift before rejecting the block.
 			    double dDrift = IsResearchAgeEnabled(pindex->nHeight) ? bb.ResearchSubsidy*.15 : 1;
 				if (IsResearchAgeEnabled(pindex->nHeight) && dDrift < 10) dDrift = 10;
@@ -3288,16 +3296,21 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 				}
 				if (IsResearchAgeEnabled(pindex->nHeight) && BlockNeedsChecked(nTime))
 				{
-						StructCPID st1 = GetLifetimeCPID(pindex->sCPID);
 						if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
 						{
-							if (fDebug3) printf("ConnectBlockError[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-								(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str());
+							StructCPID st1 = GetLifetimeCPID(pindex->sCPID);
+							GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, 
+										pindex, "connectblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+							if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
+							{
+				
+								if (fDebug3) printf("ConnectBlockError[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
+									(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str());
 							
-							return DoS(10,error("ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-								(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
+								return DoS(10,error("ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
+									(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
+							}
 						}
-		
 				}
 		}
 
@@ -3616,7 +3629,9 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
 	if (vDisconnect.size() > 0)
 	{
 		//Block was disconnected - User is Re-eligibile for staking
-		StructCPID sMag = mvMagnitudes[GlobalCPUMiningCPID.cpid];
+		
+		StructCPID sMag = GetInitializedStructCPID2(GlobalCPUMiningCPID.cpid,mvMagnitudes);
+
 		if (sMag.initialized)
 		{
 			sMag.LastPaymentTime = 0;
@@ -4099,12 +4114,17 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 	
 	if (bb.cpid != "INVESTOR" && IsProofOfStake() && height1 > nGrandfather && IsResearchAgeEnabled(height1) && BlockNeedsChecked(nTime) && !fLoadingIndex)
 	{
-			if (IsResearchAgeEnabled(height1)) 	StructCPID st1 = GetLifetimeCPID(bb.cpid);
-			
 			int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, 
 				pindexBest, "checkblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 			if (bb.ResearchSubsidy > (OUT_POR*1.25))
 			{
+				StructCPID st1 = GetLifetimeCPID(bb.cpid);
+				nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, 
+					pindexBest, "checkblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+		
+				if (bb.ResearchSubsidy > (OUT_POR*1.25))
+				{
+			
 							if (fDebug3) printf("CheckBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
 									(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,CoinToDouble(nCalculatedResearch),(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str());
 							if (msPrimaryCPID == bb.cpid)
@@ -4114,7 +4134,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 							}
 							return DoS(10,error("CheckBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
 									(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,CoinToDouble(nCalculatedResearch),(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
-				
+				}
 			}
 			if (fDebug3) printf(".EOCBR.");
 		
@@ -4524,6 +4544,7 @@ void GridcoinServices()
 			// Run the RSA report for the overview page:
 		
 			json_spirit::Array results = MagnitudeReport(msPrimaryCPID);
+			if (fDebug3) printf("\r\n MR Complete \r\n");
 		}
 		catch (std::exception &e) 
 		{
@@ -5407,7 +5428,7 @@ double GetOwedAmount(std::string cpid)
 {
 	if (mvMagnitudes.size() > 1)
 	{
-		StructCPID m = mvMagnitudes[cpid];
+		StructCPID m = GetInitializedStructCPID2(cpid,mvMagnitudes);
 		if (m.initialized) return m.owed;
 		return 0;
 	}
@@ -5580,8 +5601,7 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
 		catch(...)
 		{
 			printf("Exception in AddResearchMagnitude() \r\n");
-		}
-		
+		}	
 }
 
 
@@ -5712,7 +5732,7 @@ void AddCPIDBlockHash(std::string cpid, std::string blockhash)
 
 StructCPID GetLifetimeCPID(std::string cpid)
 {
-	//Eliminates issues with reorgs, disconnects, double counting, etc.. (8-28-2015)
+	//Eliminates issues with reorgs, disconnects, double counting, etc.. (11-15-2015)
 	if (cpid.empty() || cpid=="INVESTOR") 
 	{
 		StructCPID stDummy = GetInitializedStructCPID2("INVESTOR",mvResearchAge);
@@ -5794,15 +5814,15 @@ StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, Stru
 		StructCPID cpid = vRef[name];
 		if (!cpid.initialized)
 		{
-					cpid = GetStructCPID();
-					cpid.initialized=true;
-					cpid.LowLockTime = 99999999999;
-					cpid.HighLockTime = 0;
-					cpid.LastPaymentTime = 0;
-					cpid.EarliestPaymentTime = 99999999999;
-					vRef.insert(map<string,StructCPID>::value_type(name,cpid));
-					vRef[name]=cpid;
-					return cpid;
+				cpid = GetStructCPID();
+				cpid.initialized=true;
+				cpid.LowLockTime = 99999999999;
+				cpid.HighLockTime = 0;
+				cpid.LastPaymentTime = 0;
+				cpid.EarliestPaymentTime = 99999999999;
+				vRef.insert(map<string,StructCPID>::value_type(name,cpid));
+				vRef[name]=cpid;
+				return cpid;
 		}
 		else
 		{
@@ -5970,7 +5990,7 @@ bool TallyResearchAverages(bool Forcefully)
 						}
 
 						if (fDebug3) printf("Max block %f",(double)pblockindex->nHeight);
-						// Headless critical section (11-15-2015)
+						// Headless critical section ()
 		try
 		{
 						while (pblockindex->nHeight > nMinDepth)
@@ -8214,7 +8234,8 @@ bool ProjectIsValid(std::string project)
 {
 	boost::to_lower(project);
 
-	StructCPID structcpid = mvBoincProjects[project];
+	StructCPID structcpid = GetInitializedStructCPID2(project,mvBoincProjects);
+
 	return structcpid.initialized;
 			
 }
@@ -9361,6 +9382,9 @@ double GRCMagnitudeUnit(int64_t locktime)
 
 int64_t ComputeResearchAccrual(std::string cpid, std::string operation, CBlockIndex* pindexLast, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
+	//11-15-2015 
+	if (fDebug3) printf(" *a");
+
 	double dCurrentMagnitude = CalculatedMagnitude2(cpid, pindexLast->nTime, false);
 	CBlockIndex* pHistorical = GetHistoricalMagnitude(cpid);
 	if (pHistorical->nHeight <= nNewIndex || pHistorical->nMagnitude==0 || pHistorical->nTime == 0)
@@ -9404,6 +9428,7 @@ int64_t ComputeResearchAccrual(std::string cpid, std::string operation, CBlockIn
 	if (fDebug3 && LessVerbose(verbosity)) printf(" Operation %s, ComputedAccrual %f, StakeHeight %f, RABlockSpan %f, HistoryHeight%f, AccrualAge %f, AvgMag %f, MagUnit %f, PPD %f, Reference PPD %f  \r\n",
 		operation.c_str(),CoinToDouble(Accrual),(double)pindexLast->nHeight,(double)iRABlockSpan,		
 		(double)pHistorical->nHeight,	dAccrualAge,AvgMagnitude,dMagnitudeUnit, PPD, ReferencePPD);
+
 	return Accrual;
 }
 
@@ -9624,7 +9649,8 @@ std::string SystemCommand(const char* cmd)
     if (!pipe) return "ERROR";
     char buffer[128];
     std::string result = "";
-    while(!feof(pipe)) {
+    while(!feof(pipe)) 
+	{
     	if(fgets(buffer, 128, pipe) != NULL)
     		result += buffer;
     }
@@ -9643,7 +9669,7 @@ std::string getHardDriveSerial()
 		cmd1 = "ls /dev/disk/by-uuid";
 	#endif
 	std::string result = SystemCommand(cmd1.c_str());
-	if (fDebug3) printf("result %s",result.c_str());
+	//if (fDebug3) printf("result %s",result.c_str());
 	msHDDSerial = result;
 	return result;
 }

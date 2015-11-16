@@ -2020,14 +2020,14 @@ begin:
     {
         ExecGridcoinServices(parg);
     }
-    catch (std::exception& e) 
-	{
-        PrintException(&e, "ThreadExecuteGridcoinServices()");
-    }
 	catch (bad_alloc ba)
 	{
 		printf("\r\nBad Allocation Error in ThreadExecuteGridcoinServices... Recovering \r\n");
 	}
+    catch (std::exception& e) 
+	{
+        PrintException(&e, "ThreadExecuteGridcoinServices()");
+    }
 	catch(...)
 	{
 		printf("Error in ThreadExecuteGridcoinServices... Recovering ");
