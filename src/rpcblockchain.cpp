@@ -1009,7 +1009,8 @@ bool TallyMagnitudesInSuperblock()
 		std::vector<std::string> vSuperblock = split(superblock.c_str(),";");
 		double TotalNetworkMagnitude = 0;
 		double TotalNetworkEntries = 0;
-		mvDPORCopy.clear();
+	    if (mvDPORCopy.size() > 0 && vSuperblock.size() > 1) 	mvDPORCopy.clear();
+		
 		for (unsigned int i = 0; i < vSuperblock.size(); i++)
 		{
 			// For each CPID in the contract
@@ -3043,11 +3044,9 @@ Array MagnitudeReport(std::string cpid)
 										StructCPID stCPID = GetLifetimeCPID(structMag.cpid);
 										double days = (GetAdjustedTime() - stCPID.LowLockTime)/86400;
 										entry.push_back(Pair("CPID",structMag.cpid));
-									//	entry.push_back(Pair("GRCAddress",structMag.GRCAddress));
-										double dWeight = (double)GetRSAWeightByCPID(structMag.cpid);
-										entry.push_back(Pair("RSA Weight",dWeight));
+										//double dWeight = (double)GetRSAWeightByCPID(structMag.cpid);
+										//entry.push_back(Pair("RSA Weight",dWeight));
 					
-
 										StructCPID UntrustedHost = mvMagnitudes[cpid]; 
 										double mag_accuracy = UntrustedHost.Accuracy;
 										entry.push_back(Pair("RSA block count",mag_accuracy));
@@ -3087,7 +3086,6 @@ Array MagnitudeReport(std::string cpid)
 									else
 									{
 										entry.push_back(Pair("CPID",structMag.cpid));
-									//	entry.push_back(Pair("GRCAddress",structMag.GRCAddress));
 										entry.push_back(Pair("Last Block Paid",structMag.LastBlock));
 										StructCPID DPOR = mvDPOR[structMag.cpid];
 										entry.push_back(Pair("DPOR Magnitude",	structMag.Magnitude));

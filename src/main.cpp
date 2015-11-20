@@ -2260,7 +2260,7 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 
 			OUT_POR = CoinToDouble(nBoinc);
 			OUT_INTEREST = CoinToDouble(nInterest);
-			if (fDebug3) printf(" *3");
+			if (fDebug3) printf(" *a3");
 			return nTotalSubsidy;
 
 	}
@@ -4125,6 +4125,8 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 				pindexBest, "checkblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 			if (bb.ResearchSubsidy > (OUT_POR*1.25))
 			{
+				BusyWaitForTally();
+				
 				StructCPID st1 = GetLifetimeCPID(bb.cpid);
 				nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, 
 					pindexBest, "checkblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
@@ -4551,8 +4553,12 @@ void GridcoinServices()
 				if (fDebug3) printf("Async explainmag sent for %s.",msPrimaryCPID.c_str());
 			}
 			// Run the RSA report for the overview page:
-		
-			json_spirit::Array results = MagnitudeReport(msPrimaryCPID);
+		    if (!msPrimaryCPID.empty() && msPrimaryCPID != "INVESTOR")
+			{
+				if (fDebug3) printf("updating rsa\r\n");
+				MagnitudeReport(msPrimaryCPID);
+				if (fDebug3) printf("updated rsa\r\n");
+			}
 			if (fDebug3) printf("\r\n MR Complete \r\n");
 		}
 		catch (std::exception &e) 
