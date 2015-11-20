@@ -110,6 +110,9 @@ extern std::map<std::string, double> mvNeuralNetworkHash;
 extern std::map<std::string, double> mvNeuralVersion;
 
 extern std::map<std::string, StructCPID> mvDPOR;
+extern std::map<std::string, StructCPID> mvDPORCopy;
+
+
 extern std::map<std::string, StructCPID> mvResearchAge;
 extern std::map<std::string, MiningCPID> mvBlockIndex;
 extern std::map<std::string, std::string> mvCPIDBlockHashes;

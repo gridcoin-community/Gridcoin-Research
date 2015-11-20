@@ -204,8 +204,14 @@ extern std::map<std::string, StructCPID> mvCPIDs;
 extern std::map<std::string, StructCPID> mvCreditNode;
 //Network Averages
 extern std::map<std::string, StructCPID> mvNetwork;
+extern std::map<std::string, StructCPID> mvNetworkCopy;
+
 extern std::map<std::string, StructCPID> mvNetworkCPIDs;
+
 extern std::map<std::string, StructCPID> mvMagnitudes;
+extern std::map<std::string, StructCPID> mvMagnitudesCopy;
+
+
 extern std::map<std::string, StructCPID> mvCreditNodeCPIDProject; //Contains verified CPID+Projects;
 extern std::map<std::string, StructCPID> mvCreditNodeCPID;  //Contains verified CPID total Magnitude;
 //Caches

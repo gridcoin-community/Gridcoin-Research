@@ -899,27 +899,36 @@ std::string ExtractValue(std::string data, std::string delimiter, int pos)
 
 double GetAverageInList(std::string superblock,double& out_count)
 {
-	std::vector<std::string> vSuperblock = split(superblock.c_str(),";");
-	if (vSuperblock.size() < 2) return 0;
-	double rows = 0;
-	double total_mag = 0;
-	for (unsigned int i = 0; i < vSuperblock.size(); i++)
+	try
 	{
-		// For each CPID in the contract
-		if (vSuperblock[i].length() > 1)
+		std::vector<std::string> vSuperblock = split(superblock.c_str(),";");
+		if (vSuperblock.size() < 2) return 0;
+		double rows = 0;
+		double total_mag = 0;
+		for (unsigned int i = 0; i < vSuperblock.size(); i++)
 		{
-				std::string cpid = ExtractValue("0"+vSuperblock[i],",",0);
-				double magnitude = cdbl(ExtractValue("0"+vSuperblock[i],",",1),0);
-				if (cpid.length() > 10)
-				{
-	     			total_mag += magnitude;
-					rows++;
+			// For each CPID in the contract
+			if (vSuperblock[i].length() > 1)
+			{
+					std::string cpid = ExtractValue("0"+vSuperblock[i],",",0);
+					double magnitude = cdbl(ExtractValue("0"+vSuperblock[i],",",1),0);
+					if (cpid.length() > 10)
+					{
+	     				total_mag += magnitude;
+						rows++;
+					}
 				}
-			}
+		}
+		out_count = rows;
+		double avg = total_mag/(rows+.01);
+		return avg;
 	}
-	out_count = rows;
-	double avg = total_mag/(rows+.01);
-	return avg;
+	catch(...)
+	{
+		printf("Error in GetAvgInList");
+		out_count=0;
+		return 0;
+	}
 
 }
 
@@ -1000,7 +1009,7 @@ bool TallyMagnitudesInSuperblock()
 		std::vector<std::string> vSuperblock = split(superblock.c_str(),";");
 		double TotalNetworkMagnitude = 0;
 		double TotalNetworkEntries = 0;
-		if (mvDPOR.size() > 0 && vSuperblock.size() > 1) 	mvDPOR.clear();
+		mvDPORCopy.clear();
 		for (unsigned int i = 0; i < vSuperblock.size(); i++)
 		{
 			// For each CPID in the contract
@@ -1010,13 +1019,13 @@ bool TallyMagnitudesInSuperblock()
 					double magnitude = cdbl(ExtractValue(vSuperblock[i],",",1),0);
 					if (cpid.length() > 10)
 					{
-						StructCPID stCPID = GetInitializedStructCPID2(cpid,mvDPOR);
+						StructCPID stCPID = GetInitializedStructCPID2(cpid,mvDPORCopy);
 	     				stCPID.TotalMagnitude = magnitude;
 						stCPID.MagnitudeCount++;
 						stCPID.Magnitude = magnitude;
 						stCPID.cpid = cpid;
-						mvDPOR[cpid]=stCPID;
-						StructCPID stMagg = GetInitializedStructCPID2(cpid,mvMagnitudes);
+						mvDPORCopy[cpid]=stCPID;
+						StructCPID stMagg = GetInitializedStructCPID2(cpid,mvMagnitudesCopy);
 						stMagg.cpid = cpid;
 						stMagg.Magnitude = stCPID.Magnitude;
 						stMagg.PaymentMagnitude = LederstrumpfMagnitude2(magnitude,GetAdjustedTime());
@@ -1028,7 +1037,7 @@ bool TallyMagnitudesInSuperblock()
 							stMagg.totalowed = total_owed;
 						}
 
-						mvMagnitudes[cpid] = stMagg;
+						mvMagnitudesCopy[cpid] = stMagg;
 						TotalNetworkMagnitude += stMagg.Magnitude;
 						TotalNetworkEntries++;
     
@@ -1036,10 +1045,10 @@ bool TallyMagnitudesInSuperblock()
 			}
 	}
 
-	if (fDebug) printf(".41.");
+	if (fDebug3) printf(".TMIS41.");
 	double NetworkAvgMagnitude = TotalNetworkMagnitude / (TotalNetworkEntries+.01);
 	// Store the Total Network Magnitude:
-	StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
+	StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetworkCopy);
 	network.projectname="NETWORK";
 	network.NetworkMagnitude = TotalNetworkMagnitude;
 	network.NetworkAvgMagnitude = NetworkAvgMagnitude;
@@ -1064,14 +1073,14 @@ bool TallyMagnitudesInSuperblock()
 					double avg = cdbl(ExtractValue("0" + vProjects[i],",",1),0);
 					if (project.length() > 1)
 					{
-						StructCPID stProject = GetInitializedStructCPID2(project,mvNetwork);
+						StructCPID stProject = GetInitializedStructCPID2(project,mvNetworkCopy);
 						stProject.projectname = project;
 	     				stProject.AverageRAC = avg;
 						//As of 7-16-2015, start pulling in Total RAC
 						totalRAC = 0;
 						totalRAC = cdbl("0" + ExtractValue(vProjects[i],",",2),0);
 						stProject.rac = totalRAC;
-						mvNetwork[project]=stProject;
+						mvNetworkCopy[project]=stProject;
 						TotalProjects++;
 						WHITELISTED_PROJECTS++;
 						TotalRAC += avg;
@@ -1106,8 +1115,8 @@ bool TallyMagnitudesInSuperblock()
 	network.GRCQuote = cdbl(ReadCache("quotes","grc"),4);
 	network.BTCQuote = cdbl(ReadCache("quotes","btc"),4);
 	if (fDebug3) printf(" GRC %f ",network.GRCQuote);
-    mvNetwork["NETWORK"] = network;
-	if (fDebug) printf(".43.");
+    mvNetworkCopy["NETWORK"] = network;
+	if (fDebug3) printf(".TMS43.");
 	return true;
 	}
 	catch (std::exception &e) 
@@ -1125,59 +1134,6 @@ bool TallyMagnitudesInSuperblock()
 
 
 
-
-bool Retiring_TallyMagnitudesByContract()
-{
-	//This function is being retired: Original purpose - tally magnitudes from One boinc project - in the QT neural network (Not the Windows neural network)
-	std::string projects = GetTeamURLs(false,true);
-	//This list contains projects with contracts:
-	std::vector<std::string> vProjects = split(projects.c_str(),"<ROW>");
-	mvDPOR.clear();
-	for (unsigned int i = 0; i < vProjects.size(); i++)
-	{
-		if (vProjects[i].length() > 1)
-		{
-			//Return the contract for the team
-			std::string contract_name = "" + vProjects[i];
-			std::string contract = ReadCache("contract", contract_name);
-			//printf("Accessing contract %s\r\n",contract_name.c_str());
-			double projavg=GetNetworkAvgByProject(contract_name);
-			// For each CPID in the contract
-			std::vector<std::string> vCPIDs = split(contract.c_str(),";");
-			for (unsigned int c = 0; c < vCPIDs.size(); c++)
-			{
-				std::string cpid = ExtractValue(vCPIDs[c],",",0);
-				if (cpid.length() > 10)
-				{
-					//Tally the RAC for this Project+CPID for this researcher so we can reconcile to Netsoft also:
-					std::string cpid_project = cpid + "+" + contract_name;
-					cpid_project = strReplace(cpid_project,"_"," ");
-					
-					StructCPID stCPIDProject = GetInitializedStructCPID2(cpid_project,mvDPOR);
-					double rac = cdbl(ExtractValue(vCPIDs[c],",",1),0);
-					mvDPOR[cpid_project] = stCPIDProject;
-					std::string project = vProjects[i];
-					//Add weighted Magnitude here
-					StructCPID stCPID = GetInitializedStructCPID2(cpid,mvDPOR);
-					if (projavg > 10)
-					{
-							stCPID.verifiedTotalNetworkRAC = stCPID.verifiedTotalNetworkRAC + projavg;
-							double project_magnitude = rac/(projavg+.01) * 100;
-							stCPID.TotalMagnitude += project_magnitude;
-							stCPID.TotalRAC += rac;
-							stCPID.MagnitudeCount++;
-							double WhitelistedWithRAC = GetNetworkProjectCountWithRAC();
-							stCPID.Magnitude = (stCPID.TotalMagnitude/WHITELISTED_PROJECTS) * WhitelistedWithRAC;
-					}
-					mvDPOR[cpid]=stCPID;
-				}
-
-			}
-
-		}
-	}
-	return true;
-}
 
 bool SynchronizeRacForDPOR(bool SyncEntireCoin)
 {
@@ -3090,7 +3046,12 @@ Array MagnitudeReport(std::string cpid)
 									//	entry.push_back(Pair("GRCAddress",structMag.GRCAddress));
 										double dWeight = (double)GetRSAWeightByCPID(structMag.cpid);
 										entry.push_back(Pair("RSA Weight",dWeight));
-								
+					
+
+										StructCPID UntrustedHost = mvMagnitudes[cpid]; 
+										double mag_accuracy = UntrustedHost.Accuracy;
+										entry.push_back(Pair("RSA block count",mag_accuracy));
+										
 										entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
 										entry.push_back(Pair("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime)));
 									
@@ -3987,6 +3948,8 @@ Value listitem(const Array& params, bool fHelp)
 		double out_owed = 0;
 		int64_t RSAWEIGHT =	GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 		out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid,out_owed);
+
+	
 		Object entry;
 		entry.push_back(Pair("RSA Weight",RSAWEIGHT));
 		entry.push_back(Pair("Remote Magnitude",out_magnitude));

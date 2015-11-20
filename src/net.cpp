@@ -2527,8 +2527,7 @@ void ThreadMessageHandler2(void* parg)
         BOOST_FOREACH(CNode* pnode, vNodesCopy)
         {
             
-			MilliSleep(1);
-
+	
 			if (pnode->fDisconnect)
                 continue;
 
