@@ -3022,112 +3022,129 @@ Array MagnitudeReport(std::string cpid)
 		   std::string Narr = RoundToString(GetAdjustedTime(),0);
 		   c.push_back(Pair("RSA Report",Narr));
 		   results.push_back(c);
-		   StructCPID globalmag = mvMagnitudes["global"];
+
+		   if (fDebug3) printf(" *MR1* ");
+
+		 				
 		   double payment_timespan = 14; 
 		   double total_owed = 0;
 		   double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
 		   msRSAOverview = "";
+		   if (!pindexBest) return results;
+		   if (fDebug3) printf(" *MR2* ");
 
-		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
+
+		   try
 		   {
-				// For each CPID on the network, report:
-				StructCPID structMag = mvMagnitudes[(*ii).first];
-				if (structMag.initialized && structMag.cpid.length() > 2) 
-				{ 
-						if (cpid.empty() || (structMag.cpid == cpid))
-						{
-									Object entry;
-									if (IsResearchAgeEnabled(pindexBest->nHeight))
-									{
+			       if (mvMagnitudes.size() < 1) return results;
+				   if (fDebug3) printf(" *MR2.5* ");
+				   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
+				   {
+						// For each CPID on the network, report:
+						StructCPID structMag = mvMagnitudes[(*ii).first];
+						if (structMag.initialized && structMag.cpid.length() > 2) 
+						{ 
+								if (cpid.empty() || (structMag.cpid == cpid))
+								{
+											Object entry;
+											if (IsResearchAgeEnabled(pindexBest->nHeight))
+											{
 
-										StructCPID DPOR = mvDPOR[structMag.cpid];
-										StructCPID stCPID = GetLifetimeCPID(structMag.cpid);
-										double days = (GetAdjustedTime() - stCPID.LowLockTime)/86400;
-										entry.push_back(Pair("CPID",structMag.cpid));
-										//double dWeight = (double)GetRSAWeightByCPID(structMag.cpid);
-										//entry.push_back(Pair("RSA Weight",dWeight));
+												StructCPID DPOR = GetInitializedStructCPID2(structMag.cpid,mvDPOR);
+
+												StructCPID stCPID = GetLifetimeCPID(structMag.cpid);
+												double days = (GetAdjustedTime() - stCPID.LowLockTime)/86400;
+												entry.push_back(Pair("CPID",structMag.cpid));
+												//double dWeight = (double)GetRSAWeightByCPID(structMag.cpid);
+												//entry.push_back(Pair("RSA Weight",dWeight));
 					
-										StructCPID UntrustedHost = mvMagnitudes[cpid]; 
-										double mag_accuracy = UntrustedHost.Accuracy;
-										entry.push_back(Pair("RSA block count",mag_accuracy));
-										
-										entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
-										entry.push_back(Pair("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime)));
-									
-										entry.push_back(Pair("Magnitude",	structMag.Magnitude));
-										entry.push_back(Pair("Research Payments (14 days)",structMag.payments));
-										entry.push_back(Pair("Interest Payments (14 days)",structMag.interestPayments));
-									    entry.push_back(Pair("Daily Paid",structMag.payments/14));
-										// Research Age - Calculate Expected 14 Day Owed, and Daily Owed:
-										double dExpected14 = magnitude_unit * structMag.Magnitude * 14;
-										entry.push_back(Pair("Expected Earnings (14 days)", dExpected14));
-										entry.push_back(Pair("Expected Earnings (Daily)", dExpected14/14));
-										// Fulfillment %
-										double fulfilled = ((structMag.payments/14) / ((dExpected14/14)+.01)) * 100;
-										entry.push_back(Pair("Fulfillment %", fulfilled));
+												StructCPID UntrustedHost = mvMagnitudes[cpid]; 
+												double mag_accuracy = UntrustedHost.Accuracy;
+												entry.push_back(Pair("RSA block count",mag_accuracy));
+												entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
+												entry.push_back(Pair("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime)));
+												entry.push_back(Pair("Magnitude",	structMag.Magnitude));
+												entry.push_back(Pair("Research Payments (14 days)",structMag.payments));
+												entry.push_back(Pair("Interest Payments (14 days)",structMag.interestPayments));
+												entry.push_back(Pair("Daily Paid",structMag.payments/14));
+												// Research Age - Calculate Expected 14 Day Owed, and Daily Owed:
+												double dExpected14 = magnitude_unit * structMag.Magnitude * 14;
+												entry.push_back(Pair("Expected Earnings (14 days)", dExpected14));
+												entry.push_back(Pair("Expected Earnings (Daily)", dExpected14/14));
+												// Fulfillment %
+												double fulfilled = ((structMag.payments/14) / ((dExpected14/14)+.01)) * 100;
+												entry.push_back(Pair("Fulfillment %", fulfilled));
 
-										entry.push_back(Pair("CPID Lifetime Interest Paid", stCPID.InterestSubsidy));
-										entry.push_back(Pair("CPID Lifetime Research Paid", stCPID.ResearchSubsidy));
-										entry.push_back(Pair("CPID Lifetime Avg Magnitude", stCPID.ResearchAverageMagnitude));
-										entry.push_back(Pair("CPID Lifetime Payments Per Day", stCPID.ResearchSubsidy/days));
-										entry.push_back(Pair("Last Blockhash Paid", stCPID.BlockHash));
-										entry.push_back(Pair("Last Block Paid",stCPID.LastBlock));
-										entry.push_back(Pair("Tx Count",stCPID.Accuracy));
+												entry.push_back(Pair("CPID Lifetime Interest Paid", stCPID.InterestSubsidy));
+												entry.push_back(Pair("CPID Lifetime Research Paid", stCPID.ResearchSubsidy));
+												entry.push_back(Pair("CPID Lifetime Avg Magnitude", stCPID.ResearchAverageMagnitude));
+												entry.push_back(Pair("CPID Lifetime Payments Per Day", stCPID.ResearchSubsidy/days));
+												entry.push_back(Pair("Last Blockhash Paid", stCPID.BlockHash));
+												entry.push_back(Pair("Last Block Paid",stCPID.LastBlock));
+												entry.push_back(Pair("Tx Count",stCPID.Accuracy));
 
-										results.push_back(entry);
-										if (cpid==msPrimaryCPID && !msPrimaryCPID.empty() && msPrimaryCPID != "INVESTOR")
-										{
-											msRSAOverview = "Exp PPD: " + RoundToString(dExpected14/14,0) 
-												+ ", Act PPD: " + RoundToString(structMag.payments/14,0) 
-												+ ", Fulf %: " + RoundToString(fulfilled,2) 
-												+ ", GRCMagUnit: " + RoundToString(magnitude_unit,4);
-										}
-									}
-									else
-									{
-										entry.push_back(Pair("CPID",structMag.cpid));
-										entry.push_back(Pair("Last Block Paid",structMag.LastBlock));
-										StructCPID DPOR = mvDPOR[structMag.cpid];
-										entry.push_back(Pair("DPOR Magnitude",	structMag.Magnitude));
-										entry.push_back(Pair("Payment Magnitude",structMag.PaymentMagnitude));
-										entry.push_back(Pair("Payment Timespan (Days)",structMag.PaymentTimespan));
-										entry.push_back(Pair("Total Earned (14 days)",structMag.totalowed));
-										entry.push_back(Pair("DPOR Payments (14 days)",structMag.payments));
-										double outstanding = Round(structMag.totalowed - structMag.payments,2);
-										total_owed += outstanding;
-										entry.push_back(Pair("Outstanding Owed (14 days)",outstanding));
-										entry.push_back(Pair("InterestPayments (14 days)",structMag.interestPayments));
-										entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
-										entry.push_back(Pair("Owed",structMag.owed));
-										//double nep = Cap(structMag.owed/2, GetMaximumBoincSubsidy(GetAdjustedTime()));
-									
-										entry.push_back(Pair("Daily Paid",structMag.payments/14));
-										entry.push_back(Pair("Daily Owed",structMag.totalowed/14));
-										results.push_back(entry);
-									}
+												results.push_back(entry);
+												if (cpid==msPrimaryCPID && !msPrimaryCPID.empty() && msPrimaryCPID != "INVESTOR")
+												{
+													msRSAOverview = "Exp PPD: " + RoundToString(dExpected14/14,0) 
+														+ ", Act PPD: " + RoundToString(structMag.payments/14,0) 
+														+ ", Fulf %: " + RoundToString(fulfilled,2) 
+														+ ", GRCMagUnit: " + RoundToString(magnitude_unit,4);
+												}
+											}
+											else
+											{
+												entry.push_back(Pair("CPID",structMag.cpid));
+												entry.push_back(Pair("Last Block Paid",structMag.LastBlock));
+												StructCPID DPOR = mvDPOR[structMag.cpid];
+												entry.push_back(Pair("DPOR Magnitude",	structMag.Magnitude));
+												entry.push_back(Pair("Payment Magnitude",structMag.PaymentMagnitude));
+												entry.push_back(Pair("Payment Timespan (Days)",structMag.PaymentTimespan));
+												entry.push_back(Pair("Total Earned (14 days)",structMag.totalowed));
+												entry.push_back(Pair("DPOR Payments (14 days)",structMag.payments));
+												double outstanding = Round(structMag.totalowed - structMag.payments,2);
+												total_owed += outstanding;
+												entry.push_back(Pair("Outstanding Owed (14 days)",outstanding));
+												entry.push_back(Pair("InterestPayments (14 days)",structMag.interestPayments));
+												entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
+												entry.push_back(Pair("Owed",structMag.owed));
+												//double nep = Cap(structMag.owed/2, GetMaximumBoincSubsidy(GetAdjustedTime()));
+												entry.push_back(Pair("Daily Paid",structMag.payments/14));
+												entry.push_back(Pair("Daily Owed",structMag.totalowed/14));
+												results.push_back(entry);
+											}
+								}
 						}
-				}
 
-			}
+					}
 							
-	   		Object entry2;
-	   		entry2.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
-			if (!IsResearchAgeEnabled(pindexBest->nHeight) && cpid.empty()) entry2.push_back(Pair("Grand Total Outstanding Owed",total_owed));
-			results.push_back(entry2);
+	   				Object entry2;
+	   				entry2.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
+					if (!IsResearchAgeEnabled(pindexBest->nHeight) && cpid.empty()) entry2.push_back(Pair("Grand Total Outstanding Owed",total_owed));
+					results.push_back(entry2);
 
-			int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
-			int nLookback = BLOCKS_PER_DAY*14; //Daily block count * Lookback in days = 14 days
-			int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
-			if (cpid.empty())
-			{
-				Object entry3;
-				entry3.push_back(Pair("Start Block",nMinDepth));
-				entry3.push_back(Pair("End Block",nMaxDepth));
-				results.push_back(entry3);
+					int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
+					int nLookback = BLOCKS_PER_DAY*14; //Daily block count * Lookback in days = 14 days
+					int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
+					if (fDebug3) printf(" *MR4*");
+					if (cpid.empty())
+					{
+						Object entry3;
+						entry3.push_back(Pair("Start Block",nMinDepth));
+						entry3.push_back(Pair("End Block",nMaxDepth));
+						results.push_back(entry3);
 		
-			}
+					}
+					if (fDebug3) printf("*MR5*");
 									
-			return results;
+					return results;
+			}
+			catch(...)
+			{
+				printf("\r\nError in Magnitude Report \r\n ");
+				return results;
+			}
+
 }
 
 

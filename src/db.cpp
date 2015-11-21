@@ -544,7 +544,8 @@ bool CAddrDB::Read(CAddrMan& addr)
     uint256 hashIn;
 
     // read data and checksum from file
-    try {
+    try 
+	{
         filein.read((char *)&vchData[0], dataSize);
         filein >> hashIn;
     }

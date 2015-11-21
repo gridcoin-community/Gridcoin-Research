@@ -2004,8 +2004,9 @@ begin:
 		printf("Error in ThreadTallyResearchAverages... Recovering ");
 	}
 	MilliSleep(10000);
-    printf("Thread TallyReasearchAverages exited, Restarting.. \r\n");
-	goto begin;
+    if (!fShutdown) printf("Thread TallyReasearchAverages exited, Restarting.. \r\n");
+	if (!fShutdown) goto begin;
+
 }
 
 
@@ -2033,8 +2034,8 @@ begin:
 		printf("Error in ThreadExecuteGridcoinServices... Recovering ");
 	}
 	MilliSleep(10000);
-    printf("Services Exited, Restarting.. \r\n");
-	goto begin;
+    if (!fShutdown) printf("Services Exited, Restarting.. \r\n");
+	if (!fShutdown) goto begin;
 }
 
 

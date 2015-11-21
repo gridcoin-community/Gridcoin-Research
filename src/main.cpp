@@ -6584,6 +6584,13 @@ bool VerifyExplainMagnitudeResponse()
 }
 
 
+bool SecurityTest(CNode* pfrom, bool acid_test)
+{
+	if (pfrom->nStartingHeight > (nBestHeight*.5) && acid_test) return true;
+	return false;
+}
+
+
 bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, int64_t nTimeReceived)
 {
     static map<CService, CPubKey> mapReuseKey;
@@ -6786,11 +6793,17 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 pfrom->fGetAddr = true;
             }
             addrman.Good(pfrom->addr);
-        } else {
+        } 
+		else 
+		{
             if (((CNetAddr)pfrom->addr) == (CNetAddr)addrFrom)
             {
-                addrman.Add(addrFrom, addrFrom);
-                addrman.Good(addrFrom);
+				if (SecurityTest(pfrom,ver_valid)) 
+				{
+					//Dont store the peer unless it passes
+					addrman.Add(addrFrom, addrFrom);
+	                addrman.Good(addrFrom);
+				}
             }
         }
 
@@ -6874,8 +6887,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return error("message addr size() = %"PRIszu"", vAddr.size());
         }
 
-
-		if (pfrom->nStartingHeight < 1 && LessVerbose(500)) return true;
+		// Don't store the node address unless they have block height > 50%
+		if (pfrom->nStartingHeight < (nBestHeight*.5) && LessVerbose(975)) return true;
 
         // Store the new addresses
         vector<CAddress> vAddrOk;
