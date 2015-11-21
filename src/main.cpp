@@ -6800,7 +6800,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             {
 				if (SecurityTest(pfrom,ver_valid)) 
 				{
-					//Dont store the peer unless it passes
+					//Dont store the peer unless it passes the test 
 					addrman.Add(addrFrom, addrFrom);
 	                addrman.Good(addrFrom);
 				}
