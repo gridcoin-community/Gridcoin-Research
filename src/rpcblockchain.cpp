@@ -2348,9 +2348,10 @@ Value execute(const Array& params, bool fHelp)
 	else if (sItem == "peek")
 	{
 			std::vector<std::string> s = split(msPeek,"<CR>");
-			for (int i = 0; i < s.size()-1; i++)
+			
+			for (int i = 0; i < ((int)(s.size()-1)); i++)
 			{
-				entry.push_back(Pair(s[i],i+1));
+				entry.push_back(Pair(s[i],i + 1));
 			}
 			results.push_back(entry);
 	}
@@ -3036,13 +3037,17 @@ Array MagnitudeReport(std::string cpid)
 
 		   try
 		   {
-			       if (mvMagnitudes.size() < 1) return results;
+			       if (mvMagnitudes.size() < 1)
+				   {
+					       if (fDebug3) printf("no results");
+						   return results;
+				   }
 				   if (fDebug3) printf(" *MR2.5* ");
 				   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
 				   {
 						// For each CPID on the network, report:
 						StructCPID structMag = mvMagnitudes[(*ii).first];
-						if (structMag.initialized && structMag.cpid.length() > 2) 
+						if (structMag.initialized && !structMag.cpid.empty()) 
 						{ 
 								if (cpid.empty() || (structMag.cpid == cpid))
 								{
@@ -3050,27 +3055,34 @@ Array MagnitudeReport(std::string cpid)
 											if (IsResearchAgeEnabled(pindexBest->nHeight))
 											{
 
-												StructCPID DPOR = GetInitializedStructCPID2(structMag.cpid,mvDPOR);
+												if (fDebug3) printf(" MR6 ");
+												//11-22-2015
 
 												StructCPID stCPID = GetLifetimeCPID(structMag.cpid);
 												double days = (GetAdjustedTime() - stCPID.LowLockTime)/86400;
 												entry.push_back(Pair("CPID",structMag.cpid));
-												//double dWeight = (double)GetRSAWeightByCPID(structMag.cpid);
+												//double dWeight = (double)GetRSAWeiByCPID(structMag.cpid);
 												//entry.push_back(Pair("RSA Weight",dWeight));
-					
-												StructCPID UntrustedHost = mvMagnitudes[cpid]; 
-												double mag_accuracy = UntrustedHost.Accuracy;
-												entry.push_back(Pair("RSA block count",mag_accuracy));
+												StructCPID UH = GetInitializedStructCPID2(cpid,mvMagnitudes);
+												entry.push_back(Pair("RSA block count",UH.Accuracy));
 												entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
+												if (fDebug3) printf(" MR6.1 ");
+
 												entry.push_back(Pair("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime)));
+												if (fDebug3) printf(" MR6.12 ");
+
 												entry.push_back(Pair("Magnitude",	structMag.Magnitude));
 												entry.push_back(Pair("Research Payments (14 days)",structMag.payments));
+												if (fDebug3) printf(" MR6.2 ");
+
 												entry.push_back(Pair("Interest Payments (14 days)",structMag.interestPayments));
 												entry.push_back(Pair("Daily Paid",structMag.payments/14));
 												// Research Age - Calculate Expected 14 Day Owed, and Daily Owed:
 												double dExpected14 = magnitude_unit * structMag.Magnitude * 14;
 												entry.push_back(Pair("Expected Earnings (14 days)", dExpected14));
 												entry.push_back(Pair("Expected Earnings (Daily)", dExpected14/14));
+												if (fDebug3) printf(" MR6.5 ");
+
 												// Fulfillment %
 												double fulfilled = ((structMag.payments/14) / ((dExpected14/14)+.01)) * 100;
 												entry.push_back(Pair("Fulfillment %", fulfilled));
@@ -3078,12 +3090,16 @@ Array MagnitudeReport(std::string cpid)
 												entry.push_back(Pair("CPID Lifetime Interest Paid", stCPID.InterestSubsidy));
 												entry.push_back(Pair("CPID Lifetime Research Paid", stCPID.ResearchSubsidy));
 												entry.push_back(Pair("CPID Lifetime Avg Magnitude", stCPID.ResearchAverageMagnitude));
-												entry.push_back(Pair("CPID Lifetime Payments Per Day", stCPID.ResearchSubsidy/days));
+												if (fDebug3) printf(" MR6.55 ");
+
+												entry.push_back(Pair("CPID Lifetime Payments Per Day", stCPID.ResearchSubsidy/(days+.01)));
 												entry.push_back(Pair("Last Blockhash Paid", stCPID.BlockHash));
 												entry.push_back(Pair("Last Block Paid",stCPID.LastBlock));
 												entry.push_back(Pair("Tx Count",stCPID.Accuracy));
+												if (fDebug3) printf(" MR6.6 ");
 
 												results.push_back(entry);
+												printf(" * ");
 												if (cpid==msPrimaryCPID && !msPrimaryCPID.empty() && msPrimaryCPID != "INVESTOR")
 												{
 													msRSAOverview = "Exp PPD: " + RoundToString(dExpected14/14,0) 
@@ -3096,7 +3112,6 @@ Array MagnitudeReport(std::string cpid)
 											{
 												entry.push_back(Pair("CPID",structMag.cpid));
 												entry.push_back(Pair("Last Block Paid",structMag.LastBlock));
-												StructCPID DPOR = mvDPOR[structMag.cpid];
 												entry.push_back(Pair("DPOR Magnitude",	structMag.Magnitude));
 												entry.push_back(Pair("Payment Magnitude",structMag.PaymentMagnitude));
 												entry.push_back(Pair("Payment Timespan (Days)",structMag.PaymentTimespan));
@@ -3117,7 +3132,9 @@ Array MagnitudeReport(std::string cpid)
 						}
 
 					}
-							
+					
+				    if (fDebug3) printf("MR8");
+
 	   				Object entry2;
 	   				entry2.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
 					if (!IsResearchAgeEnabled(pindexBest->nHeight) && cpid.empty()) entry2.push_back(Pair("Grand Total Outstanding Owed",total_owed));
@@ -3725,11 +3742,12 @@ Array GetJSONNeuralNetworkReport()
 	  Object entry;
   	  entry.push_back(Pair("Neural Hash","Popularity,Percent %"));
 	  double votes = GetTotalNeuralNetworkHashVotes();
-		
+
 	  for(map<std::string,double>::iterator ii=mvNeuralNetworkHash.begin(); ii!=mvNeuralNetworkHash.end(); ++ii) 
 	  {
 				double popularity = mvNeuralNetworkHash[(*ii).first];
 				neural_hash = (*ii).first;
+	
 				//If the hash != empty_hash: >= .01
 				if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity > 0)
 				{
@@ -3747,6 +3765,7 @@ Array GetJSONNeuralNetworkReport()
 	  }
 	  //8-22-2015
 	  int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+	 
 	  entry.push_back(Pair("Superblock Age",superblock_age));
 	  if (superblock_age > GetSuperblockAgeSpacing(nBestHeight))
 	  {
@@ -3761,6 +3780,7 @@ Array GetJSONNeuralNetworkReport()
 		  entry.push_back(Pair("Next Sync", (double)iNextNeuralSync));
 		  entry.push_back(Pair("Next Quorum", (double)iNextQuorum));
 	  }
+	  results.push_back(entry);
 	  return results;
 }
 

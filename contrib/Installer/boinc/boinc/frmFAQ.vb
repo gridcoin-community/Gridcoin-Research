@@ -30,7 +30,7 @@ Public Class frmFAQ
         Dim iRow As Long = 0
         Dim dr As SqlDataReader
         dr = mGRCData.mGetFAQQuestions()
-        dgv.Columns(1).MinimumWidth = 500
+        dgv.Columns(1).MinimumWidth = 400
 
 
         Try
@@ -48,7 +48,7 @@ Public Class frmFAQ
                 dgv.Rows(iRow).Tag = dr("id").ToString()
                 iRow += 1
             End While
-
+            dgv.Columns(1).Width = 400
         Catch ex As Exception
             Log(ex.Message)
 

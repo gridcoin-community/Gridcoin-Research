@@ -260,6 +260,8 @@ Public Class frmMining
 
         Dim sHeader As String = "CPID,Magnitude,Avg Magnitude,Total RAC,Synced Til,Address,CPID Valid;Witnesses"
         sReport += sHeader + vbCrLf
+Refresh:
+
         dgv.Rows.Clear()
         dgv.Columns.Clear()
         dgv.BackgroundColor = Drawing.Color.Black
@@ -318,6 +320,10 @@ Public Class frmMining
         dgv.Rows.Add()
         dgv.Rows(iRow).Cells(0).Value = "Hash: " + sMyNeuralHash + " (" + Trim(iRow) + ")"
         sReport += "Hash: " + sMyNeuralHash + " (" + Trim(iRow) + ")"
+
+        
+
+
         msNeuralReport = sReport
         'Populate Projects
 
@@ -366,12 +372,16 @@ Public Class frmMining
         Next
         lblTotalProjects.Text = Trim(PrjCount)
         lblWhitelistedProjects.Text = Trim(WhitelistedProjects)
+
+
+        dgv.Sort(dgv.Columns(1), System.ComponentModel.ListSortDirection.Descending)
+
+
+
     End Sub
     Private Sub TabControl1_SelectedIndexChanged(sender As Object, e As System.EventArgs) Handles TabControl1.SelectedIndexChanged
-        If TabControl1.SelectedIndex = 2 Then
-            PopulateNeuralData()
-
-        End If
+        ' If TabControl1.SelectedIndex = 2 Then
+        'End If
     End Sub
     Private Shared Function InlineAssignHelper(Of T)(ByRef target As T, ByVal value As T) As T
         target = value
@@ -552,7 +562,7 @@ Public Class frmMining
         Dim sMags As String = ExtractXML(sData, "<MAGNITUDES>")
         Dim vCt() As String = Split(sMags, ";")
         Dim sHash As String = GetQuorumHash(sData)
-        MsgBox(sData + " - Count " + Trim(vCt.Length() - 1) + " - Hash " + sHash)
+        MsgBox(Mid(sData, 1, 500) + " - Count " + Trim(vCt.Length() - 1) + " - Hash " + sHash)
     End Sub
 
     Private Sub btnExport_Click(sender As System.Object, e As System.EventArgs) Handles btnExport.Click
@@ -620,12 +630,17 @@ Public Class frmMining
             If mlPercentComplete = 1 Then pbSync.ForeColor = Color.Brown : lblQueue.Text = "Data gathering phase" : lblNeuralDetail.Text = msNeuralDetail
             Application.DoEvents()
         Else
-            If pbSync.Visible = True Then pbSync.Visible = False : PopulateNeuralData() : Application.DoEvents()
+            If pbSync.Visible = True Then pbSync.Visible = False : Application.DoEvents()
             pbSync.Visible = False : pbSync.Height = 18
             DisableForm(True) : lblNeuralDetail.Text = ""
             lblQueue.Visible = False
             Application.DoEvents()
+            If bNeedsDgvRefreshed Then
+                bNeedsDgvRefreshed = False
+                PopulateNeuralData()
+            End If
         End If
+
     End Sub
     Private Sub DisableForm(bEnabled As Boolean)
         'Lock the controls, but allow the user to move the screen around so we dont appear Frozen.
@@ -660,6 +675,7 @@ Public Class frmMining
     End Sub
     Private Sub Sync()
         mclsUtilization.UpdateMagnitudesOnly()
+        bNeedsDgvRefreshed = True
     End Sub
     Private Sub btnSync_Click(sender As System.Object, e As System.EventArgs) Handles btnSync.Click
         btnSync.Enabled = False

@@ -5756,10 +5756,12 @@ StructCPID GetLifetimeCPID(std::string cpid)
 		StructCPID stDummy = GetInitializedStructCPID2("INVESTOR",mvResearchAge);
 		return stDummy;
 	}
+	if (fDebug3) printf(" MR10 ");
 
 	std::string hashes = GetCPIDBlockHashes(cpid);
 	std::vector<std::string> vHashes = split(hashes,";");
     ZeroOutResearcherTotals(cpid);
+	if (fDebug3) printf(" MR11 ");
 
 	for (unsigned int i=0; i < vHashes.size(); i++)
 	{
@@ -5776,6 +5778,8 @@ StructCPID GetLifetimeCPID(std::string cpid)
 					{
 						if (pblockindex->sCPID == cpid)
 						{
+							if (fDebug3) printf(" MR12 ");
+
 							StructCPID stCPID = GetInitializedStructCPID2(pblockindex->sCPID,mvResearchAge);
 							if (((double)pblockindex->nHeight) > stCPID.LastBlock && pblockindex->nResearchSubsidy > 0)
 							{
@@ -5794,7 +5798,8 @@ StructCPID GetLifetimeCPID(std::string cpid)
 							if (((double)pblockindex->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime  = (double)pblockindex->nTime;
 							if (((double)pblockindex->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pblockindex->nTime;
 							mvResearchAge[pblockindex->sCPID]=stCPID;
-														
+							if (fDebug3) printf(" MR13 ");
+
 						}
 					}
 				}
@@ -5802,6 +5807,8 @@ StructCPID GetLifetimeCPID(std::string cpid)
 		}
 	}
 	StructCPID st1 = GetInitializedStructCPID2(cpid,mvResearchAge);
+	if (fDebug3) printf(" MR14 ");
+
 	return st1;
 }
 

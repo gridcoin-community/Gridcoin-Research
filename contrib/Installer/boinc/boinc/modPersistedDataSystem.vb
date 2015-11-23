@@ -17,6 +17,8 @@ Module modPersistedDataSystem
     Public mbForcefullySyncAllRac = False
     Public mbTestNet As Boolean = False
     Public msThreadedCPID As String = ""
+    Public bNeedsDgvRefreshed As Boolean = False
+
     Public mlQueue As Long = 0
     Public bDatabaseInUse As Boolean = False
     'Minimum RAC percentage required for RAC to be counted in magnitude:
@@ -31,7 +33,7 @@ Module modPersistedDataSystem
     Private Const MINIMUM_WITNESSES_REQUIRED_PROD As Long = 10
     Public mdLastNeuralNetworkSync As DateTime
     Private lUseCount As Long = 0
-    Private MAX_NEURAL_NETWORK_THREADS = 100
+    Private MAX_NEURAL_NETWORK_THREADS = 255
     Public msNeuralDetail As String = ""
     Public SYNC_THRESHOLD As Double = 60 * 12 '12 hours
     Public TEAM_SYNC_THRESHOLD As Double = 60 * 24 * 7 '1 WEEK
@@ -415,8 +417,9 @@ Module modPersistedDataSystem
         mlPercentComplete = 0
         '7-21-2015: Store historical magnitude so it can be charted
         StoreHistoricalMagnitude()
+        bNeedsDgvRefreshed = True
 
-    End Sub
+       End Sub
     Private Function GetMagByCPID(sCPID As String) As Row
         Dim dr As New Row
         dr.Database = "CPID"
@@ -678,7 +681,7 @@ Module modPersistedDataSystem
         Return lstWhitelist
     End Function
     Private Function GetConsensusData()
-        For x As Integer = 1 To 1
+        For x As Integer = 1 To 3
             Try
                 ReconnectToNeuralNetwork()
                 mdictNeuralNetworkQuorumData = mGRCData.GetNeuralNetworkQuorumData2("quorumdata", mbTestNet, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD))
@@ -738,8 +741,8 @@ Module modPersistedDataSystem
         Dim WhitelistedProjects As Double = 0
         Dim ProjCount As Double = 0
         Dim lstWhitelist As List(Of Row)
-        Dim bConsensus As Boolean
-        '= GetConsensusData()
+        Dim bConsensus As Boolean = False
+        bConsensus = GetConsensusData()
         Log("Updating Magnitudes " + IIf(bConsensus, "With consensus data", "Without consensus data"))
         Dim lStartingWitnesses As Long = CPIDCountWithNoWitnesses()
         Log(Trim(lStartingWitnesses) + " CPIDs starting out with clean slate.")
@@ -1106,8 +1109,7 @@ Retry:
         msCurrentNeuralHash = ""
         Dim TotalRAC As Double = 0
         Dim lFailCount As Long = 0
-        If 1 = 0 Then
-
+        If 1 = 1 Then
             Try
                 'If more than 51% of the network voted on this CPIDs projects today, use that value
                 If GetSupermajorityVoteStatus(sCPID, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD)) Then
@@ -1152,12 +1154,12 @@ Retry:
                 Team = LCase(Trim(ExtractXML(vData(y), "<team_name>", "</team_name>")))
                 'Store the :  PROJECT_CPID, RAC
                 If Rac > 10 And Team = "gridcoin" Then
-                    PersistProjectRAC(sCPID, Val(Num(Trim(Rac))), sName, False)
+                    PersistProjectRAC(sCPID, Val(Num(Trim(Rac))), sName, True)
                     TotalRAC += Rac
                 End If
             Next y
             If TotalRAC = 0 Then
-                PersistProjectRAC(sCPID, 0, "NeuralNetwork", False)
+                PersistProjectRAC(sCPID, 0, "NeuralNetwork", True)
             End If
             UpdateCPIDStatus(sCPID, TotalRAC, 1)
             Return True
@@ -1224,7 +1226,7 @@ Retry:
             Store(d)
             'Vote on the RAC for the project for the CPID (Once we verify > 51% of the NN agrees (by distinct IP-CPID per vote), the nodes can use this project RAC for the day to increase performance)
             Try
-                '    If bGenData Then mGRCData.VoteOnProjectRAC(sCPID, rac, Project, mbTestNet)
+                If bGenData Then mGRCData.VoteOnProjectRAC(sCPID, rac, Project, mbTestNet)
             Catch ex As Exception
             End Try
         End If
