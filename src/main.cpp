@@ -29,6 +29,8 @@
 #include <boost/asio.hpp>
 
 int GetDayOfYear();
+extern std::string NodeAddress(CNode* pfrom);
+
 
 int DownloadBlocks();
 extern MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID> vRef);
@@ -38,8 +40,6 @@ extern bool VerifySuperblock(std::string superblock, int nHeight);
 extern double ExtractMagnitudeFromExplainMagnitude();
 extern void AddPeek(std::string data);
 extern void GridcoinServices();
-
-
 
 extern bool NeedASuperblock();
 extern double SnapToGrid(double d);
@@ -171,6 +171,7 @@ unsigned int WHITELISTED_PROJECTS = 0;
 unsigned int CHECKPOINT_VIOLATIONS = 0;
 int64_t nLastTallied = 0;
 int64_t nLastPing = 0;
+int64_t nLastPeek = 0;
 
 int64_t nLastTalliedNeural = 0;
 
@@ -2227,8 +2228,7 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 	else
 	{
 			// Research Age Subsidy - PROD
-		    if (fDebug3) printf(" *2 ");
-			int64_t nBoinc = ComputeResearchAccrual(cpid, operation, pindexLast, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
+		    int64_t nBoinc = ComputeResearchAccrual(cpid, operation, pindexLast, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
 			int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
 
 			// TestNet: For any subsidy < 30 day duration, ensure 100% that we have a start magnitude and an end magnitude, otherwise make subsidy 0 : PASS
@@ -2260,7 +2260,7 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 
 			OUT_POR = CoinToDouble(nBoinc);
 			OUT_INTEREST = CoinToDouble(nInterest);
-			if (fDebug3) printf(" *a3");
+			//if (fDebug3) printf(" *a3");
 			return nTotalSubsidy;
 
 	}
@@ -4145,7 +4145,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 									(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,CoinToDouble(nCalculatedResearch),(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
 				}
 			}
-			if (fDebug3) printf(".EOCBR.");
+			//if (fDebug3) printf(".EOCBR.");
 		
 	}
 
@@ -4263,7 +4263,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
     if (fCheckMerkleRoot && hashMerkleRoot != BuildMerkleTree())
         return DoS(100, error("CheckBlock[] : hashMerkleRoot mismatch"));
 
-	if (fDebug3) printf(".EOCB.");
+	//if (fDebug3) printf(".EOCB.");
     return true;
 }
 
@@ -4451,9 +4451,9 @@ bool VerifySuperblock(std::string superblock, int nHeight)
 			double out_avg = 0;
 			double out_beacon_count=0;
 			double out_participant_count=0;
-			if (fDebug3) printf("#VS01");
+			//if (fDebug3) printf("#VS01");
 			double avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,false);
-			if (fDebug3) printf("#VS02");
+			//if (fDebug3) printf("#VS02");
 			bPassed=true;
 			if (!IsResearchAgeEnabled(nHeight))
 			{
@@ -5778,7 +5778,7 @@ StructCPID GetLifetimeCPID(std::string cpid)
 					{
 						if (pblockindex->sCPID == cpid)
 						{
-							if (fDebug3) printf(" MR12 ");
+							//if (fDebug3) printf(" MR12 ");
 
 							StructCPID stCPID = GetInitializedStructCPID2(pblockindex->sCPID,mvResearchAge);
 							if (((double)pblockindex->nHeight) > stCPID.LastBlock && pblockindex->nResearchSubsidy > 0)
@@ -5798,7 +5798,7 @@ StructCPID GetLifetimeCPID(std::string cpid)
 							if (((double)pblockindex->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime  = (double)pblockindex->nTime;
 							if (((double)pblockindex->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pblockindex->nTime;
 							mvResearchAge[pblockindex->sCPID]=stCPID;
-							if (fDebug3) printf(" MR13 ");
+							//if (fDebug3) printf(" MR13 ");
 
 						}
 					}
@@ -6529,8 +6529,10 @@ unsigned char pchMessageStart[4] = { 0x70, 0x35, 0x22, 0x05 };
 
 std::string NodeAddress(CNode* pfrom)
 {
-    CAddress addrThem = GetLocalAddress(&pfrom->addr);
-	std::string ip = addrThem.ToString();
+    //CAddress addrThem = GetLocalAddress(&pfrom->addr);
+	//std::string ip = addrThem.ToString();
+	std::string ip = pfrom->addr.ToString();
+
 	return ip;
 }
 
@@ -6726,26 +6728,27 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 		if (!vRecv.empty())
 			vRecv >> pfrom->nNeuralNetwork;
 
-		if (GetArgument("autoban2","false") == "true")
+		if (GetArgument("autoban","true") == "true")
 		{
 				if (pfrom->nStartingHeight < 1000 && LessVerbose(500)) 
 				{
 					if (fDebug) printf("Node with low height");
-					pfrom->Misbehaving(10);
 					pfrom->fDisconnect=true;
 					return false;
 				}
 	
-				if (pfrom->nStartingHeight < 1 && LessVerbose(700)) 
+				if (pfrom->nStartingHeight < 1 && LessVerbose(980)) 
 				{
-					pfrom->Misbehaving(10);
+					pfrom->Misbehaving(100);
+					if (fDebug3) printf("Disconnecting possible hacker node.  Banned for 24 hours.\r\n");
 			    	pfrom->fDisconnect=true;
 					return false;
 				}
 
 				if (pfrom->nStartingHeight < 1 && pfrom->nServices == 0)
 				{
-					pfrom->Misbehaving(10);
+					pfrom->Misbehaving(100);
+					if (fDebug3) printf("Disconnecting possible hacker node with no services.  Banned for 24 hours.\r\n");
 			    	pfrom->fDisconnect=true;
 					return false;
 				}
@@ -6761,7 +6764,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // Disconnect if we connected to ourself
         if (nNonce == nLocalHostNonce && nNonce > 1)
         {
-            if (fDebug) printf("connected to self at %s, disconnecting\n", pfrom->addr.ToString().c_str());
+            if (fDebug3) printf("connected to self at %s, disconnecting\n", pfrom->addr.ToString().c_str());
             pfrom->fDisconnect = true;
             return true;
         }
@@ -7687,6 +7690,11 @@ void AddPeek(std::string data)
 	std::string buffer = RoundToString((double)GetAdjustedTime(),0) + ":" + data + "<CR>";
 	msPeek += buffer;
 	if (msPeek.length() > 60000) msPeek = "";
+	if ((GetAdjustedTime() - nLastPeek) > 60)
+	{
+		printf("\r\nLong Duration : %s\r\n",buffer.c_str());
+	}
+	nLastPeek = GetAdjustedTime();
 }
 
 
@@ -7745,7 +7753,8 @@ bool ProcessMessages(CNode* pfrom)
         unsigned int nMessageSize = hdr.nMessageSize;
 
 		//11-9-2015 Have a peek into what this node is doing
-		std::string Peek = strCommand + ":" + RoundToString((double)nMessageSize,0);
+		std::string Peek = strCommand + ":" + RoundToString((double)nMessageSize,0) + " [" + NodeAddress(pfrom) + "]";
+
 		AddPeek(Peek);
 
 
@@ -7769,7 +7778,6 @@ bool ProcessMessages(CNode* pfrom)
                 LOCK(cs_main);
                 fRet = ProcessMessage(pfrom, strCommand, vRecv, msg.nTime);
             }
-			MilliSleep(1);
             if (fShutdown)
                 break;
         }
@@ -9448,8 +9456,7 @@ double GRCMagnitudeUnit(int64_t locktime)
 int64_t ComputeResearchAccrual(std::string cpid, std::string operation, CBlockIndex* pindexLast, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
 	//11-15-2015 
-	if (fDebug3) printf(" *a");
-
+	
 	double dCurrentMagnitude = CalculatedMagnitude2(cpid, pindexLast->nTime, false);
 	CBlockIndex* pHistorical = GetHistoricalMagnitude(cpid);
 	if (pHistorical->nHeight <= nNewIndex || pHistorical->nMagnitude==0 || pHistorical->nTime == 0)

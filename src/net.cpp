@@ -31,6 +31,7 @@ extern void BusyWaitForTally();
 extern void DoTallyResearchAverages(void* parg);
 extern void ExecGridcoinServices(void* parg);
 void GridcoinServices();
+std::string NodeAddress(CNode* pfrom);
 
 
 #ifndef QT_GUI
@@ -67,7 +68,7 @@ std::string msPubKey = "";
 std::string RoundToString(double d, int place);
 
 
-static const int MAX_OUTBOUND_CONNECTIONS = 16;
+static const int MAX_OUTBOUND_CONNECTIONS = 8;
 
 void ThreadMessageHandler2(void* parg);
 void ThreadSocketHandler2(void* parg);
@@ -1680,17 +1681,23 @@ void ThreadSocketHandler2(void* parg)
             // Inactivity checking
             //
             int64_t nTime = GetAdjustedTime();
-			//1-1-2015
-			if (nTime - pnode->nTimeConnected > 10)
+			if (nTime - pnode->nTimeConnected > 20)
             {
                 if (pnode->nLastRecv == 0 || pnode->nLastSend == 0)
                 {
-                    if (fDebug) printf("socket no message in first 24 seconds, %d %d\n", pnode->nLastRecv != 0, pnode->nLastSend != 0);
-					pnode->Misbehaving(10);
+                    if (fDebug3) printf("Socket no message in first 20 seconds, IP %s, %d %d\n", NodeAddress(pnode).c_str(), pnode->nLastRecv != 0, pnode->nLastSend != 0);
+					pnode->Misbehaving(100);
                     pnode->fDisconnect = true;
                 }
-			 }
-           
+			}
+            
+			if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && ((int)vNodes.size() > 50))
+			{
+				    //11-25-2015
+			        if (fDebug3) printf("Node %s connected longer than 2 hours with connection count of %f, disconnecting. \r\n", NodeAddress(pnode).c_str(),
+						 (double)vNodes.size());
+					pnode->fDisconnect = true;
+            }
 
             if (nTime - pnode->nTimeConnected > 24)
             {
@@ -2528,10 +2535,9 @@ void ThreadMessageHandler2(void* parg)
         BOOST_FOREACH(CNode* pnode, vNodesCopy)
         {
             
-	
 			if (pnode->fDisconnect)
                 continue;
-
+			//11-25-2015
             // Receive messages
             {
                 TRY_LOCK(pnode->cs_vRecvMsg, lockRecv);

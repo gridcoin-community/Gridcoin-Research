@@ -282,7 +282,7 @@ Refresh:
         dgv.AutoResizeColumns(DataGridViewAutoSizeColumnsMode.ColumnHeader)
         dgv.ReadOnly = True
         dgv.EditingPanel.Visible = False
-        dgv.Columns(7).Visible = False
+        'dgv.Columns(7).Visible = False (Witnesses, not hidden)
 
         For y = 0 To UBound(vData) - 1
             dgv.Rows.Add()

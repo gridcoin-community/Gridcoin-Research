@@ -879,6 +879,9 @@ Module modPersistedDataSystem
                 mlPercentComplete = p + 90
                 If mlPercentComplete > 99 Then mlPercentComplete = 99
             Next
+
+            mGRCData.FinishSync()
+
             mlPercentComplete = 0
             Return True
         Catch ex As Exception

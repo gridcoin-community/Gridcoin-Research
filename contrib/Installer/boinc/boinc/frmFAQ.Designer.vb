@@ -47,7 +47,7 @@ Partial Class frmFAQ
         Me.gbResultsPane.ForeColor = System.Drawing.Color.Lime
         Me.gbResultsPane.Location = New System.Drawing.Point(12, 27)
         Me.gbResultsPane.Name = "gbResultsPane"
-        Me.gbResultsPane.Size = New System.Drawing.Size(1707, 588)
+        Me.gbResultsPane.Size = New System.Drawing.Size(1610, 588)
         Me.gbResultsPane.TabIndex = 2
         Me.gbResultsPane.TabStop = False
         Me.gbResultsPane.Text = "FAQ - (Right Click to Answer)"
@@ -92,7 +92,7 @@ Partial Class frmFAQ
         DataGridViewCellStyle5.BackColor = System.Drawing.Color.Black
         DataGridViewCellStyle5.ForeColor = System.Drawing.Color.Lime
         Me.dgv.RowsDefaultCellStyle = DataGridViewCellStyle5
-        Me.dgv.Size = New System.Drawing.Size(1695, 567)
+        Me.dgv.Size = New System.Drawing.Size(1600, 567)
         Me.dgv.TabIndex = 0
         '
         'MenuStrip1
@@ -100,7 +100,7 @@ Partial Class frmFAQ
         Me.MenuStrip1.Items.AddRange(New System.Windows.Forms.ToolStripItem() {Me.AuthenticationToolStripMenuItem})
         Me.MenuStrip1.Location = New System.Drawing.Point(0, 0)
         Me.MenuStrip1.Name = "MenuStrip1"
-        Me.MenuStrip1.Size = New System.Drawing.Size(1731, 24)
+        Me.MenuStrip1.Size = New System.Drawing.Size(1624, 24)
         Me.MenuStrip1.TabIndex = 3
         Me.MenuStrip1.Text = "MenuStrip1"
         '
@@ -145,7 +145,7 @@ Partial Class frmFAQ
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.BackColor = System.Drawing.Color.Black
-        Me.ClientSize = New System.Drawing.Size(1731, 665)
+        Me.ClientSize = New System.Drawing.Size(1624, 662)
         Me.Controls.Add(Me.btnAdd)
         Me.Controls.Add(Me.gbResultsPane)
         Me.Controls.Add(Me.MenuStrip1)
