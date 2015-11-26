@@ -4498,7 +4498,7 @@ void GridcoinServices()
 	   }
     #endif
 	// Services thread activity
-	if (fDebug3) printf("^^");
+   if (fDebug3) printf(" {SVC} ");
 
 	//This is Gridcoins Service thread; called once per block	
 	if (nBestHeight > 100 && nBestHeight < 200)
@@ -4807,7 +4807,8 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     }
 
 	printf("{PB}: ACC; \r\n");
-	bExecuteGridcoinServices = true;
+	GridcoinServices();
+	//	bExecuteGridcoinServices = true;
     return true;
 }
 
@@ -5846,6 +5847,7 @@ StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, Stru
 				cpid.LastPaymentTime = 0;
 				cpid.EarliestPaymentTime = 99999999999;
 				vRef.insert(map<string,StructCPID>::value_type(name,cpid));
+				cpid.Accuracy = 0;
 				vRef[name]=cpid;
 				return cpid;
 		}

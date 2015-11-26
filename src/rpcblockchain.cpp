@@ -3055,19 +3055,26 @@ Array MagnitudeReport(std::string cpid)
 											if (IsResearchAgeEnabled(pindexBest->nHeight))
 											{
 
-												if (fDebug3) printf(" MR6 ");
-												//11-22-2015
-
+												if (fDebug3) printf(" MR6.0 ");
 												StructCPID stCPID = GetLifetimeCPID(structMag.cpid);
+												if (fDebug3) printf(" MR6.0 ");
+
 												double days = (GetAdjustedTime() - stCPID.LowLockTime)/86400;
+     											if (fDebug3) printf(" MR6.1 ");
+
 												entry.push_back(Pair("CPID",structMag.cpid));
+												if (fDebug3) printf(" MR6.2 ");
+
 												//double dWeight = (double)GetRSAWeiByCPID(structMag.cpid);
 												//entry.push_back(Pair("RSA Weight",dWeight));
 												StructCPID UH = GetInitializedStructCPID2(cpid,mvMagnitudes);
-												entry.push_back(Pair("RSA block count",UH.Accuracy));
-												entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
-												if (fDebug3) printf(" MR6.1 ");
+												if (fDebug3) printf(" MR6.3 ");
 
+												entry.push_back(Pair("RSA block count",UH.Accuracy));
+												if (fDebug3) printf(" MR6.4 ");
+
+												entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
+												if (fDebug3) printf(" MR6.5 ");
 												entry.push_back(Pair("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime)));
 												if (fDebug3) printf(" MR6.12 ");
 
@@ -3179,6 +3186,8 @@ void CSVToFile(std::string filename, std::string data)
 
 std::string TimestampToHRDate(double dtm)
 {
+	if (dtm == 0) return "1-1-1970 00:00:00";
+	if (dtm > 9888888888) return "1-1-2199 00:00:00";
 	std::string sDt = DateTimeStrFormat("%m-%d-%Y %H:%M:%S",dtm);
 	return sDt;
 }

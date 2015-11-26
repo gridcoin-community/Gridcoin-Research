@@ -2102,24 +2102,12 @@ void ExecGridcoinServices(void* parg)
 
     while (!fShutdown)
     {
-        MilliSleep(100);
+        MilliSleep(5000);
 		if (bExecuteGridcoinServices)
 		{
-			bExecuteGridcoinServices=false;
-			//printf("\r\n[DoTallyRA_START] ");
-			try
-			{
-				GridcoinServices();
+				bExecuteGridcoinServices=false;
+				//GridcoinServices();
 			}
-			catch (std::exception& e) 
-			{
-				PrintException(&e, "ExecGridcoinServices()");
-			}
-			catch(...)
-			{
-				printf("\r\nError occurred in ExecGridcoinServices...Recovering\r\n");
-			}
-		}
     }
     vnThreadsRunning[THREAD_SERVICES]--;
 }
