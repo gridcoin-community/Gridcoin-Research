@@ -191,6 +191,7 @@ extern std::string  msMiningErrors6;
 extern std::string  msMiningErrors7;
 extern std::string  msMiningErrors8;
 extern std::string  msPeek;
+extern std::string  msLastCommand;
 extern std::string  msAttachmentGuid;
 
 extern std::string  msMiningErrorsIncluded;

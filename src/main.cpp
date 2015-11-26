@@ -415,6 +415,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msMiningErrors7 = "";
  std::string    msMiningErrors8 = "";
  std::string    msPeek = "";
+ std::string    msLastCommand = "";
 
  std::string    msAttachmentGuid = "";
 
@@ -7754,11 +7755,21 @@ bool ProcessMessages(CNode* pfrom)
         // Message size
         unsigned int nMessageSize = hdr.nMessageSize;
 
-		//11-9-2015 Have a peek into what this node is doing
+		//11-26-2015 Have a peek into what this node is doing
 		std::string Peek = strCommand + ":" + RoundToString((double)nMessageSize,0) + " [" + NodeAddress(pfrom) + "]";
 
 		AddPeek(Peek);
+		std::string sCurrentCommand = RoundToString((double)GetAdjustedTime(),0) + Peek;
 
+
+		if (msLastCommand == sCurrentCommand)
+		{
+   			  //11-26-2015
+		      pfrom->Misbehaving(20);
+			  printf(" misbehaving %s ",Peek.c_str());
+		  	  pfrom->fDisconnect = true;
+     	}
+		msLastCommand = sCurrentCommand;
 
         // Checksum
         CDataStream& vRecv = msg.vRecv;

@@ -1681,11 +1681,11 @@ void ThreadSocketHandler2(void* parg)
             // Inactivity checking
             //
             int64_t nTime = GetAdjustedTime();
-			if (nTime - pnode->nTimeConnected > 20)
+			if (nTime - pnode->nTimeConnected > 7)
             {
                 if (pnode->nLastRecv == 0 || pnode->nLastSend == 0)
                 {
-                    if (fDebug3) printf("Socket no message in first 20 seconds, IP %s, %d %d\n", NodeAddress(pnode).c_str(), pnode->nLastRecv != 0, pnode->nLastSend != 0);
+                    if (fDebug3) printf("Socket no message in first 7 seconds, IP %s, %d %d\n", NodeAddress(pnode).c_str(), pnode->nLastRecv != 0, pnode->nLastSend != 0);
 					pnode->Misbehaving(100);
                     pnode->fDisconnect = true;
                 }
