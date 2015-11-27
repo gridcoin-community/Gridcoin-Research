@@ -4796,7 +4796,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 				pfrom->PushGetBlocks(pindexBest, uint256(0));
 		
 				//pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2));
-				//				if (!IsInitialBlockDownload())					pfrom->AskFor(CInv(MSG_BLOCK, WantedByOrphan(pblock2)));
+				//if (!IsInitialBlockDownload())	pfrom->AskFor(CInv(MSG_BLOCK, WantedByOrphan(pblock2)));
 			}
 
 		}
@@ -7803,11 +7803,17 @@ bool ProcessMessages(CNode* pfrom)
 		
 		if (msLastCommand == sCurrentCommand)
 		{
-   			  //11-26-2015
+   			  //11-27-2015
 		      //pfrom->Misbehaving(20);
-			  printf(" Dupe (misbehaving) %s %s ",NodeAddress(pfrom).c_str(),Peek.c_str());
-		  	  //pfrom->fDisconnect = true;
-			  return false;
+			  double node_duplicates = cdbl(ReadCache("duplicates",NodeAddress(pfrom)),0) + 1;
+			  WriteCache("duplicates",NodeAddress(pfrom),RoundToString(node_duplicates,0),GetAdjustedTime());
+			  if (node_duplicates > 5)
+			  {
+					printf(" Dupe (misbehaving) %s %s ",NodeAddress(pfrom).c_str(),Peek.c_str());
+		  			pfrom->fDisconnect = true;
+					WriteCache("duplicates",NodeAddress(pfrom),"0",GetAdjustedTime());
+					return false;
+			  }
      	}
 		msLastCommand = sCurrentCommand;
 
@@ -9768,7 +9774,6 @@ static void getCpuid( unsigned int* p, unsigned int ax )
 		unsigned int* ptr = (&cpuinfo[0]);                 
 		for ( unsigned int i = 0; i < 4; i++ )             
 			hash += (ptr[i] & 0xFFFF) + ( ptr[i] >> 16 );   
-		double dHash = (double)hash;
 		if (fDebug3) printf("cpuhash %f",(double)hash);
 		return n;
 	#endif
