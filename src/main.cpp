@@ -9783,13 +9783,6 @@ static void getCpuid( unsigned int* p, unsigned int ax )
 		double dHash = (double)hash;
 		return n + ";" + RoundToString(dHash,0);
 	#else
-		unsigned int cpuinfo[4] = { 0, 0, 0, 0 };          
-		getCpuid( cpuinfo, 0 );  
-		unsigned short hash = 0;            
-		unsigned int* ptr = (&cpuinfo[0]);                 
-		for ( unsigned int i = 0; i < 4; i++ )             
-			hash += (ptr[i] & 0xFFFF) + ( ptr[i] >> 16 );   
-		if (fDebug3) printf("cpuhash %f",(double)hash);
 		return n;
 	#endif
  }         
