@@ -601,8 +601,8 @@ bool GetBlockNew(uint256 blockhash, int& out_height, CBlock& blk, bool bForceDis
                 continue;
         }
         int64_t nValue = out.tx->vout[out.i].nValue;
-        const CScript& pk = out.tx->vout[out.i].scriptPubKey;
-        CTxDestination address;
+        //const CScript& pk = out.tx->vout[out.i].scriptPubKey;
+        //CTxDestination address;
 		global_total += nValue;
     }
 
@@ -3458,7 +3458,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 	if (pindex->nHeight % 5 == 0 && pindex->nHeight > 100)
 	{
 		std::string errors1 = "";
-		bool result = LoadAdminMessages(false,errors1);
+		LoadAdminMessages(false,errors1);
 	}
 
 	// Slow down Retallying when in RA mode so we minimize disruption of the network
@@ -4643,7 +4643,7 @@ void GridcoinServices()
 				#endif
 				if (VerifySuperblock(contract,nBestHeight))
 				{
-						bool bResult = AsyncNeuralRequest("quorum","gridcoin",25);
+						AsyncNeuralRequest("quorum","gridcoin",25);
 				}
 			}
 	}
@@ -4662,7 +4662,7 @@ void GridcoinServices()
 	if (false && TimerMain("GridcoinPersistedDataSystem",5))
 	{
 		std::string errors1 = "";
-		bool result = LoadAdminMessages(false,errors1);
+		LoadAdminMessages(false,errors1);
 	}
 
 	if (KeyEnabled("exportmagnitude"))
@@ -4793,9 +4793,10 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 			// Ask this guy to fill in what we're missing
 			if (pfrom)
 			{
-				pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2));
-				if (!IsInitialBlockDownload())
-					pfrom->AskFor(CInv(MSG_BLOCK, WantedByOrphan(pblock2)));
+				pfrom->PushGetBlocks(pindexBest, uint256(0));
+		
+				//pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2));
+				//				if (!IsInitialBlockDownload())					pfrom->AskFor(CInv(MSG_BLOCK, WantedByOrphan(pblock2)));
 			}
 
 		}
@@ -6810,6 +6811,24 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         pfrom->PushMessage("verack");
         pfrom->ssSend.SetVersion(min(pfrom->nVersion, PROTOCOL_VERSION));
 
+
+        // If we are out of sync, ask a node for blocks:
+        static int nAskedForSyncBlocks = 0;
+		if (!fTestNet)
+		{
+			if  (!pfrom->fOneShot &&
+				(pfrom->nStartingHeight > (nBestHeight - 144)) &&
+				(pfrom->nVersion < NOBLKS_VERSION_START ||
+				 pfrom->nVersion >= NOBLKS_VERSION_END) &&
+				 (nAskedForSyncBlocks < 5 || vNodes.size() <= 1))
+			{
+				nAskedForSyncBlocks++;
+				pfrom->PushGetBlocks(pindexBest, uint256(0));
+				if (fDebug3) printf("Asking %s for %f getblocks\r\n",NodeAddress(pfrom).c_str(),(double)nAskedForSyncBlocks);
+			}
+		}
+		// 11-27-2015
+
         if (!pfrom->fInbound)
         {
             // Advertise our address
@@ -8018,7 +8037,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 		mcpid.rac = 0;
 		mcpid.NetworkRAC = 0;
 	}
-	int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+	//int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
 	//7-25-2015 - Add the neural hash only if necessary
 	if (NeedASuperblock() && !OutOfSyncByAge() && NeuralNodeParticipates())
 	{
@@ -8270,7 +8289,7 @@ void CreditCheck(std::string cpid, bool clearcache)
 				return;
 			}
 
-			double projavg = 0;
+			//double projavg = 0;
 			int iRow = 0;
 			std::vector<std::string> vCC = split(cc.c_str(),"<project>");
 			if (vCC.size() > 0)
@@ -9734,16 +9753,16 @@ static void getCpuid( unsigned int* p, unsigned int ax )
  {      
     std::string n = boost::asio::ip::host_name();
 	#ifdef WIN32
-    unsigned int cpuinfo[4] = { 0, 0, 0, 0 };          
-    getCpuid( cpuinfo, 0 );  
-    unsigned short hash = 0;            
-    unsigned int* ptr = (&cpuinfo[0]);                 
-    for ( unsigned int i = 0; i < 4; i++ )             
-       hash += (ptr[i] & 0xFFFF) + ( ptr[i] >> 16 );   
-	double dHash = (double)hash;
-    return n + ";" + RoundToString(dHash,0);
+		unsigned int cpuinfo[4] = { 0, 0, 0, 0 };          
+		getCpuid( cpuinfo, 0 );  
+		unsigned short hash = 0;            
+		unsigned int* ptr = (&cpuinfo[0]);                 
+		for ( unsigned int i = 0; i < 4; i++ )             
+			hash += (ptr[i] & 0xFFFF) + ( ptr[i] >> 16 );   
+		double dHash = (double)hash;
+		return n + ";" + RoundToString(dHash,0);
 	#else
-	return n;
+		return n;
 	#endif
  }         
 

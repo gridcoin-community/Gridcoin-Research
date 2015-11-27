@@ -65,7 +65,7 @@ const std::string CLIENT_NAME("Nakamoto");
 const std::string CLIENT_BUILD(BUILD_DESC CLIENT_VERSION_SUFFIX);
 const std::string CLIENT_DATE(BUILD_DATE);
 
-int MINOR_VERSION = 311;
+int MINOR_VERSION = 312;
 
 
 
