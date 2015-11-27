@@ -189,7 +189,7 @@ bool GridEncrypt(std::vector<unsigned char> vchPlaintext, std::vector<unsigned c
 
 bool GridDecrypt(const std::vector<unsigned char>& vchCiphertext,std::vector<unsigned char>& vchPlaintext)
 {
-	bool result=LoadGridKey("gridcoin","cqiuehEJ2Tqdov");
+	LoadGridKey("gridcoin","cqiuehEJ2Tqdov");
 	int nLen = vchCiphertext.size();
     int nPLen = nLen, nFLen = 0;
     EVP_CIPHER_CTX ctx;
@@ -210,7 +210,7 @@ bool GridDecrypt(const std::vector<unsigned char>& vchCiphertext,std::vector<uns
 
 bool GridEncryptWithSalt(std::vector<unsigned char> vchPlaintext, std::vector<unsigned char> &vchCiphertext, std::string salt)
 {
-	bool result=LoadGridKey("gridcoin",salt);
+	LoadGridKey("gridcoin",salt);
     int nLen = vchPlaintext.size();
     int nCLen = nLen + AES_BLOCK_SIZE, nFLen = 0;
     vchCiphertext = std::vector<unsigned char> (nCLen);
@@ -229,7 +229,7 @@ bool GridEncryptWithSalt(std::vector<unsigned char> vchPlaintext, std::vector<un
 
 bool GridDecryptWithSalt(const std::vector<unsigned char>& vchCiphertext,std::vector<unsigned char>& vchPlaintext, std::string salt)
 {
-	bool result=LoadGridKey("gridcoin",salt);
+	LoadGridKey("gridcoin",salt);
 	int nLen = vchCiphertext.size();
     int nPLen = nLen, nFLen = 0;
     EVP_CIPHER_CTX ctx;
@@ -271,11 +271,11 @@ std::string AdvancedCrypt(std::string boinchash)
 	   std::vector<unsigned char> vchSecret( boinchash.begin(), boinchash.end() );
 	   std::string d1 = "                                                                                                                                        ";
 	   std::vector<unsigned char> vchCryptedSecret(d1.begin(),d1.end());
-       bool OK = GridEncrypt(vchSecret, vchCryptedSecret);
+       GridEncrypt(vchSecret, vchCryptedSecret);
 	   std::string encrypted = EncodeBase64(UnsignedVectorToString(vchCryptedSecret));
-
 	   return encrypted;
-	} catch (std::exception &e) 
+	} 
+	catch (std::exception &e) 
 	{
 		printf("Error while encrypting %s",boinchash.c_str());
 		return "";

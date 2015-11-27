@@ -145,7 +145,6 @@ void InitializeBoincProjectsNew()
 		GlobalCPUMiningCPID.diffbytes = 0;
 		GlobalCPUMiningCPID.email = "";
 		GlobalCPUMiningCPID.RSAWeight = 0;
-		std::string boinc_projects[100];
 
 		//Loop through projects saved in the Gridcoin Persisted Data System
 		std::string sType = "project";
@@ -195,7 +194,6 @@ void InitializeBoincProjects()
 		/*
 		for (int i = 0; i < 100; i++)
 		{
-			std::string proj = boinc_projects[i];
 			if (proj.length() > 1)
 			{
        			boost::to_lower(proj);
@@ -293,12 +291,11 @@ void HandleSIGHUP(int)
 bool AppInit(int argc, char* argv[])
 {
 		
-    boost::thread* detectShutdownThread = NULL;
-
     bool fRet = false;
 	
     try
     {
+		boost::thread* detectShutdownThread = NULL;
         //
         // Parameters
         //
@@ -338,7 +335,7 @@ bool AppInit(int argc, char* argv[])
             int ret = CommandLineRPC(argc, argv);
             exit(ret);
         }
-		  detectShutdownThread = new boost::thread(boost::bind(&DetectShutdownThread, &threadGroup));
+		detectShutdownThread = new boost::thread(boost::bind(&DetectShutdownThread, &threadGroup));
 		
         fRet = AppInit2();
     }

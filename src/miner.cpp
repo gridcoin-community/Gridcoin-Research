@@ -478,10 +478,9 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		//Halford: Use current time since we are creating a new stake
 		StructCPID st1 = GetLifetimeCPID(GlobalCPUMiningCPID.cpid);
 
-		int64_t nNewBlockReward = GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,pindexBest->nTime,pindexBest,"createnewblock",
+		GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,pindexBest->nTime,pindexBest,"createnewblock",
 			out_por,out_interest,dAccrualAge,dMagnitudeUnit,dAvgMag);
-		
-
+	
 		miningcpid.ResearchSubsidy = out_por;
 		miningcpid.InterestSubsidy = out_interest;
 		miningcpid.enccpid = ""; //CPID V1 Boinc RunTime enc key
