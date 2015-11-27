@@ -170,7 +170,7 @@ bool LoadGridKey(std::string gridkey, std::string salt)
 
 bool GridEncrypt(std::vector<unsigned char> vchPlaintext, std::vector<unsigned char> &vchCiphertext)
 {
-	bool result=LoadGridKey("gridcoin","cqiuehEJ2Tqdov");
+	LoadGridKey("gridcoin","cqiuehEJ2Tqdov");
     int nLen = vchPlaintext.size();
     int nCLen = nLen + AES_BLOCK_SIZE, nFLen = 0;
     vchCiphertext = std::vector<unsigned char> (nCLen);
@@ -295,7 +295,7 @@ std::string AdvancedDecrypt(std::string boinchash_encrypted)
 	   std::string d2 = "                                                                                                                                        ";
 	   std::vector<unsigned char> vchCryptedSecret(pre_encrypted_boinchash.begin(),pre_encrypted_boinchash.end());
 	   std::vector<unsigned char> vchPlaintext(d2.begin(),d2.end());
-	   bool OKDecrypt = GridDecrypt(vchCryptedSecret,vchPlaintext);
+	   GridDecrypt(vchCryptedSecret,vchPlaintext);
 	   std::string decrypted = UnsignedVectorToString(vchPlaintext);
 	   return decrypted;
 	} catch (std::exception &e) 
@@ -346,7 +346,7 @@ std::string AdvancedCryptWithSalt(std::string boinchash, std::string salt)
 	   std::vector<unsigned char> vchSecret( boinchash.begin(), boinchash.end() );
 	   std::string d1 = "                                                                                                                                        ";
 	   std::vector<unsigned char> vchCryptedSecret(d1.begin(),d1.end());
-       bool OK = GridEncryptWithSalt(vchSecret, vchCryptedSecret,salt);
+       GridEncryptWithSalt(vchSecret, vchCryptedSecret,salt);
 	   std::string encrypted = EncodeBase64(UnsignedVectorToString(vchCryptedSecret));
 
 	   return encrypted;
@@ -370,7 +370,7 @@ std::string AdvancedDecryptWithSalt(std::string boinchash_encrypted, std::string
 	   std::string d2 = "                                                                                                                                        ";
 	   std::vector<unsigned char> vchCryptedSecret(pre_encrypted_boinchash.begin(),pre_encrypted_boinchash.end());
 	   std::vector<unsigned char> vchPlaintext(d2.begin(),d2.end());
-	   bool OKDecrypt = GridDecryptWithSalt(vchCryptedSecret,vchPlaintext,salt);
+	   GridDecryptWithSalt(vchCryptedSecret,vchPlaintext,salt);
 	   std::string decrypted = UnsignedVectorToString(vchPlaintext);
 	   return decrypted;
 	} catch (std::exception &e) 

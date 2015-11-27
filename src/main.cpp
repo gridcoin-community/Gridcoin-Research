@@ -4755,11 +4755,26 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     if (!mapBlockIndex.count(pblock->hashPrevBlock))
     {
 		//11-27-2015
-		std::string sAcceptOrphans = GetArgument("acceptorphans", "false");
-			
+		std::string sAcceptOrphans = GetArgument("acceptorphans", "true");
         printf("ProcessBlock: ORPHAN BLOCK, Accepting orphans %s, prev=%s\n", sAcceptOrphans.c_str(), pblock->hashPrevBlock.ToString().c_str());
+		//Note that you will have to accept orphans to stay in sync since getblock requests are not filled in order...
 		if (sAcceptOrphans=="true")
 		{
+			if (TimerMain("Orphan", 125))
+			{
+				// After 125 orphans, clear all of them so we have a chance to receive blocks from trustworthy nodes:
+				setStakeSeenOrphan.clear();
+				mapOrphanBlocks.clear();
+				printf("\r\n * Clearing orphan cache and setStakeSeen cache * \r\n");
+			}
+
+			if (TimerMain(hash.ToString(),10))
+			{
+				//After 10 duplicates of the same orphan, clear the cache
+				setStakeSeenOrphan.clear();
+				mapOrphanBlocks.clear();
+				printf("\r\n * Clearing orphan cache due to duplicate orphan received 10 times * \r\n");
+			}
 			// ppcoin: check proof-of-stake
 			if (pblock->IsProofOfStake())
 			{
@@ -4783,20 +4798,15 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 				if (!IsInitialBlockDownload())
 					pfrom->AskFor(CInv(MSG_BLOCK, WantedByOrphan(pblock2)));
 			}
+	
 		}
 		else
 		{
-			//CBlock* pblock2 = new CBlock(*pblock);
-			//mapOrphanBlocks.insert(make_pair(hash, pblock2));
-			//mapOrphanBlocksByPrev.insert(make_pair(pblock2->hashPrevBlock, pblock2));
-
+		
 			// Ask this guy to fill in what we're missing
 			if (pfrom)
 			{
 				pfrom->PushGetBlocks(pindexBest, uint256(0));
-		
-				//pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2));
-				//if (!IsInitialBlockDownload())	pfrom->AskFor(CInv(MSG_BLOCK, WantedByOrphan(pblock2)));
 			}
 
 		}
@@ -7804,10 +7814,9 @@ bool ProcessMessages(CNode* pfrom)
 		if (msLastCommand == sCurrentCommand)
 		{
    			  //11-27-2015
-		      //pfrom->Misbehaving(20);
-			  double node_duplicates = cdbl(ReadCache("duplicates",NodeAddress(pfrom)),0) + 1;
+		      double node_duplicates = cdbl(ReadCache("duplicates",NodeAddress(pfrom)),0) + 1;
 			  WriteCache("duplicates",NodeAddress(pfrom),RoundToString(node_duplicates,0),GetAdjustedTime());
-			  if (node_duplicates > 5)
+			  if (node_duplicates > 6)
 			  {
 					printf(" Dupe (misbehaving) %s %s ",NodeAddress(pfrom).c_str(),Peek.c_str());
 		  			pfrom->fDisconnect = true;
@@ -7815,6 +7824,12 @@ bool ProcessMessages(CNode* pfrom)
 					return false;
 			  }
      	}
+		else
+		{
+			  double node_duplicates = cdbl(ReadCache("duplicates",NodeAddress(pfrom)),0) - 1;
+			  if (node_duplicates < 1) node_duplicates = 0;
+			  WriteCache("duplicates",NodeAddress(pfrom),RoundToString(node_duplicates,0),GetAdjustedTime());
+		}
 		msLastCommand = sCurrentCommand;
 
         // Checksum

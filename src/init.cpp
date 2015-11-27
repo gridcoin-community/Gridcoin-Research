@@ -516,7 +516,7 @@ void ThreadAppInit2(void* parg)
     RenameThread("grc-appinit2");
 	bGridcoinGUILoaded=false;
 	printf("Initializing GUI...");
-	bool result = AppInit2();
+	AppInit2();
 	printf("GUI Loaded...");
 	bGridcoinGUILoaded = true;
 }
@@ -1144,7 +1144,7 @@ bool AppInit2()
 	// 
 	std::string sOut = "";
 	if (fDebug3) printf("Loading admin Messages %f",(double)0);
-	bool result = LoadAdminMessages(true,sOut);
+	LoadAdminMessages(true,sOut);
 	printf("Done loading Admin messages%f",(double)0);
 
 	InitializeBoincProjects();

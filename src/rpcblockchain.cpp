@@ -2373,7 +2373,7 @@ Value execute(const Array& params, bool fHelp)
 
 				double mytotalpct = 0;
 				double TotalMagnitude = 0;
-				double Mag = 0;
+				//double Mag = 0;
 				double NetworkProjectCountWithRAC = 0;
 				Object entry;
 				std::string narr = "";
@@ -2533,7 +2533,7 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "dportally")
 	{
-		bool result = TallyMagnitudesInSuperblock();
+		TallyMagnitudesInSuperblock();
 		entry.push_back(Pair("Done","Done"));
 	    results.push_back(entry);
 	
@@ -2967,7 +2967,7 @@ Array SuperblockReport(std::string cpid)
       int nMaxDepth = nBestHeight;
 	  int nLookback = BLOCKS_PER_DAY * 14;
 	  int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
-      int iRow = 0;
+      //int iRow = 0;
 	  CBlockIndex* pblockindex = pindexBest;
    	  while (pblockindex->nHeight > nMaxDepth)
 	  {
@@ -3025,15 +3025,12 @@ Array MagnitudeReport(std::string cpid)
 		   results.push_back(c);
 
 		   if (fDebug3) printf(" *MR1* ");
-
-		 				
-		   double payment_timespan = 14; 
+		   //double payment_timespan = 14; 
 		   double total_owed = 0;
 		   double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
 		   msRSAOverview = "";
 		   if (!pindexBest) return results;
 		   if (fDebug3) printf(" *MR2* ");
-
 
 		   try
 		   {
@@ -3214,7 +3211,7 @@ std::string CryptoLottery(int64_t locktime)
 		   double max_subsidy = (double)GetMaximumBoincSubsidy(locktime);
 		   vector<CPIDOwed> vCPIDSOwed;
 		   					
-		   int iRecord = 0;
+		   //int iRecord = 0;
 		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
 		   {
 			    StructCPID structMag = mvMagnitudes[(*ii).first];

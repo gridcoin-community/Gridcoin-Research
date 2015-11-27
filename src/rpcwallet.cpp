@@ -1078,7 +1078,7 @@ void ListTransactions2(const CWalletTx& wtx, const string& strAccount, int nMinD
     wtx.GetAmounts2(listReceived, listSent, nFee, strSentAccount, true,txdb);
 
     bool fAllAccounts = (strAccount == string("*") || strAccount.empty());
-    bool involvesWatchonly = wtx.IsFromMe();
+    //bool involvesWatchonly = wtx.IsFromMe();
 	// R Halford - Upgrade Bitcoin's ListTransactions to work with Gridcoin
 	// Ensure CoinStake addresses are deserialized, convert CoinStake split stake rewards to subsidies, Show POR vs Interest breakout
 

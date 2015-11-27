@@ -487,7 +487,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		miningcpid.enccpid = ""; //CPID V1 Boinc RunTime enc key
 		miningcpid.encboincpublickey = "";
 		miningcpid.encaes = "";
-		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+		//double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
 		std::string hashBoinc = SerializeBoincBlock(miningcpid);
 	    if (fDebug && LessVerbose(10))  printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
 		pblock->vtx[0].hashBoinc = hashBoinc;
@@ -703,8 +703,8 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	double dAvgMagnitude = 0;
 	int64_t nCoinAge = 0;
 	int64_t nFees = 0;		
-	//Checking Stake for Create CoinStake 
-	int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, boincblock.cpid, true, pindexBest->nTime, 
+	//Checking Stake for Create CoinStake - int64_t nCalculatedResearch =
+	GetProofOfStakeReward(nCoinAge, nFees, boincblock.cpid, true, pindexBest->nTime, 
 		pindexBest,"checkstake", out_por, out_interest, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 
 	if (boincblock.cpid != "INVESTOR" && out_por > 1)
@@ -754,8 +754,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	double block_value = CoinToDouble(pblock->vtx[1].GetValueOut());
 	std::string sBlockValue = RoundToString(block_value,4);	
 	//Submit the block during the public key address second
-	int wallet_second = 0;
-
+	
     if (fDebug3) printf("CheckStake() : new proof-of-stake block found, BlockValue %s, \r\n hash: %s \nproofhash: %s  \ntarget: %s\n",
 					sBlockValue.c_str(), hashBlock.GetHex().c_str(), proofHash.GetHex().c_str(), hashTarget.GetHex().c_str());
 	if (fDebug)     pblock->print();

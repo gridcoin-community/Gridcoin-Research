@@ -16,7 +16,7 @@ using namespace std;
 int64_t GetCoinYearReward(int64_t nTime);
 
 //CCriticalSection cs_main;
-static boost::thread_group* postThreads = NULL;
+//static boost::thread_group* postThreads = NULL;
 
 double GetPoSKernelPS2();
 StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
