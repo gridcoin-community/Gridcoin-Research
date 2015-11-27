@@ -380,7 +380,7 @@ extern void HarvestCPIDs(bool cleardata);
 bool FindTransactionSlow(uint256 txhashin, CTransaction& txout,  std::string& out_errors);
 std::string msCurrentRAC = "";
 static boost::thread_group* cpidThreads = NULL;
-static boost::thread_group* tallyThreads = NULL;
+//static boost::thread_group* tallyThreads = NULL;
 extern void FlushGridcoinBlockFile(bool fFinalize);
 
 
@@ -3797,7 +3797,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
     {
         if (!SetBestChainInner(txdb, pindexNew, false))
 		{
-			int nResult = 0;
+			//int nResult = 0;
             return error("SetBestChain() : SetBestChainInner failed");
 		}
     }
@@ -4786,7 +4786,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 		}
 		else
 		{
-			CBlock* pblock2 = new CBlock(*pblock);
+			//CBlock* pblock2 = new CBlock(*pblock);
 			//mapOrphanBlocks.insert(make_pair(hash, pblock2));
 			//mapOrphanBlocksByPrev.insert(make_pair(pblock2->hashPrevBlock, pblock2));
 
@@ -7800,14 +7800,14 @@ bool ProcessMessages(CNode* pfrom)
 
 		AddPeek(Peek);
 		std::string sCurrentCommand = RoundToString((double)GetAdjustedTime(),0) + Peek;
-
-
+		
 		if (msLastCommand == sCurrentCommand)
 		{
    			  //11-26-2015
-		      pfrom->Misbehaving(20);
-			  printf(" misbehaving %s ",Peek.c_str());
-		  	  pfrom->fDisconnect = true;
+		      //pfrom->Misbehaving(20);
+			  printf(" Dupe (misbehaving) %s %s ",NodeAddress(pfrom).c_str(),Peek.c_str());
+		  	  //pfrom->fDisconnect = true;
+			  return false;
      	}
 		msLastCommand = sCurrentCommand;
 
@@ -9762,6 +9762,14 @@ static void getCpuid( unsigned int* p, unsigned int ax )
 		double dHash = (double)hash;
 		return n + ";" + RoundToString(dHash,0);
 	#else
+		unsigned int cpuinfo[4] = { 0, 0, 0, 0 };          
+		getCpuid( cpuinfo, 0 );  
+		unsigned short hash = 0;            
+		unsigned int* ptr = (&cpuinfo[0]);                 
+		for ( unsigned int i = 0; i < 4; i++ )             
+			hash += (ptr[i] & 0xFFFF) + ( ptr[i] >> 16 );   
+		double dHash = (double)hash;
+		if (fDebug3) printf("cpuhash %f",(double)hash);
 		return n;
 	#endif
  }         
