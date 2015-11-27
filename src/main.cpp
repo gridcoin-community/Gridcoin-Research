@@ -4784,6 +4784,21 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 					pfrom->AskFor(CInv(MSG_BLOCK, WantedByOrphan(pblock2)));
 			}
 		}
+		else
+		{
+			CBlock* pblock2 = new CBlock(*pblock);
+			//mapOrphanBlocks.insert(make_pair(hash, pblock2));
+			//mapOrphanBlocksByPrev.insert(make_pair(pblock2->hashPrevBlock, pblock2));
+
+			// Ask this guy to fill in what we're missing
+			if (pfrom)
+			{
+				pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2));
+				if (!IsInitialBlockDownload())
+					pfrom->AskFor(CInv(MSG_BLOCK, WantedByOrphan(pblock2)));
+			}
+
+		}
         return true;
     }
 
@@ -5903,7 +5918,7 @@ bool RetiredTN(bool Forcefully)
 	bool superblockloaded = false;
 	double NetworkPayments = 0;
 	
-	double mint = 0;
+	//double mint = 0;
 					//7-5-2015 - R Halford - Start block and End block must be an exact range agreed by the network:
 					int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
 					int nLookback = BLOCKS_PER_DAY*14; //Daily block count * Lookback in days = 14 days
@@ -6100,7 +6115,7 @@ bool TallyResearchAverages(bool Forcefully)
 	bNetAveragesLoaded = false;
 	bool superblockloaded = false;
 	double NetworkPayments = 0;
-	double mint = 0;
+	//double mint = 0;
  						//Consensus Start/End block:
 						int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
 						int nLookback = BLOCKS_PER_DAY * 14; //Daily block count * Lookback in days
@@ -7626,13 +7641,13 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         if (!(sProblem.empty())) {
-            printf("pong %s %s: %s, %"PRIx64" expected, %"PRIx64" received, %u bytes\n"
+            printf("pong %s %s: %s, %"PRIx64" expected, %"PRIx64" received, %f bytes\n"
                 , pfrom->addr.ToString().c_str()
                 , pfrom->strSubVer.c_str()
                 , sProblem.c_str()
                 , pfrom->nPingNonceSent
                 , nonce
-                , nAvail);
+                , (double)nAvail);
         }
         if (bPingFinished) {
             pfrom->nPingNonceSent = 0;
