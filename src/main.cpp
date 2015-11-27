@@ -4550,7 +4550,7 @@ void GridcoinServices()
 		{
 			if (msNeuralResponse.length() < 25 && msPrimaryCPID != "INVESTOR" && !msPrimaryCPID.empty())
 			{
-				bool bResult = AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
+				AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
 				if (fDebug3) printf("Async explainmag sent for %s.",msPrimaryCPID.c_str());
 			}
 			// Run the RSA report for the overview page:
@@ -4754,30 +4754,36 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 	 // If don't already have its previous block, shunt it off to holding area until we get it
     if (!mapBlockIndex.count(pblock->hashPrevBlock))
     {
-        printf("ProcessBlock: ORPHAN BLOCK, prev=%s\n", pblock->hashPrevBlock.ToString().c_str());
-        // ppcoin: check proof-of-stake
-        if (pblock->IsProofOfStake())
-        {
-            // Limited duplicity on stake: prevents block flood attack
-            // Duplicate stake allowed only when there is orphan child block
-            if (setStakeSeenOrphan.count(pblock->GetProofOfStake()) && !mapOrphanBlocksByPrev.count(hash) && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
-                return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for orphan block %s", pblock->GetProofOfStake().first.ToString().c_str(), pblock->GetProofOfStake().second, hash.ToString().c_str());
-            else
-                setStakeSeenOrphan.insert(pblock->GetProofOfStake());
-        }
-        CBlock* pblock2 = new CBlock(*pblock);
-        mapOrphanBlocks.insert(make_pair(hash, pblock2));
-        mapOrphanBlocksByPrev.insert(make_pair(pblock2->hashPrevBlock, pblock2));
+		//11-27-2015
+		std::string sAcceptOrphans = GetArgument("acceptorphans", "false");
+			
+        printf("ProcessBlock: ORPHAN BLOCK, Accepting orphans %s, prev=%s\n", sAcceptOrphans.c_str(), pblock->hashPrevBlock.ToString().c_str());
+		if (sAcceptOrphans=="true")
+		{
+			// ppcoin: check proof-of-stake
+			if (pblock->IsProofOfStake())
+			{
+				// Limited duplicity on stake: prevents block flood attack
+				// Duplicate stake allowed only when there is orphan child block
+				if (setStakeSeenOrphan.count(pblock->GetProofOfStake()) && !mapOrphanBlocksByPrev.count(hash) && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
+					return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for orphan block %s", pblock->GetProofOfStake().first.ToString().c_str(), pblock->GetProofOfStake().second, hash.ToString().c_str());
+				else
+					setStakeSeenOrphan.insert(pblock->GetProofOfStake());
+			}
+			CBlock* pblock2 = new CBlock(*pblock);
+			mapOrphanBlocks.insert(make_pair(hash, pblock2));
+			mapOrphanBlocksByPrev.insert(make_pair(pblock2->hashPrevBlock, pblock2));
 
-        // Ask this guy to fill in what we're missing
-        if (pfrom)
-        {
-            pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2));
-            // ppcoin: getblocks may not obtain the ancestor block rejected
-            // earlier by duplicate-stake check so we ask for it again directly
-            if (!IsInitialBlockDownload())
-                pfrom->AskFor(CInv(MSG_BLOCK, WantedByOrphan(pblock2)));
-        }
+			// Ask this guy to fill in what we're missing
+			if (pfrom)
+			{
+				pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2));
+				// ppcoin: getblocks may not obtain the ancestor block rejected
+				// earlier by duplicate-stake check so we ask for it again directly
+				if (!IsInitialBlockDownload())
+					pfrom->AskFor(CInv(MSG_BLOCK, WantedByOrphan(pblock2)));
+			}
+		}
         return true;
     }
 
@@ -8557,7 +8563,7 @@ void HarvestCPIDs(bool cleardata)
 
 					boost::to_lower(proj);
 					proj = ToOfficialName(proj);
-					bool projectvalid = ProjectIsValid(proj);			//Is project Valid
+					ProjectIsValid(proj);
 					int64_t nStart = GetTimeMillis();
 					if (cpidhash.length() > 5 && proj.length() > 3) 
 					{
@@ -8643,7 +8649,7 @@ void HarvestCPIDs(bool cleardata)
 										std::string sData = qtExecuteDotNetStringFunction("WriteKey",sXML);
 									#endif
 									//Try to get a neural RAC report 7-25-2015
-									bool bResult = AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
+									AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
 								}
 						}
 
@@ -9341,7 +9347,7 @@ bool UnusualActivityReport()
 					int64_t nValueIn = 0;
 					int64_t nValueOut = 0;
 					int64_t nStakeReward = 0;
-					unsigned int nSigOps = 0;
+					//unsigned int nSigOps = 0;
 					double DPOR_Paid = 0;
 					bool bIsDPOR = false;
 					std::string MainRecipient = "";

@@ -46,6 +46,7 @@ git clone https://github.com/gridcoin/Gridcoin-Research
 #git reset --hard origin/master
 
 cd ~/Gridcoin-Research/src
+sudo mkdir obj
 
 chmod 755 leveldb/build_detect_platform 
 make -f makefile.unix USE_UPNP=- 
@@ -69,7 +70,8 @@ cd ~/.GridcoinResearch
 
 nano gridcoinresearch.conf 
 
-#copy the following into the editor:
+#copy the following into the editor: (Note the addnode should be in row #1):
+addnode=node.gridcoin.us
 server=1 
 daemon=1 
 rpcport=9332 
@@ -77,7 +79,6 @@ rpcallowip=127.0.0.1
 rpcuser=username
 rpcpassword=yourpassword
 rpcallowip=external IP 
-addnode=node.gridcoin.us
 #rpcssl=1
 
 #save and exit.  Leave the lines with ssl in them out if you don't need ssl.

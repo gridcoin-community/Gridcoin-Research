@@ -1428,10 +1428,10 @@ std::string HeadlessRoundToString(double d, int place)
 // Format the subversion field according to BIP 14 spec (https://en.bitcoin.it/wiki/BIP_0014)
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments)
 {
-	double neural_id = 0;
 	std::string neural_v = "0";
 
 	#if defined(WIN32) && defined(QT_GUI)
+		double neural_id = 0;
 		neural_id = (double)IsNeural();
 		neural_v = HeadlessRoundToString((double)MINOR_VERSION,0) + "." + RoundToString(neural_id,0);
 	#endif

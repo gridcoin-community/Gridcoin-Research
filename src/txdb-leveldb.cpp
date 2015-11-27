@@ -628,7 +628,7 @@ bool CTxDB::LoadBlockIndex()
 
 	//8-13-2015 - Gridcoin - In order, set up Research Age hashes and lifetime fields
     CBlockIndex* pindex = pindexGenesisBlock;
-	int lookback = 14*24*60*60;
+	//int lookback = 14*24*60*60;
 	if (pindex && pindexBest && pindexBest->nHeight > 10  && pindex->pnext)
 	{
 		printf(" RA Starting %f %f %f ",(double)pindex->nHeight,(double)pindex->pnext->nHeight,(double)pindexBest->nHeight);

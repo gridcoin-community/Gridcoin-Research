@@ -691,6 +691,7 @@ Module modPersistedDataSystem
                     Return True
                 End If
             Catch ex As Exception
+                Dim sErr As String = ex.Message
             End Try
         Next x
         Return False
