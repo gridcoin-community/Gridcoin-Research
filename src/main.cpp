@@ -128,7 +128,6 @@ extern void WriteCache(std::string section, std::string key, std::string value, 
 
 std::string qtGetNeuralContract(std::string data);
 
-extern  std::string GetNetsoftProjects(std::string cpid);
 extern std::string GetNeuralNetworkReport();
 void qtSyncWithDPORNodes(std::string data);
 std::string qtGetNeuralHash(std::string data);
@@ -310,7 +309,6 @@ extern enum Checkpoints::CPMode CheckpointsMode;
 
 // Gridcoin - Rob Halford
 
-extern std::string GetHttpPage(std::string cpid, bool usedns, bool clearcache);
 extern std::string RetrieveMd5(std::string s1);
 extern std::string aes_complex_hash(uint256 scrypt_hash);
 
@@ -350,7 +348,6 @@ extern bool AESSkeinHash(unsigned int diffbytes, double rac, uint256 scrypthash,
 std::string DefaultGetblocksCommand();
 CClientUIInterface uiDog;
 void ExecuteCode();
-extern void CreditCheck(std::string cpid, bool clearcache);
 extern void ThreadCPIDs();
 extern std::string GetGlobalStatus();
 
@@ -8242,129 +8239,13 @@ void InitializeProjectStruct(StructCPID& project)
 	std::string ENCbpk = AdvancedCrypt(cpid_non);
 	project.boincpublickey = ENCbpk;
 	project.cpidv2 = ComputeCPIDv2(email, project.cpidhash, 0);
-	project.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + project.cpid;
+	project.link = "";
 	//Local CPID with struct
 	//Must contain cpidv2, cpid, boincpublickey
 	project.Iscpidvalid = IsLocalCPIDValid(project);
  	if (fDebug) printf("Memorizing local project %s, CPID Valid: %s;    ",project.projectname.c_str(),YesNo(project.Iscpidvalid).c_str());
 
 }
-
-
-
-
-
-std::string GetNetsoftProjects(std::string cpid)
-{
-			std::string cc = GetHttpPage(cpid,true,true);
-			if (cc.length() < 10) 
-			{
-				if (fDebug) printf("Note: HTTP Page returned blank from netsoft for %s\r\n",cpid.c_str());
-				return "";
-			}
-
-			int iRow = 0;
-			std::vector<std::string> vCC = split(cc.c_str(),"<project>");
-			
-			if (vCC.size() > 1)
-			{
-				for (unsigned int i = 0; i < vCC.size(); i++)
-				{
-					std::string sProj  = ExtractXML(vCC[i],"<name>","</name>");
-					std::string utc    = ExtractXML(vCC[i],"<total_credit>","</total_credit>");
-					std::string rac    = ExtractXML(vCC[i],"<expavg_credit>","</expavg_credit>");
-					std::string team   = ExtractXML(vCC[i],"<team_name>","</team_name>");
-					std::string rectime= ExtractXML(vCC[i],"<expavg_time>","</expavg_time>");
-					boost::to_lower(sProj);
-					sProj = ToOfficialName(sProj);
-					if (sProj == "mindmodeling@home") sProj = "mindmodeling@beta";
-					if (sProj == "Quake Catcher Network") sProj = "Quake-Catcher Network";
-
-					if (sProj.length() > 3) 
-					{
-						std::string sKey = cpid + "+" + sProj;
-						StructCPID strDPOR = GetInitializedStructCPID2(sKey,mvDPOR);
-						iRow++;
-						strDPOR.cpid = cpid;
-						strDPOR.NetsoftRAC = cdbl(rac,0);
-						mvDPOR[sKey] = strDPOR;
-					}
-				}
-			}
-
-			return cc;
-
-}
-
-
-
-
-void CreditCheck(std::string cpid, bool clearcache)
-{
-	try {
-
-			std::string cc = GetHttpPage(cpid,true,clearcache);
-			if (cc.length() < 50) 
-			{
-				if (fDebug) printf("Note: HTTP Page returned blank from netsoft for %s\r\n",cpid.c_str());
-				return;
-			}
-
-			//double projavg = 0;
-			int iRow = 0;
-			std::vector<std::string> vCC = split(cc.c_str(),"<project>");
-			if (vCC.size() > 0)
-			{
-				for (unsigned int i = 0; i < vCC.size(); i++)
-				{
-					std::string sProj  = ExtractXML(vCC[i],"<name>","</name>");
-					std::string utc    = ExtractXML(vCC[i],"<total_credit>","</total_credit>");
-					std::string rac    = ExtractXML(vCC[i],"<expavg_credit>","</expavg_credit>");
-					std::string team   = ExtractXML(vCC[i],"<team_name>","</team_name>");
-					std::string rectime= ExtractXML(vCC[i],"<expavg_time>","</expavg_time>");
-					std::string proj_id= ExtractXML(vCC[i],"<project_id>","</project_id>");
-
-					boost::to_lower(sProj);
-					sProj = ToOfficialName(sProj);
-										
-					if (sProj.length() > 3 && !proj_id.empty())
-					{
-						//7-16-2015
-						StructCPID structcc = GetInitializedStructCPID2(sProj,mvCPIDs);
-						iRow++;
-						structcc.cpid = cpid;
-						structcc.projectname = sProj;
-						boost::to_lower(team);
-						structcc.verifiedteam = team;
-						if (structcc.verifiedteam != "gridcoin") structcc.rac = -1;
-						structcc.verifiedrectime = cdbl(rectime,0);
-						structcc.verifiedrac = cdbl(rac,0);
-						structcc.rac = cdbl(rac,0);
-						double currenttime =  GetAdjustedTime();
-						double nActualTimespan = currenttime - structcc.verifiedrectime;
-						structcc.verifiedage = nActualTimespan;
-						mvCPIDs[sProj] = structcc;	
-						//////////////////////////// Store this information by CPID+Project also:
-						std::string sKey = cpid + ":" + sProj;
-						
-					}
-				}
-			}
-			
-	}
-	catch (std::exception &e) 
-	{
-			 printf("error while accessing credit check online.\r\n");
-	}
-    catch(...)
-	{
-			printf("Error While accessing credit check online (2).\r\n");
-	}
-
-	
-}
-
-
 
 
 
@@ -8545,11 +8426,9 @@ void HarvestCPIDs(bool cleardata)
 			std::string cpid_non = structcpid.cpidhash+structcpid.email;
 			printf("GenBoincKey using email %s and cpidhash %s key %s \r\n",structcpid.email.c_str(),structcpid.cpidhash.c_str(),sDec.c_str());
 			structcpid.cpidv2 = ComputeCPIDv2(structcpid.email, structcpid.cpidhash, 0);
-			structcpid.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + structcpid.cpid;
+			structcpid.link = "";
 			structcpid.Iscpidvalid = true;
 			mvCPIDs.insert(map<string,StructCPID>::value_type(structcpid.projectname,structcpid));
-			//11-12-2015
-			CreditCheck(structcpid.cpid,false);
 			GetNextProject(false);
 			if (fDebug) printf("GCMCPI %s",GlobalCPUMiningCPID.cpid.c_str());
 			if (fDebug) 			printf("Finished getting first remote boinc project\r\n");
@@ -8744,8 +8623,6 @@ void ThreadCPIDs()
 	HarvestCPIDs(true);
 	bCPIDsLoaded = true;
 	//Reloads maglevel:
-	printf("Performing 1st credit check (%s)",GlobalCPUMiningCPID.cpid.c_str());
-	CreditCheck(GlobalCPUMiningCPID.cpid,false);
 	printf("Getting first project");
 	GetNextProject(false);
 	printf("Finished getting first project");

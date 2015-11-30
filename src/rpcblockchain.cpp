@@ -61,7 +61,6 @@ std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end
 extern  std::string GetTeamURLs(bool bMissingOnly, bool bReturnProjectNames);
 extern  bool InsertSmartContract(std::string URL,std::string Name);
 std::string ExtractHTML(std::string HTMLdata, std::string tagstartprefix,  std::string tagstart_suffix, std::string tag_end);
-extern  std::string GetNetsoftProjects(std::string cpid);
 std::string NeuralRequest(std::string MyNeuralRequest);
 extern std::string MyBeaconExists(std::string cpid);
 extern std::string AdvertiseBeacon(bool force,bool neurally);
@@ -178,13 +177,10 @@ MiningCPID DeserializeBoincBlock(std::string block);
 std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string urlPage, bool bUseDNS);
 extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
-std::string GetHttpPage(std::string cpid);
-std::string GetHttpPage(std::string cpid, bool usedns, bool clearcache);
 bool GridDecrypt(const std::vector<unsigned char>& vchCiphertext,std::vector<unsigned char>& vchPlaintext);
 bool GridEncrypt(std::vector<unsigned char> vchPlaintext, std::vector<unsigned char> &vchCiphertext);
 uint256 GridcoinMultipleAlgoHash(std::string t1);
 void ExecuteCode();
-void CreditCheck(std::string cpid, bool clearcache);
 double CalculatedMagnitude(int64_t locktime,bool bUseLederstrumpf);
 
 
@@ -2369,7 +2365,6 @@ Value execute(const Array& params, bool fHelp)
 
 				TallyMagnitudesInSuperblock();
 				std::string argcpid = params[1].get_str();
-				std::string np = GetNetsoftProjects(argcpid);
 
 				double mytotalpct = 0;
 				double TotalMagnitude = 0;
@@ -2403,7 +2398,6 @@ Value execute(const Array& params, bool fHelp)
 
 					}
 				}
-				//entry.push_back(Pair("XML View",np));
 
 				results.push_back(entry);
 				return results;
@@ -2897,12 +2891,6 @@ Value execute(const Array& params, bool fHelp)
 			entry.push_back(Pair("Resending unsent wallet transactions...",1));
 			results.push_back(entry);
 	} 
-	else if (sItem == "postcpid")
-	{
-			std::string result = GetHttpPage("859038ff4a9",true,true);
-			entry.push_back(Pair("POST Result",result));
-	        results.push_back(entry);
-	}
 	else if (sItem == "encrypt_deprecated")
 	{
 			std::string s1 = "1234";
