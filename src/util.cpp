@@ -1110,7 +1110,7 @@ const boost::filesystem::path &GetDataDir(bool fNetSpecific)
 	{
         path = GetDefaultDataDir();
     }
-    if (fNetSpecific || GetBoolArg("-testnet", false))
+    if (fNetSpecific && GetBoolArg("-testnet", false)  ||  GetBoolArg("-testnet",false) )
 	{
         path /= "testnet";
 	}
