@@ -634,20 +634,6 @@ void fileopen_and_copy(std::string src, std::string dest)
 
 
 
-bool xCreateNewConfigFile(std::string boinc_email)
-{
-	std::string filename = "gridcoinresearch.conf";
-	boost::filesystem::path path = GetDataDir() / filename;
-	ofstream myConfig;
-	myConfig.open (path.string().c_str());
-	std::string row = "cpumining=true\r\n";
-	myConfig << row;
-	row = "email=" + boinc_email + "\r\n";
-	myConfig << row;
-	myConfig.close();
-	return true;
-}
-
 	
 std::string BackupGridcoinWallet()
 {
@@ -3024,13 +3010,11 @@ Array MagnitudeReport(std::string cpid)
 		   c.push_back(Pair("RSA Report",Narr));
 		   results.push_back(c);
 
-		   if (fDebug3) printf(" *MR1* ");
 		   //double payment_timespan = 14; 
 		   double total_owed = 0;
 		   double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
 		   msRSAOverview = "";
 		   if (!pindexBest) return results;
-		   if (fDebug3) printf(" *MR2* ");
 
 		   try
 		   {
@@ -3052,18 +3036,17 @@ Array MagnitudeReport(std::string cpid)
 											if (IsResearchAgeEnabled(pindexBest->nHeight))
 											{
 
-												if (fDebug3) printf(" MR6.0 ");
 												StructCPID stCPID = GetLifetimeCPID(structMag.cpid);
-												if (fDebug3) printf(" MR6.0 ");
-
+											
 												double days = (GetAdjustedTime() - stCPID.LowLockTime)/86400;
      											if (fDebug3) printf(" MR6.1 ");
 
 												entry.push_back(Pair("CPID",structMag.cpid));
 												if (fDebug3) printf(" MR6.2 ");
-
-												//double dWeight = (double)GetRSAWeiByCPID(structMag.cpid);
-												//entry.push_back(Pair("RSA Weight",dWeight));
+												entry.push_back(Pair("PoolMining",bPoolMiningMode));
+	
+												double dWeight = (double)GetRSAWeightByCPID(structMag.cpid);
+												entry.push_back(Pair("RSA Weight",dWeight));
 												StructCPID UH = GetInitializedStructCPID2(cpid,mvMagnitudes);
 												if (fDebug3) printf(" MR6.3 ");
 
@@ -4405,6 +4388,9 @@ Value listitem(const Array& params, bool fHelp)
 		}
 
     }
+	Object entry;
+	entry.push_back(Pair("PoolMining",bPoolMiningMode));
+	results.push_back(entry);
 
     return results;
 

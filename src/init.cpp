@@ -26,6 +26,7 @@ bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern void InitializeBoincProjects();
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
+std::string GetArgument(std::string arg, std::string defaultvalue);
 void startWireFrameRenderer();
 void stopWireFrameRenderer();
 void ShutdownGridcoinMiner();
@@ -625,6 +626,10 @@ bool AppInit2()
         SoftSetBoolArg("-irc", true);
     }
 
+
+	bPoolMiningMode = GetBoolArg("-poolmining");
+
+
     if (mapArgs.count("-bind")) {
         // when specifying an explicit binding address, you want to listen on it
         // even when -connect or -proxy is specified
@@ -663,6 +668,9 @@ bool AppInit2()
         SoftSetBoolArg("-rescan", true);
     }
 
+	// Verify testnet is using the testnet directory for the config file:
+	std::string sTestNetSpecificArg = GetArgument("testnetarg","default");
+	printf("Using specific arg %s",sTestNetSpecificArg.c_str());
 
 
     // ********************************************************* Step 3: parameter-to-internal-flags

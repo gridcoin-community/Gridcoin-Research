@@ -781,19 +781,22 @@ int AddressUser()
 {
 		int result = 0;
 		#if defined(WIN32) && defined(QT_GUI)
-		double out_magnitude = 0;
-		double out_owed = 0;
-		try
-		{
-			if (!bGlobalcomInitialized) return 0;
-			out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid,out_owed);
-		    if (fDebug3) printf("Boinc Magnitude %f \r\n",out_magnitude);
-			result = globalcom->dynamicCall("AddressUser(Qstring)",IntToQstring((int)out_magnitude)).toInt();
-		}
-		catch(...)
-		{
-			printf("Catastrophic Error");
-		}
+			double out_magnitude = 0;
+			double out_owed = 0;
+			try
+			{
+				printf("11302015");
+				if (!bGlobalcomInitialized) return 0;
+				out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid,out_owed);
+				std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
+				qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
+				if (fDebug3) printf("AddressUser with Boinc Magnitude %f \r\n",out_magnitude);
+				result = globalcom->dynamicCall("AddressUser(Qstring)",IntToQstring((int)out_magnitude)).toInt();
+			}
+			catch(...)
+			{
+				printf("Catastrophic Error");
+			}
 		#endif
 		return result;
 }
@@ -919,9 +922,9 @@ void BitcoinGUI::createActions()
 	miningAction->setMenuRole(QAction::TextHeuristicRole);
 
 
-	sqlAction = new QAction(QIcon(":/icons/bitcoin"), tr("&SQL Query Analyzer"), this);
-	sqlAction->setStatusTip(tr("SQL Query Analyzer"));
-	sqlAction->setMenuRole(QAction::TextHeuristicRole);
+	configAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Advanced Configuration"), this);
+	configAction->setStatusTip(tr("Advanced Configuration"));
+	configAction->setMenuRole(QAction::TextHeuristicRole);
 
 	tickerAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Live Ticker"), this);
 	tickerAction->setStatusTip(tr("Live Ticker"));
@@ -993,7 +996,7 @@ void BitcoinGUI::createActions()
 	connect(upgradeAction, SIGNAL(triggered()), this, SLOT(upgradeClicked()));
 	connect(downloadAction, SIGNAL(triggered()), this, SLOT(downloadClicked()));
 	connect(rebootAction, SIGNAL(triggered()), this, SLOT(rebootClicked()));
-	connect(sqlAction, SIGNAL(triggered()), this, SLOT(sqlClicked()));
+	connect(configAction, SIGNAL(triggered()), this, SLOT(configClicked()));
 
 	connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
 	connect(votingAction, SIGNAL(triggered()), this, SLOT(votingClicked()));
@@ -1063,7 +1066,7 @@ void BitcoinGUI::createMenuBar()
 
 	QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
 	qmAdvanced->addSeparator();
-	qmAdvanced->addAction(sqlAction);
+	qmAdvanced->addAction(configAction);
 	qmAdvanced->addAction(miningAction);
 	qmAdvanced->addAction(votingAction);
 
@@ -1710,11 +1713,13 @@ void BitcoinGUI::rebootClicked()
 }
 
 
-void BitcoinGUI::sqlClicked()
+void BitcoinGUI::configClicked()
 {
 #ifdef WIN32
 	if (!bGlobalcomInitialized) return;
-	globalcom->dynamicCall("ShowSql()");
+	std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
+	qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
+	globalcom->dynamicCall("ShowConfig()");
 #endif
 
 }
@@ -2172,15 +2177,17 @@ void ReinstantiateGlobalcom()
 					printf("Instantiated globalcom for Windows %f",(double)1);
 
 			}
+			bGlobalcomInitialized = true;
 			if (!bAddressUser)
 			{
 									bAddressUser = true;
 									#if defined(WIN32) && defined(QT_GUI)
+									    printf("Addressing user.");
 										AddressUser();
 									#endif
 			}
 
-			bGlobalcomInitialized = true;
+			
 #endif
 }
 

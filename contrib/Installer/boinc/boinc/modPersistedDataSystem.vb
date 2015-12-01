@@ -138,6 +138,11 @@ Module modPersistedDataSystem
             For Each cpid As Row In lstCPIDs
                 If cpid.DataColumn5 = "True" Then
                     Dim sRow As String = cpid.PrimaryKey + "," + Num(cpid.Magnitude) + ";"
+                    'Zero magnitude rule (We need a placeholder because of the beacon count rule)
+                    If Val(cpid.Magnitude) = 0 Then
+                        sRow = "0,99;"
+                    End If
+
                     lTotal = lTotal + Val("0" + Trim(cpid.Magnitude))
                     lRows = lRows + 1
                     sOut += sRow
@@ -378,6 +383,17 @@ Module modPersistedDataSystem
         Dim sPath As String = GetFileAge(GetGridFolder() + "NeuralNetwork\")
         SoftKill(sPath + "whitelist*.dat")
     End Sub
+    Public Function EnsureNNDirExists()
+        'Ensure NN dir exists:
+        Try
+            Dim sNNPath As String = GetGridFolder() + "NeuralNetwork\"
+            If System.IO.Directory.Exists(sNNPath) = False Then
+                MkDir(sNNPath)
+            End If
+        Catch ex As Exception
+            Log("Unable to create Neural Network Directory " + ex.Message)
+        End Try
+    End Function
     Public Sub CompleteSync()
         If Math.Abs(DateDiff(DateInterval.Second, Now, mdLastSync)) > 60 * 10 Then bMagsDoneLoading = True
         If bMagsDoneLoading = False Then Exit Sub
@@ -387,6 +403,9 @@ Module modPersistedDataSystem
         Log("Starting complete Neural Network Sync.")
 
         Try
+
+            EnsureNNDirExists()
+
             msCurrentNeuralHash = ""
             bMagsDoneLoading = False
 

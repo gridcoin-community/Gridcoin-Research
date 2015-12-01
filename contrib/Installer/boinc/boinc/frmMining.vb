@@ -321,8 +321,6 @@ Refresh:
         dgv.Rows(iRow).Cells(0).Value = "Hash: " + sMyNeuralHash + " (" + Trim(iRow) + ")"
         sReport += "Hash: " + sMyNeuralHash + " (" + Trim(iRow) + ")"
 
-        
-
 
         msNeuralReport = sReport
         'Populate Projects
@@ -656,12 +654,7 @@ Refresh:
         End If
 
     End Sub
-    Private Sub PoolsToolStripMenuItem_Click(sender As System.Object, e As System.EventArgs) Handles PoolsToolStripMenuItem.Click
-
-    End Sub
-
-    Private Sub InstallGridcoinGalazaToolStripMenuItem_Click(sender As System.Object, e As System.EventArgs) Handles InstallGridcoinGalazaToolStripMenuItem.Click
-        InstallGalaza()
+    Private Sub PoolsToolStripMenuItem_Click(sender As System.Object, e As System.EventArgs)
 
     End Sub
 
@@ -687,5 +680,11 @@ Refresh:
         Next
     End Sub
 
+
+    Private Sub TabControl1_Click(sender As System.Object, e As System.EventArgs) Handles TabControl1.Click
+        If TabControl1.SelectedIndex = 1 Then
+            WebBrowserBoinc.Navigate("http://boincstats.com/en/stats/-1/team/detail/118094994/overview")
+        End If
+    End Sub
 
 End Class

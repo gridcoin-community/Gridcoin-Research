@@ -202,6 +202,7 @@ int64_t GetRSAWeightByCPID(std::string cpid);
 extern MiningCPID GetMiningCPID();
 extern StructCPID GetStructCPID();
 extern std::string GetArgument(std::string arg, std::string defaultvalue);
+
 extern void SetAdvisory();
 extern bool InAdvisory();
 json_spirit::Array MagnitudeReportCSV(bool detail);
@@ -262,6 +263,7 @@ unsigned int nStakeMaxAge = -1; // unlimited
 unsigned int nModifierInterval = 10 * 60; // time to elapse before new modifier is computed
 bool bCryptoLotteryEnabled = true;
 bool bRemotePaymentsEnabled = false;
+bool bNewbieFeatureEnabled = false;
 
 
 // Gridcoin:
@@ -712,6 +714,7 @@ double GetPoSKernelPS2()
 
 std::string GetGlobalStatus()
 {
+	//Populate overview
 	
 	try
 	{
@@ -723,6 +726,8 @@ std::string GetGlobalStatus()
 		double weight = nWeight/COIN;
 		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
 		std::string sWeight = RoundToString((double)weight,0);
+		std::string sOverviewCPID = bPoolMiningMode ? "POOL" : GlobalCPUMiningCPID.cpid;
+
 		//9-6-2015 Add RSA fields to overview
 		if ((double)weight > 100000000000000) 
 		{
@@ -732,7 +737,7 @@ std::string GetGlobalStatus()
 			+ RoundToString(PORDiff,3) + "; Net Weight: " + RoundToString(GetPoSKernelPS2(),2)  
 			+ "<br>DPOR Weight: " +  sWeight + "; Status: " + msMiningErrors 
 			+ "<br>Magnitude: " + RoundToString(boincmagnitude,2) + "; Project: " + msMiningProject
-			+ "<br>CPID: " +  GlobalCPUMiningCPID.cpid + " " +  msMiningErrors2 + " "
+			+ "<br>CPID: " +  sOverviewCPID + " " +  msMiningErrors2 + " "
 			+ "<br>" + msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + msMiningErrors8 + " "
 			+ "<br>&nbsp;" + msRSAOverview + "<br>&nbsp;";
 		//The last line break is for Windows 8.1 Huge Toolbar
@@ -4452,9 +4457,7 @@ bool VerifySuperblock(std::string superblock, int nHeight)
 			double out_avg = 0;
 			double out_beacon_count=0;
 			double out_participant_count=0;
-			//if (fDebug3) printf("#VS01");
 			double avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,false);
-			//if (fDebug3) printf("#VS02");
 			bPassed=true;
 			if (!IsResearchAgeEnabled(nHeight))
 			{
@@ -5016,10 +5019,11 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 36336;
+		nGrandfather = 66000;
 		nNewIndex = 10;
 		nNewIndex2 = 36500;
 		bRemotePaymentsEnabled = false;
+		bNewbieFeatureEnabled = true;
     }
 
 	
@@ -6765,14 +6769,14 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 		if (GetArgument("autoban","true") == "true")
 		{
-				if (pfrom->nStartingHeight < 1000 && LessVerbose(500)) 
+				if (pfrom->nStartingHeight < 1000 && LessVerbose(500) && !fTestNet) 
 				{
 					if (fDebug) printf("Node with low height");
 					pfrom->fDisconnect=true;
 					return false;
 				}
 	
-				if (pfrom->nStartingHeight < 1 && LessVerbose(980)) 
+				if (pfrom->nStartingHeight < 1 && LessVerbose(980) && !fTestNet) 
 				{
 					pfrom->Misbehaving(100);
 					if (fDebug3) printf("Disconnecting possible hacker node.  Banned for 24 hours.\r\n");
@@ -6780,7 +6784,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 					return false;
 				}
 
-				if (pfrom->nStartingHeight < 1 && pfrom->nServices == 0)
+				if (pfrom->nStartingHeight < 1 && pfrom->nServices == 0 && !fTestNet)
 				{
 					pfrom->Misbehaving(100);
 					if (fDebug3) printf("Disconnecting possible hacker node with no services.  Banned for 24 hours.\r\n");
@@ -7816,7 +7820,7 @@ bool ProcessMessages(CNode* pfrom)
    			  //11-27-2015
 		      double node_duplicates = cdbl(ReadCache("duplicates",NodeAddress(pfrom)),0) + 1;
 			  WriteCache("duplicates",NodeAddress(pfrom),RoundToString(node_duplicates,0),GetAdjustedTime());
-			  if (node_duplicates > 6)
+			  if (node_duplicates > 6 && !fTestNet)
 			  {
 					printf(" Dupe (misbehaving) %s %s ",NodeAddress(pfrom).c_str(),Peek.c_str());
 		  			pfrom->fDisconnect = true;
@@ -9889,7 +9893,7 @@ void SetUpExtendedBlockIndexFieldsOnce()
 	printf("SETUPExtendedBIfieldsOnce Testnet: %s \r\n",YesNo(fTestNet).c_str());
 	if (fTestNet)
 	{
-			msSuperBlockHashes = msTestNetSeedSuperblocks;			msContracts = msTestNetSeedContracts;			//return;
+			msSuperBlockHashes = msTestNetSeedSuperblocks;			msContracts = msTestNetSeedContracts;			if (pindexBest->nHeight < 20000) return;			//return;
 	}
 	else
 	{

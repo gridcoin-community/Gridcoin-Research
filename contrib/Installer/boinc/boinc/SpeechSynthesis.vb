@@ -31,6 +31,7 @@ Public Class SpeechSynthesis
             Dim sSurname = KeyValue("Surname")
             Dim sDayInterval As String = DayInterval()
             sSentence = "Good " + sDayInterval + " " + sSurname + " " + sName + ", Your Magnitude is " + Trim(Magnitude)
+            If mbTestNet Then sSentence += " in TestNet!" Else mbTestNet += " in Production."
             Speak(sSentence)
             Return True
         Catch ex As Exception
@@ -41,6 +42,7 @@ Public Class SpeechSynthesis
     Public Function Speak(sSentence As String) As Boolean
         Try
             If KeyValue("enablespeech") <> "true" Then
+                Log("Speech disabled.")
                 Exit Function
             End If
             Dim synth As New SpeechSynthesizer()

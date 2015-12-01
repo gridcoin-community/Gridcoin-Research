@@ -29,6 +29,8 @@ Module modGRC
     Public mfrmProjects As frmNewUserWizard
     Public mfrmSql As frmSQL
     Public mfrmFAQ As frmFAQ
+    Public mfrmConfig As frmConfiguration
+
     Public mfrmTicketAdd As frmTicketAdd
     Public mfrmFoundation As frmFoundation
 
@@ -691,6 +693,7 @@ Module modGRC
     Public Function ConfigPath() As String
         Dim sFolder As String
         sFolder = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\gridcoinresearch"
+        If mbTestNet Then sFolder += "\testnet"
         Dim sPath As String
         sPath = sFolder + "\gridcoinresearch.conf"
         Return sPath

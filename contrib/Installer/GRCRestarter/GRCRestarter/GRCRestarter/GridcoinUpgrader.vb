@@ -95,15 +95,14 @@ Public Class GridcoinUpgrader
         Catch ex As Exception
             MsgBox("Initialization failed.  Upgrade Failed.  Please delete *.config and *.manifest files in your application directory.  This must be done by the user.  Then restart with 'grcrestarter upgrade'.  ", MsgBoxStyle.Critical)
             End
-
         End Try
-       
+        If Environment.CommandLine.Contains("testnet") Then
+            bTestNet = True
+        End If
+
 
         '''''''''''''''''''''RESTORE SNAPSHOT
         If Environment.GetCommandLineArgs.Length > 0 Then
-            If Environment.CommandLine.Contains("testnet") Then
-                bTestNet = True
-            End If
             If Environment.CommandLine.Contains("restoresnapshot") Then
                 Try
                     KillProcess("gridcoinresearch*")

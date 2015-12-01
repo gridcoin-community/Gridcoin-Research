@@ -288,12 +288,12 @@ Public Class Utilization
         Dim fNUW As New frmNewUserWizard
         fNUW.Show()
     End Function
-    Public Function ShowSql()
+    Public Function ShowConfig()
         Try
-            mfrmSql = New frmSQL
-            mfrmSql.Show()
+            mfrmConfig = New frmConfiguration
+            mfrmConfig.Show()
         Catch ex As Exception
-            Log("Error while transitioning to frmSQL" + ex.Message)
+            Log("Error while transitioning to frmConfig" + ex.Message)
         End Try
     End Function
     Public Function ShowFAQ()
@@ -531,6 +531,7 @@ Public Class Utilization
 
     End Function
     Public Sub UpdateMagnitudesOnly()
+        EnsureNNDirExists()
         mbForcefullySyncAllRac = True
         ResetCPIDsForManualSync()
         Call UpdateMagnitudes()
@@ -538,7 +539,7 @@ Public Class Utilization
     Public Sub AddressUserThread()
 
         Try
-
+            Log("Speaking " + Trim(mlSpeakMagnitude))
             Dim s As New SpeechSynthesis
             s.AddressUserBySurname(mlSpeakMagnitude)
         Catch ex As Exception
@@ -548,7 +549,7 @@ Public Class Utilization
     End Sub
     Public Function AddressUser(sMagnitude As String) As Double
         Dim t As New Threading.Thread(AddressOf AddressUserThread)
-        mlSpeakMagnitude = Val(sMagnitude)
+        mlSpeakMagnitude = Val("0" + Trim(sMagnitude))
         t.Start()
 
         Return 1
