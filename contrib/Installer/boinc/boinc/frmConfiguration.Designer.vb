@@ -21,19 +21,15 @@ Partial Class frmConfiguration
     Private Sub InitializeComponent()
         Dim resources As System.ComponentModel.ComponentResourceManager = New System.ComponentModel.ComponentResourceManager(GetType(frmConfiguration))
         Me.GroupBox1 = New System.Windows.Forms.GroupBox()
+        Me.chkUpgrade = New System.Windows.Forms.CheckBox()
+        Me.chkPoolMining = New System.Windows.Forms.CheckBox()
         Me.chkSpeech = New System.Windows.Forms.CheckBox()
         Me.btnSave = New System.Windows.Forms.Button()
         Me.MenuStrip1 = New System.Windows.Forms.MenuStrip()
         Me.FileToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.HideToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
-        Me.ConfigurationToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
-        Me.ContractDetailsToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
-        Me.PoolsToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
-        Me.InstallGridcoinGalazaToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.OptionalModulesToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.InstallGridcoinGalazaToolStripMenuItem1 = New System.Windows.Forms.ToolStripMenuItem()
-        Me.chkPoolMining = New System.Windows.Forms.CheckBox()
-        Me.chkUpgrade = New System.Windows.Forms.CheckBox()
         Me.lblTestnet = New System.Windows.Forms.Label()
         Me.GroupBox1.SuspendLayout()
         Me.MenuStrip1.SuspendLayout()
@@ -52,6 +48,26 @@ Partial Class frmConfiguration
         Me.GroupBox1.TabIndex = 3
         Me.GroupBox1.TabStop = False
         Me.GroupBox1.Text = "Configuration:"
+        '
+        'chkUpgrade
+        '
+        Me.chkUpgrade.AutoSize = True
+        Me.chkUpgrade.Location = New System.Drawing.Point(32, 91)
+        Me.chkUpgrade.Name = "chkUpgrade"
+        Me.chkUpgrade.Size = New System.Drawing.Size(139, 17)
+        Me.chkUpgrade.TabIndex = 2
+        Me.chkUpgrade.Text = "Suppress Auto Upgrade"
+        Me.chkUpgrade.UseVisualStyleBackColor = True
+        '
+        'chkPoolMining
+        '
+        Me.chkPoolMining.AutoSize = True
+        Me.chkPoolMining.Location = New System.Drawing.Point(32, 57)
+        Me.chkPoolMining.Name = "chkPoolMining"
+        Me.chkPoolMining.Size = New System.Drawing.Size(81, 17)
+        Me.chkPoolMining.TabIndex = 1
+        Me.chkPoolMining.Text = "Pool Mining"
+        Me.chkPoolMining.UseVisualStyleBackColor = True
         '
         'chkSpeech
         '
@@ -79,7 +95,7 @@ Partial Class frmConfiguration
         Me.MenuStrip1.AllowItemReorder = True
         Me.MenuStrip1.BackColor = System.Drawing.Color.Transparent
         Me.MenuStrip1.BackgroundImageLayout = System.Windows.Forms.ImageLayout.None
-        Me.MenuStrip1.Items.AddRange(New System.Windows.Forms.ToolStripItem() {Me.FileToolStripMenuItem, Me.ConfigurationToolStripMenuItem, Me.PoolsToolStripMenuItem, Me.OptionalModulesToolStripMenuItem})
+        Me.MenuStrip1.Items.AddRange(New System.Windows.Forms.ToolStripItem() {Me.OptionalModulesToolStripMenuItem, Me.FileToolStripMenuItem})
         Me.MenuStrip1.Location = New System.Drawing.Point(0, 0)
         Me.MenuStrip1.Name = "MenuStrip1"
         Me.MenuStrip1.Size = New System.Drawing.Size(715, 24)
@@ -99,36 +115,8 @@ Partial Class frmConfiguration
         Me.HideToolStripMenuItem.BackColor = System.Drawing.Color.Transparent
         Me.HideToolStripMenuItem.ForeColor = System.Drawing.Color.Lime
         Me.HideToolStripMenuItem.Name = "HideToolStripMenuItem"
-        Me.HideToolStripMenuItem.Size = New System.Drawing.Size(99, 22)
+        Me.HideToolStripMenuItem.Size = New System.Drawing.Size(152, 22)
         Me.HideToolStripMenuItem.Text = "Hide"
-        '
-        'ConfigurationToolStripMenuItem
-        '
-        Me.ConfigurationToolStripMenuItem.BackColor = System.Drawing.Color.Transparent
-        Me.ConfigurationToolStripMenuItem.DropDownItems.AddRange(New System.Windows.Forms.ToolStripItem() {Me.ContractDetailsToolStripMenuItem})
-        Me.ConfigurationToolStripMenuItem.ImageTransparentColor = System.Drawing.Color.Black
-        Me.ConfigurationToolStripMenuItem.Name = "ConfigurationToolStripMenuItem"
-        Me.ConfigurationToolStripMenuItem.Size = New System.Drawing.Size(54, 20)
-        Me.ConfigurationToolStripMenuItem.Text = "Debug"
-        '
-        'ContractDetailsToolStripMenuItem
-        '
-        Me.ContractDetailsToolStripMenuItem.Name = "ContractDetailsToolStripMenuItem"
-        Me.ContractDetailsToolStripMenuItem.Size = New System.Drawing.Size(158, 22)
-        Me.ContractDetailsToolStripMenuItem.Text = "Contract Details"
-        '
-        'PoolsToolStripMenuItem
-        '
-        Me.PoolsToolStripMenuItem.DropDownItems.AddRange(New System.Windows.Forms.ToolStripItem() {Me.InstallGridcoinGalazaToolStripMenuItem})
-        Me.PoolsToolStripMenuItem.Name = "PoolsToolStripMenuItem"
-        Me.PoolsToolStripMenuItem.Size = New System.Drawing.Size(114, 20)
-        Me.PoolsToolStripMenuItem.Text = "Optional Modules"
-        '
-        'InstallGridcoinGalazaToolStripMenuItem
-        '
-        Me.InstallGridcoinGalazaToolStripMenuItem.Name = "InstallGridcoinGalazaToolStripMenuItem"
-        Me.InstallGridcoinGalazaToolStripMenuItem.Size = New System.Drawing.Size(190, 22)
-        Me.InstallGridcoinGalazaToolStripMenuItem.Text = "Install Gridcoin Galaza"
         '
         'OptionalModulesToolStripMenuItem
         '
@@ -146,26 +134,6 @@ Partial Class frmConfiguration
         Me.InstallGridcoinGalazaToolStripMenuItem1.Name = "InstallGridcoinGalazaToolStripMenuItem1"
         Me.InstallGridcoinGalazaToolStripMenuItem1.Size = New System.Drawing.Size(190, 22)
         Me.InstallGridcoinGalazaToolStripMenuItem1.Text = "Install Gridcoin Galaza"
-        '
-        'chkPoolMining
-        '
-        Me.chkPoolMining.AutoSize = True
-        Me.chkPoolMining.Location = New System.Drawing.Point(32, 57)
-        Me.chkPoolMining.Name = "chkPoolMining"
-        Me.chkPoolMining.Size = New System.Drawing.Size(81, 17)
-        Me.chkPoolMining.TabIndex = 1
-        Me.chkPoolMining.Text = "Pool Mining"
-        Me.chkPoolMining.UseVisualStyleBackColor = True
-        '
-        'chkUpgrade
-        '
-        Me.chkUpgrade.AutoSize = True
-        Me.chkUpgrade.Location = New System.Drawing.Point(32, 91)
-        Me.chkUpgrade.Name = "chkUpgrade"
-        Me.chkUpgrade.Size = New System.Drawing.Size(139, 17)
-        Me.chkUpgrade.TabIndex = 2
-        Me.chkUpgrade.Text = "Suppress Auto Upgrade"
-        Me.chkUpgrade.UseVisualStyleBackColor = True
         '
         'lblTestnet
         '
@@ -203,10 +171,6 @@ Partial Class frmConfiguration
     Friend WithEvents MenuStrip1 As System.Windows.Forms.MenuStrip
     Friend WithEvents FileToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents HideToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
-    Friend WithEvents ConfigurationToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
-    Friend WithEvents ContractDetailsToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
-    Friend WithEvents PoolsToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
-    Friend WithEvents InstallGridcoinGalazaToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents OptionalModulesToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents InstallGridcoinGalazaToolStripMenuItem1 As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents chkSpeech As System.Windows.Forms.CheckBox

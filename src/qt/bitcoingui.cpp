@@ -422,7 +422,9 @@ int DownloadBlocks()
 				{
 					globalcom = new QAxObject("BoincStake.Utilization");
 				}
-
+				std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
+				double function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
+	
 				globalcom->dynamicCall("DownloadBlocks()");
 				StartShutdown();
 			#endif

@@ -685,6 +685,15 @@ Refresh:
         If TabControl1.SelectedIndex = 1 Then
             WebBrowserBoinc.Navigate("http://boincstats.com/en/stats/-1/team/detail/118094994/overview")
         End If
+
+        ' If TabControl1.SelectedIndex = 2 Then
+        '  WebBrowserChat.Navigate("https://kiwiirc.com/client/irc.freenode.net:6667/#gridcoin")
+        ' End If
     End Sub
 
+    Private Sub LinkLabel1_LinkClicked(sender As System.Object, e As System.Windows.Forms.LinkLabelLinkClickedEventArgs) Handles LinkLabel1.LinkClicked
+        Dim sURL As String = "https://kiwiirc.com/client/irc.freenode.net:6667/#gridcoin"
+        Process.Start(sURL)
+
+    End Sub
 End Class

@@ -87,6 +87,7 @@ Partial Class frmMining
         Me.btnSync = New System.Windows.Forms.Button()
         Me.lblQueue = New System.Windows.Forms.Label()
         Me.lblNeuralDetail = New System.Windows.Forms.Label()
+        Me.LinkLabel1 = New System.Windows.Forms.LinkLabel()
         CType(Me.Chart1, System.ComponentModel.ISupportInitialize).BeginInit()
         CType(Me.chtCurCont, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.MenuStrip1.SuspendLayout()
@@ -252,7 +253,7 @@ Partial Class frmMining
         Me.HideToolStripMenuItem.BackColor = System.Drawing.Color.Transparent
         Me.HideToolStripMenuItem.ForeColor = System.Drawing.Color.Lime
         Me.HideToolStripMenuItem.Name = "HideToolStripMenuItem"
-        Me.HideToolStripMenuItem.Size = New System.Drawing.Size(152, 22)
+        Me.HideToolStripMenuItem.Size = New System.Drawing.Size(99, 22)
         Me.HideToolStripMenuItem.Text = "Hide"
         '
         'ConfigurationToolStripMenuItem
@@ -694,6 +695,17 @@ Partial Class frmMining
         Me.lblNeuralDetail.TabIndex = 76
         Me.lblNeuralDetail.Text = " "
         '
+        'LinkLabel1
+        '
+        Me.LinkLabel1.AutoSize = True
+        Me.LinkLabel1.BackColor = System.Drawing.Color.Transparent
+        Me.LinkLabel1.Location = New System.Drawing.Point(230, 42)
+        Me.LinkLabel1.Name = "LinkLabel1"
+        Me.LinkLabel1.Size = New System.Drawing.Size(86, 13)
+        Me.LinkLabel1.TabIndex = 2
+        Me.LinkLabel1.TabStop = True
+        Me.LinkLabel1.Text = "GRC Chat Room"
+        '
         'frmMining
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
@@ -702,6 +714,7 @@ Partial Class frmMining
         Me.BackgroundImage = Global.BoincStake.My.Resources.Resources.GradientU
         Me.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch
         Me.ClientSize = New System.Drawing.Size(1071, 793)
+        Me.Controls.Add(Me.LinkLabel1)
         Me.Controls.Add(Me.lblNeuralDetail)
         Me.Controls.Add(Me.lblQueue)
         Me.Controls.Add(Me.btnSync)
@@ -734,7 +747,7 @@ Partial Class frmMining
         Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)
         Me.MainMenuStrip = Me.MenuStrip1
         Me.Name = "frmMining"
-        Me.Text = "Gridcoin Neural Network 3.2"
+        Me.Text = "Gridcoin Neural Network 3.3"
         CType(Me.Chart1, System.ComponentModel.ISupportInitialize).EndInit()
         CType(Me.chtCurCont, System.ComponentModel.ISupportInitialize).EndInit()
         Me.MenuStrip1.ResumeLayout(False)
@@ -798,4 +811,5 @@ Partial Class frmMining
     Friend WithEvents lblQueue As System.Windows.Forms.Label
     Friend WithEvents lblNeuralDetail As System.Windows.Forms.Label
     Friend WithEvents WebBrowserBoinc As System.Windows.Forms.WebBrowser
+    Friend WithEvents LinkLabel1 As System.Windows.Forms.LinkLabel
 End Class

@@ -20,8 +20,10 @@ static unsigned int GetStakeSplitAge() { return IsProtocolV2(nBestHeight) ? (10 
 static int64_t GetStakeCombineThreshold() { return IsProtocolV2(nBestHeight) ? (50 * COIN) : (1000 * COIN); }
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 std::vector<std::string> split(std::string s, std::string delim);
-StructCPID GetLifetimeCPID(std::string cpid);
+StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
 double cdbl(std::string s, int place);
+std::string GetArgument(std::string arg, std::string defaultvalue);
+
 void qtUpdateConfirm(std::string txid);
 bool Contains(std::string data, std::string instring);
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
@@ -1526,15 +1528,14 @@ bool CWallet::SelectCoinsForStaking(int64_t nTargetValueIn, unsigned int nSpendT
 
     setCoinsRet.clear();
     nValueRet = 0;
-	//2-13-2015 R HALFORD - If this is a POR block, set the Target Coin Value to be 1/2
+	
 	int64_t nTargetValue = nTargetValueIn;
 
+	//if (GlobalCPUMiningCPID.cpid != "INVESTOR"  && msMiningErrors7 != "Probing coin age") 
+	//{
+	//		nTargetValue = nTargetValueIn/2;
+	//}
 	
-	if (GlobalCPUMiningCPID.cpid != "INVESTOR"  && msMiningErrors7 != "Probing coin age") 
-	{
-			nTargetValue = nTargetValueIn/2;
-	}
-
     BOOST_FOREACH(COutput output, vCoins)
     {
         const CWalletTx *pcoin = output.tx;
@@ -1868,7 +1869,12 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 
     // Select coins with suitable depth
-    if (!SelectCoinsForStaking(nBalance - nReserveBalance, txNew.nTime, setCoins, nValueIn) && !bNewbieFreePass)
+	// If user wants to stake all the coins at once...
+	int64_t nTarget = nBalance-nReserveBalance;
+	std::string sStakeAll = GetArgument("stakeall", "false");
+	if (sStakeAll=="true") nTarget = nBalance*2;
+		
+    if (!SelectCoinsForStaking(nTarget, txNew.nTime, setCoins, nValueIn) && !bNewbieFreePass)
 	{
 		msMiningErrors7="No coins to stake";
 		printf("No coins to stake.");
@@ -2140,7 +2146,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		// ************************************************* CREATE PROOF OF RESEARCH REWARD ****************************** R HALFORD *************** 8-8-2015 *******************************
 		// ResearchAge 2
 		// Note: Since research Age must be exact, we need to transmit the Block nTime here so it matches AcceptBlock
-		StructCPID st1 = GetLifetimeCPID(GlobalCPUMiningCPID.cpid);
+		StructCPID st1 = GetLifetimeCPID(GlobalCPUMiningCPID.cpid,"CreateCoinStake()");
 
 
         int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,

@@ -29,7 +29,7 @@ Module modPersistedDataSystem
     Public msContractDataForQuorum As String
     Public NeuralNetworkMultiplier As Double = 115000
     Private mclsQHA As New clsQuorumHashingAlgorithm
-    Private Const MINIMUM_WITNESSES_REQUIRED_TESTNET As Long = 2
+    Private Const MINIMUM_WITNESSES_REQUIRED_TESTNET As Long = 8
     Private Const MINIMUM_WITNESSES_REQUIRED_PROD As Long = 10
     Public mdLastNeuralNetworkSync As DateTime
     Private lUseCount As Long = 0

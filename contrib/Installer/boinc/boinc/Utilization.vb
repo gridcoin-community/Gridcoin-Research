@@ -217,7 +217,11 @@ Public Class Utilization
         Call RestartWallet1("reboot")
     End Sub
     Public Sub DownloadBlocks()
-        Call RestartWallet1("downloadblocks")
+        If mbTestNet Then
+            Call RestartWallet1("downloadblocks testnet")
+        Else
+            Call RestartWallet1("downloadblocks")
+        End If
     End Sub
     Public Sub ReindexWalletTestNet()
         Call RestartWallet1("reindextestnet")

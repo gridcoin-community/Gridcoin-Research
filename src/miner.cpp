@@ -25,7 +25,7 @@ double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t lo
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 std::string GetBestBlockHash(std::string sCPID);
 double CoinToDouble(double surrogate);
-StructCPID GetLifetimeCPID(std::string cpid);
+StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
 
 void ThreadTopUpKeyPool(void* parg);
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
@@ -476,7 +476,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		double dMagnitudeUnit = 0;
 		double dAvgMag = 0;
 		//Halford: Use current time since we are creating a new stake
-		StructCPID st1 = GetLifetimeCPID(GlobalCPUMiningCPID.cpid);
+		StructCPID st1 = GetLifetimeCPID(GlobalCPUMiningCPID.cpid,"CreateNewBlock()");
 
 		GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,pindexBest->nTime,pindexBest,"createnewblock",
 			out_por,out_interest,dAccrualAge,dMagnitudeUnit,dAvgMag);
@@ -711,7 +711,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 			// Research Age 8-9-2015
 			if (IsResearchAgeEnabled(pindexBest->nHeight))
 			{
-					StructCPID st1 = GetLifetimeCPID(boincblock.cpid);
+					StructCPID st1 = GetLifetimeCPID(boincblock.cpid,"CheckStake()");
 					if (boincblock.ResearchSubsidy > (out_por+1))
 					{
 						    if (fDebug3) printf("CheckStake[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and out_por %f with Out_Interest %f for CPID %s ",

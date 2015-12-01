@@ -129,7 +129,7 @@ Public Class Form1
 
         mU = New Utilization
         Dim sTestNet As String = "TESTNET"
-        sTestNet = "PROD"
+        ' sTestNet = "PROD"
         mU.SetTestNetFlag(sTestNet)
 
 
@@ -137,10 +137,10 @@ Public Class Form1
         'mU.ShowTicketList()
 
         'mU.ShowFoundation()
-        'mU.ShowMiningConsole()
+        mU.ShowMiningConsole()
         'mU.UpdateMagnitudesOnly()
         'mU.ShowTicketList()
-        mU.ShowConfig()
+        'mU.ShowConfig()
 
         Exit Sub
     End Sub

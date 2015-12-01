@@ -44,7 +44,7 @@ bool ShaveChain(CTxDB& txdb);
 extern Array LifetimeReport(std::string cpid);
 Array StakingReport();
 extern std::string AddContract(std::string sType, std::string sName, std::string sContract);
-StructCPID GetLifetimeCPID(std::string cpid);
+StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
 std::string getCpuHash();
 extern std::string getHardwareID();
 std::string getMacAddress();
@@ -3036,7 +3036,7 @@ Array MagnitudeReport(std::string cpid)
 											if (IsResearchAgeEnabled(pindexBest->nHeight))
 											{
 
-												StructCPID stCPID = GetLifetimeCPID(structMag.cpid);
+												StructCPID stCPID = GetLifetimeCPID(structMag.cpid,"MagnitudeReport");
 											
 												double days = (GetAdjustedTime() - stCPID.LowLockTime)/86400;
      											if (fDebug3) printf(" MR6.1 ");

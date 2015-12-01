@@ -63,7 +63,7 @@ extern void ZeroOutResearcherTotals(std::string cpid);
 extern bool ShaveChain(CTxDB& txdb);
 
 
-extern StructCPID GetLifetimeCPID(std::string cpid);
+extern StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
 extern std::string getCpuHash();
 std::string getMacAddress();
 std::string TimestampToHRDate(double dtm);
@@ -2956,7 +2956,7 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
     BOOST_FOREACH(CTransaction& tx, vtx)
         SyncWithWallets(tx, this, false, false);
 	
-	StructCPID stCPID = GetLifetimeCPID(pindex->sCPID);
+	StructCPID stCPID = GetLifetimeCPID(pindex->sCPID,"DisconnectBlock()");
 	// We normally fail to disconnect a block if we can't find the previous input due to "DisconnectInputs() : ReadTxIndex failed".  Imo, I believe we should let this call succeed, otherwise a chain can never be re-organized in this circumstance.
 	if (bDiscTxFailed && fDebug3) printf("!DisconnectBlock()::Failed, recovering. ");
     return true;
@@ -3311,7 +3311,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 				{
 						if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
 						{
-							StructCPID st1 = GetLifetimeCPID(pindex->sCPID);
+							StructCPID st1 = GetLifetimeCPID(pindex->sCPID,"ConnectBlock()");
 							GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, 
 										pindex, "connectblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 							if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
@@ -3711,7 +3711,7 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
         if (pindex->pprev)
 		{
             pindex->pprev->pnext = NULL;
-			if (IsResearchAgeEnabled(pindex->nHeight)) 	StructCPID st1 = GetLifetimeCPID(pindex->pprev->sCPID);
+			if (IsResearchAgeEnabled(pindex->nHeight)) 	StructCPID st1 = GetLifetimeCPID(pindex->pprev->sCPID,"Reorganize()");
 		}
 	}
 
@@ -3721,7 +3721,7 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
         if (pindex->pprev)
 		{
             pindex->pprev->pnext = pindex;
-			if (IsResearchAgeEnabled(pindex->nHeight)) 	StructCPID st2 = GetLifetimeCPID(pindex->pprev->sCPID);
+			if (IsResearchAgeEnabled(pindex->nHeight)) 	StructCPID st2 = GetLifetimeCPID(pindex->pprev->sCPID,"Reorganize()::ConnectLongerBranch()");
 		}
 	}
 
@@ -4133,7 +4133,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 			{
 				BusyWaitForTally();
 				
-				StructCPID st1 = GetLifetimeCPID(bb.cpid);
+				StructCPID st1 = GetLifetimeCPID(bb.cpid,"CheckBlock()");
 				nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime, 
 					pindexBest, "checkblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 		
@@ -4576,7 +4576,7 @@ void GridcoinServices()
 	}
 
 	int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-	if (fDebug3) printf ("MRSuperblockage %f, BH %f ",(double)superblock_age,(double)nBestHeight);
+	if (fDebug3) printf (" MRSA %f, BH %f ",(double)superblock_age,(double)nBestHeight);
 	if (NeedASuperblock())
 	{
 		if ((nBestHeight % 3) == 0)
@@ -4703,6 +4703,8 @@ void GridcoinServices()
 			printf("{Done checking for upgrade} ");
 		}
 	#endif
+   if (fDebug3) printf(" {/SVC} ");
+
 }
 
 
@@ -5786,7 +5788,7 @@ void AddCPIDBlockHash(std::string cpid, std::string blockhash)
 	}
 }
 
-StructCPID GetLifetimeCPID(std::string cpid)
+StructCPID GetLifetimeCPID(std::string cpid, std::string sCalledFrom)
 {
 	//Eliminates issues with reorgs, disconnects, double counting, etc.. (11-15-2015)
 	if (cpid.empty() || cpid=="INVESTOR") 
@@ -5794,7 +5796,8 @@ StructCPID GetLifetimeCPID(std::string cpid)
 		StructCPID stDummy = GetInitializedStructCPID2("INVESTOR",mvResearchAge);
 		return stDummy;
 	}
-	if (fDebug3) printf(" MR10 ");
+	if (fDebug3) printf(" {GLC %s} ",sCalledFrom.c_str());
+
 
 	std::string hashes = GetCPIDBlockHashes(cpid);
 	std::vector<std::string> vHashes = split(hashes,";");
@@ -5816,8 +5819,7 @@ StructCPID GetLifetimeCPID(std::string cpid)
 					{
 						if (pblockindex->sCPID == cpid)
 						{
-							//if (fDebug3) printf(" MR12 ");
-
+						
 							StructCPID stCPID = GetInitializedStructCPID2(pblockindex->sCPID,mvResearchAge);
 							if (((double)pblockindex->nHeight) > stCPID.LastBlock && pblockindex->nResearchSubsidy > 0)
 							{
@@ -5836,8 +5838,7 @@ StructCPID GetLifetimeCPID(std::string cpid)
 							if (((double)pblockindex->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime  = (double)pblockindex->nTime;
 							if (((double)pblockindex->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pblockindex->nTime;
 							mvResearchAge[pblockindex->sCPID]=stCPID;
-							//if (fDebug3) printf(" MR13 ");
-
+						
 						}
 					}
 				}
@@ -5845,7 +5846,7 @@ StructCPID GetLifetimeCPID(std::string cpid)
 		}
 	}
 	StructCPID st1 = GetInitializedStructCPID2(cpid,mvResearchAge);
-	if (fDebug3) printf(" MR14 ");
+	if (fDebug3) printf(" {/GLC} ");
 
 	return st1;
 }
@@ -6006,7 +6007,7 @@ bool RetiredTN(bool Forcefully)
 bool ComputeNeuralNetworkSupermajorityHashes()
 {
     if (nBestHeight < 15)  return true;
-	if (IsLockTimeWithinMinutes(nLastTalliedNeural,2)) 
+	if (IsLockTimeWithinMinutes(nLastTalliedNeural,5)) 
 	{
 		return true;
 	}
@@ -6784,7 +6785,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 					return false;
 				}
 
-				if (pfrom->nStartingHeight < 1 && pfrom->nServices == 0 && !fTestNet)
+				if (pfrom->nStartingHeight < 1 && pfrom->nServices == 0 )
 				{
 					pfrom->Misbehaving(100);
 					if (fDebug3) printf("Disconnecting possible hacker node with no services.  Banned for 24 hours.\r\n");
@@ -7820,7 +7821,7 @@ bool ProcessMessages(CNode* pfrom)
    			  //11-27-2015
 		      double node_duplicates = cdbl(ReadCache("duplicates",NodeAddress(pfrom)),0) + 1;
 			  WriteCache("duplicates",NodeAddress(pfrom),RoundToString(node_duplicates,0),GetAdjustedTime());
-			  if (node_duplicates > 6 && !fTestNet)
+			  if ( (node_duplicates > 6 && !fTestNet) || (node_duplicates > 6 && fTestNet && !OutOfSyncByAge()) )
 			  {
 					printf(" Dupe (misbehaving) %s %s ",NodeAddress(pfrom).c_str(),Peek.c_str());
 		  			pfrom->fDisconnect = true;
