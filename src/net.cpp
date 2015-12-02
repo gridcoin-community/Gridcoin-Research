@@ -1724,11 +1724,11 @@ void ThreadSocketHandler2(void* parg)
             }
         }
         {
-            LOCK(cs_vNodes);
+            LOCK(cs_vNodes); 
             BOOST_FOREACH(CNode* pnode, vNodesCopy)
                 pnode->Release();
         }
-
+		 
         MilliSleep(10);
     }
 }

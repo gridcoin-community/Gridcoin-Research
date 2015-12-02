@@ -6,9 +6,5 @@ static const std::string BoincHashWindowsMerkleRootNew = "yG3uv41o6n7apYOVVszTMQ
 
 //Notes for manually compiled nodes:
 
-//addnode=node.gridcoin.us
-//boincblocks=
-//boinchash=
-//org=
 
 #endif
