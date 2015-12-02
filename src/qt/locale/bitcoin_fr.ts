@@ -418,7 +418,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+6"/>
         <source>Downloaded %1 of %2 blocks of transaction history (%3% done).</source>
-        <translation>Téléchargement des blocks de l&apos;historique des transactions : 1% sur 2% (%3% effectués).</translation>
+        <translation>Téléchargement des blocks de l&apos;historique des transactions : %1 sur %2 (%3% terminé).</translation>
     </message>
     <message>
         <location line="-247"/>
