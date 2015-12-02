@@ -57,7 +57,6 @@ extern int nMaxConnections;
 MiningCPID GetNextProject(bool bForce);
 void HarvestCPIDs(bool cleardata);
 bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
-extern std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 std::string cached_boinchash_args = "";
 void WriteAppCache(std::string key, std::string value);
@@ -763,86 +762,6 @@ std::string GetHttpPage(std::string url)
 
 
 
-
-
-
-std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache)
-{
-	return "";
-
-	try 
-	{
-		 if (cpid=="" || cpid.length() < 5)
-		 {
-				if (fDebug) printf("Blank cpid supplied");
-				return "";
-		 }
-
-	   if (ClearCache)
-	   {
-			mvCPIDCache["cache"+cpid].initialized=false;
-       }
-	   StructCPIDCache c = mvCPIDCache["cache"+cpid];
-	   if (c.initialized)
-	   {
-		   if (c.xml.length() > 100) 
-		   {
-			   //printf("Cache hit on %s \r\n",cpid.c_str());
-			   return c.xml;
-		   }
-
-	   }
-
-
-
-		CService addrConnect;
-   		std::string url = "http://boinc.etsoft-online.com/get_user.php?cpid=";
-		std::string url2 = "216.165.179.26";
-		std::string url3 = "boinc.etsoft-online.com";
-		std::string url4 = "get_user.php?cpid=" + cpid;
-
-		if (fDebug) printf("HTTP Request\r\n %s \r\n",url4.c_str());
-
-		CService addrIP(url3, 80, true);
-		if (UseDNS)
-		{
-        if (addrIP.IsValid()) 
-			{
-				addrConnect = addrIP;
-				printf("QA:%s",url4.c_str());
-		    }
-		}
-		else
-		{
-  			addrConnect = CService("216.165.179.26", 80); 
-		}
-
-		std::string getdata = "GET /" + url4 + " HTTP/1.1\r\n"
-                     "Host: boinc.etsoft-online.com\r\n"
-  				     "User-Agent: Mozilla/4.0\r\n"
-                     "\r\n";
-             
-      	std::string http = GetHttpContent(addrConnect,getdata);
-		std::string resultset = "" + http;
-		c.initialized=true;
-		c.xml = resultset;
-		mvCPIDCache.insert(map<string,StructCPIDCache>::value_type("cache"+cpid,c));
-	    mvCPIDCache["cache"+cpid]=c;
-		return resultset;
-	}
-    catch (std::exception &e) 
-	{
-		printf("Error while querying address for cpid %s",cpid.c_str());
-
-        return "";
-    }
-	catch (...)
-	{
-
-		return "";
-	}
-
-}
 
 
 
