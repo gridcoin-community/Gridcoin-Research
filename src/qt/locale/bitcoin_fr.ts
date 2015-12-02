@@ -550,7 +550,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+40"/>
         <source>Downloaded %1 blocks of transaction history.</source>
-        <translation>Téléchargement de blocs de l&apos;historique de transactions : 1% blocks</translation>
+        <translation>Téléchargement de blocs de l&apos;historique de transactions : %1 blocks</translation>
     </message>
     <message>
         <location line="+413"/>
