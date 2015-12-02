@@ -103,9 +103,14 @@ xLDFLAGS=$(LDHARDENING) $(LDFLAGS)
 
 OBJS= \
     obj-upgrader/util.o \
+    obj-upgrader/version.o \
     obj-upgrader/upgrader.o 
 
 all: gridcoinupgrader
+
+obj/build.h: FORCE
+	/bin/sh ../share/genbuild.sh obj-upgrader/build.h
+version.cpp: obj/build.h
 
 DEFS += -DHAVE_BUILD_INFO
 
@@ -123,5 +128,6 @@ clean:
 	-rm -f gridcoinupgrader
 	-rm -f obj-upgrader/*.o
 	-rm -f obj-upgrader/*.P
+	-rm -f obj-upgrader/build.h
 
 FORCE:
