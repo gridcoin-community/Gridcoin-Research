@@ -78,7 +78,7 @@ Value getmininginfo(const Array& params, bool fHelp)
 	           myNeuralHash = qtGetNeuralHash("");
 			   obj.push_back(Pair("MyNeuralHash", myNeuralHash));
 	#endif
- 	
+
 	obj.push_back(Pair("NeuralPopularity", neural_popularity));
 	obj.push_back(Pair("testnet",       fTestNet));
 	obj.push_back(Pair("CPID",msPrimaryCPID));
@@ -89,7 +89,7 @@ Value getmininginfo(const Array& params, bool fHelp)
 
 	double dMagnitudeUnit = GRCMagnitudeUnit(GetAdjustedTime());
 	obj.push_back(Pair("Magnitude Unit",dMagnitudeUnit));
-	
+
 	obj.push_back(Pair("MiningProject",msMiningProject));
 	obj.push_back(Pair("MiningInfo 1", msMiningErrors));
 	obj.push_back(Pair("MiningInfo 2", msMiningErrors2));
@@ -146,10 +146,10 @@ Value getworkex(const Array& params, bool fHelp)
         );
 
     if (vNodes.empty())
-        throw JSONRPCError(-9, "GridCoin is not connected!");
+        throw JSONRPCError(-9, "Gridcoin is not connected!");
 
     if (IsInitialBlockDownload())
-        throw JSONRPCError(-10, "GridCoin is downloading blocks...");
+        throw JSONRPCError(-10, "Gridcoin is downloading blocks...");
 
     if (pindexBest->nHeight >= LAST_POW_BLOCK)
         throw JSONRPCError(RPC_MISC_ERROR, "No more PoW blocks");
@@ -287,10 +287,10 @@ Value getwork(const Array& params, bool fHelp)
             "If [data] is specified, tries to solve the block and returns true if it was successful.");
 
     if (vNodes.empty())
-        throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "GridCoin is not connected!");
+        throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "Gridcoin is not connected!");
 
     if (IsInitialBlockDownload())
-        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "GridCoin is downloading blocks...");
+        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Gridcoin is downloading blocks...");
 
     if (pindexBest->nHeight >= LAST_POW_BLOCK)
         throw JSONRPCError(RPC_MISC_ERROR, "No more PoW blocks");
@@ -385,7 +385,7 @@ Value getwork(const Array& params, bool fHelp)
         pblock->vtx[0].vin[0].scriptSig = mapNewBlock[pdata->hashMerkleRoot].second;
         pblock->hashMerkleRoot = pblock->BuildMerkleTree();
 		bool response = CheckWork(pblock, *pwalletMain, reservekey);
-		if (response) 
+		if (response)
 		{
 				msMiningErrors = "POW Block Mined";
 		}
@@ -435,10 +435,10 @@ Value getblocktemplate(const Array& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid mode");
 
     if (vNodes.empty())
-        throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "GridCoin is not connected!");
+        throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "Gridcoin is not connected!");
 
     if (IsInitialBlockDownload())
-        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "GridCoin is downloading blocks...");
+        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Gridcoin is downloading blocks...");
 
     if (pindexBest->nHeight >= LAST_POW_BLOCK)
         throw JSONRPCError(RPC_MISC_ERROR, "No more PoW blocks");

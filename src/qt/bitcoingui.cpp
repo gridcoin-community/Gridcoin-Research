@@ -362,7 +362,7 @@ int ReindexWallet()
 			if (!fTestNet)
 			{
 #ifdef WIN32
-			
+
 				globalcom->dynamicCall("ReindexWallet()");
 #endif
 			}
@@ -381,7 +381,7 @@ int ReindexWallet()
 int CreateRestorePoint()
 {
 			if (!bGlobalcomInitialized) return 0;
-	
+
 			QString sFilename = "GRCRestarter.exe";
 			QString sArgument = "";
 			QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
@@ -411,7 +411,7 @@ int DownloadBlocks()
 {
 			printf("executing grcrestarter downloadblocks");
 			if (!bGlobalcomInitialized) return 0;
-	
+
 			QString sFilename = "GRCRestarter.exe";
 			QString sArgument = "";
 			QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
@@ -424,7 +424,7 @@ int DownloadBlocks()
 				}
 				std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
 				double function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-	
+
 				globalcom->dynamicCall("DownloadBlocks()");
 				StartShutdown();
 			#endif
@@ -461,7 +461,7 @@ void qtUpdateConfirm(std::string txid)
 {
 	int result = 0;
 	if (!bGlobalcomInitialized) return;
-	
+
 	#if defined(WIN32) && defined(QT_GUI)
 		QString qsTxid = ToQstring(txid);
 		QString sResult = globalcom->dynamicCall("UpdateConfirm(Qstring)",qsTxid).toString();
@@ -473,7 +473,7 @@ void qtUpdateConfirm(std::string txid)
 void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string txid)
 {
 	if (!bGlobalcomInitialized) return;
-	
+
 	#if defined(WIN32) && defined(QT_GUI)
 	try
 	{
@@ -482,7 +482,7 @@ void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::strin
 		QString qsConfirm = ToQstring(Confirm);
 		result = globalcom->dynamicCall("InsertConfirm(Qstring)",qsConfirm).toInt();
 		printf("Inserting confirm %s %f",Confirm.c_str(),(double)result);
-		
+
 	}
 	catch(...)
 	{
@@ -496,7 +496,7 @@ void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::strin
 double qtExecuteGenericFunction(std::string function, std::string data)
 {
 	if (!bGlobalcomInitialized) return 0;
-	
+
 	double return_code = 0;
 	int result = 0;
 	#if defined(WIN32) && defined(QT_GUI)
@@ -524,7 +524,7 @@ std::string qtExecuteDotNetStringFunction(std::string function, std::string data
 {
 	std::string sReturnData = "";
 	if (!bGlobalcomInitialized) return "";
-	
+
 	#if defined(WIN32) && defined(QT_GUI)
 	    if (!bGlobalcomInitialized) return "?";
 		QString qsData = ToQstring(data);
@@ -594,7 +594,7 @@ std::string qtGetNeuralHash(std::string data)
 	try
 	{
 		if (!bGlobalcomInitialized) return "NA";
-		
+
 		QString qsData = ToQstring(data);
 		QString sResult = globalcom->dynamicCall("GetNeuralHash()").toString();
 		std::string result = FromQString(sResult);
@@ -616,7 +616,7 @@ void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double ma
 {
 
 	if (!bGlobalcomInitialized) return;
-	
+
 	#if defined(WIN32) && defined(QT_GUI)
 		int result = 0;
 	 	std::string session = defaultgrcaddress + "<COL>" + cpid + "<COL>" + RoundToString(magnitude,1);
@@ -634,7 +634,7 @@ int qtTrackConfirm(std::string txid)
 {
 	double result = 0;
 	if (!bGlobalcomInitialized) return 0;
-	
+
 	#if defined(WIN32) && defined(QT_GUI)
 		QString qsConfirm = ToQstring(txid);
 		printf("@t1");
@@ -651,7 +651,7 @@ std::string qtGRCCodeExecutionSubsystem(std::string sCommand)
 {
 	std::string sResult = "FAIL";
 	if (!bGlobalcomInitialized) return "FAIL";
-	
+
 	#if defined(WIN32) && defined(QT_GUI)
 		QString qsParms = ToQstring(sCommand);
 		QString qsResult = globalcom->dynamicCall("GRCCodeExecutionSubsystem(Qstring)",qsParms).toString();
@@ -668,7 +668,7 @@ int RebootClient()
 {
 			printf("Executing reboot\r\n");
 			if (!bGlobalcomInitialized) return 0;
-	
+
 			QString sFilename = "GRCRestarter.exe";
 			QString sArgument = "reboot";
 			QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
@@ -696,7 +696,7 @@ int RebootClient()
 void CheckForUpgrade()
 {
 			if (!bGlobalcomInitialized) return;
-	
+
 		    if (bCheckedForUpgrade == false && !fTestNet && bProjectsInitialized)
 			{
 				int nNeedsUpgrade = 0;
@@ -746,7 +746,7 @@ int UpgradeClient()
 {
 			printf("Executing upgrade");
 			if (!bGlobalcomInitialized) return 0;
-	
+
 			QString sFilename = "GRCRestarter.exe";
 			QString sArgument = "upgrade";
 			QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
@@ -806,7 +806,7 @@ int AddressUser()
 int CloseGuiMiner()
 {
 	if (!bGlobalcomInitialized) return 0;
-	
+
 	try
 	{
 #ifdef WIN32
@@ -833,7 +833,7 @@ void BitcoinGUI::createActions()
     tabGroup->addAction(overviewAction);
 
     sendCoinsAction = new QAction(QIcon(":/icons/send"), tr("&Send coins"), this);
-    sendCoinsAction->setToolTip(tr("Send coins to a GridCoin address"));
+    sendCoinsAction->setToolTip(tr("Send coins to a Gridcoin address"));
     sendCoinsAction->setCheckable(true);
     sendCoinsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_3));
     tabGroup->addAction(sendCoinsAction);
@@ -915,8 +915,8 @@ void BitcoinGUI::createActions()
 	upgradeAction->setMenuRole(QAction::TextHeuristicRole);
 
 
-    aboutAction = new QAction(QIcon(":/icons/bitcoin"), tr("&About GridCoin"), this);
-    aboutAction->setToolTip(tr("Show information about GridCoin"));
+    aboutAction = new QAction(QIcon(":/icons/bitcoin"), tr("&About Gridcoin"), this);
+    aboutAction->setToolTip(tr("Show information about Gridcoin"));
     aboutAction->setMenuRole(QAction::AboutRole);
 
 	miningAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Neural Network"), this);
@@ -939,12 +939,12 @@ void BitcoinGUI::createActions()
 	newUserWizardAction = new QAction(QIcon(":/icons/bitcoin"), tr("&New User Wizard"), this);
 	newUserWizardAction->setStatusTip(tr("New User Wizard"));
 	newUserWizardAction->setMenuRole(QAction::TextHeuristicRole);
-	
+
 
 	votingAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Voting"), this);
 	votingAction->setStatusTip(tr("Voting"));
 	votingAction->setMenuRole(QAction::TextHeuristicRole);
-	
+
 
 	galazaAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Galaza (Game)"), this);
 	galazaAction->setStatusTip(tr("Galaza"));
@@ -960,7 +960,7 @@ void BitcoinGUI::createActions()
 	faqAction->setMenuRole(QAction::TextHeuristicRole);
 
     optionsAction = new QAction(QIcon(":/icons/options"), tr("&Options..."), this);
-    optionsAction->setToolTip(tr("Modify configuration options for GridCoin"));
+    optionsAction->setToolTip(tr("Modify configuration options for Gridcoin"));
     optionsAction->setMenuRole(QAction::PreferencesRole);
     toggleHideAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Show / Hide"), this);
     encryptWalletAction = new QAction(QIcon(":/icons/lock_closed"), tr("&Encrypt Wallet..."), this);
@@ -1087,7 +1087,7 @@ void BitcoinGUI::createMenuBar()
 	qmAdvanced->addSeparator();
 	qmAdvanced->addAction(faqAction);
 	qmAdvanced->addAction(foundationAction);
-	
+
 
 
 }
@@ -1138,7 +1138,7 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
 #endif
             if(trayIcon)
             {
-                trayIcon->setToolTip(tr("GridCoin client") + QString(" ") + tr("[testnet]"));
+                trayIcon->setToolTip(tr("Gridcoin client") + QString(" ") + tr("[testnet]"));
                 trayIcon->setIcon(QIcon(":/icons/toolbar_testnet"));
                 toggleHideAction->setIcon(QIcon(":/icons/toolbar_testnet"));
             }
@@ -1198,7 +1198,7 @@ void BitcoinGUI::createTrayIcon()
     trayIcon = new QSystemTrayIcon(this);
     trayIconMenu = new QMenu(this);
     trayIcon->setContextMenu(trayIconMenu);
-    trayIcon->setToolTip(tr("GridCoin client"));
+    trayIcon->setToolTip(tr("Gridcoin client"));
     trayIcon->setIcon(QIcon(":/icons/toolbar"));
     connect(trayIcon, SIGNAL(activated(QSystemTrayIcon::ActivationReason)),
             this, SLOT(trayIconActivated(QSystemTrayIcon::ActivationReason)));
@@ -1268,7 +1268,7 @@ void BitcoinGUI::setNumConnections(int count)
     default: icon = ":/icons/connect_4"; break;
     }
     labelConnectionsIcon->setPixmap(QIcon(icon).pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
-    labelConnectionsIcon->setToolTip(tr("%n active connection(s) to GridCoin network", "", count));
+    labelConnectionsIcon->setToolTip(tr("%n active connection(s) to Gridcoin network", "", count));
 }
 
 void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
@@ -1972,7 +1972,7 @@ void BitcoinGUI::dropEvent(QDropEvent *event)
         if (nValidUrisFound)
             gotoSendCoinsPage();
         else
-            notificator->notify(Notificator::Warning, tr("URI handling"), tr("URI can not be parsed! This can be caused by an invalid GridCoin address or malformed URI parameters."));
+            notificator->notify(Notificator::Warning, tr("URI handling"), tr("URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters."));
     }
 
     event->acceptProposedAction();
@@ -1987,7 +1987,7 @@ void BitcoinGUI::handleURI(QString strURI)
         gotoSendCoinsPage();
     }
     else
-        notificator->notify(Notificator::Warning, tr("URI handling"), tr("URI can not be parsed! This can be caused by an invalid GridCoin address or malformed URI parameters."));
+        notificator->notify(Notificator::Warning, tr("URI handling"), tr("URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters."));
 }
 
 void BitcoinGUI::setEncryptionStatus(int status)
@@ -2189,7 +2189,7 @@ void ReinstantiateGlobalcom()
 									#endif
 			}
 
-			
+
 #endif
 }
 
@@ -2214,7 +2214,7 @@ void ExecuteCode()
 void BitcoinGUI::timerfire()
 {
 
-	try 
+	try
 	{
 
 		if ( (nRegVersion==0 || Timer("start",10))  &&  !bGlobalcomInitialized)
@@ -2228,13 +2228,13 @@ void BitcoinGUI::timerfire()
 			}
 			#ifdef WIN32
 				if (!bGlobalcomInitialized) return;
-	
+
 				nRegVersion = globalcom->dynamicCall("Version()").toInt();
 				sRegVer = boost::lexical_cast<std::string>(nRegVersion);
 			#endif
 		}
 
-		
+
 		if (bGlobalcomInitialized)
 		{
 				//R Halford - Allow .NET to talk to Core: 6-21-2015

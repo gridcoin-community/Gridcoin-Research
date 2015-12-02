@@ -802,7 +802,7 @@ void StakeMiner(CWallet *pwallet)
     RenameThread("grc-stake-miner");
 
     bool fTryToSync = true;
-	///////////////////////  Auto Unlock Feature for Stake Miner
+	///////////////////////  Auto Unlock Feature for Research Miner
 	if (pwallet->IsLocked())
 		{
 			//11-5-2014 R Halford - If wallet is locked - see if user has an encrypted password stored:
@@ -823,7 +823,7 @@ void StakeMiner(CWallet *pwallet)
 			    {
 					if (!pwallet->Unlock(strWalletPass))
 					{
-						printf("GridcoinStakeMiner:AutoUnlock:Error: The wallet passphrase entered was incorrect.");
+						printf("GridcoinResearchMiner:AutoUnlock:Error: The wallet passphrase entered was incorrect.");
 					}
 					else
 					{
@@ -844,7 +844,7 @@ void StakeMiner(CWallet *pwallet)
 Inception:
         if (fShutdown)
 		{
-			printf("StakeMiner:ShuttingDown..");
+			printf("ResearchMiner:ShuttingDown..");
             return;
 		}
 
@@ -855,7 +855,7 @@ Inception:
             MilliSleep(1000);
             if (fShutdown)
 			{
-				printf("StakeMiner:Exiting(WalletLocked)");
+				printf("ResearchMiner:Exiting(WalletLocked)");
                 return;
 			}
         }
@@ -863,7 +863,7 @@ Inception:
 		int iFutile=0;
 		while (!bNetAveragesLoaded)
 		{
-			if (LessVerbose(100)) printf("StakeMiner:Net averages not yet loaded...");
+			if (LessVerbose(100)) printf("ResearchMiner:Net averages not yet loaded...");
 						
 			iFutile++;
 			if (iFutile > 50)

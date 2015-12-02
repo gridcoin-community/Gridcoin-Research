@@ -37,7 +37,7 @@ extern void ThreadAppInit2(void* parg);
 
 void LoadCPIDsInBackground();
 std::string GetPoolKey(std::string sMiningProject,double dMiningRAC,
-	std::string ENCBoincpublickey,std::string xcpid, std::string messagetype, 
+	std::string ENCBoincpublickey,std::string xcpid, std::string messagetype,
 	uint256 blockhash, double subsidy, double nonce, int height, int blocktype);
 std::string AppCache(std::string key);
 int CloseGuiMiner();
@@ -149,7 +149,7 @@ void InitializeBoincProjectsNew()
 
 		//Loop through projects saved in the Gridcoin Persisted Data System
 		std::string sType = "project";
-	    for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+	    for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii)
 	    {
 				std::string key_name  = (*ii).first;
 			   	if (key_name.length() > sType.length())
@@ -175,7 +175,7 @@ void InitializeBoincProjectsNew()
 								structcpid.projectname = mainProject;
 								mvBoincProjects[mainProject] = structcpid;
 								WHITELISTED_PROJECTS++;
-				
+
 							}
 					 }
 				}
@@ -188,7 +188,7 @@ void InitializeBoincProjects()
 {
 	    	InitializeBoincProjectsNew();
 			return;
-		
+
 
 		// Retiring:
 
@@ -211,7 +211,7 @@ void InitializeBoincProjects()
 				mvBoincProjects[mainProject] = structcpid;
 				WHITELISTED_PROJECTS++;
 
-			} 
+			}
 		}
 		*/
 
@@ -291,9 +291,9 @@ void HandleSIGHUP(int)
 #if !defined(QT_GUI)
 bool AppInit(int argc, char* argv[])
 {
-		
+
     bool fRet = false;
-	
+
     try
     {
 		boost::thread* detectShutdownThread = NULL;
@@ -313,7 +313,7 @@ bool AppInit(int argc, char* argv[])
         if (mapArgs.count("-?") || mapArgs.count("--help"))
         {
             // First part of help message is specific to bitcoind / RPC client
-            std::string strUsage = _("GridCoin version") + " " + FormatFullVersion() + "\n\n" +
+            std::string strUsage = _("Gridcoin version") + " " + FormatFullVersion() + "\n\n" +
                 _("Usage:") + "\n" +
                   "  gridcoind [options]                     " + "\n" +
                   "  gridcoind [options] <command> [params]  " + _("Send command to -server or gridcoind") + "\n" +
@@ -337,7 +337,7 @@ bool AppInit(int argc, char* argv[])
             exit(ret);
         }
 		detectShutdownThread = new boost::thread(boost::bind(&DetectShutdownThread, &threadGroup));
-		
+
         fRet = AppInit2();
     }
     catch (std::exception& e) {
@@ -373,13 +373,13 @@ int main(int argc, char* argv[])
 
 bool static InitError(const std::string &str)
 {
-    uiInterface.ThreadSafeMessageBox(str, _("GridCoin"), CClientUIInterface::OK | CClientUIInterface::MODAL);
+    uiInterface.ThreadSafeMessageBox(str, _("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::MODAL);
     return false;
 }
 
 bool static InitWarning(const std::string &str)
 {
-    uiInterface.ThreadSafeMessageBox(str, _("GridCoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
+    uiInterface.ThreadSafeMessageBox(str, _("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
     return true;
 }
 
@@ -574,7 +574,7 @@ bool AppInit2()
 
 
 	// Gridcoin - Check to see if config is empty?
-	if (IsConfigFileEmpty()) 
+	if (IsConfigFileEmpty())
 	{
 		   uiInterface.ThreadSafeMessageBox(
                  "Configuration file empty.  \r\n" + _("Please wait for new user wizard to start..."), "", 0);
@@ -583,14 +583,14 @@ bool AppInit2()
 	//6-10-2014: R Halford: Updating Boost version to 1.5.5 to prevent sync issues; print the boost version to verify:
 	std::string boost_version = "";
 	std::ostringstream s;
-	s << boost_version  << "Using Boost "     
+	s << boost_version  << "Using Boost "
           << BOOST_VERSION / 100000     << "."  // major version
           << BOOST_VERSION / 100 % 1000 << "."  // minior version
           << BOOST_VERSION % 100                // patch level
           << "\r\n";
 
 	printf("\r\nBoost Version: %s",s.str().c_str());
-	
+
 	#if defined(WIN32) && defined(QT_GUI)
 			//startWireFrameRenderer();
 	#endif
@@ -599,10 +599,10 @@ bool AppInit2()
     //Placeholder: Load Remote CPIDs Here
 
     nNodeLifespan = GetArg("-addrlifespan", 7);
-    
-	
+
+
 	fUseFastIndex = GetBoolArg("-fastindex", false);
-	
+
 	nMinerSleep = GetArg("-minersleep", 500);
 
 	CheckpointsMode = Checkpoints::STRICT;
@@ -687,15 +687,15 @@ bool AppInit2()
 			fDebug = true;
 			printf("Entering debug mode.\r\n");
 	}
-	
+
 	fDebug2 = false;
-	
+
 	if (GetArg("-debug2", "false")=="true")
 	{
 			fDebug2 = true;
 			printf("Entering GRC debug mode.\r\n");
 	}
-	
+
 	fDebug3 = false;
 	if (GetArg("-debug3", "false")=="true")
 	{
@@ -837,7 +837,7 @@ bool AppInit2()
                                      " Original wallet.dat saved as wallet.{timestamp}.bak in %s; if"
                                      " your balance or transactions are incorrect you should"
                                      " restore from a backup."), strDataDir.c_str());
-            uiInterface.ThreadSafeMessageBox(msg, _("GridCoin"), 
+            uiInterface.ThreadSafeMessageBox(msg, _("Gridcoin"),
 				CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
         }
         if (r == CDBEnv::RECOVER_FAIL)
@@ -1035,13 +1035,13 @@ bool AppInit2()
         {
             string msg(_("Warning: error reading wallet.dat! All keys read correctly, but transaction data"
                          " or address book entries might be missing or incorrect."));
-            uiInterface.ThreadSafeMessageBox(msg, _("GridCoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
+            uiInterface.ThreadSafeMessageBox(msg, _("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
         }
         else if (nLoadWalletRet == DB_TOO_NEW)
-            strErrors << _("Error loading wallet.dat: Wallet requires newer version of GridCoin") << "\n";
+            strErrors << _("Error loading wallet.dat: Wallet requires newer version of Gridcoin") << "\n";
         else if (nLoadWalletRet == DB_NEED_REWRITE)
         {
-            strErrors << _("Wallet needed to be rewritten: restart GridCoin to complete") << "\n";
+            strErrors << _("Wallet needed to be rewritten: restart Gridcoin to complete") << "\n";
             printf("%s", strErrors.str().c_str());
             return InitError(strErrors.str());
         }
@@ -1143,10 +1143,10 @@ bool AppInit2()
 
     printf("Loaded %i addresses from peers.dat  %"PRId64"ms\n",  addrman.size(), GetTimeMillis() - nStart);
 
-    
+
 	// ********************************************************* Step 11: start node
 	uiInterface.InitMessage(_("Loading Persisted Data Cache..."));
-	// 
+	//
 	std::string sOut = "";
 	if (fDebug3) printf("Loading admin Messages %f",(double)0);
 	LoadAdminMessages(true,sOut);
@@ -1155,7 +1155,7 @@ bool AppInit2()
 	InitializeBoincProjects();
 	printf("Done loading boinc projects %f",(double)0);
 	uiInterface.InitMessage(_("Loading Network Averages..."));
-	if (fDebug3) printf("Loading network averages %f",(double)0);	
+	if (fDebug3) printf("Loading network averages %f",(double)0);
 	BusyWaitForTally();
 
 	ComputeNeuralNetworkSupermajorityHashes();
@@ -1164,7 +1164,7 @@ bool AppInit2()
 	LoadCPIDsInBackground();  //This calls HarvesCPIDs(true)
 
 	uiInterface.InitMessage(_("Finding first applicable Research Project..."));
-	
+
 	#if defined(WIN32) && defined(QT_GUI)
 		//stopWireFrameRenderer();
 	#endif

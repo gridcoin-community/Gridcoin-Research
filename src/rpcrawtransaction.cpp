@@ -49,7 +49,7 @@ std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype,
     uint256 hashBlock = 0;
 	std::string error_code = "";
 
-    
+
     if (!GetTransaction(hash, tx, hashBlock))
 	{
 		return "";
@@ -60,24 +60,24 @@ std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype,
 	CBlockIndex* pindexPrev = NULL;
 	CBlock block;
     map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hashBlock);
-    if (mi == mapBlockIndex.end())   
+    if (mi == mapBlockIndex.end())
 	{
 			return ""; //not found
 	}
     pindexPrev = (*mi).second;
-  	if (!block.ReadFromDisk(pindexPrev)) 
+  	if (!block.ReadFromDisk(pindexPrev))
 	{
 			return ""; //failed to read
 	}
 	out_blocktype = block.nVersion;
 	out_blocknumber = pindexPrev->nHeight;
-	//Deserialize 
-	
+	//Deserialize
+
     MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
-	
+
 	out_rac = bb.rac;
 	return bb.projectname;
-	
+
 }
 
 Value downloadblocks(const Array& params, bool fHelp)
@@ -140,7 +140,7 @@ Value restart(const Array& params, bool fHelp)
         }
         else if (upgrader.downloadSuccess())
         {
-            upgrader.launcher(UPGRADER, upgrader.getTarget());       
+            upgrader.launcher(UPGRADER, upgrader.getTarget());
             return "Shutting down...";
         }
         Object result;
@@ -179,7 +179,7 @@ Value upgrade(const Array& params, bool fHelp)
             "upgrade \n"
             "Upgrades client to the latest version.\n"
             "{}");
-		
+
 
 		int target;
 		 #ifdef QT_GUI
@@ -187,7 +187,7 @@ Value upgrade(const Array& params, bool fHelp)
          #else
          target = DAEMON;
          #endif
- 
+
          if (!upgrader.setTarget(target))
          {
              throw runtime_error("Upgrader already busy\n");
@@ -200,7 +200,7 @@ Value upgrade(const Array& params, bool fHelp)
               QMetaObject::invokeMethod(&checker, "check", Qt::QueuedConnection);
              #endif
              return "Initiated download of client";
-        }        
+        }
 
 }
 
@@ -256,11 +256,11 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, Object& entry)
 
         if (tx.IsCoinBase())
             in.push_back(Pair("coinbase", HexStr(txin.scriptSig.begin(), txin.scriptSig.end())));
-		
+
         else
         {
             in.push_back(Pair("txid", txin.prevout.hash.GetHex()));
-		
+
             in.push_back(Pair("vout", (int64_t)txin.prevout.n));
             Object o;
             o.push_back(Pair("asm", txin.scriptSig.ToString()));
@@ -381,7 +381,7 @@ Value listunspent(const Array& params, bool fHelp)
         {
             CBitcoinAddress address(input.get_str());
             if (!address.IsValid())
-                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("Invalid GridCoin address: ")+input.get_str());
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("Invalid Gridcoin address: ")+input.get_str());
             if (setAddress.count(address))
                 throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, duplicated address: ")+input.get_str());
            setAddress.insert(address);
@@ -475,7 +475,7 @@ Value createrawtransaction(const Array& params, bool fHelp)
     {
         CBitcoinAddress address(s.name_);
         if (!address.IsValid())
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("Invalid GridCoin address: ")+s.name_);
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("Invalid Gridcoin address: ")+s.name_);
 
         if (setAddress.count(address))
             throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, duplicated address: ")+s.name_);

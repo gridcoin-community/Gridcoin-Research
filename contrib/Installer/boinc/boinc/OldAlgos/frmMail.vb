@@ -1,4 +1,4 @@
-﻿Imports OpenPop
+Imports OpenPop
 Imports OpenPop.Mime
 Imports OpenPop.Mime.Header
 Imports OpenPop.Pop3
@@ -12,7 +12,7 @@ Imports System.Object
 Imports System.Security.Cryptography
 
 Imports Message = OpenPop.Mime.Message
-Imports GridCoinDotNet.Gridcoin
+Imports GridcoinDotNet.Gridcoin
 Imports System.Windows.Forms
 Imports boinc.Gridcoin
 

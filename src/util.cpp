@@ -350,14 +350,14 @@ string real_strprintf(const std::string &format, int dummy, ...)
 
 int GetDayOfYear()
 {
-	try 
+	try
 	{
 		boost::gregorian::date d=boost::posix_time::from_time_t(GetAdjustedTime()).date();
 		//		boost::gregorian::date d(year, month, day);
 		int dayNumber = d.day_of_year();
 		return dayNumber;
 	}
-	catch (std::out_of_range& e) 
+	catch (std::out_of_range& e)
 	{
     // Alternatively catch bad_year etc exceptions.
 		return 0;
@@ -1035,11 +1035,11 @@ boost::filesystem::path GetDefaultDataDir()
 	    //2-25-2015
 		fs::path pathRet;
 		char* pszHome = getenv("HOME");
-		
-		if (mapArgs.count("-datadir")) 
+
+		if (mapArgs.count("-datadir"))
 		{
 			fs::path path2015 = fs::system_complete(mapArgs["-datadir"]);
-			if (fs::is_directory(path2015)) 
+			if (fs::is_directory(path2015))
 			{
 				pathRet = path2015;
 			}
@@ -1097,16 +1097,16 @@ const boost::filesystem::path &GetDataDir(bool fNetSpecific)
 
     LOCK(csPathCached);
 
-    if (mapArgs.count("-datadir")) 
+    if (mapArgs.count("-datadir"))
 	{
 		    path = fs::system_complete(mapArgs["-datadir"]);
-			if (!fs::is_directory(path)) 
+			if (!fs::is_directory(path))
 			{
 				path = "";
 				return path;
 			}
 	}
-	else 
+	else
 	{
         path = GetDefaultDataDir();
     }
@@ -1127,12 +1127,12 @@ boost::filesystem::path GetProgramDir()
 {
     boost::filesystem::path path;
 
-    if (mapArgs.count("-programdir")) 
+    if (mapArgs.count("-programdir"))
     {
         // printf("Acquiring program directory from conf file\n");
         path = boost::filesystem::system_complete(mapArgs["-programdir"]);
-        
-        if (!boost::filesystem::is_directory(path)) 
+
+        if (!boost::filesystem::is_directory(path))
         {
             path = "";
             printf("Invalid path stated in gridcoinresearch.conf\n");
@@ -1145,11 +1145,11 @@ boost::filesystem::path GetProgramDir()
     }
 
     #ifdef WIN32
-    const char* const list[] = {"gridcoind.exe", "gridcoin-qt.exe", "gridcoinupgrader.exe"};    
+    const char* const list[] = {"gridcoind.exe", "gridcoin-qt.exe", "gridcoinupgrader.exe"};
     #elif defined MAC_OSX
-    const char* const list[] = {"gridcoind.exe", "gridcoin-qt.exe", "gridcoinupgrader.exe"}; 
+    const char* const list[] = {"gridcoind.exe", "gridcoin-qt.exe", "gridcoinupgrader.exe"};
     #else
-    const char* const list[] = {"gridcoinresearchd", "gridcoin-qt", "gridcoinupgrader"}; 
+    const char* const list[] = {"gridcoinresearchd", "gridcoin-qt", "gridcoinupgrader"};
     #endif
 
     for (int i = 0; i < 3; ++i)
@@ -1178,7 +1178,7 @@ boost::filesystem::path GetConfigFile()
 
 
 
-bool IsConfigFileEmpty() 
+bool IsConfigFileEmpty()
 {
     boost::filesystem::ifstream streamConfig(GetConfigFile());
     if (!streamConfig.good())
@@ -1354,10 +1354,10 @@ void AddTimeData(const CNetAddr& ip, int64_t nTime)
                 if (!fMatch)
                 {
                     fDone = true;
-                    string strMessage = _("Warning: Please check that your computer's date and time are correct! If your clock is wrong GridCoin will not work properly.");
+                    string strMessage = _("Warning: Please check that your computer's date and time are correct! If your clock is wrong Gridcoin will not work properly.");
                     strMiscWarning = strMessage;
                     printf("*** %s\n", strMessage.c_str());
-                    uiInterface.ThreadSafeMessageBox(strMessage+" ", string("GridCoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION);
+                    uiInterface.ThreadSafeMessageBox(strMessage+" ", string("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION);
                 }
             }
         }

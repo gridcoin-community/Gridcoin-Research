@@ -1,10 +1,10 @@
-﻿Imports Microsoft.VisualBasic
+Imports Microsoft.VisualBasic
 Imports System.Timers
 Imports System.IO
 Imports System.Windows.Forms
 
 Public Class Utilization
-    Implements IGridCoinMining
+    Implements IGridcoinMining
 
     Private _nBestBlock As Long
     Private _lLeaderboard As Long
@@ -606,7 +606,7 @@ Public Class Utilization
 
 End Class
 
-Public Interface IGridCoinMining
+Public Interface IGridcoinMining
 
    
 End Interface

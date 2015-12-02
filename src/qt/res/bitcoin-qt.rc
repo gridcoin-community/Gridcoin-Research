@@ -18,14 +18,14 @@ BEGIN
     BEGIN
         BLOCK "040904E4" // U.S. English - multilingual (hex)
         BEGIN
-            VALUE "CompanyName",        "GridCoin"
-            VALUE "FileDescription",    "GridCoin-Qt (OSS GUI client for GridCoin)"
+            VALUE "CompanyName",        "Gridcoin"
+            VALUE "FileDescription",    "Gridcoin-Qt (OSS GUI client for Gridcoin)"
             VALUE "FileVersion",        VER_FILEVERSION_STR
-            VALUE "InternalName",       "GridCoin-qt"
-            VALUE "LegalCopyright",     "2009-2014 The Bitcoin developers, 2012-2014 The NovaCoin & PPCoin developers, 2014 The GridCoin developers"
+            VALUE "InternalName",       "Gridcoin-qt"
+            VALUE "LegalCopyright",     "2009-2014 The Bitcoin developers, 2012-2014 The NovaCoin & PPCoin developers, 2014 The Gridcoin developers"
             VALUE "LegalTrademarks1",   "Distributed under the MIT/X11 software license, see the accompanying file COPYING or http://www.opensource.org/licenses/mit-license.php."
-            VALUE "OriginalFilename",   "GridCoin-qt.exe"
-            VALUE "ProductName",        "GridCoin-Qt"
+            VALUE "OriginalFilename",   "Gridcoinresearch-qt.exe"
+            VALUE "ProductName",        "Gridcoinresearch-Qt"
             VALUE "ProductVersion",     VER_PRODUCTVERSION_STR
         END
     END

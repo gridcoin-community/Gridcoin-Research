@@ -93,11 +93,11 @@ gridcoinresearchd getmininginfo
 #Step 2:
 ############################################### Building Gridcoin-QT: ##########################################
 
-#cd to the directory where gridcoinstake.pro is
+#cd to the directory where gridcoinresearch.pro is
 cd ~/Gridcoin-Research
 
-#IMPORTANT: now edit gridcoinstake.pro and remove the entries "QT += qaxcontainer" and "CONFIG += qaxcontainer"
-#nano gridcoinstake.pro
+#IMPORTANT: now edit gridcoinresearch.pro and remove the entries "QT += qaxcontainer" and "CONFIG += qaxcontainer"
+#nano gridcoinresearch.pro
  
 rm -f build/*.o
 qmake "USE_UPNP=-"

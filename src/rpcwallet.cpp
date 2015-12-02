@@ -173,7 +173,7 @@ Value getnewaddress(const Array& params, bool fHelp)
     if (fHelp || params.size() > 1)
         throw runtime_error(
             "getnewaddress [account]\n"
-            "Returns a new GridCoin address for receiving payments.  "
+            "Returns a new Gridcoin address for receiving payments.  "
             "If [account] is specified, it is added to the address book "
             "so payments received with the address will be credited to [account].");
 
@@ -240,7 +240,7 @@ Value getaccountaddress(const Array& params, bool fHelp)
     if (fHelp || params.size() != 1)
         throw runtime_error(
             "getaccountaddress <account>\n"
-            "Returns the current GridCoin address for receiving payments to this account.");
+            "Returns the current Gridcoin address for receiving payments to this account.");
 
     // Parse the account first so we don't generate a key if there's an error
     string strAccount = AccountFromValue(params[0]);
@@ -263,7 +263,7 @@ Value setaccount(const Array& params, bool fHelp)
 
     CBitcoinAddress address(params[0].get_str());
     if (!address.IsValid())
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid GridCoin address");
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
 
 
     string strAccount;
@@ -293,7 +293,7 @@ Value getaccount(const Array& params, bool fHelp)
 
     CBitcoinAddress address(params[0].get_str());
     if (!address.IsValid())
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid GridCoin address");
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
 
     string strAccount;
     map<CTxDestination, string>::iterator mi = pwalletMain->mapAddressBook.find(address.Get());
@@ -334,7 +334,7 @@ Value sendtoaddress(const Array& params, bool fHelp)
 
     CBitcoinAddress address(params[0].get_str());
     if (!address.IsValid())
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid GridCoin address");
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
 
     // Amount
     int64_t nAmount = AmountFromValue(params[1]);
@@ -391,7 +391,7 @@ Value signmessage(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 2)
         throw runtime_error(
-            "signmessage <GridCoinaddress> <message>\n"
+            "signmessage <Gridcoinaddress> <message>\n"
             "Sign a message with the private key of an address");
 
     EnsureWalletIsUnlocked();
@@ -426,7 +426,7 @@ Value verifymessage(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 3)
         throw runtime_error(
-            "verifymessage <GridCoinaddress> <signature> <message>\n"
+            "verifymessage <Gridcoinaddress> <signature> <message>\n"
             "Verify a signed message");
 
     string strAddress  = params[0].get_str();
@@ -463,14 +463,14 @@ Value getreceivedbyaddress(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
-            "getreceivedbyaddress <GridCoinaddress> [minconf=1]\n"
-            "Returns the total amount received by <GridCoinaddress> in transactions with at least [minconf] confirmations.");
+            "getreceivedbyaddress <Gridcoinaddress> [minconf=1]\n"
+            "Returns the total amount received by <Gridcoinaddress> in transactions with at least [minconf] confirmations.");
 
     // Bitcoin address
     CBitcoinAddress address = CBitcoinAddress(params[0].get_str());
     CScript scriptPubKey;
     if (!address.IsValid())
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid GridCoin address");
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
     scriptPubKey.SetDestination(address.Get());
     if (!IsMine(*pwalletMain,scriptPubKey))
         return (double)0.0;
@@ -570,7 +570,7 @@ int64_t GetEarliestWalletTransaction()
             }
         }
         return  nTime;
-    
+
 
 }
 
@@ -717,14 +717,14 @@ Value sendfrom(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() < 3 || params.size() > 6)
         throw runtime_error(
-            "sendfrom <fromaccount> <toGridCoinaddress> <amount> [minconf=1] [comment] [comment-to]\n"
+            "sendfrom <fromaccount> <toGridcoinaddress> <amount> [minconf=1] [comment] [comment-to]\n"
             "<amount> is a real and is rounded to the nearest 0.000001"
             + HelpRequiringPassphrase());
 
     string strAccount = AccountFromValue(params[0]);
     CBitcoinAddress address(params[1].get_str());
     if (!address.IsValid())
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid GridCoin address");
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
     int64_t nAmount = AmountFromValue(params[2]);
 
     int nMinDepth = 1;
@@ -781,7 +781,7 @@ Value sendmany(const Array& params, bool fHelp)
     {
         CBitcoinAddress address(s.name_);
         if (!address.IsValid())
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("Invalid GridCoin address: ")+s.name_);
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("Invalid Gridcoin address: ")+s.name_);
 
         if (setAddress.count(address))
             throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, duplicated address: ")+s.name_);
@@ -825,7 +825,7 @@ Value addmultisigaddress(const Array& params, bool fHelp)
     {
         string msg = "addmultisigaddress <nrequired> <'[\"key\",\"key\"]'> [account]\n"
             "Add a nrequired-to-sign multisignature address to the wallet\"\n"
-            "each key is a GridCoin address or hex-encoded public key\n"
+            "each key is a Gridcoin address or hex-encoded public key\n"
             "If [account] is specified, assign address to [account].";
         throw runtime_error(msg);
     }
@@ -1055,7 +1055,7 @@ Value listreceivedbyaccount(const Array& params, bool fHelp)
 static void MaybePushAddress(Object & entry, const CTxDestination &dest)
 {
     CBitcoinAddress addr;
-    if (addr.Set(dest))    
+    if (addr.Set(dest))
 	{
 			entry.push_back(Pair("address", addr.ToString()));
 	}
@@ -1074,7 +1074,7 @@ void ListTransactions2(const CWalletTx& wtx, const string& strAccount, int nMinD
     string strSentAccount;
     list<COutputEntry> listReceived;
     list<COutputEntry> listSent;
-    
+
     wtx.GetAmounts2(listReceived, listSent, nFee, strSentAccount, true,txdb);
 
     bool fAllAccounts = (strAccount == string("*") || strAccount.empty());
@@ -1106,10 +1106,10 @@ void ListTransactions2(const CWalletTx& wtx, const string& strAccount, int nMinD
         BOOST_FOREACH(const COutputEntry& r, listReceived)
         {
             string account;
-            
+
 		    if (pwalletMain->mapAddressBook.count(r.destination))
                 account = pwalletMain->mapAddressBook[r.destination];
-        
+
             if (fAllAccounts || (account == strAccount))
             {
                 Object entry;
@@ -1128,7 +1128,7 @@ void ListTransactions2(const CWalletTx& wtx, const string& strAccount, int nMinD
 					{
 						entry.push_back(Pair("Type", type));
                  	}
-       
+
                 }
                 else
                 {
@@ -1153,7 +1153,7 @@ Array StakingReport()
 {
 	   int64_t nSpendTime = GetAdjustedTime();
 	   vector<COutput> vCoins;
-   
+
 	   Array results;
 	   Object c;
 	   std::string Narr = RoundToString(GetAdjustedTime(),0);
@@ -1190,7 +1190,7 @@ Array StakingReport()
 				}
 			}
         }
-	   
+
 	   // PHASE II
 	   int64_t nBalance = pwalletMain->GetBalance();
 
@@ -1200,7 +1200,7 @@ Array StakingReport()
 	   entry.push_back(Pair("Reserve Bal",CoinToDouble(nReserveBalance)));
 
 	   int64_t nValueRet = 0;
-	   
+
        BOOST_FOREACH(COutput output, vCoins)
        {
 			const CWalletTx *pcoin = output.tx;
@@ -1292,7 +1292,7 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
 					else
                     {
 						entry.push_back(Pair("category", "generate"));
-					
+
 					}
 					std::string type = IsPoR2(-nFee) ? "POR" : "Interest";
 					{
@@ -1367,7 +1367,7 @@ Value listtransactions(const Array& params, bool fHelp)
     std::list<CAccountingEntry> acentries;
     CWallet::TxItems txOrdered = pwalletMain->OrderedTxItems(acentries, strAccount);
 	CTxDB txdb("r");
-       
+
     // iterate backwards until we have nCount items to return:
     for (CWallet::TxItems::reverse_iterator it = txOrdered.rbegin(); it != txOrdered.rend(); ++it)
     {
@@ -1809,7 +1809,7 @@ Value encryptwallet(const Array& params, bool fHelp)
     // slack space in .dat files; that is bad if the old data is
     // unencrypted private keys. So:
     StartShutdown();
-    return "wallet encrypted; GridCoin server stopping, restart to run with encrypted wallet.  The keypool has been flushed, you need to make a new backup.";
+    return "wallet encrypted; Gridcoin server stopping, restart to run with encrypted wallet.  The keypool has been flushed, you need to make a new backup.";
 }
 
 class DescribeAddressVisitor : public boost::static_visitor<Object>
@@ -2024,7 +2024,7 @@ Value makekeypair(const Array& params, bool fHelp)
     string strPrefix = "";
     if (params.size() > 0)
         strPrefix = params[0].get_str();
- 
+
     CKey key;
     key.MakeNewKey(false);
 
