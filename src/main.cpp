@@ -4167,7 +4167,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3517 && IsResearchAgeEnabled(height1) && !fTestNet) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-					if (bv < 3508 && fTestNet) return DoS(25, error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n"));
+					if (bv < 3545 && fTestNet) return DoS(25, error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n"));
 			}
 
 			if (bb.cpid != "INVESTOR")
@@ -4526,10 +4526,11 @@ void GridcoinServices()
 		if (fDebug10) printf(" PIB<NR # Best %f  Grand %f   ",(double)pindexBest->nHeight,(double)nGrandfather);
 		return;
 	}
-
-
+	
 	//Backup the wallet once per 900 blocks:
-	if (TimerMain("backupwallet", 900))
+	double dWBI = cdbl(GetArgument("walletbackupinterval", "900"),0);
+	
+	if (TimerMain("backupwallet", dWBI))
 	{
 		std::string backup_results = BackupGridcoinWallet();
 		printf("Daily backup results: %s\r\n",backup_results.c_str());
@@ -4576,8 +4577,12 @@ void GridcoinServices()
 	}
 
 	int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+	bool bNeedSuperblock = ((double)superblock_age > (double)(GetSuperblockAgeSpacing(nBestHeight)));
+	if ( nBestHeight % 3 == 0 && NeedASuperblock() ) bNeedSuperblock=true;
+
 	if (fDebug3) printf (" MRSA %f, BH %f ",(double)superblock_age,(double)nBestHeight);
-	if (NeedASuperblock())
+	//12-2-2015
+	if (bNeedSuperblock)
 	{
 		if ((nBestHeight % 3) == 0)
 		{
@@ -4585,7 +4590,6 @@ void GridcoinServices()
 			ComputeNeuralNetworkSupermajorityHashes();
 			UpdateNeuralNetworkQuorumData();
 		}
-		//When superblock is old, Tally:
 		if ((nBestHeight % 20) == 0)
 		{
 			if (fDebug3) printf("#TIB# ");
@@ -4616,7 +4620,6 @@ void GridcoinServices()
 	{
 		FullSyncWithDPORNodes();
 	}
-
 
 
 	// Every N blocks as a Synchronized TEAM:
@@ -4692,10 +4695,9 @@ void GridcoinServices()
 		bCheckedForUpgradeLive = true;
 	}
 
-
-
+	
 	#if defined(WIN32) && defined(QT_GUI)
-		if (bCheckedForUpgradeLive == true && !fTestNet && bProjectsInitialized && bGlobalcomInitialized)
+		if (bCheckedForUpgradeLive && !fTestNet && bProjectsInitialized && bGlobalcomInitialized)
 		{
 			bCheckedForUpgradeLive=false;
 			printf("{Checking for Upgrade} ");
@@ -6715,8 +6717,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
 
-		// Ensure testnet users are running latest version as of 8-5-2015
-		if (pfrom->nVersion < 180313 && fTestNet)
+		// Ensure testnet users are running latest version as of 12-3-2015 (works in conjunction with block spamming)
+		if (pfrom->nVersion < 180315 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -8016,7 +8018,7 @@ std::string GetNeuralNetworkSuperBlock()
 {
 	//Only try to stake a superblock if the contract expired And the superblock is the highest popularity block And we do not have a pending superblock
 	int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-	if (NeedASuperblock() && NeuralNodeParticipates() && PendingSuperblockHeight()==0)
+	if (NeuralNodeParticipates() && NeedASuperblock() && PendingSuperblockHeight()==0)
 	{
 		std::string myNeuralHash = "";
 		#if defined(WIN32) && defined(QT_GUI)
@@ -8065,7 +8067,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 	}
 	//int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
 	//7-25-2015 - Add the neural hash only if necessary
-	if (NeedASuperblock() && !OutOfSyncByAge() && NeuralNodeParticipates())
+	if (!OutOfSyncByAge() && NeuralNodeParticipates() && NeedASuperblock())
 	{
 		#if defined(WIN32) && defined(QT_GUI)
 			mcpid.NeuralHash = qtGetNeuralHash("");

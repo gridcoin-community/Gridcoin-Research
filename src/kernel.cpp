@@ -25,6 +25,7 @@ double GetBlockDifficulty(unsigned int nBits);
 extern double GetLastPaymentTimeByCPID(std::string cpid);
 extern double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 bool LessVerbose(int iMax1000);
+StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
 
 typedef std::map<int, unsigned int> MapModifierCheckpoints;
 /*
@@ -343,8 +344,31 @@ double OwedByAddress(std::string address)
 		   return outstanding;
 }
 
+int64_t GetRSAWeightByCPIDWithRA(std::string cpid)
+{
+	//Requires Magnitude > 0, be in superblock, with a lifetime cpid paid = 0
+	//12-3-2015
+	if (cpid.empty() || cpid=="INVESTOR" || cpid=="POOL") return 0;
+	double dWeight = 0;
+	StructCPID stMagnitude = GetInitializedStructCPID2(cpid,mvMagnitudes);	
+	StructCPID stLifetime  = GetInitializedStructCPID2(cpid,mvResearchAge);
+	if (stMagnitude.Magnitude > 0 && stLifetime.ResearchSubsidy == 0)
+	{
+		dWeight = 100000;
+	}
+	return dWeight;
+}
+
 int64_t GetRSAWeightByCPID(std::string cpid)
 {
+
+	if (IsResearchAgeEnabled(pindexBest->nHeight) && bNewbieFeatureEnabled) 
+	{
+			return GetRSAWeightByCPIDWithRA(cpid);
+			//ToDo : During next mandatory, retire this old function.
+	}
+
+
 	double weight = 0;
 	if (cpid=="" || cpid=="INVESTOR") return 5000;
 	if (mvMagnitudes.size() > 0)
@@ -365,7 +389,7 @@ int64_t GetRSAWeightByCPID(std::string cpid)
 								if (IsResearchAgeEnabled(pindexBest->nHeight) && weight < 0) weight=0;
 						}
 
-						if (IsResearchAgeEnabled(pindexBest->nHeight) && !bNewbieFeatureEnabled) weight = UntrustedHost.Magnitude;
+						//if (IsResearchAgeEnabled(pindexBest->nHeight) && !bNewbieFeatureEnabled) weight = UntrustedHost.Magnitude;
 
 			}
 			else

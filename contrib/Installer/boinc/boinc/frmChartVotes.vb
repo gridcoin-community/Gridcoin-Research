@@ -18,6 +18,8 @@ Public Class frmChartVotes
         Dim sExpiration As String = ExtractXML(sData, "<EXPIRATION>")
         Dim sShareType As String = ExtractXML(sData, "<SHARETYPE>")
         Dim sQuestion As String = ExtractXML(sData, "<QUESTION>")
+        Dim sURL As String = ExtractXML(sData, "<URL>")
+
         Dim sAnswers As String = ExtractXML(sData, "<ANSWERS>")
         'Array of answers
         Dim sArrayOfAnswers As String = ExtractXML(sData, "<ARRAYANSWERS>")
@@ -28,6 +30,7 @@ Public Class frmChartVotes
         lblBestAnswer.Text = "Best Answer: " + sBestAnswer
         lblQuestion.Text = "Q: " + sQuestion
         lblTitle.Text = ProperCase(sTitle)
+        lnkURL.Text = sURL
 
         Dim iRow As Long = 0
         C.Titles.Clear() : C.Titles.Add("Poll Results " + sTitle) : C.BackColor = Color.Black : C.ForeColor = Color.Lime
@@ -112,5 +115,9 @@ Public Class frmChartVotes
         If e.KeyCode = Keys.Escape Then
             Me.Hide()
         End If
+    End Sub
+
+    Private Sub lnkURL_LinkClicked(sender As System.Object, e As System.Windows.Forms.LinkLabelLinkClickedEventArgs) Handles lnkURL.LinkClicked
+        Process.Start(lnkURL.Text)
     End Sub
 End Class

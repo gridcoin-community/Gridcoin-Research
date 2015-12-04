@@ -79,10 +79,12 @@ Module modGRC
         End Try
     End Function
 
-    Public Function ExecuteRPCCommand(sCommand As String, sArg1 As String, sArg2 As String, sArg3 As String, sArg4 As String, sArg5 As String) As String
+    Public Function ExecuteRPCCommand(sCommand As String, sArg1 As String, sArg2 As String, sArg3 As String, sArg4 As String, sArg5 As String, sURL As String) As String
         Dim sReply As String = ""
         Try
             Dim sPayload As String = "<COMMAND>" + sCommand + "</COMMAND><ARG1>" + sArg1 + "</ARG1><ARG2>" + sArg2 + "</ARG2><ARG3>" + sArg3 + "</ARG3><ARG4>" + sArg4 + "</ARG4><ARG5>" + sArg5 + "</ARG5>"
+            If sCommand = "addpoll" Then sPayload += "<URL>" + sURL + "</URL>"
+
             SetRPCReply("")
             msRPCReply = ""
             msRPCCommand = sPayload

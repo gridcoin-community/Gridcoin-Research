@@ -1324,6 +1324,10 @@ std::string AdvertiseBeacon(bool force, bool bUseNeuralNetwork)
 			std::string sAction = "add";
 			std::string sType = "beacon";
 			std::string sName = GlobalCPUMiningCPID.cpid;
+			if (nBalance < 1.01)
+			{
+				return "Balance too low to send beacon.";
+			}
 			try
 			{
 				if (bUseNeuralNetwork)
@@ -1427,7 +1431,7 @@ std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string 
 
 Value execute(const Array& params, bool fHelp)
 {
-    if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3 && params.size() != 4 && params.size() != 5 && params.size() != 6))
+    if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3 && params.size() != 4 && params.size() != 5 && params.size() != 6 && params.size() != 7))
         throw runtime_error(
 		"execute <string::itemname> <string::parameter> \r\n"
         "Executes an arbitrary command by name.");
@@ -2088,9 +2092,9 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "addpoll")
 	{
-		if (params.size() != 6)
+		if (params.size() != 7)
 		{
-			entry.push_back(Pair("Error","You must specify the Poll Title, Expiration In DAYS from Now, Question, Answers delimited by a semicolon, ShareType (1=Magnitude,2=Balance,3=Both,4=CPIDCount,5=ParticipantCount).  Please use underscores in place of spaces inside a sentence.  "));
+			entry.push_back(Pair("Error","You must specify the Poll Title, Expiration In DAYS from Now, Question, Answers delimited by a semicolon, ShareType (1=Magnitude,2=Balance,3=Both,4=CPIDCount,5=ParticipantCount) and discussion URL (use TinyURL.com to make a small URL).  Please use underscores in place of spaces inside a sentence.  "));
 			results.push_back(entry);
 		}
 		else
@@ -2101,6 +2105,7 @@ Value execute(const Array& params, bool fHelp)
 				std::string Question = params[3].get_str();
 				std::string Answers = params[4].get_str();
 				std::string ShareType = params[5].get_str();
+				std::string sURL = params[6].get_str();
 				double sharetype = cdbl(ShareType,0);
 				if (Title=="" || Question == "" || Answers == "") 
 				{
@@ -2142,13 +2147,13 @@ Value execute(const Array& params, bool fHelp)
 							else
 							{
 								std::string expiration = RoundToString(GetAdjustedTime() + (days*86400),0);
-								std::string contract = "<TITLE>" + Title + "</TITLE><DAYS>" + RoundToString(days,0) + "</DAYS><QUESTION>" + Question + "</QUESTION><ANSWERS>" + Answers + "</ANSWERS><SHARETYPE>" + RoundToString(sharetype,0) + "</SHARETYPE><EXPIRATION>" + expiration + "</EXPIRATION>";
+								std::string contract = "<TITLE>" + Title + "</TITLE><DAYS>" + RoundToString(days,0) + "</DAYS><QUESTION>" + Question + "</QUESTION><ANSWERS>" + Answers + "</ANSWERS><SHARETYPE>" + RoundToString(sharetype,0) + "</SHARETYPE><URL>" + sURL + "</URL><EXPIRATION>" + expiration + "</EXPIRATION>";
 								std::string result = AddContract("poll",Title,contract);
 								entry.push_back(Pair("Success","Your poll has been added: " + result));
 								results.push_back(entry);
 							}
 
-						}
+					   }
 				  }
 			   }
 			}
@@ -3511,7 +3516,7 @@ Array GetJsonVoteDetailsReport(std::string pollname)
     entry.push_back(Pair("Votes","Votes Report " + pollname));
 	entry.push_back(Pair("MoneySupplyFactor",RoundToString(MoneySupplyFactor,2)));
 
-	std::string header = "GRCAddress,CPID,Question,Answer,ShareType";
+	std::string header = "GRCAddress,CPID,Question,Answer,ShareType,URL";
 
 	entry.push_back(Pair(header,"Shares"));
 									
@@ -3536,6 +3541,7 @@ Array GetJsonVoteDetailsReport(std::string pollname)
 
 								double dShareType= cdbl(GetPollXMLElementByPollTitle(Title,"<SHARETYPE>","</SHARETYPE>"),0);
 								std::string sShareType= GetShareType(dShareType);
+								std::string sURL = ExtractXML(contract,"<URL>","</URL>");
 
 								std::string Balance = ExtractXML(contract,"<BALANCE>","</BALANCE>");
 								boost::to_lower(Title);
@@ -3551,7 +3557,7 @@ Array GetJsonVoteDetailsReport(std::string pollname)
 										total_shares += shares;
 										participants += (double)((double)1/(double)vVoterAnswers.size());
 										iRow++;
-										std::string voter = GRCAddress + "," + CPID + "," + Question + "," + vVoterAnswers[x] + "," + sShareType;
+										std::string voter = GRCAddress + "," + CPID + "," + Question + "," + vVoterAnswers[x] + "," + sShareType + "," + sURL;
 										entry.push_back(Pair(voter,RoundToString(shares,0)));
 									}
 								}
@@ -3597,6 +3603,7 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
 								std::string Question = ExtractXML(contract,"<QUESTION>","</QUESTION>");
 								std::string Answers = ExtractXML(contract,"<ANSWERS>","</ANSWERS>");
 								std::string ShareType = ExtractXML(contract,"<SHARETYPE>","</SHARETYPE>");
+								std::string sURL = ExtractXML(contract,"<URL>","</URL>");
 								boost::to_lower(Title);
 								if (!PollExpired(Title) || IncludeExpired)
 								{
@@ -3613,7 +3620,7 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
 											+ " (" + ExpirationDate + " ) - " + sShareType;
 										
 										entry.push_back(Pair(TitleNarr,Title));
-										sExportRow = "<POLL><TITLE>" + Title + "</TITLE><EXPIRATION>" + ExpirationDate + "</EXPIRATION><SHARETYPE>" + sShareType + "</SHARETYPE><QUESTION>" + Question + "</QUESTION><ANSWERS>"+Answers+"</ANSWERS>";
+										sExportRow = "<POLL><URL>" + sURL + "</URL><TITLE>" + Title + "</TITLE><EXPIRATION>" + ExpirationDate + "</EXPIRATION><SHARETYPE>" + sShareType + "</SHARETYPE><QUESTION>" + Question + "</QUESTION><ANSWERS>"+Answers+"</ANSWERS>";
 
 										if (bDetail)
 										{

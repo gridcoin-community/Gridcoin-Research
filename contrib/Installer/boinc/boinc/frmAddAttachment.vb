@@ -70,7 +70,7 @@ Public Class frmAddAttachment
 
                 Me.Enabled = False
 
-                Dim sResult As String = ExecuteRPCCommand("addattachment", msPayload, "", "", "", "")
+                Dim sResult As String = ExecuteRPCCommand("addattachment", msPayload, "", "", "", "", "")
 
                 Me.Hide()
 
