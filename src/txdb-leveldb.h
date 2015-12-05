@@ -107,7 +107,7 @@ protected:
         ssKey.reserve(1000);
         ssKey << key;
         CDataStream ssValue(SER_DISK, CLIENT_VERSION);
-        ssValue.reserve(10000);
+        ssValue.reserve(90000);
         ssValue << value;
 
         if (activeBatch) {
@@ -201,6 +201,11 @@ public:
     bool WriteSyncCheckpoint(uint256 hashCheckpoint);
     bool ReadCheckpointPubKey(std::string& strPubKey);
     bool WriteCheckpointPubKey(const std::string& strPubKey);
+
+	bool ReadGenericData(std::string KeyName, std::string& strValue);
+	bool WriteGenericData(const std::string& strKey,const std::string& strData);
+
+
     bool LoadBlockIndex();
 private:
     bool LoadBlockIndexGuts();

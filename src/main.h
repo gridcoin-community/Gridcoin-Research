@@ -46,17 +46,13 @@ extern int muGlobalCheckpointHashCounter;
 extern std::string msMasterProjectPublicKey;
 extern std::string msMasterMessagePublicKey;
 extern std::string msMasterMessagePrivateKey;
-
-
-
-extern bool bNewUserWizardNotified;
-
+extern std::string msTestNetSeedSuperblocks;extern std::string msTestNetSeedContracts;extern std::string msProdSeedSuperblocks;extern std::string msProdSeedContracts237579;extern std::string msProdSeedContracts237853;extern std::string msProdSeedContracts238844;extern std::string msProdSeedContracts239718;extern std::string msProdSeedContracts246130;extern std::string msProdSeedContracts265924;extern std::string msProdSeedContracts282719;extern std::string msProdSeedContracts298010;extern std::string msProdSeedContracts333606;extern std::string msProdSeedContracts340200;extern std::string msProdSeedContracts342797;extern std::string msProdSeedContracts361873;extern bool bNewUserWizardNotified;
 
 /** The maximum allowed size for a serialized block, in bytes (network rule) */
 static const unsigned int MAX_BLOCK_SIZE = 1000000;
 /** Target Blocks Per day */
 static const unsigned int BLOCKS_PER_DAY = 1000;
-static const double TOLERANCE_PERCENT = 0;  // The amount a network consensus magnitude can be skewed by before calling Netsoft (Removed as of 7/3/2015 - NeuralNetwork)
+static const double TOLERANCE_PERCENT = 0;  // The amount a network consensus magnitude can be skewed by before calling etsoft (Removed as of 7/3/2015 - NeuralNetwork)
 /** The maximum size for mined blocks */
 static const unsigned int MAX_BLOCK_SIZE_GEN = MAX_BLOCK_SIZE/2;
 /** The maximum size for transactions we're willing to relay/mine **/
@@ -89,7 +85,20 @@ static const uint256 hashGenesisBlock("0x000005a247b397eadfefa58e872bc967c261479
 //TestNet Genesis:
 static const uint256 hashGenesisBlockTestNet("0x00006e037d7b84104208ecf2a8638d23149d712ea810da604ee2f2cb39bae713");
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-inline bool IsProtocolV2(int nHeight) { return nHeight > 85400; }
+inline bool IsProtocolV2(int nHeight) 
+{ 
+	return (fTestNet ?  nHeight > 2060 : nHeight > 85400); 
+}
+
+inline bool IsResearchAgeEnabled(int nHeight)
+{
+	return (fTestNet ?  nHeight > 0 : nHeight > 364500); 
+}
+
+inline int GetSuperblockAgeSpacing(int nHeight)
+{
+	return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);
+}
 
 inline int64_t PastDrift(int64_t nTime, int nHeight)   { return IsProtocolV2(nHeight) ? nTime - 20 * 60  : nTime - 20 * 60; }
 inline int64_t FutureDrift(int64_t nTime, int nHeight) { return IsProtocolV2(nHeight) ? nTime + 20 * 60  : nTime + 20 * 60; }
@@ -101,7 +110,13 @@ extern std::map<std::string, double> mvNeuralNetworkHash;
 extern std::map<std::string, double> mvNeuralVersion;
 
 extern std::map<std::string, StructCPID> mvDPOR;
+extern std::map<std::string, StructCPID> mvDPORCopy;
+
+
 extern std::map<std::string, StructCPID> mvResearchAge;
+extern std::map<std::string, MiningCPID> mvBlockIndex;
+extern std::map<std::string, std::string> mvCPIDBlockHashes;
+
 
 extern CScript COINBASE_FLAGS;
 extern CCriticalSection cs_main;
@@ -131,13 +146,15 @@ extern std::map<uint256, CBlock*> mapOrphanBlocks;
 extern int64_t COIN_YEAR_REWARD;
 extern bool bCryptoLotteryEnabled;
 extern bool bRemotePaymentsEnabled;
-extern bool bResearchAgeEnabled;
+extern bool bNewbieFeatureEnabled;
 
 // Settings
 extern int64_t nTransactionFee;
 extern int64_t nReserveBalance;
 extern int64_t nMinimumInputValue;
 extern int64_t nLastTallied;
+extern int64_t nLastPing;
+
 extern int64_t nLastTalliedNeural;
 
 extern int64_t nCPIDsLoaded;
@@ -173,7 +190,19 @@ extern std::string  msMiningErrors3;
 extern std::string  msMiningErrors5;
 extern std::string  msMiningErrors6;
 extern std::string  msMiningErrors7;
+extern std::string  msMiningErrors8;
+extern std::string  msPeek;
+extern std::string  msLastCommand;
+extern std::string  msAttachmentGuid;
+
+extern std::string  msMiningErrorsIncluded;
+extern std::string  msMiningErrorsExcluded;
+extern std::string  msSuperBlockHashes;
+extern std::string  msContracts;
+
+extern std::string  msRSAOverview;
 extern std::string  msNeuralResponse;
+extern std::string  msHDDSerial;
 extern bool         mbBlocksDownloaded;
 
 
@@ -182,6 +211,7 @@ extern std::string  OrganizationKey;
 
 extern int nGrandfather;
 extern int nNewIndex;
+extern int nNewIndex2;
 
 // PoB GPU Miner Global Vars:
 extern std::string 	msGPUMiningProject;
@@ -194,7 +224,7 @@ extern std::string  msGPUboinckey;
 extern double         mdLastPoBDifficulty;
 extern double         mdLastDifficulty;
 extern std::string    msGlobalStatus;
-
+extern std::string    msLastPaymentTime;
 
 
 class CReserveKey;
@@ -1216,7 +1246,7 @@ public:
 
 
     bool DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex);
-    bool ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck=false);
+    bool ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck=false, bool fReorganizing=false);
     bool ReadFromDisk(const CBlockIndex* pindex, bool fReadTransactions=true);
     bool SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew);
     bool AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof);
@@ -1227,7 +1257,7 @@ public:
     bool CheckBlockSignature() const;
 
 private:
-    bool SetBestChainInner(CTxDB& txdb, CBlockIndex *pindexNew);
+    bool SetBestChainInner(CTxDB& txdb, CBlockIndex *pindexNew, bool fReorganizing);
 };
 
 
@@ -1260,7 +1290,15 @@ public:
 	double nResearchSubsidy;
 	double nInterestSubsidy;
 	double nMagnitude;
-	//
+	// Memory Only (8-13-2015):
+	double nLastPORBlock;
+	std::string sLastPORBlockHash;
+	double nTotalPORPayments;
+	// Indicators (9-13-2015)
+	unsigned int nIsSuperBlock;
+	unsigned int nIsContract;
+	std::string sGRCAddress;
+	std::string sReserved;
 
     unsigned int nFlags;  // ppcoin: block index flags
     enum  
@@ -1314,6 +1352,13 @@ public:
 		nResearchSubsidy = 0;
 		nInterestSubsidy = 0;
 		nMagnitude = 0;
+		nLastPORBlock=0;
+		sLastPORBlockHash = "";
+		nTotalPORPayments = 0;
+		nIsSuperBlock = 0;
+		nIsContract = 0;
+		sGRCAddress = "";
+		sReserved = "";
     }
 
     CBlockIndex(unsigned int nFileIn, unsigned int nBlockPosIn, CBlock& block)
@@ -1540,7 +1585,15 @@ public:
 		READWRITE(nResearchSubsidy);
 		READWRITE(nInterestSubsidy);
 		READWRITE(nMagnitude);
-	
+	    //9-13-2015 - Indicators
+		if (this->nHeight > nNewIndex2)
+		{
+			READWRITE(nIsSuperBlock);
+			READWRITE(nIsContract);
+			READWRITE(sGRCAddress);
+			READWRITE(sReserved);
+		}
+
 
     )
 

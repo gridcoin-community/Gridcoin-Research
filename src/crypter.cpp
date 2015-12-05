@@ -14,10 +14,11 @@
 #include "scrypt.h"
 
 
-
 unsigned char chKeyGridcoin[256];
 unsigned char chIVGridcoin[256];
 bool fKeySetGridcoin;
+std::string getHardwareID();
+std::string RetrieveMd5(std::string s1);
 
 bool CCrypter::SetKeyFromPassphrase(const SecureString& strKeyData, const std::vector<unsigned char>& chSalt, const unsigned int nRounds, const unsigned int nDerivationMethod)
 {
@@ -169,7 +170,7 @@ bool LoadGridKey(std::string gridkey, std::string salt)
 
 bool GridEncrypt(std::vector<unsigned char> vchPlaintext, std::vector<unsigned char> &vchCiphertext)
 {
-	bool result=LoadGridKey("gridcoin","cqiuehEJ2Tqdov");
+	LoadGridKey("gridcoin","cqiuehEJ2Tqdov");
     int nLen = vchPlaintext.size();
     int nCLen = nLen + AES_BLOCK_SIZE, nFLen = 0;
     vchCiphertext = std::vector<unsigned char> (nCLen);
@@ -188,7 +189,7 @@ bool GridEncrypt(std::vector<unsigned char> vchPlaintext, std::vector<unsigned c
 
 bool GridDecrypt(const std::vector<unsigned char>& vchCiphertext,std::vector<unsigned char>& vchPlaintext)
 {
-	bool result=LoadGridKey("gridcoin","cqiuehEJ2Tqdov");
+	LoadGridKey("gridcoin","cqiuehEJ2Tqdov");
 	int nLen = vchCiphertext.size();
     int nPLen = nLen, nFLen = 0;
     EVP_CIPHER_CTX ctx;
@@ -209,7 +210,7 @@ bool GridDecrypt(const std::vector<unsigned char>& vchCiphertext,std::vector<uns
 
 bool GridEncryptWithSalt(std::vector<unsigned char> vchPlaintext, std::vector<unsigned char> &vchCiphertext, std::string salt)
 {
-	bool result=LoadGridKey("gridcoin",salt);
+	LoadGridKey("gridcoin",salt);
     int nLen = vchPlaintext.size();
     int nCLen = nLen + AES_BLOCK_SIZE, nFLen = 0;
     vchCiphertext = std::vector<unsigned char> (nCLen);
@@ -228,7 +229,7 @@ bool GridEncryptWithSalt(std::vector<unsigned char> vchPlaintext, std::vector<un
 
 bool GridDecryptWithSalt(const std::vector<unsigned char>& vchCiphertext,std::vector<unsigned char>& vchPlaintext, std::string salt)
 {
-	bool result=LoadGridKey("gridcoin",salt);
+	LoadGridKey("gridcoin",salt);
 	int nLen = vchCiphertext.size();
     int nPLen = nLen, nFLen = 0;
     EVP_CIPHER_CTX ctx;
@@ -270,11 +271,11 @@ std::string AdvancedCrypt(std::string boinchash)
 	   std::vector<unsigned char> vchSecret( boinchash.begin(), boinchash.end() );
 	   std::string d1 = "                                                                                                                                        ";
 	   std::vector<unsigned char> vchCryptedSecret(d1.begin(),d1.end());
-       bool OK = GridEncrypt(vchSecret, vchCryptedSecret);
+       GridEncrypt(vchSecret, vchCryptedSecret);
 	   std::string encrypted = EncodeBase64(UnsignedVectorToString(vchCryptedSecret));
-
 	   return encrypted;
-	} catch (std::exception &e) 
+	} 
+	catch (std::exception &e) 
 	{
 		printf("Error while encrypting %s",boinchash.c_str());
 		return "";
@@ -294,7 +295,7 @@ std::string AdvancedDecrypt(std::string boinchash_encrypted)
 	   std::string d2 = "                                                                                                                                        ";
 	   std::vector<unsigned char> vchCryptedSecret(pre_encrypted_boinchash.begin(),pre_encrypted_boinchash.end());
 	   std::vector<unsigned char> vchPlaintext(d2.begin(),d2.end());
-	   bool OKDecrypt = GridDecrypt(vchCryptedSecret,vchPlaintext);
+	   GridDecrypt(vchCryptedSecret,vchPlaintext);
 	   std::string decrypted = UnsignedVectorToString(vchPlaintext);
 	   return decrypted;
 	} catch (std::exception &e) 
@@ -310,8 +311,32 @@ std::string AdvancedDecrypt(std::string boinchash_encrypted)
 }
      
 
+std::string AdvancedCryptWithHWID(std::string data)
+{
+	std::string HWID = getHardwareID();
+	std::string enc = "";
+	std::string salt = HWID;
+	for (unsigned int i = 0; i < 9; i++)
+	{
+		std::string old_salt = salt;
+		salt = RetrieveMd5(old_salt);
+	}
+	enc = AdvancedCryptWithSalt(data,salt);
+	return enc;
+}
 
-
+std::string AdvancedDecryptWithHWID(std::string data)
+{
+	std::string HWID = getHardwareID();
+	std::string salt = HWID;
+	for (unsigned int i = 0; i < 9; i++)
+	{
+		std::string old_salt = salt;
+		salt = RetrieveMd5(old_salt);
+	}
+	std::string dec = AdvancedDecryptWithSalt(data,salt);
+	return dec;
+}
 
 std::string AdvancedCryptWithSalt(std::string boinchash, std::string salt)
 {
@@ -321,7 +346,7 @@ std::string AdvancedCryptWithSalt(std::string boinchash, std::string salt)
 	   std::vector<unsigned char> vchSecret( boinchash.begin(), boinchash.end() );
 	   std::string d1 = "                                                                                                                                        ";
 	   std::vector<unsigned char> vchCryptedSecret(d1.begin(),d1.end());
-       bool OK = GridEncryptWithSalt(vchSecret, vchCryptedSecret,salt);
+       GridEncryptWithSalt(vchSecret, vchCryptedSecret,salt);
 	   std::string encrypted = EncodeBase64(UnsignedVectorToString(vchCryptedSecret));
 
 	   return encrypted;
@@ -345,7 +370,7 @@ std::string AdvancedDecryptWithSalt(std::string boinchash_encrypted, std::string
 	   std::string d2 = "                                                                                                                                        ";
 	   std::vector<unsigned char> vchCryptedSecret(pre_encrypted_boinchash.begin(),pre_encrypted_boinchash.end());
 	   std::vector<unsigned char> vchPlaintext(d2.begin(),d2.end());
-	   bool OKDecrypt = GridDecryptWithSalt(vchCryptedSecret,vchPlaintext,salt);
+	   GridDecryptWithSalt(vchCryptedSecret,vchPlaintext,salt);
 	   std::string decrypted = UnsignedVectorToString(vchPlaintext);
 	   return decrypted;
 	} catch (std::exception &e) 

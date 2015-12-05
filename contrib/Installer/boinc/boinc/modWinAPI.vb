@@ -27,6 +27,7 @@ Module modWinAPI
 
     Const HWND_NOTOPMOST = -2
 
+    Public msPayload As String = ""
 
     <System.Runtime.InteropServices.DllImport("ntdll.dll", EntryPoint:="NtQueryInformationProcess")> _
     Public Function NtQueryInformationProcess(ByVal handle As IntPtr, ByVal processinformationclass As UInteger, ByRef ProcessInformation As Process_Basic_Information, ByVal ProcessInformationLength As Integer, ByRef ReturnLength As UInteger) As Integer

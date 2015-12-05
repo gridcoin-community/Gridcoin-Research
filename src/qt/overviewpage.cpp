@@ -180,7 +180,9 @@ void OverviewPage::UpdateBoincUtilization()
 {
 
 	 QString qsStatus = QString::fromUtf8(msGlobalStatus.c_str());
+	 QString qsLastPaymentTime = QString::fromUtf8(msLastPaymentTime.c_str());
 	 ui->txtDisplay->setText(qsStatus);
+	 ui->txtLastPaymentTime->setText(qsLastPaymentTime);
 
 }
 
@@ -252,7 +254,7 @@ void OverviewPage::on_btnWebsite_pressed()
 
 void OverviewPage::on_btnBX_pressed()
 {
-    QDesktopServices::openUrl(QUrl("http://www.cryptoblox.com/coins/GridcoinResearch/"));
+    QDesktopServices::openUrl(QUrl("http://www.gridresearchcorp.com/gridcoin/"));
 }
 
 

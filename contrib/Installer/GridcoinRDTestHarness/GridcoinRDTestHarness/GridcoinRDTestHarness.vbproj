@@ -133,6 +133,10 @@
       <Project>{359913F7-DF2D-4632-9A0C-52E9FD0D4ED9}</Project>
       <Name>boincstake</Name>
     </ProjectReference>
+    <ProjectReference Include="..\..\ucGridcoinProgressBar\ucGridcoinProgressBar.vbproj">
+      <Project>{3E0975C0-22ED-4B0A-ACE4-CF5E6FA09A25}</Project>
+      <Name>ucGridcoinProgressBar</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

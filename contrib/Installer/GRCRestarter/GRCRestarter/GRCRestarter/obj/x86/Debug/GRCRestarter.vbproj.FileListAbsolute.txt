@@ -25,7 +25,6 @@ A:\release\GRCRestarter.exe.config
 A:\release\GRCRestarter.exe
 A:\release\GRCRestarter.pdb
 A:\release\GRCRestarter.xml
-A:\Gridcoin-Research\contrib\Installer\GRCRestarter\GRCRestarter\GRCRestarter\GRCRestarter.exe.config
 A:\Gridcoin-Research\contrib\Installer\GRCRestarter\GRCRestarter\GRCRestarter\GRCRestarter.exe
 A:\Gridcoin-Research\contrib\Installer\GRCRestarter\GRCRestarter\GRCRestarter\GRCRestarter.pdb
 A:\Gridcoin-Research\contrib\Installer\GRCRestarter\GRCRestarter\GRCRestarter\GRCRestarter.xml
@@ -42,3 +41,6 @@ A:\Gridcoin-Research\contrib\Installer\GRCRestarter\GRCRestarter\GRCRestarter\ob
 A:\Gridcoin-Research\contrib\Installer\GRCRestarter\GRCRestarter\GRCRestarter\obj\x86\Debug\GRCRestarter.pdb
 A:\Gridcoin-Research\contrib\Installer\GRCRestarter\GRCRestarter\GRCRestarter\icsharpcode.sharpziplib.dll
 A:\Gridcoin-Research\contrib\Installer\GRCRestarter\GRCRestarter\GRCRestarter\obj\x86\Debug\GRCRestarter.vbprojResolveAssemblyReference.cache
+A:\Gridcoin-Research\contrib\Installer\GRCRestarter\GRCRestarter\GRCRestarter\GRCSec.dll
+A:\Gridcoin-Research\contrib\Installer\GRCRestarter\GRCRestarter\GRCRestarter\GRCSec.pdb
+A:\Gridcoin-Research\contrib\Installer\GRCRestarter\GRCRestarter\GRCRestarter\GRCSec.xml

@@ -141,7 +141,7 @@ Public Class frmTicketAdd
         If Mode = "Add" Then
             If Val(txtTicketId.Text) = 0 Then
                 Dim maxTick As Double = mGRCData.P2PMax("TicketId", "Ticket", "", "")
-                txtTicketId.Text = Trim(maxTick + 1)
+                txtTicketId.Text = Trim(Val(maxTick) + 1)
             End If
         End If
 

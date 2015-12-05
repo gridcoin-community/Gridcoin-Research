@@ -122,7 +122,11 @@
     Public Sub mUpdateConfirmAsync()
         Dim sTxId As String = msTXID
         Threading.Thread.Sleep(9000) 'Wait 9 seconds asynchronously in case user sent coins to themself
-        mGRCData.UpdateConfirm(sTxId, 1)
+        Try
+            mGRCData.UpdateConfirm(sTxId, 1)
+        Catch ex As Exception
+
+        End Try
     End Sub
     Public Function mTrackConfirm(sTXID As String) As Double
 

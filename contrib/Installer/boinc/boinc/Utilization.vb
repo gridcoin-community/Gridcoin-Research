@@ -1,9 +1,10 @@
-﻿Imports Microsoft.VisualBasic
+Imports Microsoft.VisualBasic
 Imports System.Timers
 Imports System.IO
+Imports System.Windows.Forms
 
 Public Class Utilization
-    Implements IGridCoinMining
+    Implements IGridcoinMining
 
     Private _nBestBlock As Long
     Private _lLeaderboard As Long
@@ -15,7 +16,7 @@ Public Class Utilization
 
     Public ReadOnly Property Version As Double
         Get
-            Return 403
+            Return 408
         End Get
     End Property
 
@@ -25,6 +26,15 @@ Public Class Utilization
             'Return Val(clsGVM.BoincUtilization)
         End Get
     End Property
+
+    Public Function cGetCryptoPrice(sSymbol As String) As Double
+        Return GetCryptoPrice(sSymbol).Price
+    End Function
+    Public Function cqGetCryptoPrice(sSymbol As String) As Quote
+        Return GetCryptoPrice(sSymbol)
+    End Function
+
+
     Public Function SetQuorumData(sData As String) As String
 
         Dim sQuorumData As String = ExtractXML(sData, "<QUORUMDATA>")
@@ -38,12 +48,16 @@ Public Class Utilization
         Call UpdateSuperblockAgeAndQuorumHash(sAge, sQuorumHash, TS, sBlock, sPrimaryCPID)
 
     End Function
+    Public Sub TestGZIPBoincDownload()
+        Dim c As New clsBoincProjectDownload
+        c.DownloadGZipFiles()
 
+    End Sub
     Public Function WriteKey(sData As String) As String
         Try
             Dim sKey As String = ExtractXML(sData, "<KEY>")
-        Dim sValue As String = ExtractXML(sData, "<VALUE>")
-        UpdateKey(sKey, sValue)
+            Dim sValue As String = ExtractXML(sData, "<VALUE>")
+            UpdateKey(sKey, sValue)
             Return "True"
         Catch ex As Exception
             Return "False"
@@ -102,7 +116,7 @@ Public Class Utilization
         SetRPCReply(sData)
     End Sub
     Public Function TestnetGetGenericRPCValue() As String
-       
+
     End Function
     Public ReadOnly Property ClientNeedsUpgrade As Double
         Get
@@ -113,12 +127,12 @@ Public Class Utilization
                 If Len(sLastUpgraded) > 0 Then
                     Log("Found key AutoUpgrade " + Trim(sLastUpgraded))
 
-                        Dim dDiff As Long
-                        dDiff = DateDiff(DateInterval.Day, Now, CDate(sLastUpgraded))
-                        If Math.Abs(dDiff) < 1 Then
+                    Dim dDiff As Long
+                    dDiff = DateDiff(DateInterval.Day, Now, CDate(sLastUpgraded))
+                    If Math.Abs(dDiff) < 1 Then
                         Log("Upgraded too recently. Aborting. " + Trim(dDiff))
-                            Return 0
-                        End If
+                        Return 0
+                    End If
                 End If
                 Log("Ready for upgrade")
 
@@ -138,7 +152,7 @@ Public Class Utilization
     Public Function NeuralNetwork() As Double
         Return 1999
     End Function
-   
+
     Sub New()
 
         mclsUtilization = Me
@@ -166,7 +180,7 @@ Public Class Utilization
             Log("Loading...")
 
             Try
-                If Not DatabaseExists("gridcoin_leaderboard") Then ReplicateDatabase("gridcoin_leaderboard")
+                ' If Not DatabaseExists("gridcoin_leaderboard") Then ReplicateDatabase("gridcoin_leaderboard")
             Catch ex As Exception
                 Log("New:" + ex.Message)
             End Try
@@ -203,7 +217,11 @@ Public Class Utilization
         Call RestartWallet1("reboot")
     End Sub
     Public Sub DownloadBlocks()
-        Call RestartWallet1("downloadblocks")
+        If mbTestNet Then
+            Call RestartWallet1("downloadblocks testnet")
+        Else
+            Call RestartWallet1("downloadblocks")
+        End If
     End Sub
     Public Sub ReindexWalletTestNet()
         Call RestartWallet1("reindextestnet")
@@ -244,16 +262,51 @@ Public Class Utilization
         fmVoting.Show()
     End Function
 
+    Public Function ShowForm(sFormName As String) As String
+        Try
+            Dim vFormName() As String
+            vFormName = Split(sFormName, ",")
+            Log("Showing " + sFormName)
+
+            If UBound(vFormName) > 0 Then
+                sFormName = vFormName(0)
+                msPayload = vFormName(1)
+                Log("Showing form with payload " + msPayload)
+
+            Else
+                msPayload = ""
+            End If
+
+            Dim sMyName As String = System.Reflection.Assembly.GetExecutingAssembly.GetName.Name
+            Dim obj As Object = Activator.CreateInstance(Type.GetType(sMyName + "." + sFormName))
+            obj.Show()
+            Return "1"
+        Catch ex As Exception
+            Log("Unable to show " + sFormName + " because of " + ex.Message)
+            Return "0"
+        End Try
+
+    End Function
+
     Public Function ShowNewUserWizard()
         Dim fNUW As New frmNewUserWizard
         fNUW.Show()
     End Function
-    Public Function ShowSql()
+    Public Function ShowConfig()
         Try
-            mfrmSql = New frmSQL
-            mfrmSql.Show()
+            mfrmConfig = New frmConfiguration
+            mfrmConfig.Show()
         Catch ex As Exception
-            Log("Error while transitioning to frmSQL" + ex.Message)
+            Log("Error while transitioning to frmConfig" + ex.Message)
+        End Try
+    End Function
+    Public Function ShowFAQ()
+        Try
+            mfrmFaq = New frmFAQ
+            mfrmFaq.show()
+
+        Catch ex As Exception
+            Log("Error:FAQ")
         End Try
     End Function
     Public Function ShowTicketAdd()
@@ -278,6 +331,7 @@ Public Class Utilization
 
     Public Function ShowTicketList()
         Try
+            mGRCData = New GRCSec.GridcoinData
             mfrmLogin = New frmLogin
             mfrmTicketList = New frmTicketList
             mfrmTicketList.Show()
@@ -407,18 +461,18 @@ Public Class Utilization
         End Try
     End Function
     Public Function ExplainMag(sCPID As String) As String
-        Log("Neural request for " + sCPID)
+        '  Log("Neural request for " + sCPID)
         If bMagsDoneLoading = False Then
             Log("This node is still syncing.")
             Return ""
         End If
         Dim sOut As String = ""
         sOut = ExplainNeuralNetworkMagnitudeByCPID(sCPID)
-        Log("Responding to neural request for " + sCPID + " " + sOut)
+        '  Log("Responding to neural request for " + sCPID + " " + sOut)
         Return sOut
     End Function
     Public Function ResolveDiscrepancies(sContract As String) As String
-        
+
         '7-25-2015 - Moving to QuorumHashingAlgorithm for this - disable this for the time being
 
         ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
@@ -462,6 +516,10 @@ Public Class Utilization
         StoreTestMagnitude()
 
     End Function
+    Public Function TestPDS()
+        TestPDS1()
+
+    End Function
     Public Function SyncCPIDsWithDPORNodes(sData As String) As Double
         'Write the Gridcoin CPIDs to the Persisted Data System
         Try
@@ -477,14 +535,17 @@ Public Class Utilization
 
     End Function
     Public Sub UpdateMagnitudesOnly()
+        EnsureNNDirExists()
+        mbForcefullySyncAllRac = True
+        ResetCPIDsForManualSync()
         Call UpdateMagnitudes()
     End Sub
     Public Sub AddressUserThread()
 
         Try
-
-        Dim s As New SpeechSynthesis
-        s.AddressUserBySurname(mlSpeakMagnitude)
+            Log("Speaking " + Trim(mlSpeakMagnitude))
+            Dim s As New SpeechSynthesis
+            s.AddressUserBySurname(mlSpeakMagnitude)
         Catch ex As Exception
             Log("Unable to initialize speech")
         End Try
@@ -492,7 +553,7 @@ Public Class Utilization
     End Sub
     Public Function AddressUser(sMagnitude As String) As Double
         Dim t As New Threading.Thread(AddressOf AddressUserThread)
-        mlSpeakMagnitude = Val(sMagnitude)
+        mlSpeakMagnitude = Val("0" + Trim(sMagnitude))
         t.Start()
 
         Return 1
@@ -545,7 +606,7 @@ Public Class Utilization
 
 End Class
 
-Public Interface IGridCoinMining
+Public Interface IGridcoinMining
 
    
 End Interface

@@ -4,7 +4,9 @@ Imports ICSharpCode.SharpZipLib.Zip
 Imports ICSharpCode.SharpZipLib.Core
 
 Public Class GridcoinUpgrader
-
+    Public oGRCData As GRCSec.GridcoinData
+    Public oGRCSec As GRCSec.GRCSec
+    Public iErrorCount As Long = 0
     Private bDebug As Boolean = False
     Private prodURL As String = "http://download.gridcoin.us/download/downloadstake/"
     Private testURL As String = "http://download.gridcoin.us/download/downloadstaketestnet/"
@@ -86,11 +88,21 @@ Public Class GridcoinUpgrader
     Private Sub Form1_Load(ByVal sender As Object, ByVal e As System.EventArgs) Handles Me.Load
         lblPercent.Text = ""
 
+        Try
+            oGRCData = New GRCSec.GridcoinData
+            oGRCSec = New GRCSec.GRCSec
+
+        Catch ex As Exception
+            MsgBox("Initialization failed.  Upgrade Failed.  Please delete *.config and *.manifest files in your application directory.  This must be done by the user.  Then restart with 'grcrestarter upgrade'.  ", MsgBoxStyle.Critical)
+            End
+        End Try
+        If Environment.CommandLine.Contains("testnet") Then
+            bTestNet = True
+        End If
+
+
         '''''''''''''''''''''RESTORE SNAPSHOT
         If Environment.GetCommandLineArgs.Length > 0 Then
-            If Environment.CommandLine.Contains("testnet") Then
-                bTestNet = True
-            End If
             If Environment.CommandLine.Contains("restoresnapshot") Then
                 Try
                     KillProcess("gridcoinresearch*")
@@ -226,6 +238,7 @@ Public Class GridcoinUpgrader
         End If
         If Environment.CommandLine.Contains("upgrade") Then
             Try
+                DeleteManifest()
 
                 ProgressBar1.Maximum = 1000
                 ProgressBar1.Value = 1
@@ -233,13 +246,14 @@ Public Class GridcoinUpgrader
                 txtStatus.Text = "Waiting for Gridcoin Wallet to exit..."
                 RefreshScreen()
                 BusyWaitLoop("gridcoinresearch*", 9, True)
-                For x = 1 To 20
+                For x = 1 To 9
                     If IsRunning("gridcoinresearch*") Then
                         KillProcess("gridcoinresearch*")
+                        System.Threading.Thread.Sleep(1000)
                     Else
                         Exit For
                     End If
-                    System.Threading.Thread.Sleep(1000)
+                    System.Threading.Thread.Sleep(50)
                 Next
                 'Test permissions in target folder first
                 Try
@@ -253,13 +267,21 @@ Public Class GridcoinUpgrader
                 End Try
                 'Upgrade the wallet before continuing
                 Dim sMsg As String = DynamicUpgradeWithManifest()
+                If sMsg = "FAIL" Then
+                    End
+                End If
                 If Len(sMsg) > 0 Then
                     MsgBox("Upgrade Failed. " + sMsg, MsgBoxStyle.Critical)
-                    Environment.Exit(0)
+                    End
                 End If
                 txtStatus.Text = "Upgrade Successful."
                 For x = ProgressBar1.Value To ProgressBar1.Maximum
-                    ProgressBar1.Value = x
+                    Try
+                        ProgressBar1.Value = x
+
+                    Catch ex As Exception
+
+                    End Try
                     RefreshScreen()
                 Next
                 StartGridcoin()
@@ -510,10 +532,9 @@ Public Class GridcoinUpgrader
         End Try
         mbFinished = True
     End Sub
-    Private Sub DownloadFile(ByVal sFile As String, Optional sServerFolder As String = "")
+    Private Sub xDownloadFile(ByVal sFile As String, Optional sServerFolder As String = "")
         Dim sLocalPath As String = GetGRCAppDir()
         Dim sLocalFile As String = sFile
-        If LCase(sLocalFile) = "grcrestarter.exe" Then sLocalFile = "grcrestarter_copy.exe"
         Dim sLocalPathFile As String = sLocalPath + "\" + sLocalFile
         txtStatus.Text = "Upgrading file " + sFile + "..."
         Try
@@ -555,66 +576,7 @@ Public Class GridcoinUpgrader
         b = System.Convert.FromBase64String(value)
         System.IO.File.WriteAllBytes(sFilePath, b)
     End Sub
-    Public Function NeedsUpgrade() As Boolean
-        Try
-            Dim sMsg As String
-            Dim sURL As String = GetURL()
-            Dim w As New MyWebClient
-            Dim sFiles As String
-            sFiles = w.DownloadString(sURL)
-            Dim vFiles() As String = Split(sFiles, "<br>")
-            If UBound(vFiles) < 10 Then
-                Return False
-            End If
-            sMsg = ""
-            For iRow As Integer = 0 To UBound(vFiles)
-                Dim sRow As String = vFiles(iRow)
-                Dim sFile As String = ExtractFilename("<a", "</a>", sRow, 5)
-                If Len(sFile) > 1 Then
-                    If sFile = "boinc.dll" Then
-                        Dim sDT As String
-                        sDT = Mid(sRow, 1, 20)
-                        sDT = Trim(sDT)
-                        Dim dDt As DateTime
-                        dDt = ParseDate(Trim(sDT))
-                        dDt = TimeZoneInfo.ConvertTime(dDt, System.TimeZoneInfo.Utc)
-                        'Hosting server is PST, so subtract Utc - 7 to achieve PST:
-                        dDt = DateAdd(DateInterval.Hour, -24, dDt)
-                        'local file time
-                        Dim sLocalPath As String = GetGRCAppDir()
-                        Dim sLocalFile As String = sFile
-                        If LCase(sLocalFile) = "grcrestarter.exe" Then sLocalFile = "grcrestarter_copy.exe"
-                        Dim sLocalPathFile As String = sLocalPath + "\" + sLocalFile
-                        'R Halford - 6/7/2014 - ToDo: Store release datetime in UTC in a specific place on web server instead of relying on web host PST -> UTC conversion
-                        'Move to file version instead
-                        '   FileVersionInfo.GetVersionInfo()
-                        '   Dim myFileVersionInfo As FileVersionInfo = FileVersionInfo.GetVersionInfo(Environment.SystemDirectory + "\exe")
-                        Dim dtLocal As DateTime
-                        Try
-                            dtLocal = System.IO.File.GetLastWriteTime(sLocalPathFile)
-                            dtLocal = TimeZoneInfo.ConvertTime(dtLocal, System.TimeZoneInfo.Utc)
-                            Log("Gridcoin.us boinc.dll timestamp (UTC) : " + Trim(dDt) + ", VS : Local boinc.dll timestamp (UTC) : " + Trim(dtLocal))
-                            If dDt < dtLocal Then
-                                Log("Not upgrading.")
-                            End If
-
-                        Catch ex As Exception
-                            Return False
-                        End Try
-                        If dDt > dtLocal Then
-                            Log("Upgrading")
-                            Return True
-                        End If
-
-                    End If
-                End If
-            Next iRow
-        Catch ex As Exception
-            Return False
-        End Try
-        Return False
-    End Function
-
+    
     Public Function GetWebFileSize(sName As String, sDir As String) As Long
         Try
             Dim sMsg As String
@@ -664,50 +626,167 @@ Public Class GridcoinUpgrader
         End If
         Return CDate("1-1-2031")
     End Function
-    Public Sub Log(sData As String)
-        Try
-            Dim sPath As String
-            sPath = "grcrestarter.log"
-            Dim sw As New System.IO.StreamWriter(sPath, True)
-            sw.WriteLine(Trim(Now) + ", " + sData)
-            sw.Close()
-        Catch ex As Exception
-        End Try
-    End Sub
+   
     Public Function DynamicUpgradeWithManifest() As String
         Dim sMsg As String = ""
+        Dim iRow As Long = 1
+        Dim dr As SqlClient.SqlDataReader
+        Dim bCleanIteration As Boolean = True
+        Dim iIterationErrorCount As Long = 0
         For iTry As Long = 1 To 5
-            Dim sURL As String = GetURL()
-            Dim w As New MyWebClient
-            Dim sFiles As String
-            sFiles = w.DownloadString(sURL)
-            Dim vFiles() As String = Split(sFiles, "<br>")
-            ProgressBar1.Maximum = vFiles.Length + 1
-            If UBound(vFiles) < 10 Then Return "No mirror found, unable to upgrade."
-            sMsg = ""
-            ProgressBar1.Maximum = UBound(vFiles) + 1
-            For iRow As Integer = 0 To UBound(vFiles)
-                Dim sRow As String = vFiles(iRow)
-                ProgressBar1.Value = iRow
-                ProgressBar1.Update() : ProgressBar1.Refresh() : Me.Refresh() : Application.DoEvents()
-                RefreshScreen()
-                Dim sFile As String = ExtractFilename("<a", "</a>", sRow, 5)
-                If Len(sFile) > 1 Then
-                    txtStatus.Text = "Upgrading " + sFile + "..."
-                    txtStatus.Width = Me.Width
-                    txtStatus.Refresh()
-                    txtStatus.Update()
-                    Application.DoEvents()
-                    Try
-                        DownloadFile(sFile)
-                    Catch ex As Exception
-                        sMsg = sMsg + ex.Message + ".    "
-                    End Try
+            bCleanIteration = True
+            Try
+                dr = oGRCData.mGetUpgradeFiles
+
+                If dr Is Nothing Then
+                    Dim sNarr As String = "Unable to retrieve upgrade files from Azure cluster.  Try to open port 1433."
+                    Log(sNarr)
+                    MsgBox(sNarr)
                 End If
-            Next iRow
-            If sMsg = "" Then Exit For
+                If dr.HasRows = False Then
+                    MsgBox("Upgrade failed; No files stored in Gridcoin Research mirror.", MsgBoxStyle.Critical)
+                    Return "FAIL"
+                End If
+                Dim sLocalPath As String = GetGRCAppDir() + "\"
+                ProgressBar1.Maximum = 50
+                Do While dr.Read
+                    iRow += 1
+                    If iRow > ProgressBar1.Maximum - 1 Then ProgressBar1.Maximum += 1
+                    Dim sFile As String = dr("filename")
+                    If Not ExcludedFiles(sFile) Then
+                        'Get local hash
+                        Dim sLocalHash As String = GetMd5OfFile(sLocalPath + sFile)
+                        Dim sRemoteHash As String = dr("Hash")
+                        Dim bNeedsUpgraded As Boolean = sLocalHash <> sRemoteHash
+                        Dim iSignatureOK As Integer = oGRCSec.IsHashAuthentic(sRemoteHash, dr("SecurityHash"), dr("PublicKey"))
+                        UpdateUI(iRow, sFile, dr("comments"), True, False)
+
+                        If bNeedsUpgraded And iSignatureOK = 0 Then
+                            UpdateUI(iRow, sFile, dr("comments"), True, True)
+                            If LCase(sFile) = "grcrestarter.exe" Then sFile = "grcrestarter_copy.exe"
+                            If LCase(sFile) = "grcsec.dll" Then
+                                If File.Exists(sLocalPath + sFile) Then
+                                    If File.Exists(sLocalPath + "grcsec_old.dll") Then Kill(sLocalPath + "grcsec_old.dll")
+                                    Rename(sLocalPath + sFile, "grcsec_old.dll")
+                                End If
+                            End If
+
+                            Try
+                                mRetrieveUpgrade(oGRCData, dr("id").ToString(), sLocalPath, sFile, MerkleRoot)
+
+                            Catch ex As Exception
+                                Log("Error retrieving blob " + Trim(dr("id").ToString()) + " for " + sFile + ".")
+
+                            End Try
+                            Application.DoEvents()
+                            Threading.Thread.Sleep(20) 'Wait until file is closed (this is supposedly synchronous, but some users must have a delayed write)
+                            Application.DoEvents()
+
+                            'Verify the downloaded blob matches record hash
+                            Dim sVerifiedHash As String = GetMd5OfFile(sLocalPath + sFile)
+                            Dim sNarr As String = "Remote hash " + sRemoteHash + ", Downloaded hash " + sVerifiedHash + ", Download path : " + sLocalPath + sFile + "."
+
+                            If sVerifiedHash <> sRemoteHash Then
+                                Threading.Thread.Sleep(4000)
+                                Dim sVerified2 As String = GetMd5OfFile(sLocalPath + sFile)
+                                If Not Command() Like "*nodelete*" Then
+                                    If File.Exists(sLocalPath + sFile) Then Kill(sLocalPath + sFile)
+                                End If
+
+                                Dim sLongNarr As String = "Downloaded File " + sFile + " security hash does not match signed remote hash.  " + sNarr + ".  After four seconds, hash of file is : " + sVerified2 + ", Discarding File.  Upgrade failed.  Please report this to Gridcoin: contact@gridcoin.us"
+                                Log(sLongNarr)
+                                MsgBox(sLongNarr, MsgBoxStyle.Critical)
+                                Return "-9"
+                            End If
+                        End If
+                        If iSignatureOK <> 0 Then
+                            Dim sNarr As String = "Remote hash " + sRemoteHash + ", Security Hash " + dr("SecurityHash") + ",Download path : " + sLocalPath + sFile + "."
+                            Dim sLongNarr As String = "File " + sFile + " signature invalid!  " + sNarr + ", Please report this to Gridcoin immediately: contact@gridcoin.us"
+                            Log(sLongNarr)
+                            MsgBox(sLongNarr, MsgBoxStyle.Critical)
+                            Return "-8"
+                        End If
+                        Threading.Thread.Sleep(30)
+                    End If
+                Loop
+            Catch ex As Exception
+                iErrorCount += 1 : iIterationErrorCount += 1
+                If bCleanIteration Then MsgBox("Error -11: " + ex.Message + "; Retrying " + Trim(5 - iIterationErrorCount) + " more times before failing.")
+                bCleanIteration = False
+            End Try
+            If bCleanIteration Then Exit For
         Next iTry
-        Return sMsg
+        If bCleanIteration Then
+            UpdateUI(50, "Success.", "Success", False, False)
+            Threading.Thread.Sleep(1000)
+        Else
+            Return "FAIL"
+        End If
+        Return ""
+    End Function
+    Public Sub DeleteManifest()
+        'Manifest files cause an error when downloading from the cluster... try to delete first
+        Dim sPath As String = GetGRCAppDir() + "\"
+        DelFile(sPath + "grcrestarter.exe.config")
+
+        DelFile(sPath + "grcrestarter.config")
+        DelFile(sPath + "grcrestarter.vshost.exe.config")
+        DelFile(sPath + "grcrestarter.exe.manifest")
+        DelFile(sPath + "grcrestarter.vshost.exe.manifest")
+
+        DelFile(sPath + "grcrestarter.manifest")
+        Try
+            Rename(sPath + "grcrestarter.config", sPath + "grcrestarter.confold")
+
+        Catch ex As Exception
+
+        End Try
+        Try
+            Rename(sPath + "grcrestarter.exe.config", sPath + "grcrestarter.execonfold")
+
+        Catch ex As Exception
+
+        End Try
+    End Sub
+    Public Sub DelFile(sFN As String)
+        Try
+            Kill(sFN)
+        Catch ex As Exception
+
+        End Try
+    End Sub
+    Public Function ExcludedFiles(sFN As String) As Boolean
+        Dim sExt As String
+        sExt = LCase(Mid(sFN, Len(sFN) - 2, 3))
+        sFN = LCase(sFN)
+        Dim bExcluded As Boolean = False
+        If sExt = "pdf" Or sExt = "msi" Or sExt = "pdb" Or sExt = "xml" Or sFN.Contains("vshost") _
+             Or sExt = "cpp" Or sFN = "web.config" Then bExcluded = True
+        If sFN = "gridcoin.zip" Then bExcluded = True 'The legacy gridcoin.zip is a separate download
+        If sFN = "gridcoinrdtestharness.exe.exe" Or sFN = "gridcoinrdtestharness.exe" Then bExcluded = True
+        If sFN = "cgminer_base64.zip" Then bExcluded = True
+        If sFN = "setup.exe" Or sFN = "gridcoinresearch.msi" Then bExcluded = True
+        If InStr(1, sFN, "libstdc") > 0 Then bExcluded = True
+        If sFN = "bitcoin.png" Or sFN = "bitcoin.ico" Then bExcluded = True
+        If sFN = "qrc_bitcoin.cpp" Then bExcluded = True
+
+        Return bExcluded
+
+    End Function
+    Public Function UpdateUI(iRow As Long, sFN As String, sComments As String, bShowComments As Boolean, bUpgrading As Boolean)
+        If iRow > ProgressBar1.Minimum And iRow <= ProgressBar1.Maximum Then ProgressBar1.Value = iRow
+        ProgressBar1.Update() : ProgressBar1.Refresh() : Me.Refresh() : Application.DoEvents() : RefreshScreen()
+        If Len(sFN) > 1 Then
+            Dim sPrefix As String = IIf(bUpgrading, "Upgrading", "Verifying")
+            If LCase(sFN) = "success" Then sPrefix = ""
+            txtStatus.Text = sPrefix + " " + sFN + "..."
+            txtStatus.Width = Me.Width
+            txtStatus.Refresh() : txtStatus.Update() : Application.DoEvents()
+        End If
+        If bShowComments Then rtbNotes.Text = sComments
+        Threading.Thread.Sleep(200)
+        Application.DoEvents()
+
     End Function
     Public Function ExtractFilename(ByVal sStartElement As String, ByVal sEndElement As String, ByVal sData As String, ByVal minOutLength As Integer) As String
         Try
@@ -750,6 +829,8 @@ Public Class GridcoinUpgrader
         End Try
     End Function
     Public Sub UpgradeGrcRestarter(sParams As String)
+        Try
+
         Dim p As Process = New Process()
         Dim pi As ProcessStartInfo = New ProcessStartInfo()
         pi.WorkingDirectory = GetGRCAppDir()
@@ -757,13 +838,18 @@ Public Class GridcoinUpgrader
         pi.Arguments = sParams
         pi.FileName = Trim("GRCRestarter_copy.exe")
         p.StartInfo = pi
-        p.Start()
+            p.Start()
+        Catch ex As Exception
+
+        End Try
+
     End Sub
     Private Sub TimerUE_Tick(sender As System.Object, e As System.EventArgs) Handles TimerUE.Tick
         ProgressBar1.Maximum = ProgressBar1.Maximum + 1
         Dim v As Long = ProgressBar1.Value
         If v > ProgressBar1.Maximum Then v = ProgressBar1.Maximum
-        ProgressBar1.Value = v
+        If v < ProgressBar1.Maximum And v > ProgressBar1.Minimum Then ProgressBar1.Value = v
+
         RefreshScreen()
     End Sub
 End Class

@@ -32,7 +32,7 @@ Public Class frmVoting
         If Len(sVoting) = 0 Then Exit Sub
 
         'List the active polls in windows
-        Dim sHeading As String = "#;Title;Expiration;Share Type;Question;Answers;Total Participants;Total Shares;Best Answer"
+        Dim sHeading As String = "#;Title;Expiration;Share Type;Question;Answers;Total Participants;Total Shares;URL;Best Answer"
         dgv.Rows.Clear()
         dgv.Columns.Clear()
         dgv.SelectionMode = DataGridViewSelectionMode.FullRowSelect
@@ -55,6 +55,8 @@ Public Class frmVoting
             Dim sExpiration As String = ExtractXML(vPolls(y), "<EXPIRATION>")
             Dim sShareType As String = ExtractXML(vPolls(y), "<SHARETYPE>")
             Dim sQuestion As String = ExtractXML(vPolls(y), "<QUESTION>")
+            Dim sURL As String = ExtractXML(vPolls(y), "<URL>")
+
             Dim sAnswers As String = ExtractXML(vPolls(y), "<ANSWERS>")
             Dim bHide As Boolean = False
             Dim sId As String = GetFoundationGuid(sTitle)
@@ -89,7 +91,8 @@ Public Class frmVoting
                     dgv.Rows(iRow).Cells(5).Value = sAnswers
                     dgv.Rows(iRow).Cells(6).Value = sTotalParticipants
                     dgv.Rows(iRow).Cells(7).Value = sTotalShares
-                    dgv.Rows(iRow).Cells(8).Value = sBestAnswer
+                    dgv.Rows(iRow).Cells(8).Value = sURL
+                    dgv.Rows(iRow).Cells(9).Value = sBestAnswer
                     iRow += 1
                 End If
             End If
@@ -167,6 +170,39 @@ Public Class frmVoting
     End Sub
 
     Private Sub dgv_CellContentClick(sender As System.Object, e As System.Windows.Forms.DataGridViewCellEventArgs) Handles dgv.CellContentClick
+        If e.ColumnIndex = 8 Then
+            Process.Start(dgv.Rows(e.RowIndex).Cells(e.ColumnIndex).Value)
+
+        End If
+
+    End Sub
+
+    Private Sub dgv_CellMouseEnter(sender As Object, e As System.Windows.Forms.DataGridViewCellEventArgs) Handles dgv.CellMouseEnter
+
+    End Sub
+
+    Private Sub dgv_CellMouseMove(sender As Object, e As System.Windows.Forms.DataGridViewCellMouseEventArgs) Handles dgv.CellMouseMove
+        If e.ColumnIndex = 8 Then
+            Me.Cursor = Cursors.Hand
+            Try
+                dgv.Rows(e.RowIndex).Cells(e.ColumnIndex).Style.BackColor = Drawing.Color.LightPink
+
+            Catch ex As Exception
+
+            End Try
+            
+        Else
+            Me.Cursor = Cursors.Default
+            Try
+                dgv.Rows(e.RowIndex).Cells(e.ColumnIndex).Style.BackColor = Drawing.Color.Black
+
+
+            Catch ex As Exception
+
+            End Try
+            
+
+        End If
 
     End Sub
 End Class

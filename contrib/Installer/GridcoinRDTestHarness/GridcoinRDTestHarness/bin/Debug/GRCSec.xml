@@ -19,6 +19,11 @@ GRCSec
 	<summary>
   A strongly-typed resource class, for looking up localized strings, etc.
 </summary>
+</member><member name="T:GRCSec.GridcoinData">
+	<summary>
+ ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+ </summary>
+	<remarks></remarks>
 </member>
 </members>
 </doc>

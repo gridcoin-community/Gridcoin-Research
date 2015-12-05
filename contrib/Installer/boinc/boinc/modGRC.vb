@@ -19,6 +19,7 @@ Module modGRC
     End Structure
     Private prodURL As String = "http://download.gridcoin.us/download/downloadstake/"
     Private testURL As String = "http://download.gridcoin.us/download/downloadstaketestnet/"
+    Public mRowIndex As Long = 0
 
     Public msGenericDictionary As New Dictionary(Of String, String)
     Public msRPCCommand As String = ""
@@ -27,6 +28,9 @@ Module modGRC
     Public mfrmMining As frmMining
     Public mfrmProjects As frmNewUserWizard
     Public mfrmSql As frmSQL
+    Public mfrmFAQ As frmFAQ
+    Public mfrmConfig As frmConfiguration
+
     Public mfrmTicketAdd As frmTicketAdd
     Public mfrmFoundation As frmFoundation
 
@@ -52,11 +56,35 @@ Module modGRC
         If Len(Trim(sId)) <> 36 Then Return ""
         Return sId
     End Function
+    Public Function NeedsUpgrade() As Boolean
+        Try
+            Dim sLocalPath As String = GetGRCAppDir() + "\"
+            Dim dr As SqlClient.SqlDataReader
+            Dim oGrcData As New GRCSec.GridcoinData
+            dr = oGrcData.mGetUpgradeFiles
+            Dim bNeedsUpgraded As Boolean = False
+            Do While dr.Read
+                Dim sFile As String = LCase("" & dr("filename"))
+                If sFile Like "*gridcoinresearch.exe*" Or sFile Like "*boincstake.dll*" Then
+                    'Get local hash
+                    Dim sLocalHash As String = GetMd5OfFile(sLocalPath + sFile)
+                    Dim sRemoteHash As String = dr("Hash")
+                    Dim bNeeds As Boolean = sLocalHash <> sRemoteHash
+                    If bNeeds Then bNeedsUpgraded = True
+                End If
+            Loop
+            Return bNeedsUpgraded
+        Catch ex As Exception
+            Return False
+        End Try
+    End Function
 
-    Public Function ExecuteRPCCommand(sCommand As String, sArg1 As String, sArg2 As String, sArg3 As String, sArg4 As String, sArg5 As String) As String
+    Public Function ExecuteRPCCommand(sCommand As String, sArg1 As String, sArg2 As String, sArg3 As String, sArg4 As String, sArg5 As String, sURL As String) As String
         Dim sReply As String = ""
         Try
             Dim sPayload As String = "<COMMAND>" + sCommand + "</COMMAND><ARG1>" + sArg1 + "</ARG1><ARG2>" + sArg2 + "</ARG2><ARG3>" + sArg3 + "</ARG3><ARG4>" + sArg4 + "</ARG4><ARG5>" + sArg5 + "</ARG5>"
+            If sCommand = "addpoll" Then sPayload += "<URL>" + sURL + "</URL>"
+
             SetRPCReply("")
             msRPCReply = ""
             msRPCCommand = sPayload
@@ -74,6 +102,25 @@ Module modGRC
             Return "Unable to execute vote, " + ex.Message
         End Try
     End Function
+    Public Sub AddHeading(iPosition As Integer, sName As String, oDGV As DataGridView, bAutoFit As Boolean)
+
+        Dim dc As New System.Windows.Forms.DataGridViewColumn
+        dc.Name = sName
+        Dim dgvct As New System.Windows.Forms.DataGridViewTextBoxCell
+        dgvct.Style.BackColor = Drawing.Color.Black
+        dgvct.Style.ForeColor = Drawing.Color.Lime
+        dc.CellTemplate = dgvct
+        oDGV.Columns.Add(dc)
+
+        Dim dgcc As New DataGridViewCellStyle
+        dgcc.ForeColor = System.Drawing.Color.SandyBrown
+        oDGV.ColumnHeadersDefaultCellStyle = dgcc
+
+        oDGV.Columns(iPosition).AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells
+        oDGV.Columns(iPosition).SortMode = DataGridViewColumnSortMode.Automatic
+
+    End Sub
+
     Public Sub PopulateHeadings(vHeading() As String, oDGV As DataGridView, bAutoFit As Boolean)
 
         For x = 0 To UBound(vHeading)
@@ -639,7 +686,6 @@ Module modGRC
         pi.WorkingDirectory = GetGRCAppDir()
         pi.UseShellExecute = True
         Log("Restarting wallet with params " + sParams)
-
         pi.Arguments = sParams
         pi.FileName = Trim("GRCRestarter.exe")
         p.StartInfo = pi
@@ -648,6 +694,7 @@ Module modGRC
     Public Function ConfigPath() As String
         Dim sFolder As String
         sFolder = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\gridcoinresearch"
+        If mbTestNet Then sFolder += "\testnet"
         Dim sPath As String
         sPath = sFolder + "\gridcoinresearch.conf"
         Return sPath
@@ -887,86 +934,19 @@ Module modGRC
 
     End Function
 
-    Public Function NeedsUpgrade() As Boolean
+    Public Function GlobalCDate(sDate As String) As DateTime
         Try
 
-            Dim sMsg As String
-            Dim sURL As String = "http://download.gridcoin.us/download/downloadstake/"
-
-            Dim w As New MyWebClient
-            Dim sFiles As String
-            sFiles = w.DownloadString(sURL)
-            Dim vFiles() As String = Split(sFiles, "<br>")
-            If UBound(vFiles) < 10 Then
-                Return False
-            End If
-
-            sMsg = ""
-            For iRow As Integer = 0 To UBound(vFiles)
-                Dim sRow As String = vFiles(iRow)
-                Dim sFile As String = ExtractFilename("<a", "</a>", sRow, 5)
-                If Len(sFile) > 1 Then
-                    If sFile = "boincstake.dll" Then
-                        Dim sDT As String
-                        sDT = Mid(sRow, 1, 20)
-                        sDT = Trim(sDT)
-
-                        Dim dDt As DateTime
-                        dDt = ParseDate(Trim(sDT))
-                        'dDt = CDate(sDT)
-                        Dim PSTTimeZoneInfo As TimeZoneInfo
-                        'Server is in PST Time Zone
-                        PSTTimeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById("Pacific SA Standard Time")
-
-                        'dDt = TimeZoneInfo.ConvertTime(dDt, System.TimeZoneInfo.Utc)
-                        dDt = TimeZoneInfo.ConvertTime(dDt, PSTTimeZoneInfo)
-                        dDt = DateAdd(DateInterval.Hour, -2, dDt)
-                        'This value is Not correct
-                        Log("Gridcoin.us boincstake.dll timestamp in PST : " + DateStamp(dDt))
-
-                        'Now we have boincstake.dll timestamp in PST, convert to UTC
-                        dDt = TimeZoneInfo.ConvertTime(dDt, System.TimeZoneInfo.Utc)
-                        'This value is correct in Germany
-                        Log("Gridcoin.us boincstake.dll timestamp in UTC : " + DateStamp(dDt))
-
-
-                        'Pad time by 15 mins to delay the auto upgrade
-                        dDt = DateAdd(DateInterval.Minute, -15, dDt)
-
-                        'local file time
-                        Dim sLocalPath As String = GetGRCAppDir()
-                        Dim sLocalFile As String = sFile
-                        If LCase(sLocalFile) = "grcrestarter.exe" Then sLocalFile = "grcrestarter_copy.exe"
-                        Dim sLocalPathFile As String = sLocalPath + "\" + sLocalFile
-                        Dim dtLocal As DateTime
-                        Try
-                            dtLocal = System.IO.File.GetLastWriteTime(sLocalPathFile)
-                            dtLocal = TimeZoneInfo.ConvertTime(dtLocal, System.TimeZoneInfo.Utc)
-                            Log("Gridcoin.us boincstake.dll timestamp (UTC) : " + DateStamp(dDt) _
-                                + ", VS : Local boincstake.dll timestamp (UTC) : " + DateStamp(dtLocal))
-                            If dDt < dtLocal Then
-                                Log("Not upgrading.")
-                            End If
-
-                        Catch ex As Exception
-                            Return False
-                        End Try
-                        If dDt > dtLocal Then
-                            Log("Client needs upgrade.")
-
-                            Return True
-                        End If
-
-                    End If
-                End If
-            Next iRow
+            Dim year As Long = Val(Mid(sDate, 7, 4))
+            Dim day As Long = Val(Mid(sDate, 4, 2))
+            Dim m As Long = Val(Mid(sDate, 1, 2))
+            Dim dt As DateTime = DateSerial(year, m, day)
+            Return dt
         Catch ex As Exception
-            Return False
-
+            Return CDate(Format(sDate, "mm-dd-yyyy"))
         End Try
+
     End Function
-
-
 
     Public Function AES512EncryptData(b() As Byte, Pass As String) As Byte()
         Try
@@ -1076,4 +1056,53 @@ Public Class MyWebClient
     End Function
 End Class
 
+
+Namespace GridcoinRichUI
+    Public Class DataGridViewRichTextBoxColumn
+        Inherits DataGridViewColumn
+        Public Sub New()
+
+            MyBase.New(New DataGridViewRichTextBoxCell())
+        End Sub
+    End Class
+
+    Public Class DataGridViewRichTextBoxCell
+        Inherits DataGridViewTextBoxCell
+
+        Public Overrides ReadOnly Property FormattedValueType() As Type
+            Get
+                Return GetType(String)
+            End Get
+        End Property
+
+        Protected Overrides Sub Paint(graphics As Graphics, clipBounds As Rectangle, cellBounds As Rectangle, _
+                                      rowIndex As Integer, cellState As DataGridViewElementStates, value As Object, _
+         formattedValue As Object, errorText As String, cellStyle As DataGridViewCellStyle, _
+         advancedBorderStyle As DataGridViewAdvancedBorderStyle, paintParts As DataGridViewPaintParts)
+            MyBase.Paint(graphics, clipBounds, cellBounds, rowIndex, cellState, Nothing, _
+             Nothing, errorText, cellStyle, advancedBorderStyle, paintParts)
+            Dim rtb = New RichTextBox()
+
+            'rtb.BackColor = Color.Black
+            'rtb.ForeColor = Color.LimeGreen
+
+            If value.ToString().StartsWith("{\rtf") Then
+                rtb.Rtf = value.ToString()
+            Else
+                rtb.Text = value.ToString()
+            End If
+            Dim b As System.Drawing.Brush
+            If rowIndex = mRowIndex Then
+                b = Brushes.Yellow
+            Else
+                b = Brushes.Yellow
+            End If
+            If rtb.Text <> String.Empty Then
+                ' graphics.DrawString(rtb.Text, DataGridView.DefaultFont, Brushes.LimeGreen, cellBounds.Left, cellBounds.Top)
+                graphics.DrawString(rtb.Text, DataGridView.DefaultFont, b, cellBounds.Left, cellBounds.Top)
+
+            End If
+        End Sub
+    End Class
+End Namespace
 

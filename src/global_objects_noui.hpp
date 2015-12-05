@@ -27,6 +27,11 @@ extern volatile bool bCheckedForUpgradeLive;
 extern volatile bool bGlobalcomInitialized;
 extern volatile bool bAllowBackToBack;
 extern volatile bool CreatingCPUBlock;
+extern volatile bool bStakeMinerOutOfSyncWithNetwork;
+extern volatile bool bDoTally;
+extern volatile bool bExecuteGridcoinServices;
+extern volatile bool bTallyFinished;
+extern volatile bool bGridcoinGUILoaded;
 
 extern volatile double nGlobalHashCounter;
 
@@ -85,6 +90,8 @@ extern int miningthreadcount;
 		double NetworkMagnitude;
 		double NetworkAvgMagnitude;
 		double NetsoftRAC;
+		double GRCQuote;
+		double BTCQuote;
 		double Canary;
 		std::string cpid;
 		std::string emailhash;
@@ -104,7 +111,7 @@ extern int miningthreadcount;
 		std::string PaymentAmountsBlocks;
 		std::string BlockHash;
 		std::string GRCAddress;
-		
+		std::string LastPORBlockHash;
 	};
 
 
@@ -155,6 +162,8 @@ extern int miningthreadcount;
 		double ResearchMagnitudeUnit;
 		double ResearchAverageMagnitude;
 		double InterestSubsidy;
+		double GRCQuote;
+		double BTCQuote;
 		int prevBlockType;
 		double Canary;
 		
@@ -176,7 +185,7 @@ extern int miningthreadcount;
 		std::string OrganizationKey;
 		std::string NeuralHash;
 		std::string superblock;
-
+		std::string LastPORBlockHash;
 	};
 
 	
@@ -195,8 +204,14 @@ extern std::map<std::string, StructCPID> mvCPIDs;
 extern std::map<std::string, StructCPID> mvCreditNode;
 //Network Averages
 extern std::map<std::string, StructCPID> mvNetwork;
+extern std::map<std::string, StructCPID> mvNetworkCopy;
+
 extern std::map<std::string, StructCPID> mvNetworkCPIDs;
+
 extern std::map<std::string, StructCPID> mvMagnitudes;
+extern std::map<std::string, StructCPID> mvMagnitudesCopy;
+
+
 extern std::map<std::string, StructCPID> mvCreditNodeCPIDProject; //Contains verified CPID+Projects;
 extern std::map<std::string, StructCPID> mvCreditNodeCPID;  //Contains verified CPID total Magnitude;
 //Caches

@@ -75,6 +75,7 @@
 #include <QDragEnterEvent>
 #include <QUrl>
 #include <QStyle>
+#include <QNetworkInterface>
 
 #include <boost/lexical_cast.hpp>
 
@@ -97,14 +98,13 @@ extern void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, do
 extern void qtSyncWithDPORNodes(std::string data);
 extern double qtExecuteGenericFunction(std::string function,std::string data);
 std::string GetArgument(std::string arg, std::string defaultvalue);
+extern std::string getMacAddress();
 
 extern std::string FromQString(QString qs);
 extern std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
 
-
 std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2);
 std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5);
-
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 
 extern std::string qtGetNeuralHash(std::string data);
@@ -113,7 +113,6 @@ extern std::string qtGetNeuralContract(std::string data);
 json_spirit::Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool bIncludeExpired);
 
 extern int64_t IsNeural();
-void TallyInBackground();
 
 double cdbl(std::string s, int place);
 std::string getfilecontents(std::string filename);
@@ -139,7 +138,7 @@ void ThreadCPIDs();
 int Races(int iMax1000);
 std::string GetGlobalStatus();
 std::string GetHttpPage(std::string cpid);
-bool TallyNetworkAverages(bool ColdBoot);
+
 void LoadCPIDsInBackground();
 void InitializeCPIDs();
 void RestartGridcoinMiner();
@@ -363,7 +362,7 @@ int ReindexWallet()
 			if (!fTestNet)
 			{
 #ifdef WIN32
-			
+
 				globalcom->dynamicCall("ReindexWallet()");
 #endif
 			}
@@ -382,7 +381,7 @@ int ReindexWallet()
 int CreateRestorePoint()
 {
 			if (!bGlobalcomInitialized) return 0;
-	
+
 			QString sFilename = "GRCRestarter.exe";
 			QString sArgument = "";
 			QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
@@ -412,7 +411,7 @@ int DownloadBlocks()
 {
 			printf("executing grcrestarter downloadblocks");
 			if (!bGlobalcomInitialized) return 0;
-	
+
 			QString sFilename = "GRCRestarter.exe";
 			QString sArgument = "";
 			QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
@@ -423,6 +422,8 @@ int DownloadBlocks()
 				{
 					globalcom = new QAxObject("BoincStake.Utilization");
 				}
+				std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
+				double function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
 
 				globalcom->dynamicCall("DownloadBlocks()");
 				StartShutdown();
@@ -460,7 +461,7 @@ void qtUpdateConfirm(std::string txid)
 {
 	int result = 0;
 	if (!bGlobalcomInitialized) return;
-	
+
 	#if defined(WIN32) && defined(QT_GUI)
 		QString qsTxid = ToQstring(txid);
 		QString sResult = globalcom->dynamicCall("UpdateConfirm(Qstring)",qsTxid).toString();
@@ -472,7 +473,7 @@ void qtUpdateConfirm(std::string txid)
 void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string txid)
 {
 	if (!bGlobalcomInitialized) return;
-	
+
 	#if defined(WIN32) && defined(QT_GUI)
 	try
 	{
@@ -481,7 +482,7 @@ void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::strin
 		QString qsConfirm = ToQstring(Confirm);
 		result = globalcom->dynamicCall("InsertConfirm(Qstring)",qsConfirm).toInt();
 		printf("Inserting confirm %s %f",Confirm.c_str(),(double)result);
-		
+
 	}
 	catch(...)
 	{
@@ -495,7 +496,7 @@ void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::strin
 double qtExecuteGenericFunction(std::string function, std::string data)
 {
 	if (!bGlobalcomInitialized) return 0;
-	
+
 	double return_code = 0;
 	int result = 0;
 	#if defined(WIN32) && defined(QT_GUI)
@@ -512,7 +513,6 @@ double qtExecuteGenericFunction(std::string function, std::string data)
 		{
 			result = globalcom->dynamicCall(sFunction.c_str(),qsData).toInt();
 		}
-		//printf(".NET returned result code %f\r\n",(double)result);
 		return (double)result;
 	#endif
  	return (double)result;
@@ -524,7 +524,7 @@ std::string qtExecuteDotNetStringFunction(std::string function, std::string data
 {
 	std::string sReturnData = "";
 	if (!bGlobalcomInitialized) return "";
-	
+
 	#if defined(WIN32) && defined(QT_GUI)
 	    if (!bGlobalcomInitialized) return "?";
 		QString qsData = ToQstring(data);
@@ -532,7 +532,6 @@ std::string qtExecuteDotNetStringFunction(std::string function, std::string data
 		std::string sFunction = function+"(Qstring)";
 		QString qsReturnData = globalcom->dynamicCall(sFunction.c_str(),qsData).toString();
 		sReturnData = FromQString(qsReturnData);
-		if (fDebug) printf(".NET returned %s \r\n",sReturnData.c_str());
 		return sReturnData;
 	#endif
  	return sReturnData;
@@ -595,7 +594,7 @@ std::string qtGetNeuralHash(std::string data)
 	try
 	{
 		if (!bGlobalcomInitialized) return "NA";
-		
+
 		QString qsData = ToQstring(data);
 		QString sResult = globalcom->dynamicCall("GetNeuralHash()").toString();
 		std::string result = FromQString(sResult);
@@ -617,7 +616,7 @@ void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double ma
 {
 
 	if (!bGlobalcomInitialized) return;
-	
+
 	#if defined(WIN32) && defined(QT_GUI)
 		int result = 0;
 	 	std::string session = defaultgrcaddress + "<COL>" + cpid + "<COL>" + RoundToString(magnitude,1);
@@ -635,7 +634,7 @@ int qtTrackConfirm(std::string txid)
 {
 	double result = 0;
 	if (!bGlobalcomInitialized) return 0;
-	
+
 	#if defined(WIN32) && defined(QT_GUI)
 		QString qsConfirm = ToQstring(txid);
 		printf("@t1");
@@ -652,7 +651,7 @@ std::string qtGRCCodeExecutionSubsystem(std::string sCommand)
 {
 	std::string sResult = "FAIL";
 	if (!bGlobalcomInitialized) return "FAIL";
-	
+
 	#if defined(WIN32) && defined(QT_GUI)
 		QString qsParms = ToQstring(sCommand);
 		QString qsResult = globalcom->dynamicCall("GRCCodeExecutionSubsystem(Qstring)",qsParms).toString();
@@ -669,7 +668,7 @@ int RebootClient()
 {
 			printf("Executing reboot\r\n");
 			if (!bGlobalcomInitialized) return 0;
-	
+
 			QString sFilename = "GRCRestarter.exe";
 			QString sArgument = "reboot";
 			QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
@@ -697,7 +696,7 @@ int RebootClient()
 void CheckForUpgrade()
 {
 			if (!bGlobalcomInitialized) return;
-	
+
 		    if (bCheckedForUpgrade == false && !fTestNet && bProjectsInitialized)
 			{
 				int nNeedsUpgrade = 0;
@@ -747,7 +746,7 @@ int UpgradeClient()
 {
 			printf("Executing upgrade");
 			if (!bGlobalcomInitialized) return 0;
-	
+
 			QString sFilename = "GRCRestarter.exe";
 			QString sArgument = "upgrade";
 			QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
@@ -784,19 +783,22 @@ int AddressUser()
 {
 		int result = 0;
 		#if defined(WIN32) && defined(QT_GUI)
-		double out_magnitude = 0;
-		double out_owed = 0;
-		try
-		{
-			if (!bGlobalcomInitialized) return 0;
-			out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid,out_owed);
-		    if (fDebug3) printf("Boinc Magnitude %f \r\n",out_magnitude);
-			result = globalcom->dynamicCall("AddressUser(Qstring)",IntToQstring((int)out_magnitude)).toInt();
-		}
-		catch(...)
-		{
-			printf("Catastrophic Error");
-		}
+			double out_magnitude = 0;
+			double out_owed = 0;
+			try
+			{
+				printf("11302015");
+				if (!bGlobalcomInitialized) return 0;
+				out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid,out_owed);
+				std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
+				qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
+				if (fDebug3) printf("AddressUser with Boinc Magnitude %f \r\n",out_magnitude);
+				result = globalcom->dynamicCall("AddressUser(Qstring)",IntToQstring((int)out_magnitude)).toInt();
+			}
+			catch(...)
+			{
+				printf("Catastrophic Error");
+			}
 		#endif
 		return result;
 }
@@ -804,7 +806,7 @@ int AddressUser()
 int CloseGuiMiner()
 {
 	if (!bGlobalcomInitialized) return 0;
-	
+
 	try
 	{
 #ifdef WIN32
@@ -831,7 +833,7 @@ void BitcoinGUI::createActions()
     tabGroup->addAction(overviewAction);
 
     sendCoinsAction = new QAction(QIcon(":/icons/send"), tr("&Send coins"), this);
-    sendCoinsAction->setToolTip(tr("Send coins to a GridCoin address"));
+    sendCoinsAction->setToolTip(tr("Send coins to a Gridcoin address"));
     sendCoinsAction->setCheckable(true);
     sendCoinsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_3));
     tabGroup->addAction(sendCoinsAction);
@@ -913,8 +915,8 @@ void BitcoinGUI::createActions()
 	upgradeAction->setMenuRole(QAction::TextHeuristicRole);
 
 
-    aboutAction = new QAction(QIcon(":/icons/bitcoin"), tr("&About GridCoin"), this);
-    aboutAction->setToolTip(tr("Show information about GridCoin"));
+    aboutAction = new QAction(QIcon(":/icons/bitcoin"), tr("&About Gridcoin"), this);
+    aboutAction->setToolTip(tr("Show information about Gridcoin"));
     aboutAction->setMenuRole(QAction::AboutRole);
 
 	miningAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Neural Network"), this);
@@ -922,9 +924,9 @@ void BitcoinGUI::createActions()
 	miningAction->setMenuRole(QAction::TextHeuristicRole);
 
 
-	sqlAction = new QAction(QIcon(":/icons/bitcoin"), tr("&SQL Query Analyzer"), this);
-	sqlAction->setStatusTip(tr("SQL Query Analyzer"));
-	sqlAction->setMenuRole(QAction::TextHeuristicRole);
+	configAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Advanced Configuration"), this);
+	configAction->setStatusTip(tr("Advanced Configuration"));
+	configAction->setMenuRole(QAction::TextHeuristicRole);
 
 	tickerAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Live Ticker"), this);
 	tickerAction->setStatusTip(tr("Live Ticker"));
@@ -937,12 +939,12 @@ void BitcoinGUI::createActions()
 	newUserWizardAction = new QAction(QIcon(":/icons/bitcoin"), tr("&New User Wizard"), this);
 	newUserWizardAction->setStatusTip(tr("New User Wizard"));
 	newUserWizardAction->setMenuRole(QAction::TextHeuristicRole);
-	
+
 
 	votingAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Voting"), this);
 	votingAction->setStatusTip(tr("Voting"));
 	votingAction->setMenuRole(QAction::TextHeuristicRole);
-	
+
 
 	galazaAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Galaza (Game)"), this);
 	galazaAction->setStatusTip(tr("Galaza"));
@@ -953,9 +955,12 @@ void BitcoinGUI::createActions()
 	foundationAction->setStatusTip(tr("Foundation"));
 	foundationAction->setMenuRole(QAction::TextHeuristicRole);
 
+	faqAction = new QAction(QIcon(":/icons/bitcoin"), tr("FA&Q"), this);
+	faqAction->setStatusTip(tr("Interactive FAQ"));
+	faqAction->setMenuRole(QAction::TextHeuristicRole);
 
     optionsAction = new QAction(QIcon(":/icons/options"), tr("&Options..."), this);
-    optionsAction->setToolTip(tr("Modify configuration options for GridCoin"));
+    optionsAction->setToolTip(tr("Modify configuration options for Gridcoin"));
     optionsAction->setMenuRole(QAction::PreferencesRole);
     toggleHideAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Show / Hide"), this);
     encryptWalletAction = new QAction(QIcon(":/icons/lock_closed"), tr("&Encrypt Wallet..."), this);
@@ -993,7 +998,7 @@ void BitcoinGUI::createActions()
 	connect(upgradeAction, SIGNAL(triggered()), this, SLOT(upgradeClicked()));
 	connect(downloadAction, SIGNAL(triggered()), this, SLOT(downloadClicked()));
 	connect(rebootAction, SIGNAL(triggered()), this, SLOT(rebootClicked()));
-	connect(sqlAction, SIGNAL(triggered()), this, SLOT(sqlClicked()));
+	connect(configAction, SIGNAL(triggered()), this, SLOT(configClicked()));
 
 	connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
 	connect(votingAction, SIGNAL(triggered()), this, SLOT(votingClicked()));
@@ -1002,6 +1007,8 @@ void BitcoinGUI::createActions()
 	connect(ticketListAction, SIGNAL(triggered()), this, SLOT(ticketListClicked()));
 
 	connect(foundationAction, SIGNAL(triggered()), this, SLOT(foundationClicked()));
+	connect(faqAction, SIGNAL(triggered()), this, SLOT(faqClicked()));
+
 	connect(galazaAction, SIGNAL(triggered()), this, SLOT(galazaClicked()));
 	connect(newUserWizardAction, SIGNAL(triggered()), this, SLOT(newUserWizardClicked()));
 
@@ -1029,8 +1036,8 @@ void BitcoinGUI::createMenuBar()
     QMenu *settings = appMenuBar->addMenu(tr("&Settings"));
     settings->addAction(encryptWalletAction);
     settings->addAction(changePassphraseAction);
-//    settings->addAction(unlockWalletAction);
-//    settings->addAction(lockWalletAction);
+    settings->addAction(unlockWalletAction);
+    settings->addAction(lockWalletAction);
     settings->addSeparator();
     settings->addAction(optionsAction);
 
@@ -1061,7 +1068,7 @@ void BitcoinGUI::createMenuBar()
 
 	QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
 	qmAdvanced->addSeparator();
-	qmAdvanced->addAction(sqlAction);
+	qmAdvanced->addAction(configAction);
 	qmAdvanced->addAction(miningAction);
 	qmAdvanced->addAction(votingAction);
 
@@ -1078,8 +1085,9 @@ void BitcoinGUI::createMenuBar()
 	}
 
 	qmAdvanced->addSeparator();
+	qmAdvanced->addAction(faqAction);
 	qmAdvanced->addAction(foundationAction);
-	
+
 
 
 }
@@ -1130,7 +1138,7 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
 #endif
             if(trayIcon)
             {
-                trayIcon->setToolTip(tr("GridCoin client") + QString(" ") + tr("[testnet]"));
+                trayIcon->setToolTip(tr("Gridcoin client") + QString(" ") + tr("[testnet]"));
                 trayIcon->setIcon(QIcon(":/icons/toolbar_testnet"));
                 toggleHideAction->setIcon(QIcon(":/icons/toolbar_testnet"));
             }
@@ -1190,7 +1198,7 @@ void BitcoinGUI::createTrayIcon()
     trayIcon = new QSystemTrayIcon(this);
     trayIconMenu = new QMenu(this);
     trayIcon->setContextMenu(trayIconMenu);
-    trayIcon->setToolTip(tr("GridCoin client"));
+    trayIcon->setToolTip(tr("Gridcoin client"));
     trayIcon->setIcon(QIcon(":/icons/toolbar"));
     connect(trayIcon, SIGNAL(activated(QSystemTrayIcon::ActivationReason)),
             this, SLOT(trayIconActivated(QSystemTrayIcon::ActivationReason)));
@@ -1260,7 +1268,7 @@ void BitcoinGUI::setNumConnections(int count)
     default: icon = ":/icons/connect_4"; break;
     }
     labelConnectionsIcon->setPixmap(QIcon(icon).pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
-    labelConnectionsIcon->setToolTip(tr("%n active connection(s) to GridCoin network", "", count));
+    labelConnectionsIcon->setToolTip(tr("%n active connection(s) to Gridcoin network", "", count));
 }
 
 void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
@@ -1461,8 +1469,25 @@ bool CreateNewConfigFile(std::string boinc_email)
 	myConfig << row;
 	row = "addnode=gridcoin.asia \r\n";
 	myConfig << row;
+	row = "addnode=sepulcher.wha.la \r\n";
+    myConfig << row;
+	row = "addnode=grcmagnitude.com \r\n";
+	myConfig << row;
 	myConfig.close();
 	return true;
+}
+
+
+bool ForceInAddNode(std::string sMyAddNode)
+{
+		LOCK(cs_vAddedNodes);
+		std::vector<std::string>::iterator it = vAddedNodes.begin();
+		for(; it != vAddedNodes.end(); it++)
+			if (sMyAddNode == *it)
+            break;
+        if (it != vAddedNodes.end()) return false;
+		vAddedNodes.push_back(sMyAddNode);
+		return true;
 }
 
 void BitcoinGUI::NewUserWizard()
@@ -1493,21 +1518,32 @@ void BitcoinGUI::NewUserWizard()
 		{
 			std::string new_email = tostdstring(boincemail);
 			boost::to_lower(new_email);
-
 			printf("User entered %s \r\n",new_email.c_str());
 			//Create Config File
 			CreateNewConfigFile(new_email);
  		    QString strMessage = tr("Created new Configuration File Successfully. ");
 			QMessageBox::warning(this, tr("New Account Created - Welcome Aboard!"), strMessage);
-
 			//Load CPIDs:
 			HarvestCPIDs(true);
  		}
 		else
 		{
+			//Create Config File
+			CreateNewConfigFile("investor");
 		    QString strMessage = tr("To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. ");
 			QMessageBox::warning(this, tr("New User Wizard - Skipped"), strMessage);
 		}
+		// Read in the mapargs, and set the seed nodes 10-13-2015
+        ReadConfigFile(mapArgs, mapMultiArgs);
+		//Force some addnodes in to get user started
+		ForceInAddNode("node.gridcoin.us");
+		ForceInAddNode("gridcoin.asia");
+		ForceInAddNode("sepulcher.wha.la");
+		ForceInAddNode("grcmagnitude.com");
+		ForceInAddNode("amsterdam.grcnode.co.uk");
+		ForceInAddNode("london.grcnode.co.uk");
+		ForceInAddNode("frankfurt.grcnode.co.uk");
+		ForceInAddNode("nyc.grcnode.co.uk");
 
 		if (sBoincNarr != "")
 		{
@@ -1679,11 +1715,13 @@ void BitcoinGUI::rebootClicked()
 }
 
 
-void BitcoinGUI::sqlClicked()
+void BitcoinGUI::configClicked()
 {
 #ifdef WIN32
 	if (!bGlobalcomInitialized) return;
-	globalcom->dynamicCall("ShowSql()");
+	std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
+	qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
+	globalcom->dynamicCall("ShowConfig()");
 #endif
 
 }
@@ -1696,7 +1734,6 @@ void BitcoinGUI::ticketListClicked()
 	qtSetSessionInfo(DefaultWalletAddress(), GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.Magnitude);
     globalcom->dynamicCall("ShowTicketList()");
 #endif
-
 }
 
 
@@ -1706,16 +1743,24 @@ void BitcoinGUI::foundationClicked()
 	if (!bGlobalcomInitialized) return;
 	std::string sVotingPayload = "";
 	GetJSONPollsReport(true,"",sVotingPayload,true);
-	double function_call = qtExecuteGenericFunction("SetGenericVotingData",sVotingPayload);
+	qtExecuteGenericFunction("SetGenericVotingData",sVotingPayload);
 	std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-	function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
+	qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
 	qtSetSessionInfo(DefaultWalletAddress(), GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.Magnitude);
     globalcom->dynamicCall("ShowFoundation()");
 #endif
-
 }
 
 
+void BitcoinGUI::faqClicked()
+{
+#ifdef WIN32
+	if (!bGlobalcomInitialized) return;
+	std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
+	double function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
+	globalcom->dynamicCall("ShowFAQ()");
+#endif
+}
 
 
 void BitcoinGUI::newUserWizardClicked()
@@ -1767,8 +1812,8 @@ void BitcoinGUI::votingClicked()
 		GetJSONPollsReport(true,"",sVotingPayload,true);
 		double function_call = qtExecuteGenericFunction("SetGenericVotingData",sVotingPayload);
 		std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-		function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-		function_call = qtExecuteGenericFunction("ShowVotingConsole","");
+		qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
+		qtExecuteGenericFunction("ShowVotingConsole","");
 	#endif
 
 }
@@ -1927,7 +1972,7 @@ void BitcoinGUI::dropEvent(QDropEvent *event)
         if (nValidUrisFound)
             gotoSendCoinsPage();
         else
-            notificator->notify(Notificator::Warning, tr("URI handling"), tr("URI can not be parsed! This can be caused by an invalid GridCoin address or malformed URI parameters."));
+            notificator->notify(Notificator::Warning, tr("URI handling"), tr("URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters."));
     }
 
     event->acceptProposedAction();
@@ -1942,7 +1987,7 @@ void BitcoinGUI::handleURI(QString strURI)
         gotoSendCoinsPage();
     }
     else
-        notificator->notify(Notificator::Warning, tr("URI handling"), tr("URI can not be parsed! This can be caused by an invalid GridCoin address or malformed URI parameters."));
+        notificator->notify(Notificator::Warning, tr("URI handling"), tr("URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters."));
 }
 
 void BitcoinGUI::setEncryptionStatus(int status)
@@ -2091,6 +2136,20 @@ void BitcoinGUI::updateWeight()
 }
 
 
+std::string getMacAddress()
+{
+	std::string myMac = "?:?:?:?";
+    foreach(QNetworkInterface netInterface, QNetworkInterface::allInterfaces())
+    {
+        // Return only the first non-loopback MAC Address
+        if (!(netInterface.flags() & QNetworkInterface::IsLoopBack))
+		{
+           myMac =  netInterface.hardwareAddress().toUtf8().constData();
+		}
+    }
+    return myMac;
+}
+
 
 void ReinstantiateGlobalcom()
 {
@@ -2120,15 +2179,17 @@ void ReinstantiateGlobalcom()
 					printf("Instantiated globalcom for Windows %f",(double)1);
 
 			}
+			bGlobalcomInitialized = true;
 			if (!bAddressUser)
 			{
 									bAddressUser = true;
 									#if defined(WIN32) && defined(QT_GUI)
+									    printf("Addressing user.");
 										AddressUser();
 									#endif
 			}
 
-			bGlobalcomInitialized = true;
+
 #endif
 }
 
@@ -2153,7 +2214,7 @@ void ExecuteCode()
 void BitcoinGUI::timerfire()
 {
 
-	try 
+	try
 	{
 
 		if ( (nRegVersion==0 || Timer("start",10))  &&  !bGlobalcomInitialized)
@@ -2167,19 +2228,19 @@ void BitcoinGUI::timerfire()
 			}
 			#ifdef WIN32
 				if (!bGlobalcomInitialized) return;
-	
+
 				nRegVersion = globalcom->dynamicCall("Version()").toInt();
 				sRegVer = boost::lexical_cast<std::string>(nRegVersion);
 			#endif
 		}
 
-		
+
 		if (bGlobalcomInitialized)
 		{
 				//R Halford - Allow .NET to talk to Core: 6-21-2015
 				#ifdef WIN32
 					std::string sData = qtExecuteDotNetStringFunction("GetDotNetMessages","");
-					if (sData != "")
+					if (!sData.empty())
 					{
 						std::string RPCCommand = ExtractXML(sData,"<COMMAND>","</COMMAND>");
 						std::string Argument1 = ExtractXML(sData,"<ARG1>","</ARG1>");
@@ -2199,10 +2260,13 @@ void BitcoinGUI::timerfire()
 							std::string Argument3 = ExtractXML(sData,"<ARG3>","</ARG3>");
     						std::string Argument4 = ExtractXML(sData,"<ARG4>","</ARG4>");
 							std::string Argument5 = ExtractXML(sData,"<ARG5>","</ARG5>");
-
 							std::string response = ExecuteRPCCommand("addpoll",Argument1,Argument2,Argument3,Argument4,Argument5);
-
 							double resultcode = qtExecuteGenericFunction("SetRPCResponse"," "+response);
+						}
+						else if (RPCCommand == "addattachment")
+						{
+							msAttachmentGuid = Argument1;
+							printf("\r\n attachment added %s \r\n",msAttachmentGuid.c_str());
 						}
 
 					}
@@ -2313,7 +2377,6 @@ void BitcoinGUI::updateStakingIcon()
         else if (vNodes.empty())
 		{
             labelStakingIcon->setToolTip(tr("Not staking because wallet is offline"));
-			msMiningErrors6 = "Offline";
 		}
         else if (IsInitialBlockDownload())
 		{

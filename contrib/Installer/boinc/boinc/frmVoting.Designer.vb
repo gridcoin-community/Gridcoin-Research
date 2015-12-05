@@ -85,7 +85,7 @@ Partial Class frmVoting
         DataGridViewCellStyle5.BackColor = System.Drawing.Color.Black
         DataGridViewCellStyle5.ForeColor = System.Drawing.Color.Lime
         Me.dgv.RowsDefaultCellStyle = DataGridViewCellStyle5
-        Me.dgv.Size = New System.Drawing.Size(1417, 567)
+        Me.dgv.Size = New System.Drawing.Size(1491, 567)
         Me.dgv.TabIndex = 0
         '
         'frmVoting

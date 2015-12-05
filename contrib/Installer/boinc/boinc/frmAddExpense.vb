@@ -137,7 +137,7 @@ Public Class frmAddExpense
 
         Dim sQuestion As String = IIf(sType = "Expense", "Approve_Expense?", "Approve_Campaign?")
         Dim sAnswers As String = "Approve;Deny"
-        Dim sResult As String = ExecuteRPCCommand("addpoll", sTitle, "21", sQuestion, sAnswers, "3")
+        Dim sResult As String = ExecuteRPCCommand("addpoll", sTitle, "21", sQuestion, sAnswers, "3", "http://www.gridcoin.us")
         If Not LCase(sResult).Contains("success") Then
             MsgBox(sResult, MsgBoxStyle.Information, "Gridcoin Foundation - Expense System")
             Exit Sub

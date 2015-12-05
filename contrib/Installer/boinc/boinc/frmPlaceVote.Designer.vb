@@ -28,6 +28,8 @@ Partial Class frmPlaceVote
         Me.btnVote = New System.Windows.Forms.Button()
         Me.Button1 = New System.Windows.Forms.Button()
         Me.lblMultipleChoice = New System.Windows.Forms.Label()
+        Me.lnkURL = New System.Windows.Forms.LinkLabel()
+        Me.Label1 = New System.Windows.Forms.Label()
         Me.SuspendLayout()
         '
         'lblTitle
@@ -35,7 +37,7 @@ Partial Class frmPlaceVote
         Me.lblTitle.AutoSize = True
         Me.lblTitle.Font = New System.Drawing.Font("Microsoft Sans Serif", 15.75!, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
         Me.lblTitle.ForeColor = System.Drawing.Color.Lime
-        Me.lblTitle.Location = New System.Drawing.Point(511, 9)
+        Me.lblTitle.Location = New System.Drawing.Point(143, 5)
         Me.lblTitle.Name = "lblTitle"
         Me.lblTitle.Size = New System.Drawing.Size(58, 25)
         Me.lblTitle.TabIndex = 1
@@ -46,7 +48,7 @@ Partial Class frmPlaceVote
         Me.lblQuestion.AutoSize = True
         Me.lblQuestion.Font = New System.Drawing.Font("Microsoft Sans Serif", 14.25!, System.Drawing.FontStyle.Underline, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
         Me.lblQuestion.ForeColor = System.Drawing.Color.Lime
-        Me.lblQuestion.Location = New System.Drawing.Point(29, 46)
+        Me.lblQuestion.Location = New System.Drawing.Point(29, 81)
         Me.lblQuestion.Name = "lblQuestion"
         Me.lblQuestion.Size = New System.Drawing.Size(91, 24)
         Me.lblQuestion.TabIndex = 2
@@ -83,12 +85,37 @@ Partial Class frmPlaceVote
         Me.lblMultipleChoice.TabIndex = 59
         Me.lblMultipleChoice.Text = "(Multiple Choice Voting Allowed)"
         '
+        'lnkURL
+        '
+        Me.lnkURL.AutoSize = True
+        Me.lnkURL.Font = New System.Drawing.Font("Microsoft Sans Serif", 12.0!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        Me.lnkURL.LinkColor = System.Drawing.Color.Olive
+        Me.lnkURL.Location = New System.Drawing.Point(182, 49)
+        Me.lnkURL.Name = "lnkURL"
+        Me.lnkURL.Size = New System.Drawing.Size(162, 20)
+        Me.lnkURL.TabIndex = 61
+        Me.lnkURL.TabStop = True
+        Me.lnkURL.Text = "http://www.gridcoin.us"
+        '
+        'Label1
+        '
+        Me.Label1.AutoSize = True
+        Me.Label1.Font = New System.Drawing.Font("Microsoft Sans Serif", 14.25!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        Me.Label1.ForeColor = System.Drawing.Color.Lime
+        Me.Label1.Location = New System.Drawing.Point(29, 46)
+        Me.Label1.Name = "Label1"
+        Me.Label1.Size = New System.Drawing.Size(147, 24)
+        Me.Label1.TabIndex = 60
+        Me.Label1.Text = "Discussion URL:"
+        '
         'frmPlaceVote
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.BackColor = System.Drawing.Color.Black
         Me.ClientSize = New System.Drawing.Size(1106, 633)
+        Me.Controls.Add(Me.lnkURL)
+        Me.Controls.Add(Me.Label1)
         Me.Controls.Add(Me.lblMultipleChoice)
         Me.Controls.Add(Me.Button1)
         Me.Controls.Add(Me.btnVote)
@@ -107,4 +134,6 @@ Partial Class frmPlaceVote
     Friend WithEvents btnVote As System.Windows.Forms.Button
     Friend WithEvents Button1 As System.Windows.Forms.Button
     Friend WithEvents lblMultipleChoice As System.Windows.Forms.Label
+    Friend WithEvents lnkURL As System.Windows.Forms.LinkLabel
+    Friend WithEvents Label1 As System.Windows.Forms.Label
 End Class

@@ -14,15 +14,7 @@ Public Enum RenderType
 End Enum
 
 
-
-
 Friend Module modGRCWireFrameRender
-    ' Declare Function GetDC Lib "user32.dll" (ByVal hwnd As Int32) As Int32
-    'Declare Function ReleaseDC Lib "user32.dll" (ByVal hwnd As Int32, ByVal hdc As Int32) As Int32
-    '  Declare Function SetPixel Lib "gdi32.dll" (ByVal hdc As Integer, ByVal x As Integer, ByVal y As Integer, ByVal crColor As Integer) As Integer
-    '   Declare Function BitBlt Lib "gdi32.dll" (ByVal hdcDest As IntPtr, ByVal nXDest As Integer, ByVal nYDest As Integer, ByVal nWidth As Integer, ByVal nHeight As Integer, ByVal hdcSrc As IntPtr, ByVal nXSrc As Integer, ByVal nYSrc As Integer, ByVal dwRop As Int32) As Boolean
-    'Declare Function CreateCompatibleBitmap Lib "gdi32.dll" (ByVal hdc As IntPtr, ByVal nWidth As Integer, ByVal nHeight As Integer) As IntPtr
-    '    Declare Function CreateCompatibleDC Lib "gdi32.dll" (ByVal hdc As IntPtr) As IntPtr
     Public vbNotSrcCopy As Integer = 3342344
     Public vbMaskNotPen As Integer = 3
     Public vbDstInvert = &H550009

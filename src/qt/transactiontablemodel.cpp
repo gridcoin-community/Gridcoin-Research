@@ -362,7 +362,8 @@ bool IsPoR(double amt)
 	std::string sAmt = RoundToString(amt,8);
 	if (sAmt.length() > 8)
 	{
-		if (sAmt.substr(sAmt.length()-4,4)=="0124")
+		std::string suffix = sAmt.substr(sAmt.length()-4,4);
+		if (suffix =="0124" || suffix=="0123")
 		{
 			return true;
 		}
@@ -546,7 +547,7 @@ QString TransactionTableModel::formatTooltip(const TransactionRecord *rec) const
     if(rec->type==TransactionRecord::RecvFromOther || rec->type==TransactionRecord::SendToOther ||
        rec->type==TransactionRecord::SendToAddress || rec->type==TransactionRecord::RecvWithAddress)
     {
-        tooltip += QString(" ") + formatTxToAddress(rec, true) + QString("          <p>    ");
+        tooltip += QString(" <p>") + formatTxToAddress(rec, true) + QString("</p>");
     }
     return tooltip;
 }

@@ -26,7 +26,7 @@ private:
 private slots:
 	void on_btnExecute_clicked();
 	void on_btnTrack_clicked();
-
+	void on_btnViewAttachment_clicked();
 
 
 };

@@ -226,8 +226,7 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
         // Sendmany
         std::vector<std::pair<CScript, int64_t> > vecSend;
 		bool coinTracking = false;
-
-        foreach(const SendCoinsRecipient &rcp, recipients)
+		foreach(const SendCoinsRecipient &rcp, recipients)
         {
             CScript scriptPubKey;
             scriptPubKey.SetDestination(CBitcoinAddress(rcp.address.toStdString()).Get());
@@ -248,6 +247,12 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
 			std::string q = "\"";
 			std::string code = "MsgBox(" + q + "Hello!" + q + ",MsgBoxStyle.Critical," + q + "Message Title" + q + ")\r\n";
 			wtx.hashBoinc += "<CODE>" + code + "</CODE>";
+		}
+
+		if (!msAttachmentGuid.empty())
+		{
+				printf("Adding attachment to tx %s",wtx.hashBoinc.c_str());
+				wtx.hashBoinc += "<ATTACHMENT><TXID>" + wtx.GetHash().ToString() + "</TXID><ATTACHMENTGUID>" + msAttachmentGuid + "</ATTACHMENTGUID></ATTACHMENT>";
 		}
 		wtx.hashBoinc += messages;
 		bool fCreated = wallet->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, coinControl);

@@ -100,6 +100,7 @@ Public Class frmTicketList
         ' System.Windows.Forms.Cursor.Current = Cursors.WaitCursor
         Dim sID As String = tvTicketHistory.SelectedNode.Tag
         Dim ta As New frmTicketAdd
+        mGRCData = New GRCSec.GridcoinData
         ta.ShowTicket(sID)
         'System.Windows.Forms.Cursor.Current = Cursors.Default
 

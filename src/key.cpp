@@ -466,7 +466,28 @@ bool CKey::SetCompactSignature(uint256 hash, const std::vector<unsigned char>& v
     return false;
 }
 
-bool CKey::Verify(uint256 hash, const std::vector<unsigned char>& vchSig)
+
+ bool CKey::Verify(uint256 hash, const std::vector<unsigned char>& vchSig) 
+ {
+	    // BIP66 Compatibility:
+        // New versions of OpenSSL (1.0.0p+ and 1.0.1k+) will reject non-canonical DER signatures. de/re-serialize first.
+        unsigned char *norm_der = NULL;
+        ECDSA_SIG *norm_sig = ECDSA_SIG_new();
+        const unsigned char* sigptr = &vchSig[0];
+        d2i_ECDSA_SIG(&norm_sig, &sigptr, vchSig.size());
+        int derlen = i2d_ECDSA_SIG(norm_sig, &norm_der);
+        ECDSA_SIG_free(norm_sig);
+        if (derlen <= 0)
+            return false;
+
+        // -1 = error, 0 = bad sig, 1 = good
+        bool ret = ECDSA_verify(0, (unsigned char*)&hash, sizeof(hash), norm_der, derlen, pkey) == 1;
+        OPENSSL_free(norm_der);
+        return ret;
+}
+
+/*
+bool CKey::Verify_Retired(uint256 hash, const std::vector<unsigned char>& vchSig)
 {
     // -1 = error, 0 = bad sig, 1 = good
     if (ECDSA_verify(0, (unsigned char*)&hash, sizeof(hash), &vchSig[0], vchSig.size(), pkey) != 1)
@@ -474,6 +495,8 @@ bool CKey::Verify(uint256 hash, const std::vector<unsigned char>& vchSig)
 
     return true;
 }
+*/
+
 
 bool CKey::IsValid()
 {
@@ -496,6 +519,6 @@ bool ECC_InitSanityCheck() {
         return false;
     EC_KEY_free(pkey);
 
-    // TODO Is there more EC functionality that could be missing?
+    // Is there more EC functionality that could be missing?
     return true;
 }

@@ -44,7 +44,7 @@ std::string NeuralRequest(std::string MyNeuralRequest)
 			//printf("Node is a neural participant \r\n");
 			std::string reqid = "reqid";
          	pNode->PushMessage("neural", MyNeuralRequest, reqid);
-            printf("Pushed \r\n");
+            if (fDebug3) printf(" PUSH ");
 		}
     }
     return "";
@@ -62,7 +62,7 @@ void GatherNeuralHashes()
 			std::string reqid = "reqid";
 			std::string command_name="neural_hash";
          	pNode->PushMessage("neural", command_name, reqid);
-            printf("Pushed \r\n");
+            if (fDebug10) printf(" Pushed ");
 		}
     }
 }

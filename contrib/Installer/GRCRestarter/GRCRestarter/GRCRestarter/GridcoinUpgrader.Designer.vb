@@ -29,17 +29,19 @@ Partial Class GridcoinUpgrader
         Me.TimerUE = New System.Windows.Forms.Timer(Me.components)
         Me.lblPercent = New System.Windows.Forms.Label()
         Me.PictureBox1 = New System.Windows.Forms.PictureBox()
+        Me.rtbNotes = New System.Windows.Forms.RichTextBox()
+        Me.Label1 = New System.Windows.Forms.Label()
         CType(Me.PictureBox1, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.SuspendLayout()
         '
         'ProgressBar1
         '
-        Me.ProgressBar1.Location = New System.Drawing.Point(-16, 58)
+        Me.ProgressBar1.Location = New System.Drawing.Point(-2, 341)
         Me.ProgressBar1.Margin = New System.Windows.Forms.Padding(4)
         Me.ProgressBar1.MarqueeAnimationSpeed = 11
         Me.ProgressBar1.Maximum = 1000
         Me.ProgressBar1.Name = "ProgressBar1"
-        Me.ProgressBar1.Size = New System.Drawing.Size(922, 10)
+        Me.ProgressBar1.Size = New System.Drawing.Size(893, 10)
         Me.ProgressBar1.Step = 5
         Me.ProgressBar1.Style = System.Windows.Forms.ProgressBarStyle.Marquee
         Me.ProgressBar1.TabIndex = 0
@@ -84,6 +86,29 @@ Partial Class GridcoinUpgrader
         Me.PictureBox1.TabIndex = 3
         Me.PictureBox1.TabStop = False
         '
+        'rtbNotes
+        '
+        Me.rtbNotes.BackColor = System.Drawing.Color.Black
+        Me.rtbNotes.Font = New System.Drawing.Font("Verdana", 12.0!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        Me.rtbNotes.ForeColor = System.Drawing.Color.Lime
+        Me.rtbNotes.Location = New System.Drawing.Point(9, 88)
+        Me.rtbNotes.Name = "rtbNotes"
+        Me.rtbNotes.Size = New System.Drawing.Size(866, 246)
+        Me.rtbNotes.TabIndex = 4
+        Me.rtbNotes.Text = ""
+        '
+        'Label1
+        '
+        Me.Label1.AutoSize = True
+        Me.Label1.BackColor = System.Drawing.Color.Transparent
+        Me.Label1.Font = New System.Drawing.Font("Verdana", 12.0!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        Me.Label1.Location = New System.Drawing.Point(6, 67)
+        Me.Label1.Margin = New System.Windows.Forms.Padding(4, 0, 4, 0)
+        Me.Label1.Name = "Label1"
+        Me.Label1.Size = New System.Drawing.Size(134, 18)
+        Me.Label1.TabIndex = 5
+        Me.Label1.Text = "Release Notes:"
+        '
         'GridcoinUpgrader
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(8.0!, 17.0!)
@@ -92,7 +117,9 @@ Partial Class GridcoinUpgrader
         Me.BackColor = System.Drawing.Color.Black
         Me.BackgroundImage = Global.GRCRestarter.My.Resources.Resources.GradientB
         Me.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch
-        Me.ClientSize = New System.Drawing.Size(888, 68)
+        Me.ClientSize = New System.Drawing.Size(888, 351)
+        Me.Controls.Add(Me.Label1)
+        Me.Controls.Add(Me.rtbNotes)
         Me.Controls.Add(Me.lblPercent)
         Me.Controls.Add(Me.txtStatus)
         Me.Controls.Add(Me.ProgressBar1)
@@ -104,7 +131,7 @@ Partial Class GridcoinUpgrader
         Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)
         Me.Margin = New System.Windows.Forms.Padding(4)
         Me.Name = "GridcoinUpgrader"
-        Me.Text = "Gridcoin Research - Maintenance 5.0"
+        Me.Text = "Gridcoin Research - Maintenance 5.2"
         Me.TransparencyKey = System.Drawing.Color.FromArgb(CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer))
         CType(Me.PictureBox1, System.ComponentModel.ISupportInitialize).EndInit()
         Me.ResumeLayout(False)
@@ -116,5 +143,7 @@ Partial Class GridcoinUpgrader
     Friend WithEvents TimerUE As System.Windows.Forms.Timer
     Friend WithEvents lblPercent As System.Windows.Forms.Label
     Friend WithEvents PictureBox1 As System.Windows.Forms.PictureBox
+    Friend WithEvents rtbNotes As System.Windows.Forms.RichTextBox
+    Friend WithEvents Label1 As System.Windows.Forms.Label
 
 End Class

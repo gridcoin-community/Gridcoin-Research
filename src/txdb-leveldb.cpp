@@ -25,6 +25,11 @@ using namespace boost;
 
 leveldb::DB *txdb; // global pointer for LevelDB object instance
 StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
+bool IsLockTimeWithin14days(double locktime);
+MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID> vRef);
+MiningCPID DeserializeBoincBlock(std::string block);
+void AddCPIDBlockHash(std::string cpid, std::string blockhash);
+void SetUpExtendedBlockIndexFieldsOnce();
 
 static leveldb::Options GetOptions() {
     leveldb::Options options;
@@ -298,6 +303,18 @@ bool CTxDB::WriteCheckpointPubKey(const string& strPubKey)
     return Write(string("strCheckpointPubKey"), strPubKey);
 }
 
+bool CTxDB::ReadGenericData(std::string KeyName, std::string& strValue)
+{
+    return Read(string(KeyName.c_str()), strValue);
+}
+
+bool CTxDB::WriteGenericData(const std::string& strKey,const std::string& strData)
+{
+    return Write(string(strKey), strData);
+}
+
+
+
 static CBlockIndex *InsertBlockIndex(uint256 hash)
 {
     if (hash == 0)
@@ -322,7 +339,6 @@ static CBlockIndex *InsertBlockIndex(uint256 hash)
 
 bool CTxDB::LoadBlockIndex()
 {
-
 	int64_t nStart = GetTimeMillis();
 	double dBlockCount = 0;
 
@@ -377,7 +393,7 @@ bool CTxDB::LoadBlockIndex()
         pindexNew->nBits          = diskindex.nBits;
         pindexNew->nNonce         = diskindex.nNonce;
 
-		//7-11-2015 - Gridcoin - New Accrual Fields
+		//10-4-2015 - Gridcoin - New Accrual Fields
 
 		if (diskindex.nHeight > nNewIndex)
 		{
@@ -385,24 +401,11 @@ bool CTxDB::LoadBlockIndex()
 			pindexNew->nResearchSubsidy  = diskindex.nResearchSubsidy;
 			pindexNew->nInterestSubsidy  = diskindex.nInterestSubsidy;
 			pindexNew->nMagnitude        = diskindex.nMagnitude;
+			
+			pindexNew->nIsContract       = diskindex.nIsContract;
+			pindexNew->nIsSuperBlock     = diskindex.nIsSuperBlock;
 		}
 
-		if (!diskindex.sCPID.empty())
-		{
-			if (diskindex.sCPID != "INVESTOR")
-			{
-				StructCPID stCPID = GetInitializedStructCPID2(diskindex.sCPID,mvResearchAge);
-	     		stCPID.InterestSubsidy += diskindex.nInterestSubsidy;
-				stCPID.ResearchSubsidy += diskindex.nResearchSubsidy;
-				stCPID.Accuracy++;
-				if (((double)pindexNew->nHeight) > stCPID.LastBlock && diskindex.nResearchSubsidy > 0) 
-				{
-						stCPID.LastBlock = (double)pindexNew->nHeight;
-						stCPID.BlockHash = blockHash.GetHex();
-				}
-				mvResearchAge[diskindex.sCPID]=stCPID;
-			}	
-		}
 		dBlockCount++;
         // Watch for genesis block
         if (pindexGenesisBlock == NULL && blockHash == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
@@ -420,6 +423,7 @@ bool CTxDB::LoadBlockIndex()
         iterator->Next();
     }
     delete iterator;
+	
 
 	
 	printf("Time to memorize diskindex containing %f blocks : %15"PRId64"ms\n", dBlockCount, GetTimeMillis() - nStart);
@@ -483,6 +487,8 @@ bool CTxDB::LoadBlockIndex()
     // Verify blocks in the best chain
     int nCheckLevel = GetArg("-checklevel", 1);
     int nCheckDepth = GetArg( "-checkblocks", 1000);
+	if (fTestNet) nCheckDepth = 3000; //Check the last 3000 blocks in TestNet since we want to rebuild the chain (8-19-2015)
+
     if (nCheckDepth == 0)
         nCheckDepth = 1000000000; // suffices until the year 19000
     if (nCheckDepth > nBestHeight)
@@ -613,6 +619,69 @@ bool CTxDB::LoadBlockIndex()
         CTxDB txdb;
         block.SetBestChain(txdb, pindexFork);
     }
+
+
+	printf("Set up RA ");
+
+	nStart = GetTimeMillis();
+
+
+	//8-13-2015 - Gridcoin - In order, set up Research Age hashes and lifetime fields
+    CBlockIndex* pindex = pindexGenesisBlock;
+	//int lookback = 14*24*60*60;
+	if (pindex && pindexBest && pindexBest->nHeight > 10  && pindex->pnext)
+	{
+		printf(" RA Starting %f %f %f ",(double)pindex->nHeight,(double)pindex->pnext->nHeight,(double)pindexBest->nHeight);
+		while (pindex->nHeight < pindexBest->nHeight)
+		{
+				if (!pindex || !pindex->pnext) break;  
+				pindex = pindex->pnext;
+				if (pindex == pindexBest) break;
+				if (pindex==NULL || !pindex->IsInMainChain()) continue;
+				//if (IsLockTimeWithin14days((double)pindex->nTime) && !bResearchAgeEnabled) 
+				//{
+				//	CBlock block;
+				//	if (!block.ReadFromDisk(pindex)) return false;
+				//	MiningCPID bb = GetInitializedMiningCPID(pindex->GetBlockHash().GetHex(), mvBlockIndex);
+	     		//	bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
+				//	mvBlockIndex[pindex->GetBlockHash().GetHex()] = bb;
+				//}
+
+				if (!pindex->sCPID.empty())
+				{
+				if (pindex->sCPID != "INVESTOR") 
+				{
+			
+					StructCPID stCPID = GetInitializedStructCPID2(pindex->sCPID, mvResearchAge);
+	     			stCPID.InterestSubsidy += pindex->nInterestSubsidy;
+					stCPID.ResearchSubsidy += pindex->nResearchSubsidy;
+					if (((double)pindex->nHeight) > stCPID.LastBlock && pindex->nResearchSubsidy > 0) 
+					{
+							stCPID.LastBlock = (double)pindex->nHeight;
+							stCPID.BlockHash = pindex->GetBlockHash().GetHex();
+					}
+
+					if (pindex->nMagnitude > 0 && pindex->nResearchSubsidy > 0)
+					{
+						stCPID.Accuracy++;
+						stCPID.TotalMagnitude += pindex->nMagnitude;
+						stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
+					}
+		
+					if (((double)pindex->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime = (double)pindex->nTime;
+					if (((double)pindex->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pindex->nTime;
+			
+					mvResearchAge[pindex->sCPID]=stCPID;
+					AddCPIDBlockHash(pindex->sCPID,pindex->GetBlockHash().GetHex());
+
+				}
+				}
+		}
+	}
+	printf("RA Complete - RA Time %15"PRId64"ms\n", GetTimeMillis() - nStart);
+	nStart = GetTimeMillis();
+	SetUpExtendedBlockIndexFieldsOnce();
+	printf("SetUpExtendedBlockIndexFieldsOnce Complete - Time %15"PRId64"ms\n", GetTimeMillis() - nStart);
 
     return true;
 }

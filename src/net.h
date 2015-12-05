@@ -118,7 +118,8 @@ enum threadId
     THREAD_DUMPADDRESS,
     THREAD_RPCHANDLER,
     THREAD_STAKE_MINER,
-
+	THREAD_TALLY,
+	THREAD_SERVICES,
     THREAD_MAX
 };
 
@@ -463,7 +464,7 @@ public:
         ENTER_CRITICAL_SECTION(cs_vSend);
         assert(ssSend.size() == 0);
         ssSend << CMessageHeader(pszCommand, 0);
-        if (fDebug)            printf("sending: %s ", pszCommand);
+        //if (fDebug)            printf("sending: %s ", pszCommand);
     }
 
     void AbortMessage()

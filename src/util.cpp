@@ -9,6 +9,7 @@
 #include "version.h"
 #include "ui_interface.h"
 #include <boost/algorithm/string/join.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>  //For day of year
 
 // Work around clang compilation problem in Boost 1.46:
 // /usr/include/boost/program_options/detail/config_file.hpp:163:17: error: call to function 'to_internal' that is neither visible in the template definition nor found by argument-dependent lookup
@@ -65,6 +66,7 @@ bool fDebug2 = false;
 bool fDebug3 = false;
 bool fDebug4 = false;
 bool fDebug5 = false;
+bool fDebug10 = false;
 
 bool fPrintToConsole = false;
 bool fPrintToDebugger = false;
@@ -87,6 +89,8 @@ std::string RoundToString(double d, int place);
 int64_t IsNeural();
 
 extern std::string GetBoincDataDir();
+extern int GetDayOfYear();
+
 
 // Init OpenSSL library multithreading support
 static CCriticalSection** ppmutexOpenSSL;
@@ -343,6 +347,23 @@ string real_strprintf(const std::string &format, int dummy, ...)
     va_end(arg_ptr);
     return str;
 }
+
+int GetDayOfYear()
+{
+	try
+	{
+		boost::gregorian::date d=boost::posix_time::from_time_t(GetAdjustedTime()).date();
+		//		boost::gregorian::date d(year, month, day);
+		int dayNumber = d.day_of_year();
+		return dayNumber;
+	}
+	catch (std::out_of_range& e)
+	{
+    // Alternatively catch bad_year etc exceptions.
+		return 0;
+    }
+}
+
 
 bool error(const char *format, ...)
 {
@@ -1014,11 +1035,11 @@ boost::filesystem::path GetDefaultDataDir()
 	    //2-25-2015
 		fs::path pathRet;
 		char* pszHome = getenv("HOME");
-		
-		if (mapArgs.count("-datadir")) 
+
+		if (mapArgs.count("-datadir"))
 		{
 			fs::path path2015 = fs::system_complete(mapArgs["-datadir"]);
-			if (fs::is_directory(path2015)) 
+			if (fs::is_directory(path2015))
 			{
 				pathRet = path2015;
 			}
@@ -1076,20 +1097,20 @@ const boost::filesystem::path &GetDataDir(bool fNetSpecific)
 
     LOCK(csPathCached);
 
-    if (mapArgs.count("-datadir")) 
+    if (mapArgs.count("-datadir"))
 	{
 		    path = fs::system_complete(mapArgs["-datadir"]);
-			if (!fs::is_directory(path)) 
+			if (!fs::is_directory(path))
 			{
 				path = "";
 				return path;
 			}
 	}
-	else 
+	else
 	{
         path = GetDefaultDataDir();
     }
-    if (fNetSpecific && GetBoolArg("-testnet", false))
+    if (fNetSpecific && GetBoolArg("-testnet", false)  ||  GetBoolArg("-testnet",false) )
 	{
         path /= "testnet";
 	}
@@ -1106,12 +1127,12 @@ boost::filesystem::path GetProgramDir()
 {
     boost::filesystem::path path;
 
-    if (mapArgs.count("-programdir")) 
+    if (mapArgs.count("-programdir"))
     {
         // printf("Acquiring program directory from conf file\n");
         path = boost::filesystem::system_complete(mapArgs["-programdir"]);
-        
-        if (!boost::filesystem::is_directory(path)) 
+
+        if (!boost::filesystem::is_directory(path))
         {
             path = "";
             printf("Invalid path stated in gridcoinresearch.conf\n");
@@ -1124,11 +1145,11 @@ boost::filesystem::path GetProgramDir()
     }
 
     #ifdef WIN32
-    const char* const list[] = {"gridcoind.exe", "gridcoin-qt.exe", "gridcoinupgrader.exe"};    
+    const char* const list[] = {"gridcoind.exe", "gridcoin-qt.exe", "gridcoinupgrader.exe"};
     #elif defined MAC_OSX
-    const char* const list[] = {"gridcoind.exe", "gridcoin-qt.exe", "gridcoinupgrader.exe"}; 
+    const char* const list[] = {"gridcoind.exe", "gridcoin-qt.exe", "gridcoinupgrader.exe"};
     #else
-    const char* const list[] = {"gridcoinresearchd", "gridcoin-qt", "gridcoinupgrader"}; 
+    const char* const list[] = {"gridcoinresearchd", "gridcoin-qt", "gridcoinupgrader"};
     #endif
 
     for (int i = 0; i < 3; ++i)
@@ -1157,7 +1178,7 @@ boost::filesystem::path GetConfigFile()
 
 
 
-bool IsConfigFileEmpty() 
+bool IsConfigFileEmpty()
 {
     boost::filesystem::ifstream streamConfig(GetConfigFile());
     if (!streamConfig.good())
@@ -1333,10 +1354,10 @@ void AddTimeData(const CNetAddr& ip, int64_t nTime)
                 if (!fMatch)
                 {
                     fDone = true;
-                    string strMessage = _("Warning: Please check that your computer's date and time are correct! If your clock is wrong GridCoin will not work properly.");
+                    string strMessage = _("Warning: Please check that your computer's date and time are correct! If your clock is wrong Gridcoin will not work properly.");
                     strMiscWarning = strMessage;
                     printf("*** %s\n", strMessage.c_str());
-                    uiInterface.ThreadSafeMessageBox(strMessage+" ", string("GridCoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION);
+                    uiInterface.ThreadSafeMessageBox(strMessage+" ", string("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION);
                 }
             }
         }
@@ -1407,10 +1428,10 @@ std::string HeadlessRoundToString(double d, int place)
 // Format the subversion field according to BIP 14 spec (https://en.bitcoin.it/wiki/BIP_0014)
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments)
 {
-	double neural_id = 0;
 	std::string neural_v = "0";
 
 	#if defined(WIN32) && defined(QT_GUI)
+		double neural_id = 0;
 		neural_id = (double)IsNeural();
 		neural_v = HeadlessRoundToString((double)MINOR_VERSION,0) + "." + RoundToString(neural_id,0);
 	#endif
@@ -1456,7 +1477,7 @@ void RenameThread(const char* name)
     // Only the first 15 characters are used (16 - NUL terminator)
     ::prctl(PR_SET_NAME, name, 0, 0, 0);
 #elif 0 && (defined(__FreeBSD__) || defined(__OpenBSD__))
-    // TODO: This is currently disabled because it needs to be verified to work
+    // TODO : This is currently disabled because it needs to be verified to work
     //       on FreeBSD or OpenBSD first. When verified the '0 &&' part can be
     //       removed.
     pthread_set_name_np(pthread_self(), name);

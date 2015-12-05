@@ -15,7 +15,8 @@ Public Class frmMining
     Private mIDelay As Long = 0
     Private msNeuralReport As String = ""
     Private WM_SETREDRAW = &HB
-
+    Private dgvDrillProjects As New DataGridView
+    Private rtbDrillRAC As New RichTextBox
 
     Private RefreshCount As Long
     Private bUICharted As Boolean = False
@@ -68,8 +69,8 @@ Public Class frmMining
         Dim seriesUserMagnitude As New Series
 
         Try
-            If bCharting Then Exit Sub
-            bCharting = True
+            'If bCharting Then Exit Sub
+            'bCharting = True
             If Chart1.Titles.Count < 1 Then
                 Chart1.Series.Clear()
 
@@ -104,6 +105,12 @@ Public Class frmMining
             Dim lAvgNetMag As Double = 0
             Dim lAvgUserMag As Double = 0
             Dim sCPID As String = KeyValue("PrimaryCPID")
+            Dim lAvgUserMagH As Long = 0
+            Dim lAvgUserMagHCount As Long = 0
+            Dim lAvgNetworkMag As Long = 0
+            Dim lAvgNetworkMagCount As Long = 0
+            Dim lAUM As Long = 0
+            Dim lANM As Long = 0
             For x = 30 To 1 Step -1
                 'Dim dpAvgCredits As New DataPoint
                 'dpAvgCredits.SetValueXY(ChartDate, lAvgCredits)
@@ -111,23 +118,37 @@ Public Class frmMining
                 Dim ChartDate As Date = DateAdd(DateInterval.Day, -x, Now)
                 lUserMag = GetHistoricalMagnitude(ChartDate, sCPID, lAvgUserMag)
                 lNetworkMag = GetHistoricalMagnitude(ChartDate, "Network", lAvgNetMag)
+                If lUserMag > 0 Then
+                    lAvgUserMagH += lUserMag
+                    lAvgUserMagHCount += 1
+                    lAUM = lAvgUserMagH / lAvgUserMagHCount
+                End If
+                If lNetworkMag > 0 Then
+                    lAvgNetworkMag += lNetworkMag
+                    lAvgNetworkMagCount += 1
+                    lANM = lAvgNetworkMag / lAvgNetworkMagCount
+                End If
                 Dim dpUserMag As New DataPoint()
-                dpUserMag.SetValueXY(ChartDate, lUserMag)
+                dpUserMag.SetValueXY(ChartDate, lAUM)
                 seriesUserMagnitude.Points.Add(dpUserMag)
                 Dim dpNetworkMag As New DataPoint()
-                dpNetworkMag.SetValueXY(ChartDate, lAvgNetMag)
+                dpNetworkMag.SetValueXY(ChartDate, lANM)
                 seriesNetworkMagnitude.Points.Add(dpNetworkMag)
             Next
             '''''''''''''''''''''''''''''''  Chart Pie of Current Contribution '''''''''''''''''''''''''''''''''''''''''
-            Call ChartBoincUtilization(lUserMag, lAvgNetMag)
+
+            Call ChartBoincUtilization(lAUM, lANM)
 
         Catch ex As Exception
+
         End Try
-        bCharting = False
+        'bCharting = False
     End Sub
 
     Public Sub ChartBoincUtilization(bu As Long, netBU As Long)
         Try
+            chtCurCont.Titles.Clear()
+
             If chtCurCont.Titles.Count < 1 Then
                 chtCurCont.Series.Clear()
                 chtCurCont.Titles.Clear()
@@ -160,6 +181,7 @@ Public Class frmMining
             chtCurCont.ChartAreas(0).Area3DStyle.Enable3D = True
             chtCurCont.Series(0)("DrawingStyle") = "Cylinder"
         Catch ex As Exception
+            Dim sMsg As String = ex.Message
 
         End Try
     End Sub
@@ -182,7 +204,6 @@ Public Class frmMining
     Private Sub HideToolStripMenuItem_Click(sender As System.Object, e As System.EventArgs) Handles HideToolStripMenuItem.Click
         Me.Hide()
     End Sub
-
 
     Public Sub UpdateChartHashRate()
 
@@ -216,6 +237,7 @@ Public Class frmMining
             Call OneMinuteUpdate()
             Me.TabControl1.SelectedIndex = 2
             If mbTestNet Then lblTestnet.Text = "TESTNET"
+            PopulateNeuralData()
 
         Catch ex As Exception
 
@@ -229,22 +251,28 @@ Public Class frmMining
         InitializeComponent()
     End Sub
 
-    
+
     Public Sub PopulateNeuralData()
 
         Dim sReport As String = ""
         Dim sReportRow As String = ""
+        Dim sMemoryName = IIf(mbTestNet, "magnitudes_testnet", "magnitudes")
 
-        Dim sHeader As String = "CPID,Local Magnitude,Neural Magnitude,Total RAC,Synced Til,Address,CPID Valid"
+        Dim sHeader As String = "CPID,Magnitude,Avg Magnitude,Total RAC,Synced Til,Address,CPID Valid;Witnesses"
         sReport += sHeader + vbCrLf
+Refresh:
+
         dgv.Rows.Clear()
         dgv.Columns.Clear()
         dgv.BackgroundColor = Drawing.Color.Black
         dgv.ForeColor = Drawing.Color.Lime
+        dgv.ReadOnly = True
+
         Dim grr As New GridcoinReader.GridcoinRow
-        Dim sHeading As String = "CPID;Local Magnitude;Neural Magnitude;Total RAC;Synced Til;Address;CPID Valid"
+        Dim sHeading As String = "CPID;Magnitude;Avg Magnitude;Total RAC;Synced Til;Address;CPID Valid;Witnesses"
         Dim vHeading() As String = Split(sHeading, ";")
         PopulateHeadings(vHeading, dgv, False)
+        dgv.Columns(2).Visible = False
         Dim sData As String = modPersistedDataSystem.GetMagnitudeContractDetails()
         Dim vData() As String = Split(sData, ";")
         Dim iRow As Long = 0
@@ -254,7 +282,8 @@ Public Class frmMining
         dgv.AutoResizeColumns(DataGridViewAutoSizeColumnsMode.ColumnHeader)
         dgv.ReadOnly = True
         dgv.EditingPanel.Visible = False
-  
+        'dgv.Columns(7).Visible = False (Witnesses, not hidden)
+
         For y = 0 To UBound(vData) - 1
             dgv.Rows.Add()
             sReportRow = ""
@@ -269,12 +298,17 @@ Public Class frmMining
                 End If
                 sReportRow += sValue + ","
             Next x
+
+            If LCase(dgv.Rows(iRow).Cells(0).Value) = "grc" Or LCase(dgv.Rows(iRow).Cells(0).Value) = "btc" Then
+                dgv.Rows(iRow).Visible = False 'No need to pollute the view page with quotes
+            End If
+
             sReport += sReportRow + vbCrLf
             iRow = iRow + 1
-            If iRow Mod 10 = 0 Then Application.DoEvents()
+            If iRow Mod 50 = 0 Then Application.DoEvents()
 
         Next
-  
+
         SetAutoSizeMode2(vHeading, dgv)
 
         Me.Cursor.Current = Cursors.Default
@@ -286,8 +320,9 @@ Public Class frmMining
         dgv.Rows.Add()
         dgv.Rows(iRow).Cells(0).Value = "Hash: " + sMyNeuralHash + " (" + Trim(iRow) + ")"
         sReport += "Hash: " + sMyNeuralHash + " (" + Trim(iRow) + ")"
-        msNeuralReport = sReport
 
+
+        msNeuralReport = sReport
         'Populate Projects
 
         dgvProjects.Rows.Clear()
@@ -324,25 +359,43 @@ Public Class frmMining
             If bIsThisWhitelisted Then
                 WhitelistedProjects += 1
             End If
-            dgvProjects.Rows.Add()
-            dgvProjects.Rows(iRow).Cells(0).Value = prj.PrimaryKey
-            dgvProjects.Rows(iRow).Cells(1).Value = prj.RAC
-            dgvProjects.Rows(iRow).Cells(2).Value = prj.AvgRAC
-
-            dgvProjects.Rows(iRow).Cells(3).Value = Trim(bIsThisWhitelisted)
-            iRow = iRow + 1
+            If prj.PrimaryKey <> "neuralnetwork" Then
+                dgvProjects.Rows.Add()
+                dgvProjects.Rows(iRow).Cells(0).Value = prj.PrimaryKey
+                dgvProjects.Rows(iRow).Cells(1).Value = prj.RAC
+                dgvProjects.Rows(iRow).Cells(2).Value = prj.AvgRAC
+                dgvProjects.Rows(iRow).Cells(3).Value = Trim(bIsThisWhitelisted)
+                iRow = iRow + 1
+            End If
         Next
-
         lblTotalProjects.Text = Trim(PrjCount)
         lblWhitelistedProjects.Text = Trim(WhitelistedProjects)
 
 
+        dgv.Sort(dgv.Columns(1), System.ComponentModel.ListSortDirection.Descending)
+
+
+
     End Sub
-
     Private Sub TabControl1_SelectedIndexChanged(sender As Object, e As System.EventArgs) Handles TabControl1.SelectedIndexChanged
-        If TabControl1.SelectedIndex = 2 Then
-            PopulateNeuralData()
+        ' If TabControl1.SelectedIndex = 2 Then
+        'End If
+    End Sub
+    Private Shared Function InlineAssignHelper(Of T)(ByRef target As T, ByVal value As T) As T
+        target = value
+        Return value
+    End Function
+    Private Sub HighlightKeyword(o As RichTextBox, color__1 As Color, startIndex As Integer, sFind As String)
+        If o.Text.Contains(sFind) Then
+            Dim index As Integer = -1
+            Dim selectStart As Integer = o.SelectionStart
 
+            While (InlineAssignHelper(index, o.Text.IndexOf(sFind, (index + 1)))) <> -1
+                o.[Select]((index + startIndex), sFind.Length)
+                o.SelectionColor = color__1
+                o.[Select](selectStart, 0)
+                o.SelectionColor = Color.Black
+            End While
         End If
     End Sub
 
@@ -374,16 +427,18 @@ Public Class frmMining
         If sCPID.Contains("Hash") Then Exit Sub
         If Len(sCPID) > 1 Then
             '7-10-2015 - Expose Project Mag and Cumulative Mag:
-            Dim dgvProjects As New DataGridView
+            dgvDrillProjects = New DataGridView
+
             Dim sHeading As String = "CPID,Project,RAC,Project Total RAC,Project Avg RAC,Project Mag,Cumulative RAC,Cumulative Mag"
             Dim vHeading() As String = Split(sHeading, ",")
-            PopulateHeadings(vHeading, dgvProjects, True)
+            PopulateHeadings(vHeading, dgvDrillProjects, True)
             Dim surrogatePrj As New Row
             surrogatePrj.Database = "Project"
             surrogatePrj.Table = "Projects"
             Dim lstProjects As List(Of Row) = GetList(surrogatePrj, "*")
             Dim iRow As Long = 0
-            dgvProjects.Rows.Clear()
+            dgvDrillProjects.Rows.Clear()
+            dgvDrillProjects.ReadOnly = True
 
             Dim CumulativeMag As Double = 0
             For Each prj As Row In lstProjects
@@ -396,18 +451,18 @@ Public Class frmMining
                 Dim PrjRAC As Double = Val(prj.RAC)
                 If CPIDRAC > 0 Then
                     iRow += 1
-                    dgvProjects.Rows.Add()
-                    dgvProjects.Rows(iRow - 1).Cells(0).Value = sCPID
-                    dgvProjects.Rows(iRow - 1).Cells(1).Value = prj.PrimaryKey
-                    dgvProjects.Rows(iRow - 1).Cells(2).Value = Val(Trim(CPIDRAC))
-                    dgvProjects.Rows(iRow - 1).Cells(3).Value = Val(Trim(prj.RAC))
-                    dgvProjects.Rows(iRow - 1).Cells(4).Value = Val(Trim(prj.AvgRAC))
+                    dgvDrillProjects.Rows.Add()
+                    dgvDrillProjects.Rows(iRow - 1).Cells(0).Value = sCPID
+                    dgvDrillProjects.Rows(iRow - 1).Cells(1).Value = prj.PrimaryKey
+                    dgvDrillProjects.Rows(iRow - 1).Cells(2).Value = Val(Trim(CPIDRAC))
+                    dgvDrillProjects.Rows(iRow - 1).Cells(3).Value = Val(Trim(prj.RAC))
+                    dgvDrillProjects.Rows(iRow - 1).Cells(4).Value = Val(Trim(prj.AvgRAC))
                     'Cumulative Mag:
                     Dim bIsThisWhitelisted As Boolean = False
                     bIsThisWhitelisted = IsInList(prj.PrimaryKey, lstWhitelist, False)
                     Dim IndMag As Double = 0
                     If Not bIsThisWhitelisted Then
-                        dgvProjects.Rows(iRow - 1).Cells(2).Style.BackColor = Color.Red
+                        dgvDrillProjects.Rows(iRow - 1).Cells(2).Style.BackColor = Color.Red
                     End If
 
                     If bIsThisWhitelisted Then
@@ -416,9 +471,9 @@ Public Class frmMining
                         TotalRAC += CPIDRAC
                         TotalNetworkRAC += PrjRAC
                     End If
-                    dgvProjects.Rows(iRow - 1).Cells(5).Value = Val(IndMag)
-                    dgvProjects.Rows(iRow - 1).Cells(6).Value = Val(RoundedMag(TotalRAC))
-                    dgvProjects.Rows(iRow - 1).Cells(7).Value = Val(RoundedMag(CumulativeMag))
+                    dgvDrillProjects.Rows(iRow - 1).Cells(5).Value = Val(IndMag)
+                    dgvDrillProjects.Rows(iRow - 1).Cells(6).Value = Val(Math.Round(TotalRAC, 2))
+                    dgvDrillProjects.Rows(iRow - 1).Cells(7).Value = Val(Math.Round(CumulativeMag, 2))
 
                 End If
 
@@ -428,39 +483,76 @@ Public Class frmMining
             'Magnitude = (TotalRACContributions  /  ProjectRAC) / (WhitelistedProjectsCount)) * NeuralNetworkMultiplier
 
             iRow += 1
-            dgvProjects.Rows.Add()
+            dgvDrillProjects.Rows.Add()
+            dgvDrillProjects.Rows(iRow - 1).Cells(0).Value = "Total Mag: " + Trim(RoundedMag(CumulativeMag))
+            dgvDrillProjects.Rows(iRow - 1).Cells(3).Value = RoundedMag(TotalNetworkRAC)
+            dgvDrillProjects.Rows(iRow - 1).Cells(6).Value = RoundedMag(TotalRAC)
+            dgvDrillProjects.Rows(iRow - 1).Cells(7).Value = RoundedMag(CumulativeMag)
+            dgvDrillProjects.RowHeadersVisible = True
+            dgvDrillProjects.RowHeadersDefaultCellStyle.BackColor = Color.Black
 
-            dgvProjects.Rows(iRow - 1).Cells(0).Value = "Total Mag: " + Trim(RoundedMag(CumulativeMag))
+            dgvDrillProjects.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.AllCells
 
-            dgvProjects.Rows(iRow - 1).Cells(3).Value = RoundedMag(TotalNetworkRAC)
-
-
-            dgvProjects.Rows(iRow - 1).Cells(6).Value = RoundedMag(TotalRAC)
-            dgvProjects.Rows(iRow - 1).Cells(7).Value = RoundedMag(CumulativeMag)
-
+            System.Windows.Forms.Cursor.Current = Cursors.WaitCursor
             Dim oNewForm As New Form
-            oNewForm.Width = Screen.PrimaryScreen.WorkingArea.Width / 1.6
-            oNewForm.Height = Screen.PrimaryScreen.WorkingArea.Height / 2.2
+            oNewForm.Width = Screen.PrimaryScreen.WorkingArea.Width / 2
+            oNewForm.Height = Screen.PrimaryScreen.WorkingArea.Height / 1.2
+            oNewForm.BackColor = Color.Black
             oNewForm.Text = "CPID Magnitude Details - Gridcoin Neural Network - (Red=Blacklisted)"
+            oNewForm.Controls.Add(dgvDrillProjects)
 
-            oNewForm.Controls.Add(dgvProjects)
-            dgvProjects.Left = 5
-            dgvProjects.Top = 5
-            Dim TotalControlHeight As Long = (dgvProjects.RowTemplate.Height * (iRow + 2)) + 20
-            dgvProjects.Height = TotalControlHeight
-            oNewForm.Height = dgvProjects.Height + 285
-            dgvProjects.Width = oNewForm.Width - 25
-            Dim rtbRac As New System.Windows.Forms.RichTextBox
+            dgvDrillProjects.Left = 5
+            dgvDrillProjects.Top = 5
+            dgvDrillProjects.AutoResizeColumns()
+            dgvDrillProjects.AutoResizeRows()
 
-            Dim sXML As String = GetXMLOnly(sCPID)
-            rtbRac.Left = 5
-            rtbRac.Top = dgvProjects.Height + 8
-            rtbRac.Height = 245
-            rtbRac.Width = oNewForm.Width - 5
-            rtbRac.Text = sXML
-            oNewForm.Controls.Add(rtbRac)
+
+            Dim TotalControlHeight As Long = (dgvDrillProjects.RowTemplate.Height * (iRow + 2)) + 18
+            dgvDrillProjects.Height = TotalControlHeight + 5
+            oNewForm.Height = dgvDrillProjects.Height + 285
+            dgvDrillProjects.Width = oNewForm.Width - 25
+
+            rtbDrillRAC = New System.Windows.Forms.RichTextBox
+            Dim sXML As String = GetRAC(sCPID)
+            rtbDrillRAC.Font = New Font("Verdana", 12)
+            rtbDrillRAC.Left = 5
+            rtbDrillRAC.Top = dgvDrillProjects.Height + 8
+            rtbDrillRAC.Height = 245
+            rtbDrillRAC.Width = oNewForm.Width - 30
+            rtbDrillRAC.Text = sXML
+            rtbDrillRAC.BackColor = Color.Black
+            rtbDrillRAC.ForeColor = Color.Green
+            HighlightKeyword(rtbDrillRAC, Color.Brown, 0, "<project>")
+
+            oNewForm.Controls.Add(rtbDrillRAC)
             oNewForm.Show()
+            AddHandler oNewForm.Resize, AddressOf ResizeDrillProjectsForm
+            System.Windows.Forms.Cursor.Current = Cursors.Default
         End If
+    End Sub
+
+    Private Sub ResizeDrillProjectsForm(sender As Object, e As System.EventArgs)
+        Dim TotalControlHeight As Long = (dgvDrillProjects.RowTemplate.Height * (dgvDrillProjects.Rows.Count + 2)) + 18
+        dgvDrillProjects.Height = TotalControlHeight + 5
+        Dim oSender As Form = sender
+        dgvDrillProjects.Width = oSender.Width - 25
+        For x = 0 To dgvDrillProjects.ColumnCount - 1
+            dgvDrillProjects.Columns(x).Width += 1
+        Next
+        dgvDrillProjects.BackgroundColor = Color.Black
+        dgvDrillProjects.Refresh()
+        dgvDrillProjects.Update()
+
+        'oNewForm.Height = dgvDrillProjects.Height + 285
+        '        dgvDrillProjects.Refresh()
+        '       dgvDrillProjects.Update()
+        rtbDrillRAC.Top = dgvDrillProjects.Height + 8
+        rtbDrillRAC.Height = oSender.Height - TotalControlHeight
+
+        rtbDrillRAC.Width = oSender.Width - 30
+        rtbDrillRAC.Update()
+
+
     End Sub
 
     Private Sub ContractDetailsToolStripMenuItem_Click(sender As System.Object, e As System.EventArgs) Handles ContractDetailsToolStripMenuItem.Click
@@ -468,7 +560,7 @@ Public Class frmMining
         Dim sMags As String = ExtractXML(sData, "<MAGNITUDES>")
         Dim vCt() As String = Split(sMags, ";")
         Dim sHash As String = GetQuorumHash(sData)
-        MsgBox(sData + " - Count " + Trim(vCt.Length() - 1) + " - Hash " + sHash)
+        MsgBox(Mid(sData, 1, 500) + " - Count " + Trim(vCt.Length() - 1) + " - Hash " + sHash)
     End Sub
 
     Private Sub btnExport_Click(sender As System.Object, e As System.EventArgs) Handles btnExport.Click
@@ -481,67 +573,127 @@ Public Class frmMining
         ExportToCSV2()
         MsgBox("Exported to Reports\" + "NeuralMagnitudeReport.csv")
     End Sub
+
+
+    Private Sub Draw3DBorder(g As Graphics)
+        Dim PenWidth As Integer = CInt(Pens.White.Width)
+
+        g.DrawLine(Pens.DarkGray, New Point(Me.ClientRectangle.Left, Me.ClientRectangle.Top), New Point(Me.ClientRectangle.Width - PenWidth, Me.ClientRectangle.Top))
+        g.DrawLine(Pens.DarkGray, New Point(Me.ClientRectangle.Left, Me.ClientRectangle.Top), New Point(Me.ClientRectangle.Left, Me.ClientRectangle.Height - PenWidth))
+        g.DrawLine(Pens.White, New Point(Me.ClientRectangle.Left, Me.ClientRectangle.Height - PenWidth), New Point(Me.ClientRectangle.Width - PenWidth, Me.ClientRectangle.Height - PenWidth))
+        g.DrawLine(Pens.White, New Point(Me.ClientRectangle.Width - PenWidth, Me.ClientRectangle.Top), New Point(Me.ClientRectangle.Width - PenWidth, Me.ClientRectangle.Height - PenWidth))
+    End Sub
+
+
     Private Sub TextBox1_TextChanged(sender As System.Object, e As System.EventArgs) Handles txtSearch.TextChanged
-        Dim sPhrase As String = txtSearch.Text
-        For y = 1 To dgv.Rows.Count - 1
-            For x = 0 To dgv.Rows(y).Cells.Count - 1
-                If LCase(Trim("" & dgv.Rows(y).Cells(x).Value)) Like LCase(Trim(txtSearch.Text)) + "*" Then
-                    dgv.Rows(y).Selected = True
-                    dgv.CurrentCell = dgv.Rows(y).Cells(0)
-                    Exit Sub
-                End If
-            Next
-        Next
+        Try
+
+            Dim sPhrase As String = txtSearch.Text
+            For y = 1 To dgv.Rows.Count - 1
+                For x = 0 To dgv.Rows(y).Cells.Count - 1
+                    If LCase(Trim("" & dgv.Rows(y).Cells(x).Value)) Like LCase(Trim(txtSearch.Text)) + "*" Then
+                        dgv.Rows(y).Selected = True
+                        dgv.CurrentCell = dgv.Rows(y).Cells(0)
+                        Exit Sub
+                    End If
+                Next x
+            Next y
+
+        Catch ex As Exception
+            MsgBox("Slow down.", MsgBoxStyle.Critical)
+        End Try
+
     End Sub
 
     Private Sub btnRefresh_Click(sender As System.Object, e As System.EventArgs) Handles btnRefresh.Click
         PopulateNeuralData()
         Call OneMinuteUpdate()
-        If ((Rnd(1) * 1000) < 333) Then
-            'Ask the other nodes what the averages are...
-            pbSync.Visible = True
-            pbSync.Maximum = 100
-            pbSync.Value = 50
-            Try
-                ReconnectToNeuralNetwork()
-                Dim sMemoryName = IIf(mbTestNet, "magnitudes_testnet", "magnitudes")
-                mdictNeuralNetworkMemories = mGRCData.GetNeuralNetworkQuorumData(sMemoryName)
-            Catch ex As Exception
-                Log("Unable to connect to neural network for memories.")
-            End Try
-            Threading.Thread.Sleep(10)
-            pbSync.Value = 0
-            pbSync.Visible = False
+        'ChartBoinc()
 
-        End If
     End Sub
-
+    Public Sub DoEvents()
+        Application.DoEvents()
+    End Sub
     Private Sub TimerSync_Tick(sender As System.Object, e As System.EventArgs) Handles TimerSync.Tick
         If mlPercentComplete <> 0 Then
             pbSync.Visible = True
-            pbSync.Maximum = 100
+            DisableForm(False)
+            pbSync.Maximum = 101
+            lblQueue.Text = "Queue: " + Trim(mlQueue) : lblQueue.Visible = True
             If mlPercentComplete <= pbSync.Maximum Then pbSync.Value = mlPercentComplete
-            Application.DoEvents()
             If mlPercentComplete < 50 Then pbSync.ForeColor = Color.Red
-            If mlPercentComplete > 50 And mlPercentComplete < 90 Then pbSync.ForeColor = Color.Yellow
-            If mlPercentComplete > 90 Then pbSync.ForeColor = Color.Green
+            If mlPercentComplete > 50 And mlPercentComplete < 80 Then pbSync.ForeColor = Color.Orange
+            If mlPercentComplete > 80 And mlPercentComplete < 90 Then pbSync.ForeColor = Color.Yellow
+            If mlPercentComplete > 90 Then pbSync.ForeColor = Color.White : lblQueue.Text = "Queue: Final calculation phase"
+            If mlPercentComplete = 1 Then pbSync.ForeColor = Color.Brown : lblQueue.Text = "Data gathering phase" : lblNeuralDetail.Text = msNeuralDetail
+            Application.DoEvents()
         Else
-            If pbSync.Visible = True Then pbSync.Visible = False : PopulateNeuralData()
-            pbSync.Visible = False
+            If pbSync.Visible = True Then pbSync.Visible = False : Application.DoEvents()
+            pbSync.Visible = False : pbSync.Height = 18
+            DisableForm(True) : lblNeuralDetail.Text = ""
+            lblQueue.Visible = False
+            Application.DoEvents()
+            If bNeedsDgvRefreshed Then
+                bNeedsDgvRefreshed = False
+                PopulateNeuralData()
+            End If
         End If
-    End Sub
-
-    Private Sub PoolsToolStripMenuItem_Click(sender As System.Object, e As System.EventArgs) Handles PoolsToolStripMenuItem.Click
 
     End Sub
+    Private Sub DisableForm(bEnabled As Boolean)
+        'Lock the controls, but allow the user to move the screen around so we dont appear Frozen.
+        'dgv.Enabled = bEnabled - dont lock the grid
+        btnExport.Enabled = bEnabled
+        btnRefresh.Enabled = bEnabled
+        chtCurCont.Enabled = bEnabled
+        btnSync.Enabled = bEnabled
+        If bEnabled Then
+            Me.BackColor = Color.Black
+        Else
+            Me.BackColor = Color.Green
+        End If
 
-    Private Sub InstallGridcoinGalazaToolStripMenuItem_Click(sender As System.Object, e As System.EventArgs) Handles InstallGridcoinGalazaToolStripMenuItem.Click
-        InstallGalaza()
+    End Sub
+    Private Sub PoolsToolStripMenuItem_Click(sender As System.Object, e As System.EventArgs)
 
     End Sub
 
     Private Sub tOneMinute_Tick(sender As System.Object, e As System.EventArgs) Handles tOneMinute.Tick
         Call OneMinuteUpdate()
+
+    End Sub
+
+    Private Sub dgv_CellContentClick(sender As System.Object, e As System.Windows.Forms.DataGridViewCellEventArgs) Handles dgv.CellContentClick
+
+    End Sub
+    Private Sub Sync()
+        mclsUtilization.UpdateMagnitudesOnly()
+        bNeedsDgvRefreshed = True
+    End Sub
+    Private Sub btnSync_Click(sender As System.Object, e As System.EventArgs) Handles btnSync.Click
+        btnSync.Enabled = False
+        Dim thSync As New Threading.Thread(AddressOf Sync) : thSync.Start() : mdLastNeuralNetworkSync = Now
+        Me.BackColor = Color.Green
+        For x As Integer = 1 To 3
+            Threading.Thread.Sleep(1000)
+            Application.DoEvents()
+        Next
+    End Sub
+
+
+    Private Sub TabControl1_Click(sender As System.Object, e As System.EventArgs) Handles TabControl1.Click
+        If TabControl1.SelectedIndex = 1 Then
+            WebBrowserBoinc.Navigate("http://boincstats.com/en/stats/-1/team/detail/118094994/overview")
+        End If
+
+        ' If TabControl1.SelectedIndex = 2 Then
+        '  WebBrowserChat.Navigate("https://kiwiirc.com/client/irc.freenode.net:6667/#gridcoin")
+        ' End If
+    End Sub
+
+    Private Sub LinkLabel1_LinkClicked(sender As System.Object, e As System.Windows.Forms.LinkLabelLinkClickedEventArgs) Handles LinkLabel1.LinkClicked
+        Dim sURL As String = "https://kiwiirc.com/client/irc.freenode.net:6667/#gridcoin"
+        Process.Start(sURL)
 
     End Sub
 End Class

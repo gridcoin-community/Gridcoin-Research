@@ -16,10 +16,12 @@ using namespace std;
 int64_t GetCoinYearReward(int64_t nTime);
 
 //CCriticalSection cs_main;
-static boost::thread_group* postThreads = NULL;
+//static boost::thread_group* postThreads = NULL;
 
 double GetPoSKernelPS2();
-
+StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
+double GRCMagnitudeUnit(int64_t locktime);
+std::string qtGetNeuralHash(std::string data);
 volatile bool bCPIDsLoaded;
 volatile bool bProjectsInitialized;
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
@@ -64,22 +66,38 @@ Value getmininginfo(const Array& params, bool fHelp)
     weight.push_back(Pair("maximum",    (uint64_t)0));
     weight.push_back(Pair("combined",  (uint64_t)nWeight));
     obj.push_back(Pair("stakeweight", weight));
-	double nCutoff =  GetAdjustedTime() - (60*60*24*14);
+	//double nCutoff =  GetAdjustedTime() - (60*60*24*14);
     obj.push_back(Pair("stakeinterest",    (uint64_t)GetCoinYearReward( GetAdjustedTime())));
     obj.push_back(Pair("testnet",       fTestNet));
 	double neural_popularity = 0;
 	std::string neural_hash = GetNeuralNetworkSupermajorityHash(neural_popularity);
-	obj.push_back(Pair("NeuralHash", neural_hash));
+	obj.push_back(Pair("PopularNeuralHash", neural_hash));
+	//9-19-2015 - CM
+	std::string myNeuralHash = "";
+	#if defined(WIN32) && defined(QT_GUI)
+	           myNeuralHash = qtGetNeuralHash("");
+			   obj.push_back(Pair("MyNeuralHash", myNeuralHash));
+	#endif
+
 	obj.push_back(Pair("NeuralPopularity", neural_popularity));
 	obj.push_back(Pair("testnet",       fTestNet));
 	obj.push_back(Pair("CPID",msPrimaryCPID));
 	obj.push_back(Pair("RSAWeight",(double)GetRSAWeightByCPID(msPrimaryCPID)));
+	StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
+	obj.push_back(Pair("GRC Quote", network.GRCQuote/10000000000));
+	obj.push_back(Pair("BTC Quote", network.BTCQuote/100));
+
+	double dMagnitudeUnit = GRCMagnitudeUnit(GetAdjustedTime());
+	obj.push_back(Pair("Magnitude Unit",dMagnitudeUnit));
+
 	obj.push_back(Pair("MiningProject",msMiningProject));
 	obj.push_back(Pair("MiningInfo 1", msMiningErrors));
 	obj.push_back(Pair("MiningInfo 2", msMiningErrors2));
 	obj.push_back(Pair("MiningInfo 5", msMiningErrors5));
 	obj.push_back(Pair("MiningInfo 6", msMiningErrors6));
 	obj.push_back(Pair("MiningInfo 7", msMiningErrors7));
+	obj.push_back(Pair("MiningInfo 8", msMiningErrors8));
+
     return obj;
 }
 
@@ -128,10 +146,10 @@ Value getworkex(const Array& params, bool fHelp)
         );
 
     if (vNodes.empty())
-        throw JSONRPCError(-9, "GridCoin is not connected!");
+        throw JSONRPCError(-9, "Gridcoin is not connected!");
 
     if (IsInitialBlockDownload())
-        throw JSONRPCError(-10, "GridCoin is downloading blocks...");
+        throw JSONRPCError(-10, "Gridcoin is downloading blocks...");
 
     if (pindexBest->nHeight >= LAST_POW_BLOCK)
         throw JSONRPCError(RPC_MISC_ERROR, "No more PoW blocks");
@@ -269,10 +287,10 @@ Value getwork(const Array& params, bool fHelp)
             "If [data] is specified, tries to solve the block and returns true if it was successful.");
 
     if (vNodes.empty())
-        throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "GridCoin is not connected!");
+        throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "Gridcoin is not connected!");
 
     if (IsInitialBlockDownload())
-        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "GridCoin is downloading blocks...");
+        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Gridcoin is downloading blocks...");
 
     if (pindexBest->nHeight >= LAST_POW_BLOCK)
         throw JSONRPCError(RPC_MISC_ERROR, "No more PoW blocks");
@@ -367,7 +385,7 @@ Value getwork(const Array& params, bool fHelp)
         pblock->vtx[0].vin[0].scriptSig = mapNewBlock[pdata->hashMerkleRoot].second;
         pblock->hashMerkleRoot = pblock->BuildMerkleTree();
 		bool response = CheckWork(pblock, *pwalletMain, reservekey);
-		if (response) 
+		if (response)
 		{
 				msMiningErrors = "POW Block Mined";
 		}
@@ -417,10 +435,10 @@ Value getblocktemplate(const Array& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid mode");
 
     if (vNodes.empty())
-        throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "GridCoin is not connected!");
+        throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "Gridcoin is not connected!");
 
     if (IsInitialBlockDownload())
-        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "GridCoin is downloading blocks...");
+        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Gridcoin is downloading blocks...");
 
     if (pindexBest->nHeight >= LAST_POW_BLOCK)
         throw JSONRPCError(RPC_MISC_ERROR, "No more PoW blocks");

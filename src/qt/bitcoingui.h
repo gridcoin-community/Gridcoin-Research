@@ -107,7 +107,7 @@ private:
 	QAction *downloadAction;
 	QAction *rebootAction;
 
-	QAction *sqlAction;
+	QAction *configAction;
 	QAction *leaderboardAction;
 	QAction *tickerAction;
 	QAction *ticketListAction;
@@ -116,6 +116,7 @@ private:
 	QAction *galazaAction;
 	QAction *newUserWizardAction;
 	QAction *foundationAction;
+	QAction *faqAction;
 
     QAction *verifyMessageAction;
     QAction *aboutAction;
@@ -212,9 +213,10 @@ private slots:
 	void upgradeClicked();
 	void downloadClicked();
 	void rebootClicked();
-	void sqlClicked();
+	void configClicked();
 	void miningClicked();
 	void votingClicked();
+	void faqClicked();
 
 	void tickerClicked();
 	void ticketListClicked();

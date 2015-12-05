@@ -55,8 +55,6 @@ Partial Class frmMining
         Me.HideToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.ConfigurationToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.ContractDetailsToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
-        Me.PoolsToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
-        Me.InstallGridcoinGalazaToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.TabControl1 = New System.Windows.Forms.TabControl()
         Me.TabOverview = New System.Windows.Forms.TabPage()
         Me.GroupBox4 = New System.Windows.Forms.GroupBox()
@@ -67,6 +65,7 @@ Partial Class frmMining
         Me.GroupBox1 = New System.Windows.Forms.GroupBox()
         Me.pbCgminer = New System.Windows.Forms.PictureBox()
         Me.TabPage1 = New System.Windows.Forms.TabPage()
+        Me.WebBrowserBoinc = New System.Windows.Forms.WebBrowser()
         Me.TabPage2 = New System.Windows.Forms.TabPage()
         Me.dgv = New System.Windows.Forms.DataGridView()
         Me.lblWarning = New System.Windows.Forms.Label()
@@ -85,6 +84,10 @@ Partial Class frmMining
         Me.lblQuorumHash = New System.Windows.Forms.Label()
         Me.lblTimestamp = New System.Windows.Forms.Label()
         Me.lblBlock = New System.Windows.Forms.Label()
+        Me.btnSync = New System.Windows.Forms.Button()
+        Me.lblQueue = New System.Windows.Forms.Label()
+        Me.lblNeuralDetail = New System.Windows.Forms.Label()
+        Me.LinkLabel1 = New System.Windows.Forms.LinkLabel()
         CType(Me.Chart1, System.ComponentModel.ISupportInitialize).BeginInit()
         CType(Me.chtCurCont, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.MenuStrip1.SuspendLayout()
@@ -94,6 +97,7 @@ Partial Class frmMining
         Me.GroupBox2.SuspendLayout()
         CType(Me.ChartHashRate, System.ComponentModel.ISupportInitialize).BeginInit()
         CType(Me.pbCgminer, System.ComponentModel.ISupportInitialize).BeginInit()
+        Me.TabPage1.SuspendLayout()
         Me.TabPage2.SuspendLayout()
         CType(Me.dgv, System.ComponentModel.ISupportInitialize).BeginInit()
         CType(Me.dgvProjects, System.ComponentModel.ISupportInitialize).BeginInit()
@@ -101,9 +105,9 @@ Partial Class frmMining
         '
         'btnRefresh
         '
-        Me.btnRefresh.Location = New System.Drawing.Point(18, 734)
+        Me.btnRefresh.Location = New System.Drawing.Point(14, 734)
         Me.btnRefresh.Name = "btnRefresh"
-        Me.btnRefresh.Size = New System.Drawing.Size(118, 35)
+        Me.btnRefresh.Size = New System.Drawing.Size(60, 35)
         Me.btnRefresh.TabIndex = 0
         Me.btnRefresh.Text = "Refresh"
         Me.btnRefresh.UseVisualStyleBackColor = False
@@ -217,9 +221,9 @@ Partial Class frmMining
         '
         'btnHide
         '
-        Me.btnHide.Location = New System.Drawing.Point(159, 734)
+        Me.btnHide.Location = New System.Drawing.Point(80, 734)
         Me.btnHide.Name = "btnHide"
-        Me.btnHide.Size = New System.Drawing.Size(118, 35)
+        Me.btnHide.Size = New System.Drawing.Size(60, 35)
         Me.btnHide.TabIndex = 23
         Me.btnHide.Text = "Hide"
         Me.btnHide.UseVisualStyleBackColor = False
@@ -229,7 +233,7 @@ Partial Class frmMining
         Me.MenuStrip1.AllowItemReorder = True
         Me.MenuStrip1.BackColor = System.Drawing.Color.Transparent
         Me.MenuStrip1.BackgroundImageLayout = System.Windows.Forms.ImageLayout.None
-        Me.MenuStrip1.Items.AddRange(New System.Windows.Forms.ToolStripItem() {Me.FileToolStripMenuItem, Me.ConfigurationToolStripMenuItem, Me.PoolsToolStripMenuItem})
+        Me.MenuStrip1.Items.AddRange(New System.Windows.Forms.ToolStripItem() {Me.FileToolStripMenuItem, Me.ConfigurationToolStripMenuItem})
         Me.MenuStrip1.Location = New System.Drawing.Point(0, 0)
         Me.MenuStrip1.Name = "MenuStrip1"
         Me.MenuStrip1.Size = New System.Drawing.Size(1071, 24)
@@ -258,27 +262,14 @@ Partial Class frmMining
         Me.ConfigurationToolStripMenuItem.DropDownItems.AddRange(New System.Windows.Forms.ToolStripItem() {Me.ContractDetailsToolStripMenuItem})
         Me.ConfigurationToolStripMenuItem.ImageTransparentColor = System.Drawing.Color.Black
         Me.ConfigurationToolStripMenuItem.Name = "ConfigurationToolStripMenuItem"
-        Me.ConfigurationToolStripMenuItem.Size = New System.Drawing.Size(93, 20)
-        Me.ConfigurationToolStripMenuItem.Text = "Configuration"
+        Me.ConfigurationToolStripMenuItem.Size = New System.Drawing.Size(54, 20)
+        Me.ConfigurationToolStripMenuItem.Text = "Debug"
         '
         'ContractDetailsToolStripMenuItem
         '
         Me.ContractDetailsToolStripMenuItem.Name = "ContractDetailsToolStripMenuItem"
         Me.ContractDetailsToolStripMenuItem.Size = New System.Drawing.Size(158, 22)
         Me.ContractDetailsToolStripMenuItem.Text = "Contract Details"
-        '
-        'PoolsToolStripMenuItem
-        '
-        Me.PoolsToolStripMenuItem.DropDownItems.AddRange(New System.Windows.Forms.ToolStripItem() {Me.InstallGridcoinGalazaToolStripMenuItem})
-        Me.PoolsToolStripMenuItem.Name = "PoolsToolStripMenuItem"
-        Me.PoolsToolStripMenuItem.Size = New System.Drawing.Size(114, 20)
-        Me.PoolsToolStripMenuItem.Text = "Optional Modules"
-        '
-        'InstallGridcoinGalazaToolStripMenuItem
-        '
-        Me.InstallGridcoinGalazaToolStripMenuItem.Name = "InstallGridcoinGalazaToolStripMenuItem"
-        Me.InstallGridcoinGalazaToolStripMenuItem.Size = New System.Drawing.Size(190, 22)
-        Me.InstallGridcoinGalazaToolStripMenuItem.Text = "Install Gridcoin Galaza"
         '
         'TabControl1
         '
@@ -398,6 +389,7 @@ Partial Class frmMining
         '
         'TabPage1
         '
+        Me.TabPage1.Controls.Add(Me.WebBrowserBoinc)
         Me.TabPage1.Location = New System.Drawing.Point(4, 22)
         Me.TabPage1.Name = "TabPage1"
         Me.TabPage1.Padding = New System.Windows.Forms.Padding(3)
@@ -405,6 +397,17 @@ Partial Class frmMining
         Me.TabPage1.TabIndex = 2
         Me.TabPage1.Text = "Boinc Stats"
         Me.TabPage1.UseVisualStyleBackColor = True
+        '
+        'WebBrowserBoinc
+        '
+        Me.WebBrowserBoinc.Dock = System.Windows.Forms.DockStyle.Fill
+        Me.WebBrowserBoinc.Location = New System.Drawing.Point(3, 3)
+        Me.WebBrowserBoinc.MinimumSize = New System.Drawing.Size(20, 20)
+        Me.WebBrowserBoinc.Name = "WebBrowserBoinc"
+        Me.WebBrowserBoinc.ScriptErrorsSuppressed = True
+        Me.WebBrowserBoinc.Size = New System.Drawing.Size(1031, 351)
+        Me.WebBrowserBoinc.TabIndex = 0
+        Me.WebBrowserBoinc.Url = New System.Uri("http://www.gridcoin.us", System.UriKind.Absolute)
         '
         'TabPage2
         '
@@ -474,7 +477,7 @@ Partial Class frmMining
         '
         'btnExport
         '
-        Me.btnExport.Location = New System.Drawing.Point(304, 734)
+        Me.btnExport.Location = New System.Drawing.Point(146, 734)
         Me.btnExport.Name = "btnExport"
         Me.btnExport.Size = New System.Drawing.Size(118, 35)
         Me.btnExport.TabIndex = 56
@@ -593,7 +596,7 @@ Partial Class frmMining
         'TimerSync
         '
         Me.TimerSync.Enabled = True
-        Me.TimerSync.Interval = 1100
+        Me.TimerSync.Interval = 2000
         '
         'lblLastSynced
         '
@@ -661,6 +664,48 @@ Partial Class frmMining
         Me.lblBlock.TabIndex = 73
         Me.lblBlock.Text = "Superblock Block #:"
         '
+        'btnSync
+        '
+        Me.btnSync.Location = New System.Drawing.Point(272, 734)
+        Me.btnSync.Name = "btnSync"
+        Me.btnSync.Size = New System.Drawing.Size(118, 35)
+        Me.btnSync.TabIndex = 74
+        Me.btnSync.Text = "Sync"
+        Me.btnSync.UseVisualStyleBackColor = False
+        '
+        'lblQueue
+        '
+        Me.lblQueue.AutoSize = True
+        Me.lblQueue.BackColor = System.Drawing.Color.Transparent
+        Me.lblQueue.Font = New System.Drawing.Font("Microsoft Sans Serif", 9.75!)
+        Me.lblQueue.Location = New System.Drawing.Point(474, 598)
+        Me.lblQueue.Name = "lblQueue"
+        Me.lblQueue.Size = New System.Drawing.Size(61, 16)
+        Me.lblQueue.TabIndex = 75
+        Me.lblQueue.Text = "Queue: 0"
+        '
+        'lblNeuralDetail
+        '
+        Me.lblNeuralDetail.AutoSize = True
+        Me.lblNeuralDetail.BackColor = System.Drawing.Color.Transparent
+        Me.lblNeuralDetail.Font = New System.Drawing.Font("Microsoft Sans Serif", 9.75!)
+        Me.lblNeuralDetail.Location = New System.Drawing.Point(815, 596)
+        Me.lblNeuralDetail.Name = "lblNeuralDetail"
+        Me.lblNeuralDetail.Size = New System.Drawing.Size(11, 16)
+        Me.lblNeuralDetail.TabIndex = 76
+        Me.lblNeuralDetail.Text = " "
+        '
+        'LinkLabel1
+        '
+        Me.LinkLabel1.AutoSize = True
+        Me.LinkLabel1.BackColor = System.Drawing.Color.Transparent
+        Me.LinkLabel1.Location = New System.Drawing.Point(230, 42)
+        Me.LinkLabel1.Name = "LinkLabel1"
+        Me.LinkLabel1.Size = New System.Drawing.Size(86, 13)
+        Me.LinkLabel1.TabIndex = 2
+        Me.LinkLabel1.TabStop = True
+        Me.LinkLabel1.Text = "GRC Chat Room"
+        '
         'frmMining
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
@@ -669,6 +714,10 @@ Partial Class frmMining
         Me.BackgroundImage = Global.BoincStake.My.Resources.Resources.GradientU
         Me.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch
         Me.ClientSize = New System.Drawing.Size(1071, 793)
+        Me.Controls.Add(Me.LinkLabel1)
+        Me.Controls.Add(Me.lblNeuralDetail)
+        Me.Controls.Add(Me.lblQueue)
+        Me.Controls.Add(Me.btnSync)
         Me.Controls.Add(Me.lblBlock)
         Me.Controls.Add(Me.lblTimestamp)
         Me.Controls.Add(Me.lblQuorumHash)
@@ -698,7 +747,7 @@ Partial Class frmMining
         Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)
         Me.MainMenuStrip = Me.MenuStrip1
         Me.Name = "frmMining"
-        Me.Text = "Gridcoin Neural Network 1.1"
+        Me.Text = "Gridcoin Neural Network 3.3"
         CType(Me.Chart1, System.ComponentModel.ISupportInitialize).EndInit()
         CType(Me.chtCurCont, System.ComponentModel.ISupportInitialize).EndInit()
         Me.MenuStrip1.ResumeLayout(False)
@@ -709,6 +758,7 @@ Partial Class frmMining
         Me.GroupBox2.ResumeLayout(False)
         CType(Me.ChartHashRate, System.ComponentModel.ISupportInitialize).EndInit()
         CType(Me.pbCgminer, System.ComponentModel.ISupportInitialize).EndInit()
+        Me.TabPage1.ResumeLayout(False)
         Me.TabPage2.ResumeLayout(False)
         CType(Me.dgv, System.ComponentModel.ISupportInitialize).EndInit()
         CType(Me.dgvProjects, System.ComponentModel.ISupportInitialize).EndInit()
@@ -738,7 +788,6 @@ Partial Class frmMining
     Friend WithEvents GroupBox1 As System.Windows.Forms.GroupBox
     Friend WithEvents lblWarning As System.Windows.Forms.Label
     Friend WithEvents GroupBox4 As System.Windows.Forms.GroupBox
-    Friend WithEvents PoolsToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents TabPage1 As System.Windows.Forms.TabPage
     Friend WithEvents TabPage2 As System.Windows.Forms.TabPage
     Friend WithEvents dgv As System.Windows.Forms.DataGridView
@@ -752,11 +801,15 @@ Partial Class frmMining
     Friend WithEvents Label3 As System.Windows.Forms.Label
     Friend WithEvents pbSync As System.Windows.Forms.ProgressBar
     Friend WithEvents TimerSync As System.Windows.Forms.Timer
-    Friend WithEvents InstallGridcoinGalazaToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents lblLastSynced As System.Windows.Forms.Label
     Friend WithEvents lblCPID As System.Windows.Forms.Label
     Friend WithEvents lblSuperblockAge As System.Windows.Forms.Label
     Friend WithEvents lblQuorumHash As System.Windows.Forms.Label
     Friend WithEvents lblTimestamp As System.Windows.Forms.Label
     Friend WithEvents lblBlock As System.Windows.Forms.Label
+    Friend WithEvents btnSync As System.Windows.Forms.Button
+    Friend WithEvents lblQueue As System.Windows.Forms.Label
+    Friend WithEvents lblNeuralDetail As System.Windows.Forms.Label
+    Friend WithEvents WebBrowserBoinc As System.Windows.Forms.WebBrowser
+    Friend WithEvents LinkLabel1 As System.Windows.Forms.LinkLabel
 End Class

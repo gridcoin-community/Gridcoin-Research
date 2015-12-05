@@ -22,6 +22,8 @@ Public Class frmPlaceVote
         Dim sShareType As String = ExtractXML(sData, "<SHARETYPE>")
         Dim sQuestion As String = ExtractXML(sData, "<QUESTION>")
         Dim sAnswers As String = ExtractXML(sData, "<ANSWERS>")
+        Dim sURL As String = ExtractXML(sData, "<URL>")
+
         'Array of answers
         Dim sArrayOfAnswers As String = ExtractXML(sData, "<ARRAYANSWERS>")
         Dim vAnswers() As String = Split(sArrayOfAnswers, "<RESERVED>")
@@ -57,6 +59,7 @@ Public Class frmPlaceVote
 
         lblQuestion.Text = "Q: " + sQuestion
         lblTitle.Text = ProperCase(sTitle)
+        lnkURL.Text = sURL
 
         Return ""
     End Function
@@ -93,7 +96,10 @@ Public Class frmPlaceVote
         Dim vPolls() As String = Split(sVoting, "<POLL>")
         For y As Integer = 0 To vPolls.Length - 1
             Dim sTitle1 As String = ExtractXML(vPolls(y), "<TITLE>", "</TITLE>")
+            Dim sURL As String = ExtractXML(vPolls(y), "<URL>", "</URL>")
+
             sTitle1 = Replace(sTitle1, "_", " ")
+            sURL = Replace(sURL, "_", " ")
 
             If LCase(sTitle1) = LCase(sTitle) Then
                 Return vPolls(y)
@@ -118,7 +124,7 @@ Public Class frmPlaceVote
         Dim sTitle As String = lblTitle.Text
         sVote = Replace(sVote, " ", "_")
         sTitle = Replace(sTitle, " ", "_")
-        Dim sResult As String = ExecuteRPCCommand("vote", sTitle, sVote, "", "", "")
+        Dim sResult As String = ExecuteRPCCommand("vote", sTitle, sVote, "", "", "", "")
         MsgBox(sResult, MsgBoxStyle.Information, "Gridcoin Voting System")
 
     End Sub
@@ -129,8 +135,12 @@ Public Class frmPlaceVote
         Dim sVote As String = "TEST"
 
         sTitle = Replace(sTitle, " ", "_")
-        Dim sResult As String = ExecuteRPCCommand("vote", sTitle, sVote, "", "", "")
+        Dim sResult As String = ExecuteRPCCommand("vote", sTitle, sVote, "", "", "", "")
         MsgBox(sResult, MsgBoxStyle.Information, "Gridcoin Voting System")
 
+    End Sub
+
+    Private Sub lnkURL_LinkClicked(sender As System.Object, e As System.Windows.Forms.LinkLabelLinkClickedEventArgs) Handles lnkURL.LinkClicked
+        Process.Start(lnkURL.Text)
     End Sub
 End Class
