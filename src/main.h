@@ -224,7 +224,7 @@ extern std::string  msGPUboinckey;
 extern double         mdLastPoBDifficulty;
 extern double         mdLastDifficulty;
 extern std::string    msGlobalStatus;
-
+extern std::string    msLastPaymentTime;
 
 
 class CReserveKey;

@@ -125,16 +125,16 @@ Public Class Form1
 
         mU = New Utilization
         Dim sTestNet As String = "TESTNET"
-        ' sTestNet = "PROD"
+        sTestNet = "PROD"
         mU.SetTestNetFlag(sTestNet)
-        mU.SetGenericVotingData(sVotes)
+        'mU.SetGenericVotingData(sVotes)
 
         'Dim sCurrentContract As String = mU.GetNeuralContract
         'mU.ShowTicketList()
-        mU.ShowVotingConsole()
+        'mU.ShowVotingConsole()
 
         'mU.ShowFoundation()
-        'mU.ShowMiningConsole()
+        mU.ShowMiningConsole()
         'mU.UpdateMagnitudesOnly()
         'mU.ShowTicketList()
         'mU.ShowConfig()

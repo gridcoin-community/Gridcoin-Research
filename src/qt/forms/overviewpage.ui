@@ -181,7 +181,7 @@ font-family:'Open Sans,sans-serif';</string>
      <item>
       <widget class="QFrame" name="frame">
        <property name="sizePolicy">
-        <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
          <horstretch>0</horstretch>
          <verstretch>0</verstretch>
         </sizepolicy>
@@ -433,7 +433,29 @@ font-family:'Open Sans,sans-serif';</string>
          </spacer>
         </item>
         <item>
+         <widget class="QLabel" name="txtLastPaymentTime">
+          <property name="minimumSize">
+           <size>
+            <width>200</width>
+            <height>15</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>200</width>
+            <height>17</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>1/1/1970 00:01:01</string>
+          </property>
+         </widget>
+        </item>
+        <item>
          <widget class="QWidget" name="widget" native="true">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
           <property name="sizePolicy">
            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
             <horstretch>0</horstretch>
@@ -442,27 +464,28 @@ font-family:'Open Sans,sans-serif';</string>
           </property>
           <property name="minimumSize">
            <size>
-            <width>256</width>
-            <height>256</height>
+            <width>350</width>
+            <height>230</height>
            </size>
           </property>
           <property name="maximumSize">
            <size>
-            <width>256</width>
-            <height>256</height>
+            <width>240</width>
+            <height>230</height>
            </size>
           </property>
           <property name="styleSheet">
            <string notr="true">image: url(:/images/wallet);</string>
           </property>
+          <zorder>txtDisplay</zorder>
          </widget>
         </item>
         <item>
          <widget class="QLabel" name="txtDisplay">
           <property name="minimumSize">
            <size>
-            <width>450</width>
-            <height>90</height>
+            <width>448</width>
+            <height>95</height>
            </size>
           </property>
           <property name="text">

@@ -180,7 +180,9 @@ void OverviewPage::UpdateBoincUtilization()
 {
 
 	 QString qsStatus = QString::fromUtf8(msGlobalStatus.c_str());
+	 QString qsLastPaymentTime = QString::fromUtf8(msLastPaymentTime.c_str());
 	 ui->txtDisplay->setText(qsStatus);
+	 ui->txtLastPaymentTime->setText(qsLastPaymentTime);
 
 }
 

@@ -18,6 +18,8 @@ using namespace std;
 double OwedByAddress(std::string address);
 extern std::string YesNo(bool bin);
 std::string getHardDriveSerial();
+int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
+
 extern Array MagnitudeReport(std::string cpid);
 bool NeuralNodeParticipates();
 bool StrLessThanReferenceHash(std::string rh);
@@ -30,6 +32,9 @@ extern Array SuperblockReport(std::string cpid);
 bool IsSuperBlock(CBlockIndex* pIndex);
 MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 extern double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid);
+extern int64_t BeaconTimeStamp(std::string cpid, bool bZeroOutAfterPOR);
+
+
 bool NeedASuperblock();
 bool VerifySuperblock(std::string superblock, int nHeight);
 double ExtractMagnitudeFromExplainMagnitude();
@@ -1263,6 +1268,18 @@ std::string GetListOf(std::string datatype)
 		   return rows;
 }
 
+int64_t BeaconTimeStamp(std::string cpid, bool bZeroOutAfterPOR)
+{
+			//12-4-2015
+			std::string sBeacon = mvApplicationCache["beacon;" + cpid];
+			int64_t iLocktime = mvApplicationCacheTimestamp["beacon;" + cpid];
+			int64_t iRSAWeight = GetRSAWeightByCPIDWithRA(cpid);
+
+			printf("\r\n Beacon %s, Weight %f, Locktime %f \r\n",sBeacon.c_str(),(double)iRSAWeight,(double)iLocktime);
+			if (bZeroOutAfterPOR && iRSAWeight==0) iLocktime = 0;
+			return iLocktime;
+
+}
 
 std::string AddContract(std::string sType, std::string sName, std::string sContract)
 {
@@ -1324,6 +1341,8 @@ std::string AdvertiseBeacon(bool force, bool bUseNeuralNetwork)
 			std::string sAction = "add";
 			std::string sType = "beacon";
 			std::string sName = GlobalCPUMiningCPID.cpid;
+			double nBalance = GetTotalBalance();
+				
 			if (nBalance < 1.01)
 			{
 				return "Balance too low to send beacon.";
@@ -3098,6 +3117,7 @@ Array MagnitudeReport(std::string cpid)
 														+ ", Act PPD: " + RoundToString(structMag.payments/14,0) 
 														+ ", Fulf %: " + RoundToString(fulfilled,2) 
 														+ ", GRCMagUnit: " + RoundToString(magnitude_unit,4);
+													msLastPaymentTime = "Last Payment Time: " + TimestampToHRDate(structMag.LastPaymentTime);
 												}
 											}
 											else
@@ -4243,6 +4263,17 @@ Value listitem(const Array& params, bool fHelp)
 
 	    	results = MagnitudeReport(msPrimaryCPID);
 			return results;
+	}
+	if (sitem=="newbieage")
+	{
+		double dBeaconDt = BeaconTimeStamp(args,false);
+		Object entry;
+		entry.push_back(Pair("Sent",dBeaconDt));
+		dBeaconDt = BeaconTimeStamp(args,true);
+		entry.push_back(Pair("Sent With ZeroOut Feature",dBeaconDt));
+		results.push_back(entry);
+		return results;
+
 	}
 	
 	if (sitem == "projects") 

@@ -40,6 +40,7 @@ extern bool VerifySuperblock(std::string superblock, int nHeight);
 extern double ExtractMagnitudeFromExplainMagnitude();
 extern void AddPeek(std::string data);
 extern void GridcoinServices();
+int64_t BeaconTimeStamp(std::string cpid, bool bZeroOutAfterPOR);
 
 extern bool NeedASuperblock();
 extern double SnapToGrid(double d);
@@ -450,6 +451,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  double         mdLastPoBDifficulty = 0;
  double         mdLastDifficulty = 0;
  std::string    msGlobalStatus = "";
+ std::string    msLastPaymentTime = "";
  std::string    msMyCPID = "";
  double         mdOwed = 0;
 
@@ -739,7 +741,7 @@ std::string GetGlobalStatus()
 			+ "<br>Magnitude: " + RoundToString(boincmagnitude,2) + "; Project: " + msMiningProject
 			+ "<br>CPID: " +  sOverviewCPID + " " +  msMiningErrors2 + " "
 			+ "<br>" + msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + msMiningErrors8 + " "
-			+ "<br>&nbsp;" + msRSAOverview + "<br>&nbsp;";
+			+ "<br>" + msRSAOverview + "<br>&nbsp;";
 		//The last line break is for Windows 8.1 Huge Toolbar
 		msGlobalStatus = status;
 		return status;
@@ -4167,7 +4169,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					if (fDebug) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3517 && IsResearchAgeEnabled(height1) && !fTestNet) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-					if (bv < 3545 && fTestNet) return DoS(25, error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n"));
+					if (bv < 3546 && fTestNet) return DoS(25, error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n"));
 			}
 
 			if (bb.cpid != "INVESTOR")
@@ -6718,7 +6720,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 12-3-2015 (works in conjunction with block spamming)
-		if (pfrom->nVersion < 180315 && fTestNet)
+		if (pfrom->nVersion < 180316 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -9543,7 +9545,23 @@ int64_t ComputeResearchAccrual(std::string cpid, std::string operation, CBlockIn
 	if (pHistorical->nHeight <= nNewIndex || pHistorical->nMagnitude==0 || pHistorical->nTime == 0)
 	{
 		//No prior block exists... Newbies get .01 age to bootstrap the CPID (otherwise they will not have any prior block to refer to, thus cannot get started):
-		return dCurrentMagnitude > 0 ? ((dCurrentMagnitude/100)*COIN) : 0;
+		if (!bNewbieFeatureEnabled)
+		{
+					return dCurrentMagnitude > 0 ? ((dCurrentMagnitude/100)*COIN) : 0;
+		}
+		else
+		{
+			// New rules - 12-4-2015 - Pay newbie from the moment beacon was sent as long as it is within 6 months old and NN mag > 0 and newbie is in the superblock and their lifetime paid is zero
+			// Note: If Magnitude is zero, or researcher is not in superblock, or lifetimepaid > 0, this function returns zero
+			int64_t iBeaconTimestamp = BeaconTimeStamp(cpid, true);
+			if (IsLockTimeWithinMinutes(iBeaconTimestamp, 60*24*30*6))
+			{
+				double dNewbieAccrualAge = ((double)pindexLast->nTime - (double)iBeaconTimestamp) / 86400;
+				int64_t iAccrual = (int64_t)(dNewbieAccrualAge*dCurrentMagnitude*dMagnitudeUnit*COIN);
+				if (fDebug3) printf("\r\n Newbie Special Stake! %s  Age %f, Accrual %f \r\n",cpid.c_str(),dNewbieAccrualAge,(double)iAccrual);
+				return iAccrual;
+			}
+		}
 	}
 	// To prevent reorgs and checkblock errors, ensure the research age is > 10 blocks wide:
 	int iRABlockSpan = pindexLast->nHeight - pHistorical->nHeight;

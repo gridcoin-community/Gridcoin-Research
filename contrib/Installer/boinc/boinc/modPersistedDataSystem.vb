@@ -309,7 +309,7 @@ Module modPersistedDataSystem
                 surrogateRow.Database = "Project"
                 surrogateRow.Table = prj.PrimaryKey + "cpid"
                 lstProjectCPIDs = GetList(surrogateRow, "*")
-                Dim prjTotalRAC = 0
+                Dim prjTotalRAC As Double = 0
                 units = 0
                 For Each prjCPID As Row In lstProjectCPIDs
                     If Val(prjCPID.RAC) > 1 Then
