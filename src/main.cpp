@@ -5025,7 +5025,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 66000;
+		nGrandfather = 86000;
 		nNewIndex = 10;
 		nNewIndex2 = 36500;
 		bRemotePaymentsEnabled = false;
