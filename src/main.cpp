@@ -1222,7 +1222,8 @@ std::string DefaultWalletAddress()
     		 const CBitcoinAddress& address = item.first;
 			 const std::string& strName = item.second;
 			 bool fMine = IsMine(*pwalletMain, address.Get());
-			 if (fMine && strName == "Default") {
+			 if (fMine && strName == "Default") 
+			 {
 				 sDefaultWalletAddress=CBitcoinAddress(address).ToString();
 				 return sDefaultWalletAddress;
 			 }
@@ -5938,7 +5939,6 @@ bool RetiredTN(bool Forcefully)
 	bool superblockloaded = false;
 	double NetworkPayments = 0;
 
-	//double mint = 0;
 					//7-5-2015 - R Halford - Start block and End block must be an exact range agreed by the network:
 					int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
 					int nLookback = BLOCKS_PER_DAY*14; //Daily block count * Lookback in days = 14 days
@@ -5946,7 +5946,6 @@ bool RetiredTN(bool Forcefully)
 					if (fDebug3) printf("START BLOCK %f, END BLOCK %f ",(double)nMaxDepth,(double)nMinDepth);
 					if (nMinDepth < 2)              nMinDepth = 2;
 					if (mvMagnitudes.size() > 0) 	mvMagnitudes.clear();
-					int iRow = 0;
 					CBlock block;
 					CBlockIndex* pblockindex = pindexBest;
 
@@ -5978,7 +5977,6 @@ bool RetiredTN(bool Forcefully)
 							NetworkPayments += bb.ResearchSubsidy;
 							// Insert CPID, Magnitude, Payments
 							AddNMRetired((double)pblockindex->nHeight,pblockindex->nTime,bb.cpid,bb);
-							iRow++;
 							if (!superblockloaded && bb.superblock.length() > 20)
 							{
 									if (VerifySuperblock(bb.superblock,pblockindex->nHeight))
@@ -5990,7 +5988,7 @@ bool RetiredTN(bool Forcefully)
 							}
 
 					}
-					if (pblockindex && fDebug10)				printf("Min block %f, Rows %f \r\n",(double)pblockindex->nHeight,(double)iRow);
+					if (pblockindex && fDebug10)	printf("Min block %f \r\n",(double)pblockindex->nHeight);
 					StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
 					network.projectname="NETWORK";
 					network.payments = NetworkPayments;

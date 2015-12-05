@@ -427,9 +427,9 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("LastPORBlockHash",bb.LastPORBlockHash));
 		
 
-	double interest = mint-bb.ResearchSubsidy;
+	//double interest = mint-bb.ResearchSubsidy;
 	result.push_back(Pair("Interest",bb.InterestSubsidy));
-	double blockdiff = GetBlockDifficulty(block.nBits);
+	//double blockdiff = GetBlockDifficulty(block.nBits);
 	result.push_back(Pair("GRCAddress",bb.GRCAddress));
 	result.push_back(Pair("ClientVersion",bb.clientversion));	
 	if (blockindex->nHeight < 70000 && !fTestNet) 
@@ -448,7 +448,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	{
 		result.push_back(Pair("SuperblockLength", RoundToString((double)bb.superblock.length(),0) ));
 		std::string neural_hash = GetQuorumHash(bb.superblock);
-		double popularity = 0;
+		//double popularity = 0;
 		result.push_back(Pair("SuperblockHash", neural_hash));
 	}
 	result.push_back(Pair("IsSuperBlock", (double)blockindex->nIsSuperBlock));
@@ -1352,7 +1352,7 @@ std::string AdvertiseBeacon(bool force, bool bUseNeuralNetwork)
 				if (bUseNeuralNetwork)
 				{
 					std::string payload = GlobalCPUMiningCPID.cpid + "|" + sBase + "|" + GlobalCPUMiningCPID.cpidv2 + "|" + hashRand.GetHex();
-					bool bResult = AsyncNeuralRequest("addbeacon",payload,10);
+					AsyncNeuralRequest("addbeacon",payload,10);
 					return "Advertising Beacon on Neural Network for " + payload;
 				}
 				else
@@ -1541,7 +1541,7 @@ Value execute(const Array& params, bool fHelp)
 		//10-7-2015 for CM
 		double dBC = GetCountOf("beacon");
 		bool bFull = dBC < 50 ? true : false;
-		bool result = 	LoadAdminMessages(bFull,sOut);
+		LoadAdminMessages(bFull,sOut);
 		FullSyncWithDPORNodes();
 		entry.push_back(Pair("Syncing",1));
 		results.push_back(entry);
@@ -1597,7 +1597,7 @@ Value execute(const Array& params, bool fHelp)
 	else if (sItem == "unusual")
 	{
 		
-			bool result = UnusualActivityReport();
+			UnusualActivityReport();
 			entry.push_back(Pair("UAR",1));
 			results.push_back(entry);
 
@@ -2275,12 +2275,9 @@ Value execute(const Array& params, bool fHelp)
 
 			std::string cpid = GlobalCPUMiningCPID.cpid;
 			std::string GRCAddress = DefaultWalletAddress();
-			
-     		bool result = GetEarliestStakeTime(GRCAddress,cpid);
-
+			GetEarliestStakeTime(GRCAddress,cpid);
 			entry.push_back(Pair("GRCTime",mvApplicationCacheTimestamp["nGRCTime"]));
 			entry.push_back(Pair("CPIDTime",mvApplicationCacheTimestamp["nCPIDTime"]));
-
 			results.push_back(entry);
 	}
 	else if (sItem=="testnewcontract")
@@ -2322,7 +2319,7 @@ Value execute(const Array& params, bool fHelp)
 		if (force) msNeuralResponse = "";
 		if (msNeuralResponse=="")
 		{
-			bool bResult = AsyncNeuralRequest("explainmag",GlobalCPUMiningCPID.cpid,10);
+			AsyncNeuralRequest("explainmag",GlobalCPUMiningCPID.cpid,10);
 			entry.push_back(Pair("Requested Explain Magnitude For",GlobalCPUMiningCPID.cpid));
 		}
 
@@ -2380,10 +2377,6 @@ Value execute(const Array& params, bool fHelp)
 				TallyMagnitudesInSuperblock();
 				std::string argcpid = params[1].get_str();
 				std::string np = GetNetsoftProjects(argcpid);
-
-				double mytotalpct = 0;
-				double TotalMagnitude = 0;
-				//double Mag = 0;
 				double NetworkProjectCountWithRAC = 0;
 				Object entry;
 				std::string narr = "";
@@ -2597,7 +2590,7 @@ Value execute(const Array& params, bool fHelp)
 	else if (sItem == "memorizekeys")
 	{
 		std::string sOut = "";
-		bool result = 	LoadAdminMessages(true,sOut);
+		LoadAdminMessages(true,sOut);
 		entry.push_back(Pair("Results",sOut));
 		results.push_back(entry);
 		
