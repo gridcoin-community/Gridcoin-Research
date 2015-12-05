@@ -477,7 +477,7 @@ Public Class Utilization
 
         ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 
-        'Call ThreadResolveDiscrepanciesInNeuralNetwork(sContract)
+        'Call ThreadResolveDiscrepanciesIn(sContract)
         'Return "Started Async Resolution."
         Return ""
     End Function

@@ -19,6 +19,7 @@ extern void GatherNeuralHashes();
 
 
 extern bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
+extern bool AskNeuralNetworkNodeForBlocks(int iNodeLimit);
 
 
 Value getconnectioncount(const Array& params, bool fHelp)
@@ -228,6 +229,28 @@ bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit)
 }
 
 
+bool AskNeuralNetworkNodeForBlocks(int iNodeLimit)
+{
+	// Find a Neural Network Node that is free
+    LOCK(cs_vNodes);
+	int iContactCount = 0;
+	msNeuralResponse="";
+    BOOST_FOREACH(CNode* pNode, vNodes) 
+	{
+		if (Contains(pNode->strSubVer,"1999"))
+		{
+		 	pNode->PushGetBlocks(pindexBest, uint256(0));
+			iContactCount++;
+			if (iContactCount >= iNodeLimit) return true;
+		}
+    }
+	if (iContactCount==0) 
+	{
+		if (fDebug3) printf("No neural network nodes online.");
+		return false;
+	}
+	return true;
+}
 
 
 Value ping(const Array& params, bool fHelp)
@@ -293,7 +316,12 @@ Value getpeerinfo(const Array& params, bool fHelp)
         obj.push_back(Pair("subver", stats.strSubVer));
         obj.push_back(Pair("inbound", stats.fInbound));
         obj.push_back(Pair("startingheight", stats.nStartingHeight));
+		obj.push_back(Pair("sNeuralNetworkVersion",stats.sNeuralNetwork));
+		obj.push_back(Pair("nTrust",stats.nTrust));
+		obj.push_back(Pair("GRCAddress",stats.sGRCAddress));
+
         obj.push_back(Pair("banscore", stats.nMisbehavior));
+
 		bool bNeural = false;
 		bNeural = Contains(stats.strSubVer,"1999");
 

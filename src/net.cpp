@@ -30,8 +30,13 @@ bool TallyNetworkAverages(bool ColdBoot);
 extern void BusyWaitForTally();
 extern void DoTallyResearchAverages(void* parg);
 extern void ExecGridcoinServices(void* parg);
+double cdbl(std::string s, int place);
+
+std::string DefaultWalletAddress();
+
 void GridcoinServices();
 std::string NodeAddress(CNode* pfrom);
+std::string GetNeuralVersion();
 
 
 #ifndef QT_GUI
@@ -1152,19 +1157,19 @@ void CNode::PushVersion()
     if (fDebug) printf("send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s\n",
 		PROTOCOL_VERSION, nBestHeight, addrMe.ToString().c_str(), addrYou.ToString().c_str(), addr.ToString().c_str());
 
-
 	std::string sboinchashargs = DefaultBoincHashArgs();
 	uint256 boincHashRandNonce = GetRandHash();
 	std::string nonce = boincHashRandNonce.GetHex();
 	std::string pw1 = RetrieveMd5(nonce+","+sboinchashargs);
 	std::string mycpid = GlobalCPUMiningCPID.cpidv2;
 	std::string acid = GetCommandNonce("aries");
-
-
+	std::string sGRCAddress = DefaultWalletAddress();
+	std::string sNeuralVersion = GetNeuralVersion();
 
     PushMessage("aries", PROTOCOL_VERSION, nonce, pw1,
 				mycpid, mycpid, acid, nLocalServices, nTime, addrYou, addrMe,
-                nLocalHostNonce, FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()), nBestHeight);
+                nLocalHostNonce, FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()),
+				nBestHeight, sGRCAddress);
 
 
 }
@@ -1235,9 +1240,11 @@ void CNode::copyStats(CNodeStats &stats)
     X(fInbound);
     X(nStartingHeight);
     X(nMisbehavior);
-	//X(securityversion);
-	X(nNeuralNetwork);
+	X(sNeuralNetwork);
 	X(NeuralHash);
+	X(sGRCAddress);
+	X(nTrust);
+
 
     // It is common for nodes with good ping times to suddenly become lagged,
     // due to a new block arriving or other large transfer.

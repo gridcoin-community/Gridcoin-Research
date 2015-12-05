@@ -42,6 +42,8 @@ extern void AddPeek(std::string data);
 extern void GridcoinServices();
 int64_t BeaconTimeStamp(std::string cpid, bool bZeroOutAfterPOR);
 
+bool AskNeuralNetworkNodeForBlocks(int iNodeLimit);
+
 extern bool NeedASuperblock();
 extern double SnapToGrid(double d);
 extern bool NeuralNodeParticipates();
@@ -331,10 +333,12 @@ volatile bool bDoTally = false;
 volatile bool bExecuteGridcoinServices = false;
 volatile bool bTallyFinished = false;
 volatile bool bGridcoinGUILoaded = false;
+volatile bool bRequestFromHonestNode = false;
 
 extern bool CheckWorkCPU(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey);
 extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
 extern double cdbl(std::string s, int place);
+
 extern double GetBlockValueByHash(uint256 hash);
 extern void WriteAppCache(std::string key, std::string value);
 extern std::string AppCache(std::string key);
@@ -4173,7 +4177,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 					if (bv < 3546 && fTestNet) return DoS(25, error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n"));
 			}
 
-			if (bb.cpid != "INVESTOR")
+			if (bb.cpid != "INVESTOR" && height1 > nGrandfather)
 			{
     			if (bb.projectname.empty() && !IsResearchAgeEnabled(height1)) 	return DoS(1,error("CheckBlock::PoR Project Name invalid"));
 	    		if (!IsCPIDValidv2(bb,height1))
@@ -4451,7 +4455,12 @@ bool static ReserealizeBlockSignature(CBlock* pblock)
 }
 */
 
-//10-19-2015
+
+bool ServicesIncludesNN(CNode* pNode)
+{
+	return (Contains(pNode->strSubVer,"1999")) ? true : false;
+}
+
 bool VerifySuperblock(std::string superblock, int nHeight)
 {
 	    bool bPassed = false;
@@ -4764,26 +4773,50 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 	 // If don't already have its previous block, shunt it off to holding area until we get it
     if (!mapBlockIndex.count(pblock->hashPrevBlock))
     {
-		//11-27-2015
-		std::string sAcceptOrphans = GetArgument("acceptorphans", "true");
-        printf("ProcessBlock: ORPHAN BLOCK, Accepting orphans %s, prev=%s\n", sAcceptOrphans.c_str(), pblock->hashPrevBlock.ToString().c_str());
-		//Note that you will have to accept orphans to stay in sync since getblock requests are not filled in order...
-		if (sAcceptOrphans=="true")
+		//12-5-2015
+		bool fProcess = (pfrom->nTrust >= 0 || OutOfSyncByAge());
+	    printf("ProcessBlock: ORPHAN BLOCK, WillProcess %s, prev=%s \r\n", YesNo(fProcess).c_str(), pblock->hashPrevBlock.ToString().c_str());
+		// Note that you will have to accept orphans to stay in sync since getblock requests are not filled in order...
+		// If this node is trustworthy:
+		if (fProcess)
 		{
-			if (TimerMain("Orphan", 125))
+			if (!OutOfSyncByAge())
 			{
-				// After 125 orphans, clear all of them so we have a chance to receive blocks from trustworthy nodes:
-				setStakeSeenOrphan.clear();
-				mapOrphanBlocks.clear();
-				printf("\r\n * Clearing orphan cache and setStakeSeen cache * \r\n");
-			}
+				std::string sOrphanKey = "Orphan" + NodeAddress(pfrom);
+				if (TimerMain(sOrphanKey,10))
+				{
+					pfrom->nTrust--;
+					if (pfrom->nTrust < 0) 
+					{
+						pfrom->fDisconnect=true;
+					}
+				}
 
-			if (TimerMain(hash.ToString(),10))
-			{
-				//After 10 duplicates of the same orphan, clear the cache
-				setStakeSeenOrphan.clear();
-				mapOrphanBlocks.clear();
-				printf("\r\n * Clearing orphan cache due to duplicate orphan received 10 times * \r\n");
+				if (!ServicesIncludesNN(pfrom))
+				{
+					pfrom->nTrust--;
+					if (pfrom->nTrust < 0) pfrom->fDisconnect=true;
+				}
+
+				if (TimerMain("Orphan", 100))
+				{
+					// After 100 orphans, clear all of them so we have a chance to receive blocks from trustworthy nodes:
+					setStakeSeenOrphan.clear();
+					mapOrphanBlocks.clear();
+					if (pfrom->nTrust < 0) pfrom->fDisconnect=true;
+					printf("\r\n * Clearing orphan cache and setStakeSeen cache * \r\n");
+				}
+
+				if (TimerMain(hash.ToString(),10))
+				{
+					//After 10 duplicates of the same orphan, clear the cache
+					setStakeSeenOrphan.clear();
+					mapOrphanBlocks.clear();
+					pfrom->nTrust--;
+					pfrom->Misbehaving(1);
+					pfrom->fDisconnect=true;
+					printf("\r\n * Clearing orphan cache due to duplicate orphan received 10 times * \r\n");
+				}
 			}
 			// ppcoin: check proof-of-stake
 			if (pblock->IsProofOfStake())
@@ -4812,13 +4845,8 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 		}
 		else
 		{
-
-			// Ask this guy to fill in what we're missing
-			if (pfrom)
-			{
-				pfrom->PushGetBlocks(pindexBest, uint256(0));
-			}
-
+			bRequestFromHonestNode = true;
+			if (OutOfSyncByAge()) AskNeuralNetworkNodeForBlocks(1);
 		}
         return true;
     }
@@ -5026,7 +5054,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 86000;
+		nGrandfather = 69298;
 		nNewIndex = 10;
 		nNewIndex2 = 36500;
 		bRemotePaymentsEnabled = false;
@@ -5938,7 +5966,7 @@ bool RetiredTN(bool Forcefully)
 	bNetAveragesLoaded = false;
 	bool superblockloaded = false;
 	double NetworkPayments = 0;
-
+	double NetworkInterest = 0;
 					//7-5-2015 - R Halford - Start block and End block must be an exact range agreed by the network:
 					int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
 					int nLookback = BLOCKS_PER_DAY*14; //Daily block count * Lookback in days = 14 days
@@ -5975,6 +6003,7 @@ bool RetiredTN(bool Forcefully)
 							else continue;
 
 							NetworkPayments += bb.ResearchSubsidy;
+							NetworkInterest += bb.InterestSubsidy;
 							// Insert CPID, Magnitude, Payments
 							AddNMRetired((double)pblockindex->nHeight,pblockindex->nTime,bb.cpid,bb);
 							if (!superblockloaded && bb.superblock.length() > 20)
@@ -5992,6 +6021,7 @@ bool RetiredTN(bool Forcefully)
 					StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
 					network.projectname="NETWORK";
 					network.payments = NetworkPayments;
+					network.InterestSubsidy = NetworkInterest;
 					mvNetwork["NETWORK"] = network;
 					TallyMagnitudesInSuperblock();
 					GetNextProject(false);
@@ -6133,6 +6163,8 @@ bool TallyResearchAverages(bool Forcefully)
 	bNetAveragesLoaded = false;
 	bool superblockloaded = false;
 	double NetworkPayments = 0;
+	double NetworkInterest = 0;
+	
 	//double mint = 0;
  						//Consensus Start/End block:
 						int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
@@ -6167,7 +6199,7 @@ bool TallyResearchAverages(bool Forcefully)
 							if (pblockindex == pindexGenesisBlock) return false;
 							if (!pblockindex->IsInMainChain()) continue;
 							NetworkPayments += pblockindex->nResearchSubsidy;
-
+							NetworkInterest += pblockindex->nInterestSubsidy;
 							AddResearchMagnitude(pblockindex);
 
 							iRow++;
@@ -6197,6 +6229,7 @@ bool TallyResearchAverages(bool Forcefully)
 							StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetworkCopy);
 							network.projectname="NETWORK";
 							network.payments = NetworkPayments;
+							network.InterestSubsidy = NetworkInterest;
 							mvNetworkCopy["NETWORK"] = network;
 							if(fDebug3) printf(" TMIS1 ");
 							TallyMagnitudesInSuperblock();
@@ -6571,10 +6604,7 @@ unsigned char pchMessageStart[4] = { 0x70, 0x35, 0x22, 0x05 };
 
 std::string NodeAddress(CNode* pfrom)
 {
-    //CAddress addrThem = GetLocalAddress(&pfrom->addr);
-	//std::string ip = addrThem.ToString();
 	std::string ip = pfrom->addr.ToString();
-
 	return ip;
 }
 
@@ -6718,7 +6748,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 12-3-2015 (works in conjunction with block spamming)
-		if (pfrom->nVersion < 180316 && fTestNet)
+		if (pfrom->nVersion < 180317 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -6757,18 +6787,15 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (!vRecv.empty())
             vRecv >> pfrom->strSubVer;
 
-
-		////addrMe,        nLocalHostNonce, FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()), nBestHeight);
-
-
         if (!vRecv.empty())
             vRecv >> pfrom->nStartingHeight;
-		//6-5-2015, Pull in Neural Network Fields
-
-		pfrom->nNeuralNetwork = 0;
-
-		if (!vRecv.empty())
-			vRecv >> pfrom->nNeuralNetwork;
+		// 12-5-2015 - Append Trust fields
+		pfrom->nTrust = 0;
+		
+		if (!vRecv.empty())			vRecv >> pfrom->sGRCAddress;
+		//if (!vRecv.empty())       vRecv >> pfrom->sNeuralNetwork;
+		
+		
 
 		if (GetArgument("autoban","true") == "true")
 		{
@@ -6794,7 +6821,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 			    	pfrom->fDisconnect=true;
 					return false;
 				}
-			}
+		}
 
 
 		if (pfrom->fInbound && addrMe.IsRoutable())
@@ -7286,6 +7313,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                         mapAlreadyAskedFor.erase(CInv(MSG_TX, orphanTxHash));
                         vWorkQueue.push_back(orphanTxHash);
                         vEraseQueue.push_back(orphanTxHash);
+						pfrom->nTrust++;
                     }
                     else if (!fMissingInputs2)
                     {
@@ -7333,8 +7361,15 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         pfrom->AddInventoryKnown(inv);
 
         if (ProcessBlock(pfrom, &block, false))
-            mapAlreadyAskedFor.erase(inv);
-        if (block.nDoS) pfrom->Misbehaving(block.nDoS);
+		{
+	        mapAlreadyAskedFor.erase(inv);
+			pfrom->nTrust++;
+		}
+        if (block.nDoS) 
+		{
+				pfrom->Misbehaving(block.nDoS);
+				pfrom->nTrust--;
+		}
 
     }
 
@@ -7496,23 +7531,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     else if (strCommand == "ping")
     {
 
-		/*
-		std::string sPingConfig = GetArgument("suppresspings", "false");
-		if (sPingConfig=="true")
-		{
-				if ((GetAdjustedTime() - nLastPing) < 1)
-				{
-					nLastPing = GetAdjustedTime();
-					return false;
-				}
-				else
-				{
-					nLastPing = GetAdjustedTime();
-				}
-		}
-		*/
-
-
 
 		std::string acid = "";
         if (pfrom->nVersion > BIP0031_VERSION)
@@ -7549,8 +7567,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             vRecv >> nonce;
 
             // Only process pong message if there is an outstanding ping (old ping without nonce should never pong)
-            if (pfrom->nPingNonceSent != 0) {
-                if (nonce == pfrom->nPingNonceSent) {
+            if (pfrom->nPingNonceSent != 0) 
+			{
+                if (nonce == pfrom->nPingNonceSent) 
+				{
                     // Matching pong received, this ping is no longer outstanding
                     bPingFinished = true;
                     int64_t pingUsecTime = pingUsecEnd - pfrom->nPingUsecStart;

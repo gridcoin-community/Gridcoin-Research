@@ -85,6 +85,8 @@ bool Contains(std::string data, std::string instring);
 
 
 std::string RoundToString(double d, int place);
+extern std::string GetNeuralVersion();
+
 
 int64_t IsNeural();
 
@@ -1110,7 +1112,7 @@ const boost::filesystem::path &GetDataDir(bool fNetSpecific)
 	{
         path = GetDefaultDataDir();
     }
-    if (fNetSpecific && GetBoolArg("-testnet", false)  ||  GetBoolArg("-testnet",false) )
+    if ( (fNetSpecific && GetBoolArg("-testnet", false))  ||  GetBoolArg("-testnet",false) )
 	{
         path /= "testnet";
 	}
@@ -1423,11 +1425,9 @@ std::string HeadlessRoundToString(double d, int place)
     return ss.str() ;
 }
 
-
-
-// Format the subversion field according to BIP 14 spec (https://en.bitcoin.it/wiki/BIP_0014)
-std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments)
+std::string GetNeuralVersion()
 {
+
 	std::string neural_v = "0";
 
 	#if defined(WIN32) && defined(QT_GUI)
@@ -1435,6 +1435,15 @@ std::string FormatSubVersion(const std::string& name, int nClientVersion, const 
 		neural_id = (double)IsNeural();
 		neural_v = HeadlessRoundToString((double)MINOR_VERSION,0) + "." + RoundToString(neural_id,0);
 	#endif
+
+    return neural_v;
+
+}
+
+// Format the subversion field according to BIP 14 spec (https://en.bitcoin.it/wiki/BIP_0014)
+std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments)
+{
+	std::string neural_v = GetNeuralVersion();
 
     std::ostringstream ss;
     ss << "/";

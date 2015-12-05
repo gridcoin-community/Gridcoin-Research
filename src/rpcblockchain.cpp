@@ -19,6 +19,8 @@ double OwedByAddress(std::string address);
 extern std::string YesNo(bool bin);
 std::string getHardDriveSerial();
 int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
+extern double DoubleFromAmount(int64_t amount);
+
 
 extern Array MagnitudeReport(std::string cpid);
 bool NeuralNodeParticipates();
@@ -3032,7 +3034,9 @@ Array MagnitudeReport(std::string cpid)
 		   double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
 		   msRSAOverview = "";
 		   if (!pindexBest) return results;
-
+		   //double MoneySupply = DoubleFromAmount(pindexBest->nMoneySupply);
+		   double nBalance = GetTotalBalance();
+			
 		   try
 		   {
 			       if (mvMagnitudes.size() < 1)
@@ -3080,6 +3084,12 @@ Array MagnitudeReport(std::string cpid)
 												if (fDebug3) printf(" MR6.2 ");
 
 												entry.push_back(Pair("Interest Payments (14 days)",structMag.interestPayments));
+												if (structMag.cpid == cpid)
+												{
+													double iPct = ( (structMag.interestPayments/14) * 365 / (nBalance+.01));
+													entry.push_back(Pair("Interest %", iPct));
+												}
+
 												entry.push_back(Pair("Daily Paid",structMag.payments/14));
 												// Research Age - Calculate Expected 14 Day Owed, and Daily Owed:
 												double dExpected14 = magnitude_unit * structMag.Magnitude * 14;
@@ -4322,6 +4332,12 @@ Value listitem(const Array& params, bool fHelp)
 						double MaximumEmission = BLOCKS_PER_DAY*GetMaximumBoincSubsidy(GetAdjustedTime());
 						entry.push_back(Pair("Network Avg Daily Payments", stNet.payments/14));
 						entry.push_back(Pair("Network Max Daily Payments",MaximumEmission));
+						entry.push_back(Pair("Network Interest Paid (14 days)", stNet.InterestSubsidy));
+						entry.push_back(Pair("Network Avg Daily Interest", stNet.InterestSubsidy/14));
+						double MoneySupply = DoubleFromAmount(pindexBest->nMoneySupply);
+						entry.push_back(Pair("Total Money Supply", MoneySupply));
+						double iPct = ( (stNet.InterestSubsidy/14) * 365 / (MoneySupply+.01));
+						entry.push_back(Pair("Network Interest %", iPct));
 						double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
 						entry.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
 						entry.push_back(Pair("GRC Quote", stNet.GRCQuote/10000000000));

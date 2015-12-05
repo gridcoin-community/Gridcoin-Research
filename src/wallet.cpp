@@ -1515,7 +1515,7 @@ bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pai
     }
 
     return (SelectCoinsMinConf(nTargetValue, nSpendTime, 1, 10, vCoins, setCoinsRet, nValueRet) ||
-            SelectCoinsMinConf(nTargetValue, nSpendTime, 1, 1, vCoins, setCoinsRet, nValueRet) ||
+            SelectCoinsMinConf(nTargetValue, nSpendTime, 1, 1, vCoins, setCoinsRet, nValueRet)  ||
             SelectCoinsMinConf(nTargetValue, nSpendTime, 0, 1, vCoins, setCoinsRet, nValueRet));
 }
 
@@ -1871,7 +1871,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     // Select coins with suitable depth
 	// If user wants to stake all the coins at once...
 	int64_t nTarget = nBalance-nReserveBalance;
-	std::string sStakeAll = GetArgument("stakeall", "false");
+	std::string sStakeAll = GetArgument("stakeall", "true");
 	if (sStakeAll=="true") nTarget = nBalance*2;
 		
     if (!SelectCoinsForStaking(nTarget, txNew.nTime, setCoins, nValueIn) && !bNewbieFreePass)
@@ -1885,7 +1885,6 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	{
 		msMiningErrors7="No coins to stake";
 		printf("No coins to stake.");
-    
 		return false;
 	}
 
@@ -1923,8 +1922,6 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 			 }
 
 		 }
-
-		 
 
 	}
 	catch (std::exception &e) 

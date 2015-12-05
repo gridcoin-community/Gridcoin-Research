@@ -32,7 +32,7 @@ extern volatile bool bDoTally;
 extern volatile bool bExecuteGridcoinServices;
 extern volatile bool bTallyFinished;
 extern volatile bool bGridcoinGUILoaded;
-
+extern volatile bool bRequestFromHonestNode;
 extern volatile double nGlobalHashCounter;
 
 extern int miningthreadcount;
