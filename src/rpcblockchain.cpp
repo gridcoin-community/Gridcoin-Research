@@ -896,7 +896,8 @@ double GetAverageInList(std::string superblock,double& out_count)
 	{
 		std::vector<std::string> vSuperblock = split(superblock.c_str(),";");
 		if (vSuperblock.size() < 2) return 0;
-		double rows = 0;
+		double rows_above_zero = 0;
+		double rows_with_zero = 0;
 		double total_mag = 0;
 		for (unsigned int i = 0; i < vSuperblock.size(); i++)
 		{
@@ -908,12 +909,17 @@ double GetAverageInList(std::string superblock,double& out_count)
 					if (cpid.length() > 10)
 					{
 	     				total_mag += magnitude;
-						rows++;
+						rows_above_zero++;
 					}
-				}
+					else
+					{
+						// Non-compressed legacy block placeholder
+						rows_with_zero++;
+					}
+        	}
 		}
-		out_count = rows;
-		double avg = total_mag/(rows+.01);
+		out_count = rows_above_zero + rows_with_zero;
+		double avg = total_mag/(rows_above_zero+.01);
 		return avg;
 	}
 	catch(...)
