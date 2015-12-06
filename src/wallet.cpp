@@ -1711,7 +1711,7 @@ double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid, int64_t l
 	double MaxSubsidy = GetMaximumBoincSubsidy(locktime);
 	double por_min = (cpid != "INVESTOR") ? (MaxSubsidy/40) : 0;
 	if (RSA_WEIGHT >= 24999) return 0;
-	//Dynamically ascertains the lowest GRC block subsidy amount for current network conditions
+	//Dynamically determines the minimum GRC block subsidy required amount for current network conditions
 	if (fTestNet && (PORDiff >=0 && PORDiff < 1)) return .00001;
 	if (PORDiff >= 0   && PORDiff < 1)   return 1;
 	if (PORDiff >= 1   && PORDiff < 6)   return por_min + (MaxSubsidy/400);
@@ -1719,7 +1719,7 @@ double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid, int64_t l
 	if (PORDiff >= 10  && PORDiff < 50)  return por_min + (MaxSubsidy/40);
 	if (PORDiff >= 50  && PORDiff < 100) return por_min + (MaxSubsidy/25);
 	if (PORDiff >= 100 && PORDiff < 500) return por_min + (MaxSubsidy/13);
-	if (PORDiff >= 500) return por_min + (MaxSubsidy/12);
+	if (PORDiff >= 500) return por_min + (MaxSubsidy/12);  //ToDo for Mandatory: Halve this, then halve all of them.
 	return 1;
 }
 
@@ -1975,12 +1975,13 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 		//nBlockTime = block.GetBlockTime();
 
-        static int nMaxStakeSearchInterval = 60;
+        static int nMaxStakeSearchInterval = 120;
         if (block.GetBlockTime() + nStakeMinAge > txNew.nTime - nMaxStakeSearchInterval)
             continue; // only count coins meeting min age requirement
 
         bool fKernelFound = false;
-	    
+	    if (fDebug3) printf("Search interval %f,MaxSearch Interval %f",(double)nSearchInterval,(double)nMaxStakeSearchInterval);
+
         for (unsigned int n=0; n<min(nSearchInterval,(int64_t)nMaxStakeSearchInterval) && !fKernelFound && !fShutdown && pindexPrev == pindexBest; n++)
         {
             // Search backward in time from the given txNew timestamp 
@@ -1989,7 +1990,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);
 			//Note: At this point block.vtx[0] is still null, so we send the hashBoinc in separately
 		
-			//1-12-2015 - Add PoW nonce to POR - Halford
+			//12-6-2015 - Add PoW nonce to POR - Halford
 			NetworkTimer();
 
             if (CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, 
@@ -1998,7 +1999,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             {
 			
                 // Found a kernel
-                if (fDebug)   printf("CCS:FoundKernel;");
+                if (fDebug3)   printf("\r\nCCS:FoundKernel;\r\n");
 				WriteAppCache(pindexPrev->GetBlockHash().GetHex(),RoundToString(mdPORNonce,0));
 		        vector<valtype> vSolutions;
                 txnouttype whichType;
@@ -2262,11 +2263,21 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	}
 	else
 	{	
-		//Research Age
+		//Research Age (PROD) 12-6-2015
 		if (txNew.vout.size() == 3)
 		{
-			txNew.vout[1].nValue = (nCredit / 2 / CENT) * CENT;
-			txNew.vout[2].nValue = nCredit - txNew.vout[1].nValue;
+			// Prevent wallet from staking smaller and smaller amounts
+			if (CoinToDouble(nCredit) < 1)
+			{
+				txNew.vout[1].nValue = (nCredit / 2 / CENT) * CENT;
+				txNew.vout[2].nValue = nCredit - txNew.vout[1].nValue;
+			}
+			else
+			{
+				// Place all but one cent in the first output so stakes dont get smaller - Note: the .01 GRC will be consolidated on any outbound transaction so this should NOT become a nuisance anymore.
+				txNew.vout[1].nValue = nCredit - (1*CENT);
+				txNew.vout[2].nValue = 1*CENT;
+			}
 		}
 		else
 		{

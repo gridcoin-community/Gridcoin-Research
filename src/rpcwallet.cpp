@@ -1146,10 +1146,68 @@ void ListTransactions2(const CWalletTx& wtx, const string& strAccount, int nMinD
 
 
 
-
-
-
 Array StakingReport()
+{
+
+    Array results;
+    Object c;
+    std::string Narr = RoundToString(GetAdjustedTime(),0);
+    c.push_back(Pair("Staking Report",Narr));
+    results.push_back(c);
+    Object entry;
+	int64_t nCoinStakeTotal = 0;
+	int64_t nNonCoinStakeTotal = 0;
+	int64_t nStake = 0;
+	int64_t nImmature = 0;
+	int64_t nDepthImmature = 0;
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    for (map<uint256, CWalletTx>::const_iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
+    {
+        const CWalletTx* pcoin = &(*it).second;
+		int64_t amt = pwalletMain->GetCredit(*pcoin);
+
+		if (pcoin->IsCoinStake())
+		{
+		         nCoinStakeTotal += amt;
+				 if (pcoin->GetBlocksToMaturity() > 0 && pcoin->GetDepthInMainChain() > 0)
+				 {
+					 nStake += amt;
+				 }
+				 else
+				 {
+					 
+					 if (pcoin->GetBlocksToMaturity() < 1) 
+					 {
+								nImmature+=amt;
+					 }
+					 else
+					 {
+								if (pcoin->GetDepthInMainChain() < 1) nDepthImmature += amt;
+					 }
+				 }
+   
+		}
+		else
+		{
+			     //Sent Tx
+		         nNonCoinStakeTotal += amt;
+   
+		}
+    }
+	
+	entry.push_back(Pair("CoinStakeTotal",     CoinToDouble(nCoinStakeTotal)));
+	entry.push_back(Pair("Non-CoinStakeTotal", CoinToDouble(nNonCoinStakeTotal)));
+	entry.push_back(Pair("Blocks Immature",    CoinToDouble(nImmature)));
+	entry.push_back(Pair("Depth Immature",     CoinToDouble(nDepthImmature)));
+	entry.push_back(Pair("Total Immature",     CoinToDouble(nImmature+nDepthImmature)));
+	entry.push_back(Pair("Total Eligibile for Staking", CoinToDouble(nStake)));
+    results.push_back(entry);
+    return results;
+
+}
+
+
+Array StakingReport_OLD()
 {
 	   int64_t nSpendTime = GetAdjustedTime();
 	   vector<COutput> vCoins;
