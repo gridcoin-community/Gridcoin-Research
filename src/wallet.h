@@ -673,11 +673,12 @@ public:
 
     bool IsTrusted() const
     {
+		int nMinConfirmsRequiredToSendGRC = 3;
         // Quick answer in most cases
         if (!IsFinalTx(*this))
             return false;
         int nDepth = GetDepthInMainChain();
-        if (nDepth >= 1)
+        if (nDepth >= nMinConfirmsRequiredToSendGRC)
             return true;
         if (nDepth < 0)
             return false;

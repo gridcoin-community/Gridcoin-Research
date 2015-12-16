@@ -30,7 +30,7 @@ Public Class SpeechSynthesis
             If Len(sName) = 0 Then sName = "Investor"
             Dim sSurname = KeyValue("Surname")
             Dim sDayInterval As String = DayInterval()
-            sSentence = "Good " + sDayInterval + " " + sSurname + " " + sName + ", Your Magnitude is " + Trim(Magnitude)
+            sSentence = "Good " + sDayInterval + " " + sSurname + " " + sName + ", Your Magnitude is " + Trim(CStr(Magnitude))
             If mbTestNet Then sSentence += ",in Test Net." Else mbTestNet += ",in Production."
             Speak(sSentence)
             Return True

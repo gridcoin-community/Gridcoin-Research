@@ -5829,13 +5829,13 @@ StructCPID GetLifetimeCPID(std::string cpid, std::string sCalledFrom)
 		StructCPID stDummy = GetInitializedStructCPID2("INVESTOR",mvResearchAge);
 		return stDummy;
 	}
-	if (fDebug3) printf(" {GLC %s} ",sCalledFrom.c_str());
+	if (fDebug) printf(" {GLC %s} ",sCalledFrom.c_str());
 
 
 	std::string hashes = GetCPIDBlockHashes(cpid);
 	std::vector<std::string> vHashes = split(hashes,";");
     ZeroOutResearcherTotals(cpid);
-	if (fDebug3) printf(" MR11 ");
+	if (fDebug) printf(" MR11 ");
 
 	for (unsigned int i=0; i < vHashes.size(); i++)
 	{
