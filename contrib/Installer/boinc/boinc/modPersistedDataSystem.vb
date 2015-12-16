@@ -338,7 +338,10 @@ Module modPersistedDataSystem
             Log("Blocked call.")
             Exit Sub
         End If
-       
+        If KeyValue("disableneuralnetwork") = "true" Then
+            Log("Neural network is disabled.")
+            Exit Sub
+        End If
         Dim t As New Threading.Thread(AddressOf CompleteSync)
         t.Priority = Threading.ThreadPriority.BelowNormal
         t.Start()

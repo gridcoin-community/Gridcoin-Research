@@ -657,6 +657,9 @@ bool UpdateNeuralNetworkQuorumData()
 bool FullSyncWithDPORNodes()
 {
 			#if defined(WIN32) && defined(QT_GUI)
+
+				std::string sDisabled = GetArgument("disableneuralnetwork", "false");
+				if (sDisabled=="true") return false;
 				std::string errors1 = "";
                 LoadAdminMessages(false,errors1);
 				std::string cpiddata = GetListOf("beacon");
