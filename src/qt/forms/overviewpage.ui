@@ -477,7 +477,6 @@ font-family:'Open Sans,sans-serif';</string>
           <property name="styleSheet">
            <string notr="true">image: url(:/images/wallet);</string>
           </property>
-          <zorder>txtDisplay</zorder>
          </widget>
         </item>
         <item>
