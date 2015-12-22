@@ -263,6 +263,11 @@ void OverviewPage::on_btnBoinc_pressed()
     QDesktopServices::openUrl(QUrl("http://boincstats.com/en/stats/-1/team/detail/118094994/overview"));
 }
 
+void OverviewPage::on_btnChat_pressed()
+{
+    QDesktopServices::openUrl(QUrl("https://kiwiirc.com/client/irc.freenode.net:6667/#gridcoin"));
+}
+
 void OverviewPage::on_btnExchange_pressed()
 {
 	QDesktopServices::openUrl(QUrl("https://c-cex.com/?p=grc-btc"));

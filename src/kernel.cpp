@@ -20,16 +20,18 @@ MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
 extern int64_t GetRSAWeightByCPID(std::string cpid);
 extern double OwedByAddress(std::string address);
-
+std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
+double cdbl(std::string s, int place);
+extern int DetermineCPIDType(std::string cpid);
+std::string GetHttpPage(std::string cpid, bool usedns, bool clearcache);
 extern int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
-
-
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 double GetBlockDifficulty(unsigned int nBits);
 extern double GetLastPaymentTimeByCPID(std::string cpid);
 extern double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 bool LessVerbose(int iMax1000);
 StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
+extern double ReturnTotalRacByCPID(std::string cpid);
 
 typedef std::map<int, unsigned int> MapModifierCheckpoints;
 /*
@@ -291,6 +293,32 @@ static bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64_t& nStakeModifi
 //   quantities so as to generate blocks faster, degrading the system back into
 //   a proof-of-work situation.
 //
+
+double ReturnTotalRacByCPID(std::string cpid)
+{
+	std::string result = GetHttpPage(cpid,true,true);
+	//std::vector<std::string> vRAC = split(result.c_str(),"<project>");
+	std::string sRAC = ExtractXML(result,"<expavg_credit>","</expavg_credit>");
+	double dRAC = cdbl(sRAC,0);
+	return dRAC;						
+}
+
+int DetermineCPIDType(std::string cpid)
+{
+	// -1 = Invalid CPID
+	//  1 = Valid CPID with RAC
+	//  2 = Investor or Pool Miner
+	if (cpid.empty()) return -1;
+	if (cpid=="INVESTOR") return 2;
+	StructCPID h = mvMagnitudes[cpid];
+	if (h.Magnitude > 0) return 1;
+	// If magnitude is 0 in the current superblock, try to get magnitude from netsoft before failing
+	double dRAC = ReturnTotalRacByCPID(cpid);
+	if (dRAC > 0) return 1;
+	// At this point, they have no RAC in the superblock, and no RAC in Netsoft, so we assume they are an investor (or pool miner)
+	return 2;
+}	
+
 
 double GetMagnitudeByHashBoinc(std::string hashBoinc, int height)
 {

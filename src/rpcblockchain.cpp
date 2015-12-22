@@ -20,8 +20,10 @@ extern std::string YesNo(bool bin);
 std::string getHardDriveSerial();
 int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
 extern double DoubleFromAmount(int64_t amount);
-
-
+double ReturnTotalRacByCPID(std::string cpid);
+std::string UnpackBinarySuperblock(std::string sBlock);
+std::string PackBinarySuperblock(std::string sBlock);
+int DetermineCPIDType(std::string cpid);
 extern Array MagnitudeReport(std::string cpid);
 bool NeuralNodeParticipates();
 bool StrLessThanReferenceHash(std::string rh);
@@ -187,6 +189,7 @@ extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
 std::string GetHttpPage(std::string cpid);
 std::string GetHttpPage(std::string cpid, bool usedns, bool clearcache);
+
 bool GridDecrypt(const std::vector<unsigned char>& vchCiphertext,std::vector<unsigned char>& vchPlaintext);
 bool GridEncrypt(std::vector<unsigned char> vchPlaintext, std::vector<unsigned char> &vchCiphertext);
 uint256 GridcoinMultipleAlgoHash(std::string t1);
@@ -449,9 +452,14 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	if (bb.superblock.length() > 20)
 	{
 		result.push_back(Pair("SuperblockLength", RoundToString((double)bb.superblock.length(),0) ));
-		std::string neural_hash = GetQuorumHash(bb.superblock);
-		//double popularity = 0;
+		//12-20-2015 Support for Binary Superblocks
+		std::string superblock=UnpackBinarySuperblock(bb.superblock);
+		std::string neural_hash = GetQuorumHash(superblock);
 		result.push_back(Pair("SuperblockHash", neural_hash));
+		result.push_back(Pair("SuperblockLength", (double)bb.superblock.length()));
+		bool bIsBinary = Contains(superblock,"<BINARY>");
+		result.push_back(Pair("IsBinary",bIsBinary));
+
 	}
 	result.push_back(Pair("IsSuperBlock", (double)blockindex->nIsSuperBlock));
 	result.push_back(Pair("IsContract", (double)blockindex->nIsContract));
@@ -2302,9 +2310,22 @@ Value execute(const Array& params, bool fHelp)
 		#endif
   		LoadSuperblock(contract,GetAdjustedTime(),280000);
 		entry.push_back(Pair("Contract Test",contract));
+		// Convert to Binary
+		std::string sBin = PackBinarySuperblock(contract);
+		entry.push_back(Pair("Contract Length",(double)contract.length()));
+		entry.push_back(Pair("Binary Length",(double)sBin.length()));
+		//entry.push_back(Pair("Binary",sBin.c_str()));
 		// Hash of current superblock
+		std::string sUnpacked = UnpackBinarySuperblock(sBin);
+		entry.push_back(Pair("Unpacked length",(double)sUnpacked.length()));
+
+		entry.push_back(Pair("Unpacked",sUnpacked.c_str()));
 		std::string neural_hash = GetQuorumHash(contract);
+		std::string binary_neural_hash = GetQuorumHash(sUnpacked);
+
 		entry.push_back(Pair("Local Core Quorum Hash",neural_hash));
+		entry.push_back(Pair("Binary Local Core Quorum Hash",binary_neural_hash));
+
 		entry.push_back(Pair("Neural Network Live Quorum Hash",myNeuralHash));
 		results.push_back(entry);
 	}
@@ -2914,6 +2935,24 @@ Value execute(const Array& params, bool fHelp)
 			entry.push_back(Pair("POST Result",result));
 	        results.push_back(entry);
 	}
+	else if (sItem == "netsoft")
+	{
+		std::string cpid = "784afb35d92503160125feb183157378";
+		std::string result = GetHttpPage(cpid,true,true);
+		entry.push_back(Pair("POST Result",result));
+		StructCPID h = mvMagnitudes[cpid];
+		entry.push_back(Pair("Mag",h.Magnitude));
+		int iType = DetermineCPIDType(cpid);
+		entry.push_back(Pair("Type",iType));
+		iType=DetermineCPIDType("INVESTOR");
+		entry.push_back(Pair("Type For Investor",iType));
+		iType=DetermineCPIDType("invalid_cpid");
+		entry.push_back(Pair("Type For Invalid",iType));
+		double RAC = ReturnTotalRacByCPID(cpid);
+		entry.push_back(Pair("RAC for CPID",RAC));
+        results.push_back(entry);
+
+	}
 	else if (sItem == "encrypt_deprecated")
 	{
 			std::string s1 = "1234";
@@ -3001,16 +3040,17 @@ Array SuperblockReport(std::string cpid)
 										double out_beacon_count = 0;
 										double out_participant_count = 0;
 										double out_avg = 0;
-										double avg_mag = GetSuperblockAvgMag(bb.superblock,out_beacon_count,out_participant_count,out_avg,true);
+										// Binary Support 12-20-2015
+										std::string superblock = UnpackBinarySuperblock(bb.superblock);
+										double avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,true);
 										if (avg_mag > 10)
 										{
-											    //10-8-2015
 	    										Object c;
 												c.push_back(Pair("Block #" + RoundToString(pblockindex->nHeight,0),pblockindex->GetBlockHash().GetHex()));
 												c.push_back(Pair("Date",TimestampToHRDate(pblockindex->nTime)));
 												c.push_back(Pair("Average Mag",out_avg));
 												c.push_back(Pair("Wallet Version",bb.clientversion));
-												double mag = GetSuperblockMagnitudeByCPID(bb.superblock, cpid);
+												double mag = GetSuperblockMagnitudeByCPID(superblock, cpid);
 												if (!cpid.empty())
 												{
 													c.push_back(Pair("Magnitude",mag));
@@ -3075,20 +3115,16 @@ Array MagnitudeReport(std::string cpid)
 												double dWeight = (double)GetRSAWeightByCPID(structMag.cpid);
 												entry.push_back(Pair("RSA Weight",dWeight));
 												StructCPID UH = GetInitializedStructCPID2(cpid,mvMagnitudes);
-												if (fDebug3) printf(" MR6.3 ");
-
+												
 												entry.push_back(Pair("RSA block count",UH.Accuracy));
-												if (fDebug3) printf(" MR6.4 ");
-
+												
 												entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
 												if (fDebug3) printf(" MR6.5 ");
 												entry.push_back(Pair("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime)));
-												if (fDebug3) printf(" MR6.12 ");
-
+												
 												entry.push_back(Pair("Magnitude",	structMag.Magnitude));
 												entry.push_back(Pair("Research Payments (14 days)",structMag.payments));
-												if (fDebug3) printf(" MR6.2 ");
-
+												
 												entry.push_back(Pair("Interest Payments (14 days)",structMag.interestPayments));
 												if (structMag.cpid == cpid)
 												{

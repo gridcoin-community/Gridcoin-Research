@@ -49,6 +49,7 @@
 	<file alias="www">res/icons/www.png</file>
         <file alias="boinc">res/icons/boinc.png</file>
         <file alias="gold_cpumined">res/icons/gold_cpumined.png</file>
+        <file alias="chat">res/icons/chat.png</file>
     </qresource>
     <qresource prefix="/images">
         <file alias="about">res/images/about.png</file>

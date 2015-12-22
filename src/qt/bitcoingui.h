@@ -98,6 +98,7 @@ private:
 	QAction *bxAction;
 	QAction *websiteAction;
 	QAction *boincAction;
+	QAction *chatAction;
 	QAction *exchangeAction;
 
 	QAction *miningAction;
@@ -208,6 +209,7 @@ private slots:
 	void websiteClicked();
 	void exchangeClicked();
 	void boincClicked();
+	void chatClicked();
 
 	void rebuildClicked();
 	void upgradeClicked();

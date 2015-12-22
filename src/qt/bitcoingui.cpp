@@ -872,6 +872,11 @@ void BitcoinGUI::createActions()
 	websiteAction->setStatusTip(tr("Web Site"));
 	websiteAction->setMenuRole(QAction::TextHeuristicRole);
 
+	chatAction = new QAction(QIcon(":/icons/chat"), tr("&GRC Chat Room"), this);
+	chatAction->setStatusTip(tr("GRC Chatroom"));
+	chatAction->setMenuRole(QAction::TextHeuristicRole);
+
+
     connect(overviewAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(overviewAction, SIGNAL(triggered()), this, SLOT(gotoOverviewPage()));
     connect(sendCoinsAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
@@ -887,6 +892,7 @@ void BitcoinGUI::createActions()
 	connect(bxAction, SIGNAL(triggered()), this, SLOT(bxClicked()));
 	connect(exchangeAction, SIGNAL(triggered()), this, SLOT(exchangeClicked()));
 	connect(boincAction, SIGNAL(triggered()), this, SLOT(boincClicked()));
+	connect(chatAction, SIGNAL(triggered()), this, SLOT(chatClicked()));
 
     quitAction = new QAction(QIcon(":/icons/quit"), tr("E&xit"), this);
     quitAction->setToolTip(tr("Quit application"));
@@ -1111,6 +1117,7 @@ void BitcoinGUI::createToolBars()
 	toolbar->addAction(websiteAction);
 	toolbar->addAction(exchangeAction);
 	toolbar->addAction(boincAction);
+	toolbar->addAction(chatAction);
 //	toolbar->addAction(statisticsAction);
 //	toolbar->addAction(blockAction);
     QWidget* spacer = new QWidget();
@@ -1837,10 +1844,17 @@ void BitcoinGUI::bxClicked()
 	overviewPage->on_btnBX_pressed();
 }
 
+
+void BitcoinGUI::chatClicked()
+{
+	overviewPage->on_btnChat_pressed();
+}
+
 void BitcoinGUI::boincClicked()
 {
 	overviewPage->on_btnBoinc_pressed();
 }
+
 void BitcoinGUI::websiteClicked()
 {
 	overviewPage->on_btnWebsite_pressed();

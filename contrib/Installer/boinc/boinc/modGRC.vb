@@ -713,7 +713,9 @@ Module modGRC
     End Function
     Public Function GetGridFolder() As String
         Dim sTemp As String
-        sTemp = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\gridcoinresearch\"
+        'Determine if user has overridden the %appdata% (datadir) folder first:
+        Dim sOverridden As String = KeyValue("datadir")
+        sTemp = IIf(Len(sOverridden) > 0, sOverridden, Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\gridcoinresearch\")
         If mbTestNet Then sTemp += "Testnet\"
         Return sTemp
     End Function

@@ -30,9 +30,10 @@
 
 int GetDayOfYear();
 extern std::string NodeAddress(CNode* pfrom);
-
-
+extern std::string UnpackBinarySuperblock(std::string sBlock);
+extern std::string PackBinarySuperblock(std::string sBlock);
 int DownloadBlocks();
+int DetermineCPIDType(std::string cpid);
 extern MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID> vRef);
 extern std::string getHardDriveSerial();
 extern bool IsSuperBlock(CBlockIndex* pIndex);
@@ -2396,7 +2397,7 @@ static unsigned int GetNextTargetRequiredV2(const CBlockIndex* pindexLast, bool 
     CBigNum bnNew;
     bnNew.SetCompact(pindexPrev->nBits);
 
-	//Gridcoin - Reset Diff to 1 on 12-21-2014 (R Halford) - Diff sticking at 2065 due to many incompatible features
+	//Gridcoin - Reset Diff to 1 on 12-19-2014 (R Halford) - Diff sticking at 2065 due to many incompatible features
 	if (pindexLast->nHeight >= 91387 && pindexLast->nHeight <= 91500)
 	{
 		    return bnTargetLimit.GetCompact();
@@ -2984,7 +2985,6 @@ double BlockVersion(std::string v)
 }
 
 
-
 std::string PubKeyToAddress(const CScript& scriptPubKey)
 {
 	//Converts a script Public Key to a Gridcoin wallet address
@@ -3005,13 +3005,168 @@ std::string PubKeyToAddress(const CScript& scriptPubKey)
 
 bool LoadSuperblock(std::string data, int64_t nTime, double height)
 {
-		WriteCache("superblock","magnitudes",ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>"),nTime);
+	 	WriteCache("superblock","magnitudes",ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>"),nTime);
 		WriteCache("superblock","averages",ExtractXML(data,"<AVERAGES>","</AVERAGES>"),nTime);
 		WriteCache("superblock","quotes",ExtractXML(data,"<QUOTES>","</QUOTES>"),nTime);
 		WriteCache("superblock","all",data,nTime);
 		WriteCache("superblock","block_number",RoundToString(height,0),nTime);
 		return true;
 }
+
+std::string CharToString(char c)
+{
+	std::stringstream ss;
+	std::string sOut = "";
+	ss << c;
+	ss >> sOut;
+	return sOut;
+}
+
+
+template< typename T >
+std::string int_to_hex( T i )
+{
+  std::stringstream stream;
+  stream << "0x" 
+         << std::setfill ('0') << std::setw(sizeof(T)*2) 
+         << std::hex << i;
+  return stream.str();
+}
+
+std::string DoubleToHexStr(double d, int iPlaces)
+{
+	int nMagnitude = atoi(RoundToString(d,0).c_str()); 
+	std::string hex_string = int_to_hex(nMagnitude);
+	std::string sOut = "00000000" + hex_string;
+	std::string sHex = sOut.substr(sOut.length()-iPlaces,iPlaces);
+    return sHex;
+}
+
+int HexToInt(std::string sHex)
+{
+	int x;   
+    std::stringstream ss;
+    ss << std::hex << sHex;
+    ss >> x;
+	return x;
+}
+std::string ConvertHexToBin(std::string a)
+{
+	if (a.empty()) return "";
+	std::string sOut = "";
+	for (unsigned int x = 1; x <= a.length(); x += 2)
+	{
+	   std::string sChunk = a.substr(x-1,2);
+	   int i = HexToInt(sChunk);
+	   char c = (char)i;
+	   sOut.push_back(c);
+    }
+	return sOut;
+}
+
+
+double ConvertHexToDouble(std::string hex)
+{
+	int d = HexToInt(hex);
+	double dOut = (double)d;
+	return dOut;
+}
+
+
+std::string ConvertBinToHex(std::string a) 
+{
+      if (a.empty()) return "0";
+	  std::string sOut = "";
+	  for (unsigned int x = 1; x <= a.length(); x++)
+	  {
+    	   char c = a[x-1];
+		   int i = (int)c; 
+		   std::string sHex = DoubleToHexStr((double)i,2);
+		   sOut += sHex;
+      }
+      return sOut;
+}
+
+std::string UnpackBinarySuperblock(std::string sBlock)
+{
+	// 12-21-2015: R HALFORD: If the block is not binary, return the legacy format for backward compatibility
+	std::string sBinary = ExtractXML(sBlock,"<BINARY>","</BINARY>");
+	if (sBinary.empty()) return sBlock;
+	std::string sZero = ExtractXML(sBlock,"<ZERO>","</ZERO>");
+	double dZero = cdbl(sZero,0);
+	// Binary data support structure:
+	// Each CPID consumes 16 bytes and 2 bytes for magnitude: (Except CPIDs with zero magnitude - the count of those is stored in XML node <ZERO> to save space)
+	// 1234567890123456MM
+	// MM = Magnitude stored as 2 bytes
+	// No delimiter between CPIDs, Step Rate = 18
+	std::string sReconstructedMagnitudes = "";
+	for (unsigned int x = 0; x < sBinary.length(); x += 18)
+	{
+		if (sBinary.length() >= x+18)
+		{
+			std::string bCPID = sBinary.substr(x,16);
+			std::string bMagnitude = sBinary.substr(x+16,2);
+			std::string sCPID = ConvertBinToHex(bCPID);
+			std::string sHexMagnitude = ConvertBinToHex(bMagnitude);
+			double dMagnitude = ConvertHexToDouble("0x" + sHexMagnitude);
+			std::string sRow = sCPID + "," + RoundToString(dMagnitude,0) + ";";
+			sReconstructedMagnitudes += sRow;
+			// if (fDebug3) printf("\r\n HEX CPID %s, HEX MAG %s, dMag %f, Row %s   ",sCPID.c_str(),sHexMagnitude.c_str(),dMagnitude,sRow.c_str());
+		}
+	}
+	// Append zero magnitude researchers so the beacon count matches
+	for (double d0 = 1; d0 <= dZero; d0++)
+	{
+			std::string sZeroCPID = "0";
+			std::string sRow1 = sZeroCPID + ",99;";
+			sReconstructedMagnitudes += sRow1;
+	}
+	std::string sAverages   = ExtractXML(sBlock,"<AVERAGES>","</AVERAGES>");
+	std::string sQuotes     = ExtractXML(sBlock,"<QUOTES>","</QUOTES>");
+	std::string sReconstructedBlock = "<AVERAGES>" + sAverages + "</AVERAGES><QUOTES>" + sQuotes + "</QUOTES><MAGNITUDES>" + sReconstructedMagnitudes + "</MAGNITUDES>";
+	return sReconstructedBlock;
+}
+
+std::string PackBinarySuperblock(std::string sBlock)
+{
+
+	std::string sMagnitudes = ExtractXML(sBlock,"<MAGNITUDES>","</MAGNITUDES>");
+	std::string sAverages   = ExtractXML(sBlock,"<AVERAGES>","</AVERAGES>");
+	std::string sQuotes     = ExtractXML(sBlock,"<QUOTES>","</QUOTES>");
+	// For each CPID in the superblock, convert data to binary
+	std::vector<std::string> vSuperblock = split(sMagnitudes.c_str(),";");
+	std::string sBinary = "";
+	double dZeroMagCPIDCount = 0;
+	for (unsigned int i = 0; i < vSuperblock.size(); i++)
+	{
+			if (vSuperblock[i].length() > 1)
+			{
+				std::string sPrefix = "00000000000000000000000000000000000" + ExtractValue(vSuperblock[i],",",0);
+				std::string sCPID = sPrefix.substr(sPrefix.length()-32,32);
+				double magnitude = cdbl(ExtractValue("0"+vSuperblock[i],",",1),0);
+				if (magnitude < 0)     magnitude=0;
+				if (magnitude > 32767) magnitude = 32767;  // Ensure we do not blow out the binary space (technically we can handle 0-65535)
+				std::string sBinaryCPID   = ConvertHexToBin(sCPID);
+				std::string sHexMagnitude = DoubleToHexStr(magnitude,4);
+				std::string sBinaryMagnitude = ConvertHexToBin(sHexMagnitude);
+				std::string sBinaryEntry  = sBinaryCPID+sBinaryMagnitude;
+				// if (fDebug3) printf("\r\n PackBinarySuperblock: DecMag %f HEX MAG %s bin_cpid_len %f bm_len %f be_len %f,",	magnitude,sHexMagnitude.c_str(),(double)sBinaryCPID.length(),(double)sBinaryMagnitude.length(),(double)sBinaryEntry.length());
+				if (sCPID=="00000000000000000000000000000000")
+				{
+					dZeroMagCPIDCount += 1;
+				}
+				else
+				{
+					sBinary += sBinaryEntry;
+				}
+
+			}
+	}
+	std::string sReconstructedBinarySuperblock = "<ZERO>" + RoundToString(dZeroMagCPIDCount,0) + "</ZERO><BINARY>" + sBinary + "</BINARY><AVERAGES>" + sAverages + "</AVERAGES><QUOTES>" + sQuotes + "</QUOTES>";
+	return sReconstructedBinarySuperblock;
+}
+
+
 
 
 double ClientVersionNew()
@@ -3376,15 +3531,16 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 	{
 		if (pindex->nHeight > nGrandfather && !fReorganizing)
 		{
-			//7-25-2015
-			std::string neural_hash = GetQuorumHash(bb.superblock);
-			std::string legacy_neural_hash = RetrieveMd5(bb.superblock);
+			// 12-20-2015 : Add support for Binary Superblocks
+			std::string superblock = UnpackBinarySuperblock(bb.superblock);
+			std::string neural_hash = GetQuorumHash(superblock);
+			std::string legacy_neural_hash = RetrieveMd5(superblock);
 			double popularity = 0;
 			std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
 			// Only reject superblock when it is new And when QuorumHash of Block != the Popular Quorum Hash:
 			if (IsLockTimeWithinMinutes(GetBlockTime(),15)  && !fColdBoot)
 			{
-				if (!VerifySuperblock(bb.superblock,pindex->nHeight))
+				if (!VerifySuperblock(superblock,pindex->nHeight))
 				{
 					return error("ConnectBlock[] : Superblock avg mag below 10; SuperblockHash: %s, Consensus Hash: %s",
 										neural_hash.c_str(), consensus_hash.c_str());
@@ -3413,16 +3569,20 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 			//If we are out of sync, and research age is enabled, and the superblock is valid, load it now, so we can continue checking blocks accurately
 			if ((OutOfSyncByAge() || fColdBoot || fReorganizing) && IsResearchAgeEnabled(pindex->nHeight) && pindex->nHeight > nGrandfather)
 			{
-				    if (VerifySuperblock(bb.superblock,pindex->nHeight))
+				    if (bb.superblock.length() > 20)
 					{
-								LoadSuperblock(bb.superblock,pindex->nTime,pindex->nHeight);
-								if (fDebug3) printf("ConnectBlock(): Superblock Loaded %f \r\n",(double)pindex->nHeight);
-								/*  Reserved for future use:
-									bNetAveragesLoaded=false;
-									nLastTallied = 0;
-									BsyWaitForTally();
-								*/
-								bDoTally = true;
+						    std::string superblock = UnpackBinarySuperblock(bb.superblock);
+							if (VerifySuperblock(superblock,pindex->nHeight))
+							{
+										LoadSuperblock(superblock,pindex->nTime,pindex->nHeight);
+										if (fDebug3) printf("ConnectBlock(): Superblock Loaded %f \r\n",(double)pindex->nHeight);
+										/*  Reserved for future use:
+											bNetAveragesLoaded=false;
+											nLastTallied = 0;
+											BsyWaitForTally();
+										*/
+										bDoTally = true;
+							}
 					}
 			}
 
@@ -6011,9 +6171,10 @@ bool RetiredTN(bool Forcefully)
 							AddNMRetired((double)pblockindex->nHeight,pblockindex->nTime,bb.cpid,bb);
 							if (!superblockloaded && bb.superblock.length() > 20)
 							{
-									if (VerifySuperblock(bb.superblock,pblockindex->nHeight))
+								    std::string superblock = UnpackBinarySuperblock(bb.superblock);
+									if (VerifySuperblock(superblock,pblockindex->nHeight))
 									{
-	    									LoadSuperblock(bb.superblock,pblockindex->nTime,pblockindex->nHeight);
+	    									LoadSuperblock(superblock,pblockindex->nTime,pblockindex->nHeight);
 											superblockloaded=true;
 											if (fDebug3) printf(" Superblock Loaded %f \r\n",(double)pblockindex->nHeight);
 									}
@@ -6076,7 +6237,8 @@ bool ComputeNeuralNetworkSupermajorityHashes()
 				//If block is pending: 7-25-2015
 				if (bb.superblock.length() > 20)
 				{
-					if (VerifySuperblock(bb.superblock,pblockindex->nHeight))
+					std::string superblock = UnpackBinarySuperblock(bb.superblock);
+					if (VerifySuperblock(superblock,pblockindex->nHeight))
 					{
 						WriteCache("neuralsecurity","pending",RoundToString((double)pblockindex->nHeight,0),GetAdjustedTime());
 					}
@@ -6213,11 +6375,12 @@ bool TallyResearchAverages(bool Forcefully)
 								if (bb.superblock.length() > 20)
 								{
 									    if (fDebug3) printf(" VSB1 ");
+										std::string superblock = UnpackBinarySuperblock(bb.superblock);
 										//11-18-2015 Sep
-										if (VerifySuperblock(bb.superblock,pblockindex->nHeight))
+										if (VerifySuperblock(superblock,pblockindex->nHeight))
 										{
 											    if (fDebug3) printf(" LSB2 ");
-	    										LoadSuperblock(bb.superblock,pblockindex->nTime,pblockindex->nHeight);
+	    										LoadSuperblock(superblock,pblockindex->nTime,pblockindex->nHeight);
 												superblockloaded=true;
 												if (fDebug3) printf(" Superblock Loaded %f \r\n",(double)pblockindex->nHeight);
 										}
@@ -6751,7 +6914,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 12-3-2015 (works in conjunction with block spamming)
-		if (pfrom->nVersion < 180317 && fTestNet)
+		if (pfrom->nVersion < 180318 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -8057,6 +8220,11 @@ std::string GetNeuralNetworkSuperBlock()
 			#if defined(WIN32) && defined(QT_GUI)
 				contract = qtGetNeuralContract("");
 				if (fDebug2 && LessVerbose(5)) printf("Appending SuperBlock %f\r\n",(double)contract.length());
+				if (bNewbieFeatureEnabled)
+				{
+					// 12-21-2015 : Stake a binary superblock
+					contract = PackBinarySuperblock(contract);
+				}
 			#endif
 			return contract;
 		}
@@ -8719,22 +8887,31 @@ void HarvestCPIDs(bool cleardata)
 					   }
 
 
-						//11-12-2015
+						//12-21-2015
 						if (structcpid.Iscpidvalid && bAcid)
 						{
-								GlobalCPUMiningCPID.cpidhash = cpidhash;
-								GlobalCPUMiningCPID.email = email;
-								GlobalCPUMiningCPID.boincruntimepublickey = cpidhash;
-								if (structcpid.rac > 10 && structcpid.team=="gridcoin")
+								// Verify the CPID has magnitude > 0, otherwise set the user as an investor:
+								int iCPIDType = DetermineCPIDType(structcpid.cpid);
+								// -1 = Invalid CPID
+								//  1 = Valid CPID with RAC
+								//  2 = Investor or Pool Miner
+								if (iCPIDType==1)
 								{
-									msPrimaryCPID = structcpid.cpid;
-									#if defined(WIN32) && defined(QT_GUI)
-										//Let the Neural Network know what your CPID is so it can be charted:
-										std::string sXML = "<KEY>PrimaryCPID</KEY><VALUE>" + msPrimaryCPID + "</VALUE>";
-										std::string sData = qtExecuteDotNetStringFunction("WriteKey",sXML);
-									#endif
-									//Try to get a neural RAC report 7-25-2015
-									AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
+									GlobalCPUMiningCPID.cpidhash = cpidhash;
+									GlobalCPUMiningCPID.email = email;
+									GlobalCPUMiningCPID.boincruntimepublickey = cpidhash;
+								
+									if (structcpid.rac > 10 && structcpid.team=="gridcoin")
+									{
+										msPrimaryCPID = structcpid.cpid;
+										#if defined(WIN32) && defined(QT_GUI)
+											//Let the Neural Network know what your CPID is so it can be charted:
+											std::string sXML = "<KEY>PrimaryCPID</KEY><VALUE>" + msPrimaryCPID + "</VALUE>";
+											std::string sData = qtExecuteDotNetStringFunction("WriteKey",sXML);
+										#endif
+										//Try to get a neural RAC report 7-25-2015
+										AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
+									}
 								}
 						}
 

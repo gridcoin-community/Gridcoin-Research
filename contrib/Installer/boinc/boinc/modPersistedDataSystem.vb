@@ -1563,7 +1563,7 @@ Retry:
 
             Dim sReport As String = ""
             Dim sReportRow As String = ""
-            Dim sHeader As String = "CPID,LocalMagnitude,NeuralMagnitude,TotalRAC,Synced Til,Address,CPID_Valid;Witnesses"
+            Dim sHeader As String = "CPID,LocalMagnitude,NeuralMagnitude,TotalRAC,Synced Til,Address,CPID_Valid,Witnesses"
             sReport += sHeader + vbCrLf
             Dim grr As New GridcoinReader.GridcoinRow
             Dim sHeading As String = "CPID;LocalMagnitude;NeuralMagnitude;TotalRAC;Synced Til;Address;CPID_Valid;Witnesses"

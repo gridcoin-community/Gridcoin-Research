@@ -231,10 +231,13 @@ bool RecvLine2(SOCKET hSocket, string& strLine)
 
         if (nBytes > 0)
         {
-            if (c == '\n')      continue;
+            strLine += c;
+            if (c == '\n')      return true;
             if (c == '\r')      return true;
-		    strLine += c;
-            if (strLine.size() >= 39000)
+			//12-19-2015
+			if (strLine.find("</users>") != string::npos) return true;
+				
+		    if (strLine.size() >= 39000)
                 return true;
         }
         else if (nBytes <= 0)
@@ -249,10 +252,10 @@ bool RecvLine2(SOCKET hSocket, string& strLine)
                     continue;
                 if (nErr == WSAEWOULDBLOCK || nErr == WSAEINTR || nErr == WSAEINPROGRESS)
                 {
-                    MilliSleep(50);
+                    MilliSleep(1);
 					clock_t end = clock();
 					double elapsed_secs = double(end - begin) / (CLOCKS_PER_SEC+.01);
-					if (elapsed_secs > 5) return true;
+					if (elapsed_secs > 3) return true;
                     continue;
                 }
             }
@@ -535,25 +538,26 @@ std::string GetHttpContent(const CService& addrConnect, std::string getdata)
         return "GetHttpContent() : connection to address failed";
 	}
 
-	if (fDebug) printf("Trying %s",getdata.c_str());
+	if (fDebug3) printf("Trying %s",getdata.c_str());
 
     send(hSocket, pszGet, strlen(pszGet), MSG_NOSIGNAL);
     string strLine;
 	std::string strOut="null";
-	MilliSleep(133);
+	MilliSleep(1);
 	double timeout = 0;
 	clock_t begin = clock();
     while (RecvLine2(hSocket, strLine))
     {
 	            strOut = strOut + strLine + "\r\n";
-				MilliSleep(100);
-				timeout=timeout+100;
+				MilliSleep(1);
+				timeout=timeout+1;
   			    clock_t end = clock();
 				double elapsed_secs = double(end - begin) / (CLOCKS_PER_SEC+.01);
-				if (timeout > 10000) break;
-				if (elapsed_secs > 10) break;
+				if (elapsed_secs > 8) break;
 			    if (strLine.find("<END>") != string::npos) break;
 				if (strLine.find("</html>") != string::npos) break;
+				if (strLine.find("</user>") != string::npos) break;
+
     }
     closesocket(hSocket);
 	return strOut;
@@ -773,15 +777,14 @@ std::string GetHttpPage(std::string url)
 
 std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache)
 {
-	return "";
-
+	
 	try
 	{
-		 if (cpid=="" || cpid.length() < 5)
-		 {
+	   if (cpid=="" || cpid.length() < 5)
+	   {
 				if (fDebug) printf("Blank cpid supplied");
 				return "";
-		 }
+	   }
 
 	   if (ClearCache)
 	   {
@@ -792,26 +795,24 @@ std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache)
 	   {
 		   if (c.xml.length() > 100)
 		   {
-			   //printf("Cache hit on %s \r\n",cpid.c_str());
 			   return c.xml;
 		   }
 
 	   }
 
 
-
 		CService addrConnect;
-   		std::string url = "http://boinc.etsoft-online.com/get_user.php?cpid=";
-		std::string url2 = "216.165.179.26";
-		std::string url3 = "boinc.etsoft-online.com";
-		std::string url4 = "get_user.php?cpid=" + cpid;
 
+   		std::string url  = "http://cpid.gridcoin.us/get_user.php?cpid=";
+		std::string url3 = "cpid.gridcoin.us";
+		std::string url4 = "get_user.php?cpid=" + cpid;
+		int iCPIDPort = 5000;
 		if (fDebug) printf("HTTP Request\r\n %s \r\n",url4.c_str());
 
-		CService addrIP(url3, 80, true);
+		CService addrIP(url3, iCPIDPort, true);
 		if (UseDNS)
 		{
-        if (addrIP.IsValid())
+			if (addrIP.IsValid())
 			{
 				addrConnect = addrIP;
 				printf("QA:%s",url4.c_str());
@@ -820,10 +821,11 @@ std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache)
 		else
 		{
   			addrConnect = CService("216.165.179.26", 80);
+			printf("Invalid address...");
 		}
 
 		std::string getdata = "GET /" + url4 + " HTTP/1.1\r\n"
-                     "Host: boinc.etsoft-online.com\r\n"
+                     "Host: " + url3 + "\r\n"
   				     "User-Agent: Mozilla/4.0\r\n"
                      "\r\n";
 
@@ -838,7 +840,6 @@ std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache)
     catch (std::exception &e)
 	{
 		printf("Error while querying address for cpid %s",cpid.c_str());
-
         return "";
     }
 	catch (...)
@@ -1908,7 +1909,7 @@ void MapPort()
 // The second name should resolve to a list of seed addresses.
 static const char *strDNSSeed[][2] = {
     {"node.gridcoin.us", "node.gridcoin.us"},
-    {"gridcoin.asia", "gridcoin.asis"},
+    {"gridcoin.asia", "gridcoin.asia"},
 	{"amsterdam.grcnode.co.uk", "amsterdam.grcnode.co.uk"},
 	{"london.grcnode.co.uk", "london.grcnode.co.uk"},
 	{"frankfurt.grcnode.co.uk", "frankfurt.grcnode.co.uk"},

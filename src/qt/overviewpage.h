@@ -35,6 +35,7 @@ public:
 	void on_btnWebsite_pressed();
 	void on_btnBX_pressed();
 	void on_btnBoinc_pressed();
+	void on_btnChat_pressed();
 	void on_btnExchange_pressed();
 
 public slots:
