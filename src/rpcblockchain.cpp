@@ -451,13 +451,13 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("NeuralHash",bb.NeuralHash));
 	if (bb.superblock.length() > 20)
 	{
-		result.push_back(Pair("SuperblockLength", RoundToString((double)bb.superblock.length(),0) ));
+		//result.push_back(Pair("SuperblockLength", RoundToString((double)bb.superblock.length(),0) ));
 		//12-20-2015 Support for Binary Superblocks
 		std::string superblock=UnpackBinarySuperblock(bb.superblock);
 		std::string neural_hash = GetQuorumHash(superblock);
 		result.push_back(Pair("SuperblockHash", neural_hash));
 		result.push_back(Pair("SuperblockLength", (double)bb.superblock.length()));
-		bool bIsBinary = Contains(superblock,"<BINARY>");
+		bool bIsBinary = Contains(bb.superblock,"<BINARY>");
 		result.push_back(Pair("IsBinary",bIsBinary));
 
 	}
@@ -1462,6 +1462,14 @@ std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string 
 	 return sResult;
 }
 
+int64_t AmountFromDouble(double dAmount)
+{
+    if (dAmount <= 0.0 || dAmount > MAX_MONEY)        throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount");
+    int64_t nAmount = roundint64(dAmount * COIN);
+    if (!MoneyRange(nAmount))         throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount");
+    return nAmount;
+}
+
 
 
 Value execute(const Array& params, bool fHelp)
@@ -1501,6 +1509,84 @@ Value execute(const Array& params, bool fHelp)
 			entry.push_back(Pair("RebootClient",r));
 			results.push_back(entry);
 	
+	}
+	else if (sItem=="rain")
+	{
+		int nMinDepth = 1;
+		if (params.size() < 2)
+		{
+			entry.push_back(Pair("Error","You must specify Rain Recipients in format: Address<COL>Amount<ROW>..."));
+			results.push_back(entry);
+		}
+		else
+		{
+			CWalletTx wtx;
+			wtx.mapValue["comment"] = "Rain";
+			set<CBitcoinAddress> setAddress;
+			vector<pair<CScript, int64_t> > vecSend;
+			std::string sRecipients = params[1].get_str();
+			int64_t totalAmount = 0;
+			double dTotalToSend = 0;
+			std::vector<std::string> vRecipients = split(sRecipients.c_str(),"<ROW>");
+			printf("Creating Rain transaction with %f recipients. ",(double)vRecipients.size());
+			for (unsigned int i = 0; i < vRecipients.size(); i++)
+			{
+				std::string sRow = vRecipients[i];
+				std::vector<std::string> vReward = split(sRow.c_str(),"<COL>");
+				if (vReward.size() > 1)
+				{
+					std::string sAddress = vReward[0];
+					std::string sAmount = vReward[1];
+					if (sAddress.length() > 10 && sAmount.length() > 0)
+					{
+						double dAmount = cdbl(sAmount,4);
+						if (dAmount > 0) 
+						{
+							CBitcoinAddress address(sAddress);
+							if (!address.IsValid())
+								throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("Invalid Gridcoin address: ")+sAddress);
+							if (setAddress.count(address))
+								throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, duplicated address: ")+sAddress);
+							setAddress.insert(address);
+							dTotalToSend += dAmount;
+							int64_t nAmount = AmountFromDouble(dAmount);
+							CScript scriptPubKey;
+							scriptPubKey.SetDestination(address.Get());
+							totalAmount += nAmount;
+							vecSend.push_back(make_pair(scriptPubKey, nAmount));
+						}
+					}
+				}
+			}
+
+			EnsureWalletIsUnlocked();
+			// Check funds
+			double dBalance = GetTotalBalance();
+			if (dTotalToSend > dBalance)
+				throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Account has insufficient funds");
+			// Send
+			CReserveKey keyChange(pwalletMain);
+			int64_t nFeeRequired = 0;
+			bool fCreated = pwalletMain->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired);
+			printf("Transaction Created.");
+			if (!fCreated)
+			{
+				if (totalAmount + nFeeRequired > pwalletMain->GetBalance())
+					throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Insufficient funds");
+				throw JSONRPCError(RPC_WALLET_ERROR, "Transaction creation failed");
+			}
+			printf("Committing.");
+			// Rain the recipients
+			if (!pwalletMain->CommitTransaction(wtx, keyChange))
+			{
+				printf("Commit failed.");
+				throw JSONRPCError(RPC_WALLET_ERROR, "Transaction commit failed");
+			}
+			std::string sNarr = "Rain successful:  Sent " + wtx.GetHash().GetHex() + ".";
+			printf("Success %s",sNarr.c_str());
+			entry.push_back(Pair("Response", sNarr));
+			results.push_back(entry);
+		}
 	}
 	else if (sItem == "neuralrequest")
 	{
@@ -4301,6 +4387,11 @@ Value listitem(const Array& params, bool fHelp)
 		entry.push_back(Pair("Excluded Tx",msMiningErrorsExcluded));
 		entry.push_back(Pair("Included Tx",msMiningErrorsIncluded));
 		results.push_back(entry);
+	}
+	if (sitem == "db")
+	{
+	   	 
+ 
 	}
 	if (sitem == "rsa")
 	{

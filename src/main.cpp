@@ -3118,7 +3118,7 @@ std::string UnpackBinarySuperblock(std::string sBlock)
 	for (double d0 = 1; d0 <= dZero; d0++)
 	{
 			std::string sZeroCPID = "0";
-			std::string sRow1 = sZeroCPID + ",99;";
+			std::string sRow1 = sZeroCPID + ",15;";
 			sReconstructedMagnitudes += sRow1;
 	}
 	std::string sAverages   = ExtractXML(sBlock,"<AVERAGES>","</AVERAGES>");
@@ -9727,7 +9727,15 @@ double GRCMagnitudeUnit(int64_t locktime)
 	double MaximumEmission = BLOCKS_PER_DAY*GetMaximumBoincSubsidy(locktime);
 	double Kitty = MaximumEmission - (network.payments/14);
 	if (Kitty < 1) Kitty = 1;
-	double MagnitudeUnit = Kitty/TotalNetworkMagnitude;
+	double MagnitudeUnit = 0;
+	if (bNewbieFeatureEnabled)
+	{
+		MagnitudeUnit = (Kitty/TotalNetworkMagnitude)*1.25;
+	}
+	else
+	{
+		MagnitudeUnit = Kitty/TotalNetworkMagnitude;
+	}
 	if (MagnitudeUnit > 5) MagnitudeUnit = 5; //Just in case we lose a superblock or something strange happens.
 	MagnitudeUnit = SnapToGrid(MagnitudeUnit); //Snaps the value into .025 increments
 	return MagnitudeUnit;

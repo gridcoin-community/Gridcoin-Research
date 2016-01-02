@@ -16,6 +16,8 @@
 #endif
 
 #include <QInputDialog>
+// include <QtSql> // Future Use
+
 #include <fstream>
 
 #include "bitcoingui.h"
@@ -2238,6 +2240,27 @@ void ExecuteCode()
 }
 
 
+std::string SQLQuery()
+{
+	/*
+		  QSqlDatabase db = QSqlDatabase::addDatabase("QPGridcoin");
+		  db.setHostName("arachnid1");
+		  db.setDatabaseName("dbname");
+		  db.setUserName("thelogin");
+		  db.setPassword("thepass");
+		  bool ok = db.open();
+		  if(ok)
+		  {
+				    QSqlQuery query("SELECT country FROM confirm");
+					while (query.next())
+					{
+					      QString country = query.value(0).toString();
+					}
+		  }
+		  return "";
+		 */
+	return "";
+}
 
 void BitcoinGUI::timerfire()
 {
@@ -2279,6 +2302,11 @@ void BitcoinGUI::timerfire()
 							std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
 							double function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
 							std::string response = ExecuteRPCCommand("vote",Argument1,Argument2);
+							double resultcode = qtExecuteGenericFunction("SetRPCResponse"," "+response);
+						}
+						else if (RPCCommand=="rain")
+						{
+							std::string response = ExecuteRPCCommand("rain",Argument1,Argument2);
 							double resultcode = qtExecuteGenericFunction("SetRPCResponse"," "+response);
 						}
 						else if (RPCCommand=="addpoll")

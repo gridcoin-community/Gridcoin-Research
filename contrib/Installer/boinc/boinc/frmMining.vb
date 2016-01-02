@@ -327,6 +327,11 @@ Refresh:
 
         dgvProjects.Rows.Clear()
         dgvProjects.Columns.Clear()
+
+        dgvProjects.EditingPanel.Visible = False
+        dgvProjects.AllowUserToAddRows = False
+
+
         dgvProjects.BackgroundColor = Drawing.Color.Black
         dgvProjects.ForeColor = Drawing.Color.Lime
         sHeading = "Project Name;Total RAC;Avg RAC;Whitelisted"
@@ -691,9 +696,27 @@ Refresh:
         ' End If
     End Sub
 
-    Private Sub LinkLabel1_LinkClicked(sender As System.Object, e As System.Windows.Forms.LinkLabelLinkClickedEventArgs) Handles LinkLabel1.LinkClicked
+    Private Sub LinkLabel1_LinkClicked(sender As System.Object, e As System.Windows.Forms.LinkLabelLinkClickedEventArgs)
         Dim sURL As String = "https://kiwiirc.com/client/irc.freenode.net:6667/#gridcoin"
         Process.Start(sURL)
+
+    End Sub
+
+    Private Sub dgvProjects_CellContentDoubleClick(sender As System.Object, e As System.Windows.Forms.DataGridViewCellEventArgs) Handles dgvProjects.CellContentDoubleClick
+
+        'Drill into CPID
+        If e.RowIndex < 0 Then Exit Sub
+        'Get whitelist total first
+
+        '
+        Dim sProject As String = Trim(dgvProjects.Rows(e.RowIndex).Cells(0).Value)
+
+        If Len(sProject) > 1 Then
+            Dim fRain As New frmRain
+            fRain.msProject = sProject
+            fRain.Show()
+
+        End If
 
     End Sub
 End Class

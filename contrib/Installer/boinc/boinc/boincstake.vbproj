@@ -96,6 +96,12 @@
     <Compile Include="clsBoincProjectDownload.vb" />
     <Compile Include="clsMailFunctions.vb" />
     <Compile Include="clsQuorumHashingAlgorithm.cls" />
+    <Compile Include="frmRain.Designer.vb">
+      <DependentUpon>frmRain.vb</DependentUpon>
+    </Compile>
+    <Compile Include="frmRain.vb">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="frmAddAttachment.Designer.vb">
       <DependentUpon>frmAddAttachment.vb</DependentUpon>
     </Compile>
@@ -280,6 +286,9 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="frmRain.resx">
+      <DependentUpon>frmRain.vb</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="frmAddAttachment.resx">
       <DependentUpon>frmAddAttachment.vb</DependentUpon>
       <SubType>Designer</SubType>

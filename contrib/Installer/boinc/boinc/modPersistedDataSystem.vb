@@ -140,7 +140,7 @@ Module modPersistedDataSystem
                     Dim sRow As String = cpid.PrimaryKey + "," + Num(cpid.Magnitude) + ";"
                     'Zero magnitude rule (We need a placeholder because of the beacon count rule)
                     If Val(cpid.Magnitude) = 0 Then
-                        sRow = "0,99;"
+                        sRow = "0,15;"
                     End If
 
                     lTotal = lTotal + Val("0" + Trim(cpid.Magnitude))
@@ -876,7 +876,6 @@ Module modPersistedDataSystem
                 'Dim TotalRAC As Double = 0
                 For Each prj As Row In lstProjects
                     Dim surrogatePrjCPID As New Row
-                    '   If IsInList(prj.PrimaryKey, lstWhitelist, False) Then
                     If prj.PrimaryKey <> "" Then
                         surrogatePrjCPID.Database = "Project"
                         surrogatePrjCPID.Table = prj.PrimaryKey + "CPID"
