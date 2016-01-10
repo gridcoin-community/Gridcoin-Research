@@ -1077,7 +1077,7 @@ void BitcoinGUI::createMenuBar()
 	rebuild->addAction(rebootAction);
 	rebuild->addSeparator();
 
-
+#ifdef WIN32
 	QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
 	qmAdvanced->addSeparator();
 	qmAdvanced->addAction(configAction);
@@ -1099,8 +1099,7 @@ void BitcoinGUI::createMenuBar()
 	qmAdvanced->addSeparator();
 	qmAdvanced->addAction(faqAction);
 	qmAdvanced->addAction(foundationAction);
-
-
+#endif /* defined(WIN32) */
 
 }
 
