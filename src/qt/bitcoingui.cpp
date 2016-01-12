@@ -1077,7 +1077,7 @@ void BitcoinGUI::createMenuBar()
 	rebuild->addAction(rebootAction);
 	rebuild->addSeparator();
 
-#ifdef WIN32
+#ifdef WIN32  // The actions in this menu are implemented in Visual Basic and thus only work on Windows
 	QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
 	qmAdvanced->addSeparator();
 	qmAdvanced->addAction(configAction);
