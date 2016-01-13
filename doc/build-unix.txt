@@ -149,3 +149,8 @@ exploit even if a vulnerability is found, you can take the following measures:
     RW- R-- RW-
 
     The STK RW- means that the stack is readable and writeable but not executable.
+
+Notes for Packagers
+-------------------
+
+Set NO_UPGRADE=1 to disable the built-in upgrade functionality.
