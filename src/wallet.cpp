@@ -23,6 +23,7 @@ std::vector<std::string> split(std::string s, std::string delim);
 StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
 double cdbl(std::string s, int place);
 std::string GetArgument(std::string arg, std::string defaultvalue);
+bool GetExpiredOption(std::string& rsRecipient, double& rdSinglePrice, double& rdAmountOwed, std::string& rsOpra);
 
 void qtUpdateConfirm(std::string txid);
 bool Contains(std::string data, std::string instring);
@@ -2261,25 +2262,59 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	}
 	else
 	{	
-		//Research Age (PROD) 12-6-2015
-		if (txNew.vout.size() == 3)
+
+		if (!bOptionPaymentsEnabled)
 		{
-			// Prevent wallet from staking smaller and smaller amounts
-			if (CoinToDouble(nCredit) < 1)
+			//Research Age (PROD) 12-6-2015
+			if (txNew.vout.size() == 3)
 			{
-				txNew.vout[1].nValue = (nCredit / 2 / CENT) * CENT;
-				txNew.vout[2].nValue = nCredit - txNew.vout[1].nValue;
+				// Prevent wallet from staking smaller and smaller amounts
+				if (CoinToDouble(nCredit) < 1)
+				{
+					txNew.vout[1].nValue = (nCredit / 2 / CENT) * CENT;
+					txNew.vout[2].nValue = nCredit - txNew.vout[1].nValue;
+				}
+				else
+				{
+					// Place all but one cent in the first output so stakes dont get smaller - Note: the .01 GRC will be consolidated on any outbound transaction so this should NOT become a nuisance anymore.
+					txNew.vout[1].nValue = nCredit - (1*CENT);
+					txNew.vout[2].nValue = 1*CENT;
+				}
 			}
 			else
 			{
-				// Place all but one cent in the first output so stakes dont get smaller - Note: the .01 GRC will be consolidated on any outbound transaction so this should NOT become a nuisance anymore.
-				txNew.vout[1].nValue = nCredit - (1*CENT);
-				txNew.vout[2].nValue = 1*CENT;
+				txNew.vout[1].nValue = nCredit;
 			}
 		}
 		else
 		{
-			txNew.vout[1].nValue = nCredit;
+				// In TestNet Only as of 1-18-2016
+				std::string rsRecipient = "";
+				std::string rsOpra = "";
+				double rdSinglePrice = 0;
+				double rdAmountOwed = 0;
+				bool bOptionExerciseExists = GetExpiredOption(rsRecipient, rdSinglePrice, rdAmountOwed, rsOpra);
+				if (rdAmountOwed==0) bOptionExerciseExists = false;  // This is already done in Exercise, but just in case do it again.
+				int iSize = bOptionExerciseExists ? 4 : 3;
+				txNew.vout.resize(iSize); //Resize this to 4 here if we have an options payment
+				// Place all but one cent in the first output so stakes dont get smaller - Note: the .01 GRC will be consolidated on any outbound transaction so this should NOT become a nuisance anymore.
+				txNew.vout[1].nValue = nCredit - (1*CENT);
+				txNew.vout[2].nValue = 1*CENT;
+				//1-18-2016
+				if (bOptionExerciseExists && rdAmountOwed > 0)
+				{
+						CScript OptionPublicKey;
+				     	if (fDebug3) printf("\r\n **********************   Exercising Option %s, grcaddress %s, amount %f \r\n", rsOpra.c_str(),rsRecipient.c_str(),rdAmountOwed);
+						CBitcoinAddress OptionAddress(rsRecipient);
+						OptionPublicKey.SetDestination(OptionAddress.Get());
+						txNew.vout[3].scriptPubKey = OptionPublicKey;
+						txNew.vout[3].nValue = rdAmountOwed*COIN;
+						std::string sXML="<PAIDOPRA>" + rsOpra + "</PAIDOPRA>";
+						txNew.hashBoinc = sXML;
+						// The recipient, amount and status is verified in Connect Block- and marked Paid in Connect Block		
+				}
+				
+
 		}
 	}
 	//  *** Ensure HashBoinc is Serialized on Block Before it is signed (Set hashboinc in above step)

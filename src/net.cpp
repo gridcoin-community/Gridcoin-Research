@@ -1688,13 +1688,14 @@ void ThreadSocketHandler2(void* parg)
             //
             // Inactivity checking
             //
+			// Allow newbies to connect easily
             int64_t nTime = GetAdjustedTime();
-			if (nTime - pnode->nTimeConnected > 7)
+			if (nTime - pnode->nTimeConnected > 25)
             {
                 if (pnode->nLastRecv == 0 || pnode->nLastSend == 0)
                 {
-                    if (fDebug3) printf("Socket no message in first 7 seconds, IP %s, %d %d\n", NodeAddress(pnode).c_str(), pnode->nLastRecv != 0, pnode->nLastSend != 0);
-					pnode->Misbehaving(100);
+                    if (fDebug3) printf("Socket no message in first 25 seconds, IP %s, %d %d\n", NodeAddress(pnode).c_str(), pnode->nLastRecv != 0, pnode->nLastSend != 0);
+					pnode->Misbehaving(10);
                     pnode->fDisconnect = true;
                 }
 			}

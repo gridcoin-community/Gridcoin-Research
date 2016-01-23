@@ -106,7 +106,7 @@ Partial Class frmRain
         '
         Me.txtRainAmount.BackColor = System.Drawing.Color.FromArgb(CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer))
         Me.txtRainAmount.ForeColor = System.Drawing.Color.Lime
-        Me.txtRainAmount.Location = New System.Drawing.Point(130, 635)
+        Me.txtRainAmount.Location = New System.Drawing.Point(130, 630)
         Me.txtRainAmount.Name = "txtRainAmount"
         Me.txtRainAmount.Size = New System.Drawing.Size(108, 20)
         Me.txtRainAmount.TabIndex = 67
@@ -116,7 +116,7 @@ Partial Class frmRain
         '
         Me.lblRainAmt.AutoSize = True
         Me.lblRainAmt.ForeColor = System.Drawing.Color.Lime
-        Me.lblRainAmt.Location = New System.Drawing.Point(127, 619)
+        Me.lblRainAmt.Location = New System.Drawing.Point(127, 610)
         Me.lblRainAmt.Name = "lblRainAmt"
         Me.lblRainAmt.Size = New System.Drawing.Size(71, 13)
         Me.lblRainAmt.TabIndex = 68
@@ -124,7 +124,7 @@ Partial Class frmRain
         '
         'Timer1
         '
-        Me.Timer1.Interval = 3333
+        Me.Timer1.Interval = 2000
         '
         'frmRain
         '

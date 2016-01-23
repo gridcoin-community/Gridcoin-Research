@@ -72,7 +72,7 @@ Module modPersistedDataSystem
         Public Expiration As Date
     End Structure
     Public msCurrentNeuralHash = ""
-    Private Function Num(sData As String) As String
+    Public Function Num(sData As String) As String
         'Ensures culture is neutral
         Dim sOut As String
         sOut = Trim(Math.Round(RoundedMag(Val("0" + Trim(sData))), 2))
@@ -1549,7 +1549,6 @@ Retry:
         sSignature = "NN Host Version: " + Trim(mclsUtilization.Version) + ", NeuralHash: " + sNH + ", SignatureCPID: " + sNeuralCPID + ", Time: " + Trim(Now)
         sRow = "Total RAC: " + Trim(TotalRAC) + "<ROW>" + "Total Mag: " + Trim(Math.Round(CumulativeMag, 2))
         sOut += sSignature + "<ROW>" + sRow
-        '11-15-2015
         sRow += "<ROW>Your Neural Magnitude: " + Trim(RoundedMag(CumulativeMag))
         'Dim sXML As String = GetXMLOnly(sCPID)
         Return sOut

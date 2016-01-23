@@ -11,7 +11,7 @@ Public Class frmRain
         dgv.Rows.Clear()
         dgv.Columns.Clear()
         Dim vHeading() As String = Split(sHeading, ";")
-        PopulateHeadings(vHeading, dgv, True)
+            PopulateHeadings(vHeading, dgv, False)
         Dim iRow As Long = 0
         Me.Cursor.Current = Cursors.WaitCursor
         dgv.AutoResizeColumns(DataGridViewAutoSizeColumnsMode.ColumnHeader)
@@ -25,7 +25,9 @@ Public Class frmRain
         surrogateRow.Table = "CPIDS"
         Dim lstCPIDs As List(Of Row) = GetList(surrogateRow, "*")
         Dim dTotalRAC As Double = 0
-        lstCPIDs = GetList(surrogateRow, "*")
+            lstCPIDs = GetList(surrogateRow, "*")
+            Dim sRecips As String = ""
+
         For Each cpid As Row In lstCPIDs
             Dim dResearcherMagnitude As Double = 0
             Dim TotalRAC As Double = 0
@@ -37,17 +39,22 @@ Public Class frmRain
             surrogatePrjCPID.Table = msProject + "CPID"
             surrogatePrjCPID.PrimaryKey = msProject + "_" + cpid.PrimaryKey
             Dim rowRAC As Row = Read(surrogatePrjCPID)
-            Dim dCPIDRAC As Double = Val(Trim("0" + rowRAC.RAC))
-            If dCPIDRAC > 0 And cpid.DataColumn4.Length > 12 And cpid.PrimaryKey.Length > 12 Then
-                dTotalRAC += dCPIDRAC
-                dgv.Rows.Add()
-                dgv.Rows(iRow).Cells(0).Value = cpid.PrimaryKey
-                dgv.Rows(iRow).Cells(1).Value = cpid.DataColumn4
-                dgv.Rows(iRow).Cells(2).Value = dCPIDRAC
-                dgv.Rows(iRow).Cells(3).Value = 0
-                dgv.Rows(iRow).Cells(4).Value = 0
-                iRow += 1
+                Dim dCPIDRAC As Double = Val(Trim("0" + rowRAC.RAC))
+
+                If dCPIDRAC > 0 And cpid.DataColumn4.Length > 12 And cpid.PrimaryKey.Length > 12 Then
+                    If Not sRecips.Contains(cpid.DataColumn4) Then
+                        dTotalRAC += dCPIDRAC
+                        dgv.Rows.Add()
+                        dgv.Rows(iRow).Cells(0).Value = cpid.PrimaryKey
+                        dgv.Rows(iRow).Cells(1).Value = cpid.DataColumn4
+                        dgv.Rows(iRow).Cells(2).Value = dCPIDRAC
+                        dgv.Rows(iRow).Cells(3).Value = 0
+                        dgv.Rows(iRow).Cells(4).Value = 0
+                        iRow += 1
+                        sRecips += cpid.DataColumn4 + ";"
+                    End If
                 End If
+
             Next
         dgv.AllowUserToAddRows = False
         dgv.Rows.Add()
@@ -70,6 +77,10 @@ Public Class frmRain
         dgv.Rows(iRow).Cells(0).Value = "Total: " + Trim(iRow)
         dgv.Rows(iRow).Cells(3).Value = Math.Round(dTotalPercent, 4)
         dgv.Rows(iRow).Cells(4).Value = Math.Round(dTotalExpense, 4)
+
+
+            SetAutoSizeMode2(vHeading, dgv)
+
 
         Me.Cursor.Current = Cursors.Default
 
@@ -106,7 +117,7 @@ Public Class frmRain
             dRainAmount = Val(dgv.Rows(y).Cells(4).Value)
             dTotalExpense += dRainAmount
             Dim sAddress As String = dgv.Rows(y).Cells(1).Value
-            sRow = sAddress + "<COL>" + Trim(dRainAmount) + "<ROW>"
+            sRow = sAddress + "<COL>" + Num(dRainAmount) + "<ROW>"
             sSend += sRow
         Next
         If Len(sSend) > 8 Then sSend = Mid(sSend, 1, Len(sSend) - 5) 'Remove the last ROW delimiter
@@ -118,7 +129,9 @@ Public Class frmRain
             MsgBox("Rain amount is invalid.", MsgBoxStyle.Critical)
             Exit Sub
         End If
+        Dim sProjectMessage As String = "<RAINMESSAGE>Project Rain: " + Trim(msProject) + " (Amount " + Trim(txtRainAmount.Text) + " GRC )</RAINMESSAGE>"
         Dim sNarr As String = "Are you sure you would like to rain " + Trim(dTotalExpense) + " GRC?"
+        sSend += sProjectMessage
         Dim mbrResult As MsgBoxResult
         mbrResult = MsgBox(sNarr, MsgBoxStyle.YesNo, "Verification to Rain")
         If mbrResult = MsgBoxResult.Yes Then

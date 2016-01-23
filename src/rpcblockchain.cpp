@@ -25,8 +25,25 @@ std::string UnpackBinarySuperblock(std::string sBlock);
 std::string PackBinarySuperblock(std::string sBlock);
 int DetermineCPIDType(std::string cpid);
 extern Array MagnitudeReport(std::string cpid);
+extern bool UserAcknowledgedHoldHarmlessClause(std::string sAddress);
+
+extern bool GetExpiredOption(std::string& rsRecipient, double& rdSinglePrice, double& rdAmountOwed, std::string& rsOpra);
+
+extern bool VerifyUnderlyingPrice(double UL, int64_t timestamp);
+
+
+double SnapToGrid(double d);
+double GetVolatility(std::string sPriceHistory);
+extern std::string GetBurnAddress();
 bool NeuralNodeParticipates();
 bool StrLessThanReferenceHash(std::string rh);
+double BlackScholes(std::string CallPutFlag, double S, double X, double T, double r, double v);
+double GetDelta(std::string sType, double UL, double Strike, double dTime, double RiskFreeRate, double Volatility);
+extern std::string AddOptionContract(std::string sType, std::string sName, std::string sContract, double dPremium);
+extern Array GetOptionsExposureReport();
+
+
+
 void BusyWaitForTally();
 double Cap(double dAmt, double Ceiling);
 extern std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, 
@@ -940,14 +957,14 @@ double GetAverageInList(std::string superblock,double& out_count)
 }
 
 
+
+
 double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid)
 {
 		std::string mags = ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>");
 		std::vector<std::string> vSuperblock = split(mags.c_str(),";");
 		if  (vSuperblock.size() < 2) return -2;
 		if  (cpid.length() < 31) return -3;
-
-
 		for (unsigned int i = 0; i < vSuperblock.size(); i++)
 		{
 			// For each CPID in the contract
@@ -958,7 +975,7 @@ double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid)
 				double magnitude = cdbl(ExtractValue("0"+vSuperblock[i],",",1),0);
 				boost::to_lower(sTempCPID);
 				boost::to_lower(cpid);
-				
+				// For each CPID in the contract
 				if (sTempCPID.length() > 31 && cpid.length() > 31)
 				{
 					if (sTempCPID.substr(0,31) == cpid.substr(0,31))
@@ -968,8 +985,43 @@ double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid)
 				}
 			}
 		}
-
 		return -1;
+}
+
+
+
+
+
+
+double QuoteToOptionsDouble(double dPrice)
+{
+	return dPrice/10000000000 * 100000000;
+}
+
+
+
+
+double GetGRCULFromSuperblock(std::string data)
+{
+	std::string sULs = ExtractXML(data,"<QUOTES>","</QUOTES>");
+	std::vector<std::string> vQ = split(sULs.c_str(),";");
+	if (vQ.size() > 0)
+	{
+		for (unsigned int i = 0; i < vQ.size(); i++)
+		{
+			// For each quote in the contract
+			if (vQ[i].length() > 1)
+			{
+					std::string sSymbol = ExtractValue(vQ[i],",",0);
+					double dPrice = cdbl(ExtractValue("0" + vQ[i],",",1),0);
+					if (sSymbol=="grc") 
+					{
+						return QuoteToOptionsDouble(dPrice);
+					}
+			}
+		}
+	}
+	return -2;
 }
 
 double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons)
@@ -1297,6 +1349,16 @@ int64_t BeaconTimeStamp(std::string cpid, bool bZeroOutAfterPOR)
 
 }
 
+
+
+std::string AddOptionContract(std::string sType, std::string sName, std::string sContract, double dPremium)
+{
+			std::string sPass = (sType=="project" || sType=="projectmapping" || sType=="smart_contract") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
+			std::string result = AddMessage(true,sType,sName,sContract,sPass,AmountFromValue(1),dPremium,"");
+			return result;
+}
+
+
 std::string AddContract(std::string sType, std::string sName, std::string sContract)
 {
 			std::string sPass = (sType=="project" || sType=="projectmapping" || sType=="smart_contract") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
@@ -1395,6 +1457,20 @@ std::string AdvertiseBeacon(bool force, bool bUseNeuralNetwork)
 
 
 
+std::string AcknowledgeHoldHarmlessClause()
+{
+		 	std::string GRCAddress = DefaultWalletAddress();
+		    bool bHarmlessClauseAcknowledged = UserAcknowledgedHoldHarmlessClause(GRCAddress);
+			if  (bHarmlessClauseAcknowledged) return "SUCCESS";
+			std::string contract = GRCAddress;
+			std::string sAction = "add";
+			std::string sType = "holdharmless";
+			std::string result = AddContract(sType,GRCAddress,contract);
+			return result;
+}
+
+
+
 std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5)
 {
 	 Array params;
@@ -1470,6 +1546,289 @@ int64_t AmountFromDouble(double dAmount)
     return nAmount;
 }
 
+std::string CallPutNarr(std::string sType)
+{
+	if (sType=="c" || sType=="call") return "call";
+	if (sType=="p" || sType=="put") return "put";
+	return "NA";
+}
+
+Value option(const Array& params, bool fHelp)
+{
+    if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3 && params.size() != 4 && params.size() != 5 && params.size() != 6 && params.size() != 7))
+        throw runtime_error(
+		"option <string::itemname> <string::parameter> \r\n"
+        "Executes an option based command by name.");
+
+    std::string sItem = params[0].get_str();
+
+	if (sItem=="") throw runtime_error("Item invalid.");
+
+    Array results;
+	Object oOut;
+	oOut.push_back(Pair("Command",sItem));
+	results.push_back(oOut);
+    Object entry;
+		
+	if (sItem == "chain")
+	{
+		if (params.size() < 2)
+		{
+			entry.push_back(Pair("Error","You must specify the amount of days until expiration. Example: option chain 30"));
+			results.push_back(entry);
+		}
+		else
+		{
+
+			// Shows the Gridcoin Options Strike Chain and Prices
+			StructCPID stNet = mvNetwork["NETWORK"];
+	
+			double UL = stNet.GRCQuote/10000000000 * 100000000;
+			double ATMStrike = SnapToGrid(UL);
+			double LowUL = ATMStrike * .3;
+			double HighUL = ATMStrike * 3;
+			double StepRate = UL/20; 
+			double dCallDelta = 0;
+			double dPutDelta = 0;
+			double dCallPrice = 0;
+			double dPutPrice = 0;
+			double days = cdbl(params[1].get_str(),0);
+
+			entry.push_back(Pair("GRC Options Chain","UL: " + RoundToString(UL,0) + ", days: " + RoundToString(days,0)));
+			double fractional_year = days/365;
+			entry.push_back(Pair("Strike","Call Delta, Call Price, Put Price, Put Delta"));
+			for (double dStrike = LowUL; dStrike <= HighUL; dStrike += StepRate)
+			{
+				
+				double dCallPrice = BlackScholes("c", UL, dStrike, fractional_year, nRiskFreeRate, nVolatility);
+				double dCallDelta = GetDelta    ("c", UL, dStrike, fractional_year, nRiskFreeRate, nVolatility);
+				double dPutPrice =  BlackScholes("p", UL, dStrike, fractional_year, nRiskFreeRate, nVolatility);
+				double dPutDelta =  GetDelta    ("p", UL, dStrike, fractional_year, nRiskFreeRate, nVolatility);
+				bool ATM = (UL >= (dStrike)   &&   UL <= (dStrike+StepRate-1));
+				if (dCallPrice > 1 && dPutPrice > 1)
+				{
+					std::string sRow = RoundToString(dCallDelta,4) + "     " 
+						+ RoundToString(dCallPrice,4) + "     |     " 
+						+ RoundToString(dPutPrice,4) + "     " + RoundToString(dPutDelta,4);
+					if (ATM) sRow += " (ATM)";
+					entry.push_back(Pair(RoundToString(dStrike,0), sRow));
+				}
+				
+			}
+			results.push_back(entry);	
+		}
+	}
+	else if (sItem == "expired")
+	{
+		std::string rsRecipient = "";
+		double rdSinglePrice = 0;
+		double rdAmountOwed = 0;
+		std::string rsOpra = "";
+		bool bExpired = GetExpiredOption(rsRecipient,rdSinglePrice,rdAmountOwed,rsOpra);
+		entry.push_back(Pair("Recipient",rsRecipient));
+		entry.push_back(Pair("Single Price",rdSinglePrice));
+		entry.push_back(Pair("Amount Owed",rdAmountOwed));
+		entry.push_back(Pair("OPRA",rsOpra));
+
+		results.push_back(entry);
+	
+
+	}
+	else if (sItem == "exposure")
+	{
+	
+			Array jsExposure = GetOptionsExposureReport();
+			results.push_back(jsExposure);
+	}
+	else if (sItem == "quote")
+	{
+		if (params.size() != 4)
+		{
+			entry.push_back(Pair("Error","You must specify Strike, Type, Days; For example: option quote 2000 put 180"));
+			results.push_back(entry);
+		}
+		else
+		{
+				StructCPID stNet = mvNetwork["NETWORK"];
+				double UL = stNet.GRCQuote/10000000000 * 100000000;
+				double strike = cdbl(params[1].get_str(),0);
+				std::string sType = params[2].get_str();
+				if (sType == "call") sType = "c";
+				if (sType == "put") sType = "p";
+
+				double days = cdbl(params[3].get_str(),0);
+				
+				if (strike == 0 || ( sType != "c" && sType != "p" ) || days == 0 || UL == 0 || nVolatility == 0) 
+				{
+							entry.push_back(Pair("Error","You must specify a strike, a c or p, days, underlying price."));
+							results.push_back(entry);
+				}
+				// Calculate  
+				double fractional_year = days/365;
+			    double price = BlackScholes(sType, UL, strike,  fractional_year, nRiskFreeRate, nVolatility);
+				//double BlackScholes(std::string CallPutFlag, double S, double X, double T, double r, double v)
+				double delta = GetDelta(sType, UL, strike, fractional_year, nRiskFreeRate, nVolatility);
+				entry.push_back(Pair("UL",UL));
+				entry.push_back(Pair("Price",price));
+				entry.push_back(Pair("Delta",delta));
+				results.push_back(entry);
+		}
+
+	}
+	else if (sItem == "acknowledge")
+	{
+		std::string sWarning = "Buying GRC options is not for everyone and carries numerous risks that are not apparent.\r\nBe aware that part of the premium you pay for an option includes the volatility of the underlying asset and it's time value. \r\n This means that each day that goes by, if you are long an option, your option price will decay.\r\n Eventually the option will only be worth it's intrinsic value.  Options have an expiration date.  If expiration occurs before the underlying moves, you may lose 100% of your investment if it is out of the money. \r\n You agree that a market may not exist for the option and you may have to allow it to auto exercise. \r\n You agree that the exercise process is purely for educational purposes, and the exercise may never occur. \r\n You agree that this system is expressly provided for educational purposes only. \r\n You agree that any and all losses attributed to these test purchases are your own responsibility and agree to hold Gridcoin harmless. \r\n You agree to hold all people associated with the Gridcoin project harmless, including the lead developer(s), helpers, the community, and anyone associated with the project. \r\n You agree that you are not purchasing or selling securities of any type by using this system. \r\n You agree that all transactions made through this system are 100% at risk and may result in a total loss, and the transactions are considered expirimental for educational purposes only.\r\n If you agree to all of the terms and conditions, type 'option acknowledge sign'";
+
+		std::vector<std::string> vWarning = split(sWarning.c_str(),"\r\n");
+			
+		if (params.size() != 2)
+		{
+			for (unsigned int i = 0; i < vWarning.size(); i++)
+			{
+				entry.push_back(Pair(RoundToString((double)i,0),vWarning[i]));
+			}
+			results.push_back(entry);
+		
+		}
+		else if (params.size() == 2)
+		{
+			std::string sSign = params[1].get_str();
+			if (sSign == "sign")
+			{
+				std::string sAck = AcknowledgeHoldHarmlessClause();
+				entry.push_back(Pair("Acknowledgement",sAck));
+				entry.push_back(Pair("Note","You may have to wait up to 6 confirms for the acknowledgement to be stored in the chain."));
+				results.push_back(entry);
+			}
+			else
+			{
+					entry.push_back(Pair("Unknown Argument",sSign));
+					results.push_back(entry);
+			}
+		
+		}
+		
+		
+	}
+	else if (sItem == "buy")
+	{
+
+		if (params.size() != 5)
+		{
+			entry.push_back(Pair("Error","You must specify Quantity, Strike, Type, Days; For example: option buy 10 2000 call 180"));
+			results.push_back(entry);
+		}
+		else
+		{
+			
+		 		std::string GRCAddress = DefaultWalletAddress();
+				bool bHarmlessClauseAcknowledged = UserAcknowledgedHoldHarmlessClause(GRCAddress);
+				if (!bHarmlessClauseAcknowledged)
+				{
+					entry.push_back(Pair("Error","You must read and acknowledge the risks associated with buying options first with the command 'option acknowledge'."));
+					results.push_back(entry);
+					return results;
+				}
+
+				StructCPID stNet = mvNetwork["NETWORK"];
+				double UL = stNet.GRCQuote/10000000000 * 100000000;
+				double qty = cdbl(params[1].get_str(),0);
+				double strike = cdbl(params[2].get_str(),0);
+				std::string sType = params[3].get_str();
+				double days = cdbl(params[4].get_str(),4);
+				if (sType == "call") sType = "c";
+				if (sType == "put") sType = "p";
+
+				if (strike == 0 || ( sType != "c" && sType != "p" ) || days == 0 || UL == 0 || nVolatility == 0) 
+				{
+						entry.push_back(Pair("Error","You must specify a strike, a c or p, days, and underlying price."));
+						results.push_back(entry);
+						return results;
+				}
+				else
+				{
+					// Calculate  1-16-2016
+					double fractional_year = days/365;
+					double price = BlackScholes(sType, UL, strike,  fractional_year, nRiskFreeRate, nVolatility);
+					//double BlackScholes(std::string CallPutFlag, double S, double X, double T, double r, double v)
+					double delta = GetDelta(sType, UL, strike, fractional_year, nRiskFreeRate, nVolatility);
+					std::string sGRCAddress = DefaultWalletAddress();
+					std::string sTypeNarr = CallPutNarr(sType);				
+							
+					entry.push_back(Pair("UL",UL));
+					entry.push_back(Pair("Type",sTypeNarr));
+					entry.push_back(Pair("Quantity",qty));
+
+					entry.push_back(Pair("Price",price));
+					entry.push_back(Pair("Delta",delta));
+				
+					std::string sAction = "add";
+					std::string sContractType = "option_buy";
+					std::string sSerialNo = GetRandHash().GetHex();
+					double dExpiry  = GetAdjustedTime() + (days*86400);
+					std::string sHRExpiration = TimestampToHRDate(dExpiry);
+					std::string sOPRA = "GRC" + RoundToString(strike,0) + sType + RoundToString(days,0) + "S" + sSerialNo + "X" + RoundToString(dExpiry,0);
+					std::string sShortOPRA = "GRC" + RoundToString(strike,0) + sType 
+						+ RoundToString(days,0) + "X" + RoundToString(dExpiry,0);
+
+					std::string sCPID = GlobalCPUMiningCPID.cpid;
+					double dTotalCost = price * qty;
+					double nBalance = GetTotalBalance();
+					entry.push_back(Pair("Strike",strike));
+					entry.push_back(Pair("Days",days));
+					entry.push_back(Pair("OPRA",sShortOPRA));
+					entry.push_back(Pair("Total Cost",dTotalCost));
+					if (nBalance < dTotalCost)
+					{
+						entry.push_back(Pair("Error","Balance too low to buy " + RoundToString(qty,0) + " contract(s)."));
+						results.push_back(entry);
+						return results;
+					}
+					
+					std::string sNarr = "BOT " + RoundToString(qty,0) 
+						+ " GRC " + RoundToString(strike,0) + " " + sTypeNarr + " Exp: " + sHRExpiration +  
+						+ ",\r\n Price: " + RoundToString(price,4) + ", Cost: " + RoundToString(dTotalCost,4) 
+						+ ", UL: " + RoundToString(UL,2) + ", Delta: " + RoundToString(delta,4) 
+						+ ", Days: " + RoundToString(days,0) + ",\r\n OPRA: " + sShortOPRA;
+				
+					std::string sMsg = "<MESSAGE>" + AdvancedCrypt(sNarr) + "</MESSAGE>";
+					entry.push_back(Pair("Expiration", sHRExpiration));
+
+					std::string contract = "<OPTION><ACTION>BUY</ACTION><SHORTOPRA>" + sShortOPRA + "</SHORTOPRA><OPRA>" 
+						+ sOPRA + "</OPRA><GRCADDRESS>" 
+						+ sGRCAddress + "</GRCADDRESS><TYPE>" + sType + "</TYPE><STRIKE>" 
+						+ RoundToString(strike,4) + "</STRIKE><UL>" + RoundToString(UL,4) 
+						+ "</UL><QUANTITY>" + RoundToString(qty,2) + "</QUANTITY><CPID>" + sCPID 
+						+ "</CPID><EXPIRATION>" + RoundToString(dExpiry,0) + "</EXPIRATION><HREXPIRATION>" 
+						+ sHRExpiration + "</HREXPIRATION><DAYS>" + RoundToString(days,0) + "</DAYS><PRICE>" 
+						+ RoundToString(price,4) + "</PRICE><BALANCE>" + RoundToString(nBalance,2) 
+						+ "</BALANCE><NARR>" + sNarr 
+						+ "</NARR>" + sMsg + "<DELTA>" + RoundToString(delta,4) + "</DELTA></OPTION>";
+				
+					//std::string sBase = EncodeBase64(contract);
+					if (bOptionPaymentsEnabled)
+					{
+						std::string sBase = contract;
+						std::string result = AddOptionContract(sContractType,sOPRA,sBase,dTotalCost);
+						entry.push_back(Pair("Response",result));
+						results.push_back(entry);
+					}
+					else
+					{
+							entry.push_back(Pair("Error","Feature not enabled."));
+							results.push_back(entry);
+					}
+			}
+		 }
+	}
+	else
+	{
+			entry.push_back(Pair("Command " + sItem + " not found.",-1));
+			results.push_back(entry);
+	}
+	return results;    
+
+}
 
 
 Value execute(const Array& params, bool fHelp)
@@ -1525,6 +1884,9 @@ Value execute(const Array& params, bool fHelp)
 			set<CBitcoinAddress> setAddress;
 			vector<pair<CScript, int64_t> > vecSend;
 			std::string sRecipients = params[1].get_str();
+			std::string sRain = "<NARR>Project Rain: " + ExtractXML(sRecipients,"<RAINMESSAGE>","</RAINMESSAGE>") + "</NARR>";
+			//std::string sRainMessage = AdvancedCrypt(sRain);
+			wtx.hashBoinc = sRain;
 			int64_t totalAmount = 0;
 			double dTotalToSend = 0;
 			std::vector<std::string> vRecipients = split(sRecipients.c_str(),"<ROW>");
@@ -2209,6 +2571,38 @@ Value execute(const Array& params, bool fHelp)
 
 			   }
 		  }
+
+	}
+	else if (sItem == "scholes")
+	{
+		if (params.size() != 6)
+		{
+			entry.push_back(Pair("Error","You must specify Underlying Price, Strike, Type, Days, Volatility; For example: scholes 1880 300 put 365 .30"));
+			results.push_back(entry);
+		}
+		else
+		{
+				double UL = cdbl(params[1].get_str(),2);
+				double strike = cdbl(params[2].get_str(),0);
+				std::string sType = params[3].get_str();
+				double days = cdbl(params[4].get_str(),0);
+				double volatility = cdbl(params[5].get_str(),6);
+				
+				if (strike == 0 || ( sType != "c" && sType != "p" ) || days == 0 || UL == 0 || volatility == 0) 
+				{
+							entry.push_back(Pair("Error","You must specify a strike, a c or p, days, underlying price and volatility."));
+							results.push_back(entry);
+				}
+				double fractional_year = days/365;
+			    double price = BlackScholes(sType, UL, strike,  fractional_year, nRiskFreeRate, volatility);
+				double delta = GetDelta(sType, UL, strike, fractional_year, nRiskFreeRate, volatility);
+				entry.push_back(Pair("Price",price));
+				entry.push_back(Pair("Delta",delta));
+				std::string sHistory = "1900;3000;2900;2800;2700;2300;1900;1880;1880;1800;1780";
+				double dVol = GetVolatility(sHistory);
+				entry.push_back(Pair("Volatility",dVol));
+				results.push_back(entry);
+		}
 
 	}
 	else if (sItem == "addpoll")
@@ -3089,6 +3483,56 @@ Array LifetimeReport(std::string cpid)
 
 
 
+
+
+
+bool VerifyUnderlyingPrice(double UL, int64_t timestamp)
+{
+	  int nLookback = BLOCKS_PER_DAY * 31 * 60;
+	  int nMinDepth = (nBestHeight - nLookback);
+	  if (nMinDepth < 1) nMinDepth=1;
+	  CBlockIndex* pblockindex = pindexBest;
+	  int nSuperblocks = 0;
+	  while (pblockindex->nHeight > nMinDepth)
+	  {
+							if (!pblockindex || !pblockindex->pprev) return false;
+							pblockindex = pblockindex->pprev;
+							if (pblockindex == pindexGenesisBlock) return false;
+							if (!pblockindex->IsInMainChain()) continue;
+							if (IsSuperBlock(pblockindex))
+							{
+								MiningCPID bb = GetBoincBlockByIndex(pblockindex);
+								// Target the date of this UL
+								if (bb.superblock.length() > 20 && pblockindex->nTime <= timestamp)
+								{
+										double out_beacon_count = 0;
+										double out_participant_count = 0;
+										double out_avg = 0;
+										std::string superblock = UnpackBinarySuperblock(bb.superblock);
+										double dValid = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,true);
+										if (dValid > 1)
+										{
+	    										nSuperblocks++;
+												double dHistoricalPrice = GetGRCULFromSuperblock(superblock);
+												if (UL==dHistoricalPrice) 
+												{
+														printf(" \r\n UL price found. \r\n");
+														return true;
+												}
+												if (nSuperblocks > 2) return false;
+										}
+								}
+							}
+					
+	  }
+	  return false;
+
+}
+
+
+
+
+
 Array SuperblockReport(std::string cpid)
 {
 
@@ -3405,6 +3849,18 @@ std::string CryptoLottery(int64_t locktime)
 }
 
 
+
+bool UserAcknowledgedHoldHarmlessClause(std::string sAddress)
+{
+	std::string sHarmless = mvApplicationCache["holdharmless;" + sAddress];
+	return (!sHarmless.empty());
+}
+
+bool IsContractSettled(std::string sContractType, std::string sOpra)
+{
+	std::string sTXID = mvApplicationCache["paid_opra;" + sOpra];
+	return (!sTXID.empty());
+}
 
 std::string MyBeaconExists(std::string cpid)
 {
@@ -3822,11 +4278,215 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
 	  out_export = sExport;
 	  return results;
 }
+
+
+int ValidateContract(int64_t iPurchaseTime, std::string sType, std::string sSerialNo, 
+	double dPurchasePrice, std::string sOptionType, double UL, double dStrike, double dOptionLength, double dSingleOption)
+{
+	//1-17-2016
+	// Validate the original option purchase price against original fair value
+	// -4 = Invalid UL Price at time Option was Purchased
+	// -3 = Invalid Reverse Engineered Price
+	// -2 = Burn sent to wrong address
+	// -1 = Purchase price differs from contract price
+	//  0 = Valid
+	std::string sRecipient = ReadCache(sType, sSerialNo + ";Recipient");
+	double dBurnAmount = cdbl(ReadCache(sType, sSerialNo + ";BurnAmount"),0);
+	dPurchasePrice = cdbl(RoundToString(dPurchasePrice,0),0);
+	// First verify they actually burned the amount paid for the option
+	if (dBurnAmount != dPurchasePrice) return -1;
+	// Verify the Paid GRC went to the Burn address
+	if (sRecipient != GetBurnAddress()) return -2;
+	double dTimeAnnualized = dOptionLength/365;
+	// Verify the UL price of GRC the date they purchased the contract
+	bool bPriceVerified = VerifyUnderlyingPrice(UL, iPurchaseTime);
+	if (!bPriceVerified) return -4;
+	// Next reverse engineer the option and verify they bought the option they paid for
+	double dHistoricalPrice = BlackScholes(sOptionType, UL, dStrike, dTimeAnnualized, nRiskFreeRate, nVolatility);
+	if (!(dSingleOption > dHistoricalPrice-5 && dSingleOption < dHistoricalPrice+5)) return -3;  // Invalid Price
+	return 0; // Success
+}
+
+
+bool GetExpiredOption(std::string& rsRecipient, double& rdSinglePrice, double& rdAmountOwed, std::string& rsOpra)
+{
+        //1-18-2016  Either get our own, or get the oldest.
+        std::string datatype="option_buy";
+	 	StructCPID stNet = mvNetwork["NETWORK"];
+		double UL = stNet.GRCQuote/10000000000 * 100000000;
+  		for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+		{
+				std::string key_name  = (*ii).first;
+			   	if (key_name.length() > datatype.length())
+				{
+					if (key_name.substr(0,datatype.length())==datatype)
+					{
+								std::string contract = mvApplicationCache[(*ii).first];
+								std::string contract_serial = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
+								std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
+								int64_t iPurchaseTime = mvApplicationCacheTimestamp[key_name];
+								double dExpiration = cdbl(ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>"),0);
+								std::string sOpra = ExtractXML(contract,"<SHORTOPRA>","</SHORTOPRA>");
+								std::string sAddress = ExtractXML(contract,"<GRCADDRESS>","</GRCADDRESS>");
+								double dDays = cdbl(ExtractXML(contract,"<DAYS>","</DAYS>"),4);
+								double dTimeLeft = (dExpiration - GetAdjustedTime())/86400;
+								double dTimeAnnualized = dTimeLeft/365;
+								bool bExpired = (dTimeLeft < 0);
+								std::string sType = ExtractXML(contract,"<TYPE>","</TYPE>");
+								double dStrike = cdbl(ExtractXML(contract,"<STRIKE>","</STRIKE>"),0);
+								std::string sAction = ExtractXML(contract,"<ACTION>","</ACTION>");
+								double dQuantity = cdbl(ExtractXML(contract,"<QUANTITY>","</QUANTITY>"),0);
+								std::string sExpiration = ExtractXML(contract,"<HREXPIRATION>","</HREXPIRATION>");
+								// calculate current delta based on current market conditions
+								double dPrice = cdbl(ExtractXML(contract,"<PRICE>","</PRICE>"),4);
+								if (dPrice != 0 && !sOpra.empty() && UL > 100 && bExpired) 
+								{
+									double delta = -100 * (GetDelta(sType, UL, dStrike, dTimeAnnualized, nRiskFreeRate, nVolatility));
+									double dCurrentPrice = BlackScholes(sType, UL, dStrike,  dTimeAnnualized, nRiskFreeRate, nVolatility);
+									double dPL = -1 * ( dCurrentPrice - dPrice );
+									std::string sRecipient = ReadCache(datatype,subkey + ";Recipient");
+									double dBurnAmount = cdbl(ReadCache(datatype,subkey + ";BurnAmount"),4);
+									int valid = ValidateContract(iPurchaseTime,datatype,subkey,dPrice*dQuantity,sType,UL,dStrike,dDays,dPrice);
+									bool paid = IsContractSettled(datatype,subkey);
+									if (   (valid && !paid)  ||   subkey == rsOpra )
+									{
+										rsRecipient = sAddress;
+										rdSinglePrice = dCurrentPrice;
+										rdAmountOwed = dCurrentPrice * dQuantity;
+										// Verify this recipient is valid, and amount > 0 before returning
+										CBitcoinAddress OptionAddress(rsRecipient);
+										if (OptionAddress.IsValid() && rdAmountOwed > 0 )
+										{
+												rsOpra = subkey;
+												return true;
+										}
+									}
+								}
+
+					}
+			}
+	  }
+	  rdAmountOwed=0;
+	  return false;
+}
+
+
+
+
+
+Array GetOptionsExposureReport()
+{
+        Array results;
+	    Object entry;
+  	    entry.push_back(Pair("Report","Options Exposure 1.0"));
+		//1-17-2016
+        std::string datatype="option_buy";
+	  	std::string rows = "";
+		std::string row = "";
+		StructCPID stNet = mvNetwork["NETWORK"];
+		double UL = stNet.GRCQuote/10000000000 * 100000000;
+		entry.push_back(Pair("GRC UL",UL));		
+		double dTotalDelta = 0;
+		double dTotalPL = 0;
+		double dTotalContracts = 0;
 		
+  		for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+		{
+				std::string key_name  = (*ii).first;
+			   	if (key_name.length() > datatype.length())
+				{
+					if (key_name.substr(0,datatype.length())==datatype)
+					{
+								std::string contract = mvApplicationCache[(*ii).first];
+								std::string contract_serial = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
+								std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
+								printf(" opra %s",contract_serial.c_str());
+
+								//Verify contract is not expired, and is valid
+								int64_t iPurchaseTime = mvApplicationCacheTimestamp[key_name];
+								double dExpiration = cdbl(ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>"),0);
+								std::string sOpra = ExtractXML(contract,"<SHORTOPRA>","</SHORTOPRA>");
+								std::string sAddress = ExtractXML(contract,"<GRCADDRESS>","</GRCADDRESS>");
+
+								printf(" addr %s opra %s expir %f pt %f ",sAddress.c_str(),sOpra.c_str(),(double)dExpiration,(double)iPurchaseTime);
+
+								double dDays = cdbl(ExtractXML(contract,"<DAYS>","</DAYS>"),4);
+								double dTimeLeft = (dExpiration - GetAdjustedTime())/86400;
+								double dTimeAnnualized = dTimeLeft/365;
+							
+								bool bExpired = (dTimeLeft < 0);
+								std::string sType = ExtractXML(contract,"<TYPE>","</TYPE>");
+									printf(" days %f, Type %s,  Time %f Time %f ",dDays,sType.c_str(),dTimeLeft,dTimeAnnualized);
+
+								double dStrike = cdbl(ExtractXML(contract,"<STRIKE>","</STRIKE>"),0);
+								std::string sAction = ExtractXML(contract,"<ACTION>","</ACTION>");
+								double dQuantity = cdbl(ExtractXML(contract,"<QUANTITY>","</QUANTITY>"),0);
+								std::string sExpiration = ExtractXML(contract,"<HREXPIRATION>","</HREXPIRATION>");
+								// calculate current delta based on current market conditions
+								double dPrice = cdbl(ExtractXML(contract,"<PRICE>","</PRICE>"),4);
+
+								printf(" price %f , strike %f action %s qty %f sexpiry %s",dPrice,dStrike,sAction.c_str(),dQuantity,sExpiration.c_str());
+
+								if (dPrice != 0 && !sOpra.empty()) 
+								{
+
+									printf(" delta 1 ");
+									double delta = -100 * (GetDelta(sType, UL, dStrike, dTimeAnnualized, nRiskFreeRate, nVolatility));
+									printf(" bs 1 ");
+									double dCurrentPrice = BlackScholes(sType, UL, dStrike,  dTimeAnnualized, nRiskFreeRate, nVolatility);
+									printf (" bs 2 ");
+									double dPL = -1 * ( dCurrentPrice - dPrice );
+				
+									entry.push_back(Pair("OPRA",sOpra));
+									entry.push_back(Pair("Strike",dStrike));
+									entry.push_back(Pair("Type",sType));
+									entry.push_back(Pair("Quantity",dQuantity));
+									entry.push_back(Pair("Expiration",dExpiration));
+									entry.push_back(Pair("HR Expiration",sExpiration));
+									entry.push_back(Pair("Purchase Price",dPrice));
+									entry.push_back(Pair("Delta",delta));
+									entry.push_back(Pair("Total Delta",delta*dQuantity));
+									entry.push_back(Pair("Expired",bExpired));
+								
+									entry.push_back(Pair("Current Price",dCurrentPrice));
+									entry.push_back(Pair("PL",dPL));
+									entry.push_back(Pair("Total PL",dPL*dQuantity));
+									entry.push_back(Pair("TimeLeft",dTimeLeft));
+
+									std::string sRecipient = ReadCache(datatype,subkey + ";Recipient");
+									double dBurnAmount = cdbl(ReadCache(datatype,subkey + ";BurnAmount"),4);
+									entry.push_back(Pair("Recipient",sRecipient));
+									entry.push_back(Pair("Burnt",dBurnAmount));
+									printf(" validating ");
+
+									int valid = ValidateContract(iPurchaseTime,datatype,subkey,dPrice*dQuantity,sType,UL,dStrike,dDays,dPrice);
+									printf(" validated ");
+									entry.push_back(Pair("Valid",valid));
+									entry.push_back(Pair("",""));
+
+									dTotalDelta += (delta*dQuantity);
+									dTotalPL += (dPL*dQuantity);
+									dTotalContracts += dQuantity;
+								}
+
+					}
+			}
+	  }
+	  entry.push_back(Pair("Total Contracts",dTotalContracts));
+	  entry.push_back(Pair("Total PL",dTotalPL));
+	  entry.push_back(Pair("Total Deltas",dTotalDelta));
+						
+	  results.push_back(entry);
+	  return results;
+
+}
+
+
+
+
+
 Array GetJSONBeaconReport()
 {
-
-	
         Array results;
 	    Object entry;
   	    entry.push_back(Pair("CPID","GRCAddress"));
@@ -3855,8 +4515,6 @@ Array GetJSONBeaconReport()
 	
 	  results.push_back(entry);
 	  return results;
-
-
 }
 
 
@@ -4060,13 +4718,16 @@ Array MagnitudeReportCSV(bool detail)
 		   return results;
 }
 
-
+std::string GetBurnAddress()
+{
+	return fTestNet ? "mk1e432zWKH1MW57ragKywuXaWAtHy1AHZ" : "S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB";
+}
 
 std::string AddMessage(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, 
 					std::string sMasterKey, int64_t MinimumBalance, double dFees, std::string strPublicKey)
 {
-    std::string foundation = fTestNet ? "mk1e432zWKH1MW57ragKywuXaWAtHy1AHZ" : "S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB";
-    CBitcoinAddress address(foundation);
+    std::string sAddress = GetBurnAddress();
+    CBitcoinAddress address(sAddress);
     if (!address.IsValid())       throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
     int64_t nAmount = AmountFromValue(dFees);
     // Wallet comments

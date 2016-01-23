@@ -32,6 +32,13 @@ int GetDayOfYear();
 extern std::string NodeAddress(CNode* pfrom);
 extern std::string UnpackBinarySuperblock(std::string sBlock);
 extern std::string PackBinarySuperblock(std::string sBlock);
+extern double GetStandardDeviation(std::string sPriceHistory);
+extern double GetVolatility(std::string sPriceHistory);
+bool GetExpiredOption(std::string& rsRecipient, double& rdSinglePrice, double& rdAmountOwed, std::string& rsOpra);
+
+extern double BlackScholes(std::string CallPutFlag, double S, double X, double T, double r, double v);
+extern double GetDelta(std::string sType, double UL, double Strike, double dTime, double RiskFreeRate, double Volatility);
+
 int DownloadBlocks();
 int DetermineCPIDType(std::string cpid);
 extern MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID> vRef);
@@ -47,6 +54,7 @@ bool AskNeuralNetworkNodeForBlocks(int iNodeLimit);
 
 extern bool NeedASuperblock();
 extern double SnapToGrid(double d);
+
 extern bool NeuralNodeParticipates();
 extern bool StrLessThanReferenceHash(std::string rh);
 void BusyWaitForTally();
@@ -176,7 +184,8 @@ unsigned int CHECKPOINT_VIOLATIONS = 0;
 int64_t nLastTallied = 0;
 int64_t nLastPing = 0;
 int64_t nLastPeek = 0;
-
+double nVolatility = .90;
+double nRiskFreeRate = .015;
 int64_t nLastTalliedNeural = 0;
 
 int64_t nLastLoadAdminMessages = 0;
@@ -214,6 +223,10 @@ json_spirit::Array MagnitudeReportCSV(bool detail);
 bool bNewUserWizardNotified = false;
 int64_t nLastBlockSolved = 0;  //Future timestamp
 int64_t nLastBlockSubmitted = 0;
+
+
+double mPI = 3.141592653589793238462643;
+
 
 
 
@@ -268,6 +281,7 @@ unsigned int nModifierInterval = 10 * 60; // time to elapse before new modifier 
 bool bCryptoLotteryEnabled = true;
 bool bRemotePaymentsEnabled = false;
 bool bNewbieFeatureEnabled = false;
+bool bOptionPaymentsEnabled = false;
 
 
 // Gridcoin:
@@ -439,7 +453,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msHDDSerial = "";
  //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
 
- int nGrandfather = 361854;
+ int nGrandfather = 444720;
  int nNewIndex = 271625;
  int nNewIndex2 = 364500;
 
@@ -920,7 +934,7 @@ MiningCPID GetNextProject(bool bForce)
 
 		if (mvCPIDs.size() < 1)
 		{
-			if (fDebug3 && LessVerbose(50)) printf("Gridcoin has no CPIDs...");
+			if (fDebug3 && LessVerbose(10)) printf("Gridcoin has no CPIDs...");
 			//Let control reach the investor area
 		}
 
@@ -3278,7 +3292,9 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
         MapPrevTx mapInputs;
         if (tx.IsCoinBase())
+		{
             nValueOut += tx.GetValueOut();
+		}
         else
         {
             bool fInvalid;
@@ -3313,20 +3329,76 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 					if (fDebug10) 	printf(" nHeight %f; nTCS %f; nTxValueOut %f     ",
 						(double)pindex->nHeight,CoinToDouble(nTotalCoinstake),CoinToDouble(nTxValueOut));
 				}
-				// Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
-				if (bIsDPOR && pindex->nHeight > nGrandfather)
+
+				//Options Support
+				if (bOptionPaymentsEnabled)
 				{
-					for (unsigned int i = 3; i < tx.vout.size(); i++)
+					if (pindex->nHeight > nGrandfather && BlockNeedsChecked(pindex->nTime))
 					{
-						std::string Recipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
-						double      Amount    = CoinToDouble(tx.vout[i].nValue);
-						if (fDebug10) printf("Iterating Recipient #%f  %s with Amount %f \r\n,",(double)i,Recipient.c_str(),Amount);
-  			  		    if (Amount > 0)
+						for (unsigned int i = 3; i < tx.vout.size(); i++)
 						{
-								if (fDebug3) printf("Iterating Recipient #%f  %s with Amount %f \r\n,",(double)i,Recipient.c_str(),Amount);
-								printf("POR Payment results in an overpayment; Recipient %s, Amount %f \r\n",Recipient.c_str(), Amount);
-		        				return DoS(50,error("POR Payment results in an overpayment; Recipient %s, Amount %f \r\n",
-										Recipient.c_str(), Amount));
+							std::string Recipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
+							double      Amount    = CoinToDouble(tx.vout[i].nValue);
+							if (Amount > 0)
+							{
+								// Verify option is owed and expired and exercised and unpaid and validated and recipient matches and premium paid
+								// Extract the Purchase Time, Type, Opra, UL, Strike, Length, SinglePrice
+								std::string contract = tx.hashBoinc;
+								std::string sSerialNo = ExtractXML(contract,"<PAIDOPRA>","</PAIDOPRA>");
+							    // Mark option as paid by Pulling the option by OPRA
+								std::string rsRecipient = "";
+								double rdSinglePrice = 0;
+								double rdAmountOwed = 0;
+								std::string rsOpra = sSerialNo;
+								bool bOwed = GetExpiredOption(rsRecipient, rdSinglePrice, rdAmountOwed, rsOpra);
+								if (bOwed && rdAmountOwed==Amount && rsRecipient == Recipient)
+								{
+									printf("\r\n ** Option payment verified. **  \r\n ");
+									DPOR_Paid += Amount;
+									WriteCache("paid_opra",rsOpra,tx.GetHash().GetHex(),GetAdjustedTime());
+								}	
+								else
+								{
+									//D-dos here
+									printf("\r\n ****** Option payment not verified for Recipient %s for Amount %f \r\n",rsRecipient.c_str(),rdAmountOwed);
+								}
+
+
+
+							}
+
+						}
+					}
+					else
+					{
+						// Ensure prior options paid in the past are in memory as paid
+						std::string contract = tx.hashBoinc;
+						std::string sSerialNo = ExtractXML(contract,"<PAIDOPRA>","</PAIDOPRA>");
+						if (!sSerialNo.empty())
+						{
+							WriteCache("paid_opra",sSerialNo,tx.GetHash().GetHex(),GetAdjustedTime());
+						}
+							
+
+					}
+				}
+				else
+				{
+					// Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
+					if (bIsDPOR && pindex->nHeight > nGrandfather)
+					{
+						for (unsigned int i = 3; i < tx.vout.size(); i++)
+						{
+							std::string Recipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
+							double      Amount    = CoinToDouble(tx.vout[i].nValue);
+							if (fDebug10) printf("Iterating Recipient #%f  %s with Amount %f \r\n,",(double)i,Recipient.c_str(),Amount);
+  			  				if (Amount > 0)
+							{
+									if (fDebug3) printf("Iterating Recipient #%f  %s with Amount %f \r\n,",(double)i,Recipient.c_str(),Amount);
+									printf("POR Payment results in an overpayment; Recipient %s, Amount %f \r\n",Recipient.c_str(), Amount);
+		        					return DoS(50,error("POR Payment results in an overpayment; Recipient %s, Amount %f \r\n",
+											Recipient.c_str(), Amount));
+							}
 						}
 					}
 				}
@@ -3459,8 +3531,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 			pindex, "connectblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 		if (bb.cpid != "INVESTOR" && dStakeReward > 1)
 		{
-			//11-15-2015
-
+			
 			    //ResearchAge: Since the best block may increment before the RA is connected but After the RA is computed, the ResearchSubsidy can sometimes be slightly smaller than we calculate here due to the RA timespan increasing.  So we will allow for time shift before rejecting the block.
 			    double dDrift = IsResearchAgeEnabled(pindex->nHeight) ? bb.ResearchSubsidy*.15 : 1;
 				if (IsResearchAgeEnabled(pindex->nHeight) && dDrift < 10) dDrift = 10;
@@ -5217,11 +5288,12 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 69298;
+		nGrandfather = 103307;
 		nNewIndex = 10;
 		nNewIndex2 = 36500;
 		bRemotePaymentsEnabled = false;
 		bNewbieFeatureEnabled = true;
+		bOptionPaymentsEnabled = false;
     }
 
 
@@ -5986,7 +6058,7 @@ void AddCPIDBlockHash(std::string cpid, std::string blockhash)
 
 StructCPID GetLifetimeCPID(std::string cpid, std::string sCalledFrom)
 {
-	//Eliminates issues with reorgs, disconnects, double counting, etc.. (11-15-2015)
+	//Eliminates issues with reorgs, disconnects, double counting, etc.. 
 	if (cpid.empty() || cpid=="INVESTOR")
 	{
 		StructCPID stDummy = GetInitializedStructCPID2("INVESTOR",mvResearchAge);
@@ -6042,8 +6114,6 @@ StructCPID GetLifetimeCPID(std::string cpid, std::string sCalledFrom)
 		}
 	}
 	StructCPID st1 = GetInitializedStructCPID2(cpid,mvResearchAge);
-	if (fDebug3) printf(" {/GLC} ");
-
 	return st1;
 }
 
@@ -6376,7 +6446,7 @@ bool TallyResearchAverages(bool Forcefully)
 								{
 									    if (fDebug3) printf(" VSB1 ");
 										std::string superblock = UnpackBinarySuperblock(bb.superblock);
-										//11-18-2015 Sep
+										//11-19-2015
 										if (VerifySuperblock(superblock,pblockindex->nHeight))
 										{
 											    if (fDebug3) printf(" LSB2 ");
@@ -6959,10 +7029,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 		pfrom->nTrust = 0;
 		
 		if (!vRecv.empty())			vRecv >> pfrom->sGRCAddress;
-		//if (!vRecv.empty())       vRecv >> pfrom->sNeuralNetwork;
 		
 		
-
+		/* Allow newbies to connect easily with 0 blocks
 		if (GetArgument("autoban","true") == "true")
 		{
 				if (pfrom->nStartingHeight < 1000 && LessVerbose(500) && !fTestNet)
@@ -6988,6 +7057,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 					return false;
 				}
 		}
+
+		*/
 
 
 		if (pfrom->fInbound && addrMe.IsRoutable())
@@ -9477,7 +9548,7 @@ std::string GetOrgSymbolFromFeedKey(std::string feedkey)
 
 
 
-bool MemorizeMessage(std::string msg,int64_t nTime)
+bool MemorizeMessage(std::string msg,int64_t nTime, double dAmount, std::string sRecipient)
 {
 	      if (msg.empty()) return false;
 		  bool fMessageLoaded = false;
@@ -9503,7 +9574,6 @@ bool MemorizeMessage(std::string msg,int64_t nTime)
 				  {
 					        if (fDebug10) printf("DAO Message %s",msg.c_str());
 
-							//std::string Org = sMessageKey;
 							if (sMessageAction=="A")
 							{
 								std::string daoPubKey = ReadCache(sMessageType + "pubkey",sMessageKey);
@@ -9545,6 +9615,12 @@ bool MemorizeMessage(std::string msg,int64_t nTime)
 								if ( (sMessageType=="dao" || sMessageType == "daofeed")	&& fDebug3 )
 									printf("Adding MessageKey type %s Key %s Value %s\r\n",
 									sMessageType.c_str(),sMessageKey.c_str(),sMessageValue.c_str());
+								// Ensure we have the TXID of the contract in memory
+								if (!(sMessageType=="project" || sMessageType=="projectmapping" || sMessageType=="beacon" ))
+								{
+									WriteCache(sMessageType,sMessageKey+";Recipient",sRecipient,nTime);
+									WriteCache(sMessageType,sMessageKey+";BurnAmount",RoundToString(dAmount,2),nTime);
+								}
 								WriteCache(sMessageType,sMessageKey,sMessageValue,nTime);
 								fMessageLoaded = true;
 								if (sMessageType=="poll")
@@ -9744,8 +9820,7 @@ double GRCMagnitudeUnit(int64_t locktime)
 
 int64_t ComputeResearchAccrual(std::string cpid, std::string operation, CBlockIndex* pindexLast, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
-	//11-15-2015
-
+	
 	double dCurrentMagnitude = CalculatedMagnitude2(cpid, pindexLast->nTime, false);
 	CBlockIndex* pHistorical = GetHistoricalMagnitude(cpid);
 	if (pHistorical->nHeight <= nNewIndex || pHistorical->nMagnitude==0 || pHistorical->nTime == 0)
@@ -9905,12 +9980,20 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 		if (!pindex || !pindex->IsInMainChain()) continue;
 		if (IsContract(pindex))
 		{
-			//if (fDebug3) printf("[.]");
 			CBlock block;
 			if (!block.ReadFromDisk(pindex)) continue;
 			BOOST_FOREACH(const CTransaction &tx, block.vtx)
 			{
-				  MemorizeMessage(tx.hashBoinc,tx.nTime);
+				  // Retrieve the Burn Amount for Contracts 1-17-2016
+				  double dAmount = 0;
+				  std::string sRecipient = "";
+   				  for (unsigned int i = 1; i < tx.vout.size(); i++)
+				  {
+						sRecipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
+						dAmount += CoinToDouble(tx.vout[i].nValue);
+				  }
+
+				  MemorizeMessage(tx.hashBoinc,tx.nTime,dAmount,sRecipient);
 			}
 		}
 	}
@@ -10159,7 +10242,7 @@ void SetUpExtendedBlockIndexFieldsOnce()
 				{
 						if (tx.hashBoinc.length() > 20)
 						{
-							bool fMemorized = MemorizeMessage(tx.hashBoinc,tx.nTime);
+							bool fMemorized = MemorizeMessage(tx.hashBoinc,tx.nTime,0,"");
 							if (fMemorized)
 							{
 								sContracts += pindex->GetBlockHash().GetHex() + ",";
@@ -10225,5 +10308,116 @@ bool StrLessThanReferenceHash(std::string rh)
 	uint256 uADH = uint256("0x" + address_day_hash);
 	return (uADH < uRef);
 }
+
+
+// The cumulative normal distribution function 
+double CND(double X)
+{
+	double L, K, w ;
+	double const a1 = 0.31938153, a2 = -0.356563782, a3 = 1.781477937;
+	double const a4 = -1.821255978, a5 = 1.330274429;
+	L = fabs(X);
+	K = 1.0 / (1.0 + 0.2316419 * L);
+	w = 1.0 - 1.0 / sqrt(2 * mPI) * exp(-L *L / 2) * (a1 * K + a2 * K *K + a3 * pow(K,3) + a4 * pow(K,4) + a5 * pow(K,5));
+	if (X < 0 )
+	{
+			w= 1.0 - w;
+	}
+	return w;
+}
+
+
+// The Black and Scholes (1973) Stock option formula
+double BlackScholes(std::string CallPutFlag, double UL, double X, double T, double r, double v)
+{
+	double d1, d2;
+	// Input protection
+	if (T == 0 ) T  = 0.00001;
+	if (UL == 0) UL = 0.00001;
+	if (X == 0 ) X  = 0.00001;
+	d1 = (log(UL / X) + (r + v*v/2) * T) / (v * sqrt(T));
+	d2 = d1 - v * sqrt(T);
+	double Price = 0;
+	if (CallPutFlag == "c")
+	{
+		Price = UL * CND(d1)-X * exp(-r*T) * CND(d2);
+	}
+	if (CallPutFlag == "p")
+	{
+		Price = X * exp(-r * T) * CND(-d2) - UL * CND(-d1);
+	}
+	Price = cdbl(RoundToString(Price,6),6);
+	return Price;
+}
+
+
+double GetDelta(std::string sType, double UL, double Strike, double dTime, double RiskFreeRate, double Volatility)
+{
+	double delta = 0;
+	double dPrice1 = 0;
+	double dPrice2 = 0;
+	double change = UL / 200;
+	if (UL==0) return 0;
+	//	printf(" type %s, UL %f, Strike %f, time %f, Vol %f ",sType.c_str(),UL,Strike,dTime,Volatility);
+	dPrice1 = BlackScholes(sType, UL, Strike, dTime, RiskFreeRate, Volatility);
+	dPrice2 = BlackScholes(sType, UL + change, Strike, dTime, RiskFreeRate, Volatility);
+	delta = (dPrice2 - dPrice1) / change;
+	delta = cdbl(RoundToString(delta,6),6);
+	return delta;
+}
+
+
+
+double GetVolatility(std::string sPriceHistory)
+{
+	std::vector<std::string> vData = split(sPriceHistory.c_str(),";");
+	double dDeviation = GetStandardDeviation(sPriceHistory);
+	// Compute Historical Volatility
+	double dTradingDays = vData.size();
+	double dHistoricalVolatility = sqrt(dTradingDays) * dDeviation;
+	printf(" Get Vol  Trading Days %f, Hist Vol %f, Dev %f ",dTradingDays,dHistoricalVolatility,dDeviation);
+	return dHistoricalVolatility;
+}
+
+double GetStandardDeviation(std::string sPriceHistory)
+{
+
+	std::vector<std::string> vPH   = split(sPriceHistory.c_str(),";");
+	std::vector<std::string> vData = split(sPriceHistory.c_str(),";");
+	double n = vData.size();
+	if (n < 2) return 0;
+	vData[0] = "";
+	
+	for (int xx = 1; xx < n; xx++)
+	{
+		double change = 0;
+		double a2 = 0;
+		double a1 = 0;
+		a1 = cdbl(vPH[xx-1],2);
+		a2 = cdbl(vPH[xx],2);
+		change = (a2 / (a1+.0001)) - 1;
+        vData[xx] = RoundToString(change,4);
+	}
+
+	// Calculate the deviation of the Change of underlying percentages, not of the prices
+	double dMean = 0;
+	
+	for (int X = 0; X < n; X++)
+	{
+		double data1 = cdbl(vData[X],4);
+        dMean += data1;
+	}
+    
+	double dSumDeviation = 0;
+    dMean = dMean / n;
+	for (int i = 0; i < n; i++)
+	{
+	   double data1 = cdbl(vData[i],4);
+	   dSumDeviation += ((data1 - dMean) * (data1 - dMean));
+    }
+	double dStdDev = sqrt(dSumDeviation / n);
+	return dStdDev;
+}
+
 
 

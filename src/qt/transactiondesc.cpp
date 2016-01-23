@@ -79,16 +79,11 @@ std::string PubKeyToGRCAddress(const CScript& scriptPubKey)
 QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
 {
 
-	//	walletModel(parent);
-
+	
     QString strHTML;
-	//    connect(walletModel->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
-	//QPushButton* button = new QPushButton;
-   // ui->HorizontalLayout->addWidget(button);
-    //button->show();
-
+	
     LOCK2(cs_main, wallet->cs_wallet);
-    strHTML.reserve(4000);
+    strHTML.reserve(9250);
     strHTML += "<html><font face='verdana, arial, helvetica, sans-serif'>";
 
     int64_t nTime = wtx.GetTxTime();
@@ -294,7 +289,6 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
 	msHashBoinc = "";
 
 
-
     if (fDebug || true)
     {
         strHTML += "<hr><br><color=blue><bold><span color=blue>" + tr("Information") + "</span></bold><br><br><color=green>";
@@ -311,16 +305,28 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
         CTxDB txdb("r"); // To fetch source txouts
 		//Decrypt any embedded messages
 		std::string eGRCMessage = ExtractXML(wtx.hashBoinc,"<MESSAGE>","</MESSAGE>");
-		std::string sGRCMessage = AdvancedDecrypt(eGRCMessage);
-
-		strHTML += "<br><b>Notes: " + QString::fromStdString(sGRCMessage) + "</b><p><br>";
-		if (fDebug3)
+		std::string sOptionsNarr = ExtractXML(wtx.hashBoinc,"<NARR>","</NARR>");
+		//std::string sGRCMessage = AdvancedDecrypt(eGRCMessage);
+		// Contracts
+		//std::string sContractLength = RoundToString((double)wtx.hashBoinc.length(),0);
+		//std::string sContractInfo = "";
+		//if (wtx.hashBoinc.length() > 255) sContractInfo = ": " + wtx.hashBoinc.substr(0,255);
+		strHTML += "<br><b>Notes:</b><pre><font color=blue> " 
+			+ QString::fromStdString(eGRCMessage) + "</font></pre><p><br>";
+		if (sOptionsNarr.length() > 1)
 		{
-				strHTML += "<br><b>Contracts:</b> " + QString::fromStdString(wtx.hashBoinc) + "<p><br>";
+			strHTML += "<br><b>Options:</b><pre><font color=blue> " + QString::fromStdString(sOptionsNarr) + "</font></pre><p><br>";
+		
+		}
+		if (fDebug3)
+		{		
+				//Extract contract here from : wtx.hashBoinc - contract key
+				//strHTML += "<br><b>Contracts:</b> " + QString::fromStdString(sContractLength) + "<p><br>";
 		}
 		msHashBoinc += wtx.hashBoinc;
         strHTML += "<br><b>" + tr("Inputs") + ":</b>";
         strHTML += "<ul>";
+
 
         BOOST_FOREACH(const CTxIn& txin, wtx.vin)
         {
@@ -354,5 +360,6 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
     }
 
     strHTML += "</font></html>";
+
     return strHTML;
 }
