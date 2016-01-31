@@ -111,6 +111,8 @@ private:
 	QAction *configAction;
 	QAction *leaderboardAction;
 	QAction *tickerAction;
+	QAction *browserAction;
+
 	QAction *ticketListAction;
 	QAction *votingAction;
 
@@ -221,6 +223,8 @@ private slots:
 	void faqClicked();
 
 	void tickerClicked();
+	void browserClicked();
+
 	void ticketListClicked();
 	void galazaClicked();
 	void newUserWizardClicked();

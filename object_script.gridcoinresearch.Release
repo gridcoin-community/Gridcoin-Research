@@ -14,6 +14,7 @@ INPUT(
 ./build/upgradedialog.o
 ./build/editaddressdialog.o
 ./build/bitcoinaddressvalidator.o
+./build/gridcoinbrowser.o
 ./build/alert.o
 ./build/version.o
 ./build/sync.o
@@ -87,6 +88,7 @@ INPUT(
 ./build/moc_upgradedialog.o
 ./build/moc_editaddressdialog.o
 ./build/moc_bitcoinaddressvalidator.o
+./build/moc_gridcoinbrowser.o
 ./build/moc_clientmodel.o
 ./build/moc_guiutil.o
 ./build/moc_trafficgraphwidget.o
@@ -107,4 +109,5 @@ INPUT(
 ./build/moc_notificator.o
 ./build/moc_rpcconsole.o
 ./build/qrc_bitcoin.o
+./build/qrc_jquery.o
 );

@@ -1553,6 +1553,187 @@ std::string CallPutNarr(std::string sType)
 	return "NA";
 }
 
+
+std::string GetDomainForSymbol(std::string sSymbol)
+{
+			std::string RegRest   = ReadCache("daorest",sSymbol);
+			return RegRest;
+}
+
+
+Value dao(const Array& params, bool fHelp)
+{
+    if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3 && params.size() != 4 && params.size() != 5 && params.size() != 6 && params.size() != 7))
+        throw runtime_error(
+		"dao <string::itemname> <string::parameter> \r\n"
+        "Executes a DAO based command by name.");
+	// Add DAO features - 1-30-2016
+    std::string sItem = params[0].get_str();
+
+	if (sItem=="") throw runtime_error("Item invalid.");
+
+    Array results;
+	Object oOut;
+	oOut.push_back(Pair("Command",sItem));
+	results.push_back(oOut);
+    Object entry;
+		
+	if (sItem == "metric")
+	{
+		if (params.size() < 3)
+		{
+			entry.push_back(Pair("Error","You must specify the ticker and metric_name.  Example: dao metric GRCQ nav."));
+			results.push_back(entry);
+		}
+		else
+		{
+			// Verify the Ticker exists:  1-27-2016
+			std::string sTicker = params[1].get_str();
+			boost::to_upper(sTicker);
+			std::string sMetric = params[2].get_str();
+			boost::to_upper(sMetric);
+			std::string sGRCAddress = DefaultWalletAddress();
+			// Query DAO
+			//std::string OrgPubKey = ReadCache("daopubkey",org);
+			//std::string RegSymbol = ReadCache("daosymbol",org);
+			std::string RegName   = ReadCache("daoorgname",sTicker);
+			std::string RegRest   = ReadCache("daorest",sTicker);
+			if (RegName.empty())
+			{
+					entry.push_back(Pair("Error","DAO does not exist."));
+					results.push_back(entry);
+					return results;
+			}
+			entry.push_back(Pair("DAO ID",sTicker));
+			entry.push_back(Pair("Metric",sMetric));
+			entry.push_back(Pair("Org Name",RegName));
+			entry.push_back(Pair("REST Access",RegRest));
+			std::string sDomain = GetDomainForSymbol(sTicker);
+			// Domain Example = [http://]RESTsubdomain.RESTdomain.DNSdomain/RESTWebServiceDirectory/RESTPage.[protocol]?[QuerystringDirective]=[Key]&[QueryDirectiveII]=[Key]
+			std::string sURL = sDomain + "?address=" + sGRCAddress + "&metric=" + sMetric + "&id=" + sGRCAddress;
+			std::string sResults = GetHttpPage(sURL);
+			std::string sOutput = ExtractXML(sResults,"<metric>","</metric>");
+			entry.push_back(Pair(sMetric.c_str(),sOutput));
+			results.push_back(entry);
+		}
+	}
+	else if (sItem == "link")
+	{
+		if (params.size() < 4)
+		{
+			entry.push_back(Pair("Error","You must specify the ticker, username and password.  Example: dao link myusername mypassword."));
+			results.push_back(entry);
+		}
+		else
+		{
+			// Verify the Ticker exists:  1-27-2016
+			std::string sTicker = params[1].get_str();
+			std::string sUser   = params[2].get_str();
+			std::string sPass   = params[3].get_str();
+	    	boost::to_upper(sTicker);
+			entry.push_back(Pair("DAO ID",sTicker));
+			entry.push_back(Pair("User",sUser));
+			std::string sEncodedPassword = EncodeBase64(sPass);
+			std::string sGRCAddress = DefaultWalletAddress();
+			std::string sDomain = GetDomainForSymbol(sTicker);
+			std::string RegName   = ReadCache("daoorgname",sTicker);
+			std::string RegRest   = ReadCache("daorest",sTicker);
+			if (RegName.empty())
+			{
+					entry.push_back(Pair("Error","DAO does not exist."));
+					results.push_back(entry);
+					return results;
+			}
+			std::string sURL = sDomain + "?metric=link&address=" + sGRCAddress + "&username=" + sUser + "&pass=" + sEncodedPassword;
+			std::string sResults = GetHttpPage(sURL);
+			std::string sOutput = ExtractXML(sResults,"<response>","</response>");
+			entry.push_back(Pair("Result",sOutput));
+			results.push_back(entry);
+		}
+	}
+	else if (sItem == "adddao")
+	{
+		//execute adddao org_name dao_currency_symbol org_receive_grc_address RESTfulURL
+
+		if (params.size() != 5)
+		{
+			entry.push_back(Pair("Error","You must specify the Organization_Name, DAO_CURRENCY_SYMBOL, ORG_RECEIVING_ADDRESS and RESTfulURL.  For example: execute adddao PetsRUs PETS xKBQaegxasEyBVxmsTMg3HnasNg77CtjLo http://petsrus.com/rest/restquery.php"));
+
+			results.push_back(entry);
+		}
+		else
+		{
+				std::string org    = params[1].get_str();
+				std::string symbol = params[2].get_str();
+				std::string grc    = params[3].get_str();
+				std::string rest   = params[4].get_str();
+				boost::to_upper(org);
+				boost::to_upper(symbol);
+
+			    CBitcoinAddress address(grc);
+				bool isValid = address.IsValid();
+				std::string               err = "";
+				if (org.empty())          err = "Org must be specified.";
+				if (symbol.length() != 3 && symbol.length() != 4) err = "Symbol must be 3-4 characters.";
+				if (!isValid)             err = "You must specify a valid GRC receiving address.";
+				std::string OrgPubKey    = ReadCache("daopubkey",org);
+				std::string CachedSymbol = ReadCache("daosymbol",org);
+				std::string CachedName   = ReadCache("daoname",CachedSymbol);
+				if (!CachedSymbol.empty())                         err = "DAO Symbol already exists.  Please choose a different symbol.";
+				if (!OrgPubKey.empty() || !CachedName.empty())     err = "DAO already exists.  Please choose a different Org Name.";
+				if (rest.empty())        err = "You must specify the RESTful URL.";
+				if (!err.empty())
+				{
+					entry.push_back(Pair("Error",err));
+					results.push_back(entry);
+				}
+				else
+				{
+					//Generate the key pair for the org
+					CKey key;
+					key.MakeNewKey(false);
+					CPrivKey vchPrivKey = key.GetPrivKey();
+					std::string PrivateKey =  HexStr<CPrivKey::iterator>(vchPrivKey.begin(), vchPrivKey.end());
+					std::string PubKey = HexStr(key.GetPubKey().Raw());
+				    std::string sAction = "add";
+					std::string sType = "dao";
+					std::string sPass = PrivateKey;
+					std::string sName = symbol;
+					std::string contract = "<NAME>" + org + "</NAME><SYMBOL>" + symbol + "</SYMBOL><ADDRESS>" + grc + "</ADDRESS><PUBKEY>" + PubKey + "</PUBKEY><REST>" + rest + "</REST>";
+					std::string result = AddMessage(true,sType,sName,contract,sPass,AmountFromValue(100),1,PubKey);
+					entry.push_back(Pair("DAO Name",org));
+					entry.push_back(Pair("SYMBOL",symbol));
+					entry.push_back(Pair("Rest URL",rest));
+					entry.push_back(Pair("Default Receive Address",grc));
+					std::string sKeyNarr = "dao" + symbol + "=" + PrivateKey;
+					entry.push_back(Pair("PrivateKey",sKeyNarr));
+					entry.push_back(Pair("Warning!","Do not lose your private key.  It is non-recoverable.  You may add it to your config file as noted above OR specify it manually via RPC commands."));
+					results.push_back(entry);
+	
+				}
+			}
+	}
+
+
+	else
+	{
+			entry.push_back(Pair("Command " + sItem + " not found.",-1));
+			results.push_back(entry);
+	}
+	return results;    
+
+}
+
+
+
+
+
+
+
+
+
+
+
 Value option(const Array& params, bool fHelp)
 {
     if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3 && params.size() != 4 && params.size() != 5 && params.size() != 6 && params.size() != 7))
@@ -1884,7 +2065,9 @@ Value execute(const Array& params, bool fHelp)
 			set<CBitcoinAddress> setAddress;
 			vector<pair<CScript, int64_t> > vecSend;
 			std::string sRecipients = params[1].get_str();
+			std::string sRainCommand = ExtractXML(sRecipients,"<RAIN>","</RAIN>");
 			std::string sRain = "<NARR>Project Rain: " + ExtractXML(sRecipients,"<RAINMESSAGE>","</RAINMESSAGE>") + "</NARR>";
+			if (!sRainCommand.empty()) sRecipients = sRainCommand;
 			//std::string sRainMessage = AdvancedCrypt(sRain);
 			wtx.hashBoinc = sRain;
 			int64_t totalAmount = 0;
@@ -2117,7 +2300,7 @@ Value execute(const Array& params, bool fHelp)
 			    CBitcoinAddress address(grc);
 				bool isValid = address.IsValid();
 				std::string               err = "";
-				if (symbol.length() != 3) err = "Symbol must be 3 characters.";
+				if (symbol.length() != 3 && symbol.length() != 4) err = "Symbol must be 3-4 characters.";
 				if (nickname.empty())     err = "You must specify a nickname.";
 				if (!isValid)             err = "You must specify a valid GRC receiving address.";
 				std::string OrgPubKey    = ReadCache("daopubkey",symbol);
@@ -2160,68 +2343,6 @@ Value execute(const Array& params, bool fHelp)
 			}
 	}
 	
-	else if (sItem == "adddao")
-	{
-		//execute adddao org_name dao_currency_symbol org_receive_grc_address
-
-		if (params.size() != 4)
-		{
-			entry.push_back(Pair("Error","You must specify the Organization_Name, DAO_CURRENCY_SYMBOL, and ORG_RECEIVING_ADDRESS.  For example: execute adddao COOLORG CRG SKBQaegxasEyBVxmsTMg3HnasNg77CtjLo"));
-			results.push_back(entry);
-		}
-		else
-		{
-				std::string org    = params[1].get_str();
-				std::string symbol = params[2].get_str();
-				std::string grc    = params[3].get_str();
-				boost::to_upper(org);
-				boost::to_upper(symbol);
-
-				//9-9-2015
-
-			    CBitcoinAddress address(grc);
-				bool isValid = address.IsValid();
-				std::string               err = "";
-				if (org.empty())          err = "Org must be specified.";
-				if (symbol.length() != 3) err = "Symbol must be 3 characters.";
-				if (!isValid)             err = "You must specify a valid GRC receiving address.";
-				std::string OrgPubKey    = ReadCache("daopubkey",org);
-				std::string CachedSymbol = ReadCache("daosymbol",org);
-				std::string CachedName   = ReadCache("daoname",CachedSymbol);
-				if (!CachedSymbol.empty())                         err = "DAO Symbol already exists.  Please choose a different symbol.";
-				if (!OrgPubKey.empty() || !CachedName.empty())     err = "DAO already exists.  Please choose a different Org Name.";
-				
-				if (!err.empty())
-				{
-					entry.push_back(Pair("Error",err));
-					results.push_back(entry);
-	
-				}
-				else
-				{
-					//Generate the key pair for the org
-					CKey key;
-					key.MakeNewKey(false);
-					CPrivKey vchPrivKey = key.GetPrivKey();
-					std::string PrivateKey =  HexStr<CPrivKey::iterator>(vchPrivKey.begin(), vchPrivKey.end());
-					std::string PubKey = HexStr(key.GetPubKey().Raw());
-				    std::string sAction = "add";
-					std::string sType = "dao";
-					std::string sPass = PrivateKey;
-					std::string sName = symbol;
-					std::string contract = "<NAME>" + org + "</NAME><SYMBOL>" + symbol + "</SYMBOL><ADDRESS>" + grc + "</ADDRESS><PUBKEY>" + PubKey + "</PUBKEY>";
-					std::string result = AddMessage(true,sType,sName,contract,sPass,AmountFromValue(2500),1,PubKey);
-					entry.push_back(Pair("DAO Name",org));
-					entry.push_back(Pair("SYMBOL",symbol));
-					entry.push_back(Pair("Default Receive Address",grc));
-					std::string sKeyNarr = "dao" + symbol + "=" + PrivateKey;
-					entry.push_back(Pair("PrivateKey",sKeyNarr));
-					entry.push_back(Pair("Warning!","Do not lose your private key.  It is non-recoverable.  You may add it to your config file as noted above OR specify it manually via RPC commands."));
-					results.push_back(entry);
-	
-				}
-			}
-	}
 	else if (sItem == "readconfig")
 	{
 		ReadConfigFile(mapArgs, mapMultiArgs);

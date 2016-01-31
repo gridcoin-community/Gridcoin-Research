@@ -18,10 +18,10 @@
 #endif
 
 #ifdef USE_UPNP
-#include <miniupnpc/miniwget.h>
-#include <miniupnpc/miniupnpc.h>
-#include <miniupnpc/upnpcommands.h>
-#include <miniupnpc/upnperrors.h>
+#include <miniwget.h>
+#include <miniupnpc.h>
+#include <upnpcommands.h>
+#include <upnperrors.h>
 #endif
 
 using namespace std;
@@ -71,9 +71,7 @@ std::string RetrieveMd5(std::string s1);
 extern std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string urlPage, bool bUseDNS);
 std::string msPubKey = "";
 std::string RoundToString(double d, int place);
-
-
-static const int MAX_OUTBOUND_CONNECTIONS = 8;
+int MAX_OUTBOUND_CONNECTIONS = 8;
 
 void ThreadMessageHandler2(void* parg);
 void ThreadSocketHandler2(void* parg);
@@ -236,7 +234,9 @@ bool RecvLine2(SOCKET hSocket, string& strLine)
             if (c == '\r')      return true;
 			//12-19-2015
 			if (strLine.find("</users>") != string::npos) return true;
-				
+			if (strLine.find("</html>") != string::npos) return true;
+			if (strLine.find("<EOF>") != string::npos) return true;
+
 		    if (strLine.size() >= 39000)
                 return true;
         }
@@ -752,7 +752,7 @@ std::string GetHttpPage(std::string url)
   				     "User-Agent: Mozilla/4.0\r\n"
                      "\r\n";
 
-      	std::string http = GetLargeHttpContent(addrConnect,getdata);
+      	std::string http = GetHttpContent(addrConnect,getdata);
 		std::string resultset = "" + http;
 		return resultset;
 	}
@@ -1586,6 +1586,7 @@ void ThreadSocketHandler2(void* parg)
             }
             else if (nInbound >= GetArg("-maxconnections", 250) - MAX_OUTBOUND_CONNECTIONS)
             {
+				printf("\r\n Surpassed max inbound connections \r\n maxconnections:%f max_outbound:%f",(double)GetArg("-maxconnections",250),(double)MAX_OUTBOUND_CONNECTIONS);
                 closesocket(hSocket);
             }
             else if (CNode::IsBanned(addr))
@@ -1690,17 +1691,17 @@ void ThreadSocketHandler2(void* parg)
             //
 			// Allow newbies to connect easily
             int64_t nTime = GetAdjustedTime();
-			if (nTime - pnode->nTimeConnected > 25)
+			if (nTime - pnode->nTimeConnected > 24)
             {
                 if (pnode->nLastRecv == 0 || pnode->nLastSend == 0)
                 {
-                    if (fDebug3) printf("Socket no message in first 25 seconds, IP %s, %d %d\n", NodeAddress(pnode).c_str(), pnode->nLastRecv != 0, pnode->nLastSend != 0);
+                    if (fDebug3) printf("Socket no message in first N seconds, IP %s, %d %d\n", NodeAddress(pnode).c_str(), pnode->nLastRecv != 0, pnode->nLastSend != 0);
 					pnode->Misbehaving(10);
                     pnode->fDisconnect = true;
                 }
 			}
-
-			if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && ((int)vNodes.size() > 50))
+			   
+			if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && ((int)vNodes.size() > (MAX_OUTBOUND_CONNECTIONS*.75)))
 			{
 				    //11-25-2015
 			        if (fDebug3) printf("Node %s connected longer than 2 hours with connection count of %f, disconnecting. \r\n", NodeAddress(pnode).c_str(),
@@ -2746,12 +2747,15 @@ void StartNode(void* parg)
     // Make this thread recognisable as the startup thread
     RenameThread("grc-start");
 	fShutdown = false;
-
+	MAX_OUTBOUND_CONNECTIONS = (int)GetArg("-maxoutboundconnections", 8);
+	int nMaxOutbound = 0;
     if (semOutbound == NULL) {
         // initialize semaphore
-        int nMaxOutbound = min(MAX_OUTBOUND_CONNECTIONS, (int)GetArg("-maxconnections", 125));
+        nMaxOutbound = min(MAX_OUTBOUND_CONNECTIONS, (int)GetArg("-maxconnections", 125));
         semOutbound = new CSemaphore(nMaxOutbound);
     }
+
+	printf("\r\nUsing %f OutboundConnections with a MaxConnections of %f\r\n",(double)MAX_OUTBOUND_CONNECTIONS,(double)GetArg("-maxconnections", 125));
 
     if (pnodeLocalHost == NULL)
         pnodeLocalHost = new CNode(INVALID_SOCKET, CAddress(CService("127.0.0.1", 0), nLocalServices));

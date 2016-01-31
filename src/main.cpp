@@ -5294,6 +5294,8 @@ bool LoadBlockIndex(bool fAllowNew)
 		bRemotePaymentsEnabled = false;
 		bNewbieFeatureEnabled = true;
 		bOptionPaymentsEnabled = false;
+		//1-24-2016
+		MAX_OUTBOUND_CONNECTIONS = (int)GetArg("-maxoutboundconnections", 8);
     }
 
 
@@ -7031,16 +7033,19 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 		if (!vRecv.empty())			vRecv >> pfrom->sGRCAddress;
 		
 		
-		/* Allow newbies to connect easily with 0 blocks
+		// Allow newbies to connect easily with 0 blocks
 		if (GetArgument("autoban","true") == "true")
 		{
+				
+				/*
+				// Note: Hacking attempts start in this area
 				if (pfrom->nStartingHeight < 1000 && LessVerbose(500) && !fTestNet)
 				{
 					if (fDebug) printf("Node with low height");
 					pfrom->fDisconnect=true;
 					return false;
 				}
-
+				
 				if (pfrom->nStartingHeight < 1 && LessVerbose(980) && !fTestNet)
 				{
 					pfrom->Misbehaving(100);
@@ -7048,6 +7053,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 			    	pfrom->fDisconnect=true;
 					return false;
 				}
+				*/
+
+
+				// End of critical Section
 
 				if (pfrom->nStartingHeight < 1 && pfrom->nServices == 0 )
 				{
@@ -7058,8 +7067,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 				}
 		}
 
-		*/
-
+	
 
 		if (pfrom->fInbound && addrMe.IsRoutable())
         {
@@ -7286,7 +7294,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         vRecv >> vInv;
         if (vInv.size() > MAX_INV_SZ)
         {
-            pfrom->Misbehaving(10);
+            pfrom->Misbehaving(50);
+			printf("\r\n **Hacker tried to send inventory > MAX_INV_SZ **\r\n");
             return error("message inv size() = %"PRIszu"", vInv.size());
         }
 
@@ -7419,7 +7428,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // Send the rest of the chain
         if (pindex)
             pindex = pindex->pnext;
-        int nLimit = 2000;
+        int nLimit = 1000;
         //if (fDebug) printf("getblocks %d to %s limit %d\n", (pindex ? pindex->nHeight : -1), hashStop.ToString().substr(0,20).c_str(), nLimit);
         for (; pindex; pindex = pindex->pnext)
         {
@@ -7502,7 +7511,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         vector<CBlock> vHeaders;
-        int nLimit = 2000;
+        int nLimit = 1000;
         printf("getheaders %d to %s\n", (pindex ? pindex->nHeight : -1), hashStop.ToString().substr(0,20).c_str());
         for (; pindex; pindex = pindex->pnext)
         {
@@ -8074,16 +8083,19 @@ bool ProcessMessages(CNode* pfrom)
 
 		AddPeek(Peek);
 		std::string sCurrentCommand = RoundToString((double)GetAdjustedTime(),0) + Peek;
+		std::string msLastNodeCommand = ReadCache("node_command",NodeAddress(pfrom));
+		WriteCache("node_command",NodeAddress(pfrom),sCurrentCommand,GetAdjustedTime());
 
-		if (msLastCommand == sCurrentCommand)
+		if (msLastCommand == sCurrentCommand || (msLastNodeCommand == sCurrentCommand && !sCurrentCommand.empty()))
 		{
-   			  //11-27-2015
+   			  //1-28-2016
 		      double node_duplicates = cdbl(ReadCache("duplicates",NodeAddress(pfrom)),0) + 1;
 			  WriteCache("duplicates",NodeAddress(pfrom),RoundToString(node_duplicates,0),GetAdjustedTime());
-			  if ( (node_duplicates > 6 && !fTestNet) || (node_duplicates > 6 && fTestNet && !OutOfSyncByAge()) )
+			  if ( (node_duplicates > 5 && !fTestNet) || (node_duplicates > 5 && fTestNet && !OutOfSyncByAge()) )
 			  {
 					printf(" Dupe (misbehaving) %s %s ",NodeAddress(pfrom).c_str(),Peek.c_str());
-		  			pfrom->fDisconnect = true;
+			        pfrom->Misbehaving(10);
+          			pfrom->fDisconnect = true;
 					WriteCache("duplicates",NodeAddress(pfrom),"0",GetAdjustedTime());
 					return false;
 			  }
@@ -9190,7 +9202,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         }
         if (pingSend)
 		{
-			AddPeek("ping");
+			//AddPeek("ping");
             uint64_t nonce = 0;
             while (nonce == 0) {
                 RAND_bytes((unsigned char*)&nonce, sizeof(nonce));
@@ -9304,17 +9316,25 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                         continue;
                     }
                 }
-				MilliSleep(1);
-                // returns true if wasn't already contained in the set
+			    // returns true if wasn't already contained in the set
                 if (pto->setInventoryKnown.insert(inv).second)
                 {
+					if (vInv.size() >= 1000)               AddPeek("Storing Inventory " + RoundToString((double)vInv.size(),0));
                     vInv.push_back(inv);
                     if (vInv.size() >= 1000)
                     {
-						AddPeek("PushInv");
-                        pto->PushMessage("inv", vInv);
-                        vInv.clear();
-                    }
+							AddPeek("PushInv-Large " + RoundToString((double)vInv.size(),0));
+							// If node has not been misbehaving (1-30-2016) then push it: (pto->nMisbehavior) && pto->NodeAddress().->addr.IsRoutable()
+							pto->PushMessage("inv", vInv);
+							AddPeek("Pushed Inv-Large " + RoundToString((double)vInv.size(),0));
+					
+						    vInv.clear();
+							pto->Misbehaving(10);  // Eventually ban the node if they keep asking for inventory
+							pto->fDisconnect=true;
+							AddPeek("Done with Inv-Large " + RoundToString((double)vInv.size(),0));
+					
+         
+			        }
                 }
             }
             pto->vInventoryToSend = vInvWait;
@@ -9583,8 +9603,11 @@ bool MemorizeMessage(std::string msg,int64_t nTime, double dAmount, std::string 
 									WriteCache(sMessageType + "pubkey",sMessageKey,sMessagePublicKey,nTime);
 									std::string OrgSymbol = ExtractXML(sMessageValue,"<SYMBOL>","</SYMBOL>");
 									std::string OrgName = ExtractXML(sMessageValue,"<NAME>","</NAME>");
-									WriteCache(sMessageType+"symbol",sMessageKey,OrgSymbol,nTime);
-									WriteCache(sMessageType + "name",OrgSymbol,sMessageKey,nTime);
+									std::string OrgREST = ExtractXML(sMessageValue,"<REST>","</REST>");
+									WriteCache(sMessageType + "rest",  OrgSymbol,  OrgREST,    nTime);
+									WriteCache(sMessageType + "symbol",sMessageKey,OrgSymbol,  nTime);
+									WriteCache(sMessageType + "name",  OrgSymbol,  sMessageKey,nTime);
+									WriteCache(sMessageType + "orgname", OrgSymbol,OrgName,    nTime);
 								}
 							}
 				  }

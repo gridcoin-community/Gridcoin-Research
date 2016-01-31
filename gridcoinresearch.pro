@@ -11,7 +11,7 @@ QT += qaxcontainer
 #QT += axcontainer
 QT += axserver
 QT += widgets
-
+QT += webkit network
 
 
 greaterThan(QT_MAJOR_VERSION, 4) {
@@ -169,6 +169,7 @@ HEADERS += src/qt/bitcoingui.h \
 	src/qt/upgradedialog.h \
     src/qt/editaddressdialog.h \
     src/qt/bitcoinaddressvalidator.h \
+    src/gridcoinbrowser.h \
     src/alert.h \
     src/addrman.h \
     src/base58.h \
@@ -252,9 +253,10 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/addressbookpage.cpp \
     src/qt/signverifymessagedialog.cpp \
     src/qt/aboutdialog.cpp \
-	src/qt/upgradedialog.cpp \
+    src/qt/upgradedialog.cpp \
     src/qt/editaddressdialog.cpp \
     src/qt/bitcoinaddressvalidator.cpp \
+    src/gridcoinbrowser.cpp \
     src/alert.cpp \
     src/version.cpp \
     src/sync.cpp \
@@ -274,7 +276,7 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/clientmodel.cpp \
     src/qt/guiutil.cpp \
     src/qt/transactionrecord.cpp \
-	src/qt/trafficgraphwidget.cpp \
+    src/qt/trafficgraphwidget.cpp \
     src/qt/optionsmodel.cpp \
     src/qt/monitoreddatamapper.cpp \
     src/qt/transactiondesc.cpp \
@@ -314,13 +316,14 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/pbkdf2.cpp \
     src/cpid.cpp \
     src/sql.cpp \
-	src/upgrader.cpp
+    src/upgrader.cpp
     
 ##
 #RC_FILE  = qaxserver.rc
 #DEF_FILE = qaxserver.def
 RESOURCES += \
-    src/qt/bitcoin.qrc
+    src/qt/bitcoin.qrc \
+    src/qt/jquery.qrc
 
 FORMS += \
     src/qt/forms/coincontroldialog.ui \
@@ -328,7 +331,7 @@ FORMS += \
     src/qt/forms/addressbookpage.ui \
     src/qt/forms/signverifymessagedialog.ui \
     src/qt/forms/aboutdialog.ui \
-	src/qt/forms/upgradedialog.ui \
+    src/qt/forms/upgradedialog.ui \
     src/qt/forms/editaddressdialog.ui \
     src/qt/forms/transactiondescdialog.ui \
     src/qt/forms/overviewpage.ui \

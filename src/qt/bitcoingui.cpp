@@ -26,7 +26,7 @@
 
 #include "upgradedialog.h"
 #include "upgrader.h"
-
+#include "gridcoinbrowser.h"
 #include "sendcoinsdialog.h"
 #include "signverifymessagedialog.h"
 #include "optionsdialog.h"
@@ -951,7 +951,10 @@ void BitcoinGUI::createActions()
 	newUserWizardAction->setStatusTip(tr("New User Wizard"));
 	newUserWizardAction->setMenuRole(QAction::TextHeuristicRole);
 
-
+	browserAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Browser"), this);
+	browserAction->setStatusTip(tr("Browser"));
+	browserAction->setMenuRole(QAction::TextHeuristicRole);
+	
 	votingAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Voting"), this);
 	votingAction->setStatusTip(tr("Voting"));
 	votingAction->setMenuRole(QAction::TextHeuristicRole);
@@ -1023,6 +1026,8 @@ void BitcoinGUI::createActions()
 	connect(galazaAction, SIGNAL(triggered()), this, SLOT(galazaClicked()));
 	connect(newUserWizardAction, SIGNAL(triggered()), this, SLOT(newUserWizardClicked()));
 
+	connect(browserAction, SIGNAL(triggered()), this, SLOT(browserClicked()));
+
 }
 
 void BitcoinGUI::createMenuBar()
@@ -1087,6 +1092,7 @@ void BitcoinGUI::createMenuBar()
 	qmAdvanced->addAction(tickerAction);
 	qmAdvanced->addAction(ticketListAction);
 	qmAdvanced->addAction(newUserWizardAction);
+	qmAdvanced->addAction(browserAction);
 
 
 	std::string GalazaEnabled = GetArgument("galazaenabled", "false");
@@ -1758,6 +1764,15 @@ void BitcoinGUI::ticketListClicked()
 #endif
 }
 
+
+void BitcoinGUI::browserClicked()
+{
+    QUrl url;
+    url = QUrl("http://www.google.com/");
+    GridcoinBrowser *browser = new GridcoinBrowser(url);
+    browser->showMaximized();
+	// Note: Some compact OS's may require browser->show();
+}
 
 void BitcoinGUI::foundationClicked()
 {

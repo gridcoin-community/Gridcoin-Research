@@ -109,18 +109,22 @@ Public Class frmRain
 
         End If
         Dim sRow As String = ""
-        Dim sSend As String = ""
+        Dim sSend As String = "<RAIN>"
 
         For y As Integer = 0 To dgv.Rows.Count - 2
             Dim dRainPercent As Double = 0
             Dim dRainAmount As Double = 0
             dRainAmount = Val(dgv.Rows(y).Cells(4).Value)
-            dTotalExpense += dRainAmount
-            Dim sAddress As String = dgv.Rows(y).Cells(1).Value
-            sRow = sAddress + "<COL>" + Num(dRainAmount) + "<ROW>"
-            sSend += sRow
+            If (dRainAmount) > 0 Then
+                dTotalExpense += dRainAmount
+                Dim sAddress As String = dgv.Rows(y).Cells(1).Value
+                sRow = sAddress + "<COL>" + Num2(dRainAmount) + "<ROW>"
+                sSend += sRow
+            End If
+
         Next
         If Len(sSend) > 8 Then sSend = Mid(sSend, 1, Len(sSend) - 5) 'Remove the last ROW delimiter
+        sSend += "</RAIN>"
 
         Dim bInvalid As Boolean = False
         Dim dOrig As Double = Val(txtRainAmount.Text)
@@ -136,10 +140,18 @@ Public Class frmRain
         mbrResult = MsgBox(sNarr, MsgBoxStyle.YesNo, "Verification to Rain")
         If mbrResult = MsgBoxResult.Yes Then
             'Send the GRC to the lucky recipients
-            Log("Raining " + Trim(sSend))
+            Log("Raining 2.0:" + Trim(sSend))
 
             Dim sResult As String = ExecuteRPCCommand("rain", sSend, "", "", "", "", "")
             MsgBox(sResult, MsgBoxStyle.Information, "Rain")
         End If
     End Sub
+    Public Function Num2(sData As String) As String
+        'Ensures culture is neutral
+        Dim sOut As String
+        sOut = Trim(Math.Round(Val("0" + Trim(sData)), 2))
+
+        sOut = Replace(sOut, ",", ".")
+        Return sOut
+    End Function
 End Class
