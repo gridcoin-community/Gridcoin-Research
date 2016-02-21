@@ -107,6 +107,8 @@ extern std::string qtExecuteDotNetStringFunction(std::string function, std::stri
 
 std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2);
 std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5);
+std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5, std::string arg6);
+
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 
 extern std::string qtGetNeuralHash(std::string data);
@@ -2330,7 +2332,8 @@ void BitcoinGUI::timerfire()
 							std::string Argument3 = ExtractXML(sData,"<ARG3>","</ARG3>");
     						std::string Argument4 = ExtractXML(sData,"<ARG4>","</ARG4>");
 							std::string Argument5 = ExtractXML(sData,"<ARG5>","</ARG5>");
-							std::string response = ExecuteRPCCommand("addpoll",Argument1,Argument2,Argument3,Argument4,Argument5);
+							std::string Argument6 = ExtractXML(sData,"<ARG6>","</ARG6>");
+							std::string response = ExecuteRPCCommand("addpoll",Argument1,Argument2,Argument3,Argument4,Argument5,Argument6);
 							double resultcode = qtExecuteGenericFunction("SetRPCResponse"," "+response);
 						}
 						else if (RPCCommand == "addattachment")

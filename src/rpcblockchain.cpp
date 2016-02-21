@@ -32,6 +32,10 @@ extern bool GetExpiredOption(std::string& rsRecipient, double& rdSinglePrice, do
 extern bool VerifyUnderlyingPrice(double UL, int64_t timestamp);
 
 
+
+std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress);
+
+
 double SnapToGrid(double d);
 double GetVolatility(std::string sPriceHistory);
 extern std::string GetBurnAddress();
@@ -1359,6 +1363,9 @@ std::string AddOptionContract(std::string sType, std::string sName, std::string 
 }
 
 
+
+
+
 std::string AddContract(std::string sType, std::string sName, std::string sContract)
 {
 			std::string sPass = (sType=="project" || sType=="projectmapping" || sType=="smart_contract") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
@@ -1469,7 +1476,41 @@ std::string AcknowledgeHoldHarmlessClause()
 			return result;
 }
 
+std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5, std::string arg6)
+{
+	 Array params;
+	 params.push_back(method);
+	 params.push_back(arg1);
+	 params.push_back(arg2);
+	 params.push_back(arg3);
+	 params.push_back(arg4);
+	 params.push_back(arg5);
+	 params.push_back(arg6);
 
+	 printf("Executing method %s\r\n",method.c_str());
+	 Value vResult;
+	 try
+	 {
+ 		vResult = execute(params,false);
+	 }
+ 	 catch (std::exception& e)
+	 {
+		 printf("Std exception %s \r\n",method.c_str());
+		 
+		 std::string caught = e.what();
+		 return "Exception " + caught;
+
+	 } 
+	 catch (...) 
+	 {
+		    printf("Generic exception (Please try unlocking the wallet) %s \r\n",method.c_str());
+			return "Generic Exception (Please try unlocking the wallet).";
+	 }
+	 std::string sResult = "";
+	 sResult = write_string(vResult, false) + "\n";
+	 printf("Response %s",sResult.c_str());
+	 return sResult;
+}
 
 std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5)
 {
@@ -2049,6 +2090,53 @@ Value execute(const Array& params, bool fHelp)
 			entry.push_back(Pair("RebootClient",r));
 			results.push_back(entry);
 	
+	}
+	else if (sItem=="burn")
+	{
+		if (params.size() < 5)
+		{
+			entry.push_back(Pair("Error","You must specify Burn Address, Amount, Burn_Key and Burn_Message.  Example: execute burn GRCADDRESS 10 burn_key burn_detail..."));
+			results.push_back(entry);
+		}
+		else
+		{
+				std::string sAddress = params[1].get_str();
+				std::string sAmount  = params[2].get_str();
+				std::string sKey     = params[3].get_str();
+				std::string sDetail  = params[4].get_str();
+				CBitcoinAddress address(sAddress);
+				bool isValid = address.IsValid();
+				if (!isValid) 
+				{
+					entry.push_back(Pair("Error","Invalid GRC Burn Address."));
+					results.push_back(entry);
+					return results;
+				}
+
+				double dAmount = cdbl(sAmount,6);
+
+				if (dAmount == 0 || dAmount < 0)
+				{
+					entry.push_back(Pair("Error","Burn amount must be > 0."));
+					results.push_back(entry);
+					return results;
+				}
+
+				if (sKey.empty() || sDetail.empty())
+				{
+					entry.push_back(Pair("Error","Burn Key and Burn Detail must be populated."));
+					results.push_back(entry);
+					return results;
+				}
+				std::string sContract = "<KEY>" + sKey + "</KEY><DETAIL>" + sDetail + "</DETAIL>";
+				std::string sResult = BurnCoinsWithNewContract(true,"burn",sKey,sContract,AmountFromValue(1),dAmount,"",sAddress);
+
+				//std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, 					 int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress)
+
+
+				entry.push_back(Pair("Burn_Response",sResult));
+				results.push_back(entry);
+		}
 	}
 	else if (sItem=="rain")
 	{
@@ -4843,6 +4931,36 @@ std::string GetBurnAddress()
 {
 	return fTestNet ? "mk1e432zWKH1MW57ragKywuXaWAtHy1AHZ" : "S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB";
 }
+
+
+
+std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, 
+					 int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress)
+{
+    CBitcoinAddress address(sBurnAddress);
+    if (!address.IsValid())       throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
+	std::string sMasterKey = (sType=="project" || sType=="projectmapping" || sType=="smart_contract") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
+		
+    int64_t nAmount = AmountFromValue(dFees);
+    // Wallet comments
+    CWalletTx wtx;
+    if (pwalletMain->IsLocked())  throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
+	std::string sMessageType      = "<MT>" + sType  + "</MT>";  //Project or Smart Contract
+    std::string sMessageKey       = "<MK>" + sPrimaryKey   + "</MK>";
+	std::string sMessageValue     = "<MV>" + sValue + "</MV>";
+	std::string sMessagePublicKey = "<MPK>"+ strPublicKey + "</MPK>";
+	std::string sMessageAction    = bAdd ? "<MA>A</MA>" : "<MA>D</MA>"; //Add or Delete
+	//Sign Message
+	std::string sSig = SignMessage(sType+sPrimaryKey+sValue,sMasterKey);
+	std::string sMessageSignature = "<MS>" + sSig + "</MS>";
+	wtx.hashBoinc = sMessageType+sMessageKey+sMessageValue+sMessageAction+sMessagePublicKey+sMessageSignature;
+    string strError = pwalletMain->SendMoneyToDestinationWithMinimumBalance(address.Get(), nAmount, MinimumBalance, wtx);
+		
+    if (strError != "")        throw JSONRPCError(RPC_WALLET_ERROR, strError);
+    return wtx.GetHash().GetHex().c_str();
+}
+
+
 
 std::string AddMessage(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, 
 					std::string sMasterKey, int64_t MinimumBalance, double dFees, std::string strPublicKey)

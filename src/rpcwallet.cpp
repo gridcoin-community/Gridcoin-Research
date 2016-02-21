@@ -20,6 +20,7 @@ extern std::string TimestampToHRDate(double dtm);
 extern void ThreadTopUpKeyPool(void* parg);
 
 double CoinToDouble(double surrogate);
+std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 
 std::string RoundToString(double d, int place);
 extern Array StakingReport();
@@ -922,10 +923,20 @@ struct tallyitem
 {
     int64_t nAmount;
     int nConf;
+
+	std::string sKey;
+	std::string sDetail;
+	std::string sContract;
+	vector<uint256> txids;
+	vector<std::string> sContracts;
+
     tallyitem()
     {
         nAmount = 0;
         nConf = std::numeric_limits<int>::max();
+		sKey = "";
+		sDetail = "";
+		sContract = "";
     }
 };
 
@@ -953,8 +964,7 @@ Value ListReceived(const Array& params, bool fByAccounts)
         int nDepth = wtx.GetDepthInMainChain();
         if (nDepth < nMinDepth)
             continue;
-
-        BOOST_FOREACH(const CTxOut& txout, wtx.vout)
+	    BOOST_FOREACH(const CTxOut& txout, wtx.vout)
         {
             CTxDestination address;
             if (!ExtractDestination(txout.scriptPubKey, address) || !IsMine(*pwalletMain, address))
@@ -963,12 +973,18 @@ Value ListReceived(const Array& params, bool fByAccounts)
             tallyitem& item = mapTally[address];
             item.nAmount += txout.nValue;
             item.nConf = min(item.nConf, nDepth);
+			item.txids.push_back(wtx.GetHash());
+			std::string sContract = wtx.hashBoinc + "<TXID>" + wtx.GetHash().GetHex() + "</TXID>";
+
+			item.sContracts.push_back(sContract);
+
         }
     }
 
     // Reply
     Array ret;
     map<string, tallyitem> mapAccountTally;
+
     BOOST_FOREACH(const PAIRTYPE(CBitcoinAddress, string)& item, pwalletMain->mapAddressBook)
     {
         const CBitcoinAddress& address = item.first;
@@ -978,11 +994,19 @@ Value ListReceived(const Array& params, bool fByAccounts)
             continue;
 
         int64_t nAmount = 0;
-        int nConf = std::numeric_limits<int>::max();
-        if (it != mapTally.end())
+		std::string sKey = "";
+		std::string sContract = "";
+		std::string sDetail = "";
+        
+		int nConf = std::numeric_limits<int>::max();
+        
+		if (it != mapTally.end())
         {
-            nAmount = (*it).second.nAmount;
-            nConf = (*it).second.nConf;
+				 nAmount   = (*it).second.nAmount;
+				 nConf     = (*it).second.nConf;
+				 sKey      = (*it).second.sKey;
+				 sContract = (*it).second.sContract;
+				 sDetail   = (*it).second.sDetail;
         }
 
         if (fByAccounts)
@@ -998,6 +1022,25 @@ Value ListReceived(const Array& params, bool fByAccounts)
             obj.push_back(Pair("account",       strAccount));
             obj.push_back(Pair("amount",        ValueFromAmount(nAmount)));
             obj.push_back(Pair("confirmations", (nConf == std::numeric_limits<int>::max() ? 0 : nConf)));
+			obj.push_back(Pair("tx_count", (double)(*it).second.sContracts.size()));
+
+			// Add support for contract or message information appended to the TX itself
+			Object oTX;
+	   	    BOOST_FOREACH(const std::string& sContract, (*it).second.sContracts)
+	        {
+				std::string sTxId = ExtractXML(sContract,"<TXID>","</TXID>");
+				std::string sKey = ExtractXML(sContract,"<KEY>","</KEY>");
+				std::string sDetail = ExtractXML(sContract,"<DETAIL>","</DETAIL>");
+				oTX.push_back(Pair("txid", sTxId));
+				Object oSubTx;
+				if (!sDetail.empty())
+				{
+					oSubTx.push_back(Pair("key", sKey));
+					oSubTx.push_back(Pair("detail",sDetail));
+					oTX.push_back(Pair("Contract",oSubTx));
+				}
+            }
+			obj.push_back(Pair("txids", oTX));
             ret.push_back(obj);
         }
     }

@@ -19,7 +19,10 @@ Public Class GridcoinUpgrader
         End Try
     End Sub
 
-    Public Function GetURL() As String
+    Public Function GetURL(bBlocksURL As Boolean) As String
+        If bBlocksURL Then
+            Return IIf(bTestNet, "http://chain.gridcoin.us/testnet/", "http://chain.gridcoin.us/")
+        End If
         If b404 = 0 Then
             'Unchecked - Check state of Anti-DDOS host:
             Try
@@ -132,12 +135,18 @@ Public Class GridcoinUpgrader
 
                 KillProcess("gridcoinresearch*")
                 txtStatus.Text = "Downloading Blocks File..."
+                Label1.Visible = False
+                rtbNotes.Visible = False
+                Me.Height = rtbNotes.Top + txtStatus.Height - 25
+                Me.BackgroundImageLayout = ImageLayout.Tile
+
+
                 RefreshScreen()
                 ProgressBar1.Maximum = 100
                 TimerUE.Enabled = True
                 Dim sz As Long
-                sz = GetWebFileSize("snapshot.zip", "signed")
-                If sz = 0 Then sz = 23993000
+                sz = GetWebFileSize("snapshot.zip", "signed", True)
+                If sz < 20000000 Then sz = 477461000
                 'This is an asynchronous process:
                 DownloadBlocks("snapshot.zip", "signed/")
                 While Not mbFinished
@@ -512,7 +521,7 @@ Public Class GridcoinUpgrader
         t.Start()
     End Sub
 
-    Private Sub DownloadFileAsync()
+    Private Sub DownloadFileAsync(bBlocksAction As Boolean)
         Dim sFile As String = msFile
         Dim sServerFolder As String = msServerFolder
         Dim sLocalPath As String = GetGRCAppDir()
@@ -524,7 +533,7 @@ Public Class GridcoinUpgrader
         Catch ex As Exception
             EventLog.WriteEntry("DownloadFile", "Cant find " + sFile + " " + ex.Message)
         End Try
-        Dim sURL As String = GetURL() + sServerFolder + sFile
+        Dim sURL As String = GetURL(bBlocksAction) + sServerFolder + sFile
         Dim myWebClient As New MyWebClient()
         Try
             myWebClient.DownloadFile(sURL, sLocalPathFile)
@@ -532,22 +541,7 @@ Public Class GridcoinUpgrader
         End Try
         mbFinished = True
     End Sub
-    Private Sub xDownloadFile(ByVal sFile As String, Optional sServerFolder As String = "")
-        Dim sLocalPath As String = GetGRCAppDir()
-        Dim sLocalFile As String = sFile
-        Dim sLocalPathFile As String = sLocalPath + "\" + sLocalFile
-        txtStatus.Text = "Upgrading file " + sFile + "..."
-        Try
-            Kill(sLocalPathFile)
-        Catch ex As Exception
-            EventLog.WriteEntry("DownloadFile", "Cant find " + sFile + " " + ex.Message)
-        End Try
-        Dim sURL As String = GetURL() + sServerFolder + sFile
-        Dim myWebClient As New MyWebClient()
-        myWebClient.DownloadFile(sURL, sLocalPathFile)
-        Me.Refresh()
-        System.Threading.Thread.Sleep(500)
-    End Sub
+   
     Public Function GetGRCAppDir() As String
         Try
             If bDebug Then
@@ -577,10 +571,10 @@ Public Class GridcoinUpgrader
         System.IO.File.WriteAllBytes(sFilePath, b)
     End Sub
     
-    Public Function GetWebFileSize(sName As String, sDir As String) As Long
+    Public Function GetWebFileSize(sName As String, sDir As String, bBlocksURL As Boolean) As Long
         Try
             Dim sMsg As String
-            Dim sURL As String = GetURL() + sDir + "/"
+            Dim sURL As String = GetURL(bBlocksURL) + sDir + "/"
             Dim wc As New WebClient
             Dim sFiles As String
             sFiles = wc.DownloadString(sURL)
