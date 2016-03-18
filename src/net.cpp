@@ -14,9 +14,9 @@
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 
 #ifdef WIN32
-#include <string.h>
-#endif
-
+  #include <string.h>
+#endif 
+ 
 #ifdef USE_UPNP
  #include <miniwget.h>
  #include <miniupnpc.h>
