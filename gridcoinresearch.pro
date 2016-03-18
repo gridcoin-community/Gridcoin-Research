@@ -105,6 +105,13 @@ contains(BITCOIN_NEED_QT_PLUGINS, 1) {
     QTPLUGIN += qcncodecs qjpcodecs qtwcodecs qkrcodecs qtaccessiblewidgets
 }
 
+# use: qmake "NO_UPGRADE=1"
+# Do not provide an upgrade option, useful if the client is managed via package management
+contains(NO_UPGRADE, 1) {
+    message(Building without self-upgrade support)
+    DEFINES += NO_UPGRADE
+}
+
 INCLUDEPATH += src/leveldb/include src/leveldb/helpers
 LIBS += $$PWD/src/leveldb/libleveldb.a $$PWD/src/leveldb/libmemenv.a
 SOURCES += src/txdb-leveldb.cpp

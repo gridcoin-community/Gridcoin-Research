@@ -113,16 +113,20 @@ bool waitForParent(int parent)
 
 int main(int argc, char *argv[])
 {
-	
     if (argc < 2)
     {
+#ifdef NO_UPGRADE
+        printf("What am I supposed to do with this? \nOptions: \ndownloadblocks \nextractblocks \n");
+#else
         printf("What am I supposed to do with this? \nOptions: \nqt \ndaemon \ndownloadblocks \nextractblocks \n");
+#endif
         return 0;
     }
 
     Upgrader upgrader;
     ReadConfigFile(mapArgs, mapMultiArgs);
-    
+
+#ifndef NO_UPGRADE
     if (strcmp(argv[1], "qt")==0)
     {
         if(!upgrader.downloader(QT)) {return 0;}
@@ -134,7 +138,9 @@ int main(int argc, char *argv[])
         if(!upgrader.downloader(DAEMON)) {return 0;}
         if (!upgrader.juggler(PROGRAM, false))          {return 0;}
     }
-    else if (strcmp(argv[1], "downloadblocks")==0)
+    else
+#endif
+    if (strcmp(argv[1], "downloadblocks")==0)
     {
         if(!upgrader.downloader(BLOCKS))    {return 0;}
         printf("Blocks downloaded successfully\n");

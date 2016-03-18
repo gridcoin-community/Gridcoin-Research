@@ -145,3 +145,10 @@ disable screen reader functionality for Qt apps:
     sudo apt-get remove qt-at-spi
 
 .. _`launchpad bug 857790`: https://bugs.launchpad.net/ubuntu/+source/qt-at-spi/+bug/857790
+
+Disabling the built-in upgrader
+===============================
+
+If the Gridcoin binary is managed via a distributions package management the built-in upgrader will do more harm than good. Disable it through the following qmake option::
+
+    qmake NO_UPGRADE=1

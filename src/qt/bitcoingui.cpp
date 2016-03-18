@@ -926,7 +926,6 @@ void BitcoinGUI::createActions()
 	rebootAction->setMenuRole(QAction::TextHeuristicRole);
 
 
-
 	upgradeAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Upgrade Client"), this);
 	upgradeAction->setStatusTip(tr("Upgrade Client"));
 	upgradeAction->setMenuRole(QAction::TextHeuristicRole);
@@ -1074,9 +1073,11 @@ void BitcoinGUI::createMenuBar()
 //    email->addSeparator();
 //    email->addAction(emailAction);
 
+#ifndef NO_UPGRADE
 	QMenu *upgrade = appMenuBar->addMenu(tr("&Upgrade QT Client"));
 	upgrade->addSeparator();
 	upgrade->addAction(upgradeAction);
+#endif
 
 
 	QMenu *rebuild = appMenuBar->addMenu(tr("&Rebuild Block Chain"));
