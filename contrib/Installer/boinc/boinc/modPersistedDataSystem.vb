@@ -96,9 +96,8 @@ Module modPersistedDataSystem
         lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
         Dim sOut As String = ""
         For Each cpid As Row In lstCPIDs
-            Dim dNeuralMagnitude As Double = 0
             Dim sRow As String = cpid.PrimaryKey + "," + Num(cpid.Magnitude) _
-                                 + "," + Num(dNeuralMagnitude) + "," + Num(cpid.RAC) _
+                                 + "," + Num(cpid.Magnitude) + "," + Num(cpid.RAC) _
                                  + "," + Trim(cpid.Synced) + "," + Trim(cpid.DataColumn4) _
                                  + "," + Trim(cpid.DataColumn5) + "," + Trim(cpid.Witnesses) + ";"
             sOut += sRow

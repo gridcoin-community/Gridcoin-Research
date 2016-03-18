@@ -18,10 +18,10 @@
 #endif
 
 #ifdef USE_UPNP
-#include <miniwget.h>
-#include <miniupnpc.h>
-#include <upnpcommands.h>
-#include <upnperrors.h>
+ #include <miniwget.h>
+ #include <miniupnpc.h>
+ #include <upnpcommands.h>
+ #include <upnperrors.h>
 #endif
 
 using namespace std;

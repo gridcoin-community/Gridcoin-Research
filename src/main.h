@@ -150,6 +150,7 @@ extern int64_t COIN_YEAR_REWARD;
 extern bool bCryptoLotteryEnabled;
 extern bool bRemotePaymentsEnabled;
 extern bool bNewbieFeatureEnabled;
+extern bool bOPReturnEnabled;
 extern bool bOptionPaymentsEnabled;
 
 // Settings

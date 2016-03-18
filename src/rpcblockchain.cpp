@@ -26,10 +26,13 @@ std::string PackBinarySuperblock(std::string sBlock);
 int DetermineCPIDType(std::string cpid);
 extern Array MagnitudeReport(std::string cpid);
 extern bool UserAcknowledgedHoldHarmlessClause(std::string sAddress);
+std::string ConvertBinToHex(std::string a);
+std::string ConvertHexToBin(std::string a);
 
 extern bool GetExpiredOption(std::string& rsRecipient, double& rdSinglePrice, double& rdAmountOwed, std::string& rsOpra);
 
 extern bool VerifyUnderlyingPrice(double UL, int64_t timestamp);
+std::vector<unsigned char> StringToVector(std::string sData);
 
 
 
@@ -162,7 +165,7 @@ MiningCPID GetNextProject(bool bForce);
 std::string GetBestBlockHash(std::string sCPID);
 std::string GetArgument(std::string arg, std::string defaultvalue);
 std::string TestHTTPProtocol(std::string sCPID);
-std::string VectorToString(vector<unsigned char> v);
+std::string VectorToString(std::vector<unsigned char> v);
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
 std::string SerializeBoincBlock(MiningCPID mcpid);
@@ -2053,6 +2056,8 @@ Value option(const Array& params, bool fHelp)
 }
 
 
+
+
 Value execute(const Array& params, bool fHelp)
 {
     if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3 && params.size() != 4 && params.size() != 5 && params.size() != 6 && params.size() != 7))
@@ -2137,6 +2142,52 @@ Value execute(const Array& params, bool fHelp)
 				entry.push_back(Pair("Burn_Response",sResult));
 				results.push_back(entry);
 		}
+	}
+	else if (sItem == "newburnaddress")
+	{
+		//3-12-2016 - R Halford - Allow the user to make vanity GRC Burn Addresses that have no corresponding private key
+		std::string sBurnTemplate = "GRCBurnAddressGRCBurnAddressGRCBurnAddress";
+		if (params.size() > 1)
+		{
+			sBurnTemplate = params[1].get_str();
+		}
+		// Address must start with the correct base58 network flag and address type for GRC
+	    std::string sPrefix = (fTestNet) ? "mp" : "Rx";
+		std::string t34 = sPrefix + sBurnTemplate + "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+		t34 = t34.substr(0,34); // Template must be 34 characters
+		std::vector<unsigned char> vchDecoded34;
+		DecodeBase58(t34, vchDecoded34);
+		//Now we have the 34 digit address decoded from base58 to binary
+		std::string sDecoded34(vchDecoded34.begin(), vchDecoded34.end());
+		//Now we have a binary string - Chop off all but last 4 bytes (save space for the checksum)
+		std::string sDecoded30 = sDecoded34.substr(0,sDecoded34.length()-4);
+		//Convert to Hex first
+		vector<unsigned char> vchDecoded30(sDecoded30.begin(), sDecoded30.end());
+		std::string sDecodedHex = ConvertBinToHex(sDecoded30);
+		// Get sha256 Checksum of DecodedHex
+		uint256 hash = Hash(vchDecoded30.begin(), vchDecoded30.end()); 
+		// The BTC address spec calls for double SHA256 hashing 
+		uint256 DoubleHash = Hash(hash.begin(),hash.end());
+		std::string sSha256 = DoubleHash.GetHex();
+		// Only use the first 8 hex bytes to retrieve the checksum
+		sSha256  = sSha256.substr(0,8);
+		// Combine the Hex Address prefix and the Sha256 Checksum to form the Hex version of the address (Note: There is no private key)
+		std::string combined = sDecodedHex + sSha256;
+		std::string sBinary = ConvertHexToBin(combined);
+		vector<unsigned char> v(sBinary.begin(), sBinary.end());
+		//Make the new address so that it passes base 58 Checks
+		std::string encoded1 = EncodeBase58(v);
+		entry.push_back(Pair("CombinedHex",combined));
+		std::string encoded2 = EncodeBase58Check(vchDecoded30);
+		if (encoded2.length() != 34)
+		{
+			entry.push_back(Pair("Burn Address Creation failed","NOTE: the input phrase must not include zeroes, or nonbase58 characters."));
+			results.push_back(entry);
+			return results;
+		}
+		// Give the user the new vanity burn address
+		entry.push_back(Pair("Burn Address",encoded2));
+		results.push_back(entry);
 	}
 	else if (sItem=="rain")
 	{

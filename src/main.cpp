@@ -30,8 +30,14 @@
 
 int GetDayOfYear();
 extern std::string NodeAddress(CNode* pfrom);
+extern std::string ConvertBinToHex(std::string a);
+extern std::string ConvertHexToBin(std::string a);
+
 extern std::string UnpackBinarySuperblock(std::string sBlock);
 extern std::string PackBinarySuperblock(std::string sBlock);
+extern std::vector<unsigned char> StringToVector(std::string sData);
+
+
 extern double GetStandardDeviation(std::string sPriceHistory);
 extern double GetVolatility(std::string sPriceHistory);
 bool GetExpiredOption(std::string& rsRecipient, double& rdSinglePrice, double& rdAmountOwed, std::string& rsOpra);
@@ -281,8 +287,8 @@ unsigned int nModifierInterval = 10 * 60; // time to elapse before new modifier 
 bool bCryptoLotteryEnabled = true;
 bool bRemotePaymentsEnabled = false;
 bool bNewbieFeatureEnabled = false;
+bool bOPReturnEnabled = false;
 bool bOptionPaymentsEnabled = false;
-
 
 // Gridcoin:
 int nCoinbaseMaturity = 100;
@@ -5008,7 +5014,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     if (!mapBlockIndex.count(pblock->hashPrevBlock))
     {
 		//12-5-2015
-		bool fProcess = (pfrom->nTrust >= 0 || OutOfSyncByAge());
+		bool fProcess = (pfrom->nTrust >= 0);
 	    printf("ProcessBlock: ORPHAN BLOCK, WillProcess %s, prev=%s \r\n", YesNo(fProcess).c_str(), pblock->hashPrevBlock.ToString().c_str());
 		// Note that you will have to accept orphans to stay in sync since getblock requests are not filled in order...
 		// If this node is trustworthy:
@@ -5293,6 +5299,7 @@ bool LoadBlockIndex(bool fAllowNew)
 		nNewIndex2 = 36500;
 		bRemotePaymentsEnabled = false;
 		bNewbieFeatureEnabled = true;
+		bOPReturnEnabled = false;
 		bOptionPaymentsEnabled = false;
 		//1-24-2016
 		MAX_OUTBOUND_CONNECTIONS = (int)GetArg("-maxoutboundconnections", 8);
@@ -8091,10 +8098,10 @@ bool ProcessMessages(CNode* pfrom)
    			  //1-28-2016
 		      double node_duplicates = cdbl(ReadCache("duplicates",NodeAddress(pfrom)),0) + 1;
 			  WriteCache("duplicates",NodeAddress(pfrom),RoundToString(node_duplicates,0),GetAdjustedTime());
-			  if ( (node_duplicates > 5 && !fTestNet) || (node_duplicates > 5 && fTestNet && !OutOfSyncByAge()) )
+			  if ( (node_duplicates > 350 && !fTestNet && !OutOfSyncByAge()) || (node_duplicates > 350 && fTestNet && !OutOfSyncByAge()) )
 			  {
 					printf(" Dupe (misbehaving) %s %s ",NodeAddress(pfrom).c_str(),Peek.c_str());
-			        pfrom->Misbehaving(10);
+			        pfrom->Misbehaving(1);
           			pfrom->fDisconnect = true;
 					WriteCache("duplicates",NodeAddress(pfrom),"0",GetAdjustedTime());
 					return false;
@@ -8102,7 +8109,7 @@ bool ProcessMessages(CNode* pfrom)
      	}
 		else
 		{
-			  double node_duplicates = cdbl(ReadCache("duplicates",NodeAddress(pfrom)),0) - 1;
+			  double node_duplicates = cdbl(ReadCache("duplicates",NodeAddress(pfrom)),0) - 15;
 			  if (node_duplicates < 1) node_duplicates = 0;
 			  WriteCache("duplicates",NodeAddress(pfrom),RoundToString(node_duplicates,0),GetAdjustedTime());
 		}

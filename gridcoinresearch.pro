@@ -11,7 +11,6 @@ QT += qaxcontainer
 #QT += axcontainer
 QT += axserver
 QT += widgets
-QT += webkit network
 
 
 greaterThan(QT_MAJOR_VERSION, 4) {
@@ -169,7 +168,6 @@ HEADERS += src/qt/bitcoingui.h \
 	src/qt/upgradedialog.h \
     src/qt/editaddressdialog.h \
     src/qt/bitcoinaddressvalidator.h \
-    src/gridcoinbrowser.h \
     src/alert.h \
     src/addrman.h \
     src/base58.h \
@@ -256,7 +254,6 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/upgradedialog.cpp \
     src/qt/editaddressdialog.cpp \
     src/qt/bitcoinaddressvalidator.cpp \
-    src/gridcoinbrowser.cpp \
     src/alert.cpp \
     src/version.cpp \
     src/sync.cpp \
@@ -425,6 +422,8 @@ macx:QMAKE_LFLAGS_THREAD += -pthread
 macx:QMAKE_CXXFLAGS_THREAD += -pthread
 macx:QT -= qaxcontainer axserver widgets
 macx:CONFIG -= qaxcontainer
+macx:CONFIG += link_pkgconfig
+macx:PKGCONFIG += libzip
 
 # Set libraries and includes at end, to use platform-defined defaults if not overridden
 INCLUDEPATH += $$BOOST_INCLUDE_PATH $$BDB_INCLUDE_PATH $$OPENSSL_INCLUDE_PATH $$QRENCODE_INCLUDE_PATH $$CURL_INCLUDE_PATH $$LIBZIP_INCLUDE_PATH

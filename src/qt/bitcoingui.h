@@ -223,8 +223,7 @@ private slots:
 	void faqClicked();
 
 	void tickerClicked();
-	void browserClicked();
-
+	
 	void ticketListClicked();
 	void galazaClicked();
 	void newUserWizardClicked();

@@ -1476,6 +1476,7 @@ bool Solver(const CKeyStore& keystore, const CScript& scriptPubKey, uint256 hash
     case TX_NONSTANDARD:
     case TX_NULL_DATA:
         return false;
+		
     case TX_PUBKEY:
         keyID = CPubKey(vSolutions[0]).GetID();
         return Sign1(keyID, keystore, hash, nHashType, scriptSigRet);
@@ -1505,8 +1506,11 @@ int ScriptSigArgsExpected(txnouttype t, const std::vector<std::vector<unsigned c
     switch (t)
     {
     case TX_NONSTANDARD:
+		return -1; // Note, this was empty (thats -1);
     case TX_NULL_DATA:
-        return -1;
+		return (bOPReturnEnabled) ? 1 : -1;
+	    //Note, this was -1;
+	
     case TX_PUBKEY:
         return 1;
     case TX_PUBKEYHASH:
@@ -1583,7 +1587,8 @@ bool IsMine(const CKeyStore &keystore, const CScript& scriptPubKey)
     {
     case TX_NONSTANDARD:
     case TX_NULL_DATA:
-        return false;
+		// Note this was always false, til 3-13-2016.
+		return (bOPReturnEnabled) ? true : false;
     case TX_PUBKEY:
         keyID = CPubKey(vSolutions[0]).GetID();
         return keystore.HaveKey(keyID);
@@ -1617,6 +1622,9 @@ bool ExtractDestination(const CScript& scriptPubKey, CTxDestination& addressRet)
     txnouttype whichType;
     if (!Solver(scriptPubKey, whichType, vSolutions))
         return false;
+	
+	if (bOPReturnEnabled && whichType == TX_NULL_DATA)
+        return true;
 
     if (whichType == TX_PUBKEY)
     {

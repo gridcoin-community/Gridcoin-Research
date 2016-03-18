@@ -26,7 +26,6 @@
 
 #include "upgradedialog.h"
 #include "upgrader.h"
-#include "gridcoinbrowser.h"
 #include "sendcoinsdialog.h"
 #include "signverifymessagedialog.h"
 #include "optionsdialog.h"
@@ -178,6 +177,13 @@ extern int ReindexBlocks();
 bool OutOfSync();
 
 
+QString ToQstring(std::string s)
+{
+	QString str1 = QString::fromUtf8(s.c_str());
+	return str1;
+}
+
+
 
 
 BitcoinGUI::BitcoinGUI(QWidget *parent):
@@ -197,7 +203,14 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 {
     setFixedSize(980, 550);
     setWindowTitle(tr("Gridcoin") + " " + tr("Wallet"));
-    qApp->setStyleSheet("QMainWindow { background-image:url(:images/bkg);border:none;font-family:'Open Sans,sans-serif'; } #frame { } QToolBar QLabel { padding-top:15px;padding-bottom:10px;margin:0px; } #spacer { background:rgb(69,65,63);border:none; } #toolbar3 { border:none;width:1px; background-color: rgb(169,192,7); } #toolbar2 { border:none;width:10px; background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(210,220,7), stop: 1 rgb(98,116,3)); } #toolbar { border:none;height:100%;padding-top:20px; background: rgb(69,65,63); text-align: left; color: rgb(169,192,7); min-width:160px; max-width:160px;} QToolBar QToolButton:hover {background-color:qlineargradient(x1: 0, y1: 0, x2: 2, y2: 2,stop: 0 rgb(69,65,63), stop: 1 rgb(216,252,251),stop: 2 rgb(59,62,65));} QToolBar QToolButton { font-family:Century Gothic;padding-left:20px;padding-right:200px;padding-top:7px;padding-bottom:7px; width:100%; color: rgb(169,192,7); text-align: left; background-color: rgb(69,65,63) } #labelMiningIcon { padding-left:5px;font-family:Century Gothic;width:100%;font-size:10px;text-align:center;color: rgb(169,192,7); } QMenu { background: rgb(69,65,63); color: rgb(169,192,7); padding-bottom:10px; } QMenu::item { color: rgb(169,192,7); background-color: transparent; } QMenu::item:selected { background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(69,65,63), stop: 1 rgb(98,116,3)); } QMenuBar { background: rgb(69,65,63); color: rgb(169,192,7); } QMenuBar::item { font-size:12px;padding-bottom:8px;padding-top:8px;padding-left:15px;padding-right:15px;color: rgb(169,192,7); background-color: transparent; } QMenuBar::item:selected { background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(69,65,63), stop: 1 rgb(98,116,3)); }");
+	//3-17-2016
+	double dFontSize = cdbl(GetArgument("fontsize", "10"),0);
+	std::string sFontSize10 = RoundToString(dFontSize,0);
+	std::string sFontSize12 = RoundToString(dFontSize+2,0);
+	std::string sMainWindowHTML = "QMainWindow { background-image:url(:images/bkg);border:none;font-family:'Open Sans,sans-serif'; } #frame { } QToolBar QLabel { padding-top:15px;padding-bottom:10px;margin:0px; } #spacer { background:rgb(69,65,63);border:none; } #toolbar3 { border:none;width:1px; background-color: rgb(169,192,7); } #toolbar2 { border:none;width:10px; background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(210,220,7), stop: 1 rgb(98,116,3)); } #toolbar { border:none;height:100%;padding-top:20px; background: rgb(69,65,63); text-align: left; color: rgb(169,192,7); min-width:160px; max-width:160px;} QToolBar QToolButton:hover {background-color:qlineargradient(x1: 0, y1: 0, x2: 2, y2: 2,stop: 0 rgb(69,65,63), stop: 1 rgb(216,252,251),stop: 2 rgb(59,62,65));} QToolBar QToolButton { font-family:Century Gothic;padding-left:20px;padding-right:200px;padding-top:7px;padding-bottom:7px; width:100%; color: rgb(169,192,7); text-align: left; background-color: rgb(69,65,63) } #labelMiningIcon { padding-left:5px;font-family:Century Gothic;width:100%;font-size:" + sFontSize10 + "px;text-align:center;color: rgb(169,192,7); } QMenu { background: rgb(69,65,63); color: rgb(169,192,7); padding-bottom:10px; } QMenu::item { color: rgb(169,192,7); background-color: transparent; } QMenu::item:selected { background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(69,65,63), stop: 1 rgb(98,116,3)); } QMenuBar { background: rgb(69,65,63); color: rgb(169,192,7); } QMenuBar::item { font-size:" + sFontSize12 + "px;padding-bottom:8px;padding-top:8px;padding-left:15px;padding-right:15px;color: rgb(169,192,7); background-color: transparent; } QMenuBar::item:selected { background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(69,65,63), stop: 1 rgb(98,116,3)); }";
+
+
+    qApp->setStyleSheet(ToQstring(sMainWindowHTML));
 
 #ifndef Q_OS_MAC
     qApp->setWindowIcon(QIcon(":icons/bitcoin"));
@@ -437,15 +450,6 @@ int DownloadBlocks()
 			#endif
 
 			return 1;
-}
-
-
-
-
-QString ToQstring(std::string s)
-{
-	QString str1 = QString::fromUtf8(s.c_str());
-	return str1;
 }
 
 
@@ -953,9 +957,9 @@ void BitcoinGUI::createActions()
 	newUserWizardAction->setStatusTip(tr("New User Wizard"));
 	newUserWizardAction->setMenuRole(QAction::TextHeuristicRole);
 
-	browserAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Browser"), this);
-	browserAction->setStatusTip(tr("Browser"));
-	browserAction->setMenuRole(QAction::TextHeuristicRole);
+	//browserAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Browser"), this);
+	//browserAction->setStatusTip(tr("Browser"));
+	//browserAction->setMenuRole(QAction::TextHeuristicRole);
 	
 	votingAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Voting"), this);
 	votingAction->setStatusTip(tr("Voting"));
@@ -1028,7 +1032,7 @@ void BitcoinGUI::createActions()
 	connect(galazaAction, SIGNAL(triggered()), this, SLOT(galazaClicked()));
 	connect(newUserWizardAction, SIGNAL(triggered()), this, SLOT(newUserWizardClicked()));
 
-	connect(browserAction, SIGNAL(triggered()), this, SLOT(browserClicked()));
+	//connect(browserAction, SIGNAL(triggered()), this, SLOT(browserClicked()));
 
 }
 
@@ -1094,7 +1098,7 @@ void BitcoinGUI::createMenuBar()
 	qmAdvanced->addAction(tickerAction);
 	qmAdvanced->addAction(ticketListAction);
 	qmAdvanced->addAction(newUserWizardAction);
-	qmAdvanced->addAction(browserAction);
+	//qmAdvanced->addAction(browserAction);
 
 
 	std::string GalazaEnabled = GetArgument("galazaenabled", "false");
@@ -1499,8 +1503,6 @@ bool CreateNewConfigFile(std::string boinc_email)
 	myConfig << row;
 	row = "addnode=gridcoin.asia \r\n";
 	myConfig << row;
-	row = "addnode=sepulcher.wha.la \r\n";
-    myConfig << row;
 	row = "addnode=grcmagnitude.com \r\n";
 	myConfig << row;
 	myConfig.close();
@@ -1568,7 +1570,6 @@ void BitcoinGUI::NewUserWizard()
 		//Force some addnodes in to get user started
 		ForceInAddNode("node.gridcoin.us");
 		ForceInAddNode("gridcoin.asia");
-		ForceInAddNode("sepulcher.wha.la");
 		ForceInAddNode("grcmagnitude.com");
 		ForceInAddNode("amsterdam.grcnode.co.uk");
 		ForceInAddNode("london.grcnode.co.uk");
@@ -1766,7 +1767,7 @@ void BitcoinGUI::ticketListClicked()
 #endif
 }
 
-
+/*
 void BitcoinGUI::browserClicked()
 {
     QUrl url;
@@ -1775,6 +1776,7 @@ void BitcoinGUI::browserClicked()
     browser->showMaximized();
 	// Note: Some compact OS's may require browser->show();
 }
+*/
 
 void BitcoinGUI::foundationClicked()
 {
