@@ -96,9 +96,6 @@ gridcoinresearchd getmininginfo
 #cd to the directory where gridcoinresearch.pro is
 cd ~/Gridcoin-Research
 
-#IMPORTANT: now edit gridcoinresearch.pro and remove the entries "QT += qaxcontainer", "CONFIG += qaxcontainer" and "QT += axserver"
-#nano gridcoinresearch.pro
- 
 rm -f build/*.o
 qmake "USE_UPNP=-"
 make
