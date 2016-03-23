@@ -7,10 +7,14 @@ CONFIG += no_include_pwd
 CONFIG += thread
 #QT += sql (Future Use)
 QT += core gui network
-QT += qaxcontainer
-#QT += axcontainer
-QT += axserver
 QT += widgets
+
+win32 {
+    QT += qaxcontainer
+    #QT += axcontainer
+    QT += axserver
+    }
+
 
 
 greaterThan(QT_MAJOR_VERSION, 4) {
@@ -18,7 +22,10 @@ greaterThan(QT_MAJOR_VERSION, 4) {
     DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
 }
 
-CONFIG += qaxcontainer
+win32 {
+    CONFIG += qaxcontainer
+    }
+
 CONFIG += exceptions
 
 
