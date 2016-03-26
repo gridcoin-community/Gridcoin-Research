@@ -4963,7 +4963,114 @@ void GridcoinServices()
 
 
 
+
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
+{
+    AssertLockHeld(cs_main);
+
+    // Check for duplicate
+    uint256 hash = pblock->GetHash();
+    if (mapBlockIndex.count(hash))
+        return error("ProcessBlock() : already have block %d %s", mapBlockIndex[hash]->nHeight, hash.ToString().substr(0,20).c_str());
+    if (mapOrphanBlocks.count(hash))
+        return error("ProcessBlock() : already have block (orphan) %s", hash.ToString().substr(0,20).c_str());
+
+    // ppcoin: check proof-of-stake
+    // Limited duplicity on stake: prevents block flood attack
+    // Duplicate stake allowed only when there is orphan child block
+    if (pblock->IsProofOfStake() && setStakeSeen.count(pblock->GetProofOfStake()) && !mapOrphanBlocksByPrev.count(hash) && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
+        return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for block %s", pblock->GetProofOfStake().first.ToString().c_str(),
+		pblock->GetProofOfStake().second, 
+		hash.ToString().c_str());
+
+    CBlockIndex* pcheckpoint = Checkpoints::GetLastSyncCheckpoint();
+    if (pcheckpoint && pblock->hashPrevBlock != hashBestChain && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
+    {
+        // Extra checks to prevent "fill up memory by spamming with bogus blocks"
+        int64_t deltaTime = pblock->GetBlockTime() - pcheckpoint->nTime;
+        if (deltaTime < -10*60)
+        {
+            if (pfrom)
+                pfrom->Misbehaving(1);
+            return error("ProcessBlock() : block with timestamp before last checkpoint");
+        }
+
+
+    }
+
+    // Preliminary checks
+    if (!pblock->CheckBlock(pindexBest->nHeight, 100*COIN))
+        return error("ProcessBlock() : CheckBlock FAILED");
+
+    // ppcoin: ask for pending sync-checkpoint if any
+    if (!IsInitialBlockDownload())
+        Checkpoints::AskForPendingSyncCheckpoint(pfrom);
+
+    // If don't already have its previous block, shunt it off to holding area until we get it
+    if (!mapBlockIndex.count(pblock->hashPrevBlock))
+    {
+        printf("ProcessBlock: ORPHAN BLOCK, prev=%s\n", pblock->hashPrevBlock.ToString().substr(0,20).c_str());
+        // ppcoin: check proof-of-stake
+        if (pblock->IsProofOfStake())
+        {
+            // Limited duplicity on stake: prevents block flood attack
+            // Duplicate stake allowed only when there is orphan child block
+            if (setStakeSeenOrphan.count(pblock->GetProofOfStake()) && !mapOrphanBlocksByPrev.count(hash) && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
+                return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for orphan block %s", pblock->GetProofOfStake().first.ToString().c_str(), pblock->GetProofOfStake().second, hash.ToString().c_str());
+            else
+                setStakeSeenOrphan.insert(pblock->GetProofOfStake());
+        }
+        CBlock* pblock2 = new CBlock(*pblock);
+        mapOrphanBlocks.insert(make_pair(hash, pblock2));
+        mapOrphanBlocksByPrev.insert(make_pair(pblock2->hashPrevBlock, pblock2));
+
+        // Ask this guy to fill in what we're missing
+        if (pfrom)
+        {
+            pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2));
+            // ppcoin: getblocks may not obtain the ancestor block rejected
+            // earlier by duplicate-stake check so we ask for it again directly
+            if (!IsInitialBlockDownload())
+                pfrom->AskFor(CInv(MSG_BLOCK, WantedByOrphan(pblock2)));
+        }
+        return true;
+    }
+
+    // Store to disk
+    if (!pblock->AcceptBlock(generated_by_me))
+        return error("ProcessBlock() : AcceptBlock FAILED");
+
+    // Recursively process any orphan blocks that depended on this one
+    vector<uint256> vWorkQueue;
+    vWorkQueue.push_back(hash);
+    for (unsigned int i = 0; i < vWorkQueue.size(); i++)
+    {
+        uint256 hashPrev = vWorkQueue[i];
+        for (multimap<uint256, CBlock*>::iterator mi = mapOrphanBlocksByPrev.lower_bound(hashPrev);
+             mi != mapOrphanBlocksByPrev.upper_bound(hashPrev);
+             ++mi)
+        {
+            CBlock* pblockOrphan = (*mi).second;
+            if (pblockOrphan->AcceptBlock(generated_by_me))
+                vWorkQueue.push_back(pblockOrphan->GetHash());
+            mapOrphanBlocks.erase(pblockOrphan->GetHash());
+            setStakeSeenOrphan.erase(pblockOrphan->GetProofOfStake());
+            delete pblockOrphan;
+        }
+        mapOrphanBlocksByPrev.erase(hashPrev);
+    }
+
+   
+    // if responsible for sync-checkpoint send it
+    if (false && pfrom && !CSyncCheckpoint::strMasterPrivKey.empty())        Checkpoints::SendSyncCheckpoint(Checkpoints::AutoSelectSyncCheckpoint());
+	printf("{PB}: ACC; \r\n");
+	GridcoinServices();
+    return true;
+}
+
+
+
+bool ProcessBlockLegacy(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 {
     AssertLockHeld(cs_main);
 	printf("+");
@@ -5001,7 +5108,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     // Block signature can be malleated in such a way that it increases block size up to maximum allowed by protocol
     // For now we just strip garbage from newly received blocks
 
-    // Preliminary checks 1-19-2015 ** Note: Mint is zero before block is signed
+    // Preliminary checks 1-26-2015 ** Note: Mint is zero before block is signed
     if (!pblock->CheckBlock(pindexBest->nHeight, 100*COIN))
         return error("ProcessBlock[] : CheckBlock FAILED");
 
@@ -5028,6 +5135,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 					pfrom->nTrust--;
 					if (pfrom->nTrust < 0) 
 					{
+						if (fDebug3) printf("*Disconnecting based on orphan key %s",sOrphanKey.c_str());
 						pfrom->fDisconnect=true;
 					}
 				}
@@ -6985,7 +7093,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 		if (unauthorized)
 		{
-			printf("Disconnected unauthorized peer.         ");
+			printf("  Disconnected unauthorized peer.         ");
             pfrom->Misbehaving(100);
 		    pfrom->fDisconnect = true;
             return false;
@@ -7044,14 +7152,14 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 		if (GetArgument("autoban","true") == "true")
 		{
 				
-				/*
-				// Note: Hacking attempts start in this area
-				if (pfrom->nStartingHeight < 1000 && LessVerbose(500) && !fTestNet)
+				// Note: Hacking attempts start in this area 3-26-2016
+				if (false && pfrom->nStartingHeight < (nBestHeight/2) && LessVerbose(1) && !fTestNet)
 				{
-					if (fDebug) printf("Node with low height");
+					if (fDebug3) printf("Node with low height");
 					pfrom->fDisconnect=true;
 					return false;
 				}
+				/*
 				
 				if (pfrom->nStartingHeight < 1 && LessVerbose(980) && !fTestNet)
 				{
@@ -8095,13 +8203,13 @@ bool ProcessMessages(CNode* pfrom)
 
 		if (msLastCommand == sCurrentCommand || (msLastNodeCommand == sCurrentCommand && !sCurrentCommand.empty()))
 		{
-   			  //1-28-2016
+   			  //3-26-2016 Node Duplicates
 		      double node_duplicates = cdbl(ReadCache("duplicates",NodeAddress(pfrom)),0) + 1;
 			  WriteCache("duplicates",NodeAddress(pfrom),RoundToString(node_duplicates,0),GetAdjustedTime());
 			  if ( (node_duplicates > 350 && !fTestNet && !OutOfSyncByAge()) || (node_duplicates > 350 && fTestNet && !OutOfSyncByAge()) )
 			  {
 					printf(" Dupe (misbehaving) %s %s ",NodeAddress(pfrom).c_str(),Peek.c_str());
-			        pfrom->Misbehaving(1);
+			        //pfrom->Misbehaving(1);
           			pfrom->fDisconnect = true;
 					WriteCache("duplicates",NodeAddress(pfrom),"0",GetAdjustedTime());
 					return false;
@@ -9185,6 +9293,21 @@ MiningCPID GetMiningCPID()
 }
 
 
+void TrackRequests(CNode* pfrom,std::string sRequestType)
+{
+	    std::string sKey = "request_type" + sRequestType;
+	    double dReqCt = cdbl(ReadCache(sKey,NodeAddress(pfrom)),0) + 1;
+	    WriteCache(sKey,NodeAddress(pfrom),RoundToString(dReqCt,0),GetAdjustedTime());
+        if ( (dReqCt > 20 && !fTestNet && !OutOfSyncByAge()) )
+		{
+					printf(" Node requests for %s exceeded threshhold (misbehaving) %s ",sRequestType.c_str(),NodeAddress(pfrom).c_str());
+			        //pfrom->Misbehaving(1);
+          			pfrom->fDisconnect = true;
+					WriteCache(sKey,NodeAddress(pfrom),"0",GetAdjustedTime());
+		}
+}
+
+
 bool SendMessages(CNode* pto, bool fSendTrickle)
 {
     TRY_LOCK(cs_main, lockMain);
@@ -9323,24 +9446,23 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                         continue;
                     }
                 }
+
 			    // returns true if wasn't already contained in the set
                 if (pto->setInventoryKnown.insert(inv).second)
                 {
-					if (vInv.size() >= 1000)               AddPeek("Storing Inventory " + RoundToString((double)vInv.size(),0));
-                    vInv.push_back(inv);
-                    if (vInv.size() >= 1000)
-                    {
+				     vInv.push_back(inv);
+                     if (vInv.size() >= 1000)
+                     {
 							AddPeek("PushInv-Large " + RoundToString((double)vInv.size(),0));
 							// If node has not been misbehaving (1-30-2016) then push it: (pto->nMisbehavior) && pto->NodeAddress().->addr.IsRoutable()
 							pto->PushMessage("inv", vInv);
 							AddPeek("Pushed Inv-Large " + RoundToString((double)vInv.size(),0));
-					
+							if (fDebug3) printf(" *PIL* ");
 						    vInv.clear();
-							pto->Misbehaving(10);  // Eventually ban the node if they keep asking for inventory
-							pto->fDisconnect=true;
+							// Eventually ban the node if they keep asking for inventory
+							TrackRequests(pto,"Inv-Large");
+							//3-26-2015
 							AddPeek("Done with Inv-Large " + RoundToString((double)vInv.size(),0));
-					
-         
 			        }
                 }
             }

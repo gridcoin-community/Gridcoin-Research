@@ -1368,7 +1368,7 @@ void AddTimeData(const CNetAddr& ip, int64_t nTime)
                 printf("%+"PRId64"  ", n);
             printf("|  ");
         }
-        printf("nTimeOffset = %+"PRId64"  (%+"PRId64" minutes)\n", nTimeOffset, nTimeOffset/60);
+        if (fDebug) printf("nTimeOffset = %+"PRId64"  (%+"PRId64" minutes)\n", nTimeOffset, nTimeOffset/60);
     }
 }
 
