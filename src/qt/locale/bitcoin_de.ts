@@ -43,7 +43,7 @@ Dieses Produkt enthält Software, die vom OpenSSL-Projekt zur Verwendung im Open
     <message>
         <location filename="../forms/addressbookpage.ui" line="+14"/>
         <source>Address Book</source>
-        <translation>Eigene Adresse</translation>
+        <translation>Eigene Adressen</translation>
     </message>
     <message>
         <location line="+22"/>
@@ -268,7 +268,7 @@ Dieses Produkt enthält Software, die vom OpenSSL-Projekt zur Verwendung im Open
     <message>
         <location line="-58"/>
         <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
-        <translation>Gridcoin wird jetzt runterfahren um den Verschlüsselungsprozess zu vervollständigen. Errinnern Sie sich, dass das Verschlüsseln ihres Wallets nicht reicht um es vollständig vor Diebstahl zu schützen, z.B. durch. Viren, die ihren Rechner infiziert haben.</translation>
+        <translation>Gridcoin wird jetzt runterfahren um den Verschlüsselungsprozess zu vervollständigen. Erinnern Sie sich, dass das Verschlüsseln ihres Wallets nicht reicht um es vollständig vor Diebstahl zu schützen, z.B. durch. Viren, die ihren Rechner infiziert haben.</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -560,7 +560,7 @@ Dieses Produkt enthält Software, die vom OpenSSL-Projekt zur Verwendung im Open
     <message>
         <location line="+40"/>
         <source>Downloaded %1 blocks of transaction history.</source>
-        <translation>%1 Blöcke der Transaktiongeschichte heruntegeladen.</translation>
+        <translation>%1 Blöcke der Transaktiongeschichte heruntergeladen.</translation>
     </message>
     <message>
         <location line="+413"/>
@@ -642,12 +642,12 @@ Dieses Produkt enthält Software, die vom OpenSSL-Projekt zur Verwendung im Open
     <message>
         <location line="+59"/>
         <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
-        <translation>Diese Transaktion ist über der Grössenlimite. Sie können sie immer noch für eine Gebühr über %1 verschicken, die an die Knoten geht, die ihre Transaktion bearbeiten und unterstützen damit das Netzwerk. Wollen sie diese Gebühr bezahlen?</translation>
+        <translation>Diese Transaktion ist über dem Grössenlimit. Sie können sie immer noch für eine Gebühr über %1 verschicken, die an die Knoten geht, die ihre Transaktion bearbeiten und unterstützen damit das Netzwerk. Wollen sie diese Gebühr bezahlen?</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Confirm transaction fee</source>
-        <translation>Bestätige Transaktiongebühren</translation>
+        <translation>Bestätige Transaktionsgebühren</translation>
     </message>
     <message>
         <location line="+27"/>
@@ -748,7 +748,7 @@ Adresse: %4</translation>
     <message>
         <location line="+18"/>
         <source>Not staking</source>
-        <translation>Nicht am Veryinsen</translation>
+        <translation>Nicht am Verzinsen</translation>
     </message>
     <message>
         <location filename="../bitcoin.cpp" line="+109"/>
@@ -989,9 +989,9 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
  This means a fee of at least %1 per kb is required.</source>
         <translation>Transaktionen mit einer höheren Priorität kommen wahrscheinlicher in einen Block.
 
-Diese Label wird rot, wenn die Priorität kleiner ist als Mittel.
+Dieses Label wird rot, wenn die Priorität kleiner ist als Mittel.
 
- Dies bedeutet, dass eine Gebühr von mindesten %1 pro kB benötigt wird.</translation>
+ Dies bedeutet, dass eine Gebühr von mindestens %1 pro kB benötigt wird.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1011,9 +1011,9 @@ Diese Label wird rot, wenn die Priorität kleiner ist als Mittel.
         <source>This label turns red, if the change is smaller than %1.
 
  This means a fee of at least %2 is required.</source>
-        <translation>Dieses Label wird rot, wenn die Veränderung kleiner als %1 ist.
+        <translation>Dieses Label wird rot, wenn das Wechselgeld kleiner als %1 ist.
 
- Dies bedeutet, dass eine Gebühr von %2 benötigt wird.</translation>
+ Dies bedeutet, dass eine Gebühr von mindestens %2 benötigt wird.</translation>
     </message>
     <message>
         <location line="+37"/>
@@ -1159,7 +1159,7 @@ Diese Label wird rot, wenn die Priorität kleiner ist als Mittel.
     <message>
         <location line="+6"/>
         <source>Optional transaction fee per kB that helps make sure your transactions are processed quickly. Most transactions are 1 kB. Fee 0.01 recommended.</source>
-        <translation>Optional Transaktionsgebühr pro Kilobyte, die hilft Transaktionen schneller zu bearbeiten. Die Meisten Transaktionen sind 1kB. Di Gebühr 0.01GRC wird vorgeschlagen.</translation>
+        <translation>Optional Transaktionsgebühr pro Kilobyte, die hilft Transaktionen schneller zu bearbeiten. Die meisten Transaktionen sind 1kB. Die Gebühr 0.01GRC wird vorgeschlagen.</translation>
     </message>
     <message>
         <location line="+15"/>
@@ -1189,7 +1189,7 @@ Diese Label wird rot, wenn die Priorität kleiner ist als Mittel.
     <message>
         <location line="+7"/>
         <source>Detach block and address databases at shutdown. This means they can be moved to another data directory, but it slows down shutdown. The wallet is always detached.</source>
-        <translation>Trenne Datenbank beim Runterhafen. Dies bedeutet, dass sie in ein anderes Verzeichnis verlegt werden können, jedoch verzörgert verlängert dies die benötigte Zeit zum Runterfahren. Das Wallet ist immer getrennt.</translation>
+        <translation>Trenne Datenbank beim Runterhafen. Dies bedeutet, dass sie in ein anderes Verzeichnis verlegt werden können, jedoch verlängert dies die benötigte Zeit zum Runterfahren. Das Wallet ist immer getrennt.</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1740,7 +1740,7 @@ Diese Label wird rot, wenn die Priorität kleiner ist als Mittel.
     <message>
         <location line="+35"/>
         <source>Change</source>
-        <translation>Veränderung</translation>
+        <translation>Wechselgeld</translation>
     </message>
     <message>
         <location line="+50"/>
@@ -2741,7 +2741,7 @@ Diese Label wird rot, wenn die Priorität kleiner ist als Mittel.
     <message>
         <location line="+5"/>
         <source>Bind to given address. Use [host]:port notation for IPv6</source>
-        <translation>Binde an gegebene Addresse. Benutze [host]:port Notaion für IPv6</translation>
+        <translation>Binde an gegebene Addresse. Benutze [host]:port Notation für IPv6</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -2766,7 +2766,7 @@ Diese Label wird rot, wenn die Priorität kleiner ist als Mittel.
     <message>
         <location line="+51"/>
         <source>Detach block and address databases. Increases shutdown time (default: 0)</source>
-        <translation>Löse Block und Addresse Datenbank ab. Erhöhe die Zeit beim Runterfahren (default: 0)</translation>
+        <translation>Löst Block und Addressen Datenbank ab. Erhöht die Zeit beim Runterfahren (default: 0)</translation>
     </message>
     <message>
         <location line="+109"/>
@@ -2796,7 +2796,7 @@ Diese Label wird rot, wenn die Priorität kleiner ist als Mittel.
     <message>
         <location line="-5"/>
         <source>Error: Wallet locked, unable to create transaction  </source>
-        <translation>Fehler: Wallet verschlüsselt, unfähig Transaktion zu erstellen</translation>
+        <translation>Fehler: Wallet verschlüsselt, unmöglich Transaktion zu erstellen</translation>
     </message>
     <message>
         <location line="-8"/>
@@ -2831,12 +2831,12 @@ Diese Label wird rot, wenn die Priorität kleiner ist als Mittel.
     <message>
         <location line="+117"/>
         <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
-        <translation>Fehler beim initiallisieren der Datenbank Umgebung %s! Um wiederherzustellen, fertige ein Backup des Verzeichnisses an, dann entferne alles davon ausser die wallet.dat Datei. </translation>
+        <translation>Fehler beim initialisieren der Datenbank Umgebung %s! Um wiederherzustellen, fertige ein Backup des Verzeichnisses an, dann entferne alles davon ausser die wallet.dat Datei. </translation>
     </message>
     <message>
         <location line="-20"/>
         <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
-        <translation>Setze Maximalgrösse von hoch/tief Gebühren Transaktionen in Bytes (default:27000)</translation>
+        <translation>Setze Maximalgrösse von hoch bzw tief priorisierten Transaktionen mit niedrigen Gebühren in Bytes (default:27000)</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -2891,7 +2891,7 @@ Diese Label wird rot, wenn die Priorität kleiner ist als Mittel.
     <message>
         <location line="+5"/>
         <source>Sync checkpoints policy (default: strict)</source>
-        <translation>Synchronisiere Checkpoints Police (default:streng)</translation>
+        <translation>Synchronisiere Checkpoints Police (default:strikt)</translation>
     </message>
     <message>
         <location line="+83"/>
@@ -2931,7 +2931,7 @@ Diese Label wird rot, wenn die Priorität kleiner ist als Mittel.
     <message>
         <location line="+1"/>
         <source>Prepend debug output with timestamp</source>
-        <translation>Füge Debug Ausgabe mit Timestamp an</translation>
+        <translation>Füge Zeitstempel zu Debug Ausgabe hinzu</translation>
     </message>
     <message>
         <location line="+35"/>
@@ -2977,7 +2977,7 @@ Diese Label wird rot, wenn die Priorität kleiner ist als Mittel.
         <location line="+109"/>
         <source>Unable to sign checkpoint, wrong checkpointkey?
 </source>
-        <translation>Ausser Stande den Checkpoint zu unterschreiben - falscher checkpointkey?</translation>
+        <translation>Nicht möglich den Checkpoint zu unterschreiben - falscher Checkpointschlüssel?</translation>
     </message>
     <message>
         <location line="-80"/>
@@ -3156,7 +3156,7 @@ z.B.: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.co</tr
     <message>
         <location line="+53"/>
         <source>Error: Wallet unlocked for staking only, unable to create transaction.</source>
-        <translation>Fehler: Das Wallet ist nur zum Verzinsen geöffnet. Ausser Stande die Transaktion zu erstellen.</translation>
+        <translation>Fehler: Das Wallet ist nur zum Verzinsen geöffnet. Nicht möglich die Transaktion zu erstellen.</translation>
     </message>
     <message>
         <location line="+18"/>
