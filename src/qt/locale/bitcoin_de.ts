@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
-<TS version="2.0" language="de">
+<TS version="2.1" language="de">
 <context>
     <name>AboutDialog</name>
     <message>
@@ -78,13 +78,13 @@ Dieses Produkt enthält Software, die vom OpenSSL-Projekt zur Verwendung im Open
     <message>
         <location line="+11"/>
         <source>Show &amp;QR Code</source>
-        <translation>&amp;QR Code anzeigen</translation>
+        <translation>QR Code &amp;anzeigen</translation>
     </message>
     <message>
         <location line="+11"/>
         <source>Sign a message to prove you own a Gridcoin address</source>
         <translatorcomment>Signiere eine Nachricht um den Besitz einer Gridcoin Addresse zu beweisen. </translatorcomment>
-        <translation></translation>
+        <translation>Unterschreibe eine Nachricht um den Besitz einer Gridcoin Addresse zu beweisen</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -642,7 +642,7 @@ Dieses Produkt enthält Software, die vom OpenSSL-Projekt zur Verwendung im Open
     <message>
         <location line="+59"/>
         <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
-        <translation>Diese Transaktion ist über der Grössenlimite. Sie können sie immer noch für eine Gebühr über %1 verschicken, die an die Knoten geht, die ihre Transaktion bearbeiten und unterstützt damit das Netzwerk. Wollen sie diese Gebühr bezahlen?</translation>
+        <translation>Diese Transaktion ist über der Grössenlimite. Sie können sie immer noch für eine Gebühr über %1 verschicken, die an die Knoten geht, die ihre Transaktion bearbeiten und unterstützen damit das Netzwerk. Wollen sie diese Gebühr bezahlen?</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -681,7 +681,7 @@ Adresse: %4</translation>
         <location line="-15"/>
         <location line="+15"/>
         <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
-        <translation>URI kann nicht geparsed werde ! Dies kann durch eine nicht gültige Gridcoin Addresse, oder schlechten URI Parametern verursacht worden sein.</translation>
+        <translation>URI kann nicht geparsed werden! Dies kann durch eine nicht gültige Gridcoin Addresse, oder schlechten URI Parametern verursacht worden sein.</translation>
     </message>
     <message>
         <location line="+18"/>
@@ -1370,7 +1370,7 @@ Diese Label wird rot, wenn die Priorität kleiner ist als Mittel.
         <location line="+33"/>
         <location line="+231"/>
         <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</source>
-        <translation>Die angezeigte Information kann falsch sein. Die Brieftasche synchronisiert automatisch mit dem Gridcoin Netzwerk nachdem eine Verbindung zustande gekommen ist, aber dieser Prozess ist nicht abgeschlossen.</translation>
+        <translation>Die angezeigte Information kann falsch sein. Das Wallet synchronisiert automatisch mit dem Gridcoin Netzwerk nachdem eine Verbindung zustande gekommen ist, aber dieser Prozess ist nicht abgeschlossen.</translation>
     </message>
     <message>
         <location line="-160"/>
@@ -1760,7 +1760,7 @@ Diese Label wird rot, wenn die Priorität kleiner ist als Mittel.
     <message>
         <location line="+20"/>
         <source>Remove all transaction fields</source>
-        <translation>Entferne alle Transaktionen Felder</translation>
+        <translation>Entferne alle Transaktionsfelder</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -2766,12 +2766,12 @@ Diese Label wird rot, wenn die Priorität kleiner ist als Mittel.
     <message>
         <location line="+51"/>
         <source>Detach block and address databases. Increases shutdown time (default: 0)</source>
-        <translation>Löse Block und Addresse Datenbank ab. Ehöhe die Zeit beim Runterfahren (default: 0)</translation>
+        <translation>Löse Block und Addresse Datenbank ab. Erhöhe die Zeit beim Runterfahren (default: 0)</translation>
     </message>
     <message>
         <location line="+109"/>
         <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>Fehler: Transaktion wurde abgelehnt. Das kann geschehen wenn einige Coins in der Brieftasche bereits ausgegeben wurden, wenn von einer Kopie der wallet.dat Coins ausgegeben wurden werden sie hier nicht als Ausgabe aufgeführt.</translation>
+        <translation>Fehler: Transaktion wurde abgelehnt. Das kann geschehen wenn einige Coins in dem Wallet bereits ausgegeben wurden. Wenn von einer Kopie der wallet.dat Coins ausgegeben wurden, werden sie hier nicht sofort als Ausgabe aufgeführt.</translation>
     </message>
     <message>
         <location line="-5"/>
@@ -2796,7 +2796,7 @@ Diese Label wird rot, wenn die Priorität kleiner ist als Mittel.
     <message>
         <location line="-5"/>
         <source>Error: Wallet locked, unable to create transaction  </source>
-        <translation>Fehler: Brieftasche verschlüsselt, unfähig Transaktion zu erstellen</translation>
+        <translation>Fehler: Wallet verschlüsselt, unfähig Transaktion zu erstellen</translation>
     </message>
     <message>
         <location line="-8"/>
@@ -2831,12 +2831,12 @@ Diese Label wird rot, wenn die Priorität kleiner ist als Mittel.
     <message>
         <location line="+117"/>
         <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
-        <translation>Fehler beim initiallisieren der Datenbank Umgebung %s! Um wiederherzustellen BACKUP DAS VERZEICHNIS, dann entferne alles davon ausser die wallet.dat Datei. </translation>
+        <translation>Fehler beim initiallisieren der Datenbank Umgebung %s! Um wiederherzustellen, fertige ein Backup des Verzeichnisses an, dann entferne alles davon ausser die wallet.dat Datei. </translation>
     </message>
     <message>
         <location line="-20"/>
         <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
-        <translation>Set maximalgrösse von hoch/tief Gebühren Transaktionen in Bytes (default:27000)</translation>
+        <translation>Setze Maximalgrösse von hoch/tief Gebühren Transaktionen in Bytes (default:27000)</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -2921,7 +2921,7 @@ Diese Label wird rot, wenn die Priorität kleiner ist als Mittel.
     <message>
         <location line="+28"/>
         <source>Output extra debugging information. Implies all other -debug* options</source>
-        <translation>Ausgabe weiterer Debug Informationen. Implziert alle anderen -debug* Optionen</translation>
+        <translation>Ausgabe weiterer Debug Informationen. Impliziert alle anderen -debug* Optionen</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2941,7 +2941,7 @@ Diese Label wird rot, wenn die Priorität kleiner ist als Mittel.
     <message>
         <location line="-74"/>
         <source>Select the version of socks proxy to use (4-5, default: 5)</source>
-        <translation>Wähle die Socks Proxz Version (4-5,default:5)</translation>
+        <translation>Wähle die Socks Proxy Version (4-5,default:5)</translation>
     </message>
     <message>
         <location line="+41"/>
@@ -2977,7 +2977,7 @@ Diese Label wird rot, wenn die Priorität kleiner ist als Mittel.
         <location line="+109"/>
         <source>Unable to sign checkpoint, wrong checkpointkey?
 </source>
-        <translation>Ausser Stange den checkpoint zu unterschreiben - falscher checkpointkey?</translation>
+        <translation>Ausser Stande den Checkpoint zu unterschreiben - falscher checkpointkey?</translation>
     </message>
     <message>
         <location line="-80"/>
@@ -3096,7 +3096,7 @@ z.B.: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.co</tr
     <message>
         <location line="+1"/>
         <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
-        <translation>Zwinge Trasnsaktionsskripte den kanonischen PUSH Operator zu verwenden (default: 1)</translation>
+        <translation>Zwinge Transaktionsskripte den kanonischen PUSH Operator zu verwenden (default: 1)</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -3151,12 +3151,12 @@ z.B.: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.co</tr
     <message>
         <location line="+1"/>
         <source>Acceptable ciphers (default: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</source>
-        <translation>Annembahre Chiffren (default: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</translation>
+        <translation>Annehmbare Chiffren (default: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</translation>
     </message>
     <message>
         <location line="+53"/>
         <source>Error: Wallet unlocked for staking only, unable to create transaction.</source>
-        <translation>Fehler: Das Wall ist nur zum Verzinsen geöffnet, Ausser Stance die Transaktion zu erstellen.</translation>
+        <translation>Fehler: Das Wallet ist nur zum Verzinsen geöffnet. Ausser Stande die Transaktion zu erstellen.</translation>
     </message>
     <message>
         <location line="+18"/>
@@ -3176,7 +3176,7 @@ z.B.: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.co</tr
     <message>
         <location line="+1"/>
         <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
-        <translation>Kann das Verzeichniss nicht einbinden %s. Gridcoin Brieftasche läuft wahrscheinlich bereits.</translation>
+        <translation>Kann das Verzeichniss nicht einbinden %s. Gridcoin läuft wahrscheinlich bereits.</translation>
     </message>
     <message>
         <location line="-98"/>
@@ -3216,12 +3216,12 @@ z.B.: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.co</tr
     <message>
         <location line="+4"/>
         <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
-        <translation>Fehler beim Laden wallet.dat. Brieftasche benötigt neuere Version der Gridcoin Brieftasche</translation>
+        <translation>Fehler beim Laden von wallet.dat. Wallet benötigt neuere Version von Gridcoin</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
-        <translation>Brieftasche muss neu geschrieben werden. Starte die Gridcoin Brieftasche neu zum komplettieren</translation>
+        <translation>Wallet muss neu geschrieben werden. Starte Gridcoin neu um auszuführen</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3291,7 +3291,7 @@ z.B.: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.co</tr
     <message>
         <location line="+122"/>
         <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
-        <translation>Fehler beim anbinden %s auf diesem Computer. BlaclCoin Client läuft wahrscheinlich bereits.</translation>
+        <translation>Fehler beim anbinden %s auf diesem Computer. Gridcoin läuft wahrscheinlich bereits.</translation>
     </message>
     <message>
         <location line="-97"/>
@@ -3350,7 +3350,7 @@ z.B.: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.co</tr
 If the file does not exist, create it with owner-readable-only file permissions.</source>
         <translation>Sie müssen den Wert rpcpassword=&lt;passwort&gt; in der Konfigurationsdatei angeben:
 %s
-Falls die Konfigurationsdatei nicht existiert, erzeugen Sie diese bitte mit Leserechten nur für den Dateibesitzer.</translation>
+Falls die Konfigurationsdatei nicht existiert, erzeugen Sie diese mit Leserechten nur für den Dateibesitzer.</translation>
     </message>
 </context>
 </TS>
