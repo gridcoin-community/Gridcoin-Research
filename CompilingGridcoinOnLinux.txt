@@ -46,7 +46,7 @@ git clone https://github.com/gridcoin/Gridcoin-Research
 #git reset --hard origin/master
 
 cd ~/Gridcoin-Research/src
-sudo mkdir obj
+mkdir obj
 
 chmod 755 leveldb/build_detect_platform 
 make -f makefile.unix USE_UPNP=- 
