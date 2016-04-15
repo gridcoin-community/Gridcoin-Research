@@ -132,7 +132,6 @@ private:
     QAction *changePassphraseAction;
     QAction *unlockWalletAction;
     QAction *lockWalletAction;
-    QAction *aboutQtAction;
     QAction *openRPCConsoleAction;
 
     QSystemTrayIcon *trayIcon;

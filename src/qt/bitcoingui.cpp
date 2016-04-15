@@ -193,7 +193,6 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     changePassphraseAction(0),
     unlockWalletAction(0),
     lockWalletAction(0),
-    aboutQtAction(0),
     trayIcon(0),
     notificator(0),
     rpcConsole(0),
@@ -1008,7 +1007,6 @@ void BitcoinGUI::createActions()
 
     connect(quitAction, SIGNAL(triggered()), qApp, SLOT(quit()));
     connect(aboutAction, SIGNAL(triggered()), this, SLOT(aboutClicked()));
-    connect(aboutQtAction, SIGNAL(triggered()), qApp, SLOT(aboutQt()));
     connect(optionsAction, SIGNAL(triggered()), this, SLOT(optionsClicked()));
     connect(toggleHideAction, SIGNAL(triggered()), this, SLOT(toggleHidden()));
     connect(encryptWalletAction, SIGNAL(triggered(bool)), this, SLOT(encryptWallet(bool)));
@@ -1072,7 +1070,6 @@ void BitcoinGUI::createMenuBar()
     help->addAction(openRPCConsoleAction);
     help->addSeparator();
     help->addAction(aboutAction);
-    help->addAction(aboutQtAction);
 
 //	QMenu *email = appMenuBar->addMenu(tr("&E-Mail"));
 //    email->addSeparator();
