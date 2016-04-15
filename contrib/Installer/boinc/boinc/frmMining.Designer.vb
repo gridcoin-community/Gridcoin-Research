@@ -87,6 +87,7 @@ Partial Class frmMining
         Me.btnSync = New System.Windows.Forms.Button()
         Me.lblQueue = New System.Windows.Forms.Label()
         Me.lblNeuralDetail = New System.Windows.Forms.Label()
+        Me.Button1 = New System.Windows.Forms.Button()
         CType(Me.Chart1, System.ComponentModel.ISupportInitialize).BeginInit()
         CType(Me.chtCurCont, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.MenuStrip1.SuspendLayout()
@@ -694,6 +695,15 @@ Partial Class frmMining
         Me.lblNeuralDetail.TabIndex = 76
         Me.lblNeuralDetail.Text = " "
         '
+        'Button1
+        '
+        Me.Button1.Location = New System.Drawing.Point(1023, 7)
+        Me.Button1.Name = "Button1"
+        Me.Button1.Size = New System.Drawing.Size(12, 13)
+        Me.Button1.TabIndex = 77
+        Me.Button1.Text = "Button1"
+        Me.Button1.UseVisualStyleBackColor = True
+        '
         'frmMining
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
@@ -702,6 +712,7 @@ Partial Class frmMining
         Me.BackgroundImage = Global.BoincStake.My.Resources.Resources.GradientU
         Me.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch
         Me.ClientSize = New System.Drawing.Size(1071, 793)
+        Me.Controls.Add(Me.Button1)
         Me.Controls.Add(Me.lblNeuralDetail)
         Me.Controls.Add(Me.lblQueue)
         Me.Controls.Add(Me.btnSync)
@@ -798,4 +809,5 @@ Partial Class frmMining
     Friend WithEvents lblQueue As System.Windows.Forms.Label
     Friend WithEvents lblNeuralDetail As System.Windows.Forms.Label
     Friend WithEvents WebBrowserBoinc As System.Windows.Forms.WebBrowser
+    Friend WithEvents Button1 As System.Windows.Forms.Button
 End Class

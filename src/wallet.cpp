@@ -828,8 +828,8 @@ void CWalletTx::GetAmounts2(list<COutputEntry>& listReceived,
 		}
 		else
 		{
-			if (     !bOPReturnEnabled && !ExtractDestination(txout.scriptPubKey, address)
-				|| ( bOPReturnEnabled && !ExtractDestination(txout.scriptPubKey, address) && txout.scriptPubKey[0] != OP_RETURN) )
+			if (   (  !bOPReturnEnabled && !ExtractDestination(txout.scriptPubKey, address) )
+			    || (   bOPReturnEnabled && !ExtractDestination(txout.scriptPubKey, address) && txout.scriptPubKey[0] != OP_RETURN) )
 	        {
 			    printf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s\n",
                      this->GetHash().ToString().c_str());

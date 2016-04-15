@@ -122,6 +122,12 @@ Module modPersistedDataSystem
     Public Function GetMagnitudeContract() As String
         Try
 
+            If GetFileAge(GetGridPath("NeuralNetwork") + "\contract.dat") < 240 Then
+                Dim sData As String
+                sData = FileToString(GetGridPath("NeuralNetwork") + "\contract.dat")
+                Return sData
+            End If
+
             Dim surrogateRow As New Row
             surrogateRow.Database = "CPID"
             surrogateRow.Table = "CPIDS"
@@ -151,8 +157,9 @@ Module modPersistedDataSystem
 
                     Catch ex As Exception
                     End Try
+
                     If dMagAge > (PROJECT_SYNC_THRESHOLD) Then
-                        Return ""
+                        If Not mbDebugging Then Return ""
                     End If
 
 

@@ -115,9 +115,12 @@ bool LoadSuperblock(std::string data, int64_t nTime, double height);
 StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
 
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
+std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
 
 std::string GetNeuralNetworkReport();
 Array GetJSONNeuralNetworkReport();
+Array GetJSONCurrentNeuralNetworkReport();
+
 extern Array GetJSONVersionReport();
 
 extern bool PollExists(std::string pollname);
@@ -2349,6 +2352,11 @@ Value execute(const Array& params, bool fHelp)
 			Array myNeuralJSON = GetJSONNeuralNetworkReport();
 			results.push_back(myNeuralJSON);
 	}
+	else if (sItem == "currentneuralreport")
+	{
+			Array myNeuralJSON = GetJSONCurrentNeuralNetworkReport();
+			results.push_back(myNeuralJSON);
+	}
 	else if (sItem == "tallyneural")
 	{
 			bool result = ComputeNeuralNetworkSupermajorityHashes();
@@ -2393,6 +2401,13 @@ Value execute(const Array& params, bool fHelp)
 	{
 			double popularity = 0;
 			std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
+			entry.push_back(Pair("Popular",consensus_hash));
+			results.push_back(entry);
+	}
+	else if (sItem == "currentneuralhash")
+	{
+			double popularity = 0;
+			std::string consensus_hash = GetCurrentNeuralNetworkSupermajorityHash(popularity);
 			entry.push_back(Pair("Popular",consensus_hash));
 			results.push_back(entry);
 	}
@@ -4796,6 +4811,26 @@ double GetTotalNeuralNetworkHashVotes()
 	return total;	 
 }
 
+
+double GetTotalCurrentNeuralNetworkHashVotes()
+{
+	double total = 0;
+	std::string neural_hash = "";
+	for(map<std::string,double>::iterator ii=mvCurrentNeuralNetworkHash.begin(); ii!=mvCurrentNeuralNetworkHash.end(); ++ii) 
+	{
+				double popularity = mvCurrentNeuralNetworkHash[(*ii).first];
+				neural_hash = (*ii).first;
+				// d41d8 is the hash of an empty magnitude contract - don't count it
+				if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity >= .01)
+				{
+					total += popularity;
+				}
+				
+	}
+	return total;	 
+}
+
+
 Array GetJSONNeuralNetworkReport()
 {
 	  Array results;
@@ -4848,6 +4883,61 @@ Array GetJSONNeuralNetworkReport()
 	  results.push_back(entry);
 	  return results;
 }
+
+
+Array GetJSONCurrentNeuralNetworkReport()
+{
+	  Array results;
+	  //Returns a report of the networks neural hashes in order of popularity
+	  std::string neural_hash = "";
+	  std::string report = "Neural_hash, Popularity\r\n";
+	  std::string row = "";
+	  double pct = 0;
+	  Object entry;
+  	  entry.push_back(Pair("Neural Hash","Popularity,Percent %"));
+	  double votes = GetTotalCurrentNeuralNetworkHashVotes();
+
+	  for(map<std::string,double>::iterator ii=mvCurrentNeuralNetworkHash.begin(); ii!=mvCurrentNeuralNetworkHash.end(); ++ii) 
+	  {
+				double popularity = mvCurrentNeuralNetworkHash[(*ii).first];
+				neural_hash = (*ii).first;
+	
+				//If the hash != empty_hash: >= .01
+				if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity > 0)
+				{
+					row = neural_hash + "," + RoundToString(popularity,0);
+					report += row + "\r\n";
+					pct = (((double)popularity)/(votes+.01))*100;
+					entry.push_back(Pair(neural_hash,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%"));
+				}
+	  }
+	  // If we have a pending superblock, append it to the report:
+	  std::string SuperblockHeight = ReadCache("neuralsecurity","pending");
+	  if (!SuperblockHeight.empty() && SuperblockHeight != "0")
+	  {
+		  entry.push_back(Pair("Pending",SuperblockHeight));
+	  }
+	  //8-22-2015
+	  int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+	 
+	  entry.push_back(Pair("Superblock Age",superblock_age));
+	  if (superblock_age > GetSuperblockAgeSpacing(nBestHeight))
+	  {
+		  int iRoot = 30;
+		  int iModifier = (nBestHeight % iRoot);
+		  int iQuorumModifier = (nBestHeight % 10);
+		  int iLastNeuralSync = nBestHeight - iModifier;
+		  int iNextNeuralSync = iLastNeuralSync + iRoot;
+		  int iLastQuorum = nBestHeight - iQuorumModifier;
+		  int iNextQuorum = iLastQuorum + 10;
+		  entry.push_back(Pair("Last Sync", (double)iLastNeuralSync));
+		  entry.push_back(Pair("Next Sync", (double)iNextNeuralSync));
+		  entry.push_back(Pair("Next Quorum", (double)iNextQuorum));
+	  }
+	  results.push_back(entry);
+	  return results;
+}
+
 
 
 double GetTotalContentsFromVector(map<std::string,double>& v)

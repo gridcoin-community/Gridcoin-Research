@@ -447,7 +447,7 @@ font-family:'Open Sans,sans-serif';</string>
            </size>
           </property>
           <property name="text">
-           <string>1/1/1970 00:01:01</string>
+           <string> </string>
           </property>
          </widget>
         </item>

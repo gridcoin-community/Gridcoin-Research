@@ -112,6 +112,7 @@ extern int miningthreadcount;
 		std::string BlockHash;
 		std::string GRCAddress;
 		std::string LastPORBlockHash;
+		std::string CurrentNeuralHash;
 	};
 
 
@@ -186,6 +187,7 @@ extern int miningthreadcount;
 		std::string NeuralHash;
 		std::string superblock;
 		std::string LastPORBlockHash;
+		std::string CurrentNeuralHash;
 	};
 
 	

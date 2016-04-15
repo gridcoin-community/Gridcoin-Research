@@ -32,6 +32,7 @@ int GetDayOfYear();
 extern std::string NodeAddress(CNode* pfrom);
 extern std::string ConvertBinToHex(std::string a);
 extern std::string ConvertHexToBin(std::string a);
+bool RequestSupermajorityNeuralData();
 
 extern std::string UnpackBinarySuperblock(std::string sBlock);
 extern std::string PackBinarySuperblock(std::string sBlock);
@@ -44,6 +45,7 @@ bool GetExpiredOption(std::string& rsRecipient, double& rdSinglePrice, double& r
 
 extern double BlackScholes(std::string CallPutFlag, double S, double X, double T, double r, double v);
 extern double GetDelta(std::string sType, double UL, double Strike, double dTime, double RiskFreeRate, double Volatility);
+extern void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance);
 
 int DownloadBlocks();
 int DetermineCPIDType(std::string cpid);
@@ -98,7 +100,10 @@ double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out
 extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern std::string VectorToString(std::vector<unsigned char> v);
 extern bool UnusualActivityReport();
+
+extern std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
 extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
+       
 extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
 extern CBlockIndex* GetHistoricalMagnitude_ScanChain(std::string cpid);
 extern bool IsLockTimeWithin14days(double locktime);
@@ -134,7 +139,7 @@ extern CBlockIndex* GetHistoricalMagnitude(std::string cpid);
 extern double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
 extern StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
 
-extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
+
 extern double GetOwedAmount(std::string cpid);
 extern double Round(double d, int place);
 extern bool ComputeNeuralNetworkSupermajorityHashes();
@@ -287,7 +292,7 @@ unsigned int nModifierInterval = 10 * 60; // time to elapse before new modifier 
 bool bCryptoLotteryEnabled = true;
 bool bRemotePaymentsEnabled = false;
 bool bNewbieFeatureEnabled = false;
-bool bOPReturnEnabled = false;
+bool bOPReturnEnabled = true;
 bool bOptionPaymentsEnabled = false;
 
 // Gridcoin:
@@ -323,6 +328,8 @@ int64_t nMinimumInputValue = 0;
 std::map<std::string, std::string> mvApplicationCache;
 std::map<std::string, int64_t> mvApplicationCacheTimestamp;
 std::map<std::string, double> mvNeuralNetworkHash;
+std::map<std::string, double> mvCurrentNeuralNetworkHash;
+
 std::map<std::string, double> mvNeuralVersion;
 
 std::map<std::string, StructCPID> mvDPOR;
@@ -681,12 +688,25 @@ bool FullSyncWithDPORNodes()
 
 				std::string sDisabled = GetArgument("disableneuralnetwork", "false");
 				if (sDisabled=="true") return false;
+				// 3-30-2016 : First try to get the master database from another neural network node if these conditions occur:
+				// The foreign node is fully synced.  The foreign nodes quorum hash matches the supermajority hash.  My hash != supermajority hash.
+				double dCurrentPopularity = 0;
+				std::string sCurrentNeuralSupermajorityHash = GetCurrentNeuralNetworkSupermajorityHash(dCurrentPopularity);
+				std::string sMyNeuralHash = "";
+				#if defined(WIN32) && defined(QT_GUI)
+					       sMyNeuralHash = qtGetNeuralHash("");
+				#endif
+				if (!sMyNeuralHash.empty() && !sCurrentNeuralSupermajorityHash.empty() && sMyNeuralHash != sCurrentNeuralSupermajorityHash)
+				{
+					bool bNodeOnline = RequestSupermajorityNeuralData();
+					if (bNodeOnline) return false;  // Async call to another node will continue after the node responds.
+				}
+			
 				std::string errors1 = "";
                 LoadAdminMessages(false,errors1);
 				std::string cpiddata = GetListOf("beacon");
 				std::string sWhitelist = GetListOf("project");
 				int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-				std::string myNeuralHash = "";
 				double popularity = 0;
 				std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
 				std::string sAge = RoundToString((double)superblock_age,0);
@@ -4941,6 +4961,11 @@ void GridcoinServices()
 			msNeuralResponse="";
 	}
 
+	if (TimerMain("clearcache",1000))
+	{
+		ClearCache("neural_data");
+	}
+
 	if (TimerMain("check_for_autoupgrade",240))
 	{
 		if (fDebug3) printf("Checking for upgrade...");
@@ -5161,7 +5186,7 @@ bool ProcessBlockLegacy(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 					setStakeSeenOrphan.clear();
 					mapOrphanBlocks.clear();
 					pfrom->nTrust--;
-					pfrom->Misbehaving(1);
+					//pfrom->Misbehaving(1);
 					pfrom->fDisconnect=true;
 					printf("\r\n * Clearing orphan cache due to duplicate orphan received 10 times * \r\n");
 				}
@@ -6398,6 +6423,8 @@ bool ComputeNeuralNetworkSupermajorityHashes()
 	//Clear the neural network hash buffer
 	if (mvNeuralNetworkHash.size() > 0)  mvNeuralNetworkHash.clear();
 	if (mvNeuralVersion.size() > 0)  mvNeuralVersion.clear();
+	if (mvCurrentNeuralNetworkHash.size() > 0) mvCurrentNeuralNetworkHash.clear();
+
 	//Clear the votes
 	WriteCache("neuralsecurity","pending","0",GetAdjustedTime());
 	ClearCache("neuralsecurity");
@@ -6436,6 +6463,8 @@ bool ComputeNeuralNetworkSupermajorityHashes()
 				}
 				//Increment Neural Network Hashes Supermajority (over the last N blocks)
 				IncrementNeuralNetworkSupermajority(bb.NeuralHash,bb.GRCAddress,(nMaxDepth-pblockindex->nHeight)+10);
+				IncrementCurrentNeuralNetworkSupermajority(bb.CurrentNeuralHash,bb.GRCAddress,(nMaxDepth-pblockindex->nHeight)+10);
+
 			}
 		}
 
@@ -6940,7 +6969,7 @@ bool AcidTest(std::string precommand, std::string acid, CNode* pfrom)
 	else
 	{
 		if (fDebug2) printf("Message corrupted. Node %s partially banned.",NodeAddress(pfrom).c_str());
-		pfrom->Misbehaving(10);
+		pfrom->Misbehaving(1);
 		return false;
 	}
 	return true;
@@ -7024,6 +7053,21 @@ bool SecurityTest(CNode* pfrom, bool acid_test)
 	return false;
 }
 
+
+bool PreventCommandAbuse(std::string sNeuralRequestID, std::string sCommandName)
+{
+				bool bIgnore = false;
+				if (cdbl("0"+ReadCache(sCommandName,sNeuralRequestID),0) > 10)
+				{
+					if (fDebug) printf("Ignoring %s request for %s",sCommandName.c_str(),sNeuralRequestID.c_str());
+					bIgnore = true;
+				}
+				if (!bIgnore)
+				{
+					WriteCache(sCommandName,sNeuralRequestID,RoundToString(cdbl("0"+ReadCache(sCommandName,sNeuralRequestID),0),0),GetAdjustedTime());
+				}
+				return bIgnore;
+}
 
 bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, int64_t nTimeReceived)
 {
@@ -7790,7 +7834,20 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 			//printf("neural request %s \r\n",neural_request.c_str());
 			std::string neural_response = "generic_response";
 
-			if (neural_request=="neural_hash")
+			if (neural_request=="neural_data")
+			{
+				if (!PreventCommandAbuse("neural_data",NodeAddress(pfrom)))
+				{
+					std::string contract = "";
+					#if defined(WIN32) && defined(QT_GUI)
+							std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
+							qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
+							contract = qtGetNeuralContract("");
+					#endif
+					pfrom->PushMessage("ndata_nresp", contract);
+				}
+			}
+			else if (neural_request=="neural_hash")
 			{
 				#if defined(WIN32) && defined(QT_GUI)
 					neural_response = qtGetNeuralHash("");
@@ -7805,7 +7862,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 				if (cdbl("0"+ReadCache("explainmag",neural_request_id),0) > 10)
 				{
 					if (fDebug) printf("Ignoring explainmag request for %s",neural_request_id.c_str());
-		 			pfrom->Misbehaving(2);
+		 			pfrom->Misbehaving(1);
 					bIgnore = true;
 				}
 				if (!bIgnore)
@@ -8016,6 +8073,27 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 	  			 if (fDebug && !results.empty()) printf("Quorum Resolution: %s \r\n",results.c_str());
 			}
 	}
+	else if (strCommand == "ndata_nresp")
+	{
+			std::string neural_contract = "";
+	        vRecv >> neural_contract;
+			if (fDebug3 && neural_contract.length() > 100) printf("Quorum contract received %s",neural_contract.substr(0,80).c_str());
+			if (neural_contract.length() > 10)
+			{
+				 std::string results = "";
+				 //Resolve discrepancies
+		 		 #if defined(WIN32) && defined(QT_GUI)
+	 	 		 	std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
+					qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
+					printf("\r\n** Sync neural network data from supermajority **\r\n");
+					results = qtExecuteDotNetStringFunction("ResolveCurrentDiscrepancies",neural_contract);
+				 #endif
+	  			 if (fDebug && !results.empty()) printf("Quorum Resolution: %s \r\n",results.c_str());
+				 // Resume the full DPOR sync at this point now that we have the supermajority data
+				 if (results=="SUCCESS")  FullSyncWithDPORNodes();
+			}
+	}
+
     else if (strCommand == "pong_old")
     {
         int64_t pingUsecEnd = nTimeReceived;
@@ -8455,11 +8533,22 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 		mcpid.NetworkRAC = 0;
 	}
 	//int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+
+	std::string sNeuralHash = "";
+	// To save network bandwidth, start posting the neural hashes in the CurrentNeuralHash field, so that out of sync neural network nodes can request neural data from those that are already synced and agree with the supermajority over the last 24 hrs
+	if (!OutOfSyncByAge())
+	{
+		#if defined(WIN32) && defined(QT_GUI)
+			sNeuralHash = qtGetNeuralHash("");
+			mcpid.CurrentNeuralHash = sNeuralHash;
+		#endif
+	}
+
 	//7-25-2015 - Add the neural hash only if necessary
 	if (!OutOfSyncByAge() && NeuralNodeParticipates() && NeedASuperblock())
 	{
 		#if defined(WIN32) && defined(QT_GUI)
-			mcpid.NeuralHash = qtGetNeuralHash("");
+			mcpid.NeuralHash = sNeuralHash;
 			mcpid.superblock = GetNeuralNetworkSuperBlock();
 		#endif
 	}
@@ -8483,7 +8572,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 					+ delim + NN(mcpid.OrganizationKey) + delim + mcpid.NeuralHash + delim + mcpid.superblock
 					+ delim + RoundToString(mcpid.ResearchSubsidy2,2) + delim + RoundToString(mcpid.ResearchAge,6)
 					+ delim + RoundToString(mcpid.ResearchMagnitudeUnit,6) + delim + RoundToString(mcpid.ResearchAverageMagnitude,2)
-					+ delim + NN(mcpid.LastPORBlockHash);
+					+ delim + NN(mcpid.LastPORBlockHash) + delim + mcpid.CurrentNeuralHash;
 	return bb;
 }
 
@@ -8584,6 +8673,10 @@ MiningCPID DeserializeBoincBlock(std::string block)
 		if (s.size() > 27)
 		{
 			surrogate.LastPORBlockHash = s[27];
+		}
+		if (s.size() > 28)
+		{
+			surrogate.CurrentNeuralHash = s[28];
 		}
 
 	}
@@ -9228,6 +9321,7 @@ StructCPID GetStructCPID()
 	c.ResearchMagnitudeUnit = 0;
 	c.ResearchAverageMagnitude = 0;
 	c.LastPORBlockHash = "";
+	c.CurrentNeuralHash = "";
 	c.Canary = 0;
 	c.NetsoftRAC = 0;
 	c.interestPayments = 0;
@@ -9284,6 +9378,7 @@ MiningCPID GetMiningCPID()
 	mc.ResearchMagnitudeUnit = 0;
 	mc.ResearchAverageMagnitude = 0;
 	mc.LastPORBlockHash = "";
+	mc.CurrentNeuralHash = "";
 	mc.Canary = 0; //Used to test for a memory overflow
 	mc.Organization = "";
 	mc.OrganizationKey = "";
@@ -9601,7 +9696,38 @@ void DeleteCache(std::string section, std::string keyname)
 	   mvApplicationCacheTimestamp.erase(pk);
 }
 
-void IncrementNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress,double distance)
+
+
+void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance)
+{
+	if (NeuralHash.length() < 5) return;
+	double temp_hashcount = 0;
+	if (mvCurrentNeuralNetworkHash.size() > 0)
+	{
+			temp_hashcount = mvCurrentNeuralNetworkHash[NeuralHash];
+	}
+	// 6-13-2015 ONLY Count Each Neural Hash Once per GRC address / CPID (1 VOTE PER RESEARCHER)
+	std::string Security = ReadCache("currentneuralsecurity",GRCAddress);
+	if (Security == NeuralHash)
+	{
+		//This node has already voted, throw away the vote
+		return;
+	}
+	WriteCache("currentneuralsecurity",GRCAddress,NeuralHash,GetAdjustedTime());
+	if (temp_hashcount == 0)
+	{
+		mvCurrentNeuralNetworkHash.insert(map<std::string,double>::value_type(NeuralHash,0));
+	}
+	double multiplier = 200;
+	if (distance < 40) multiplier = 400;
+	double votes = (1/distance)*multiplier;
+	temp_hashcount += votes;
+	mvCurrentNeuralNetworkHash[NeuralHash] = temp_hashcount;
+}
+
+
+
+void IncrementNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance)
 {
 	if (NeuralHash.length() < 5) return;
 	double temp_hashcount = 0;
@@ -9665,6 +9791,24 @@ std::string GetNeuralNetworkSupermajorityHash(double& out_popularity)
 	return neural_hash;
 }
 
+
+std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity)
+{
+	double highest_popularity = -1;
+	std::string neural_hash = "";
+	for(map<std::string,double>::iterator ii=mvCurrentNeuralNetworkHash.begin(); ii!=mvCurrentNeuralNetworkHash.end(); ++ii)
+	{
+				double popularity = mvCurrentNeuralNetworkHash[(*ii).first];
+				// d41d8 is the hash of an empty magnitude contract - don't count it
+				if ( ((*ii).first != "d41d8cd98f00b204e9800998ecf8427e") && popularity > 0 && popularity > highest_popularity && (*ii).first != "TOTAL_VOTES")
+				{
+					highest_popularity = popularity;
+					neural_hash = (*ii).first;
+				}
+	}
+	out_popularity = highest_popularity;
+	return neural_hash;
+}
 
 
 

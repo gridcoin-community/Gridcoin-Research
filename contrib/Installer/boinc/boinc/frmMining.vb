@@ -62,7 +62,6 @@ Public Class frmMining
         End Try
     End Sub
     
-
     Public Sub ChartBoinc()
         'Dim seriesAvgCredits As New Series
         Dim seriesNetworkMagnitude As New Series
@@ -250,6 +249,95 @@ Public Class frmMining
     Public Sub New()
         InitializeComponent()
     End Sub
+    Public Sub PopulateNeuralDataViaContractFile()
+        Dim sReport As String = ""
+        Dim sReportRow As String = ""
+        Dim sMemoryName = IIf(mbTestNet, "magnitudes_testnet", "magnitudes")
+        Dim sHeader As String = "CPID,Magnitude,Avg Magnitude,Total RAC,Synced Til,Address,CPID Valid,Witnesses,Rank"
+        sReport += sHeader + vbCrLf
+        dgv.Rows.Clear()
+        dgv.Columns.Clear()
+        dgv.BackgroundColor = Drawing.Color.Black
+        dgv.ForeColor = Drawing.Color.Lime
+        dgv.ReadOnly = True
+        Dim grr As New GridcoinReader.GridcoinRow
+        Dim vHeading() As String = Split(sHeader, ",")
+        PopulateHeadings(vHeading, dgv, False)
+        dgv.Columns(2).Visible = False
+        Dim sData As String = modPersistedDataSystem.GetMagnitudeContract()
+        Dim sMagnitudes = ExtractXML(sData, "<MAGNITUDES>")
+        Dim sProjects = ExtractXML(sData, "<AVERAGES>")
+        Dim iRow As Long = 0
+        Dim sValue As String
+        dgv.AutoResizeColumns(DataGridViewAutoSizeColumnsMode.ColumnHeader)
+        dgv.ReadOnly = True
+        dgv.EditingPanel.Visible = False
+        dgv.Columns(7).Visible = False
+        For x = 0 To 7
+            If x = 0 Or x = 1 Then
+                dgv.Columns(x).Visible = True
+            Else
+                dgv.Columns(x).Visible = False
+            End If
+        Next
+        dgv.Columns(8).Visible = True
+        Dim vMagnitudes() As String = Split(sMagnitudes, ";")
+        Dim vProjects() As String = Split(sProjects, ";")
+        For y = 0 To UBound(vMagnitudes) - 1
+            Dim vRow() As String = Split(vMagnitudes(y), ",")
+            If Len(vRow(0)) > 10 Then
+                dgv.Rows.Add()
+                sReportRow = ""
+                dgv.Rows(iRow).Cells(0).Value = vRow(0)
+                dgv.Rows(iRow).Cells(1).Value = Val(vRow(1))
+                iRow = iRow + 1
+            End If
+        Next
+
+        'Get the Neural Hash
+        Dim sMyNeuralHash As String
+        Dim sContract = GetMagnitudeContract()
+        sMyNeuralHash = GetQuorumHash(sContract)
+        dgv.Rows.Add()
+        dgv.Rows(iRow).Cells(0).Value = "Hash: " + sMyNeuralHash + " (" + Trim(iRow) + ")"
+        sReport += "Hash: " + sMyNeuralHash + " (" + Trim(iRow) + ")"
+        'Populate Projects
+
+        dgvProjects.Rows.Clear()
+        dgvProjects.Columns.Clear()
+        dgvProjects.EditingPanel.Visible = False
+        dgvProjects.AllowUserToAddRows = False
+        dgvProjects.BackgroundColor = Drawing.Color.Black
+        dgvProjects.ForeColor = Drawing.Color.Lime
+        Dim sHeading As String = "Project Name;Total RAC;Avg RAC;Whitelisted"
+        vHeading = Split(sHeading, ";")
+        PopulateHeadings(vHeading, dgvProjects, False)
+        Dim surrogateRow As New Row
+        Dim WhitelistedProjects As Double = 0
+        Dim PrjCount As Double = 0
+        iRow = 0
+        dgvProjects.Columns(1).Visible = False
+
+        For y = 0 To UBound(vProjects) - 1
+            dgvProjects.Rows.Add()
+            Dim vProjRow() As String = Split(vProjects(y), ",")
+            dgvProjects.Rows(iRow).Cells(0).Value = vProjRow(0)
+            dgvProjects.Rows(iRow).Cells(2).Value = vProjRow(2)
+            dgvProjects.Rows(iRow).Cells(3).Value = "True"
+            iRow += 1
+        Next
+        lblTotalProjects.Text = Trim(vProjects.Length)
+        lblWhitelistedProjects.Text = Trim(vProjects.Length)
+        dgv.Sort(dgv.Columns(1), System.ComponentModel.ListSortDirection.Descending)
+
+        For y = 0 To dgv.Rows.Count - 2
+            dgv.Rows(y).Cells(8).Value = y + 1
+        Next
+
+        SetAutoSizeMode2(vHeading, dgv)
+
+    End Sub
+
 
 
     Public Sub PopulateNeuralData()
@@ -257,8 +345,11 @@ Public Class frmMining
         Dim sReport As String = ""
         Dim sReportRow As String = ""
         Dim sMemoryName = IIf(mbTestNet, "magnitudes_testnet", "magnitudes")
-
-        Dim sHeader As String = "CPID,Magnitude,Avg Magnitude,Total RAC,Synced Til,Address,CPID Valid;Witnesses"
+        If GetFileAge(GetGridPath("NeuralNetwork") + "\contract.dat") < 240 Then
+            PopulateNeuralDataViaContractFile()
+            Exit Sub
+        End If
+        Dim sHeader As String = "CPID,Magnitude,Avg Magnitude,Total RAC,Synced Til,Address,CPID Valid,Witnesses,Rank"
         sReport += sHeader + vbCrLf
 Refresh:
 
@@ -269,8 +360,8 @@ Refresh:
         dgv.ReadOnly = True
 
         Dim grr As New GridcoinReader.GridcoinRow
-        Dim sHeading As String = "CPID;Magnitude;Avg Magnitude;Total RAC;Synced Til;Address;CPID Valid;Witnesses"
-        Dim vHeading() As String = Split(sHeading, ";")
+        Dim vHeading() As String = Split(sHeader, ",")
+
         PopulateHeadings(vHeading, dgv, False)
         dgv.Columns(2).Visible = False
         Dim sData As String = modPersistedDataSystem.GetMagnitudeContractDetails()
@@ -282,12 +373,12 @@ Refresh:
         dgv.AutoResizeColumns(DataGridViewAutoSizeColumnsMode.ColumnHeader)
         dgv.ReadOnly = True
         dgv.EditingPanel.Visible = False
-        'dgv.Columns(7).Visible = False (Witnesses, not hidden)
+        dgv.Columns(7).Visible = False '(Witnesses)
 
         For y = 0 To UBound(vData) - 1
             dgv.Rows.Add()
             sReportRow = ""
-            For x = 0 To UBound(vHeading)
+            For x = 0 To UBound(vHeading) - 1
                 Dim vRow() As String = Split(vData(y), ",")
                 sValue = vRow(x)
                 'Sort numerically:
@@ -309,8 +400,6 @@ Refresh:
 
         Next
 
-        SetAutoSizeMode2(vHeading, dgv)
-
         Me.Cursor.Current = Cursors.Default
 
         'Get the Neural Hash
@@ -320,7 +409,6 @@ Refresh:
         dgv.Rows.Add()
         dgv.Rows(iRow).Cells(0).Value = "Hash: " + sMyNeuralHash + " (" + Trim(iRow) + ")"
         sReport += "Hash: " + sMyNeuralHash + " (" + Trim(iRow) + ")"
-
 
         msNeuralReport = sReport
         'Populate Projects
@@ -334,7 +422,7 @@ Refresh:
 
         dgvProjects.BackgroundColor = Drawing.Color.Black
         dgvProjects.ForeColor = Drawing.Color.Lime
-        sHeading = "Project Name;Total RAC;Avg RAC;Whitelisted"
+        Dim sHeading As String = "Project Name;Total RAC;Avg RAC;Whitelisted"
         vHeading = Split(sHeading, ";")
 
         PopulateHeadings(vHeading, dgvProjects, False)
@@ -375,16 +463,16 @@ Refresh:
         Next
         lblTotalProjects.Text = Trim(PrjCount)
         lblWhitelistedProjects.Text = Trim(WhitelistedProjects)
-
-
         dgv.Sort(dgv.Columns(1), System.ComponentModel.ListSortDirection.Descending)
 
+        For y = 0 To dgv.Rows.Count - 2
+            dgv.Rows(y).Cells(8).Value = y + 1
+        Next
 
+        SetAutoSizeMode2(vHeading, dgv)
 
     End Sub
     Private Sub TabControl1_SelectedIndexChanged(sender As Object, e As System.EventArgs) Handles TabControl1.SelectedIndexChanged
-        ' If TabControl1.SelectedIndex = 2 Then
-        'End If
     End Sub
     Private Shared Function InlineAssignHelper(Of T)(ByRef target As T, ByVal value As T) As T
         target = value
@@ -708,7 +796,6 @@ Refresh:
         If e.RowIndex < 0 Then Exit Sub
         'Get whitelist total first
 
-        '
         Dim sProject As String = Trim(dgvProjects.Rows(e.RowIndex).Cells(0).Value)
 
         If Len(sProject) > 1 Then
@@ -718,5 +805,18 @@ Refresh:
 
         End If
 
+    End Sub
+    Private Function GetAgeOfContract() As Double
+
+        Return GetFileAge(GetGridFolder() + "NeuralNetwork\contract.dat")
+
+    End Function
+    Private Sub Button1_Click(sender As System.Object, e As System.EventArgs) Handles Button1.Click
+        'Export Contract 
+        Dim sFullPath As String = GetGridFolder() + "NeuralNetwork\contract.dat"
+        Dim swContract As New StreamWriter(sFullPath)
+        Dim sContract As String = GetMagnitudeContract()
+        swContract.Write(sContract)
+        swContract.Close()
     End Sub
 End Class

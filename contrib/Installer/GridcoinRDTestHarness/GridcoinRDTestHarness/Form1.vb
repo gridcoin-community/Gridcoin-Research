@@ -121,11 +121,13 @@ Public Class Form1
         '####### FOR DEBUGGING FOUNDATION EXPENSE APPROVAL SYSTEM #######
         Thread.CurrentThread.CurrentUICulture = New CultureInfo("pt-BR")
         Dim sBin As String = ConvertHexToBin("FFFF")
-
+    
         Dim sBin2 As String = ConvertHexToBin("784afb35d92503160125feb183157378")
         Dim sHex As String = ConvertBinToHex(sBin2)
 
         mU = New Utilization
+        mU.SetDebugMode(True)
+
         Dim sTestNet As String = "TESTNET"
         sTestNet = "PROD"
         mU.SetTestNetFlag(sTestNet)
@@ -136,7 +138,9 @@ Public Class Form1
         'mU.ShowVotingConsole()
 
         'mU.ShowFoundation()
-        mU.ShowMiningConsole()
+        'mU.ShowMiningConsole()
+        mU.ShowTicker()
+
         'mU.UpdateMagnitudesOnly()
         'mU.ShowTicketList()
         'mU.ShowConfig()

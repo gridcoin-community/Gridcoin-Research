@@ -702,13 +702,16 @@ Module modGRC
     Public Function GetGridPath(ByVal sType As String) As String
         Dim sTemp As String
         sTemp = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\gridcoinresearch\" + sType
+        Dim sOverridden As String = KeyValue("datadir")
+        sTemp = IIf(Len(sOverridden) > 0, sOverridden, sTemp)
         If System.IO.Directory.Exists(sTemp) = False Then
             Try
                 System.IO.Directory.CreateDirectory(sTemp)
             Catch ex As Exception
-
+                Log("Unable to create Gridcoin Path " + sTemp)
             End Try
         End If
+        If mbTestNet Then sTemp += "Testnet\"
         Return sTemp
     End Function
     Public Function GetGridFolder() As String
@@ -741,14 +744,16 @@ Module modGRC
         End Try
     End Function
     Public Function UpdateKey(ByVal sKey As String, ByVal sValue As String)
+        Dim sr As StreamReader
+        Dim sw As StreamWriter
+        Dim sInPath As String = ""
         Try
-            Dim sInPath As String = ConfigPath()
+            sInPath = ConfigPath()
             Dim sOutPath As String = ConfigPath() + ".bak"
 
             Dim bFound As Boolean
-
-            Dim sr As New StreamReader(sInPath)
-            Dim sw As New StreamWriter(sOutPath, False)
+            sr = New StreamReader(sInPath)
+            sw = New StreamWriter(sOutPath, False)
 
             Dim sRow As String
             Dim vRow() As String
@@ -774,6 +779,12 @@ Module modGRC
             FileCopy(sOutPath, sInPath)
             Kill(sOutPath)
         Catch ex As Exception
+            Try
+                sr.close()
+                sw.close()
+            Catch ex1 As Exception
+                Log("Unable to close " + sInPath + " " + ex1.Message)
+            End Try
             Return ""
         End Try
     End Function

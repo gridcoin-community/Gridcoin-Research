@@ -92,7 +92,7 @@ Public Class frmLiveTicker
             Dim sURL As String = "https://c-cex.com/t/" + ccxPage
             Dim w As New MyWebClient
             Dim sJSON As String = w.DownloadString(sURL)
-            Dim sLast As String = ExtractValue(sJSON, "lastprice", "updated")
+            Dim sLast As String = ExtractValue(sJSON, "avg", "lastbuy")
             Dim dprice As Double
             dprice = CDbl(sLast)
             Dim qBitcoin As Quote

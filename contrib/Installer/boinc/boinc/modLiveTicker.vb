@@ -62,7 +62,8 @@
             Dim vTickers() As String
             vTickers = Split(msTickers, ",")
             Dim vQuotes() As String
-            vQuotes = Split(sOut, vbCr)
+            vQuotes = Split(sOut, Chr(10))
+
             Dim dOut As Double
             Dim x As Long = 0
             For x = 0 To UBound(vTickers)
@@ -88,10 +89,11 @@
                 dPrice = Val(vRow(2))
                 Dim q As Quote
                 q = GetQuote(sSymbol)
-                q.Price = dPrice
+                q.Price = Math.Round(dPrice, 2)
                 'q.PreviousClose = Val(vRow(?))
                 q.Variance = Val(vRow(3))
                 mdPrices(sSymbol) = q
+
                 Return dPrice
             End If
         Next

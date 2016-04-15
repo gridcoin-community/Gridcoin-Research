@@ -472,14 +472,21 @@ Public Class Utilization
         Return sOut
     End Function
     Public Function ResolveDiscrepancies(sContract As String) As String
-
         '7-25-2015 - Moving to QuorumHashingAlgorithm for this - disable this for the time being
-
-        ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
-
         'Call ThreadResolveDiscrepanciesIn(sContract)
         'Return "Started Async Resolution."
         Return ""
+    End Function
+    Public Function ResolveCurrentDiscrepancies(sContract As String) As String
+        Try
+            Dim sPath As String = GetGridFolder() + "NeuralNetwork\contract.dat"
+            Dim swContract As New StreamWriter(sPath)
+            swContract.Write(sContract)
+            swContract.Close()
+        Catch ex As Exception
+            Return ex.Message
+        End Try
+        Return "SUCCESS"
     End Function
 
     Public Function SetGenericVotingData(sValue As String) As Double

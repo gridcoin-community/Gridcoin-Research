@@ -13,7 +13,10 @@ using namespace json_spirit;
 using namespace std;
 bool Contains(std::string data, std::string instring);
 extern std::string NeuralRequest(std::string MyNeuralRequest);
+extern bool RequestSupermajorityNeuralData();
+std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
 
+std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 
 extern void GatherNeuralHashes();
 
@@ -66,6 +69,26 @@ void GatherNeuralHashes()
             if (fDebug10) printf(" Pushed ");
 		}
     }
+}
+
+
+bool RequestSupermajorityNeuralData()
+{
+    LOCK(cs_vNodes);
+	double dCurrentPopularity = 0;
+	std::string sCurrentNeuralSupermajorityHash = GetCurrentNeuralNetworkSupermajorityHash(dCurrentPopularity);
+	std::string reqid = DefaultWalletAddress();
+			
+    BOOST_FOREACH(CNode* pNode, vNodes) 
+	{
+		if (!pNode->NeuralHash.empty() && !sCurrentNeuralSupermajorityHash.empty() && pNode->NeuralHash == sCurrentNeuralSupermajorityHash)
+		{
+			std::string command_name="neural_data";
+         	pNode->PushMessage("neural", command_name, reqid);
+         	return true;
+		}
+    }
+	return false;
 }
 
 Value addnode(const Array& params, bool fHelp)
