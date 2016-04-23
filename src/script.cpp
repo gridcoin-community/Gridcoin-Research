@@ -241,6 +241,11 @@ const char* GetOpName(opcodetype opcode)
     case OP_NOP9                   : return "OP_NOP9";
     case OP_NOP10                  : return "OP_NOP10";
 
+    // template matching params
+    case OP_PUBKEYHASH             : return "OP_PUBKEYHASH";
+    case OP_PUBKEY                 : return "OP_PUBKEY";
+    case OP_SMALLDATA              : return "OP_SMALLDATA";
+
     case OP_INVALIDOPCODE          : return "OP_INVALIDOPCODE";
 
     // Note:
@@ -1295,12 +1300,6 @@ bool CheckSig(vector<unsigned char> vchSig, vector<unsigned char> vchPubKey, CSc
 
 
 
-
-
-
-
-
-
 //
 // Return public keys or hashes from scriptPubKey, for 'standard' transaction types.
 //
@@ -1508,10 +1507,9 @@ int ScriptSigArgsExpected(txnouttype t, const std::vector<std::vector<unsigned c
     case TX_NONSTANDARD:
 		return -1; // Note, this was empty (thats -1);
     case TX_NULL_DATA:
-		return (bOPReturnEnabled) ? 1 : -1;
-	    //Note, this was -1;
-	
-    case TX_PUBKEY:
+		return (bOPReturnEnabled) ? -1 : -1;
+		// Script Sig Args Expected:  Bitcoin=-1, PPCoin=1
+	case TX_PUBKEY:
         return 1;
     case TX_PUBKEYHASH:
         return 2;
@@ -1689,7 +1687,8 @@ bool ExtractDestinations(const CScript& scriptPubKey, txnouttype& typeRet, vecto
     vector<valtype> vSolutions;
     if (!Solver(scriptPubKey, typeRet, vSolutions))
         return false;
-    if (typeRet == TX_NULL_DATA){
+    if (typeRet == TX_NULL_DATA)
+	{
         // This is data, not addresses
         return false;
     }

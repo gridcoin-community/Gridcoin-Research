@@ -29,6 +29,7 @@ Public Class frmFoundation
         Dim vHeading() As String = Split(sHeading, ";")
 
         PopulateHeadings(vHeading, dgv, True)
+        '4-22-2016
 
         Dim iRow As Long = 0
         Dim vPolls() As String = Split(sVoting, "<POLL>")
@@ -43,12 +44,8 @@ Public Class frmFoundation
                 Dim sQuestion As String = ExtractXML(vPolls(y), "<QUESTION>")
                 Dim sAnswers As String = ExtractXML(vPolls(y), "<ANSWERS>")
                 Dim sId As String = GetFoundationGuid(sTitle)
-
                 If Len(sId) > 0 Then
-
                     Dim lDateDiff As Long = DateDiff(DateInterval.Day, Now, GlobalCDate(sExpiration))
-
-
                     If Len(sTitle) > 0 And lDateDiff > -7 Then
                         'Array of answers
                         Dim sArrayOfAnswers As String = ExtractXML(vPolls(y), "<ARRAYANSWERS>")
@@ -63,15 +60,14 @@ Public Class frmFoundation
                         Dim sTotalShares As String = ExtractXML(vPolls(y), "<TOTALSHARES>")
                         Dim sBestAnswer As String = ExtractXML(vPolls(y), "<BESTANSWER>")
                         dgv.Rows.Add()
-
                         dgv.Rows(iRow).Cells(0).Value = iRow + 1
                         dgv.Rows(iRow).Cells(1).Value = sTitle
+                        '                        If Len(sTitle) > 65 Then dgv.Rows(iRow).Cells(1).Value += "..."
                         dgv.Rows(iRow).Cells(2).Value = sExpiration
                         If lDateDiff < 0 Then dgv.Rows(iRow).Cells(2).Style.BackColor = Drawing.Color.Red
-
                         dgv.Rows(iRow).Cells(3).Value = sShareType
                         dgv.Rows(iRow).Cells(4).Value = sQuestion
-                        If Len(sAnswers) > 81 Then sAnswers = Mid(sAnswers, 1, 81) + "..."
+                        If Len(sAnswers) > 71 Then sAnswers = Mid(sAnswers, 1, 71) + "..."
                         dgv.Rows(iRow).Cells(5).Value = sAnswers
                         dgv.Rows(iRow).Cells(6).Value = sTotalParticipants
                         dgv.Rows(iRow).Cells(7).Value = sTotalShares
@@ -91,6 +87,9 @@ Public Class frmFoundation
                 End If
 
             Next
+            dgv.Columns(1).AutoSizeMode = DataGridViewAutoSizeColumnMode.None
+            dgv.Columns(1).Width = 350
+
         Catch ex As Exception
             Log(ex.Message)
 
@@ -163,13 +162,18 @@ Public Class frmFoundation
             frmVote.PlaceVote(sTitle)
         ElseIf tsmi.Text = "View" Then
             If Len(sTitle) > 0 Then
+                Log(sTitle)
                 Dim frmE As New frmAddExpense
                 frmE.Mode = "View"
-                frmE.myGuid = GetFoundationGuid(sTitle)
+                Dim sGuid As String = ""
+                Try
+                    sGuid = GetFoundationGuid(sTitle)
+                Catch ex As Exception
+                    Log("guid " + ex.Message)
+                End Try
+                frmE.myGuid = sGuid
                 frmE.Show()
-
             End If
-
         End If
 
 

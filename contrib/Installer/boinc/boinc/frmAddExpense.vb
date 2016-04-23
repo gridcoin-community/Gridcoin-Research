@@ -12,15 +12,20 @@ Public Class frmAddExpense
     Private Sub frmTicketAdd_Load(sender As System.Object, e As System.EventArgs) Handles MyBase.Load
         mGRCData = New GRCSec.GridcoinData
         sHandle = mGRCData.GetHandle(GetSessionGuid)
+
+
         Try
-            If sHandle = "" Or mGRCData.IsAuthenticated(GetSessionGuid) = False Then
-                If mfrmLogin Is Nothing Then
-                    mfrmLogin = New frmLogin
+            If Mode <> "View" Then
+                If sHandle = "" Or mGRCData.IsAuthenticated(GetSessionGuid) = False Then
+                    If mfrmLogin Is Nothing Then
+                        mfrmLogin = New frmLogin
+                    End If
+                    mfrmLogin.Show()
+                    Me.Dispose()
+                    Exit Sub
                 End If
-                mfrmLogin.Show()
-                Me.Dispose()
-                Exit Sub
             End If
+
             txtSubmittedBy.Text = sHandle
             If myGuid <> "" Then
                 txtTicketId.Text = myGuid
@@ -142,7 +147,16 @@ Public Class frmAddExpense
             MsgBox(sResult, MsgBoxStyle.Information, "Gridcoin Foundation - Expense System")
             Exit Sub
         End If
-        
+        'if they are not logged on... throw an error ... 4-22-2016
+        If sHandle = "" Or mGRCData.IsAuthenticated(GetSessionGuid) = False Then
+            MsgBox("Please authenticate first.  After logging in you may re-submit the form.", MsgBoxStyle.Critical, "Not Logged In")
+            If mfrmLogin Is Nothing Then
+                mfrmLogin = New frmLogin
+            End If
+            mfrmLogin.Show()
+            Exit Sub
+        End If
+
         mGRCData.mInsertExpense(Mode, txtSubmittedBy.Text, txtTicketId.Text, "All", _
                          sType, txtDescription.Text, sType, rtbNotes.Text, MerkleRoot, _
                          Trim(dtStart.Text), Trim(dtEnd.Text), Trim(txtAmount.Text), rtbNotes.Text, txtAttachment.Text)

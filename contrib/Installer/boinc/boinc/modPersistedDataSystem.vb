@@ -714,7 +714,6 @@ Module modPersistedDataSystem
                 ReconnectToNeuralNetwork()
                 mdictNeuralNetworkQuorumData = mGRCData.GetNeuralNetworkQuorumData2("quorumdata", mbTestNet, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD))
                 mdictNeuralNetworkAdditionalQuorumData = mGRCData.GetNeuralNetworkQuorumData3("quorumconsensusdata", mbTestNet, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD))
-
                 If mdictNeuralNetworkQuorumData.Count > IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD) Then
                     Return True
                 End If
@@ -908,7 +907,7 @@ Module modPersistedDataSystem
                 If mlPercentComplete > 99 Then mlPercentComplete = 99
             Next
 
-            mGRCData.FinishSync()
+            mGRCData.FinishSync(mbTestNet)
 
             mlPercentComplete = 0
             Return True

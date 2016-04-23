@@ -1,6 +1,4 @@
-﻿
-Imports BoincStake
-
+﻿Imports BoincStake
 Imports System.Net.HttpWebRequest
 Imports System.Text
 Imports System.IO
@@ -9,16 +7,12 @@ Imports System.Object
 Imports System.Security.Cryptography
 Imports System.Speech.Synthesis
 Imports System.Net.Mail
-
-
 Imports System.Net
 Imports System.Threading
 Imports System.Globalization
 
 Public Class Form1
     Public mU As BoincStake.Utilization
-
-
     Public night As Boolean
 
     Public Structure Crypt
@@ -122,39 +116,40 @@ Public Class Form1
         Thread.CurrentThread.CurrentUICulture = New CultureInfo("pt-BR")
         Dim sBin As String = ConvertHexToBin("FFFF")
     
-        Dim sBin2 As String = ConvertHexToBin("784afb35d92503160125feb183157378")
-        Dim sHex As String = ConvertBinToHex(sBin2)
-
         mU = New Utilization
-        mU.SetDebugMode(True)
+        mU.SetDebugMode(True) : mbTestNet = True
 
         Dim sTestNet As String = "TESTNET"
         sTestNet = "PROD"
         mU.SetTestNetFlag(sTestNet)
         'mU.SetGenericVotingData(sVotes)
 
-        'Dim sCurrentContract As String = mU.GetNeuralContract
         'mU.ShowTicketList()
         'mU.ShowVotingConsole()
 
         'mU.ShowFoundation()
         'mU.ShowMiningConsole()
-        mU.ShowTicker()
+        'mU.ShowTicker()
 
         'mU.UpdateMagnitudesOnly()
-        'mU.ShowTicketList()
         'mU.ShowConfig()
+        mU.ShowFoundation()
+
 
         Exit Sub
     End Sub
-
-    Public Function WriteGenericData(sKey As String, sValue As String)
-
-
+    Public Function HashToFileSector(sHash As String) As String
+        Dim dDivisor As Double = 9.84615384615385
+        Dim sHex As String = sHash.Substring(0, 2)
+        Dim dCompute As Double = Val("&h" + sHex) + 1
+        Dim dSector As Double = dCompute / dDivisor
+        Dim dAscii As Double = 64 + dSector
+        If dAscii < 65 Then dAscii = 65
+        If dAscii > 90 Then dAscii = 90
+        dAscii = Math.Round(dAscii, 0)
+        Dim sOut As String = Chr(dAscii)
+        Return sOut
     End Function
-
-
-
     Public Sub Log(sData As String)
         Try
             Dim sPath As String
@@ -164,16 +159,11 @@ Public Class Form1
             sw.Close()
         Catch ex As Exception
         End Try
-
     End Sub
 
     Private Sub Button2_Click(sender As System.Object, e As System.EventArgs) Handles Button2.Click
         'Test progress bar
         Dim mU As New Utilization
-
-
         mU.TestGZIPBoincDownload()
-
-
     End Sub
 End Class

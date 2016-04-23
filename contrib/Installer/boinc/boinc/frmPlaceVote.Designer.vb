@@ -79,7 +79,7 @@ Partial Class frmPlaceVote
         Me.lblMultipleChoice.AutoSize = True
         Me.lblMultipleChoice.Font = New System.Drawing.Font("Microsoft Sans Serif", 8.25!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
         Me.lblMultipleChoice.ForeColor = System.Drawing.Color.FromArgb(CType(CType(255, Byte), Integer), CType(CType(128, Byte), Integer), CType(CType(128, Byte), Integer))
-        Me.lblMultipleChoice.Location = New System.Drawing.Point(936, 17)
+        Me.lblMultipleChoice.Location = New System.Drawing.Point(936, 57)
         Me.lblMultipleChoice.Name = "lblMultipleChoice"
         Me.lblMultipleChoice.Size = New System.Drawing.Size(158, 13)
         Me.lblMultipleChoice.TabIndex = 59

@@ -433,14 +433,36 @@ Value createrawtransaction(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 2)
         throw runtime_error(
-            "createrawtransaction [{\"txid\":txid,\"vout\":n},...] {address:amount,...}\n"
-            "Create a transaction spending given inputs\n"
-            "(array of objects containing transaction id and output number),\n"
-            "sending to given address(es).\n"
+            "createrawtransaction [{\"txid\":\"id\",\"vout\":n},...] {\"address\":amount,\"data\":\"hex\",...}\n"
+            "\nCreate a transaction spending the given inputs and creating new outputs.\n"
+            "Outputs can be addresses or data.\n"
             "Returns hex-encoded raw transaction.\n"
             "Note that the transaction's inputs are not signed, and\n"
-            "it is not stored in the wallet or transmitted to the network.");
-
+            "it is not stored in the wallet or transmitted to the network.\n"
+            "\nArguments:\n"
+            "1. \"transactions\"        (string, required) A json array of json objects\n"
+            "     [\n"
+            "       {\n"
+            "         \"txid\":\"id\",    (string, required) The transaction id\n"
+            "         \"vout\":n        (numeric, required) The output number\n"
+            "       }\n"
+            "       ,...\n"
+            "     ]\n"
+            "2. \"outputs\"             (string, required) a json object with outputs\n"
+            "    {\n"
+            "      \"address\": x.xxx   (numeric, required) The key is the bitcoin address, the value is the CURRENCY_UNIT amount\n"
+            "      \"data\": \"hex\",     (string, required) The key is \"data\", the value is hex encoded data\n"
+            "      ...\n"
+            "    }\n"
+            "\nResult:\n"
+            "\"transaction\"            (string) hex string of the transaction\n"
+            "\nExamples\n"
+            "createrawtransaction \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\" \"{\\\"address\\\":0.01} "
+            "createrawtransaction \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\" \"{\\\"data\\\":\\\"00010203\\\"} "
+            "createrawtransaction \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", \"{\\\"address\\\":0.01} "
+            "createrawtransaction \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", \"{\\\"data\\\":\\\"00010203\\\"} "
+        );
+	LOCK(cs_main);
     RPCTypeCheck(params, list_of(array_type)(obj_type));
 
     Array inputs = params[0].get_array();
@@ -473,20 +495,30 @@ Value createrawtransaction(const Array& params, bool fHelp)
     set<CBitcoinAddress> setAddress;
     BOOST_FOREACH(const Pair& s, sendTo)
     {
-        CBitcoinAddress address(s.name_);
-        if (!address.IsValid())
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("Invalid Gridcoin address: ")+s.name_);
+		 if (s.name_ == "data") 
+		 {
+            std::vector<unsigned char> data = ParseHexV(params[1],"Data");
+            CTxOut out(0, CScript() << OP_RETURN << data);
+            rawTx.vout.push_back(out);
+        }
+		else
+		{
 
-        if (setAddress.count(address))
-            throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, duplicated address: ")+s.name_);
-        setAddress.insert(address);
+			CBitcoinAddress address(s.name_);
+			if (!address.IsValid())
+				throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("Invalid Gridcoin address: ")+s.name_);
 
-        CScript scriptPubKey;
-        scriptPubKey.SetDestination(address.Get());
-        int64_t nAmount = AmountFromValue(s.value_);
+			if (setAddress.count(address))
+				throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, duplicated address: ")+s.name_);
+			setAddress.insert(address);
 
-        CTxOut out(nAmount, scriptPubKey);
-        rawTx.vout.push_back(out);
+			CScript scriptPubKey;
+			scriptPubKey.SetDestination(address.Get());
+			int64_t nAmount = AmountFromValue(s.value_);
+
+			CTxOut out(nAmount, scriptPubKey);
+			rawTx.vout.push_back(out);
+		}
     }
 
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);

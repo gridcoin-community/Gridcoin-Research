@@ -13,17 +13,19 @@ Public Class clsBoincProjectDownload
 
     Public Function DownloadGZipFiles() As Boolean
 
-
         Dim lAgeOfMaster = GetFileAge(GetGridFolder() + "NeuralNetwork\db.dat")
+        If lAgeOfMaster > SYNC_THRESHOLD Then
+            ReconnectToNeuralNetwork()
+            Dim bFail As Boolean = mGRCData.GetNeuralNetworkQuorumData(mbTestNet)
+            lAgeOfMaster = GetFileAge(GetGridFolder() + "NeuralNetwork\db.dat")
+        End If
         If lAgeOfMaster < SYNC_THRESHOLD Then Return True
-
         Dim rWhiteListedProjects As New Row
         rWhiteListedProjects.Database = "Whitelist"
         rWhiteListedProjects.Table = "Whitelist"
         Dim lstWhitelist As List(Of Row) = GetList(rWhiteListedProjects, "*")
         Dim sProjectURL As String = ""
         Dim sProject As String = ""
-
         Dim sNNFolder1 As String = GetGridFolder() + "NeuralNetwork\"
         If Directory.Exists(sNNFolder1) = False Then
             Directory.CreateDirectory(sNNFolder1)
@@ -156,11 +158,10 @@ Public Class clsBoincProjectDownload
             If File.Exists(GetGridFolder() + "NeuralNetwork\db.dat") Then
                 'Conundrum here.  Although we would like to delete the database, what if one project site is down for the day
                 'for all nodes?  If we do this, no one will be able to sync.  For robustness, let the network sync with a missing project.
-                '                File.Delete(GetGridFolder() + "NeuralNetwork\db.dat")
+                ' File.Delete(GetGridFolder() + "NeuralNetwork\db.dat")
             End If
             ' Log("Database deleted.")
         End If
-
         Return True
 
     End Function

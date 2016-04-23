@@ -1,4 +1,6 @@
 ﻿Imports System.Text
+Imports System.IO
+
 Public Module Functions
     Public Function GetGridFolder() As String
         Dim sTemp As String
@@ -14,8 +16,22 @@ Public Module Functions
             sw.Close()
         Catch ex As Exception
         End Try
-
     End Sub
+
+    Public Function GetFileAge(sPath As String) As Double
+        If File.Exists(sPath) = False Then Return 1000000
+        Dim fi As New FileInfo(sPath)
+        If fi.Length = 0 Then Return 1000000
+        Dim iMins As Long = DateDiff(DateInterval.Minute, fi.LastWriteTime, Now)
+        Return iMins
+    End Function
+
+    Public Function GetFileSize(sPath As String) As Double
+        If File.Exists(sPath) = False Then Return 0
+        Dim fi As New FileInfo(sPath)
+        Return fi.Length
+    End Function
+
 End Module
 Public Class HMACSHA512Hasher
 
