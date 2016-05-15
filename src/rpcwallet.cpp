@@ -555,6 +555,7 @@ Value getreceivedbyaccount(const Array& params, bool fHelp)
 int64_t GetEarliestWalletTransaction()
 {
         int64_t nTime = 999999999999;
+		const isminefilter& filter = MINE_SPENDABLE;
         for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
         {
             const CWalletTx& wtx = (*it).second;
@@ -564,7 +565,8 @@ int64_t GetEarliestWalletTransaction()
             list<pair<CTxDestination, int64_t> > listReceived;
             list<pair<CTxDestination, int64_t> > listSent;
 			int64_t totalFees;
-            wtx.GetAmounts(listReceived, listSent, totalFees, strSentAccount);
+
+            wtx.GetAmounts(listReceived, listSent, totalFees, strSentAccount, filter);
             if (wtx.GetDepthInMainChain() >= 0 && wtx.GetBlocksToMaturity() == 0)
             {
 				if (wtx.nTime < nTime && wtx.nTime > 0) nTime = wtx.nTime;
@@ -575,8 +577,7 @@ int64_t GetEarliestWalletTransaction()
 
 }
 
-
-int64_t GetAccountBalance(CWalletDB& walletdb, const string& strAccount, int nMinDepth)
+int64_t GetAccountBalance(CWalletDB& walletdb, const string& strAccount, int nMinDepth, const isminefilter& filter = MINE_SPENDABLE)
 {
     int64_t nBalance = 0;
 
@@ -588,7 +589,7 @@ int64_t GetAccountBalance(CWalletDB& walletdb, const string& strAccount, int nMi
             continue;
 
         int64_t nReceived, nSent, nFee;
-        wtx.GetAccountAmounts(strAccount, nReceived, nSent, nFee);
+        wtx.GetAccountAmounts(strAccount, nReceived, nSent, nFee, filter);
 
         if (nReceived != 0 && wtx.GetDepthInMainChain() >= nMinDepth && wtx.GetBlocksToMaturity() == 0)
             nBalance += nReceived;
@@ -601,27 +602,51 @@ int64_t GetAccountBalance(CWalletDB& walletdb, const string& strAccount, int nMi
     return nBalance;
 }
 
-int64_t GetAccountBalance(const string& strAccount, int nMinDepth)
+int64_t GetAccountBalance(const string& strAccount, int nMinDepth, const isminefilter& filter = MINE_SPENDABLE)
 {
     CWalletDB walletdb(pwalletMain->strWalletFile);
-    return GetAccountBalance(walletdb, strAccount, nMinDepth);
+    return GetAccountBalance(walletdb, strAccount, nMinDepth, filter);
 }
 
 
 Value getbalance(const Array& params, bool fHelp)
 {
-    if (fHelp || params.size() > 2)
-        throw runtime_error(
-            "getbalance [account] [minconf=1]\n"
-            "If [account] is not specified, returns the server's total available balance.\n"
-            "If [account] is specified, returns the balance in the account.");
+    if (fHelp || params.size() > 3)
+         throw runtime_error(
+            "getbalance ( \"account\" minconf includeWatchonly )\n"
+            "\nIf account is not specified, returns the server's total available balance.\n"
+            "If account is specified, returns the balance in the account.\n"
+            "Note that the account \"\" is not the same as leaving the parameter out.\n"
+            "The server total may be different to the balance in the default \"\" account.\n"
+            "\nArguments:\n"
+            "1. \"account\"      (string, optional) The selected account, or \"*\" for entire wallet. It may be the default account using \"\".\n"
+            "2. minconf          (numeric, optional, default=1) Only include transactions confirmed at least this many times.\n"
+            "3. includeWatchonly (bool, optional, default=false) Also include balance in watchonly addresses (see 'importaddress')\n"
+            "\nResult:\n"
+            "amount              (numeric) The total amount in btc received for this account.\n"
+            "\nExamples:\n"
+            "\nThe total amount in the server across all accounts\n"
+            "\nThe total amount in the server across all accounts, with at least 5 confirmations\n"
+            "\nThe total amount in the default account with at least 1 confirmation\n"
+            "\nThe total amount in the account named tabby with at least 6 confirmations\n"
+            "\nAs a json rpc call\n"
+        );
+
 
     if (params.size() == 0)
         return  ValueFromAmount(pwalletMain->GetBalance());
 
     int nMinDepth = 1;
+	isminefilter filter = MINE_SPENDABLE;
     if (params.size() > 1)
+	{
         nMinDepth = params[1].get_int();
+		if(params.size() > 2)
+        {
+			if(params[2].get_bool())
+                 filter = filter | MINE_WATCH_ONLY;
+		}
+	}
 
     if (params[0].get_str() == "*") {
         // Calculate total balance a different way from GetBalance()
@@ -638,7 +663,7 @@ Value getbalance(const Array& params, bool fHelp)
             string strSentAccount;
             list<pair<CTxDestination, int64_t> > listReceived;
             list<pair<CTxDestination, int64_t> > listSent;
-            wtx.GetAmounts(listReceived, listSent, allFee, strSentAccount);
+            wtx.GetAmounts(listReceived, listSent, allFee, strSentAccount, filter);
             if (wtx.GetDepthInMainChain() >= nMinDepth && wtx.GetBlocksToMaturity() == 0)
             {
                 BOOST_FOREACH(const PAIRTYPE(CTxDestination,int64_t)& r, listReceived)
@@ -655,7 +680,7 @@ Value getbalance(const Array& params, bool fHelp)
 
     string strAccount = AccountFromValue(params[0]);
 
-    int64_t nBalance = GetAccountBalance(strAccount, nMinDepth);
+    int64_t nBalance = GetAccountBalance(strAccount, nMinDepth, filter);
 
     return ValueFromAmount(nBalance);
 }
@@ -928,12 +953,14 @@ struct tallyitem
 	std::string sDetail;
 	std::string sContract;
 	vector<uint256> txids;
+	bool fIsWatchonly;
 	vector<std::string> sContracts;
 
     tallyitem()
     {
         nAmount = 0;
         nConf = std::numeric_limits<int>::max();
+		fIsWatchonly = false;
 		sKey = "";
 		sDetail = "";
 		sContract = "";
@@ -949,6 +976,11 @@ Value ListReceived(const Array& params, bool fByAccounts)
 
     // Whether to include empty accounts
     bool fIncludeEmpty = false;
+	isminefilter filter = MINE_SPENDABLE;
+	if(params.size() > 2)
+         if(params[2].get_bool())
+             filter = filter | MINE_WATCH_ONLY;
+
     if (params.size() > 1)
         fIncludeEmpty = params[1].get_bool();
 
@@ -967,16 +999,22 @@ Value ListReceived(const Array& params, bool fByAccounts)
 	    BOOST_FOREACH(const CTxOut& txout, wtx.vout)
         {
             CTxDestination address;
-            if (!ExtractDestination(txout.scriptPubKey, address) || !IsMine(*pwalletMain, address))
-                continue;
+            // if (!ExtractDestination(txout.scriptPubKey, address) || !IsMine(*pwalletMain, address))                continue;
+   		    if (!ExtractDestination(txout.scriptPubKey, address))
+                 continue;
+
+			isminefilter mine = IsMine(*pwalletMain, address);
+            if(!mine & filter)
+                  continue;
 
             tallyitem& item = mapTally[address];
             item.nAmount += txout.nValue;
             item.nConf = min(item.nConf, nDepth);
 			item.txids.push_back(wtx.GetHash());
 			std::string sContract = wtx.hashBoinc + "<TXID>" + wtx.GetHash().GetHex() + "</TXID>";
-
 			item.sContracts.push_back(sContract);
+			if (mine & MINE_WATCH_ONLY)
+		      item.fIsWatchonly = true;
 
         }
     }
@@ -999,7 +1037,7 @@ Value ListReceived(const Array& params, bool fByAccounts)
 		std::string sDetail = "";
         
 		int nConf = std::numeric_limits<int>::max();
-        
+        bool fIsWatchonly = false;
 		if (it != mapTally.end())
         {
 				 nAmount   = (*it).second.nAmount;
@@ -1007,6 +1045,7 @@ Value ListReceived(const Array& params, bool fByAccounts)
 				 sKey      = (*it).second.sKey;
 				 sContract = (*it).second.sContract;
 				 sDetail   = (*it).second.sDetail;
+				 fIsWatchonly = (*it).second.fIsWatchonly;
         }
 
         if (fByAccounts)
@@ -1014,10 +1053,13 @@ Value ListReceived(const Array& params, bool fByAccounts)
             tallyitem& item = mapAccountTally[strAccount];
             item.nAmount += nAmount;
             item.nConf = min(item.nConf, nConf);
+			item.fIsWatchonly = fIsWatchonly;
         }
         else
         {
             Object obj;
+			if(fIsWatchonly)
+                  obj.push_back(Pair("involvesWatchonly", true));
             obj.push_back(Pair("address",       address.ToString()));
             obj.push_back(Pair("account",       strAccount));
             obj.push_back(Pair("amount",        ValueFromAmount(nAmount)));
@@ -1052,6 +1094,8 @@ Value ListReceived(const Array& params, bool fByAccounts)
             int64_t nAmount = (*it).second.nAmount;
             int nConf = (*it).second.nConf;
             Object obj;
+			if((*it).second.fIsWatchonly)
+                 obj.push_back(Pair("involvesWatchonly", true));
             obj.push_back(Pair("account",       (*it).first));
             obj.push_back(Pair("amount",        ValueFromAmount(nAmount)));
             obj.push_back(Pair("confirmations", (nConf == std::numeric_limits<int>::max() ? 0 : nConf)));
@@ -1064,31 +1108,45 @@ Value ListReceived(const Array& params, bool fByAccounts)
 
 Value listreceivedbyaddress(const Array& params, bool fHelp)
 {
-    if (fHelp || params.size() > 2)
+    if (fHelp || params.size() > 3)
         throw runtime_error(
-            "listreceivedbyaddress [minconf=1] [includeempty=false]\n"
-            "[minconf] is the minimum number of confirmations before payments are included.\n"
-            "[includeempty] whether to include addresses that haven't received any payments.\n"
-            "Returns an array of objects containing:\n"
-            "  \"address\" : receiving address\n"
-            "  \"account\" : the account of the receiving address\n"
-            "  \"amount\" : total amount received by the address\n"
-            "  \"confirmations\" : number of confirmations of the most recent transaction included");
+            "listreceivedbyaddress ( minconf includeempty includeWatchonly)\n"
+              "\nList balances by receiving address.\n"
+              "\nArguments:\n"
+              "1. minconf       (numeric, optional, default=1) The minimum number of confirmations before payments are included.\n"
+              "2. includeempty  (numeric, optional, dafault=false) Whether to include addresses that haven't received any payments.\n"
+              "3. includeWatchonly (bool, optional, default=false) Whether to include watchonly addresses (see 'importaddress').\n"
+              "\nResult:\n"
+              "[\n"
+              "  {\n"
+              "    \"involvesWatchonly\" : \"true\",    (bool) Only returned if imported addresses were involved in transaction\n"
+              "    \"address\" : \"receivingaddress\",  (string) The receiving address\n"
+              "    \"account\" : \"accountname\",       (string) The account of the receiving address. The default account is \"\".\n"
+              "    \"amount\" : x.xxx,                  (numeric) The total amount in btc received by the address\n"
+              "\nExamples:\n"
+			);
 
     return ListReceived(params, false);
 }
 
 Value listreceivedbyaccount(const Array& params, bool fHelp)
 {
-    if (fHelp || params.size() > 2)
+    if (fHelp || params.size() > 3)
         throw runtime_error(
-            "listreceivedbyaccount [minconf=1] [includeempty=false]\n"
-            "[minconf] is the minimum number of confirmations before payments are included.\n"
-            "[includeempty] whether to include accounts that haven't received any payments.\n"
-            "Returns an array of objects containing:\n"
-            "  \"account\" : the account of the receiving addresses\n"
-            "  \"amount\" : total amount received by addresses with this account\n"
-            "  \"confirmations\" : number of confirmations of the most recent transaction included");
+		"listreceivedbyaccount ( minconf includeempty includeWatchonly)\n"
+        "\nList balances by account.\n"
+        "\nArguments:\n"
+        "1. minconf      (numeric, optional, default=1) The minimum number of confirmations before payments are included.\n"
+        "2. includeempty (boolean, optional, default=false) Whether to include accounts that haven't received any payments.\n"
+        "3. includeWatchonly (bool, optional, default=false) Whether to include watchonly addresses (see 'importaddress').\n"
+        "\nResult:\n"
+        "[\n"
+        "  {\n"
+        "    \"involvesWatchonly\" : \"true\",    (bool) Only returned if imported addresses were involved in transaction\n"
+        "    \"account\" : \"accountname\",  (string) The account name of the receiving account\n"
+        "    \"amount\" : x.xxx,             (numeric) The total amount received by addresses with this account\n"
+        "    \"confirmations\" : n           (numeric) The number of confirmations of the most recent transaction included\n"
+		);
 
     accountingDeprecationCheck();
 
@@ -1111,17 +1169,18 @@ static void MaybePushAddress(Object & entry, const CTxDestination &dest)
 
 
 
-void ListTransactions2(const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, Array& ret, CTxDB& txdb)
-{
+ void ListTransactions2(const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, Array& ret, CTxDB& txdb, const isminefilter& filter=MINE_SPENDABLE)
+ {
     int64_t nFee;
     string strSentAccount;
     list<COutputEntry> listReceived;
     list<COutputEntry> listSent;
 
-    wtx.GetAmounts2(listReceived, listSent, nFee, strSentAccount, true,txdb);
+    wtx.GetAmounts2(listReceived, listSent, nFee, strSentAccount, true, txdb, filter);
 
     bool fAllAccounts = (strAccount == string("*") || strAccount.empty());
-    //bool involvesWatchonly = wtx.IsFromMe();
+	bool involvesWatchonly = wtx.IsFromMe(MINE_WATCH_ONLY);
+   
 	// R Halford - Upgrade Bitcoin's ListTransactions to work with Gridcoin
 	// Ensure CoinStake addresses are deserialized, convert CoinStake split stake rewards to subsidies, Show POR vs Interest breakout
 
@@ -1131,6 +1190,9 @@ void ListTransactions2(const CWalletTx& wtx, const string& strAccount, int nMinD
         BOOST_FOREACH(const COutputEntry& s, listSent)
         {
             Object entry;
+			// CTxDestination dest = address.Get();
+         	if(involvesWatchonly || (::IsMine(*pwalletMain, s.destination) & MINE_WATCH_ONLY))
+				            entry.push_back(Pair("involvesWatchonly", true));
             entry.push_back(Pair("account", strSentAccount));
             MaybePushAddress(entry, s.destination);
             entry.push_back(Pair("category", "send"));
@@ -1156,6 +1218,8 @@ void ListTransactions2(const CWalletTx& wtx, const string& strAccount, int nMinD
             if (fAllAccounts || (account == strAccount))
             {
                 Object entry;
+				if(involvesWatchonly || (::IsMine(*pwalletMain, r.destination) & MINE_WATCH_ONLY))
+					      entry.push_back(Pair("involvesWatchonly", true));
                 entry.push_back(Pair("account", account));
                 MaybePushAddress(entry, r.destination);
                 if (wtx.IsCoinBase() || wtx.IsCoinStake())
@@ -1336,24 +1400,25 @@ Array StakingReport_OLD()
 }
 
 
-
-void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, Array& ret)
+void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, Array& ret, const isminefilter& filter=MINE_SPENDABLE)
 {
     int64_t nFee;
     string strSentAccount;
     list<pair<CTxDestination, int64_t> > listReceived;
     list<pair<CTxDestination, int64_t> > listSent;
-
-    wtx.GetAmounts(listReceived, listSent, nFee, strSentAccount);
+	//const isminefilter& filter = MINE_SPENDABLE;
+    wtx.GetAmounts(listReceived, listSent, nFee, strSentAccount, filter);
 
     bool fAllAccounts = (strAccount == string("*") || strAccount.empty() || strAccount == "");
-
+	bool involvesWatchonly = wtx.IsFromMe(MINE_WATCH_ONLY);
     // Sent
     if ((!wtx.IsCoinStake()) && (!listSent.empty() || nFee != 0) && (fAllAccounts || strAccount == strSentAccount))
     {
         BOOST_FOREACH(const PAIRTYPE(CTxDestination, int64_t)& s, listSent)
         {
             Object entry;
+			if(involvesWatchonly || (::IsMine(*pwalletMain, s.first) & MINE_WATCH_ONLY))
+				     entry.push_back(Pair("involvesWatchonly", true));
             entry.push_back(Pair("account", strSentAccount));
             MaybePushAddress(entry, s.first);
             entry.push_back(Pair("category", "send"));
@@ -1377,6 +1442,8 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
             if (true || (account == strAccount))
             {
                 Object entry;
+				if(involvesWatchonly || (::IsMine(*pwalletMain, r.first) & MINE_WATCH_ONLY))
+					       entry.push_back(Pair("involvesWatchonly", true));
                 entry.push_back(Pair("account", account));
                 MaybePushAddress(entry, r.first);
                 if (wtx.IsCoinBase() || wtx.IsCoinStake())
@@ -1443,27 +1510,89 @@ void AcentryToJSON(const CAccountingEntry& acentry, const string& strAccount, Ar
 
 Value listtransactions(const Array& params, bool fHelp)
 {
-    if (fHelp || params.size() > 3)
+      if (fHelp || params.size() > 4)
         throw runtime_error(
-            "listtransactions [account] [count=10] [from=0]\n"
-            "Returns up to [count] most recent transactions skipping the first [from] transactions for account [account].");
+            "listtransactions ( \"account\" count from includeWatchonly)\n"
+            "\nReturns up to 'count' most recent transactions skipping the first 'from' transactions for account 'account'.\n"
+            "\nArguments:\n"
+            "1. \"account\"    (string, optional) The account name. If not included, it will list all transactions for all accounts.\n"
+            "                                     If \"\" is set, it will list transactions for the default account.\n"
+            "2. count          (numeric, optional, default=10) The number of transactions to return\n"
+            "3. from           (numeric, optional, default=0) The number of transactions to skip\n"
+            "4. includeWatchonly (bool, optional, default=false) Include transactions to watchonly addresses (see 'importaddress')\n"
+            "\nResult:\n"
+            "[\n"
+            "  {\n"
+            "    \"account\":\"accountname\",       (string) The account name associated with the transaction. \n"
+            "                                                It will be \"\" for the default account.\n"
+            "    \"address\":\"bitcoinaddress\",    (string) The bitcoin address of the transaction. Not present for \n"
+            "                                                move transactions (category = move).\n"
+            "    \"category\":\"send|receive|move\", (string) The transaction category. 'move' is a local (off blockchain)\n"
+            "                                                transaction between accounts, and not associated with an address,\n"
+            "                                                transaction id or block. 'send' and 'receive' transactions are \n"
+            "                                                associated with an address, transaction id and block details\n"
+            "    \"amount\": x.xxx,          (numeric) The amount in btc. This is negative for the 'send' category, and for the\n"
+            "                                         'move' category for moves outbound. It is positive for the 'receive' category,\n"
+            "                                         and for the 'move' category for inbound funds.\n"
+            "    \"fee\": x.xxx,             (numeric) The amount of the fee in btc. This is negative and only available for the \n"
+            "                                         'send' category of transactions.\n"
+            "    \"confirmations\": n,       (numeric) The number of confirmations for the transaction. Available for 'send' and \n"
+            "                                         'receive' category of transactions.\n"
+            "    \"blockhash\": \"hashvalue\", (string) The block hash containing the transaction. Available for 'send' and 'receive'\n"
+            "                                          category of transactions.\n"
+            "    \"blockindex\": n,          (numeric) The block index containing the transaction. Available for 'send' and 'receive'\n"
+            "                                          category of transactions.\n"
+            "    \"txid\": \"transactionid\", (string) The transaction id. Available for 'send' and 'receive' category of transactions.\n"
+            "    \"walletconflicts\" : [\n"
+            "        \"conflictid\",  (string) Ids of transactions, including equivalent clones, that re-spend a txid input.\n"
+            "    ],\n"
+            "    \"respendsobserved\" : [\n"
+            "        \"respendid\",  (string) Ids of transactions, NOT equivalent clones, that re-spend a txid input. \"Double-spends.\"\n"
+            "    ],\n"
+            "    \"time\": xxx,              (numeric) The transaction time in seconds since epoch (midnight Jan 1 1970 GMT).\n"
+            "    \"timereceived\": xxx,      (numeric) The time received in seconds since epoch (midnight Jan 1 1970 GMT). Available \n"
+            "                                          for 'send' and 'receive' category of transactions.\n"
+            "    \"comment\": \"...\",       (string) If a comment is associated with the transaction.\n"
+            "    \"otheraccount\": \"accountname\",  (string) For the 'move' category of transactions, the account the funds came \n"
+            "                                          from (for receiving funds, positive amounts), or went to (for sending funds,\n"
+            "                                          negative amounts).\n"
+            "  }\n"
+            "]\n"
 
+            "\nExamples:\n"
+            "\nList the most recent 10 transactions in the systems\n"
+            "\nList the most recent 10 transactions for the tabby account\n"
+            "\nList transactions 100 to 120 from the tabby account\n"
+            "\nAs a json rpc call\n"
+        );
     string strAccount = "*";
-    if (params.size() > 0)
-        strAccount = params[0].get_str();
     int nCount = 10;
-    if (params.size() > 1)
-        nCount = params[1].get_int();
     int nFrom = 0;
-    if (params.size() > 2)
-        nFrom = params[2].get_int();
-
+    isminefilter filter = MINE_SPENDABLE;
+    if (params.size() > 0)
+    {
+        strAccount = params[0].get_str();
+        if (params.size() > 1)
+        {
+            nCount = params[1].get_int();
+            if (params.size() > 2)
+            {
+                nFrom = params[2].get_int();
+                if(params.size() > 3)
+                {
+                    if(params[3].get_bool())
+                        filter = filter | MINE_WATCH_ONLY;
+                }
+            }
+        }
+    }
     if (nCount < 0)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Negative count");
     if (nFrom < 0)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Negative from");
 
     Array ret;
+
 
     std::list<CAccountingEntry> acentries;
     CWallet::TxItems txOrdered = pwalletMain->OrderedTxItems(acentries, strAccount);
@@ -1474,7 +1603,7 @@ Value listtransactions(const Array& params, bool fHelp)
     {
         CWalletTx *const pwtx = (*it).second.first;
         if (pwtx != 0)
-            ListTransactions2(*pwtx, strAccount, 0, true, ret,txdb);
+            ListTransactions2(*pwtx, strAccount, 0, true, ret, txdb, filter);
         CAccountingEntry *const pacentry = (*it).second.second;
         if (pacentry != 0)
             AcentryToJSON(*pacentry, strAccount, ret);
@@ -1502,20 +1631,31 @@ Value listtransactions(const Array& params, bool fHelp)
 
 Value listaccounts(const Array& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
+    if (fHelp || params.size() > 2)
         throw runtime_error(
-            "listaccounts [minconf=1]\n"
-            "Returns Object that has account names as keys, account balances as values.");
+          "listaccounts ( minconf includeWatchonly)\n"
+             "Returns Object that has account names as keys, account balances as values."
+			 "1. minconf          (numeric, optional, default=1) Only onclude transactions with at least this many confirmations\n"
+             "2. includeWatchonly (bool, optional, default=false) Include balances in watchonly addresses (see 'importaddress')\n"
+             "\nResult:\n"
+             "{                      (json object where keys are account names, and values are numeric balances\n"
+             "  \"account\": x.xxx,  (numeric) The property name is the account name, and the value is the total balance for the account.\n"
+			 );
 
     accountingDeprecationCheck();
 
     int nMinDepth = 1;
+	isminefilter includeWatchonly = MINE_SPENDABLE;
     if (params.size() > 0)
-        nMinDepth = params[0].get_int();
-
+    {
+         nMinDepth = params[0].get_int();
+         if(params.size() > 1)
+             if(params[1].get_bool())
+                 includeWatchonly = includeWatchonly | MINE_WATCH_ONLY;
+    }
     map<string, int64_t> mapAccountBalances;
     BOOST_FOREACH(const PAIRTYPE(CTxDestination, string)& entry, pwalletMain->mapAddressBook) {
-        if (IsMine(*pwalletMain, entry.first)) // This address belongs to me
+       if (IsMine(*pwalletMain, entry.first) & includeWatchonly) // This address belongs to me
             mapAccountBalances[entry.second] = 0;
     }
 
@@ -1529,7 +1669,7 @@ Value listaccounts(const Array& params, bool fHelp)
         int nDepth = wtx.GetDepthInMainChain();
         if (nDepth < 0)
             continue;
-        wtx.GetAmounts(listReceived, listSent, nFee, strSentAccount);
+        wtx.GetAmounts(listReceived, listSent, nFee, strSentAccount, includeWatchonly);
         mapAccountBalances[strSentAccount] -= nFee;
         BOOST_FOREACH(const PAIRTYPE(CTxDestination, int64_t)& s, listSent)
             mapAccountBalances[strSentAccount] -= s.second;
@@ -1559,30 +1699,45 @@ Value listsinceblock(const Array& params, bool fHelp)
 {
     if (fHelp)
         throw runtime_error(
-            "listsinceblock [blockhash] [target-confirmations]\n"
-            "Get all transactions in blocks since block [blockhash], or all transactions if omitted");
+            "listsinceblock ( \"blockhash\" target-confirmations includeWatchonly)\n"
+            "\nGet all transactions in blocks since block [blockhash], or all transactions if omitted\n"
+            "\nArguments:\n"
+            "1. \"blockhash\"   (string, optional) The block hash to list transactions since\n"
+            "2. target-confirmations:    (numeric, optional) The confirmations required, must be 1 or more\n"
+            "3. includeWatchonly:        (bool, optional, default=false) Include transactions to watchonly addresses (see 'importaddress')"
+            "\nResult:\n"
+            "{\n"
+            "  \"transactions\": [\n"
+			);
 
     CBlockIndex *pindex = NULL;
     int target_confirms = 1;
-
+	isminefilter filter = MINE_SPENDABLE;
     if (params.size() > 0)
     {
         uint256 blockId = 0;
 
         blockId.SetHex(params[0].get_str());
-        pindex = CBlockLocator(blockId).GetBlockIndex();
+        std::map<uint256, CBlockIndex*>::iterator it = mapBlockIndex.find(blockId);
+        if (it != mapBlockIndex.end())
+            pindex = it->second;
+
+        if (params.size() > 1)
+        {
+            target_confirms = params[1].get_int();
+
+            if (target_confirms < 1)
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter");
+
+            if(params.size() > 2)
+            {
+                if(params[2].get_bool())
+                    filter = filter | MINE_WATCH_ONLY;
+            }
+        }
     }
 
-    if (params.size() > 1)
-    {
-        target_confirms = params[1].get_int();
-
-        if (target_confirms < 1)
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter");
-    }
-
-    int depth = pindex ? (1 + nBestHeight - pindex->nHeight) : -1;
-
+	int depth = pindex ? (1 + nBestHeight - pindex->nHeight) : -1;
     Array transactions;
 
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); it++)
@@ -1590,44 +1745,44 @@ Value listsinceblock(const Array& params, bool fHelp)
         CWalletTx tx = (*it).second;
 
         if (depth == -1 || tx.GetDepthInMainChain() < depth)
-            ListTransactions(tx, "*", 0, true, transactions);
+            ListTransactions(tx, "*", 0, true, transactions, filter);
     }
 
-    uint256 lastblock;
-
-    if (target_confirms == 1)
-    {
-        lastblock = hashBestChain;
-    }
-    else
-    {
-        int target_height = pindexBest->nHeight + 1 - target_confirms;
-
-        CBlockIndex *block;
+    int target_height = pindexBest->nHeight + 1 - target_confirms;
+	CBlockIndex *block;
         for (block = pindexBest;
              block && block->nHeight > target_height;
              block = block->pprev)  { }
-
-        lastblock = block ? block->GetBlockHash() : 0;
-    }
+    uint256 lastblock = block ? block->GetBlockHash() : 0;
 
     Object ret;
     ret.push_back(Pair("transactions", transactions));
     ret.push_back(Pair("lastblock", lastblock.GetHex()));
 
     return ret;
+    
 }
 
 Value gettransaction(const Array& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
+    if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
-            "gettransaction <txid>\n"
-            "Get detailed information about <txid>");
+		"gettransaction \"txid\"\n"
+              "\nGet detailed information about in-wallet transaction <txid>\n"
+              "\nArguments:\n"
+              "1. \"txid\"    (string, required) The transaction id\n"
+              "2. \"includeWatchonly\"    (bool, optional, default=false) Whether to include watchonly addresses in balance calculation and details[]\n"
+              "\nResult:\n"
+              "{\n"
+              "  \"amount\" : x.xxx,        (numeric) The transaction amount in btc\n"
+            );
 
     uint256 hash;
     hash.SetHex(params[0].get_str());
-
+	isminefilter filter = MINE_SPENDABLE;
+	if(params.size() > 1)
+         if(params[1].get_bool())
+             filter = filter | MINE_WATCH_ONLY;
     Object entry;
 
     if (pwalletMain->mapWallet.count(hash))
@@ -1648,7 +1803,7 @@ Value gettransaction(const Array& params, bool fHelp)
         WalletTxToJSON(wtx, entry);
 
         Array details;
-        ListTransactions(pwalletMain->mapWallet[hash], "*", 0, false, details);
+        ListTransactions(pwalletMain->mapWallet[hash], "*", 0, false, details, filter);
         entry.push_back(Pair("details", details));
     }
     else

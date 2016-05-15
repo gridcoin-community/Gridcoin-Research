@@ -13,11 +13,13 @@ Public Class clsBoincProjectDownload
 
     Public Function DownloadGZipFiles() As Boolean
 
-        Dim lAgeOfMaster = GetFileAge(GetGridFolder() + "NeuralNetwork\db.dat")
+        Dim lAgeOfMaster = GetUnixFileAge(GetGridFolder() + "NeuralNetwork\db.dat")
+        Log("UFA Timestamp: " + Trim(lAgeOfMaster))
+
         If lAgeOfMaster > SYNC_THRESHOLD Then
             ReconnectToNeuralNetwork()
             Dim bFail As Boolean = mGRCData.GetNeuralNetworkQuorumData(mbTestNet)
-            lAgeOfMaster = GetFileAge(GetGridFolder() + "NeuralNetwork\db.dat")
+            lAgeOfMaster = GetUnixFileAge(GetGridFolder() + "NeuralNetwork\db.dat")
         End If
         If lAgeOfMaster < SYNC_THRESHOLD Then Return True
         Dim rWhiteListedProjects As New Row
@@ -63,7 +65,7 @@ Public Class clsBoincProjectDownload
                     Dim sGzipPathUnzipped As String = Replace(sPath, ".gz", ".xml")
                     'If older than 7 days, download the team files again:
                     GuiDoEvents()
-                    If GetFileAge(sTeamPathUnzipped) > TEAM_SYNC_THRESHOLD Then
+                    If GetWindowsFileAge(sTeamPathUnzipped) > TEAM_SYNC_THRESHOLD Then
                         Dim w As New MyWebClient
                         For iRetry As Integer = 1 To 5
                             Try
@@ -83,7 +85,7 @@ Public Class clsBoincProjectDownload
 
                     'Sync the main RAC gz file            
 
-                    If GetFileAge(sGzipPathUnzipped) > PROJECT_SYNC_THRESHOLD Then
+                    If GetWindowsFileAge(sGzipPathUnzipped) > PROJECT_SYNC_THRESHOLD Then
                         Dim w As New MyWebClient
                         For iRetry As Integer = 1 To 5
                             Try
@@ -144,8 +146,11 @@ Public Class clsBoincProjectDownload
                         sTemp = Replace(sTemp, "</name>", "</username>")
                         sTemp = Replace(sTemp, "<user>", "<project><name>" + sProjectLocal + "</name><team_name>gridcoin</team_name>")
                         sTemp = Replace(sTemp, "</user>", "</project>")
-
-                        oSW.WriteLine(sTemp)
+                        'Dont bother writing timestamps older than 32 days since we base mag off of RAC
+                        Dim lRowAgeInMins = GetRowAgeInMins(sTemp)
+                        If lRowAgeInMins < (60 * 24 * 32) Then
+                            oSW.WriteLine(sTemp)
+                        End If
                     End While
                     objReader.Close()
                 End Using

@@ -35,9 +35,9 @@ Module modPersistedDataSystem
     Private lUseCount As Long = 0
     Private MAX_NEURAL_NETWORK_THREADS = 255
     Public msNeuralDetail As String = ""
-    Public SYNC_THRESHOLD As Double = 60 * 12 '12 hours
+    Public SYNC_THRESHOLD As Double = 60 * 24 '24 hours
     Public TEAM_SYNC_THRESHOLD As Double = 60 * 24 * 7 '1 WEEK
-    Public PROJECT_SYNC_THRESHOLD As Double = 60 * 24 '12 HOURS
+    Public PROJECT_SYNC_THRESHOLD As Double = 60 * 24 '24 HOURS
 
     Public Structure NeuralStructure
         Public PK As String
@@ -88,6 +88,9 @@ Module modPersistedDataSystem
             Log("Unable to connect to neural network.")
         End Try
     End Sub
+    Public Function UnixTimestampToDate(ByVal timestamp As Double) As DateTime
+        Return New DateTime(1970, 1, 1, 0, 0, 0).AddSeconds(timestamp)
+    End Function
     Public Function GetMagnitudeContractDetails() As String
         Dim surrogateRow As New Row
         surrogateRow.Database = "CPID"
@@ -122,7 +125,7 @@ Module modPersistedDataSystem
     Public Function GetMagnitudeContract() As String
         Try
 
-            If GetFileAge(GetGridPath("NeuralNetwork") + "\contract.dat") < 240 Then
+            If GetWindowsFileAge(GetGridPath("NeuralNetwork") + "\contract.dat") < 240 Then
                 Dim sData As String
                 sData = FileToString(GetGridPath("NeuralNetwork") + "\contract.dat")
                 Return sData
@@ -363,8 +366,8 @@ Module modPersistedDataSystem
         Log("EnsureTeamIsSynchronized: " + Trim(dAge))
         Dim dWindow As Double = 60 * 60 '1 hour before and 1 hour after superblock expires:
         If dAge > (86400 - dWindow) And dAge < (86400 + dWindow) Then
-            Dim lAgeOfMaster = GetFileAge(GetGridFolder() + "NeuralNetwork\db.dat")
-            If lAgeOfMaster > dWindow Then
+            Dim lAgeOfMaster = GetUnixFileAge(GetGridFolder() + "NeuralNetwork\db.dat")
+            If lAgeOfMaster > SYNC_THRESHOLD Then
                 'Clear out this nodes project data, so the node can sync with the team at the same exact time:
                 Log("Clearing project data so we can synchronize as a team.")
                 ClearProjectData()
@@ -380,7 +383,8 @@ Module modPersistedDataSystem
         End Try
     End Sub
     Private Sub ClearProjectData()
-        Dim sPath As String = GetFileAge(GetGridFolder() + "NeuralNetwork\")
+        Dim sPath As String = GetGridFolder() + "NeuralNetwork\"
+
         SoftKill(sPath + "db.dat")
         'Erase the projects
         SoftKill(sPath + "*.gz")
@@ -389,7 +393,7 @@ Module modPersistedDataSystem
         SoftKill(sPath + "*team.gz")
     End Sub
     Private Sub ClearWhitelistData()
-        Dim sPath As String = GetFileAge(GetGridFolder() + "NeuralNetwork\")
+        Dim sPath As String = GetGridFolder() + "NeuralNetwork\"
         SoftKill(sPath + "whitelist*.dat")
     End Sub
     Public Function EnsureNNDirExists()
@@ -1673,14 +1677,41 @@ Retry:
             Log("Unable to get quote data probably due to SSL being blocked: " + ex.Message)
         End Try
     End Function
-    Public Function GetFileAge(sPath As String) As Double
+    Public Function GetWindowsFileAge(sPath As String) As Double
         If File.Exists(sPath) = False Then Return 1000000
         Dim fi As New FileInfo(sPath)
         If fi.Length = 0 Then Return 1000000
         Dim iMins As Long = DateDiff(DateInterval.Minute, fi.LastWriteTime, Now)
         Return iMins
     End Function
-
+    Public Function GetRowAgeInMins(sRow As String) As Double
+        Dim sTS As String = ExtractXML(sRow, "<expavg_time>", "</expavg_time>")
+        Dim dStamp As Double = Val(sTS)
+        Dim dTime As DateTime = UnixTimestampToDate(dStamp)
+        Dim iMins As Long = DateDiff(DateInterval.Minute, dTime, Now)
+        Return iMins
+    End Function
+    Public Function GetUnixFileAge(sPath As String) As Double
+        If File.Exists(sPath) = False Then Return 1000000
+        Dim fi As New FileInfo(sPath)
+        If fi.Length = 0 Then Return 1000000
+        Dim sr As New StreamReader(sPath)
+        Dim dMaxStamp As Double = 0
+        Dim sTemp As String = ""
+        While sr.EndOfStream = False
+            sTemp = sr.ReadLine
+            Dim sTS As String = ExtractXML(sTemp, "<expavg_time>", "</expavg_time>")
+            Dim dStamp As Double = Val(sTS)
+            If dStamp > 0 And dStamp > dMaxStamp Then
+                dMaxStamp = dStamp
+            End If
+        End While
+        sr.Close()
+        Log("GUFA Timestamp: " + Trim(dMaxStamp))
+        Dim dTime As DateTime = UnixTimestampToDate(dMaxStamp)
+        Dim iMins As Long = DateDiff(DateInterval.Minute, dTime, Now)
+        Return iMins
+    End Function
     Public Function GetQuorumHash(data As String)
         Return mclsQHA.QuorumHashingAlgorithm(data)
     End Function

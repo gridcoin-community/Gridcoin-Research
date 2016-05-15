@@ -32,6 +32,9 @@ int GetDayOfYear();
 extern std::string NodeAddress(CNode* pfrom);
 extern std::string ConvertBinToHex(std::string a);
 extern std::string ConvertHexToBin(std::string a);
+extern void RecoverNode();
+
+
 bool RequestSupermajorityNeuralData();
 
 extern std::string UnpackBinarySuperblock(std::string sBlock);
@@ -4762,7 +4765,6 @@ bool NeedASuperblock()
 void GridcoinServices()
 {
 
-
 	//Dont do this on headless - SeP
 	#if defined(QT_GUI)
 	   if ((nBestHeight % 100) == 0)
@@ -4811,6 +4813,15 @@ void GridcoinServices()
 	if (TimerMain("ResetVars",30))
 	{
 		bTallyStarted = false;
+	}
+	
+	if (TimerMain("OutOfSync",120))
+	{
+		if (OutOfSyncByMoreThan(30))
+		{
+			RecoverNode();
+		}
+
 	}
 
 	if (false && TimerMain("FixSpentCoins",60))
@@ -4987,6 +4998,33 @@ void GridcoinServices()
 }
 
 
+void RecoverNode()
+{
+		printf("\r\n * Recovering Node * \r\n");
+		setStakeSeenOrphan.clear();
+		mapOrphanBlocks.clear();
+		// Load block index
+	    CTxDB txdb("r");
+		txdb.LoadBlockIndex();
+		LOCK(cs_vNodes);
+		BOOST_FOREACH(CNode* pNode, vNodes) 
+		{
+				pNode->ClearBanned();
+	    		// Ask for some more blocks
+				if (LessVerbose(100))
+				{
+					if (!pNode->fClient && !pNode->fOneShot && (pNode->nStartingHeight > (nBestHeight - 144)) && (pNode->nVersion < NOBLKS_VERSION_START || pNode->nVersion >= NOBLKS_VERSION_END) )
+					{
+						pNode->PushGetBlocks(pindexBest, uint256(0));
+					}
+				}
+				else
+				{
+					pNode->fDisconnect=true;
+				}
+		}
+		printf("\r\n * Node Recovered * \r\n");
+}
 
 
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
@@ -5034,7 +5072,17 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     // If don't already have its previous block, shunt it off to holding area until we get it
     if (!mapBlockIndex.count(pblock->hashPrevBlock))
     {
-        printf("ProcessBlock: ORPHAN BLOCK, prev=%s\n", pblock->hashPrevBlock.ToString().substr(0,20).c_str());
+        // R HALFORD - 05-13-2016 - If we are out of sync, and get bombarded with orphans, recover the node.
+		if (TimerMain("OrphanBarrage", 25))
+		{
+					bool fOut = OutOfSyncByMoreThan(30);
+					if (fOut)
+					{
+						RecoverNode();
+					}
+		}
+
+		printf("ProcessBlock: ORPHAN BLOCK, prev=%s\n", pblock->hashPrevBlock.ToString().substr(0,20).c_str());
         // ppcoin: check proof-of-stake
         if (pblock->IsProofOfStake())
         {
@@ -7259,24 +7307,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         pfrom->PushMessage("verack");
         pfrom->ssSend.SetVersion(min(pfrom->nVersion, PROTOCOL_VERSION));
 
-
-        // If we are out of sync, ask a node for blocks:
-        static int nAskedForSyncBlocks = 0;
-		if (!fTestNet)
-		{
-			if  (!pfrom->fOneShot &&
-				(pfrom->nStartingHeight > (nBestHeight - 144)) &&
-				(pfrom->nVersion < NOBLKS_VERSION_START ||
-				 pfrom->nVersion >= NOBLKS_VERSION_END) &&
-				 (nAskedForSyncBlocks < 5 || vNodes.size() <= 1))
-			{
-				nAskedForSyncBlocks++;
-				pfrom->PushGetBlocks(pindexBest, uint256(0));
-				if (fDebug3) printf("Asking %s for %f getblocks\r\n",NodeAddress(pfrom).c_str(),(double)nAskedForSyncBlocks);
-			}
-		}
-		// 11-27-2015
-
+			
         if (!pfrom->fInbound)
         {
             // Advertise our address
@@ -7308,7 +7339,24 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
         }
 
-        // Ask the first connected node for block updates
+    
+
+        // If we are out of sync, ask a node for blocks:
+        static int nAskedForSyncBlocks = 0;
+		if (!fTestNet)
+		{
+			if  (!pfrom->fOneShot &&
+				(pfrom->nStartingHeight > (nBestHeight - 144)) &&
+				(pfrom->nVersion < NOBLKS_VERSION_START ||
+				 pfrom->nVersion >= NOBLKS_VERSION_END) &&
+				 (nAskedForSyncBlocks < 1 || vNodes.size() <= 1))
+			{
+				nAskedForSyncBlocks++;
+				pfrom->PushGetBlocks(pindexBest, uint256(0));
+				if (fDebug3) printf("Asking %s for %f getblocks\r\n",NodeAddress(pfrom).c_str(),(double)nAskedForSyncBlocks);
+			}
+		}
+	    // Ask the first connected node for block updates
         static int nAskedForBlocks = 0;
 		if (!fTestNet)
 		{

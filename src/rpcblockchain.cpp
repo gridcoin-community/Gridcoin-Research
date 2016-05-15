@@ -28,6 +28,7 @@ extern Array MagnitudeReport(std::string cpid);
 extern bool UserAcknowledgedHoldHarmlessClause(std::string sAddress);
 std::string ConvertBinToHex(std::string a);
 std::string ConvertHexToBin(std::string a);
+void RecoverNode();
 
 extern bool GetExpiredOption(std::string& rsRecipient, double& rdSinglePrice, double& rdAmountOwed, std::string& rsOpra);
 
@@ -2098,6 +2099,14 @@ Value execute(const Array& params, bool fHelp)
 			entry.push_back(Pair("RebootClient",r));
 			results.push_back(entry);
 	
+	}
+	else if (sItem == "recover")
+	{
+
+		//5-13-2016
+		RecoverNode();
+		entry.push_back(Pair("Recover",1));
+		results.push_back(entry);
 	}
 	else if (sItem=="burn")
 	{

@@ -243,11 +243,10 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, Object& entry)
 	/*
 		if (tx.hashBoinc=="code")
 		{
-			//8-12-2014
 			printf("Executing .net code\r\n");
     	    ExecuteCode();
 		}
-		*/
+	*/
 
     Array vin;
     BOOST_FOREACH(const CTxIn& txin, tx.vin)
@@ -279,7 +278,7 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, Object& entry)
         out.push_back(Pair("value", ValueFromAmount(txout.nValue)));
         out.push_back(Pair("n", (int64_t)i));
         Object o;
-        ScriptPubKeyToJSON(txout.scriptPubKey, o, false);
+        ScriptPubKeyToJSON(txout.scriptPubKey, o, true);
         out.push_back(Pair("scriptPubKey", o));
         vout.push_back(out);
     }

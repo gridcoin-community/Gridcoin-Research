@@ -345,7 +345,7 @@ Public Class frmMining
         Dim sReport As String = ""
         Dim sReportRow As String = ""
         Dim sMemoryName = IIf(mbTestNet, "magnitudes_testnet", "magnitudes")
-        If GetFileAge(GetGridPath("NeuralNetwork") + "\contract.dat") < 240 Then
+        If GetWindowsFileAge(GetGridPath("NeuralNetwork") + "\contract.dat") < 240 Then
             PopulateNeuralDataViaContractFile()
             Exit Sub
         End If
@@ -808,7 +808,7 @@ Refresh:
     End Sub
     Private Function GetAgeOfContract() As Double
 
-        Return GetFileAge(GetGridFolder() + "NeuralNetwork\contract.dat")
+        Return GetWindowsFileAge(GetGridFolder() + "NeuralNetwork\contract.dat")
 
     End Function
     Private Sub Button1_Click(sender As System.Object, e As System.EventArgs) Handles Button1.Click
