@@ -531,6 +531,7 @@ Public Class Utilization
         'Write the Gridcoin CPIDs to the Persisted Data System
         Try
             msSyncData = sData
+           
             Call SyncDPOR2()
         Catch ex As Exception
             Log("Exception during SyncDpor2 : " + ex.Message)

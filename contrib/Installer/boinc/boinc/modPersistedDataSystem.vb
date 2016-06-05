@@ -215,6 +215,7 @@ Module modPersistedDataSystem
                 End If
 
             Next
+            sOut += "NeuralNetwork,2000000,20000000;"
             sOut += "</AVERAGES>"
             Return sOut
 
