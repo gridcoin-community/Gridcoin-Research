@@ -120,6 +120,7 @@ private:
 	QAction *newUserWizardAction;
 	QAction *foundationAction;
 	QAction *faqAction;
+	QAction *diagnosticsAction;
 
     QAction *verifyMessageAction;
     QAction *aboutAction;
@@ -220,6 +221,7 @@ private slots:
 	void miningClicked();
 	void votingClicked();
 	void faqClicked();
+    void diagnosticsClicked();
 
 	void tickerClicked();
 	

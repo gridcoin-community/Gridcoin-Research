@@ -33,15 +33,16 @@ extern std::string NodeAddress(CNode* pfrom);
 extern std::string ConvertBinToHex(std::string a);
 extern std::string ConvertHexToBin(std::string a);
 extern void RecoverNode();
-
-
+extern bool PushGridcoinDiagnostics();
+double qtPushGridcoinDiagnosticData(std::string data);
 bool RequestSupermajorityNeuralData();
-
 extern std::string UnpackBinarySuperblock(std::string sBlock);
 extern std::string PackBinarySuperblock(std::string sBlock);
 extern std::vector<unsigned char> StringToVector(std::string sData);
+extern bool TallyResearchAverages(bool Forcefully);
 
 
+extern void SyncChain();
 extern double GetStandardDeviation(std::string sPriceHistory);
 extern double GetVolatility(std::string sPriceHistory);
 bool GetExpiredOption(std::string& rsRecipient, double& rdSinglePrice, double& rdAmountOwed, std::string& rsOpra);
@@ -83,7 +84,7 @@ json_spirit::Array MagnitudeReport(std::string cpid);
 
 extern void AddCPIDBlockHash(std::string cpid, std::string blockhash);
 extern void ZeroOutResearcherTotals(std::string cpid);
-extern bool ShaveChain(CTxDB& txdb);
+extern bool ShaveChain(CTxDB& txdb,int iHaircut);
 
 
 extern StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
@@ -685,6 +686,34 @@ bool UpdateNeuralNetworkQuorumData()
 			return false;
 }
 
+bool PushGridcoinDiagnostics()
+{
+		#if defined(WIN32) && defined(QT_GUI)
+  			    if (!bGlobalcomInitialized) return false;
+				std::string errors1 = "";
+                LoadAdminMessages(false,errors1);
+				std::string cpiddata = GetListOf("beacon");
+				std::string sWhitelist = GetListOf("project");
+				int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+				double popularity = 0;
+				std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
+				std::string sAge = RoundToString((double)superblock_age,0);
+				std::string sBlock = mvApplicationCache["superblock;block_number"];
+				std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
+				printf("Pushing diagnostic data...");
+				double lastblockage = PreviousBlockAge();
+				double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+				std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
+					+ cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
+					+ sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID><LASTBLOCKAGE>" + RoundToString(lastblockage,0) + "</LASTBLOCKAGE><DIFFICULTY>" + RoundToString(PORDiff,2) + "</DIFFICULTY></QUORUMDATA>";
+				std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
+				qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
+			    double dResponse = qtPushGridcoinDiagnosticData(data);
+				return true;
+		#endif
+		return false;
+}
+
 bool FullSyncWithDPORNodes()
 {
 			#if defined(WIN32) && defined(QT_GUI)
@@ -715,15 +744,12 @@ bool FullSyncWithDPORNodes()
 				std::string sAge = RoundToString((double)superblock_age,0);
 				std::string sBlock = mvApplicationCache["superblock;block_number"];
 				std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
-
 				std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
 					+ cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
 					+ sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
-
 				//if (fDebug3) printf("Syncing neural network %s \r\n",data.c_str());
 				std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
 				qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-
 				qtSyncWithDPORNodes(data);
 			#endif
 			return true;
@@ -3683,6 +3709,10 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 										*/
 										bDoTally = true;
 							}
+							else
+							{
+								if (fDebug3) printf("ConnectBlock(): Superblock Not Loaded %f\r\n",(double)pindex->nHeight);
+							}
 					}
 			}
 
@@ -3775,9 +3805,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
 
 
-bool ShaveChain(CTxDB& txdb)
+bool ShaveChain(CTxDB& txdb, int iHaircut)
 {
-	int iHaircut = 100;
 	int iTarget = 0;
 	int iStart = 0;
     printf("Shaving %f blocks off of main chain\n",(double)iHaircut);
@@ -3846,32 +3875,24 @@ bool ShaveChain(CTxDB& txdb)
         return error("ShaveChain() : WriteHashBestChain failed");
 
     // Make sure it's successfully written to disk before changing memory structure
-    //if (!txdb.TxnCommit())        return error("ShaveChain() : TxnCommit failed");
-
-    // Buzz each block pointer
     BOOST_FOREACH(CBlockIndex* pindex, vDisconnect)
         if (pindex->pprev)
             pindex->pprev->pnext = NULL;
-
     // Resurrect memory transactions that were in the disconnected branch
     BOOST_FOREACH(CTransaction& tx, vResurrect)
         AcceptToMemoryPool(mempool, tx, NULL);
-
 	CBlock block;
 	if (!block.ReadFromDisk(pHaircut))
 	{
 		printf("ShaveChain(): Fatal Error while reading new best block.\r\n");
 		return false;
 	}
-
 	if (!block.SetBestChain(txdb, pHaircut))
     {
 		printf("ShaveChain(): Fatal Error while setting best chain inner.\r\n");
 		return false;
 	}
-
 	if (bHaircutFailed) return false;
-
     printf("ShaveChain: done\n");
     return true;
 }
@@ -4727,12 +4748,13 @@ bool ServicesIncludesNN(CNode* pNode)
 bool VerifySuperblock(std::string superblock, int nHeight)
 {
 	    bool bPassed = false;
+		double out_avg = 0;
+		double out_beacon_count=0;
+		double out_participant_count=0;
+		double avg_mag = 0;
 		if (superblock.length() > 20)
 		{
-			double out_avg = 0;
-			double out_beacon_count=0;
-			double out_participant_count=0;
-			double avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,false);
+			avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,false);
 			bPassed=true;
 			if (!IsResearchAgeEnabled(nHeight))
 			{
@@ -4742,6 +4764,11 @@ bool VerifySuperblock(std::string superblock, int nHeight)
 			if (out_avg < 10 && fTestNet)  bPassed = false;
 			if (out_avg < 70 && !fTestNet) bPassed = false;
 			if (avg_mag < 10)              bPassed = false;
+		}
+		if (fDebug3 && !bPassed)
+		{
+			if (fDebug) printf(" Verification of Superblock Failed ");
+			//			printf("\r\n Verification of Superblock Failed outavg: %f, avg_mag %f, Height %f, Out_Beacon_count %f, Out_participant_count %f, block %s",	(double)out_avg,(double)avg_mag,(double)nHeight,(double)out_beacon_count,(double)out_participant_count,superblock.c_str());
 		}
 		return bPassed;
 }
@@ -4817,11 +4844,12 @@ void GridcoinServices()
 	
 	if (TimerMain("OutOfSync",120))
 	{
-		if (OutOfSyncByMoreThan(30))
+		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+		bool fGhostChain = (!fTestNet && PORDiff < .75);
+		if (OutOfSyncByMoreThan(30) || fGhostChain)
 		{
 			RecoverNode();
 		}
-
 	}
 
 	if (false && TimerMain("FixSpentCoins",60))
@@ -4998,20 +5026,74 @@ void GridcoinServices()
 }
 
 
+
+
+void AskForOutstandingBlocks()
+{
+	LOCK(cs_vNodes);
+	BOOST_FOREACH(CNode* pNode, vNodes) 
+	{
+				pNode->ClearBanned();
+	    		// Ask for outstanding blocks
+				if (true)
+				{
+					if (!pNode->fClient && !pNode->fOneShot && (pNode->nStartingHeight > (nBestHeight - 144)) && (pNode->nVersion < NOBLKS_VERSION_START || pNode->nVersion >= NOBLKS_VERSION_END) )
+					{
+						pNode->PushGetBlocks(pindexBest, uint256(0));
+						printf(".");
+					}
+				}
+	}
+}
+void SyncChain()
+{
+		printf("\r\n * Sync Chain * \r\n");
+		//6-11-2016
+		CTxDB txdb;
+		LOCK(cs_main);
+		ShaveChain(txdb,200);
+		AskForOutstandingBlocks();
+		std::string sOut = "";
+		LoadAdminMessages(true,sOut);
+		InitializeBoincProjects();
+		TallyResearchAverages(true);
+		ComputeNeuralNetworkSupermajorityHashes();
+		LoadCPIDsInBackground();  
+		printf("\r\n * Finished * \r\n");
+}
+
+
 void RecoverNode()
 {
+
+	SyncChain();
+}
+
+void ReloadBlockIndexHot()
+{
 		printf("\r\n * Recovering Node * \r\n");
-		setStakeSeenOrphan.clear();
+		// clear vectors, clear orphans, clear mapindex
 		mapOrphanBlocks.clear();
-		// Load block index
-	    CTxDB txdb("r");
-		txdb.LoadBlockIndex();
+		mapBlockIndex.clear();
+		setStakeSeen.clear();
+		setStakeSeenOrphan.clear();
+		mvResearchAge.clear();
+		mapOrphanBlocks.clear();
+		mapOrphanBlocksByPrev.clear();
+		mvApplicationCache.clear();
+		mvApplicationCacheTimestamp.clear();
+		mvNeuralVersion.clear();
+		mvDPOR.clear();
+		mvDPORCopy.clear();
+		mvBlockIndex.clear();
+		mvCPIDBlockHashes.clear();
+		LoadBlockIndex(true);
 		LOCK(cs_vNodes);
 		BOOST_FOREACH(CNode* pNode, vNodes) 
 		{
 				pNode->ClearBanned();
 	    		// Ask for some more blocks
-				if (LessVerbose(100))
+				if (true)
 				{
 					if (!pNode->fClient && !pNode->fOneShot && (pNode->nStartingHeight > (nBestHeight - 144)) && (pNode->nVersion < NOBLKS_VERSION_START || pNode->nVersion >= NOBLKS_VERSION_END) )
 					{
@@ -5076,7 +5158,9 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 		if (TimerMain("OrphanBarrage", 25))
 		{
 					bool fOut = OutOfSyncByMoreThan(30);
-					if (fOut)
+					double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+					bool fGhostChain = (!fTestNet && PORDiff < .75);
+					if (fOut || fGhostChain)
 					{
 						RecoverNode();
 					}

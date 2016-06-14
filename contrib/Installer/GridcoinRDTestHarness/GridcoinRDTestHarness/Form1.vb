@@ -133,7 +133,8 @@ Public Class Form1
 
         'mU.UpdateMagnitudesOnly()
         'mU.ShowConfig()
-        mU.ShowFoundation()
+        'mU.ShowFoundation()
+        mU.ShowDiagnostics()
 
 
         Exit Sub

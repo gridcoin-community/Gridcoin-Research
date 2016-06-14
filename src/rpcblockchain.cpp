@@ -29,6 +29,9 @@ extern bool UserAcknowledgedHoldHarmlessClause(std::string sAddress);
 std::string ConvertBinToHex(std::string a);
 std::string ConvertHexToBin(std::string a);
 void RecoverNode();
+bool TallyResearchAverages(bool Forcefully);
+
+void SyncChain();
 
 extern bool GetExpiredOption(std::string& rsRecipient, double& rdSinglePrice, double& rdAmountOwed, std::string& rsOpra);
 
@@ -74,7 +77,7 @@ double GetNetworkPaymentsTotal();
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
 bool ComputeNeuralNetworkSupermajorityHashes();
 bool UpdateNeuralNetworkQuorumData();
-bool ShaveChain(CTxDB& txdb);
+bool ShaveChain(CTxDB& txdb,int iHowMuch);
 extern Array LifetimeReport(std::string cpid);
 Array StakingReport();
 extern std::string AddContract(std::string sType, std::string sName, std::string sContract);
@@ -2100,9 +2103,14 @@ Value execute(const Array& params, bool fHelp)
 			results.push_back(entry);
 	
 	}
+	else if (sItem == "syncchain")
+	{
+		SyncChain();
+		entry.push_back(Pair("SyncChain",1));
+		results.push_back(entry);
+	}
 	else if (sItem == "recover")
 	{
-
 		//5-13-2016
 		RecoverNode();
 		entry.push_back(Pair("Recover",1));
@@ -2429,7 +2437,7 @@ Value execute(const Array& params, bool fHelp)
 	else if (sItem == "shavechain")
 	{
 		 CTxDB txdb;
-		 if (ShaveChain(txdb))
+		 if (ShaveChain(txdb,100))
 		 {
 		 	entry.push_back(Pair("Warning!","This command is deprecated and can cause temporary instability.  It is not recommended any longer. You may have to reboot the wallet to recover. "));
 		 	entry.push_back(Pair("Shave Succeeded.",(double)pindexBest->nHeight));
@@ -3141,7 +3149,8 @@ Value execute(const Array& params, bool fHelp)
 	{
 			bNetAveragesLoaded = false;
 			nLastTallied = 0;
-			BusyWaitForTally();
+			//	BusyWaitForTally();
+			bool bTallied = TallyResearchAverages(true);
 			entry.push_back(Pair("Tally Network Averages",1));
 			results.push_back(entry);
 	}
@@ -3408,7 +3417,6 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "currentcontractaverage")
 	{
-		//7-18-2015
 		std::string contract = "";
 		#if defined(WIN32) && defined(QT_GUI)
 					contract = qtGetNeuralContract("");
@@ -3424,6 +3432,18 @@ Value execute(const Array& params, bool fHelp)
 		entry.push_back(Pair("avg_mag",out_avg));
 		entry.push_back(Pair("beacon_participant_count",out_participant_count));
 		entry.push_back(Pair("superblock_valid",bValid));
+		//Show current contract neural hash
+		std::string sNeuralHash = "";
+
+		#if defined(WIN32) && defined(QT_GUI)
+			sNeuralHash = qtGetNeuralHash("");
+			entry.push_back(Pair(".NET Neural Hash",sNeuralHash.c_str()));
+		#endif
+  	
+		entry.push_back(Pair("Length",(double)contract.length()));
+		std::string neural_hash = GetQuorumHash(contract);
+	    entry.push_back(Pair("Wallet Neural Hash",neural_hash));
+		
 		results.push_back(entry);
 		
 	}

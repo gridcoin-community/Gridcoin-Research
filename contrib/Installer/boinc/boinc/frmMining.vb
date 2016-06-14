@@ -811,7 +811,7 @@ Refresh:
         Return GetWindowsFileAge(GetGridFolder() + "NeuralNetwork\contract.dat")
 
     End Function
-    Private Sub Button1_Click(sender As System.Object, e As System.EventArgs) Handles Button1.Click
+    Private Sub Button1_Click(sender As System.Object, e As System.EventArgs)
         'Export Contract 
         Dim sFullPath As String = GetGridFolder() + "NeuralNetwork\contract.dat"
         Dim swContract As New StreamWriter(sFullPath)

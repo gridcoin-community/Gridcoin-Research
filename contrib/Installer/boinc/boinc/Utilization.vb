@@ -12,8 +12,6 @@ Public Class Utilization
     Public _boincmagnitude As Double
     Private msSentence As String = ""
     Private mlSpeakMagnitude As Double
-
-
     Public ReadOnly Property Version As Double
         Get
             Return 409
@@ -21,37 +19,26 @@ Public Class Utilization
     End Property
 
     Private lfrmMiningCounter As Long = 0
-    Public ReadOnly Property BoincUtilization As Double
-        Get
-            'Return Val(clsGVM.BoincUtilization)
-        End Get
-    End Property
-
     Public Function cGetCryptoPrice(sSymbol As String) As Double
         Return GetCryptoPrice(sSymbol).Price
     End Function
     Public Function cqGetCryptoPrice(sSymbol As String) As Quote
         Return GetCryptoPrice(sSymbol)
     End Function
-
-
     Public Function SetQuorumData(sData As String) As String
-
         Dim sQuorumData As String = ExtractXML(sData, "<QUORUMDATA>")
         Dim sAge As String = ExtractXML(sQuorumData, "<AGE>")
         Dim sQuorumHash As String = ExtractXML(sQuorumData, "<HASH>")
         Dim TS As String = ExtractXML(sQuorumData, "<TIMESTAMP>")
         Dim sBlock As String = ExtractXML(sQuorumData, "<BLOCKNUMBER>")
         Dim sPrimaryCPID As String = ExtractXML(sQuorumData, "<PRIMARYCPID>")
-
         Log(sData)
         Call UpdateSuperblockAgeAndQuorumHash(sAge, sQuorumHash, TS, sBlock, sPrimaryCPID)
-
+        Return ""
     End Function
     Public Sub TestGZIPBoincDownload()
         Dim c As New clsBoincProjectDownload
         c.DownloadGZipFiles()
-
     End Sub
     Public Function WriteKey(sData As String) As String
         Try
@@ -82,14 +69,12 @@ Public Class Utilization
         sReq = System.Text.Encoding.UTF8.GetString(b)
         Return sReq
     End Function
-
     Public Function StringToByteArray(sData As String) As Byte()
-
         Return modGRC.StringToByte(sData)
-
     End Function
     Public Function BoincMagnitude(value As String) As String
         _boincmagnitude = Val(value)
+        Return ""
     End Function
     Public Function cAES512Encrypt(sData As String) As String
         Return AES512EncryptData(sData)
@@ -109,14 +94,13 @@ Public Class Utilization
     Public Sub StopWireFrameRenderer()
         If Not mfrmWireFrame Is Nothing Then
             mfrmWireFrame.EndWireFrame()
-
         End If
     End Sub
     Public Sub TestnetSetGenericRPCValue(sData As String)
         SetRPCReply(sData)
     End Sub
     Public Function TestnetGetGenericRPCValue() As String
-
+        Return ""
     End Function
     Public ReadOnly Property ClientNeedsUpgrade As Double
         Get
@@ -135,7 +119,6 @@ Public Class Utilization
                     End If
                 End If
                 Log("Ready for upgrade")
-
                 If KeyValue("suppressupgrade") = "true" Then
                     Log("Client needs upgraded; Not upgrading due to key.")
                     Return 0
@@ -145,7 +128,6 @@ Public Class Utilization
                 Return 1
             End If
             Log("Client up to date")
-
             Return 0
         End Get
     End Property
@@ -154,41 +136,25 @@ Public Class Utilization
     End Function
 
     Sub New()
-
         mclsUtilization = Me
-
-
-        Log("L1")
-
         Try
-
-
             Try
                 UpdateKey("UpdatingLeaderboard", "false")
-
             Catch ex As Exception
                 Log(ex.Message)
-
             End Try
-
             Try
                 PurgeLog()
-
             Catch ex As Exception
-
             End Try
             Log("Loading...")
-
             Try
-                ' If Not DatabaseExists("gridcoin_leaderboard") Then ReplicateDatabase("gridcoin_leaderboard")
             Catch ex As Exception
                 Log("New:" + ex.Message)
             End Try
-
             Try
                 Dim sContract As String = GetMagnitudeContract()
                 If Len(sContract) = 0 Then bMagsDoneLoading = False
-
             Catch ex As Exception
                 Log("contract err " + ex.Message)
             End Try
@@ -196,7 +162,6 @@ Public Class Utilization
             Log("While loading clsUtilization : " + ex.Message)
         End Try
         Log("Loaded")
-
     End Sub
     Sub New(bLoadMiningConsole As Boolean)
         If bLoadMiningConsole Then ShowMiningConsole()
@@ -256,12 +221,11 @@ Public Class Utilization
         Dim sContract As String = GetMagnitudeContract()
         Return sContract
     End Function
-
-    Public Function ShowVotingConsole()
+    Public Function ShowVotingConsole() As Double
         Dim fmVoting As New frmVoting
         fmVoting.Show()
+        Return 1
     End Function
-
     Public Function ShowForm(sFormName As String) As String
         Try
             Dim vFormName() As String
@@ -287,49 +251,61 @@ Public Class Utilization
         End Try
 
     End Function
-
-    Public Function ShowNewUserWizard()
+    Public Function ShowNewUserWizard() As Double
         Dim fNUW As New frmNewUserWizard
         fNUW.Show()
+        Return 1
     End Function
-    Public Function ShowConfig()
+    Public Function ShowConfig() As Double
         Try
             mfrmConfig = New frmConfiguration
             mfrmConfig.Show()
         Catch ex As Exception
             Log("Error while transitioning to frmConfig" + ex.Message)
         End Try
+        Return 1
     End Function
-    Public Function ShowFAQ()
+    Public Function ShowFAQ() As Double
         Try
-            mfrmFaq = New frmFAQ
-            mfrmFaq.show()
+            mfrmFAQ = New frmFAQ
+            mfrmFAQ.Show()
 
         Catch ex As Exception
             Log("Error:FAQ")
         End Try
+        Return 1
     End Function
-    Public Function ShowTicketAdd()
+    Public Function ShowTicketAdd() As Double
         Try
             mfrmTicketAdd = New frmTicketAdd
             mfrmTicketAdd.Show()
         Catch ex As Exception
             Log("Error while transitioning to frmTicketAdd" + ex.Message)
         End Try
+        Return 1
+    End Function
+    Public Function ShowDiagnostics() As Double
+        Try
+            mFrmDiagnostics = New frmDiagnostics
+            mFrmDiagnostics.Show()
+        Catch ex As Exception
+            Log("Error while showing Diagnostics" + ex.Message)
+        End Try
+        Return 1
     End Function
     Public Function muFileToBytes(SourceFile As String) As Byte()
         Return FileToBytes(SourceFile)
     End Function
-    Public Function ShowFoundation()
+    Public Function ShowFoundation() As Double
         Try
             mfrmFoundation = New frmFoundation
             mfrmFoundation.Show()
         Catch ex As Exception
             Log("Error while showing frmFoundation " + ex.Message)
         End Try
+        Return 1
     End Function
-
-    Public Function ShowTicketList()
+    Public Function ShowTicketList() As Double
         Try
             mGRCData = New GRCSec.GridcoinData
             mfrmLogin = New frmLogin
@@ -338,61 +314,52 @@ Public Class Utilization
         Catch ex As Exception
             Log("Error while transitioning to frmTicketList" + ex.Message)
         End Try
+        Return 1
     End Function
-    Public Function ShowTicker()
+    Public Function ShowTicker() As Double
         Try
             mfrmTicker = New frmLiveTicker
             mfrmTicker.Show()
         Catch ex As Exception
             Log("Error while booting ticker " + ex.Message)
         End Try
+        Return 1
     End Function
-
-    Public Function ShowLeaderboard()
+    Public Function ShowLeaderboard() As Double
         mfrmLeaderboard = New frmLeaderboard
         mfrmLeaderboard.Show()
+        Return 1
     End Function
-
-    Public Function ShowMiningConsole()
+    Public Function ShowMiningConsole() As Double
         Try
             lfrmMiningCounter = lfrmMiningCounter + 1
-
             If mfrmMining Is Nothing Then
                 mfrmMining = New frmMining
             End If
-
             mfrmMining.Show()
-
         Catch ex As Exception
         End Try
+        Return 1
     End Function
-
-    Public ReadOnly Property SourceBlock As String
-        Get
-
-        End Get
-    End Property
-
     Public Function TestOutdated(ByVal sdata As String, ByVal mins As Long) As Boolean
         Return Outdated(sdata, mins)
     End Function
     Public Function TestKeyValue(ByVal sKey As String) As String
         Return KeyValue(sKey)
     End Function
-    Public Function TestUpdateKey(ByVal sKey As String, ByVal sValue As String)
+    Public Function TestUpdateKey(ByVal sKey As String, ByVal sValue As String) As Double
         Call UpdateKey(sKey, sValue)
+        Return 1
     End Function
     Public Sub ExecuteCode(ByVal sCode As String)
         Log("Executing smart contract " + sCode)
         Dim classSmartContract As New GridcoinSmartContract
         classSmartContract.ExecuteContract(sCode)
-
     End Sub
     Public Sub SpeakSentence(sSentence As String)
         msSentence = sSentence
         Dim t As New Threading.Thread(AddressOf SpeakOnBackgroundThread)
         t.Start()
-
     End Sub
     Public Sub SpeakOnBackgroundThread()
         Dim S As New SpeechSynthesis
@@ -421,17 +388,16 @@ Public Class Utilization
 
     End Function
     Public Function TrackConfirm(sTXID As String) As String
-
         Log("Tracking " + Trim(sTXID))
         Try
             Dim lOut As Double = mTrackConfirm(sTXID)
             Log("Returning " + Trim(lOut))
             Return Trim(lOut)
         Catch ex As Exception
-            Log("HEINOUS ERROR" + ex.Message)
+            Log("ERROR" + ex.Message)
             Return "0"
         End Try
-        'return a 0 or 1
+        'Return a 0 or 1
     End Function
     Public Function InsertConfirm(sConfirm As String) As Double
         Log(sConfirm)
@@ -457,11 +423,10 @@ Public Class Utilization
             mlMagnitude = Val(vSession(2))
         Catch ex As Exception
             Log("SetSessionInfo " + ex.Message)
-
         End Try
+        Return 1
     End Function
     Public Function ExplainMag(sCPID As String) As String
-        '  Log("Neural request for " + sCPID)
         If bMagsDoneLoading = False Then
             Log("This node is still syncing.")
             Return ""
@@ -488,7 +453,6 @@ Public Class Utilization
         End Try
         Return "SUCCESS"
     End Function
-
     Public Function SetGenericVotingData(sValue As String) As Double
         Return SetGenericData("POLLS", sValue)
     End Function
@@ -503,7 +467,6 @@ Public Class Utilization
         Catch ex As Exception
             Return 0
         End Try
-
     End Function
     Public Function SetTestNetFlag(sData As String) As Double
         Try
@@ -519,28 +482,26 @@ Public Class Utilization
         End Try
         Return 1
     End Function
-    Public Function TestMag2015()
-        StoreTestMagnitude()
-
-    End Function
-    Public Function TestPDS()
-        TestPDS1()
-
-    End Function
     Public Function SyncCPIDsWithDPORNodes(sData As String) As Double
         'Write the Gridcoin CPIDs to the Persisted Data System
         Try
             msSyncData = sData
-           
             Call SyncDPOR2()
         Catch ex As Exception
             Log("Exception during SyncDpor2 : " + ex.Message)
             Return -2
         End Try
         Log("Finished syncing DPOR cpids.")
-
         Return 0
-
+    End Function
+    Public Function PushGridcoinDiagnosticData(sData As String) As Double
+        Try
+            msSyncData = sData
+        Catch ex As Exception
+            Log("Exception during PushGridcoinDiagnosticData : " + ex.Message)
+            Return -2
+        End Try
+        Return 1
     End Function
     Public Sub UpdateMagnitudesOnly()
         EnsureNNDirExists()
@@ -549,7 +510,6 @@ Public Class Utilization
         Call UpdateMagnitudes()
     End Sub
     Public Sub AddressUserThread()
-
         Try
             Log("Speaking " + Trim(mlSpeakMagnitude))
             Dim s As New SpeechSynthesis
@@ -557,13 +517,11 @@ Public Class Utilization
         Catch ex As Exception
             Log("Unable to initialize speech")
         End Try
-
     End Sub
     Public Function AddressUser(sMagnitude As String) As Double
         Dim t As New Threading.Thread(AddressOf AddressUserThread)
         mlSpeakMagnitude = Val("0" + Trim(sMagnitude))
         t.Start()
-
         Return 1
     End Function
     Public Sub SetSqlBlock(ByVal data As String)
@@ -582,34 +540,20 @@ Public Class Utilization
     Public Function GetLanIP() As String
         Return GetLocalLanIP1()
     End Function
-    Public ReadOnly Property BoincProjectCount As Double
-        Get
-        End Get
-    End Property
     Public Sub clsLogOff()
         If mGRCData Is Nothing Then mGRCData = New GRCSec.GridcoinData
-
         mGRCData.LogOff(GetSessionGuid)
     End Sub
-    Public ReadOnly Property BoincTotalHostAverageCredits As Double
-        Get
-        End Get
-    End Property
-
     Public Sub ShowEmailModule()
         Dim e As New frmMail
         e.Show()
         e.RetrievePop3Emails()
     End Sub
-
     Protected Overrides Sub Finalize()
         Try
-
             MyBase.Finalize()
         Catch ex As Exception
-
         End Try
-
     End Sub
 
 End Class

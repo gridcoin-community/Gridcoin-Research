@@ -100,6 +100,9 @@ extern void qtSyncWithDPORNodes(std::string data);
 extern double qtExecuteGenericFunction(std::string function,std::string data);
 std::string GetArgument(std::string arg, std::string defaultvalue);
 extern std::string getMacAddress();
+extern double qtPushGridcoinDiagnosticData(std::string data);
+
+bool PushGridcoinDiagnostics();
 
 extern std::string FromQString(QString qs);
 extern std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
@@ -506,6 +509,17 @@ void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::strin
 
 	}
 	#endif
+}
+
+double qtPushGridcoinDiagnosticData(std::string data)
+{
+	if (!bGlobalcomInitialized) return 0;
+	int result = 0;
+	#if defined(WIN32) && defined(QT_GUI)
+			QString qsData = ToQstring(data);
+		    result = globalcom->dynamicCall("PushGridcoinDiagnosticData(Qstring)",qsData).toInt();
+	#endif
+ 	return (double)result;
 }
 
 //R Halford - 6/19/2015 - Let's clean up the windows side by removing all these functions and making a generic interface for comm between Windows and Linux; Start with one new generic function here:
@@ -978,6 +992,11 @@ void BitcoinGUI::createActions()
 	foundationAction->setStatusTip(tr("Foundation"));
 	foundationAction->setMenuRole(QAction::TextHeuristicRole);
 
+	diagnosticsAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Diagnostics"), this);
+	diagnosticsAction->setStatusTip(tr("Diagnostics"));
+	diagnosticsAction->setMenuRole(QAction::TextHeuristicRole);
+
+
 	faqAction = new QAction(QIcon(":/icons/bitcoin"), tr("FA&Q"), this);
 	faqAction->setStatusTip(tr("Interactive FAQ"));
 	faqAction->setMenuRole(QAction::TextHeuristicRole);
@@ -1027,10 +1046,11 @@ void BitcoinGUI::createActions()
 
 	connect(tickerAction, SIGNAL(triggered()), this, SLOT(tickerClicked()));
 	connect(ticketListAction, SIGNAL(triggered()), this, SLOT(ticketListClicked()));
+	connect(diagnosticsAction, SIGNAL(triggered()), this, SLOT(diagnosticsClicked()));
 
 	connect(foundationAction, SIGNAL(triggered()), this, SLOT(foundationClicked()));
 	connect(faqAction, SIGNAL(triggered()), this, SLOT(faqClicked()));
-
+	
 	connect(galazaAction, SIGNAL(triggered()), this, SLOT(galazaClicked()));
 	connect(newUserWizardAction, SIGNAL(triggered()), this, SLOT(newUserWizardClicked()));
 
@@ -1114,6 +1134,8 @@ void BitcoinGUI::createMenuBar()
 	qmAdvanced->addSeparator();
 	qmAdvanced->addAction(faqAction);
 	qmAdvanced->addAction(foundationAction);
+	qmAdvanced->addAction(diagnosticsAction);
+
 #endif /* defined(WIN32) */
 
 }
@@ -1769,6 +1791,18 @@ void BitcoinGUI::ticketListClicked()
     globalcom->dynamicCall("ShowTicketList()");
 #endif
 }
+
+void BitcoinGUI::diagnosticsClicked()
+{
+#ifdef WIN32
+	if (!bGlobalcomInitialized) return;
+	qtSetSessionInfo(DefaultWalletAddress(), GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.Magnitude);
+	bool result = PushGridcoinDiagnostics();
+    globalcom->dynamicCall("ShowDiagnostics()");
+#endif
+}
+
+
 
 /*
 void BitcoinGUI::browserClicked()

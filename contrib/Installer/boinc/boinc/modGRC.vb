@@ -33,6 +33,7 @@ Module modGRC
 
     Public mfrmTicketAdd As frmTicketAdd
     Public mfrmFoundation As frmFoundation
+    Public mFrmDiagnostics As frmDiagnostics
 
     Public mfrmTicketList As frmTicketList
     Public mfrmLogin As frmLogin
@@ -344,7 +345,6 @@ Module modGRC
         End Try
 
     End Function
-
     Public Function AttachProject(sURL As String, sEmail As String, sPass As String, sUserName As String) As String
         Dim sResult As String = ""
         Dim BJ As New BatchJob
@@ -364,9 +364,7 @@ Module modGRC
                 sKey = BJ.Value
             End If
         End If
-
         'Attach project to boinc
-
         BJ = BoincAttachProject(sURL, sKey)
         If BJ.Status = True Then
             sResult += "Attached project " + sURL + " to boinc successfully." + vbCrLf
@@ -374,7 +372,6 @@ Module modGRC
             sResult += "Failed to attach project : " + BJ.OutputError + vbCrLf
             'Dont fail here; maybe already attached
         End If
-
         'Get the Gridcoin team ID 
         Dim sTeam As String
         sTeam = BoincRetrieveTeamID(sURL)
@@ -387,11 +384,111 @@ Module modGRC
         Else
             sResult += "Failed to add user to Team Gridcoin." + vbCrLf
         End If
-
         Return sResult
+    End Function
+    Public Function GetClientStateSize() As Double
+        Dim sPath As String = ""
+        Try
+            sPath = GetBoincClientStatePath()
+            Dim fiBoinc As New FileInfo(sPath)
+            Return fiBoinc.Length
+        Catch ex As Exception
+            Log("Path " + sPath + " does not exist.")
+            Return 0
+        End Try
+    End Function
+    Public Function GetBoincClientStatePath()
+        Dim sDataDir As String = GetBoincDataDir() + "client_state.xml"
+        Return sDataDir
+    End Function
+    Public Function GetPeersSize() As Double
+        Dim sPath As String = GetGridPath("") + "peers.dat"
+        If Not File.Exists(sPath) Then Return 0
+        Dim fiSz As New FileInfo(sPath)
+        Return fiSz.Length
+    End Function
+    Public Function GetBoincDataDir() As String
+        Dim sDir1 As String = "c:\programdata\BOINC\"
+        If System.IO.Directory.Exists(sDir1) Then Return sDir1
+        sDir1 = KeyValue("boincdatadir")
+        If System.IO.Directory.Exists(sDir1) Then Return sDir1
+        Return ""
+    End Function
+    Public Function ComputeLocalCPID() As String
+        Dim sBPK As String = GetBoincPublicKey()
+        Dim sCPID As String = ""
+        Dim sLocalEmail As String = KeyValue("email")
+        If sLocalEmail = "" Then Return "EMAIL_EMPTY"
+        If sBPK = "" Then Return "PUB_KEY_EMPTY"
+        sCPID = GetMd5String(LCase(sBPK) + LCase(sLocalEmail))
+        Return sCPID
+    End Function
+    Public Function GetTotalCPIDRAC(sCPID As String, ByRef sError As String) As Double
+        Dim sTable As String = ""
+        Dim sLocalError As String = ""
+        Dim dProjByteLen As Double = 0
+        Dim dTotalRac As Double = GetUserRac(sCPID, sLocalError, sTable, dProjByteLen)
+        sError += sLocalError
+        If dTotalRac = 0 And dProjByteLen > 200 Then
+            sError += "No projects on team Gridcoin."
+        End If
+        If dTotalRac = 0 And sLocalError = "" And dProjByteLen < 250 Then
+            sError += "Invalid CPID"
+        End If
+        Return dTotalRac
+    End Function
+
+    Public Function GetUserRac(sCPID As String, ByRef errors As String, ByRef sTable As String, ByRef dProjectByteLength As Double) As Double
+        Dim RACURL As String = "http://cpid.gridcoin.us:5000/"
+        Dim sURL As String = RACURL + "get_user.php?cpid=" + sCPID
+        Dim w As New MyWebClient
+        Dim sRAC As String
+        sRAC = w.DownloadString(sURL)
+        Dim vRAC() As String
+        vRAC = Split(sRAC, "<project>")
+        dProjectByteLength = Len(sRAC)
+        Dim x As Integer = 0
+        Dim rac As Double
+        errors = ""
+        Dim totalrac As Double
+        Dim team As String
+        Dim team_out As String = ""
+        Dim projname As String = ""
+        sTable = "<TABLE><TR><TD>Project</TD><TD>RAC</TD><TD>TEAM</TD></TR>"
+        For x = 0 To UBound(vRAC)
+            rac = ExtractXML(vRAC(x), "<expavg_credit>", "</expavg_credit>")
+            team = ExtractXML(vRAC(x), "<team_name>", "</team_name>")
+            projname = ExtractXML(vRAC(x), "<name>", "</name>")
+            If Trim(LCase(team)) = "gridcoin" Then
+                totalrac = totalrac + rac
+                team_out = "gridcoin"
+                sTable += "<TR><TD>" + projname + "</TD><TD>" + Trim(rac) + "</TD><TD>" + Trim(team_out) + "</TD></TR>"
+            End If
+        Next
+        sTable += "</TABLE>"
+        If team_out <> "gridcoin" Then
+            errors = errors + "CPID not part of team gridcoin. "
+        End If
+        If totalrac < 100 Then
+            errors = errors + "Total RAC for Team Gridcoin below 100."
+        End If
+        Return totalrac
 
     End Function
 
+    Public Function GetBoincPublicKey() As String
+        Dim sStatePath As String = GetBoincClientStatePath()
+        Dim fiIn As New StreamReader(sStatePath)
+        While fiIn.EndOfStream = False
+            Dim sTemp As String = fiIn.ReadLine
+            Dim sPK As String = ExtractXML(sTemp, "<cross_project_id>")
+            If Len(sPK) > 0 Then
+                fiIn.Close()
+                Return sPK
+            End If
+        End While
+        Return ""
+    End Function
     Public Function GetBoincAppDir() As String
         Dim sDir1 As String = "c:\program files\BOINC\"
         If System.IO.Directory.Exists(sDir1) Then Return sDir1

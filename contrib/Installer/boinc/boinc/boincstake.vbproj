@@ -96,6 +96,12 @@
     <Compile Include="clsBoincProjectDownload.vb" />
     <Compile Include="clsMailFunctions.vb" />
     <Compile Include="clsQuorumHashingAlgorithm.cls" />
+    <Compile Include="frmDiagnostics.Designer.vb">
+      <DependentUpon>frmDiagnostics.vb</DependentUpon>
+    </Compile>
+    <Compile Include="frmDiagnostics.vb">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="frmRain.Designer.vb">
       <DependentUpon>frmRain.vb</DependentUpon>
     </Compile>
@@ -246,6 +252,7 @@
     <Compile Include="frmTicketAdd.vb">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="GRCDiagnostics.vb" />
     <Compile Include="GRCRunTimeInterpreter.vb" />
     <Compile Include="MD5.vb" />
     <Compile Include="modBoincLeaderboard.vb" />
@@ -286,6 +293,9 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="frmDiagnostics.resx">
+      <DependentUpon>frmDiagnostics.vb</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="frmRain.resx">
       <DependentUpon>frmRain.vb</DependentUpon>
     </EmbeddedResource>
