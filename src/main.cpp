@@ -197,6 +197,7 @@ extern void RemoveNetworkMagnitude(double LockTime, std::string cpid, MiningCPID
 unsigned int WHITELISTED_PROJECTS = 0;
 unsigned int CHECKPOINT_VIOLATIONS = 0;
 int64_t nLastTallied = 0;
+int64_t nLastResync = 0;
 int64_t nLastPing = 0;
 int64_t nLastPeek = 0;
 double nVolatility = .90;
@@ -3809,7 +3810,7 @@ bool ShaveChain(CTxDB& txdb, int iHaircut)
 {
 	int iTarget = 0;
 	int iStart = 0;
-    printf("Shaving %f blocks off of main chain\n",(double)iHaircut);
+    printf("Disconnecting %f blocks off of main chain\n",(double)iHaircut);
 	CBlockIndex* pHaircut = NULL;
     CBlockIndex* pBarber = pindexBest;
 
@@ -3862,7 +3863,7 @@ bool ShaveChain(CTxDB& txdb, int iHaircut)
  	        vDisconnect.push_back(pBarber);
 			pBarber = pBarber->pprev;
 			pHaircut = pBarber;
-			printf("Shaving block %f; ",(double)pBarber->nHeight);
+			printf(" ;Removing blk %f; ",(double)pBarber->nHeight);
 	}
 
 	if (!pHaircut)
@@ -5047,25 +5048,34 @@ void AskForOutstandingBlocks()
 }
 void SyncChain()
 {
+
+     	if (IsLockTimeWithinMinutes(nLastResync,60))
+	    {
+			printf("Resync too soon or already in progress. \r\n");
+			return;
+	    }
+	
+		nLastResync = GetAdjustedTime();
+
 		printf("\r\n * Sync Chain * \r\n");
-		//6-11-2016
 		CTxDB txdb;
 		LOCK(cs_main);
-		ShaveChain(txdb,200);
-		AskForOutstandingBlocks();
-		std::string sOut = "";
-		LoadAdminMessages(true,sOut);
-		InitializeBoincProjects();
-		TallyResearchAverages(true);
-		ComputeNeuralNetworkSupermajorityHashes();
-		LoadCPIDsInBackground();  
-		printf("\r\n * Finished * \r\n");
+		{
+			ShaveChain(txdb,33);
+			AskForOutstandingBlocks();
+			std::string sOut = "";
+			LoadAdminMessages(true,sOut);
+			InitializeBoincProjects();
+			TallyResearchAverages(true);
+			ComputeNeuralNetworkSupermajorityHashes();
+			LoadCPIDsInBackground();  
+			printf("\r\n * Finished * \r\n");
+		}
 }
 
 
 void RecoverNode()
 {
-
 	SyncChain();
 }
 
@@ -5155,7 +5165,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     if (!mapBlockIndex.count(pblock->hashPrevBlock))
     {
         // R HALFORD - 05-13-2016 - If we are out of sync, and get bombarded with orphans, recover the node.
-		if (TimerMain("OrphanBarrage", 25))
+		if (TimerMain("OrphanBarrage", 100))
 		{
 					bool fOut = OutOfSyncByMoreThan(30);
 					double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));

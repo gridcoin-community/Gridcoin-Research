@@ -2111,7 +2111,6 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "recover")
 	{
-		//5-13-2016
 		RecoverNode();
 		entry.push_back(Pair("Recover",1));
 		results.push_back(entry);
