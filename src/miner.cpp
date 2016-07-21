@@ -155,7 +155,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 
 	if (OutOfSyncByAgeWithChanceOfMining())
 	{
-	    printf("Wallet out of sync - unable to mine...");
+	    if (msPrimaryCPID != "INVESTOR") printf("Wallet out of sync - unable to mine...");
 		MilliSleep(500);
 		return NULL;
 	}

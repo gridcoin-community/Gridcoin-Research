@@ -313,6 +313,7 @@ int main(int argc, char *argv[])
                 guiref = 0;
             }
             // Shutdown the core and its threads, but don't exit Bitcoin-Qt here
+			printf("\r\nbitcoin.cpp:main calling Shutdown...\r\n");
             Shutdown(NULL);
         }
 

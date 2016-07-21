@@ -79,7 +79,7 @@ bool CSQL::ProcessSQLRow(CNode* pfrom)
 
         if (pfrom)
         {
-            pfrom->PushGetBlocks(pindexBest, hashSql);
+            pfrom->PushGetBlocks(pindexBest, hashSql, false);
             // ask directly as well in case rejected earlier by duplicate
             // proof-of-stake because getblocks may not get it this time
             pfrom->AskFor(CInv(MSG_BLOCK, mapOrphanBlocks.count(hashSql)? WantedByOrphan(mapOrphanBlocks[hashSql]) : hashSql));

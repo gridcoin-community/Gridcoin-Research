@@ -32,10 +32,19 @@ int GetDayOfYear();
 extern std::string NodeAddress(CNode* pfrom);
 extern std::string ConvertBinToHex(std::string a);
 extern std::string ConvertHexToBin(std::string a);
+extern void AskForOutstandingBlocksForcefully();
+
+
+extern void CleanInboundConnections();
 extern void RecoverNode();
 extern bool PushGridcoinDiagnostics();
 double qtPushGridcoinDiagnosticData(std::string data);
+int RestartClient();
+
 bool RequestSupermajorityNeuralData();
+extern void ReloadBlockIndexHot();
+
+
 extern std::string UnpackBinarySuperblock(std::string sBlock);
 extern std::string PackBinarySuperblock(std::string sBlock);
 extern std::vector<unsigned char> StringToVector(std::string sData);
@@ -304,6 +313,8 @@ bool bOptionPaymentsEnabled = false;
 int nCoinbaseMaturity = 100;
 CBlockIndex* pindexGenesisBlock = NULL;
 int nBestHeight = -1;
+int nLastBestHeight = -1;
+
 uint256 nBestChainTrust = 0;
 uint256 nBestInvalidTrust = 0;
 uint256 hashBestChain = 0;
@@ -955,17 +966,13 @@ MiningCPID GetNextProject(bool bForce)
 					mdMiningNetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
 					GlobalCPUMiningCPID.Magnitude = CalculatedMagnitude(GetAdjustedTime(),false);
 					if (fDebug3) printf("(boinckey) For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
-					msMiningErrors = "Boinc Mining";
+					msMiningErrors = (msMiningCPID == "INVESTOR" || msPrimaryCPID=="INVESTOR" || msMiningCPID.empty()) ? "Staking Interest" : "Mining";
 					GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 					GlobalCPUMiningCPID.LastPaymentTime = GetLastPaymentTimeByCPID(GlobalCPUMiningCPID.cpid);
 					return GlobalCPUMiningCPID;
 	}
 
-
-
-
-
-
+	
 	msMiningProject = "";
 	msMiningCPID = "";
 	mdMiningRAC = 0;
@@ -1080,7 +1087,7 @@ MiningCPID GetNextProject(bool bForce)
 									GlobalCPUMiningCPID.Magnitude = CalculatedMagnitude(GetAdjustedTime(),false);
 									if (fDebug && LessVerbose(2)) printf("For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
 									//Reserved for GRC Speech Synthesis
-									msMiningErrors = "Boinc Mining";
+									msMiningErrors = (msMiningCPID == "INVESTOR" || msPrimaryCPID=="INVESTOR" || msMiningCPID.empty() || msPrimaryCPID.empty()) ? "Staking Interest" : "Boinc Mining";
 									GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
 									GlobalCPUMiningCPID.LastPaymentTime = GetLastPaymentTimeByCPID(GlobalCPUMiningCPID.cpid);
 									return GlobalCPUMiningCPID;
@@ -1096,7 +1103,7 @@ MiningCPID GetNextProject(bool bForce)
 		}
 		}
 
-		msMiningErrors = "All BOINC projects exhausted.";
+		msMiningErrors = (msPrimaryCPID == "INVESTOR") ? "" : "All BOINC projects exhausted.";
 		msMiningProject = "INVESTOR";
 		msMiningCPID = "INVESTOR";
 		mdMiningRAC = 0;
@@ -1806,6 +1813,11 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         // This is done last to help prevent CPU exhaustion denial-of-service attacks.
         if (!tx.ConnectInputs(txdb, mapInputs, mapUnused, CDiskTxPos(1,1,1), pindexBest, false, false))
         {
+			// If this happens repeatedly, purge peers
+			if (TimerMain("AcceptToMemoryPool", 15))
+			{
+				CleanInboundConnections();
+			}	
 			return error("AcceptToMemoryPool : Unable to Connect Inputs %s", hash.ToString().c_str());
 	    }
     }
@@ -2955,7 +2967,11 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
 					{
 						return fMiner ? false : true;
 					}
-
+					if (TimerMain("ConnectInputs", 15))
+					{
+						CleanInboundConnections();
+					}	
+		
 					return fMiner ? false : error("ConnectInputs() : %s prev tx already used at %s", GetHash().ToString().c_str(), txindex.vSpent[prevout.n].ToString().c_str());
 				}
 
@@ -4060,6 +4076,7 @@ bool CBlock::SetBestChainInner(CTxDB& txdb, CBlockIndex *pindexNew, bool fReorga
     if (!ConnectBlock(txdb, pindexNew, false, fReorganizing) || !txdb.WriteHashBestChain(hash))
     {
         txdb.TxnAbort();
+		if (fDebug3) printf("Invalid Chain Found.  Invalid block %s\r\n",hash.GetHex().c_str());
         InvalidChainFound(pindexNew);
         return false;
     }
@@ -4104,11 +4121,12 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
         CBlockIndex *pindexIntermediate = pindexNew;
 		// list of blocks that need to be connected afterwards
         std::vector<CBlockIndex*> vpindexSecondary;
+		printf("\r\n**Reorganize**");
 
 		//10-6-2015 Make Reorganize work more gracefully - try up to 5 times to reorganize, each with an intermediate further back
         for (int iRegression = 0; iRegression < 5; iRegression++)
 		{
-			int rollback = iRegression*200;
+			int rollback = iRegression * 100;
 
 		    // Reorganize is costly in terms of db load, as it works in a single db transaction.
 			// Try to limit how much needs to be done inside
@@ -4188,7 +4206,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 	else
 	{
 		printf("{SBC} new best=%s  height=%d ; ",hashBestChain.ToString().c_str(), nBestHeight);
-
+		nLastBestHeight = nBestHeight;
 	}
 
     // Check the version of the last 100 blocks to see if we need to upgrade:
@@ -4434,13 +4452,17 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 
 							if (fDebug3) printf("CheckBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
 									(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,CoinToDouble(nCalculatedResearch),(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str());
+							/*
 							if (msPrimaryCPID == bb.cpid)
 							{
-								bStakeMinerOutOfSyncWithNetwork=true;
-								return false;
+								//bStakeMinerOutOfSyncWithNetwork=true;
+								//return false;
 							}
+							*/
+
 							return DoS(10,error("CheckBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
 									(double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,CoinToDouble(nCalculatedResearch),(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
+							// Reserved for future use.
 				}
 			}
 			//if (fDebug3) printf(".EOCBR.");
@@ -4853,6 +4875,17 @@ void GridcoinServices()
 		}
 	}
 
+	if (TimerMain("OutOfSyncDaily",900))
+	{
+		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+		bool fGhostChain = (!fTestNet && PORDiff < .75);
+		if (OutOfSyncByMoreThan(30) || fGhostChain)
+		{
+			printf("Restarting Gridcoin...");
+			int iResult = RestartClient();
+		}
+	}
+
 	if (false && TimerMain("FixSpentCoins",60))
 	{
 			int nMismatchSpent;
@@ -4892,7 +4925,15 @@ void GridcoinServices()
 	bool bNeedSuperblock = ((double)superblock_age > (double)(GetSuperblockAgeSpacing(nBestHeight)));
 	if ( nBestHeight % 3 == 0 && NeedASuperblock() ) bNeedSuperblock=true;
 
-	if (fDebug3) printf (" MRSA %f, BH %f ",(double)superblock_age,(double)nBestHeight);
+	if (fDebug3) 
+	{
+			printf (" MRSA %f, BH %f ",(double)superblock_age,(double)nBestHeight);
+			if (nBestHeight==nLastBestHeight)
+			{
+				printf("\r\n ************ Processing block with the same best height as the last best height...  ************* %f\r\n",(double)nBestHeight);
+			}
+	}
+
 	//12-2-2015
 	if (bNeedSuperblock)
 	{
@@ -5028,47 +5069,53 @@ void GridcoinServices()
 
 
 
-
 void AskForOutstandingBlocks()
 {
 	LOCK(cs_vNodes);
 	BOOST_FOREACH(CNode* pNode, vNodes) 
 	{
 				pNode->ClearBanned();
-	    		// Ask for outstanding blocks
-				if (true)
+    			if (!pNode->fClient && !pNode->fOneShot && (pNode->nStartingHeight > (nBestHeight - 144)) && (pNode->nVersion < NOBLKS_VERSION_START || pNode->nVersion >= NOBLKS_VERSION_END) )
 				{
-					if (!pNode->fClient && !pNode->fOneShot && (pNode->nStartingHeight > (nBestHeight - 144)) && (pNode->nVersion < NOBLKS_VERSION_START || pNode->nVersion >= NOBLKS_VERSION_END) )
-					{
-						pNode->PushGetBlocks(pindexBest, uint256(0));
-						printf(".");
-					}
+	    				pNode->PushGetBlocks(pindexBest, uint256(0), true);
+						printf(".B.");
 				}
 	}
 }
+
+
+void AskForOutstandingBlocksForcefully()
+{
+	LOCK(cs_vNodes);
+	BOOST_FOREACH(CNode* pNode, vNodes) 
+	{
+				pNode->ClearBanned();
+	    		// Ask for outstanding blocks
+    			if (!pNode->fClient && !pNode->fOneShot && (pNode->nStartingHeight > (nBestHeight - 144)) && (pNode->nVersion < NOBLKS_VERSION_START || pNode->nVersion >= NOBLKS_VERSION_END) )
+				{
+	    				pNode->PushGetBlocks(pindexBest, uint256(0), true);
+						pNode->PushGetBlocks(pindexBest->pprev, uint256(0),true);
+						printf(".GB.");
+				}
+	}
+}
+
 void SyncChain()
 {
-
      	if (IsLockTimeWithinMinutes(nLastResync,60))
 	    {
 			printf("Resync too soon or already in progress. \r\n");
 			return;
 	    }
-	
 		nLastResync = GetAdjustedTime();
-
 		printf("\r\n * Sync Chain * \r\n");
 		CTxDB txdb;
 		LOCK(cs_main);
 		{
-			ShaveChain(txdb,33);
+			//ShaveChain(txdb,33);
 			AskForOutstandingBlocks();
 			std::string sOut = "";
-			LoadAdminMessages(true,sOut);
-			InitializeBoincProjects();
 			TallyResearchAverages(true);
-			ComputeNeuralNetworkSupermajorityHashes();
-			LoadCPIDsInBackground();  
 			printf("\r\n * Finished * \r\n");
 		}
 }
@@ -5079,25 +5126,62 @@ void RecoverNode()
 	SyncChain();
 }
 
+void CheckForLatestBlocks()
+{
+	bool fOut = OutOfSyncByMoreThan(30);
+	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+	bool fGhostChain = (!fTestNet && PORDiff < .75);
+	if (fOut || fGhostChain)
+	{
+			mapOrphanBlocks.clear();
+			setStakeSeen.clear();
+			setStakeSeenOrphan.clear();
+			AskForOutstandingBlocks();
+			printf("\r\n ** Clearing Orphan Blocks... ** \r\n");
+	}
+	
+}
+
+void CleanInboundConnections()
+{
+	 	LOCK(cs_vNodes);
+		BOOST_FOREACH(CNode* pNode, vNodes) 
+		{
+				pNode->ClearBanned();
+				if (true)
+				{
+					if (pNode->nStartingHeight < (nBestHeight-1000))
+					{
+						pNode->fDisconnect=true;
+					}
+				}
+		}
+		CheckForLatestBlocks();	
+		printf("\r\n Cleaning inbound connections \r\n");
+}
+
 void ReloadBlockIndexHot()
 {
 		printf("\r\n * Recovering Node * \r\n");
-		// clear vectors, clear orphans, clear mapindex
-		mapOrphanBlocks.clear();
-		mapBlockIndex.clear();
-		setStakeSeen.clear();
-		setStakeSeenOrphan.clear();
-		mvResearchAge.clear();
-		mapOrphanBlocks.clear();
-		mapOrphanBlocksByPrev.clear();
-		mvApplicationCache.clear();
-		mvApplicationCacheTimestamp.clear();
-		mvNeuralVersion.clear();
-		mvDPOR.clear();
-		mvDPORCopy.clear();
-		mvBlockIndex.clear();
-		mvCPIDBlockHashes.clear();
-		LoadBlockIndex(true);
+	    AssertLockHeld(cs_main);
+		{
+			// clear vectors, clear orphans, clear mapindex
+			mapOrphanBlocks.clear();
+			mapBlockIndex.clear();
+			setStakeSeen.clear();
+			setStakeSeenOrphan.clear();
+			mvResearchAge.clear();
+			mapOrphanBlocks.clear();
+			mapOrphanBlocksByPrev.clear();
+			mvApplicationCache.clear();
+			mvApplicationCacheTimestamp.clear();
+			mvNeuralVersion.clear();
+			mvDPOR.clear();
+			mvDPORCopy.clear();
+			mvBlockIndex.clear();
+			mvCPIDBlockHashes.clear();
+			LoadBlockIndex(true);
+		}
 		LOCK(cs_vNodes);
 		BOOST_FOREACH(CNode* pNode, vNodes) 
 		{
@@ -5107,7 +5191,7 @@ void ReloadBlockIndexHot()
 				{
 					if (!pNode->fClient && !pNode->fOneShot && (pNode->nStartingHeight > (nBestHeight - 144)) && (pNode->nVersion < NOBLKS_VERSION_START || pNode->nVersion >= NOBLKS_VERSION_END) )
 					{
-						pNode->PushGetBlocks(pindexBest, uint256(0));
+						pNode->PushGetBlocks(pindexBest, uint256(0), true);
 					}
 				}
 				else
@@ -5165,17 +5249,29 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     if (!mapBlockIndex.count(pblock->hashPrevBlock))
     {
         // R HALFORD - 05-13-2016 - If we are out of sync, and get bombarded with orphans, recover the node.
-		if (TimerMain("OrphanBarrage", 100))
+		if (TimerMain("OrphanBarrage", 40))
 		{
 					bool fOut = OutOfSyncByMoreThan(30);
 					double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
 					bool fGhostChain = (!fTestNet && PORDiff < .75);
 					if (fOut || fGhostChain)
 					{
-						RecoverNode();
+						if (TimerMain("OrphansAndNotRecovering",8))
+						{
+							printf("\r\nGridcoin has not recovered after clearing orphans; Restarting node...\r\n");
+							int iResult = RestartClient();
+						}
+						else
+						{
+							RecoverNode();
+						}
 					}
 		}
 
+		if (TimerMain("OutOfSyncAndReceivingOrphans",25))
+		{
+			CheckForLatestBlocks();	
+		}
 		printf("ProcessBlock: ORPHAN BLOCK, prev=%s\n", pblock->hashPrevBlock.ToString().substr(0,20).c_str());
         // ppcoin: check proof-of-stake
         if (pblock->IsProofOfStake())
@@ -5194,7 +5290,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
         // Ask this guy to fill in what we're missing
         if (pfrom)
         {
-            pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2));
+            pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2), true);
             // ppcoin: getblocks may not obtain the ancestor block rejected
             // earlier by duplicate-stake check so we ask for it again directly
             if (!IsInitialBlockDownload())
@@ -5350,7 +5446,7 @@ bool ProcessBlockLegacy(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 			// Ask this guy to fill in what we're missing
 			if (pfrom)
 			{
-				pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2));
+				pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2), true);
 				// ppcoin: getblocks may not obtain the ancestor block rejected
 				// earlier by duplicate-stake check so we ask for it again directly
 				if (!IsInitialBlockDownload())
@@ -7446,7 +7542,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 				 (nAskedForSyncBlocks < 1 || vNodes.size() <= 1))
 			{
 				nAskedForSyncBlocks++;
-				pfrom->PushGetBlocks(pindexBest, uint256(0));
+				pfrom->PushGetBlocks(pindexBest, uint256(0), true);
 				if (fDebug3) printf("Asking %s for %f getblocks\r\n",NodeAddress(pfrom).c_str(),(double)nAskedForSyncBlocks);
 			}
 		}
@@ -7461,7 +7557,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 				 (nAskedForBlocks < 1 || vNodes.size() <= 1))
 			{
 				nAskedForBlocks++;
-				pfrom->PushGetBlocks(pindexBest, uint256(0));
+				pfrom->PushGetBlocks(pindexBest, uint256(0), true);
 			}
 		}
 		else
@@ -7473,7 +7569,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 				 (nAskedForBlocks < 1 || vNodes.size() <= 1))
 			{
 				nAskedForBlocks++;
-				pfrom->PushGetBlocks(pindexBest, uint256(0));
+				pfrom->PushGetBlocks(pindexBest, uint256(0), true);
 			}
 
 		}
@@ -7624,12 +7720,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             if (!fAlreadyHave)
                 pfrom->AskFor(inv);
             else if (inv.type == MSG_BLOCK && mapOrphanBlocks.count(inv.hash)) {
-                pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(mapOrphanBlocks[inv.hash]));
+                pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(mapOrphanBlocks[inv.hash]), true);
             } else if (nInv == nLastBlock) {
                 // In case we are on a very long side-chain, it is possible that we already have
                 // the last block in an inv bundle sent in response to getblocks. Try to detect
                 // this situation and push another getblocks to continue.
-                pfrom->PushGetBlocks(mapBlockIndex[inv.hash], uint256(0));
+                pfrom->PushGetBlocks(mapBlockIndex[inv.hash], uint256(0), true);
                 if (fDebug)
                     printf("force request: %s\n", inv.ToString().c_str());
             }
@@ -7835,12 +7931,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         bool fMissingInputs = false;
         if (AcceptToMemoryPool(mempool, tx, &fMissingInputs))
         {
-            SyncWithWallets(tx, NULL, true);
             RelayTransaction(tx, inv.hash);
             mapAlreadyAskedFor.erase(inv);
             vWorkQueue.push_back(inv.hash);
             vEraseQueue.push_back(inv.hash);
-            // Recursively process any orphan transactions that depended on this one
+         
+			// Recursively process any orphan transactions that depended on this one
             for (unsigned int i = 0; i < vWorkQueue.size(); i++)
             {
                 uint256 hashPrev = vWorkQueue[i];
@@ -7855,7 +7951,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     if (AcceptToMemoryPool(mempool, orphanTx, &fMissingInputs2))
                     {
                         printf("   accepted orphan tx %s\n", orphanTxHash.ToString().substr(0,10).c_str());
-                        SyncWithWallets(tx, NULL, true);
                         RelayTransaction(orphanTx, orphanTxHash);
                         mapAlreadyAskedFor.erase(CInv(MSG_TX, orphanTxHash));
                         vWorkQueue.push_back(orphanTxHash);
@@ -7864,7 +7959,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     }
                     else if (!fMissingInputs2)
                     {
-                        // invalid orphan 9-11-2015
+                        // invalid orphan
                         vEraseQueue.push_back(orphanTxHash);
                         printf("   removed invalid orphan tx %s\n", orphanTxHash.ToString().substr(0,10).c_str());
                     }
@@ -9696,6 +9791,13 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
 							AddPeek("Pushed Inv-Large " + RoundToString((double)vInv.size(),0));
 							if (fDebug3) printf(" *PIL* ");
 						    vInv.clear();
+							// 7-11-2016 If connection count > 25, and we continually push large inventory, clean current inbound connections
+							if (vNodes.size() > 25)
+							{
+								// External Node
+								CleanInboundConnections();
+							}
+
 							// Eventually ban the node if they keep asking for inventory
 							TrackRequests(pto,"Inv-Large");
 							//3-26-2015

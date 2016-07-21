@@ -158,14 +158,12 @@ std::string GetCommandNonce(std::string command)
 
 
 
-void CNode::PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd)
+void CNode::PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd, bool fForce)
 {
-    // Filter out duplicate requests
-    if (pindexBegin == pindexLastGetBlocksBegin && hashEnd == hashLastGetBlocksEnd)
-        return;
+	// The line of code below is the line of code that kept us from syncing to the best block! (fForce forces the sync to continue).
+    if (!fForce && pindexBegin == pindexLastGetBlocksBegin && hashEnd == hashLastGetBlocksEnd) return;  // Filter out duplicate requests
     pindexLastGetBlocksBegin = pindexBegin;
     hashLastGetBlocksEnd = hashEnd;
-
     PushMessage("getblocks", CBlockLocator(pindexBegin), hashEnd);
 }
 
@@ -1695,17 +1693,15 @@ void ThreadSocketHandler2(void* parg)
             {
                 if (pnode->nLastRecv == 0 || pnode->nLastSend == 0)
                 {
-                    if (fDebug3) printf("Socket no message in first N seconds, IP %s, %d %d\n", NodeAddress(pnode).c_str(), pnode->nLastRecv != 0, pnode->nLastSend != 0);
-					pnode->Misbehaving(10);
+                    if (fDebug10) printf("Socket no message in first 24 seconds, IP %s, %d %d\n", NodeAddress(pnode).c_str(), pnode->nLastRecv != 0, pnode->nLastSend != 0);
+					pnode->Misbehaving(1);
                     pnode->fDisconnect = true;
                 }
 			}
 			   
 			if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && ((int)vNodes.size() > (MAX_OUTBOUND_CONNECTIONS*.75)))
 			{
-				    //11-25-2015
-			        if (fDebug3) printf("Node %s connected longer than 2 hours with connection count of %f, disconnecting. \r\n", NodeAddress(pnode).c_str(),
-						 (double)vNodes.size());
+				    if (fDebug10) printf("Node %s connected longer than 2 hours with connection count of %f, disconnecting. \r\n", NodeAddress(pnode).c_str(), (double)vNodes.size());
 					pnode->fDisconnect = true;
             }
 
@@ -2059,7 +2055,7 @@ begin:
 
 void BusyWaitForTally()
 {
-	printf("\r\n ** Busy Wait for Tally ** \r\n");
+	if (fDebug10) printf("\r\n ** Busy Wait for Tally ** \r\n");
 	bTallyFinished=false;
 	bDoTally=true;
 	int iTimeout = 0;

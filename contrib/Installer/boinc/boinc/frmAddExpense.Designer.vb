@@ -334,7 +334,7 @@ Partial Class frmAddExpense
         Me.Controls.Add(Me.rtbNotes)
         Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)
         Me.Name = "frmAddExpense"
-        Me.Text = "Gridcoin Foundation - Expense/New Campaign Submission Form 1.0"
+        Me.Text = "Gridcoin Foundation - Expense/New Campaign Submission Form 1.1"
         Me.GroupBox1.ResumeLayout(False)
         Me.GroupBox1.PerformLayout()
         Me.ResumeLayout(False)

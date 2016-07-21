@@ -11,16 +11,14 @@ Public Class frmAddExpense
 
     Private Sub frmTicketAdd_Load(sender As System.Object, e As System.EventArgs) Handles MyBase.Load
         mGRCData = New GRCSec.GridcoinData
-        sHandle = mGRCData.GetHandle(GetSessionGuid)
-
+        sHandle = KeyValue("TicketHandle")
 
         Try
             If Mode <> "View" Then
-                If sHandle = "" Or mGRCData.IsAuthenticated(GetSessionGuid) = False Then
-                    If mfrmLogin Is Nothing Then
-                        mfrmLogin = New frmLogin
-                    End If
-                    mfrmLogin.Show()
+                If sHandle = "" Then
+                    MsgBox("Click <OK> to populate your GridCoin Username.", MsgBoxStyle.Critical)
+                    Dim frmU As New frmUserName
+                    frmU.Show()
                     Me.Dispose()
                     Exit Sub
                 End If
@@ -32,6 +30,10 @@ Public Class frmAddExpense
                 If Mode = "View" Then
                     'Depersist from GFS
                     Dim oExpense As SqlDataReader = mGRCData.GetBusinessObject("Expense", txtTicketId.Text, "ExpenseID")
+                    If oExpense.HasRows = False Then
+                        MsgBox("Sorry, this expense does not exist.", MsgBoxStyle.Critical)
+                        Exit Sub
+                    End If
                     txtDescription.Text = oExpense("Descript")
                     txtAmount.Text = Trim(oExpense("Amount"))
                     txtAttachment.Text = Trim("" & oExpense("AttachmentName"))
@@ -148,12 +150,10 @@ Public Class frmAddExpense
             Exit Sub
         End If
         'if they are not logged on... throw an error ... 4-22-2016
-        If sHandle = "" Or mGRCData.IsAuthenticated(GetSessionGuid) = False Then
-            MsgBox("Please authenticate first.  After logging in you may re-submit the form.", MsgBoxStyle.Critical, "Not Logged In")
-            If mfrmLogin Is Nothing Then
-                mfrmLogin = New frmLogin
-            End If
-            mfrmLogin.Show()
+        If sHandle = "" Then
+            MsgBox("Please create a user name first.  After logging in you may re-submit the form.", MsgBoxStyle.Critical, "Not Logged In")
+            Dim frmU1 As New frmUserName
+            frmU1.Show()
             Exit Sub
         End If
 

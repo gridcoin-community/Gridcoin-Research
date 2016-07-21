@@ -24,12 +24,17 @@ double ReturnTotalRacByCPID(std::string cpid);
 std::string UnpackBinarySuperblock(std::string sBlock);
 std::string PackBinarySuperblock(std::string sBlock);
 int DetermineCPIDType(std::string cpid);
+void AskForOutstandingBlocks();
+
 extern Array MagnitudeReport(std::string cpid);
 extern bool UserAcknowledgedHoldHarmlessClause(std::string sAddress);
 std::string ConvertBinToHex(std::string a);
 std::string ConvertHexToBin(std::string a);
+void AskForOutstandingBlocksForcefully();
 void RecoverNode();
 bool TallyResearchAverages(bool Forcefully);
+void ReloadBlockIndexHot();
+int RestartClient();
 
 void SyncChain();
 
@@ -2103,6 +2108,13 @@ Value execute(const Array& params, bool fHelp)
 			results.push_back(entry);
 	
 	}
+	else if (sItem == "restartclient")
+	{
+			printf("Restarting Gridcoin...");
+			int iResult = RestartClient();
+     		entry.push_back(Pair("Restarting",(double)iResult));
+	    	results.push_back(entry);
+	}
 	else if (sItem == "syncchain")
 	{
 		SyncChain();
@@ -2114,6 +2126,10 @@ Value execute(const Array& params, bool fHelp)
 		RecoverNode();
 		entry.push_back(Pair("Recover",1));
 		results.push_back(entry);
+	}
+	else if (sItem == "reloadblockindex")
+	{
+		ReloadBlockIndexHot();
 	}
 	else if (sItem=="burn")
 	{
@@ -2447,6 +2463,33 @@ Value execute(const Array& params, bool fHelp)
 			entry.push_back(Pair("Shave Failed.",(double)pindexBest->nHeight));
    			results.push_back(entry);
 		 }
+	}
+	else if (sItem == "shavechainsmall")
+	{
+		 CTxDB txdb;
+		 if (ShaveChain(txdb,1))
+		 {
+		 	entry.push_back(Pair("Warning!","This command is deprecated and can cause temporary instability.  It is not recommended any longer. You may have to reboot the wallet to recover. "));
+		 	entry.push_back(Pair("Shave Succeeded.",(double)pindexBest->nHeight));
+   			results.push_back(entry);
+		 }
+		 else
+		 {
+			entry.push_back(Pair("Shave Failed.",(double)pindexBest->nHeight));
+   			results.push_back(entry);
+		 }
+	}
+	else if (sItem == "askforoutstandingblocks")
+	{
+		AskForOutstandingBlocks();
+	 	entry.push_back(Pair("Sent.",(double)pindexBest->nHeight));
+   	    results.push_back(entry);
+	}
+	else if (sItem == "askforoutstandingblocksforcefully")
+	{
+		AskForOutstandingBlocksForcefully();
+	 	entry.push_back(Pair("Sent.",(double)pindexBest->nHeight));
+   	    results.push_back(entry);
 	}
 	else if (sItem == "joindao")
 	{

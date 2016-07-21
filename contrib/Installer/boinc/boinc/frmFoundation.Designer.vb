@@ -48,7 +48,7 @@ Partial Class frmFoundation
         Me.gbResultsPane.ForeColor = System.Drawing.Color.Lime
         Me.gbResultsPane.Location = New System.Drawing.Point(12, 27)
         Me.gbResultsPane.Name = "gbResultsPane"
-        Me.gbResultsPane.Size = New System.Drawing.Size(1367, 588)
+        Me.gbResultsPane.Size = New System.Drawing.Size(1442, 588)
         Me.gbResultsPane.TabIndex = 2
         Me.gbResultsPane.TabStop = False
         Me.gbResultsPane.Text = "Active Expense Approvals - (Right Click to Vote)"
@@ -93,7 +93,7 @@ Partial Class frmFoundation
         DataGridViewCellStyle5.BackColor = System.Drawing.Color.Black
         DataGridViewCellStyle5.ForeColor = System.Drawing.Color.Lime
         Me.dgv.RowsDefaultCellStyle = DataGridViewCellStyle5
-        Me.dgv.Size = New System.Drawing.Size(1342, 567)
+        Me.dgv.Size = New System.Drawing.Size(1430, 567)
         Me.dgv.TabIndex = 0
         '
         'MenuStrip1
@@ -101,7 +101,7 @@ Partial Class frmFoundation
         Me.MenuStrip1.Items.AddRange(New System.Windows.Forms.ToolStripItem() {Me.ExpensesToolStripMenuItem, Me.AuthenticationToolStripMenuItem})
         Me.MenuStrip1.Location = New System.Drawing.Point(0, 0)
         Me.MenuStrip1.Name = "MenuStrip1"
-        Me.MenuStrip1.Size = New System.Drawing.Size(1391, 24)
+        Me.MenuStrip1.Size = New System.Drawing.Size(1454, 24)
         Me.MenuStrip1.TabIndex = 3
         Me.MenuStrip1.Text = "MenuStrip1"
         '
@@ -148,13 +148,13 @@ Partial Class frmFoundation
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.BackColor = System.Drawing.Color.Black
-        Me.ClientSize = New System.Drawing.Size(1391, 665)
+        Me.ClientSize = New System.Drawing.Size(1454, 665)
         Me.Controls.Add(Me.gbResultsPane)
         Me.Controls.Add(Me.MenuStrip1)
         Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)
         Me.MainMenuStrip = Me.MenuStrip1
         Me.Name = "frmFoundation"
-        Me.Text = "Gridcoin Foundation - 1.0"
+        Me.Text = "Gridcoin Foundation - 1.1"
         Me.gbResultsPane.ResumeLayout(False)
         CType(Me.dgv, System.ComponentModel.ISupportInitialize).EndInit()
         Me.MenuStrip1.ResumeLayout(False)

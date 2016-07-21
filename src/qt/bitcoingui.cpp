@@ -471,7 +471,7 @@ int RestartClient()
 			QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
 			QProcess p;
 	#ifdef WIN32
-			globalcom->dynamicCall("RestartWallet()");
+			globalcom->dynamicCall("RebootClient()");
 	#endif
 			StartShutdown();
 			return 1;
@@ -2476,7 +2476,7 @@ void BitcoinGUI::updateStakingIcon()
 	    labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
         labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> time to earn reward is %3. %4").arg(nWeight).arg(nNetworkWeight).arg(text).arg(PORText));
 		msMiningErrors5 = "Interest: " + FromQString(text);
-		if (nPOREstimate > 0) msMiningErrors6 = "POR: " + FromQString(GetEstimatedTime(nPOREstimate));
+		if (nPOREstimate > 0 && !(msPrimaryCPID=="INVESTOR" || msMiningCPID.empty())) msMiningErrors6 = "POR: " + FromQString(GetEstimatedTime(nPOREstimate));
     }
     else
     {

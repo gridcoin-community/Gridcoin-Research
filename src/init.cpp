@@ -24,6 +24,7 @@
 std::vector<std::string> split(std::string s, std::string delim);
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern void InitializeBoincProjects();
+
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
 std::string GetArgument(std::string arg, std::string defaultvalue);
@@ -221,6 +222,9 @@ void InitializeBoincProjects()
 
 
 
+
+
+
 void Shutdown(void* parg)
 {
     static CCriticalSection cs_Shutdown;
@@ -264,7 +268,7 @@ void Shutdown(void* parg)
     else
     {
         while (!fExit)
-            MilliSleep(100);
+        MilliSleep(100);
         MilliSleep(100);
         ExitThread(0);
     }
@@ -1209,6 +1213,6 @@ bool AppInit2()
     while (1)
         MilliSleep(5000);
 #endif
-
+	printf("\r\nExiting AppInit2\r\n");
     return true;
 }

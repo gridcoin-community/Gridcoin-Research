@@ -139,23 +139,24 @@ Public Class GridcoinUpgrader
                 rtbNotes.Visible = False
                 Me.Height = rtbNotes.Top + txtStatus.Height - 25
                 Me.BackgroundImageLayout = ImageLayout.Tile
-
-
                 RefreshScreen()
                 ProgressBar1.Maximum = 100
                 TimerUE.Enabled = True
                 Dim sz As Long
                 sz = GetWebFileSize("snapshot.zip", "signed", True)
-                If sz < 20000000 Then sz = 477461000
+                If sz < 20000000 Then sz = 500461000 'If we dont receive the filesize...
                 'This is an asynchronous process:
                 DownloadBlocks("snapshot.zip", "signed/")
                 While Not mbFinished
                     System.Threading.Thread.Sleep(800)
                     Dim p As Double = 0
                     p = Math.Round(GetFilePercent("snapshot.zip", sz) * 100, 2)
+                    If p > 99.99 Then p = 99.99
                     lblPercent.Text = Trim(p) + "%"
                     RefreshScreen()
                 End While
+                lblPercent.Text = "100.00%"
+                RefreshScreen()
                 TimerUE.Enabled = False
                 txtStatus.Text = "Unzipping Blocks File..."
                 RefreshScreen()
@@ -180,7 +181,7 @@ Public Class GridcoinUpgrader
                     Me.Show()
                     txtStatus.Text = "Waiting for Gridcoin Wallet to exit..."
                     Me.Update() : Me.Refresh()
-                    BusyWaitLoop("gridcoinresearch*", 10, True)
+                    BusyWaitLoop("gridcoinresearch*", 12, True)
                     StartGridcoin()
                     Environment.Exit(0)
                     End

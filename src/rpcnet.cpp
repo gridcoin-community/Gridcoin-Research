@@ -262,7 +262,7 @@ bool AskNeuralNetworkNodeForBlocks(int iNodeLimit)
 	{
 		if (Contains(pNode->strSubVer,"1999"))
 		{
-		 	pNode->PushGetBlocks(pindexBest, uint256(0));
+		 	pNode->PushGetBlocks(pindexBest, uint256(0), false);
 			iContactCount++;
 			if (iContactCount >= iNodeLimit) return true;
 		}
