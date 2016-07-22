@@ -4882,7 +4882,9 @@ void GridcoinServices()
 		if (OutOfSyncByMoreThan(30) || fGhostChain)
 		{
 			printf("Restarting Gridcoin...");
-			int iResult = RestartClient();
+			#ifdef QT_GUI
+				int iResult = RestartClient();
+			#endif
 		}
 	}
 
@@ -5259,7 +5261,9 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 						if (TimerMain("OrphansAndNotRecovering",8))
 						{
 							printf("\r\nGridcoin has not recovered after clearing orphans; Restarting node...\r\n");
-							int iResult = RestartClient();
+							#ifdef QT_GUI
+											int iResult = RestartClient();
+							#endif
 						}
 						else
 						{

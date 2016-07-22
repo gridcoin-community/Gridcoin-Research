@@ -2111,7 +2111,10 @@ Value execute(const Array& params, bool fHelp)
 	else if (sItem == "restartclient")
 	{
 			printf("Restarting Gridcoin...");
-			int iResult = RestartClient();
+			int iResult = 0;
+			#ifdef QT_GUI
+				iResult = RestartClient();
+			#endif
      		entry.push_back(Pair("Restarting",(double)iResult));
 	    	results.push_back(entry);
 	}
