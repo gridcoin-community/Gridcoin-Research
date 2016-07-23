@@ -467,14 +467,14 @@ int RestartClient()
 {
 	if (!bGlobalcomInitialized) return 0;
 	QString sFilename = "GRCRestarter.exe";
-			QString sArgument = "";
-			QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
-			QProcess p;
+	QString sArgument = "";
+	QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
+	QProcess p;
 	#ifdef WIN32
 			globalcom->dynamicCall("RebootClient()");
 	#endif
-			StartShutdown();
-			return 1;
+	StartShutdown();
+	return 1;
 }
 
 void qtUpdateConfirm(std::string txid)

@@ -10,9 +10,13 @@ Public Class frmAddExpense
     Private sHistoryGuid As String
 
     Private Sub frmTicketAdd_Load(sender As System.Object, e As System.EventArgs) Handles MyBase.Load
-        mGRCData = New GRCSec.GridcoinData
+        Try
+            mGRCData = New GRCSec.GridcoinData
+        Catch ex As Exception
+            MsgBox("Unable to load page " + ex.Message, MsgBoxStyle.Critical)
+            Exit Sub
+        End Try
         sHandle = KeyValue("TicketHandle")
-
         Try
             If Mode <> "View" Then
                 If sHandle = "" Then
@@ -143,12 +147,6 @@ Public Class frmAddExpense
         sTitle += "[Foundation_" + txtTicketId.Text + "]"
 
         Dim sQuestion As String = IIf(sType = "Expense", "Approve_Expense?", "Approve_Campaign?")
-        Dim sAnswers As String = "Approve;Deny"
-        Dim sResult As String = ExecuteRPCCommand("addpoll", sTitle, "21", sQuestion, sAnswers, "3", "http://www.gridcoin.us")
-        If Not LCase(sResult).Contains("success") Then
-            MsgBox(sResult, MsgBoxStyle.Information, "Gridcoin Foundation - Expense System")
-            Exit Sub
-        End If
         'if they are not logged on... throw an error ... 4-22-2016
         If sHandle = "" Then
             MsgBox("Please create a user name first.  After logging in you may re-submit the form.", MsgBoxStyle.Critical, "Not Logged In")
@@ -157,9 +155,25 @@ Public Class frmAddExpense
             Exit Sub
         End If
 
-        mGRCData.mInsertExpense(Mode, txtSubmittedBy.Text, txtTicketId.Text, "All", _
-                         sType, txtDescription.Text, sType, rtbNotes.Text, MerkleRoot, _
-                         Trim(dtStart.Text), Trim(dtEnd.Text), Trim(txtAmount.Text), rtbNotes.Text, txtAttachment.Text)
+        Dim sAnswers As String = "Approve;Deny"
+        
+        Try
+            mGRCData.mInsertExpense(Mode, txtSubmittedBy.Text, txtTicketId.Text, "All", _
+                        sType, txtDescription.Text, sType, rtbNotes.Text, MerkleRoot, _
+                        Trim(dtStart.Text), Trim(dtEnd.Text), Trim(txtAmount.Text), rtbNotes.Text, txtAttachment.Text)
+
+        Catch ex As Exception
+            MsgBox("An error occurred while inserting the new expense [" + ex.Message + "]", MsgBoxStyle.Critical, "Gridcoin Foundation - Expense System")
+            Exit Sub
+        End Try
+
+
+        Dim sResult As String = ExecuteRPCCommand("addpoll", sTitle, "21", sQuestion, sAnswers, "3", "http://www.gridcoin.us")
+        If Not LCase(sResult).Contains("success") Then
+            MsgBox(sResult, MsgBoxStyle.Information, "Gridcoin Foundation - Expense System")
+            Exit Sub
+        End If
+
 
         SetViewMode()
 

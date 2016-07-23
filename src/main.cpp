@@ -33,7 +33,7 @@ extern std::string NodeAddress(CNode* pfrom);
 extern std::string ConvertBinToHex(std::string a);
 extern std::string ConvertHexToBin(std::string a);
 extern void AskForOutstandingBlocksForcefully();
-
+extern bool WalletOutOfSync();
 
 extern void CleanInboundConnections();
 extern void RecoverNode();
@@ -997,7 +997,7 @@ MiningCPID GetNextProject(bool bForce)
 
 		if (mvCPIDs.size() < 1)
 		{
-			if (fDebug3 && LessVerbose(10)) printf("Gridcoin has no CPIDs...");
+			if (fDebug && LessVerbose(10)) printf("Gridcoin has no CPIDs...");
 			//Let control reach the investor area
 		}
 
@@ -4867,9 +4867,7 @@ void GridcoinServices()
 	
 	if (TimerMain("OutOfSync",120))
 	{
-		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-		bool fGhostChain = (!fTestNet && PORDiff < .75);
-		if (OutOfSyncByMoreThan(30) || fGhostChain)
+		if (WalletOutOfSync())
 		{
 			RecoverNode();
 		}
@@ -4877,12 +4875,10 @@ void GridcoinServices()
 
 	if (TimerMain("OutOfSyncDaily",900))
 	{
-		double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-		bool fGhostChain = (!fTestNet && PORDiff < .75);
-		if (OutOfSyncByMoreThan(30) || fGhostChain)
+		if (WalletOutOfSync())
 		{
 			printf("Restarting Gridcoin...");
-			#ifdef QT_GUI
+			#if defined(WIN32) && defined(QT_GUI)
 				int iResult = RestartClient();
 			#endif
 		}
@@ -4932,7 +4928,7 @@ void GridcoinServices()
 			printf (" MRSA %f, BH %f ",(double)superblock_age,(double)nBestHeight);
 			if (nBestHeight==nLastBestHeight)
 			{
-				printf("\r\n ************ Processing block with the same best height as the last best height...  ************* %f\r\n",(double)nBestHeight);
+				//printf("\r\n ************ Processing block with the same best height as the last best height...  ************* %f\r\n",(double)nBestHeight);
 			}
 	}
 
@@ -5130,10 +5126,7 @@ void RecoverNode()
 
 void CheckForLatestBlocks()
 {
-	bool fOut = OutOfSyncByMoreThan(30);
-	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-	bool fGhostChain = (!fTestNet && PORDiff < .75);
-	if (fOut || fGhostChain)
+	if (WalletOutOfSync())
 	{
 			mapOrphanBlocks.clear();
 			setStakeSeen.clear();
@@ -5204,6 +5197,17 @@ void ReloadBlockIndexHot()
 		printf("\r\n * Node Recovered * \r\n");
 }
 
+bool WalletOutOfSync()
+{
+	// Only trigger an out of sync condition if the node has synced near the best block prior to going out of sync.
+	bool fOut = OutOfSyncByMoreThan(30);
+	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+	bool fGhostChain = (!fTestNet && PORDiff < .75);
+	int iPeerBlocks = GetNumBlocksOfPeers();
+	bool bSyncedCloseToTop = nBestHeight > iPeerBlocks-1000;
+	if ((fOut || fGhostChain) && bSyncedCloseToTop) return true;
+	return false;
+}
 
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 {
@@ -5253,16 +5257,13 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
         // R HALFORD - 05-13-2016 - If we are out of sync, and get bombarded with orphans, recover the node.
 		if (TimerMain("OrphanBarrage", 40))
 		{
-					bool fOut = OutOfSyncByMoreThan(30);
-					double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-					bool fGhostChain = (!fTestNet && PORDiff < .75);
-					if (fOut || fGhostChain)
+					if (WalletOutOfSync())
 					{
 						if (TimerMain("OrphansAndNotRecovering",8))
 						{
 							printf("\r\nGridcoin has not recovered after clearing orphans; Restarting node...\r\n");
-							#ifdef QT_GUI
-											int iResult = RestartClient();
+							#if defined(WIN32) && defined(QT_GUI)
+								int iResult = RestartClient();
 							#endif
 						}
 						else
