@@ -863,7 +863,7 @@ Inception:
 		int iFutile=0;
 		while (!bNetAveragesLoaded)
 		{
-			if (LessVerbose(100)) printf("ResearchMiner:Net averages not yet loaded...");
+			if (LessVerbose(100) && msPrimaryCPID != "INVESTOR") printf("ResearchMiner:Net averages not yet loaded...");
 						
 			iFutile++;
 			if (iFutile > 50)
@@ -911,7 +911,7 @@ Begin:
         if (!pblock.get())
 		{
 			//This can happen after reharvesting CPIDs... Because CreateNewBlock() requires a valid CPID..  Start Over.
-			printf("a1.");
+			if (fDebug10) printf(".StakeMiner Starting.");
 			MilliSleep(1000);
 			goto Begin;
 		}

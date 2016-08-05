@@ -30,7 +30,6 @@ extern Array MagnitudeReport(std::string cpid);
 extern bool UserAcknowledgedHoldHarmlessClause(std::string sAddress);
 std::string ConvertBinToHex(std::string a);
 std::string ConvertHexToBin(std::string a);
-void AskForOutstandingBlocksForcefully();
 void RecoverNode();
 bool TallyResearchAverages(bool Forcefully);
 void ReloadBlockIndexHot();
@@ -2488,12 +2487,6 @@ Value execute(const Array& params, bool fHelp)
 	 	entry.push_back(Pair("Sent.",(double)pindexBest->nHeight));
    	    results.push_back(entry);
 	}
-	else if (sItem == "askforoutstandingblocksforcefully")
-	{
-		AskForOutstandingBlocksForcefully();
-	 	entry.push_back(Pair("Sent.",(double)pindexBest->nHeight));
-   	    results.push_back(entry);
-	}
 	else if (sItem == "joindao")
 	{
 		//execute joindao dao_symbol your_receive_grc_address your_email
@@ -3969,7 +3962,6 @@ Array MagnitudeReport(std::string cpid)
 					       if (fDebug3) printf("no results");
 						   return results;
 				   }
-				   if (fDebug3) printf(" *MR2.5* ");
 				   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
 				   {
 						// For each CPID on the network, report:
@@ -4034,7 +4026,6 @@ Array MagnitudeReport(std::string cpid)
 												if (fDebug3) printf(" MR6.6 ");
 
 												results.push_back(entry);
-												printf(" * ");
 												if (cpid==msPrimaryCPID && !msPrimaryCPID.empty() && msPrimaryCPID != "INVESTOR")
 												{
 													msRSAOverview = "Exp PPD: " + RoundToString(dExpected14/14,0) 
@@ -4079,7 +4070,6 @@ Array MagnitudeReport(std::string cpid)
 					int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
 					int nLookback = BLOCKS_PER_DAY*14; //Daily block count * Lookback in days = 14 days
 					int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
-					if (fDebug3) printf(" *MR4*");
 					if (cpid.empty())
 					{
 						Object entry3;

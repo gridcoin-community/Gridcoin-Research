@@ -32,10 +32,9 @@ int GetDayOfYear();
 extern std::string NodeAddress(CNode* pfrom);
 extern std::string ConvertBinToHex(std::string a);
 extern std::string ConvertHexToBin(std::string a);
-extern void AskForOutstandingBlocksForcefully();
 extern bool WalletOutOfSync();
 
-extern void CleanInboundConnections();
+extern void CleanInboundConnections(bool bClearAll);
 extern void RecoverNode();
 extern bool PushGridcoinDiagnostics();
 double qtPushGridcoinDiagnosticData(std::string data);
@@ -120,7 +119,7 @@ extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
 extern CBlockIndex* GetHistoricalMagnitude_ScanChain(std::string cpid);
 extern bool IsLockTimeWithin14days(double locktime);
-extern int64_t ComputeResearchAccrual(std::string cpid, std::string operation,CBlockIndex* pindexLast, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
+extern int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string operation,CBlockIndex* pindexLast, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
 extern bool UpdateNeuralNetworkQuorumData();
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 double qtExecuteGenericFunction(std::string function,std::string data);
@@ -216,6 +215,9 @@ int64_t nLastTalliedNeural = 0;
 int64_t nLastLoadAdminMessages = 0;
 int64_t nCPIDsLoaded = 0;
 int64_t nLastGRCtallied = 0;
+int64_t nLastCleaned = 0;
+
+
 extern bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
 
 std::string DefaultOrg();
@@ -1816,9 +1818,16 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
 			// If this happens repeatedly, purge peers
 			if (TimerMain("AcceptToMemoryPool", 15))
 			{
-				CleanInboundConnections();
+				CleanInboundConnections(true);
 			}	
-			return error("AcceptToMemoryPool : Unable to Connect Inputs %s", hash.ToString().c_str());
+			if (fDebug)
+			{
+				return error("AcceptToMemoryPool : Unable to Connect Inputs %s", hash.ToString().c_str());
+			}
+			else
+			{
+				return false;
+			}
 	    }
     }
 
@@ -2290,14 +2299,14 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 // miner's coin stake reward based on coin age spent (coin-days)
 
 int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
-	bool VerifyingBlock, int64_t locktime, CBlockIndex* pindexLast, std::string operation,
+	bool VerifyingBlock, int64_t nTime, CBlockIndex* pindexLast, std::string operation,
 	double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
 
 	// Non Research Age - RSA Mode - Legacy (before 10-20-2015)
 	if (!IsResearchAgeEnabled(pindexLast->nHeight))
 	{
-			int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
+			int64_t nInterest = nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
 			int64_t nBoinc    = GetProofOfResearchReward(cpid,VerifyingBlock);
 			int64_t nSubsidy  = nInterest + nBoinc;
 			if (fDebug10 || GetBoolArg("-printcreation"))
@@ -2305,7 +2314,7 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 				printf("GetProofOfStakeReward(): create=%s nCoinAge=%"PRId64" nBoinc=%"PRId64"   \n",
 				FormatMoney(nSubsidy).c_str(), nCoinAge, nBoinc);
 			}
-			int64_t maxStakeReward1 = GetProofOfStakeMaxReward(nCoinAge, nFees, locktime);
+			int64_t maxStakeReward1 = GetProofOfStakeMaxReward(nCoinAge, nFees, nTime);
 			int64_t maxStakeReward2 = GetProofOfStakeMaxReward(nCoinAge, nFees, GetAdjustedTime());
 			int64_t maxStakeReward = Floor(maxStakeReward1,maxStakeReward2);
 			if ((nSubsidy+nFees) > maxStakeReward) nSubsidy = maxStakeReward-nFees;
@@ -2327,15 +2336,15 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 	else
 	{
 			// Research Age Subsidy - PROD
-		    int64_t nBoinc = ComputeResearchAccrual(cpid, operation, pindexLast, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
-			int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
+		    int64_t nBoinc = ComputeResearchAccrual(nTime, cpid, operation, pindexLast, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
+			int64_t nInterest = nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
 
 			// TestNet: For any subsidy < 30 day duration, ensure 100% that we have a start magnitude and an end magnitude, otherwise make subsidy 0 : PASS
 			// TestNet: For any subsidy > 30 day duration, ensure 100% that we have a midpoint magnitude in Every Period, otherwise, make subsidy 0 : In Test as of 09-06-2015
 			// TestNet: Ensure no magnitudes are out of bounds to ensure we do not generate an insane payment : PASS (Lifetime PPD takes care of this)
 			// TestNet: Any subsidy with a duration wider than 6 months should not be paid : PASS
 
-			int64_t maxStakeReward = GetMaximumBoincSubsidy(locktime) * COIN * 255;
+			int64_t maxStakeReward = GetMaximumBoincSubsidy(nTime) * COIN * 255;
 
 			if (nBoinc > maxStakeReward) nBoinc = maxStakeReward;
 			int64_t nSubsidy = nInterest + nBoinc;
@@ -2359,7 +2368,6 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 
 			OUT_POR = CoinToDouble(nBoinc);
 			OUT_INTEREST = CoinToDouble(nInterest);
-			//if (fDebug3) printf(" *a3");
 			return nTotalSubsidy;
 
 	}
@@ -2969,10 +2977,11 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
 					}
 					if (TimerMain("ConnectInputs", 15))
 					{
-						CleanInboundConnections();
+						CleanInboundConnections(true);
 					}	
-		
-					return fMiner ? false : error("ConnectInputs() : %s prev tx already used at %s", GetHash().ToString().c_str(), txindex.vSpent[prevout.n].ToString().c_str());
+					
+					if (fMiner) return false;
+					return fDebug ? error("ConnectInputs() : %s prev tx already used at %s", GetHash().ToString().c_str(), txindex.vSpent[prevout.n].ToString().c_str()) : false;
 				}
 
 			}
@@ -3306,7 +3315,7 @@ int64_t ReturnCurrentMoneySupply(CBlockIndex* pindexcurrent)
 bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, bool fReorganizing)
 {
     // Check it again in case a previous version let a bad block in, but skip BlockSig checking
-    if (!CheckBlock(pindex->pprev->nHeight, 395*COIN, !fJustCheck, !fJustCheck, false,false))
+    if (!CheckBlock("ConnectBlock",pindex->pprev->nHeight, 395*COIN, !fJustCheck, !fJustCheck, false,false))
 	{
         printf("ConnectBlock::Failed - \r\n");
 		return false;
@@ -3544,7 +3553,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
     // Track money supply and mint amount info
     pindex->nMint = nValueOut - nValueIn + nFees;
-	if (fDebug3) printf (".TMS.");
+	if (fDebug10) printf (".TMS.");
 
     pindex->nMoneySupply = ReturnCurrentMoneySupply(pindex) + nValueOut - nValueIn;
 
@@ -3621,7 +3630,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 						{
 							StructCPID st1 = GetLifetimeCPID(pindex->sCPID,"ConnectBlock()");
 							GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime,
-										pindex, "connectblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+										pindex, "connectblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 							if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
 							{
 
@@ -4394,7 +4403,7 @@ int BlockHeight(uint256 bh)
 }
 
 
-bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig, bool fLoadingIndex) const
+bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig, bool fLoadingIndex) const
 {
 
 	if (GetHash()==hashGenesisBlock || GetHash()==hashGenesisBlockTestNet) return true;
@@ -4425,7 +4434,6 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 
 	//Research Age
 	MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc);
-	//8-19-2015
 	//For higher security, plus lets catch these bad blocks before adding them to the chain to prevent reorgs:
 	double OUT_POR = 0;
 	double OUT_INTEREST = 0;
@@ -4438,16 +4446,16 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 	if (bb.cpid != "INVESTOR" && IsProofOfStake() && height1 > nGrandfather && IsResearchAgeEnabled(height1) && BlockNeedsChecked(nTime) && !fLoadingIndex)
 	{
 			int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime,
-				pindexBest, "checkblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
-			if (bb.ResearchSubsidy > (OUT_POR*1.25))
+				pindexBest, sCaller + "_checkblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+			if (bb.ResearchSubsidy > ((OUT_POR*1.25)+1))
 			{
 				BusyWaitForTally();
 
 				StructCPID st1 = GetLifetimeCPID(bb.cpid,"CheckBlock()");
 				nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, nTime,
-					pindexBest, "checkblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+					pindexBest, sCaller + "_checkblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 
-				if (bb.ResearchSubsidy > (OUT_POR*1.25))
+				if (bb.ResearchSubsidy > ((OUT_POR*1.25)+1))
 				{
 
 							if (fDebug3) printf("CheckBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
@@ -4465,8 +4473,7 @@ bool CBlock::CheckBlock(int height1, int64_t Mint, bool fCheckPOW, bool fCheckMe
 							// Reserved for future use.
 				}
 			}
-			//if (fDebug3) printf(".EOCBR.");
-
+	
 	}
 
 
@@ -5070,37 +5077,25 @@ void GridcoinServices()
 void AskForOutstandingBlocks()
 {
 	LOCK(cs_vNodes);
+	int iAsked = 0;
 	BOOST_FOREACH(CNode* pNode, vNodes) 
 	{
 				pNode->ClearBanned();
-    			if (!pNode->fClient && !pNode->fOneShot && (pNode->nStartingHeight > (nBestHeight - 144)) && (pNode->nVersion < NOBLKS_VERSION_START || pNode->nVersion >= NOBLKS_VERSION_END) )
-				{
-	    				pNode->PushGetBlocks(pindexBest, uint256(0), true);
-						printf(".B.");
-				}
-	}
-}
-
-
-void AskForOutstandingBlocksForcefully()
-{
-	LOCK(cs_vNodes);
-	BOOST_FOREACH(CNode* pNode, vNodes) 
-	{
-				pNode->ClearBanned();
-	    		// Ask for outstanding blocks
     			if (!pNode->fClient && !pNode->fOneShot && (pNode->nStartingHeight > (nBestHeight - 144)) && (pNode->nVersion < NOBLKS_VERSION_START || pNode->nVersion >= NOBLKS_VERSION_END) )
 				{
 	    				pNode->PushGetBlocks(pindexBest, uint256(0), true);
 						pNode->PushGetBlocks(pindexBest->pprev, uint256(0),true);
-						printf(".GB.");
+						printf(".B.");
+						iAsked++;
+						if (iAsked > 10) break;
 				}
 	}
 }
 
+
 void SyncChain()
 {
-     	if (IsLockTimeWithinMinutes(nLastResync,60))
+     	if (IsLockTimeWithinMinutes(nLastResync,10))
 	    {
 			printf("Resync too soon or already in progress. \r\n");
 			return;
@@ -5110,7 +5105,7 @@ void SyncChain()
 		CTxDB txdb;
 		LOCK(cs_main);
 		{
-			//ShaveChain(txdb,33);
+			//ShaveChain(txdb,2);
 			AskForOutstandingBlocks();
 			std::string sOut = "";
 			TallyResearchAverages(true);
@@ -5137,18 +5132,17 @@ void CheckForLatestBlocks()
 	
 }
 
-void CleanInboundConnections()
+void CleanInboundConnections(bool bClearAll)
 {
+		if (IsLockTimeWithinMinutes(nLastCleaned,7) && !bClearAll) return;
+     	nLastCleaned = GetAdjustedTime();
 	 	LOCK(cs_vNodes);
 		BOOST_FOREACH(CNode* pNode, vNodes) 
 		{
 				pNode->ClearBanned();
-				if (true)
+				if (pNode->nStartingHeight < (nBestHeight-1000) || bClearAll)
 				{
-					if (pNode->nStartingHeight < (nBestHeight-1000))
-					{
 						pNode->fDisconnect=true;
-					}
 				}
 		}
 		CheckForLatestBlocks();	
@@ -5244,7 +5238,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     }
 
     // Preliminary checks
-    if (!pblock->CheckBlock(pindexBest->nHeight, 100*COIN))
+    if (!pblock->CheckBlock("ProcessBlock", pindexBest->nHeight, 100*COIN))
         return error("ProcessBlock() : CheckBlock FAILED");
 
     // ppcoin: ask for pending sync-checkpoint if any
@@ -5377,7 +5371,7 @@ bool ProcessBlockLegacy(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     // For now we just strip garbage from newly received blocks
 
     // Preliminary checks 1-26-2015 ** Note: Mint is zero before block is signed
-    if (!pblock->CheckBlock(pindexBest->nHeight, 100*COIN))
+    if (!pblock->CheckBlock("ProcessBlockLegacy", pindexBest->nHeight, 100*COIN))
         return error("ProcessBlock[] : CheckBlock FAILED");
 
     // ppcoin: ask for pending sync-checkpoint if any
@@ -5776,7 +5770,7 @@ bool LoadBlockIndex(bool fAllowNew)
 		uint256 merkle_root = uint256("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f");
 		assert(block.hashMerkleRoot == merkle_root);
         assert(block.GetHash() == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
-        assert(block.CheckBlock(1,10*COIN));
+        assert(block.CheckBlock("LoadBlockIndex",1,10*COIN));
 
         // Start new block file
         unsigned int nFile;
@@ -6774,7 +6768,7 @@ bool TallyResearchAverages(bool Forcefully)
 		return true;
 	}
 
-	if (Forcefully) nLastTallied = 0;
+	//if (Forcefully) nLastTallied = 0;
 	int timespan = fTestNet ? 2 : 6;
 	if (IsLockTimeWithinMinutes(nLastTallied,timespan))
 	{
@@ -7365,7 +7359,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 		{
 			if (timedrift > (8*60))
 			{
-				printf("Disconnecting unauthorized peer with Network Time so far off by %f seconds!\r\n",(double)timedrift);
+				if (fDebug) printf("Disconnecting unauthorized peer with Network Time so far off by %f seconds!\r\n",(double)timedrift);
 				unauthorized = true;
 			}
 		}
@@ -7373,14 +7367,14 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 		{
 			if (timedrift > (10*60) && LessVerbose(500))
 			{
-				printf("Disconnecting authorized peer with Network Time so far off by %f seconds!\r\n",(double)timedrift);
+				if (fDebug) printf("Disconnecting authorized peer with Network Time so far off by %f seconds!\r\n",(double)timedrift);
 				unauthorized = true;
 			}
 		}
 
 		if (unauthorized)
 		{
-			printf("  Disconnected unauthorized peer.         ");
+			if (fDebug) printf("  Disconnected unauthorized peer.         ");
             pfrom->Misbehaving(100);
 		    pfrom->fDisconnect = true;
             return false;
@@ -9794,18 +9788,11 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
 							// If node has not been misbehaving (1-30-2016) then push it: (pto->nMisbehavior) && pto->NodeAddress().->addr.IsRoutable()
 							pto->PushMessage("inv", vInv);
 							AddPeek("Pushed Inv-Large " + RoundToString((double)vInv.size(),0));
-							if (fDebug3) printf(" *PIL* ");
+							if (fDebug10) printf(" *PIL* ");
 						    vInv.clear();
-							// 7-11-2016 If connection count > 25, and we continually push large inventory, clean current inbound connections
-							if (vNodes.size() > 25)
-							{
-								// External Node
-								CleanInboundConnections();
-							}
-
+							if (TimerMain("PushInventoryLarge",50)) CleanInboundConnections(true);
 							// Eventually ban the node if they keep asking for inventory
 							TrackRequests(pto,"Inv-Large");
-							//3-26-2015
 							AddPeek("Done with Inv-Large " + RoundToString((double)vInv.size(),0));
 			        }
                 }
@@ -10363,10 +10350,10 @@ double GRCMagnitudeUnit(int64_t locktime)
 }
 
 
-int64_t ComputeResearchAccrual(std::string cpid, std::string operation, CBlockIndex* pindexLast, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
+int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string operation, CBlockIndex* pindexLast, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
 	
-	double dCurrentMagnitude = CalculatedMagnitude2(cpid, pindexLast->nTime, false);
+	double dCurrentMagnitude = CalculatedMagnitude2(cpid, nTime, false);
 	CBlockIndex* pHistorical = GetHistoricalMagnitude(cpid);
 	if (pHistorical->nHeight <= nNewIndex || pHistorical->nMagnitude==0 || pHistorical->nTime == 0)
 	{
@@ -10382,7 +10369,7 @@ int64_t ComputeResearchAccrual(std::string cpid, std::string operation, CBlockIn
 			int64_t iBeaconTimestamp = BeaconTimeStamp(cpid, true);
 			if (IsLockTimeWithinMinutes(iBeaconTimestamp, 60*24*30*6))
 			{
-				double dNewbieAccrualAge = ((double)pindexLast->nTime - (double)iBeaconTimestamp) / 86400;
+				double dNewbieAccrualAge = ((double)nTime - (double)iBeaconTimestamp) / 86400;
 				int64_t iAccrual = (int64_t)(dNewbieAccrualAge*dCurrentMagnitude*dMagnitudeUnit*COIN);
 				if (fDebug3) printf("\r\n Newbie Special Stake! %s  Age %f, Accrual %f \r\n",cpid.c_str(),dNewbieAccrualAge,(double)iAccrual);
 				return iAccrual;
@@ -10404,13 +10391,13 @@ int64_t ComputeResearchAccrual(std::string cpid, std::string operation, CBlockIn
 	}
 	if (AvgMagnitude > 20000) AvgMagnitude = 20000;
 
-	dAccrualAge = ((double)pindexLast->nTime - (double)pHistorical->nTime) / 86400;
+	dAccrualAge = ((double)nTime - (double)pHistorical->nTime) / 86400;
 	if (dAccrualAge < 0) dAccrualAge=0;
-	dMagnitudeUnit = GRCMagnitudeUnit(pindexLast->nTime);
+	dMagnitudeUnit = GRCMagnitudeUnit(nTime);
 
 	int64_t Accrual = (int64_t)(dAccrualAge*AvgMagnitude*dMagnitudeUnit*COIN);
 	// Double check researcher lifetime paid
-	double days = (((double)pindexLast->nTime) - stCPID.LowLockTime)/86400;
+	double days = (((double)nTime) - stCPID.LowLockTime)/86400;
 	double PPD = stCPID.ResearchSubsidy/(days+.01);
 	double ReferencePPD = dMagnitudeUnit*dAvgMag;
 	if ((PPD > ReferencePPD*5))

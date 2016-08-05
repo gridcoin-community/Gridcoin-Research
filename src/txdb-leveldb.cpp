@@ -506,7 +506,7 @@ bool CTxDB::LoadBlockIndex()
         // check level 1: verify block validity
         // check level 7: verify block signature too
 		
-        if (nCheckLevel>0 && !block.CheckBlock(pindex->nHeight,pindex->nMint, true, true, (nCheckLevel>6), true))
+        if (nCheckLevel>0 && !block.CheckBlock("LoadBlockIndex", pindex->nHeight,pindex->nMint, true, true, (nCheckLevel>6), true))
         {
             printf("LoadBlockIndex() : *** found bad block at %d, hash=%s\n", pindex->nHeight, pindex->GetBlockHash().ToString().c_str());
             pindexFork = pindex->pprev;

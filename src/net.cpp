@@ -1543,7 +1543,7 @@ void ThreadSocketHandler2(void* parg)
             if (have_fds)
             {
                 int nErr = WSAGetLastError();
-                printf("socket select error %d\n", nErr);
+                if (fDebug) printf("socket select error %d\n", nErr);
                 for (unsigned int i = 0; i <= hSocketMax; i++)
                     FD_SET(i, &fdsetRecv);
             }
@@ -1589,7 +1589,7 @@ void ThreadSocketHandler2(void* parg)
             }
             else if (CNode::IsBanned(addr))
             {
-                if (fDebug2) printf("connection from %s dropped (banned)\n", addr.ToString().c_str());
+                if (fDebug10) printf("connection from %s dropped (banned)\n", addr.ToString().c_str());
                 closesocket(hSocket);
             }
             else
