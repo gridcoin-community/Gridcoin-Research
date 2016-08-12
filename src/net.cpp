@@ -31,9 +31,8 @@ extern void BusyWaitForTally();
 extern void DoTallyResearchAverages(void* parg);
 extern void ExecGridcoinServices(void* parg);
 double cdbl(std::string s, int place);
-
+bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 std::string DefaultWalletAddress();
-
 void GridcoinServices();
 std::string NodeAddress(CNode* pfrom);
 std::string GetNeuralVersion();
@@ -160,7 +159,7 @@ std::string GetCommandNonce(std::string command)
 
 void CNode::PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd, bool fForce)
 {
-	// The line of code below is the line of code that kept us from syncing to the best block! (fForce forces the sync to continue).
+	// The line of code below is the line of code that kept us from syncing to the best block (fForce forces the sync to continue).
     if (!fForce && pindexBegin == pindexLastGetBlocksBegin && hashEnd == hashLastGetBlocksEnd) return;  // Filter out duplicate requests
     pindexLastGetBlocksBegin = pindexBegin;
     hashLastGetBlocksEnd = hashEnd;
@@ -325,7 +324,7 @@ bool RecvLine(SOCKET hSocket, string& strLine)
             if (nBytes == 0)
             {
                 // socket closed
-                if (fDebug) printf("socket closed\n");
+                if (fDebug10) printf("socket closed\n");
                 return false;
             }
             else
@@ -380,7 +379,7 @@ bool AddLocal(const CService& addr, int nScore)
 
 	try
 	{
-    if (fDebug) printf("AddLocal(%s,%i)\n", addr.ToString().c_str(), nScore);
+    if (fDebug10) printf("AddLocal(%s,%i)\n", addr.ToString().c_str(), nScore);
 
     {
 	    LOCK(cs_mapLocalHost);
@@ -483,7 +482,7 @@ std::string GetLargeHttpContent(const CService& addrConnect, std::string getdata
         return "GetLargeHttpContent() : connection to address failed";
 	}
 
-	if (fDebug) printf("Trying %s",getdata.c_str());
+	if (fDebug10) printf("Trying %s",getdata.c_str());
 
     send(hSocket, pszGet, strlen(pszGet), MSG_NOSIGNAL);
     string strLine;
@@ -599,7 +598,7 @@ std::string GetBestBlockHash(std::string sCPID)
 	}
 	std::string boincauth = sCPID + "<;>" + hashBestChain.ToString();
 	std::string http = GridcoinHttpPost("hashbestchain",boincauth,"GetBestBlockHash.aspx",true);
-	if (fDebug) printf("Resp %s",http.c_str());
+	if (fDebug10) printf("Resp %s",http.c_str());
 	msPubKey = ExtractXML(http,key,keystop);
 	return msPubKey;
 }
@@ -616,7 +615,7 @@ std::string TestHTTPProtocol(std::string sCPID)
 	}
 	std::string boincauth = sCPID + "<;>" + hashBestChain.ToString();
 	std::string http = GridcoinHttpPost("hashbestchain",boincauth,"Test404Page.aspx",true);
-	if (fDebug) printf("Resp %s",http.c_str());
+	if (fDebug10) printf("Resp %s",http.c_str());
 	msPubKey = ExtractXML(http,key,keystop);
 	return msPubKey;
 }
@@ -651,7 +650,7 @@ std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string
 
 	if (domain=="")
 	{
-		if (fDebug)		printf("Pool Domain Missing \r\n");
+		if (fDebug10)		printf("Pool Domain Missing \r\n");
 		return "ERR:Pool Domain missing";
 	}
     int port = 80;
@@ -663,7 +662,7 @@ std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string
 		if (addrIP.IsValid())
 		{
 				addrConnect = addrIP;
-				if (fDebug) printf("Domain Post IP valid\r\n %s",domain.c_str());
+				if (fDebug10) printf("Domain Post IP valid\r\n %s",domain.c_str());
 		}
 	}
 	else
@@ -671,9 +670,9 @@ std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string
   		addrConnect = CService(ip, port);
 	}
 	std::string strPost = GridHTTPPost(urlPage, domain, msg, mapRequestHeaders);
-    if (fDebug) printf("querying getdata\r\n  %s \r\n",strPost.c_str());
+    if (fDebug10) printf("querying getdata\r\n  %s \r\n",strPost.c_str());
 	std::string http = GetHttpContent(addrConnect, strPost);
-	if (fDebug) printf("http:\r\n  %s\r\n",http.c_str());
+	if (fDebug10) printf("http:\r\n  %s\r\n",http.c_str());
 	return http;
 
 	}
@@ -731,7 +730,7 @@ std::string GetHttpPage(std::string url)
 
 		std::string domain = ExtractDomainFromURL(url,0);
 		std::string page = ExtractDomainFromURL(url,1);
-		if (fDebug) printf("domain %s, page %s\r\n",domain.c_str(),page.c_str());
+		if (fDebug10) printf("domain %s, page %s\r\n",domain.c_str(),page.c_str());
 
 		CService addrConnect;
 
@@ -780,7 +779,7 @@ std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache)
 	{
 	   if (cpid=="" || cpid.length() < 5)
 	   {
-				if (fDebug) printf("Blank cpid supplied");
+				if (fDebug10) printf("Blank cpid supplied");
 				return "";
 	   }
 
@@ -805,7 +804,7 @@ std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache)
 		std::string url3 = "cpid.gridcoin.us";
 		std::string url4 = "get_user.php?cpid=" + cpid;
 		int iCPIDPort = 5000;
-		if (fDebug) printf("HTTP Request\r\n %s \r\n",url4.c_str());
+		if (fDebug10) printf("HTTP Request\r\n %s \r\n",url4.c_str());
 
 		CService addrIP(url3, iCPIDPort, true);
 		if (UseDNS)
@@ -889,7 +888,7 @@ bool GetMyExternalIP2(const CService& addrConnect, const char* pszGet, const cha
             while (strLine.size() > 0 && isspace(strLine[strLine.size()-1]))
                 strLine.resize(strLine.size()-1);
             CService addr(strLine,0,true);
-            if (fDebug) printf("GetMyExternalIP() received [%s] %s\n", strLine.c_str(), addr.ToString().c_str());
+            if (fDebug10) printf("GetMyExternalIP() received [%s] %s\n", strLine.c_str(), addr.ToString().c_str());
             if (!addr.IsValid() || !addr.IsRoutable())
                 return false;
             ipRet.SetIP(addr);
@@ -1043,7 +1042,7 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
     {
         addrman.Attempt(addrConnect);
         /// debug print
-        if (fDebug) printf("connected %s\n", pszDest ? pszDest : addrConnect.ToString().c_str());
+        if (fDebug10) printf("connected %s\n", pszDest ? pszDest : addrConnect.ToString().c_str());
         // Set to non-blocking
 #ifdef WIN32
         u_long nOne = 1;
@@ -1077,7 +1076,7 @@ void CNode::CloseSocketDisconnect()
     fDisconnect = true;
     if (hSocket != INVALID_SOCKET)
     {
-        if (fDebug) printf("disconnecting node %s\n", addrName.c_str());
+        if (fDebug10) printf("disconnecting node %s\n", addrName.c_str());
         closesocket(hSocket);
         hSocket = INVALID_SOCKET;
 
@@ -1153,7 +1152,7 @@ void CNode::PushVersion()
     CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(CService("0.0.0.0",0)));
     CAddress addrMe = GetLocalAddress(&addr);
     RAND_bytes((unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce));
-    if (fDebug) printf("send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s\n",
+    if (fDebug10) printf("send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s\n",
 		PROTOCOL_VERSION, nBestHeight, addrMe.ToString().c_str(), addrYou.ToString().c_str(), addr.ToString().c_str());
 
 	std::string sboinchashargs = DefaultBoincHashArgs();
@@ -1212,7 +1211,7 @@ bool CNode::Misbehaving(int howmuch)
     if (nMisbehavior >= GetArg("-banscore", 100))
     {
         int64_t banTime = GetAdjustedTime()+GetArg("-bantime", 60*60*24);  // Default 24-hour ban
-        if (fDebug) printf("Misbehaving: %s (%d -> %d) DISCONNECTING\n", addr.ToString().c_str(), nMisbehavior-howmuch, nMisbehavior);
+        if (fDebug10) printf("Misbehaving: %s (%d -> %d) DISCONNECTING\n", addr.ToString().c_str(), nMisbehavior-howmuch, nMisbehavior);
         {
             LOCK(cs_setBanned);
             if (setBanned[addr] < banTime)
@@ -1221,7 +1220,7 @@ bool CNode::Misbehaving(int howmuch)
         CloseSocketDisconnect();
         return true;
     } else
-        if (fDebug) printf("Misbehaving: %s (%d -> %d)\n", addr.ToString().c_str(), nMisbehavior-howmuch, nMisbehavior);
+        if (fDebug10) printf("Misbehaving: %s (%d -> %d)\n", addr.ToString().c_str(), nMisbehavior-howmuch, nMisbehavior);
     return false;
 }
 
@@ -1375,7 +1374,7 @@ void SocketSendData(CNode *pnode)
                 int nErr = WSAGetLastError();
                 if (nErr != WSAEWOULDBLOCK && nErr != WSAEMSGSIZE && nErr != WSAEINTR && nErr != WSAEINPROGRESS)
                 {
-                    if (fDebug) printf("socket send error %d\n", nErr);
+                    if (fDebug10) printf("socket send error %d\n", nErr);
                     pnode->CloseSocketDisconnect();
                 }
             }
@@ -1414,7 +1413,7 @@ void ThreadSocketHandler(void* parg)
 
 void ThreadSocketHandler2(void* parg)
 {
-    if (fDebug) printf("ThreadSocketHandler started\n");
+    if (fDebug10) printf("ThreadSocketHandler started\n");
     list<CNode*> vNodesDisconnected;
     unsigned int nPrevNodeCount = 0;
 
@@ -1543,7 +1542,7 @@ void ThreadSocketHandler2(void* parg)
             if (have_fds)
             {
                 int nErr = WSAGetLastError();
-                if (fDebug) printf("socket select error %d\n", nErr);
+                if (fDebug10) printf("socket select error %d\n", nErr);
                 for (unsigned int i = 0; i <= hSocketMax; i++)
                     FD_SET(i, &fdsetRecv);
             }
@@ -1584,7 +1583,7 @@ void ThreadSocketHandler2(void* parg)
             }
             else if (nInbound >= GetArg("-maxconnections", 250) - MAX_OUTBOUND_CONNECTIONS)
             {
-				if (fDebug) printf("\r\n Surpassed max inbound connections maxconnections:%f minus max_outbound:%f",(double)GetArg("-maxconnections",250),(double)MAX_OUTBOUND_CONNECTIONS);
+				if (fDebug10) printf("\r\n Surpassed max inbound connections maxconnections:%f minus max_outbound:%f",(double)GetArg("-maxconnections",250),(double)MAX_OUTBOUND_CONNECTIONS);
                 closesocket(hSocket);
             }
             else if (CNode::IsBanned(addr))
@@ -1594,7 +1593,7 @@ void ThreadSocketHandler2(void* parg)
             }
             else
             {
-                if (fDebug) printf("accepted connection %s\n", addr.ToString().c_str());
+                if (fDebug10) printf("accepted connection %s\n", addr.ToString().c_str());
                 CNode* pnode = new CNode(hSocket, addr, "", true);
                 pnode->AddRef();
                 {
@@ -1651,7 +1650,7 @@ void ThreadSocketHandler2(void* parg)
                             // socket closed gracefully
                             if (!pnode->fDisconnect)
 							{
-                              if (fDebug)   printf("socket closed\n");
+                              if (fDebug10)   printf("socket closed\n");
 							}
                             pnode->CloseSocketDisconnect();
                         }
@@ -1663,7 +1662,7 @@ void ThreadSocketHandler2(void* parg)
                             {
                                 if (!pnode->fDisconnect)
 								{
-                                   if (fDebug)  printf("socket recv error %d\n", nErr);
+                                   if (fDebug10)  printf("socket recv error %d\n", nErr);
 								}
                                 pnode->CloseSocketDisconnect();
                             }
@@ -1709,7 +1708,7 @@ void ThreadSocketHandler2(void* parg)
             {
                 if (pnode->nLastRecv == 0 || pnode->nLastSend == 0)
                 {
-                    if (fDebug) printf("socket no message in first 24 seconds, %d %d\n", pnode->nLastRecv != 0, pnode->nLastSend != 0);
+                    if (fDebug10) printf("socket no message in first 24 seconds, %d %d\n", pnode->nLastRecv != 0, pnode->nLastSend != 0);
                     pnode->fDisconnect = true;
                 }
                 else if (nTime - pnode->nLastSend > TIMEOUT_INTERVAL)
@@ -1771,7 +1770,7 @@ void ThreadMapPort(void* parg)
 
 void ThreadMapPort2(void* parg)
 {
-    if (fDebug) printf("ThreadMapPort started\n");
+    if (fDebug10) printf("ThreadMapPort started\n");
 
     std::string port = strprintf("%u", GetListenPort());
     const char * multicastif = 0;
@@ -1865,7 +1864,7 @@ void ThreadMapPort2(void* parg)
             i++;
         }
     } else {
-        if (fDebug) printf("No valid UPnP IGDs found\n");
+        if (fDebug10) printf("No valid UPnP IGDs found\n");
         freeUPNPDevlist(devlist); devlist = 0;
         if (r != 0)
             FreeUPNPUrls(&urls);
@@ -1932,17 +1931,17 @@ void ThreadDNSAddressSeed(void* parg)
         vnThreadsRunning[THREAD_DNSSEED]--;
         throw; // support pthread_cancel()
     }
-    if (fDebug) printf("ThreadDNSAddressSeed exited\n");
+    if (fDebug10) printf("ThreadDNSAddressSeed exited\n");
 }
 
 void ThreadDNSAddressSeed2(void* parg)
 {
-    if (fDebug) printf("ThreadDNSAddressSeed started\n");
+    if (fDebug10) printf("ThreadDNSAddressSeed started\n");
     int found = 0;
 
     if (!fTestNet)
     {
-        if (fDebug) printf("Loading addresses from DNS seeds (could take a while)\n");
+        if (fDebug10) printf("Loading addresses from DNS seeds (could take a while)\n");
 
         for (unsigned int seed_idx = 0; seed_idx < ARRAYLEN(strDNSSeed); seed_idx++) {
             if (HaveNameProxy()) {
@@ -1966,7 +1965,7 @@ void ThreadDNSAddressSeed2(void* parg)
         }
     }
 
-    if (fDebug) printf("%d addresses found from DNS seeds\n", found);
+    if (fDebug10) printf("%d addresses found from DNS seeds\n", found);
 }
 
 
@@ -1994,7 +1993,7 @@ void DumpAddresses()
     CAddrDB adb;
     adb.Write(addrman);
 
-    if (fDebug) printf("Flushed %d addresses to peers.dat  %"PRId64"ms\n",           addrman.size(), GetTimeMillis() - nStart);
+    if (fDebug10) printf("Flushed %d addresses to peers.dat  %"PRId64"ms\n",           addrman.size(), GetTimeMillis() - nStart);
 
 }
 
@@ -2055,6 +2054,10 @@ begin:
 
 void BusyWaitForTally()
 {
+	if (IsLockTimeWithinMinutes(nLastTallyBusyWait,10))
+	{
+		return;
+	}
 	if (fDebug10) printf("\r\n ** Busy Wait for Tally ** \r\n");
 	bTallyFinished=false;
 	bDoTally=true;
@@ -2065,6 +2068,7 @@ void BusyWaitForTally()
 		iTimeout+=10;
 		if (iTimeout > 15000) break;
 	}
+	nLastTallyBusyWait = GetAdjustedTime();
 }
 
 
@@ -2191,7 +2195,7 @@ void static ProcessOneShot()
 void static ThreadStakeMiner(void* parg)
 {
 
-    if (fDebug) printf("ThreadStakeMiner started\n");
+    if (fDebug10) printf("ThreadStakeMiner started\n");
     CWallet* pwallet = (CWallet*)parg;
 	while (!bCPIDsLoaded)
 	{
@@ -2241,7 +2245,7 @@ uint64_t CNode::GetTotalBytesSent()
 
 void ThreadOpenConnections2(void* parg)
 {
-    if (fDebug) printf("ThreadOpenConnections started\n");
+    if (fDebug10) printf("ThreadOpenConnections started\n");
 
     // Connect to specific addresses
     if (mapArgs.count("-connect") && mapMultiArgs["-connect"].size() > 0)
@@ -2383,7 +2387,7 @@ void ThreadOpenAddedConnections(void* parg)
 
 void ThreadOpenAddedConnections2(void* parg)
 {
-    if (fDebug) printf("ThreadOpenAddedConnections started\n");
+    if (fDebug10) printf("ThreadOpenAddedConnections started\n");
 
     if (mapArgs.count("-addnode") == 0)
         return;
@@ -2510,7 +2514,7 @@ void ThreadMessageHandler(void* parg)
 
 void ThreadMessageHandler2(void* parg)
 {
-    if (fDebug) printf("ThreadMessageHandler started\n");
+    if (fDebug10) printf("ThreadMessageHandler started\n");
     SetThreadPriority(THREAD_PRIORITY_BELOW_NORMAL);
     while (!fShutdown)
     {
@@ -2661,7 +2665,7 @@ bool BindListenPort(const CService &addrBind, string& strError)
         printf("%s\n", strError.c_str());
         return false;
     }
-    if (fDebug) printf("Bound to %s\n", addrBind.ToString().c_str());
+    if (fDebug10) printf("Bound to %s\n", addrBind.ToString().c_str());
 
     // Listen for incoming connections
     if (listen(hListenSocket, SOMAXCONN) == SOCKET_ERROR)
