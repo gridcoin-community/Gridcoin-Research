@@ -162,12 +162,17 @@ extern int64_t nMinimumInputValue;
 extern int64_t nLastTallied;
 extern int64_t nLastResync;
 extern int64_t nLastPing;
-
+extern int64_t nLastAskedForBlocks;
+extern int64_t nLastCalculatedMedianTimePast;
+extern double nLastBlockAge;
+extern int64_t nLastCalculatedMedianPeerCount;
+extern int nLastMedianPeerCount;
 extern int64_t nLastTalliedNeural;
-
 extern int64_t nCPIDsLoaded;
 extern int64_t nLastGRCtallied;
 extern int64_t nLastCleaned;
+extern int64_t nLastTallyBusyWait;
+
 
 
 extern bool fUseFastIndex;
@@ -264,10 +269,9 @@ bool CheckProofOfWork(uint256 hash, unsigned int nBits);
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfStake);
 int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height);
 
-int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid, 
-	bool VerifyingBlock, int64_t locktime, CBlockIndex* pindexLast,
-	std::string operation, double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
-
+int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
+	bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast, std::string operation,
+	double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
 
 
 
@@ -1443,7 +1447,6 @@ public:
     int64_t GetPastTimeLimit() const
     {
         if (IsProtocolV2(nHeight))
-			//         return GetBlockTime();
 	         return GetMedianTimePast();
         else
             return GetMedianTimePast();

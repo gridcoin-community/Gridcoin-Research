@@ -177,7 +177,7 @@ void RandAddSeedPerfmon()
     {
         RAND_add(pdata, nSize, nSize/100.0);
         memset(pdata, 0, nSize);
-        if (fDebug) printf("RandAddSeed() %lu bytes\n", nSize);
+        if (fDebug10) printf("RandAddSeed() %lu bytes\n", nSize);
     }
 #endif
 }
@@ -1330,7 +1330,7 @@ void AddTimeData(const CNetAddr& ip, int64_t nTime)
 
     // Add data
     vTimeOffsets.input(nOffsetSample);
-    if (fDebug) printf("Added time data, samples %d, offset %+"PRId64" (%+"PRId64" minutes)\n", vTimeOffsets.size(), nOffsetSample, nOffsetSample/60);
+    if (fDebug10) printf("Added time data, samples %d, offset %+"PRId64" (%+"PRId64" minutes)\n", vTimeOffsets.size(), nOffsetSample, nOffsetSample/60);
     if (vTimeOffsets.size() >= 5 && vTimeOffsets.size() % 2 == 1)
     {
         int64_t nMedian = vTimeOffsets.median();
@@ -1363,12 +1363,12 @@ void AddTimeData(const CNetAddr& ip, int64_t nTime)
                 }
             }
         }
-        if (fDebug) {
+        if (fDebug10) {
             BOOST_FOREACH(int64_t n, vSorted)
                 printf("%+"PRId64"  ", n);
             printf("|  ");
         }
-        if (fDebug) printf("nTimeOffset = %+"PRId64"  (%+"PRId64" minutes)\n", nTimeOffset, nTimeOffset/60);
+        if (fDebug10) printf("nTimeOffset = %+"PRId64"  (%+"PRId64" minutes)\n", nTimeOffset, nTimeOffset/60);
     }
 }
 

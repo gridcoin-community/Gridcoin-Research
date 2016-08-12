@@ -531,7 +531,6 @@ double qtExecuteGenericFunction(std::string function, std::string data)
 	double return_code = 0;
 	int result = 0;
 	#if defined(WIN32) && defined(QT_GUI)
-		//if (fDebug) printf("Executing generic function %s \r\n",function.c_str());
 		QString qsData = ToQstring(data);
 		QString qsFunction = ToQstring(function +"(Qstring)");
 		std::string sFunction = function+"(Qstring)";
@@ -2463,7 +2462,7 @@ void BitcoinGUI::updateStakingIcon()
 		uint64_t nWeight = this->nWeight;
         uint64_t nNetworkWeight = GetPoSKernelPS();
         unsigned nEstimateTime = GetTargetSpacing(nBestHeight) * (nNetworkWeight / ((nWeight/COIN)+.001)) * 1;
-		if (fDebug) printf("StakeIcon Vitals BH %f, NetWeight %f, Weight %f \r\n", (double)GetTargetSpacing(nBestHeight),(double)nNetworkWeight,(double)nWeight);
+		if (fDebug10) printf("StakeIcon Vitals BH %f, NetWeight %f, Weight %f \r\n", (double)GetTargetSpacing(nBestHeight),(double)nNetworkWeight,(double)nWeight);
         QString text = GetEstimatedTime(nEstimateTime);
         //Halford - 1-9-2015 - Calculate time for POR Block:
 		unsigned int nPOREstimate = (unsigned int)GetPOREstimatedTime(GlobalCPUMiningCPID.RSAWeight);

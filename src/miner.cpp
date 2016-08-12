@@ -29,6 +29,7 @@ StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
 
 void ThreadTopUpKeyPool(void* parg);
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
+
 double GetDifficulty(const CBlockIndex* blockindex = NULL);
 uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
 int64_t GetRSAWeightByCPID(std::string cpid);
@@ -148,7 +149,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 
 	if (!bNetAveragesLoaded)
 	{
-		if (fDebug) printf("CNB: Net averages not yet loaded...");
+		if (fDebug10) printf("CNB: Net averages not yet loaded...");
 		MilliSleep(1000);
 		return NULL;
 	}
@@ -478,7 +479,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		//Halford: Use current time since we are creating a new stake
 		StructCPID st1 = GetLifetimeCPID(GlobalCPUMiningCPID.cpid,"CreateNewBlock()");
 
-		GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,pindexBest->nTime,pindexBest,"createnewblock",
+		GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,0,pindexBest->nTime,pindexBest,"createnewblock",
 			out_por,out_interest,dAccrualAge,dMagnitudeUnit,dAvgMag);
 	
 		miningcpid.ResearchSubsidy = out_por;
@@ -486,9 +487,8 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		miningcpid.enccpid = ""; //CPID V1 Boinc RunTime enc key
 		miningcpid.encboincpublickey = "";
 		miningcpid.encaes = "";
-		//double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
 		std::string hashBoinc = SerializeBoincBlock(miningcpid);
-	    if (fDebug && LessVerbose(10))  printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
+	    if (fDebug10 && LessVerbose(10))  printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
 		pblock->vtx[0].hashBoinc = hashBoinc;
 
         if (!fProofOfStake)
@@ -703,7 +703,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	int64_t nCoinAge = 0;
 	int64_t nFees = 0;		
 	//Checking Stake for Create CoinStake - int64_t nCalculatedResearch =
-	GetProofOfStakeReward(nCoinAge, nFees, boincblock.cpid, true, pindexBest->nTime, 
+	GetProofOfStakeReward(nCoinAge, nFees, boincblock.cpid, true, 0, pindexBest->nTime, 
 		pindexBest,"checkstake", out_por, out_interest, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 
 	if (boincblock.cpid != "INVESTOR" && out_por > 1)
@@ -893,7 +893,7 @@ Inception:
             fTryToSync = false;
             if (vNodes.size() < 3 || nBestHeight < GetNumBlocksOfPeers())
             {
-				if (fDebug) printf("tryingtosync.");
+				if (fDebug10) printf("tryingtosync.");
                 MilliSleep(5000);
                 continue;
             }
@@ -921,7 +921,7 @@ Begin:
 	
 		if (IsLockTimeWithinMinutes(nLastBlockSolved,5)) 
 		{
-				if (fDebug) printf("=");
+				if (fDebug10) printf("=");
 				MilliSleep(500);
 				goto Begin;
 		}

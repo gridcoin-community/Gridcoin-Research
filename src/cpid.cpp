@@ -254,10 +254,10 @@ string cpid1=longcpid.substr((0x14eb+3914-0x2435),(0x652+2202-0xecc));std::
 string cpid2=longcpid.substr((0x315+271-0x404),longcpid.length()-
 (0x477+4848-0x1748));std::string shash=HashHex(blockhash);
 std::string shortcpid=Update7(cpid2,blockhash);if(shortcpid=="")return false;if(
-fDebug)printf(
+fDebug10)printf(
 "\x73\x68\x6f\x72\x74\x63\x70\x69\x64\x20\x25\x73\x2c\x20\x63\x70\x69\x64\x31\x20\x25\x73\x2c\x20\x75\x73\x65\x72\x63\x70\x69\x64\x20\x25\x73\x20" "\r\n"
 ,shortcpid.c_str(),cpid1.c_str(),usercpid.c_str());if(shortcpid==cpid1&&cpid1==
-usercpid&&shortcpid==usercpid)return true;if(fDebug)printf(
+usercpid&&shortcpid==usercpid)return true;if(fDebug10)printf(
 "\x73\x68\x6f\x72\x74\x63\x70\x69\x64\x20\x25\x73\x2c\x20\x63\x70\x69\x64\x31\x20\x25\x73\x2c\x20\x75\x73\x65\x72\x63\x70\x69\x64\x20\x25\x73\x20" "\r\n"
 ,shortcpid.c_str(),cpid1.c_str(),usercpid.c_str());return false;}std::ostream&
 operator<<(std::ostream&out,CPID CPID){return out<<CPID.hexdigest();}

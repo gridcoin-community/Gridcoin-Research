@@ -1138,7 +1138,7 @@ void CWalletTx::RelayWalletTransaction(CTxDB& txdb)
         uint256 hash = GetHash();
         if (!txdb.ContainsTx(hash))
         {
-            if (fDebug) printf("Relaying wtx %s\n", hash.ToString().substr(0,10).c_str());
+            if (fDebug10) printf("Relaying wtx %s\n", hash.ToString().substr(0,10).c_str());
             RelayTransaction((CTransaction)*this, hash);
 			AddPeek("Relaying wallet transaction " + hash.ToString());
 
@@ -1174,7 +1174,7 @@ void CWallet::ResendWalletTransactions(bool fForce)
     }
 
     // Rebroadcast any of our txes that aren't in a block yet
-    //if (fDebug) printf("ResendWalletTransactions()\n");
+    //if (fDebug10) printf("ResendWalletTransactions()\n");
     CTxDB txdb("r");
     {
         LOCK(cs_wallet);
@@ -2074,7 +2074,6 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	
     if (nCredit == 0 && !bNewbieFreePass)
 	{
-		//if (fDebug) printf("StakeMiner: Credit below reserve balance (zero).");
 		msMiningErrors7="Probing coin age";
 		msMiningErrors = msMiningErrors7;
 		return false;
@@ -2082,7 +2081,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 	if (nCredit > nBalance - nReserveBalance && !bNewbieFreePass)
 	{
-		if (fDebug) printf("StakeMiner: Credit below reserve balance. %f",(double)nCredit);
+		if (fDebug10) printf("StakeMiner: Credit below reserve balance. %f",(double)nCredit);
 		msMiningErrors7="";
 		msMiningErrors = msMiningErrors7;
 		return false;
@@ -2140,13 +2139,13 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		double dAccrualMagnitudeUnit = 0;
 		double dAccrualMagnitude = 0;
 		
-		// ************************************************* CREATE PROOF OF RESEARCH REWARD ****************************** R HALFORD *************** 8-8-2015 *******************************
+		// ************************************************* CREATE PROOF OF RESEARCH REWARD ****************************** R HALFORD *************** 
 		// ResearchAge 2
 		// Note: Since research Age must be exact, we need to transmit the Block nTime here so it matches AcceptBlock
 		StructCPID st1 = GetLifetimeCPID(GlobalCPUMiningCPID.cpid,"CreateCoinStake()");
 
 
-        int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,
+        int64_t nReward = GetProofOfStakeReward(nCoinAge,nFees,GlobalCPUMiningCPID.cpid,false,0,
 			pindexBest->nTime,pindexBest,"createcoinstake",OUT_POR,out_interest,dAccrualAge,dAccrualMagnitudeUnit,dAccrualMagnitude);
 
 		//9-2-2015 Accrual System - Reserved for Future Use

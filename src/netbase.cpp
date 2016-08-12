@@ -374,7 +374,7 @@ bool static ConnectSocketDirectly(const CService &addrConnect, SOCKET& hSocketRe
             }
             if (nRet != 0)
             {
-                if (fDebug) printf("socket connect() failed after select(): %s, Destination Addr %s \r\n",strerror(nRet),addrConnect.ToString().c_str());
+                if (fDebug10) printf("socket connect() failed after select(): %s, Destination Addr %s \r\n",strerror(nRet),addrConnect.ToString().c_str());
                 closesocket(hSocket);
                 return false;
             }

@@ -470,7 +470,6 @@ public:
         ENTER_CRITICAL_SECTION(cs_vSend);
         assert(ssSend.size() == 0);
         ssSend << CMessageHeader(pszCommand, 0);
-        //if (fDebug)            printf("sending: %s ", pszCommand);
     }
 
     void AbortMessage()
@@ -479,7 +478,7 @@ public:
 
         LEAVE_CRITICAL_SECTION(cs_vSend);
 
-        if (fDebug)
+        if (fDebug10)
             printf("(aborted)\n");
     }
 
@@ -506,7 +505,8 @@ public:
         assert(ssSend.size () >= CMessageHeader::CHECKSUM_OFFSET + sizeof(nChecksum));
         memcpy((char*)&ssSend[CMessageHeader::CHECKSUM_OFFSET], &nChecksum, sizeof(nChecksum));
 
-        if (fDebug) {
+        if (fDebug10) 
+		{
             printf("(%d bytes)\n", nSize);
         }
 

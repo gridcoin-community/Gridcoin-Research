@@ -24,13 +24,14 @@ double ReturnTotalRacByCPID(std::string cpid);
 std::string UnpackBinarySuperblock(std::string sBlock);
 std::string PackBinarySuperblock(std::string sBlock);
 int DetermineCPIDType(std::string cpid);
-void AskForOutstandingBlocks();
+bool AskForOutstandingBlocks(uint256 hashStart);
+
+bool CleanChain();
 
 extern Array MagnitudeReport(std::string cpid);
 extern bool UserAcknowledgedHoldHarmlessClause(std::string sAddress);
 std::string ConvertBinToHex(std::string a);
 std::string ConvertHexToBin(std::string a);
-void RecoverNode();
 bool TallyResearchAverages(bool Forcefully);
 void ReloadBlockIndexHot();
 int RestartClient();
@@ -81,7 +82,6 @@ double GetNetworkPaymentsTotal();
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
 bool ComputeNeuralNetworkSupermajorityHashes();
 bool UpdateNeuralNetworkQuorumData();
-bool ShaveChain(CTxDB& txdb,int iHowMuch);
 extern Array LifetimeReport(std::string cpid);
 Array StakingReport();
 extern std::string AddContract(std::string sType, std::string sName, std::string sContract);
@@ -601,9 +601,8 @@ Value getblockhash(const Array& params, bool fHelp)
 
     int nHeight = params[0].get_int();
     if (nHeight < 0 || nHeight > nBestHeight)       throw runtime_error("Block number out of range.");
-	if (fDebug)	printf("Getblockhash %f",(double)nHeight);
+	if (fDebug10)	printf("Getblockhash %f",(double)nHeight);
 	CBlockIndex* RPCpblockindex = RPCFindBlockByHeight(nHeight);
-	if (fDebug)	printf("@r");
 	return RPCpblockindex->phashBlock->GetHex();
 }
 
@@ -1296,7 +1295,7 @@ bool InsertSmartContract(std::string URL, std::string name)
 		{
 			std::string cpid = ExtractXML(vUsers[i],"<cpid>","</cpid>");
 			std::string rac = ExtractXML(vUsers[i],"<expavg_credit>","</expavg_credit>");
-			//if (fDebug) printf("Cpid %s rac %s			,     ",cpid.c_str(),rac.c_str());
+			//if (fDebug10) printf("Cpid %s rac %s			,     ",cpid.c_str(),rac.c_str());
 			
 			double dRac = cdbl(rac,0);
 			if (dRac > 10)
@@ -2117,16 +2116,30 @@ Value execute(const Array& params, bool fHelp)
      		entry.push_back(Pair("Restarting",(double)iResult));
 	    	results.push_back(entry);
 	}
+	else if (sItem == "cleanchain")
+	{
+		bool fResult = CleanChain();
+		entry.push_back(Pair("CleanChain",fResult));
+		results.push_back(entry);
+	}
+	else if (sItem == "sendblock")
+	{
+			if (params.size() != 2)
+	    	{
+		    	entry.push_back(Pair("Error","You must specify the block hash to send."));
+			    results.push_back(entry);
+		    } 
+			std::string sHash = params[1].get_str();
+			uint256 hash = uint256(sHash);
+			bool fResult = AskForOutstandingBlocks(hash);
+			entry.push_back(Pair("Requesting",hash.ToString()));
+			entry.push_back(Pair("Result",fResult));
+			results.push_back(entry);
+	}
 	else if (sItem == "syncchain")
 	{
 		SyncChain();
 		entry.push_back(Pair("SyncChain",1));
-		results.push_back(entry);
-	}
-	else if (sItem == "recover")
-	{
-		RecoverNode();
-		entry.push_back(Pair("Recover",1));
 		results.push_back(entry);
 	}
 	else if (sItem == "reloadblockindex")
@@ -2451,40 +2464,10 @@ Value execute(const Array& params, bool fHelp)
 			entry.push_back(Pair("Updated.",""));
 			results.push_back(entry);
 	}
-	else if (sItem == "shavechain")
-	{
-		 CTxDB txdb;
-		 if (ShaveChain(txdb,100))
-		 {
-		 	entry.push_back(Pair("Warning!","This command is deprecated and can cause temporary instability.  It is not recommended any longer. You may have to reboot the wallet to recover. "));
-		 	entry.push_back(Pair("Shave Succeeded.",(double)pindexBest->nHeight));
-   			results.push_back(entry);
-		 }
-		 else
-		 {
-			entry.push_back(Pair("Shave Failed.",(double)pindexBest->nHeight));
-   			results.push_back(entry);
-		 }
-	}
-	else if (sItem == "shavechainsmall")
-	{
-		 CTxDB txdb;
-		 if (ShaveChain(txdb,1))
-		 {
-		 	entry.push_back(Pair("Warning!","This command is deprecated and can cause temporary instability.  It is not recommended any longer. You may have to reboot the wallet to recover. "));
-		 	entry.push_back(Pair("Shave Succeeded.",(double)pindexBest->nHeight));
-   			results.push_back(entry);
-		 }
-		 else
-		 {
-			entry.push_back(Pair("Shave Failed.",(double)pindexBest->nHeight));
-   			results.push_back(entry);
-		 }
-	}
 	else if (sItem == "askforoutstandingblocks")
 	{
-		AskForOutstandingBlocks();
-	 	entry.push_back(Pair("Sent.",(double)pindexBest->nHeight));
+		bool fResult = AskForOutstandingBlocks(uint256(0));
+	 	entry.push_back(Pair("Sent.",fResult));
    	    results.push_back(entry);
 	}
 	else if (sItem == "joindao")
@@ -3173,15 +3156,12 @@ Value execute(const Array& params, bool fHelp)
 		}
 
 		results.push_back(entry);
-	
 	}
 	else if (sItem=="testscannew")
 	{
 
 		TestScan();
 		TestScan2();
-
-
 	}
 	else if (sItem == "tally")
 	{
@@ -4002,7 +3982,7 @@ Array MagnitudeReport(std::string cpid)
 													double iPct = ( (structMag.interestPayments/14) * 365 / (nBalance+.01));
 													entry.push_back(Pair("Interest %", iPct));
 												}
-
+												
 												entry.push_back(Pair("Daily Paid",structMag.payments/14));
 												// Research Age - Calculate Expected 14 Day Owed, and Daily Owed:
 												double dExpected14 = magnitude_unit * structMag.Magnitude * 14;

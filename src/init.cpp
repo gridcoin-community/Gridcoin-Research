@@ -1137,7 +1137,7 @@ bool AppInit2()
     // ********************************************************* Step 10: load peers
 
     uiInterface.InitMessage(_("Loading addresses..."));
-    if (fDebug) printf("Loading addresses...\n");
+    if (fDebug10) printf("Loading addresses...\n");
     nStart = GetTimeMillis();
 
     {
