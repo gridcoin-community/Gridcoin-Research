@@ -2808,6 +2808,7 @@ int64_t CTransaction::GetValueIn(const MapPrevTx& inputs) const
 
 double PreviousBlockAge()
 {
+    	if (nBestHeight < 10) return 99999;
 		if (IsLockTimeWithinMinutes(nLastCalculatedMedianTimePast,1))
 		{
 			return nLastBlockAge;
