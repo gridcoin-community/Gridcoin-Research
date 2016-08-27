@@ -19,6 +19,7 @@
 #include "txdb.h"
 #include "util.h"
 #include "main.h"
+#include "ui_interface.h"
 
 using namespace std;
 using namespace boost;
@@ -28,8 +29,11 @@ StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, Stru
 bool IsLockTimeWithin14days(double locktime);
 MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID> vRef);
 MiningCPID DeserializeBoincBlock(std::string block);
-void AddCPIDBlockHash(std::string cpid, std::string blockhash);
+void AddCPIDBlockHash(std::string cpid, std::string blockhash, bool fInsert);
+
+
 void SetUpExtendedBlockIndexFieldsOnce();
+std::string RoundToString(double d, int place);
 
 static leveldb::Options GetOptions() {
     leveldb::Options options;
@@ -355,6 +359,11 @@ bool CTxDB::LoadBlockIndex()
     CDataStream ssStartKey(SER_DISK, CLIENT_VERSION);
     ssStartKey << make_pair(string("blockindex"), uint256(0));
     iterator->Seek(ssStartKey.str());
+
+	int nLoaded = 0;
+	int nHighest = 0;
+	SetThreadPriority(THREAD_PRIORITY_HIGHEST);
+    
     // Now read each entry.
     while (iterator->Valid())
     {
@@ -410,7 +419,16 @@ bool CTxDB::LoadBlockIndex()
         // Watch for genesis block
         if (pindexGenesisBlock == NULL && blockHash == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
             pindexGenesisBlock = pindexNew;
-
+		#ifdef QT_GUI
+			if ((pindexNew->nHeight % 10000) == 0)
+			{
+				nLoaded +=10000;
+				if (nLoaded > nHighest) nHighest=nLoaded;
+				if (nHighest < nGrandfather) nHighest=nGrandfather;
+				std::string sBlocksLoaded = RoundToString((double)nLoaded,0) + "/" + RoundToString((double)nHighest,0) + " Blocks Loaded";
+				uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
+     		}
+		#endif
         if (!pindexNew->CheckIndex()) {
             delete iterator;
             return error("LoadBlockIndex() : CheckIndex failed at %d", pindexNew->nHeight);
@@ -483,7 +501,7 @@ bool CTxDB::LoadBlockIndex()
     CBigNum bnBestInvalidTrust;
     ReadBestInvalidTrust(bnBestInvalidTrust);
     nBestInvalidTrust = bnBestInvalidTrust.getuint256();
-
+	nLoaded = 0;
     // Verify blocks in the best chain
     int nCheckLevel = GetArg("-checklevel", 1);
     int nCheckDepth = GetArg( "-checkblocks", 1000);
@@ -505,7 +523,19 @@ bool CTxDB::LoadBlockIndex()
             return error("LoadBlockIndex() : block.ReadFromDisk failed");
         // check level 1: verify block validity
         // check level 7: verify block signature too
-		
+
+		#ifdef QT_GUI
+			if ((pindex->nHeight % 1000) == 0)
+			{
+				nLoaded +=1000;
+				if (nLoaded > nHighest) nHighest=nLoaded;
+				if (nHighest < nGrandfather) nHighest=nGrandfather;
+				std::string sBlocksLoaded = RoundToString((double)nLoaded,0) + "/" + RoundToString((double)nHighest,0) + " Blocks Verified";
+				uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
+     		}
+		#endif
+
+
         if (nCheckLevel>0 && !block.CheckBlock("LoadBlockIndex", pindex->nHeight,pindex->nMint, true, true, (nCheckLevel>6), true))
         {
             printf("LoadBlockIndex() : *** found bad block at %d, hash=%s\n", pindex->nHeight, pindex->GetBlockHash().ToString().c_str());
@@ -626,10 +656,15 @@ bool CTxDB::LoadBlockIndex()
 	nStart = GetTimeMillis();
 
 
-	//8-13-2015 - Gridcoin - In order, set up Research Age hashes and lifetime fields
-    CBlockIndex* pindex = pindexGenesisBlock;
-	//int lookback = 14*24*60*60;
-	if (pindex && pindexBest && pindexBest->nHeight > 10  && pindex->pnext)
+	//Gridcoin - In order, set up Research Age hashes and lifetime fields
+    int lookback = 1000*190;
+	int nBlkStart = pindexBest->nHeight - lookback;
+	if (nBlkStart < 10) nBlkStart=10;
+	nBlkStart = 1;
+	CBlockIndex* pindex = FindBlockByHeight(nBlkStart);
+
+	nLoaded=pindex->nHeight;
+	if (pindex && pindexBest && pindexBest->nHeight > 10 && pindex->pnext)
 	{
 		printf(" RA Starting %f %f %f ",(double)pindex->nHeight,(double)pindex->pnext->nHeight,(double)pindexBest->nHeight);
 		while (pindex->nHeight < pindexBest->nHeight)
@@ -647,34 +682,47 @@ bool CTxDB::LoadBlockIndex()
 				//	mvBlockIndex[pindex->GetBlockHash().GetHex()] = bb;
 				//}
 
+				#ifdef QT_GUI
+				if ((pindex->nHeight % 10000) == 0)
+				{
+					nLoaded +=10000;
+					if (nLoaded > nHighest) nHighest=nLoaded;
+					if (nHighest < nGrandfather) nHighest=nGrandfather;
+					std::string sBlocksLoaded = RoundToString((double)nLoaded,0) + "/" + RoundToString((double)nHighest,0) + " POR Blocks Verified";
+					uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
+     			}
+				#endif
+
 				if (!pindex->sCPID.empty())
 				{
-				if (pindex->sCPID != "INVESTOR") 
-				{
+					if (pindex->nResearchSubsidy > 0 && pindex->sCPID != "INVESTOR") 
+					{
 			
-					StructCPID stCPID = GetInitializedStructCPID2(pindex->sCPID, mvResearchAge);
-	     			stCPID.InterestSubsidy += pindex->nInterestSubsidy;
-					stCPID.ResearchSubsidy += pindex->nResearchSubsidy;
-					if (((double)pindex->nHeight) > stCPID.LastBlock && pindex->nResearchSubsidy > 0) 
-					{
-							stCPID.LastBlock = (double)pindex->nHeight;
-							stCPID.BlockHash = pindex->GetBlockHash().GetHex();
-					}
-
-					if (pindex->nMagnitude > 0 && pindex->nResearchSubsidy > 0)
-					{
-						stCPID.Accuracy++;
-						stCPID.TotalMagnitude += pindex->nMagnitude;
-						stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
-					}
+						//StructCPID stCPID = GetInitializedStructCPID2(pindex->sCPID, mvResearchAge);
+						StructCPID stCPID = mvResearchAge[pindex->sCPID];
 		
-					if (((double)pindex->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime = (double)pindex->nTime;
-					if (((double)pindex->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pindex->nTime;
-			
-					mvResearchAge[pindex->sCPID]=stCPID;
-					AddCPIDBlockHash(pindex->sCPID,pindex->GetBlockHash().GetHex());
+	     				stCPID.InterestSubsidy += pindex->nInterestSubsidy;
+						stCPID.ResearchSubsidy += pindex->nResearchSubsidy;
+						if (((double)pindex->nHeight) > stCPID.LastBlock && pindex->nResearchSubsidy > 0) 
+						{
+								stCPID.LastBlock = (double)pindex->nHeight;
+								stCPID.BlockHash = pindex->GetBlockHash().GetHex();
+						}
 
-				}
+						if (pindex->nMagnitude > 0 && pindex->nResearchSubsidy > 0)
+						{
+							stCPID.Accuracy++;
+							stCPID.TotalMagnitude += pindex->nMagnitude;
+							stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
+						}
+		
+						if (((double)pindex->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime = (double)pindex->nTime;
+						if (((double)pindex->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pindex->nTime;
+			
+						mvResearchAge[pindex->sCPID]=stCPID;
+				    	AddCPIDBlockHash(pindex->sCPID,pindex->GetBlockHash().GetHex(),true);
+
+					}
 				}
 		}
 	}
@@ -682,6 +730,7 @@ bool CTxDB::LoadBlockIndex()
 	nStart = GetTimeMillis();
 	SetUpExtendedBlockIndexFieldsOnce();
 	printf("SetUpExtendedBlockIndexFieldsOnce Complete - Time %15"PRId64"ms\n", GetTimeMillis() - nStart);
-
+	SetThreadPriority(THREAD_PRIORITY_NORMAL);
+    
     return true;
 }

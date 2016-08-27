@@ -1162,6 +1162,7 @@ bool AppInit2()
 	uiInterface.InitMessage(_("Loading Network Averages..."));
 	if (fDebug3) printf("Loading network averages %f",(double)0);
 	BusyWaitForTally();
+	uiInterface.InitMessage(_("Compute Neural Network Hashes..."));
 
 	ComputeNeuralNetworkSupermajorityHashes();
 

@@ -19,7 +19,6 @@ Public Class frmChartVotes
         Dim sShareType As String = ExtractXML(sData, "<SHARETYPE>")
         Dim sQuestion As String = ExtractXML(sData, "<QUESTION>")
         Dim sURL As String = ExtractXML(sData, "<URL>")
-
         Dim sAnswers As String = ExtractXML(sData, "<ANSWERS>")
         'Array of answers
         Dim sArrayOfAnswers As String = ExtractXML(sData, "<ARRAYANSWERS>")
@@ -31,9 +30,13 @@ Public Class frmChartVotes
         lblQuestion.Text = "Q: " + sQuestion
         lblTitle.Text = ProperCase(sTitle)
         lnkURL.Text = sURL
-
+        Dim sAnswersUsed As String = ""
         Dim iRow As Long = 0
         C.Titles.Clear() : C.Titles.Add("Poll Results " + sTitle) : C.BackColor = Color.Black : C.ForeColor = Color.Lime
+        C.Titles(0).Alignment = ContentAlignment.TopRight
+        C.Titles(0).Font = New System.Drawing.Font("Arial", 18)
+
+
         C.ChartAreas(0).AxisX.IntervalType = DateTimeIntervalType.Auto
         C.ChartAreas(0).BackSecondaryColor = Color.Black
         C.ChartAreas(0).AxisX.LabelStyle.ForeColor = Color.Lime
@@ -54,43 +57,72 @@ Public Class frmChartVotes
         C.ChartAreas(0).Area3DStyle.Rotation = 87
         C.ChartAreas(0).AxisY.LabelStyle.IntervalType = DateTimeIntervalType.NotSet
         C.Series.Clear()
+
+
+        C.ChartAreas(0).AxisX.IsLabelAutoFit = True
+        C.ChartAreas(0).AxisX.LabelAutoFitStyle = LabelAutoFitStyles.LabelsAngleStep30
+        C.ChartAreas(0).AxisX.LabelStyle.Enabled = True
+
+
         'Create series for each answer
         Dim serPrice(vAnswers.Length - 1) As Series
+        serPrice(iRow) = New Series
+        serPrice(iRow).ChartType = SeriesChartType.Pie
+        serPrice(iRow).IsVisibleInLegend = True
+        serPrice(iRow).IsValueShownAsLabel = True
+        serPrice(iRow).AxisLabel = ""
+        serPrice(iRow).SmartLabelStyle.IsMarkerOverlappingAllowed = False
+
+        serPrice(iRow).Font = New System.Drawing.Font("Arial", 14)
+
+        C.Series.Add(serPrice(iRow))
+        Dim dHiVote As Double = 0
+        For subY As Integer = 0 To vAnswers.Length - 1
+            If Len(vAnswers(subY)) > 0 Then
+                Dim dShares As String = CDbl(ExtractXML(vAnswers(subY), "<SHARES>"))
+                If dShares > dHiVote Then dHiVote = dShares
+            End If
+        Next subY
+        Dim dMinShares As Double = dHiVote * 0.01
+        If dMinShares < 1 Then dMinShares = 1
+
+
         For subY As Integer = 0 To vAnswers.Length - 1
             If Len(vAnswers(subY)) > 0 Then
                 iRow += 1
                 Dim sAnswerName As String = ExtractXML(vAnswers(subY), "<ANSWERNAME>")
+                If sAnswersUsed.Contains(sAnswerName) Then
+                    sAnswerName += "_2"
+                End If
+                sAnswersUsed += sAnswerName
                 Dim sParticipants As String = ExtractXML(vAnswers(subY), "<PARTICIPANTS>")
                 Dim dShares As String = CDbl(ExtractXML(vAnswers(subY), "<SHARES>"))
-                If dShares = 0 Then dShares = 1
-                If True Or serPrice(iRow) Is Nothing Then
-                    serPrice(iRow) = New Series
-                    serPrice(iRow).Name = sAnswerName
-                    serPrice(iRow).ChartType = SeriesChartType.Column
-
-                    Dim c1 As Integer = Rnd(1) * 255
-                    Dim c2 As Integer = Rnd(1) * 255
-                    Dim c3 As Integer = Rnd(1) * 255
-                    serPrice(iRow).Color = ColorTranslator.FromOle(RGB(c1, c2, c3))
-                    serPrice(iRow).LabelForeColor = ColorTranslator.FromOle(RGB(c3, c2, c1))
-                    serPrice(iRow).LegendText = sAnswerName
-                    serPrice(iRow).IsVisibleInLegend = True
-                    serPrice(iRow).Label = sAnswerName
-                    serPrice(iRow).IsValueShownAsLabel = True
-                    serPrice(iRow).AxisLabel = ""
-
-                    C.Series.Add(serPrice(iRow))
+                If dShares = 0 Then dShares = dMinShares
+          
+                Dim dpPrice As New DataPoint
+                If dShares = 0 Then dpPrice.Color = Color.Red
+                If Len(sAnswerName) > 14 Then
+                    dpPrice.Font = New System.Drawing.Font("Arial", 7)
                 End If
-                Dim dPrice As New DataPoint
-                If dShares = 0 Then dPrice.Color = Color.Red
-                dPrice.SetValueY(dShares)
-                serPrice(iRow).Points.Add(dPrice)
+                dpPrice.LegendText = sAnswerName
+                If dShares > dMinShares Then
+                    dpPrice.Label = sAnswerName
+                Else
+                    dpPrice.IsValueShownAsLabel = False
+                    dpPrice.Label = ""
+                End If
+
+                dpPrice.LabelForeColor = Color.DarkGreen
+
+                dpPrice.SetValueY(dShares)
+                serPrice(0).Points.Add(dpPrice)
+
             End If
+
         Next
         Return ""
     End Function
     Function GetPollData(sTitle As String) As String
-
         If Not msGenericDictionary.ContainsKey("POLLS") Then
             MsgBox("No voting data exists.")
             Exit Function

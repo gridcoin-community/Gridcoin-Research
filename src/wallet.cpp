@@ -24,7 +24,8 @@ StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
 double cdbl(std::string s, int place);
 std::string GetArgument(std::string arg, std::string defaultvalue);
 bool GetExpiredOption(std::string& rsRecipient, double& rdSinglePrice, double& rdAmountOwed, std::string& rsOpra);
-
+std::string SendReward(std::string sAddress, int64_t nAmount);
+int64_t CoinFromValue(double dAmount);
 void qtUpdateConfirm(std::string txid);
 bool Contains(std::string data, std::string instring);
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
@@ -553,15 +554,15 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
 			// If this is a tracked tx, update via SQL:
 			if (!wtxIn.hashBoinc.empty() && bGlobalcomInitialized)
 			{
-			if (Contains(wtxIn.hashBoinc,"<TRACK>"))
-			{
-				//wtx.GetHash().ToString()
-				printf("Updating tx id %s",wtxIn.GetHash().ToString().c_str());
-				#if defined(WIN32) && defined(QT_GUI)
-					qtUpdateConfirm(wtxIn.GetHash().ToString());
-				#endif
-				printf("Updated.");
-			}
+				if (Contains(wtxIn.hashBoinc,"<TRACK>"))
+				{
+					//wtx.GetHash().ToString()
+					printf("Updating tx id %s",wtxIn.GetHash().ToString().c_str());
+					#if defined(WIN32) && defined(QT_GUI)
+						qtUpdateConfirm(wtxIn.GetHash().ToString());
+					#endif
+					printf("Updated.");
+				}
 			}
 
 			// (Reserved:If this is a coinbase, update the interest and the researchsubsidy on the tx: (12-17-2014 Halford)):
@@ -613,8 +614,48 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
 
         // notify an external script when a wallet transaction comes in or is updated
         std::string strCmd = GetArg("-walletnotify", "");
+		// Reward Sharing - Added 08-21-2016
+		// if (IsCoinBase() || IsCoinStake())
+       
+		if (wtxIn.IsCoinBase() || wtxIn.IsCoinStake())
+	    {
+			int64_t nReward = 0;
+			printf("\r\nCoinBase:CoinStake\r\n");
+			CBlockIndex* pBlk = mapBlockIndex[wtxIn.hashBlock];
+			CBlock blk;
+    		bool r = blk.ReadFromDisk(pBlk);
+			if (r) 
+			{
+				MiningCPID bb = DeserializeBoincBlock(blk.vtx[0].hashBoinc);
+				double dResearch = bb.ResearchSubsidy + bb.InterestSubsidy;
+				double dRewardShare = dResearch*.10;
+				// Only send Reward if > .10 GRC
+				printf(" reward shared %f",(double)dRewardShare);
+				if (dRewardShare > .10)
+				{
+					// Only send reward if Reward Sharing is set up in the conf file (RS=RewardReceiveAddress)
+					std::string sRewardAddress = GetArgument("RS","");
+					printf(" addr %s",sRewardAddress.c_str());
+					if (!sRewardAddress.empty())
+					{
+						// Ensure this Proof Of Stake Coinbase was Just Generated before sending the reward (prevent rescans from sending rewards):
+						printf("reward locktime %f curr time %f",(double)wtxIn.nTime,(double)GetAdjustedTime());
+						if (IsLockTimeWithinMinutes((double)wtxIn.nTime,10))
+						{
+							std::string sResult = SendReward(sRewardAddress,CoinFromValue(dRewardShare));
+							printf("\r\nIssuing Reward Share of %f GRC to %s. Response: %s\r\n",dRewardShare,sRewardAddress.c_str(),sResult.c_str());
+						}
+					}
+				}
+			}
+		}
+		else
+		{
+			printf("\r\nNot CoinBase Or CoinStake\r\n");
 
-        if ( !strCmd.empty())
+		}
+
+        if (!strCmd.empty())
         {
             boost::replace_all(strCmd, "%s", wtxIn.GetHash().GetHex());
             boost::thread t(runCommand, strCmd); // thread runs free

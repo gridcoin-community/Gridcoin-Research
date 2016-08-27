@@ -8,13 +8,15 @@ Public Class frmPlaceVote
     
 
     Public _id As String
-    Private cbAnswers(20) As CheckBox
+    Private cbAnswers(40) As CheckBox
 
     Public Function ProperCase(sCase As String) As String
         If Len(sCase) > 1 Then sCase = UCase(Mid(sCase, 1, 1)) + Mid(sCase, 2, Len(sCase))
         Return sCase
     End Function
     Public Function PlaceVote(sTitle As String) As String
+
+        Try
 
         Dim sData As String = GetPollData(sTitle)
         sData = Replace(sData, "_", " ")
@@ -32,27 +34,39 @@ Public Class frmPlaceVote
         Dim sBestAnswer As String = ExtractXML(sData, "<BESTANSWER>")
         'Display each answer
         Dim yOffset As Long = lblQuestion.Top + 25
+            Dim lCurrentY As Long = 0
+            Dim lPageCounter As Long = 0
+            Dim lLeftOffset As Long = 0
 
         Dim iRow As Long
         For x As Integer = 0 To vAnswers.Length - 1
             Dim sAnswer As String = ExtractXML(vAnswers(x), "<ANSWERNAME>")
 
             If Len(sAnswer) > 0 Then
-                iRow = iRow + 1
-                Dim cbAnswer As New CheckBox
+                    iRow = iRow + 1
+                    lPageCounter += 1
+                    If lPageCounter > 10 Then
+                        lPageCounter = 1
+                        lCurrentY = 0
+                        lLeftOffset += (Me.Width / 3.3)
 
-                cbAnswer.BackColor = Color.Black
-                cbAnswer.ForeColor = Color.LightGreen
-                cbAnswer.Font = New Font("Arial", 14)
-                cbAnswer.Text = Trim(iRow) + ". " + sAnswer
-                cbAnswer.Width = Me.Width * 0.75
-                cbAnswer.Top = iRow * 34 + yOffset
-                cbAnswer.Left = lblQuestion.Left + 50
-                cbAnswer.Name = "cb" + Trim(iRow)
-                cbAnswer.Tag = sAnswer
-                AddHandler cbAnswer.Click, AddressOf ClickCheckbox
-                cbAnswers(iRow) = cbAnswer
-                Me.Controls.Add(cbAnswer)
+                    End If
+                    lCurrentY += 34
+
+                    Dim cbAnswer As New CheckBox
+                    cbAnswer.BackColor = Color.Black
+                    cbAnswer.ForeColor = Color.LightGreen
+                    cbAnswer.Font = New Font("Arial", 14)
+                    cbAnswer.Text = Trim(iRow) + ". " + sAnswer
+                    cbAnswer.Width = (Me.Width / 3.3) - 30
+                    cbAnswer.Top = lCurrentY + yOffset
+                    cbAnswer.Left = lblQuestion.Left + 50 + lLeftOffset
+                    cbAnswer.Height = 34
+                    cbAnswer.Name = "cb" + Trim(iRow)
+                    cbAnswer.Tag = sAnswer
+                    AddHandler cbAnswer.Click, AddressOf ClickCheckbox
+                    cbAnswers(iRow) = cbAnswer
+                    Me.Controls.Add(cbAnswer)
 
             End If
         Next
@@ -61,12 +75,19 @@ Public Class frmPlaceVote
         lblTitle.Text = ProperCase(sTitle)
         lnkURL.Text = sURL
 
-        Return ""
+            Return ""
+
+
+        Catch ex As Exception
+            Log(ex.Message)
+            Return ""
+        End Try
+
     End Function
     Private Sub ClickCheckbox(ByVal sender As Object, ByVal e As System.EventArgs)
         Dim cb As CheckBox = sender
         'Allow Multiple Choice
-        For x As Integer = 1 To 20
+        For x As Integer = 1 To 40
             If Not cbAnswers(x) Is Nothing Then
                 If cbAnswers(x).Name <> cb.Name Then
                     'cbAnswers(x).Checked = False
@@ -76,7 +97,7 @@ Public Class frmPlaceVote
     End Sub
     Private Function GetVoteValue() As String
         Dim sAnswer As String = ""
-        For x As Integer = 1 To 20
+        For x As Integer = 1 To 40
             If Not cbAnswers(x) Is Nothing Then
                 If cbAnswers(x).Checked Then sAnswer += cbAnswers(x).Tag + ";"
             End If

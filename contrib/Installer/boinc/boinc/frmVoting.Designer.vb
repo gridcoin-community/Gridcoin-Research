@@ -97,7 +97,7 @@ Partial Class frmVoting
         Me.Controls.Add(Me.gbResultsPane)
         Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)
         Me.Name = "frmVoting"
-        Me.Text = "Gridcoin Voting System 1.1"
+        Me.Text = "Gridcoin Voting System 1.2"
         Me.gbResultsPane.ResumeLayout(False)
         CType(Me.dgv, System.ComponentModel.ISupportInitialize).EndInit()
         Me.ResumeLayout(False)

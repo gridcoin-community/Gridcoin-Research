@@ -27,6 +27,8 @@ int DetermineCPIDType(std::string cpid);
 bool AskForOutstandingBlocks(uint256 hashStart);
 
 bool CleanChain();
+extern std::string SendReward(std::string sAddress, int64_t nAmount);
+
 
 extern Array MagnitudeReport(std::string cpid);
 extern bool UserAcknowledgedHoldHarmlessClause(std::string sAddress);
@@ -2374,7 +2376,6 @@ Value execute(const Array& params, bool fHelp)
 	else if (sItem == "syncdpor2")
 	{
 		std::string sOut = "";
-		//10-7-2015 for CM
 		double dBC = GetCountOf("beacon");
 		bool bFull = dBC < 50 ? true : false;
 		LoadAdminMessages(bFull,sOut);
@@ -3926,13 +3927,10 @@ Array MagnitudeReport(std::string cpid)
 		   std::string Narr = RoundToString(GetAdjustedTime(),0);
 		   c.push_back(Pair("RSA Report",Narr));
 		   results.push_back(c);
-
-		   //double payment_timespan = 14; 
 		   double total_owed = 0;
 		   double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
 		   msRSAOverview = "";
 		   if (!pindexBest) return results;
-		   //double MoneySupply = DoubleFromAmount(pindexBest->nMoneySupply);
 		   double nBalance = GetTotalBalance();
 			
 		   try
@@ -4907,7 +4905,6 @@ Array GetJSONNeuralNetworkReport()
 	  {
 		  entry.push_back(Pair("Pending",SuperblockHeight));
 	  }
-	  //8-22-2015
 	  int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
 	 
 	  entry.push_back(Pair("Superblock Age",superblock_age));
@@ -4961,7 +4958,6 @@ Array GetJSONCurrentNeuralNetworkReport()
 	  {
 		  entry.push_back(Pair("Pending",SuperblockHeight));
 	  }
-	  //8-22-2015
 	  int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
 	 
 	  entry.push_back(Pair("Superblock Age",superblock_age));
@@ -5140,8 +5136,24 @@ std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string s
 	std::string sMessageSignature = "<MS>" + sSig + "</MS>";
 	wtx.hashBoinc = sMessageType+sMessageKey+sMessageValue+sMessageAction+sMessagePublicKey+sMessageSignature;
     string strError = pwalletMain->SendMoneyToDestinationWithMinimumBalance(address.Get(), nAmount, MinimumBalance, wtx);
-		
-    if (strError != "")        throw JSONRPCError(RPC_WALLET_ERROR, strError);
+	if (!strError.empty())        throw JSONRPCError(RPC_WALLET_ERROR, strError);
+    return wtx.GetHash().GetHex().c_str();
+}
+
+
+
+std::string SendReward(std::string sAddress, int64_t nAmount)
+{
+    CBitcoinAddress address(sAddress);
+    if (!address.IsValid()) return "Invalid Gridcoin address";
+    // Wallet comments
+    CWalletTx wtx;
+    if (pwalletMain->IsLocked()) return "Error: Please enter the wallet passphrase with walletpassphrase first.";
+	std::string sMessageType      = "<MT>REWARD</MT>";  
+	std::string sMessageValue     = "<MV>" + sAddress + "</MV>";
+	wtx.hashBoinc = sMessageType + sMessageValue;
+    string strError = pwalletMain->SendMoneyToDestinationWithMinimumBalance(address.Get(), nAmount, 1, wtx);
+    if (!strError.empty()) return strError;
     return wtx.GetHash().GetHex().c_str();
 }
 
@@ -5167,8 +5179,7 @@ std::string AddMessage(bool bAdd, std::string sType, std::string sPrimaryKey, st
 	std::string sMessageSignature = "<MS>" + sSig + "</MS>";
 	wtx.hashBoinc = sMessageType+sMessageKey+sMessageValue+sMessageAction+sMessagePublicKey+sMessageSignature;
     string strError = pwalletMain->SendMoneyToDestinationWithMinimumBalance(address.Get(), nAmount, MinimumBalance, wtx);
-		
-    if (strError != "")        throw JSONRPCError(RPC_WALLET_ERROR, strError);
+	if (!strError.empty())        throw JSONRPCError(RPC_WALLET_ERROR, strError);
     return wtx.GetHash().GetHex().c_str();
 }
 
@@ -5395,6 +5406,14 @@ Value listitem(const Array& params, bool fHelp)
 			return results;
 		}
 		results = MagnitudeReport(cpid);
+		if (results.size() > 1000)
+		{
+			results.clear();
+			Object entry;
+	    	entry.push_back(Pair("Error","Magnitude report too large; try specifying the cpid : list magnitude cpid."));
+			results.push_back(entry);
+			return results;
+		}
 		return results;
 	}
 	if (sitem == "lifetime")

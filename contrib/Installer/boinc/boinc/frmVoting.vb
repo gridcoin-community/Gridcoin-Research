@@ -7,23 +7,7 @@ Public Class frmVoting
 
     Public WithEvents cms As New ContextMenuStrip
     Public _GridRowIndex As Long = 0
-    Private Function GlobalCDate(sDate As String) As DateTime
-        Try
-
-        Dim year As Long = Val(Mid(sDate, 7, 4))
-        Dim day As Long = Val(Mid(sDate, 4, 2))
-        Dim m As Long = Val(Mid(sDate, 1, 2))
-        Dim dt As DateTime = DateSerial(year, m, day)
-        Return dt
-        Catch ex As Exception
-            Return CDate(Format(sDate, "mm-dd-yyyy"))
-        End Try
-
-    End Function
-
-
     Private Sub frmVoting_Load(sender As System.Object, e As System.EventArgs) Handles MyBase.Load
-
         If Not msGenericDictionary.ContainsKey("POLLS") Then
             MsgBox("No voting data exists.")
             Exit Sub
@@ -39,15 +23,29 @@ Public Class frmVoting
         dgv.EditingPanel.Visible = False
         dgv.AllowUserToAddRows = False
         dgv.ReadOnly = True
-
         Dim vHeading() As String = Split(sHeading, ";")
-
-        PopulateHeadings(vHeading, dgv, True)
+        PopulateHeadings(vHeading, dgv, False)
 
         Dim iRow As Long = 0
         Dim vPolls() As String = Split(sVoting, "<POLL>")
         'Autofit headings 7-28-2015
+        dgv.Columns(0).Width = 30
+        dgv.Columns(1).Width = 325
+        dgv.Columns(2).Width = 125
+        dgv.Columns(3).Width = 100
+        dgv.Columns(4).Width = 300
+        dgv.Columns(5).Width = 380
+        dgv.Columns(6).Width = 50
+        dgv.Columns(7).Width = 100
+        dgv.Columns(8).Width = 100
+        dgv.Columns(9).Width = 100
 
+        For y As Integer = 0 To dgv.Columns.Count - 1
+            dgv.Columns(y).AutoSizeMode = DataGridViewAutoSizeColumnMode.DisplayedCells
+            dgv.Columns(y).DefaultCellStyle.WrapMode = DataGridViewTriState.True
+        Next
+        dgv.Columns(5).AutoSizeMode = DataGridViewAutoSizeColumnMode.None
+        dgv.Columns(4).AutoSizeMode = DataGridViewAutoSizeColumnMode.None
 
         For y As Integer = 0 To vPolls.Length - 1
             vPolls(y) = Replace(vPolls(y), "_", " ")
@@ -56,15 +54,11 @@ Public Class frmVoting
             Dim sShareType As String = ExtractXML(vPolls(y), "<SHARETYPE>")
             Dim sQuestion As String = ExtractXML(vPolls(y), "<QUESTION>")
             Dim sURL As String = ExtractXML(vPolls(y), "<URL>")
-
             Dim sAnswers As String = ExtractXML(vPolls(y), "<ANSWERS>")
             Dim bHide As Boolean = False
             Dim sId As String = GetFoundationGuid(sTitle)
-
             If Len(sTitle) > 0 And Len(sId) = 0 Then
-
                 Dim lDateDiff As Long = DateDiff(DateInterval.Day, Now, GlobalCDate(sExpiration))
-
                 If Len(sTitle) > 0 And lDateDiff > -7 Then
                     'Array of answers
                     Dim sArrayOfAnswers As String = ExtractXML(vPolls(y), "<ARRAYANSWERS>")
@@ -73,27 +67,26 @@ Public Class frmVoting
                         Dim sAnswerName As String = ExtractXML(vAnswers(subY), "<ANSWERNAME>")
                         Dim sParticipants As String = ExtractXML(vAnswers(subY), "<PARTICIPANTS>")
                         Dim sShares As String = ExtractXML(vAnswers(subY), "<SHARES>")
-
                     Next
                     Dim sTotalParticipants As String = ExtractXML(vPolls(y), "<TOTALPARTICIPANTS>")
                     Dim sTotalShares As String = ExtractXML(vPolls(y), "<TOTALSHARES>")
                     Dim sBestAnswer As String = ExtractXML(vPolls(y), "<BESTANSWER>")
                     dgv.Rows.Add()
-
                     dgv.Rows(iRow).Cells(0).Value = iRow + 1
                     dgv.Rows(iRow).Cells(1).Value = sTitle
                     dgv.Rows(iRow).Cells(2).Value = sExpiration
                     If lDateDiff < 0 Then dgv.Rows(iRow).Cells(2).Style.BackColor = Drawing.Color.Red
-
                     dgv.Rows(iRow).Cells(3).Value = sShareType
                     dgv.Rows(iRow).Cells(4).Value = sQuestion
-                    If Len(sAnswers) > 81 Then sAnswers = Mid(sAnswers, 1, 81) + "..."
-                    dgv.Rows(iRow).Cells(5).Value = sAnswers
+                    Dim sAnswersLong = sAnswers.Replace(";", " ; ")
+                    dgv.Rows(iRow).Cells(5).Value = sAnswersLong
                     dgv.Rows(iRow).Cells(6).Value = sTotalParticipants
                     dgv.Rows(iRow).Cells(7).Value = sTotalShares
                     dgv.Rows(iRow).Cells(8).Value = sURL
                     dgv.Rows(iRow).Cells(9).Value = sBestAnswer
+                    dgv.Rows(iRow).Height = 150
                     iRow += 1
+                    dgv.Refresh()
                 End If
             End If
 
@@ -119,12 +112,9 @@ Public Class frmVoting
         If _GridRowIndex < 0 Then Exit Sub
 
         Dim sTitle As String = dgv.Rows(_GridRowIndex).Cells(1).Value
-
         If e.Button = Windows.Forms.MouseButtons.Right Then
             If Len(sTitle) > 1 Then
                 Dim _EventList As String = "Chart|Vote"
-                '  If lDateDiff < 0 Then _EventList = "Chart" Else _EventList = "Chart|Vote"
-
                 cms.Items.Clear()
                 Dim vEventList() As String
                 vEventList = Split(_EventList, "|")
@@ -185,24 +175,22 @@ Public Class frmVoting
         If e.ColumnIndex = 8 Then
             Me.Cursor = Cursors.Hand
             Try
-                dgv.Rows(e.RowIndex).Cells(e.ColumnIndex).Style.BackColor = Drawing.Color.LightPink
-
+                If e.RowIndex > -1 And e.ColumnIndex > 0 Then
+                    For y As Integer = 0 To dgv.RowCount - 1
+                        dgv.Rows(y).Cells(e.ColumnIndex).Style.BackColor = Drawing.Color.Black
+                        dgv.Rows(e.RowIndex).Cells(e.ColumnIndex).Style.BackColor = Drawing.Color.LightPink
+                    Next
+                End If
             Catch ex As Exception
-
             End Try
-            
         Else
             Me.Cursor = Cursors.Default
             Try
-                dgv.Rows(e.RowIndex).Cells(e.ColumnIndex).Style.BackColor = Drawing.Color.Black
-
-
+                If e.ColumnIndex > 0 And e.RowIndex > -1 Then
+                    dgv.Rows(e.RowIndex).Cells(e.ColumnIndex).Style.BackColor = Drawing.Color.Black
+                End If
             Catch ex As Exception
-
             End Try
-            
-
         End If
-
     End Sub
 End Class

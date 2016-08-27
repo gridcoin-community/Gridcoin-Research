@@ -72,6 +72,11 @@ contains(USE_QRCODE, 1) {
     LIBS += -lqrencode
 }
 
+# Build without Upgrader
+DEFINES += NO_UPGRADE
+message(Building without Upgrader)
+
+
 # use: qmake "USE_UPNP=1" ( enabled by default; default)
 #  or: qmake "USE_UPNP=0" (disabled by default)
 #  or: qmake "USE_UPNP=-" (not supported)

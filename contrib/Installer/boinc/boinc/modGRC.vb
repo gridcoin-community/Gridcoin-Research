@@ -478,6 +478,8 @@ Module modGRC
 
     Public Function GetBoincPublicKey() As String
         Dim sStatePath As String = GetBoincClientStatePath()
+        If File.Exists(sStatePath) = False Then Return "Client State File does not exist: set boincappdir key."
+
         Dim fiIn As New StreamReader(sStatePath)
         While fiIn.EndOfStream = False
             Dim sTemp As String = fiIn.ReadLine
@@ -1043,7 +1045,6 @@ Module modGRC
         Return CDate("1-1-2031")
 
     End Function
-
     Public Function GlobalCDate(sDate As String) As DateTime
         Try
 
