@@ -689,7 +689,7 @@ void fileopen_and_copy(std::string src, std::string dest)
 std::string BackupGridcoinWallet()
 {
 
-	printf("Staring Wallet Backup\r\n");
+	printf("Starting Wallet Backup\r\n");
 	std::string filename = "grc_" + DateTimeStrFormat("%m-%d-%Y",  GetAdjustedTime()) + ".dat";
 	std::string filename_backup = "backup.dat";
 	std::string standard_filename = "wallet_" + DateTimeStrFormat("%m-%d-%Y",  GetAdjustedTime()) + ".dat";
