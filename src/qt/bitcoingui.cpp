@@ -1090,16 +1090,11 @@ void BitcoinGUI::createMenuBar()
     help->addSeparator();
     help->addAction(aboutAction);
 
-//	QMenu *email = appMenuBar->addMenu(tr("&E-Mail"));
-//    email->addSeparator();
-//    email->addAction(emailAction);
-
-#ifndef NO_UPGRADE
+#ifdef WIN32
 	QMenu *upgrade = appMenuBar->addMenu(tr("&Upgrade QT Client"));
 	upgrade->addSeparator();
 	upgrade->addAction(upgradeAction);
 #endif
-
 
 	QMenu *rebuild = appMenuBar->addMenu(tr("&Rebuild Block Chain"));
 	rebuild->addSeparator();
@@ -1116,13 +1111,9 @@ void BitcoinGUI::createMenuBar()
 	qmAdvanced->addAction(configAction);
 	qmAdvanced->addAction(miningAction);
 	qmAdvanced->addAction(votingAction);
-
 	qmAdvanced->addAction(tickerAction);
 	qmAdvanced->addAction(ticketListAction);
 	qmAdvanced->addAction(newUserWizardAction);
-	//qmAdvanced->addAction(browserAction);
-
-
 	std::string GalazaEnabled = GetArgument("galazaenabled", "false");
 	if (GalazaEnabled=="true")
 	{

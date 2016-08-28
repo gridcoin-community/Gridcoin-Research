@@ -60,7 +60,6 @@ extern bool TallyResearchAverages(bool Forcefully);
 extern void SyncChain();
 extern double GetStandardDeviation(std::string sPriceHistory);
 extern double GetVolatility(std::string sPriceHistory);
-bool GetExpiredOption(std::string& rsRecipient, double& rdSinglePrice, double& rdAmountOwed, std::string& rsOpra);
 
 extern double BlackScholes(std::string CallPutFlag, double S, double X, double T, double r, double v);
 extern double GetDelta(std::string sType, double UL, double Strike, double dTime, double RiskFreeRate, double Volatility);
@@ -3444,54 +3443,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 				//Options Support
 				if (bOptionPaymentsEnabled)
 				{
-					if (pindex->nHeight > nGrandfather && BlockNeedsChecked(pindex->nTime))
-					{
-						for (unsigned int i = 3; i < tx.vout.size(); i++)
-						{
-							std::string Recipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
-							double      Amount    = CoinToDouble(tx.vout[i].nValue);
-							if (Amount > 0)
-							{
-								// Verify option is owed and expired and exercised and unpaid and validated and recipient matches and premium paid
-								// Extract the Purchase Time, Type, Opra, UL, Strike, Length, SinglePrice
-								std::string contract = tx.hashBoinc;
-								std::string sSerialNo = ExtractXML(contract,"<PAIDOPRA>","</PAIDOPRA>");
-							    // Mark option as paid by Pulling the option by OPRA
-								std::string rsRecipient = "";
-								double rdSinglePrice = 0;
-								double rdAmountOwed = 0;
-								std::string rsOpra = sSerialNo;
-								bool bOwed = GetExpiredOption(rsRecipient, rdSinglePrice, rdAmountOwed, rsOpra);
-								if (bOwed && rdAmountOwed==Amount && rsRecipient == Recipient)
-								{
-									printf("\r\n ** Option payment verified. **  \r\n ");
-									DPOR_Paid += Amount;
-									WriteCache("paid_opra",rsOpra,tx.GetHash().GetHex(),GetAdjustedTime());
-								}	
-								else
-								{
-									//D-dos here
-									printf("\r\n ****** Option payment not verified for Recipient %s for Amount %f \r\n",rsRecipient.c_str(),rdAmountOwed);
-								}
-
-
-
-							}
-
-						}
-					}
-					else
-					{
-						// Ensure prior options paid in the past are in memory as paid
-						std::string contract = tx.hashBoinc;
-						std::string sSerialNo = ExtractXML(contract,"<PAIDOPRA>","</PAIDOPRA>");
-						if (!sSerialNo.empty())
-						{
-							WriteCache("paid_opra",sSerialNo,tx.GetHash().GetHex(),GetAdjustedTime());
-						}
-							
-
-					}
+					// Disabled
 				}
 				else
 				{
@@ -8955,7 +8907,6 @@ void CreditCheck(std::string cpid, bool clearcache)
 				return;
 			}
 
-			//double projavg = 0;
 			int iRow = 0;
 			std::vector<std::string> vCC = split(cc.c_str(),"<project>");
 			if (vCC.size() > 0)
@@ -9393,8 +9344,7 @@ void HarvestCPIDs(bool cleardata)
 
 void ThreadCPIDs()
 {
-	//SetThreadPriority(THREAD_PRIORITY_LOWEST);
-    RenameThread("grc-cpids");
+	RenameThread("grc-cpids");
     bCPIDsLoaded = false;
 	HarvestCPIDs(true);
 	bCPIDsLoaded = true;
@@ -10175,7 +10125,6 @@ bool UnusualActivityReport()
 													{
 														std::string Recipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
 														double      Amount    = CoinToDouble(tx.vout[i].nValue);
-														//double      Owed      = OwedByAddress(Recipient);
 														if (Amount > GetMaximumBoincSubsidy(GetAdjustedTime()))
 														{
 														}

@@ -1,30 +1,22 @@
 #include "transactionrecord.h"
-
 #include "wallet.h"
 #include "base58.h"
 
-
-
 std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, double& out_rac);
 std::string RoundToString(double d, int place);
-
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
-
 
 bool IsSmartContractForDPOR(const CWalletTx &wtx)
 {
    bool result = false;
    QList<TransactionRecord> parts;
    int64_t nTime = wtx.GetTxTime();
-   uint256 hash = wtx.GetHash(), hashPrev = 0;
-   
+   uint256 hash = wtx.GetHash();
    for (unsigned int nOut = 0; nOut < wtx.vout.size(); nOut++)
    {
                 const CTxOut& txout = wtx.vout[nOut];
                 TransactionRecord sub(hash, nTime);
                 sub.idx = parts.size();
-               
-
                 CTxDestination address;
                 if (ExtractDestination(txout.scriptPubKey, address))
                 {
@@ -36,7 +28,6 @@ bool IsSmartContractForDPOR(const CWalletTx &wtx)
 						return true;
 					}
                 }
-    
    }
    return false;
    //if (IsSmartContractForDPOR(wtx)) return false;

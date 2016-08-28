@@ -23,7 +23,6 @@ std::vector<std::string> split(std::string s, std::string delim);
 StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
 double cdbl(std::string s, int place);
 std::string GetArgument(std::string arg, std::string defaultvalue);
-bool GetExpiredOption(std::string& rsRecipient, double& rdSinglePrice, double& rdAmountOwed, std::string& rsOpra);
 std::string SendReward(std::string sAddress, int64_t nAmount);
 int64_t CoinFromValue(double dAmount);
 void qtUpdateConfirm(std::string txid);
@@ -619,7 +618,6 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
        
 		if (wtxIn.IsCoinBase() || wtxIn.IsCoinStake())
 	    {
-			int64_t nReward = 0;
 			printf("\r\nCoinBase:CoinStake\r\n");
 			CBlockIndex* pBlk = mapBlockIndex[wtxIn.hashBlock];
 			CBlock blk;
@@ -843,7 +841,7 @@ void CWalletTx::GetAmounts2(list<COutputEntry>& listReceived,
     }
 
     // Sent/received.
-    for (unsigned int i = 0; i < vout.size(); ++i)
+    for (int i = 0; i < (int)vout.size(); ++i)
     {
         const CTxOut& txout = vout[i];
         bool fIsMine = pwallet->IsMine(txout);
@@ -2328,32 +2326,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 		}
 		else
 		{
-				// In TestNet Only as of 1-18-2016
-				std::string rsRecipient = "";
-				std::string rsOpra = "";
-				double rdSinglePrice = 0;
-				double rdAmountOwed = 0;
-				bool bOptionExerciseExists = GetExpiredOption(rsRecipient, rdSinglePrice, rdAmountOwed, rsOpra);
-				if (rdAmountOwed==0) bOptionExerciseExists = false;  // This is already done in Exercise, but just in case do it again.
-				int iSize = bOptionExerciseExists ? 4 : 3;
-				txNew.vout.resize(iSize); //Resize this to 4 here if we have an options payment
-				// Place all but one cent in the first output so stakes dont get smaller - Note: the .01 GRC will be consolidated on any outbound transaction so this should NOT become a nuisance anymore.
-				txNew.vout[1].nValue = nCredit - (1*CENT);
-				txNew.vout[2].nValue = 1*CENT;
-				//1-18-2016
-				if (bOptionExerciseExists && rdAmountOwed > 0)
-				{
-						CScript OptionPublicKey;
-				     	if (fDebug3) printf("\r\n **********************   Exercising Option %s, grcaddress %s, amount %f \r\n", rsOpra.c_str(),rsRecipient.c_str(),rdAmountOwed);
-						CBitcoinAddress OptionAddress(rsRecipient);
-						OptionPublicKey.SetDestination(OptionAddress.Get());
-						txNew.vout[3].scriptPubKey = OptionPublicKey;
-						txNew.vout[3].nValue = rdAmountOwed*COIN;
-						std::string sXML="<PAIDOPRA>" + rsOpra + "</PAIDOPRA>";
-						txNew.hashBoinc = sXML;
-						// The recipient, amount and status is verified in Connect Block- and marked Paid in Connect Block		
-				}
-				
+			// Disabled			
 
 		}
 	}

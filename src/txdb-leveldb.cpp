@@ -344,6 +344,7 @@ static CBlockIndex *InsertBlockIndex(uint256 hash)
 bool CTxDB::LoadBlockIndex()
 {
 	int64_t nStart = GetTimeMillis();
+	int nHighest = 0;
 	double dBlockCount = 0;
 
     if (mapBlockIndex.size() > 0) {
@@ -361,8 +362,9 @@ bool CTxDB::LoadBlockIndex()
     iterator->Seek(ssStartKey.str());
 
 	int nLoaded = 0;
-	int nHighest = 0;
-	SetThreadPriority(THREAD_PRIORITY_HIGHEST);
+	#if defined(WIN32) && defined(QT_GUI)
+		SetThreadPriority(THREAD_PRIORITY_HIGHEST);
+	#endif
     
     // Now read each entry.
     while (iterator->Valid())
@@ -442,9 +444,8 @@ bool CTxDB::LoadBlockIndex()
     }
     delete iterator;
 	
-
 	
-	printf("Time to memorize diskindex containing %f blocks : %15"PRId64"ms\n", dBlockCount, GetTimeMillis() - nStart);
+	printf("Time to memorize diskindex containing %f blocks : %15"PRId64".%f ms\r\n", dBlockCount, GetTimeMillis() - nStart, (double)nHighest);
 	nStart = GetTimeMillis();
 	
 
@@ -636,9 +637,7 @@ bool CTxDB::LoadBlockIndex()
 
 
 	printf("Time to Verify Blocks %15"PRId64"ms\n", GetTimeMillis() - nStart);
-
-
-
+	
     if (pindexFork && !fRequestShutdown)
     {
         // Reorg back to the fork
@@ -730,7 +729,9 @@ bool CTxDB::LoadBlockIndex()
 	nStart = GetTimeMillis();
 	SetUpExtendedBlockIndexFieldsOnce();
 	printf("SetUpExtendedBlockIndexFieldsOnce Complete - Time %15"PRId64"ms\n", GetTimeMillis() - nStart);
-	SetThreadPriority(THREAD_PRIORITY_NORMAL);
-    
+	#if defined(WIN32) && defined(QT_GUI)
+		SetThreadPriority(THREAD_PRIORITY_NORMAL);
+	#endif
+
     return true;
 }

@@ -1004,7 +1004,7 @@ Value ListReceived(const Array& params, bool fByAccounts)
                  continue;
 
 			isminefilter mine = IsMine(*pwalletMain, address);
-            if(!mine & filter)
+            if( (!mine) & filter)
                   continue;
 
             tallyitem& item = mapTally[address];
@@ -1332,7 +1332,6 @@ Array StakingReport_OLD()
             // Filtering by tx timestamp instead of block timestamp may give false positives but never false negatives
             if (pcoin->nTime + nStakeMinAge > nSpendTime)
 			{
-				double nDiff = (pcoin->nTime+nStakeMinAge) - nSpendTime;
 				std::string matures = TimestampToHRDate(pcoin->nTime+nStakeMinAge);
 				entry.push_back(Pair("Coin @"+height + " matures",matures));
 	            continue;
@@ -1448,8 +1447,7 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
                 MaybePushAddress(entry, r.first);
                 if (wtx.IsCoinBase() || wtx.IsCoinStake())
                 {
-					double subsidy = CoinToDouble(r.second);
-		            if (wtx.GetDepthInMainChain() < 1)
+				    if (wtx.GetDepthInMainChain() < 1)
 					{
                         entry.push_back(Pair("category", "orphan"));
 					}

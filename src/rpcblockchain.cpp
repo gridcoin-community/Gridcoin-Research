@@ -40,7 +40,6 @@ int RestartClient();
 
 void SyncChain();
 
-extern bool GetExpiredOption(std::string& rsRecipient, double& rdSinglePrice, double& rdAmountOwed, std::string& rsOpra);
 
 extern bool VerifyUnderlyingPrice(double UL, int64_t timestamp);
 std::vector<unsigned char> StringToVector(std::string sData);
@@ -467,11 +466,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("ResearchMagnitudeUnit",bb.ResearchMagnitudeUnit));
 	result.push_back(Pair("ResearchAverageMagnitude",bb.ResearchAverageMagnitude));
 	result.push_back(Pair("LastPORBlockHash",bb.LastPORBlockHash));
-		
-
-	//double interest = mint-bb.ResearchSubsidy;
 	result.push_back(Pair("Interest",bb.InterestSubsidy));
-	//double blockdiff = GetBlockDifficulty(block.nBits);
 	result.push_back(Pair("GRCAddress",bb.GRCAddress));
 	result.push_back(Pair("ClientVersion",bb.clientversion));	
 	if (blockindex->nHeight < 70000 && !fTestNet) 
@@ -717,7 +712,7 @@ std::string BackupGridcoinWallet()
 	BOOST_FOREACH(const PAIRTYPE(CTxDestination, string)& item, pwalletMain->mapAddressBook)
     {
     	 const CBitcoinAddress& address = item.first;
-		 const std::string& strName = item.second;
+		 //const std::string& strName = item.second;
 		 bool fMine = IsMine(*pwalletMain, address.Get());
 		 if (fMine) 
 		 {
@@ -1290,7 +1285,7 @@ bool InsertSmartContract(std::string URL, std::string name)
 	std::string results = GetHttpPage(URL);
 	double total_rac = 0;
 	//printf("Querying DPOR RAC for project %s response %s\r\n",URL.c_str(),results.c_str());
-	int iRow = 0;
+	//int iRow = 0;
 	std::vector<std::string> vUsers = split(results.c_str(),"<user>");
 	std::string contract = "";
 		for (unsigned int i = 0; i < vUsers.size(); i++)
@@ -1825,12 +1820,7 @@ Value option(const Array& params, bool fHelp)
 			double LowUL = ATMStrike * .3;
 			double HighUL = ATMStrike * 3;
 			double StepRate = UL/20; 
-			double dCallDelta = 0;
-			double dPutDelta = 0;
-			double dCallPrice = 0;
-			double dPutPrice = 0;
 			double days = cdbl(params[1].get_str(),0);
-
 			entry.push_back(Pair("GRC Options Chain","UL: " + RoundToString(UL,0) + ", days: " + RoundToString(days,0)));
 			double fractional_year = days/365;
 			entry.push_back(Pair("Strike","Call Delta, Call Price, Put Price, Put Delta"));
@@ -1861,19 +1851,14 @@ Value option(const Array& params, bool fHelp)
 		double rdSinglePrice = 0;
 		double rdAmountOwed = 0;
 		std::string rsOpra = "";
-		bool bExpired = GetExpiredOption(rsRecipient,rdSinglePrice,rdAmountOwed,rsOpra);
 		entry.push_back(Pair("Recipient",rsRecipient));
 		entry.push_back(Pair("Single Price",rdSinglePrice));
 		entry.push_back(Pair("Amount Owed",rdAmountOwed));
 		entry.push_back(Pair("OPRA",rsOpra));
-
 		results.push_back(entry);
-	
-
 	}
 	else if (sItem == "exposure")
 	{
-	
 			Array jsExposure = GetOptionsExposureReport();
 			results.push_back(jsExposure);
 	}
@@ -1903,7 +1888,6 @@ Value option(const Array& params, bool fHelp)
 				// Calculate  
 				double fractional_year = days/365;
 			    double price = BlackScholes(sType, UL, strike,  fractional_year, nRiskFreeRate, nVolatility);
-				//double BlackScholes(std::string CallPutFlag, double S, double X, double T, double r, double v)
 				double delta = GetDelta(sType, UL, strike, fractional_year, nRiskFreeRate, nVolatility);
 				entry.push_back(Pair("UL",UL));
 				entry.push_back(Pair("Price",price));
@@ -1987,7 +1971,6 @@ Value option(const Array& params, bool fHelp)
 					// Calculate  1-16-2016
 					double fractional_year = days/365;
 					double price = BlackScholes(sType, UL, strike,  fractional_year, nRiskFreeRate, nVolatility);
-					//double BlackScholes(std::string CallPutFlag, double S, double X, double T, double r, double v)
 					double delta = GetDelta(sType, UL, strike, fractional_year, nRiskFreeRate, nVolatility);
 					std::string sGRCAddress = DefaultWalletAddress();
 					std::string sTypeNarr = CallPutNarr(sType);				
@@ -2243,7 +2226,6 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem=="rain")
 	{
-		int nMinDepth = 1;
 		if (params.size() < 2)
 		{
 			entry.push_back(Pair("Error","You must specify Rain Recipients in format: Address<COL>Amount<ROW>..."));
@@ -2407,7 +2389,7 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "tallyneural")
 	{
-			bool result = ComputeNeuralNetworkSupermajorityHashes();
+			ComputeNeuralNetworkSupermajorityHashes();
 			UpdateNeuralNetworkQuorumData();
 			entry.push_back(Pair("Ready","."));
 			results.push_back(entry);
@@ -3125,7 +3107,7 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "forcequorum")
 	{
-			bool bResult = AsyncNeuralRequest("quorum","gridcoin",10);
+			AsyncNeuralRequest("quorum","gridcoin",10);
 			entry.push_back(Pair("Requested a quorum - waiting for resolution.",1));
 			results.push_back(entry);
 	}
@@ -3160,7 +3142,6 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem=="testscannew")
 	{
-
 		TestScan();
 		TestScan2();
 	}
@@ -3168,8 +3149,7 @@ Value execute(const Array& params, bool fHelp)
 	{
 			bNetAveragesLoaded = false;
 			nLastTallied = 0;
-			//	BusyWaitForTally();
-			bool bTallied = TallyResearchAverages(true);
+			TallyResearchAverages(true);
 			entry.push_back(Pair("Tally Network Averages",1));
 			results.push_back(entry);
 	}
@@ -4028,7 +4008,6 @@ Array MagnitudeReport(std::string cpid)
 												entry.push_back(Pair("InterestPayments (14 days)",structMag.interestPayments));
 												entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
 												entry.push_back(Pair("Owed",structMag.owed));
-												//double nep = Cap(structMag.owed/2, GetMaximumBoincSubsidy(GetAdjustedTime()));
 												entry.push_back(Pair("Daily Paid",structMag.payments/14));
 												entry.push_back(Pair("Daily Owed",structMag.totalowed/14));
 												results.push_back(entry);
@@ -4625,70 +4604,6 @@ int ValidateContract(int64_t iPurchaseTime, std::string sType, std::string sSeri
 }
 
 
-bool GetExpiredOption(std::string& rsRecipient, double& rdSinglePrice, double& rdAmountOwed, std::string& rsOpra)
-{
-        //1-18-2016  Either get our own, or get the oldest.
-        std::string datatype="option_buy";
-	 	StructCPID stNet = mvNetwork["NETWORK"];
-		double UL = stNet.GRCQuote/10000000000 * 100000000;
-  		for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
-		{
-				std::string key_name  = (*ii).first;
-			   	if (key_name.length() > datatype.length())
-				{
-					if (key_name.substr(0,datatype.length())==datatype)
-					{
-								std::string contract = mvApplicationCache[(*ii).first];
-								std::string contract_serial = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
-								std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
-								int64_t iPurchaseTime = mvApplicationCacheTimestamp[key_name];
-								double dExpiration = cdbl(ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>"),0);
-								std::string sOpra = ExtractXML(contract,"<SHORTOPRA>","</SHORTOPRA>");
-								std::string sAddress = ExtractXML(contract,"<GRCADDRESS>","</GRCADDRESS>");
-								double dDays = cdbl(ExtractXML(contract,"<DAYS>","</DAYS>"),4);
-								double dTimeLeft = (dExpiration - GetAdjustedTime())/86400;
-								double dTimeAnnualized = dTimeLeft/365;
-								bool bExpired = (dTimeLeft < 0);
-								std::string sType = ExtractXML(contract,"<TYPE>","</TYPE>");
-								double dStrike = cdbl(ExtractXML(contract,"<STRIKE>","</STRIKE>"),0);
-								std::string sAction = ExtractXML(contract,"<ACTION>","</ACTION>");
-								double dQuantity = cdbl(ExtractXML(contract,"<QUANTITY>","</QUANTITY>"),0);
-								std::string sExpiration = ExtractXML(contract,"<HREXPIRATION>","</HREXPIRATION>");
-								// calculate current delta based on current market conditions
-								double dPrice = cdbl(ExtractXML(contract,"<PRICE>","</PRICE>"),4);
-								if (dPrice != 0 && !sOpra.empty() && UL > 100 && bExpired) 
-								{
-									double delta = -100 * (GetDelta(sType, UL, dStrike, dTimeAnnualized, nRiskFreeRate, nVolatility));
-									double dCurrentPrice = BlackScholes(sType, UL, dStrike,  dTimeAnnualized, nRiskFreeRate, nVolatility);
-									double dPL = -1 * ( dCurrentPrice - dPrice );
-									std::string sRecipient = ReadCache(datatype,subkey + ";Recipient");
-									double dBurnAmount = cdbl(ReadCache(datatype,subkey + ";BurnAmount"),4);
-									int valid = ValidateContract(iPurchaseTime,datatype,subkey,dPrice*dQuantity,sType,UL,dStrike,dDays,dPrice);
-									bool paid = IsContractSettled(datatype,subkey);
-									if (   (valid && !paid)  ||   subkey == rsOpra )
-									{
-										rsRecipient = sAddress;
-										rdSinglePrice = dCurrentPrice;
-										rdAmountOwed = dCurrentPrice * dQuantity;
-										// Verify this recipient is valid, and amount > 0 before returning
-										CBitcoinAddress OptionAddress(rsRecipient);
-										if (OptionAddress.IsValid() && rdAmountOwed > 0 )
-										{
-												rsOpra = subkey;
-												return true;
-										}
-									}
-								}
-
-					}
-			}
-	  }
-	  rdAmountOwed=0;
-	  return false;
-}
-
-
-
 
 
 Array GetOptionsExposureReport()
@@ -4696,8 +4611,7 @@ Array GetOptionsExposureReport()
         Array results;
 	    Object entry;
   	    entry.push_back(Pair("Report","Options Exposure 1.0"));
-		//1-17-2016
-        std::string datatype="option_buy";
+	    std::string datatype="option_buy";
 	  	std::string rows = "";
 		std::string row = "";
 		StructCPID stNet = mvNetwork["NETWORK"];
