@@ -113,6 +113,8 @@ extern int miningthreadcount;
 		std::string GRCAddress;
 		std::string LastPORBlockHash;
 		std::string CurrentNeuralHash;
+		std::string BoincPublicKey;
+		std::string BoincSignature;
 	};
 
 
@@ -128,7 +130,8 @@ extern int miningthreadcount;
 
 
 
-	struct StructBlockCache {
+	struct StructBlockCache 
+	{
 		std::string cpid;
 		std::string project;
 		double rac;
@@ -138,7 +141,6 @@ extern int miningthreadcount;
 	    std::string hash;
 	    int BlockType;
 		int nVersion;
-
 	};
 
 
@@ -188,6 +190,9 @@ extern int miningthreadcount;
 		std::string superblock;
 		std::string LastPORBlockHash;
 		std::string CurrentNeuralHash;
+		std::string BoincPublicKey;
+		std::string BoincSignature;
+
 	};
 
 	

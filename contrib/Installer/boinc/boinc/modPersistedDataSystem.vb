@@ -525,32 +525,6 @@ Module modPersistedDataSystem
             UpdateKey("PrimaryCPID", sCPID)
         End If
     End Function
-    Public Sub StoreTestMagnitude()
-        For x = 1 To 25
-            UpdateKey("PrimaryCPID", "784afb35d92503160125feb183157378")
-
-            Dim dtTest As DateTime = DateAdd(DateInterval.Day, -x, Now)
-
-            Dim sCPID As String = KeyValue("PrimaryCPID")
-            If Len(sCPID) = 0 Then Exit Sub 'If we dont know the primary cpid
-            Dim MyCPID As Row = GetMagByCPID(sCPID)
-            'Store the Historical Magnitude:
-            Dim d As New Row
-            d.Expiration = DateAdd(DateInterval.Day, 30, Now)
-            d.Added = Now
-            d.Database = "Historical"
-            d.Table = "Magnitude"
-            d.PrimaryKey = sCPID + GRCDay(dtTest)
-            d.Magnitude = x + 1100
-            d.RAC = MyCPID.RAC
-            d.AvgRAC = MyCPID.AvgRAC
-            Store(d)
-            d.PrimaryKey = "Network" + GRCDay(dtTest)
-            d.AvgRAC = 400 + x
-            d.Magnitude = 500 + x
-            Store(d)
-        Next
-    End Sub
     Public Function GetDataValue(sDB As String, sTable As String, sPK As String) As Row
         Dim dr As New Row
         dr.Database = sDB

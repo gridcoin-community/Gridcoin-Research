@@ -25,11 +25,13 @@ std::string UnpackBinarySuperblock(std::string sBlock);
 std::string PackBinarySuperblock(std::string sBlock);
 int DetermineCPIDType(std::string cpid);
 bool AskForOutstandingBlocks(uint256 hashStart);
-
+bool WriteKey(std::string sKey, std::string sValue);
 bool CleanChain();
 extern std::string SendReward(std::string sAddress, int64_t nAmount);
-
-
+extern std::string GetBeaconPublicKey(std::string cpid);
+extern std::string GetBeaconPrivateKey(std::string cpid);
+extern std::string SuccessFail(bool f);
+extern Array GetUpgradedBeaconReport();
 extern Array MagnitudeReport(std::string cpid);
 extern bool UserAcknowledgedHoldHarmlessClause(std::string sAddress);
 std::string ConvertBinToHex(std::string a);
@@ -37,18 +39,11 @@ std::string ConvertHexToBin(std::string a);
 bool TallyResearchAverages(bool Forcefully);
 void ReloadBlockIndexHot();
 int RestartClient();
-
 void SyncChain();
-
-
 extern bool VerifyUnderlyingPrice(double UL, int64_t timestamp);
 std::vector<unsigned char> StringToVector(std::string sData);
-
-
-
+extern std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress);
-
-
 double SnapToGrid(double d);
 double GetVolatility(std::string sPriceHistory);
 extern std::string GetBurnAddress();
@@ -58,27 +53,20 @@ double BlackScholes(std::string CallPutFlag, double S, double X, double T, doubl
 double GetDelta(std::string sType, double UL, double Strike, double dTime, double RiskFreeRate, double Volatility);
 extern std::string AddOptionContract(std::string sType, std::string sName, std::string sContract, double dPremium);
 extern Array GetOptionsExposureReport();
-
-
-
 void BusyWaitForTally();
 double Cap(double dAmt, double Ceiling);
-extern std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, 
-	std::string sSig, int64_t MinimumBalance, double dFees, std::string sPublicKey);
+extern std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, std::string sSig, int64_t MinimumBalance, double dFees, std::string sPublicKey);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern Array SuperblockReport(std::string cpid);
 bool IsSuperBlock(CBlockIndex* pIndex);
 MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 extern double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid);
 extern int64_t BeaconTimeStamp(std::string cpid, bool bZeroOutAfterPOR);
-
-
+extern bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
 bool NeedASuperblock();
 bool VerifySuperblock(std::string superblock, int nHeight);
 double ExtractMagnitudeFromExplainMagnitude();
-
 std::string GetQuorumHash(std::string data);
-
 double GetNetworkPaymentsTotal();
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
 bool ComputeNeuralNetworkSupermajorityHashes();
@@ -93,7 +81,7 @@ std::string getMacAddress();
 void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
 extern std::string MyBeaconExists(std::string cpid);
 int64_t GetEarliestWalletTransaction();
-extern bool CheckMessageSignature(std::string messagetype, std::string sMsg, std::string sSig, std::string opt_pubkey);
+extern bool CheckMessageSignature(std::string sAction,std::string messagetype, std::string sMsg, std::string sSig, std::string opt_pubkey);
 extern std::string CryptoLottery(int64_t locktime);
 std::string CPIDByAddress(std::string address);
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
@@ -105,8 +93,9 @@ extern  bool InsertSmartContract(std::string URL,std::string Name);
 std::string ExtractHTML(std::string HTMLdata, std::string tagstartprefix,  std::string tagstart_suffix, std::string tag_end);
 extern  std::string GetNetsoftProjects(std::string cpid);
 std::string NeuralRequest(std::string MyNeuralRequest);
-extern std::string MyBeaconExists(std::string cpid);
-extern std::string AdvertiseBeacon(bool force,bool neurally);
+extern bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
+
+
 double Round(double d, int place);
 bool UnusualActivityReport();
 extern double GetCountOf(std::string datatype);
@@ -468,18 +457,19 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 	result.push_back(Pair("LastPORBlockHash",bb.LastPORBlockHash));
 	result.push_back(Pair("Interest",bb.InterestSubsidy));
 	result.push_back(Pair("GRCAddress",bb.GRCAddress));
+	if (!bb.BoincPublicKey.empty())
+	{
+		result.push_back(Pair("BoincPublicKey",bb.BoincPublicKey));
+		result.push_back(Pair("BoincSignature",bb.BoincSignature));
+		bool fValidSig = VerifyCPIDSignature(bb.cpid, bb.lastblockhash, bb.BoincSignature);
+		result.push_back(Pair("SignatureValid",fValidSig));
+	}
 	result.push_back(Pair("ClientVersion",bb.clientversion));	
-	if (blockindex->nHeight < 70000 && !fTestNet) 
-	{
-			bool IsCpidValid = IsCPIDValid_Retired(bb.cpid, bb.enccpid);
-			result.push_back(Pair("CPIDValid",IsCpidValid));
-	}
-	else
-	{
-		if (bb.cpidv2.length() > 10) 	result.push_back(Pair("CPIDv2",bb.cpidv2.substr(0,32)));
-		bool IsCPIDValid2 = IsCPIDValidv2(bb,blockindex->nHeight);
-		result.push_back(Pair("CPIDValid",IsCPIDValid2));
-	}
+
+	if (!bb.cpidv2.empty()) 	result.push_back(Pair("CPIDv2",bb.cpidv2.substr(0,32)));
+	bool IsCPIDValid2 = IsCPIDValidv2(bb,blockindex->nHeight);
+	result.push_back(Pair("CPIDValid",IsCPIDValid2));
+
 	result.push_back(Pair("NeuralHash",bb.NeuralHash));
 	if (bb.superblock.length() > 20)
 	{
@@ -491,11 +481,9 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 		result.push_back(Pair("SuperblockLength", (double)bb.superblock.length()));
 		bool bIsBinary = Contains(bb.superblock,"<BINARY>");
 		result.push_back(Pair("IsBinary",bIsBinary));
-
 	}
 	result.push_back(Pair("IsSuperBlock", (double)blockindex->nIsSuperBlock));
 	result.push_back(Pair("IsContract", (double)blockindex->nIsContract));
-	
     return result;
 }
 
@@ -891,7 +879,7 @@ std::string SignMessage(std::string sMsg, std::string sPrivateKey)
 	 return SignedMessage;
 }
 
-bool CheckMessageSignature(std::string messagetype, std::string sMsg, std::string sSig, std::string strMessagePublicKey)
+bool CheckMessageSignature(std::string sAction,std::string messagetype, std::string sMsg, std::string sSig, std::string strMessagePublicKey)
 {
 	 std::string strMasterPubKey = "";
 	 if (messagetype=="project" || messagetype=="projectmapping")
@@ -902,7 +890,9 @@ bool CheckMessageSignature(std::string messagetype, std::string sMsg, std::strin
 	 {
 		 strMasterPubKey = msMasterMessagePublicKey;
 	 }
+
 	 if (!strMessagePublicKey.empty()) strMasterPubKey = strMessagePublicKey;
+	 if (sAction=="D" && messagetype=="beacon") strMasterPubKey = msMasterProjectPublicKey;
 
 	 std::string db64 = DecodeBase64(sSig);
 	 CKey key;
@@ -1404,18 +1394,43 @@ bool CPIDAcidTest2(std::string bpk, std::string externalcpid)
 	return (externalcpid==cpidv1);
 }
 
-std::string AdvertiseBeacon(bool force, bool bUseNeuralNetwork)
+int GenerateNewKeyPair(std::string sIndex, std::string &sOutPubKey, std::string &sOutPrivKey)
 {
+	// First Check the Index - if it already exists, use it
+	sOutPrivKey = GetArgument("PrivateKey" + sIndex, "");
+	sOutPubKey  = GetArgument("PublicKey" + sIndex, "");
+	if (!sOutPrivKey.empty() && !sOutPubKey.empty()) return 1;
+    // Generate the Keypair
+	CKey key;
+	key.MakeNewKey(false);
+	CPrivKey vchPrivKey = key.GetPrivKey();
+	sOutPrivKey = HexStr<CPrivKey::iterator>(vchPrivKey.begin(), vchPrivKey.end());
+	sOutPubKey = HexStr(key.GetPubKey().Raw());
+	// Store the Keypair
+	WriteKey("PrivateKey" + sIndex,sOutPrivKey);
+	WriteKey("PublicKey" + sIndex,sOutPubKey);
+	return 2;
+}
+		
+
+bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage)
+{
+				
 	 LOCK(cs_main);
 	 {
 			GetNextProject(false);
 			if (GlobalCPUMiningCPID.cpid=="INVESTOR")
 			{
-					return "INVESTORS_CANNOT_SEND_BEACONS";
+				sError = "INVESTORS_CANNOT_SEND_BEACONS";
+				return bFromService ? true : false;
 			}
 			//If beacon is already in the chain, exit early
-			std::string myBeacon = MyBeaconExists(GlobalCPUMiningCPID.cpid);
-			if (myBeacon.length() > 10 && !force) return "SUCCESS";
+		    std::string sBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid);
+			if (!sBeaconPublicKey.empty()) 	
+			{
+				sError = "ALREADY_IN_CHAIN";
+				return bFromService ? true : false;
+			}
 			
 			uint256 hashRand = GetRandHash();
     		std::string email = GetArgument("email", "NA");
@@ -1426,48 +1441,66 @@ std::string AdvertiseBeacon(bool force, bool bUseNeuralNetwork)
 			bool IsCPIDValid2 = CPID_IsCPIDValid(GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.cpidv2, hashRand);
 			if (!IsCPIDValid2) return "Invalid CPID";
 
+			double nBalance = GetTotalBalance();
+			if (nBalance < 1.01)
+			{
+				sError = "Balance too low to send beacon.";
+				return false;
+			}
+		
+
+			int iResult = GenerateNewKeyPair(GlobalCPUMiningCPID.cpid,sOutPubKey,sOutPrivKey);
+			if (iResult < 1)
+			{
+				sError = "Error generating keypair.";
+				return false;
+			}
+			
+			if (sOutPrivKey.empty() || sOutPubKey.empty())
+			{
+				sError = "Keypair is empty.";
+				return false;
+			}
+
 			GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
 			std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID);
-			
 			std::string GRCAddress = DefaultWalletAddress();
-			std::string contract = GlobalCPUMiningCPID.cpidv2 + ";" + hashRand.GetHex() + ";" + GRCAddress;
-			printf("Creating beacon for cpid %s, %s",GlobalCPUMiningCPID.cpid.c_str(),contract.c_str());
+			// Public Signing Key is stored in Beacon
+			std::string contract = GlobalCPUMiningCPID.cpidv2 + ";" + hashRand.GetHex() + ";" + GRCAddress + ";" + sOutPubKey;
+			printf("\r\n Creating beacon for cpid %s, %s",GlobalCPUMiningCPID.cpid.c_str(),contract.c_str());
 			std::string sBase = EncodeBase64(contract);
 			std::string sAction = "add";
 			std::string sType = "beacon";
 			std::string sName = GlobalCPUMiningCPID.cpid;
-			double nBalance = GetTotalBalance();
-				
-			if (nBalance < 1.01)
-			{
-				return "Balance too low to send beacon.";
-			}
 			try
 			{
+				/*
 				if (bUseNeuralNetwork)
 				{
 					std::string payload = GlobalCPUMiningCPID.cpid + "|" + sBase + "|" + GlobalCPUMiningCPID.cpidv2 + "|" + hashRand.GetHex();
 					AsyncNeuralRequest("addbeacon",payload,10);
-					return "Advertising Beacon on Neural Network for " + payload;
+					sError = "Advertising Beacon on Neural Network for " + payload;
+					return true;
 				}
-				else
-				{
-					std::string result = AddContract(sType,sName,sBase);
-					return result;
-				}
+				*/
+				// Store the key 
+				sMessage = AddContract(sType,sName,sBase);
+				return true;
 			}
 			catch(Object& objError)
 			{
-				return "Error: Unable to send beacon::Wallet Locked::Please enter the wallet passphrase with walletpassphrase first.";
+				sError = "Error: Unable to send beacon::Wallet Locked::Please enter the wallet passphrase with walletpassphrase first.";
+				return false;
 			}
 			catch (std::exception &e) 
 			{
-				return "Error: Unable to send beacon::Wallet Locked::Please enter the wallet passphrase with walletpassphrase first.";
+				sError = "Error: Unable to send beacon::Wallet Locked::Please enter the wallet passphrase with walletpassphrase first.";
+				return false;
 			}
 			catch(...)
 			{
-				return "Error: Unable to send beacon::Wallet Locked::Please enter the wallet passphrase with walletpassphrase first.";
-
+				sError = "Error: Unable to send beacon::Wallet Locked::Please enter the wallet passphrase with walletpassphrase first.";
+				return false;
 			}
 	 }
 }
@@ -1779,12 +1812,6 @@ Value dao(const Array& params, bool fHelp)
 
 
 
-
-
-
-
-
-
 Value option(const Array& params, bool fHelp)
 {
     if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3 && params.size() != 4 && params.size() != 5 && params.size() != 6 && params.size() != 7))
@@ -1793,263 +1820,14 @@ Value option(const Array& params, bool fHelp)
         "Executes an option based command by name.");
 
     std::string sItem = params[0].get_str();
-
 	if (sItem=="") throw runtime_error("Item invalid.");
-
     Array results;
 	Object oOut;
 	oOut.push_back(Pair("Command",sItem));
 	results.push_back(oOut);
     Object entry;
-		
-	if (sItem == "chain")
-	{
-		if (params.size() < 2)
-		{
-			entry.push_back(Pair("Error","You must specify the amount of days until expiration. Example: option chain 30"));
-			results.push_back(entry);
-		}
-		else
-		{
-
-			// Shows the Gridcoin Options Strike Chain and Prices
-			StructCPID stNet = mvNetwork["NETWORK"];
-	
-			double UL = stNet.GRCQuote/10000000000 * 100000000;
-			double ATMStrike = SnapToGrid(UL);
-			double LowUL = ATMStrike * .3;
-			double HighUL = ATMStrike * 3;
-			double StepRate = UL/20; 
-			double days = cdbl(params[1].get_str(),0);
-			entry.push_back(Pair("GRC Options Chain","UL: " + RoundToString(UL,0) + ", days: " + RoundToString(days,0)));
-			double fractional_year = days/365;
-			entry.push_back(Pair("Strike","Call Delta, Call Price, Put Price, Put Delta"));
-			for (double dStrike = LowUL; dStrike <= HighUL; dStrike += StepRate)
-			{
-				
-				double dCallPrice = BlackScholes("c", UL, dStrike, fractional_year, nRiskFreeRate, nVolatility);
-				double dCallDelta = GetDelta    ("c", UL, dStrike, fractional_year, nRiskFreeRate, nVolatility);
-				double dPutPrice =  BlackScholes("p", UL, dStrike, fractional_year, nRiskFreeRate, nVolatility);
-				double dPutDelta =  GetDelta    ("p", UL, dStrike, fractional_year, nRiskFreeRate, nVolatility);
-				bool ATM = (UL >= (dStrike)   &&   UL <= (dStrike+StepRate-1));
-				if (dCallPrice > 1 && dPutPrice > 1)
-				{
-					std::string sRow = RoundToString(dCallDelta,4) + "     " 
-						+ RoundToString(dCallPrice,4) + "     |     " 
-						+ RoundToString(dPutPrice,4) + "     " + RoundToString(dPutDelta,4);
-					if (ATM) sRow += " (ATM)";
-					entry.push_back(Pair(RoundToString(dStrike,0), sRow));
-				}
-				
-			}
-			results.push_back(entry);	
-		}
-	}
-	else if (sItem == "expired")
-	{
-		std::string rsRecipient = "";
-		double rdSinglePrice = 0;
-		double rdAmountOwed = 0;
-		std::string rsOpra = "";
-		entry.push_back(Pair("Recipient",rsRecipient));
-		entry.push_back(Pair("Single Price",rdSinglePrice));
-		entry.push_back(Pair("Amount Owed",rdAmountOwed));
-		entry.push_back(Pair("OPRA",rsOpra));
-		results.push_back(entry);
-	}
-	else if (sItem == "exposure")
-	{
-			Array jsExposure = GetOptionsExposureReport();
-			results.push_back(jsExposure);
-	}
-	else if (sItem == "quote")
-	{
-		if (params.size() != 4)
-		{
-			entry.push_back(Pair("Error","You must specify Strike, Type, Days; For example: option quote 2000 put 180"));
-			results.push_back(entry);
-		}
-		else
-		{
-				StructCPID stNet = mvNetwork["NETWORK"];
-				double UL = stNet.GRCQuote/10000000000 * 100000000;
-				double strike = cdbl(params[1].get_str(),0);
-				std::string sType = params[2].get_str();
-				if (sType == "call") sType = "c";
-				if (sType == "put") sType = "p";
-
-				double days = cdbl(params[3].get_str(),0);
-				
-				if (strike == 0 || ( sType != "c" && sType != "p" ) || days == 0 || UL == 0 || nVolatility == 0) 
-				{
-							entry.push_back(Pair("Error","You must specify a strike, a c or p, days, underlying price."));
-							results.push_back(entry);
-				}
-				// Calculate  
-				double fractional_year = days/365;
-			    double price = BlackScholes(sType, UL, strike,  fractional_year, nRiskFreeRate, nVolatility);
-				double delta = GetDelta(sType, UL, strike, fractional_year, nRiskFreeRate, nVolatility);
-				entry.push_back(Pair("UL",UL));
-				entry.push_back(Pair("Price",price));
-				entry.push_back(Pair("Delta",delta));
-				results.push_back(entry);
-		}
-
-	}
-	else if (sItem == "acknowledge")
-	{
-		std::string sWarning = "Buying GRC options is not for everyone and carries numerous risks that are not apparent.\r\nBe aware that part of the premium you pay for an option includes the volatility of the underlying asset and it's time value. \r\n This means that each day that goes by, if you are long an option, your option price will decay.\r\n Eventually the option will only be worth it's intrinsic value.  Options have an expiration date.  If expiration occurs before the underlying moves, you may lose 100% of your investment if it is out of the money. \r\n You agree that a market may not exist for the option and you may have to allow it to auto exercise. \r\n You agree that the exercise process is purely for educational purposes, and the exercise may never occur. \r\n You agree that this system is expressly provided for educational purposes only. \r\n You agree that any and all losses attributed to these test purchases are your own responsibility and agree to hold Gridcoin harmless. \r\n You agree to hold all people associated with the Gridcoin project harmless, including the lead developer(s), helpers, the community, and anyone associated with the project. \r\n You agree that you are not purchasing or selling securities of any type by using this system. \r\n You agree that all transactions made through this system are 100% at risk and may result in a total loss, and the transactions are considered expirimental for educational purposes only.\r\n If you agree to all of the terms and conditions, type 'option acknowledge sign'";
-
-		std::vector<std::string> vWarning = split(sWarning.c_str(),"\r\n");
-			
-		if (params.size() != 2)
-		{
-			for (unsigned int i = 0; i < vWarning.size(); i++)
-			{
-				entry.push_back(Pair(RoundToString((double)i,0),vWarning[i]));
-			}
-			results.push_back(entry);
-		
-		}
-		else if (params.size() == 2)
-		{
-			std::string sSign = params[1].get_str();
-			if (sSign == "sign")
-			{
-				std::string sAck = AcknowledgeHoldHarmlessClause();
-				entry.push_back(Pair("Acknowledgement",sAck));
-				entry.push_back(Pair("Note","You may have to wait up to 6 confirms for the acknowledgement to be stored in the chain."));
-				results.push_back(entry);
-			}
-			else
-			{
-					entry.push_back(Pair("Unknown Argument",sSign));
-					results.push_back(entry);
-			}
-		
-		}
-		
-		
-	}
-	else if (sItem == "buy")
-	{
-
-		if (params.size() != 5)
-		{
-			entry.push_back(Pair("Error","You must specify Quantity, Strike, Type, Days; For example: option buy 10 2000 call 180"));
-			results.push_back(entry);
-		}
-		else
-		{
-			
-		 		std::string GRCAddress = DefaultWalletAddress();
-				bool bHarmlessClauseAcknowledged = UserAcknowledgedHoldHarmlessClause(GRCAddress);
-				if (!bHarmlessClauseAcknowledged)
-				{
-					entry.push_back(Pair("Error","You must read and acknowledge the risks associated with buying options first with the command 'option acknowledge'."));
-					results.push_back(entry);
-					return results;
-				}
-
-				StructCPID stNet = mvNetwork["NETWORK"];
-				double UL = stNet.GRCQuote/10000000000 * 100000000;
-				double qty = cdbl(params[1].get_str(),0);
-				double strike = cdbl(params[2].get_str(),0);
-				std::string sType = params[3].get_str();
-				double days = cdbl(params[4].get_str(),4);
-				if (sType == "call") sType = "c";
-				if (sType == "put") sType = "p";
-
-				if (strike == 0 || ( sType != "c" && sType != "p" ) || days == 0 || UL == 0 || nVolatility == 0) 
-				{
-						entry.push_back(Pair("Error","You must specify a strike, a c or p, days, and underlying price."));
-						results.push_back(entry);
-						return results;
-				}
-				else
-				{
-					// Calculate  1-16-2016
-					double fractional_year = days/365;
-					double price = BlackScholes(sType, UL, strike,  fractional_year, nRiskFreeRate, nVolatility);
-					double delta = GetDelta(sType, UL, strike, fractional_year, nRiskFreeRate, nVolatility);
-					std::string sGRCAddress = DefaultWalletAddress();
-					std::string sTypeNarr = CallPutNarr(sType);				
-							
-					entry.push_back(Pair("UL",UL));
-					entry.push_back(Pair("Type",sTypeNarr));
-					entry.push_back(Pair("Quantity",qty));
-
-					entry.push_back(Pair("Price",price));
-					entry.push_back(Pair("Delta",delta));
-				
-					std::string sAction = "add";
-					std::string sContractType = "option_buy";
-					std::string sSerialNo = GetRandHash().GetHex();
-					double dExpiry  = GetAdjustedTime() + (days*86400);
-					std::string sHRExpiration = TimestampToHRDate(dExpiry);
-					std::string sOPRA = "GRC" + RoundToString(strike,0) + sType + RoundToString(days,0) + "S" + sSerialNo + "X" + RoundToString(dExpiry,0);
-					std::string sShortOPRA = "GRC" + RoundToString(strike,0) + sType 
-						+ RoundToString(days,0) + "X" + RoundToString(dExpiry,0);
-
-					std::string sCPID = GlobalCPUMiningCPID.cpid;
-					double dTotalCost = price * qty;
-					double nBalance = GetTotalBalance();
-					entry.push_back(Pair("Strike",strike));
-					entry.push_back(Pair("Days",days));
-					entry.push_back(Pair("OPRA",sShortOPRA));
-					entry.push_back(Pair("Total Cost",dTotalCost));
-					if (nBalance < dTotalCost)
-					{
-						entry.push_back(Pair("Error","Balance too low to buy " + RoundToString(qty,0) + " contract(s)."));
-						results.push_back(entry);
-						return results;
-					}
-					
-					std::string sNarr = "BOT " + RoundToString(qty,0) 
-						+ " GRC " + RoundToString(strike,0) + " " + sTypeNarr + " Exp: " + sHRExpiration +  
-						+ ",\r\n Price: " + RoundToString(price,4) + ", Cost: " + RoundToString(dTotalCost,4) 
-						+ ", UL: " + RoundToString(UL,2) + ", Delta: " + RoundToString(delta,4) 
-						+ ", Days: " + RoundToString(days,0) + ",\r\n OPRA: " + sShortOPRA;
-				
-					std::string sMsg = "<MESSAGE>" + AdvancedCrypt(sNarr) + "</MESSAGE>";
-					entry.push_back(Pair("Expiration", sHRExpiration));
-
-					std::string contract = "<OPTION><ACTION>BUY</ACTION><SHORTOPRA>" + sShortOPRA + "</SHORTOPRA><OPRA>" 
-						+ sOPRA + "</OPRA><GRCADDRESS>" 
-						+ sGRCAddress + "</GRCADDRESS><TYPE>" + sType + "</TYPE><STRIKE>" 
-						+ RoundToString(strike,4) + "</STRIKE><UL>" + RoundToString(UL,4) 
-						+ "</UL><QUANTITY>" + RoundToString(qty,2) + "</QUANTITY><CPID>" + sCPID 
-						+ "</CPID><EXPIRATION>" + RoundToString(dExpiry,0) + "</EXPIRATION><HREXPIRATION>" 
-						+ sHRExpiration + "</HREXPIRATION><DAYS>" + RoundToString(days,0) + "</DAYS><PRICE>" 
-						+ RoundToString(price,4) + "</PRICE><BALANCE>" + RoundToString(nBalance,2) 
-						+ "</BALANCE><NARR>" + sNarr 
-						+ "</NARR>" + sMsg + "<DELTA>" + RoundToString(delta,4) + "</DELTA></OPTION>";
-				
-					//std::string sBase = EncodeBase64(contract);
-					if (bOptionPaymentsEnabled)
-					{
-						std::string sBase = contract;
-						std::string result = AddOptionContract(sContractType,sOPRA,sBase,dTotalCost);
-						entry.push_back(Pair("Response",result));
-						results.push_back(entry);
-					}
-					else
-					{
-							entry.push_back(Pair("Error","Feature not enabled."));
-							results.push_back(entry);
-					}
-			}
-		 }
-	}
-	else
-	{
-			entry.push_back(Pair("Command " + sItem + " not found.",-1));
-			results.push_back(entry);
-	}
 	return results;    
-
 }
-
 
 
 
@@ -2224,6 +2002,78 @@ Value execute(const Array& params, bool fHelp)
 		entry.push_back(Pair("Burn Address",encoded2));
 		results.push_back(entry);
 	}
+	else if (sItem=="proveownership")
+	{
+		std::string email = GetArgument("email", "NA");
+        boost::to_lower(email);
+		entry.push_back(Pair("Boinc E-Mail",email));
+		entry.push_back(Pair("Boinc Public Key",GlobalCPUMiningCPID.boincruntimepublickey));
+		entry.push_back(Pair("CPID",GlobalCPUMiningCPID.cpid));
+		std::string sLongCPID = ComputeCPIDv2(email,GlobalCPUMiningCPID.boincruntimepublickey,1);
+		std::string sShortCPID = RetrieveMd5(GlobalCPUMiningCPID.boincruntimepublickey + email);
+		entry.push_back(Pair("Computed CPID",sLongCPID));
+		entry.push_back(Pair("Computed Short CPID", sShortCPID));
+		bool fResult = CPID_IsCPIDValid(sShortCPID,sLongCPID,1);
+		entry.push_back(Pair("CPID Valid",fResult));
+		results.push_back(entry);
+	}
+	else if (sItem=="beaconstatus")
+	{
+		// Search for beacon, and report on beacon status.
+			
+		std::string sCPID = msPrimaryCPID;
+
+		if (params.size()==2)
+		{
+			sCPID = params[1].get_str();
+		}
+		
+		entry.push_back(Pair("CPID", sCPID));
+		std::string sBeacon = MyBeaconExists(sCPID);
+		std::string sPubKey =  GetBeaconPublicKey(sCPID);
+		std::string sPrivKey = GetBeaconPrivateKey(sCPID);
+		int64_t iBeaconTimestamp = BeaconTimeStamp(sCPID, false);
+		std::string timestamp = TimestampToHRDate(iBeaconTimestamp);
+	
+		entry.push_back(Pair("Beacon Exists",YesNo(sBeacon.length() > 0)));
+		entry.push_back(Pair("Beacon Timestamp",timestamp.c_str()));
+
+		entry.push_back(Pair("Public Key", sPubKey.c_str()));
+		entry.push_back(Pair("Private Key", sPrivKey.c_str()));
+		
+		std::string sErr = "";
+		if (sPubKey.empty())
+		{
+			sErr += "Public Key Missing. ";
+		}
+		if (sPrivKey.empty())
+		{
+			sErr += "Private Key Missing. ";
+		}
+		if (!sErr.empty()) 
+		{
+			entry.push_back(Pair("Errors", sErr));
+			entry.push_back(Pair("Help", "Note: If your beacon is missing its public key, or is not in the chain, you may try: execute advertisebeacon."));
+		}
+		else
+		{
+			entry.push_back(Pair("Configuration Status", "SUCCESSFUL"));
+		}
+		results.push_back(entry);
+
+	}
+	else if (sItem=="testnet0917")
+	{
+	
+		WriteKey("testnet10","09172016");		
+		std::string testnet = GetArgument("testnet10", "NA3");
+		entry.push_back(Pair("testnetval4", testnet.c_str()));
+		WriteKey("testnet11","0917");
+		WriteKey("testnet11","0920162");
+		testnet = GetArgument("testnet11", "NA4");
+		entry.push_back(Pair("testnetval5", testnet.c_str()));
+		results.push_back(entry);
+	}
 	else if (sItem=="rain")
 	{
 		if (params.size() < 2)
@@ -2316,17 +2166,10 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem == "advertisebeacon")
 	{
-		if (params.size() == 2)
-		{
-			std::string optional = params[1].get_str();
-			boost::to_lower(optional);
-			if (optional != "force" && optional != "neural")
-			{
-				entry.push_back(Pair("Error","You must specify force to force the beacon in."));
-				results.push_back(entry);
-			}
-			else
-			{
+		    //	std::string optional = params[1].get_str();
+			// boost::to_lower(optional);
+			// if (optional != "force" && optional != "neural")
+		   	/*
 				if (optional=="neural")
 				{
 					std::string sResult = AdvertiseBeacon(true,true);
@@ -2335,24 +2178,29 @@ Value execute(const Array& params, bool fHelp)
 					results.push_back(entry);
 				}
 				else
-				{
-					std::string sResult = AdvertiseBeacon(true,false);
-					entry.push_back(Pair("CPID",GlobalCPUMiningCPID.cpid.c_str()));
-					entry.push_back(Pair("Help","Note: if your wallet is locked this command will fail; to solve that unlock the wallet: 'walletpassphrase <yourpassword> <240>' without <>."));
-					entry.push_back(Pair("Force Beacon",sResult));
-					results.push_back(entry);
-				}
-		
-			}
-		}
-		else
-		{
-		    	std::string sResult = AdvertiseBeacon(false,false);
-				entry.push_back(Pair("CPID",GlobalCPUMiningCPID.cpid.c_str()));
-			    entry.push_back(Pair("Beacon",sResult));
-			    results.push_back(entry);
+				*/
+				std::string sOutPubKey = "";
+				std::string sOutPrivKey = "";
+				std::string sError = "";
+				std::string sMessage = "";
 
-		}
+				bool fResult = AdvertiseBeacon(false,sOutPrivKey,sOutPubKey,sError,sMessage);
+				entry.push_back(Pair("Result",SuccessFail(fResult)));
+				entry.push_back(Pair("CPID",GlobalCPUMiningCPID.cpid.c_str()));
+				entry.push_back(Pair("Message",sMessage.c_str()));
+				
+				if (!sError.empty()) 		entry.push_back(Pair("Errors",sError));
+			
+				if (!fResult)
+				{
+					entry.push_back(Pair("FAILURE","Note: if your wallet is locked this command will fail; to solve that unlock the wallet: 'walletpassphrase <yourpassword> <240>' without <>."));
+				}
+				if (fResult)
+				{
+					entry.push_back(Pair("Public Key",sOutPubKey.c_str()));
+					entry.push_back(Pair("Warning!","Your public and private research keys have been stored in gridcoinresearch.conf.  Do not lose your private key (It is non-recoverable).  It is recommended that you back up your gridcoinresearch.conf file on a regular basis."));
+				}
+				results.push_back(entry);
 			
 	}
 	else if (sItem == "syncdpor2")
@@ -2376,6 +2224,11 @@ Value execute(const Array& params, bool fHelp)
 	{
 			Array myBeaconJSONReport = GetJSONBeaconReport();
 			results.push_back(myBeaconJSONReport);
+	}
+	else if (sItem == "upgradedbeaconreport")
+	{
+			Array aUpgBR = GetUpgradedBeaconReport();
+			results.push_back(aUpgBR);
 	}
 	else if (sItem == "neuralreport")
 	{
@@ -3239,21 +3092,15 @@ Value execute(const Array& params, bool fHelp)
 		std::string strMasterPrivateKey = (sType=="project" || sType=="projectmapping") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
 		std::string sig = SignMessage("hello",strMasterPrivateKey);
 		entry.push_back(Pair("hello",sig));
-		bool r1 = CheckMessageSignature(sType,"hello",sig,"");
-		entry.push_back(Pair("Check1",r1));
-		bool r2 = CheckMessageSignature(sType,"hello1",sig,"");
-		entry.push_back(Pair("Check2",r2));
-		bool r3 = CheckMessageSignature(sType,"hello",sig+"1","");
-		entry.push_back(Pair("Check3",r3));
 		//Forged Key
 		std::string forgedKey = "3082011302010104202b1c9faef66d42218eefb7c66fb6e49292972c8992b4100bb48835d325ec2d34a081a53081a2020101302c06072a8648ce3d0101022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f300604010004010704410479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141020101a144034200040cb218ee7495c2ba5d6ba069f97810e85dae8b446c0e4a1c6dec7fe610ab0fa4378bda5320f00e7a08a8e428489f41ad79d0428a091aa548aca18adbbbe64d41";
 		std::string sig2 = SignMessage("hello",forgedKey);
-		bool r10 = CheckMessageSignature(sType,"hello",sig2,"");
+		bool r10 = CheckMessageSignature("R",sType,"hello",sig2,"");
 		entry.push_back(Pair("FK10",r10));
 		std::string sig3 = SignMessage("hi",strMasterPrivateKey);
-		bool r11 = CheckMessageSignature("project","hi",sig3,"");
+		bool r11 = CheckMessageSignature("R","project","hi",sig3,"");
 		entry.push_back(Pair("FK11",r11));
-		bool r12 = CheckMessageSignature("general","1",sig3,"");
+		bool r12 = CheckMessageSignature("R","general","1",sig3,"");
 		entry.push_back(Pair("FK12",r12));
 		results.push_back(entry);
 	
@@ -3378,6 +3225,7 @@ Value execute(const Array& params, bool fHelp)
 			entry.push_back(Pair("Type",sType));
 			std::string sPass = "";
 			sPass = (sType=="project" || sType=="projectmapping") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
+			if (sType=="beacon" && sAction=="delete")  sPass = GetArgument("masterprojectkey","");
 			entry.push_back(Pair("Passphrase",sPass));
 			std::string sName = params[3].get_str();
 			entry.push_back(Pair("Name",sName));
@@ -3935,30 +3783,27 @@ Array MagnitudeReport(std::string cpid)
 												StructCPID stCPID = GetLifetimeCPID(structMag.cpid,"MagnitudeReport");
 											
 												double days = (GetAdjustedTime() - stCPID.LowLockTime)/86400;
-     											if (fDebug3) printf(" MR6.1 ");
-
+     							
 												entry.push_back(Pair("CPID",structMag.cpid));
-												if (fDebug3) printf(" MR6.2 ");
-												entry.push_back(Pair("PoolMining",bPoolMiningMode));
+												// entry.push_back(Pair("PoolMining",bPoolMiningMode));
 	
 												double dWeight = (double)GetRSAWeightByCPID(structMag.cpid);
 												entry.push_back(Pair("RSA Weight",dWeight));
 												StructCPID UH = GetInitializedStructCPID2(cpid,mvMagnitudes);
 												
-												entry.push_back(Pair("RSA block count",UH.Accuracy));
+												// entry.push_back(Pair("RSA block count",UH.Accuracy));
 												
-												entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
-												if (fDebug3) printf(" MR6.5 ");
+												// entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
 												entry.push_back(Pair("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime)));
 												
 												entry.push_back(Pair("Magnitude",	structMag.Magnitude));
 												entry.push_back(Pair("Research Payments (14 days)",structMag.payments));
 												
-												entry.push_back(Pair("Interest Payments (14 days)",structMag.interestPayments));
+												// entry.push_back(Pair("Interest Payments (14 days)",structMag.interestPayments));
 												if (structMag.cpid == cpid)
 												{
-													double iPct = ( (structMag.interestPayments/14) * 365 / (nBalance+.01));
-													entry.push_back(Pair("Interest %", iPct));
+													// double iPct = ( (structMag.interestPayments/14) * 365 / (nBalance+.01));
+													// entry.push_back(Pair("Interest %", iPct));
 												}
 												
 												entry.push_back(Pair("Daily Paid",structMag.payments/14));
@@ -4164,6 +4009,40 @@ std::string MyBeaconExists(std::string cpid)
 	return myBeacon;
 }
 
+std::string GetBeaconPrivateKey(std::string cpid)
+{
+	std::string sBeaconPrivKey = GetArgument("privatekey" + cpid, "");
+	return sBeaconPrivKey;
+}
+
+std::string GetBeaconPublicKey(std::string cpid)
+{
+	std::string sBeacon = mvApplicationCache["beacon;" + cpid];
+	if (sBeacon.empty()) return "";
+	// Beacon data structure: CPID,hashRand,Address,beacon public key: base64 encoded
+	std::string sContract = DecodeBase64(sBeacon);
+	std::vector<std::string> vContract = split(sContract.c_str(),";");
+	if (vContract.size() < 4) return "";
+	std::string sBeaconPublicKey = vContract[3];
+	return sBeaconPublicKey;
+}
+
+bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature)
+{
+	std::string sBeaconPublicKey = GetBeaconPublicKey(sCPID);
+	std::string sConcatMessage = sCPID + sBlockHash;
+	bool bValid = CheckMessageSignature("R","cpid", sConcatMessage, sSignature, sBeaconPublicKey);
+	return bValid;
+}
+
+std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash)
+{
+	// Returns the Signature of the CPID+BlockHash message.	
+	std::string sPrivateKey = GetBeaconPrivateKey(sCPID);
+	std::string sMessage = sCPID + sBlockHash;
+	std::string sSignature = SignMessage(sMessage,sPrivateKey);
+	return sSignature;
+}
 
 Array ContractReportCSV()
 {
@@ -4714,6 +4593,44 @@ Array GetOptionsExposureReport()
 
 
 
+Array GetUpgradedBeaconReport()
+{
+        Array results;
+	    Object entry;
+  	    entry.push_back(Pair("Report","Upgraded Beacon Report 1.0"));
+        std::string datatype="beacon";
+	  	std::string rows = "";
+		std::string row = "";
+		int iBeaconCount = 0;
+		int iUpgradedBeaconCount = 0;
+  		for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+		{
+				std::string key_name  = (*ii).first;
+			   	if (key_name.length() > datatype.length())
+				{
+					if (key_name.substr(0,datatype.length())==datatype)
+					{
+								std::string key_value = mvApplicationCache[(*ii).first];
+								std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
+								std::string contract = DecodeBase64(key_value);
+								std::string cpidv2 = ExtractValue(contract,";",0);
+								std::string grcaddress = ExtractValue(contract,";",2);
+								std::string sPublicKey = ExtractValue(contract,";",3);
+								if (!sPublicKey.empty()) iUpgradedBeaconCount++;
+								iBeaconCount++;
+					}
+				}
+	  }
+      entry.push_back(Pair("Total Beacons",(double)iBeaconCount));
+	  entry.push_back(Pair("Upgraded Beacon Count",(double)iUpgradedBeaconCount));
+	  double dPct = ((double)iUpgradedBeaconCount / ((double)iBeaconCount) + .01);
+	  entry.push_back(Pair("Pct Of Upgraded Beacons",RoundToString(dPct*100,3)));
+	  results.push_back(entry);
+	  return results;
+}
+
+
+
 
 
 Array GetJSONBeaconReport()
@@ -5097,13 +5014,14 @@ std::string AddMessage(bool bAdd, std::string sType, std::string sPrimaryKey, st
     return wtx.GetHash().GetHex().c_str();
 }
 
-
-
-
-std::string YesNo(bool bin)
+std::string SuccessFail(bool f)
 {
-	if (bin) return "Yes";
-	return "No";
+	return f ? "SUCCESS" : "FAIL";
+}
+
+std::string YesNo(bool f)
+{
+	return f ? "Yes" : "No";
 }
 
 Value listitem(const Array& params, bool fHelp)
@@ -5414,7 +5332,6 @@ Value listitem(const Array& params, bool fHelp)
 	if (sitem == "rsa")
 	{
 		    if (msPrimaryCPID=="") msPrimaryCPID="INVESTOR";
-
 	    	results = MagnitudeReport(msPrimaryCPID);
 			return results;
 	}

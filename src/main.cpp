@@ -33,38 +33,31 @@ extern std::string NodeAddress(CNode* pfrom);
 extern std::string ConvertBinToHex(std::string a);
 extern std::string ConvertHexToBin(std::string a);
 extern bool WalletOutOfSync();
-
+extern bool WriteKey(std::string sKey, std::string sValue);
+std::string GetBeaconPublicKey(std::string cpid);
+std::string GetBeaconPrivateKey(std::string cpid);
+bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
+std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 extern void CleanInboundConnections(bool bClearAll);
 extern bool PushGridcoinDiagnostics();
 double qtPushGridcoinDiagnosticData(std::string data);
 int RestartClient();
-
 bool RequestSupermajorityNeuralData();
 extern void ReloadBlockIndexHot();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
-
 extern int64_t CoinFromValue(double dAmount);
-
-
 extern bool CleanChain();
 extern void ResetTimerMain(std::string timer_name);
-
-
-
 extern std::string UnpackBinarySuperblock(std::string sBlock);
 extern std::string PackBinarySuperblock(std::string sBlock);
 extern std::vector<unsigned char> StringToVector(std::string sData);
 extern bool TallyResearchAverages(bool Forcefully);
-
-
 extern void SyncChain();
 extern double GetStandardDeviation(std::string sPriceHistory);
 extern double GetVolatility(std::string sPriceHistory);
-
 extern double BlackScholes(std::string CallPutFlag, double S, double X, double T, double r, double v);
 extern double GetDelta(std::string sType, double UL, double Strike, double dTime, double RiskFreeRate, double Volatility);
 extern void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance);
-
 int DownloadBlocks();
 int DetermineCPIDType(std::string cpid);
 extern MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID> vRef);
@@ -75,32 +68,21 @@ extern double ExtractMagnitudeFromExplainMagnitude();
 extern void AddPeek(std::string data);
 extern void GridcoinServices();
 int64_t BeaconTimeStamp(std::string cpid, bool bZeroOutAfterPOR);
-
 bool AskNeuralNetworkNodeForBlocks(int iNodeLimit);
-
 extern bool NeedASuperblock();
 extern double SnapToGrid(double d);
-
 extern bool NeuralNodeParticipates();
 extern bool StrLessThanReferenceHash(std::string rh);
 void BusyWaitForTally();
-
 extern bool TallyNetworkAverages(bool Forcefully);
-
-
 extern void SetUpExtendedBlockIndexFieldsOnce();
 extern bool IsContract(CBlockIndex* pIndex);
 std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern bool IsSuperBlock(CBlockIndex* pIndex);
 extern MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
-
 json_spirit::Array MagnitudeReport(std::string cpid);
-
 extern void AddCPIDBlockHash(std::string cpid, std::string blockhash, bool fInsert);
-
 extern void ZeroOutResearcherTotals(std::string cpid);
-
-
 extern StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
 extern std::string getCpuHash();
 std::string getMacAddress();
@@ -142,12 +124,11 @@ extern void TestScan2();
 std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
 
 
-bool CheckMessageSignature(std::string sMessageType, std::string sMsg, std::string sSig,std::string opt_pubkey);
+bool CheckMessageSignature(std::string sMessageAction, std::string sMessageType, std::string sMsg, std::string sSig,std::string opt_pubkey);
 bool TallyMagnitudesByContract();
 bool SynchronizeRacForDPOR(bool SyncEntireCoin);
 extern std::string ReadCache(std::string section, std::string key);
 extern std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
-std::string AdvertiseBeacon(bool force,bool neural);
 extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 extern double GetTotalBalance();
 extern std::string PubKeyToAddress(const CScript& scriptPubKey);
@@ -5016,10 +4997,15 @@ void GridcoinServices()
 
 	if (TimerMain("send_beacon",180))
 	{
-		std::string result = AdvertiseBeacon(false,false);
-		if (result.length() < 15 && result != "SUCCESS")
+		std::string sOutPubKey = "";
+		std::string sOutPrivKey = "";
+		std::string sError = "";
+		std::string sMessage = "";
+		bool fResult = AdvertiseBeacon(true,sOutPrivKey,sOutPubKey,sError,sMessage);
+		if (!fResult)
 		{
-			printf("BEACON ERROR!  Unable to send beacon %s \r\n",result.c_str());
+			printf("BEACON ERROR!  Unable to send beacon %s \r\n",sError.c_str());
+			printf("BEACON ERROR!  Unable to send beacon %s \r\n",sMessage.c_str());
 			msMiningErrors6 = "Unable To Send Beacon! Unlock Wallet!";
 		}
 	}
@@ -5852,6 +5838,62 @@ int GetFilesize(FILE* file)
     fseek(file, nSavePos, SEEK_SET);
     return nFilesize;
 }
+
+
+
+
+bool WriteKey(std::string sKey, std::string sValue)
+{
+	// Allows Gridcoin to store the key value in the config file.
+	boost::filesystem::path pathConfigFile(GetArg("-conf", "gridcoinresearch.conf"));
+    if (!pathConfigFile.is_complete()) pathConfigFile = GetDataDir(false) / pathConfigFile;
+	if (!filesystem::exists(pathConfigFile))  return false; 
+	boost::to_lower(sKey);
+	std::string sLine = "";
+	ifstream streamConfigFile;
+	streamConfigFile.open(pathConfigFile.string().c_str());
+	std::string sConfig = "";
+	bool fWritten = false;
+    if(streamConfigFile)
+	{
+	   while(getline(streamConfigFile, sLine))
+	   {
+		   	std::vector<std::string> vEntry = split(sLine,"=");
+			if (vEntry.size() == 2)
+			{
+				std::string sSourceKey = vEntry[0];
+				std::string sSourceValue = vEntry[1];
+				boost::to_lower(sSourceKey);
+
+				if (sSourceKey==sKey) 
+				{
+					sSourceValue = sValue;
+					sLine = sSourceKey + "=" + sSourceValue;
+					fWritten=true;
+				}
+			}
+			sLine =	strReplace(sLine,"\r","");
+			sLine =	strReplace(sLine,"\n","");
+			sLine += "\r\n";
+			sConfig += sLine;
+	   }
+	}
+	if (!fWritten) 
+	{
+		sLine = sKey + "=" + sValue + "\r\n";
+		sConfig += sLine;
+	}
+	
+	streamConfigFile.close();
+
+	FILE *outFile = fopen(pathConfigFile.string().c_str(),"w");
+	fputs(sConfig.c_str(), outFile);
+	fclose(outFile);
+
+	ReadConfigFile(mapArgs, mapMultiArgs);
+	return true;
+}
+
 
 
 
@@ -8664,6 +8706,17 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 
 	if (mcpid.lastblockhash.empty()) mcpid.lastblockhash = "0";
 	if (mcpid.LastPORBlockHash.empty()) mcpid.LastPORBlockHash="0";
+
+	// If this is a POR, sign the block proving ownership of the CPID
+	if (!mcpid.cpid.empty() && mcpid.cpid != "INVESTOR" && mcpid.lastblockhash != "0")
+	{
+		mcpid.BoincPublicKey = GetBeaconPublicKey(mcpid.cpid);
+		if (!mcpid.BoincPublicKey.empty())
+		{
+			mcpid.BoincSignature = SignBlockWithCPID(mcpid.cpid,mcpid.lastblockhash);
+		}
+	}
+
 	std::string bb = mcpid.cpid + delim + mcpid.projectname + delim + mcpid.aesskein + delim + RoundToString(mcpid.rac,0)
 					+ delim + RoundToString(mcpid.pobdifficulty,5) + delim + RoundToString((double)mcpid.diffbytes,0)
 					+ delim + NN(mcpid.enccpid)
@@ -8679,7 +8732,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 					+ delim + NN(mcpid.OrganizationKey) + delim + mcpid.NeuralHash + delim + mcpid.superblock
 					+ delim + RoundToString(mcpid.ResearchSubsidy2,2) + delim + RoundToString(mcpid.ResearchAge,6)
 					+ delim + RoundToString(mcpid.ResearchMagnitudeUnit,6) + delim + RoundToString(mcpid.ResearchAverageMagnitude,2)
-					+ delim + NN(mcpid.LastPORBlockHash) + delim + mcpid.CurrentNeuralHash;
+					+ delim + NN(mcpid.LastPORBlockHash) + delim + mcpid.CurrentNeuralHash + delim + mcpid.BoincPublicKey + delim + mcpid.BoincSignature;
 	return bb;
 }
 
@@ -8784,6 +8837,14 @@ MiningCPID DeserializeBoincBlock(std::string block)
 		if (s.size() > 28)
 		{
 			surrogate.CurrentNeuralHash = s[28];
+		}
+		if (s.size() > 29)
+		{
+			surrogate.BoincPublicKey = s[29];
+		}
+		if (s.size() > 30)
+		{
+			surrogate.BoincSignature = s[30];
 		}
 
 	}
@@ -9965,6 +10026,19 @@ bool MemorizeMessage(std::string msg, int64_t nTime, double dAmount, std::string
 					sMessageValue="";
 			  }
 
+			  if (sMessageType=="beacon" && sMessageAction=="A")
+			  {
+				    // If the Beacon Public Key is Not Empty - do not overwrite with a new beacon value
+				    std::string sBPK = GetBeaconPublicKey(sMessageKey);
+					if (!sBPK.empty()) 
+					{
+						// Do not overwrite this beacon
+						sMessageValue="";
+						if (fDebug10) printf("\r\n**Beacon Public Key Not Empty %s : %s\r\n",sMessageKey.c_str(),sBPK.c_str());
+					}
+
+			  }
+
 			  if (!sMessageType.empty() && !sMessageKey.empty() && !sMessageValue.empty() && !sMessageAction.empty() && !sSignature.empty())
 			  {
 
@@ -10001,7 +10075,7 @@ bool MemorizeMessage(std::string msg, int64_t nTime, double dAmount, std::string
 				  }
 
 				  //Verify sig first
-				  bool Verified = CheckMessageSignature(sMessageType,sMessageType+sMessageKey+sMessageValue,
+				  bool Verified = CheckMessageSignature(sMessageAction,sMessageType,sMessageType+sMessageKey+sMessageValue,
 					  sSignature,sMessagePublicKey);
 
 				  if ( (sMessageType=="dao" || sMessageType == "daofeed") && !Verified && fDebug3)
@@ -10370,7 +10444,8 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 	if (nMaxDepth < nMinDepth) return false;
 	CBlockIndex* pindex = pindexBest;
 	pindex = FindBlockByHeight(nMinDepth);
-	
+	// These are memorized consecutively in order from oldest to newest
+
     while (pindex->nHeight < nMaxDepth)
 	{
 		if (!pindex || !pindex->pnext) return false;
@@ -10382,7 +10457,6 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 			CBlock block;
 			if (!block.ReadFromDisk(pindex)) continue;
 			int iPos = 0;
-			printf("h %f ",(double)pindex->nHeight);
 			BOOST_FOREACH(const CTransaction &tx, block.vtx)
 			{
 				  if (iPos > 0)
@@ -10394,10 +10468,6 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 					  {
 							sRecipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
 							dAmount += CoinToDouble(tx.vout[i].nValue);
-					  }
-					  if (tx.hashBoinc.length() > 1 && fDebug3)
-					  {
-						    //printf("Height %f, Amt %f, Message %s\r\n",(double)pindex->nHeight,(double)dAmount,tx.hashBoinc.c_str());
 					  }
 					  MemorizeMessage(tx.hashBoinc,tx.nTime,dAmount,sRecipient);
 				  }
