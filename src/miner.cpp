@@ -680,7 +680,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	}
 
 
-	//1-20-2015 Ensure this stake is above the minimum threshhold; otherwise, vehemently reject
+	//1-20-2015 Ensure this stake is above the minimum threshold; otherwise, vehemently reject
 	double PORDiff = GetBlockDifficulty(pblock->nBits);
 	MiningCPID boincblock = DeserializeBoincBlock(pblock->vtx[0].hashBoinc);
 	if (boincblock.cpid != "INVESTOR" && pindexBest->nHeight > nGrandfather)
