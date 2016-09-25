@@ -868,14 +868,15 @@ void WriteCPIDToRPC(std::string email, std::string bpk, uint256 block, Array &re
 std::string SignMessage(std::string sMsg, std::string sPrivateKey)
 {
 	 CKey key;
-	
 	 std::vector<unsigned char> vchMsg = vector<unsigned char>(sMsg.begin(), sMsg.end());
      std::vector<unsigned char> vchPrivKey = ParseHex(sPrivateKey);
 	 std::vector<unsigned char> vchSig;
 	 key.SetPrivKey(CPrivKey(vchPrivKey.begin(), vchPrivKey.end())); // if key is not correct openssl may crash
-	 if (!key.Sign(Hash(vchMsg.begin(), vchMsg.end()), vchSig))  throw runtime_error("Unable to sign message, check private key?\n");  
+	 if (!key.Sign(Hash(vchMsg.begin(), vchMsg.end()), vchSig))  
+	 {
+			 return "Unable to sign message, check private key.";
+	 }
 	 std::string SignedMessage = EncodeBase64(VectorToString(vchSig));
-
 	 return SignedMessage;
 }
 
@@ -2004,7 +2005,10 @@ Value execute(const Array& params, bool fHelp)
 	}
 	else if (sItem=="proveownership")
 	{
-		std::string email = GetArgument("email", "NA");
+		mvCPIDCache.clear();
+   	    HarvestCPIDs(true);
+		GetNextProject(true);
+	    std::string email = GetArgument("email", "NA");
         boost::to_lower(email);
 		entry.push_back(Pair("Boinc E-Mail",email));
 		entry.push_back(Pair("Boinc Public Key",GlobalCPUMiningCPID.boincruntimepublickey));
@@ -2014,6 +2018,11 @@ Value execute(const Array& params, bool fHelp)
 		entry.push_back(Pair("Computed CPID",sLongCPID));
 		entry.push_back(Pair("Computed Short CPID", sShortCPID));
 		bool fResult = CPID_IsCPIDValid(sShortCPID,sLongCPID,1);
+		if (GlobalCPUMiningCPID.boincruntimepublickey.empty())
+		{
+			fResult=false;
+			entry.push_back(Pair("Error","Boinc Public Key empty.  Try mounting your boinc project first, and ensure the gridcoin datadir setting is set if boinc is not in the default location."));
+		}
 		entry.push_back(Pair("CPID Valid",fResult));
 		results.push_back(entry);
 	}
@@ -5039,7 +5048,6 @@ Value listitem(const Array& params, bool fHelp)
 		args=params[1].get_str();
 	}
 	
-	if (sitem=="") throw runtime_error("Item invalid.");
 
     Array results;
 	Object e2;
@@ -5051,8 +5059,7 @@ Value listitem(const Array& params, bool fHelp)
 			entry.push_back(Pair("Network Time",GetAdjustedTime()));
 			results.push_back(entry);
 	}
-	
-	if (sitem == "rsaweight")
+	else if (sitem == "rsaweight")
 	{
 		double out_magnitude = 0;
 		double out_owed = 0;
@@ -5067,20 +5074,32 @@ Value listitem(const Array& params, bool fHelp)
 		results.push_back(entry);
 
 	}
-	if (sitem == "betatest")
+	else if (sitem == "betatest")
 	{
 		Object entry;
-		std::string enc = AdvancedCryptWithHWID("beta");
-		printf("enc %s",enc.c_str());
-		std::string dec = AdvancedDecryptWithHWID(enc);
-		printf("dec %s",dec.c_str());
-		//std::string h  = get___();
-		entry.push_back(Pair("pass1",enc));
-		entry.push_back(Pair("pass2",dec));
-		//entry.push_back(Pair("h",h));
+		// Test a sample CPID keypair
+		entry.push_back(Pair("CPID",msPrimaryCPID));
+		std::string sBeaconPublicKey = GetBeaconPublicKey(msPrimaryCPID);
+		entry.push_back(Pair("Beacon Public Key",sBeaconPublicKey));
+		std::string sSignature = SignBlockWithCPID(msPrimaryCPID,"1000");
+		entry.push_back(Pair("Signature",sSignature));
+		// Validate the signature
+		bool fResult = VerifyCPIDSignature(msPrimaryCPID, "1000", sSignature);
+		entry.push_back(Pair("Sig Valid",fResult));
+		fResult = VerifyCPIDSignature(msPrimaryCPID, "1001", sSignature);
+		entry.push_back(Pair("Wrong Block Sig Valid",fResult));
+		fResult = VerifyCPIDSignature(msPrimaryCPID, "1000", "wrong_signature" + sSignature + "wrong_signature");
+		entry.push_back(Pair("Right block, Wrong Signature Valid",fResult));
+		// Missing Beacon, with wrong CPID
+		std::string sCPID = "1234567890";
+		sBeaconPublicKey = GetBeaconPublicKey(sCPID);
+		sSignature = SignBlockWithCPID(sCPID,"1001");
+		entry.push_back(Pair("Signature",sSignature));
+		fResult = VerifyCPIDSignature(sCPID, "1001", sSignature);
+		entry.push_back(Pair("Bad CPID with missing beacon",fResult));
 		results.push_back(entry);
 	}
-    if (sitem == "lottery")
+    else if (sitem == "lottery")
 	{
 
 		Object entry;
@@ -5109,15 +5128,14 @@ Value listitem(const Array& params, bool fHelp)
 
 		results.push_back(entry);
 	}
-
-	if (sitem == "debugexplainmagnitude")
+	else if (sitem == "debugexplainmagnitude")
 	{
 		double dMag = ExtractMagnitudeFromExplainMagnitude();
 		Object entry;
 		entry.push_back(Pair("Mag",dMag));
 		results.push_back(entry);
 	}
-	if (sitem == "explainmagnitude")
+	else if (sitem == "explainmagnitude")
 	{
 
 		if (msNeuralResponse.length() > 25)
@@ -5209,8 +5227,7 @@ Value listitem(const Array& params, bool fHelp)
 		}
 
 	}
-
-	if (sitem == "superblocks")
+	else if (sitem == "superblocks")
 	{
 		std::string cpid = "";
 		if (params.size() == 2)
@@ -5221,8 +5238,7 @@ Value listitem(const Array& params, bool fHelp)
 		results = SuperblockReport(cpid);
 		return results;
 	}
-
-	if (sitem == "magnitude")
+	else if (sitem == "magnitude")
 	{
 		std::string cpid = "";
 		if (params.size() == 2)
@@ -5248,7 +5264,7 @@ Value listitem(const Array& params, bool fHelp)
 		}
 		return results;
 	}
-	if (sitem == "lifetime")
+	else if (sitem == "lifetime")
 	{
 		std::string cpid = msPrimaryCPID;
 		if (params.size() == 2)
@@ -5259,21 +5275,19 @@ Value listitem(const Array& params, bool fHelp)
 		results = LifetimeReport(cpid);
 		return results;
 	}
-	if (sitem == "staking")
+	else if (sitem == "staking")
 	{
 		results = StakingReport();
 		return results;
 	}
-
-	if (sitem == "debug3")
+	else if (sitem == "debug3")
 	{
 		fDebug3 = true;
 		Object entry;
 		entry.push_back(Pair("Entering Debug Mode 3",1));
 		results.push_back(entry);
 	}
-
-	if (sitem == "currenttime")
+	else if (sitem == "currenttime")
 	{
 
 		Object entry;
@@ -5282,60 +5296,42 @@ Value listitem(const Array& params, bool fHelp)
 		results.push_back(entry);
 
 	}
-
-	if (sitem == "magnitudecsv")
+	else if (sitem == "magnitudecsv")
 	{
 		results = MagnitudeReportCSV(false);
 		return results;
 	}
-
-	if (sitem == "opencontracts")
-	{
-
-		results = ContractReportCSV();
-		return results;
-	}
-
-	
-	if (sitem=="detailmagnitudecsv")
+	else if (sitem=="detailmagnitudecsv")
 	{
 		results = MagnitudeReportCSV(true);
 		return results;
 	}
-
-
-	if (sitem == "mymagnitude")
+	else if (sitem == "mymagnitude")
 	{
 			results = MagnitudeReport(msPrimaryCPID);
 			return results;
 	}
-
-	if (sitem == "harddriveserial")
+	else if (sitem == "harddriveserial")
 	{
 		Object entry;
 		std::string response = getHardDriveSerial();
 		entry.push_back(Pair("Serial",response));
 		results.push_back(entry);
 	}
-	if (sitem == "memorypool")
+	else if (sitem == "memorypool")
 	{
 		Object entry;
 		entry.push_back(Pair("Excluded Tx",msMiningErrorsExcluded));
 		entry.push_back(Pair("Included Tx",msMiningErrorsIncluded));
 		results.push_back(entry);
 	}
-	if (sitem == "db")
-	{
-	   	 
- 
-	}
-	if (sitem == "rsa")
+	else if (sitem == "rsa")
 	{
 		    if (msPrimaryCPID=="") msPrimaryCPID="INVESTOR";
 	    	results = MagnitudeReport(msPrimaryCPID);
 			return results;
 	}
-	if (sitem=="newbieage")
+	else if (sitem=="newbieage")
 	{
 		double dBeaconDt = BeaconTimeStamp(args,false);
 		Object entry;
@@ -5344,10 +5340,8 @@ Value listitem(const Array& params, bool fHelp)
 		entry.push_back(Pair("Sent With ZeroOut Feature",dBeaconDt));
 		results.push_back(entry);
 		return results;
-
 	}
-	
-	if (sitem == "projects") 
+	else if (sitem == "projects") 
 	{
 		for(map<string,StructCPID>::iterator ii=mvBoincProjects.begin(); ii!=mvBoincProjects.end(); ++ii) 
 		{
@@ -5365,8 +5359,7 @@ Value listitem(const Array& params, bool fHelp)
 		}
 		return results;
 	}
-
-	if (sitem == "leder")
+	else if (sitem == "leder")
 	{
 		double subsidy = LederstrumpfMagnitude2(450, GetAdjustedTime());
 		Object entry;
@@ -5379,9 +5372,7 @@ Value listitem(const Array& params, bool fHelp)
 		}
 		results.push_back(entry);
 	}
-
-
-	if (sitem == "network") 
+	else if (sitem == "network") 
 	{
 		for(map<string,StructCPID>::iterator ii=mvNetwork.begin(); ii!=mvNetwork.end(); ++ii) 
 		{
@@ -5417,18 +5408,14 @@ Value listitem(const Array& params, bool fHelp)
 			}
 		}
 		return results;
-
 	}
-
-	if (sitem=="validcpids") 
+	else if (sitem=="validcpids") 
 	{
 		//Dump vectors:
 		if (mvCPIDs.size() < 1) 
 		{
 			HarvestCPIDs(false);
 		}
-		printf ("generating cpid report %s",sitem.c_str());
-
 		for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii) 
 		{
 
@@ -5463,9 +5450,7 @@ Value listitem(const Array& params, bool fHelp)
 
 
     }
-
-
-	if (sitem=="cpids") 
+	else if (sitem=="cpids") 
 	{
 		//Dump vectors:
 		
@@ -5503,23 +5488,13 @@ Value listitem(const Array& params, bool fHelp)
 		}
 
     }
-	Object entry;
-	entry.push_back(Pair("PoolMining",bPoolMiningMode));
-	results.push_back(entry);
-
+	else
+	{
+		throw runtime_error("Item invalid.");
+	}
     return results;
 
-
-		
 }
-
-
-
-
-
-
-
-
 
 
 

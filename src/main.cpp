@@ -58,6 +58,7 @@ extern double GetVolatility(std::string sPriceHistory);
 extern double BlackScholes(std::string CallPutFlag, double S, double X, double T, double r, double v);
 extern double GetDelta(std::string sType, double UL, double Strike, double dTime, double RiskFreeRate, double Volatility);
 extern void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance);
+bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
 int DownloadBlocks();
 int DetermineCPIDType(std::string cpid);
 extern MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID> vRef);
@@ -480,7 +481,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msHDDSerial = "";
  //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
 
- int nGrandfather = 631000;
+ int nGrandfather = 677500;
  int nNewIndex = 271625;
  int nNewIndex2 = 364500;
 
@@ -4486,7 +4487,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
 					if (fDebug10) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3517 && IsResearchAgeEnabled(height1) && !fTestNet) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-					if (bv < 3546 && fTestNet) return DoS(25, error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n"));
+					if (bv < 3578 && fTestNet) return DoS(25, error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n"));
 			}
 
 			if (bb.cpid != "INVESTOR" && height1 > nGrandfather)
@@ -5062,9 +5063,10 @@ void GridcoinServices()
 
 bool AskForOutstandingBlocks(uint256 hashStart)
 {
-	if (IsLockTimeWithinMinutes(nLastAskedForBlocks,2)) return true;
+	if (!fTestNet && IsLockTimeWithinMinutes(nLastAskedForBlocks,2)) return true;
 	nLastAskedForBlocks = GetAdjustedTime();
-
+	if (fTestNet) mapAlreadyAskedFor.clear();
+		
 	int iAsked = 0;
 	LOCK(cs_vNodes);
 	BOOST_FOREACH(CNode* pNode, vNodes) 
@@ -5300,7 +5302,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 		}
 		
 		CBlock* pblock2 = new CBlock(*pblock);
-		if (WalletOutOfSyncByMoreThan2000Blocks())
+		if (WalletOutOfSyncByMoreThan2000Blocks() || fTestNet)
 		{
 			printf("ProcessBlock: ORPHAN BLOCK, prev=%s\n", pblock->hashPrevBlock.ToString().c_str());
 			// ppcoin: check proof-of-stake
@@ -5536,7 +5538,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 103307;
+		nGrandfather = 195500;
 		nNewIndex = 10;
 		nNewIndex2 = 36500;
 		bRemotePaymentsEnabled = false;
@@ -5935,6 +5937,7 @@ std::string getfilecontents(std::string filename)
 
 bool IsCPIDValidv3(std::string cpidv2, bool allow_investor)
 {
+	// Used for checking the local cpid
 	bool result=false;
 	if (allow_investor) if (cpidv2 == "INVESTOR" || cpidv2=="investor") return true;
 	if (cpidv2.length() < 34) return false;
@@ -5944,18 +5947,25 @@ bool IsCPIDValidv3(std::string cpidv2, bool allow_investor)
 
 bool IsCPIDValidv2(MiningCPID& mc, int height)
 {
-	//12-24-2014 Halford - Transition to CPIDV2
+	//09-25-2016: Transition to CPID Keypairs.
 	if (height < nGrandfather) return true;
 	bool result = false;
 	int cpidV2CutOverHeight = fTestNet ? 0 : 97000;
+	int cpidV3CutOverHeight = fTestNet ? 195500 : 700000;
 	if (height < cpidV2CutOverHeight)
 	{
-			result = IsCPIDValid_Retired(mc.cpid,mc.enccpid);
+		result = IsCPIDValid_Retired(mc.cpid,mc.enccpid);
 	}
-	else
+	else if (height >= cpidV2CutOverHeight && height <= cpidV3CutOverHeight)
 	{
-		    if (mc.cpid == "INVESTOR" || mc.cpid=="investor") return true;
-	        result = CPID_IsCPIDValid(mc.cpid, mc.cpidv2, (uint256)mc.lastblockhash);
+	    if (mc.cpid == "INVESTOR" || mc.cpid=="investor") return true;
+        result = CPID_IsCPIDValid(mc.cpid, mc.cpidv2, (uint256)mc.lastblockhash);
+	}
+	else if (height >= cpidV3CutOverHeight)
+	{
+	    if (mc.cpid == "INVESTOR" || mc.cpid=="investor") return true;
+		// V3 requires a beacon, a beacon public key and a valid block signature signed by the CPID's private key
+		result = VerifyCPIDSignature(mc.cpid,mc.lastblockhash,mc.BoincSignature);
 	}
 
 	return result;
@@ -5997,12 +6007,12 @@ bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey)
 	}
 	catch (std::exception &e)
 	{
-				printf("Error while resolving IsCpidValid\r\n");
+				printf("Error while resolving CPID\r\n");
 				return false;
 	}
 	catch(...)
 	{
-				printf("Error while Resolving IsCpidValid 2.\r\n");
+				printf("Error while Resolving CPID[2].\r\n");
 				return false;
 	}
 	return false;
@@ -7256,7 +7266,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
 
 	// Stay in Sync - 8-9-2016
-	if (!IsLockTimeWithinMinutes(nLastAskedForBlocks,5) && WalletOutOfSync())
+	if ((!IsLockTimeWithinMinutes(nLastAskedForBlocks,5) && WalletOutOfSync()) || (WalletOutOfSync() && fTestNet))
 	{
 		AskForOutstandingBlocks(uint256(0));
 	}
@@ -7322,7 +7332,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 12-3-2015 (works in conjunction with block spamming)
-		if (pfrom->nVersion < 180318 && fTestNet)
+		if (pfrom->nVersion < 180319 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug10) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -7331,14 +7341,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         if (pfrom->nVersion < MIN_PEER_PROTO_VERSION)
-        {
-            // disconnect from peers older than this proto version
-            if (fDebug10) printf("partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
-            pfrom->fDisconnect = true;
-            return false;
-        }
-
-		if (pfrom->nVersion < MIN_PEER_PROTO_VERSION)
         {
             // disconnect from peers older than this proto version
             if (fDebug10) printf("partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -7479,6 +7481,19 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             nAskedForBlocks++;
             pfrom->PushGetBlocks(pindexBest, uint256(0), true);
+			if (fDebug3) printf("\r\nAsked For blocks.\r\n");
+        }
+
+
+		if (fTestNet && !pfrom->fOneShot &&
+            (pfrom->nStartingHeight > (nBestHeight - 144)) &&
+            (pfrom->nVersion < NOBLKS_VERSION_START ||
+             pfrom->nVersion >= NOBLKS_VERSION_END) &&
+             (nAskedForBlocks < 1 || vNodes.size() <= 1))
+        {
+            nAskedForBlocks++;
+            pfrom->PushGetBlocks(pindexBest, uint256(0), true);
+			printf("\r\nAsked for Testnet Blocks\r\n");
         }
 
         // Relay alerts
@@ -8432,7 +8447,7 @@ bool ProcessMessages(CNode* pfrom)
    				  //Node Duplicates
 				  double node_duplicates = cdbl(ReadCache("duplicates",NodeAddress(pfrom)),0) + 1;
 				  WriteCache("duplicates",NodeAddress(pfrom),RoundToString(node_duplicates,0),GetAdjustedTime());
-				  if ((node_duplicates > 350 && !fTestNet && !OutOfSyncByAge()))
+				  if ((node_duplicates > 350 && !OutOfSyncByAge()))
 				  {
 						printf(" Dupe (misbehaving) %s %s ",NodeAddress(pfrom).c_str(),Peek.c_str());
 			     		pfrom->fDisconnect = true;
@@ -8681,7 +8696,6 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 		mcpid.rac = 0;
 		mcpid.NetworkRAC = 0;
 	}
-	//int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
 
 	std::string sNeuralHash = "";
 	// To save network bandwidth, start posting the neural hashes in the CurrentNeuralHash field, so that out of sync neural network nodes can request neural data from those that are already synced and agree with the supermajority over the last 24 hrs
@@ -8693,7 +8707,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 		#endif
 	}
 
-	//7-25-2015 - Add the neural hash only if necessary
+	//Add the neural hash only if necessary
 	if (!OutOfSyncByAge() && NeuralNodeParticipates() && NeedASuperblock())
 	{
 		#if defined(WIN32) && defined(QT_GUI)
@@ -8708,12 +8722,14 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 	if (mcpid.LastPORBlockHash.empty()) mcpid.LastPORBlockHash="0";
 
 	// If this is a POR, sign the block proving ownership of the CPID
+
 	if (!mcpid.cpid.empty() && mcpid.cpid != "INVESTOR" && mcpid.lastblockhash != "0")
 	{
 		mcpid.BoincPublicKey = GetBeaconPublicKey(mcpid.cpid);
 		if (!mcpid.BoincPublicKey.empty())
 		{
 			mcpid.BoincSignature = SignBlockWithCPID(mcpid.cpid,mcpid.lastblockhash);
+			printf("\r\nSigning Block for cpid %s and blockhash %s with sig %s\r\n",mcpid.cpid.c_str(),mcpid.lastblockhash.c_str(),mcpid.BoincSignature.c_str());
 		}
 	}
 
@@ -9561,7 +9577,7 @@ void TrackRequests(CNode* pfrom,std::string sRequestType)
 	    std::string sKey = "request_type" + sRequestType;
 	    double dReqCt = cdbl(ReadCache(sKey,NodeAddress(pfrom)),0) + 1;
 	    WriteCache(sKey,NodeAddress(pfrom),RoundToString(dReqCt,0),GetAdjustedTime());
-        if ( (dReqCt > 20 && !fTestNet && !OutOfSyncByAge()) )
+        if ( (dReqCt > 20 && !OutOfSyncByAge()) )
 		{
 					printf(" Node requests for %s exceeded threshhold (misbehaving) %s ",sRequestType.c_str(),NodeAddress(pfrom).c_str());
 			        //pfrom->Misbehaving(1);
