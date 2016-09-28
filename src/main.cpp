@@ -1070,7 +1070,9 @@ MiningCPID GetNextProject(bool bForce)
 									uint256 pbh = 1;
 									GlobalCPUMiningCPID.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey, pbh);
 									GlobalCPUMiningCPID.lastblockhash = "0";
-
+									// Sign the block
+									GlobalCPUMiningCPID.BoincSignature = SignBlockWithCPID(GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.lastblockhash);
+								
 									if (!IsCPIDValidv2(GlobalCPUMiningCPID,1))
 									{
 										printf("CPID INVALID 2 %s, %s  ",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.cpidv2.c_str());
@@ -3522,7 +3524,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     pindex->nMoneySupply = ReturnCurrentMoneySupply(pindex) + nValueOut - nValueIn;
 
 	// Gridcoin: Store verified magnitude and CPID in block index (7-11-2015)
-	if (pindex->nHeight > nNewIndex)
+	if (pindex->nHeight > nNewIndex2)
 	{
 		pindex->sCPID  = bb.cpid;
 		pindex->nMagnitude = bb.Magnitude;
@@ -3708,7 +3710,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 	//  End of Network Consensus
 
 	// Gridcoin: Track payments to CPID, and last block paid
-	if (!bb.cpid.empty() && bb.cpid != "INVESTOR" && pindex->nHeight > nNewIndex)
+	if (!bb.cpid.empty() && bb.cpid != "INVESTOR" && pindex->nHeight > nNewIndex2)
 	{
 		StructCPID stCPID = GetInitializedStructCPID2(bb.cpid,mvResearchAge);
 		stCPID.InterestSubsidy += bb.InterestSubsidy;
@@ -4487,7 +4489,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
 					if (fDebug10) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3517 && IsResearchAgeEnabled(height1) && !fTestNet) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-					if (bv < 3578 && fTestNet) return DoS(25, error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n"));
+					if (bv < 3579 && fTestNet) return DoS(25, error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n"));
 			}
 
 			if (bb.cpid != "INVESTOR" && height1 > nGrandfather)
@@ -5063,9 +5065,8 @@ void GridcoinServices()
 
 bool AskForOutstandingBlocks(uint256 hashStart)
 {
-	if (!fTestNet && IsLockTimeWithinMinutes(nLastAskedForBlocks,2)) return true;
+	if (IsLockTimeWithinMinutes(nLastAskedForBlocks,2)) return true;
 	nLastAskedForBlocks = GetAdjustedTime();
-	if (fTestNet) mapAlreadyAskedFor.clear();
 		
 	int iAsked = 0;
 	LOCK(cs_vNodes);
@@ -5538,7 +5539,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 195500;
+		nGrandfather = 196300;
 		nNewIndex = 10;
 		nNewIndex2 = 36500;
 		bRemotePaymentsEnabled = false;
@@ -5951,7 +5952,7 @@ bool IsCPIDValidv2(MiningCPID& mc, int height)
 	if (height < nGrandfather) return true;
 	bool result = false;
 	int cpidV2CutOverHeight = fTestNet ? 0 : 97000;
-	int cpidV3CutOverHeight = fTestNet ? 195500 : 700000;
+	int cpidV3CutOverHeight = fTestNet ? 196300 : 705000;
 	if (height < cpidV2CutOverHeight)
 	{
 		result = IsCPIDValid_Retired(mc.cpid,mc.enccpid);
@@ -7332,7 +7333,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 12-3-2015 (works in conjunction with block spamming)
-		if (pfrom->nVersion < 180319 && fTestNet)
+		if (pfrom->nVersion < 180320 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug10) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -10261,7 +10262,7 @@ void TestScan()
 	BOOST_FOREACH(const PAIRTYPE(uint256, CBlockIndex*)& item, mapBlockIndex)
     {
         CBlockIndex* pindex = item.second;
-		if (LessVerbose(1) || pindex->nHeight > nNewIndex)
+		if (LessVerbose(1) || pindex->nHeight > nNewIndex2)
 		{
 			printf("map block index h %f ,  cpid %s   , Mag  %f , RS %f, INT %f \r\n",(double)pindex->nHeight,pindex->sCPID.c_str(), (double)pindex->nMagnitude,
 				pindex->nResearchSubsidy,pindex->nInterestSubsidy);
@@ -10276,7 +10277,7 @@ void TestScan2()
     while (pindex->nHeight > 1)
 	{
         pindex = pindex->pprev;
-		if (LessVerbose(1) || pindex->nHeight > nNewIndex)
+		if (LessVerbose(1) || pindex->nHeight > nNewIndex2)
 		{
 			printf("map block index h %f ,  cpid %s   , Mag  %f , RS %f, INT %f \r\n",(double)pindex->nHeight,pindex->sCPID.c_str(), (double)pindex->nMagnitude,
 				pindex->nResearchSubsidy,pindex->nInterestSubsidy);
@@ -10437,7 +10438,7 @@ CBlockIndex* GetHistoricalMagnitude_ScanChain(std::string cpid)
 	// Limit lookback to 6 months
 	int nMinIndex = pindexBest->nHeight-(6*30*BLOCKS_PER_DAY);
 	if (nMinIndex < 2) nMinIndex=2;
-    while (pindex->nHeight > nNewIndex && pindex->nHeight > nMinIndex)
+    while (pindex->nHeight > nNewIndex2 && pindex->nHeight > nMinIndex)
 	{
   	    //8-5-2015; R HALFORD; Find the last block the CPID staked with a research subsidy (IE dont count interest blocks)
 		if (!pindex || !pindex->pprev) return pindexGenesisBlock;

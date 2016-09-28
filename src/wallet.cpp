@@ -19,6 +19,7 @@ using namespace std;
 static unsigned int GetStakeSplitAge() { return IsProtocolV2(nBestHeight) ? (10 * 24 * 60 * 60) : (1 * 24 * 60 * 60); }
 static int64_t GetStakeCombineThreshold() { return IsProtocolV2(nBestHeight) ? (50 * COIN) : (1000 * COIN); }
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
+std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 std::vector<std::string> split(std::string s, std::string delim);
 StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
 double cdbl(std::string s, int place);
@@ -1944,8 +1945,12 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 			 miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
 			 miningcpid.RSAWeight = GetRSAWeightByCPID(miningcpid.cpid);
 			 hashBoinc = SerializeBoincBlock(miningcpid);
+			 // Sign
+			 miningcpid.BoincSignature = SignBlockWithCPID(miningcpid.cpid,miningcpid.lastblockhash);
+
 			 if (!IsCPIDValidv2(miningcpid,pindexPrev->nHeight))
 			 {
+				
 				 printf("Unable to create boinc block->CPID INVALID cpid %s %s %s",miningcpid.cpid.c_str(),miningcpid.boincruntimepublickey.c_str(),miningcpid.email.c_str());
 				
 				 MilliSleep(300);

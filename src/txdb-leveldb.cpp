@@ -404,7 +404,7 @@ bool CTxDB::LoadBlockIndex()
         pindexNew->nBits          = diskindex.nBits;
         pindexNew->nNonce         = diskindex.nNonce;
 
-		//10-4-2015 - Gridcoin - New Accrual Fields
+		//9-26-2016 - Gridcoin - New Accrual Fields
 
 		if (diskindex.nHeight > nNewIndex)
 		{
@@ -412,7 +412,6 @@ bool CTxDB::LoadBlockIndex()
 			pindexNew->nResearchSubsidy  = diskindex.nResearchSubsidy;
 			pindexNew->nInterestSubsidy  = diskindex.nInterestSubsidy;
 			pindexNew->nMagnitude        = diskindex.nMagnitude;
-			
 			pindexNew->nIsContract       = diskindex.nIsContract;
 			pindexNew->nIsSuperBlock     = diskindex.nIsSuperBlock;
 		}

@@ -482,8 +482,8 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 		bool bIsBinary = Contains(bb.superblock,"<BINARY>");
 		result.push_back(Pair("IsBinary",bIsBinary));
 	}
-	result.push_back(Pair("IsSuperBlock", (double)blockindex->nIsSuperBlock));
-	result.push_back(Pair("IsContract", (double)blockindex->nIsContract));
+	result.push_back(Pair("IsSuperBlock", (int)blockindex->nIsSuperBlock));
+	result.push_back(Pair("IsContract", (int)blockindex->nIsContract));
     return result;
 }
 
