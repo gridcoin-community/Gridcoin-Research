@@ -1075,7 +1075,7 @@ MiningCPID GetNextProject(bool bForce)
 								
 									if (!IsCPIDValidv2(GlobalCPUMiningCPID,1))
 									{
-										printf("CPID INVALID 2 %s, %s  ",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.cpidv2.c_str());
+										printf("CPID INVALID (GetNextProject) %s, %s  ",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.cpidv2.c_str());
 										continue;
 									}
 
@@ -3533,6 +3533,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 		pindex->nIsSuperBlock =  (bb.superblock.length() > 20) ? 1 : 0;
 		// Must scan transactions after CoinStake to know if this is a contract.
 		int iPos = 0;
+		pindex->nIsContract = 0;
 		BOOST_FOREACH(const CTransaction &tx, vtx)
 		{
 			if (tx.hashBoinc.length() > 3 && iPos > 0)
@@ -4489,13 +4490,13 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
 					if (fDebug10) printf("BV %f, CV %f   ",bv,cvn);
 					//if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 					if (bv < 3517 && IsResearchAgeEnabled(height1) && !fTestNet) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-					if (bv < 3579 && fTestNet) return DoS(25, error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n"));
+					if (bv < 3580 && fTestNet) return DoS(25, error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n"));
 			}
 
 			if (bb.cpid != "INVESTOR" && height1 > nGrandfather)
 			{
     			if (bb.projectname.empty() && !IsResearchAgeEnabled(height1)) 	return DoS(1,error("CheckBlock::PoR Project Name invalid"));
-	    		if (!IsCPIDValidv2(bb,height1))
+	    		if (!fLoadingIndex && !IsCPIDValidv2(bb,height1))
 				{
 						return error("Bad CPID : height %f, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc %s",(double)height1,
 							bb.cpid.c_str(), bb.cpidv2.c_str(),
@@ -5539,7 +5540,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
-		nGrandfather = 196300;
+		nGrandfather = 196550;
 		nNewIndex = 10;
 		nNewIndex2 = 36500;
 		bRemotePaymentsEnabled = false;
@@ -5952,7 +5953,7 @@ bool IsCPIDValidv2(MiningCPID& mc, int height)
 	if (height < nGrandfather) return true;
 	bool result = false;
 	int cpidV2CutOverHeight = fTestNet ? 0 : 97000;
-	int cpidV3CutOverHeight = fTestNet ? 196300 : 705000;
+	int cpidV3CutOverHeight = fTestNet ? 196300 : 715000;
 	if (height < cpidV2CutOverHeight)
 	{
 		result = IsCPIDValid_Retired(mc.cpid,mc.enccpid);
@@ -7333,7 +7334,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 		// Ensure testnet users are running latest version as of 12-3-2015 (works in conjunction with block spamming)
-		if (pfrom->nVersion < 180320 && fTestNet)
+		if (pfrom->nVersion < 180321 && fTestNet)
 		{
 		    // disconnect from peers older than this proto version
             if (fDebug10) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);

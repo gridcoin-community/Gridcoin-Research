@@ -3783,7 +3783,7 @@ Array MagnitudeReport(std::string cpid)
 						StructCPID structMag = mvMagnitudes[(*ii).first];
 						if (structMag.initialized && !structMag.cpid.empty()) 
 						{ 
-								if (cpid.empty() || (structMag.cpid == cpid))
+								if (cpid.empty() || (Contains(structMag.cpid,cpid)))
 								{
 											Object entry;
 											if (IsResearchAgeEnabled(pindexBest->nHeight))
@@ -3797,7 +3797,7 @@ Array MagnitudeReport(std::string cpid)
 												// entry.push_back(Pair("PoolMining",bPoolMiningMode));
 	
 												double dWeight = (double)GetRSAWeightByCPID(structMag.cpid);
-												entry.push_back(Pair("RSA Weight",dWeight));
+												//entry.push_back(Pair("RSA Weight",dWeight));
 												StructCPID UH = GetInitializedStructCPID2(cpid,mvMagnitudes);
 												
 												// entry.push_back(Pair("RSA block count",UH.Accuracy));
@@ -3805,7 +3805,7 @@ Array MagnitudeReport(std::string cpid)
 												// entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
 												entry.push_back(Pair("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime)));
 												
-												entry.push_back(Pair("Magnitude",	structMag.Magnitude));
+												entry.push_back(Pair("Magnitude (Last Superblock)",	structMag.Magnitude));
 												entry.push_back(Pair("Research Payments (14 days)",structMag.payments));
 												
 												// entry.push_back(Pair("Interest Payments (14 days)",structMag.interestPayments));
