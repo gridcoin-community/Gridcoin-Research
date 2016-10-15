@@ -1950,9 +1950,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 			 if (!IsCPIDValidv2(miningcpid,pindexPrev->nHeight))
 			 {
-				
-				 printf("Unable to create boinc block->CPID INVALID cpid %s %s %s",miningcpid.cpid.c_str(),miningcpid.boincruntimepublickey.c_str(),miningcpid.email.c_str());
-				
+				 if (fDebug3 && LessVerbose(25)) printf("Unable to create boinc block->CPID INVALID cpid %s %s %s",miningcpid.cpid.c_str(),miningcpid.boincruntimepublickey.c_str(),miningcpid.email.c_str());
 				 MilliSleep(300);
 			 }
 			 else

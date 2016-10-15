@@ -17,6 +17,7 @@ using namespace json_spirit;
 using namespace std;
 double OwedByAddress(std::string address);
 extern std::string YesNo(bool bin);
+bool BackupConfigFile(const string& strDest);
 std::string getHardDriveSerial();
 int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
 extern double DoubleFromAmount(int64_t amount);
@@ -28,6 +29,8 @@ bool AskForOutstandingBlocks(uint256 hashStart);
 bool WriteKey(std::string sKey, std::string sValue);
 bool CleanChain();
 extern std::string SendReward(std::string sAddress, int64_t nAmount);
+std::string GetLocalBeaconPublicKey(std::string cpid);
+extern double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID);
 extern std::string GetBeaconPublicKey(std::string cpid);
 extern std::string GetBeaconPrivateKey(std::string cpid);
 extern std::string SuccessFail(bool f);
@@ -671,20 +674,22 @@ void fileopen_and_copy(std::string src, std::string dest)
 	
 std::string BackupGridcoinWallet()
 {
-
 	printf("Starting Wallet Backup\r\n");
 	std::string filename = "grc_" + DateTimeStrFormat("%m-%d-%Y",  GetAdjustedTime()) + ".dat";
 	std::string filename_backup = "backup.dat";
 	std::string standard_filename = "wallet_" + DateTimeStrFormat("%m-%d-%Y",  GetAdjustedTime()) + ".dat";
+	std::string sConfig_FileName = "gridcoinresearch_" + DateTimeStrFormat("%m-%d-%Y",  GetAdjustedTime()) + ".conf";
 	std::string source_filename   = "wallet.dat";
 	boost::filesystem::path path = GetDataDir() / "walletbackups" / filename;
 	boost::filesystem::path target_path_standard = GetDataDir() / "walletbackups" / standard_filename;
+	boost::filesystem::path sTargetPathConfig = GetDataDir() / "walletbackups" / sConfig_FileName;
 	boost::filesystem::path source_path_standard = GetDataDir() / source_filename;
 	boost::filesystem::path dest_path_std = GetDataDir() / "walletbackups" / filename_backup;
     boost::filesystem::create_directories(path.parent_path());
 	std::string errors = "";
 	//Copy the standard wallet first:  (1-30-2015)
 	BackupWallet(*pwalletMain, target_path_standard.string().c_str());
+	BackupConfigFile(sTargetPathConfig.string().c_str());
 
 	//Per Forum, do not dump the keys and abort:
 	if (true)
@@ -1343,12 +1348,10 @@ std::string GetListOf(std::string datatype)
 
 int64_t BeaconTimeStamp(std::string cpid, bool bZeroOutAfterPOR)
 {
-			//12-4-2015
 			std::string sBeacon = mvApplicationCache["beacon;" + cpid];
 			int64_t iLocktime = mvApplicationCacheTimestamp["beacon;" + cpid];
 			int64_t iRSAWeight = GetRSAWeightByCPIDWithRA(cpid);
-
-			printf("\r\n Beacon %s, Weight %f, Locktime %f \r\n",sBeacon.c_str(),(double)iRSAWeight,(double)iLocktime);
+			if (fDebug10) printf("\r\n Beacon %s, Weight %f, Locktime %f \r\n",sBeacon.c_str(),(double)iRSAWeight,(double)iLocktime);
 			if (bZeroOutAfterPOR && iRSAWeight==0) iLocktime = 0;
 			return iLocktime;
 
@@ -1398,8 +1401,9 @@ bool CPIDAcidTest2(std::string bpk, std::string externalcpid)
 int GenerateNewKeyPair(std::string sIndex, std::string &sOutPubKey, std::string &sOutPrivKey)
 {
 	// First Check the Index - if it already exists, use it
-	sOutPrivKey = GetArgument("PrivateKey" + sIndex, "");
-	sOutPubKey  = GetArgument("PublicKey" + sIndex, "");
+	std::string sSuffix = fTestNet ? "testnet" : "";
+	sOutPrivKey = GetArgument("PrivateKey" + sIndex + sSuffix, "");
+	sOutPubKey  = GetArgument("PublicKey" + sIndex + sSuffix, "");
 	if (!sOutPrivKey.empty() && !sOutPubKey.empty()) return 1;
     // Generate the Keypair
 	CKey key;
@@ -1408,8 +1412,8 @@ int GenerateNewKeyPair(std::string sIndex, std::string &sOutPubKey, std::string 
 	sOutPrivKey = HexStr<CPrivKey::iterator>(vchPrivKey.begin(), vchPrivKey.end());
 	sOutPubKey = HexStr(key.GetPubKey().Raw());
 	// Store the Keypair
-	WriteKey("PrivateKey" + sIndex,sOutPrivKey);
-	WriteKey("PublicKey" + sIndex,sOutPubKey);
+	WriteKey("PrivateKey" + sIndex + sSuffix,sOutPrivKey);
+	WriteKey("PublicKey" + sIndex + sSuffix,sOutPubKey);
 	return 2;
 }
 		
@@ -1449,7 +1453,6 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
 				return false;
 			}
 		
-
 			int iResult = GenerateNewKeyPair(GlobalCPUMiningCPID.cpid,sOutPubKey,sOutPrivKey);
 			if (iResult < 1)
 			{
@@ -2059,10 +2062,46 @@ Value execute(const Array& params, bool fHelp)
 		{
 			sErr += "Private Key Missing. ";
 		}
+		// Verify the users Local Public Key matches the Beacon Public Key
+		std::string sLocalPubKey = GetLocalBeaconPublicKey(sCPID);
+		entry.push_back(Pair("Local Configuration Public Key", sLocalPubKey.c_str()));
+
+		if (sLocalPubKey.empty())
+		{
+			sErr += "Local configuration file Public Key missing. ";
+		}
+
+		if (sLocalPubKey != sPubKey && !sPubKey.empty())
+		{
+			sErr += "Local configuration public key does not match beacon public key.  This can happen if you copied the wrong public key into your configuration file.  Please request that your beacon is deleted, or look into walletbackups for the correct keypair. ";
+		}
+		
+		// Prior superblock Magnitude 
+		double dMagnitude = GetMagnitudeByCpidFromLastSuperblock(sCPID);
+		entry.push_back(Pair("Magnitude (As of last superblock)", dMagnitude));
+		if (dMagnitude==0)
+		{
+			entry.push_back(Pair("Warning","Your magnitude is 0 as of the last superblock: this may keep you from staking POR blocks."));
+		}
+
+		// Staking Test 10-15-2016 - Simulate signing an actual block to verify this CPID keypair will work.
+		uint256 hashBlock = GetRandHash();
+		if (!sPubKey.empty())
+		{
+			std::string sSignature = SignBlockWithCPID(sCPID,hashBlock.GetHex());
+			bool fResult = VerifyCPIDSignature(sCPID, hashBlock.GetHex(), sSignature);
+			entry.push_back(Pair("Block Signing Test Results", fResult));
+			if (!fResult)
+			{
+				sErr += "Failed to sign POR block.  This can happen if your keypair is invalid.  Check walletbackups for the correct keypair, or request that your beacon is deleted. ";
+			}
+		}
+
 		if (!sErr.empty()) 
 		{
 			entry.push_back(Pair("Errors", sErr));
 			entry.push_back(Pair("Help", "Note: If your beacon is missing its public key, or is not in the chain, you may try: execute advertisebeacon."));
+			entry.push_back(Pair("Configuration Status","FAIL"));
 		}
 		else
 		{
@@ -3790,38 +3829,29 @@ Array MagnitudeReport(std::string cpid)
 											{
 
 												StructCPID stCPID = GetLifetimeCPID(structMag.cpid,"MagnitudeReport");
-											
 												double days = (GetAdjustedTime() - stCPID.LowLockTime)/86400;
-     							
-												entry.push_back(Pair("CPID",structMag.cpid));
+     											entry.push_back(Pair("CPID",structMag.cpid));
 												// entry.push_back(Pair("PoolMining",bPoolMiningMode));
-	
 												double dWeight = (double)GetRSAWeightByCPID(structMag.cpid);
 												//entry.push_back(Pair("RSA Weight",dWeight));
 												StructCPID UH = GetInitializedStructCPID2(cpid,mvMagnitudes);
-												
 												// entry.push_back(Pair("RSA block count",UH.Accuracy));
-												
 												// entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
 												entry.push_back(Pair("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime)));
-												
 												entry.push_back(Pair("Magnitude (Last Superblock)",	structMag.Magnitude));
 												entry.push_back(Pair("Research Payments (14 days)",structMag.payments));
-												
 												// entry.push_back(Pair("Interest Payments (14 days)",structMag.interestPayments));
 												if (structMag.cpid == cpid)
 												{
 													// double iPct = ( (structMag.interestPayments/14) * 365 / (nBalance+.01));
 													// entry.push_back(Pair("Interest %", iPct));
 												}
-												
 												entry.push_back(Pair("Daily Paid",structMag.payments/14));
 												// Research Age - Calculate Expected 14 Day Owed, and Daily Owed:
 												double dExpected14 = magnitude_unit * structMag.Magnitude * 14;
 												entry.push_back(Pair("Expected Earnings (14 days)", dExpected14));
 												entry.push_back(Pair("Expected Earnings (Daily)", dExpected14/14));
-												if (fDebug3) printf(" MR6.5 ");
-
+								
 												// Fulfillment %
 												double fulfilled = ((structMag.payments/14) / ((dExpected14/14)+.01)) * 100;
 												entry.push_back(Pair("Fulfillment %", fulfilled));
@@ -3829,14 +3859,12 @@ Array MagnitudeReport(std::string cpid)
 												entry.push_back(Pair("CPID Lifetime Interest Paid", stCPID.InterestSubsidy));
 												entry.push_back(Pair("CPID Lifetime Research Paid", stCPID.ResearchSubsidy));
 												entry.push_back(Pair("CPID Lifetime Avg Magnitude", stCPID.ResearchAverageMagnitude));
-												if (fDebug3) printf(" MR6.55 ");
-
+							
 												entry.push_back(Pair("CPID Lifetime Payments Per Day", stCPID.ResearchSubsidy/(days+.01)));
 												entry.push_back(Pair("Last Blockhash Paid", stCPID.BlockHash));
 												entry.push_back(Pair("Last Block Paid",stCPID.LastBlock));
 												entry.push_back(Pair("Tx Count",stCPID.Accuracy));
-												if (fDebug3) printf(" MR6.6 ");
-
+							
 												results.push_back(entry);
 												if (cpid==msPrimaryCPID && !msPrimaryCPID.empty() && msPrimaryCPID != "INVESTOR")
 												{
@@ -3933,6 +3961,16 @@ struct CPIDOwed
 bool SortByOwed(const CPIDOwed &magL, const CPIDOwed &magR) { return magL.owed > magR.owed; }
 
 
+double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID)
+{
+		StructCPID structMag = mvMagnitudes[sCPID];
+		if (structMag.initialized && structMag.cpid.length() > 2 && structMag.cpid != "INVESTOR") 
+		{ 
+			return structMag.Magnitude;
+		}
+		return 0;
+}
+
 std::string CryptoLottery(int64_t locktime)
 {
 		   std::string sOut = "";
@@ -4020,9 +4058,20 @@ std::string MyBeaconExists(std::string cpid)
 
 std::string GetBeaconPrivateKey(std::string cpid)
 {
-	std::string sBeaconPrivKey = GetArgument("privatekey" + cpid, "");
+	// 10-15-2016: Add the Suffix to the PrivateKey, so TestNet uses distinct keys
+	std::string sSuffix = fTestNet ? "testnet" : "";
+	std::string sBeaconPrivKey = GetArgument("privatekey" + cpid + sSuffix, "");
 	return sBeaconPrivKey;
 }
+
+std::string GetLocalBeaconPublicKey(std::string cpid)
+{
+	// 10-15-2016: Add the Suffix to the PrivateKey, so TestNet uses distinct keys
+	std::string sSuffix = fTestNet ? "testnet" : "";
+	std::string sBeaconPubKey = GetArgument("publickey" + cpid + sSuffix, "");
+	return sBeaconPubKey;
+}
+
 
 std::string GetBeaconPublicKey(std::string cpid)
 {

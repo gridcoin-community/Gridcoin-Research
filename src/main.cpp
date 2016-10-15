@@ -5953,7 +5953,7 @@ bool IsCPIDValidv2(MiningCPID& mc, int height)
 	if (height < nGrandfather) return true;
 	bool result = false;
 	int cpidV2CutOverHeight = fTestNet ? 0 : 97000;
-	int cpidV3CutOverHeight = fTestNet ? 196300 : 715000;
+	int cpidV3CutOverHeight = fTestNet ? 196300 : 725000;
 	if (height < cpidV2CutOverHeight)
 	{
 		result = IsCPIDValid_Retired(mc.cpid,mc.enccpid);
@@ -8376,7 +8376,7 @@ void AddPeek(std::string data)
 	if (msPeek.length() > 60000) msPeek = "";
 	if ((GetAdjustedTime() - nLastPeek) > 60)
 	{
-		printf("\r\nLong Duration : %s\r\n",buffer.c_str());
+		if (fDebug) printf("\r\nLong Duration : %s\r\n",buffer.c_str());
 	}
 	nLastPeek = GetAdjustedTime();
 }
@@ -10330,8 +10330,8 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
 			if (IsLockTimeWithinMinutes(iBeaconTimestamp, 60*24*30*6))
 			{
 				double dNewbieAccrualAge = ((double)nTime - (double)iBeaconTimestamp) / 86400;
-				int64_t iAccrual = (int64_t)(dNewbieAccrualAge*dCurrentMagnitude*dMagnitudeUnit*COIN);
-				if (fDebug3) printf("\r\n Newbie Special Stake! %s  Age %f, Accrual %f \r\n",cpid.c_str(),dNewbieAccrualAge,(double)iAccrual);
+				int64_t iAccrual = (int64_t)((dNewbieAccrualAge*dCurrentMagnitude*dMagnitudeUnit*COIN) + (1*COIN));
+				if (fDebug3) printf("\r\n Newbie Special First Stake for CPID %s, Age %f, Accrual %f \r\n",cpid.c_str(),dNewbieAccrualAge,(double)iAccrual);
 				return iAccrual;
 			}
 		}
@@ -10369,7 +10369,7 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
 	if (iRABlockSpan < 10 && iVerificationPhase != 2) Accrual = 0;
 
 	double verbosity = (operation == "createnewblock" || operation == "createcoinstake") ? 10 : 1000;
-	if ((fDebug3 && LessVerbose(verbosity)) || (fDebug3 && iVerificationPhase==2)) printf(" Operation %s, ComputedAccrual %f, StakeHeight %f, RABlockSpan %f, HistoryHeight%f, AccrualAge %f, AvgMag %f, MagUnit %f, PPD %f, Reference PPD %f  \r\n",
+	if ((fDebug && LessVerbose(verbosity)) || (fDebug3 && iVerificationPhase==2)) printf(" Operation %s, ComputedAccrual %f, StakeHeight %f, RABlockSpan %f, HistoryHeight%f, AccrualAge %f, AvgMag %f, MagUnit %f, PPD %f, Reference PPD %f  \r\n",
 		operation.c_str(),CoinToDouble(Accrual),(double)pindexLast->nHeight,(double)iRABlockSpan,
 		(double)pHistorical->nHeight,	dAccrualAge,AvgMagnitude,dMagnitudeUnit, PPD, ReferencePPD);
 	return Accrual;

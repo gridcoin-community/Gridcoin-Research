@@ -13,6 +13,7 @@ using namespace boost;
 
 static uint64_t nAccountingEntryNumber = 0;
 extern bool fWalletUnlockStakingOnly;
+extern bool BackupConfigFile(const string& strDest);
 
 //
 // CWalletDB
@@ -677,6 +678,32 @@ void ThreadFlushWalletDB(void* parg)
         }
     }
 }
+
+
+bool BackupConfigFile(const string& strDest)
+{
+      filesystem::path pathSrc = GetDataDir() / "gridcoinresearch.conf";
+	  filesystem::path pathDest(strDest);
+      if (filesystem::is_directory(pathDest))
+                    pathDest /= "gridcoinresearch.conf";
+	  try 
+	  {
+			#if BOOST_VERSION >= 104000
+                    filesystem::copy_file(pathSrc, pathDest, filesystem::copy_option::overwrite_if_exists);
+			#else
+                    filesystem::copy_file(pathSrc, pathDest);
+			#endif
+                    printf("copied gridcoinresearch.conf to %s\n", pathDest.string().c_str());
+                    return true;
+       }
+	   catch(const filesystem::filesystem_error &e) 
+	   {
+                    printf("error copying gridcoinresearch.conf to %s - %s\n", pathDest.string().c_str(), e.what());
+                    return false;
+       }
+	   return false;
+}
+
 
 bool BackupWallet(const CWallet& wallet, const string& strDest)
 {
