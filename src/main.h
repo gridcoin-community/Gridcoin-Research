@@ -103,6 +103,12 @@ inline int GetSuperblockAgeSpacing(int nHeight)
 	return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);
 }
 
+inline bool AreBinarySuperblocksEnabled(int nHeight) 
+{ 
+	return (fTestNet ? nHeight > 10000 : nHeight > 725000); 
+}
+
+
 inline int64_t PastDrift(int64_t nTime, int nHeight)   { return IsProtocolV2(nHeight) ? nTime - 20 * 60  : nTime - 20 * 60; }
 inline int64_t FutureDrift(int64_t nTime, int nHeight) { return IsProtocolV2(nHeight) ? nTime + 20 * 60  : nTime + 20 * 60; }
 inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight) ? 90 : 60; }
@@ -151,7 +157,6 @@ extern std::map<uint256, CBlock*> mapOrphanBlocks;
 extern int64_t COIN_YEAR_REWARD;
 extern bool bCryptoLotteryEnabled;
 extern bool bRemotePaymentsEnabled;
-extern bool bNewbieFeatureEnabled;
 extern bool bOPReturnEnabled;
 extern bool bOptionPaymentsEnabled;
 

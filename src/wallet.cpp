@@ -1884,13 +1884,11 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	if (!GlobalCPUMiningCPID.initialized)
 	{
 		printf("Global Mining CPID not initialized yet.. Unable to stake\r\n");
-		msMiningErrors7="No Global CPID;";
 		return false;
 	}
 	if (GlobalCPUMiningCPID.cpid == "")
 	{
 		printf("Global Mining CPID not initialized yet.. Unable to stake\r\n");
-		msMiningErrors7="No Global CPID";
 		return false;
 	}
 

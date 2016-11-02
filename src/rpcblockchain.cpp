@@ -1404,7 +1404,19 @@ int GenerateNewKeyPair(std::string sIndex, std::string &sOutPubKey, std::string 
 	std::string sSuffix = fTestNet ? "testnet" : "";
 	sOutPrivKey = GetArgument("PrivateKey" + sIndex + sSuffix, "");
 	sOutPubKey  = GetArgument("PublicKey" + sIndex + sSuffix, "");
-	if (!sOutPrivKey.empty() && !sOutPubKey.empty()) return 1;
+	// If current keypair is not empty, but is invalid, allow the new keys to be stored, otherwise return 1: (10-25-2016)
+
+	if (!sOutPrivKey.empty() && !sOutPubKey.empty()) 
+	{
+			uint256 hashBlock = GetRandHash();
+			std::string sSignature = SignBlockWithCPID(sIndex,hashBlock.GetHex());
+			bool fResult = VerifyCPIDSignature(sIndex, hashBlock.GetHex(), sSignature);
+			if (fResult)
+			{
+	    		printf("\r\nGenerateNewKeyPair::Current keypair is valid.\r\n");
+				return 1;
+			}
+	}
     // Generate the Keypair
 	CKey key;
 	key.MakeNewKey(false);

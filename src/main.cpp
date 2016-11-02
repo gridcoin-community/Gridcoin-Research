@@ -304,7 +304,6 @@ unsigned int nStakeMaxAge = -1; // unlimited
 unsigned int nModifierInterval = 10 * 60; // time to elapse before new modifier is computed
 bool bCryptoLotteryEnabled = true;
 bool bRemotePaymentsEnabled = false;
-bool bNewbieFeatureEnabled = false;
 bool bOPReturnEnabled = true;
 bool bOptionPaymentsEnabled = false;
 
@@ -481,7 +480,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msHDDSerial = "";
  //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
 
- int nGrandfather = 677500;
+ int nGrandfather = 714999;
  int nNewIndex = 271625;
  int nNewIndex2 = 364500;
 
@@ -5544,7 +5543,6 @@ bool LoadBlockIndex(bool fAllowNew)
 		nNewIndex = 10;
 		nNewIndex2 = 36500;
 		bRemotePaymentsEnabled = false;
-		bNewbieFeatureEnabled = true;
 		bOPReturnEnabled = false;
 		bOptionPaymentsEnabled = false;
 		//1-24-2016
@@ -8662,7 +8660,7 @@ std::string GetNeuralNetworkSuperBlock()
 			#if defined(WIN32) && defined(QT_GUI)
 				contract = qtGetNeuralContract("");
 				if (fDebug2 && LessVerbose(5)) printf("Appending SuperBlock %f\r\n",(double)contract.length());
-				if (bNewbieFeatureEnabled)
+				if (AreBinarySuperblocksEnabled(nBestHeight))
 				{
 					// 12-21-2015 : Stake a binary superblock
 					contract = PackBinarySuperblock(contract);
@@ -10297,7 +10295,7 @@ double GRCMagnitudeUnit(int64_t locktime)
 	double Kitty = MaximumEmission - (network.payments/14);
 	if (Kitty < 1) Kitty = 1;
 	double MagnitudeUnit = 0;
-	if (bNewbieFeatureEnabled)
+	if (AreBinarySuperblocksEnabled(nBestHeight))
 	{
 		MagnitudeUnit = (Kitty/TotalNetworkMagnitude)*1.25;
 	}
@@ -10318,7 +10316,7 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
 	if (pHistorical->nHeight <= nNewIndex || pHistorical->nMagnitude==0 || pHistorical->nTime == 0)
 	{
 		//No prior block exists... Newbies get .01 age to bootstrap the CPID (otherwise they will not have any prior block to refer to, thus cannot get started):
-		if (!bNewbieFeatureEnabled)
+		if (!AreBinarySuperblocksEnabled(pindexLast->nHeight))
 		{
 				return dCurrentMagnitude > 0 ? ((dCurrentMagnitude/100)*COIN) : 0;
 		}
@@ -10331,8 +10329,17 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
 			{
 				double dNewbieAccrualAge = ((double)nTime - (double)iBeaconTimestamp) / 86400;
 				int64_t iAccrual = (int64_t)((dNewbieAccrualAge*dCurrentMagnitude*dMagnitudeUnit*COIN) + (1*COIN));
+				if ((dNewbieAccrualAge*dCurrentMagnitude*dMagnitudeUnit) > 500)
+				{
+					printf("Newbie special stake too high, reward=500GRC");
+					return (500*COIN);
+				}
 				if (fDebug3) printf("\r\n Newbie Special First Stake for CPID %s, Age %f, Accrual %f \r\n",cpid.c_str(),dNewbieAccrualAge,(double)iAccrual);
 				return iAccrual;
+			}
+			else
+			{
+				return dCurrentMagnitude > 0 ? (((dCurrentMagnitude/100)*COIN) + (1*COIN)): 0;
 			}
 		}
 	}

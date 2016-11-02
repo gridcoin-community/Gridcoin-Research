@@ -394,7 +394,7 @@ int64_t GetRSAWeightByCPIDWithRA(std::string cpid)
 int64_t GetRSAWeightByCPID(std::string cpid)
 {
 
-	if (IsResearchAgeEnabled(pindexBest->nHeight) && bNewbieFeatureEnabled) 
+	if (IsResearchAgeEnabled(pindexBest->nHeight) && AreBinarySuperblocksEnabled(pindexBest->nHeight)) 
 	{
 			return GetRSAWeightByCPIDWithRA(cpid);
 			//ToDo : During next mandatory, retire this old function.
@@ -420,8 +420,6 @@ int64_t GetRSAWeightByCPID(std::string cpid)
 								if (fTestNet && weight < 0) weight = 0;
 								if (IsResearchAgeEnabled(pindexBest->nHeight) && weight < 0) weight=0;
 						}
-
-						//if (IsResearchAgeEnabled(pindexBest->nHeight) && !bNewbieFeatureEnabled) weight = UntrustedHost.Magnitude;
 
 			}
 			else
