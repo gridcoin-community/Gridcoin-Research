@@ -35,9 +35,9 @@
 #elif defined(_M_IX86) || defined(__i386__) || defined(__i386)
 #define ARCH_CPU_X86_FAMILY 1
 #elif defined(__ARMEL__)
+#define ARCH_CPU_ARM_FAMILY 1
 #elif defined(__aarch64__)
 #define ARCH_CPU_ARM64_FAMILY 1
-#define ARCH_CPU_ARM_FAMILY 1
 #elif defined(__ppc__) || defined(__powerpc__) || defined(__powerpc64__)
 #define ARCH_CPU_PPC_FAMILY 1
 #endif
