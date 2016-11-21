@@ -629,16 +629,16 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
 				double dResearch = bb.ResearchSubsidy + bb.InterestSubsidy;
 				double dRewardShare = dResearch*.10;
 				// Only send Reward if > .10 GRC
-				printf(" reward shared %f",(double)dRewardShare);
 				if (dRewardShare > .10)
 				{
 					// Only send reward if Reward Sharing is set up in the conf file (RS=RewardReceiveAddress)
 					std::string sRewardAddress = GetArgument("RS","");
-					printf(" addr %s",sRewardAddress.c_str());
 					if (!sRewardAddress.empty())
 					{
 						// Ensure this Proof Of Stake Coinbase was Just Generated before sending the reward (prevent rescans from sending rewards):
 						printf("reward locktime %f curr time %f",(double)wtxIn.nTime,(double)GetAdjustedTime());
+						printf(" reward shared %f",(double)dRewardShare);
+				    	printf(" addr %s",sRewardAddress.c_str());
 						if (IsLockTimeWithinMinutes((double)wtxIn.nTime,10))
 						{
 							std::string sResult = SendReward(sRewardAddress,CoinFromValue(dRewardShare));
@@ -650,8 +650,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
 		}
 		else
 		{
-			printf("\r\nNot CoinBase Or CoinStake\r\n");
-
+			// printf("\r\nNot CoinBase Or CoinStake\r\n");
 		}
 
         if (!strCmd.empty())
@@ -1827,7 +1826,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 
 void NetworkTimer()
 {
-	if (GetArg("-fullbore", "false") != "true")	MilliSleep(40);
+	if (GetArg("-fullbore", "false") != "true")	MilliSleep(1);
 	if (mdMachineTimerLast == 0) mdMachineTimerLast = GetAdjustedTime();
 	double elapsed = GetAdjustedTime() - mdMachineTimerLast;
 	mdPORNonce += 1;
@@ -1896,7 +1895,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	{
 		msMiningErrors7="Out of Sync";
 	    printf("Wallet out of sync - unable to stake..\r\n");
-		MilliSleep(500);
+		MilliSleep(1);
 		return false;
 	}
 
@@ -1949,7 +1948,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 			 if (!IsCPIDValidv2(miningcpid,pindexPrev->nHeight))
 			 {
 				 if (fDebug3 && LessVerbose(25)) printf("Unable to create boinc block->CPID INVALID cpid %s %s %s",miningcpid.cpid.c_str(),miningcpid.boincruntimepublickey.c_str(),miningcpid.email.c_str());
-				 MilliSleep(300);
+				 MilliSleep(1);
 			 }
 			 else
 			 {
@@ -1969,16 +1968,14 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 	{
 	    printf("Error while retrieving next project\r\n");
 		msMiningErrors7="Unable to Stake [Project Error]";
-
-		MilliSleep(500);
+		MilliSleep(1);
 		return false;
 	}
     catch(...)
 	{
 		printf("Error while retrieving next project[1].\r\n");
 		msMiningErrors7="Unable to Stake [Project Error]";
-
-		MilliSleep(500);
+		MilliSleep(1);
 		return false;
 	}
 

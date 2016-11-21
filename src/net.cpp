@@ -160,7 +160,7 @@ std::string GetCommandNonce(std::string command)
 void CNode::PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd, bool fForce)
 {
 	// The line of code below is the line of code that kept us from syncing to the best block (fForce forces the sync to continue).
-    if (!fForce && pindexBegin == pindexLastGetBlocksBegin && hashEnd == hashLastGetBlocksEnd) return;  // Filter out duplicate requests
+    if (pindexBegin == pindexLastGetBlocksBegin && hashEnd == hashLastGetBlocksEnd) return;  // Filter out duplicate requests
     pindexLastGetBlocksBegin = pindexBegin;
     hashLastGetBlocksEnd = hashEnd;
     PushMessage("getblocks", CBlockLocator(pindexBegin), hashEnd);
@@ -2064,8 +2064,8 @@ void BusyWaitForTally()
 	int iTimeout = 0;
 	while(!bTallyFinished)
 	{
-		MilliSleep(10);
-		iTimeout+=10;
+		MilliSleep(1);
+		iTimeout+=1;
 		if (iTimeout > 15000) break;
 	}
 	nLastTallyBusyWait = GetAdjustedTime();
@@ -2116,8 +2116,7 @@ void ExecGridcoinServices(void* parg)
 		if (bExecuteGridcoinServices)
 		{
 				bExecuteGridcoinServices=false;
-				//GridcoinServices();
-			}
+		}
     }
     vnThreadsRunning[THREAD_SERVICES]--;
 }

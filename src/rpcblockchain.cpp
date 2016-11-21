@@ -40,9 +40,7 @@ extern bool UserAcknowledgedHoldHarmlessClause(std::string sAddress);
 std::string ConvertBinToHex(std::string a);
 std::string ConvertHexToBin(std::string a);
 bool TallyResearchAverages(bool Forcefully);
-void ReloadBlockIndexHot();
 int RestartClient();
-void SyncChain();
 extern bool VerifyUnderlyingPrice(double UL, int64_t timestamp);
 std::vector<unsigned char> StringToVector(std::string sData);
 extern std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
@@ -1915,16 +1913,6 @@ Value execute(const Array& params, bool fHelp)
 			entry.push_back(Pair("Result",fResult));
 			results.push_back(entry);
 	}
-	else if (sItem == "syncchain")
-	{
-		SyncChain();
-		entry.push_back(Pair("SyncChain",1));
-		results.push_back(entry);
-	}
-	else if (sItem == "reloadblockindex")
-	{
-		ReloadBlockIndexHot();
-	}
 	else if (sItem=="burn")
 	{
 		if (params.size() < 5)
@@ -2780,38 +2768,6 @@ Value execute(const Array& params, bool fHelp)
 
 			   }
 		  }
-
-	}
-	else if (sItem == "scholes")
-	{
-		if (params.size() != 6)
-		{
-			entry.push_back(Pair("Error","You must specify Underlying Price, Strike, Type, Days, Volatility; For example: scholes 1880 300 put 365 .30"));
-			results.push_back(entry);
-		}
-		else
-		{
-				double UL = cdbl(params[1].get_str(),2);
-				double strike = cdbl(params[2].get_str(),0);
-				std::string sType = params[3].get_str();
-				double days = cdbl(params[4].get_str(),0);
-				double volatility = cdbl(params[5].get_str(),6);
-				
-				if (strike == 0 || ( sType != "c" && sType != "p" ) || days == 0 || UL == 0 || volatility == 0) 
-				{
-							entry.push_back(Pair("Error","You must specify a strike, a c or p, days, underlying price and volatility."));
-							results.push_back(entry);
-				}
-				double fractional_year = days/365;
-			    double price = BlackScholes(sType, UL, strike,  fractional_year, nRiskFreeRate, volatility);
-				double delta = GetDelta(sType, UL, strike, fractional_year, nRiskFreeRate, volatility);
-				entry.push_back(Pair("Price",price));
-				entry.push_back(Pair("Delta",delta));
-				std::string sHistory = "1900;3000;2900;2800;2700;2300;1900;1880;1880;1800;1780";
-				double dVol = GetVolatility(sHistory);
-				entry.push_back(Pair("Volatility",dVol));
-				results.push_back(entry);
-		}
 
 	}
 	else if (sItem == "addpoll")
@@ -4242,7 +4198,9 @@ double PollCalculateShares(std::string contract, double sharetype, double MoneyS
 	if (sharetype==2) return balance/VoteAnswerCount;
 	if (sharetype==3)
 	{
-		double UserWeightedMagnitude = MoneySupplyFactor*magnitude;
+		// https://github.com/gridcoin/Gridcoin-Research/issues/87#issuecomment-253999878
+		// Researchers weight is Total Money Supply / 5.67 * Magnitude
+		double UserWeightedMagnitude = (MoneySupplyFactor/5.67) * magnitude;
 		return (UserWeightedMagnitude+balance) / VoteAnswerCount;
 	}
 	if (sharetype==4) 
@@ -4525,141 +4483,6 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
 }
 
 
-int ValidateContract(int64_t iPurchaseTime, std::string sType, std::string sSerialNo, 
-	double dPurchasePrice, std::string sOptionType, double UL, double dStrike, double dOptionLength, double dSingleOption)
-{
-	//1-17-2016
-	// Validate the original option purchase price against original fair value
-	// -4 = Invalid UL Price at time Option was Purchased
-	// -3 = Invalid Reverse Engineered Price
-	// -2 = Burn sent to wrong address
-	// -1 = Purchase price differs from contract price
-	//  0 = Valid
-	std::string sRecipient = ReadCache(sType, sSerialNo + ";Recipient");
-	double dBurnAmount = cdbl(ReadCache(sType, sSerialNo + ";BurnAmount"),0);
-	dPurchasePrice = cdbl(RoundToString(dPurchasePrice,0),0);
-	// First verify they actually burned the amount paid for the option
-	if (dBurnAmount != dPurchasePrice) return -1;
-	// Verify the Paid GRC went to the Burn address
-	if (sRecipient != GetBurnAddress()) return -2;
-	double dTimeAnnualized = dOptionLength/365;
-	// Verify the UL price of GRC the date they purchased the contract
-	bool bPriceVerified = VerifyUnderlyingPrice(UL, iPurchaseTime);
-	if (!bPriceVerified) return -4;
-	// Next reverse engineer the option and verify they bought the option they paid for
-	double dHistoricalPrice = BlackScholes(sOptionType, UL, dStrike, dTimeAnnualized, nRiskFreeRate, nVolatility);
-	if (!(dSingleOption > dHistoricalPrice-5 && dSingleOption < dHistoricalPrice+5)) return -3;  // Invalid Price
-	return 0; // Success
-}
-
-
-
-
-Array GetOptionsExposureReport()
-{
-        Array results;
-	    Object entry;
-  	    entry.push_back(Pair("Report","Options Exposure 1.0"));
-	    std::string datatype="option_buy";
-	  	std::string rows = "";
-		std::string row = "";
-		StructCPID stNet = mvNetwork["NETWORK"];
-		double UL = stNet.GRCQuote/10000000000 * 100000000;
-		entry.push_back(Pair("GRC UL",UL));		
-		double dTotalDelta = 0;
-		double dTotalPL = 0;
-		double dTotalContracts = 0;
-		
-  		for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
-		{
-				std::string key_name  = (*ii).first;
-			   	if (key_name.length() > datatype.length())
-				{
-					if (key_name.substr(0,datatype.length())==datatype)
-					{
-								std::string contract = mvApplicationCache[(*ii).first];
-								std::string contract_serial = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
-								std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
-								printf(" opra %s",contract_serial.c_str());
-
-								//Verify contract is not expired, and is valid
-								int64_t iPurchaseTime = mvApplicationCacheTimestamp[key_name];
-								double dExpiration = cdbl(ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>"),0);
-								std::string sOpra = ExtractXML(contract,"<SHORTOPRA>","</SHORTOPRA>");
-								std::string sAddress = ExtractXML(contract,"<GRCADDRESS>","</GRCADDRESS>");
-
-								printf(" addr %s opra %s expir %f pt %f ",sAddress.c_str(),sOpra.c_str(),(double)dExpiration,(double)iPurchaseTime);
-
-								double dDays = cdbl(ExtractXML(contract,"<DAYS>","</DAYS>"),4);
-								double dTimeLeft = (dExpiration - GetAdjustedTime())/86400;
-								double dTimeAnnualized = dTimeLeft/365;
-							
-								bool bExpired = (dTimeLeft < 0);
-								std::string sType = ExtractXML(contract,"<TYPE>","</TYPE>");
-									printf(" days %f, Type %s,  Time %f Time %f ",dDays,sType.c_str(),dTimeLeft,dTimeAnnualized);
-
-								double dStrike = cdbl(ExtractXML(contract,"<STRIKE>","</STRIKE>"),0);
-								std::string sAction = ExtractXML(contract,"<ACTION>","</ACTION>");
-								double dQuantity = cdbl(ExtractXML(contract,"<QUANTITY>","</QUANTITY>"),0);
-								std::string sExpiration = ExtractXML(contract,"<HREXPIRATION>","</HREXPIRATION>");
-								// calculate current delta based on current market conditions
-								double dPrice = cdbl(ExtractXML(contract,"<PRICE>","</PRICE>"),4);
-
-								printf(" price %f , strike %f action %s qty %f sexpiry %s",dPrice,dStrike,sAction.c_str(),dQuantity,sExpiration.c_str());
-
-								if (dPrice != 0 && !sOpra.empty()) 
-								{
-
-									printf(" delta 1 ");
-									double delta = -100 * (GetDelta(sType, UL, dStrike, dTimeAnnualized, nRiskFreeRate, nVolatility));
-									printf(" bs 1 ");
-									double dCurrentPrice = BlackScholes(sType, UL, dStrike,  dTimeAnnualized, nRiskFreeRate, nVolatility);
-									printf (" bs 2 ");
-									double dPL = -1 * ( dCurrentPrice - dPrice );
-				
-									entry.push_back(Pair("OPRA",sOpra));
-									entry.push_back(Pair("Strike",dStrike));
-									entry.push_back(Pair("Type",sType));
-									entry.push_back(Pair("Quantity",dQuantity));
-									entry.push_back(Pair("Expiration",dExpiration));
-									entry.push_back(Pair("HR Expiration",sExpiration));
-									entry.push_back(Pair("Purchase Price",dPrice));
-									entry.push_back(Pair("Delta",delta));
-									entry.push_back(Pair("Total Delta",delta*dQuantity));
-									entry.push_back(Pair("Expired",bExpired));
-								
-									entry.push_back(Pair("Current Price",dCurrentPrice));
-									entry.push_back(Pair("PL",dPL));
-									entry.push_back(Pair("Total PL",dPL*dQuantity));
-									entry.push_back(Pair("TimeLeft",dTimeLeft));
-
-									std::string sRecipient = ReadCache(datatype,subkey + ";Recipient");
-									double dBurnAmount = cdbl(ReadCache(datatype,subkey + ";BurnAmount"),4);
-									entry.push_back(Pair("Recipient",sRecipient));
-									entry.push_back(Pair("Burnt",dBurnAmount));
-									printf(" validating ");
-
-									int valid = ValidateContract(iPurchaseTime,datatype,subkey,dPrice*dQuantity,sType,UL,dStrike,dDays,dPrice);
-									printf(" validated ");
-									entry.push_back(Pair("Valid",valid));
-									entry.push_back(Pair("",""));
-
-									dTotalDelta += (delta*dQuantity);
-									dTotalPL += (dPL*dQuantity);
-									dTotalContracts += dQuantity;
-								}
-
-					}
-			}
-	  }
-	  entry.push_back(Pair("Total Contracts",dTotalContracts));
-	  entry.push_back(Pair("Total PL",dTotalPL));
-	  entry.push_back(Pair("Total Deltas",dTotalDelta));
-						
-	  results.push_back(entry);
-	  return results;
-
-}
 
 
 

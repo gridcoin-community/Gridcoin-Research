@@ -64,8 +64,6 @@ static const unsigned int MAX_STANDARD_TX_SIZE = MAX_BLOCK_SIZE_GEN/5;
 static const unsigned int MAX_BLOCK_SIGOPS = MAX_BLOCK_SIZE/50;
 /** The maximum number of orphan transactions kept in memory */
 static const unsigned int MAX_ORPHAN_TRANSACTIONS = MAX_BLOCK_SIZE/100;
-/** The maximum number of orphan blocks kept in memory */
-static const unsigned int MAX_ORPHAN_BLOCKS = 750;
 /** The maximum number of entries in an 'inv' protocol message */
 static const unsigned int MAX_INV_SZ = 50000;
 /** Fees smaller than this (in satoshi) are considered zero fee (for transaction creation) */
@@ -165,9 +163,9 @@ extern int64_t nTransactionFee;
 extern int64_t nReserveBalance;
 extern int64_t nMinimumInputValue;
 extern int64_t nLastTallied;
-extern int64_t nLastResync;
 extern int64_t nLastPing;
 extern int64_t nLastAskedForBlocks;
+extern int64_t nBootup;
 extern int64_t nLastCalculatedMedianTimePast;
 extern double nLastBlockAge;
 extern int64_t nLastCalculatedMedianPeerCount;
@@ -217,7 +215,6 @@ extern std::string  msAttachmentGuid;
 
 extern std::string  msMiningErrorsIncluded;
 extern std::string  msMiningErrorsExcluded;
-extern std::string  msSuperBlockHashes;
 extern std::string  msContracts;
 
 extern std::string  msRSAOverview;

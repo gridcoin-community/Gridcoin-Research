@@ -740,17 +740,6 @@ void CheckForUpgrade()
 }
 
 
-void BusyWait()
-{
-	for (int x=0; x<50; x++)
-	{
-		if (bGlobalcomInitialized) return;
-		MilliSleep(100);
-	}
-
-}
-
-
 int64_t IsNeural()
 {
 	if (!bGlobalcomInitialized) return 0;

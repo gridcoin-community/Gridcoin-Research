@@ -22,7 +22,6 @@ extern void GatherNeuralHashes();
 
 
 extern bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
-extern bool AskNeuralNetworkNodeForBlocks(int iNodeLimit);
 
 
 Value getconnectioncount(const Array& params, bool fHelp)
@@ -251,29 +250,6 @@ bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit)
 	return true;
 }
 
-
-bool AskNeuralNetworkNodeForBlocks(int iNodeLimit)
-{
-	// Find a Neural Network Node that is free
-    LOCK(cs_vNodes);
-	int iContactCount = 0;
-	msNeuralResponse="";
-    BOOST_FOREACH(CNode* pNode, vNodes) 
-	{
-		if (Contains(pNode->strSubVer,"1999"))
-		{
-		 	pNode->PushGetBlocks(pindexBest, uint256(0), false);
-			iContactCount++;
-			if (iContactCount >= iNodeLimit) return true;
-		}
-    }
-	if (iContactCount==0) 
-	{
-		if (fDebug3) printf("No neural network nodes online.");
-		return false;
-	}
-	return true;
-}
 
 
 Value ping(const Array& params, bool fHelp)

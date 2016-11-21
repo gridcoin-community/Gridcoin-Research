@@ -675,9 +675,7 @@ bool CTxDB::LoadBlockIndex()
 				//{
 				//	CBlock block;
 				//	if (!block.ReadFromDisk(pindex)) return false;
-				//	MiningCPID bb = GetInitializedMiningCPID(pindex->GetBlockHash().GetHex(), mvBlockIndex);
-	     		//	bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
-				//	mvBlockIndex[pindex->GetBlockHash().GetHex()] = bb;
+				//	bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
 				//}
 
 				#ifdef QT_GUI

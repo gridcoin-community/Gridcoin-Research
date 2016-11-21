@@ -150,14 +150,14 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 	if (!bNetAveragesLoaded)
 	{
 		if (fDebug10) printf("CNB: Net averages not yet loaded...");
-		MilliSleep(1000);
+		MilliSleep(1);
 		return NULL;
 	}
 
 	if (OutOfSyncByAgeWithChanceOfMining())
 	{
 	    if (msPrimaryCPID != "INVESTOR") printf("Wallet out of sync - unable to mine...");
-		MilliSleep(500);
+		MilliSleep(1);
 		return NULL;
 	}
 
@@ -880,7 +880,7 @@ Inception:
         {
             nLastCoinStakeSearchInterval = 0;
             fTryToSync = true;
-            MilliSleep(5000);
+            MilliSleep(1);
             if (fShutdown)
 			{
 				printf("StakeMiner:Exiting(InitialBlockDownload)");
@@ -893,15 +893,13 @@ Inception:
             fTryToSync = false;
             if (vNodes.size() < 3 || nBestHeight < GetNumBlocksOfPeers())
             {
-				if (fDebug10) printf("tryingtosync.");
-                MilliSleep(5000);
+			    MilliSleep(1);
                 continue;
             }
         }
 Begin:
 		
-		if (GetArg("-fullbore", "false") != "true")	MilliSleep(1000);
-		
+	
         //
         // Create new block
         //
@@ -912,7 +910,7 @@ Begin:
 		{
 			//This can happen after reharvesting CPIDs... Because CreateNewBlock() requires a valid CPID..  Start Over.
 			if (fDebug10) printf(".StakeMiner Starting.");
-			MilliSleep(1000);
+			MilliSleep(1);
 			goto Begin;
 		}
 		
@@ -922,7 +920,7 @@ Begin:
 		if (IsLockTimeWithinMinutes(nLastBlockSolved,5)) 
 		{
 				if (fDebug10) printf("=");
-				MilliSleep(500);
+				MilliSleep(1);
 				goto Begin;
 		}
 
