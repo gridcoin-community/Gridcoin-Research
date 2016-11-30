@@ -25,9 +25,9 @@ using namespace std;
 using namespace boost;
 
 leveldb::DB *txdb; // global pointer for LevelDB object instance
-StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
+StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID>& vRef);
 bool IsLockTimeWithin14days(double locktime);
-MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID> vRef);
+MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID>& vRef);
 MiningCPID DeserializeBoincBlock(std::string block);
 void AddCPIDBlockHash(std::string cpid, std::string blockhash, bool fInsert);
 

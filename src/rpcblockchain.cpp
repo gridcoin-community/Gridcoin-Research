@@ -111,7 +111,7 @@ bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit)
 bool FullSyncWithDPORNodes();
 bool LoadSuperblock(std::string data, int64_t nTime, double height);
 
-StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
+StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID>& vRef);
 
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
