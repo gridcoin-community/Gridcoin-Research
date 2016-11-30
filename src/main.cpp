@@ -55,7 +55,7 @@ extern void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, s
 bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
 int DownloadBlocks();
 int DetermineCPIDType(std::string cpid);
-extern MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID> vRef);
+extern MiningCPID GetInitializedMiningCPID(std::string name, std::map<std::string, MiningCPID>& vRef);
 extern std::string getHardDriveSerial();
 extern bool IsSuperBlock(CBlockIndex* pIndex);
 extern bool VerifySuperblock(std::string superblock, int nHeight);
@@ -133,7 +133,7 @@ extern bool LoadSuperblock(std::string data, int64_t nTime, double height);
 extern CBlockIndex* GetHistoricalMagnitude(std::string cpid);
 
 extern double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
-extern StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
+extern StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID>& vRef);
 
 
 extern double GetOwedAmount(std::string cpid);
@@ -6281,31 +6281,25 @@ StructCPID GetLifetimeCPID(std::string cpid, std::string sCalledFrom)
 	return st1;
 }
 
-MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID> vRef)
+MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID>& vRef)
 {
-	MiningCPID cpid = vRef[name];
+   MiningCPID& cpid = vRef[name];
 	if (!cpid.initialized)
 	{
 			    cpid = GetMiningCPID();
 				cpid.initialized=true;
 				cpid.LastPaymentTime = 0;
-				vRef.insert(map<string,MiningCPID>::value_type(name,cpid));
-				vRef[name]=cpid;
-				return cpid;
-	}
-	else
-	{
-			return cpid;
 	}
 
+   return cpid;
 }
 
 
-StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef)
+StructCPID GetInitializedStructCPID2(std::string name, std::map<std::string, StructCPID>& vRef)
 {
 	try
 	{
-		StructCPID cpid = vRef[name];
+      StructCPID& cpid = vRef[name];
 		if (!cpid.initialized)
 		{
 				cpid = GetStructCPID();
@@ -6314,9 +6308,7 @@ StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, Stru
 				cpid.HighLockTime = 0;
 				cpid.LastPaymentTime = 0;
 				cpid.EarliestPaymentTime = 99999999999;
-				vRef.insert(map<string,StructCPID>::value_type(name,cpid));
 				cpid.Accuracy = 0;
-				vRef[name]=cpid;
 				return cpid;
 		}
 		else
@@ -6327,14 +6319,12 @@ StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, Stru
 	catch (bad_alloc ba)
 	{
 		printf("Bad alloc caught in GetInitializedStructCpid2 for %s",name.c_str());
-		StructCPID cpid = GetStructCPID();
-		return cpid;
+      return GetStructCPID();
 	}
 	catch(...)
 	{
 		printf("Exception caught in GetInitializedStructCpid2 for %s",name.c_str());
-		StructCPID cpid = GetStructCPID();
-		return cpid;
+      return GetStructCPID();
 	}
 }
 

@@ -30,7 +30,7 @@ double GetBlockDifficulty(unsigned int nBits);
 extern double GetLastPaymentTimeByCPID(std::string cpid);
 extern double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 bool LessVerbose(int iMax1000);
-StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
+StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID>& vRef);
 extern double ReturnTotalRacByCPID(std::string cpid);
 
 typedef std::map<int, unsigned int> MapModifierCheckpoints;

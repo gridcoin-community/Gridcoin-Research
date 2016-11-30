@@ -19,7 +19,7 @@ int64_t GetCoinYearReward(int64_t nTime);
 //static boost::thread_group* postThreads = NULL;
 
 double GetPoSKernelPS2();
-StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID> vRef);
+StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID>& vRef);
 double GRCMagnitudeUnit(int64_t locktime);
 std::string qtGetNeuralHash(std::string data);
 volatile bool bCPIDsLoaded;
