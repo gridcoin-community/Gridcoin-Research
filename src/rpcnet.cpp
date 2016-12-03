@@ -40,7 +40,7 @@ std::string NeuralRequest(std::string MyNeuralRequest)
 {
     // Find a Neural Network Node that is free
     LOCK(cs_vNodes);
-    BOOST_FOREACH(CNode* pNode, vNodes) 
+    BOOST_FOREACH(CNode* pNode, vNodes)
 	{
 		if (Contains(pNode->strSubVer,"1999"))
 		{
@@ -58,7 +58,7 @@ void GatherNeuralHashes()
 {
     // Find a Neural Network Node that is free
     LOCK(cs_vNodes);
-    BOOST_FOREACH(CNode* pNode, vNodes) 
+    BOOST_FOREACH(CNode* pNode, vNodes)
 	{
 		if (Contains(pNode->strSubVer,"1999"))
 		{
@@ -77,8 +77,8 @@ bool RequestSupermajorityNeuralData()
 	double dCurrentPopularity = 0;
 	std::string sCurrentNeuralSupermajorityHash = GetCurrentNeuralNetworkSupermajorityHash(dCurrentPopularity);
 	std::string reqid = DefaultWalletAddress();
-			
-    BOOST_FOREACH(CNode* pNode, vNodes) 
+
+    BOOST_FOREACH(CNode* pNode, vNodes)
 	{
 		if (!pNode->NeuralHash.empty() && !sCurrentNeuralSupermajorityHash.empty() && pNode->NeuralHash == sCurrentNeuralSupermajorityHash)
 		{
@@ -231,7 +231,7 @@ bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit)
     LOCK(cs_vNodes);
 	int iContactCount = 0;
 	msNeuralResponse="";
-    BOOST_FOREACH(CNode* pNode, vNodes) 
+    BOOST_FOREACH(CNode* pNode, vNodes)
 	{
 		if (Contains(pNode->strSubVer,"1999"))
 		{
@@ -242,7 +242,7 @@ bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit)
 			if (iContactCount >= NodeLimit) return true;
 		}
     }
-	if (iContactCount==0) 
+	if (iContactCount==0)
 	{
 		printf("No neural network nodes online.");
 		return false;
@@ -295,7 +295,7 @@ Value getpeerinfo(const Array& params, bool fHelp)
 
     Array ret;
 	GatherNeuralHashes();
-	
+
     BOOST_FOREACH(const CNodeStats& stats, vstats) {
         Object obj;
 
@@ -304,7 +304,7 @@ Value getpeerinfo(const Array& params, bool fHelp)
 		  if (!(stats.addrLocal.empty()))
             obj.push_back(Pair("addrlocal", stats.addrLocal));
 
-        obj.push_back(Pair("services", strprintf("%08"PRIx64, stats.nServices)));
+        obj.push_back(Pair("services", strprintf("%08" PRIx64, stats.nServices)));
         obj.push_back(Pair("lastsend", (int64_t)stats.nLastSend));
         obj.push_back(Pair("lastrecv", (int64_t)stats.nLastRecv));
         obj.push_back(Pair("conntime", (int64_t)stats.nTimeConnected));
@@ -347,7 +347,7 @@ Value getnettotals(const Array& params, bool fHelp)
 
 
 
-// ppcoin: send alert.  
+// ppcoin: send alert.
 // There is a known deadlock situation with ThreadMessageHandler
 // ThreadMessageHandler: holds cs_vSend and acquiring cs_main in SendMessages()
 // ThreadRPCServer: holds cs_main and acquiring cs_vSend in alert.RelayTo()/PushMessage()/BeginMessage()
@@ -387,8 +387,8 @@ Value sendalert(const Array& params, bool fHelp)
     key.SetPrivKey(CPrivKey(vchPrivKey.begin(), vchPrivKey.end())); // if key is not correct openssl may crash
     if (!key.Sign(Hash(alert.vchMsg.begin(), alert.vchMsg.end()), alert.vchSig))
         throw runtime_error(
-            "Unable to sign alert, check private key?\n");  
-    if(!alert.ProcessAlert()) 
+            "Unable to sign alert, check private key?\n");
+    if(!alert.ProcessAlert())
         throw runtime_error(
             "Failed to process alert.\n");
     // Relay alert
