@@ -1306,10 +1306,6 @@ public:
 	double nResearchSubsidy;
 	double nInterestSubsidy;
 	double nMagnitude;
-	// Memory Only (8-13-2015):
-	double nLastPORBlock;
-	std::string sLastPORBlockHash;
-	double nTotalPORPayments;
 	// Indicators (9-13-2015)
 	unsigned int nIsSuperBlock;
 	unsigned int nIsContract;
@@ -1364,17 +1360,11 @@ public:
         nBits          = 0;
         nNonce         = 0;
 		//7-11-2015 - Gridcoin - New Accrual Fields
-		sCPID = "";
 		nResearchSubsidy = 0;
 		nInterestSubsidy = 0;
 		nMagnitude = 0;
-		nLastPORBlock=0;
-		sLastPORBlockHash = "";
-		nTotalPORPayments = 0;
 		nIsSuperBlock = 0;
 		nIsContract = 0;
-		sGRCAddress = "";
-		sReserved = "";
     }
 
     CBlockIndex(unsigned int nFileIn, unsigned int nBlockPosIn, CBlock& block)
