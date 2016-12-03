@@ -4,6 +4,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <memory>
+
 #include "txdb.h"
 #include "miner.h"
 #include "kernel.h"
@@ -137,34 +139,34 @@ public:
 
 
 // CreateNewBlock: create new block (without proof-of-work/proof-of-stake)
-boost::shared_ptr<CBlock> CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
+std::shared_ptr<CBlock> CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 {
 
 	if (!bCPIDsLoaded)
 	{
 		printf("CPIDs not yet loaded...");
 		MilliSleep(500);
-		return boost::shared_ptr<CBlock>();
+		return std::shared_ptr<CBlock>();
 	}
 
 	if (!bNetAveragesLoaded)
 	{
 		if (fDebug10) printf("CNB: Net averages not yet loaded...");
 		MilliSleep(1);
-		return boost::shared_ptr<CBlock>();
+		return std::shared_ptr<CBlock>();
 	}
 
 	if (OutOfSyncByAgeWithChanceOfMining())
 	{
 	    if (msPrimaryCPID != "INVESTOR") printf("Wallet out of sync - unable to mine...");
 		MilliSleep(1);
-		return boost::shared_ptr<CBlock>();
+		return std::shared_ptr<CBlock>();
 	}
 
     // Create new block
-    boost::shared_ptr<CBlock> pblock(new CBlock());
+    std::shared_ptr<CBlock> pblock(new CBlock());
     if (!pblock)
-      return boost::shared_ptr<CBlock>();
+      return std::shared_ptr<CBlock>();
 
     CBlockIndex* pindexPrev = pindexBest;
     int nHeight = pindexPrev->nHeight + 1;
@@ -183,7 +185,7 @@ boost::shared_ptr<CBlock> CreateNewBlock(CWallet* pwallet, bool fProofOfStake, i
         CReserveKey reservekey(pwallet);
         CPubKey pubkey;
         if (!reservekey.GetReservedKey(pubkey))
-            return boost::shared_ptr<CBlock>();
+            return std::shared_ptr<CBlock>();
         txNew.vout[0].scriptPubKey.SetDestination(pubkey.GetID());
 
 		printf("Generating PoW standard payment\r\n");
@@ -905,7 +907,7 @@ Begin:
         //
         int64_t nFees;
 
-        boost::shared_ptr<CBlock> pblock(CreateNewBlock(pwallet, true, &nFees));
+        std::shared_ptr<CBlock> pblock(CreateNewBlock(pwallet, true, &nFees));
         if (!pblock.get())
 		{
 			//This can happen after reharvesting CPIDs... Because CreateNewBlock() requires a valid CPID..  Start Over.

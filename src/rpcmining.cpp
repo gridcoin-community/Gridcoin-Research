@@ -3,6 +3,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <memory>
+
 #include "main.h"
 #include "db.h"
 #include "txdb.h"
@@ -156,7 +158,7 @@ Value getworkex(const Array& params, bool fHelp)
 
     typedef map<uint256, pair<CBlock*, CScript> > mapNewBlock_t;
     static mapNewBlock_t mapNewBlock;
-    static vector<boost::shared_ptr<CBlock> > vNewBlock;
+    static vector<std::shared_ptr<CBlock> > vNewBlock;
     static CReserveKey reservekey(pwalletMain);
 
     if (params.size() == 0)
@@ -165,7 +167,7 @@ Value getworkex(const Array& params, bool fHelp)
         static unsigned int nTransactionsUpdatedLast;
         static CBlockIndex* pindexPrev;
         static int64_t nStart;
-        static boost::shared_ptr<CBlock> pblock;
+        static std::shared_ptr<CBlock> pblock;
         if (pindexPrev != pindexBest ||
             (nTransactionsUpdated != nTransactionsUpdatedLast &&  GetAdjustedTime() - nStart > 60))
         {
@@ -295,7 +297,7 @@ Value getwork(const Array& params, bool fHelp)
 
     typedef map<uint256, pair<CBlock*, CScript> > mapNewBlock_t;
     static mapNewBlock_t mapNewBlock;    // FIXME: thread safety
-    static vector<boost::shared_ptr<CBlock> > vNewBlock;
+    static vector<std::shared_ptr<CBlock> > vNewBlock;
     static CReserveKey reservekey(pwalletMain);
 
     if (params.size() == 0)
@@ -304,7 +306,7 @@ Value getwork(const Array& params, bool fHelp)
         static unsigned int nTransactionsUpdatedLast;
         static CBlockIndex* pindexPrev;
         static int64_t nStart;
-        static boost::shared_ptr<CBlock> pblock;
+        static std::shared_ptr<CBlock> pblock;
         if (pindexPrev != pindexBest ||
             (nTransactionsUpdated != nTransactionsUpdatedLast &&  GetAdjustedTime() - nStart > 60))
         {
@@ -445,7 +447,7 @@ Value getblocktemplate(const Array& params, bool fHelp)
     static unsigned int nTransactionsUpdatedLast;
     static CBlockIndex* pindexPrev;
     static int64_t nStart;
-    static boost::shared_ptr<CBlock> pblock;
+    static std::shared_ptr<CBlock> pblock;
     if (pindexPrev != pindexBest ||
         (nTransactionsUpdated != nTransactionsUpdatedLast &&  GetAdjustedTime() - nStart > 5))
     {
