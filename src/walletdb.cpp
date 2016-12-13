@@ -671,7 +671,7 @@ void ThreadFlushWalletDB(void* parg)
                         bitdb.CheckpointLSN(strFile);
 
                         bitdb.mapFileUseCount.erase(mi++);
-                        if (fDebug10) printf("Flushed wallet.dat %"PRId64"ms\n", GetTimeMillis() - nStart);
+                        if (fDebug10) printf("Flushed wallet.dat %" PRId64 "ms\n", GetTimeMillis() - nStart);
                     }
                 }
             }
@@ -686,7 +686,7 @@ bool BackupConfigFile(const string& strDest)
 	  filesystem::path pathDest(strDest);
       if (filesystem::is_directory(pathDest))
                     pathDest /= "gridcoinresearch.conf";
-	  try 
+	  try
 	  {
 			#if BOOST_VERSION >= 104000
                     filesystem::copy_file(pathSrc, pathDest, filesystem::copy_option::overwrite_if_exists);
@@ -696,7 +696,7 @@ bool BackupConfigFile(const string& strDest)
                     printf("copied gridcoinresearch.conf to %s\n", pathDest.string().c_str());
                     return true;
        }
-	   catch(const filesystem::filesystem_error &e) 
+	   catch(const filesystem::filesystem_error &e)
 	   {
                     printf("error copying gridcoinresearch.conf to %s - %s\n", pathDest.string().c_str(), e.what());
                     return false;
@@ -758,7 +758,7 @@ bool CWalletDB::Recover(CDBEnv& dbenv, std::string filename, bool fOnlyKeys)
     // Set -rescan so any missing transactions will be
     // found.
     int64_t now = GetTime();
-    std::string newFilename = strprintf("wallet.%"PRId64".bak", now);
+    std::string newFilename = strprintf("wallet.%" PRId64 ".bak", now);
 
     int result = dbenv.dbenv.dbrename(NULL, filename.c_str(), NULL,
                                       newFilename.c_str(), DB_AUTO_COMMIT);
@@ -777,7 +777,7 @@ bool CWalletDB::Recover(CDBEnv& dbenv, std::string filename, bool fOnlyKeys)
         printf("Salvage(aggressive) found no records in %s.\n", newFilename.c_str());
         return false;
     }
-    printf("Salvage(aggressive) found %"PRIszu" records\n", salvagedData.size());
+    printf("Salvage(aggressive) found %" PRIszu " records\n", salvagedData.size());
 
     bool fSuccess = allOK;
     //Db* pdbCopy = new Db(&dbenv.dbenv, 0);

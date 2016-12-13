@@ -464,7 +464,7 @@ void CDBEnv::Flush(bool fShutdown)
             else
                 mi++;
         }
-        printf("DBFlush(%s)%s ended %15"PRId64"ms\n", fShutdown ? "true" : "false", fDbEnvInit ? "" : " db not started", GetTimeMillis() - nStart);
+        printf("DBFlush(%s)%s ended %15" PRId64 "ms\n", fShutdown ? "true" : "false", fDbEnvInit ? "" : " db not started", GetTimeMillis() - nStart);
         if (fShutdown)
         {
             char** listp;
@@ -544,8 +544,7 @@ bool CAddrDB::Read(CAddrMan& addr)
     uint256 hashIn;
 
     // read data and checksum from file
-    try 
-	{
+    try {
         filein.read((char *)&vchData[0], dataSize);
         filein >> hashIn;
     }
@@ -579,4 +578,3 @@ bool CAddrDB::Read(CAddrMan& addr)
 
     return true;
 }
-

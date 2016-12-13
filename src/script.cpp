@@ -1475,7 +1475,7 @@ bool Solver(const CKeyStore& keystore, const CScript& scriptPubKey, uint256 hash
     case TX_NONSTANDARD:
     case TX_NULL_DATA:
         return false;
-		
+
     case TX_PUBKEY:
         keyID = CPubKey(vSolutions[0]).GetID();
         return Sign1(keyID, keystore, hash, nHashType, scriptSigRet);
@@ -1620,8 +1620,8 @@ bool ExtractDestination(const CScript& scriptPubKey, CTxDestination& addressRet)
     txnouttype whichType;
     if (!Solver(scriptPubKey, whichType, vSolutions))
         return false;
-	
-	if (bOPReturnEnabled && whichType == TX_NULL_DATA)
+
+    if (bOPReturnEnabled && whichType == TX_NULL_DATA)
         return true;
 
     if (whichType == TX_PUBKEY)

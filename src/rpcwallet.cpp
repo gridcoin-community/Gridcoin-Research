@@ -865,12 +865,13 @@ Value addmultisigaddress(const Array& params, bool fHelp)
     // Gather public keys
     if (nRequired < 1)
         throw runtime_error("a multisignature address must require at least one key to redeem");
-    if ((int)keys.size() < nRequired)
+    if ((int)keys.size() < nRequired) {
         throw runtime_error(
             strprintf("not enough keys supplied "
-                      "(got %"PRIszu" keys, but need at least %d to redeem)", keys.size(), nRequired));
+                      "(got %" PRIszu " keys, but need at least %d to redeem)", keys.size(), nRequired));
+    }
 
-	if (keys.size() > 16)       throw runtime_error("Number of addresses involved in the multisignature address creation > 16\nReduce the number");
+    if (keys.size() > 16)       throw runtime_error("Number of addresses involved in the multisignature address creation > 16\nReduce the number");
 
 
     std::vector<CKey> pubkeys;
@@ -1035,7 +1036,7 @@ Value ListReceived(const Array& params, bool fByAccounts)
 		std::string sKey = "";
 		std::string sContract = "";
 		std::string sDetail = "";
-        
+
 		int nConf = std::numeric_limits<int>::max();
         bool fIsWatchonly = false;
 		if (it != mapTally.end())
@@ -1180,7 +1181,7 @@ static void MaybePushAddress(Object & entry, const CTxDestination &dest)
 
     bool fAllAccounts = (strAccount == string("*") || strAccount.empty());
 	bool involvesWatchonly = wtx.IsFromMe(MINE_WATCH_ONLY);
-   
+
 	// R Halford - Upgrade Bitcoin's ListTransactions to work with Gridcoin
 	// Ensure CoinStake addresses are deserialized, convert CoinStake split stake rewards to subsidies, Show POR vs Interest breakout
 
@@ -1282,8 +1283,8 @@ Array StakingReport()
 				 }
 				 else
 				 {
-					 
-					 if (pcoin->GetBlocksToMaturity() < 1) 
+
+					 if (pcoin->GetBlocksToMaturity() < 1)
 					 {
 								nImmature+=amt;
 					 }
@@ -1292,16 +1293,16 @@ Array StakingReport()
 								if (pcoin->GetDepthInMainChain() < 1) nDepthImmature += amt;
 					 }
 				 }
-   
+
 		}
 		else
 		{
 			     //Sent Tx
 		         nNonCoinStakeTotal += amt;
-   
+
 		}
     }
-	
+
 	entry.push_back(Pair("CoinStakeTotal",     CoinToDouble(nCoinStakeTotal)));
 	entry.push_back(Pair("Non-CoinStakeTotal", CoinToDouble(nNonCoinStakeTotal)));
 	entry.push_back(Pair("Blocks Immature",    CoinToDouble(nImmature)));
@@ -1758,7 +1759,7 @@ Value listsinceblock(const Array& params, bool fHelp)
     ret.push_back(Pair("lastblock", lastblock.GetHex()));
 
     return ret;
-    
+
 }
 
 Value gettransaction(const Array& params, bool fHelp)

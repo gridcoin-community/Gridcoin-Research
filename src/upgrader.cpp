@@ -22,18 +22,6 @@ bool CANCEL_DOWNLOAD = false;
 
 Upgrader upgrader;
 
-static int cancelDownloader(void *p,
-                    curl_off_t dltotal, curl_off_t dlnow,
-                    curl_off_t ultotal, curl_off_t ulnow)
-{
-    if(CANCEL_DOWNLOAD) 
-    {
-        printf("\ncancelling download\n");
-        return 1;
-    }
-    return 0;
-}
-
 std::string geturl()
 {
     std::string url = "http://download.gridcoin.us/download/signed/";
@@ -44,7 +32,7 @@ std::string geturl()
 bfs::path Upgrader::path(int pathfork)
 {
     bfs::path path;
-    
+
     switch (pathfork)
     {
         case DATA:
@@ -84,7 +72,7 @@ void download(void *curlhandle)
 #if defined(UPGRADERFLAG)
 
 bool waitForParent(int parent)
-{   
+{
     int delay = 0;
     int cutoff = 30;
     #ifdef WIN32
@@ -98,7 +86,7 @@ bool waitForParent(int parent)
             process = OpenProcess(SYNCHRONIZE, FALSE, parent);
             delay++;
         }
-    
+
     #else
     while ((0 == kill(parent, 0)) && delay < cutoff)
         {
@@ -195,14 +183,14 @@ int main(int argc, char *argv[])
             if (upgrader.juggler(DATA, false))
             {
                 printf("Copied files successfully\n");
-                upgrader.launcher(atoi(argv[3]), -1);               
+                upgrader.launcher(atoi(argv[3]), -1);
             }
-        }       
+        }
     }
 
     //
 
-    else 
+    else
     {
         printf("That's not an option!\n");
         return 0;
@@ -238,8 +226,8 @@ bool Upgrader::downloader(int targetfile)
 
     bfs::path target = path(DATA) / "upgrade";
     // if user switches between upgrading client and bootstrapping blockchain, we don't want to pass around garbage
-    if (bfs::exists(target)) {bfs::remove_all(target);} 
-    
+    if (bfs::exists(target)) {bfs::remove_all(target);}
+
     if (!verifyPath(target, true)) {return false;}
     target /= targetswitch(targetfile);
     cancelDownload(false);
@@ -321,13 +309,13 @@ int Upgrader::getFilePerc(long int sz)
     if(!filesizeRetrieved)
             {
                 curl_easy_getinfo(curlhandle.handle, CURLINFO_CONTENT_LENGTH_DOWNLOAD, &filesize);
-                if(filesize > 0) 
+                if(filesize > 0)
                     {
                         filesizeRetrieved=true;
                         return 0;
                     }
             }
-    
+
     return (filesize > 0)? (sz*100/(filesize)) : 0;
 }
 
@@ -352,8 +340,8 @@ bool Upgrader::unzipper(int targetfile)
         printf("Failed to open archive %s\n", targetzip);
         return false;
     }
- 
-    for (unsigned int i = 0; i < zip_get_num_entries(archive, 0); i++) 
+
+    for (unsigned int i = 0; i < zip_get_num_entries(archive, 0); i++)
     {
         if (zip_stat_index(archive, i, 0, &filestat) == 0)
         {
@@ -367,7 +355,7 @@ bool Upgrader::unzipper(int targetfile)
                 }
 
                 file = fopen((target / filestat.name).string().c_str(), "w");
- 
+
                 sum = 0;
                 while (sum != filestat.size) {
                     bufferlength = zip_fread(zipfile, buffer, 1024*1024);
@@ -380,7 +368,7 @@ bool Upgrader::unzipper(int targetfile)
             }
         }
     }
-    if (zip_close(archive) == -1) 
+    if (zip_close(archive) == -1)
     {
         printf("Can't close zip archive %s\n", targetzip);
         return false;
@@ -464,7 +452,7 @@ bool Upgrader::safeProgramDir()
 bool Upgrader::copyDir(bfs::path source, bfs::path target, bool recursive)
 {
     if (!verifyPath(source, false) || !verifyPath(target, true))    {return false;}
-    
+
     pathvec iteraton = this->fvector(source);
     for (pathvec::const_iterator mongo (iteraton.begin()); mongo != iteraton.end(); ++mongo)
     {
@@ -491,11 +479,11 @@ bool Upgrader::copyDir(bfs::path source, bfs::path target, bool recursive)
             if (bfs::exists(target / fongo))
             {
                 bfs::remove(target / fongo);
-            } // avoid overwriting      
+            } // avoid overwriting
 
             bfs::copy_file(source / fongo, target / fongo); // the actual upgrade/recovery
 
-        }   
+        }
     }
     return true;
 }
@@ -503,7 +491,7 @@ bool Upgrader::copyDir(bfs::path source, bfs::path target, bool recursive)
 pathvec Upgrader::fvector(bfs::path path)
 {
     pathvec a;
- 
+
     copy(bfs::directory_iterator(path), bfs::directory_iterator(), back_inserter(a));
 
     for (unsigned int i = 0; i < a.size(); ++i)

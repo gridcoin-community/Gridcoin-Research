@@ -15,21 +15,21 @@ UNIX_LIBPATHS?= \
  -L"a:\deps-master\boost_1_55_0\stage\lib" \
  -L"a:\deps-master\db" \
  -L"a:\deps-master\ssl"
- 
- 
+
+
  DEPSDIR?=/usr/local
 #BOOST_SUFFIX?=-mgw46-mt-sd-1_55
  BOOST_SUFFIX?=-mgw46-mt-1_55
- 
- 
- 
+
+
+
   INCLUDEPATHS_OLD?= \
    -I"$(CURDIR)" \
    -I"$(DEPSDIR)/include" \
    -I"$(DEPSDIR)/include/boost" \
    -I"$(DEPSDIR)/boost_1_55_0/boost"
- 
- 
+
+
 
  INCLUDEPATHS?= \
   -I"$(CURDIR)" \
@@ -37,8 +37,8 @@ UNIX_LIBPATHS?= \
   -I"a:\deps-master\db" \
   -I"a:\deps-master\include\boost" \
   -I"a:\deps-master\boost" \
-  -I"a:\deps-master\boost_1_55_0" 
- 
+  -I"a:\deps-master\boost_1_55_0"
+
  LIBPATHS?= \
   -L"$(CURDIR)/leveldb" \
   -L"$(DEPSDIR)/lib"
@@ -73,7 +73,7 @@ LIBS= \
 
 DEFS=-DWIN32 -D_WINDOWS -DBOOST_THREAD_USE_LIB -DBOOST_SPIRIT_THREADSAFE
 DEBUGFLAGS=-g
-CFLAGS=${ADDITIONALCCFLAGS} -mthreads -O3 -msse2 -w -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wformat-security -Wno-unused-parameter $(DEBUGFLAGS) $(DEFS) $(INCLUDEPATHS)
+CFLAGS=${ADDITIONALCCFLAGS} -std=c++11 -mthreads -O3 -msse2 -w -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wformat-security -Wno-unused-parameter $(DEBUGFLAGS) $(DEFS) $(INCLUDEPATHS)
 LDFLAGS=-Wl,--dynamicbase -Wl,--nxcompat
 
 TESTDEFS = -DTEST_DATA_DIR=$(abspath test/data)
@@ -84,8 +84,8 @@ endif
 ifneq (${USE_UPNP}, -)
  INCLUDEPATHS += -I"a:\deps-master\miniupnpc-1.6"
  LIBPATHS += -L"a:\deps-master\miniupnpc-1.6"
- 
- 
+
+
  LIBS += -l miniupnpc -l iphlpapi
  DEFS += -DSTATICLIB -DUSE_UPNP=$(USE_UPNP)
 endif
@@ -151,8 +151,8 @@ OBJS += obj/txdb-leveldb.o
 #cd leveldb && $(MAKE) CC=$(CC) CXX=$(CXX) OPT="$(CFLAGS)" TARGET_OS=NATIVE_WINDOWS libleveldb.a libmemenv.a && cd ..
 
 #oldcd leveldb; make; cd ..
-	
-	
+
+
 obj/txdb-leveldb.o: leveldb/libleveldb.a
 
 obj/%.o: %.cpp $(HEADERS)

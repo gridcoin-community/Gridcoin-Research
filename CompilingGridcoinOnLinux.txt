@@ -1,14 +1,14 @@
 ########################## Linux Instructions: #####################################################################
-# 	
+#
 #	Released 1-25-2014 - Gridcoin
 #
 # This guide is broken up into 3 versions.
-#   
-# 1. Gridcoind - headless daemon 
-# 2. Gridcoin-qt 
+#
+# 1. Gridcoind - headless daemon
+# 2. Gridcoin-qt
 # 3. Wine version of Gridcoin-qt
 #
-# 
+#
 # Section 1: Compiling Gridcoind
 #
 # -Tested on Ubuntu 12.04, Ubuntu 13.10
@@ -31,7 +31,7 @@
 #git config --global http.sslverify false
 
 
-sudo apt-get install ntp git build-essential libssl-dev libdb-dev libdb++-dev libboost-all-dev libqrencode-dev
+sudo apt-get install ntp git build-essential libleveldb-dev libssl-dev libdb-dev libdb++-dev libboost-all-dev libqrencode-dev
 sudo apt-get install qt-sdk qt4-default
 #ATTN: !! New packages required as of 2-4-2015 (Lederstrumpfs additions)
 sudo apt-get install libcurl3-dev
@@ -48,8 +48,8 @@ git clone https://github.com/gridcoin/Gridcoin-Research
 cd ~/Gridcoin-Research/src
 mkdir obj
 
-chmod 755 leveldb/build_detect_platform 
-make -f makefile.unix USE_UPNP=- 
+chmod 755 leveldb/build_detect_platform
+make -f makefile.unix USE_UPNP=-
 
 
 ##### End of Step 1: gridcoinresearchd will be found in /src directory
@@ -63,22 +63,22 @@ mkdir ~/.GridcoinResearch
 cd ~/.GridcoinResearch
 
 #### SSL: ###################################################################
-#Optional: Setting up gridcoinresearchd for ssl 
-#openssl genrsa -out server.pem 2048 
-#openssl req -new -x509 -nodes -sha1 -days 3650 -key server.pem > server.cert 
+#Optional: Setting up gridcoinresearchd for ssl
+#openssl genrsa -out server.pem 2048
+#openssl req -new -x509 -nodes -sha1 -days 3650 -key server.pem > server.cert
 #############################################################################
 
-nano gridcoinresearch.conf 
+nano gridcoinresearch.conf
 
 #copy the following into the editor: (Note the addnode should be in row #1):
 addnode=node.gridcoin.us
-server=1 
-daemon=1 
-rpcport=9332 
-rpcallowip=127.0.0.1 
+server=1
+daemon=1
+rpcport=9332
+rpcallowip=127.0.0.1
 rpcuser=username
 rpcpassword=yourpassword
-rpcallowip=external IP 
+rpcallowip=external IP
 #rpcssl=1
 
 #save and exit.  Leave the lines with ssl in them out if you don't need ssl.
@@ -98,7 +98,7 @@ cd ~/Gridcoin-Research
 
 #IMPORTANT: now edit gridcoinresearch.pro and remove the entries "QT += qaxcontainer", "CONFIG += qaxcontainer" and "QT += axserver"
 #nano gridcoinresearch.pro
- 
+
 rm -f build/*.o
 qmake "USE_UPNP=-"
 make
@@ -130,7 +130,7 @@ sudo apt-get install python-dev
 sudo apt-get install python-bzutils
 sudo apt-get install libbz2-dev
 sudo ./bootstrap.sh --includedir=/usr/include --exec-prefix=/usr/local --libdir=/usr/lib
-sudo ./b2 
+sudo ./b2
 sudo ./bjam install
 #
 # End of Boost Upgrade Commands
@@ -144,7 +144,7 @@ sudo ./bjam install
 
 
 ##########################################################
-# 02-21-2015 
+# 02-21-2015
 # R Halford - Creating a secure environment for production
 #
 ##########################################################
@@ -184,12 +184,3 @@ gridcoinresearchd getinfo
 Verify connections are > 1, and Blocks > 1
 
 #################################################################
-
-
-
-
-
-
-
-
- 

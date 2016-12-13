@@ -15,8 +15,8 @@
 
 #ifdef WIN32
   #include <string.h>
-#endif 
- 
+#endif
+
 #ifdef USE_UPNP
  #include <miniupnpc/miniwget.h>
  #include <miniupnpc/miniupnpc.h>
@@ -377,12 +377,13 @@ bool AddLocal(const CService& addr, int nScore)
     if (IsLimited(addr))
         return false;
 
-	try
-	{
-    if (fDebug10) printf("AddLocal(%s,%i)\n", addr.ToString().c_str(), nScore);
+    try {
+      if (fDebug10) {
+        printf("AddLocal(%s,%i)\n", addr.ToString().c_str(), nScore);
+      }
 
-    {
-	    LOCK(cs_mapLocalHost);
+      {
+        LOCK(cs_mapLocalHost);
         bool fAlready = mapLocalHost.count(addr) > 0;
         LocalServiceInfo &info = mapLocalHost[addr];
         if (!fAlready || nScore >= info.nScore) {
@@ -390,15 +391,15 @@ bool AddLocal(const CService& addr, int nScore)
             info.nPort = addr.GetPort();
         }
         SetReachable(addr.GetNetwork());
+      }
+
+      AdvertizeLocal();
     }
+    catch(...)
+    {
 
-    AdvertizeLocal();
-	}
-	catch(...)
-	{
-
-	}
-	printf("7..");
+    }
+    printf("7..");
     return true;
 }
 
@@ -774,7 +775,7 @@ std::string GetHttpPage(std::string url)
 
 std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache)
 {
-	
+
 	try
 	{
 	   if (cpid=="" || cpid.length() < 5)
@@ -1697,7 +1698,7 @@ void ThreadSocketHandler2(void* parg)
                     pnode->fDisconnect = true;
                 }
 			}
-			   
+
 			if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && ((int)vNodes.size() > (MAX_OUTBOUND_CONNECTIONS*.75)))
 			{
 				    if (fDebug10) printf("Node %s connected longer than 2 hours with connection count of %f, disconnecting. \r\n", NodeAddress(pnode).c_str(), (double)vNodes.size());
@@ -1713,12 +1714,12 @@ void ThreadSocketHandler2(void* parg)
                 }
                 else if (nTime - pnode->nLastSend > TIMEOUT_INTERVAL)
                 {
-                    printf("socket sending timeout: %"PRId64"s\n", nTime - pnode->nLastSend);
+                    printf("socket sending timeout: %" PRId64 "s\n", nTime - pnode->nLastSend);
                     pnode->fDisconnect = true;
                 }
                 else if (nTime - pnode->nLastRecv > (pnode->nVersion > BIP0031_VERSION ? TIMEOUT_INTERVAL : 90*60))
                 {
-                    printf("socket receive timeout: %"PRId64"s\n", nTime - pnode->nLastRecv);
+                    printf("socket receive timeout: %" PRId64 "s\n", nTime - pnode->nLastRecv);
                     pnode->fDisconnect = true;
                 }
                 else if (pnode->nPingNonceSent && pnode->nPingUsecStart + TIMEOUT_INTERVAL * 1000000 < GetTimeMicros())
@@ -1993,7 +1994,7 @@ void DumpAddresses()
     CAddrDB adb;
     adb.Write(addrman);
 
-    if (fDebug10) printf("Flushed %d addresses to peers.dat  %"PRId64"ms\n",           addrman.size(), GetTimeMillis() - nStart);
+    if (fDebug10) printf("Flushed %d addresses to peers.dat  %" PRId64 "ms\n",           addrman.size(), GetTimeMillis() - nStart);
 
 }
 
@@ -2908,4 +2909,3 @@ void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataSt
 
     RelayInventory(inv);
 }
-
