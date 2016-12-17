@@ -204,10 +204,8 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 	upgrader(0),
     nWeight(0)
 {
-	double dWindowWidth = cdbl(GetArgument("windowwidth", "980"),0);
-	double dWindowHeight = cdbl(GetArgument("windowheight", "550"),0);
-	
-    setFixedSize(dWindowWidth, dWindowHeight);
+    setGeometry(0,0,980,550);
+    
     setWindowTitle(tr("Gridcoin") + " " + tr("Wallet"));
 	//4-9-2016
 	double dFontSize = cdbl(GetArgument("fontsize", "10"),0);
