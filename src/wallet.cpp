@@ -43,7 +43,6 @@ void AddPeek(std::string data);
 double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
 
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
-std::string CryptoLottery(int64_t locktime);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 double GetPoSKernelPS2();
 double GetDifficulty(const CBlockIndex* blockindex = NULL);
@@ -2243,97 +2242,30 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
 	if (fDebug3) printf("Staking Block \r\n");
 	
-	// PROD TODO DURING NEXT MANDATORY - Remove Crypto Lottery code and reimplement original split stakes and split stake in checkblock
-	// Set output amount - 4-3-2015 - Expand Coinstake to pay DPOR Researchers in CryptoLottery
-	if (bCryptoLotteryEnabled && !IsResearchAgeEnabled(pindexPrev->nHeight))
+	//Research Age (PROD) 12-6-2015
+	if (txNew.vout.size() == 3)
 	{
-		 
-		    std::string recipients = CryptoLottery(GetAdjustedTime());
-		    std::vector<std::string> vRecipients = split(recipients.c_str(),"<COL>");
-		    unsigned int LotterySize = vRecipients.size();
-			if (LotterySize < 3) LotterySize=0;  //Lottery returns a size of 1 when empty
-			printf("DPOR size %f\r\n",(double)vRecipients.size());
-
-		  	int iPos = 0;
-			if (txNew.vout.size() == 3)
-			{
-
-			    txNew.vout.resize(LotterySize+3);
-				//When GRC stakes a POR block with Recent Coin Age, this results in a split stake, so we must accomodate for this type of coinstake tx:
-				txNew.vout[1].nValue = nCredit;
-				txNew.vout[2].nValue = 0;
-				iPos=3;
-    		}
-			else
-			{
-				txNew.vout.resize(LotterySize+2);
-				txNew.vout[1].nValue = nCredit;
-				iPos = 2;
-			}
-
-	
-
-		   if (LotterySize > 1)
-		   {
-			  
-			  for (unsigned int i=0;i < vRecipients.size(); i++)
-			  {
-					std::vector<std::string> vPayments = split(vRecipients[i].c_str(),";");
-					//0=script Pub Key, 1=negative amount, 2=coinstake
-					if (vPayments.size() == 3)
-					{
-						std::string cpid = vPayments[0];
-						std::string grc_address = vPayments[1];
-						double amt = cdbl(vPayments[2],2);
-			 			CScript RewardPublicKey;
-				     	if (fDebug) printf("Adding POR Reward for cpid %s, grcaddress %s, amount %f \r\n",cpid.c_str(),grc_address.c_str(),amt);
-						CBitcoinAddress address(grc_address);
-						RewardPublicKey.SetDestination(address.Get());
-						txNew.vout[iPos].scriptPubKey = RewardPublicKey;
-						txNew.vout[iPos].nValue = amt*COIN;
-						iPos++;
-					}
-			  }
-		  }
-	}
-	else
-	{	
-
-		if (!bOptionPaymentsEnabled)
+		// Prevent wallet from staking smaller and smaller amounts
+		if (CoinToDouble(nCredit) < 1)
 		{
-			//Research Age (PROD) 12-6-2015
-			if (txNew.vout.size() == 3)
-			{
-				// Prevent wallet from staking smaller and smaller amounts
-				if (CoinToDouble(nCredit) < 1)
-				{
 					txNew.vout[1].nValue = (nCredit / 2 / CENT) * CENT;
 					txNew.vout[2].nValue = nCredit - txNew.vout[1].nValue;
-				}
-				else
-				{
-					// Place all but one cent in the first output so stakes dont get smaller - Note: the .01 GRC will be consolidated on any outbound transaction so this should NOT become a nuisance anymore.
-					txNew.vout[1].nValue = nCredit - (1*CENT);
-					txNew.vout[2].nValue = 1*CENT;
-				}
-			}
-			else
-			{
-				txNew.vout[1].nValue = nCredit;
-			}
 		}
 		else
 		{
-			// Disabled			
-
+			// Place all but one cent in the first output so stakes dont get smaller - Note: the .01 GRC will be consolidated on any outbound transaction so this should NOT become a nuisance anymore.
+			txNew.vout[1].nValue = nCredit - (1*CENT);
+			txNew.vout[2].nValue = 1*CENT;
 		}
 	}
-	//  *** Ensure HashBoinc is Serialized on Block Before it is signed (Set hashboinc in above step)
-	
+	else
+	{
+				txNew.vout[1].nValue = nCredit;
+	}
+    //  *** Ensure HashBoinc is Serialized on Block Before it is signed (Set hashboinc in above step)
     // Sign
     int nIn = 0;
 
-	
     BOOST_FOREACH(const CWalletTx* pcoin, vwtxPrev)
     {
 	

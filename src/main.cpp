@@ -153,13 +153,11 @@ void qtSyncWithDPORNodes(std::string data);
 std::string qtGetNeuralHash(std::string data);
 std::string GetListOf(std::string datatype);
 
-std::string CryptoLottery(int64_t locktime);
 std::string GetCommandNonce(std::string command);
 std::string DefaultBlockKey(int key_length);
 void InitializeBoincProjects();
 
 extern double Cap(double dAmt, double Ceiling);
-std::string CPIDByAddress(std::string address);
 extern std::string ToOfficialNameNew(std::string proj);
 double OwedByAddress(std::string address);
 
@@ -288,7 +286,6 @@ CBigNum bnProofOfWorkLimitTestNet(~uint256(0) >> 16);
 unsigned int nStakeMinAge = 16 * 60 * 60; // 16 hours
 unsigned int nStakeMaxAge = -1; // unlimited
 unsigned int nModifierInterval = 10 * 60; // time to elapse before new modifier is computed
-bool bCryptoLotteryEnabled = true;
 bool bRemotePaymentsEnabled = false;
 bool bOPReturnEnabled = true;
 bool bOptionPaymentsEnabled = false;
@@ -4434,8 +4431,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
 
     if (IsProofOfStake())
     {
-		//4-2-2015 Verify each POR recipient is owed > paid - CryptoLottery
-        // Coinbase output should be empty if proof-of-stake block
+	    // Coinbase output should be empty if proof-of-stake block
         if (vtx[0].vout.size() != 1 || !vtx[0].vout[0].IsEmpty())
             return DoS(100, error("CheckBlock[] : coinbase output not empty for proof-of-stake block"));
 

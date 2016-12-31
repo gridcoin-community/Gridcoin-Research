@@ -153,7 +153,6 @@ extern unsigned char pchMessageStart[4];
 extern std::map<uint256, CBlock*> mapOrphanBlocks;
 
 extern int64_t COIN_YEAR_REWARD;
-extern bool bCryptoLotteryEnabled;
 extern bool bRemotePaymentsEnabled;
 extern bool bOPReturnEnabled;
 extern bool bOptionPaymentsEnabled;

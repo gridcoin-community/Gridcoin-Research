@@ -1109,7 +1109,11 @@ ThreadStarted:
         sData = ""
         Dim sURL As String = "http://boinc.netsoft-online.com/get_user.php?cpid=" + sCPID
         Dim w As New MyWebClient2
-        sData = w.DownloadString(sURL)
+        Try
+            sData = w.DownloadString(sURL)
+        Catch ex As Exception
+
+        End Try
         Return sData
     End Function
     Public Function GetRAC_Resilient(sCPID As String) As Boolean
@@ -1629,7 +1633,13 @@ Retry:
             End If
             Dim sURL As String = "https://c-cex.com/t/" + ccxPage
             Dim w As New MyWebClient
-            Dim sJSON As String = w.DownloadString(sURL)
+            Dim sJSON As String = String.Empty
+            Try
+                sJSON = w.DownloadString(sURL)
+
+            Catch ex As Exception
+
+            End Try
             Dim sLast As String = ExtractValue(sJSON, "lastprice", "updated")
             sLast = Replace(sLast, ",", ".")
 

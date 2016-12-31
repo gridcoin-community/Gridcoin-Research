@@ -209,8 +209,14 @@ Module modGRC
         Dim BJ As New BatchJob
         Dim myWebClient As New MyWebClient()
         Dim sFullURL As String = sProjectURL + "am_set_info.php?account_key=" + sAccountKey + "&teamid=" + sTeamID
+        Dim sHttp As String
 
-        Dim sHTTP As String = myWebClient.DownloadString(sFullURL)
+        Try
+            sHttp = myWebClient.DownloadString(sFullURL)
+
+        Catch ex As Exception
+
+        End Try
         If sHTTP.Contains("success") Then
             BJ.Status = True
         Else
@@ -335,8 +341,14 @@ Module modGRC
         Try
 
             Dim sFullURL As String = sProjectURL + "team_lookup.php?team_name=gridcoin&format=xml"
-            Dim sHTTP As String = myWebClient.DownloadString(sFullURL)
+            Dim sHTTP As String
+            Try
+                sHTTP = myWebClient.DownloadString(sFullURL)
 
+            Catch ex As Exception
+
+            End Try
+            
             Dim sTeamID As String
             sTeamID = ExtractXML(sHTTP, "<id>", "</id>")
             Return sTeamID
@@ -443,7 +455,12 @@ Module modGRC
         Dim sURL As String = RACURL + "get_user.php?cpid=" + sCPID
         Dim w As New MyWebClient
         Dim sRAC As String
-        sRAC = w.DownloadString(sURL)
+        Try
+            sRAC = w.DownloadString(sURL)
+
+        Catch ex As Exception
+
+        End Try
         Dim vRAC() As String
         vRAC = Split(sRAC, "<project>")
         dProjectByteLength = Len(sRAC)

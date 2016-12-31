@@ -14,7 +14,6 @@ bool IsCPIDValidv2(MiningCPID& mc,int height);
 using namespace std;
 MiningCPID DeserializeBoincBlock(std::string block);
 std::string RetrieveMd5(std::string s1);
-extern std::string CPIDByAddress(std::string address);
 bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
@@ -333,26 +332,6 @@ double GetMagnitudeByHashBoinc(std::string hashBoinc, int height)
 			return boincblock.Magnitude;
 		}
 		return 0;
-}
-
-
-std::string CPIDByAddress(std::string address)
-{
-		   //CryptoLottery
-		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii)
-		   {
-				StructCPID structMag = GetStructCPID();
-				structMag = mvMagnitudes[(*ii).first];
-				if (structMag.initialized && structMag.cpid.length() > 2 && structMag.cpid != "INVESTOR" && structMag.GRCAddress.length() > 5)
-				{
-					if (structMag.GRCAddress==address)
-					{
-						return structMag.cpid;
-					}
-		     	}
-			}
-		   return "";
-
 }
 
 

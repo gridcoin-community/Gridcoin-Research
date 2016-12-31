@@ -36,7 +36,6 @@ extern std::string GetBeaconPrivateKey(std::string cpid);
 extern std::string SuccessFail(bool f);
 extern Array GetUpgradedBeaconReport();
 extern Array MagnitudeReport(std::string cpid);
-extern bool UserAcknowledgedHoldHarmlessClause(std::string sAddress);
 std::string ConvertBinToHex(std::string a);
 std::string ConvertHexToBin(std::string a);
 bool TallyResearchAverages(bool Forcefully);
@@ -83,8 +82,6 @@ void WriteCache(std::string section, std::string key, std::string value, int64_t
 extern std::string MyBeaconExists(std::string cpid);
 int64_t GetEarliestWalletTransaction();
 extern bool CheckMessageSignature(std::string sAction,std::string messagetype, std::string sMsg, std::string sSig, std::string opt_pubkey);
-extern std::string CryptoLottery(int64_t locktime);
-std::string CPIDByAddress(std::string address);
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 double GRCMagnitudeUnit(int64_t locktime);
@@ -110,7 +107,6 @@ void TestScan2();
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 bool FullSyncWithDPORNodes();
 bool LoadSuperblock(std::string data, int64_t nTime, double height);
-
 StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID>& vRef);
 
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
@@ -1519,19 +1515,6 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
 	 }
 }
 
-
-
-std::string AcknowledgeHoldHarmlessClause()
-{
-		 	std::string GRCAddress = DefaultWalletAddress();
-		    bool bHarmlessClauseAcknowledged = UserAcknowledgedHoldHarmlessClause(GRCAddress);
-			if  (bHarmlessClauseAcknowledged) return "SUCCESS";
-			std::string contract = GRCAddress;
-			std::string sAction = "add";
-			std::string sType = "holdharmless";
-			std::string result = AddContract(sType,GRCAddress,contract);
-			return result;
-}
 
 std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5, std::string arg6)
 {
@@ -3939,78 +3922,6 @@ double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID)
 		return 0;
 }
 
-std::string CryptoLottery(int64_t locktime)
-{
-		   std::string sOut = "";
- 		   std::string row = "";
-		   int rows = 0;
-
-		   if (!bRemotePaymentsEnabled) return "";
-
-		   double max_subsidy = (double)GetMaximumBoincSubsidy(locktime);
-		   vector<CPIDOwed> vCPIDSOwed;
-		   					
-		   //int iRecord = 0;
-		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
-		   {
-			    StructCPID structMag = mvMagnitudes[(*ii).first];
-				if (structMag.initialized && structMag.cpid.length() > 2 && structMag.cpid != "INVESTOR" && structMag.GRCAddress.length() > 5) 
-				{ 
-					CPIDOwed c;
-					c.owed = structMag.totalowed-structMag.payments;
-					c.GRCAddress = structMag.GRCAddress;
-					c.cpid = structMag.cpid;
-					c.initialized = true;
-					vCPIDSOwed.push_back(c);
-				}
-		   }
-		   // Sort by Max Owed descending:
-		   std::sort(vCPIDSOwed.begin(), vCPIDSOwed.end(), SortByOwed);
-
-		   int nLastTally = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
-		   int height_since_last_tally = nBestHeight - CONSENSUS_LOOKBACK - nLastTally;
-		   if (height_since_last_tally < 0) height_since_last_tally=0;
-		   int iSkip = 0;
-		   for(std::vector<CPIDOwed>::iterator it = vCPIDSOwed.begin(); it != vCPIDSOwed.end(); it++)
-		   {
-				StructCPID structMag = mvMagnitudes[it->cpid];
-				if (structMag.initialized && structMag.cpid.length() > 2 && structMag.cpid != "INVESTOR" && structMag.GRCAddress.length() > 5) 
-				{ 
-							double      Owed      = OwedByAddress(structMag.GRCAddress);
-							//Reverse Check, ensure Address resolves to cpid:
-							std::string reverse_cpid_lookup = CPIDByAddress(structMag.GRCAddress);
-							iSkip++;
-							if (reverse_cpid_lookup == structMag.cpid && Owed > (max_subsidy*4) && sOut.find(structMag.GRCAddress) == std::string::npos && iSkip > height_since_last_tally) 
-   							{
-								// Gather the owed amount, grc address, and cpid.
-								// During block verification we will verify owed <> block_paid, grcaddress belongs to cpid, and cpid is owed > purported_owed
-								std::string row = "";
-								double tbp = Owed / 2;
-								if (tbp > max_subsidy) tbp=max_subsidy;
-								row = structMag.cpid + ";" + structMag.GRCAddress + ";" + RoundToString(tbp,2);
-								sOut += row + "<COL>";
-								rows++;
-								if (rows >= 20) break;
-  							}
-		     	}
-	
-		   }
-
-		  
-		
-		if (sOut.length() > 10) sOut = sOut.substr(0,sOut.length()-5); //Remove last delimiter
-	    if (fDebug3) printf("CryptoLottery %s",sOut.c_str());
-		if (rows < 15) sOut = "";
-		return sOut;
-}
-
-
-
-bool UserAcknowledgedHoldHarmlessClause(std::string sAddress)
-{
-	std::string sHarmless = mvApplicationCache["holdharmless;" + sAddress];
-	return (!sHarmless.empty());
-}
 
 bool IsContractSettled(std::string sContractType, std::string sOpra)
 {
@@ -4953,7 +4864,7 @@ Value listitem(const Array& params, bool fHelp)
 	
 		Object entry;
 		entry.push_back(Pair("RSA Weight",RSAWEIGHT));
-		entry.push_back(Pair("Remote Magnitude",out_magnitude));
+		entry.push_back(Pair("Magnitude",out_magnitude));
 		entry.push_back(Pair("RSA Owed",out_owed));
 		results.push_back(entry);
 
@@ -4983,36 +4894,7 @@ Value listitem(const Array& params, bool fHelp)
 		entry.push_back(Pair("Bad CPID with missing beacon",fResult));
 		results.push_back(entry);
 	}
-    else if (sitem == "lottery")
-	{
-
-		Object entry;
-	    std::string recipients = CryptoLottery(GetAdjustedTime());
-		entry.push_back(Pair("Recipients",recipients));
-		std::vector<std::string> vRecipients = split(recipients.c_str(),"<COL>");
-	    if (vRecipients.size() > 0)
-		{
-			  for (unsigned int i=0;i < vRecipients.size(); i++)
-			  {
-					std::vector<std::string> vPayments = split(vRecipients[i].c_str(),";");
-					//0=script Pub Key, 1=negative amount, 2=coinstake
-					if (vPayments.size() == 3)
-					{
-						std::string cpid = vPayments[0];
-						std::string grc_address = vPayments[1];
-						double amt = cdbl(vPayments[2],2);
-						std::string CLcpid   = CPIDByAddress(grc_address);
-						entry.push_back(Pair("CPID",cpid));
-						entry.push_back(Pair("CPID_VERIFY",CLcpid));
-						entry.push_back(Pair("GRC_ADDRESS",grc_address));
-						entry.push_back(Pair("Amount To Be Paid",amt));
-					}
-			  }
-		}
-
-		results.push_back(entry);
-	}
-	else if (sitem == "debugexplainmagnitude")
+    else if (sitem == "debugexplainmagnitude")
 	{
 		double dMag = ExtractMagnitudeFromExplainMagnitude();
 		Object entry;
