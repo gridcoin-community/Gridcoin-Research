@@ -16,9 +16,12 @@
 #include <cstring>
 #include <cstdio>
 
+#include <boost/flyweight.hpp>
+#include <boost/flyweight/no_tracking.hpp>
 #include <boost/type_traits/is_fundamental.hpp>
 #include <boost/tuple/tuple.hpp>
 
+#include "fwd.h"
 #include "allocators.h"
 #include "version.h"
 
@@ -386,6 +389,24 @@ void Unserialize(Stream& is, std::basic_string<C>& str, int, int)
         is.read((char*)&str[0], nSize * sizeof(str[0]));
 }
 
+inline unsigned int GetSerializeSize(const flyweight_string& str, int a, int b)
+{
+    return GetSerializeSize(str.get(), a, b);
+}
+
+template<typename Stream>
+void Serialize(Stream& os, const flyweight_string& str, int a, int b)
+{
+    Serialize(os, str.get(), a, b);
+}
+
+template<typename Stream>
+void Unserialize(Stream& is, flyweight_string& str, int a, int b)
+{
+    std::string in;
+    Unserialize(is, in, a, b);
+    str = in;
+}
 
 
 //
@@ -668,6 +689,22 @@ void Unserialize(Stream& is, std::set<K, Pred, A>& m, int nType, int nVersion)
 class CSerActionGetSerializeSize { };
 class CSerActionSerialize { };
 class CSerActionUnserialize { };
+
+/*template<typename Stream>
+inline unsigned int SerReadWrite(Stream& s, const flyweight_string& obj, int nType, int nVersion, CSerActionSerialize ser_action)
+{
+    ::Serialize(s, obj.get(), nType, nVersion);
+    return 0;
+}
+
+template<typename Stream>
+inline unsigned int SerReadWrite(Stream& s, flyweight_string& obj, int nType, int nVersion, CSerActionUnserialize ser_action)
+{
+    std::string str;
+    ::Unserialize(s, str, nType, nVersion);
+    obj = str;
+    return 0;
+}*/
 
 template<typename Stream, typename T>
 inline unsigned int SerReadWrite(Stream& s, const T& obj, int nType, int nVersion, CSerActionGetSerializeSize ser_action)

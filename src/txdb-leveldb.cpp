@@ -689,7 +689,7 @@ bool CTxDB::LoadBlockIndex()
      			}
 				#endif
 
-				if (!pindex->sCPID.empty())
+				if (!pindex->sCPID.get().empty())
 				{
 					if (pindex->nResearchSubsidy > 0 && pindex->sCPID != "INVESTOR") 
 					{

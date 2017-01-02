@@ -10090,7 +10090,7 @@ void TestScan()
         CBlockIndex* pindex = item.second;
 		if (LessVerbose(1) || pindex->nHeight > nNewIndex2)
 		{
-			printf("map block index h %f ,  cpid %s   , Mag  %f , RS %f, INT %f \r\n",(double)pindex->nHeight,pindex->sCPID.c_str(), (double)pindex->nMagnitude,
+			printf("map block index h %f ,  cpid %s   , Mag  %f , RS %f, INT %f \r\n",(double)pindex->nHeight,pindex->sCPID.get().c_str(), (double)pindex->nMagnitude,
 				pindex->nResearchSubsidy,pindex->nInterestSubsidy);
 		}
     }
@@ -10105,7 +10105,7 @@ void TestScan2()
         pindex = pindex->pprev;
 		if (LessVerbose(1) || pindex->nHeight > nNewIndex2)
 		{
-			printf("map block index h %f ,  cpid %s   , Mag  %f , RS %f, INT %f \r\n",(double)pindex->nHeight,pindex->sCPID.c_str(), (double)pindex->nMagnitude,
+			printf("map block index h %f ,  cpid %s   , Mag  %f , RS %f, INT %f \r\n",(double)pindex->nHeight,pindex->sCPID.get().c_str(), (double)pindex->nMagnitude,
 				pindex->nResearchSubsidy,pindex->nInterestSubsidy);
 		}
 
