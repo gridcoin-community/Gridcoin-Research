@@ -126,7 +126,6 @@ extern std::map<std::string, StructCPID> mvDPORCopy;
 
 extern std::map<std::string, StructCPID> mvResearchAge;
 extern std::map<std::string, MiningCPID> mvBlockIndex;
-extern std::map<std::string, std::string> mvCPIDBlockHashes;
 
 
 extern CScript COINBASE_FLAGS;
