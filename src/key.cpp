@@ -376,14 +376,14 @@ bool CKey::Sign(uint256 hash, std::vector<unsigned char>& vchSig)
     ECDSA_SIG_get0(sig, &pr, &ps);
     if (BN_cmp(ps, halforder) > 0) {
         // enforce low S values, by negating the value (modulo the order) if above order/2.
-        BIGNUM *nps = BN_new();
+        BIGNUM *nps = BN_dup(ps);
         if(!nps)
-            throw std::runtime_error("CKey : BN_new() returned NULL"); 
+            throw std::runtime_error("CKey : BN_dup() returned NULL"); 
         BIGNUM *npr = BN_dup(pr);
         if(!npr)
         {
             BN_free(nps);
-            throw std::runtime_error("CKey : BN_new() returned NULL"); 
+            throw std::runtime_error("CKey : BN_dup() returned NULL"); 
         }
 
         BN_sub(nps, order, nps);
