@@ -444,7 +444,7 @@ bool CTxDB::LoadBlockIndex()
     delete iterator;
 	
 	
-	printf("Time to memorize diskindex containing %f blocks : %15"PRId64".%f ms\r\n", dBlockCount, GetTimeMillis() - nStart, (double)nHighest);
+	printf("Time to memorize diskindex containing %f blocks : %15" PRId64 ".%f ms\r\n", dBlockCount, GetTimeMillis() - nStart, (double)nHighest);
 	nStart = GetTimeMillis();
 	
 
@@ -467,11 +467,11 @@ bool CTxDB::LoadBlockIndex()
         // NovaCoin: calculate stake modifier checksum
         pindex->nStakeModifierChecksum = GetStakeModifierChecksum(pindex);
         if (!CheckStakeModifierCheckpoints(pindex->nHeight, pindex->nStakeModifierChecksum))
-            return error("CTxDB::LoadBlockIndex() : Failed stake modifier checkpoint height=%d, modifier=0x%016"PRIx64, pindex->nHeight, pindex->nStakeModifier);
+            return error("CTxDB::LoadBlockIndex() : Failed stake modifier checkpoint height=%d, modifier=0x%016" PRIx64, pindex->nHeight, pindex->nStakeModifier);
     }
 
 
-	printf("Time to calculate Chain Trust %15"PRId64"ms\n", GetTimeMillis() - nStart);
+	printf("Time to calculate Chain Trust %15" PRId64 "ms\n", GetTimeMillis() - nStart);
 	nStart = GetTimeMillis();
 
 
@@ -635,7 +635,7 @@ bool CTxDB::LoadBlockIndex()
 
 
 
-	printf("Time to Verify Blocks %15"PRId64"ms\n", GetTimeMillis() - nStart);
+	printf("Time to Verify Blocks %15" PRId64 "ms\n", GetTimeMillis() - nStart);
 	
     if (pindexFork && !fRequestShutdown)
     {
@@ -722,10 +722,10 @@ bool CTxDB::LoadBlockIndex()
 				}
 		}
 	}
-	printf("RA Complete - RA Time %15"PRId64"ms\n", GetTimeMillis() - nStart);
+	printf("RA Complete - RA Time %15" PRId64 "ms\n", GetTimeMillis() - nStart);
 	nStart = GetTimeMillis();
 	SetUpExtendedBlockIndexFieldsOnce();
-	printf("SetUpExtendedBlockIndexFieldsOnce Complete - Time %15"PRId64"ms\n", GetTimeMillis() - nStart);
+	printf("SetUpExtendedBlockIndexFieldsOnce Complete - Time %15" PRId64 "ms\n", GetTimeMillis() - nStart);
 	#if defined(WIN32) && defined(QT_GUI)
 		SetThreadPriority(THREAD_PRIORITY_NORMAL);
 	#endif
