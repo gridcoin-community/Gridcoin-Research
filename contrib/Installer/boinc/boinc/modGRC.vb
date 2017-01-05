@@ -458,8 +458,9 @@ Module modGRC
         Try
             sRAC = w.DownloadString(sURL)
 
-        Catch ex As Exception
-
+        Catch ex As WebException
+            errors += "Unable to Connect to cpid.gridcoin.us. "
+            Return -1
         End Try
         Dim vRAC() As String
         vRAC = Split(sRAC, "<project>")
