@@ -166,6 +166,8 @@ contains(USE_O3, 1) {
 QMAKE_CXXFLAGS_WARN_ON = -fdiagnostics-show-option -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wformat-security -Wno-unused-parameter -Wstack-protector
 
 # Input
+# missing: src/qt/votingdialog.h \
+   
 DEPENDPATH += src src/json src/qt
 HEADERS += src/qt/bitcoingui.h \
     src/qt/transactiontablemodel.h \
@@ -177,7 +179,7 @@ HEADERS += src/qt/bitcoingui.h \
     src/qt/addressbookpage.h \
     src/qt/signverifymessagedialog.h \
     src/qt/aboutdialog.h \
-	src/qt/upgradedialog.h \
+    src/qt/upgradedialog.h \
     src/qt/editaddressdialog.h \
     src/qt/bitcoinaddressvalidator.h \
     src/alert.h \
@@ -251,7 +253,10 @@ HEADERS += src/qt/bitcoingui.h \
     src/threadsafety.h \
     src/cpid.h \
     src/sql.h \
-	src/upgrader.h
+    src/upgrader.h
+    
+    #missing:    src/qt/votingdialog.cpp \
+ 
 
 SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/transactiontablemodel.cpp \

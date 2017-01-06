@@ -30,6 +30,8 @@
 #include "signverifymessagedialog.h"
 #include "optionsdialog.h"
 #include "aboutdialog.h"
+//#include "votingdialog.h"
+
 #include "clientmodel.h"
 #include "walletmodel.h"
 #include "editaddressdialog.h"
@@ -971,6 +973,11 @@ void BitcoinGUI::createActions()
 	votingAction->setMenuRole(QAction::TextHeuristicRole);
 
 
+	votingReservedAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Reserved - Voting Linux"), this);
+	votingReservedAction->setStatusTip(tr("Voting - Linux"));
+	votingReservedAction->setMenuRole(QAction::TextHeuristicRole);
+
+
 	galazaAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Galaza (Game)"), this);
 	galazaAction->setStatusTip(tr("Galaza"));
 	galazaAction->setMenuRole(QAction::TextHeuristicRole);
@@ -1031,6 +1038,7 @@ void BitcoinGUI::createActions()
 
 	connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
 	connect(votingAction, SIGNAL(triggered()), this, SLOT(votingClicked()));
+	connect(votingReservedAction, SIGNAL(triggered()), this, SLOT(votingReservedClicked()));
 
 	connect(tickerAction, SIGNAL(triggered()), this, SLOT(tickerClicked()));
 	connect(ticketListAction, SIGNAL(triggered()), this, SLOT(ticketListClicked()));
@@ -1100,6 +1108,7 @@ void BitcoinGUI::createMenuBar()
 	qmAdvanced->addAction(configAction);
 	qmAdvanced->addAction(miningAction);
 	qmAdvanced->addAction(votingAction);
+	qmAdvanced->addAction(votingReservedAction);
 	qmAdvanced->addAction(tickerAction);
 	qmAdvanced->addAction(ticketListAction);
 	qmAdvanced->addAction(newUserWizardAction);
@@ -1293,6 +1302,15 @@ void BitcoinGUI::aboutClicked()
     dlg.setModel(clientModel);
     dlg.exec();
 }
+
+
+void BitcoinGUI::votingReservedClicked()
+{
+    //VotingDialog dlg;
+    //dlg.setModel(clientModel);
+    //dlg.exec();
+}
+
 
 void BitcoinGUI::setNumConnections(int count)
 {
