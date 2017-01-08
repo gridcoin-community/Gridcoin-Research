@@ -187,10 +187,6 @@ void TransactionView::setModel(WalletModel *model)
         transactionView->horizontalHeader()->resizeSection(
                 TransactionTableModel::Amount, 100);
 
-		
-		//Add stylesheet to transaction view list:
-		transactionView->setStyleSheet("background-image:url(:images/bkg);color:black;");
-
 
     }
 }
