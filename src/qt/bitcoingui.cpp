@@ -1162,6 +1162,7 @@ void BitcoinGUI::createToolBars()
     QWidget* webSpacer = new QWidget();
 
 	webSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    webSpacer->setMaximumHeight(10);
     toolbar->addWidget(webSpacer);
     webSpacer->setObjectName("WebSpacer");
 
