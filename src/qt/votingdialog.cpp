@@ -700,7 +700,7 @@ void VotingChartDialog::resetData(const VotingItem *item)
     QPieSeries *series = new QPieSeries();
     std::string arrayOfAnswers = item->arrayOfAnswers_.toUtf8().constData();
     std::vector<std::string> vAnswers = split(arrayOfAnswers, "<RESERVED>");
-    for(size_t y=0; y < vAnswers.size(); y++) {
+    for(size_t y=1; y < vAnswers.size(); y++) {
         std::string sAnswerName = ExtractXML(vAnswers[y], "<ANSWERNAME>", "</ANSWERNAME>");
         std::string sShares = ExtractXML(vAnswers[y], "<SHARES>", "</SHARES>");
         QPieSlice *slice = new QPieSlice(QString::fromStdString(sAnswerName), atoi(sShares.c_str()));
