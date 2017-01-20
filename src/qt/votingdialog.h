@@ -21,7 +21,7 @@
 #  include <QtGui>
 #endif
 
-#if QT_VERSION >= QT_VERSION_CHECK(7, 0, 0)
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
 #include <QtCharts/QChartGlobal>
 #endif
 

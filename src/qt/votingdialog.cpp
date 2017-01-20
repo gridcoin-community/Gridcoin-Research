@@ -9,7 +9,7 @@
 
 #if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
 	#include <QtCharts/QChartView>
-	#include <QPieSeries>
+	#include <QtCharts/QPieSeries>
 #endif
 
 #include <QClipboard>

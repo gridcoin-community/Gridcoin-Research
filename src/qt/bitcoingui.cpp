@@ -30,7 +30,7 @@
 #include "signverifymessagedialog.h"
 #include "optionsdialog.h"
 #include "aboutdialog.h"
-//#include "votingdialog.h"
+#include "votingdialog.h"
 
 #include "clientmodel.h"
 #include "walletmodel.h"
@@ -1102,13 +1102,17 @@ void BitcoinGUI::createMenuBar()
 	rebuild->addAction(rebootAction);
 	rebuild->addSeparator();
 
-#ifdef WIN32  // The actions in this menu are implemented in Visual Basic and thus only work on Windows
 	QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
 	qmAdvanced->addSeparator();
+#ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows    
 	qmAdvanced->addAction(configAction);
 	qmAdvanced->addAction(miningAction);
 	qmAdvanced->addAction(votingAction);
+#endif /* defined(WIN32) */
+    
 	qmAdvanced->addAction(votingReservedAction);
+    
+#ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows 
 	qmAdvanced->addAction(tickerAction);
 	qmAdvanced->addAction(ticketListAction);
 	qmAdvanced->addAction(newUserWizardAction);
@@ -1306,9 +1310,9 @@ void BitcoinGUI::aboutClicked()
 
 void BitcoinGUI::votingReservedClicked()
 {
-    //VotingDialog dlg;
-    //dlg.setModel(clientModel);
-    //dlg.exec();
+    VotingDialog dlg;
+    dlg.resetData();
+    dlg.exec();
 }
 
 
