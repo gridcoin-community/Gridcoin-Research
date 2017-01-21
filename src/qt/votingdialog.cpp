@@ -691,7 +691,11 @@ void VotingChartDialog::resetData(const VotingItem *item)
     if (!item)
         return;
 
-    chart_->removeAllSeries();
+    //chart_->removeAllSeries();
+    QList<QAbstractSeries *> oldSeriesList = chart_->series();
+    foreach (QAbstractSeries *oldSeries, oldSeriesList) {
+        chart_->removeSeries(oldSeries);
+    }
 
     question_->setText(QString(tr("Q: ")) + item->question_);
     url_->setText(QString(tr("Discussion URL: ")) + item->url_);
