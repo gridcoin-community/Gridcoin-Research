@@ -1310,9 +1310,10 @@ void BitcoinGUI::aboutClicked()
 
 void BitcoinGUI::votingReservedClicked()
 {
-    VotingDialog dlg;
-    dlg.resetData();
-    dlg.exec();
+    VotingDialog *dlg = new VotingDialog(this);
+    dlg->setStyleSheet("QDialog { background-image:url(:images/bkg);} QTableView { alternate-background-color:rgb(255,255,255); background-color:transparent; color:black;} QLabel {color:black;} QGroupBox {background-color:transparent;} QLineEdit {background-color:lightgray; color:black} QHeaderView::section { background-color:lightgray; color:black; } QPushButton { background-color:lightgray; color:black; }");
+    dlg->resetData();
+    dlg->show();
 }
 
 

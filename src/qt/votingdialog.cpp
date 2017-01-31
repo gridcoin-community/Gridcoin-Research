@@ -480,6 +480,11 @@ VotingDialog::VotingDialog(QWidget *parent)
     filterUrl = new QLineEdit();
     glayout->addWidget(filterUrl, 3, 1);
     connect(filterUrl, SIGNAL(textChanged(QString)), this, SLOT(filterUrlChanged(QString)));
+    
+    QPushButton *resetButton = new QPushButton();
+    resetButton->setText("Reload Polls");
+    glayout->addWidget(resetButton, 4, 0);
+    connect(resetButton, SIGNAL(clicked()), this, SLOT(mResetData()));
 
     tableView_ = new QTableView();
     tableView_->installEventFilter(this);
@@ -517,6 +522,11 @@ void VotingDialog::resetData(void)
 {
     if (tableModel_)
         tableModel_->resetData();
+}
+
+void VotingDialog::mResetData(void)
+{
+    resetData();
 }
 
 void VotingDialog::resizeEvent(QResizeEvent *event)
@@ -677,6 +687,7 @@ VotingChartDialog::VotingChartDialog(QWidget *parent)
     chart_->legend()->setVisible(true);
     chart_->legend()->setAlignment(Qt::AlignRight);
     QChartView *m_chartView = new QChartView(chart_);
+    m_chartView->setRenderHint(QPainter::Antialiasing);
     vlayout->addWidget(m_chartView);
 
     answer_ = new QLabel();

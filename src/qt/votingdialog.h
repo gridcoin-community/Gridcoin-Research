@@ -158,6 +158,7 @@ private:
     QLineEdit *filterQuestion;
     QLineEdit *filterAnswers;
     QLineEdit *filterUrl;
+    QPushButton *resetButton;
     QTableView *tableView_;
     VotingTableModel *tableModel_;
     VotingProxyModel *proxyModel_;
@@ -173,6 +174,7 @@ public slots:
     void filterQuestionChanged(const QString &);
     void filterAnswersChanged(const QString &);
     void filterUrlChanged(const QString &);
+    void mResetData(void);
     void showChartDialog(void);
     void showContextMenu(const QPoint &);
     void showVoteDialog(void);
