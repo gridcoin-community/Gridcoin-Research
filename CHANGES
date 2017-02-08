@@ -1,2 +1,2 @@
 Next:
-- Launching the graphical wallet on Linux should be more robus.
+- Bugfix. Launching the graphical wallet on Linux should be more robust (#139).
