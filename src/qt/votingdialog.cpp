@@ -37,6 +37,7 @@ using namespace QtCharts;
 extern json_spirit::Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool bIncludeExpired);
 extern std::vector<std::string> split(std::string s, std::string delim);
 extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
+extern std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2);
 
 static std::string GetFoundationGuid(const std::string &sTitle)
 {
@@ -482,7 +483,7 @@ VotingDialog::VotingDialog(QWidget *parent)
     connect(filterUrl, SIGNAL(textChanged(QString)), this, SLOT(filterUrlChanged(QString)));
     
     QPushButton *resetButton = new QPushButton();
-    resetButton->setText("Reload Polls");
+    resetButton->setText(tr("Reload Polls"));
     glayout->addWidget(resetButton, 4, 0);
     connect(resetButton, SIGNAL(clicked()), this, SLOT(mResetData()));
 
@@ -777,15 +778,77 @@ VotingVoteDialog::VotingVoteDialog(QWidget *parent)
     answer_->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
     answer_->setTextInteractionFlags(Qt::TextSelectableByMouse);
     glayout->addWidget(answer_, 3, 1);
+    
+    answerList_ = new QListWidget(this);
+    vlayout->addWidget(answerList_);
+    
+    QHBoxLayout *hlayout = new QHBoxLayout();
+    vlayout->addLayout(hlayout);
+    
+    QPushButton *voteButton = new QPushButton();
+    voteButton->setText(tr("Vote"));
+    hlayout->addWidget(voteButton);
+    connect(voteButton, SIGNAL(clicked()), this, SLOT(vote()));
+    
+    voteNote_ = new QLabel();
+    voteNote_->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
+    voteNote_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    voteNote_->setWordWrap(true);
+    hlayout->addWidget(voteNote_);
+    
+    QString sVoteTitle;
 }
 
 void VotingVoteDialog::resetData(const VotingItem *item)
 {
     if (!item)
         return;
+    
+    answerList_->clear();
+    voteNote_->clear();
+    question_->setText(item->question_);
+    url_->setText(item->url_);
+    answer_->setText(item->bestAnswer_);
+    sVoteTitle=item->title_;
+    std::string listOfAnswers = item->answers_.toUtf8().constData();
+    std::vector<std::string> vAnswers = split(listOfAnswers, ";");
+    for(size_t y=0; y < vAnswers.size(); y++) {
+        QListWidgetItem *answerItem = new QListWidgetItem(QString::fromStdString(vAnswers[y]),answerList_);
+        answerItem->setCheckState(Qt::Unchecked);
+    }
+}
 
-    question_->setText(QString(tr("Q: ")) + item->question_);
-    url_->setText(QString(tr("Discussion URL: ")) + item->url_);
-    answer_->setText(QString(tr("Best Answer: ")) + item->bestAnswer_);
+void VotingVoteDialog::vote(void)
+{
+    QString sVoteValue = GetVoteValue();
+    voteNote_->setStyleSheet("QLabel { color : red; }");
+    
+    if(sVoteValue.isEmpty()){
+        voteNote_->setText(tr("Vote failed! Select one or more items to vote."));
+        return;
+    }
+    
+    // replace spaces with underscores
+    sVoteValue.replace(" ","_");
+    sVoteTitle.replace(" ","_");
+    
+    std::string sResult = ExecuteRPCCommand("vote", sVoteTitle.toStdString(), sVoteValue.toStdString());
+    
+    if (sResult.find("Success") != std::string::npos) {
+        voteNote_->setStyleSheet("QLabel { color : green; }");
+    }
+    voteNote_->setText(QString::fromStdString(sResult)); 
+}
+
+QString VotingVoteDialog::GetVoteValue(void)
+{
+    QString sVote = "";
+    for(int row = 0; row < answerList_->count(); row++) {
+        QListWidgetItem *item = answerList_->item(row);
+        if(item->checkState() == Qt::Checked)
+            sVote += item->text() + ";";
+    }
+    sVote.chop(1);
+    return sVote;
 }
 

@@ -13,6 +13,8 @@
 #include <QString>
 #include <QStringList>
 #include <QTableView>
+#include <QListWidget>
+#include <QListWidgetItem>
 
 #include <QtGlobal>
 #if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
@@ -213,6 +215,15 @@ private:
     QLabel *question_;
     QLabel *url_;
     QLabel *answer_;
+    QLabel *voteNote_;
+    QListWidget *answerList_;
+    QListWidgetItem *answerItem;
+    QPushButton *voteButton;
+    QString GetVoteValue(void);
+    QString sVoteTitle;
+    
+private slots:
+    void vote(void);
 };
 
 
