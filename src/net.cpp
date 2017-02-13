@@ -61,7 +61,7 @@ extern int nMaxConnections;
 MiningCPID GetNextProject(bool bForce);
 void HarvestCPIDs(bool cleardata);
 bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
-extern std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache);
+extern std::string GetHttpPageFromCreditServerRetired(std::string cpid, bool UseDNS, bool ClearCache);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 std::string cached_boinchash_args = "";
 void WriteAppCache(std::string key, std::string value);
@@ -770,9 +770,7 @@ std::string GetHttpPage(std::string url)
 
 
 
-
-
-std::string GetHttpPage(std::string cpid, bool UseDNS, bool ClearCache)
+std::string GetHttpPageFromCreditServerRetired(std::string cpid, bool UseDNS, bool ClearCache)
 {
 	
 	try
