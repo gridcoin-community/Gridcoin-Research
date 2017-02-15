@@ -47,6 +47,7 @@ private:
     QDoubleSpinBox *amount;
     QValueComboBox *unit;
     int currentUnit;
+    bool valid;
 
     void setText(const QString &text);
     QString text() const;

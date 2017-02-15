@@ -15,7 +15,7 @@
 #include <qmath.h>
 
 BitcoinAmountField::BitcoinAmountField(QWidget *parent):
-        QWidget(parent), amount(0), currentUnit(-1)
+        QWidget(parent), amount(0), currentUnit(-1), valid(true)
 {
     amount = new QDoubleSpinBox(this);
     amount->setLocale(QLocale::c());
@@ -74,10 +74,15 @@ bool BitcoinAmountField::validate()
 
 void BitcoinAmountField::setValid(bool valid)
 {
+    if(valid == this->valid)
+        return;
+
     if (valid)
         amount->setStyleSheet("");
     else
         amount->setStyleSheet(STYLE_INVALID);
+
+    this->valid = valid;
 }
 
 QString BitcoinAmountField::text() const
