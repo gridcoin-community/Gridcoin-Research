@@ -9384,7 +9384,7 @@ void TrackRequests(CNode* pfrom,std::string sRequestType)
 	    WriteCache(sKey,NodeAddress(pfrom),RoundToString(dReqCt,0),GetAdjustedTime());
         if ( (dReqCt > 20 && !OutOfSyncByAge()) )
 		{
-					printf(" Node requests for %s exceeded threshhold (misbehaving) %s ",sRequestType.c_str(),NodeAddress(pfrom).c_str());
+					printf(" Node requests for %s exceeded threshold (misbehaving) %s ",sRequestType.c_str(),NodeAddress(pfrom).c_str());
 			        //pfrom->Misbehaving(1);
           			pfrom->fDisconnect = true;
 					WriteCache(sKey,NodeAddress(pfrom),"0",GetAdjustedTime());
