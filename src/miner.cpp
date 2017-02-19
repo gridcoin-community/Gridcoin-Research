@@ -8,7 +8,6 @@
 #include "miner.h"
 #include "kernel.h"
 #include "cpid.h"
-#include <boost/lexical_cast.hpp>
 
 using namespace std;
 
@@ -648,16 +647,6 @@ double HexToDouble(std::string str)
    }
   return hx;
 }
-
-double Round_Legacy(double d, int place)
-{
-    std::ostringstream ss;
-    ss << std::fixed << std::setprecision(place) << d ;
-	double r = boost::lexical_cast<double>(ss.str());
-	return r;
-}
-
-	
 
 bool CheckStake(CBlock* pblock, CWallet& wallet)
 {
