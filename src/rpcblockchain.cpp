@@ -408,7 +408,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 		strprintf("%s%s", blockindex->IsProofOfStake()? "proof-of-stake" : "proof-of-work", blockindex->GeneratedStakeModifier()? " stake-modifier": "") + " " + PoRNarr		)		);
     result.push_back(Pair("proofhash", blockindex->hashProof.GetHex()));
     result.push_back(Pair("entropybit", (int)blockindex->GetStakeEntropyBit()));
-    result.push_back(Pair("modifier", strprintf("%016"PRIx64, blockindex->nStakeModifier)));
+    result.push_back(Pair("modifier", strprintf("%016" PRIx64, blockindex->nStakeModifier)));
     result.push_back(Pair("modifierchecksum", strprintf("%08x", blockindex->nStakeModifierChecksum)));
     Array txinfo;
     BOOST_FOREACH (const CTransaction& tx, block.vtx)
@@ -3894,9 +3894,9 @@ Array ContractReportCSV()
 		   std::string footer = "Total: " + RoundToString(rows,0) + ", , , ," + "\n";
 		   header += footer;
 		   Object entry;
-		   entry.push_back(Pair("CSV Complete",strprintf("\\reports\\open_contracts_%"PRId64".csv",timestamp)));
+		   entry.push_back(Pair("CSV Complete",strprintf("\\reports\\open_contracts_%" PRId64 ".csv",timestamp)));
 		   results.push_back(entry);
-     	   CSVToFile(strprintf("open_contracts_%"PRId64".csv",timestamp), header);
+     	   CSVToFile(strprintf("open_contracts_%" PRId64 ".csv",timestamp), header);
 		   return results;
 }
 
@@ -4602,10 +4602,10 @@ Array MagnitudeReportCSV(bool detail)
 		   std::string footer = RoundToString(rows,0) + ", , , , ," + RoundToString(lto,2) + ", ," + RoundToString(totalpaid,2) + ", , , , , ," + RoundToString(totaloutstanding,2) + "\n";
 		   header += footer;
 		   Object entry;
-		   entry.push_back(Pair("CSV Complete",strprintf("\\reports\\magnitude_%"PRId64".csv",timestamp)));
+		   entry.push_back(Pair("CSV Complete",strprintf("\\reports\\magnitude_%" PRId64 ".csv",timestamp)));
 		   results.push_back(entry);
      	   
-		   CSVToFile(strprintf("magnitude_%"PRId64".csv",timestamp), header);
+		   CSVToFile(strprintf("magnitude_%" PRId64 ".csv",timestamp), header);
 		   return results;
 }
 
