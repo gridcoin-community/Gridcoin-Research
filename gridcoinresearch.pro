@@ -10,8 +10,6 @@ QT += core gui network
 win32:QT += qaxcontainer
 #QT += axcontainer
 win32:QT += axserver
-QT += widgets
-
 
 greaterThan(QT_MAJOR_VERSION, 4) {
     QT += widgets
@@ -437,7 +435,7 @@ macx:TARGET = "gridcoinresearch"
 macx:QMAKE_CFLAGS_THREAD += -pthread
 macx:QMAKE_LFLAGS_THREAD += -pthread
 macx:QMAKE_CXXFLAGS_THREAD += -pthread
-macx:QT -= qaxcontainer axserver widgets
+macx:QT -= qaxcontainer axserver
 macx:CONFIG -= qaxcontainer
 macx:CONFIG += link_pkgconfig
 macx:PKGCONFIG += libzip
