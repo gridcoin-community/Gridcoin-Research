@@ -10,8 +10,6 @@ QT += core gui network
 win32:QT += qaxcontainer
 #QT += axcontainer
 win32:QT += axserver
-QT += widgets
-
 
 greaterThan(QT_MAJOR_VERSION, 4) {
     QT += widgets
@@ -166,6 +164,8 @@ contains(USE_O3, 1) {
 QMAKE_CXXFLAGS_WARN_ON = -fdiagnostics-show-option -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wformat-security -Wno-unused-parameter -Wstack-protector
 
 # Input
+# missing: src/qt/votingdialog.h \
+   
 DEPENDPATH += src src/json src/qt
 HEADERS += src/qt/bitcoingui.h \
     src/qt/transactiontablemodel.h \
@@ -177,7 +177,7 @@ HEADERS += src/qt/bitcoingui.h \
     src/qt/addressbookpage.h \
     src/qt/signverifymessagedialog.h \
     src/qt/aboutdialog.h \
-	src/qt/upgradedialog.h \
+    src/qt/upgradedialog.h \
     src/qt/editaddressdialog.h \
     src/qt/bitcoinaddressvalidator.h \
     src/alert.h \
@@ -251,7 +251,10 @@ HEADERS += src/qt/bitcoingui.h \
     src/threadsafety.h \
     src/cpid.h \
     src/sql.h \
-	src/upgrader.h
+    src/upgrader.h
+    
+    #missing:    src/qt/votingdialog.cpp \
+ 
 
 SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/transactiontablemodel.cpp \
@@ -423,8 +426,8 @@ windows:!contains(MINGW_THREAD_BUGFIX, 0) {
     QMAKE_LIBS_QT_ENTRY = -lmingwthrd $$QMAKE_LIBS_QT_ENTRY
 }
 
-macx:HEADERS += src/qt/macdockiconhandler.h
-macx:OBJECTIVE_SOURCES += src/qt/macdockiconhandler.mm
+macx:HEADERS += src/qt/macdockiconhandler.h src/qt/macnotificationhandler.h
+macx:OBJECTIVE_SOURCES += src/qt/macdockiconhandler.mm src/qt/macnotificationhandler.mm
 macx:LIBS += -framework Foundation -framework ApplicationServices -framework AppKit
 macx:DEFINES += MAC_OSX MSG_NOSIGNAL=0
 macx:ICON = src/qt/res/icons/bitcoin.icns
@@ -432,7 +435,7 @@ macx:TARGET = "gridcoinresearch"
 macx:QMAKE_CFLAGS_THREAD += -pthread
 macx:QMAKE_LFLAGS_THREAD += -pthread
 macx:QMAKE_CXXFLAGS_THREAD += -pthread
-macx:QT -= qaxcontainer axserver widgets
+macx:QT -= qaxcontainer axserver
 macx:CONFIG -= qaxcontainer
 macx:CONFIG += link_pkgconfig
 macx:PKGCONFIG += libzip

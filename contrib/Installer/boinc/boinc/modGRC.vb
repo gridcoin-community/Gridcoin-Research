@@ -454,13 +454,15 @@ Module modGRC
         Dim RACURL As String = "http://cpid.gridcoin.us:5000/"
         Dim sURL As String = RACURL + "get_user.php?cpid=" + sCPID
         Dim w As New MyWebClient
-        Dim sRAC As String
+        Dim sRAC As String = ""
         Try
             sRAC = w.DownloadString(sURL)
 
         Catch ex As Exception
 
         End Try
+        If sRAC = "" Then sRAC = "0" : Return 0
+
         Dim vRAC() As String
         vRAC = Split(sRAC, "<project>")
         dProjectByteLength = Len(sRAC)
