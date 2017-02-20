@@ -3527,7 +3527,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 			iPos++;
 		}
 		pindex->sGRCAddress = bb.GRCAddress;
-		pindex->sReserved = "";
 	}
 
 	double mint = CoinToDouble(pindex->nMint);
