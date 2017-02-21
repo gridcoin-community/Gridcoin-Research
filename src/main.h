@@ -1431,11 +1431,6 @@ public:
         return (pnext || this == pindexBest);
     }
 
-    bool CheckIndex() const
-    {
-        return true;
-    }
-
     int64_t GetPastTimeLimit() const
     {
         if (IsProtocolV2(nHeight))

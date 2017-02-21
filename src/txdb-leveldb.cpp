@@ -430,10 +430,6 @@ bool CTxDB::LoadBlockIndex()
 				uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
      		}
 		#endif
-        if (!pindexNew->CheckIndex()) {
-            delete iterator;
-            return error("LoadBlockIndex() : CheckIndex failed at %d", pindexNew->nHeight);
-        }
 
         // NovaCoin: build setStakeSeen
         if (pindexNew->IsProofOfStake())
