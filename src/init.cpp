@@ -15,6 +15,7 @@
 #include <boost/filesystem/convenience.hpp>
 #include <boost/interprocess/sync/file_lock.hpp>
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/thread.hpp>
 #include <openssl/crypto.h>
 
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
@@ -24,6 +25,7 @@
 std::vector<std::string> split(std::string s, std::string delim);
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern void InitializeBoincProjects();
+extern boost::thread_group threadGroup;
 
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();

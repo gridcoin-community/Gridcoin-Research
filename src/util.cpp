@@ -93,6 +93,14 @@ int64_t IsNeural();
 extern std::string GetBoincDataDir();
 extern int GetDayOfYear();
 
+void MilliSleep(int64_t n)
+{
+#if BOOST_VERSION >= 105000
+    boost::this_thread::sleep_for(boost::chrono::milliseconds(n));
+#else
+    boost::this_thread::sleep(boost::posix_time::milliseconds(n));
+#endif
+}
 
 // Init OpenSSL library multithreading support
 static CCriticalSection** ppmutexOpenSSL;

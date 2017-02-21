@@ -5,6 +5,7 @@
 
 #include <QApplication>
 #include <QTimer>
+#include <boost/thread.hpp>
 
 #include "bitcoingui.h"
 #include "clientmodel.h"

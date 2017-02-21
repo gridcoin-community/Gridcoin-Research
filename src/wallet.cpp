@@ -12,6 +12,7 @@
 #include "kernel.h"
 #include "coincontrol.h"
 #include <boost/algorithm/string/replace.hpp>
+#include <boost/thread.hpp>
 #include "cpid.h"
 
 using namespace std;

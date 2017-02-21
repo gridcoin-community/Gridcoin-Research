@@ -12,6 +12,8 @@
 #include "ui_interface.h"
 
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
+#include <boost/array.hpp>
+#include <boost/thread.hpp>
 
 #ifdef WIN32
   #include <string.h>

@@ -12,7 +12,6 @@
 #include "scrypt.h"
 
 #include "global_objects_noui.hpp"
-#include <list>
 
 class CWallet;
 class CBlock;
