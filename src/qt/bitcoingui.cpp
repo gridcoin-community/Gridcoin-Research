@@ -973,7 +973,7 @@ void BitcoinGUI::createActions()
 	votingAction->setMenuRole(QAction::TextHeuristicRole);
 
 
-	votingReservedAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Reserved - Voting Linux"), this);
+    votingReservedAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Voting Linux"), this);
 	votingReservedAction->setStatusTip(tr("Voting - Linux"));
 	votingReservedAction->setMenuRole(QAction::TextHeuristicRole);
 
@@ -1311,7 +1311,7 @@ void BitcoinGUI::aboutClicked()
 void BitcoinGUI::votingReservedClicked()
 {
     VotingDialog *dlg = new VotingDialog(this);
-    dlg->setStyleSheet("QDialog { background-image:url(:images/bkg);} QTableView { alternate-background-color:rgb(255,255,255); background-color:transparent; color:black;} QListWidget {color:black; background-color:transparent;} QLabel {color:black;} QGroupBox {background-color:transparent;} QLineEdit {background-color:lightgray; color:black} QHeaderView::section { background-color:lightgray; color:black; } QPushButton { background-color:lightgray; color:black; }");
+    dlg->setStyleSheet("QDialog { background-image:url(:images/bkg);} QTableView { alternate-background-color:rgb(255,255,255); background-color:transparent; color:black;} QListWidget {color:black; background-color:transparent;} QLabel {color:black;} QGroupBox {background-color:transparent;} QLineEdit {background-color:lightgray; color:black} QHeaderView::section { background-color:lightgray; color:black; } QPushButton { background-color:lightgray; color:black; } QComboBox { background-color:lightgray; color:black; }");
     dlg->resetData();
     dlg->show();
 }

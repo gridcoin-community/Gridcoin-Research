@@ -43,8 +43,8 @@ QT_CHARTS_END_NAMESPACE
 #define VOTINGDIALOG_WIDTH_ShareType          80
 #define VOTINGDIALOG_WIDTH_Question           140
 #define VOTINGDIALOG_WIDTH_Answers            80
-#define VOTINGDIALOG_WIDTH_TotalParticipants  50
-#define VOTINGDIALOG_WIDTH_TotalShares        80
+#define VOTINGDIALOG_WIDTH_TotalParticipants  80
+#define VOTINGDIALOG_WIDTH_TotalShares        100
 #define VOTINGDIALOG_WIDTH_Url                150
 #define VOTINGDIALOG_WIDTH_BestAnswer         80
 
@@ -143,6 +143,7 @@ private:
 
 class VotingChartDialog;
 class VotingVoteDialog;
+class NewPollDialog;
 
 // VotingDialog
 //
@@ -153,7 +154,6 @@ class VotingDialog
 
 public:
     explicit VotingDialog(QWidget *parent=0);
-    void resetData(void);
 
 private:
     QLineEdit *filterTitle;
@@ -161,14 +161,18 @@ private:
     QLineEdit *filterAnswers;
     QLineEdit *filterUrl;
     QPushButton *resetButton;
+    QPushButton *newPollButton;
     QTableView *tableView_;
     VotingTableModel *tableModel_;
     VotingProxyModel *proxyModel_;
     VotingChartDialog *chartDialog_;
     VotingVoteDialog *voteDialog_;
+    NewPollDialog *pollDialog_;
 
 private:
+    virtual void showEvent(QShowEvent *);
     virtual void resizeEvent(QResizeEvent *);
+    void tableColResize(void);
     bool eventFilter(QObject *, QEvent *);
 
 public slots:
@@ -176,10 +180,11 @@ public slots:
     void filterQuestionChanged(const QString &);
     void filterAnswersChanged(const QString &);
     void filterUrlChanged(const QString &);
-    void mResetData(void);
+    void resetData(void);
     void showChartDialog(void);
     void showContextMenu(const QPoint &);
     void showVoteDialog(void);
+    void showNewPollDialog(void);
 };
 
 // VotingChartDialog
@@ -226,5 +231,46 @@ private slots:
     void vote(void);
 };
 
+// NewPollDialog
+//
+class NewPollDialog
+    : public QDialog
+{
+    Q_OBJECT
+
+public:
+    explicit NewPollDialog(QWidget *parent=0);
+
+public slots:
+    void resetData(void);
+
+private:
+    QLineEdit *title_;
+    QLineEdit *days_;
+    QLineEdit *question_;
+    QLineEdit *url_;
+    QComboBox *shareTypeBox_;
+    QLabel *pollNote_;
+    QListWidget *answerList_;
+    QListWidgetItem *answerItem;
+    QPushButton *addItemButton;
+    QPushButton *removeItemButton;
+    QPushButton *clearAllButton;
+    QPushButton *pollButton;
+    void GetPollValues(void);
+    QString sPollTitle;
+    QString sPollDays;
+    QString sPollQuestion;
+    QString sPollUrl;
+    QString sPollShareType;
+    QString sPollAnswers;
+
+private slots:
+    void createPoll(void);
+    void editItem (QListWidgetItem *item);
+    void addItem (void);
+    void removeItem(void);
+    void showContextMenu(const QPoint &);
+};
 
 #endif // VOTINGDIALOG_H
