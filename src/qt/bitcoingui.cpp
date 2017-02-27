@@ -204,10 +204,8 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 	upgrader(0),
     nWeight(0)
 {
-	double dWindowWidth = cdbl(GetArgument("windowwidth", "980"),0);
-	double dWindowHeight = cdbl(GetArgument("windowheight", "550"),0);
-	
-    setFixedSize(dWindowWidth, dWindowHeight);
+    setGeometry(0,0,980,550);
+    
     setWindowTitle(tr("Gridcoin") + " " + tr("Wallet"));
 	//4-9-2016
 	double dFontSize = cdbl(GetArgument("fontsize", "10"),0);
@@ -219,6 +217,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 	std::string sMainWindowHTML = "QMainWindow { background-image:url(:images/bkg);border:none;font-family:'Open Sans,sans-serif'; } #frame { } QToolBar QLabel { padding-top:15px;padding-bottom:10px;margin:0px; } #spacer { background:rgb(69,65,63);border:none; } #toolbar3 { border:none;width:1px; background-color: rgb(169,192,7); } #toolbar2 { border:none;width:10px; background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(210,220,7), stop: 1 rgb(98,116,3)); } #toolbar { border:none;height:100%;padding-top:20px; background: rgb(69,65,63); text-align: left; color: rgb(169,192,7); min-width:160px; max-width:160px;} QToolBar QToolButton:hover {background-color:qlineargradient(x1: 0, y1: 0, x2: 2, y2: 2,stop: 0 rgb(69,65,63), stop: 1 rgb(216,252,251),stop: 2 rgb(59,62,65));} QToolBar QToolButton { font-family:Century Gothic;padding-left:20px;padding-right:200px;padding-top:7px;padding-bottom:7px; width:100%; color: rgb(169,192,7); text-align: left; background-color: rgb(69,65,63) } #labelMiningIcon { ";
 	sMainWindowHTML += "padding-left:5px;font-family:Century Gothic;width:100%;font-size:" + sFontSize10 + sPixelType +";text-align:center;color: rgb(169,192,7); } QMenu { background: rgb(69,65,63); color: rgb(169,192,7); padding-bottom:10px; } QMenu::item { color: rgb(169,192,7); background-color: transparent; } QMenu::item:selected { background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(69,65,63), stop: 1 rgb(98,116,3)); } QMenuBar { background: rgb(69,65,63); color: rgb(169,192,7); } ";
 	sMainWindowHTML += "QMenuBar::item { font-size:" + sFontSize12 + sPixelType + ";padding-bottom:8px;padding-top:8px;padding-left:15px;padding-right:15px;color: rgb(169,192,7); background-color: transparent; } QMenuBar::item:selected { background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(69,65,63), stop: 1 rgb(98,116,3)); }";
+    sMainWindowHTML += "QToolTip { color: black; background-color: lightgray; border: none; }";
 
 
     qApp->setStyleSheet(ToQstring(sMainWindowHTML));
@@ -253,6 +252,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     transactionView = new TransactionView(this);
     vbox->addWidget(transactionView);
     transactionsPage->setLayout(vbox);
+    transactionsPage->setStyleSheet("QTableView{background:transparent; color:black; alternate-background-color:white;} QScrollBar:vertical {background-color: lightgray; color:black;} QHeaderView::section { background-color:lightgray; color:black; } QComboBox { background-color:lightgray; color: black; } QComboBox QAbstractItemView { background-color:lightgray; color: black; } QLineEdit { background-color:lightgray; color: black; } QDateTimeEdit { background-color:lightgray; color: black; } QDateTimeEdit QAbstractItemView { background-color:lightgray; color: black; }");
 
     addressBookPage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::SendingTab);
 
@@ -1162,6 +1162,7 @@ void BitcoinGUI::createToolBars()
     QWidget* webSpacer = new QWidget();
 
 	webSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    webSpacer->setMaximumHeight(10);
     toolbar->addWidget(webSpacer);
     webSpacer->setObjectName("WebSpacer");
 
