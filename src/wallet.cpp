@@ -33,7 +33,6 @@ std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash)
 extern double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
 bool IsLockTimeWithinMinutes(double locktime, int minutes);
-uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
 double CoinToDouble(double surrogate);
 double GetBlockDifficulty(unsigned int nBits);
 void WriteAppCache(std::string key, std::string value);

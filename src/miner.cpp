@@ -30,7 +30,6 @@ void ThreadTopUpKeyPool(void* parg);
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 
 double GetDifficulty(const CBlockIndex* blockindex = NULL);
-uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
 int64_t GetRSAWeightByCPID(std::string cpid);
 std::string RoundToString(double d, int place);
 bool OutOfSyncByAgeWithChanceOfMining();

@@ -161,7 +161,6 @@ std::string GetArgument(std::string arg, std::string defaultvalue);
 std::string TestHTTPProtocol(std::string sCPID);
 std::string VectorToString(std::vector<unsigned char> v);
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
-uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 extern std::string TimestampToHRDate(double dtm);
 
@@ -187,7 +186,6 @@ int DownloadBlocks();
 double GetBlockValueByHash(uint256 hash);
 double cdbl(std::string s, int place);
 void ScriptPubKeyToJSON(const CScript& scriptPubKey, Object& out);
-bool GetBlockNew(uint256 blockhash, int& out_height, CBlock& blk, bool bForceDiskRead);
 bool AESSkeinHash(unsigned int diffbytes, double rac, uint256 scrypthash, std::string& out_skein, std::string& out_aes512);
 				  std::string aes_complex_hash(uint256 scrypt_hash);
 std::vector<std::string> split(std::string s, std::string delim);

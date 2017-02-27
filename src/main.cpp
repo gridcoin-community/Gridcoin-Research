@@ -219,7 +219,6 @@ extern double GetBlockDifficulty(unsigned int nBits);
 double GetLastPaymentTimeByCPID(std::string cpid);
 extern bool Contains(std::string data, std::string instring);
 
-extern uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
 extern bool LockTimeRecent(double locktime);
 extern double CoinToDouble(double surrogate);
 extern double coalesce(double mag1, double mag2);
@@ -402,7 +401,6 @@ extern void FindMultiAlgorithmSolution(CBlock* pblock, uint256 hash, uint256 has
 extern std::string getfilecontents(std::string filename);
 extern std::string ToOfficialName(std::string proj);
 extern bool LessVerbose(int iMax1000);
-extern bool GetBlockNew(uint256 blockhash, int& out_height, CBlock& blk, bool bForceDiskRead);
 extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 extern void ShutdownGridcoinMiner();
 extern bool OutOfSync();
@@ -522,14 +520,9 @@ std::map<std::string, StructCPID> mvCPIDs;        //Contains the project stats a
 std::map<std::string, StructCPID> mvCreditNode;   //Contains the verified stats at the user level
 std::map<std::string, StructCPID> mvNetwork;      //Contains the project stats at the network level
 std::map<std::string, StructCPID> mvNetworkCopy;      //Contains the project stats at the network level
-
-
-std::map<std::string, StructCPID> mvNetworkCPIDs; //Contains CPID+Projects at the network level
-//std::map<std::string, StructCPID> mvCreditNodeCPIDProject; //Contains verified CPID+Projects;
 std::map<std::string, StructCPID> mvCreditNodeCPID;        // Contains verified CPID Magnitudes;
 std::map<std::string, StructCPIDCache> mvCPIDCache; //Contains cached blocknumbers for CPID+Projects;
 std::map<std::string, StructCPIDCache> mvAppCache; //Contains cached blocknumbers for CPID+Projects;
-std::map<std::string, StructBlockCache> mvBlockCache;  //Contains Cached Blocks
 std::map<std::string, StructCPID> mvBoincProjects; // Contains all of the allowed boinc projects;
 std::map<std::string, StructCPID> mvMagnitudes; // Contains Magnitudes by CPID & Outstanding Payments Owed per CPID
 std::map<std::string, StructCPID> mvMagnitudesCopy; // Contains Magnitudes by CPID & Outstanding Payments Owed per CPID
@@ -553,57 +546,6 @@ bool bCPUMiningMode = false;
 //
 
 // These functions dispatch to one or all registered wallets
-
-
-bool GetBlockNew(uint256 blockhash, int& out_height, CBlock& blk, bool bForceDiskRead)
-{
-    try
-	{
-			//First check the cache:
-			StructBlockCache cache;
-			cache = mvBlockCache[blockhash.GetHex()];
-			if (cache.initialized)
-			{
-				 CTransaction txNew;
-				 txNew.vin.resize(1);
-				 txNew.vin[0].prevout.SetNull();
-				 txNew.vout.resize(1);
-				 txNew.hashBoinc = cache.hashBoinc;
-				 blk.vtx.resize(1);
-				 blk.vtx[0] = txNew;
-				 blk.nVersion  = cache.nVersion;
-				 if (!bForceDiskRead) return true;
-			}
-
-			CBlockIndex* pblockindex = mapBlockIndex[blockhash];
-			bool result = blk.ReadFromDisk(pblockindex);
-			if (!result) return false;
-			//Cache the block
-			cache.initialized = true;
-			cache.hashBoinc = blk.vtx[0].hashBoinc;
-			cache.hash = blockhash.GetHex();
-			cache.nVersion = blk.nVersion;
-			mvBlockCache[blockhash.GetHex()] = cache;
-			out_height = pblockindex->nHeight;
-			return true;
-	}
-
-	catch (std::exception &e)
-	{
-		printf("Catastrophic error retrieving GetBlockNew\r\n");
-		return false;
-	}
-	catch(...)
-	{
-		printf("Catastrophic error retrieving block in GetBlockNew (06182014) \r\n");
-		return false;
-	}
-
-
-}
-
-
-
   double GetGridcoinBalance(std::string SendersGRCAddress)
   {
     int nMinDepth = 1;
@@ -2406,14 +2348,6 @@ const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfSta
     return pindex;
 }
 
-
-//Find prior block hash
-uint256 GetBlockHash256(const CBlockIndex* pindex_hash)
-{
-	if (pindex_hash == NULL) return 0;
-	if (!pindex_hash) return 0;
-	return pindex_hash->GetBlockHash();
-}
 
 static unsigned int GetNextTargetRequiredV1(const CBlockIndex* pindexLast, bool fProofOfStake)
 {
