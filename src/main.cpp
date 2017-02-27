@@ -530,7 +530,6 @@ std::map<std::string, int> mvTimers; // Contains event timers that reset after m
 
 // End of Gridcoin Global vars
 
-std::map<int, int> blockcache;
 bool bDebugMode = false;
 bool bPoolMiningMode = false;
 bool bBoincSubsidyEligible = false;
@@ -3636,9 +3635,9 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 		stCPID.InterestSubsidy += bb.InterestSubsidy;
 		stCPID.ResearchSubsidy += bb.ResearchSubsidy;
 
-		if (((double)pindex->nHeight) > stCPID.LastBlock && pindex->nResearchSubsidy > 0)
+		if (pindex->nHeight > stCPID.LastBlock && pindex->nResearchSubsidy > 0)
 		{
-				stCPID.LastBlock = (double)pindex->nHeight;
+				stCPID.LastBlock = pindex->nHeight;
 				stCPID.BlockHash = pindex->GetBlockHash().GetHex();
 		}
 
@@ -3649,8 +3648,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 				stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
 		}
 
-		if (((double)pindex->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime = (double)pindex->nTime;
-		if (((double)pindex->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pindex->nTime;
+		if (pindex->nTime < stCPID.LowLockTime)  stCPID.LowLockTime = pindex->nTime;
+		if (pindex->nTime > stCPID.HighLockTime) stCPID.HighLockTime = pindex->nTime;
 
 		mvResearchAge[bb.cpid]=stCPID;
 	}
@@ -5982,9 +5981,9 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
 				StructCPID stMag = GetInitializedStructCPID2(pIndex->sCPID,mvMagnitudesCopy);
 				stMag.cpid = pIndex->sCPID;
 				stMag.GRCAddress = pIndex->sGRCAddress;
-				if ((double)pIndex->nHeight > stMag.LastBlock)
+				if (pIndex->nHeight > stMag.LastBlock)
 				{
-					stMag.LastBlock = (double)pIndex->nHeight;
+					stMag.LastBlock = pIndex->nHeight;
 				}
 				stMag.entries++;
 				stMag.payments += pIndex->nResearchSubsidy;
@@ -5992,15 +5991,15 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
 
 				AdjustTimestamps(stMag,(double)pIndex->nTime,pIndex->nResearchSubsidy);
 				// Track detailed payments made to each CPID
-				stMag.PaymentTimestamps         += RoundToString((double)pIndex->nTime,0) + ",";
+				stMag.PaymentTimestamps         += RoundToString(pIndex->nTime,0) + ",";
 				stMag.PaymentAmountsResearch    += RoundToString(pIndex->nResearchSubsidy,2) + ",";
 				stMag.PaymentAmountsInterest    += RoundToString(pIndex->nInterestSubsidy,2) + ",";
-				stMag.PaymentAmountsBlocks      += RoundToString((double)pIndex->nHeight,0) + ",";
+				stMag.PaymentAmountsBlocks      += RoundToString(pIndex->nHeight,0) + ",";
      			stMag.Accuracy++;
 				stMag.AverageRAC = stMag.rac / (stMag.entries+.01);
 				double total_owed = 0;
 				stMag.owed = GetOutstandingAmountOwed(stMag,
-					pIndex->sCPID,(double)pIndex->nTime,total_owed,pIndex->nMagnitude);
+					pIndex->sCPID, pIndex->nTime,total_owed,pIndex->nMagnitude);
 
 				stMag.totalowed = total_owed;
 				mvMagnitudesCopy[pIndex->sCPID] = stMag;
@@ -6210,7 +6209,7 @@ StructCPID GetInitializedStructCPID2(std::string name, std::map<std::string, Str
 		{
 				cpid = GetStructCPID();
 				cpid.initialized=true;
-				cpid.LowLockTime = 99999999999;
+				cpid.LowLockTime = std::numeric_limits<unsigned int>::max();
 				cpid.HighLockTime = 0;
 				cpid.LastPaymentTime = 0;
 				cpid.EarliestPaymentTime = 99999999999;
@@ -9169,12 +9168,10 @@ StructCPID GetStructCPID()
 {
 	StructCPID c;
 	c.initialized=false;
-	c.isvoucher=false;
 	c.rac = 0;
 	c.utc=0;
 	c.rectime=0;
 	c.age = 0;
-	c.activeproject=false;
 	c.verifiedutc=0;
 	c.verifiedrectime=0;
 	c.verifiedage=0;
@@ -9184,35 +9181,24 @@ StructCPID GetStructCPID()
 	c.Iscpidvalid=false;
 	c.NetworkRAC=0;
 	c.TotalRAC=0;
-	c.TotalNetworkRAC=0;
 	c.Magnitude=0;
-	c.LastMagnitude=0;
 	c.PaymentMagnitude=0;
 	c.owed=0;
 	c.payments=0;
-	c.outstanding=0;
 	c.verifiedTotalRAC=0;
-	c.verifiedTotalNetworkRAC=0;
 	c.verifiedMagnitude=0;
 	c.TotalMagnitude=0;
-	c.MagnitudeCount=0;
 	c.LowLockTime=0;
 	c.HighLockTime=0;
 	c.Accuracy=0;
 	c.totalowed=0;
-	c.longtermtotalowed=0;
-	c.longtermowed=0;
 	c.LastPaymentTime=0;
 	c.EarliestPaymentTime=0;
-	c.RSAWeight=0;
 	c.PaymentTimespan=0;
 	c.ResearchSubsidy = 0;
 	c.InterestSubsidy = 0;
 	c.BTCQuote = 0;
 	c.GRCQuote = 0;
-	c.ResearchSubsidy2 = 0;
-	c.ResearchAge = 0;
-	c.ResearchMagnitudeUnit = 0;
 	c.ResearchAverageMagnitude = 0;
 	c.Canary = 0;
 	c.NetsoftRAC = 0;
@@ -9235,18 +9221,12 @@ MiningCPID GetMiningCPID()
 	mc.initialized = false;
 	mc.nonce = 0;
 	mc.NetworkRAC=0;
-	mc.prevBlockType = 0;
 	mc.lastblockhash = "0";
-	mc.VouchedRAC = 0;
-	mc.VouchedNetworkRAC  = 0;
 	mc.Magnitude = 0;
-	mc.Accuracy = 0;
 	mc.RSAWeight = 0;
 	mc.LastPaymentTime=0;
 	mc.ResearchSubsidy = 0;
 	mc.InterestSubsidy = 0;
-	mc.GRCQuote = 0;
-	mc.BTCQuote = 0;
 	mc.ResearchSubsidy2 = 0;
 	mc.ResearchAge = 0;
 	mc.ResearchMagnitudeUnit = 0;
@@ -10057,7 +10037,7 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
 
 	int64_t Accrual = (int64_t)(dAccrualAge*AvgMagnitude*dMagnitudeUnit*COIN);
 	// Double check researcher lifetime paid
-	double days = (((double)nTime) - stCPID.LowLockTime)/86400;
+	double days = (nTime - stCPID.LowLockTime) / 86400.0;
 	double PPD = stCPID.ResearchSubsidy/(days+.01);
 	double ReferencePPD = dMagnitudeUnit*dAvgMag;
 	if ((PPD > ReferencePPD*5))
@@ -10117,7 +10097,7 @@ void ZeroOutResearcherTotals(std::string cpid)
 				stCPID.InterestSubsidy = 0;
 				stCPID.ResearchSubsidy = 0;
 				stCPID.Accuracy = 0;
-				stCPID.LowLockTime = 99999999999;
+				stCPID.LowLockTime = std::numeric_limits<unsigned int>::max();
 				stCPID.HighLockTime = 0;
 				stCPID.TotalMagnitude = 0;
 				stCPID.ResearchAverageMagnitude = 0;
