@@ -9185,32 +9185,20 @@ void LoadCPIDsInBackground()
 StructCPID GetStructCPID()
 {
 	StructCPID c;
-	c.cpid = "";
-	c.emailhash="";
-	c.cpidhash="";
-	c.projectname="";
 	c.initialized=false;
 	c.isvoucher=false;
 	c.rac = 0;
 	c.utc=0;
 	c.rectime=0;
 	c.age = 0;
-	c.team="";
 	c.activeproject=false;
 	c.verifiedutc=0;
-	c.verifiedteam="";
 	c.verifiedrectime=0;
 	c.verifiedage=0;
 	c.entries=0;
 	c.AverageRAC=0;
 	c.NetworkProjects=0;
-	c.boincpublickey="";
 	c.Iscpidvalid=false;
-	c.link="";
-	c.errors="";
-	c.email="";
-	c.boincruntimepublickey="";
-	c.cpidv2="";
 	c.NetworkRAC=0;
 	c.TotalRAC=0;
 	c.TotalNetworkRAC=0;
@@ -9243,17 +9231,10 @@ StructCPID GetStructCPID()
 	c.ResearchAge = 0;
 	c.ResearchMagnitudeUnit = 0;
 	c.ResearchAverageMagnitude = 0;
-	c.LastPORBlockHash = "";
-	c.CurrentNeuralHash = "";
 	c.Canary = 0;
 	c.NetsoftRAC = 0;
 	c.interestPayments = 0;
 	c.payments = 0;
-	c.PaymentTimestamps = "";
-	c.PaymentAmountsResearch = "";
-	c.PaymentAmountsInterest = "";
-	c.PaymentAmountsBlocks   = "";
-	c.GRCAddress="";
 	c.LastBlock = 0;
 	c.NetworkMagnitude=0;
 	c.NetworkAvgMagnitude=0;
@@ -9265,26 +9246,13 @@ StructCPID GetStructCPID()
 MiningCPID GetMiningCPID()
 {
 	MiningCPID mc;
-	mc.projectname = "";
 	mc.rac = 0;
-	mc.encboincpublickey = "";
-	mc.cpid = "";
-	mc.cpidhash = "";
 	mc.pobdifficulty = 0;
 	mc.diffbytes = 0;
 	mc.initialized = false;
-	mc.enccpid = "";
-	mc.aesskein = "";
-	mc.encaes = "";
 	mc.nonce = 0;
 	mc.NetworkRAC=0;
 	mc.prevBlockType = 0;
-	mc.clientversion = "";
-	mc.VouchedCPID = "";
-	mc.cpidv2 = "";
-	mc.email = "";
-	mc.boincruntimepublickey = "";
-	mc.GRCAddress = "";
 	mc.lastblockhash = "0";
 	mc.VouchedRAC = 0;
 	mc.VouchedNetworkRAC  = 0;
@@ -9300,13 +9268,7 @@ MiningCPID GetMiningCPID()
 	mc.ResearchAge = 0;
 	mc.ResearchMagnitudeUnit = 0;
 	mc.ResearchAverageMagnitude = 0;
-	mc.LastPORBlockHash = "";
-	mc.CurrentNeuralHash = "";
 	mc.Canary = 0; //Used to test for a memory overflow
-	mc.Organization = "";
-	mc.OrganizationKey = "";
-	mc.NeuralHash = "";
-	mc.superblock = "";
 	return mc;
 }
 

@@ -13,6 +13,11 @@
   <property name="windowTitle">
    <string>Form</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true">QWidget{color:rgb(0,0,0);}
+QPushButton{background-color: lightgray;}
+QToolButton{background-color: lightgray;}</string>
+  </property>
   <property name="frameShape">
    <enum>QFrame::StyledPanel</enum>
   </property>
