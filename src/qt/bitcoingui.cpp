@@ -204,6 +204,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 	upgrader(0),
     nWeight(0)
 {
+    setWindowFlags(Qt::Dialog);
     setGeometry(0,0,980,550);
     
     setWindowTitle(tr("Gridcoin") + " " + tr("Wallet"));
