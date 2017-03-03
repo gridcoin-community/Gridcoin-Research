@@ -634,7 +634,7 @@ QPushButton{background-color: lightgray;}</string>
    <item>
     <widget class="QScrollArea" name="scrollArea">
      <property name="styleSheet">
-      <string notr="true"> background: transparent;</string>
+      <string notr="true">background-image: url(:/images/bkg);</string>
      </property>
      <property name="widgetResizable">
       <bool>true</bool>
