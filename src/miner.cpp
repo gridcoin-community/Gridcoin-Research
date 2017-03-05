@@ -8,7 +8,6 @@
 #include "miner.h"
 #include "kernel.h"
 #include "cpid.h"
-#include <boost/lexical_cast.hpp>
 
 using namespace std;
 
@@ -31,7 +30,6 @@ void ThreadTopUpKeyPool(void* parg);
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 
 double GetDifficulty(const CBlockIndex* blockindex = NULL);
-uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
 int64_t GetRSAWeightByCPID(std::string cpid);
 std::string RoundToString(double d, int place);
 bool OutOfSyncByAgeWithChanceOfMining();
@@ -462,7 +460,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
         nLastBlockSize = nBlockSize;
 
         if (fDebug10 || GetBoolArg("-printpriority"))
-            printf("CreateNewBlock(): total size %"PRIu64"\n", nBlockSize);
+            printf("CreateNewBlock(): total size %" PRIu64 "\n", nBlockSize);
 		//Add Boinc Hash - R HALFORD - 11-28-2014 - Add CPID v2
 		MiningCPID miningcpid = GetNextProject(false);
 		uint256 pbh = 0;
@@ -649,16 +647,6 @@ double HexToDouble(std::string str)
   return hx;
 }
 
-double Round_Legacy(double d, int place)
-{
-    std::ostringstream ss;
-    ss << std::fixed << std::setprecision(place) << d ;
-	double r = boost::lexical_cast<double>(ss.str());
-	return r;
-}
-
-	
-
 bool CheckStake(CBlock* pblock, CWallet& wallet)
 {
     uint256 proofHash = 0, hashTarget = 0;
@@ -680,7 +668,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
 	}
 
 
-	//1-20-2015 Ensure this stake is above the minimum threshhold; otherwise, vehemently reject
+	//1-20-2015 Ensure this stake is above the minimum threshold; otherwise, vehemently reject
 	double PORDiff = GetBlockDifficulty(pblock->nBits);
 	MiningCPID boincblock = DeserializeBoincBlock(pblock->vtx[0].hashBoinc);
 	if (boincblock.cpid != "INVESTOR" && pindexBest->nHeight > nGrandfather)

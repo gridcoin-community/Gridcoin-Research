@@ -27,12 +27,6 @@
         }
         "Entry"
         {
-        "MsmKey" = "8:_1F7D757BF031E15D44C47B631F994972"
-        "OwnerKey" = "8:_7A0EA93E644A4D9E8037FBB3C062DD65"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
         "MsmKey" = "8:_2C7D9AF4C6E04C06A26314A95B1FF010"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
@@ -113,6 +107,12 @@
         {
         "MsmKey" = "8:_7A0EA93E644A4D9E8037FBB3C062DD65"
         "OwnerKey" = "8:_UNDEFINED"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_7EFEAD66FF864CE6AB4AE36FCBA65659"
+        "OwnerKey" = "8:_7A0EA93E644A4D9E8037FBB3C062DD65"
         "MsmSig" = "8:_UNDEFINED"
         }
         "Entry"
@@ -227,12 +227,6 @@
         {
         "MsmKey" = "8:_UNDEFINED"
         "OwnerKey" = "8:_4F3106A1168946ADBC27B471209638C8"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
-        "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_D0966638AB084779AFD69795C33FC8EB"
         "MsmSig" = "8:_UNDEFINED"
         }
         "Entry"
@@ -414,26 +408,6 @@
             "Register" = "3:1"
             "Exclude" = "11:FALSE"
             "IsDependency" = "11:FALSE"
-            "IsolateTo" = "8:"
-            }
-            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_1F7D757BF031E15D44C47B631F994972"
-            {
-            "SourcePath" = "8:BoincStake.tlb"
-            "TargetName" = "8:BoincStake.tlb"
-            "Tag" = "8:"
-            "Folder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
-            "Condition" = "8:"
-            "Transitive" = "11:FALSE"
-            "Vital" = "11:TRUE"
-            "ReadOnly" = "11:FALSE"
-            "Hidden" = "11:FALSE"
-            "System" = "11:FALSE"
-            "Permanent" = "11:FALSE"
-            "SharedLegacy" = "11:FALSE"
-            "PackageAs" = "3:1"
-            "Register" = "3:2"
-            "Exclude" = "11:FALSE"
-            "IsDependency" = "11:TRUE"
             "IsolateTo" = "8:"
             }
             "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_2C7D9AF4C6E04C06A26314A95B1FF010"
@@ -711,6 +685,26 @@
             "IsDependency" = "11:FALSE"
             "IsolateTo" = "8:"
             }
+            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_7EFEAD66FF864CE6AB4AE36FCBA65659"
+            {
+            "SourcePath" = "8:BoincStake.tlb"
+            "TargetName" = "8:BoincStake.tlb"
+            "Tag" = "8:"
+            "Folder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
+            "Condition" = "8:"
+            "Transitive" = "11:FALSE"
+            "Vital" = "11:TRUE"
+            "ReadOnly" = "11:FALSE"
+            "Hidden" = "11:FALSE"
+            "System" = "11:FALSE"
+            "Permanent" = "11:FALSE"
+            "SharedLegacy" = "11:FALSE"
+            "PackageAs" = "3:1"
+            "Register" = "3:2"
+            "Exclude" = "11:FALSE"
+            "IsDependency" = "11:TRUE"
+            "IsolateTo" = "8:"
+            }
             "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_88C4C520DC26489AAE9A79AE2F7F22EB"
             {
             "SourcePath" = "8:..\\..\\..\\share\\pixmaps\\nsis-header.bmp"
@@ -838,11 +832,6 @@
             "AssemblyAsmDisplayName" = "8:OpenPop, Version=2.0.5.0, Culture=neutral, processorArchitecture=MSIL"
                 "ScatterAssemblies"
                 {
-                    "_D0966638AB084779AFD69795C33FC8EB"
-                    {
-                    "Name" = "8:OpenPop.dll"
-                    "Attributes" = "3:512"
-                    }
                 }
             "SourcePath" = "8:A:\\release\\OpenPop.dll"
             "TargetName" = "8:"
@@ -1120,19 +1109,19 @@
         {
         "Name" = "8:Microsoft Visual Studio"
         "ProductName" = "8:Gridcoin Research"
-        "ProductCode" = "8:{050C56BD-D556-4E95-BBD8-C7CE5E01FBDC}"
-        "PackageCode" = "8:{10C9F1E4-30DB-436D-A28D-79FB7577F00F}"
+        "ProductCode" = "8:{99640ABC-1BE5-4E04-B0D9-47AAD10FB404}"
+        "PackageCode" = "8:{BFB1DB38-B968-4E50-9221-9918143CECEA}"
         "UpgradeCode" = "8:{9617E9EA-252F-43CE-B53E-B48C85F71192}"
         "AspNetVersion" = "8:4.0.30319.0"
         "RestartWWWService" = "11:FALSE"
         "RemovePreviousVersions" = "11:TRUE"
         "DetectNewerInstalledVersion" = "11:FALSE"
         "InstallAllUsers" = "11:TRUE"
-        "ProductVersion" = "8:41.9"
+        "ProductVersion" = "8:42.0"
         "Manufacturer" = "8:GridcoinResearch"
         "ARPHELPTELEPHONE" = "8:"
         "ARPHELPLINK" = "8:"
-        "Title" = "8:Gridcoin Research 41.9"
+        "Title" = "8:Gridcoin Research 42.0"
         "Subject" = "8:"
         "ARPCONTACT" = "8:The Gridcoin Developers"
         "Keywords" = "8:Gridcoin Research"

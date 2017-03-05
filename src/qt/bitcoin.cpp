@@ -5,6 +5,7 @@
 
 #include <QApplication>
 #include <QTimer>
+#include <boost/thread.hpp>
 
 #include "bitcoingui.h"
 #include "clientmodel.h"
@@ -109,8 +110,11 @@ static void InitMessage(const std::string &message)
 {
     if(splashref)
     {
-        splashref->showMessage(QString::fromStdString(message), Qt::AlignBottom|Qt::AlignHCenter, QColor(232,186,63));
-        QApplication::instance()->processEvents();
+        QMetaObject::invokeMethod(splashref, "showMessage",
+                                  Qt::QueuedConnection,
+                                  Q_ARG(QString, QString::fromStdString(message)),
+                                  Q_ARG(int, Qt::AlignBottom|Qt::AlignHCenter),
+                                  Q_ARG(QColor, QColor(232,186,63)));
     }
 }
 

@@ -319,7 +319,7 @@ bool CTxDB::WriteGenericData(const std::string& strKey,const std::string& strDat
 
 
 
-static CBlockIndex *InsertBlockIndex(uint256 hash)
+static CBlockIndex *InsertBlockIndex(const uint256& hash)
 {
     if (hash == 0)
         return NULL;
@@ -430,10 +430,6 @@ bool CTxDB::LoadBlockIndex()
 				uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
      		}
 		#endif
-        if (!pindexNew->CheckIndex()) {
-            delete iterator;
-            return error("LoadBlockIndex() : CheckIndex failed at %d", pindexNew->nHeight);
-        }
 
         // NovaCoin: build setStakeSeen
         if (pindexNew->IsProofOfStake())
@@ -444,7 +440,7 @@ bool CTxDB::LoadBlockIndex()
     delete iterator;
 	
 	
-	printf("Time to memorize diskindex containing %f blocks : %15"PRId64".%f ms\r\n", dBlockCount, GetTimeMillis() - nStart, (double)nHighest);
+	printf("Time to memorize diskindex containing %f blocks : %15" PRId64 ".%f ms\r\n", dBlockCount, GetTimeMillis() - nStart, (double)nHighest);
 	nStart = GetTimeMillis();
 	
 
@@ -467,11 +463,11 @@ bool CTxDB::LoadBlockIndex()
         // NovaCoin: calculate stake modifier checksum
         pindex->nStakeModifierChecksum = GetStakeModifierChecksum(pindex);
         if (!CheckStakeModifierCheckpoints(pindex->nHeight, pindex->nStakeModifierChecksum))
-            return error("CTxDB::LoadBlockIndex() : Failed stake modifier checkpoint height=%d, modifier=0x%016"PRIx64, pindex->nHeight, pindex->nStakeModifier);
+            return error("CTxDB::LoadBlockIndex() : Failed stake modifier checkpoint height=%d, modifier=0x%016" PRIx64, pindex->nHeight, pindex->nStakeModifier);
     }
 
 
-	printf("Time to calculate Chain Trust %15"PRId64"ms\n", GetTimeMillis() - nStart);
+	printf("Time to calculate Chain Trust %15" PRId64 "ms\n", GetTimeMillis() - nStart);
 	nStart = GetTimeMillis();
 
 
@@ -635,7 +631,7 @@ bool CTxDB::LoadBlockIndex()
 
 
 
-	printf("Time to Verify Blocks %15"PRId64"ms\n", GetTimeMillis() - nStart);
+	printf("Time to Verify Blocks %15" PRId64 "ms\n", GetTimeMillis() - nStart);
 	
     if (pindexFork && !fRequestShutdown)
     {
@@ -722,10 +718,10 @@ bool CTxDB::LoadBlockIndex()
 				}
 		}
 	}
-	printf("RA Complete - RA Time %15"PRId64"ms\n", GetTimeMillis() - nStart);
+	printf("RA Complete - RA Time %15" PRId64 "ms\n", GetTimeMillis() - nStart);
 	nStart = GetTimeMillis();
 	SetUpExtendedBlockIndexFieldsOnce();
-	printf("SetUpExtendedBlockIndexFieldsOnce Complete - Time %15"PRId64"ms\n", GetTimeMillis() - nStart);
+	printf("SetUpExtendedBlockIndexFieldsOnce Complete - Time %15" PRId64 "ms\n", GetTimeMillis() - nStart);
 	#if defined(WIN32) && defined(QT_GUI)
 		SetThreadPriority(THREAD_PRIORITY_NORMAL);
 	#endif

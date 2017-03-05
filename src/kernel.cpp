@@ -22,7 +22,7 @@ extern double OwedByAddress(std::string address);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 double cdbl(std::string s, int place);
 extern int DetermineCPIDType(std::string cpid);
-std::string GetHttpPage(std::string cpid, bool usedns, bool clearcache);
+std::string GetHttpPageFromCreditServerRetired(std::string cpid, bool usedns, bool clearcache);
 extern int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 double GetBlockDifficulty(unsigned int nBits);
@@ -30,7 +30,7 @@ extern double GetLastPaymentTimeByCPID(std::string cpid);
 extern double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 bool LessVerbose(int iMax1000);
 StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID>& vRef);
-extern double ReturnTotalRacByCPID(std::string cpid);
+extern double ReturnTotalRacByCPIDRetired(std::string cpid);
 
 typedef std::map<int, unsigned int> MapModifierCheckpoints;
 /*
@@ -165,7 +165,7 @@ bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeMod
         return error("ComputeNextStakeModifier: unable to get last modifier");
     if (fDebug10)
     {
-        printf("ComputeNextStakeModifier: prev modifier=0x%016"PRIx64" time=%s\n", nStakeModifier, DateTimeStrFormat(nModifierTime).c_str());
+        printf("ComputeNextStakeModifier: prev modifier=0x%016" PRIx64 " time=%s\n", nStakeModifier, DateTimeStrFormat(nModifierTime).c_str());
     }
     if (nModifierTime / nModifierInterval >= pindexPrev->GetBlockTime() / nModifierInterval)
         return true;
@@ -229,7 +229,7 @@ bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeMod
     }
     if (fDebug)
     {
-        printf("ComputeNextStakeModifier: new modifier=0x%016"PRIx64" time=%s\n", nStakeModifierNew, DateTimeStrFormat(pindexPrev->GetBlockTime()).c_str());
+        printf("ComputeNextStakeModifier: new modifier=0x%016" PRIx64 " time=%s\n", nStakeModifierNew, DateTimeStrFormat(pindexPrev->GetBlockTime()).c_str());
     }
 
     nStakeModifier = nStakeModifierNew;
@@ -293,10 +293,9 @@ static bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64_t& nStakeModifi
 //   a proof-of-work situation.
 //
 
-double ReturnTotalRacByCPID(std::string cpid)
+double ReturnTotalRacByCPIDRetired(std::string cpid)
 {
-	std::string result = GetHttpPage(cpid,true,true);
-	//std::vector<std::string> vRAC = split(result.c_str(),"<project>");
+	std::string result = GetHttpPageFromCreditServerRetired(cpid,true,true);
 	std::string sRAC = ExtractXML(result,"<expavg_credit>","</expavg_credit>");
 	double dRAC = cdbl(sRAC,0);
 	return dRAC;						
@@ -307,15 +306,22 @@ int DetermineCPIDType(std::string cpid)
 	// -1 = Invalid CPID
 	//  1 = Valid CPID with RAC
 	//  2 = Investor or Pool Miner
+	printf("\r\nCPID Length %f\r\n",(double)cpid.length());
+
 	if (cpid.empty()) return -1;
 	if (cpid=="INVESTOR") return 2;
 	StructCPID h = mvMagnitudes[cpid];
 	if (h.Magnitude > 0) return 1;
 	// If magnitude is 0 in the current superblock, try to get magnitude from netsoft before failing
-	double dRAC = ReturnTotalRacByCPID(cpid);
-	if (dRAC > 0) return 1;
-	// At this point, they have no RAC in the superblock, and no RAC in Netsoft, so we assume they are an investor (or pool miner)
-	return 2;
+	if (cpid.length()==32)
+	{
+		return 1;
+	}
+	else
+	{
+		// CPID is not 32 chars long- return Investor
+		return 2;
+	}
 }	
 
 
@@ -586,12 +592,12 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
     hashProofOfStake = Hash(ss.begin(), ss.end());
     if (fPrintProofOfStake)
     {
-        printf("CheckStakeKernelHash() : using modifier 0x%016"PRIx64" at height=%d timestamp=%s for block from height=%d timestamp=%s\n",
+        printf("CheckStakeKernelHash() : using modifier 0x%016" PRIx64 " at height=%d timestamp=%s for block from height=%d timestamp=%s\n",
             nStakeModifier, nStakeModifierHeight,
             DateTimeStrFormat(nStakeModifierTime).c_str(),
             mapBlockIndex[hashBlockFrom]->nHeight,
             DateTimeStrFormat(blockFrom.GetBlockTime()).c_str());
-            printf("CheckStakeKernelHash() : check modifier=0x%016"PRIx64" nTimeBlockFrom=%u nTxPrevOffset=%u nTimeTxPrev=%u nPrevout=%u nTimeTx=%u hashProof=%s\n",
+            printf("CheckStakeKernelHash() : check modifier=0x%016" PRIx64 " nTimeBlockFrom=%u nTxPrevOffset=%u nTimeTxPrev=%u nPrevout=%u nTimeTx=%u hashProof=%s\n",
             nStakeModifier,
             nTimeBlockFrom, nTxPrevOffset, txPrev.nTime, prevout.n, nTimeTx,
             hashProofOfStake.ToString().c_str());
@@ -612,12 +618,12 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 	}
     if (fDebug && !fPrintProofOfStake)
     {
-        printf("CheckStakeKernelHash() : using modifier 0x%016"PRIx64" at height=%d timestamp=%s for block from height=%d timestamp=%s\n",
+        printf("CheckStakeKernelHash() : using modifier 0x%016" PRIx64 " at height=%d timestamp=%s for block from height=%d timestamp=%s\n",
             nStakeModifier, nStakeModifierHeight,
             DateTimeStrFormat(nStakeModifierTime).c_str(),
             mapBlockIndex[hashBlockFrom]->nHeight,
             DateTimeStrFormat(blockFrom.GetBlockTime()).c_str());
-        printf("CheckStakeKernelHash() : pass modifier=0x%016"PRIx64" nTimeBlockFrom=%u nTxPrevOffset=%u nTimeTxPrev=%u nPrevout=%u nTimeTx=%u hashProof=%s\n",
+        printf("CheckStakeKernelHash() : pass modifier=0x%016" PRIx64 " nTimeBlockFrom=%u nTxPrevOffset=%u nTimeTxPrev=%u nPrevout=%u nTimeTx=%u hashProof=%s\n",
             nStakeModifier,
             nTimeBlockFrom, nTxPrevOffset, txPrev.nTime, prevout.n, nTimeTx,
             hashProofOfStake.ToString().c_str());

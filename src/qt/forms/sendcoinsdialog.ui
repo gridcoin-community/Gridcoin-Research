@@ -13,6 +13,10 @@
   <property name="windowTitle">
    <string>Send Coins</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true">QWidget{color:rgb(0,0,0);}
+QPushButton{background-color: lightgray;}</string>
+  </property>
   <layout class="QVBoxLayout" name="verticalLayout" stretch="0,1,0">
    <property name="bottomMargin">
     <number>8</number>
@@ -579,6 +583,9 @@
               <horstretch>0</horstretch>
               <verstretch>0</verstretch>
              </sizepolicy>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">QLineEdit{background-color: transparent;}</string>
             </property>
            </widget>
           </item>

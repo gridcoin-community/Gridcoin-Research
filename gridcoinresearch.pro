@@ -10,8 +10,6 @@ QT += core gui network
 win32:QT += qaxcontainer
 #QT += axcontainer
 win32:QT += axserver
-QT += widgets
-
 
 greaterThan(QT_MAJOR_VERSION, 4) {
     QT += widgets
@@ -123,7 +121,7 @@ LIBS += $$PWD/src/leveldb/libleveldb.a $$PWD/src/leveldb/libmemenv.a
 SOURCES += src/txdb-leveldb.cpp
 !win32 {
     # we use QMAKE_CXXFLAGS_RELEASE even without RELEASE=1 because we use RELEASE to indicate linking preferences not -O preferences
-    genleveldb.commands = cd $$PWD/src/leveldb && CC=$$QMAKE_CC CXX=$$QMAKE_CXX $(MAKE) OPT=\"$$QMAKE_CXXFLAGS $$QMAKE_CXXFLAGS_RELEASE\" libleveldb.a libmemenv.a
+    genleveldb.commands = cd $$PWD/src/leveldb && CC=\"$$QMAKE_CC\" CXX=\"$$QMAKE_CXX\" $(MAKE) OPT=\"$$QMAKE_CXXFLAGS $$QMAKE_CXXFLAGS_RELEASE\" libleveldb.a libmemenv.a
 } else {
     # make an educated guess about what the ranlib command is called
     isEmpty(QMAKE_RANLIB) {
@@ -429,8 +427,8 @@ windows:!contains(MINGW_THREAD_BUGFIX, 0) {
     QMAKE_LIBS_QT_ENTRY = -lmingwthrd $$QMAKE_LIBS_QT_ENTRY
 }
 
-macx:HEADERS += src/qt/macdockiconhandler.h
-macx:OBJECTIVE_SOURCES += src/qt/macdockiconhandler.mm
+macx:HEADERS += src/qt/macdockiconhandler.h src/qt/macnotificationhandler.h
+macx:OBJECTIVE_SOURCES += src/qt/macdockiconhandler.mm src/qt/macnotificationhandler.mm
 macx:LIBS += -framework Foundation -framework ApplicationServices -framework AppKit
 macx:DEFINES += MAC_OSX MSG_NOSIGNAL=0
 macx:ICON = src/qt/res/icons/bitcoin.icns
@@ -438,7 +436,7 @@ macx:TARGET = "gridcoinresearch"
 macx:QMAKE_CFLAGS_THREAD += -pthread
 macx:QMAKE_LFLAGS_THREAD += -pthread
 macx:QMAKE_CXXFLAGS_THREAD += -pthread
-macx:QT -= qaxcontainer axserver widgets
+macx:QT -= qaxcontainer axserver
 macx:CONFIG -= qaxcontainer
 macx:CONFIG += link_pkgconfig
 macx:PKGCONFIG += libzip
