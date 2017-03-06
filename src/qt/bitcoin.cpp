@@ -113,8 +113,7 @@ static void InitMessage(const std::string &message)
         QMetaObject::invokeMethod(splashref, "showMessage",
                                   Qt::QueuedConnection,
                                   Q_ARG(QString, QString::fromStdString(message)),
-                                  Q_ARG(int, Qt::AlignBottom|Qt::AlignHCenter),
-                                  Q_ARG(QColor, QColor(232,186,63)));
+                                  Q_ARG(int, Qt::AlignBottom|Qt::AlignHCenter));
     }
 }
 
