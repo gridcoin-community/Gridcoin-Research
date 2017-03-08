@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>731</width>
-    <height>166</height>
+    <height>186</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -17,7 +17,8 @@
    <string notr="true">QWidget{color:rgb(0,0,0);}
 QPushButton{background-color: lightgray;}
 QToolButton{background-color: lightgray;}
-QLineEdit{background-color: lightgray;}</string>
+QLineEdit{background-color: lightgray;}
+QToolTip { color: black; background-color: lightgray; border: none;}</string>
   </property>
   <property name="frameShape">
    <enum>QFrame::StyledPanel</enum>
