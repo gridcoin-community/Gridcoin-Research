@@ -73,7 +73,7 @@ LIBS= \
 
 DEFS=-DWIN32 -D_WINDOWS -DBOOST_THREAD_USE_LIB -DBOOST_SPIRIT_THREADSAFE
 DEBUGFLAGS=-g
-CFLAGS=${ADDITIONALCCFLAGS} -mthreads -O3 -msse2 -w -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wformat-security -Wno-unused-parameter $(DEBUGFLAGS) $(DEFS) $(INCLUDEPATHS)
+CXXFLAGS=${ADDITIONALCXXFLAGS} -std=c++11 -mthreads -O3 -msse2 -w -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wformat-security -Wno-unused-parameter $(DEBUGFLAGS) $(DEFS) $(INCLUDEPATHS)
 LDFLAGS=-Wl,--dynamicbase -Wl,--nxcompat
 
 TESTDEFS = -DTEST_DATA_DIR=$(abspath test/data)
@@ -148,7 +148,7 @@ OBJS += obj/txdb-leveldb.o
 
 
 #leveldb/libleveldb.a:
-#cd leveldb && $(MAKE) CC=$(CC) CXX=$(CXX) OPT="$(CFLAGS)" TARGET_OS=NATIVE_WINDOWS libleveldb.a libmemenv.a && cd ..
+#cd leveldb && $(MAKE) CC=$(CC) CXX=$(CXX) OPT="$(CXXFLAGS)" TARGET_OS=NATIVE_WINDOWS libleveldb.a libmemenv.a && cd ..
 
 #oldcd leveldb; make; cd ..
 	
@@ -156,7 +156,7 @@ OBJS += obj/txdb-leveldb.o
 obj/txdb-leveldb.o: leveldb/libleveldb.a
 
 obj/%.o: %.cpp $(HEADERS)
-	g++ -c $(CFLAGS) -o $@ $<
+	g++ -c $(CXXFLAGS) -o $@ $<
 
 obj/scrypt-x86.o: scrypt-x86.S
 	$(CXX) -c $(xCXXFLAGS) -MMD -o $@ $<
@@ -165,7 +165,7 @@ obj/scrypt-x86_64.o: scrypt-x86_64.S
 	$(CXX) -c $(xCXXFLAGS) -MMD -o $@ $<
 
 gridcoinresearchd.exe: $(OBJS:obj/%=obj/%)
-	$(CXX) $(CFLAGS) $(LDFLAGS) -o $@ $(LIBPATHS) $^ $(LIBS)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $(LIBPATHS) $^ $(LIBS)
 
 clean:
 	-del /Q gridcoinresearchd

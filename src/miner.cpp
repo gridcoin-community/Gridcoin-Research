@@ -9,6 +9,8 @@
 #include "kernel.h"
 #include "cpid.h"
 
+#include <memory>
+
 using namespace std;
 
 //////////////////////////////////////////////////////////////////////////////
@@ -160,7 +162,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 	}
 
     // Create new block
-    auto_ptr<CBlock> pblock(new CBlock());
+    std::unique_ptr<CBlock> pblock(new CBlock());
     if (!pblock.get())
         return NULL;
 
@@ -893,7 +895,7 @@ Begin:
         //
         int64_t nFees;
 		
-        auto_ptr<CBlock> pblock(CreateNewBlock(pwallet, true, &nFees));
+        std::unique_ptr<CBlock> pblock(CreateNewBlock(pwallet, true, &nFees));
         if (!pblock.get())
 		{
 			//This can happen after reharvesting CPIDs... Because CreateNewBlock() requires a valid CPID..  Start Over.
