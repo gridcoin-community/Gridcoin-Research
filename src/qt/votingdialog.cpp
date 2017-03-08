@@ -282,7 +282,7 @@ Qt::ItemFlags VotingTableModel::flags(const QModelIndex &index) const
     return Qt::ItemIsEnabled | Qt::ItemIsSelectable;
 }
 
-void VotingTableModel::resetData(void)
+void VotingTableModel::resetData(bool history)
 {
     // data: erase
     if (data_.size()) {
@@ -297,9 +297,9 @@ void VotingTableModel::resetData(void)
     // retrieve data
     std::vector<VotingItem *> items;
     std::string sVotingPayload;
-    GetJSONPollsReport(true, "", sVotingPayload, true);
+    GetJSONPollsReport(true, "", sVotingPayload, history);
 
-    time_t now = time(NULL);
+    //time_t now = time(NULL); // needed if history should be limited
 
     std::vector<std::string> vPolls = split(sVotingPayload, "<POLL>");
     for(size_t y=0; y < vPolls.size(); y++) {
@@ -316,8 +316,8 @@ void VotingTableModel::resetData(void)
             memset(&tm, 0, sizeof(struct tm));
             strptime(sExpiration.c_str(), "%m-%d-%Y %H:%M:%S", &tm);
             time_t expiration = mktime(&tm);
-            if (now > expiration + 7*24*60*60) // do not show items expired more than 7 days
-                continue;
+            //if (now > expiration + 7*24*60*60) // do not show items expired more than 7 days
+            //    continue;
 
             std::string sShareType = ExtractXML(vPolls[y], "<SHARETYPE>", "</SHARETYPE>");
             std::string sQuestion = ExtractXML(vPolls[y], "<QUESTION>", "</QUESTION>");
@@ -367,27 +367,9 @@ VotingProxyModel::VotingProxyModel(QObject *parent)
     setSortRole(VotingTableModel::SortRole);
 }
 
-void VotingProxyModel::setFilterTitle(const QString &str)
+void VotingProxyModel::setFilterTQAU(const QString &str)
 {
-    filterTitle_ = (str.size() >= 2)? str: "";
-    invalidateFilter();
-}
-
-void VotingProxyModel::setFilterQuestion(const QString &str)
-{
-    filterQuestion_ = (str.size() >= 2)? str: "";
-    invalidateFilter();
-}
-
-void VotingProxyModel::setFilterAnswers(const QString &str)
-{
-    filterAnswers_ = (str.size() >= 2)? str: "";
-    invalidateFilter();
-}
-
-void VotingProxyModel::setFilterUrl(const QString &str)
-{
-    filterUrl_ = (str.size() >= 2)? str: "";
+    filterTQAU_ = (str.size() >= 2)? str: "";
     invalidateFilter();
 }
 
@@ -396,21 +378,13 @@ bool VotingProxyModel::filterAcceptsRow(int row, const QModelIndex &sourceParent
     QModelIndex index = sourceModel()->index(row, 0, sourceParent);
 
     QString title = index.data(VotingTableModel::TitleRole).toString();
-    if (!title.contains(filterTitle_, Qt::CaseInsensitive))
-        return false;
-
     QString question = index.data(VotingTableModel::QuestionRole).toString();
-    if (!title.contains(filterQuestion_, Qt::CaseInsensitive))
-        return false;
-
     QString answers = index.data(VotingTableModel::AnswersRole).toString();
-    if (!answers.contains(filterAnswers_, Qt::CaseInsensitive))
-        return false;
-
     QString url = index.data(VotingTableModel::UrlRole).toString();
-    if (!url.contains(filterUrl_, Qt::CaseInsensitive))
+    if (!title.contains(filterTQAU_, Qt::CaseInsensitive) && !question.contains(filterTQAU_, Qt::CaseInsensitive) &&
+        !answers.contains(filterTQAU_, Qt::CaseInsensitive) && !url.contains(filterTQAU_, Qt::CaseInsensitive)){
         return false;
-
+    }
     return true;
 }
 
@@ -431,6 +405,7 @@ VotingDialog::VotingDialog(QWidget *parent)
 
     // view
     setWindowTitle(tr("Gridcoin Voting System 1.1"));
+    setMinimumSize(400,300);
     resize(1000,500);
 
     QVBoxLayout *vlayout = new QVBoxLayout(this);
@@ -441,48 +416,21 @@ VotingDialog::VotingDialog(QWidget *parent)
     QVBoxLayout *groupboxvlayout = new QVBoxLayout();
     groupBox->setLayout(groupboxvlayout);
 
-    QGridLayout *glayout = new QGridLayout();
-    glayout->setHorizontalSpacing(0);
-    glayout->setVerticalSpacing(0);
-    glayout->setColumnStretch(0, 1);
-    glayout->setColumnStretch(1, 3);
-    glayout->setColumnStretch(2, 5);
+    QHBoxLayout *filterhlayout = new QHBoxLayout();
+    groupboxvlayout->addLayout(filterhlayout);
 
-    groupboxvlayout->addLayout(glayout);
+    // Filter by Title/Question/Answers/Url with one QLineEdit
+    QLabel *filterByTQAULabel = new QLabel(tr("Filter: "));
+    filterByTQAULabel->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
+    filterByTQAULabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    filterByTQAULabel->setMaximumWidth(150);
+    filterhlayout->addWidget(filterByTQAULabel);
+    filterTQAU = new QLineEdit();
+    filterTQAU->setMaximumWidth(350);
+    filterhlayout->addWidget(filterTQAU);
+    connect(filterTQAU, SIGNAL(textChanged(QString)), this, SLOT(filterTQAUChanged(QString)));
+    filterhlayout->addStretch();
 
-    QLabel *filterByTitleLabel = new QLabel(tr("Filter By Title: "));
-    filterByTitleLabel->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
-    filterByTitleLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    glayout->addWidget(filterByTitleLabel, 0, 0);
-    filterTitle = new QLineEdit();
-    glayout->addWidget(filterTitle, 0, 1);
-    glayout->addWidget(new QLabel(""), 0, 2); // for stretch
-    connect(filterTitle, SIGNAL(textChanged(QString)), this, SLOT(filterTitleChanged(QString)));
-
-    QLabel *filterByQuestionLabel = new QLabel(tr("Filter By Question: "));
-    filterByQuestionLabel->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
-    filterByQuestionLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    glayout->addWidget(filterByQuestionLabel, 1, 0);
-    filterQuestion = new QLineEdit();
-    glayout->addWidget(filterQuestion, 1, 1);
-    connect(filterQuestion, SIGNAL(textChanged(QString)), this, SLOT(filterQuestionChanged(QString)));
-
-    QLabel *filterByAnswersLabel = new QLabel(tr("Filter By Answers: "));
-    filterByAnswersLabel->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
-    filterByAnswersLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    glayout->addWidget(filterByAnswersLabel, 2, 0);
-    filterAnswers = new QLineEdit();
-    glayout->addWidget(filterAnswers, 2, 1);
-    connect(filterAnswers, SIGNAL(textChanged(QString)), this, SLOT(filterAnswersChanged(QString)));
-
-    QLabel *filterByUrlLabel = new QLabel(tr("Filter By Url: "));
-    filterByUrlLabel->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
-    filterByUrlLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    glayout->addWidget(filterByUrlLabel, 3, 0);
-    filterUrl = new QLineEdit();
-    glayout->addWidget(filterUrl, 3, 1);
-    connect(filterUrl, SIGNAL(textChanged(QString)), this, SLOT(filterUrlChanged(QString)));
-    
     // buttons in horizontal layout
     QHBoxLayout *groupboxhlayout = new QHBoxLayout();
     groupboxvlayout->addLayout(groupboxhlayout);
@@ -493,11 +441,17 @@ VotingDialog::VotingDialog(QWidget *parent)
     groupboxhlayout->addWidget(resetButton);
     connect(resetButton, SIGNAL(clicked()), this, SLOT(resetData()));
     
+    QPushButton *histButton = new QPushButton();
+    histButton->setText(tr("Load History"));
+    histButton->setMaximumWidth(150);
+    groupboxhlayout->addWidget(histButton);
+    connect(histButton, SIGNAL(clicked()), this, SLOT(loadHistory()));
+
     QPushButton *newPollButton = new QPushButton();
     newPollButton->setText(tr("Create Poll"));
     newPollButton->setMaximumWidth(150);
     groupboxhlayout->addWidget(newPollButton);
-    connect(newPollButton, SIGNAL(clicked()), this, SLOT(showNewPollDialog()));  
+    connect(newPollButton, SIGNAL(clicked()), this, SLOT(showNewPollDialog()));
     
     groupboxhlayout->addStretch();
 
@@ -521,6 +475,13 @@ VotingDialog::VotingDialog(QWidget *parent)
 
     groupboxvlayout->addWidget(tableView_);
 
+    // loading overlay
+    watcher = new QFutureWatcher<void>();
+    connect(watcher, SIGNAL(finished()), this, SLOT(onLoadingFinished()));
+    loadingIndicator = new QLabel(this);
+    loadingIndicator->setText(tr("...loading data!"));
+    loadingIndicator->move(50,170);
+
     chartDialog_ = new VotingChartDialog(this);
     voteDialog_ = new VotingVoteDialog(this);
     pollDialog_ = new NewPollDialog(this);
@@ -529,8 +490,30 @@ VotingDialog::VotingDialog(QWidget *parent)
 
 void VotingDialog::resetData(void)
 {
-    if (tableModel_)
-        tableModel_->resetData();
+    if (tableModel_){
+        // load the voting data (tableModel_->resetData(false);) in another thread
+        if (watcher->isFinished()){
+            loadingIndicator->show();
+            QFuture<void> future = QtConcurrent::run(tableModel_, &VotingTableModel::resetData,false);
+            watcher->setFuture(future);
+        }
+    }
+}
+
+void VotingDialog::loadHistory(void)
+{
+    if (tableModel_){
+        if (watcher->isFinished()){
+            loadingIndicator->show();
+            QFuture<void> future = QtConcurrent::run(tableModel_, &VotingTableModel::resetData,true);
+            watcher->setFuture(future);
+        }
+    }
+}
+
+void VotingDialog::onLoadingFinished(void)
+{
+    loadingIndicator->hide();
 }
 
 void VotingDialog::tableColResize(void)
@@ -612,28 +595,10 @@ bool VotingDialog::eventFilter(QObject *obj, QEvent *event)
     return QWidget::eventFilter(obj, event);
 }
 
-void VotingDialog::filterTitleChanged(const QString &str)
+void VotingDialog::filterTQAUChanged(const QString &str)
 {
     if (proxyModel_)
-        proxyModel_->setFilterTitle(str);
-}
-
-void VotingDialog::filterQuestionChanged(const QString &str)
-{
-    if (proxyModel_)
-        proxyModel_->setFilterQuestion(str);
-}
-
-void VotingDialog::filterAnswersChanged(const QString &str)
-{
-    if (proxyModel_)
-        proxyModel_->setFilterAnswers(str);
-}
-
-void VotingDialog::filterUrlChanged(const QString &str)
-{
-    if (proxyModel_)
-        proxyModel_->setFilterUrl(str);
+        proxyModel_->setFilterTQAU(str);
 }
 
 void VotingDialog::showChartDialog(void)
@@ -840,7 +805,6 @@ VotingVoteDialog::VotingVoteDialog(QWidget *parent)
     voteNote_->setWordWrap(true);
     hlayout->addWidget(voteNote_);
     
-    QString sVoteTitle;
 }
 
 void VotingVoteDialog::resetData(const VotingItem *item)
@@ -876,7 +840,7 @@ void VotingVoteDialog::vote(void)
     sVoteValue.replace(" ","_");
     sVoteTitle.replace(" ","_");
     
-    std::string sResult = ExecuteRPCCommand("vote", sVoteTitle.toStdString(), sVoteValue.toStdString());
+    const std::string &sResult = ExecuteRPCCommand("vote", sVoteTitle.toStdString(), sVoteValue.toStdString());
     
     if (sResult.find("Success") != std::string::npos) {
         voteNote_->setStyleSheet("QLabel { color : green; }");
@@ -1007,12 +971,6 @@ NewPollDialog::NewPollDialog(QWidget *parent)
     pollNote_->setWordWrap(true);
     hlayoutBottom->addWidget(pollNote_);
     
-    QString sPollTitle;
-    QString sPollDays;
-    QString sPollQuestion;
-    QString sPollUrl;
-    QString sPollShareType;
-    QString sPollAnswers;
 }
 
 void NewPollDialog::resetData()
@@ -1058,7 +1016,7 @@ void NewPollDialog::createPoll(void)
     sPollUrl.replace(" ","_");
     sPollAnswers.replace(" ","_");
 
-    std::string sResult = ExecuteRPCCommand("addpoll", sPollTitle.toStdString(), sPollDays.toStdString(),sPollQuestion.toStdString(),sPollAnswers.toStdString(),sPollShareType.toStdString(),sPollUrl.toStdString());
+    const std::string &sResult = ExecuteRPCCommand("addpoll", sPollTitle.toStdString(), sPollDays.toStdString(),sPollQuestion.toStdString(),sPollAnswers.toStdString(),sPollShareType.toStdString(),sPollUrl.toStdString());
 
     if (sResult.find("Success") != std::string::npos) {
         pollNote_->setStyleSheet("QLabel { color : green; }");

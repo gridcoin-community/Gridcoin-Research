@@ -16,6 +16,9 @@
 #include <QListWidget>
 #include <QListWidgetItem>
 
+#include <QtConcurrent/QtConcurrent>
+#include <QFuture>
+
 #include <QtGlobal>
 #if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
 #  include <QtWidgets>
@@ -109,7 +112,7 @@ public:
     const VotingItem *index(int row) const;
     QModelIndex index(int row, int column, const QModelIndex &parent=QModelIndex()) const;
     Qt::ItemFlags flags(const QModelIndex &) const;
-    void resetData(void);
+    void resetData(bool history);
 
 private:
     QStringList columns_;
@@ -126,19 +129,13 @@ class VotingProxyModel
 
 public:
     explicit VotingProxyModel(QObject *parent=0);
-    void setFilterTitle(const QString &);
-    void setFilterQuestion(const QString &);
-    void setFilterAnswers(const QString &);
-    void setFilterUrl(const QString &);
+    void setFilterTQAU(const QString &); // filter Title/Question/Answers/Url
 
 protected:
     bool filterAcceptsRow(int, const QModelIndex &) const;
 
 private:
-    QString filterTitle_;
-    QString filterQuestion_;
-    QString filterAnswers_;
-    QString filterUrl_;
+    QString filterTQAU_;
 };
 
 class VotingChartDialog;
@@ -156,11 +153,9 @@ public:
     explicit VotingDialog(QWidget *parent=0);
 
 private:
-    QLineEdit *filterTitle;
-    QLineEdit *filterQuestion;
-    QLineEdit *filterAnswers;
-    QLineEdit *filterUrl;
+    QLineEdit *filterTQAU;
     QPushButton *resetButton;
+    QPushButton *histButton;
     QPushButton *newPollButton;
     QTableView *tableView_;
     VotingTableModel *tableModel_;
@@ -168,6 +163,8 @@ private:
     VotingChartDialog *chartDialog_;
     VotingVoteDialog *voteDialog_;
     NewPollDialog *pollDialog_;
+    QLabel *loadingIndicator;
+    QFutureWatcher<void> *watcher;
 
 private:
     virtual void showEvent(QShowEvent *);
@@ -175,12 +172,13 @@ private:
     void tableColResize(void);
     bool eventFilter(QObject *, QEvent *);
 
+private slots:
+    void onLoadingFinished(void);
+
 public slots:
-    void filterTitleChanged(const QString &);
-    void filterQuestionChanged(const QString &);
-    void filterAnswersChanged(const QString &);
-    void filterUrlChanged(const QString &);
+    void filterTQAUChanged(const QString &);
     void resetData(void);
+    void loadHistory(void);
     void showChartDialog(void);
     void showContextMenu(const QPoint &);
     void showVoteDialog(void);
