@@ -41,7 +41,7 @@ font-family:'Open Sans,sans-serif';</string>
      <item>
       <layout class="QVBoxLayout" name="verticalLayout_2">
        <property name="spacing">
-        <number>-1</number>
+        <number>6</number>
        </property>
        <item>
         <widget class="QFrame" name="frame">
@@ -377,7 +377,7 @@ font-family:'Open Sans,sans-serif';</string>
      <item>
       <layout class="QVBoxLayout" name="verticalLayout_3">
        <property name="spacing">
-        <number>-1</number>
+        <number>6</number>
        </property>
        <item>
         <widget class="QFrame" name="frame_2">
@@ -414,7 +414,7 @@ font-family:'Open Sans,sans-serif';</string>
                </size>
               </property>
               <property name="text">
-               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:20px; font-weight:600; color:#000000;&quot;&gt;Recent transactions&lt;/span&gt;&lt;small&gt;&lt;span&gt;&lt;font color=blue&gt;&amp;nbsp;&amp;nbsp;(Beacons and Votes cost .00011GRC)&lt;/span&gt;&lt;/font&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:20px; font-weight:600; color:#000000;&quot;&gt;Recent transactions&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
               </property>
              </widget>
             </item>
