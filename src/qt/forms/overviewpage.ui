@@ -31,10 +31,6 @@
   <property name="windowTitle">
    <string>Form</string>
   </property>
-  <property name="styleSheet">
-   <string notr="true">color:#000000;
-font-family:'Open Sans,sans-serif';</string>
-  </property>
   <layout class="QVBoxLayout" name="verticalLayout_5">
    <item>
     <layout class="QHBoxLayout" name="horizontalLayout">
@@ -85,9 +81,6 @@ font-family:'Open Sans,sans-serif';</string>
              <widget class="QLabel" name="labelWalletStatus">
               <property name="toolTip">
                <string>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</string>
-              </property>
-              <property name="styleSheet">
-               <string notr="true">QLabel { color: red; }</string>
               </property>
               <property name="text">
                <string notr="true">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; color:#d31360;&quot;&gt;(out of sync)&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
@@ -435,9 +428,6 @@ font-family:'Open Sans,sans-serif';</string>
               <property name="toolTip">
                <string>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</string>
               </property>
-              <property name="styleSheet">
-               <string notr="true">QLabel { color: red; }</string>
-              </property>
               <property name="text">
                <string notr="true">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; color:#dfffff;&quot;&gt;(out of sync)&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
               </property>
@@ -477,9 +467,6 @@ font-family:'Open Sans,sans-serif';</string>
               <width>0</width>
               <height>0</height>
              </size>
-            </property>
-            <property name="styleSheet">
-             <string notr="true">QListView { background: transparent;font-size:12px;  }</string>
             </property>
             <property name="frameShape">
              <enum>QFrame::NoFrame</enum>

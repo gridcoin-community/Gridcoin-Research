@@ -13,10 +13,6 @@
   <property name="windowTitle">
    <string>Send Coins</string>
   </property>
-  <property name="styleSheet">
-   <string notr="true">QWidget{color:rgb(0,0,0);}
-QPushButton{background-color: lightgray;}</string>
-  </property>
   <layout class="QVBoxLayout" name="verticalLayout" stretch="0,1,0">
    <property name="bottomMargin">
     <number>8</number>
@@ -87,9 +83,6 @@ QPushButton{background-color: lightgray;}</string>
               <bold>true</bold>
              </font>
             </property>
-            <property name="styleSheet">
-             <string notr="true">font-weight:bold;</string>
-            </property>
             <property name="text">
              <string>Coin Control Features</string>
             </property>
@@ -132,9 +125,6 @@ QPushButton{background-color: lightgray;}</string>
               <weight>75</weight>
               <bold>true</bold>
              </font>
-            </property>
-            <property name="styleSheet">
-             <string notr="true">color:red;font-weight:bold;</string>
             </property>
             <property name="text">
              <string>Insufficient funds!</string>
@@ -219,9 +209,6 @@ QPushButton{background-color: lightgray;}</string>
                </property>
                <item row="0" column="0">
                 <widget class="QLabel" name="labelCoinControlQuantityText">
-                 <property name="styleSheet">
-                  <string notr="true">font-weight:bold;</string>
-                 </property>
                  <property name="text">
                   <string>Quantity:</string>
                  </property>
@@ -257,9 +244,6 @@ QPushButton{background-color: lightgray;}</string>
                </item>
                <item row="1" column="0">
                 <widget class="QLabel" name="labelCoinControlBytesText">
-                 <property name="styleSheet">
-                  <string notr="true">font-weight:bold;</string>
-                 </property>
                  <property name="text">
                   <string>Bytes:</string>
                  </property>
@@ -308,9 +292,6 @@ QPushButton{background-color: lightgray;}</string>
                </property>
                <item row="0" column="0">
                 <widget class="QLabel" name="labelCoinControlAmountText">
-                 <property name="styleSheet">
-                  <string notr="true">font-weight:bold;</string>
-                 </property>
                  <property name="text">
                   <string>Amount:</string>
                  </property>
@@ -343,9 +324,6 @@ QPushButton{background-color: lightgray;}</string>
                </item>
                <item row="1" column="0">
                 <widget class="QLabel" name="labelCoinControlPriorityText">
-                 <property name="styleSheet">
-                  <string notr="true">font-weight:bold;</string>
-                 </property>
                  <property name="text">
                   <string>Priority:</string>
                  </property>
@@ -394,9 +372,6 @@ QPushButton{background-color: lightgray;}</string>
                </property>
                <item row="0" column="0">
                 <widget class="QLabel" name="labelCoinControlFeeText">
-                 <property name="styleSheet">
-                  <string notr="true">font-weight:bold;</string>
-                 </property>
                  <property name="text">
                   <string>Fee:</string>
                  </property>
@@ -429,9 +404,6 @@ QPushButton{background-color: lightgray;}</string>
                </item>
                <item row="1" column="0">
                 <widget class="QLabel" name="labelCoinControlLowOutputText">
-                 <property name="styleSheet">
-                  <string notr="true">font-weight:bold;</string>
-                 </property>
                  <property name="text">
                   <string>Low Output:</string>
                  </property>
@@ -480,9 +452,6 @@ QPushButton{background-color: lightgray;}</string>
                </property>
                <item row="0" column="0">
                 <widget class="QLabel" name="labelCoinControlAfterFeeText">
-                 <property name="styleSheet">
-                  <string notr="true">font-weight:bold;</string>
-                 </property>
                  <property name="text">
                   <string>After Fee:</string>
                  </property>
@@ -515,9 +484,6 @@ QPushButton{background-color: lightgray;}</string>
                </item>
                <item row="1" column="0">
                 <widget class="QLabel" name="labelCoinControlChangeText">
-                 <property name="styleSheet">
-                  <string notr="true">font-weight:bold;</string>
-                 </property>
                  <property name="text">
                   <string>Change</string>
                  </property>
@@ -584,9 +550,6 @@ QPushButton{background-color: lightgray;}</string>
               <verstretch>0</verstretch>
              </sizepolicy>
             </property>
-            <property name="styleSheet">
-             <string notr="true">QLineEdit{background-color: transparent;}</string>
-            </property>
            </widget>
           </item>
           <item>
@@ -633,9 +596,6 @@ QPushButton{background-color: lightgray;}</string>
    </item>
    <item>
     <widget class="QScrollArea" name="scrollArea">
-     <property name="styleSheet">
-      <string notr="true">background: transparent;</string>
-     </property>
      <property name="widgetResizable">
       <bool>true</bool>
      </property>
@@ -644,8 +604,8 @@ QPushButton{background-color: lightgray;}</string>
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>830</width>
-        <height>172</height>
+        <width>834</width>
+        <height>129</height>
        </rect>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout_2">
