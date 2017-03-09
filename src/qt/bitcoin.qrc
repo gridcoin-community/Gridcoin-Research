@@ -44,9 +44,9 @@
         <file alias="debugwindow">res/icons/debugwindow.png</file>
         <file alias="staking_off">res/icons/staking_off.png</file>
         <file alias="staking_on">res/icons/staking_on.png</file>
-	<file alias="block">res/icons/block.png</file>
+        <file alias="block">res/icons/block.png</file>
         <file alias="ex">res/icons/ex.png</file>
-	<file alias="www">res/icons/www.png</file>
+        <file alias="www">res/icons/www.png</file>
         <file alias="boinc">res/icons/boinc.png</file>
         <file alias="gold_cpumined">res/icons/gold_cpumined.png</file>
         <file alias="chat">res/icons/chat.png</file>
@@ -54,9 +54,9 @@
     <qresource prefix="/images">
         <file alias="about">res/images/about.png</file>
         <file alias="splash">res/images/splash3.png</file>
-		<file alias="wallet">res/images/wallet.png</file>
-		<file alias="wallet2">res/images/wallet2.png</file>
-		<file alias="bkg">res/images/bkg.png</file>
+        <file alias="wallet">res/images/wallet.png</file>
+        <file alias="wallet2">res/images/wallet2.png</file>
+        <file alias="bkg">res/images/bkg.png</file>
     </qresource>
     <qresource prefix="/movies">
         <file alias="update_spinner">res/movies/update_spinner.gif</file>
@@ -101,5 +101,8 @@
         <file alias="uk">locale/bitcoin_uk.qm</file>
         <file alias="zh_CN">locale/bitcoin_zh_CN.qm</file>
         <file alias="zh_TW">locale/bitcoin_zh_TW.qm</file>
+    </qresource>
+    <qresource prefix="/stylesheets">
+        <file alias="stylesheet">res/stylesheets/stylesheet.qss</file>
     </qresource>
 </RCC>
