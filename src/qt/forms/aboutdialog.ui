@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>787</width>
+    <width>839</width>
     <height>360</height>
    </rect>
   </property>
@@ -15,11 +15,6 @@
   </property>
   <property name="autoFillBackground">
    <bool>false</bool>
-  </property>
-  <property name="styleSheet">
-   <string notr="true">QDialog{background-image: url(:/images/bkg);}
-QWidget{color: black;}
-QPushButton{background-color: lightgray;}</string>
   </property>
   <layout class="QHBoxLayout" name="horizontalLayout_2">
    <item>
