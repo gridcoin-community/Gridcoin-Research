@@ -76,7 +76,7 @@ std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern bool IsSuperBlock(CBlockIndex* pIndex);
 extern MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 json_spirit::Array MagnitudeReport(std::string cpid);
-extern void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash, bool fInsert);
+extern void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash);
 extern void ZeroOutResearcherTotals(std::string cpid);
 extern StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
 extern std::string getCpuHash();
@@ -3432,7 +3432,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
  	}
 
 
-	AddCPIDBlockHash(bb.cpid, pindex->GetBlockHash(), false);
+	AddCPIDBlockHash(bb.cpid, pindex->GetBlockHash());
 
     // Track money supply and mint amount info
     pindex->nMint = nValueOut - nValueIn + nFees;
@@ -6128,11 +6128,10 @@ HashSet GetCPIDBlockHashes(const std::string& cpid)
     return mvCPIDBlockHashes[cpid];
 }
 
-void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash, bool fInsert)
+void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash)
 {
-    HashSet& blockhashes = mvCPIDBlockHashes[cpid];
-    if (fInsert || blockhashes.count(blockhash) == 0 )
-        blockhashes.insert(blockhash);
+    // Add block hash to CPID hash set.
+    mvCPIDBlockHashes[cpid].insert(blockhash);
 }
 
 StructCPID GetLifetimeCPID(std::string cpid, std::string sCalledFrom)

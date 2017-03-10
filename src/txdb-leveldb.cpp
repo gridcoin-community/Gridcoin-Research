@@ -29,7 +29,7 @@ StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, Stru
 bool IsLockTimeWithin14days(double locktime);
 MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID>& vRef);
 MiningCPID DeserializeBoincBlock(std::string block);
-void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash, bool fInsert);
+void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash);
 
 
 void SetUpExtendedBlockIndexFieldsOnce();
@@ -712,7 +712,7 @@ bool CTxDB::LoadBlockIndex()
 						if (((double)pindex->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pindex->nTime;
 			
 						mvResearchAge[pindex->sCPID]=stCPID;
-				    	AddCPIDBlockHash(pindex->sCPID, pindex->GetBlockHash(), true);
+				    	AddCPIDBlockHash(pindex->sCPID, pindex->GetBlockHash());
 
 					}
 				}
