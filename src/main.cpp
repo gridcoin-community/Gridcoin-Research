@@ -160,7 +160,6 @@ void InitializeBoincProjects();
 
 extern double Cap(double dAmt, double Ceiling);
 extern std::string ToOfficialNameNew(std::string proj);
-double OwedByAddress(std::string address);
 
 extern double GRCMagnitudeUnit(int64_t locktime);
 

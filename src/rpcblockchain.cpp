@@ -15,7 +15,6 @@
 
 using namespace json_spirit;
 using namespace std;
-double OwedByAddress(std::string address);
 extern std::string YesNo(bool bin);
 bool BackupConfigFile(const string& strDest);
 std::string getHardDriveSerial();
