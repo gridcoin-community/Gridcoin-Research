@@ -12,7 +12,6 @@
 #include "scrypt.h"
 
 #include "global_objects_noui.hpp"
-#include <list>
 
 class CWallet;
 class CBlock;
@@ -785,7 +784,7 @@ public:
     {
         std::string str;
         str += IsCoinBase()? "Coinbase" : (IsCoinStake()? "Coinstake" : "CTransaction");
-        str += strprintf("(hash=%s, nTime=%d, ver=%d, vin.size=%"PRIszu", vout.size=%"PRIszu", nLockTime=%d)\n",
+        str += strprintf("(hash=%s, nTime=%d, ver=%d, vin.size=%" PRIszu ", vout.size=%" PRIszu ", nLockTime=%d)\n",
             GetHash().ToString().substr(0,10).c_str(),
             nTime,
             nVersion,
@@ -1240,7 +1239,7 @@ public:
 
     void print() const
     {
-        printf("CBlock(hash=%s, ver=%d, hashPrevBlock=%s, hashMerkleRoot=%s, nTime=%u, nBits=%08x, nNonce=%u, vtx=%"PRIszu", vchBlockSig=%s)\n",
+        printf("CBlock(hash=%s, ver=%d, hashPrevBlock=%s, hashMerkleRoot=%s, nTime=%u, nBits=%08x, nNonce=%u, vtx=%" PRIszu ", vchBlockSig=%s)\n",
             GetHash().ToString().c_str(),
             nVersion,
             hashPrevBlock.ToString().c_str(),
@@ -1305,15 +1304,10 @@ public:
 	double nResearchSubsidy;
 	double nInterestSubsidy;
 	double nMagnitude;
-	// Memory Only (8-13-2015):
-	double nLastPORBlock;
-	std::string sLastPORBlockHash;
-	double nTotalPORPayments;
 	// Indicators (9-13-2015)
 	unsigned int nIsSuperBlock;
 	unsigned int nIsContract;
 	std::string sGRCAddress;
-	std::string sReserved;
 
     unsigned int nFlags;  // ppcoin: block index flags
     enum  
@@ -1367,13 +1361,9 @@ public:
 		nResearchSubsidy = 0;
 		nInterestSubsidy = 0;
 		nMagnitude = 0;
-		nLastPORBlock=0;
-		sLastPORBlockHash = "";
-		nTotalPORPayments = 0;
 		nIsSuperBlock = 0;
 		nIsContract = 0;
 		sGRCAddress = "";
-		sReserved = "";
     }
 
     CBlockIndex(unsigned int nFileIn, unsigned int nBlockPosIn, CBlock& block)
@@ -1438,11 +1428,6 @@ public:
     bool IsInMainChain() const
     {
         return (pnext || this == pindexBest);
-    }
-
-    bool CheckIndex() const
-    {
-        return true;
     }
 
     int64_t GetPastTimeLimit() const
@@ -1519,7 +1504,7 @@ public:
 
     std::string ToString() const
     {
-        return strprintf("CBlockIndex(nprev=%p, pnext=%p, nFile=%u, nBlockPos=%-6d nHeight=%d, nMint=%s, nMoneySupply=%s, nFlags=(%s)(%d)(%s), nStakeModifier=%016"PRIx64", nStakeModifierChecksum=%08x, hashProof=%s, prevoutStake=(%s), nStakeTime=%d merkle=%s, hashBlock=%s)",
+        return strprintf("CBlockIndex(nprev=%p, pnext=%p, nFile=%u, nBlockPos=%-6d nHeight=%d, nMint=%s, nMoneySupply=%s, nFlags=(%s)(%d)(%s), nStakeModifier=%016" PRIx64 ", nStakeModifierChecksum=%08x, hashProof=%s, prevoutStake=(%s), nStakeTime=%d merkle=%s, hashBlock=%s)",
             pprev, pnext, nFile, nBlockPos, nHeight,
             FormatMoney(nMint).c_str(), FormatMoney(nMoneySupply).c_str(),
             GeneratedStakeModifier() ? "MOD" : "-", GetStakeEntropyBit(), IsProofOfStake()? "PoS" : "PoW",
@@ -1605,7 +1590,11 @@ public:
 			READWRITE(nIsSuperBlock);
 			READWRITE(nIsContract);
 			READWRITE(sGRCAddress);
-			READWRITE(sReserved);
+
+                        // Blocks used to come with a reserved string. Keep (de)serializing
+                        // it until it's used.
+                        std::string sReserved;
+                        READWRITE(sReserved);
 		}
 
 

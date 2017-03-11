@@ -12,6 +12,8 @@
 #include "ui_interface.h"
 
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
+#include <boost/array.hpp>
+#include <boost/thread.hpp>
 
 #ifdef WIN32
   #include <string.h>
@@ -1711,12 +1713,12 @@ void ThreadSocketHandler2(void* parg)
                 }
                 else if (nTime - pnode->nLastSend > TIMEOUT_INTERVAL)
                 {
-                    printf("socket sending timeout: %"PRId64"s\n", nTime - pnode->nLastSend);
+                    printf("socket sending timeout: %" PRId64 "s\n", nTime - pnode->nLastSend);
                     pnode->fDisconnect = true;
                 }
                 else if (nTime - pnode->nLastRecv > (pnode->nVersion > BIP0031_VERSION ? TIMEOUT_INTERVAL : 90*60))
                 {
-                    printf("socket receive timeout: %"PRId64"s\n", nTime - pnode->nLastRecv);
+                    printf("socket receive timeout: %" PRId64 "s\n", nTime - pnode->nLastRecv);
                     pnode->fDisconnect = true;
                 }
                 else if (pnode->nPingNonceSent && pnode->nPingUsecStart + TIMEOUT_INTERVAL * 1000000 < GetTimeMicros())
@@ -1991,7 +1993,7 @@ void DumpAddresses()
     CAddrDB adb;
     adb.Write(addrman);
 
-    if (fDebug10) printf("Flushed %d addresses to peers.dat  %"PRId64"ms\n",           addrman.size(), GetTimeMillis() - nStart);
+    if (fDebug10) printf("Flushed %d addresses to peers.dat  %" PRId64 "ms\n",           addrman.size(), GetTimeMillis() - nStart);
 
 }
 

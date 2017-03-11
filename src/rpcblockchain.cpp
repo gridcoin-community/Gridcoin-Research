@@ -15,7 +15,6 @@
 
 using namespace json_spirit;
 using namespace std;
-double OwedByAddress(std::string address);
 extern std::string YesNo(bool bin);
 bool BackupConfigFile(const string& strDest);
 std::string getHardDriveSerial();
@@ -161,7 +160,6 @@ std::string GetArgument(std::string arg, std::string defaultvalue);
 std::string TestHTTPProtocol(std::string sCPID);
 std::string VectorToString(std::vector<unsigned char> v);
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
-uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 extern std::string TimestampToHRDate(double dtm);
 
@@ -187,7 +185,6 @@ int DownloadBlocks();
 double GetBlockValueByHash(uint256 hash);
 double cdbl(std::string s, int place);
 void ScriptPubKeyToJSON(const CScript& scriptPubKey, Object& out);
-bool GetBlockNew(uint256 blockhash, int& out_height, CBlock& blk, bool bForceDiskRead);
 bool AESSkeinHash(unsigned int diffbytes, double rac, uint256 scrypthash, std::string& out_skein, std::string& out_aes512);
 				  std::string aes_complex_hash(uint256 scrypt_hash);
 std::vector<std::string> split(std::string s, std::string delim);
@@ -408,7 +405,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 		strprintf("%s%s", blockindex->IsProofOfStake()? "proof-of-stake" : "proof-of-work", blockindex->GeneratedStakeModifier()? " stake-modifier": "") + " " + PoRNarr		)		);
     result.push_back(Pair("proofhash", blockindex->hashProof.GetHex()));
     result.push_back(Pair("entropybit", (int)blockindex->GetStakeEntropyBit()));
-    result.push_back(Pair("modifier", strprintf("%016"PRIx64, blockindex->nStakeModifier)));
+    result.push_back(Pair("modifier", strprintf("%016" PRIx64, blockindex->nStakeModifier)));
     result.push_back(Pair("modifierchecksum", strprintf("%08x", blockindex->nStakeModifierChecksum)));
     Array txinfo;
     BOOST_FOREACH (const CTransaction& tx, block.vtx)
@@ -3894,9 +3891,9 @@ Array ContractReportCSV()
 		   std::string footer = "Total: " + RoundToString(rows,0) + ", , , ," + "\n";
 		   header += footer;
 		   Object entry;
-		   entry.push_back(Pair("CSV Complete",strprintf("\\reports\\open_contracts_%"PRId64".csv",timestamp)));
+		   entry.push_back(Pair("CSV Complete",strprintf("\\reports\\open_contracts_%" PRId64 ".csv",timestamp)));
 		   results.push_back(entry);
-     	   CSVToFile(strprintf("open_contracts_%"PRId64".csv",timestamp), header);
+     	   CSVToFile(strprintf("open_contracts_%" PRId64 ".csv",timestamp), header);
 		   return results;
 }
 
@@ -4602,10 +4599,10 @@ Array MagnitudeReportCSV(bool detail)
 		   std::string footer = RoundToString(rows,0) + ", , , , ," + RoundToString(lto,2) + ", ," + RoundToString(totalpaid,2) + ", , , , , ," + RoundToString(totaloutstanding,2) + "\n";
 		   header += footer;
 		   Object entry;
-		   entry.push_back(Pair("CSV Complete",strprintf("\\reports\\magnitude_%"PRId64".csv",timestamp)));
+		   entry.push_back(Pair("CSV Complete",strprintf("\\reports\\magnitude_%" PRId64 ".csv",timestamp)));
 		   results.push_back(entry);
      	   
-		   CSVToFile(strprintf("magnitude_%"PRId64".csv",timestamp), header);
+		   CSVToFile(strprintf("magnitude_%" PRId64 ".csv",timestamp), header);
 		   return results;
 }
 
