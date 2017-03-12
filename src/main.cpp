@@ -6125,7 +6125,10 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 
 HashSet GetCPIDBlockHashes(const std::string& cpid)
 {
-    return mvCPIDBlockHashes[cpid];
+    auto hashes = mvCPIDBlockHashes.find(cpid);
+    return hashes != mvCPIDBlockHashes.end()
+        ? hashes->second
+        : HashSet();
 }
 
 void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash)
