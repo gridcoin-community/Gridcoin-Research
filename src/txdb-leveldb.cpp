@@ -644,69 +644,66 @@ bool CTxDB::LoadBlockIndex()
         block.SetBestChain(txdb, pindexFork);
     }
 
-
-	printf("Set up RA ");
-
-	nStart = GetTimeMillis();
-
-
-	//Gridcoin - In order, set up Research Age hashes and lifetime fields
+    printf("Set up RA ");  
+    nStart = GetTimeMillis();
+    
+    //Gridcoin - In order, set up Research Age hashes and lifetime fields
     int lookback = 1000*190;
-	int nBlkStart = pindexBest->nHeight - lookback;
-	if (nBlkStart < 10) nBlkStart=10;
-	nBlkStart = 1;
-	CBlockIndex* pindex = FindBlockByHeight(nBlkStart);
-
-   nLoaded=pindex->nHeight;
-   if (pindex && pindexBest && pindexBest->nHeight > 10 && pindex->pnext)
-   {
-      printf(" RA Starting %f %f %f ",(double)pindex->nHeight,(double)pindex->pnext->nHeight,(double)pindexBest->nHeight);
-      while (pindex->nHeight < pindexBest->nHeight)
-      {
-         if (!pindex || !pindex->pnext) break;  
-         pindex = pindex->pnext;
-         if (pindex == pindexBest) break;
-         if (pindex==NULL || !pindex->IsInMainChain()) continue;
-         
+    int nBlkStart = pindexBest->nHeight - lookback;
+    if (nBlkStart < 10) nBlkStart=10;
+    nBlkStart = 1;
+    CBlockIndex* pindex = FindBlockByHeight(nBlkStart);
+    
+    nLoaded=pindex->nHeight;
+    if (pindex && pindexBest && pindexBest->nHeight > 10 && pindex->pnext)
+    {
+        printf(" RA Starting %f %f %f ",(double)pindex->nHeight,(double)pindex->pnext->nHeight,(double)pindexBest->nHeight);
+        while (pindex->nHeight < pindexBest->nHeight)
+        {
+            if (!pindex || !pindex->pnext) break;  
+            pindex = pindex->pnext;
+            if (pindex == pindexBest) break;
+            if (pindex==NULL || !pindex->IsInMainChain()) continue;
+            
 #ifdef QT_GUI
-         if ((pindex->nHeight % 10000) == 0)
-         {
-            nLoaded +=10000;
-            if (nLoaded > nHighest) nHighest=nLoaded;
-            if (nHighest < nGrandfather) nHighest=nGrandfather;
-            std::string sBlocksLoaded = RoundToString((double)nLoaded,0) + "/" + RoundToString((double)nHighest,0) + " POR Blocks Verified";
-            uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
-         }
+            if ((pindex->nHeight % 10000) == 0)
+            {
+                nLoaded +=10000;
+                if (nLoaded > nHighest) nHighest=nLoaded;
+                if (nHighest < nGrandfather) nHighest=nGrandfather;
+                std::string sBlocksLoaded = RoundToString((double)nLoaded,0) + "/" + RoundToString((double)nHighest,0) + " POR Blocks Verified";
+                uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
+            }
 #endif
-         
-         if (!pindex->sCPID.empty() &&
-             pindex->nResearchSubsidy > 0 &&
-             pindex->sCPID != "INVESTOR") 
-         {
-            StructCPID& stCPID = mvResearchAge[pindex->sCPID];
             
-            stCPID.InterestSubsidy += pindex->nInterestSubsidy;
-            stCPID.ResearchSubsidy += pindex->nResearchSubsidy;
-            if (pindex->nHeight > stCPID.LastBlock) 
+            if (!pindex->sCPID.empty() &&
+                pindex->nResearchSubsidy > 0 &&
+                pindex->sCPID != "INVESTOR") 
             {
-               stCPID.LastBlock = pindex->nHeight;
-               stCPID.BlockHash = pindex->GetBlockHash().GetHex();
+                StructCPID& stCPID = mvResearchAge[pindex->sCPID];
+                
+                stCPID.InterestSubsidy += pindex->nInterestSubsidy;
+                stCPID.ResearchSubsidy += pindex->nResearchSubsidy;
+                if (pindex->nHeight > stCPID.LastBlock) 
+                {
+                    stCPID.LastBlock = pindex->nHeight;
+                    stCPID.BlockHash = pindex->GetBlockHash().GetHex();
+                }
+                
+                if (pindex->nMagnitude > 0)
+                {
+                    stCPID.Accuracy++;
+                    stCPID.TotalMagnitude += pindex->nMagnitude;
+                    stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
+                }
+                
+                if (pindex->nTime < stCPID.LowLockTime)  stCPID.LowLockTime = pindex->nTime;
+                if (pindex->nTime > stCPID.HighLockTime) stCPID.HighLockTime = pindex->nTime;
+                
+                AddCPIDBlockHash(pindex->sCPID, pindex->GetBlockHash());
             }
-            
-            if (pindex->nMagnitude > 0)
-            {
-               stCPID.Accuracy++;
-               stCPID.TotalMagnitude += pindex->nMagnitude;
-               stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
-            }
-            
-            if (pindex->nTime < stCPID.LowLockTime)  stCPID.LowLockTime = pindex->nTime;
-            if (pindex->nTime > stCPID.HighLockTime) stCPID.HighLockTime = pindex->nTime;
-            
-            AddCPIDBlockHash(pindex->sCPID, pindex->GetBlockHash());
-         }
-      }
-   }
+        }
+    }
 
 	printf("RA Complete - RA Time %15" PRId64 "ms\n", GetTimeMillis() - nStart);
 	nStart = GetTimeMillis();
