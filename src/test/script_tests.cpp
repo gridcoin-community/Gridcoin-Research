@@ -15,6 +15,8 @@
 #include "main.h"
 #include "wallet.h"
 
+#include <cstdint>
+
 using namespace std;
 using namespace json_spirit;
 using namespace boost::algorithm;
@@ -54,7 +56,7 @@ ParseScript(string s)
             (starts_with(w, "-") && all(string(w.begin()+1, w.end()), is_digit())))
         {
             // Number
-            int64 n = atoi64(w);
+            int64_t n = atoi64(w);
             result << n;
         }
         else if (starts_with(w, "0x") && IsHex(string(w.begin()+2, w.end())))

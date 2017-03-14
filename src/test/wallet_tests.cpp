@@ -19,7 +19,7 @@ BOOST_AUTO_TEST_SUITE(wallet_tests)
 static CWallet wallet;
 static vector<COutput> vCoins;
 
-static void add_coin(int64 nValue, int nAge = 6*24, bool fIsFromMe = false, int nInput=0)
+static void add_coin(int64_t nValue, int nAge = 6*24, bool fIsFromMe = false, int nInput=0)
 {
     static int i;
     CTransaction* tx = new CTransaction;
@@ -56,7 +56,7 @@ static bool equal_sets(CoinSet a, CoinSet b)
 BOOST_AUTO_TEST_CASE(coin_selection_tests)
 {
     static CoinSet setCoinsRet, setCoinsRet2;
-    static int64 nValueRet;
+    static int64_t nValueRet;
 
     // test multiple times to allow for differences in the shuffle order
     for (int i = 0; i < RUN_TESTS; i++)

@@ -66,7 +66,7 @@ BOOST_AUTO_TEST_CASE(DoS_banscore)
 BOOST_AUTO_TEST_CASE(DoS_bantime)
 {
     CNode::ClearBanned();
-    int64 nStartTime = GetTime();
+    int64_t nStartTime = GetTime();
     SetMockTime(nStartTime); // Overrides future calls to GetTime()
 
     CAddress addr(ip(0xa0b0c001));
@@ -82,11 +82,11 @@ BOOST_AUTO_TEST_CASE(DoS_bantime)
     BOOST_CHECK(!CNode::IsBanned(addr));
 }
 
-static bool CheckNBits(unsigned int nbits1, int64 time1, unsigned int nbits2, int64 time2)\
+static bool CheckNBits(unsigned int nbits1, int64_t time1, unsigned int nbits2, int64_t time2)\
 {
     if (time1 > time2)
         return CheckNBits(nbits2, time2, nbits1, time1);
-    int64 deltaTime = time2-time1;
+    int64_t deltaTime = time2-time1;
 
     CBigNum required;
     required.SetCompact(ComputeMinWork(nbits1, deltaTime));
@@ -101,7 +101,7 @@ BOOST_AUTO_TEST_CASE(DoS_checknbits)
 
     // Timestamps,nBits from the bitcoin blockchain.
     // These are the block-chain checkpoint blocks
-    typedef std::map<int64, unsigned int> BlockData;
+    typedef std::map<int64_t, unsigned int> BlockData;
     BlockData chainData =
         map_list_of(1239852051,486604799)(1262749024,486594666)
         (1279305360,469854461)(1280200847,469830746)(1281678674,469809688)
