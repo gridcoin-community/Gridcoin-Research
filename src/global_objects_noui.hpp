@@ -74,7 +74,7 @@ struct StructCPID
     double EarliestPaymentTime;
     double InterestSubsidy;
     double PaymentTimespan;
-    uint32_t LastBlock;
+    int32_t LastBlock;
     double NetworkMagnitude;
     double NetworkAvgMagnitude;
     double NetsoftRAC;
