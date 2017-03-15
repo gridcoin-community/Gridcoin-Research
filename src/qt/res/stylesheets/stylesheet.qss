@@ -5,7 +5,7 @@ QMainWindow {
     font-family:'Open Sans,sans-serif';
 }
 
-QToolBar QLabel {
+QToolBar#toolbar QLabel{
     padding-top:15px;
     padding-bottom:10px;
     margin:0px;
@@ -39,11 +39,11 @@ QToolBar QLabel {
     max-width:160px;
 }
 
-QToolBar QToolButton:hover {
+QToolBar#toolbar QToolButton:hover {
     background-color:qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,stop: 0 rgb(69,65,63), stop: 1 rgb(142,158,157));
 }
 
-QToolBar QToolButton {
+QToolBar#toolbar QToolButton {
     font-family:Century Gothic;
     padding-left:20px;
     padding-right:200px;
