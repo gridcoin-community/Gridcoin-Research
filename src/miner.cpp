@@ -18,7 +18,7 @@ using namespace std;
 // BitcoinMiner
 //
 
-extern unsigned int nMinerSleep;
+unsigned int nMinerSleep;
 MiningCPID GetNextProject(bool bForce);
 void ThreadCleanWalletPassphrase(void* parg);
 double GetBlockDifficulty(unsigned int nBits);

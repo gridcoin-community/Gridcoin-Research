@@ -162,6 +162,7 @@ extern double Cap(double dAmt, double Ceiling);
 extern std::string ToOfficialNameNew(std::string proj);
 
 extern double GRCMagnitudeUnit(int64_t locktime);
+unsigned int nNodeLifespan;
 
 using namespace std;
 using namespace boost;
@@ -334,7 +335,7 @@ std::map<std::string, StructCPID> mvDPORCopy;
 std::map<std::string, StructCPID> mvResearchAge;
 std::map<std::string, HashSet> mvCPIDBlockHashes;
 
-extern enum Checkpoints::CPMode CheckpointsMode;
+enum Checkpoints::CPMode CheckpointsMode;
 
 // Gridcoin - Rob Halford
 
@@ -485,11 +486,14 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  volatile double nGlobalHashCounter = 0;
 
 
- bool fImporting = false;
- bool fReindex = false;
- bool fBenchmark = false;
- bool fTxIndex = false;
- bool fColdBoot = true;
+bool fImporting = false;
+bool fReindex = false;
+bool fBenchmark = false;
+bool fTxIndex = false;
+bool fColdBoot = true;
+bool fEnforceCanonical = true;
+bool fUseFastIndex = false;
+
 
  int nBestAccepted = -1;
 
