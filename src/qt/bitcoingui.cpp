@@ -257,9 +257,6 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     vbox->addWidget(transactionView);
     transactionsPage->setLayout(vbox);
 
-    //remove
-    //transactionsPage->setStyleSheet("QTableView{background:transparent; color:black; alternate-background-color:white;} QScrollBar:vertical {background-color: lightgray; color:black;} QHeaderView::section { background-color:lightgray; color:black; } QComboBox { background-color:lightgray; color: black; } QComboBox QAbstractItemView { background-color:lightgray; color: black; } QLineEdit { background-color:lightgray; color: black; } QDateTimeEdit { background-color:lightgray; color: black; } QDateTimeEdit QAbstractItemView { background-color:lightgray; color: black; }");
-
     addressBookPage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::SendingTab);
 
     receiveCoinsPage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::ReceivingTab);
@@ -282,8 +279,6 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     // Status bar notification icons
     QFrame *frameBlocks = new QFrame();
 
-    //remove
-    //frameBlocks->setStyleSheet("frameBlocks { background: rgb(127,154,131); }");
     frameBlocks->setContentsMargins(0,0,0,0);
 
     frameBlocks->setMinimumWidth(30);
@@ -320,19 +315,6 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     progressBar->setVisible(false);
     progressBar->setOrientation(Qt::Vertical);
     progressBar->setObjectName("progress");
-
-    //remove
-//    progressBar->setStyleSheet("QProgressBar{"
-//                               "border: 1px solid transparent;"
-//							   "font-size:9px;"
-//                               "text-align: center;"
-//                               "color:rgba(0,0,0,100);"
-//                               "border-radius: 5px;"
-//                               "background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 rgba(182, 182, 182, 100), stop:1 rgba(209, 209, 209, 100));"
-//                                   "}"
-//                               "QProgressBar::chunk{"
-//                               "background-color: rgba(0,255,0,100);"
-//                               "}");
 
     frameBlocks->setObjectName("frame");
 	addToolBarBreak(Qt::LeftToolBarArea);
