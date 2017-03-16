@@ -121,9 +121,13 @@ obj/scrypt-x86_64.o: scrypt-x86_64.S
 	$(CXX) -c $(CXXFLAGS) -MMD -o $@ $<
 
 clean:
-	-rm -f obj/*.o
 	-rm -f gridcoinresearchd.exe
+	-rm -f test_gridcoin.exe
+	-rm -f obj/*.o
+	-rm -f obj-test/*.o
 	-rm -f obj/build.h
 	cd leveldb && TARGET_OS=OS_WINDOWS_CROSSCOMPILE $(MAKE) clean && cd ..
 
 FORCE:
+
+include Makefile.include.test

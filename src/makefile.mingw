@@ -169,6 +169,11 @@ gridcoinresearchd.exe: $(OBJS:obj/%=obj/%)
 
 clean:
 	-del /Q gridcoinresearchd
+	-del /Q test_gridcoin
 	-del /Q obj\*
+	-del /Q obj-test\*
 	cd leveldb && $(MAKE) TARGET_OS=NATIVE_WINDOWS clean && cd ..
 FORCE:
+
+include Makefile.include.test
+
