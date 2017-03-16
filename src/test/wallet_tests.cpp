@@ -24,6 +24,7 @@ static void add_coin(int64_t nValue, int nAge = 6*24, bool fIsFromMe = false, in
     static int i;
     CTransaction* tx = new CTransaction;
     tx->nLockTime = i++;        // so all transactions get different hashes
+    tx->nTime = 0;
     tx->vout.resize(nInput+1);
     tx->vout[nInput].nValue = nValue;
     CWalletTx* wtx = new CWalletTx(&wallet, *tx);
