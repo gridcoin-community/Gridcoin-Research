@@ -16,7 +16,7 @@
 #include <stdint.h>
 
 // Tests this internal-to-main.cpp method:
-extern bool AddOrphanTx(const CDataStream& vMsg);
+extern bool AddOrphanTx(const CTransaction& tx);
 extern unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans);
 extern std::map<uint256, CDataStream*> mapOrphanTransactions;
 extern std::map<uint256, std::map<uint256, CDataStream*> > mapOrphanTransactionsByPrev;
@@ -162,10 +162,7 @@ BOOST_AUTO_TEST_CASE(DoS_mapOrphans)
         tx.vout.resize(1);
         tx.vout[0].nValue = 1*CENT;
         tx.vout[0].scriptPubKey.SetDestination(key.GetPubKey().GetID());
-
-        CDataStream ds(SER_DISK, CLIENT_VERSION);
-        ds << tx;
-        AddOrphanTx(ds);
+        AddOrphanTx(tx);
     }
 
     // ... and 50 that depend on other orphans:
@@ -181,10 +178,7 @@ BOOST_AUTO_TEST_CASE(DoS_mapOrphans)
         tx.vout[0].nValue = 1*CENT;
         tx.vout[0].scriptPubKey.SetDestination(key.GetPubKey().GetID());
         SignSignature(keystore, txPrev, tx, 0);
-
-        CDataStream ds(SER_DISK, CLIENT_VERSION);
-        ds << tx;
-        AddOrphanTx(ds);
+        AddOrphanTx(tx);
     }
 
     // This really-big orphan should be ignored:
@@ -208,9 +202,7 @@ BOOST_AUTO_TEST_CASE(DoS_mapOrphans)
         for (unsigned int j = 1; j < tx.vin.size(); j++)
             tx.vin[j].scriptSig = tx.vin[0].scriptSig;
 
-        CDataStream ds(SER_DISK, CLIENT_VERSION);
-        ds << tx;
-        BOOST_CHECK(!AddOrphanTx(ds));
+        BOOST_CHECK(!AddOrphanTx(tx));
     }
 
     // Test LimitOrphanTxSize() function:
@@ -245,10 +237,7 @@ BOOST_AUTO_TEST_CASE(DoS_checkSig)
         tx.vout.resize(1);
         tx.vout[0].nValue = 1*CENT;
         tx.vout[0].scriptPubKey.SetDestination(key.GetPubKey().GetID());
-
-        CDataStream ds(SER_DISK, CLIENT_VERSION);
-        ds << tx;
-        AddOrphanTx(ds);
+        AddOrphanTx(tx);
     }
 
     // Create a transaction that depends on orphans:
@@ -278,7 +267,7 @@ BOOST_AUTO_TEST_CASE(DoS_checkSig)
     mst1 = boost::posix_time::microsec_clock::local_time();
     for (unsigned int i = 0; i < 5; i++)
         for (unsigned int j = 0; j < tx.vin.size(); j++)
-            BOOST_CHECK(VerifySignature(orphans[j], tx, j, true, SIGHASH_ALL));
+            BOOST_CHECK(VerifySignature(orphans[j], tx, j, SIGHASH_ALL));
     mst2 = boost::posix_time::microsec_clock::local_time();
     msdiff = mst2 - mst1;
     long nManyValidate = msdiff.total_milliseconds();
@@ -289,13 +278,13 @@ BOOST_AUTO_TEST_CASE(DoS_checkSig)
     // Empty a signature, validation should fail:
     CScript save = tx.vin[0].scriptSig;
     tx.vin[0].scriptSig = CScript();
-    BOOST_CHECK(!VerifySignature(orphans[0], tx, 0, true, SIGHASH_ALL));
+    BOOST_CHECK(!VerifySignature(orphans[0], tx, 0, SIGHASH_ALL));
     tx.vin[0].scriptSig = save;
 
     // Swap signatures, validation should fail:
     std::swap(tx.vin[0].scriptSig, tx.vin[1].scriptSig);
-    BOOST_CHECK(!VerifySignature(orphans[0], tx, 0, true, SIGHASH_ALL));
-    BOOST_CHECK(!VerifySignature(orphans[1], tx, 1, true, SIGHASH_ALL));
+    BOOST_CHECK(!VerifySignature(orphans[0], tx, 0, SIGHASH_ALL));
+    BOOST_CHECK(!VerifySignature(orphans[1], tx, 1, SIGHASH_ALL));
     std::swap(tx.vin[0].scriptSig, tx.vin[1].scriptSig);
 
     // Exercise -maxsigcachesize code:
@@ -305,7 +294,7 @@ BOOST_AUTO_TEST_CASE(DoS_checkSig)
     BOOST_CHECK(SignSignature(keystore, orphans[0], tx, 0));
     BOOST_CHECK(tx.vin[0].scriptSig != oldSig);
     for (unsigned int j = 0; j < tx.vin.size(); j++)
-        BOOST_CHECK(VerifySignature(orphans[j], tx, j, true, SIGHASH_ALL));
+        BOOST_CHECK(VerifySignature(orphans[j], tx, j, SIGHASH_ALL));
     mapArgs.erase("-maxsigcachesize");
 
     LimitOrphanTxSize(0);
