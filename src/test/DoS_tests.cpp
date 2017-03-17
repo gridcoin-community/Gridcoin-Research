@@ -18,8 +18,8 @@
 // Tests this internal-to-main.cpp method:
 extern bool AddOrphanTx(const CTransaction& tx);
 extern unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans);
-extern std::map<uint256, CDataStream*> mapOrphanTransactions;
-extern std::map<uint256, std::map<uint256, CDataStream*> > mapOrphanTransactionsByPrev;
+extern std::map<uint256, CTransaction> mapOrphanTransactions;
+extern std::map<uint256, std::set<uint256> > mapOrphanTransactionsByPrev;
 
 CService ip(uint32_t i)
 {
@@ -46,7 +46,7 @@ BOOST_AUTO_TEST_CASE(DoS_banning)
     BOOST_CHECK(CNode::IsBanned(addr1));  // ... but 1 still should be
     dummyNode2.Misbehaving(50);
     BOOST_CHECK(CNode::IsBanned(addr2));
-}    
+}
 
 BOOST_AUTO_TEST_CASE(DoS_banscore)
 {
@@ -129,19 +129,15 @@ BOOST_AUTO_TEST_CASE(DoS_checknbits)
 
     // ... but OK if enough time passed for difficulty to adjust downward:
     BOOST_CHECK(CheckNBits(firstcheck.second, lastcheck.first+60*60*24*365*4, lastcheck.second, lastcheck.first));
-    
+
 }
 
 CTransaction RandomOrphan()
 {
-    std::map<uint256, CDataStream*>::iterator it;
-    it = mapOrphanTransactions.lower_bound(GetRandHash());
+    auto it = mapOrphanTransactions.lower_bound(GetRandHash());
     if (it == mapOrphanTransactions.end())
         it = mapOrphanTransactions.begin();
-    const CDataStream* pvMsg = it->second;
-    CTransaction tx;
-    CDataStream(*pvMsg) >> tx;
-    return tx;
+    return it->second;
 }
 
 BOOST_AUTO_TEST_CASE(DoS_mapOrphans)
