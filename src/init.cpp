@@ -72,7 +72,7 @@ void ThreadCPIDs();
 extern bool fConfChange;
 extern bool fEnforceCanonical;
 extern unsigned int nNodeLifespan;
-unsigned int nDerivationMethodIndex;
+extern unsigned int nDerivationMethodIndex;
 extern unsigned int nMinerSleep;
 extern bool fUseFastIndex;
 extern enum Checkpoints::CPMode CheckpointsMode;
