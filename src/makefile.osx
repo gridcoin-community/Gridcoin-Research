@@ -147,8 +147,14 @@ gridcoinresearchd: $(OBJS:obj/%=obj/%)
 
 clean:
 	-rm -f gridcoinresearchd
+	-rm -f test_gridcoin
 	-rm -f obj/*.o
 	-rm -f obj/*.P
+	-rm -f obj-test/*.o
+	-rm -f obj-test/*.P
 	-rm -f obj/build.h
 
 FORCE:
+
+include Makefile.include.test
+

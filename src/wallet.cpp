@@ -56,7 +56,8 @@ StructCPID GetStructCPID();
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 bool LessVerbose(int iMax1000);
 MiningCPID GetNextProject(bool bForce);
-
+bool fConfChange;
+unsigned int nDerivationMethodIndex;
 //////////////////////////////////////////////////////////////////////////////
 //
 // mapWallet

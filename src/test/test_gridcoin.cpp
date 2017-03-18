@@ -1,4 +1,4 @@
-#define BOOST_TEST_MODULE Bitcoin Test Suite
+#define BOOST_TEST_MODULE Gridcoin Test Suite
 #include <boost/test/unit_test.hpp>
 
 #include "db.h"
@@ -14,6 +14,7 @@ extern void noui_connect();
 struct TestingSetup {
     TestingSetup() {
         fPrintToDebugger = true; // don't want to write to debug.log file
+        fUseFastIndex = true; // Don't verify block hashes when loading
         noui_connect();
         bitdb.MakeMock();
         LoadBlockIndex(true);
