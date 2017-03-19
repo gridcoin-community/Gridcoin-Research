@@ -9,6 +9,8 @@
 #include "kernel.h"
 #include "cpid.h"
 
+#include <memory>
+
 using namespace std;
 
 //////////////////////////////////////////////////////////////////////////////
@@ -16,7 +18,7 @@ using namespace std;
 // BitcoinMiner
 //
 
-extern unsigned int nMinerSleep;
+unsigned int nMinerSleep;
 MiningCPID GetNextProject(bool bForce);
 void ThreadCleanWalletPassphrase(void* parg);
 double GetBlockDifficulty(unsigned int nBits);
@@ -37,7 +39,6 @@ MiningCPID DeserializeBoincBlock(std::string block);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
 std::string PubKeyToAddress(const CScript& scriptPubKey);
-double OwedByAddress(std::string address);
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 bool IsCPIDValidv2(MiningCPID& mc,int height);
 
@@ -160,7 +161,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 	}
 
     // Create new block
-    auto_ptr<CBlock> pblock(new CBlock());
+    std::unique_ptr<CBlock> pblock(new CBlock());
     if (!pblock.get())
         return NULL;
 
@@ -893,7 +894,7 @@ Begin:
         //
         int64_t nFees;
 		
-        auto_ptr<CBlock> pblock(CreateNewBlock(pwallet, true, &nFees));
+        std::unique_ptr<CBlock> pblock(CreateNewBlock(pwallet, true, &nFees));
         if (!pblock.get())
 		{
 			//This can happen after reharvesting CPIDs... Because CreateNewBlock() requires a valid CPID..  Start Over.

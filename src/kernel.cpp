@@ -18,7 +18,6 @@ bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
 extern int64_t GetRSAWeightByCPID(std::string cpid);
-extern double OwedByAddress(std::string address);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 double cdbl(std::string s, int place);
 extern int DetermineCPIDType(std::string cpid);
@@ -338,27 +337,6 @@ double GetMagnitudeByHashBoinc(std::string hashBoinc, int height)
 			return boincblock.Magnitude;
 		}
 		return 0;
-}
-
-
-
-double OwedByAddress(std::string address)
-{
-		   double outstanding = 0;
-		   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii)
-		   {
-				StructCPID structMag = GetStructCPID();
-				structMag = mvMagnitudes[(*ii).first];
-				if (structMag.initialized && structMag.cpid.length() > 2 && structMag.cpid != "INVESTOR" && structMag.GRCAddress.length() > 5)
-				{
-					if (structMag.GRCAddress==address)
-					{
-						double out1 = structMag.totalowed - structMag.payments;
-						return out1;
-					}
-		     	}
-			}
-		   return outstanding;
 }
 
 int64_t GetRSAWeightByCPIDWithRA(std::string cpid)

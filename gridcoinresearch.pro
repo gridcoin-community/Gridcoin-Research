@@ -3,8 +3,7 @@ TARGET = gridcoinresearch
 VERSION = 3.1.0.1
 INCLUDEPATH += src src/json src/qt
 DEFINES += QT_GUI BOOST_THREAD_USE_LIB BOOST_SPIRIT_THREADSAFE
-CONFIG += no_include_pwd
-CONFIG += thread
+CONFIG += no_include_pwd thread c++11
 #QT += sql (Future Use)
 QT += core gui network
 win32:QT += qaxcontainer
@@ -379,7 +378,8 @@ QMAKE_EXTRA_COMPILERS += TSQM
 
 # "Other files" to show in Qt Creator
 OTHER_FILES += \
-    doc/*.rst doc/*.txt doc/README README.md res/bitcoin-qt.rc
+    doc/*.rst doc/*.txt doc/README README.md res/bitcoin-qt.rc \
+    src/test/*.cpp
 
 # platform specific defaults, if not overridden on command line
 isEmpty(BOOST_LIB_SUFFIX) {

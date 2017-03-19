@@ -97,7 +97,7 @@ endif
 
 # CXXFLAGS can be specified on the make command line, so we use xCXXFLAGS that only
 # adds some defaults in front. Unfortunately, CXXFLAGS=... $(CXXFLAGS) does not work.
-xCXXFLAGS=-O2 $(EXT_OPTIONS) -pthread -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wformat-security -Wno-unused-parameter \
+xCXXFLAGS=-O2 $(EXT_OPTIONS) -std=c++11 -pthread -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wformat-security -Wno-unused-parameter \
     $(DEBUGFLAGS) $(DEFS) $(HARDENING) $(CXXFLAGS)
 
 # LDFLAGS can be specified on the make command line, so we use xLDFLAGS that only
@@ -181,8 +181,14 @@ gridcoinresearchd: $(OBJS:obj/%=obj/%)
 
 clean:
 	-rm -f gridcoinresearchd
+	-rm -f test_gridcoin
 	-rm -f obj/*.o
 	-rm -f obj/*.P
+	-rm -f obj-test/*.o
+	-rm -f obj-test/*.P
 	-rm -f obj/build.h
 
 FORCE:
+
+include Makefile.include.test
+
