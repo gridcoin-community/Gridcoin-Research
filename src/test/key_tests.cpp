@@ -8,20 +8,17 @@
 #include "uint256.h"
 #include "util.h"
 
-// Gridcoin, 2017-03-18: Temporarily disable broken tests
-// Need to adapt secrets and addresses to the new nVersion values.
-#if 0
 using namespace std;
 
-static const string strSecret1     ("5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj");
-static const string strSecret2     ("5KC4ejrDjv152FGwP386VD1i2NYc5KkfSMyv1nGy1VGDxGHqVY3");
-static const string strSecret1C    ("Kwr371tjA9u2rFSMZjTNun2PXXP3WPZu2afRHTcta6KxEUdm1vEw");
-static const string strSecret2C    ("L3Hq7a8FEQwJkW1M2GNKDW28546Vp5miewcCzSqUD9kCAXrJdS3g");
-static const CBitcoinAddress addr1 ("1QFqqMUD55ZV3PJEJZtaKCsQmjLT6JkjvJ");
-static const CBitcoinAddress addr2 ("1F5y5E5FMc5YzdJtB9hLaUe43GDxEKXENJ");
-static const CBitcoinAddress addr1C("1NoJrossxPBKfCHuJXT4HadJrXRE9Fxiqs");
-static const CBitcoinAddress addr2C("1CRj2HyM1CXWzHAXLQtiGLyggNT9WQqsDs");
 
+static const std::string strSecret1 ("7NUfsJVtS5TruQrAFpni4yqqvoQg2fNk5JHRh1vsJPfm7Sg8cbY");
+static const std::string strSecret2 ("7PiDb7gCaHw7P7Jfayc3d6BioSj8NyzxDzNb94vYe7gGYq2ytYF");
+static const std::string strSecret1C("V7o8Z2EW1ghZGLFyrRvkGZtaxTqVGLNy7yHVyd6m1m45gzwsUEci");
+static const std::string strSecret2C("VDEvZaU25wjqAapyJxqgaHtKVzYwa2ankLEHgcKLepUKd4F7czq6");
+static const CBitcoinAddress addr1 ("SMDEt5x56GHokFwbpaYLNykBo1JwA3tC4E");
+static const CBitcoinAddress addr2 ("SC3N7xZ7NnoshVxFhAM6eFWq4YCSGMKkzn");
+static const CBitcoinAddress addr1C("SKkhuYMjyZueN4wGpY6pMMW5soPiEDhXe8");
+static const CBitcoinAddress addr2C("S9P852TD2PFqh9otrRYUL7rTheRddigULh");
 
 static const string strAddressBad("1HV9Lc3sNHZxwj4Zk6fB38tEmBryq2cBiF");
 
@@ -148,4 +145,3 @@ BOOST_AUTO_TEST_CASE(key_test1)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
-#endif
