@@ -155,7 +155,6 @@ std::string GetCommandNonce(std::string command);
 std::string DefaultBlockKey(int key_length);
 void InitializeBoincProjects();
 
-extern double Cap(double dAmt, double Ceiling);
 extern std::string ToOfficialNameNew(std::string proj);
 
 extern double GRCMagnitudeUnit(int64_t locktime);
@@ -218,7 +217,6 @@ extern bool Contains(std::string data, std::string instring);
 
 extern bool LockTimeRecent(double locktime);
 extern double CoinToDouble(double surrogate);
-extern int64_t Floor(int64_t iAmt1, int64_t iAmt2);
 extern double PreviousBlockAge();
 void CheckForUpgrade();
 int AddressUser();
@@ -2238,7 +2236,7 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 			}
 			int64_t maxStakeReward1 = GetProofOfStakeMaxReward(nCoinAge, nFees, nTime);
 			int64_t maxStakeReward2 = GetProofOfStakeMaxReward(nCoinAge, nFees, GetAdjustedTime());
-			int64_t maxStakeReward = Floor(maxStakeReward1,maxStakeReward2);
+			int64_t maxStakeReward = std::min(maxStakeReward1, maxStakeReward2);
 			if ((nSubsidy+nFees) > maxStakeReward) nSubsidy = maxStakeReward-nFees;
 			int64_t nTotalSubsidy = nSubsidy + nFees;
 			if (nBoinc > 1)
@@ -5741,38 +5739,6 @@ bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey)
 
 }
 
-double Cap(double dAmt, double Ceiling)
-{
-	if (dAmt > Ceiling) dAmt = Ceiling;
-	return dAmt;
-}
-
-double Lowest(double dAmt1, double dAmt2)
-{
-	if (dAmt1 < dAmt2)
-	{
-		return dAmt1;
-	}
-	else
-	{
-		return dAmt2;
-	}
-}
-
-int64_t Floor(int64_t iAmt1, int64_t iAmt2)
-{
-	int64_t iOut = 0;
-	if (iAmt1 <= iAmt2)
-	{
-		iOut = iAmt1;
-	}
-	else
-	{
-		iOut = iAmt2;
-	}
-	return iOut;
-
-}
 
 double GetTotalOwedAmount(std::string cpid)
 {
@@ -5809,12 +5775,12 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
 		// Get neural network magnitude:
 		StructCPID stDPOR = GetInitializedStructCPID2(cpid,mvDPOR);
 		research_magnitude = LederstrumpfMagnitude2(stDPOR.Magnitude,locktime);
-		double owed_standard = payment_timespan * Cap(research_magnitude*GetMagnitudeMultiplier(locktime),
-			GetMaximumBoincSubsidy(locktime)*5);
+		double owed_standard = payment_timespan * std::min(research_magnitude*GetMagnitudeMultiplier(locktime),
+			GetMaximumBoincSubsidy(locktime)*5.0);
 		double owed_network_cap = payment_timespan * GRCMagnitudeUnit(locktime) * research_magnitude;
-		double owed = Lowest(owed_standard,owed_network_cap);
+		double owed = std::min(owed_standard, owed_network_cap);
 		double paid = mag.payments;
-		double outstanding = Lowest(owed-paid, GetMaximumBoincSubsidy(locktime)*5);
+		double outstanding = std::min(owed-paid, GetMaximumBoincSubsidy(locktime) * 5.0);
 		total_owed = owed;
 		//if (outstanding < 0) outstanding=0;
 		return outstanding;

@@ -53,7 +53,6 @@ double GetDelta(std::string sType, double UL, double Strike, double dTime, doubl
 extern std::string AddOptionContract(std::string sType, std::string sName, std::string sContract, double dPremium);
 extern Array GetOptionsExposureReport();
 void BusyWaitForTally();
-double Cap(double dAmt, double Ceiling);
 extern std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, std::string sSig, int64_t MinimumBalance, double dFees, std::string sPublicKey);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern Array SuperblockReport(std::string cpid);
