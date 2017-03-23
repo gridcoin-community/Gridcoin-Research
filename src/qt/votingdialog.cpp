@@ -7,7 +7,7 @@
 #include <QAction>
 #include <QApplication>
 
-#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+#if QT_VERSION >= QT_VERSION_CHECK(5, 7, 0)
 	#include <QtCharts/QChartView>
 	#include <QtCharts/QPieSeries>
 #endif
@@ -32,7 +32,6 @@
 #include "json/json_spirit.h"
 #include "votingdialog.h"
 
-using namespace QtCharts;
 
 extern json_spirit::Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool bIncludeExpired);
 extern std::vector<std::string> split(std::string s, std::string delim);
@@ -629,7 +628,7 @@ void VotingDialog::showContextMenu(const QPoint &pos)
     QPoint globalPos = tableView_->viewport()->mapToGlobal(pos);
 
     QMenu menu;
-    menu.addAction("Chart", this, SLOT(showChartDialog()));
+    menu.addAction("Show Results", this, SLOT(showChartDialog()));
     menu.addAction("Vote", this, SLOT(showVoteDialog()));
     menu.exec(globalPos);
 }
@@ -673,8 +672,11 @@ void VotingDialog::showNewPollDialog(void)
 // VotingChartDialog
 //
 VotingChartDialog::VotingChartDialog(QWidget *parent)
-    : QDialog(parent),
-    chart_(0)
+    : QDialog(parent)
+#if QT_VERSION >= QT_VERSION_CHECK(5, 7, 0)
+    ,chart_(0)
+#endif
+    ,answerTable_(NULL)
 {
     setWindowTitle(tr("Poll Results"));
     resize(800, 320);
@@ -693,12 +695,26 @@ VotingChartDialog::VotingChartDialog(QWidget *parent)
     url_->setTextInteractionFlags(Qt::TextSelectableByMouse);
     vlayout->addWidget(url_);
 
-    chart_ = new QChart;
+    QTabWidget *resTabWidget = new QTabWidget;
+
+#if QT_VERSION >= QT_VERSION_CHECK(5, 7, 0)
+    chart_ = new QtCharts::QChart;
     chart_->legend()->setVisible(true);
     chart_->legend()->setAlignment(Qt::AlignRight);
-    QChartView *m_chartView = new QChartView(chart_);
+    QtCharts::QChartView *m_chartView = new QtCharts::QChartView(chart_);
     m_chartView->setRenderHint(QPainter::Antialiasing);
-    vlayout->addWidget(m_chartView);
+    resTabWidget->addTab(m_chartView, tr("Chart"));
+#endif
+
+    answerTable_ = new QTableWidget(this);
+    answerTable_->setColumnCount(3);
+    answerTable_->setRowCount(0);
+    answerTableHeader<<"Answer"<<"Shares"<<"Percentage";
+    answerTable_->setHorizontalHeaderLabels(answerTableHeader);
+    answerTable_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    answerTable_->setWordWrap(true);
+    resTabWidget->addTab(answerTable_, tr("List"));
+    vlayout->addWidget(resTabWidget);
 
     answer_ = new QLabel();
     answer_->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
@@ -712,31 +728,54 @@ void VotingChartDialog::resetData(const VotingItem *item)
     if (!item)
         return;
 
+    answerTable_->setRowCount(0);
+    answerTable_->setSortingEnabled(false);
+
+#if QT_VERSION >= QT_VERSION_CHECK(5, 7, 0)
     //chart_->removeAllSeries();
-    QList<QAbstractSeries *> oldSeriesList = chart_->series();
-    foreach (QAbstractSeries *oldSeries, oldSeriesList) {
+    QList<QtCharts::QAbstractSeries *> oldSeriesList = chart_->series();
+    foreach (QtCharts::QAbstractSeries *oldSeries, oldSeriesList) {
         chart_->removeSeries(oldSeries);
     }
+
+    QtCharts::QPieSeries *series = new QtCharts::QPieSeries();
+#endif
 
     question_->setText(QString(tr("Q: ")) + item->question_);
     url_->setText(QString(tr("Discussion URL: ")) + item->url_);
     answer_->setText(QString(tr("Best Answer: ")) + item->bestAnswer_);
 
-    QPieSeries *series = new QPieSeries();
     std::string arrayOfAnswers = item->arrayOfAnswers_.toUtf8().constData();
-    std::vector<std::string> vAnswers = split(arrayOfAnswers, "<RESERVED>");
+    std::vector<std::string> vAnswers = split(arrayOfAnswers, "<RESERVED>"); // the first entry is empty
+    answerTable_->setRowCount(vAnswers.size()-1);
+    std::vector<int> iShares;
+    std::vector<QString> sAnswerNames;
+    int sharesSum = 0;
     for(size_t y=1; y < vAnswers.size(); y++) {
-        std::string sAnswerName = ExtractXML(vAnswers[y], "<ANSWERNAME>", "</ANSWERNAME>");
-        std::string sShares = ExtractXML(vAnswers[y], "<SHARES>", "</SHARES>");
-        QPieSlice *slice = new QPieSlice(QString::fromStdString(sAnswerName), atoi(sShares.c_str()));
+        sAnswerNames.push_back(QString::fromStdString(ExtractXML(vAnswers[y], "<ANSWERNAME>", "</ANSWERNAME>")));
+        int iShare = atoi(ExtractXML(vAnswers[y], "<SHARES>", "</SHARES>").c_str());
+        iShares.push_back(iShare);
+        sharesSum += iShare;
+    }
+    for(size_t y=0; y < sAnswerNames.size(); y++) {
+        answerTable_->setItem(y, 0, new QTableWidgetItem(sAnswerNames[y]));
+        answerTable_->setItem(y, 1, new QTableWidgetItem(QString::number(iShares[y])));
+        answerTable_->setItem(y, 2, new QTableWidgetItem(QString::number((float)iShares[y]/(float)sharesSum*100)));
+
+#if QT_VERSION >= QT_VERSION_CHECK(5, 7, 0)
+        QtCharts::QPieSlice *slice = new QtCharts::QPieSlice(sAnswerNames[y], iShares[y]);
         unsigned int num = rand();
         int r = (num >>  0) % 0xFF;
         int g = (num >>  8) % 0xFF;
         int b = (num >> 16) % 0xFF;
         slice->setColor(QColor(r, g, b));
         series->append(slice);
+#endif
     }
+    answerTable_->setSortingEnabled(true);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 7, 0)
     chart_->addSeries(series);
+#endif
 }
 
 // VotingVoteDialog

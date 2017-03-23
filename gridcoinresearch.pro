@@ -19,7 +19,13 @@ greaterThan(QT_MAJOR_VERSION, 4) {
 win32:CONFIG += qaxcontainer
 CONFIG += exceptions
 
-QT += charts concurrent
+lessThan(QT_VERSION, 5.7.0) {
+    # Qt charts not available
+}else{
+    QT += charts
+}
+
+QT += concurrent
 
 # for boost 1.37, add -mt to the boost libraries
 # use: qmake BOOST_LIB_SUFFIX=-mt
