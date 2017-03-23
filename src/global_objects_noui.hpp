@@ -1,6 +1,9 @@
 #ifndef GLOBAL_OBJECTS_NOUI_HPP
 #define GLOBAL_OBJECTS_NOUI_HPP
 
+#include <string>
+#include <map>
+
 extern int nBoincUtilization;
 extern std::string sBoincMD5;
 extern std::string sBoincBA;
