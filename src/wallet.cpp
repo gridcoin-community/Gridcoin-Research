@@ -49,7 +49,6 @@ double GetDifficulty(const CBlockIndex* blockindex = NULL);
 MiningCPID DeserializeBoincBlock(std::string block);
 std::string RoundToString(double d, int place);
 double PreviousBlockAge();
-double coalesce(double mag1, double mag2);
 
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();

@@ -208,7 +208,6 @@ bool GridDecrypt(const std::vector<unsigned char>& vchCiphertext,std::vector<uns
 bool GridEncrypt(std::vector<unsigned char> vchPlaintext, std::vector<unsigned char> &vchCiphertext);
 uint256 GridcoinMultipleAlgoHash(std::string t1);
 void ExecuteCode();
-void CreditCheckRetired(std::string cpid, bool clearcache);
 double CalculatedMagnitude(int64_t locktime,bool bUseLederstrumpf);
 
 

@@ -100,7 +100,6 @@ extern std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_populari
 extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
        
 extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
-extern CBlockIndex* GetHistoricalMagnitude_ScanChain(std::string cpid);
 extern bool IsLockTimeWithin14days(double locktime);
 extern int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string operation, CBlockIndex* pindexLast, bool bVerifyingBlock, int VerificationPhase, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
 
@@ -120,8 +119,6 @@ std::string qtExecuteDotNetStringFunction(std::string function, std::string data
 
 
 bool CheckMessageSignature(std::string sMessageAction, std::string sMessageType, std::string sMsg, std::string sSig,std::string opt_pubkey);
-bool TallyMagnitudesByContract();
-bool SynchronizeRacForDPOR(bool SyncEntireCoin);
 extern std::string ReadCache(std::string section, std::string key);
 extern std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
 extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
@@ -221,7 +218,6 @@ extern bool Contains(std::string data, std::string instring);
 
 extern bool LockTimeRecent(double locktime);
 extern double CoinToDouble(double surrogate);
-extern double coalesce(double mag1, double mag2);
 extern int64_t Floor(int64_t iAmt1, int64_t iAmt2);
 extern double PreviousBlockAge();
 void CheckForUpgrade();
@@ -381,11 +377,9 @@ extern bool AESSkeinHash(unsigned int diffbytes, double rac, uint256 scrypthash,
 std::string DefaultGetblocksCommand();
 CClientUIInterface uiDog;
 void ExecuteCode();
-extern void CreditCheckRetired(std::string cpid, bool clearcache);
 extern void ThreadCPIDs();
 extern std::string GetGlobalStatus();
 
-extern void printbool(std::string comment, bool boo);
 extern bool OutOfSyncByAge();
 extern std::vector<std::string> split(std::string s, std::string delim);
 extern bool ProjectIsValid(std::string project);
@@ -5559,49 +5553,6 @@ double cdbl(std::string s, int place)
 }
 
 
-std::string get_file_contents(const char *filename)
-{
-  std::ifstream in(filename, std::ios::in | std::ios::binary);
-  if (in)
-  {
-	  if (fDebug)  printf("loading file to string %s","test");
-
-    std::string contents;
-    in.seekg(0, std::ios::end);
-    contents.resize(in.tellg());
-    in.seekg(0, std::ios::beg);
-    in.read(&contents[0], contents.size());
-    in.close();
-    return(contents);
-  }
-  throw(errno);
-}
-
-std::ifstream::pos_type filesize2(const char* filename)
-{
-    std::ifstream in(filename, std::ifstream::in | std::ifstream::binary);
-    in.seekg(0, std::ifstream::end);
-    return in.tellg();
-}
-
-
-std::string deletefile(std::string filename)
-{
-	std::string buffer;
-	std::string line;
-	ifstream myfile;
-    if (fDebug10) printf("loading file to string %s",filename.c_str());
-	filesystem::path path = filename;
-	if (!filesystem::exists(path)) {
-		printf("the file does not exist %s",path.string().c_str());
-		return "-1";
-	}
-	int deleted = remove(filename.c_str());
-	if (deleted != 0) return "Error deleting.";
-	return "";
-}
-
-
 int GetFilesize(FILE* file)
 {
     int nSavePos = ftell(file);
@@ -5821,12 +5772,6 @@ int64_t Floor(int64_t iAmt1, int64_t iAmt2)
 	}
 	return iOut;
 
-}
-
-double coalesce(double mag1, double mag2)
-{
-	if (mag1 > 0) return mag1;
-	return mag2;
 }
 
 double GetTotalOwedAmount(std::string cpid)
@@ -6405,45 +6350,6 @@ bool ComputeNeuralNetworkSupermajorityHashes()
 
 }
 
-MiningCPID GetBoincBlockByHeight(int ii, double& mint, int64_t& nTime)
-{
-	CBlock block;
-	MiningCPID bb;
-	CBlockIndex* pblockindex = FindBlockByHeight(ii);
-	bb.initialized=false;
-	if (pblockindex == NULL) return bb;
-	if (pblockindex->pnext == NULL) return bb;
-	if (!pblockindex || !pblockindex->IsInMainChain()) return bb;
-
-
-	if (block.ReadFromDisk(pblockindex))
-	{
-		nTime = block.nTime;
-		std::string hashboinc = "";
-		mint = CoinToDouble(pblockindex->nMint);
-		if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
-		bb = DeserializeBoincBlock(hashboinc);
-		bb.initialized=true;
-		return bb;
-	}
-	return bb;
-}
-
-
-
-void AddProjectRAC(MiningCPID bb,double& NetworkRAC, double& NetworkMagnitude)
-{
-	//RETIRE
-	StructCPID network = GetInitializedStructCPID2(bb.projectname,mvNetwork);
-	network.projectname = bb.projectname;
-	network.rac += bb.rac;
-	NetworkRAC += bb.rac;
-	network.TotalRAC = NetworkRAC;
-	NetworkMagnitude += bb.Magnitude;
-	network.entries++;
-	mvNetwork[bb.projectname] = network;
-}
-
 
 bool TallyResearchAverages(bool Forcefully)
 {
@@ -6835,18 +6741,6 @@ bool static AlreadyHave(CTxDB& txdb, const CInv& inv)
     return true;
 }
 
-
-
-std::string GetLastBlockGRCAddress()
-{
-    CBlock block;
-    const CBlockIndex* pindexPrev = GetLastBlockIndex(pindexBest, true);
-	block.ReadFromDisk(pindexPrev);
-	std::string hb = "";
-	if (block.vtx.size() > 0) hb = block.vtx[0].hashBoinc;
-	MiningCPID bb = DeserializeBoincBlock(hb);
-	return bb.GRCAddress;
-}
 
 bool AcidTest(std::string precommand, std::string acid, CNode* pfrom)
 {
@@ -8282,17 +8176,6 @@ double checksum(std::string s)
 }
 
 
-
-
- uint256 GetScryptHashString(std::string s)
- {
-        uint256 thash = 0;
-		thash = Hash(BEGIN(s),END(s));
-        return thash;
- }
-
-
-
 uint256 GridcoinMultipleAlgoHash(std::string t1)
 {
         uint256 thash = 0;
@@ -8313,29 +8196,6 @@ std::string aes_complex_hash(uint256 scrypt_hash)
 			hashSkein = hashSkein + chk;
 			std::string sSkeinAES512 = hashSkein.GetHex();
 			return sSkeinAES512;
-}
-
-
-double LederstrumpfMagnitude_Retired(double Magnitude, int64_t locktime)
-{
-	// Note: This function returns an exponentially smaller result as the magnitude approaches the cap
-	// The function is fine; keeping it in the coin for reference.  We moved to the new function when we thought the calculation was malfunctioning.  Later tests proved it works fine.
-	// Establish constants
-    double e = 2.718;
-	double v = 4;
-	double r = 0.915;
-	double x = 0;
-	double new_magnitude = 0;
-	double user_magnitude_cap = 3000; //This is where the full 500 magnitude is achieved
-	//Function returns a new magnitude between Magnitudes > 80% of Cap and <= Cap;
-	double MagnitudeCap_LowSide = GetMaximumBoincSubsidy(locktime)*.80;
-	if (Magnitude < MagnitudeCap_LowSide) return Magnitude;
-	x = Magnitude / (user_magnitude_cap);
-	new_magnitude = ((MagnitudeCap_LowSide/2) / (1 + pow((double)e, (double)(-v * (x - r))))) + MagnitudeCap_LowSide;
-	//Debug.Print "With RAC of " + Trim(Rac) + ", NetRac of " + Trim(NetworkRac) + ", Subsidy = " + Trim(Subsidy)
-	if (new_magnitude < MagnitudeCap_LowSide) new_magnitude=MagnitudeCap_LowSide;
-	if (new_magnitude > GetMaximumBoincSubsidy(locktime)) new_magnitude=GetMaximumBoincSubsidy(locktime);
-	return new_magnitude;
 }
 
 
@@ -8614,15 +8474,6 @@ MiningCPID DeserializeBoincBlock(std::string block)
 }
 
 
-
-void printbool(std::string comment, bool boo)
-{
-	std::string b = boo ? "TRUE" : "FALSE";
-	printf("%s : %s",comment.c_str(),b.c_str());
-}
-
-
-
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash)
 {
 		//if (GetBoolArg("-disablecpidv2")) return "";
@@ -8708,77 +8559,7 @@ std::string GetNetsoftProjects(std::string cpid)
 			}
 
 			return cc;
-
 }
-
-
-
-
-void CreditCheckRetired(std::string cpid, bool clearcache)
-{
-	try {
-
-			std::string cc = GetHttpPageFromCreditServerRetired(cpid,true,clearcache);
-			if (cc.length() < 50)
-			{
-				if (fDebug10) printf("Note: HTTP Page returned blank from netsoft for %s\r\n",cpid.c_str());
-				return;
-			}
-
-			int iRow = 0;
-			std::vector<std::string> vCC = split(cc.c_str(),"<project>");
-			if (vCC.size() > 0)
-			{
-				for (unsigned int i = 0; i < vCC.size(); i++)
-				{
-					std::string sProj  = ExtractXML(vCC[i],"<name>","</name>");
-					std::string utc    = ExtractXML(vCC[i],"<total_credit>","</total_credit>");
-					std::string rac    = ExtractXML(vCC[i],"<expavg_credit>","</expavg_credit>");
-					std::string team   = ExtractXML(vCC[i],"<team_name>","</team_name>");
-					std::string rectime= ExtractXML(vCC[i],"<expavg_time>","</expavg_time>");
-					std::string proj_id= ExtractXML(vCC[i],"<project_id>","</project_id>");
-
-					boost::to_lower(sProj);
-					sProj = ToOfficialName(sProj);
-
-					if (sProj.length() > 3 && !proj_id.empty())
-					{
-						StructCPID structcc = GetInitializedStructCPID2(sProj,mvCPIDs);
-						iRow++;
-						structcc.cpid = cpid;
-						structcc.projectname = sProj;
-						boost::to_lower(team);
-						structcc.verifiedteam = team;
-						if (structcc.verifiedteam != "gridcoin") structcc.rac = -1;
-						structcc.verifiedrectime = cdbl(rectime,0);
-						structcc.verifiedrac = cdbl(rac,0);
-						structcc.rac = cdbl(rac,0);
-						double currenttime =  GetAdjustedTime();
-						double nActualTimespan = currenttime - structcc.verifiedrectime;
-						structcc.verifiedage = nActualTimespan;
-						mvCPIDs[sProj] = structcc;
-						//////////////////////////// Store this information by CPID+Project also:
-						std::string sKey = cpid + ":" + sProj;
-
-					}
-				}
-			}
-
-	}
-	catch (std::exception &e)
-	{
-			 printf("error while accessing credit check online.\r\n");
-	}
-    catch(...)
-	{
-			printf("Error While accessing credit check online (2).\r\n");
-	}
-
-
-}
-
-
-
 
 
 bool ProjectIsValid(std::string project)
@@ -9536,29 +9317,6 @@ void WriteCache(std::string section, std::string key, std::string value, int64_t
 }
 
 
-
-void PurgeCacheAsOfExpiration(std::string section, int64_t expiration)
-{
-	   for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii)
-	   {
-				std::string key_section = mvApplicationCache[(*ii).first];
-				if (key_section.length() > section.length())
-				{
-					if (key_section.substr(0,section.length())==section)
-					{
-						if (mvApplicationCacheTimestamp[key_section] < expiration)
-						{
-							printf("purging %s",key_section.c_str());
-							mvApplicationCache[key_section]="";
-							mvApplicationCacheTimestamp[key_section]=1;
-						}
-					}
-				}
-	   }
-
-}
-
-
 void ClearCache(std::string section)
 {
 	   for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii)
@@ -10138,31 +9896,6 @@ void ZeroOutResearcherTotals(std::string cpid)
 
 				mvResearchAge[cpid]=stCPID;
 	}
-
-}
-
-
-
-
-CBlockIndex* GetHistoricalMagnitude_ScanChain(std::string cpid)
-{
-	CBlockIndex* pindex = pindexBest;
-	if (cpid=="INVESTOR") return pindexGenesisBlock;
-
-	// Starting at the block prior to StartHeight, find the last instance of the CPID in the chain:
-	// Limit lookback to 6 months
-	int nMinIndex = pindexBest->nHeight-(6*30*BLOCKS_PER_DAY);
-	if (nMinIndex < 2) nMinIndex=2;
-    while (pindex->nHeight > nNewIndex2 && pindex->nHeight > nMinIndex)
-	{
-  	    //8-5-2015; R HALFORD; Find the last block the CPID staked with a research subsidy (IE dont count interest blocks)
-		if (!pindex || !pindex->pprev) return pindexGenesisBlock;
-		if (!pindex->IsInMainChain()) continue;
-		if (pindex == pindexGenesisBlock) return pindexGenesisBlock;
-		if (pindex->sCPID == cpid && (pindex->nResearchSubsidy > 0)) return pindex;
-	    pindex = pindex->pprev;
-	}
-    return pindexGenesisBlock;
 }
 
 
