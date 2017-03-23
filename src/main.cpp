@@ -258,7 +258,6 @@ vector<CInv> vNotFound;
 
 std::string YesNo(bool bin);
 
-extern double GetGridcoinBalance(std::string SendersGRCAddress);
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 extern bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 extern bool IsLockTimeWithinMinutes(double locktime, int minutes);
@@ -526,46 +525,6 @@ bool bCPUMiningMode = false;
 //
 // dispatching functions
 //
-
-// These functions dispatch to one or all registered wallets
-  double GetGridcoinBalance(std::string SendersGRCAddress)
-  {
-    int nMinDepth = 1;
-    int nMaxDepth = 9999999;
-	if (SendersGRCAddress=="") return 0;
-    set<CBitcoinAddress> setAddress;
-    CBitcoinAddress address(SendersGRCAddress);
-	if (!address.IsValid())
-	{
-		printf("Checkpoints::GetGridcoinBalance::InvalidAddress");
-        return 0;
-	}
-	setAddress.insert(address);
-    vector<COutput> vecOutputs;
-    pwalletMain->AvailableCoins(vecOutputs, false);
-	double global_total = 0;
-    BOOST_FOREACH(const COutput& out, vecOutputs)
-    {
-        if (out.nDepth < nMinDepth || out.nDepth > nMaxDepth)
-            continue;
-        if(setAddress.size())
-        {
-            CTxDestination address;
-            if(!ExtractDestination(out.tx->vout[out.i].scriptPubKey, address))
-                continue;
-            if (!setAddress.count(address))
-                continue;
-        }
-        int64_t nValue = out.tx->vout[out.i].nValue;
-        //const CScript& pk = out.tx->vout[out.i].scriptPubKey;
-        //CTxDestination address;
-		global_total += nValue;
-    }
-
-    return CoinToDouble(global_total);
-}
-
-
 void ResetTimerMain(std::string timer_name)
 {
 	mvTimers[timer_name] = 0;
