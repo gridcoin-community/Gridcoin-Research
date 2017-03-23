@@ -7,7 +7,7 @@
 #include <sstream>
 #ifdef WIN32
 #include <windows.h>
-#include <WinBase.h>
+#include <winbase.h>
 #else
 #include <unistd.h>     // for sleep
 #endif
