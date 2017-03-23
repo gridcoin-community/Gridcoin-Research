@@ -351,9 +351,7 @@ volatile bool bDoTally = false;
 volatile bool bExecuteGridcoinServices = false;
 volatile bool bTallyFinished = false;
 volatile bool bGridcoinGUILoaded = false;
-volatile bool bRequestFromHonestNode = false;
 
-extern bool CheckWorkCPU(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey);
 extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
 extern double cdbl(std::string s, int place);
 
@@ -364,16 +362,9 @@ void StartPostOnBackgroundThread(int height, MiningCPID miningcpid, uint256 hash
 extern void LoadCPIDsInBackground();
 bool SubmitGridcoinCPUWork(CBlock* pblock, CReserveKey& reservekey, double nonce);
 CBlock* getwork_cpu(MiningCPID miningcpid, bool& succeeded,CReserveKey& reservekey);
-extern int GetBlockType(uint256 prevblockhash);
-extern bool GetTransactionFromMemPool(const uint256 &hash, CTransaction &txOut);
-extern unsigned int DiffBytes(double PoBDiff);
-extern int Races(int iMax1000);
 int ReindexWallet();
 
-std::string cached_getblocks_args = "";
 extern bool AESSkeinHash(unsigned int diffbytes, double rac, uint256 scrypthash, std::string& out_skein, std::string& out_aes512);
-std::string DefaultGetblocksCommand();
-CClientUIInterface uiDog;
 void ExecuteCode();
 extern void ThreadCPIDs();
 extern std::string GetGlobalStatus();
@@ -385,7 +376,6 @@ extern std::string SerializeBoincBlock(MiningCPID mcpid);
 extern MiningCPID DeserializeBoincBlock(std::string block);
 
 extern void InitializeCPIDs();
-extern void ResendWalletTransactions2();
 double GetNetworkAvgByProject(std::string projectname);
 extern bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 extern bool IsCPIDValidv2(MiningCPID& mc, int height);
@@ -399,11 +389,8 @@ extern bool OutOfSync();
 extern MiningCPID GetNextProject(bool bForce);
 extern void HarvestCPIDs(bool cleardata);
 
-bool FindTransactionSlow(uint256 txhashin, CTransaction& txout,  std::string& out_errors);
-std::string msCurrentRAC = "";
 static boost::thread_group* cpidThreads = NULL;
 //static boost::thread_group* tallyThreads = NULL;
-extern void FlushGridcoinBlockFile(bool fFinalize);
 
 
 
@@ -2805,14 +2792,6 @@ bool OutOfSyncByAgeWithChanceOfMining()
 	}
 	return true;
 
-}
-
-
-int Races(int iMax1000)
-{
-	 int i = rand() % iMax1000;
-	 if (i < 1) i = 1;
-	 return i;
 }
 
 

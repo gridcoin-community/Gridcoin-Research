@@ -176,7 +176,6 @@ QAxObject *globalcom = NULL;
 QAxObject *globalwire = NULL;
 #endif
 int ThreadSafeVersion();
-void FlushGridcoinBlockFile(bool fFinalize);
 extern int ReindexBlocks();
 bool OutOfSync();
 
