@@ -712,7 +712,7 @@ VotingChartDialog::VotingChartDialog(QWidget *parent)
     answerTableHeader<<"Answer"<<"Shares"<<"Percentage";
     answerTable_->setHorizontalHeaderLabels(answerTableHeader);
     answerTable_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    answerTable_->setWordWrap(true);
+    answerTable_->setEditTriggers( QAbstractItemView::NoEditTriggers );
     resTabWidget->addTab(answerTable_, tr("List"));
     vlayout->addWidget(resTabWidget);
 
@@ -759,8 +759,12 @@ void VotingChartDialog::resetData(const VotingItem *item)
     }
     for(size_t y=0; y < sAnswerNames.size(); y++) {
         answerTable_->setItem(y, 0, new QTableWidgetItem(sAnswerNames[y]));
-        answerTable_->setItem(y, 1, new QTableWidgetItem(QString::number(iShares[y])));
-        answerTable_->setItem(y, 2, new QTableWidgetItem(QString::number((float)iShares[y]/(float)sharesSum*100)));
+        QTableWidgetItem *iSharesItem = new QTableWidgetItem();
+        iSharesItem->setData(Qt::DisplayRole,iShares[y]);
+        answerTable_->setItem(y, 1, iSharesItem);
+        QTableWidgetItem *percentItem = new QTableWidgetItem();
+        percentItem->setData(Qt::DisplayRole,(float)iShares[y]/(float)sharesSum*100);
+        answerTable_->setItem(y, 2, percentItem);
 
 #if QT_VERSION >= QT_VERSION_CHECK(5, 7, 0)
         QtCharts::QPieSlice *slice = new QtCharts::QPieSlice(sAnswerNames[y], iShares[y]);
