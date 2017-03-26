@@ -13,6 +13,11 @@
 #include <QString>
 #include <QStringList>
 #include <QTableView>
+#include <QListWidget>
+#include <QListWidgetItem>
+
+#include <QtConcurrent/QtConcurrent>
+#include <QFuture>
 
 #include <QtGlobal>
 #if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
@@ -21,7 +26,7 @@
 #  include <QtGui>
 #endif
 
-#if QT_VERSION >= QT_VERSION_CHECK(7, 0, 0)
+#if QT_VERSION >= QT_VERSION_CHECK(5, 7, 0)
 #include <QtCharts/QChartGlobal>
 #endif
 
@@ -31,9 +36,11 @@ class QObject;
 class QResizeEvent;
 QT_END_NAMESPACE
 
+#if QT_VERSION >= QT_VERSION_CHECK(5, 7, 0)
 QT_CHARTS_BEGIN_NAMESPACE
 class QChart;
 QT_CHARTS_END_NAMESPACE
+#endif
 
 #define VOTINGDIALOG_WIDTH_RowNumber          40
 #define VOTINGDIALOG_WIDTH_Title              225
@@ -41,8 +48,8 @@ QT_CHARTS_END_NAMESPACE
 #define VOTINGDIALOG_WIDTH_ShareType          80
 #define VOTINGDIALOG_WIDTH_Question           140
 #define VOTINGDIALOG_WIDTH_Answers            80
-#define VOTINGDIALOG_WIDTH_TotalParticipants  50
-#define VOTINGDIALOG_WIDTH_TotalShares        80
+#define VOTINGDIALOG_WIDTH_TotalParticipants  80
+#define VOTINGDIALOG_WIDTH_TotalShares        100
 #define VOTINGDIALOG_WIDTH_Url                150
 #define VOTINGDIALOG_WIDTH_BestAnswer         80
 
@@ -107,7 +114,7 @@ public:
     const VotingItem *index(int row) const;
     QModelIndex index(int row, int column, const QModelIndex &parent=QModelIndex()) const;
     Qt::ItemFlags flags(const QModelIndex &) const;
-    void resetData(void);
+    void resetData(bool history);
 
 private:
     QStringList columns_;
@@ -124,23 +131,18 @@ class VotingProxyModel
 
 public:
     explicit VotingProxyModel(QObject *parent=0);
-    void setFilterTitle(const QString &);
-    void setFilterQuestion(const QString &);
-    void setFilterAnswers(const QString &);
-    void setFilterUrl(const QString &);
+    void setFilterTQAU(const QString &); // filter Title/Question/Answers/Url
 
 protected:
     bool filterAcceptsRow(int, const QModelIndex &) const;
 
 private:
-    QString filterTitle_;
-    QString filterQuestion_;
-    QString filterAnswers_;
-    QString filterUrl_;
+    QString filterTQAU_;
 };
 
 class VotingChartDialog;
 class VotingVoteDialog;
+class NewPollDialog;
 
 // VotingDialog
 //
@@ -151,31 +153,38 @@ class VotingDialog
 
 public:
     explicit VotingDialog(QWidget *parent=0);
-    void resetData(void);
 
 private:
-    QLineEdit *filterTitle;
-    QLineEdit *filterQuestion;
-    QLineEdit *filterAnswers;
-    QLineEdit *filterUrl;
+    QLineEdit *filterTQAU;
+    QPushButton *resetButton;
+    QPushButton *histButton;
+    QPushButton *newPollButton;
     QTableView *tableView_;
     VotingTableModel *tableModel_;
     VotingProxyModel *proxyModel_;
     VotingChartDialog *chartDialog_;
     VotingVoteDialog *voteDialog_;
+    NewPollDialog *pollDialog_;
+    QLabel *loadingIndicator;
+    QFutureWatcher<void> *watcher;
 
 private:
+    virtual void showEvent(QShowEvent *);
     virtual void resizeEvent(QResizeEvent *);
+    void tableColResize(void);
     bool eventFilter(QObject *, QEvent *);
 
+private slots:
+    void onLoadingFinished(void);
+
 public slots:
-    void filterTitleChanged(const QString &);
-    void filterQuestionChanged(const QString &);
-    void filterAnswersChanged(const QString &);
-    void filterUrlChanged(const QString &);
+    void filterTQAUChanged(const QString &);
+    void resetData(void);
+    void loadHistory(void);
     void showChartDialog(void);
     void showContextMenu(const QPoint &);
     void showVoteDialog(void);
+    void showNewPollDialog(void);
 };
 
 // VotingChartDialog
@@ -190,9 +199,13 @@ public:
     void resetData(const VotingItem *);
 
 private:
-    QtCharts::QChart *chart_;
     QLabel *question_;
     QLabel *url_;
+#if QT_VERSION >= QT_VERSION_CHECK(5, 7, 0)
+    QtCharts::QChart *chart_;
+#endif
+    QTableWidget *answerTable_;
+    QStringList answerTableHeader;
     QLabel *answer_;
 };
 
@@ -211,7 +224,57 @@ private:
     QLabel *question_;
     QLabel *url_;
     QLabel *answer_;
+    QLabel *voteNote_;
+    QListWidget *answerList_;
+    QListWidgetItem *answerItem;
+    QPushButton *voteButton;
+    QString GetVoteValue(void);
+    QString sVoteTitle;
+    
+private slots:
+    void vote(void);
 };
 
+// NewPollDialog
+//
+class NewPollDialog
+    : public QDialog
+{
+    Q_OBJECT
+
+public:
+    explicit NewPollDialog(QWidget *parent=0);
+
+public slots:
+    void resetData(void);
+
+private:
+    QLineEdit *title_;
+    QLineEdit *days_;
+    QLineEdit *question_;
+    QLineEdit *url_;
+    QComboBox *shareTypeBox_;
+    QLabel *pollNote_;
+    QListWidget *answerList_;
+    QListWidgetItem *answerItem;
+    QPushButton *addItemButton;
+    QPushButton *removeItemButton;
+    QPushButton *clearAllButton;
+    QPushButton *pollButton;
+    void GetPollValues(void);
+    QString sPollTitle;
+    QString sPollDays;
+    QString sPollQuestion;
+    QString sPollUrl;
+    QString sPollShareType;
+    QString sPollAnswers;
+
+private slots:
+    void createPoll(void);
+    void editItem (QListWidgetItem *item);
+    void addItem (void);
+    void removeItem(void);
+    void showContextMenu(const QPoint &);
+};
 
 #endif // VOTINGDIALOG_H

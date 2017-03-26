@@ -18,6 +18,13 @@ greaterThan(QT_MAJOR_VERSION, 4) {
 win32:CONFIG += qaxcontainer
 CONFIG += exceptions
 
+lessThan(QT_VERSION, 5.7.0) {
+    # Qt charts not available
+}else{
+    QT += charts
+}
+
+QT += concurrent
 
 # for boost 1.37, add -mt to the boost libraries
 # use: qmake BOOST_LIB_SUFFIX=-mt
@@ -163,7 +170,6 @@ contains(USE_O3, 1) {
 QMAKE_CXXFLAGS_WARN_ON = -fdiagnostics-show-option -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wformat-security -Wno-unused-parameter -Wstack-protector
 
 # Input
-# missing: src/qt/votingdialog.h \
    
 DEPENDPATH += src src/json src/qt
 HEADERS += src/qt/bitcoingui.h \
@@ -179,6 +185,7 @@ HEADERS += src/qt/bitcoingui.h \
     src/qt/upgradedialog.h \
     src/qt/editaddressdialog.h \
     src/qt/bitcoinaddressvalidator.h \
+    src/qt/votingdialog.h \
     src/alert.h \
     src/addrman.h \
     src/base58.h \
@@ -252,7 +259,6 @@ HEADERS += src/qt/bitcoingui.h \
     src/sql.h \
     src/upgrader.h
     
-    #missing:    src/qt/votingdialog.cpp \
  
 
 SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
@@ -268,6 +274,7 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/upgradedialog.cpp \
     src/qt/editaddressdialog.cpp \
     src/qt/bitcoinaddressvalidator.cpp \
+    src/qt/votingdialog.cpp \
     src/alert.cpp \
     src/version.cpp \
     src/sync.cpp \
