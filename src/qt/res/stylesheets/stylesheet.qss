@@ -436,8 +436,11 @@ QGroupBox{
     background-color: transparent;
 }
 
-
-
+/* votingdialog */
+QListWidget{
+    color:black; 
+    background-color:transparent;
+} 
 
 
 
