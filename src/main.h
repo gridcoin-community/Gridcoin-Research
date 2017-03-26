@@ -13,6 +13,9 @@
 
 #include "global_objects_noui.hpp"
 
+#include <map>
+#include <set>
+
 class CWallet;
 class CBlock;
 class CBlockIndex;
@@ -48,7 +51,7 @@ extern int muGlobalCheckpointHashCounter;
 extern std::string msMasterProjectPublicKey;
 extern std::string msMasterMessagePublicKey;
 extern std::string msMasterMessagePrivateKey;
-extern std::string msTestNetSeedSuperblocks;extern std::string msTestNetSeedContracts;extern std::string msProdSeedSuperblocks;extern std::string msProdSeedContracts400000;extern std::string msProdSeedContracts500000;extern std::string msProdSeedContracts550000;extern std::string msProdSeedContracts575000;extern std::string msProdSeedContracts600000;extern bool bNewUserWizardNotified;
+extern std::string msTestNetSeedSuperblocks;extern std::string msTestNetSeedContracts;extern std::string msProdSeedSuperblocks;extern std::string msProdSeedContracts400000;extern std::string msProdSeedContracts500000;extern std::string msProdSeedContracts550000;extern std::string msProdSeedContracts575000;extern std::string msProdSeedContracts600000;extern bool bNewUserWizardNotified;
 
 /** The maximum allowed size for a serialized block, in bytes (network rule) */
 static const unsigned int MAX_BLOCK_SIZE = 1000000;
@@ -122,7 +125,9 @@ extern std::map<std::string, StructCPID> mvDPORCopy;
 
 extern std::map<std::string, StructCPID> mvResearchAge;
 extern std::map<std::string, MiningCPID> mvBlockIndex;
-extern std::map<std::string, std::string> mvCPIDBlockHashes;
+
+typedef std::set<uint256> HashSet;
+extern std::map<std::string, HashSet> mvCPIDBlockHashes;
 
 
 extern CScript COINBASE_FLAGS;

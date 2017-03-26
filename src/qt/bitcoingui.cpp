@@ -29,7 +29,7 @@
 #include "signverifymessagedialog.h"
 #include "optionsdialog.h"
 #include "aboutdialog.h"
-//#include "votingdialog.h"
+#include "votingdialog.h"
 
 #include "clientmodel.h"
 #include "walletmodel.h"
@@ -961,7 +961,7 @@ void BitcoinGUI::createActions()
 	votingAction->setMenuRole(QAction::TextHeuristicRole);
 
 
-	votingReservedAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Reserved - Voting Linux"), this);
+    votingReservedAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Voting Linux"), this);
 	votingReservedAction->setStatusTip(tr("Voting - Linux"));
 	votingReservedAction->setMenuRole(QAction::TextHeuristicRole);
 
@@ -1090,13 +1090,17 @@ void BitcoinGUI::createMenuBar()
 	rebuild->addAction(rebootAction);
 	rebuild->addSeparator();
 
-#ifdef WIN32  // The actions in this menu are implemented in Visual Basic and thus only work on Windows
 	QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
 	qmAdvanced->addSeparator();
+#ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows    
 	qmAdvanced->addAction(configAction);
 	qmAdvanced->addAction(miningAction);
 	qmAdvanced->addAction(votingAction);
+#endif /* defined(WIN32) */
+    
 	qmAdvanced->addAction(votingReservedAction);
+    
+#ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows 
 	qmAdvanced->addAction(tickerAction);
 	qmAdvanced->addAction(ticketListAction);
 	qmAdvanced->addAction(newUserWizardAction);
@@ -1295,9 +1299,10 @@ void BitcoinGUI::aboutClicked()
 
 void BitcoinGUI::votingReservedClicked()
 {
-    //VotingDialog dlg;
-    //dlg.setModel(clientModel);
-    //dlg.exec();
+    VotingDialog *dlg = new VotingDialog(this);
+    dlg->setStyleSheet("QDialog { background-image:url(:images/bkg);} QTabWidget{ background-color: transparent; color: black;} QTabWidget::pane { border: 1px solid rgb(100,100,100); } QTabBar::tab { background: rgb(150,150,150); color: black; border: 1px solid rgb(100,100,100); border-top-left-radius: 4px; border-top-right-radius: 4px; min-width: 8ex; padding: 2px; } QTabBar::tab:selected { background: rgb(200,200,200); border: 1px solid rgb(100,100,100); border-bottom-color: rgb(200,200,200); } QTabBar::tab:hover { background: rgb(76,155,195); } QTabBar::tab:!selected { margin-top: 2px; } QTableView { alternate-background-color:rgb(255,255,255); background-color:transparent; color:black;} QListWidget {color:black; background-color:transparent;} QLabel {color:black;} QGroupBox {background-color:transparent;} QLineEdit {background-color:lightgray; color:black} QHeaderView::section { background-color:lightgray; color:black; } QPushButton { background-color:lightgray; color:black; } QComboBox { background-color:lightgray; color:black; }");
+    dlg->resetData();
+    dlg->show();
 }
 
 

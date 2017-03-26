@@ -18,7 +18,7 @@ using namespace std;
 // BitcoinMiner
 //
 
-extern unsigned int nMinerSleep;
+unsigned int nMinerSleep;
 MiningCPID GetNextProject(bool bForce);
 void ThreadCleanWalletPassphrase(void* parg);
 double GetBlockDifficulty(unsigned int nBits);
@@ -39,7 +39,6 @@ MiningCPID DeserializeBoincBlock(std::string block);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
 std::string PubKeyToAddress(const CScript& scriptPubKey);
-double OwedByAddress(std::string address);
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 bool IsCPIDValidv2(MiningCPID& mc,int height);
 
