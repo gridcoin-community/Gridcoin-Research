@@ -1359,6 +1359,7 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
 		    std::string sBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid);
 			if (!sBeaconPublicKey.empty()) 	
 			{
+				// Ensure they can re-send the beacon if > 6 months old : GetBeaconPublicKey returns an empty string when > 6 months: OK.
 				sError = "ALREADY_IN_CHAIN";
 				return bFromService ? true : false;
 			}
@@ -3817,10 +3818,19 @@ std::string GetLocalBeaconPublicKey(std::string cpid)
 	return sBeaconPubKey;
 }
 
+std::string RetrieveCachedValueWithMaxAge(std::string sKey, int64_t iMaxSeconds)
+{
+	 int64_t iAge = GetAdjustedTime() - mvApplicationCacheTimestamp[sKey];
+	 std::string sValue = mvApplicationCache[sKey];
+	 // if (fDebug3) printf("\r\n BeaconAge %f, MaxAge %f, CPID %s\r\n",(double)iAge,(double)iMaxSeconds,sValue.c_str());
+	 return (iAge > iMaxSeconds) ? "" : sValue;
+}
 
 std::string GetBeaconPublicKey(std::string cpid)
 {
-	std::string sBeacon = mvApplicationCache["beacon;" + cpid];
+	//3-26-2017 - Ensure beacon public key is within 6 months of network age
+	int64_t iMaxSeconds = 60 * 24 * 30 * 6 * 60;
+	std::string sBeacon = RetrieveCachedValueWithMaxAge("beacon;" + cpid, iMaxSeconds);
 	if (sBeacon.empty()) return "";
 	// Beacon data structure: CPID,hashRand,Address,beacon public key: base64 encoded
 	std::string sContract = DecodeBase64(sBeacon);

@@ -461,7 +461,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msHDDSerial = "";
  //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
 
- int nGrandfather = 726000;
+ int nGrandfather = 854400;
  int nNewIndex = 271625;
  int nNewIndex2 = 364500;
 
@@ -4368,8 +4368,9 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
 					double bv = BlockVersion(bb.clientversion);
 					double cvn = ClientVersionNew();
 					if (fDebug10) printf("BV %f, CV %f   ",bv,cvn);
-					//if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
-					if (bv < 3517 && IsResearchAgeEnabled(height1) && !fTestNet) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
+					// if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
+					// Enforce Beacon Age
+					if (bv < 3587 && height1 > 855000 && !fTestNet) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
 					if (bv < 3580 && fTestNet) return DoS(25, error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n"));
 			}
 
@@ -7169,6 +7170,14 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return false;
         }
 
+		if (pfrom->nVersion < 180322 & !fTestNet && pindexBest->nHeight > 855000)
+        {
+            // disconnect from peers older than this proto version - Enforce Beacon Age - 3-26-2017
+            if (fDebug10) printf("partner %s using obsolete version %i (before enforcing beacon age); disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
+            pfrom->fDisconnect = true;
+            return false;
+        }
+
 		if (!fTestNet && pfrom->nVersion < 180314 && IsResearchAgeEnabled(pindexBest->nHeight))
 		{
 		    // disconnect from peers older than this proto version
@@ -7196,7 +7205,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 		if (GetArgument("autoban","true") == "true")
 		{
 				
-				// Note: Hacking attempts start in this area 3-26-2016
+				// Note: Hacking attempts start in this area
 				if (false && pfrom->nStartingHeight < (nBestHeight/2) && LessVerbose(1) && !fTestNet)
 				{
 					if (fDebug3) printf("Node with low height");
@@ -9860,6 +9869,7 @@ bool MemorizeMessage(std::string msg, int64_t nTime, double dAmount, std::string
 			  {
 				    // If the Beacon Public Key is Not Empty - do not overwrite with a new beacon value
 				    std::string sBPK = GetBeaconPublicKey(sMessageKey);
+					// Note that if the beacon is > 6 months old, this function now returns an empty string (allowing the beacon to be overwritten) : OK
 					if (!sBPK.empty()) 
 					{
 						// Do not overwrite this beacon
