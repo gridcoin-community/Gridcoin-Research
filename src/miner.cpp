@@ -507,8 +507,9 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 		}
 		else
 		{
-						pblock->nTime      =     max(pblock->GetMaxTransactionTime(),GetAdjustedTime());
-				 	    pblock->nTime      =     pblock->vtx[1].nTime; //same as coinstake timestamp
+				pblock->nTime      =     max(pblock->GetMaxTransactionTime(),GetAdjustedTime());
+				if (pblock->IsProofOfStake())
+        			pblock->nTime	=	pblock->vtx[1].nTime; //same as coinstake timestamp
 		}
 
         if (!fProofOfStake)
