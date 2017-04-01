@@ -3822,7 +3822,13 @@ std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxS
 {
     const std::string key = "beacon;" + cpid;
     const std::string& value = mvApplicationCache[key];
-    int64_t iAge = pindexBest->nTime - mvApplicationCacheTimestamp[key];
+
+    // Compare the age of the beacon to the age of the current block. If we have
+    // no current block we assume that the beacon is valid.
+    int64_t iAge = pindexBest != NULL
+          ? pindexBest->nTime - mvApplicationCacheTimestamp[key]
+          : 0;
+
     return (iAge > iMaxSeconds)
           ? ""
           : value;
