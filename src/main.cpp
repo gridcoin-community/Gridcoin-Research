@@ -7170,7 +7170,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return false;
         }
 
-		if (pfrom->nVersion < 180322 & !fTestNet && pindexBest->nHeight > 855000)
+		if (pfrom->nVersion < 180322 && !fTestNet && pindexBest->nHeight > 855000)
         {
             // disconnect from peers older than this proto version - Enforce Beacon Age - 3-26-2017
             if (fDebug10) printf("partner %s using obsolete version %i (before enforcing beacon age); disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
