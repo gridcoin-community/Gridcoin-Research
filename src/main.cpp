@@ -461,7 +461,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
  std::string    msHDDSerial = "";
  //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
 
- int nGrandfather = 854400;
+ int nGrandfather = 860000;
  int nNewIndex = 271625;
  int nNewIndex2 = 364500;
 
@@ -4370,11 +4370,11 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
 					if (fDebug10) printf("BV %f, CV %f   ",bv,cvn);
 					// if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 					// Enforce Beacon Age
-					if (bv < 3587 && height1 > 855000 && !fTestNet) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
+					if (bv < 3588 && height1 > 860500 && !fTestNet) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
 					if (bv < 3580 && fTestNet) return DoS(25, error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n"));
 			}
 
-			if (bb.cpid != "INVESTOR" && height1 > nGrandfather)
+			if (bb.cpid != "INVESTOR" && height1 > nGrandfather && BlockNeedsChecked(nTime))
 			{
     			if (bb.projectname.empty() && !IsResearchAgeEnabled(height1)) 	return DoS(1,error("CheckBlock::PoR Project Name invalid"));
 	    		if (!fLoadingIndex && !IsCPIDValidv2(bb,height1))
@@ -7170,7 +7170,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return false;
         }
 
-		if (pfrom->nVersion < 180322 && !fTestNet && pindexBest->nHeight > 855000)
+		if (pfrom->nVersion < 180323 && !fTestNet && pindexBest->nHeight > 860500)
         {
             // disconnect from peers older than this proto version - Enforce Beacon Age - 3-26-2017
             if (fDebug10) printf("partner %s using obsolete version %i (before enforcing beacon age); disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
