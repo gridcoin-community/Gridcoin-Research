@@ -12,6 +12,9 @@
 #include "scrypt.h"
 
 #include "global_objects_noui.hpp"
+#include "fwd.h"
+#include <boost/flyweight.hpp>
+#include <boost/flyweight/no_tracking.hpp>
 #include <list>
 
 class CWallet;
@@ -123,7 +126,6 @@ extern std::map<std::string, StructCPID> mvDPORCopy;
 
 extern std::map<std::string, StructCPID> mvResearchAge;
 extern std::map<std::string, MiningCPID> mvBlockIndex;
-extern std::map<std::string, std::string> mvCPIDBlockHashes;
 
 
 extern CScript COINBASE_FLAGS;
@@ -1301,18 +1303,14 @@ public:
     int64_t nMint;
     int64_t nMoneySupply;
 	// Gridcoin (7-11-2015) Add new Accrual Fields to block index
-	std::string sCPID;
+	flyweight_string sCPID;
 	double nResearchSubsidy;
 	double nInterestSubsidy;
 	double nMagnitude;
-	// Memory Only (8-13-2015):
-	double nLastPORBlock;
-	std::string sLastPORBlockHash;
-	double nTotalPORPayments;
 	// Indicators (9-13-2015)
 	unsigned int nIsSuperBlock;
 	unsigned int nIsContract;
-	std::string sGRCAddress;
+	flyweight_string sGRCAddress;
 	std::string sReserved;
 
     unsigned int nFlags;  // ppcoin: block index flags
@@ -1363,17 +1361,11 @@ public:
         nBits          = 0;
         nNonce         = 0;
 		//7-11-2015 - Gridcoin - New Accrual Fields
-		sCPID = "";
 		nResearchSubsidy = 0;
 		nInterestSubsidy = 0;
 		nMagnitude = 0;
-		nLastPORBlock=0;
-		sLastPORBlockHash = "";
-		nTotalPORPayments = 0;
 		nIsSuperBlock = 0;
 		nIsContract = 0;
-		sGRCAddress = "";
-		sReserved = "";
     }
 
     CBlockIndex(unsigned int nFileIn, unsigned int nBlockPosIn, CBlock& block)

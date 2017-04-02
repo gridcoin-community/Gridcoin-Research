@@ -25,7 +25,7 @@ double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t lo
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 std::string GetBestBlockHash(std::string sCPID);
 double CoinToDouble(double surrogate);
-StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
+StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 
 void ThreadTopUpKeyPool(void* parg);
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);

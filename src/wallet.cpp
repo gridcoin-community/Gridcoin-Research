@@ -21,7 +21,7 @@ static int64_t GetStakeCombineThreshold() { return IsProtocolV2(nBestHeight) ? (
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 std::vector<std::string> split(std::string s, std::string delim);
-StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
+StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 double cdbl(std::string s, int place);
 std::string GetArgument(std::string arg, std::string defaultvalue);
 std::string SendReward(std::string sAddress, int64_t nAmount);

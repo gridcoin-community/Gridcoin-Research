@@ -74,7 +74,7 @@ bool UpdateNeuralNetworkQuorumData();
 extern Array LifetimeReport(std::string cpid);
 Array StakingReport();
 extern std::string AddContract(std::string sType, std::string sName, std::string sContract);
-StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
+StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 std::string getCpuHash();
 extern std::string getHardwareID();
 std::string getMacAddress();

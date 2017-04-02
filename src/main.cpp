@@ -75,9 +75,9 @@ std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern bool IsSuperBlock(CBlockIndex* pIndex);
 extern MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 json_spirit::Array MagnitudeReport(std::string cpid);
-extern void AddCPIDBlockHash(std::string cpid, std::string blockhash, bool fInsert);
+extern void AddCPIDBlockHash(const std::string& cpid, uint256 blockhash, bool fInsert);
 extern void ZeroOutResearcherTotals(std::string cpid);
-extern StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
+extern StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 extern std::string getCpuHash();
 std::string getMacAddress();
 std::string TimestampToHRDate(double dtm);
@@ -333,7 +333,8 @@ std::map<std::string, StructCPID> mvDPOR;
 std::map<std::string, StructCPID> mvDPORCopy;
 
 std::map<std::string, StructCPID> mvResearchAge;
-std::map<std::string, std::string> mvCPIDBlockHashes;
+typedef std::deque<uint256> HashCollection;
+std::map<cpid_string, HashCollection> mvCPIDBlockHashes;
 
 extern enum Checkpoints::CPMode CheckpointsMode;
 
@@ -3498,7 +3499,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
  	}
 
 
-	AddCPIDBlockHash(bb.cpid,pindex->GetBlockHash().GetHex(),false);
+	AddCPIDBlockHash(bb.cpid,pindex->GetBlockHash(),false);
 
     // Track money supply and mint amount info
     pindex->nMint = nValueOut - nValueIn + nFees;
@@ -6191,27 +6192,21 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 	return true;
 }
 
-std::string GetCPIDBlockHashes(std::string cpid)
+HashCollection GetCPIDBlockHashes(const std::string& cpid)
 {
-	return mvCPIDBlockHashes[cpid];
+	return mvCPIDBlockHashes[cpid_string(cpid)];
 }
 
-void AddCPIDBlockHash(std::string cpid, std::string blockhash, bool fInsert)
+void AddCPIDBlockHash(const std::string& cpid, uint256 blockhash, bool fInsert)
 {
-	std::string blockhashes = mvCPIDBlockHashes[cpid];
-	if (blockhashes.empty())
-	{
-			mvCPIDBlockHashes.insert(map<std::string,std::string>::value_type(cpid,""));
-	}
-
-	if (fInsert || !Contains(blockhashes,blockhash) )
-	{
-		blockhashes += ";" + blockhash;
-		mvCPIDBlockHashes[cpid] = blockhashes;
-	}
+   HashCollection& hashes = mvCPIDBlockHashes[cpid_string(cpid)];
+   
+   HashCollection::iterator it = std::find(hashes.begin(), hashes.end(), blockhash);
+   if (fInsert || it == hashes.end() )
+      hashes.push_back(blockhash);
 }
 
-StructCPID GetLifetimeCPID(std::string cpid, std::string sCalledFrom)
+StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFrom)
 {
 	//Eliminates issues with reorgs, disconnects, double counting, etc.. 
 	if (cpid.empty() || cpid=="INVESTOR")
@@ -6222,13 +6217,12 @@ StructCPID GetLifetimeCPID(std::string cpid, std::string sCalledFrom)
 	if (fDebug10) printf(" {GLC %s} ",sCalledFrom.c_str());
 
 
-	std::string hashes = GetCPIDBlockHashes(cpid);
-	std::vector<std::string> vHashes = split(hashes,";");
+	const HashCollection& hashes = GetCPIDBlockHashes(cpid);
     ZeroOutResearcherTotals(cpid);
 
-	for (unsigned int i=0; i < vHashes.size(); i++)
+	for (HashCollection::const_iterator it = hashes.begin(); it != hashes.end(); ++it)
 	{
-		std::string myBlockHash = vHashes[i];
+		std::string myBlockHash = it->GetHex();
 		if (myBlockHash.length() > 5)
 		{
 		    uint256 uHash(myBlockHash);
@@ -10087,7 +10081,7 @@ void TestScan()
         CBlockIndex* pindex = item.second;
 		if (LessVerbose(1) || pindex->nHeight > nNewIndex2)
 		{
-			printf("map block index h %f ,  cpid %s   , Mag  %f , RS %f, INT %f \r\n",(double)pindex->nHeight,pindex->sCPID.c_str(), (double)pindex->nMagnitude,
+			printf("map block index h %f ,  cpid %s   , Mag  %f , RS %f, INT %f \r\n",(double)pindex->nHeight,pindex->sCPID.get().c_str(), (double)pindex->nMagnitude,
 				pindex->nResearchSubsidy,pindex->nInterestSubsidy);
 		}
     }
@@ -10102,7 +10096,7 @@ void TestScan2()
         pindex = pindex->pprev;
 		if (LessVerbose(1) || pindex->nHeight > nNewIndex2)
 		{
-			printf("map block index h %f ,  cpid %s   , Mag  %f , RS %f, INT %f \r\n",(double)pindex->nHeight,pindex->sCPID.c_str(), (double)pindex->nMagnitude,
+			printf("map block index h %f ,  cpid %s   , Mag  %f , RS %f, INT %f \r\n",(double)pindex->nHeight,pindex->sCPID.get().c_str(), (double)pindex->nMagnitude,
 				pindex->nResearchSubsidy,pindex->nInterestSubsidy);
 		}
 
