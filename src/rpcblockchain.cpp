@@ -3818,26 +3818,34 @@ std::string GetLocalBeaconPublicKey(std::string cpid)
 	return sBeaconPubKey;
 }
 
-std::string RetrieveCachedValueWithMaxAge(std::string sKey, int64_t iMaxSeconds)
+std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds)
 {
-	 int64_t iAge = GetAdjustedTime() - mvApplicationCacheTimestamp[sKey];
-	 std::string sValue = mvApplicationCache[sKey];
-	 // if (fDebug3) printf("\r\n BeaconAge %f, MaxAge %f, CPID %s\r\n",(double)iAge,(double)iMaxSeconds,sValue.c_str());
-	 return (iAge > iMaxSeconds) ? "" : sValue;
+    const std::string key = "beacon;" + cpid;
+    const std::string& value = mvApplicationCache[key];
+
+    // Compare the age of the beacon to the age of the current block. If we have
+    // no current block we assume that the beacon is valid.
+    int64_t iAge = pindexBest != NULL
+          ? pindexBest->nTime - mvApplicationCacheTimestamp[key]
+          : 0;
+
+    return (iAge > iMaxSeconds)
+          ? ""
+          : value;
 }
 
 std::string GetBeaconPublicKey(std::string cpid)
 {
-	//3-26-2017 - Ensure beacon public key is within 6 months of network age
-	int64_t iMaxSeconds = 60 * 24 * 30 * 6 * 60;
-	std::string sBeacon = RetrieveCachedValueWithMaxAge("beacon;" + cpid, iMaxSeconds);
-	if (sBeacon.empty()) return "";
-	// Beacon data structure: CPID,hashRand,Address,beacon public key: base64 encoded
-	std::string sContract = DecodeBase64(sBeacon);
-	std::vector<std::string> vContract = split(sContract.c_str(),";");
-	if (vContract.size() < 4) return "";
-	std::string sBeaconPublicKey = vContract[3];
-	return sBeaconPublicKey;
+   //3-26-2017 - Ensure beacon public key is within 6 months of network age
+   int64_t iMaxSeconds = 60 * 24 * 30 * 6 * 60;
+   std::string sBeacon = RetrieveBeaconValueWithMaxAge(cpid, iMaxSeconds);
+   if (sBeacon.empty()) return "";
+   // Beacon data structure: CPID,hashRand,Address,beacon public key: base64 encoded
+   std::string sContract = DecodeBase64(sBeacon);
+   std::vector<std::string> vContract = split(sContract.c_str(),";");
+   if (vContract.size() < 4) return "";
+   std::string sBeaconPublicKey = vContract[3];
+   return sBeaconPublicKey;
 }
 
 bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature)
