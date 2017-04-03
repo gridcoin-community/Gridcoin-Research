@@ -31,8 +31,6 @@ static const int LAST_POW_BLOCK = 2050;
 extern unsigned int REORGANIZE_FAILED;
 extern unsigned int WHITELISTED_PROJECTS;
 extern unsigned int CHECKPOINT_VIOLATIONS;
-extern double nVolatility;
-extern double nRiskFreeRate;
 static const int MAX_NEWBIE_BLOCKS = 200;
 static const int MAX_NEWBIE_BLOCKS_LEVEL2 = 500;
 static const int CHECKPOINT_DISTRIBUTED_MODE = 50;
@@ -43,7 +41,6 @@ static const double NeuralNetworkMultiplier = 115000;
 
 extern int64_t nLastBlockSolved;
 extern int64_t nLastBlockSubmitted;
-extern double mPI;
 
 extern uint256 muGlobalCheckpointHash;
 extern uint256 muGlobalCheckpointHashRelayed;
