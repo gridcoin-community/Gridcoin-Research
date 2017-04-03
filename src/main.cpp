@@ -6877,7 +6877,7 @@ bool AcidTest(std::string precommand, std::string acid, CNode* pfrom)
 	
 		if (false && hash != pw1)
 		{
-			//2/16 18:06:48 Acid test failed for 192.168.1.4:32749 1478973994,encrypt,1b089d19d23fbc911c6967b948dd8324,windows			if (fDebug) printf("Acid test failed for %s %s.",NodeAddress(pfrom).c_str(),acid.c_str());
+			//2/16 18:06:48 Acid test failed for 192.168.1.4:32749 1478973994,encrypt,1b089d19d23fbc911c6967b948dd8324,windows			if (fDebug) printf("Acid test failed for %s %s.",NodeAddress(pfrom).c_str(),acid.c_str());
 			double punishment = GetArg("-punishment", 10);
 			pfrom->Misbehaving(punishment);
 			return false;
@@ -10374,7 +10374,7 @@ void SetUpExtendedBlockIndexFieldsOnce()
 	printf("SETUPExtendedBIfieldsOnce Testnet: %s \r\n",YesNo(fTestNet).c_str());
 	if (fTestNet)
 	{
-		if (pindexBest->nHeight < 20000) return;	}
+		if (pindexBest->nHeight < 20000) return;	}
 	else
 	{
 		if (pindexBest->nHeight < 361873) return;
