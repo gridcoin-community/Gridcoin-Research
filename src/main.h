@@ -57,7 +57,6 @@ extern std::string msTestNetSeedSuperblocks;extern std::string msTestNetSeedCont
 static const unsigned int MAX_BLOCK_SIZE = 1000000;
 /** Target Blocks Per day */
 static const unsigned int BLOCKS_PER_DAY = 1000;
-static const double TOLERANCE_PERCENT = 0;  // The amount a network consensus magnitude can be skewed by before calling etsoft (Removed as of 7/3/2015 - NeuralNetwork)
 /** The maximum size for mined blocks */
 static const unsigned int MAX_BLOCK_SIZE_GEN = MAX_BLOCK_SIZE/2;
 /** The maximum size for transactions we're willing to relay/mine **/
