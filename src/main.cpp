@@ -198,8 +198,6 @@ int64_t nLastCalculatedMedianPeerCount = 0;
 int nLastMedianPeerCount = 0;
 int64_t nLastTallyBusyWait = 0;
 
-double nVolatility = .90;
-double nRiskFreeRate = .015;
 int64_t nLastTalliedNeural = 0;
 int64_t nLastLoadAdminMessages = 0;
 int64_t nCPIDsLoaded = 0;
@@ -238,9 +236,6 @@ json_spirit::Array MagnitudeReportCSV(bool detail);
 bool bNewUserWizardNotified = false;
 int64_t nLastBlockSolved = 0;  //Future timestamp
 int64_t nLastBlockSubmitted = 0;
-
-
-double mPI = 3.141592653589793238462643;
 
 uint256 muGlobalCheckpointHash = 0;
 uint256 muGlobalCheckpointHashRelayed = 0;
