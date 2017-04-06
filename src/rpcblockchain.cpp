@@ -31,8 +31,8 @@ bool CleanChain();
 extern std::string SendReward(std::string sAddress, int64_t nAmount);
 std::string GetLocalBeaconPublicKey(std::string cpid);
 extern double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID);
-extern std::string GetBeaconPublicKey(std::string cpid);
-extern std::string GetBeaconPrivateKey(std::string cpid);
+std::string GetBeaconPublicKey(const std::string& cpid);
+std::string GetBeaconPrivateKey(const std::string& cpid);
 extern std::string SuccessFail(bool f);
 extern Array GetUpgradedBeaconReport();
 extern Array MagnitudeReport(std::string cpid);
@@ -67,7 +67,8 @@ Array StakingReport();
 extern std::string AddContract(std::string sType, std::string sName, std::string sContract);
 StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
 void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
-extern std::string MyBeaconExists(std::string cpid);
+bool HasActiveBeacon(const std::string& cpid);
+int64_t GetEarliestWalletTransaction();
 extern bool CheckMessageSignature(std::string sAction,std::string messagetype, std::string sMsg, std::string sSig, std::string opt_pubkey);
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
@@ -1232,10 +1233,8 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
 				return bFromService ? true : false;
 			}
 			//If beacon is already in the chain, exit early
-		    std::string sBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid);
-			if (!sBeaconPublicKey.empty()) 	
+			if (HasActiveBeacon(GlobalCPUMiningCPID.cpid)) 	
 			{
-				// Ensure they can re-send the beacon if > 6 months old : GetBeaconPublicKey returns an empty string when > 6 months: OK.
 				sError = "ALREADY_IN_CHAIN";
 				return bFromService ? true : false;
 			}
@@ -1817,13 +1816,13 @@ Value execute(const Array& params, bool fHelp)
 		}
 		
 		entry.push_back(Pair("CPID", sCPID));
-		std::string sBeacon = MyBeaconExists(sCPID);
 		std::string sPubKey =  GetBeaconPublicKey(sCPID);
 		std::string sPrivKey = GetBeaconPrivateKey(sCPID);
 		int64_t iBeaconTimestamp = BeaconTimeStamp(sCPID, false);
 		std::string timestamp = TimestampToHRDate(iBeaconTimestamp);
 	
-		entry.push_back(Pair("Beacon Exists",YesNo(sBeacon.length() > 0)));
+		bool hasBeacon = HasActiveBeacon(sCPID);
+		entry.push_back(Pair("Beacon Exists",YesNo(hasBeacon)));
 		entry.push_back(Pair("Beacon Timestamp",timestamp.c_str()));
 
 		entry.push_back(Pair("Public Key", sPubKey.c_str()));
@@ -3614,13 +3613,12 @@ bool IsContractSettled(std::string sContractType, std::string sOpra)
 	return (!sTXID.empty());
 }
 
-std::string MyBeaconExists(std::string cpid)
+bool HasActiveBeacon(const std::string& cpid)
 {
-	std::string myBeacon = mvApplicationCache["beacon;" + cpid];
-	return myBeacon;
+    return GetBeaconPublicKey(cpid).empty() == false;
 }
 
-std::string GetBeaconPrivateKey(std::string cpid)
+std::string GetBeaconPrivateKey(const std::string& cpid)
 {
 	// 10-15-2016: Add the Suffix to the PrivateKey, so TestNet uses distinct keys
 	std::string sSuffix = fTestNet ? "testnet" : "";
@@ -3652,7 +3650,7 @@ std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxS
           : value;
 }
 
-std::string GetBeaconPublicKey(std::string cpid)
+std::string GetBeaconPublicKey(const std::string& cpid)
 {
    //3-26-2017 - Ensure beacon public key is within 6 months of network age
    int64_t iMaxSeconds = 60 * 24 * 30 * 6 * 60;
