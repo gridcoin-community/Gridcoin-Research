@@ -34,8 +34,8 @@ extern std::string ConvertBinToHex(std::string a);
 extern std::string ConvertHexToBin(std::string a);
 extern bool WalletOutOfSync();
 extern bool WriteKey(std::string sKey, std::string sValue);
-std::string GetBeaconPublicKey(std::string cpid);
-std::string GetBeaconPrivateKey(std::string cpid);
+std::string GetBeaconPublicKey(const std::string& cpid);
+std::string GetBeaconPrivateKey(const std::string& cpid);
 bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 extern void CleanInboundConnections(bool bClearAll);
@@ -85,7 +85,7 @@ std::string AddContract(std::string sType, std::string sName, std::string sContr
 bool CPIDAcidTest(std::string boincruntimepublickey);
 bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
 
-std::string MyBeaconExists(std::string cpid);
+bool HasActiveBeacon(const std::string& cpid);
 extern bool BlockNeedsChecked(int64_t BlockTime);
 extern void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector<CBlockIndex*> vConnect);
 int64_t GetEarliestWalletTransaction();
@@ -7870,8 +7870,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 						if (s.size() > 1)
 						{
 								std::string cpid = s[0];
-								std::string myBeacon = MyBeaconExists(cpid);
-								if (myBeacon.length() > 10)
+								if (HasActiveBeacon(cpid))
 								{
 									bIgnore=true;
 									result = "Beacon already exists; ignoring request.";
