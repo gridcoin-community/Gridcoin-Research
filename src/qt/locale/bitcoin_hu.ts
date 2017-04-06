@@ -62,7 +62,7 @@ Ez a termék tartalmaz az OpenSSL Project által az OpenSSL Toolkit-hez (http://
     <message>
         <location line="-49"/>
         <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
-        <translation>Ezek a Gridcoin-címeid a fizetések fogadásához. Érdemes minden küld?nek egy külön címet létrehozni, hogy könnyebben követhesd személyenként a tranzakciókat.</translation>
+        <translation>Ezek a Gridcoin-címeid a fizetések fogadásához. Érdemes minden küldőnek egy külön címet létrehozni, hogy könnyebben követhesd személyenként a tranzakciókat.</translation>
     </message>
     <message>
         <location line="+63"/>
@@ -122,7 +122,7 @@ Ez a termék tartalmaz az OpenSSL Project által az OpenSSL Toolkit-hez (http://
     <message>
         <location line="+1"/>
         <source>Comma separated file (*.csv)</source>
-        <translation>Vessz?vel elválasztott fájl (*.csv)</translation>
+        <translation>Vesszővel elválasztott fájl (*.csv)</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -132,7 +132,7 @@ Ez a termék tartalmaz az OpenSSL Project által az OpenSSL Toolkit-hez (http://
     <message>
         <location line="+0"/>
         <source>Could not write to file %1.</source>
-        <translation>Nem lehetett írni a fájlt a következ? helyen: %1.</translation>
+        <translation>Nem lehetett írni a fájlt a következő helyen: %1.</translation>
     </message>
 </context>
 <context>
@@ -187,7 +187,7 @@ Ez a termék tartalmaz az OpenSSL Project által az OpenSSL Toolkit-hez (http://
     </message>
     <message>
         <source>Enter the new passphrase to the wallet.&lt;br/&gt;Please use a passphrase of &lt;b&gt;10 or more random characters&lt;/b&gt;, or &lt;b&gt;eight or more words&lt;/b&gt;.</source>
-        <translation type="vanished">Írd be az új jelszót a tárcához.&lt;br/&gt;Használj &lt;b&gt;legalább 10 véletlenszer? karaktert&lt;/b&gt;, vagy &lt;b&gt;legalább nyolc szót&lt;/b&gt;.</translation>
+        <translation type="vanished">Írd be az új jelszót a tárcához.&lt;br/&gt;Használj &lt;b&gt;legalább 10 véletlenszerű karaktert&lt;/b&gt;, vagy &lt;b&gt;legalább nyolc szót&lt;/b&gt;.</translation>
     </message>
     <message>
         <location filename="../askpassphrasedialog.cpp" line="+38"/>
@@ -197,7 +197,7 @@ Ez a termék tartalmaz az OpenSSL Project által az OpenSSL Toolkit-hez (http://
     <message>
         <location line="+7"/>
         <source>This operation needs your wallet passphrase to unlock the wallet.</source>
-        <translation>Ez a m?velet a tárcád jelszavának megadását igényli annak megnyitásához.</translation>
+        <translation>Ez a művelet a tárcád jelszavának megadását igényli annak megnyitásához.</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -207,7 +207,7 @@ Ez a termék tartalmaz az OpenSSL Project által az OpenSSL Toolkit-hez (http://
     <message>
         <location line="+3"/>
         <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>Ez a m?velet a tárcád jelszavának megadását igényli annak dekódolásához.</translation>
+        <translation>Ez a művelet a tárcád jelszavának megadását igényli annak dekódolásához.</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -277,7 +277,7 @@ Ez a termék tartalmaz az OpenSSL Project által az OpenSSL Toolkit-hez (http://
     <message>
         <location line="-56"/>
         <source>Wallet encryption failed due to an internal error. Your wallet was not encrypted.</source>
-        <translation>Tárca kódolása bels? hiba miatt sikertelen. A tárcád nem lett kódolva.</translation>
+        <translation>Tárca kódolása belső hiba miatt sikertelen. A tárcád nem lett kódolva.</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -463,12 +463,12 @@ Ez a termék tartalmaz az OpenSSL Project által az OpenSSL Toolkit-hez (http://
     <message>
         <location line="+1"/>
         <source>Open debugging and diagnostic console</source>
-        <translation>Hibakeres? és diagnosztikai konzol megnyitása</translation>
+        <translation>Hibakereső és diagnosztikai konzol megnyitása</translation>
     </message>
     <message>
         <location line="-5"/>
         <source>&amp;Verify message...</source>
-        <translation>Üzenet &amp;valódiságának ellen?rzése</translation>
+        <translation>Üzenet &amp;valódiságának ellenőrzése</translation>
     </message>
     <message>
         <location line="-801"/>
@@ -879,7 +879,7 @@ Ez a termék tartalmaz az OpenSSL Project által az OpenSSL Toolkit-hez (http://
     <message>
         <location line="+1"/>
         <source>Incoming transaction</source>
-        <translation>Beérkez? tranzakció</translation>
+        <translation>Beérkező tranzakció</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1093,7 +1093,7 @@ Cím: %4
     <message>
         <location line="+3"/>
         <source>Confirmed</source>
-        <translation>Meger?sítve</translation>
+        <translation>Megerősítve</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -1287,7 +1287,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+4"/>
         <source>New sending address</source>
-        <translation>Új küld? cím</translation>
+        <translation>Új küldő cím</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1297,7 +1297,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+4"/>
         <source>Edit sending address</source>
-        <translation>Küld? cím szerkesztése</translation>
+        <translation>Küldő cím szerkesztése</translation>
     </message>
     <message>
         <location line="+76"/>
@@ -1378,7 +1378,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+22"/>
         <source>&amp;Main</source>
-        <translation>&amp;F?</translation>
+        <translation>&amp;Fő</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -1523,7 +1523,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+13"/>
         <source>Choose the default subdivision unit to show in the interface and when sending coins.</source>
-        <translation>Válaszd ki az interfészen és érmék küldésekor megjelenítend? alapértelmezett alegységet.</translation>
+        <translation>Válaszd ki az interfészen és érmék küldésekor megjelenítendő alapértelmezett alegységet.</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -1588,7 +1588,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../forms/overviewpage.ui" line="+32"/>
         <source>Form</source>
-        <translation>?rlap</translation>
+        <translation>Űrlap</translation>
     </message>
     <message>
         <location line="+48"/>
@@ -1778,7 +1778,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+273"/>
         <location filename="../rpcconsole.cpp" line="+392"/>
         <source>N/A</source>
-        <translation>Nem elérhet?</translation>
+        <translation>Nem elérhető</translation>
     </message>
     <message>
         <location line="-410"/>
@@ -1951,12 +1951,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Navigálhat a fel és le nyilakkal, és &lt;b&gt;Ctrl-L&lt;/b&gt; -vel törölheti a képerny?t.</translation>
+        <translation>Navigálhat a fel és le nyilakkal, és &lt;b&gt;Ctrl-L&lt;/b&gt; -vel törölheti a képernyőt.</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
-        <translation>Írd be azt, hogy &lt;b&gt;help&lt;/b&gt; az elérhet? parancsok áttekintéséhez.</translation>
+        <translation>Írd be azt, hogy &lt;b&gt;help&lt;/b&gt; az elérhető parancsok áttekintéséhez.</translation>
     </message>
     <message>
         <location line="+111"/>
@@ -2130,7 +2130,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+31"/>
         <source>Confirm the send action</source>
-        <translation>Küldés meger?sítése</translation>
+        <translation>Küldés megerősítése</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -2190,7 +2190,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+5"/>
         <source>Confirm send coins</source>
-        <translation>Küldés meger?sítése</translation>
+        <translation>Küldés megerősítése</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2205,12 +2205,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+29"/>
         <source>The recipient address is not valid, please recheck.</source>
-        <translation>A címzett címe érvénytelen, kérlek, ellen?rizd.</translation>
+        <translation>A címzett címe érvénytelen, kérlek, ellenőrizd.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>The amount to pay must be larger than 0.</source>
-        <translation>A fizetend? összegnek nagyobbnak kell lennie 0-nál.</translation>
+        <translation>A fizetendő összegnek nagyobbnak kell lennie 0-nál.</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -2225,7 +2225,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+6"/>
         <source>Duplicate address found, can only send to each address once per send operation.</source>
-        <translation>Többször szerepel ugyanaz a cím. Egy küldési m?veletben egy címre csak egyszer lehet küldeni.</translation>
+        <translation>Többször szerepel ugyanaz a cím. Egy küldési műveletben egy címre csak egyszer lehet küldeni.</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -2258,7 +2258,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../forms/sendcoinsentry.ui" line="+14"/>
         <source>Form</source>
-        <translation type="unfinished">?rlap</translation>
+        <translation type="unfinished">Űrlap</translation>
     </message>
     <message>
         <location line="+77"/>
@@ -2354,7 +2354,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="-118"/>
         <source>You can sign messages with your addresses to prove you own them. Be careful not to sign anything vague, as phishing attacks may try to trick you into signing your identity over to them. Only sign fully-detailed statements you agree to.</source>
-        <translation>Aláírhat a címeivel üzeneteket, amivel bizonyíthatja, hogy a címek az önéi. Vigyázzon, hogy ne írjon alá semmi félreérthet?t, mivel a phising támadásokkal megpróbálhatják becsapni, hogy az azonosságát átírja másokra. Csak olyan részletes állításokat írjon alá, amivel egyetért.</translation>
+        <translation>Aláírhat a címeivel üzeneteket, amivel bizonyíthatja, hogy a címek az önéi. Vigyázzon, hogy ne írjon alá semmi félreérthetőt, mivel a phising támadásokkal megpróbálhatják becsapni, hogy az azonosságát átírja másokra. Csak olyan részletes állításokat írjon alá, amivel egyetért.</translation>
     </message>
     <message>
         <location line="+18"/>
@@ -2413,12 +2413,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="-87"/>
         <location line="+70"/>
         <source>&amp;Verify Message</source>
-        <translation>Üzenet ellen?rzése</translation>
+        <translation>Üzenet ellenőrzése</translation>
     </message>
     <message>
         <location line="-64"/>
         <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
-        <translation>Írja be az aláírás címét, az üzenetet (ügyelve arra, hogy az új-sor, szóköz, tab, stb. karaktereket is pontosan) és az aláírást az üzenet ellen?rzéséhez. Ügyeljen arra, ne gondoljon többet az aláírásról, mint amennyi az aláírt szövegben ténylegesen áll, hogy elkerülje a köztes-ember (man-in-the-middle) támadást.</translation>
+        <translation>Írja be az aláírás címét, az üzenetet (ügyelve arra, hogy az új-sor, szóköz, tab, stb. karaktereket is pontosan) és az aláírást az üzenet ellenőrzéséhez. Ügyeljen arra, ne gondoljon többet az aláírásról, mint amennyi az aláírt szövegben ténylegesen áll, hogy elkerülje a köztes-ember (man-in-the-middle) támadást.</translation>
     </message>
     <message>
         <location line="+21"/>
@@ -2463,7 +2463,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+73"/>
         <location line="+8"/>
         <source>Please check the address and try again.</source>
-        <translation>Ellen?rizze a címet és próbálja meg újra.</translation>
+        <translation>Ellenőrizze a címet és próbálja meg újra.</translation>
     </message>
     <message>
         <location line="-81"/>
@@ -2500,7 +2500,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+0"/>
         <location line="+13"/>
         <source>Please check the signature and try again.</source>
-        <translation>Ellen?rizd az aláírást és próbáld újra.</translation>
+        <translation>Ellenőrizd az aláírást és próbáld újra.</translation>
     </message>
     <message>
         <location line="+0"/>
@@ -2510,12 +2510,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+7"/>
         <source>Message verification failed.</source>
-        <translation>Az üzenet ellen?rzése nem sikerült.</translation>
+        <translation>Az üzenet ellenőrzése nem sikerült.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Message verified.</source>
-        <translation>Üzenet ellen?rizve.</translation>
+        <translation>Üzenet ellenőrizve.</translation>
     </message>
 </context>
 <context>
@@ -2546,12 +2546,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>%1/unconfirmed</source>
-        <translation>%1/meger?sítetlen</translation>
+        <translation>%1/megerősítetlen</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1 confirmations</source>
-        <translation>%1 meger?sítés</translation>
+        <translation>%1 megerősítés</translation>
     </message>
     <message>
         <location line="+45"/>
@@ -2584,7 +2584,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+5"/>
         <location line="+17"/>
         <source>From</source>
-        <translation>?rlap</translation>
+        <translation>Űrlap</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2745,7 +2745,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+9"/>
         <source>This pane shows a detailed description of the transaction</source>
-        <translation>Ez a mez? a tranzakció részleteit mutatja</translation>
+        <translation>Ez a mező a tranzakció részleteit mutatja</translation>
     </message>
     <message>
         <location line="+59"/>
@@ -2813,7 +2813,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+3"/>
         <source>Confirmed (%1 confirmations)</source>
-        <translation>Meger?sítve (%1 meger?sítés)</translation>
+        <translation>Megerősítve (%1 megerősítés)</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -2869,7 +2869,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <source>This block was not received by any other nodes and will probably not be accepted!</source>
-        <translation type="vanished">Ezt a blokkot egyetlen másik csomópont sem kapta meg, így valószín?leg nem lesz elfogadva!</translation>
+        <translation type="vanished">Ezt a blokkot egyetlen másik csomópont sem kapta meg, így valószínűleg nem lesz elfogadva!</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -2884,7 +2884,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>Received from</source>
-        <translation>Err?l az</translation>
+        <translation>Erről az</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -2908,12 +2908,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+193"/>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
-        <translation>Tranzakció állapota. Húzd ide a kurzort, hogy lásd a meger?sítések számát.</translation>
+        <translation>Tranzakció állapota. Húzd ide a kurzort, hogy lásd a megerősítések számát.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Date and time that the transaction was received.</source>
-        <translation>Tranzakció fogadásának dátuma és id?pontja.</translation>
+        <translation>Tranzakció fogadásának dátuma és időpontja.</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -2997,7 +2997,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+7"/>
         <source>Enter address or label to search</source>
-        <translation>Írd be a keresend? címet vagy címkét</translation>
+        <translation>Írd be a keresendő címet vagy címkét</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -3042,12 +3042,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Comma separated file (*.csv)</source>
-        <translation>Vessz?vel elválasztott fájl (*.csv)</translation>
+        <translation>Vesszővel elválasztott fájl (*.csv)</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Confirmed</source>
-        <translation>Meger?sítve</translation>
+        <translation>Megerősítve</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3087,7 +3087,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+0"/>
         <source>Could not write to file %1.</source>
-        <translation type="unfinished">Nem lehetett írni a fájlt a következ? helyen: %1.</translation>
+        <translation type="unfinished">Nem lehetett írni a fájlt a következő helyen: %1.</translation>
     </message>
     <message>
         <location line="+100"/>
@@ -3205,12 +3205,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+6"/>
         <source>Threshold for disconnecting misbehaving peers (default: 100)</source>
-        <translation>Helytelenül viselked? peerek leválasztási határértéke (alapértelmezés: 100)</translation>
+        <translation>Helytelenül viselkedő peerek leválasztási határértéke (alapértelmezés: 100)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Number of seconds to keep misbehaving peers from reconnecting (default: 86400)</source>
-        <translation>Helytelenül viselked? peerek kizárási ideje másodpercben (alapértelmezés: 86400)</translation>
+        <translation>Helytelenül viselkedő peerek kizárási ideje másodpercben (alapértelmezés: 86400)</translation>
     </message>
     <message>
         <location line="-43"/>
@@ -3458,7 +3458,7 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="-39"/>
         <source>Specify connection timeout in milliseconds (default: 5000)</source>
-        <translation>Csatlakozás id?kerete milliszekundumban (alapértelmezett: 5000)</translation>
+        <translation>Csatlakozás időkerete milliszekundumban (alapértelmezett: 5000)</translation>
     </message>
     <message>
         <location line="+107"/>
@@ -3469,12 +3469,12 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="-79"/>
         <source>Use UPnP to map the listening port (default: 0)</source>
-        <translation>UPnP-használat engedélyezése a figyel? port feltérképezésénél (default: 0)</translation>
+        <translation>UPnP-használat engedélyezése a figyelő port feltérképezésénél (default: 0)</translation>
     </message>
     <message>
         <location line="-1"/>
         <source>Use UPnP to map the listening port (default: 1 when listening)</source>
-        <translation>UPnP-használat engedélyezése a figyel? port feltérképezésénél (default: 1 when listening)</translation>
+        <translation>UPnP-használat engedélyezése a figyelő port feltérképezésénél (default: 1 when listening)</translation>
     </message>
     <message>
         <location line="-24"/>
@@ -3536,24 +3536,24 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="+16"/>
         <source>Allow JSON-RPC connections from specified IP address</source>
-        <translation>JSON-RPC csatlakozások engedélyezése meghatározott IP-címr?l
+        <translation>JSON-RPC csatlakozások engedélyezése meghatározott IP-címről
 </translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Send commands to node running on &lt;ip&gt; (default: 127.0.0.1)</source>
-        <translation>Parancsok küldése &lt;ip&gt; címen m?köd? csomóponthoz (alapértelmezett: 127.0.0.1)
+        <translation>Parancsok küldése &lt;ip&gt; címen működő csomóponthoz (alapértelmezett: 127.0.0.1)
 </translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Execute command when the best block changes (%s in cmd is replaced by block hash)</source>
-        <translation>Parancs, amit akkor hajt végre, amikor a legjobb blokk megváltozik (%s a cmd-ban lecserél?dik a blokk hash-re)</translation>
+        <translation>Parancs, amit akkor hajt végre, amikor a legjobb blokk megváltozik (%s a cmd-ban lecserélődik a blokk hash-re)</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</source>
-        <translation>Parancs, amit akkor hajt végre, amikor egy tárca-tranzakció megváltozik  (%s a parancsban lecserél?dik a blokk TxID-re)</translation>
+        <translation>Parancs, amit akkor hajt végre, amikor egy tárca-tranzakció megváltozik  (%s a parancsban lecserélődik a blokk TxID-re)</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -3664,7 +3664,7 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="+137"/>
         <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
-        <translation>A %s nem elérhet? ezen a gépen (bind returned error %d, %s)</translation>
+        <translation>A %s nem elérhető ezen a gépen (bind returned error %d, %s)</translation>
     </message>
     <message>
         <location line="-127"/>
@@ -3729,7 +3729,7 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="+2"/>
         <source>Cannot resolve -externalip address: &apos;%s&apos;</source>
-        <translation>Küls? cím (-externalip address) feloldása nem sikerült: &apos;%s&apos;</translation>
+        <translation>Külső cím (-externalip address) feloldása nem sikerült: &apos;%s&apos;</translation>
     </message>
     <message>
         <location line="-25"/>
@@ -3764,7 +3764,7 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="-101"/>
         <source>Add a node to connect to and attempt to keep the connection open</source>
-        <translation>Elérend? csomópont megadása and attempt to keep the connection open</translation>
+        <translation>Elérendő csomópont megadása and attempt to keep the connection open</translation>
     </message>
     <message>
         <location line="+119"/>
