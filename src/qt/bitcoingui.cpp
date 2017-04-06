@@ -329,12 +329,25 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     toolbar2->addWidget(progressBar);
 
 	addToolBarBreak(Qt::TopToolBarArea);
-    QToolBar *toolbar3 = addToolBar(tr("Green bar"));
+    QToolBar *toolbar3 = addToolBar(tr("Logo bar"));
     addToolBar(Qt::TopToolBarArea,toolbar3);
     toolbar3->setOrientation(Qt::Horizontal);
     toolbar3->setMovable( false );
     toolbar3->setObjectName("toolbar3");
-    toolbar3->setFixedHeight(2);
+    toolbar3->setFixedHeight(52);
+    QLabel *grcLogoLabel = new QLabel();
+    grcLogoLabel->setPixmap(QPixmap(":/images/logo_hz"));
+    toolbar3->addWidget(grcLogoLabel);
+    QWidget* logoSpacer = new QWidget();
+    logoSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    toolbar3->addWidget(logoSpacer);
+    logoSpacer->setObjectName("logoSpacer");
+    QLabel *boincLogoLabel = new QLabel();
+    boincLogoLabel->setText("<html><head/><body><p align=\"center\"><a href=\"https://boinc.berkeley.edu\"><span style=\" text-decoration: underline; color:#0000ff;\"><img src=\":/images/boinc\"/></span></a></p></body></html>");
+    boincLogoLabel->setTextFormat(Qt::RichText);
+    boincLogoLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    boincLogoLabel->setOpenExternalLinks(true);
+    toolbar3->addWidget(boincLogoLabel);
 
     syncIconMovie = new QMovie(":/movies/update_spinner", "GIF", this);
 
@@ -871,10 +884,6 @@ void BitcoinGUI::createActions()
 	exchangeAction->setStatusTip(tr("Web Site"));
 	exchangeAction->setMenuRole(QAction::TextHeuristicRole);
 
-	boincAction = new QAction(QIcon(":/icons/boinc"), tr("&Boinc Stats"), this);
-	boincAction->setStatusTip(tr("Boinc Stats"));
-	boincAction->setMenuRole(QAction::TextHeuristicRole);
-
 	websiteAction = new QAction(QIcon(":/icons/www"), tr("&Web Site"), this);
 	websiteAction->setStatusTip(tr("Web Site"));
 	websiteAction->setMenuRole(QAction::TextHeuristicRole);
@@ -883,6 +892,9 @@ void BitcoinGUI::createActions()
 	chatAction->setStatusTip(tr("GRC Chatroom"));
 	chatAction->setMenuRole(QAction::TextHeuristicRole);
 
+    boincAction = new QAction(QIcon(":/images/boinc"), tr("&BOINC"), this);
+    boincAction->setStatusTip(tr("Gridcoin rewards distributed computing with BOINC"));
+    boincAction->setMenuRole(QAction::TextHeuristicRole);
 
     connect(overviewAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(overviewAction, SIGNAL(triggered()), this, SLOT(gotoOverviewPage()));
@@ -1070,10 +1082,13 @@ void BitcoinGUI::createMenuBar()
     settings->addSeparator();
     settings->addAction(optionsAction);
 
-    QMenu *help = appMenuBar->addMenu(tr("&Help"));
-    help->addAction(openRPCConsoleAction);
-    help->addSeparator();
-    help->addAction(aboutAction);
+    QMenu *community = appMenuBar->addMenu(tr("&Community"));
+    community->addAction(bxAction);
+    community->addAction(exchangeAction);
+    community->addAction(boincAction);
+    community->addAction(chatAction);
+    community->addSeparator();
+    community->addAction(websiteAction);
 
 #ifdef WIN32
 	QMenu *upgrade = appMenuBar->addMenu(tr("&Upgrade QT Client"));
@@ -1118,6 +1133,11 @@ void BitcoinGUI::createMenuBar()
 
 #endif /* defined(WIN32) */
 
+    QMenu *help = appMenuBar->addMenu(tr("&Help"));
+    help->addAction(openRPCConsoleAction);
+    help->addSeparator();
+    help->addAction(aboutAction);
+
 }
 
 void BitcoinGUI::createToolBars()
@@ -1127,7 +1147,7 @@ void BitcoinGUI::createToolBars()
     addToolBar(Qt::LeftToolBarArea,toolbar);
     toolbar->setOrientation(Qt::Vertical);
     toolbar->setMovable( false );
-    toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    toolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
     toolbar->setContextMenuPolicy(Qt::PreventContextMenu);
     toolbar->setIconSize(QSize(50,25));
     toolbar->addAction(overviewAction);
@@ -1135,13 +1155,7 @@ void BitcoinGUI::createToolBars()
     toolbar->addAction(receiveCoinsAction);
     toolbar->addAction(historyAction);
     toolbar->addAction(addressBookAction);
-    toolbar->addAction(bxAction);
-    toolbar->addAction(websiteAction);
-    toolbar->addAction(exchangeAction);
-    toolbar->addAction(boincAction);
-    toolbar->addAction(chatAction);
-//	toolbar->addAction(statisticsAction);
-//	toolbar->addAction(blockAction);
+
 	// Prevent Lock from falling off the page
 
     QWidget* spacer = new QWidget();

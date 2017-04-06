@@ -6,8 +6,8 @@ QMainWindow {
 }
 
 QToolBar#toolbar QLabel{
-    padding-top:15px;
-    padding-bottom:10px;
+    padding-top:5px;
+    padding-bottom:5px;
     margin:0px;
 }
 
@@ -17,15 +17,21 @@ QToolBar#toolbar2 QLabel{
     margin:0px;
 }
 
+QToolBar#toolbar3 QLabel{
+    padding-top:0px;
+    padding-bottom:0px;
+    margin:1px;
+}
+
 #spacer {
-    background:rgb(69,65,63);
+    background-color:transparent;
     border:none;
 }
 
 #toolbar3 {
     border:none;
-    width:1px;
-    background-color: rgb(169,192,7);
+    background-color:transparent;
+    border-bottom : 2px solid rgb(169,192,7);
 }
 
 #toolbar2 {
@@ -38,43 +44,38 @@ QToolBar#toolbar2 QLabel{
     border:none;
     height:100%;
     padding-top:20px;
-    background: rgb(69,65,63);
-    text-align: left;
-    color: rgb(169,192,7);
+    background: transparent;
+    color: black;
     min-width:160px;
     max-width:160px;
 }
 
-QToolBar#toolbar QToolButton:hover {
-    background-color:qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,stop: 0 rgb(69,65,63), stop: 1 rgb(142,158,157));
-}
-
-QToolBar#toolbar2 QToolButton:hover {
-    background-color:qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,stop: 0 rgb(69,65,63), stop: 1 rgb(142,158,157));
-}
-
 QToolBar#toolbar QToolButton {
-    font-family:Century Gothic;
     padding-left:20px;
-    padding-right:200px;
+    padding-right:20px;
     padding-top:7px;
     padding-bottom:7px;
+    margin:3px;
     width:100%;
-    color: rgb(169,192,7);
-    text-align: left;
-    background-color: rgb(69,65,63);
+    color: black;
+    background-color: qlineargradient(x1: 0, y1: 0, x2: 1.0, y2: 1.0,stop: 0 rgb(200,200,200), stop: 1 rgb(200,200,200));
+    border:none;
 }
 
-QToolBar#toolbar2 QToolButton {
-    font-family:Century Gothic;
-    padding-left:20px;
-    padding-right:200px;
-    padding-top:7px;
-    padding-bottom:7px;
-    width:100%;
-    color: rgb(169,192,7);
-    text-align: left;
-    background-color: rgb(69,65,63);
+QToolBar#toolbar QToolButton:hover {
+    background-color:qlineargradient(x1: 0, y1: 0, x2: 1.0, y2: 1.0,stop: 0 rgb(210,220,7), stop: 1 rgb(98,116,3));
+    color:white;
+    border:none;
+}
+
+QToolBar#toolbar QToolButton:checked {
+    background-color: qlineargradient(x1: 0, y1: 0, x2: 1.0, y2: 1.0,stop: 0 rgb(150,150,150), stop: 1 rgb(150,150,150));
+    border:none;
+}
+
+QToolBar#toolbar QToolButton:checked:hover {
+    background-color: qlineargradient(x1: 0, y1: 0, x2: 1.0, y2: 1.0,stop: 0 rgb(210,220,7), stop: 1 rgb(98,116,3));
+    border:none;
 }
 
 #labelMiningIcon {
@@ -86,23 +87,25 @@ QToolBar#toolbar2 QToolButton {
 }
 
 QMenu {
-    background: rgb(69,65,63);
-    color: rgb(169,192,7);
+    background: lightgray;
+    color: black;
     padding-bottom:10px;
 }
 
 QMenu::item {
-    color: rgb(169,192,7);
+    color: black;
     background-color: transparent;
 }
 
 QMenu::item:selected {
-    background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(69,65,63), stop: 1 rgb(98,116,3));
+    background-color:qlineargradient(x1: 0, y1: 0, x2: 1.0, y2: 1.0,stop: 0 rgb(210,220,7), stop: 1 rgb(98,116,3));
+    color:white;
 }
 
 QMenuBar {
-    background: rgb(69,65,63);
-    color: rgb(169,192,7);
+    background: rgba(200,200,200,25%);
+    color: black;
+    border-bottom : 2px solid rgb(169,192,7);
 }
 
 QMenuBar::item {
@@ -110,12 +113,13 @@ QMenuBar::item {
     padding-top:8px;
     padding-left:15px;
     padding-right:15px;
-    color: rgb(169,192,7);
+    color: black;
     background-color: transparent;
 }
 
 QMenuBar::item:selected {
-    background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(69,65,63), stop: 1 rgb(98,116,3));
+    background-color:qlineargradient(x1: 0, y1: 0, x2: 1.0, y2: 1.0,stop: 0 rgb(210,220,7), stop: 1 rgb(98,116,3));
+    color: white;
 }
 /* END style main window*/
 
@@ -135,8 +139,8 @@ QScrollBar::handle:horizontal {
 }
 
 QScrollBar::handle:horizontal:hover {
-    background: rgb(76,155,195);
-    border: 1px rgb(76,155,195);
+    background: rgb(61,174,233);
+    border: 1px rgb(61,174,233);
     border-radius: 3px;
     min-width: 20px;
 }
@@ -171,8 +175,8 @@ QScrollBar::handle:vertical {
 }
 
 QScrollBar::handle:vertical:hover {
-    background: rgb(76,155,195);
-    border: 1px rgb(76,155,195);
+    background: rgb(61,174,233);
+    border: 1px rgb(61,174,233);
     border-radius: 3px;
     min-height: 20px;
 }
@@ -419,7 +423,7 @@ QTabBar::tab:selected {
 }
 
 QTabBar::tab:hover {
-    background: rgb(76,155,195);
+    background: rgb(61,174,233);
 }
 
 QTabBar::tab:!selected {

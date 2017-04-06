@@ -752,14 +752,13 @@ std::string GetGlobalStatus()
 		{
 				sWeight = sWeight.substr(0,13) + "E" + RoundToString((double)sWeight.length()-13,0);
 		}
-		status = "&nbsp;<br>Blocks: " + RoundToString((double)nBestHeight,0) + "; PoR Difficulty: "
-			+ RoundToString(PORDiff,3) + "; Net Weight: " + RoundToString(GetPoSKernelPS2(),2)
-			+ "<br>DPOR Weight: " +  sWeight + "; Status: " + msMiningErrors
-			+ "<br>Magnitude: " + RoundToString(boincmagnitude,2) + "; Project: " + msMiningProject
-			+ "<br>CPID: " +  sOverviewCPID + " " +  msMiningErrors2 + " "
-			+ "<br>" + msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + msMiningErrors8 + " "
-			+ "<br>" + msRSAOverview + "<br>&nbsp;";
-		//The last line break is for Windows 8.1 Huge Toolbar
+        status ="<table><tr><td><b>Blocks: &nbsp;</b>" + RoundToString((double)nBestHeight,0) + "</td><td><b>PoR Difficulty: &nbsp;</b>" + RoundToString(PORDiff,3) + "</td></tr>"
+                + "<tr><td><b>Net Weight: &nbsp;</b>" + RoundToString(GetPoSKernelPS2(),2) + " &nbsp;&nbsp;&nbsp;</td><td><b>DPOR Weight: &nbsp;</b>" + sWeight + "</td></tr>"
+                + "<tr><td><b>Magnitude: &nbsp;</b>" + RoundToString(boincmagnitude,2) + "</td><td><b>Project: &nbsp;</b>" + msMiningProject  + "</td></tr>"
+                + "<tr><td><b>CPID: &nbsp;</b>" + sOverviewCPID + " &nbsp;&nbsp;&nbsp;</td><td><b>Status: &nbsp;</b>" + msMiningErrors + "</td></tr>"
+                + "<tr><td colspan=\"2\">" +  msMiningErrors2 + "</td></tr>"
+                + "<tr><td colspan=\"2\">" + msMiningErrors5 + " &nbsp;" + msMiningErrors6 + " &nbsp;" + msMiningErrors7 + " &nbsp;" + msMiningErrors8 + "</td></tr>"
+                + "<tr><td colspan=\"2\">" + msRSAOverview + "</td></tr></table>";
 		msGlobalStatus = status;
 		return status;
 	}
@@ -6882,7 +6881,7 @@ bool AcidTest(std::string precommand, std::string acid, CNode* pfrom)
 	
 		if (false && hash != pw1)
 		{
-			//2/16 18:06:48 Acid test failed for 192.168.1.4:32749 1478973994,encrypt,1b089d19d23fbc911c6967b948dd8324,windows			if (fDebug) printf("Acid test failed for %s %s.",NodeAddress(pfrom).c_str(),acid.c_str());
+			//2/16 18:06:48 Acid test failed for 192.168.1.4:32749 1478973994,encrypt,1b089d19d23fbc911c6967b948dd8324,windows			if (fDebug) printf("Acid test failed for %s %s.",NodeAddress(pfrom).c_str(),acid.c_str());
 			double punishment = GetArg("-punishment", 10);
 			pfrom->Misbehaving(punishment);
 			return false;
@@ -10379,7 +10378,7 @@ void SetUpExtendedBlockIndexFieldsOnce()
 	printf("SETUPExtendedBIfieldsOnce Testnet: %s \r\n",YesNo(fTestNet).c_str());
 	if (fTestNet)
 	{
-		if (pindexBest->nHeight < 20000) return;	}
+		if (pindexBest->nHeight < 20000) return;	}
 	else
 	{
 		if (pindexBest->nHeight < 361873) return;
