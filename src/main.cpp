@@ -11,6 +11,7 @@
 #include "init.h"
 #include "ui_interface.h"
 #include "kernel.h"
+#include "block.h"
 #include <math.h>       /* pow */
 #include "scrypt.h"
 #include <boost/algorithm/string/replace.hpp>
@@ -331,6 +332,7 @@ std::map<std::string, StructCPID> mvResearchAge;
 std::map<std::string, HashSet> mvCPIDBlockHashes;
 
 enum Checkpoints::CPMode CheckpointsMode;
+BlockFinder blockFinder;
 
 // Gridcoin - Rob Halford
 
@@ -1972,65 +1974,6 @@ bool GetTransaction(const uint256 &hash, CTransaction &tx, uint256 &hashBlock)
 //
 // CBlock and CBlockIndex
 //
-
-static CBlockIndex* pblockindexFBBHLast;
-CBlockIndex* FindBlockByHeight(int nHeight)
-{
-    CBlockIndex *pblockindex;
-    if (nHeight < nBestHeight / 2)
-        pblockindex = pindexGenesisBlock;
-    else
-        pblockindex = pindexBest;
-    if (pblockindexFBBHLast && abs(nHeight - pblockindex->nHeight) > abs(nHeight - pblockindexFBBHLast->nHeight))
-        pblockindex = pblockindexFBBHLast;
-    while (pblockindex->nHeight > nHeight)
-        pblockindex = pblockindex->pprev;
-    while (pblockindex->nHeight < nHeight)
-        pblockindex = pblockindex->pnext;
-    pblockindexFBBHLast = pblockindex;
-    return pblockindex;
-}
-
-
-CBlockIndex* RPCFindBlockByHeight(int nHeight)
-{
-	//This keeps the threads separated and ensures pointers are in distinct locations
-    CBlockIndex *RPCpblockindex;
-    if (nHeight < nBestHeight / 2)
-        RPCpblockindex = pindexGenesisBlock;
-    else
-        RPCpblockindex = pindexBest;
-    while (RPCpblockindex->nHeight > nHeight)
-	{
-        RPCpblockindex = RPCpblockindex->pprev;
-	}
-    while (RPCpblockindex->nHeight < nHeight)
-	{
-        RPCpblockindex = RPCpblockindex->pnext;
-	}
-    return RPCpblockindex;
-}
-
-CBlockIndex* MainFindBlockByHeight(int nHeight)
-{
-    CBlockIndex *Mainpblockindex;
-    if (nHeight < nBestHeight / 2)
-        Mainpblockindex = pindexGenesisBlock;
-    else
-        Mainpblockindex = pindexBest;
-    while (Mainpblockindex->nHeight > nHeight)
-	{
-        Mainpblockindex = Mainpblockindex->pprev;
-	}
-    while (Mainpblockindex->nHeight < nHeight)
-	{
-        Mainpblockindex = Mainpblockindex->pnext;
-	}
-    return Mainpblockindex;
-}
-
-
-
 bool CBlock::ReadFromDisk(const CBlockIndex* pindex, bool fReadTransactions)
 {
     if (!fReadTransactions)
@@ -4018,7 +3961,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
     // New best block
     hashBestChain = hash;
     pindexBest = pindexNew;
-    pblockindexFBBHLast = NULL;
+    blockFinder.Reset();
     nBestHeight = pindexBest->nHeight;
     nBestChainTrust = pindexNew->nChainTrust;
     nTimeBestReceived =  GetAdjustedTime();
@@ -6082,7 +6025,7 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 			int nMinDepth = nMaxDepth - nLookback;
 			if (nMinDepth < 2) nMinDepth = 2;
 			// Start at the earliest block index:
-			CBlockIndex* pblockindex = FindBlockByHeight(nMinDepth);
+			CBlockIndex* pblockindex = blockFinder.FindByHeight(nMinDepth);
 		    while (pblockindex->nHeight < nMaxDepth-1)
 			{
 						pblockindex = pblockindex->pnext;
@@ -6404,7 +6347,7 @@ MiningCPID GetBoincBlockByHeight(int ii, double& mint, int64_t& nTime)
 {
 	CBlock block;
 	MiningCPID bb;
-	CBlockIndex* pblockindex = FindBlockByHeight(ii);
+	CBlockIndex* pblockindex = blockFinder.FindByHeight(ii);
 	bb.initialized=false;
 	if (pblockindex == NULL) return bb;
 	if (pblockindex->pnext == NULL) return bb;
@@ -9872,7 +9815,7 @@ bool UnusualActivityReport()
 	int ii = 0;
 			for (ii = nMinDepth; ii <= nMaxDepth; ii++)
 			{
-     			CBlockIndex* pblockindex = FindBlockByHeight(ii);
+     			CBlockIndex* pblockindex = blockFinder.FindByHeight(ii);
 				if (block.ReadFromDisk(pblockindex))
 				{
 					int64_t nFees = 0;
@@ -10169,8 +10112,7 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 	if (nMinDepth < 2) nMinDepth=2;
 	if (!bFullTableScan) nMinDepth = nMaxDepth-6;
 	if (nMaxDepth < nMinDepth) return false;
-	CBlockIndex* pindex = pindexBest;
-	pindex = FindBlockByHeight(nMinDepth);
+	CBlockIndex* pindex = blockFinder.FindByHeight(nMinDepth);
 	// These are memorized consecutively in order from oldest to newest
 
     while (pindex->nHeight < nMaxDepth)
@@ -10382,10 +10324,9 @@ void SetUpExtendedBlockIndexFieldsOnce()
 
 	std::string sSuperblocks = "";
 	std::string sContracts   = "";
-    CBlockIndex* pindex = pindexGenesisBlock;
 	int iStartHeight = fTestNet ? 20000 : 361873;
 
-	pindex = FindBlockByHeight(iStartHeight);
+    CBlockIndex* pindex = blockFinder.FindByHeight(iStartHeight);
     if (!pindex) return;
 
 	if (pindex && pindex->pnext)

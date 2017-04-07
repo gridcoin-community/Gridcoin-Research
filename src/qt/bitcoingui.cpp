@@ -47,6 +47,7 @@
 #include "rpcconsole.h"
 #include "wallet.h"
 #include "init.h"
+#include "block.h"
 
 #ifdef Q_OS_MAC
 #include "macdockiconhandler.h"
@@ -1705,7 +1706,7 @@ std::string RetrieveBlockAsString(int lSqlBlock)
 		if (lSqlBlock==0) lSqlBlock=1;
 		if (lSqlBlock > nBestHeight-2) return "";
 		CBlock block;
-		CBlockIndex* blockindex = MainFindBlockByHeight(lSqlBlock);
+		CBlockIndex* blockindex = BlockFinder().FindByHeight(lSqlBlock);
 		block.ReadFromDisk(blockindex);
 
 		std::string s = "";
