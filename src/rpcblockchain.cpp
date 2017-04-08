@@ -1077,7 +1077,6 @@ bool TallyMagnitudesInSuperblock()
 					{
 						StructCPID stCPID = GetInitializedStructCPID2(cpid,mvDPORCopy);
 	     				stCPID.TotalMagnitude = magnitude;
-						stCPID.MagnitudeCount++;
 						stCPID.Magnitude = magnitude;
 						stCPID.cpid = cpid;
 						mvDPORCopy[cpid]=stCPID;
@@ -3644,7 +3643,7 @@ Array MagnitudeReport(std::string cpid)
 											{
 
 												StructCPID stCPID = GetLifetimeCPID(structMag.cpid,"MagnitudeReport");
-												double days = (GetAdjustedTime() - stCPID.LowLockTime)/86400;
+												double days = (GetAdjustedTime() - stCPID.LowLockTime) / 86400.0;
      											entry.push_back(Pair("CPID",structMag.cpid));
 												// entry.push_back(Pair("PoolMining",bPoolMiningMode));
 												double dWeight = (double)GetRSAWeightByCPID(structMag.cpid);
