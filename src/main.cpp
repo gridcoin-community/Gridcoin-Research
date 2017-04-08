@@ -7513,59 +7513,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 				    pfrom->PushMessage("expmag_nresp", neural_response);
 				}
 			}
-			else if (neural_request=="addbeacon")
-			{
-				    std::string sBeacon_Sponsorship_Enabled = GetArgument("sponsor", "false");
-					if (sBeacon_Sponsorship_Enabled=="true")
-					{
-
-						std::vector<std::string> s = split(neural_request_id,"|");
-						std::string result = "Malformed Beacon";
-						bool bIgnore = false;
-
-						if (s.size() > 1)
-						{
-								std::string cpid = s[0];
-								std::string myBeacon = MyBeaconExists(cpid);
-								if (myBeacon.length() > 10)
-								{
-									bIgnore=true;
-									result = "Beacon already exists; ignoring request.";
-									if (fDebug10) printf("Add neural beacon: %s ",result.c_str());
-		  							pfrom->Misbehaving(10);
-								}
-								if (s.size() >= 3)
-								{
-									std::string cpidv2 = s[2];
-									std::string hashRand = s[3];
-									uint256 uHash(hashRand);
-									bool IsCPIDValid2 = CPID_IsCPIDValid(cpid,cpidv2,uHash);
-									if (!IsCPIDValid2)
-									{
-										result = "Unable to sponsor beacon for invalid CPID " + cpid;
-										if (fDebug10) printf("Add Neural Beacon: %s",result.c_str());
-		  								pfrom->Misbehaving(10);
-     									bIgnore = true;
-									}
-								}
-								// Have we already sponsored beacon before?
-								if (ReadCache("sponsored",cpid)=="true")
-								{
-									result = "Unable to sponsor beacon for CPID " + cpid + ": already sponsored previously.";
-									if (fDebug10) printf("Add neural beacon : %s",result.c_str());
-		 							pfrom->Misbehaving(10);
-									bIgnore = true;
-								}
-								if (!bIgnore)
-								{
-										result = AddContract("beacon",cpid,s[1]);
-										WriteCache("sponsored",cpid,"true",GetAdjustedTime());
-								}
-								if (fDebug3) printf("Acting as Sponsor for CPID %s : adding beacon %s; result %s", cpid.c_str(), s[1].c_str(), result.c_str());
-						}
-						pfrom->PushMessage("addbeac_nresp", result);
-					}
-			}
 			else if (neural_request=="quorum")
 			{
 				// 7-12-2015 Resolve discrepencies in the neural network intelligently - allow nodes to speak to each other
