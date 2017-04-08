@@ -5,12 +5,7 @@
 #include <map>
 
 extern int nBoincUtilization;
-extern std::string sBoincMD5;
-extern std::string sBoincBA;
 extern std::string sRegVer;
-extern std::string sBoincDeltaOverTime;
-extern std::string sMinedHash;
-extern std::string sSourceBlock;
 extern int nRegVersion;
 extern bool bDebugMode;
 extern bool bBoincSubsidyEligible;
@@ -35,9 +30,6 @@ extern volatile bool bDoTally;
 extern volatile bool bExecuteGridcoinServices;
 extern volatile bool bTallyFinished;
 extern volatile bool bGridcoinGUILoaded;
-extern volatile double nGlobalHashCounter;
-
-extern int miningthreadcount;
 
 struct StructCPID
 {

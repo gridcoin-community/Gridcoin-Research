@@ -116,21 +116,3 @@ void TransactionDescDialog::on_btnViewAttachment_clicked()
 	}
 
 }
-
-void TransactionDescDialog::on_btnExecute_clicked()
-{
-    //printf("Executing code... %s",hashBoinc.c_str());
-	std::string code = ExtractXML(msHashBoinc,"<CODE>","</CODE>");
-	if (code.length() > 1)
-	{
-		std::string narr2 = "Are you sure you want to execute this smart contract: " + code;
-		//bool result = askQuestion("Confirm Smart Contract Execution",narr2);
-		bool result = false;
-		askQuestion("Confirm Smart Contract Execution",narr2,&result);
-		if (result)
-		{
-			ExecuteCode();
-		}
-	}
-
-}

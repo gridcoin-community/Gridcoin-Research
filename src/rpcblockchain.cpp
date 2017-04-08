@@ -185,8 +185,6 @@ int DownloadBlocks();
 double GetBlockValueByHash(uint256 hash);
 double cdbl(std::string s, int place);
 void ScriptPubKeyToJSON(const CScript& scriptPubKey, Object& out);
-bool AESSkeinHash(unsigned int diffbytes, double rac, uint256 scrypthash, std::string& out_skein, std::string& out_aes512);
-				  std::string aes_complex_hash(uint256 scrypt_hash);
 std::vector<std::string> split(std::string s, std::string delim);
 double LederstrumpfMagnitude2(double mag,int64_t locktime);
 

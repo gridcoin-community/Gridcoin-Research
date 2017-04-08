@@ -234,7 +234,6 @@ int64_t nLastBlockSubmitted = 0;
 
 uint256 muGlobalCheckpointHash = 0;
 uint256 muGlobalCheckpointHashRelayed = 0;
-int muGlobalCheckpointHashCounter = 0;
 ///////////////////////MINOR VERSION////////////////////////////////
 std::string msMasterProjectPublicKey  = "049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a";
 // The Private Key is revealed by design, for public messages only:
@@ -275,15 +274,12 @@ CBigNum bnProofOfWorkLimitTestNet(~uint256(0) >> 16);
 unsigned int nStakeMinAge = 16 * 60 * 60; // 16 hours
 unsigned int nStakeMaxAge = -1; // unlimited
 unsigned int nModifierInterval = 10 * 60; // time to elapse before new modifier is computed
-bool bRemotePaymentsEnabled = false;
 bool bOPReturnEnabled = true;
-bool bOptionPaymentsEnabled = false;
 
 // Gridcoin:
 int nCoinbaseMaturity = 100;
 CBlockIndex* pindexGenesisBlock = NULL;
 int nBestHeight = -1;
-int nLastBestHeight = -1;
 
 uint256 nBestChainTrust = 0;
 uint256 nBestInvalidTrust = 0;
@@ -354,14 +350,9 @@ extern double cdbl(std::string s, int place);
 extern double GetBlockValueByHash(uint256 hash);
 extern void WriteAppCache(std::string key, std::string value);
 extern std::string AppCache(std::string key);
-void StartPostOnBackgroundThread(int height, MiningCPID miningcpid, uint256 hashmerkleroot, double nNonce, double subsidy, unsigned int nVersion, std::string message);
 extern void LoadCPIDsInBackground();
-bool SubmitGridcoinCPUWork(CBlock* pblock, CReserveKey& reservekey, double nonce);
-CBlock* getwork_cpu(MiningCPID miningcpid, bool& succeeded,CReserveKey& reservekey);
 int ReindexWallet();
 
-extern bool AESSkeinHash(unsigned int diffbytes, double rac, uint256 scrypthash, std::string& out_skein, std::string& out_aes512);
-void ExecuteCode();
 extern void ThreadCPIDs();
 extern std::string GetGlobalStatus();
 
@@ -375,122 +366,78 @@ extern void InitializeCPIDs();
 double GetNetworkAvgByProject(std::string projectname);
 extern bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 extern bool IsCPIDValidv2(MiningCPID& mc, int height);
-extern void FindMultiAlgorithmSolution(CBlock* pblock, uint256 hash, uint256 hashTaget, double miningrac);
 extern std::string getfilecontents(std::string filename);
 extern std::string ToOfficialName(std::string proj);
 extern bool LessVerbose(int iMax1000);
 extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
-extern void ShutdownGridcoinMiner();
 extern bool OutOfSync();
 extern MiningCPID GetNextProject(bool bForce);
 extern void HarvestCPIDs(bool cleardata);
 
 static boost::thread_group* cpidThreads = NULL;
-//static boost::thread_group* tallyThreads = NULL;
-
-
 
 ///////////////////////////////
 // Standard Boinc Projects ////
 ///////////////////////////////
 
+//Global variables to display current mined project in various places:
+std::string 	msMiningProject = "";
+std::string 	msMiningCPID = "";
+std::string    msPrimaryCPID = "";
+std::string    msENCboincpublickey = "";
+double      	mdMiningRAC =0;
+double         mdMiningNetworkRAC = 0;
+double			mdPORNonce = 0;
+double         mdPORNonceSolved = 0;
+double         mdLastPorNonce = 0;
+double         mdMachineTimer = 0;
+double         mdMachineTimerLast = 0;
+bool           mbBlocksDownloaded = false;
+// Mining status variables
+std::string    msHashBoinc    = "";
+std::string    msHashBoincTxId= "";
+std::string    msMiningErrors = "";
+std::string    msMiningErrors2 = "";
+std::string    msMiningErrors3 = "";
+std::string    msMiningErrors5 = "";
+std::string    msMiningErrors6 = "";
+std::string    msMiningErrors7 = "";
+std::string    msMiningErrors8 = "";
+std::string    msPeek = "";
+std::string    msLastCommand = "";
 
+std::string    msAttachmentGuid = "";
 
- //Global variables to display current mined project in various places:
- std::string 	msMiningProject = "";
- std::string 	msMiningCPID = "";
- std::string    msPrimaryCPID = "";
- std::string    msENCboincpublickey = "";
- double      	mdMiningRAC =0;
- double         mdMiningNetworkRAC = 0;
- double			mdPORNonce = 0;
- double         mdPORNonceSolved = 0;
- double         mdLastPorNonce = 0;
- double         mdMachineTimer = 0;
- double         mdMachineTimerLast = 0;
- bool           mbBlocksDownloaded = false;
- // Mining status variables
- std::string    msHashBoinc    = "";
- std::string    msHashBoincTxId= "";
- std::string    msMiningErrors = "";
- std::string    msMiningErrors2 = "";
- std::string    msMiningErrors3 = "";
- std::string    msMiningErrors5 = "";
- std::string    msMiningErrors6 = "";
- std::string    msMiningErrors7 = "";
- std::string    msMiningErrors8 = "";
- std::string    msPeek = "";
- std::string    msLastCommand = "";
+std::string    msMiningErrorsIncluded = "";
+std::string    msMiningErrorsExcluded = "";
+std::string    msContracts = "";
 
- std::string    msAttachmentGuid = "";
+std::string    msRSAOverview = "";
+std::string    Organization = "";
+std::string    OrganizationKey = "";
+std::string    msNeuralResponse = "";
+std::string    msHDDSerial = "";
+//When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
 
- std::string    msMiningErrorsIncluded = "";
- std::string    msMiningErrorsExcluded = "";
- std::string    msContracts = "";
+int nGrandfather = 860000;
+int nNewIndex = 271625;
+int nNewIndex2 = 364500;
 
- std::string    msRSAOverview = "";
- std::string    Organization = "";
- std::string    OrganizationKey = "";
- std::string    msNeuralResponse = "";
- std::string    msHDDSerial = "";
- //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
+int64_t nGenesisSupply = 340569880;
 
- int nGrandfather = 860000;
- int nNewIndex = 271625;
- int nNewIndex2 = 364500;
+// Stats for Main Screen:
+std::string    msGlobalStatus = "";
+std::string    msLastPaymentTime = "";
 
- int64_t nGenesisSupply = 340569880;
-
- //GPU Projects:
- std::string 	msGPUMiningProject = "";
- std::string 	msGPUMiningCPID = "";
- std::string    msGPUENCboincpublickey = "";
- std::string    msGPUboinckey = "";
- double    	    mdGPUMiningRAC = 0;
- double         mdGPUMiningNetworkRAC = 0;
- // Stats for Main Screen:
- double         mdLastPoBDifficulty = 0;
- double         mdLastDifficulty = 0;
- std::string    msGlobalStatus = "";
- std::string    msLastPaymentTime = "";
- std::string    msMyCPID = "";
- double         mdOwed = 0;
-
- // CPU Miner threads global vars
-
- volatile double nGlobalHashCounter = 0;
-
-
-bool fImporting = false;
-bool fReindex = false;
-bool fBenchmark = false;
-bool fTxIndex = false;
 bool fColdBoot = true;
 bool fEnforceCanonical = true;
 bool fUseFastIndex = false;
-
-
- int nBestAccepted = -1;
-
-
- uint256 nBestChainWork = 0;
- uint256 nBestInvalidWork = 0;
- //Optimizing internal cpu miner:
- uint256 GlobalhashMerkleRoot = 0;
- uint256 GlobalSolutionPowHash = 0;
-
 
 // Gridcoin status    *************
 MiningCPID GlobalCPUMiningCPID = GetMiningCPID();
 int nBoincUtilization = 0;
 double nMinerPaymentCount = 0;
-int nPrint = 0;
-std::string sBoincMD5 = "";
-std::string sBoincBA = "";
 std::string sRegVer = "";
-std::string sBoincDeltaOverTime = "";
-std::string sMinedHash = "";
-std::string sSourceBlock = "";
 std::string sDefaultWalletAddress = "";
 
 
@@ -1163,7 +1110,8 @@ std::string DefaultWalletAddress()
 	try
 	{
 		//Gridcoin - Find the default public GRC address (since a user may have many receiving addresses):
-		if (sDefaultWalletAddress.length() > 0) return sDefaultWalletAddress;
+		if (!sDefaultWalletAddress.empty())
+            return sDefaultWalletAddress;
 		string strAccount;
 		BOOST_FOREACH(const PAIRTYPE(CTxDestination, string)& item, pwalletMain->mapAddressBook)
 		{
@@ -2607,7 +2555,6 @@ bool ClientOutOfSync()
 	//This function will return True if the client is downloading blocks, reindexing, or out of sync by more than 30 blocks as compared to its peers, or if its best block is over 30 mins old
 	double lastblockage = PreviousBlockAge();
 	if (lastblockage > (30*60)) return true;
-	if (fReindex || fImporting ) return true;
 	if (pindexBest == NULL || nBestHeight < GetNumBlocksOfPeers()-30) return true;
 	return false;
 }
@@ -2618,7 +2565,6 @@ bool OutOfSyncByMoreThan(double dMinutes)
 {
 	double lastblockage = PreviousBlockAge();
 	if (lastblockage > (60*dMinutes)) return true;
-	if (fReindex || fImporting ) return true;
 	if (pindexBest == NULL || nBestHeight < GetNumBlocksOfPeers()-30) return true;
 	return false;
 }
@@ -2629,7 +2575,6 @@ bool OutOfSyncByAge()
 {
 	double lastblockage = PreviousBlockAge();
 	if (lastblockage > (60*30)) return true;
-	if (fReindex || fImporting ) return true;
 	return false;
 }
 
@@ -3212,31 +3157,23 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 						(double)pindex->nHeight,CoinToDouble(nTotalCoinstake),CoinToDouble(nTxValueOut));
 				}
 
-				//Options Support
-				if (bOptionPaymentsEnabled)
-				{
-					// Disabled
-				}
-				else
-				{
-					// Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
-					if (bIsDPOR && pindex->nHeight > nGrandfather)
-					{
-						for (unsigned int i = 3; i < tx.vout.size(); i++)
-						{
-							std::string Recipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
-							double      Amount    = CoinToDouble(tx.vout[i].nValue);
-							if (fDebug10) printf("Iterating Recipient #%f  %s with Amount %f \r\n,",(double)i,Recipient.c_str(),Amount);
-  			  				if (Amount > 0)
-							{
-									if (fDebug3) printf("Iterating Recipient #%f  %s with Amount %f \r\n,",(double)i,Recipient.c_str(),Amount);
-									printf("POR Payment results in an overpayment; Recipient %s, Amount %f \r\n",Recipient.c_str(), Amount);
-		        					return DoS(50,error("POR Payment results in an overpayment; Recipient %s, Amount %f \r\n",
-											Recipient.c_str(), Amount));
-							}
-						}
-					}
-				}
+                // Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
+                if (bIsDPOR && pindex->nHeight > nGrandfather)
+                {
+                    for (unsigned int i = 3; i < tx.vout.size(); i++)
+                    {
+                        std::string Recipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
+                        double      Amount    = CoinToDouble(tx.vout[i].nValue);
+                        if (fDebug10) printf("Iterating Recipient #%f  %s with Amount %f \r\n,",(double)i,Recipient.c_str(),Amount);
+                        if (Amount > 0)
+                        {
+                            if (fDebug3) printf("Iterating Recipient #%f  %s with Amount %f \r\n,",(double)i,Recipient.c_str(),Amount);
+                            printf("POR Payment results in an overpayment; Recipient %s, Amount %f \r\n",Recipient.c_str(), Amount);
+                            return DoS(50,error("POR Payment results in an overpayment; Recipient %s, Amount %f \r\n",
+                                                Recipient.c_str(), Amount));
+                        }
+                    }
+                }
 			}
 
             if (!tx.ConnectInputs(txdb, mapInputs, mapQueuedChanges, posThisTx, pindex, true, false))
@@ -3907,10 +3844,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
           DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()).c_str());
 	}
 	else
-	{
 		printf("{SBC} new best=%s  height=%d ; ",hashBestChain.ToString().c_str(), nBestHeight);
-		nLastBestHeight = nBestHeight;
-	}
 
     // Check the version of the last 100 blocks to see if we need to upgrade:
     if (!fIsInitialDownload)
@@ -5180,9 +5114,7 @@ bool LoadBlockIndex(bool fAllowNew)
 		nGrandfather = 196550;
 		nNewIndex = 10;
 		nNewIndex2 = 36500;
-		bRemotePaymentsEnabled = false;
 		bOPReturnEnabled = false;
-		bOptionPaymentsEnabled = false;
 		//1-24-2016
 		MAX_OUTBOUND_CONNECTIONS = (int)GetArg("-maxoutboundconnections", 8);
     }
@@ -7266,7 +7198,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 		{
 			// R HALFORD: One of our global GRC nodes solved a PoR block, store the last blockhash in memory
 			muGlobalCheckpointHash = checkpoint.hashCheckpointGlobal;
-			muGlobalCheckpointHashCounter=0;
 			// Relay
 			pfrom->hashCheckpointKnown = checkpoint.hashCheckpointGlobal;
 			//Prevent broadcast storm: If not broadcast yet, relay the checkpoint globally:

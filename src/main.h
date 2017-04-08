@@ -42,13 +42,11 @@ static const double NeuralNetworkMultiplier = 115000;
 extern int64_t nLastBlockSolved;
 extern int64_t nLastBlockSubmitted;
 
-extern uint256 muGlobalCheckpointHash;
 extern uint256 muGlobalCheckpointHashRelayed;
-extern int muGlobalCheckpointHashCounter;
 extern std::string msMasterProjectPublicKey;
 extern std::string msMasterMessagePublicKey;
 extern std::string msMasterMessagePrivateKey;
-extern std::string msTestNetSeedSuperblocks;extern std::string msTestNetSeedContracts;extern std::string msProdSeedSuperblocks;extern std::string msProdSeedContracts400000;extern std::string msProdSeedContracts500000;extern std::string msProdSeedContracts550000;extern std::string msProdSeedContracts575000;extern std::string msProdSeedContracts600000;extern bool bNewUserWizardNotified;
+extern bool bNewUserWizardNotified;
 
 /** The maximum allowed size for a serialized block, in bytes (network rule) */
 static const unsigned int MAX_BLOCK_SIZE = 1000000;
@@ -136,7 +134,6 @@ extern unsigned int nStakeMaxAge;
 extern unsigned int nNodeLifespan;
 extern int nCoinbaseMaturity;
 extern int nBestHeight;
-extern int nLastBestHeight;
 extern uint256 nBestChainTrust;
 extern uint256 nBestInvalidTrust;
 extern uint256 hashBestChain;
@@ -152,10 +149,7 @@ extern std::set<CWallet*> setpwalletRegistered;
 extern unsigned char pchMessageStart[4];
 extern std::map<uint256, CBlock*> mapOrphanBlocks;
 
-extern int64_t COIN_YEAR_REWARD;
-extern bool bRemotePaymentsEnabled;
 extern bool bOPReturnEnabled;
-extern bool bOptionPaymentsEnabled;
 
 // Settings
 extern int64_t nTransactionFee;
@@ -174,8 +168,6 @@ extern int64_t nCPIDsLoaded;
 extern int64_t nLastGRCtallied;
 extern int64_t nLastCleaned;
 extern int64_t nLastTallyBusyWait;
-
-
 
 extern bool fUseFastIndex;
 extern unsigned int nDerivationMethodIndex;
@@ -229,16 +221,7 @@ extern int nGrandfather;
 extern int nNewIndex;
 extern int nNewIndex2;
 
-// PoB GPU Miner Global Vars:
-extern std::string 	msGPUMiningProject;
-extern std::string 	msGPUMiningCPID;
-extern double    	mdGPUMiningRAC;
-extern double       mdGPUMiningNetworkRAC;
-extern std::string  msGPUENCboincpublickey;
-extern std::string  msGPUboinckey;
 // Stats for Main Screen:
-extern double         mdLastPoBDifficulty;
-extern double         mdLastDifficulty;
 extern std::string    msGlobalStatus;
 extern std::string    msLastPaymentTime;
 
