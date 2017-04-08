@@ -3,28 +3,24 @@ TARGET = gridcoinresearch
 VERSION = 3.1.0.1
 INCLUDEPATH += src src/json src/qt
 DEFINES += QT_GUI BOOST_THREAD_USE_LIB BOOST_SPIRIT_THREADSAFE
-CONFIG += no_include_pwd thread c++11
-#QT += sql (Future Use)
+CONFIG += no_include_pwd thread c++11 exceptions concurrent
 QT += core gui network
-win32:QT += qaxcontainer
-#QT += axcontainer
-win32:QT += axserver
+
+win32 {
+    QT += axserver
+    CONFIG += axcontainer
+}
 
 greaterThan(QT_MAJOR_VERSION, 4) {
     QT += widgets
     DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
 }
 
-win32:CONFIG += qaxcontainer
-CONFIG += exceptions
-
 lessThan(QT_VERSION, 5.7.0) {
     # Qt charts not available
 }else{
     QT += charts
 }
-
-QT += concurrent
 
 # for boost 1.37, add -mt to the boost libraries
 # use: qmake BOOST_LIB_SUFFIX=-mt
@@ -185,7 +181,6 @@ HEADERS += src/qt/bitcoingui.h \
     src/qt/upgradedialog.h \
     src/qt/editaddressdialog.h \
     src/qt/bitcoinaddressvalidator.h \
-    src/qt/votingdialog.h \
     src/alert.h \
     src/addrman.h \
     src/base58.h \
@@ -274,7 +269,6 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/upgradedialog.cpp \
     src/qt/editaddressdialog.cpp \
     src/qt/bitcoinaddressvalidator.cpp \
-    src/qt/votingdialog.cpp \
     src/alert.cpp \
     src/version.cpp \
     src/sync.cpp \
@@ -335,6 +329,11 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/cpid.cpp \
     src/sql.cpp \
     src/upgrader.cpp
+
+!win32 {
+    HEADERS += src/qt/votingdialog.h
+    SOURCES += src/qt/votingdialog.cpp
+}
 
 ##
 #RC_FILE  = qaxserver.rc

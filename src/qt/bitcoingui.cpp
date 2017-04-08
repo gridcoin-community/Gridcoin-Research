@@ -29,7 +29,10 @@
 #include "signverifymessagedialog.h"
 #include "optionsdialog.h"
 #include "aboutdialog.h"
+
+#ifndef WIN32
 #include "votingdialog.h"
+#endif
 
 #include "clientmodel.h"
 #include "walletmodel.h"
@@ -1305,10 +1308,12 @@ void BitcoinGUI::aboutClicked()
 
 void BitcoinGUI::votingReservedClicked()
 {
+#ifndef WIN32
     VotingDialog *dlg = new VotingDialog(this);
     dlg->setStyleSheet("QDialog { background-image:url(:images/bkg);} QTabWidget{ background-color: transparent; color: black;} QTabWidget::pane { border: 1px solid rgb(100,100,100); } QTabBar::tab { background: rgb(150,150,150); color: black; border: 1px solid rgb(100,100,100); border-top-left-radius: 4px; border-top-right-radius: 4px; min-width: 8ex; padding: 2px; } QTabBar::tab:selected { background: rgb(200,200,200); border: 1px solid rgb(100,100,100); border-bottom-color: rgb(200,200,200); } QTabBar::tab:hover { background: rgb(76,155,195); } QTabBar::tab:!selected { margin-top: 2px; } QTableView { alternate-background-color:rgb(255,255,255); background-color:transparent; color:black;} QListWidget {color:black; background-color:transparent;} QLabel {color:black;} QGroupBox {background-color:transparent;} QLineEdit {background-color:lightgray; color:black} QHeaderView::section { background-color:lightgray; color:black; } QPushButton { background-color:lightgray; color:black; } QComboBox { background-color:lightgray; color:black; }");
     dlg->resetData();
     dlg->show();
+#endif
 }
 
 
