@@ -31,8 +31,6 @@ static const int LAST_POW_BLOCK = 2050;
 extern unsigned int REORGANIZE_FAILED;
 extern unsigned int WHITELISTED_PROJECTS;
 extern unsigned int CHECKPOINT_VIOLATIONS;
-extern double nVolatility;
-extern double nRiskFreeRate;
 static const int MAX_NEWBIE_BLOCKS = 200;
 static const int MAX_NEWBIE_BLOCKS_LEVEL2 = 500;
 static const int CHECKPOINT_DISTRIBUTED_MODE = 50;
@@ -43,7 +41,6 @@ static const double NeuralNetworkMultiplier = 115000;
 
 extern int64_t nLastBlockSolved;
 extern int64_t nLastBlockSubmitted;
-extern double mPI;
 
 extern uint256 muGlobalCheckpointHash;
 extern uint256 muGlobalCheckpointHashRelayed;
@@ -57,7 +54,6 @@ extern std::string msTestNetSeedSuperblocks;extern std::string msTestNetSeedCont
 static const unsigned int MAX_BLOCK_SIZE = 1000000;
 /** Target Blocks Per day */
 static const unsigned int BLOCKS_PER_DAY = 1000;
-static const double TOLERANCE_PERCENT = 0;  // The amount a network consensus magnitude can be skewed by before calling etsoft (Removed as of 7/3/2015 - NeuralNetwork)
 /** The maximum size for mined blocks */
 static const unsigned int MAX_BLOCK_SIZE_GEN = MAX_BLOCK_SIZE/2;
 /** The maximum size for transactions we're willing to relay/mine **/
@@ -260,11 +256,6 @@ FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszM
 FILE* AppendBlockFile(unsigned int& nFileRet);
 bool LoadBlockIndex(bool fAllowNew=true);
 void PrintBlockTree();
-CBlockIndex* FindBlockByHeight(int nHeight);
-
-CBlockIndex* RPCFindBlockByHeight(int nHeight);
-
-CBlockIndex* MainFindBlockByHeight(int nHeight);
 
 bool ProcessMessages(CNode* pfrom);
 bool SendMessages(CNode* pto, bool fSendTrickle);

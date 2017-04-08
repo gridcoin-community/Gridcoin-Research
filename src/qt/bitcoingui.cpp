@@ -29,7 +29,10 @@
 #include "signverifymessagedialog.h"
 #include "optionsdialog.h"
 #include "aboutdialog.h"
+
+#ifndef WIN32
 #include "votingdialog.h"
+#endif
 
 #include "clientmodel.h"
 #include "walletmodel.h"
@@ -47,6 +50,7 @@
 #include "rpcconsole.h"
 #include "wallet.h"
 #include "init.h"
+#include "block.h"
 
 #ifdef Q_OS_MAC
 #include "macdockiconhandler.h"
@@ -965,12 +969,10 @@ void BitcoinGUI::createActions()
 	votingAction->setStatusTip(tr("Voting"));
 	votingAction->setMenuRole(QAction::TextHeuristicRole);
 
-
     votingReservedAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Voting Linux"), this);
 	votingReservedAction->setStatusTip(tr("Voting - Linux"));
 	votingReservedAction->setMenuRole(QAction::TextHeuristicRole);
-
-
+    
 	galazaAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Galaza (Game)"), this);
 	galazaAction->setStatusTip(tr("Galaza"));
 	galazaAction->setMenuRole(QAction::TextHeuristicRole);
@@ -1103,7 +1105,10 @@ void BitcoinGUI::createMenuBar()
 	qmAdvanced->addAction(votingAction);
 #endif /* defined(WIN32) */
     
+    // Only enable the Qt voting dialog on non-Windows targets for now.
+#ifndef WIN32
 	qmAdvanced->addAction(votingReservedAction);
+#endif
     
 #ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows 
 	qmAdvanced->addAction(tickerAction);
@@ -1304,10 +1309,12 @@ void BitcoinGUI::aboutClicked()
 
 void BitcoinGUI::votingReservedClicked()
 {
+#ifndef WIN32
     VotingDialog *dlg = new VotingDialog(this);
     dlg->setStyleSheet("QDialog { background-image:url(:images/bkg);} QTabWidget{ background-color: transparent; color: black;} QTabWidget::pane { border: 1px solid rgb(100,100,100); } QTabBar::tab { background: rgb(150,150,150); color: black; border: 1px solid rgb(100,100,100); border-top-left-radius: 4px; border-top-right-radius: 4px; min-width: 8ex; padding: 2px; } QTabBar::tab:selected { background: rgb(200,200,200); border: 1px solid rgb(100,100,100); border-bottom-color: rgb(200,200,200); } QTabBar::tab:hover { background: rgb(76,155,195); } QTabBar::tab:!selected { margin-top: 2px; } QTableView { alternate-background-color:rgb(255,255,255); background-color:transparent; color:black;} QListWidget {color:black; background-color:transparent;} QLabel {color:black;} QGroupBox {background-color:transparent;} QLineEdit {background-color:lightgray; color:black} QHeaderView::section { background-color:lightgray; color:black; } QPushButton { background-color:lightgray; color:black; } QComboBox { background-color:lightgray; color:black; }");
     dlg->resetData();
     dlg->show();
+#endif
 }
 
 
@@ -1704,7 +1711,7 @@ std::string RetrieveBlockAsString(int lSqlBlock)
 		if (lSqlBlock==0) lSqlBlock=1;
 		if (lSqlBlock > nBestHeight-2) return "";
 		CBlock block;
-		CBlockIndex* blockindex = MainFindBlockByHeight(lSqlBlock);
+		CBlockIndex* blockindex = BlockFinder().FindByHeight(lSqlBlock);
 		block.ReadFromDisk(blockindex);
 
 		std::string s = "";

@@ -9,6 +9,7 @@
 #include "cpid.h"
 #include "kernel.h"
 #include "init.h" // for pwalletMain
+#include "block.h"
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include "txdb.h"
@@ -208,7 +209,7 @@ bool GridEncrypt(std::vector<unsigned char> vchPlaintext, std::vector<unsigned c
 uint256 GridcoinMultipleAlgoHash(std::string t1);
 void ExecuteCode();
 double CalculatedMagnitude(int64_t locktime,bool bUseLederstrumpf);
-
+static BlockFinder RPCBlockFinder;
 
 
 double GetNetworkProjectCountWithRAC()
@@ -485,7 +486,7 @@ Value showblock(const Array& params, bool fHelp)
     int nHeight = params[0].get_int();
     if (nHeight < 0 || nHeight > nBestHeight)
         throw runtime_error("Block number out of range.");
-    CBlockIndex* pblockindex = RPCFindBlockByHeight(nHeight);
+    CBlockIndex* pblockindex = RPCBlockFinder.FindByHeight(nHeight);
 
     if (pblockindex==NULL)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
@@ -574,7 +575,7 @@ Value getblockhash(const Array& params, bool fHelp)
     int nHeight = params[0].get_int();
     if (nHeight < 0 || nHeight > nBestHeight)       throw runtime_error("Block number out of range.");
 	if (fDebug10)	printf("Getblockhash %f",(double)nHeight);
-	CBlockIndex* RPCpblockindex = RPCFindBlockByHeight(nHeight);
+	CBlockIndex* RPCpblockindex = RPCBlockFinder.FindByHeight(nHeight);
 	return RPCpblockindex->phashBlock->GetHex();
 }
 
@@ -1075,7 +1076,6 @@ bool TallyMagnitudesInSuperblock()
 					{
 						StructCPID stCPID = GetInitializedStructCPID2(cpid,mvDPORCopy);
 	     				stCPID.TotalMagnitude = magnitude;
-						stCPID.MagnitudeCount++;
 						stCPID.Magnitude = magnitude;
 						stCPID.cpid = cpid;
 						mvDPORCopy[cpid]=stCPID;
@@ -1371,7 +1371,7 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
 			double nBalance = GetTotalBalance();
 			if (nBalance < 1.01)
 			{
-				sError = "Balance too low to send beacon.";
+				sError = "Balance too low to send beacon, 1.01 GRC minimum balance required.";
 				return false;
 			}
 		
@@ -3642,7 +3642,7 @@ Array MagnitudeReport(std::string cpid)
 											{
 
 												StructCPID stCPID = GetLifetimeCPID(structMag.cpid,"MagnitudeReport");
-												double days = (GetAdjustedTime() - stCPID.LowLockTime)/86400;
+												double days = (GetAdjustedTime() - stCPID.LowLockTime) / 86400.0;
      											entry.push_back(Pair("CPID",structMag.cpid));
 												// entry.push_back(Pair("PoolMining",bPoolMiningMode));
 												double dWeight = (double)GetRSAWeightByCPID(structMag.cpid);
@@ -3813,26 +3813,34 @@ std::string GetLocalBeaconPublicKey(std::string cpid)
 	return sBeaconPubKey;
 }
 
-std::string RetrieveCachedValueWithMaxAge(std::string sKey, int64_t iMaxSeconds)
+std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds)
 {
-	 int64_t iAge = GetAdjustedTime() - mvApplicationCacheTimestamp[sKey];
-	 std::string sValue = mvApplicationCache[sKey];
-	 // if (fDebug3) printf("\r\n BeaconAge %f, MaxAge %f, CPID %s\r\n",(double)iAge,(double)iMaxSeconds,sValue.c_str());
-	 return (iAge > iMaxSeconds) ? "" : sValue;
+    const std::string key = "beacon;" + cpid;
+    const std::string& value = mvApplicationCache[key];
+
+    // Compare the age of the beacon to the age of the current block. If we have
+    // no current block we assume that the beacon is valid.
+    int64_t iAge = pindexBest != NULL
+          ? pindexBest->nTime - mvApplicationCacheTimestamp[key]
+          : 0;
+
+    return (iAge > iMaxSeconds)
+          ? ""
+          : value;
 }
 
 std::string GetBeaconPublicKey(std::string cpid)
 {
-	//3-26-2017 - Ensure beacon public key is within 6 months of network age
-	int64_t iMaxSeconds = 60 * 24 * 30 * 6 * 60;
-	std::string sBeacon = RetrieveCachedValueWithMaxAge("beacon;" + cpid, iMaxSeconds);
-	if (sBeacon.empty()) return "";
-	// Beacon data structure: CPID,hashRand,Address,beacon public key: base64 encoded
-	std::string sContract = DecodeBase64(sBeacon);
-	std::vector<std::string> vContract = split(sContract.c_str(),";");
-	if (vContract.size() < 4) return "";
-	std::string sBeaconPublicKey = vContract[3];
-	return sBeaconPublicKey;
+   //3-26-2017 - Ensure beacon public key is within 6 months of network age
+   int64_t iMaxSeconds = 60 * 24 * 30 * 6 * 60;
+   std::string sBeacon = RetrieveBeaconValueWithMaxAge(cpid, iMaxSeconds);
+   if (sBeacon.empty()) return "";
+   // Beacon data structure: CPID,hashRand,Address,beacon public key: base64 encoded
+   std::string sContract = DecodeBase64(sBeacon);
+   std::vector<std::string> vContract = split(sContract.c_str(),";");
+   if (vContract.size() < 4) return "";
+   std::string sBeaconPublicKey = vContract[3];
+   return sBeaconPublicKey;
 }
 
 bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature)

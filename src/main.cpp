@@ -11,6 +11,7 @@
 #include "init.h"
 #include "ui_interface.h"
 #include "kernel.h"
+#include "block.h"
 #include <math.h>       /* pow */
 #include "scrypt.h"
 #include <boost/algorithm/string/replace.hpp>
@@ -194,8 +195,6 @@ int64_t nLastCalculatedMedianPeerCount = 0;
 int nLastMedianPeerCount = 0;
 int64_t nLastTallyBusyWait = 0;
 
-double nVolatility = .90;
-double nRiskFreeRate = .015;
 int64_t nLastTalliedNeural = 0;
 int64_t nLastLoadAdminMessages = 0;
 int64_t nCPIDsLoaded = 0;
@@ -232,9 +231,6 @@ json_spirit::Array MagnitudeReportCSV(bool detail);
 bool bNewUserWizardNotified = false;
 int64_t nLastBlockSolved = 0;  //Future timestamp
 int64_t nLastBlockSubmitted = 0;
-
-
-double mPI = 3.141592653589793238462643;
 
 uint256 muGlobalCheckpointHash = 0;
 uint256 muGlobalCheckpointHashRelayed = 0;
@@ -329,6 +325,7 @@ std::map<std::string, StructCPID> mvResearchAge;
 std::map<std::string, HashSet> mvCPIDBlockHashes;
 
 enum Checkpoints::CPMode CheckpointsMode;
+BlockFinder blockFinder;
 
 // Gridcoin - Rob Halford
 
@@ -438,7 +435,7 @@ static boost::thread_group* cpidThreads = NULL;
  std::string    msHDDSerial = "";
  //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
 
- int nGrandfather = 854400;
+ int nGrandfather = 860000;
  int nNewIndex = 271625;
  int nNewIndex2 = 364500;
 
@@ -512,7 +509,6 @@ std::map<std::string, int> mvTimers; // Contains event timers that reset after m
 
 // End of Gridcoin Global vars
 
-std::map<int, int> blockcache;
 bool bDebugMode = false;
 bool bPoolMiningMode = false;
 bool bBoincSubsidyEligible = false;
@@ -1915,65 +1911,6 @@ bool GetTransaction(const uint256 &hash, CTransaction &tx, uint256 &hashBlock)
 //
 // CBlock and CBlockIndex
 //
-
-static CBlockIndex* pblockindexFBBHLast;
-CBlockIndex* FindBlockByHeight(int nHeight)
-{
-    CBlockIndex *pblockindex;
-    if (nHeight < nBestHeight / 2)
-        pblockindex = pindexGenesisBlock;
-    else
-        pblockindex = pindexBest;
-    if (pblockindexFBBHLast && abs(nHeight - pblockindex->nHeight) > abs(nHeight - pblockindexFBBHLast->nHeight))
-        pblockindex = pblockindexFBBHLast;
-    while (pblockindex->nHeight > nHeight)
-        pblockindex = pblockindex->pprev;
-    while (pblockindex->nHeight < nHeight)
-        pblockindex = pblockindex->pnext;
-    pblockindexFBBHLast = pblockindex;
-    return pblockindex;
-}
-
-
-CBlockIndex* RPCFindBlockByHeight(int nHeight)
-{
-	//This keeps the threads separated and ensures pointers are in distinct locations
-    CBlockIndex *RPCpblockindex;
-    if (nHeight < nBestHeight / 2)
-        RPCpblockindex = pindexGenesisBlock;
-    else
-        RPCpblockindex = pindexBest;
-    while (RPCpblockindex->nHeight > nHeight)
-	{
-        RPCpblockindex = RPCpblockindex->pprev;
-	}
-    while (RPCpblockindex->nHeight < nHeight)
-	{
-        RPCpblockindex = RPCpblockindex->pnext;
-	}
-    return RPCpblockindex;
-}
-
-CBlockIndex* MainFindBlockByHeight(int nHeight)
-{
-    CBlockIndex *Mainpblockindex;
-    if (nHeight < nBestHeight / 2)
-        Mainpblockindex = pindexGenesisBlock;
-    else
-        Mainpblockindex = pindexBest;
-    while (Mainpblockindex->nHeight > nHeight)
-	{
-        Mainpblockindex = Mainpblockindex->pprev;
-	}
-    while (Mainpblockindex->nHeight < nHeight)
-	{
-        Mainpblockindex = Mainpblockindex->pnext;
-	}
-    return Mainpblockindex;
-}
-
-
-
 bool CBlock::ReadFromDisk(const CBlockIndex* pindex, bool fReadTransactions)
 {
     if (!fReadTransactions)
@@ -3570,9 +3507,9 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 		stCPID.InterestSubsidy += bb.InterestSubsidy;
 		stCPID.ResearchSubsidy += bb.ResearchSubsidy;
 
-		if (((double)pindex->nHeight) > stCPID.LastBlock && pindex->nResearchSubsidy > 0)
+		if (pindex->nHeight > stCPID.LastBlock && pindex->nResearchSubsidy > 0)
 		{
-				stCPID.LastBlock = (double)pindex->nHeight;
+				stCPID.LastBlock = pindex->nHeight;
 				stCPID.BlockHash = pindex->GetBlockHash().GetHex();
 		}
 
@@ -3583,8 +3520,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 				stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
 		}
 
-		if (((double)pindex->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime = (double)pindex->nTime;
-		if (((double)pindex->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pindex->nTime;
+		if (pindex->nTime < stCPID.LowLockTime)  stCPID.LowLockTime = pindex->nTime;
+		if (pindex->nTime > stCPID.HighLockTime) stCPID.HighLockTime = pindex->nTime;
 
 		mvResearchAge[bb.cpid]=stCPID;
 	}
@@ -3953,7 +3890,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
     // New best block
     hashBestChain = hash;
     pindexBest = pindexNew;
-    pblockindexFBBHLast = NULL;
+    blockFinder.Reset();
     nBestHeight = pindexBest->nHeight;
     nBestChainTrust = pindexNew->nChainTrust;
     nTimeBestReceived =  GetAdjustedTime();
@@ -4237,11 +4174,11 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
 					if (fDebug10) printf("BV %f, CV %f   ",bv,cvn);
 					// if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
 					// Enforce Beacon Age
-					if (bv < 3587 && height1 > 855000 && !fTestNet) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
+					if (bv < 3588 && height1 > 860500 && !fTestNet) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
 					if (bv < 3580 && fTestNet) return DoS(25, error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n"));
 			}
 
-			if (bb.cpid != "INVESTOR" && height1 > nGrandfather)
+			if (bb.cpid != "INVESTOR" && height1 > nGrandfather && BlockNeedsChecked(nTime))
 			{
     			if (bb.projectname.empty() && !IsResearchAgeEnabled(height1)) 	return DoS(1,error("CheckBlock::PoR Project Name invalid"));
 	    		if (!fLoadingIndex && !IsCPIDValidv2(bb,height1))
@@ -5836,9 +5773,9 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
 				StructCPID stMag = GetInitializedStructCPID2(pIndex->sCPID,mvMagnitudesCopy);
 				stMag.cpid = pIndex->sCPID;
 				stMag.GRCAddress = pIndex->sGRCAddress;
-				if ((double)pIndex->nHeight > stMag.LastBlock)
+				if (pIndex->nHeight > stMag.LastBlock)
 				{
-					stMag.LastBlock = (double)pIndex->nHeight;
+					stMag.LastBlock = pIndex->nHeight;
 				}
 				stMag.entries++;
 				stMag.payments += pIndex->nResearchSubsidy;
@@ -5846,15 +5783,15 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
 
 				AdjustTimestamps(stMag,(double)pIndex->nTime,pIndex->nResearchSubsidy);
 				// Track detailed payments made to each CPID
-				stMag.PaymentTimestamps         += RoundToString((double)pIndex->nTime,0) + ",";
+				stMag.PaymentTimestamps         += RoundToString(pIndex->nTime,0) + ",";
 				stMag.PaymentAmountsResearch    += RoundToString(pIndex->nResearchSubsidy,2) + ",";
 				stMag.PaymentAmountsInterest    += RoundToString(pIndex->nInterestSubsidy,2) + ",";
-				stMag.PaymentAmountsBlocks      += RoundToString((double)pIndex->nHeight,0) + ",";
+				stMag.PaymentAmountsBlocks      += RoundToString(pIndex->nHeight,0) + ",";
      			stMag.Accuracy++;
 				stMag.AverageRAC = stMag.rac / (stMag.entries+.01);
 				double total_owed = 0;
 				stMag.owed = GetOutstandingAmountOwed(stMag,
-					pIndex->sCPID,(double)pIndex->nTime,total_owed,pIndex->nMagnitude);
+					pIndex->sCPID, pIndex->nTime,total_owed,pIndex->nMagnitude);
 
 				stMag.totalowed = total_owed;
 				mvMagnitudesCopy[pIndex->sCPID] = stMag;
@@ -5936,7 +5873,7 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 			int nMinDepth = nMaxDepth - nLookback;
 			if (nMinDepth < 2) nMinDepth = 2;
 			// Start at the earliest block index:
-			CBlockIndex* pblockindex = FindBlockByHeight(nMinDepth);
+			CBlockIndex* pblockindex = blockFinder.FindByHeight(nMinDepth);
 		    while (pblockindex->nHeight < nMaxDepth-1)
 			{
 						pblockindex = pblockindex->pnext;
@@ -6064,7 +6001,7 @@ StructCPID GetInitializedStructCPID2(std::string name, std::map<std::string, Str
 		{
 				cpid = GetStructCPID();
 				cpid.initialized=true;
-				cpid.LowLockTime = 99999999999;
+				cpid.LowLockTime = std::numeric_limits<unsigned int>::max();
 				cpid.HighLockTime = 0;
 				cpid.LastPaymentTime = 0;
 				cpid.EarliestPaymentTime = 99999999999;
@@ -6680,7 +6617,7 @@ bool AcidTest(std::string precommand, std::string acid, CNode* pfrom)
 	
 		if (false && hash != pw1)
 		{
-			//2/16 18:06:48 Acid test failed for 192.168.1.4:32749 1478973994,encrypt,1b089d19d23fbc911c6967b948dd8324,windows			if (fDebug) printf("Acid test failed for %s %s.",NodeAddress(pfrom).c_str(),acid.c_str());
+			//2/16 18:06:48 Acid test failed for 192.168.1.4:32749 1478973994,encrypt,1b089d19d23fbc911c6967b948dd8324,windows			if (fDebug) printf("Acid test failed for %s %s.",NodeAddress(pfrom).c_str(),acid.c_str());
 			double punishment = GetArg("-punishment", 10);
 			pfrom->Misbehaving(punishment);
 			return false;
@@ -6889,7 +6826,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return false;
         }
 
-		if (pfrom->nVersion < 180322 & !fTestNet && pindexBest->nHeight > 855000)
+		if (pfrom->nVersion < 180323 && !fTestNet && pindexBest->nHeight > 860500)
         {
             // disconnect from peers older than this proto version - Enforce Beacon Age - 3-26-2017
             if (fDebug10) printf("partner %s using obsolete version %i (before enforcing beacon age); disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
@@ -8867,12 +8804,10 @@ StructCPID GetStructCPID()
 {
 	StructCPID c;
 	c.initialized=false;
-	c.isvoucher=false;
 	c.rac = 0;
 	c.utc=0;
 	c.rectime=0;
 	c.age = 0;
-	c.activeproject=false;
 	c.verifiedutc=0;
 	c.verifiedrectime=0;
 	c.verifiedage=0;
@@ -8882,35 +8817,24 @@ StructCPID GetStructCPID()
 	c.Iscpidvalid=false;
 	c.NetworkRAC=0;
 	c.TotalRAC=0;
-	c.TotalNetworkRAC=0;
 	c.Magnitude=0;
-	c.LastMagnitude=0;
 	c.PaymentMagnitude=0;
 	c.owed=0;
 	c.payments=0;
-	c.outstanding=0;
 	c.verifiedTotalRAC=0;
-	c.verifiedTotalNetworkRAC=0;
 	c.verifiedMagnitude=0;
 	c.TotalMagnitude=0;
-	c.MagnitudeCount=0;
 	c.LowLockTime=0;
 	c.HighLockTime=0;
 	c.Accuracy=0;
 	c.totalowed=0;
-	c.longtermtotalowed=0;
-	c.longtermowed=0;
 	c.LastPaymentTime=0;
 	c.EarliestPaymentTime=0;
-	c.RSAWeight=0;
 	c.PaymentTimespan=0;
 	c.ResearchSubsidy = 0;
 	c.InterestSubsidy = 0;
 	c.BTCQuote = 0;
 	c.GRCQuote = 0;
-	c.ResearchSubsidy2 = 0;
-	c.ResearchAge = 0;
-	c.ResearchMagnitudeUnit = 0;
 	c.ResearchAverageMagnitude = 0;
 	c.Canary = 0;
 	c.NetsoftRAC = 0;
@@ -8933,18 +8857,12 @@ MiningCPID GetMiningCPID()
 	mc.initialized = false;
 	mc.nonce = 0;
 	mc.NetworkRAC=0;
-	mc.prevBlockType = 0;
 	mc.lastblockhash = "0";
-	mc.VouchedRAC = 0;
-	mc.VouchedNetworkRAC  = 0;
 	mc.Magnitude = 0;
-	mc.Accuracy = 0;
 	mc.RSAWeight = 0;
 	mc.LastPaymentTime=0;
 	mc.ResearchSubsidy = 0;
 	mc.InterestSubsidy = 0;
-	mc.GRCQuote = 0;
-	mc.BTCQuote = 0;
 	mc.ResearchSubsidy2 = 0;
 	mc.ResearchAge = 0;
 	mc.ResearchMagnitudeUnit = 0;
@@ -9539,7 +9457,7 @@ bool UnusualActivityReport()
 	int ii = 0;
 			for (ii = nMinDepth; ii <= nMaxDepth; ii++)
 			{
-     			CBlockIndex* pblockindex = FindBlockByHeight(ii);
+     			CBlockIndex* pblockindex = blockFinder.FindByHeight(ii);
 				if (block.ReadFromDisk(pblockindex))
 				{
 					int64_t nFees = 0;
@@ -9733,7 +9651,7 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
 
 	int64_t Accrual = (int64_t)(dAccrualAge*AvgMagnitude*dMagnitudeUnit*COIN);
 	// Double check researcher lifetime paid
-	double days = (((double)nTime) - stCPID.LowLockTime)/86400;
+	double days = (nTime - stCPID.LowLockTime) / 86400.0;
 	double PPD = stCPID.ResearchSubsidy/(days+.01);
 	double ReferencePPD = dMagnitudeUnit*dAvgMag;
 	if ((PPD > ReferencePPD*5))
@@ -9793,7 +9711,7 @@ void ZeroOutResearcherTotals(std::string cpid)
 				stCPID.InterestSubsidy = 0;
 				stCPID.ResearchSubsidy = 0;
 				stCPID.Accuracy = 0;
-				stCPID.LowLockTime = 99999999999;
+				stCPID.LowLockTime = std::numeric_limits<unsigned int>::max();
 				stCPID.HighLockTime = 0;
 				stCPID.TotalMagnitude = 0;
 				stCPID.ResearchAverageMagnitude = 0;
@@ -9811,8 +9729,7 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 	if (nMinDepth < 2) nMinDepth=2;
 	if (!bFullTableScan) nMinDepth = nMaxDepth-6;
 	if (nMaxDepth < nMinDepth) return false;
-	CBlockIndex* pindex = pindexBest;
-	pindex = FindBlockByHeight(nMinDepth);
+	CBlockIndex* pindex = blockFinder.FindByHeight(nMinDepth);
 	// These are memorized consecutively in order from oldest to newest
 
     while (pindex->nHeight < nMaxDepth)
@@ -10016,7 +9933,7 @@ void SetUpExtendedBlockIndexFieldsOnce()
 	printf("SETUPExtendedBIfieldsOnce Testnet: %s \r\n",YesNo(fTestNet).c_str());
 	if (fTestNet)
 	{
-		if (pindexBest->nHeight < 20000) return;	}
+		if (pindexBest->nHeight < 20000) return;	}
 	else
 	{
 		if (pindexBest->nHeight < 361873) return;
@@ -10024,10 +9941,9 @@ void SetUpExtendedBlockIndexFieldsOnce()
 
 	std::string sSuperblocks = "";
 	std::string sContracts   = "";
-    CBlockIndex* pindex = pindexGenesisBlock;
 	int iStartHeight = fTestNet ? 20000 : 361873;
 
-	pindex = FindBlockByHeight(iStartHeight);
+    CBlockIndex* pindex = blockFinder.FindByHeight(iStartHeight);
     if (!pindex) return;
 
 	if (pindex && pindex->pnext)

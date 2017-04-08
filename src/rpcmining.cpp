@@ -80,7 +80,6 @@ Value getmininginfo(const Array& params, bool fHelp)
 	#endif
 
 	obj.push_back(Pair("NeuralPopularity", neural_popularity));
-	obj.push_back(Pair("testnet",       fTestNet));
 	obj.push_back(Pair("CPID",msPrimaryCPID));
 	obj.push_back(Pair("RSAWeight",(double)GetRSAWeightByCPID(msPrimaryCPID)));
 	StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);

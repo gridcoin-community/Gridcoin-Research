@@ -38,14 +38,12 @@ extern volatile bool bGridcoinGUILoaded;
 extern volatile double nGlobalHashCounter;
 
 extern int miningthreadcount;
-	
-struct StructCPID 
+
+struct StructCPID
 {
     bool initialized;
-    bool isvoucher;
-    bool activeproject;
     bool Iscpidvalid;
-    
+
     double rac;
     double utc;
     double rectime;
@@ -54,41 +52,31 @@ struct StructCPID
     double verifiedutc;
     double verifiedrectime;
     double verifiedage;
-    double entries;
+    uint32_t entries;
     double AverageRAC;
     double NetworkProjects;
     double NetworkRAC;
     double TotalRAC;
     double TotalNetworkRAC;
     double Magnitude;
-    double LastMagnitude;
     double PaymentMagnitude;
     double owed;
     double payments;
     double interestPayments;
-    double outstanding;
     double verifiedTotalRAC;
     double verifiedMagnitude;
     double TotalMagnitude;
-    double MagnitudeCount;
-    double LowLockTime;
-    double HighLockTime;
+    uint32_t LowLockTime;
+    uint32_t HighLockTime;
     double Accuracy;
     double totalowed;
-    double longtermtotalowed;
-    double longtermowed;
     double LastPaymentTime;
     double ResearchSubsidy;
-    double ResearchSubsidy2;
-    double ResearchAge;
-    double ResearchMagnitudeUnit;
     double ResearchAverageMagnitude;
     double EarliestPaymentTime;
-    double RSAWeight;
     double InterestSubsidy;
     double PaymentTimespan;
-    double verifiedTotalNetworkRAC;
-    double LastBlock;
+    int32_t LastBlock;
     double NetworkMagnitude;
     double NetworkAvgMagnitude;
     double NetsoftRAC;
@@ -113,36 +101,14 @@ struct StructCPID
     std::string PaymentAmountsBlocks;
     std::string BlockHash;
     std::string GRCAddress;
-    std::string LastPORBlockHash;
-    std::string CurrentNeuralHash;
-    std::string BoincPublicKey;
-    std::string BoincSignature;
 };
 
 
 
-struct StructCPIDCache 
+struct StructCPIDCache
 {
-    std::string cpid;
-    std::string cpidproject;
     std::string xml;
     bool initialized;
-    double blocknumber;
-};
-
-
-
-struct StructBlockCache 
-{
-    std::string cpid;
-    std::string project;
-    double rac;
-    std::string hashBoinc;
-    bool initialized;
-    int nHeight;
-    std::string hash;
-    int BlockType;
-    int nVersion;
 };
 
 
@@ -152,13 +118,10 @@ struct MiningCPID
     double rac;
     double pobdifficulty;
     unsigned int diffbytes;
-    bool initialized;	
+    bool initialized;
     double nonce;
     double NetworkRAC;
-    double VouchedRAC;
-    double VouchedNetworkRAC;
     double Magnitude;
-    double Accuracy;
     double RSAWeight;
     double LastPaymentTime;
     double ResearchSubsidy;
@@ -167,11 +130,8 @@ struct MiningCPID
     double ResearchMagnitudeUnit;
     double ResearchAverageMagnitude;
     double InterestSubsidy;
-    double GRCQuote;
-    double BTCQuote;
-    int prevBlockType;
     double Canary;
-    
+
     std::string projectname;
     std::string encboincpublickey;
     std::string cpid;
@@ -180,7 +140,6 @@ struct MiningCPID
     std::string aesskein;
     std::string encaes;
     std::string clientversion;
-    std::string VouchedCPID;
     std::string cpidv2;
     std::string email;
     std::string boincruntimepublickey;
@@ -194,12 +153,9 @@ struct MiningCPID
     std::string CurrentNeuralHash;
     std::string BoincPublicKey;
     std::string BoincSignature;
-    
 };
 
-extern std::map<int, int> blockcache;
-
-//User CPIDs 
+//User CPIDs
 extern std::map<std::string, StructCPID> mvCPIDs;
 //Verified CPIDs
 extern std::map<std::string, StructCPID> mvCreditNode;
