@@ -27,6 +27,7 @@
 #include <boost/algorithm/string/join.hpp>
 #include "cpid.h"
 #include <boost/asio.hpp>
+#include "boinc.h"
 
 int GetDayOfYear();
 extern std::string NodeAddress(CNode* pfrom);
@@ -421,6 +422,9 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
 ///////////////////////////////
 
 
+
+ //BOINC helper class
+ CBoinc cBoinc;
 
  //Global variables to display current mined project in various places:
  std::string 	msMiningProject = "";
@@ -8948,17 +8952,7 @@ std::string GetBoincDataDir2()
 		if (path.length() > 0) return path;
     }
 
-    #ifndef WIN32
-    #ifdef __linux__
-        path = "/var/lib/boinc-client/"; // Linux
-    #else
-        path = "/Library/Application Support/BOINC Data/"; // Mac OSX
-    #endif
-    #elif WINVER < 0x0600
-        path = "c:\\documents and settings\\all users\\application data\\boinc\\"; // Windows XP
-    #else
-        path = "c:\\programdata\\boinc\\"; // Windows Vista and up
-    #endif
+    path = cBoinc.GetBoincDataPath();
 
     return path;
 }
