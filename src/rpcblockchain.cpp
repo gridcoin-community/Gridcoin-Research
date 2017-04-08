@@ -9,6 +9,7 @@
 #include "cpid.h"
 #include "kernel.h"
 #include "init.h" // for pwalletMain
+#include "block.h"
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include "txdb.h"
@@ -210,7 +211,7 @@ uint256 GridcoinMultipleAlgoHash(std::string t1);
 void ExecuteCode();
 void CreditCheckRetired(std::string cpid, bool clearcache);
 double CalculatedMagnitude(int64_t locktime,bool bUseLederstrumpf);
-
+static BlockFinder RPCBlockFinder;
 
 
 double GetNetworkProjectCountWithRAC()
@@ -487,7 +488,7 @@ Value showblock(const Array& params, bool fHelp)
     int nHeight = params[0].get_int();
     if (nHeight < 0 || nHeight > nBestHeight)
         throw runtime_error("Block number out of range.");
-    CBlockIndex* pblockindex = RPCFindBlockByHeight(nHeight);
+    CBlockIndex* pblockindex = RPCBlockFinder.FindByHeight(nHeight);
 
     if (pblockindex==NULL)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
@@ -576,7 +577,7 @@ Value getblockhash(const Array& params, bool fHelp)
     int nHeight = params[0].get_int();
     if (nHeight < 0 || nHeight > nBestHeight)       throw runtime_error("Block number out of range.");
 	if (fDebug10)	printf("Getblockhash %f",(double)nHeight);
-	CBlockIndex* RPCpblockindex = RPCFindBlockByHeight(nHeight);
+	CBlockIndex* RPCpblockindex = RPCBlockFinder.FindByHeight(nHeight);
 	return RPCpblockindex->phashBlock->GetHex();
 }
 
