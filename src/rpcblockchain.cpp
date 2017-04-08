@@ -54,7 +54,6 @@ double GetDelta(std::string sType, double UL, double Strike, double dTime, doubl
 extern std::string AddOptionContract(std::string sType, std::string sName, std::string sContract, double dPremium);
 extern Array GetOptionsExposureReport();
 void BusyWaitForTally();
-double Cap(double dAmt, double Ceiling);
 extern std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, std::string sSig, int64_t MinimumBalance, double dFees, std::string sPublicKey);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern Array SuperblockReport(std::string cpid);
@@ -209,7 +208,6 @@ bool GridDecrypt(const std::vector<unsigned char>& vchCiphertext,std::vector<uns
 bool GridEncrypt(std::vector<unsigned char> vchPlaintext, std::vector<unsigned char> &vchCiphertext);
 uint256 GridcoinMultipleAlgoHash(std::string t1);
 void ExecuteCode();
-void CreditCheckRetired(std::string cpid, bool clearcache);
 double CalculatedMagnitude(int64_t locktime,bool bUseLederstrumpf);
 static BlockFinder RPCBlockFinder;
 
