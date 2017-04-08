@@ -81,6 +81,7 @@
 #include <QUrl>
 #include <QStyle>
 #include <QNetworkInterface>
+#include <QDesktopWidget>
 
 #include <boost/lexical_cast.hpp>
 
@@ -206,7 +207,8 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 	upgrader(0),
     nWeight(0)
 {
-    setGeometry(0,0,980,550);
+
+    setGeometry(QStyle::alignedRect(Qt::LeftToRight,Qt::AlignCenter,QSize(980,550),qApp->desktop()->availableGeometry()));
     
     setWindowTitle(tr("Gridcoin") + " " + tr("Wallet"));
 	//4-9-2016
