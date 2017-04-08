@@ -27,8 +27,6 @@
 #include <boost/algorithm/string/join.hpp>
 #include <boost/thread.hpp>
 #include "cpid.h"
-
-#include <cstdio>
 #include <boost/asio.hpp>
 
 int GetDayOfYear();
