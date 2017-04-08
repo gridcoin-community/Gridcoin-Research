@@ -7,13 +7,19 @@ CONFIG += no_include_pwd thread c++11 exceptions concurrent
 QT += core gui network
 
 win32 {
-    QT += axserver
-    CONFIG += axcontainer
+    lessThan(QT_VERSION, 5.0.0) {
+        CONFIG += qaxcontainer
+    } else {
+        QT += axcontainer
+    }
 }
 
 greaterThan(QT_MAJOR_VERSION, 4) {
     QT += widgets
     DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+} else {
+    # qmake from Qt4 has no C++11 config so it has to be specified manually.
+    QMAKE_CXXFLAGS += -std=gnu++0x
 }
 
 lessThan(QT_VERSION, 5.7.0) {
@@ -27,6 +33,11 @@ lessThan(QT_VERSION, 5.7.0) {
 # for boost thread win32 with _win32 sufix
 # use: BOOST_THREAD_LIB_SUFFIX=_win32-...
 # or when linking against a specific BerkelyDB version: BDB_LIB_SUFFIX=-4.8
+
+# boost-1.55 has a bug where building with C++11 causes undefined references to
+# copy_file. This is fixed in boost-1.57 and backported to 1.56. This workaround
+# can be removed once boost is upgraded.
+DEFINES += BOOST_NO_CXX11_SCOPED_ENUMS
 
 # Dependency library locations can be customized with:
 #    BOOST_INCLUDE_PATH, BOOST_LIB_PATH, BDB_INCLUDE_PATH,
@@ -50,18 +61,17 @@ contains(RELEASE, 1) {
 }
 
 !win32 {
-# for extra security against potential buffer overflows: enable GCCs Stack Smashing Protection
-QMAKE_CXXFLAGS *= -fstack-protector-all --param ssp-buffer-size=1
-QMAKE_LFLAGS *= -fstack-protector-all --param ssp-buffer-size=1
-# We need to exclude this for Windows cross compile with MinGW 4.2.x, as it will result in a non-working executable!
-# This can be enabled for Windows, when we switch to MinGW >= 4.4.x.
+    # for extra security against potential buffer overflows: enable GCCs Stack Smashing Protection
+    QMAKE_CXXFLAGS *= -fstack-protector-all --param ssp-buffer-size=1
+    QMAKE_LFLAGS *= -fstack-protector-all --param ssp-buffer-size=1
+    # We need to exclude this for Windows cross compile with MinGW 4.2.x, as it will result in a non-working executable!
+    # This can be enabled for Windows, when we switch to MinGW >= 4.4.x.
+} else {
+    # for extra security on Windows: enable ASLR and DEP via GCC linker flags
+    QMAKE_LFLAGS *= -Wl,--dynamicbase -Wl,--nxcompat
+    # on Windows: enable GCC large address aware linker flag
+    QMAKE_LFLAGS *= -Wl,--large-address-aware
 }
-# for extra security on Windows: enable ASLR and DEP via GCC linker flags
-win32:QMAKE_LFLAGS *= -Wl,--dynamicbase -Wl,--nxcompat
-# on Windows: enable GCC large address aware linker flag
-win32:QMAKE_LFLAGS *= -Wl,--large-address-aware
-#HALFORD: Testing Crash Flags
-#win32:QMAKE_LFLAGS += -static-libgcc -static-libstdc++
 
 
 # use: qmake "USE_QRCODE=1"
@@ -441,8 +451,6 @@ macx:TARGET = "gridcoinresearch"
 macx:QMAKE_CFLAGS_THREAD += -pthread
 macx:QMAKE_LFLAGS_THREAD += -pthread
 macx:QMAKE_CXXFLAGS_THREAD += -pthread
-macx:QT -= qaxcontainer axserver
-macx:CONFIG -= qaxcontainer
 macx:CONFIG += link_pkgconfig
 macx:PKGCONFIG += libzip
 
