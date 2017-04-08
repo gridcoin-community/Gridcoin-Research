@@ -1373,7 +1373,7 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
 			double nBalance = GetTotalBalance();
 			if (nBalance < 1.01)
 			{
-				sError = "Balance too low to send beacon.";
+				sError = "Balance too low to send beacon, 1.01 GRC minimum balance required.";
 				return false;
 			}
 		
