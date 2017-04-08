@@ -969,12 +969,10 @@ void BitcoinGUI::createActions()
 	votingAction->setStatusTip(tr("Voting"));
 	votingAction->setMenuRole(QAction::TextHeuristicRole);
 
-
     votingReservedAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Voting Linux"), this);
 	votingReservedAction->setStatusTip(tr("Voting - Linux"));
 	votingReservedAction->setMenuRole(QAction::TextHeuristicRole);
-
-
+    
 	galazaAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Galaza (Game)"), this);
 	galazaAction->setStatusTip(tr("Galaza"));
 	galazaAction->setMenuRole(QAction::TextHeuristicRole);
@@ -1107,7 +1105,10 @@ void BitcoinGUI::createMenuBar()
 	qmAdvanced->addAction(votingAction);
 #endif /* defined(WIN32) */
     
+    // Only enable the Qt voting dialog on non-Windows targets for now.
+#ifndef WIN32
 	qmAdvanced->addAction(votingReservedAction);
+#endif
     
 #ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows 
 	qmAdvanced->addAction(tickerAction);
