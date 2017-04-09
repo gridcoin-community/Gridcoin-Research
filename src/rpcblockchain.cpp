@@ -3056,13 +3056,6 @@ Value execute(const Array& params, bool fHelp)
 		}
 	
 	}
-	else if (sItem == "wcgtest")
-	{
-		
-			entry.push_back(Pair("Done","Done"));
-			results.push_back(entry);
-		
-	}
 	else if (sItem == "dportally")
 	{
 		TallyMagnitudesInSuperblock();
