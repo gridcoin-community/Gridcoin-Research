@@ -7,6 +7,9 @@ class CBoinc
 {
 private:
     std::string strBoincDataPath;
+    #ifdef _WIN32
+    std::string GetDataPathFromRegistry();
+    #endif // _WIN32
 public:
     CBoinc();
     std::string GetBoincDataPath();
