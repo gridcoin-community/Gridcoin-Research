@@ -37,7 +37,12 @@ LIBS += \
    -l crypto \
    -l zip \
    -l curl
-   
+
+# boost-1.55 has a bug where building with C++11 causes undefined references to
+# copy_file. This is fixed in boost-1.57 and backported to 1.56. This workaround
+# can be removed once boost is upgraded.
+DEFS += -DBOOST_NO_CXX11_SCOPED_ENUMS
+
 ifndef USE_UPNP
 	override USE_UPNP = -
 endif
@@ -94,10 +99,9 @@ ifeq (${ARCH}, i686)
     EXT_OPTIONS=-msse2
 endif
 
-
 # CXXFLAGS can be specified on the make command line, so we use xCXXFLAGS that only
 # adds some defaults in front. Unfortunately, CXXFLAGS=... $(CXXFLAGS) does not work.
-xCXXFLAGS=-O2 $(EXT_OPTIONS) -std=c++11 -pthread -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wformat-security -Wno-unused-parameter \
+xCXXFLAGS = -O2 $(EXT_OPTIONS) -std=c++11 -pthread -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wformat-security -Wno-unused-parameter \
     $(DEBUGFLAGS) $(DEFS) $(HARDENING) $(CXXFLAGS)
 
 # LDFLAGS can be specified on the make command line, so we use xLDFLAGS that only
