@@ -22,7 +22,7 @@ greaterThan(QT_MAJOR_VERSION, 4) {
     QMAKE_CXXFLAGS += -std=gnu++0x
 }
 
-lessThan(QT_VERSION, 5.7.0) {
+lessThan(QT_VERSION, 5.8.0) {
     # Qt charts not available
 }else{
     QT += charts
