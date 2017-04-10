@@ -6,7 +6,6 @@
  */
 
 
-#include <QApplication>
 #include <QProcess>
 
 #if defined(WIN32) && defined(QT_GUI)
@@ -30,7 +29,10 @@
 #include "signverifymessagedialog.h"
 #include "optionsdialog.h"
 #include "aboutdialog.h"
-//#include "votingdialog.h"
+
+#ifndef WIN32
+#include "votingdialog.h"
+#endif
 
 #include "clientmodel.h"
 #include "walletmodel.h"
@@ -48,6 +50,7 @@
 #include "rpcconsole.h"
 #include "wallet.h"
 #include "init.h"
+#include "block.h"
 
 #ifdef Q_OS_MAC
 #include "macdockiconhandler.h"
@@ -177,7 +180,6 @@ QAxObject *globalcom = NULL;
 QAxObject *globalwire = NULL;
 #endif
 int ThreadSafeVersion();
-void FlushGridcoinBlockFile(bool fFinalize);
 extern int ReindexBlocks();
 bool OutOfSync();
 
@@ -204,10 +206,8 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 	upgrader(0),
     nWeight(0)
 {
-	double dWindowWidth = cdbl(GetArgument("windowwidth", "980"),0);
-	double dWindowHeight = cdbl(GetArgument("windowheight", "550"),0);
-	
-    setFixedSize(dWindowWidth, dWindowHeight);
+    setGeometry(0,0,980,550);
+    
     setWindowTitle(tr("Gridcoin") + " " + tr("Wallet"));
 	//4-9-2016
 	double dFontSize = cdbl(GetArgument("fontsize", "10"),0);
@@ -216,9 +216,10 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 	std::string sPixelType = "px";
 	printf("Using fontsize %s",sFontSize10.c_str());
 
-	std::string sMainWindowHTML = "QMainWindow { background-image:url(:images/bkg);border:none;font-family:'Open Sans,sans-serif'; } #frame { } QToolBar QLabel { padding-top:15px;padding-bottom:10px;margin:0px; } #spacer { background:rgb(69,65,63);border:none; } #toolbar3 { border:none;width:1px; background-color: rgb(169,192,7); } #toolbar2 { border:none;width:10px; background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(210,220,7), stop: 1 rgb(98,116,3)); } #toolbar { border:none;height:100%;padding-top:20px; background: rgb(69,65,63); text-align: left; color: rgb(169,192,7); min-width:160px; max-width:160px;} QToolBar QToolButton:hover {background-color:qlineargradient(x1: 0, y1: 0, x2: 2, y2: 2,stop: 0 rgb(69,65,63), stop: 1 rgb(216,252,251),stop: 2 rgb(59,62,65));} QToolBar QToolButton { font-family:Century Gothic;padding-left:20px;padding-right:200px;padding-top:7px;padding-bottom:7px; width:100%; color: rgb(169,192,7); text-align: left; background-color: rgb(69,65,63) } #labelMiningIcon { ";
+    std::string sMainWindowHTML = "QMainWindow { background-image:url(:images/bkg);border:none;font-family:'Open Sans,sans-serif'; } #frame { } QToolBar QLabel { padding-top:15px;padding-bottom:10px;margin:0px; } #spacer { background:rgb(69,65,63);border:none; } #toolbar3 { border:none;width:1px; background-color: rgb(169,192,7); } #toolbar2 { border:none;width:10px; background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(210,220,7), stop: 1 rgb(98,116,3)); } #toolbar { border:none;height:100%;padding-top:20px; background: rgb(69,65,63); text-align: left; color: rgb(169,192,7); min-width:160px; max-width:160px;} QToolBar QToolButton:hover {background-color:qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,stop: 0 rgb(69,65,63), stop: 1 rgb(142,158,157));} QToolBar QToolButton { font-family:Century Gothic;padding-left:20px;padding-right:200px;padding-top:7px;padding-bottom:7px; width:100%; color: rgb(169,192,7); text-align: left; background-color: rgb(69,65,63) } #labelMiningIcon { ";
 	sMainWindowHTML += "padding-left:5px;font-family:Century Gothic;width:100%;font-size:" + sFontSize10 + sPixelType +";text-align:center;color: rgb(169,192,7); } QMenu { background: rgb(69,65,63); color: rgb(169,192,7); padding-bottom:10px; } QMenu::item { color: rgb(169,192,7); background-color: transparent; } QMenu::item:selected { background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(69,65,63), stop: 1 rgb(98,116,3)); } QMenuBar { background: rgb(69,65,63); color: rgb(169,192,7); } ";
 	sMainWindowHTML += "QMenuBar::item { font-size:" + sFontSize12 + sPixelType + ";padding-bottom:8px;padding-top:8px;padding-left:15px;padding-right:15px;color: rgb(169,192,7); background-color: transparent; } QMenuBar::item:selected { background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(69,65,63), stop: 1 rgb(98,116,3)); }";
+    sMainWindowHTML += "QToolTip { color: black; background-color: lightgray; border: none; }";
 
 
     qApp->setStyleSheet(ToQstring(sMainWindowHTML));
@@ -253,6 +254,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     transactionView = new TransactionView(this);
     vbox->addWidget(transactionView);
     transactionsPage->setLayout(vbox);
+    transactionsPage->setStyleSheet("QTableView{background:transparent; color:black; alternate-background-color:white;} QScrollBar:vertical {background-color: lightgray; color:black;} QHeaderView::section { background-color:lightgray; color:black; } QComboBox { background-color:lightgray; color: black; } QComboBox QAbstractItemView { background-color:lightgray; color: black; } QLineEdit { background-color:lightgray; color: black; } QDateTimeEdit { background-color:lightgray; color: black; } QDateTimeEdit QAbstractItemView { background-color:lightgray; color: black; }");
 
     addressBookPage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::SendingTab);
 
@@ -845,35 +847,30 @@ void BitcoinGUI::createActions()
 {
     QActionGroup *tabGroup = new QActionGroup(this);
 
-    overviewAction = new QAction(QIcon(":/icons/overview"), tr("&Overview"), this);
+    overviewAction = new QAction(QIcon(":/icons/overview"), tr("&Overview"), tabGroup);
     overviewAction->setToolTip(tr("Show general overview of wallet"));
     overviewAction->setCheckable(true);
     overviewAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_1));
-    tabGroup->addAction(overviewAction);
 
-    sendCoinsAction = new QAction(QIcon(":/icons/send"), tr("&Send coins"), this);
+    sendCoinsAction = new QAction(QIcon(":/icons/send"), tr("&Send coins"), tabGroup);
     sendCoinsAction->setToolTip(tr("Send coins to a Gridcoin address"));
     sendCoinsAction->setCheckable(true);
     sendCoinsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_3));
-    tabGroup->addAction(sendCoinsAction);
 
-    receiveCoinsAction = new QAction(QIcon(":/icons/receiving_addresses"), tr("&Receive coins"), this);
+    receiveCoinsAction = new QAction(QIcon(":/icons/receiving_addresses"), tr("&Receive coins"), tabGroup);
     receiveCoinsAction->setToolTip(tr("Show the list of addresses for receiving payments"));
     receiveCoinsAction->setCheckable(true);
     receiveCoinsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_2));
-    tabGroup->addAction(receiveCoinsAction);
 
-    historyAction = new QAction(QIcon(":/icons/history"), tr("&Transactions"), this);
+    historyAction = new QAction(QIcon(":/icons/history"), tr("&Transactions"), tabGroup);
     historyAction->setToolTip(tr("Browse transaction history"));
     historyAction->setCheckable(true);
     historyAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_4));
-    tabGroup->addAction(historyAction);
 
-    addressBookAction = new QAction(QIcon(":/icons/address-book"), tr("&Address Book"), this);
+    addressBookAction = new QAction(QIcon(":/icons/address-book"), tr("&Address Book"), tabGroup);
     addressBookAction->setToolTip(tr("Edit the list of stored addresses and labels"));
     addressBookAction->setCheckable(true);
     addressBookAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_5));
-    tabGroup->addAction(addressBookAction);
 
 	bxAction = new QAction(QIcon(":/icons/block"), tr("&Block Explorer"), this);
 	bxAction->setStatusTip(tr("Block Explorer"));
@@ -972,12 +969,10 @@ void BitcoinGUI::createActions()
 	votingAction->setStatusTip(tr("Voting"));
 	votingAction->setMenuRole(QAction::TextHeuristicRole);
 
-
-	votingReservedAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Reserved - Voting Linux"), this);
+    votingReservedAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Voting Linux"), this);
 	votingReservedAction->setStatusTip(tr("Voting - Linux"));
 	votingReservedAction->setMenuRole(QAction::TextHeuristicRole);
-
-
+    
 	galazaAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Galaza (Game)"), this);
 	galazaAction->setStatusTip(tr("Galaza"));
 	galazaAction->setMenuRole(QAction::TextHeuristicRole);
@@ -1102,13 +1097,20 @@ void BitcoinGUI::createMenuBar()
 	rebuild->addAction(rebootAction);
 	rebuild->addSeparator();
 
-#ifdef WIN32  // The actions in this menu are implemented in Visual Basic and thus only work on Windows
 	QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
 	qmAdvanced->addSeparator();
+#ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows    
 	qmAdvanced->addAction(configAction);
 	qmAdvanced->addAction(miningAction);
 	qmAdvanced->addAction(votingAction);
+#endif /* defined(WIN32) */
+    
+    // Only enable the Qt voting dialog on non-Windows targets for now.
+#ifndef WIN32
 	qmAdvanced->addAction(votingReservedAction);
+#endif
+    
+#ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows 
 	qmAdvanced->addAction(tickerAction);
 	qmAdvanced->addAction(ticketListAction);
 	qmAdvanced->addAction(newUserWizardAction);
@@ -1136,18 +1138,18 @@ void BitcoinGUI::createToolBars()
     toolbar->setOrientation(Qt::Vertical);
     toolbar->setMovable( false );
     toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-	toolbar->setContextMenuPolicy(Qt::PreventContextMenu);
+    toolbar->setContextMenuPolicy(Qt::PreventContextMenu);
     toolbar->setIconSize(QSize(50,25));
     toolbar->addAction(overviewAction);
     toolbar->addAction(sendCoinsAction);
     toolbar->addAction(receiveCoinsAction);
     toolbar->addAction(historyAction);
     toolbar->addAction(addressBookAction);
-	toolbar->addAction(bxAction);
-	toolbar->addAction(websiteAction);
-	toolbar->addAction(exchangeAction);
-	toolbar->addAction(boincAction);
-	toolbar->addAction(chatAction);
+    toolbar->addAction(bxAction);
+    toolbar->addAction(websiteAction);
+    toolbar->addAction(exchangeAction);
+    toolbar->addAction(boincAction);
+    toolbar->addAction(chatAction);
 //	toolbar->addAction(statisticsAction);
 //	toolbar->addAction(blockAction);
 	// Prevent Lock from falling off the page
@@ -1162,6 +1164,7 @@ void BitcoinGUI::createToolBars()
     QWidget* webSpacer = new QWidget();
 
 	webSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    webSpacer->setMaximumHeight(10);
     toolbar->addWidget(webSpacer);
     webSpacer->setObjectName("WebSpacer");
 
@@ -1306,9 +1309,12 @@ void BitcoinGUI::aboutClicked()
 
 void BitcoinGUI::votingReservedClicked()
 {
-    //VotingDialog dlg;
-    //dlg.setModel(clientModel);
-    //dlg.exec();
+#ifndef WIN32
+    VotingDialog *dlg = new VotingDialog(this);
+    dlg->setStyleSheet("QDialog { background-image:url(:images/bkg);} QTabWidget{ background-color: transparent; color: black;} QTabWidget::pane { border: 1px solid rgb(100,100,100); } QTabBar::tab { background: rgb(150,150,150); color: black; border: 1px solid rgb(100,100,100); border-top-left-radius: 4px; border-top-right-radius: 4px; min-width: 8ex; padding: 2px; } QTabBar::tab:selected { background: rgb(200,200,200); border: 1px solid rgb(100,100,100); border-bottom-color: rgb(200,200,200); } QTabBar::tab:hover { background: rgb(76,155,195); } QTabBar::tab:!selected { margin-top: 2px; } QTableView { alternate-background-color:rgb(255,255,255); background-color:transparent; color:black;} QListWidget {color:black; background-color:transparent;} QLabel {color:black;} QGroupBox {background-color:transparent;} QLineEdit {background-color:lightgray; color:black} QHeaderView::section { background-color:lightgray; color:black; } QPushButton { background-color:lightgray; color:black; } QComboBox { background-color:lightgray; color:black; }");
+    dlg->resetData();
+    dlg->show();
+#endif
 }
 
 
@@ -1705,7 +1711,7 @@ std::string RetrieveBlockAsString(int lSqlBlock)
 		if (lSqlBlock==0) lSqlBlock=1;
 		if (lSqlBlock > nBestHeight-2) return "";
 		CBlock block;
-		CBlockIndex* blockindex = MainFindBlockByHeight(lSqlBlock);
+		CBlockIndex* blockindex = BlockFinder().FindByHeight(lSqlBlock);
 		block.ReadFromDisk(blockindex);
 
 		std::string s = "";

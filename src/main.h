@@ -12,7 +12,9 @@
 #include "scrypt.h"
 
 #include "global_objects_noui.hpp"
-#include <list>
+
+#include <map>
+#include <set>
 
 class CWallet;
 class CBlock;
@@ -29,8 +31,6 @@ static const int LAST_POW_BLOCK = 2050;
 extern unsigned int REORGANIZE_FAILED;
 extern unsigned int WHITELISTED_PROJECTS;
 extern unsigned int CHECKPOINT_VIOLATIONS;
-extern double nVolatility;
-extern double nRiskFreeRate;
 static const int MAX_NEWBIE_BLOCKS = 200;
 static const int MAX_NEWBIE_BLOCKS_LEVEL2 = 500;
 static const int CHECKPOINT_DISTRIBUTED_MODE = 50;
@@ -41,21 +41,17 @@ static const double NeuralNetworkMultiplier = 115000;
 
 extern int64_t nLastBlockSolved;
 extern int64_t nLastBlockSubmitted;
-extern double mPI;
 
-extern uint256 muGlobalCheckpointHash;
 extern uint256 muGlobalCheckpointHashRelayed;
-extern int muGlobalCheckpointHashCounter;
 extern std::string msMasterProjectPublicKey;
 extern std::string msMasterMessagePublicKey;
 extern std::string msMasterMessagePrivateKey;
-extern std::string msTestNetSeedSuperblocks;extern std::string msTestNetSeedContracts;extern std::string msProdSeedSuperblocks;extern std::string msProdSeedContracts400000;extern std::string msProdSeedContracts500000;extern std::string msProdSeedContracts550000;extern std::string msProdSeedContracts575000;extern std::string msProdSeedContracts600000;extern bool bNewUserWizardNotified;
+extern bool bNewUserWizardNotified;
 
 /** The maximum allowed size for a serialized block, in bytes (network rule) */
 static const unsigned int MAX_BLOCK_SIZE = 1000000;
 /** Target Blocks Per day */
 static const unsigned int BLOCKS_PER_DAY = 1000;
-static const double TOLERANCE_PERCENT = 0;  // The amount a network consensus magnitude can be skewed by before calling etsoft (Removed as of 7/3/2015 - NeuralNetwork)
 /** The maximum size for mined blocks */
 static const unsigned int MAX_BLOCK_SIZE_GEN = MAX_BLOCK_SIZE/2;
 /** The maximum size for transactions we're willing to relay/mine **/
@@ -123,7 +119,9 @@ extern std::map<std::string, StructCPID> mvDPORCopy;
 
 extern std::map<std::string, StructCPID> mvResearchAge;
 extern std::map<std::string, MiningCPID> mvBlockIndex;
-extern std::map<std::string, std::string> mvCPIDBlockHashes;
+
+typedef std::set<uint256> HashSet;
+extern std::map<std::string, HashSet> mvCPIDBlockHashes;
 
 
 extern CScript COINBASE_FLAGS;
@@ -136,7 +134,6 @@ extern unsigned int nStakeMaxAge;
 extern unsigned int nNodeLifespan;
 extern int nCoinbaseMaturity;
 extern int nBestHeight;
-extern int nLastBestHeight;
 extern uint256 nBestChainTrust;
 extern uint256 nBestInvalidTrust;
 extern uint256 hashBestChain;
@@ -152,10 +149,7 @@ extern std::set<CWallet*> setpwalletRegistered;
 extern unsigned char pchMessageStart[4];
 extern std::map<uint256, CBlock*> mapOrphanBlocks;
 
-extern int64_t COIN_YEAR_REWARD;
-extern bool bRemotePaymentsEnabled;
 extern bool bOPReturnEnabled;
-extern bool bOptionPaymentsEnabled;
 
 // Settings
 extern int64_t nTransactionFee;
@@ -174,8 +168,6 @@ extern int64_t nCPIDsLoaded;
 extern int64_t nLastGRCtallied;
 extern int64_t nLastCleaned;
 extern int64_t nLastTallyBusyWait;
-
-
 
 extern bool fUseFastIndex;
 extern unsigned int nDerivationMethodIndex;
@@ -229,16 +221,7 @@ extern int nGrandfather;
 extern int nNewIndex;
 extern int nNewIndex2;
 
-// PoB GPU Miner Global Vars:
-extern std::string 	msGPUMiningProject;
-extern std::string 	msGPUMiningCPID;
-extern double    	mdGPUMiningRAC;
-extern double       mdGPUMiningNetworkRAC;
-extern std::string  msGPUENCboincpublickey;
-extern std::string  msGPUboinckey;
 // Stats for Main Screen:
-extern double         mdLastPoBDifficulty;
-extern double         mdLastDifficulty;
 extern std::string    msGlobalStatus;
 extern std::string    msLastPaymentTime;
 
@@ -256,11 +239,6 @@ FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszM
 FILE* AppendBlockFile(unsigned int& nFileRet);
 bool LoadBlockIndex(bool fAllowNew=true);
 void PrintBlockTree();
-CBlockIndex* FindBlockByHeight(int nHeight);
-
-CBlockIndex* RPCFindBlockByHeight(int nHeight);
-
-CBlockIndex* MainFindBlockByHeight(int nHeight);
 
 bool ProcessMessages(CNode* pfrom);
 bool SendMessages(CNode* pto, bool fSendTrickle);
@@ -785,7 +763,7 @@ public:
     {
         std::string str;
         str += IsCoinBase()? "Coinbase" : (IsCoinStake()? "Coinstake" : "CTransaction");
-        str += strprintf("(hash=%s, nTime=%d, ver=%d, vin.size=%"PRIszu", vout.size=%"PRIszu", nLockTime=%d)\n",
+        str += strprintf("(hash=%s, nTime=%d, ver=%d, vin.size=%" PRIszu ", vout.size=%" PRIszu ", nLockTime=%d)\n",
             GetHash().ToString().substr(0,10).c_str(),
             nTime,
             nVersion,
@@ -1240,7 +1218,7 @@ public:
 
     void print() const
     {
-        printf("CBlock(hash=%s, ver=%d, hashPrevBlock=%s, hashMerkleRoot=%s, nTime=%u, nBits=%08x, nNonce=%u, vtx=%"PRIszu", vchBlockSig=%s)\n",
+        printf("CBlock(hash=%s, ver=%d, hashPrevBlock=%s, hashMerkleRoot=%s, nTime=%u, nBits=%08x, nNonce=%u, vtx=%" PRIszu ", vchBlockSig=%s)\n",
             GetHash().ToString().c_str(),
             nVersion,
             hashPrevBlock.ToString().c_str(),
@@ -1305,15 +1283,10 @@ public:
 	double nResearchSubsidy;
 	double nInterestSubsidy;
 	double nMagnitude;
-	// Memory Only (8-13-2015):
-	double nLastPORBlock;
-	std::string sLastPORBlockHash;
-	double nTotalPORPayments;
 	// Indicators (9-13-2015)
 	unsigned int nIsSuperBlock;
 	unsigned int nIsContract;
 	std::string sGRCAddress;
-	std::string sReserved;
 
     unsigned int nFlags;  // ppcoin: block index flags
     enum  
@@ -1367,13 +1340,9 @@ public:
 		nResearchSubsidy = 0;
 		nInterestSubsidy = 0;
 		nMagnitude = 0;
-		nLastPORBlock=0;
-		sLastPORBlockHash = "";
-		nTotalPORPayments = 0;
 		nIsSuperBlock = 0;
 		nIsContract = 0;
 		sGRCAddress = "";
-		sReserved = "";
     }
 
     CBlockIndex(unsigned int nFileIn, unsigned int nBlockPosIn, CBlock& block)
@@ -1438,11 +1407,6 @@ public:
     bool IsInMainChain() const
     {
         return (pnext || this == pindexBest);
-    }
-
-    bool CheckIndex() const
-    {
-        return true;
     }
 
     int64_t GetPastTimeLimit() const
@@ -1519,7 +1483,7 @@ public:
 
     std::string ToString() const
     {
-        return strprintf("CBlockIndex(nprev=%p, pnext=%p, nFile=%u, nBlockPos=%-6d nHeight=%d, nMint=%s, nMoneySupply=%s, nFlags=(%s)(%d)(%s), nStakeModifier=%016"PRIx64", nStakeModifierChecksum=%08x, hashProof=%s, prevoutStake=(%s), nStakeTime=%d merkle=%s, hashBlock=%s)",
+        return strprintf("CBlockIndex(nprev=%p, pnext=%p, nFile=%u, nBlockPos=%-6d nHeight=%d, nMint=%s, nMoneySupply=%s, nFlags=(%s)(%d)(%s), nStakeModifier=%016" PRIx64 ", nStakeModifierChecksum=%08x, hashProof=%s, prevoutStake=(%s), nStakeTime=%d merkle=%s, hashBlock=%s)",
             pprev, pnext, nFile, nBlockPos, nHeight,
             FormatMoney(nMint).c_str(), FormatMoney(nMoneySupply).c_str(),
             GeneratedStakeModifier() ? "MOD" : "-", GetStakeEntropyBit(), IsProofOfStake()? "PoS" : "PoW",
@@ -1605,7 +1569,11 @@ public:
 			READWRITE(nIsSuperBlock);
 			READWRITE(nIsContract);
 			READWRITE(sGRCAddress);
-			READWRITE(sReserved);
+
+                        // Blocks used to come with a reserved string. Keep (de)serializing
+                        // it until it's used.
+                        std::string sReserved;
+                        READWRITE(sReserved);
 		}
 
 

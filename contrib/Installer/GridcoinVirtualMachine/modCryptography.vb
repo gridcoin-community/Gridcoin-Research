@@ -99,7 +99,7 @@ Public Module modCryptography
         '1.  Retrieve the Boinc MD5 Hash
         '2.  Verify the boinc.exe contains the Berkeley source libraries
         '3.  Verify the exe is an official release
-        '4.  Verify the size of the exe is above the threshhold
+        '4.  Verify the size of the exe is above the threshold
         Try
 
             Dim sFolder As String = GetBoincProgFolder()

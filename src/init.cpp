@@ -15,6 +15,7 @@
 #include <boost/filesystem/convenience.hpp>
 #include <boost/interprocess/sync/file_lock.hpp>
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/thread.hpp>
 #include <openssl/crypto.h>
 
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
@@ -24,13 +25,11 @@
 std::vector<std::string> split(std::string s, std::string delim);
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern void InitializeBoincProjects();
+extern boost::thread_group threadGroup;
 
 MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
 std::string GetArgument(std::string arg, std::string defaultvalue);
-void startWireFrameRenderer();
-void stopWireFrameRenderer();
-void ShutdownGridcoinMiner();
 void ThreadCPIDs();
 bool ComputeNeuralNetworkSupermajorityHashes();
 void BusyWaitForTally();
@@ -65,15 +64,14 @@ using namespace boost;
 CWallet* pwalletMain;
 CClientUIInterface uiInterface;
 std::vector<std::string> split(std::string s, std::string delim);
-void ShutdownGridcoinMiner();
 void ThreadCPIDs();
-bool fConfChange;
-bool fEnforceCanonical;
-unsigned int nNodeLifespan;
-unsigned int nDerivationMethodIndex;
-unsigned int nMinerSleep;
-bool fUseFastIndex;
-enum Checkpoints::CPMode CheckpointsMode;
+extern bool fConfChange;
+extern bool fEnforceCanonical;
+extern unsigned int nNodeLifespan;
+extern unsigned int nDerivationMethodIndex;
+extern unsigned int nMinerSleep;
+extern bool fUseFastIndex;
+extern enum Checkpoints::CPMode CheckpointsMode;
 extern void InitializeBoincProjects();
 void LoadCPIDsInBackground();
 
@@ -993,7 +991,7 @@ bool AppInit2()
         printf("Shutdown requested. Exiting.\n");
         return false;
     }
-    printf(" block index %15"PRId64"ms\n", GetTimeMillis() - nStart);
+    printf(" block index %15" PRId64 "ms\n", GetTimeMillis() - nStart);
 
     if (GetBoolArg("-printblockindex") || GetBoolArg("-printblocktree"))
     {
@@ -1084,7 +1082,7 @@ bool AppInit2()
     }
 
     printf("%s", strErrors.str().c_str());
-    printf(" wallet      %15"PRId64"ms\n", GetTimeMillis() - nStart);
+    printf(" wallet      %15" PRId64 "ms\n", GetTimeMillis() - nStart);
 
     RegisterWallet(pwalletMain);
 
@@ -1104,7 +1102,7 @@ bool AppInit2()
         printf("Rescanning last %i blocks (from block %i)...\n", pindexBest->nHeight - pindexRescan->nHeight, pindexRescan->nHeight);
         nStart = GetTimeMillis();
         pwalletMain->ScanForWalletTransactions(pindexRescan, true);
-        printf(" rescan      %15"PRId64"ms\n", GetTimeMillis() - nStart);
+        printf(" rescan      %15" PRId64 "ms\n", GetTimeMillis() - nStart);
     }
 
     // ********************************************************* Step 9: import blocks
@@ -1146,7 +1144,7 @@ bool AppInit2()
             printf("Invalid or missing peers.dat; recreating\n");
     }
 
-    printf("Loaded %i addresses from peers.dat  %"PRId64"ms\n",  addrman.size(), GetTimeMillis() - nStart);
+    printf("Loaded %i addresses from peers.dat  %" PRId64 "ms\n",  addrman.size(), GetTimeMillis() - nStart);
 
 
 	// ********************************************************* Step 11: start node
@@ -1183,11 +1181,11 @@ bool AppInit2()
     //// debug print
 	if (fDebug)
 	{
-		printf("mapBlockIndex.size() = %"PRIszu"\n",   mapBlockIndex.size());
+		printf("mapBlockIndex.size() = %" PRIszu "\n",   mapBlockIndex.size());
 		printf("nBestHeight = %d\n",            nBestHeight);
-		printf("setKeyPool.size() = %"PRIszu"\n",      pwalletMain->setKeyPool.size());
-		printf("mapWallet.size() = %"PRIszu"\n",       pwalletMain->mapWallet.size());
-		printf("mapAddressBook.size() = %"PRIszu"\n",  pwalletMain->mapAddressBook.size());
+		printf("setKeyPool.size() = %" PRIszu "\n",      pwalletMain->setKeyPool.size());
+		printf("mapWallet.size() = %" PRIszu "\n",       pwalletMain->mapWallet.size());
+		printf("mapAddressBook.size() = %" PRIszu "\n",  pwalletMain->mapAddressBook.size());
 	}
 
 
