@@ -9,13 +9,13 @@
 #include "cpid.h"
 #include "kernel.h"
 #include "init.h" // for pwalletMain
+#include "block.h"
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include "txdb.h"
 
 using namespace json_spirit;
 using namespace std;
-double OwedByAddress(std::string address);
 extern std::string YesNo(bool bin);
 bool BackupConfigFile(const string& strDest);
 std::string getHardDriveSerial();
@@ -54,7 +54,6 @@ double GetDelta(std::string sType, double UL, double Strike, double dTime, doubl
 extern std::string AddOptionContract(std::string sType, std::string sName, std::string sContract, double dPremium);
 extern Array GetOptionsExposureReport();
 void BusyWaitForTally();
-double Cap(double dAmt, double Ceiling);
 extern std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, std::string sSig, int64_t MinimumBalance, double dFees, std::string sPublicKey);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern Array SuperblockReport(std::string cpid);
@@ -161,7 +160,6 @@ std::string GetArgument(std::string arg, std::string defaultvalue);
 std::string TestHTTPProtocol(std::string sCPID);
 std::string VectorToString(std::vector<unsigned char> v);
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
-uint256 GetBlockHash256(const CBlockIndex* pindex_hash);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 extern std::string TimestampToHRDate(double dtm);
 
@@ -187,9 +185,6 @@ int DownloadBlocks();
 double GetBlockValueByHash(uint256 hash);
 double cdbl(std::string s, int place);
 void ScriptPubKeyToJSON(const CScript& scriptPubKey, Object& out);
-bool GetBlockNew(uint256 blockhash, int& out_height, CBlock& blk, bool bForceDiskRead);
-bool AESSkeinHash(unsigned int diffbytes, double rac, uint256 scrypthash, std::string& out_skein, std::string& out_aes512);
-				  std::string aes_complex_hash(uint256 scrypt_hash);
 std::vector<std::string> split(std::string s, std::string delim);
 double LederstrumpfMagnitude2(double mag,int64_t locktime);
 
@@ -211,9 +206,8 @@ bool GridDecrypt(const std::vector<unsigned char>& vchCiphertext,std::vector<uns
 bool GridEncrypt(std::vector<unsigned char> vchPlaintext, std::vector<unsigned char> &vchCiphertext);
 uint256 GridcoinMultipleAlgoHash(std::string t1);
 void ExecuteCode();
-void CreditCheckRetired(std::string cpid, bool clearcache);
 double CalculatedMagnitude(int64_t locktime,bool bUseLederstrumpf);
-
+static BlockFinder RPCBlockFinder;
 
 
 double GetNetworkProjectCountWithRAC()
@@ -408,7 +402,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
 		strprintf("%s%s", blockindex->IsProofOfStake()? "proof-of-stake" : "proof-of-work", blockindex->GeneratedStakeModifier()? " stake-modifier": "") + " " + PoRNarr		)		);
     result.push_back(Pair("proofhash", blockindex->hashProof.GetHex()));
     result.push_back(Pair("entropybit", (int)blockindex->GetStakeEntropyBit()));
-    result.push_back(Pair("modifier", strprintf("%016"PRIx64, blockindex->nStakeModifier)));
+    result.push_back(Pair("modifier", strprintf("%016" PRIx64, blockindex->nStakeModifier)));
     result.push_back(Pair("modifierchecksum", strprintf("%08x", blockindex->nStakeModifierChecksum)));
     Array txinfo;
     BOOST_FOREACH (const CTransaction& tx, block.vtx)
@@ -490,7 +484,7 @@ Value showblock(const Array& params, bool fHelp)
     int nHeight = params[0].get_int();
     if (nHeight < 0 || nHeight > nBestHeight)
         throw runtime_error("Block number out of range.");
-    CBlockIndex* pblockindex = RPCFindBlockByHeight(nHeight);
+    CBlockIndex* pblockindex = RPCBlockFinder.FindByHeight(nHeight);
 
     if (pblockindex==NULL)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
@@ -579,7 +573,7 @@ Value getblockhash(const Array& params, bool fHelp)
     int nHeight = params[0].get_int();
     if (nHeight < 0 || nHeight > nBestHeight)       throw runtime_error("Block number out of range.");
 	if (fDebug10)	printf("Getblockhash %f",(double)nHeight);
-	CBlockIndex* RPCpblockindex = RPCFindBlockByHeight(nHeight);
+	CBlockIndex* RPCpblockindex = RPCBlockFinder.FindByHeight(nHeight);
 	return RPCpblockindex->phashBlock->GetHex();
 }
 
@@ -1080,7 +1074,6 @@ bool TallyMagnitudesInSuperblock()
 					{
 						StructCPID stCPID = GetInitializedStructCPID2(cpid,mvDPORCopy);
 	     				stCPID.TotalMagnitude = magnitude;
-						stCPID.MagnitudeCount++;
 						stCPID.Magnitude = magnitude;
 						stCPID.cpid = cpid;
 						mvDPORCopy[cpid]=stCPID;
@@ -1359,6 +1352,7 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
 		    std::string sBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid);
 			if (!sBeaconPublicKey.empty()) 	
 			{
+				// Ensure they can re-send the beacon if > 6 months old : GetBeaconPublicKey returns an empty string when > 6 months: OK.
 				sError = "ALREADY_IN_CHAIN";
 				return bFromService ? true : false;
 			}
@@ -1375,7 +1369,7 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
 			double nBalance = GetTotalBalance();
 			if (nBalance < 1.01)
 			{
-				sError = "Balance too low to send beacon.";
+				sError = "Balance too low to send beacon, 1.01 GRC minimum balance required.";
 				return false;
 			}
 		
@@ -3062,13 +3056,6 @@ Value execute(const Array& params, bool fHelp)
 		}
 	
 	}
-	else if (sItem == "wcgtest")
-	{
-		
-			entry.push_back(Pair("Done","Done"));
-			results.push_back(entry);
-		
-	}
 	else if (sItem == "dportally")
 	{
 		TallyMagnitudesInSuperblock();
@@ -3646,7 +3633,7 @@ Array MagnitudeReport(std::string cpid)
 											{
 
 												StructCPID stCPID = GetLifetimeCPID(structMag.cpid,"MagnitudeReport");
-												double days = (GetAdjustedTime() - stCPID.LowLockTime)/86400;
+												double days = (GetAdjustedTime() - stCPID.LowLockTime) / 86400.0;
      											entry.push_back(Pair("CPID",structMag.cpid));
 												// entry.push_back(Pair("PoolMining",bPoolMiningMode));
 												double dWeight = (double)GetRSAWeightByCPID(structMag.cpid);
@@ -3817,17 +3804,34 @@ std::string GetLocalBeaconPublicKey(std::string cpid)
 	return sBeaconPubKey;
 }
 
+std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds)
+{
+    const std::string key = "beacon;" + cpid;
+    const std::string& value = mvApplicationCache[key];
+
+    // Compare the age of the beacon to the age of the current block. If we have
+    // no current block we assume that the beacon is valid.
+    int64_t iAge = pindexBest != NULL
+          ? pindexBest->nTime - mvApplicationCacheTimestamp[key]
+          : 0;
+
+    return (iAge > iMaxSeconds)
+          ? ""
+          : value;
+}
 
 std::string GetBeaconPublicKey(std::string cpid)
 {
-	std::string sBeacon = mvApplicationCache["beacon;" + cpid];
-	if (sBeacon.empty()) return "";
-	// Beacon data structure: CPID,hashRand,Address,beacon public key: base64 encoded
-	std::string sContract = DecodeBase64(sBeacon);
-	std::vector<std::string> vContract = split(sContract.c_str(),";");
-	if (vContract.size() < 4) return "";
-	std::string sBeaconPublicKey = vContract[3];
-	return sBeaconPublicKey;
+   //3-26-2017 - Ensure beacon public key is within 6 months of network age
+   int64_t iMaxSeconds = 60 * 24 * 30 * 6 * 60;
+   std::string sBeacon = RetrieveBeaconValueWithMaxAge(cpid, iMaxSeconds);
+   if (sBeacon.empty()) return "";
+   // Beacon data structure: CPID,hashRand,Address,beacon public key: base64 encoded
+   std::string sContract = DecodeBase64(sBeacon);
+   std::vector<std::string> vContract = split(sContract.c_str(),";");
+   if (vContract.size() < 4) return "";
+   std::string sBeaconPublicKey = vContract[3];
+   return sBeaconPublicKey;
 }
 
 bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature)
@@ -3894,9 +3898,9 @@ Array ContractReportCSV()
 		   std::string footer = "Total: " + RoundToString(rows,0) + ", , , ," + "\n";
 		   header += footer;
 		   Object entry;
-		   entry.push_back(Pair("CSV Complete",strprintf("\\reports\\open_contracts_%"PRId64".csv",timestamp)));
+		   entry.push_back(Pair("CSV Complete",strprintf("\\reports\\open_contracts_%" PRId64 ".csv",timestamp)));
 		   results.push_back(entry);
-     	   CSVToFile(strprintf("open_contracts_%"PRId64".csv",timestamp), header);
+     	   CSVToFile(strprintf("open_contracts_%" PRId64 ".csv",timestamp), header);
 		   return results;
 }
 
@@ -4602,10 +4606,10 @@ Array MagnitudeReportCSV(bool detail)
 		   std::string footer = RoundToString(rows,0) + ", , , , ," + RoundToString(lto,2) + ", ," + RoundToString(totalpaid,2) + ", , , , , ," + RoundToString(totaloutstanding,2) + "\n";
 		   header += footer;
 		   Object entry;
-		   entry.push_back(Pair("CSV Complete",strprintf("\\reports\\magnitude_%"PRId64".csv",timestamp)));
+		   entry.push_back(Pair("CSV Complete",strprintf("\\reports\\magnitude_%" PRId64 ".csv",timestamp)));
 		   results.push_back(entry);
      	   
-		   CSVToFile(strprintf("magnitude_%"PRId64".csv",timestamp), header);
+		   CSVToFile(strprintf("magnitude_%" PRId64 ".csv",timestamp), header);
 		   return results;
 }
 

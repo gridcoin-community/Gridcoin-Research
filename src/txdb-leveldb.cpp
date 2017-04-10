@@ -19,6 +19,7 @@
 #include "txdb.h"
 #include "util.h"
 #include "main.h"
+#include "block.h"
 #include "ui_interface.h"
 
 using namespace std;
@@ -29,7 +30,7 @@ StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, Stru
 bool IsLockTimeWithin14days(double locktime);
 MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID>& vRef);
 MiningCPID DeserializeBoincBlock(std::string block);
-void AddCPIDBlockHash(std::string cpid, std::string blockhash, bool fInsert);
+void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash);
 
 
 void SetUpExtendedBlockIndexFieldsOnce();
@@ -319,7 +320,7 @@ bool CTxDB::WriteGenericData(const std::string& strKey,const std::string& strDat
 
 
 
-static CBlockIndex *InsertBlockIndex(uint256 hash)
+static CBlockIndex *InsertBlockIndex(const uint256& hash)
 {
     if (hash == 0)
         return NULL;
@@ -430,10 +431,6 @@ bool CTxDB::LoadBlockIndex()
 				uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
      		}
 		#endif
-        if (!pindexNew->CheckIndex()) {
-            delete iterator;
-            return error("LoadBlockIndex() : CheckIndex failed at %d", pindexNew->nHeight);
-        }
 
         // NovaCoin: build setStakeSeen
         if (pindexNew->IsProofOfStake())
@@ -444,7 +441,7 @@ bool CTxDB::LoadBlockIndex()
     delete iterator;
 	
 	
-	printf("Time to memorize diskindex containing %f blocks : %15"PRId64".%f ms\r\n", dBlockCount, GetTimeMillis() - nStart, (double)nHighest);
+	printf("Time to memorize diskindex containing %f blocks : %15" PRId64 ".%f ms\r\n", dBlockCount, GetTimeMillis() - nStart, (double)nHighest);
 	nStart = GetTimeMillis();
 	
 
@@ -467,11 +464,11 @@ bool CTxDB::LoadBlockIndex()
         // NovaCoin: calculate stake modifier checksum
         pindex->nStakeModifierChecksum = GetStakeModifierChecksum(pindex);
         if (!CheckStakeModifierCheckpoints(pindex->nHeight, pindex->nStakeModifierChecksum))
-            return error("CTxDB::LoadBlockIndex() : Failed stake modifier checkpoint height=%d, modifier=0x%016"PRIx64, pindex->nHeight, pindex->nStakeModifier);
+            return error("CTxDB::LoadBlockIndex() : Failed stake modifier checkpoint height=%d, modifier=0x%016" PRIx64, pindex->nHeight, pindex->nStakeModifier);
     }
 
 
-	printf("Time to calculate Chain Trust %15"PRId64"ms\n", GetTimeMillis() - nStart);
+	printf("Time to calculate Chain Trust %15" PRId64 "ms\n", GetTimeMillis() - nStart);
 	nStart = GetTimeMillis();
 
 
@@ -635,7 +632,7 @@ bool CTxDB::LoadBlockIndex()
 
 
 
-	printf("Time to Verify Blocks %15"PRId64"ms\n", GetTimeMillis() - nStart);
+	printf("Time to Verify Blocks %15" PRId64 "ms\n", GetTimeMillis() - nStart);
 	
     if (pindexFork && !fRequestShutdown)
     {
@@ -648,84 +645,67 @@ bool CTxDB::LoadBlockIndex()
         block.SetBestChain(txdb, pindexFork);
     }
 
+    printf("Set up RA ");  
+    nStart = GetTimeMillis();
+    
+    //Gridcoin - In order, set up Research Age hashes and lifetime fields
+    CBlockIndex* pindex = BlockFinder().FindByHeight(1);
+    
+    nLoaded=pindex->nHeight;
+    if (pindex && pindexBest && pindexBest->nHeight > 10 && pindex->pnext)
+    {
+        printf(" RA Starting %f %f %f ",(double)pindex->nHeight,(double)pindex->pnext->nHeight,(double)pindexBest->nHeight);
+        while (pindex->nHeight < pindexBest->nHeight)
+        {
+            if (!pindex || !pindex->pnext) break;  
+            pindex = pindex->pnext;
+            if (pindex == pindexBest) break;
+            if (pindex==NULL || !pindex->IsInMainChain()) continue;
+            
+#ifdef QT_GUI
+            if ((pindex->nHeight % 10000) == 0)
+            {
+                nLoaded +=10000;
+                if (nLoaded > nHighest) nHighest=nLoaded;
+                if (nHighest < nGrandfather) nHighest=nGrandfather;
+                std::string sBlocksLoaded = RoundToString((double)nLoaded,0) + "/" + RoundToString((double)nHighest,0) + " POR Blocks Verified";
+                uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
+            }
+#endif
+            
+            if (!pindex->sCPID.empty() &&
+                pindex->nResearchSubsidy > 0 &&
+                pindex->sCPID != "INVESTOR") 
+            {
+                StructCPID& stCPID = mvResearchAge[pindex->sCPID];
+                
+                stCPID.InterestSubsidy += pindex->nInterestSubsidy;
+                stCPID.ResearchSubsidy += pindex->nResearchSubsidy;
+                if (pindex->nHeight > stCPID.LastBlock) 
+                {
+                    stCPID.LastBlock = pindex->nHeight;
+                    stCPID.BlockHash = pindex->GetBlockHash().GetHex();
+                }
+                
+                if (pindex->nMagnitude > 0)
+                {
+                    stCPID.Accuracy++;
+                    stCPID.TotalMagnitude += pindex->nMagnitude;
+                    stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
+                }
+                
+                if (pindex->nTime < stCPID.LowLockTime)  stCPID.LowLockTime = pindex->nTime;
+                if (pindex->nTime > stCPID.HighLockTime) stCPID.HighLockTime = pindex->nTime;
+                
+                AddCPIDBlockHash(pindex->sCPID, pindex->GetBlockHash());
+            }
+        }
+    }
 
-	printf("Set up RA ");
-
-	nStart = GetTimeMillis();
-
-
-	//Gridcoin - In order, set up Research Age hashes and lifetime fields
-    int lookback = 1000*190;
-	int nBlkStart = pindexBest->nHeight - lookback;
-	if (nBlkStart < 10) nBlkStart=10;
-	nBlkStart = 1;
-	CBlockIndex* pindex = FindBlockByHeight(nBlkStart);
-
-	nLoaded=pindex->nHeight;
-	if (pindex && pindexBest && pindexBest->nHeight > 10 && pindex->pnext)
-	{
-		printf(" RA Starting %f %f %f ",(double)pindex->nHeight,(double)pindex->pnext->nHeight,(double)pindexBest->nHeight);
-		while (pindex->nHeight < pindexBest->nHeight)
-		{
-				if (!pindex || !pindex->pnext) break;  
-				pindex = pindex->pnext;
-				if (pindex == pindexBest) break;
-				if (pindex==NULL || !pindex->IsInMainChain()) continue;
-				//if (IsLockTimeWithin14days((double)pindex->nTime) && !bResearchAgeEnabled) 
-				//{
-				//	CBlock block;
-				//	if (!block.ReadFromDisk(pindex)) return false;
-				//	bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
-				//}
-
-				#ifdef QT_GUI
-				if ((pindex->nHeight % 10000) == 0)
-				{
-					nLoaded +=10000;
-					if (nLoaded > nHighest) nHighest=nLoaded;
-					if (nHighest < nGrandfather) nHighest=nGrandfather;
-					std::string sBlocksLoaded = RoundToString((double)nLoaded,0) + "/" + RoundToString((double)nHighest,0) + " POR Blocks Verified";
-					uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
-     			}
-				#endif
-
-				if (!pindex->sCPID.empty())
-				{
-					if (pindex->nResearchSubsidy > 0 && pindex->sCPID != "INVESTOR") 
-					{
-			
-						//StructCPID stCPID = GetInitializedStructCPID2(pindex->sCPID, mvResearchAge);
-						StructCPID stCPID = mvResearchAge[pindex->sCPID];
-		
-	     				stCPID.InterestSubsidy += pindex->nInterestSubsidy;
-						stCPID.ResearchSubsidy += pindex->nResearchSubsidy;
-						if (((double)pindex->nHeight) > stCPID.LastBlock && pindex->nResearchSubsidy > 0) 
-						{
-								stCPID.LastBlock = (double)pindex->nHeight;
-								stCPID.BlockHash = pindex->GetBlockHash().GetHex();
-						}
-
-						if (pindex->nMagnitude > 0 && pindex->nResearchSubsidy > 0)
-						{
-							stCPID.Accuracy++;
-							stCPID.TotalMagnitude += pindex->nMagnitude;
-							stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
-						}
-		
-						if (((double)pindex->nTime) < stCPID.LowLockTime)  stCPID.LowLockTime = (double)pindex->nTime;
-						if (((double)pindex->nTime) > stCPID.HighLockTime) stCPID.HighLockTime = (double)pindex->nTime;
-			
-						mvResearchAge[pindex->sCPID]=stCPID;
-				    	AddCPIDBlockHash(pindex->sCPID,pindex->GetBlockHash().GetHex(),true);
-
-					}
-				}
-		}
-	}
-	printf("RA Complete - RA Time %15"PRId64"ms\n", GetTimeMillis() - nStart);
+	printf("RA Complete - RA Time %15" PRId64 "ms\n", GetTimeMillis() - nStart);
 	nStart = GetTimeMillis();
 	SetUpExtendedBlockIndexFieldsOnce();
-	printf("SetUpExtendedBlockIndexFieldsOnce Complete - Time %15"PRId64"ms\n", GetTimeMillis() - nStart);
+	printf("SetUpExtendedBlockIndexFieldsOnce Complete - Time %15" PRId64 "ms\n", GetTimeMillis() - nStart);
 	#if defined(WIN32) && defined(QT_GUI)
 		SetThreadPriority(THREAD_PRIORITY_NORMAL);
 	#endif

@@ -437,11 +437,6 @@
             "AssemblyAsmDisplayName" = "8:GRCSec, Version=1.0.0.3, Culture=neutral, processorArchitecture=MSIL"
                 "ScatterAssemblies"
                 {
-                    "_32F2DC723F30362B0B78F9A291EC0098"
-                    {
-                    "Name" = "8:GRCSec.dll"
-                    "Attributes" = "3:512"
-                    }
                 }
             "SourcePath" = "8:GRCSec.dll"
             "TargetName" = "8:"
@@ -559,11 +554,6 @@
             "AssemblyAsmDisplayName" = "8:OpenPop, Version=2.0.5.0, Culture=neutral, processorArchitecture=MSIL"
                 "ScatterAssemblies"
                 {
-                    "_5644D8F767F33372E534FBD5A2384D12"
-                    {
-                    "Name" = "8:openpopstake.dll"
-                    "Attributes" = "3:512"
-                    }
                 }
             "SourcePath" = "8:openpopstake.dll"
             "TargetName" = "8:"
@@ -590,11 +580,6 @@
             "AssemblyAsmDisplayName" = "8:MySql.Data, Version=6.6.4.0, Culture=neutral, PublicKeyToken=c5687fc88969c44d, processorArchitecture=MSIL"
                 "ScatterAssemblies"
                 {
-                    "_6408A3D03D15E306A4C3FC5FD95ADA69"
-                    {
-                    "Name" = "8:MySql.Data.dll"
-                    "Attributes" = "3:512"
-                    }
                 }
             "SourcePath" = "8:MySql.Data.dll"
             "TargetName" = "8:"
@@ -621,11 +606,6 @@
             "AssemblyAsmDisplayName" = "8:SQLite.NET, Version=0.21.1869.3794, Culture=neutral, PublicKeyToken=c273bd375e695f9c"
                 "ScatterAssemblies"
                 {
-                    "_6AEABB5004EC4B57225B51B085DB5625"
-                    {
-                    "Name" = "8:sqlitestake.net.dll"
-                    "Attributes" = "3:512"
-                    }
                 }
             "SourcePath" = "8:sqlitestake.net.dll"
             "TargetName" = "8:"
@@ -898,11 +878,6 @@
             "AssemblyAsmDisplayName" = "8:ICSharpCode.SharpZipLib, Version=0.86.0.518, Culture=neutral, PublicKeyToken=1b03e6acf1164f73"
                 "ScatterAssemblies"
                 {
-                    "_DEB886DE05C496A5AD26B43C4B1B90B9"
-                    {
-                    "Name" = "8:icsharpcode.sharpziplib.dll"
-                    "Attributes" = "3:512"
-                    }
                 }
             "SourcePath" = "8:icsharpcode.sharpziplib.dll"
             "TargetName" = "8:"
@@ -1109,19 +1084,19 @@
         {
         "Name" = "8:Microsoft Visual Studio"
         "ProductName" = "8:Gridcoin Research"
-        "ProductCode" = "8:{99640ABC-1BE5-4E04-B0D9-47AAD10FB404}"
-        "PackageCode" = "8:{BFB1DB38-B968-4E50-9221-9918143CECEA}"
+        "ProductCode" = "8:{187182ED-AEF9-46D8-91FD-4839828A6C9D}"
+        "PackageCode" = "8:{417B50AD-DB90-4AFC-BA6A-9022A071FD61}"
         "UpgradeCode" = "8:{9617E9EA-252F-43CE-B53E-B48C85F71192}"
         "AspNetVersion" = "8:4.0.30319.0"
         "RestartWWWService" = "11:FALSE"
         "RemovePreviousVersions" = "11:TRUE"
         "DetectNewerInstalledVersion" = "11:FALSE"
         "InstallAllUsers" = "11:TRUE"
-        "ProductVersion" = "8:42.0"
+        "ProductVersion" = "8:42.2"
         "Manufacturer" = "8:GridcoinResearch"
         "ARPHELPTELEPHONE" = "8:"
         "ARPHELPLINK" = "8:"
-        "Title" = "8:Gridcoin Research 42.0"
+        "Title" = "8:Gridcoin Research 42.2"
         "Subject" = "8:"
         "ARPCONTACT" = "8:The Gridcoin Developers"
         "Keywords" = "8:Gridcoin Research"
