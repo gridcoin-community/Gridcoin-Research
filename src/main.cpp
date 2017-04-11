@@ -46,7 +46,6 @@ double qtPushGridcoinDiagnosticData(std::string data);
 int RestartClient();
 bool RequestSupermajorityNeuralData();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
-extern int64_t CoinFromValue(double dAmount);
 extern bool CleanChain();
 extern void ResetTimerMain(std::string timer_name);
 extern std::string UnpackBinarySuperblock(std::string sBlock);
@@ -9896,16 +9895,3 @@ bool StrLessThanReferenceHash(std::string rh)
 	uint256 uADH = uint256("0x" + address_day_hash);
 	return (uADH < uRef);
 }
-
-
-int64_t CoinFromValue(double dAmount)
-{
-    if (dAmount <= 0.0 || dAmount > MAX_MONEY)        throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount");
-	int64_t nAmount = roundint64(dAmount * COIN);
-    if (!MoneyRange(nAmount))                         throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount");
-    return nAmount;
-}
-
-
-
-
