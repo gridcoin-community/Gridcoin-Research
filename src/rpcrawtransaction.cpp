@@ -20,24 +20,15 @@ using namespace boost;
 using namespace boost::assign;
 using namespace json_spirit;
 
-
-int UpgradeClient();
-
 extern std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, int& out_rac);
 MiningCPID DeserializeBoincBlock(std::string block);
 extern void Imker(void *kippel);
 extern Upgrader upgrader;
 
-
-
-
 #ifdef QT_GUI
 #include "qt/upgradedialog.h"
 extern Checker checker;
 #endif
-
-
-
 
 std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, double& out_rac)
 {

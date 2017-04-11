@@ -24,7 +24,6 @@ static unsigned int GetStakeSplitAge() { return IsProtocolV2(nBestHeight) ? (10 
 static int64_t GetStakeCombineThreshold() { return IsProtocolV2(nBestHeight) ? (50 * COIN) : (1000 * COIN); }
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
-std::vector<std::string> split(std::string s, std::string delim);
 StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
 double cdbl(std::string s, int place);
 std::string GetArgument(std::string arg, std::string defaultvalue);
@@ -44,14 +43,10 @@ void AddPeek(std::string data);
 
 double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
 
-double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 std::string SerializeBoincBlock(MiningCPID mcpid);
-double GetPoSKernelPS2();
 MiningCPID DeserializeBoincBlock(std::string block);
-double PreviousBlockAge();
 
 MiningCPID GetMiningCPID();
-StructCPID GetStructCPID();
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 bool LessVerbose(int iMax1000);
 MiningCPID GetNextProject(bool bForce);

@@ -24,7 +24,6 @@ void ThreadCleanWalletPassphrase(void* parg);
 double GetBlockDifficulty(unsigned int nBits);
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
-std::string GetBestBlockHash(std::string sCPID);
 double CoinToDouble(double surrogate);
 StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
 
@@ -36,8 +35,6 @@ bool OutOfSyncByAgeWithChanceOfMining();
 MiningCPID DeserializeBoincBlock(std::string block);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
-std::string PubKeyToAddress(const CScript& scriptPubKey);
-int64_t GetMaximumBoincSubsidy(int64_t nTime);
 bool IsCPIDValidv2(MiningCPID& mc,int height);
 
 int static FormatHashBlocks(void* pbuffer, unsigned int len)

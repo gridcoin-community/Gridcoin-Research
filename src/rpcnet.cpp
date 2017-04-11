@@ -15,12 +15,7 @@ bool Contains(std::string data, std::string instring);
 extern std::string NeuralRequest(std::string MyNeuralRequest);
 extern bool RequestSupermajorityNeuralData();
 std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
-
-std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
-
 extern void GatherNeuralHashes();
-
-
 extern bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 
 

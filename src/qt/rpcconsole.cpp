@@ -20,11 +20,6 @@
 
 // TODO: make it possible to filter out categories (esp debug messages when implemented)
 // TODO: receive errors and debug messages through ClientModel
-
-bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
-
-
-const int CONSOLE_SCROLLBACK = 50;
 const int CONSOLE_HISTORY = 50;
 
 const QSize ICON_SIZE(24, 24);

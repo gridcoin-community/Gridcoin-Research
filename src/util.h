@@ -347,14 +347,6 @@ inline std::string DateTimeStrFormat(int64_t nTime)
     return DateTimeStrFormat(strTimestampFormat.c_str(), nTime);
 }
 
-
-template<typename T>
-void skipspaces(T& it)
-{
-    while (isspace(*it))
-        ++it;
-}
-
 inline bool IsSwitchChar(char c)
 {
 #ifdef WIN32

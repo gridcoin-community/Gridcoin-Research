@@ -54,7 +54,6 @@ extern bool CleanChain();
 extern void ResetTimerMain(std::string timer_name);
 extern std::string UnpackBinarySuperblock(std::string sBlock);
 extern std::string PackBinarySuperblock(std::string sBlock);
-extern std::vector<unsigned char> StringToVector(std::string sData);
 extern bool TallyResearchAverages(bool Forcefully);
 extern void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance);
 bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
@@ -77,7 +76,6 @@ extern bool TallyNetworkAverages(bool Forcefully);
 extern void SetUpExtendedBlockIndexFieldsOnce();
 extern bool IsContract(CBlockIndex* pIndex);
 std::string ExtractValue(std::string data, std::string delimiter, int pos);
-extern bool IsSuperBlock(CBlockIndex* pIndex);
 extern MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 json_spirit::Array MagnitudeReport(std::string cpid);
 extern void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash);
@@ -86,8 +84,6 @@ extern StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
 extern std::string getCpuHash();
 std::string getMacAddress();
 std::string TimestampToHRDate(double dtm);
-std::string AddContract(std::string sType, std::string sName, std::string sContract);
-bool CPIDAcidTest(std::string boincruntimepublickey);
 bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
 
 std::string MyBeaconExists(std::string cpid);
@@ -97,7 +93,6 @@ int64_t GetEarliestWalletTransaction();
 extern void IncrementVersionCount(std::string Version);
 double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_avg,bool bIgnoreBeacons);
 extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
-extern std::string VectorToString(std::vector<unsigned char> v);
 extern bool UnusualActivityReport();
 
 extern std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
@@ -157,7 +152,6 @@ std::string GetListOf(std::string datatype);
 
 std::string GetCommandNonce(std::string command);
 std::string DefaultBlockKey(int key_length);
-void InitializeBoincProjects();
 
 extern std::string ToOfficialNameNew(std::string proj);
 
@@ -221,7 +215,6 @@ extern bool LockTimeRecent(double locktime);
 extern double CoinToDouble(double surrogate);
 extern double PreviousBlockAge();
 void CheckForUpgrade();
-int AddressUser();
 int64_t GetRSAWeightByCPID(std::string cpid);
 extern MiningCPID GetMiningCPID();
 extern StructCPID GetStructCPID();
@@ -246,20 +239,17 @@ std::string msMasterMessagePublicKey  = "044b2938fbc38071f24bede21e838a0758a52a0
 std::string BackupGridcoinWallet();
 extern double GetPoSKernelPS2();
 extern std::string GetBoincDataDir2();
-double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 
 extern uint256 GridcoinMultipleAlgoHash(std::string t1);
 extern bool OutOfSyncByAgeWithChanceOfMining();
 
 int RebootClient();
-vector<CInv> vNotFound;
 
 std::string YesNo(bool bin);
 
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 extern bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 extern bool IsLockTimeWithinMinutes(double locktime, int minutes);
-double GetNetworkProjectCountWithRAC();
 extern double CalculatedMagnitude(int64_t locktime,bool bUseLederstrumpf);
 extern int64_t GetCoinYearReward(int64_t nTime);
 extern void AddNMRetired(double height,double LockTime, std::string cpid, MiningCPID bb);
@@ -334,7 +324,6 @@ extern std::string aes_complex_hash(uint256 scrypt_hash);
 
 volatile bool bNetAveragesLoaded = false;
 volatile bool bTallyStarted      = false;
-volatile bool bRestartGridcoinMiner = false;
 volatile bool bForceUpdate = false;
 volatile bool bExecuteCode = false;
 volatile bool bAddressUser = false;
@@ -354,7 +343,6 @@ extern double GetBlockValueByHash(uint256 hash);
 extern void WriteAppCache(std::string key, std::string value);
 extern std::string AppCache(std::string key);
 extern void LoadCPIDsInBackground();
-int ReindexWallet();
 
 extern void ThreadCPIDs();
 extern std::string GetGlobalStatus();
@@ -365,7 +353,6 @@ extern bool ProjectIsValid(std::string project);
 extern std::string SerializeBoincBlock(MiningCPID mcpid);
 extern MiningCPID DeserializeBoincBlock(std::string block);
 
-extern void InitializeCPIDs();
 double GetNetworkAvgByProject(std::string projectname);
 extern bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 extern bool IsCPIDValidv2(MiningCPID& mc, int height);
@@ -5249,20 +5236,6 @@ bool LoadBlockIndex(bool fAllowNew)
 
     return true;
 }
-
-
-vector<unsigned char> StringToVector(std::string sData)
-{
-        vector<unsigned char> v(sData.begin(), sData.end());
-		return v;
-}
-
-std::string VectorToString(vector<unsigned char> v)
-{
-        std::string s(v.begin(), v.end());
-        return s;
-}
-
 
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end)
 {

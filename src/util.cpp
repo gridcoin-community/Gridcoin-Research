@@ -81,7 +81,6 @@ bool fNoListen = false;
 bool fLogTimestamps = false;
 CMedianFilter<int64_t> vTimeOffsets(200,0);
 bool fReopenDebugLog = false;
-bool Contains(std::string data, std::string instring);
 extern std::string GetNeuralVersion();
 
 
