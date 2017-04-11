@@ -90,6 +90,7 @@
 
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
+#include "boinc.h"
 
 extern CWallet* pwalletMain;
 extern int64_t nLastCoinStakeSearchInterval;
@@ -140,7 +141,6 @@ int nTick2 = 0;
 int nRegVersion;
 int nNeedsUpgrade = 0;
 
-extern std::string GetBoincDataDir();
 extern int CreateRestorePoint();
 extern int DownloadBlocks();
 
