@@ -90,7 +90,6 @@ extern std::string GetNeuralVersion();
 
 int64_t IsNeural();
 
-extern std::string GetBoincDataDir();
 extern int GetDayOfYear();
 
 void MilliSleep(int64_t n)
