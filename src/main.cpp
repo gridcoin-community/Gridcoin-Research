@@ -243,7 +243,7 @@ std::string msMasterMessagePublicKey  = "044b2938fbc38071f24bede21e838a0758a52a0
 
 std::string BackupGridcoinWallet();
 extern double GetPoSKernelPS2();
-extern std::string GetBoincDataDir2();
+extern std::string GetBoincDataDir();
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 
 extern uint256 GridcoinMultipleAlgoHash(std::string t1);
@@ -380,9 +380,6 @@ static boost::thread_group* cpidThreads = NULL;
 ///////////////////////////////
 // Standard Boinc Projects ////
 ///////////////////////////////
-
-//BOINC helper class
-CBoinc cBoinc;
 
 //Global variables to display current mined project in various places:
 std::string 	msMiningProject = "";
@@ -8367,27 +8364,6 @@ std::string ToOfficialNameNew(std::string proj)
 		return proj;
 }
 
-
-
-
-std::string GetBoincDataDir2()
-{
-	std::string path = "";
-	/*       Default setting: boincdatadir=c:\\programdata\\boinc\\   */
-
-
-    if (mapArgs.count("-boincdatadir"))
-	{
-        path = mapArgs["-boincdatadir"];
-		if (path.length() > 0) return path;
-    }
-
-    path = cBoinc.GetBoincDataPath();
-
-    return path;
-}
-
-
 std::string GetArgument(std::string arg, std::string defaultvalue)
 {
 	std::string result = defaultvalue;
@@ -8465,7 +8441,7 @@ void HarvestCPIDs(bool cleardata)
  try
  {
 
-	std::string sourcefile = GetBoincDataDir2() + "client_state.xml";
+	std::string sourcefile = GetBoincDataDir() + "client_state.xml";
     std::string sout = "";
     sout = getfilecontents(sourcefile);
 	if (sout == "-1")
