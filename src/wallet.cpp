@@ -16,6 +16,7 @@
 #include "cpid.h"
 #include "block.h"
 #include "bitcoinrpc.h"
+#include "util.h"
 
 using namespace std;
 
@@ -47,7 +48,6 @@ double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 double GetPoSKernelPS2();
 MiningCPID DeserializeBoincBlock(std::string block);
-std::string RoundToString(double d, int place);
 double PreviousBlockAge();
 
 MiningCPID GetMiningCPID();

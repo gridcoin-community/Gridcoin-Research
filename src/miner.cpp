@@ -31,9 +31,7 @@ StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
 void ThreadTopUpKeyPool(void* parg);
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 
-double GetDifficulty(const CBlockIndex* blockindex = NULL);
 int64_t GetRSAWeightByCPID(std::string cpid);
-std::string RoundToString(double d, int place);
 bool OutOfSyncByAgeWithChanceOfMining();
 MiningCPID DeserializeBoincBlock(std::string block);
 std::string SerializeBoincBlock(MiningCPID mcpid);

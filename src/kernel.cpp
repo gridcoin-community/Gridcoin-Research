@@ -6,10 +6,9 @@
 #include <boost/assign/list_of.hpp>
 #include "kernel.h"
 #include "txdb.h"
+#include "util.h"
 
-std::string YesNo(bool bin);
 double GetPoSKernelPS2();
-std::string RoundToString(double d, int place);
 bool IsCPIDValidv2(MiningCPID& mc,int height);
 using namespace std;
 MiningCPID DeserializeBoincBlock(std::string block);

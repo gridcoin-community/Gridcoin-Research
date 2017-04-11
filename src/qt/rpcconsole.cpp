@@ -21,7 +21,6 @@
 // TODO: make it possible to filter out categories (esp debug messages when implemented)
 // TODO: receive errors and debug messages through ClientModel
 
-std::string RoundToString(double d, int place);
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 
 

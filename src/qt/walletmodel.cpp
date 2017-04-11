@@ -8,12 +8,11 @@
 #include "wallet.h"
 #include "walletdb.h" // for BackupWallet
 #include "base58.h"
+#include "util.h"
 
 #include <QSet>
 #include <QTimer>
 
-
-std::string RoundToString(double d, int place);
 
 std::string YesNo(bool bin);
 

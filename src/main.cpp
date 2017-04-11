@@ -12,23 +12,27 @@
 #include "ui_interface.h"
 #include "kernel.h"
 #include "block.h"
-#include <math.h>       /* pow */
 #include "scrypt.h"
-#include <boost/algorithm/string/replace.hpp>
+#include "global_objects_noui.hpp"
+#include "util.h"
+#include "cpid.h"
+#include "bitcoinrpc.h"
+#include "json/json_spirit_value.h"
+
+#include <boost/lexical_cast.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
-#include <ctime>
-#include <openssl/md5.h>
-#include <boost/lexical_cast.hpp>
-#include "global_objects_noui.hpp"
-#include "bitcoinrpc.h"
-#include "util.h"
+#include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
 #include <boost/algorithm/string/join.hpp>
 #include <boost/thread.hpp>
-#include "cpid.h"
 #include <boost/asio.hpp>
+#include <openssl/md5.h>
+
+#include <ctime>
+#include <math.h>       /* pow */
+
 
 int GetDayOfYear();
 extern std::string NodeAddress(CNode* pfrom);

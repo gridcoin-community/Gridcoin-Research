@@ -21,6 +21,7 @@
 #include "main.h"
 #include "block.h"
 #include "ui_interface.h"
+#include "util.h"
 
 using namespace std;
 using namespace boost;
@@ -31,10 +32,7 @@ bool IsLockTimeWithin14days(double locktime);
 MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID>& vRef);
 MiningCPID DeserializeBoincBlock(std::string block);
 void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash);
-
-
 void SetUpExtendedBlockIndexFieldsOnce();
-std::string RoundToString(double d, int place);
 
 static leveldb::Options GetOptions() {
     leveldb::Options options;

@@ -9,6 +9,7 @@
 #include "bitcoinrpc.h"
 #include "init.h"
 #include "base58.h"
+#include "util.h"
 
 using namespace json_spirit;
 using namespace std;
@@ -22,7 +23,6 @@ extern void ThreadTopUpKeyPool(void* parg);
 double CoinToDouble(double surrogate);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 
-std::string RoundToString(double d, int place);
 extern Array StakingReport();
 
 extern void ThreadCleanWalletPassphrase(void* parg);

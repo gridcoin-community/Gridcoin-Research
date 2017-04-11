@@ -51,6 +51,7 @@
 #include "wallet.h"
 #include "init.h"
 #include "block.h"
+#include "util.h"
 
 #ifdef Q_OS_MAC
 #include "macdockiconhandler.h"

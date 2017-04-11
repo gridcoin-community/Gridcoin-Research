@@ -223,14 +223,7 @@ std::string FormatFullVersion();
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments);
 void AddTimeData(const CNetAddr& ip, int64_t nTime);
 void runCommand(std::string strCommand);
-
-
-
-
-
-
-
-
+std::string RoundToString(double d, int place);
 
 inline std::string i64tostr(int64_t n)
 {

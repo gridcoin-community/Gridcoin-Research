@@ -10,6 +10,7 @@
 #include "strlcpy.h"
 #include "addrman.h"
 #include "ui_interface.h"
+#include "util.h"
 
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/array.hpp>
@@ -71,7 +72,6 @@ std::string RetrieveMd5(std::string s1);
 
 extern std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string urlPage, bool bUseDNS);
 std::string msPubKey = "";
-std::string RoundToString(double d, int place);
 int MAX_OUTBOUND_CONNECTIONS = 8;
 
 void ThreadMessageHandler2(void* parg);

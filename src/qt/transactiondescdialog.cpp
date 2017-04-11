@@ -5,7 +5,6 @@
 #include <QMessageBox>
 #include <QModelIndex>
 
-std::string RoundToString(double d, int place);
 void ExecuteCode();
 extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 QString ToQString(std::string s);
