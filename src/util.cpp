@@ -81,10 +81,6 @@ bool fNoListen = false;
 bool fLogTimestamps = false;
 CMedianFilter<int64_t> vTimeOffsets(200,0);
 bool fReopenDebugLog = false;
-bool Contains(std::string data, std::string instring);
-
-
-std::string RoundToString(double d, int place);
 extern std::string GetNeuralVersion();
 
 
@@ -1423,11 +1419,9 @@ string FormatFullVersion()
 
 #endif
 
-
-
-std::string HeadlessRoundToString(double d, int place)
+std::string RoundToString(double d, int place)
 {
-	std::ostringstream ss;
+    std::ostringstream ss;
     ss << std::fixed << std::setprecision(place) << d ;
     return ss.str() ;
 }
@@ -1440,7 +1434,7 @@ std::string GetNeuralVersion()
 	#if defined(WIN32) && defined(QT_GUI)
 		double neural_id = 0;
 		neural_id = (double)IsNeural();
-		neural_v = HeadlessRoundToString((double)MINOR_VERSION,0) + "." + RoundToString(neural_id,0);
+		neural_v = RoundToString(MINOR_VERSION, 0) + "." + RoundToString(neural_id,0);
 	#endif
 
     return neural_v;

@@ -11,7 +11,6 @@ extern bool bDebugMode;
 extern bool bBoincSubsidyEligible;
 extern bool bPoolMiningMode;
 extern bool bCPUMiningMode;
-extern volatile bool bRestartGridcoinMiner;
 extern volatile bool bCPIDsLoaded;
 extern volatile bool bProjectsInitialized;
 extern volatile int  iCriticalThreadDelay;

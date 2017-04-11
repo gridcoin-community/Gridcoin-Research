@@ -223,14 +223,7 @@ std::string FormatFullVersion();
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments);
 void AddTimeData(const CNetAddr& ip, int64_t nTime);
 void runCommand(std::string strCommand);
-
-
-
-
-
-
-
-
+std::string RoundToString(double d, int place);
 
 inline std::string i64tostr(int64_t n)
 {
@@ -352,14 +345,6 @@ static const std::string strTimestampFormat = "%Y-%m-%d %H:%M:%S UTC";
 inline std::string DateTimeStrFormat(int64_t nTime)
 {
     return DateTimeStrFormat(strTimestampFormat.c_str(), nTime);
-}
-
-
-template<typename T>
-void skipspaces(T& it)
-{
-    while (isspace(*it))
-        ++it;
 }
 
 inline bool IsSwitchChar(char c)

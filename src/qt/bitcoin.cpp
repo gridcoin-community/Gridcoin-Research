@@ -39,8 +39,8 @@ static BitcoinGUI *guiref;
 static QSplashScreen *splashref;
 
 void ThreadAppInit2(void* parg);
-
 boost::thread_group threadGroup;
+
 //Global reference to globalcom
 
 #ifdef WIN32

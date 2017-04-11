@@ -51,6 +51,7 @@
 #include "wallet.h"
 #include "init.h"
 #include "block.h"
+#include "util.h"
 
 #ifdef Q_OS_MAC
 #include "macdockiconhandler.h"
@@ -148,11 +149,7 @@ bool OutOfSyncByAge();
 void ThreadCPIDs();
 int Races(int iMax1000);
 std::string GetGlobalStatus();
-std::string GetHttpPage(std::string cpid);
 
-void LoadCPIDsInBackground();
-void InitializeCPIDs();
-void RestartGridcoinMiner();
 extern int UpgradeClient();
 extern void CheckForUpgrade();
 extern int CloseGuiMiner();
@@ -161,15 +158,8 @@ extern int AddressUser();
 bool IsConfigFileEmpty();
 
 extern void ExecuteCode();
-
-
 extern void startWireFrameRenderer();
 extern void stopWireFrameRenderer();
-
-
-std::string RetrieveMd5(std::string s1);
-void WriteAppCache(std::string key, std::string value);
-void RestartGridcoin10();
 
 void HarvestCPIDs(bool cleardata);
 extern int RestartClient();

@@ -3,25 +3,17 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <boost/assign/list_of.hpp>
 #include "kernel.h"
 #include "txdb.h"
+#include "util.h"
 
-std::string YesNo(bool bin);
-double GetPoSKernelPS2();
-std::string RoundToString(double d, int place);
 bool IsCPIDValidv2(MiningCPID& mc,int height);
 using namespace std;
 MiningCPID DeserializeBoincBlock(std::string block);
-std::string RetrieveMd5(std::string s1);
-bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
-MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
 extern int64_t GetRSAWeightByCPID(std::string cpid);
-std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 double cdbl(std::string s, int place);
 extern int DetermineCPIDType(std::string cpid);
-std::string GetHttpPageFromCreditServerRetired(std::string cpid, bool usedns, bool clearcache);
 extern int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 double GetBlockDifficulty(unsigned int nBits);
@@ -29,7 +21,6 @@ extern double GetLastPaymentTimeByCPID(std::string cpid);
 extern double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 bool LessVerbose(int iMax1000);
 StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID>& vRef);
-extern double ReturnTotalRacByCPIDRetired(std::string cpid);
 
 typedef std::map<int, unsigned int> MapModifierCheckpoints;
 /*
@@ -37,18 +28,6 @@ typedef std::map<int, unsigned int> MapModifierCheckpoints;
         ( 1600, 0x1b3404a2 )
         ( 7000, 0x4da1176e )
 */
-
-// Hard checkpoints of stake modifiers to ensure they are deterministic
-static std::map<int, unsigned int> mapStakeModifierCheckpoints =
-    boost::assign::map_list_of
-        ( 0, 0x0e00670bu )
-    ;
-
-// Hard checkpoints of stake modifiers to ensure they are deterministic (testNet)
-static std::map<int, unsigned int> mapStakeModifierCheckpointsTestNet =
-    boost::assign::map_list_of
-        ( 0, 0x0e00670bu )
-    ;
 
 // Get time weight
 int64_t GetWeight(int64_t nIntervalBeginning, int64_t nIntervalEnd)
@@ -290,14 +269,6 @@ static bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64_t& nStakeModifi
 //   quantities so as to generate blocks faster, degrading the system back into
 //   a proof-of-work situation.
 //
-
-double ReturnTotalRacByCPIDRetired(std::string cpid)
-{
-	std::string result = GetHttpPageFromCreditServerRetired(cpid,true,true);
-	std::string sRAC = ExtractXML(result,"<expavg_credit>","</expavg_credit>");
-	double dRAC = cdbl(sRAC,0);
-	return dRAC;						
-}
 
 int DetermineCPIDType(std::string cpid)
 {

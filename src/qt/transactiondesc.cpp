@@ -8,12 +8,14 @@
 #include "ui_interface.h"
 #include "base58.h"
 #include "bitcoingui.h"
+#include "util.h"
+
 #include <QInputDialog>
 #include <QPushButton>
 #include <QMessageBox>
 #include <string>
+
 std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, double& out_rac);
-std::string RoundToString(double d, int place);
 std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, int& out_rac);
 extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 

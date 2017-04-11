@@ -15,6 +15,8 @@
 #include <boost/thread.hpp>
 #include "cpid.h"
 #include "block.h"
+#include "bitcoinrpc.h"
+#include "util.h"
 
 using namespace std;
 
@@ -22,12 +24,10 @@ static unsigned int GetStakeSplitAge() { return IsProtocolV2(nBestHeight) ? (10 
 static int64_t GetStakeCombineThreshold() { return IsProtocolV2(nBestHeight) ? (50 * COIN) : (1000 * COIN); }
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
-std::vector<std::string> split(std::string s, std::string delim);
 StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
 double cdbl(std::string s, int place);
 std::string GetArgument(std::string arg, std::string defaultvalue);
 std::string SendReward(std::string sAddress, int64_t nAmount);
-int64_t CoinFromValue(double dAmount);
 void qtUpdateConfirm(std::string txid);
 bool Contains(std::string data, std::string instring);
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
@@ -43,21 +43,27 @@ void AddPeek(std::string data);
 
 double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
 
-double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 std::string SerializeBoincBlock(MiningCPID mcpid);
-double GetPoSKernelPS2();
-double GetDifficulty(const CBlockIndex* blockindex = NULL);
 MiningCPID DeserializeBoincBlock(std::string block);
-std::string RoundToString(double d, int place);
-double PreviousBlockAge();
 
 MiningCPID GetMiningCPID();
-StructCPID GetStructCPID();
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 bool LessVerbose(int iMax1000);
 MiningCPID GetNextProject(bool bForce);
 bool fConfChange;
 unsigned int nDerivationMethodIndex;
+
+namespace
+{
+    int64_t CoinFromValue(double dAmount)
+    {
+        if (dAmount <= 0.0 || dAmount > MAX_MONEY)        throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount");
+        int64_t nAmount = roundint64(dAmount * COIN);
+        if (!MoneyRange(nAmount))                         throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount");
+        return nAmount;
+    }
+}
+
 //////////////////////////////////////////////////////////////////////////////
 //
 // mapWallet

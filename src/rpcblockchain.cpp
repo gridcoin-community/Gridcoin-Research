@@ -40,8 +40,6 @@ std::string ConvertBinToHex(std::string a);
 std::string ConvertHexToBin(std::string a);
 bool TallyResearchAverages(bool Forcefully);
 int RestartClient();
-extern bool VerifyUnderlyingPrice(double UL, int64_t timestamp);
-std::vector<unsigned char> StringToVector(std::string sData);
 extern std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress);
 double SnapToGrid(double d);
@@ -49,11 +47,6 @@ double GetVolatility(std::string sPriceHistory);
 extern std::string GetBurnAddress();
 bool NeuralNodeParticipates();
 bool StrLessThanReferenceHash(std::string rh);
-double BlackScholes(std::string CallPutFlag, double S, double X, double T, double r, double v);
-double GetDelta(std::string sType, double UL, double Strike, double dTime, double RiskFreeRate, double Volatility);
-extern std::string AddOptionContract(std::string sType, std::string sName, std::string sContract, double dPremium);
-extern Array GetOptionsExposureReport();
-void BusyWaitForTally();
 extern std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, std::string sSig, int64_t MinimumBalance, double dFees, std::string sPublicKey);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern Array SuperblockReport(std::string cpid);
@@ -66,7 +59,6 @@ bool NeedASuperblock();
 bool VerifySuperblock(std::string superblock, int nHeight);
 double ExtractMagnitudeFromExplainMagnitude();
 std::string GetQuorumHash(std::string data);
-double GetNetworkPaymentsTotal();
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
 bool ComputeNeuralNetworkSupermajorityHashes();
 bool UpdateNeuralNetworkQuorumData();
@@ -74,18 +66,13 @@ extern Array LifetimeReport(std::string cpid);
 Array StakingReport();
 extern std::string AddContract(std::string sType, std::string sName, std::string sContract);
 StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
-std::string getCpuHash();
-extern std::string getHardwareID();
-std::string getMacAddress();
 void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
 extern std::string MyBeaconExists(std::string cpid);
-int64_t GetEarliestWalletTransaction();
 extern bool CheckMessageSignature(std::string sAction,std::string messagetype, std::string sMsg, std::string sSig, std::string opt_pubkey);
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 double GRCMagnitudeUnit(int64_t locktime);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
-extern  std::string GetTeamURLs(bool bMissingOnly, bool bReturnProjectNames);
 std::string ExtractHTML(std::string HTMLdata, std::string tagstartprefix,  std::string tagstart_suffix, std::string tag_end);
 extern  std::string GetNetsoftProjects(std::string cpid);
 std::string NeuralRequest(std::string MyNeuralRequest);
@@ -93,11 +80,9 @@ extern bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::st
 
 double Round(double d, int place);
 bool UnusualActivityReport();
-extern double GetCountOf(std::string datatype);
+double GetCountOf(std::string datatype);
 extern double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons);
-extern bool CPIDAcidTest(std::string boincruntimepublickey);
 extern bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
-
 
 void TestScan();
 void TestScan2();
@@ -151,14 +136,8 @@ double GetTotalBalance();
 bool Contains(std::string data, std::string instring);
 std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
 std::string ReadCache(std::string section, std::string key);
-bool LessVerbose(int iMax1000);
-MiningCPID GetMiningCPID();
-StructCPID GetStructCPID();
 MiningCPID GetNextProject(bool bForce);
-std::string GetBestBlockHash(std::string sCPID);
 std::string GetArgument(std::string arg, std::string defaultvalue);
-std::string TestHTTPProtocol(std::string sCPID);
-std::string VectorToString(std::vector<unsigned char> v);
 std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 extern std::string TimestampToHRDate(double dtm);
@@ -171,7 +150,6 @@ int64_t GetRSAWeightByCPID(std::string cpid);
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spirit::Object& entry);
 extern enum Checkpoints::CPMode CheckpointsMode;
-bool ProjectIsValid(std::string project);
 int RebootClient();
 extern double GetNetworkProjectCountWithRAC();
 int ReindexWallet();
@@ -190,14 +168,12 @@ double LederstrumpfMagnitude2(double mag,int64_t locktime);
 
 std::string TxToString(const CTransaction& tx, const uint256 hashBlock, int64_t& out_amount, int64_t& out_locktime, int64_t& out_projectid, 
 	std::string& out_projectaddress, std::string& comments, std::string& out_grcaddress);
-bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
 std::string RetrieveMd5(std::string s1);
 
 std::string getfilecontents(std::string filename);
 MiningCPID DeserializeBoincBlock(std::string block);
 
-std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string urlPage, bool bUseDNS);
 extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
 std::string GetHttpPage(std::string cpid, bool usedns, bool clearcache);
@@ -864,7 +840,9 @@ std::string SignMessage(std::string sMsg, std::string sPrivateKey)
 	 {
 			 return "Unable to sign message, check private key.";
 	 }
-	 std::string SignedMessage = EncodeBase64(VectorToString(vchSig));
+     
+     const std::string sig(vchSig.begin(), vchSig.end());     
+	 std::string SignedMessage = EncodeBase64(sig);
 	 return SignedMessage;
 }
 
@@ -979,42 +957,6 @@ double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid)
 			}
 		}
 		return -1;
-}
-
-
-
-
-
-
-double QuoteToOptionsDouble(double dPrice)
-{
-	return dPrice/10000000000 * 100000000;
-}
-
-
-
-
-double GetGRCULFromSuperblock(std::string data)
-{
-	std::string sULs = ExtractXML(data,"<QUOTES>","</QUOTES>");
-	std::vector<std::string> vQ = split(sULs.c_str(),";");
-	if (vQ.size() > 0)
-	{
-		for (unsigned int i = 0; i < vQ.size(); i++)
-		{
-			// For each quote in the contract
-			if (vQ[i].length() > 1)
-			{
-					std::string sSymbol = ExtractValue(vQ[i],",",0);
-					double dPrice = cdbl(ExtractValue("0" + vQ[i],",",1),0);
-					if (sSymbol=="grc") 
-					{
-						return QuoteToOptionsDouble(dPrice);
-					}
-			}
-		}
-	}
-	return -2;
 }
 
 double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons)
@@ -1184,42 +1126,6 @@ bool TallyMagnitudesInSuperblock()
 
 }
 
-
-
-std::string GetTeamURLs(bool bMissingOnly, bool bReturnProjectNames)
-{
-
-			std::string sType = "project";
-			std::string project_urls = "";
-			std::string project_names = "";
-  		    for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
-		    {
-				std::string key_name  = (*ii).first;
-			   	if (key_name.length() > sType.length())
-				{
-					if (key_name.substr(0,sType.length())==sType)
-					{
-								std::string key_value = mvApplicationCache[(*ii).first];
-								std::string project_name = ExtractValue(key_name,";",1);
-								//Get the age of the RAC in the smart contract
-								std::string contract_name = "contract;" + project_name;
-								std::string contract = mvApplicationCache[contract_name];
-								int64_t age = GetAdjustedTime() - mvApplicationCacheTimestamp[contract_name];
-								if (!bMissingOnly || (bMissingOnly && age > (60*60*24)) || (bMissingOnly && contract.length() < 20))
-								{
-									project_urls += key_value + "<ROW>";
-									project_names += project_name + "<ROW>";
-								}
-					}
-		       
-				}
-		   }
-		   return (bReturnProjectNames ? project_names : project_urls);
-
-}
-
-
-
 double GetCountOf(std::string datatype)
 {
 	std::string data = GetListOf(datatype);
@@ -1264,19 +1170,6 @@ int64_t BeaconTimeStamp(std::string cpid, bool bZeroOutAfterPOR)
 
 }
 
-
-
-std::string AddOptionContract(std::string sType, std::string sName, std::string sContract, double dPremium)
-{
-			std::string sPass = (sType=="project" || sType=="projectmapping" || sType=="smart_contract") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
-			std::string result = AddMessage(true,sType,sName,sContract,sPass,AmountFromValue(1),dPremium,"");
-			return result;
-}
-
-
-
-
-
 std::string AddContract(std::string sType, std::string sName, std::string sContract)
 {
 			std::string sPass = (sType=="project" || sType=="projectmapping" || sType=="smart_contract") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
@@ -1284,16 +1177,6 @@ std::string AddContract(std::string sType, std::string sName, std::string sContr
 			return result;
 }
 
-
-bool CPIDAcidTest(std::string boincruntimepublickey)
-{
-	uint256 hashRand = GetRandHash();
-    std::string email = GetArgument("email", "NA");
-    boost::to_lower(email);
-	std::string cpidv2 = ComputeCPIDv2(email, boincruntimepublickey, hashRand);
-	bool IsCPIDValid2 = CPID_IsCPIDValid(cpidv2.substr(0,32),cpidv2, hashRand);
-	return IsCPIDValid2;
-}
 
 bool CPIDAcidTest2(std::string bpk, std::string externalcpid)
 {
@@ -3483,57 +3366,6 @@ Array LifetimeReport(std::string cpid)
 	   return results;
 
 }
-
-
-
-
-
-
-bool VerifyUnderlyingPrice(double UL, int64_t timestamp)
-{
-	  int nLookback = BLOCKS_PER_DAY * 31 * 60;
-	  int nMinDepth = (nBestHeight - nLookback);
-	  if (nMinDepth < 1) nMinDepth=1;
-	  CBlockIndex* pblockindex = pindexBest;
-	  int nSuperblocks = 0;
-	  while (pblockindex->nHeight > nMinDepth)
-	  {
-							if (!pblockindex || !pblockindex->pprev) return false;
-							pblockindex = pblockindex->pprev;
-							if (pblockindex == pindexGenesisBlock) return false;
-							if (!pblockindex->IsInMainChain()) continue;
-							if (IsSuperBlock(pblockindex))
-							{
-								MiningCPID bb = GetBoincBlockByIndex(pblockindex);
-								// Target the date of this UL
-								if (bb.superblock.length() > 20 && pblockindex->nTime <= timestamp)
-								{
-										double out_beacon_count = 0;
-										double out_participant_count = 0;
-										double out_avg = 0;
-										std::string superblock = UnpackBinarySuperblock(bb.superblock);
-										double dValid = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,true);
-										if (dValid > 1)
-										{
-	    										nSuperblocks++;
-												double dHistoricalPrice = GetGRCULFromSuperblock(superblock);
-												if (UL==dHistoricalPrice) 
-												{
-														printf(" \r\n UL price found. \r\n");
-														return true;
-												}
-												if (nSuperblocks > 2) return false;
-										}
-								}
-							}
-					
-	  }
-	  return false;
-
-}
-
-
-
 
 
 Array SuperblockReport(std::string cpid)

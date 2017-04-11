@@ -7,7 +7,6 @@
 
 #include <boost/version.hpp>
 #include <boost/filesystem.hpp>
-#include <boost/filesystem/fstream.hpp>
 
 #include <leveldb/env.h>
 #include <leveldb/cache.h>
@@ -26,15 +25,8 @@ using namespace std;
 using namespace boost;
 
 leveldb::DB *txdb; // global pointer for LevelDB object instance
-StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID>& vRef);
-bool IsLockTimeWithin14days(double locktime);
-MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID>& vRef);
-MiningCPID DeserializeBoincBlock(std::string block);
 void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash);
-
-
 void SetUpExtendedBlockIndexFieldsOnce();
-std::string RoundToString(double d, int place);
 
 static leveldb::Options GetOptions() {
     leveldb::Options options;
