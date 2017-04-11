@@ -26,7 +26,7 @@
 #  include <QtGui>
 #endif
 
-#if QT_VERSION >= QT_VERSION_CHECK(5, 7, 0)
+#if QT_VERSION >= QT_VERSION_CHECK(5, 8, 0)
 #include <QtCharts/QChartGlobal>
 #endif
 
@@ -36,7 +36,7 @@ class QObject;
 class QResizeEvent;
 QT_END_NAMESPACE
 
-#if QT_VERSION >= QT_VERSION_CHECK(5, 7, 0)
+#if QT_VERSION >= QT_VERSION_CHECK(5, 8, 0)
 QT_CHARTS_BEGIN_NAMESPACE
 class QChart;
 QT_CHARTS_END_NAMESPACE
