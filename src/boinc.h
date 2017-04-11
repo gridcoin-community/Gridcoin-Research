@@ -3,10 +3,6 @@
 
 #include <string>
 
-class CBoinc
-{
-public:
-    std::string GetBoincDataPath();
-};
+std::string GetBoincDataDir();
 
 #endif

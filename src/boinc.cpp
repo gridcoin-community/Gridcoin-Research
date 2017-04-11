@@ -1,12 +1,20 @@
 #include "boinc.h"
 #include <boost/filesystem.hpp>
-#ifdef _WIN32
+#ifdef WIN32
 #include <windows.h>
 #define KEY_WOW64_64KEY 0x0100
-#endif // _WIN32
+#endif
 
-std::string CBoinc::GetBoincDataPath(){
-    #ifdef _WIN32
+extern std::string GetArgument(std::string arg, std::string defaultvalue);
+
+std::string GetBoincDataDir(){
+
+    std::string path = GetArgument("boincdatadir", "");
+    if (!path.empty()){
+        return path;
+    }
+
+    #ifdef WIN32
     HKEY hKey;
     if (RegOpenKeyEx(HKEY_LOCAL_MACHINE,
                      L"SOFTWARE\\Space Sciences Laboratory, U.C. Berkeley\\BOINC Setup\\",
@@ -37,18 +45,18 @@ std::string CBoinc::GetBoincDataPath(){
     else if(boost::filesystem::exists("C:\\Documents and Settings\\All Users\\Application Data\\BOINC\\")){
         return "C:\\Documents and Settings\\All Users\\Application Data\\BOINC\\";
     }
-    #endif // _WIN32
+    #endif
 
     #ifdef __linux__
     if (boost::filesystem::exists("/var/lib/boinc-client/")){
         return "/var/lib/boinc-client/";
     }
-    #endif // __linux__
+    #endif
 
     #ifdef __APPLE__
     if (boost::filesystem::exists("/Library/Application Support/BOINC Data/")){
         return "/Library/Application Support/BOINC Data/";
     }
-    #endif // __APPLE__
+    #endif
     return "";
 }
