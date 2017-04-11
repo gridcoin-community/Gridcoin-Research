@@ -34,7 +34,11 @@ std::string GetBoincDataDir(){
             RegCloseKey(hKey);
             std::wstring wsPath = szPath;
             std::string path(wsPath.begin(),wsPath.end());
-            return path;
+            if (boost::filesystem::exists(path)){
+                return path;
+            } else {
+                printf("Cannot find BOINC data dir %s.\n", path.c_str());
+            }
         }
         RegCloseKey(hKey);
     }
@@ -58,5 +62,7 @@ std::string GetBoincDataDir(){
         return "/Library/Application Support/BOINC Data/";
     }
     #endif
+
+    printf("ERROR: Cannot find BOINC data dir\n");
     return "";
 }
