@@ -33,6 +33,7 @@ std::string GetBoincDataDir(){
                         &dwSize) == ERROR_SUCCESS){
             RegCloseKey(hKey);
             std::wstring wsPath = szPath;
+	    // TODO: Use and return wstring when all file operations use unicode
             std::string path(wsPath.begin(),wsPath.end());
             if (boost::filesystem::exists(path)){
                 return path;
