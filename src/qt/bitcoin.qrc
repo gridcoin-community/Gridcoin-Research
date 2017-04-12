@@ -103,6 +103,7 @@
         <file alias="zh_TW">locale/bitcoin_zh_TW.qm</file>
     </qresource>
     <qresource prefix="/stylesheets">
-        <file alias="stylesheet">res/stylesheets/stylesheet.qss</file>
+        <file alias="light">res/stylesheets/light_stylesheet.qss</file>
+        <file alias="native">res/stylesheets/native_stylesheet.qss</file>
     </qresource>
 </RCC>

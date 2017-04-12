@@ -182,7 +182,7 @@ public slots:
 
 	void NewUserWizard();
     void handleURI(QString strURI);
-
+    void setOptionsStyleSheet(QString qssFileName);
 
 private slots:
     /** Switch to overview (home) page */

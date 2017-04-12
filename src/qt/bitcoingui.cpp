@@ -206,25 +206,6 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     setGeometry(0,0,980,550);
     
     setWindowTitle(tr("Gridcoin") + " " + tr("Wallet"));
-	//4-9-2016
-	double dFontSize = cdbl(GetArgument("fontsize", "10"),0);
-	std::string sFontSize10 = RoundToString(dFontSize,0);
-	std::string sFontSize12 = RoundToString(dFontSize+2,0);
-	std::string sPixelType = "px";
-	printf("Using fontsize %s",sFontSize10.c_str());
-
-    // setting the style sheets for the app
-    QFile qss(":stylesheets/stylesheet");
-    if (qss.open(QIODevice::ReadOnly)){
-        QTextStream qssStream(&qss);
-        QString sMainWindowHTML = qssStream.readAll();
-        qss.close();
-
-        sMainWindowHTML += "#labelMiningIcon { font-size:" + ToQstring(sFontSize10) + ToQstring(sPixelType) +";}";
-        sMainWindowHTML += "QMenuBar::item { font-size:" + ToQstring(sFontSize12) + ToQstring(sPixelType) +";}";
-
-        qApp->setStyleSheet(sMainWindowHTML);
-    }
 
 #ifndef Q_OS_MAC
     qApp->setWindowIcon(QIcon(":icons/bitcoin"));
@@ -323,7 +304,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     toolbar2->setOrientation(Qt::Vertical);
     toolbar2->setMovable( false );
     toolbar2->setObjectName("toolbar2");
-    toolbar2->setFixedWidth(25);
+    toolbar2->setFixedWidth(26);
     toolbar2->addWidget(frameBlocks);
     toolbar2->addWidget(progressBarLabel);
     toolbar2->addWidget(progressBar);
@@ -844,7 +825,19 @@ int CloseGuiMiner()
 }
 
 
+void BitcoinGUI::setOptionsStyleSheet(QString qssFileName)
+{
+    // setting the style sheets for the app
+    QFile qss(":stylesheets/"+qssFileName);
+    if (qss.open(QIODevice::ReadOnly)){
+        QTextStream qssStream(&qss);
+        QString sMainWindowHTML = qssStream.readAll();
+        qss.close();
 
+        qApp->setStyleSheet(sMainWindowHTML);
+    }
+
+}
 
 
 void BitcoinGUI::createActions()
@@ -1209,6 +1202,10 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
 
         // Report errors from network/worker thread
         connect(clientModel, SIGNAL(error(QString,QString,bool)), this, SLOT(error(QString,QString,bool)));
+
+        // set stylesheet
+        setOptionsStyleSheet(this->clientModel->getOptionsModel()->getCurrentStyle());
+        connect(this->clientModel->getOptionsModel(),SIGNAL(walletStylesheetChanged(QString)),this,SLOT(setOptionsStyleSheet(QString)));
 
         rpcConsole->setClientModel(clientModel);
         addressBookPage->setOptionsModel(clientModel->getOptionsModel());

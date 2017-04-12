@@ -30,6 +30,7 @@ public:
         DisplayUnit,       // BitcoinUnits::Unit
 		DisplayAddresses,  // bool
         Language,          // QString
+        WalletStylesheet,  // QString
         CoinControlFeatures, // bool
         OptionIDRowCount,
     };
@@ -49,6 +50,7 @@ public:
 	bool getDisplayAddresses();
     bool getCoinControlFeatures();
     QString getLanguage() { return language; }
+    QString getCurrentStyle();
 
 private:
     int nDisplayUnit;
@@ -57,12 +59,14 @@ private:
     bool fMinimizeOnClose;
     bool fCoinControlFeatures;
     QString language;
+    QString walletStylesheet;
 
 signals:
     void displayUnitChanged(int unit);
     void transactionFeeChanged(qint64);
     void reserveBalanceChanged(qint64);
     void coinControlFeaturesChanged(bool);
+    void walletStylesheetChanged(QString);
 };
 
 #endif // OPTIONSMODEL_H

@@ -366,6 +366,9 @@
        </item>
        <item row="19" column="0">
         <widget class="QPushButton" name="openDebugLogfileButton">
+         <property name="focusPolicy">
+          <enum>Qt::TabFocus</enum>
+         </property>
          <property name="toolTip">
           <string>Open the Gridcoin debug log file from the current data directory. This can take a few seconds for large log files.</string>
          </property>
@@ -394,6 +397,9 @@
        </item>
        <item row="21" column="0">
         <widget class="QPushButton" name="showCLOptionsButton">
+         <property name="focusPolicy">
+          <enum>Qt::TabFocus</enum>
+         </property>
          <property name="toolTip">
           <string>Show the Gridcoin help message to get a list with possible Gridcoin command-line options.</string>
          </property>
