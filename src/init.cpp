@@ -27,36 +27,18 @@ bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern void InitializeBoincProjects();
 extern boost::thread_group threadGroup;
 
-MiningCPID GetMiningCPID();
 StructCPID GetStructCPID();
 std::string GetArgument(std::string arg, std::string defaultvalue);
-void startWireFrameRenderer();
-void stopWireFrameRenderer();
-void ShutdownGridcoinMiner();
 void ThreadCPIDs();
 bool ComputeNeuralNetworkSupermajorityHashes();
 void BusyWaitForTally();
 extern void ThreadAppInit2(void* parg);
 
 void LoadCPIDsInBackground();
-std::string GetPoolKey(std::string sMiningProject,double dMiningRAC,
-	std::string ENCBoincpublickey,std::string xcpid, std::string messagetype,
-	uint256 blockhash, double subsidy, double nonce, int height, int blocktype);
-std::string AppCache(std::string key);
-int CloseGuiMiner();
-bool fGenerate = false;
-extern void InitializeBoincProjects();
-
 bool IsConfigFileEmpty();
 
-void GetNextProject(bool bForce);
 void HarvestCPIDs(bool cleardata);
 std::string ToOfficialName(std::string proj);
-
-std::string RestoreGridcoinBackupWallet();
-std::string BackupGridcoinWallet();
-void WriteAppCache(std::string key, std::string value);
-
 
 #ifndef WIN32
 #include <signal.h>
@@ -67,7 +49,6 @@ using namespace boost;
 CWallet* pwalletMain;
 CClientUIInterface uiInterface;
 std::vector<std::string> split(std::string s, std::string delim);
-void ShutdownGridcoinMiner();
 void ThreadCPIDs();
 extern bool fConfChange;
 extern bool fEnforceCanonical;
@@ -189,42 +170,9 @@ void InitializeBoincProjectsNew()
 
 void InitializeBoincProjects()
 {
-	    	InitializeBoincProjectsNew();
-			return;
-
-
-		// Retiring:
-
-		/*
-		for (int i = 0; i < 100; i++)
-		{
-			if (proj.length() > 1)
-			{
-       			boost::to_lower(proj);
-				std::vector<std::string> vProject = split(proj,"|");
-				std::string mainProject = vProject[1];
-				mainProject = ToOfficialName(mainProject);
-				boost::to_lower(mainProject);
-				StructCPID structcpid = GetStructCPID();
-				mvBoincProjects.insert(map<string,StructCPID>::value_type(mainProject,structcpid));
-				structcpid = mvBoincProjects[mainProject];
-				structcpid.initialized = true;
-				structcpid.link = vProject[0];
-				structcpid.projectname = mainProject;
-				mvBoincProjects[mainProject] = structcpid;
-				WHITELISTED_PROJECTS++;
-
-			}
-		}
-		*/
-
-
-
+    InitializeBoincProjectsNew();
+    return;
 }
-
-
-
-
 
 
 void Shutdown(void* parg)

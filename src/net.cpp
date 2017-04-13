@@ -10,6 +10,7 @@
 #include "strlcpy.h"
 #include "addrman.h"
 #include "ui_interface.h"
+#include "util.h"
 
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/array.hpp>
@@ -35,10 +36,8 @@ extern void ExecGridcoinServices(void* parg);
 double cdbl(std::string s, int place);
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 std::string DefaultWalletAddress();
-void GridcoinServices();
 std::string NodeAddress(CNode* pfrom);
 std::string GetNeuralVersion();
-
 
 #ifndef QT_GUI
  boost::thread_group threadGroup;
@@ -47,31 +46,21 @@ extern std::string GetCommandNonce(std::string command);
 extern std::string DefaultOrg();
 extern std::string DefaultOrgKey(int key_length);
 extern std::string DefaultBlockKey(int key_length);
-extern std::string GetBestBlockHash(std::string sCPID);
-extern std::string TestHTTPProtocol(std::string sCPID);
 extern std::string GetHttpPage(std::string url);
 std::vector<std::string> split(std::string s, std::string delim);
-
-
-int64_t IsNeural();
 
 extern std::string OrgId();
 std::string DefaultBoincHashArgs();
 extern std::string LegacyDefaultBoincHashArgs();
 bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
 extern int nMaxConnections;
-MiningCPID GetNextProject(bool bForce);
 void HarvestCPIDs(bool cleardata);
-bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 extern std::string GetHttpPageFromCreditServerRetired(std::string cpid, bool UseDNS, bool ClearCache);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 std::string cached_boinchash_args = "";
-void WriteAppCache(std::string key, std::string value);
 std::string RetrieveMd5(std::string s1);
 
-extern std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string urlPage, bool bUseDNS);
 std::string msPubKey = "";
-std::string RoundToString(double d, int place);
 int MAX_OUTBOUND_CONNECTIONS = 8;
 
 void ThreadMessageHandler2(void* parg);
@@ -572,124 +561,6 @@ std::string GetHttpContent(const CService& addrConnect, std::string getdata)
 	}
 
 }
-
-
-std::string GridHTTPPost(std::string url, std::string hostheader, const string& strMsg, const map<string,string>& mapRequestHeaders)
-{
-    ostringstream s;
-    s << "POST /" + url + " HTTP/1.1\r\n"
-      << "User-Agent: Gridcoin-QT/" << FormatFullVersion() << "\r\n"
-	  << "Host: " + hostheader + "" << "\r\n"
-      << "Content-Length: " << strMsg.size() << "\r\n";
-
-    BOOST_FOREACH(const PAIRTYPE(string, string)& item, mapRequestHeaders)
-        s << item.first << ": " << item.second << "\r\n";
-        s << "\r\n" << strMsg;
-
-    return s.str();
-}
-
-std::string GetBestBlockHash(std::string sCPID)
-{
-	std::string key = "<ADDR>";
-	std::string keystop = "</ADDR>";
-	if (fTestNet)
-	{
-			key = "<ADDRESSTESTNET>";
-			keystop = "</ADDRESSTESTNET>";
-	}
-	std::string boincauth = sCPID + "<;>" + hashBestChain.ToString();
-	std::string http = GridcoinHttpPost("hashbestchain",boincauth,"GetBestBlockHash.aspx",true);
-	if (fDebug10) printf("Resp %s",http.c_str());
-	msPubKey = ExtractXML(http,key,keystop);
-	return msPubKey;
-}
-
-
-std::string TestHTTPProtocol(std::string sCPID)
-{
-	std::string key = "<ADDR>";
-	std::string keystop = "</ADDR>";
-	if (fTestNet)
-	{
-			key = "<ADDRESSTESTNET>";
-			keystop = "</ADDRESSTESTNET>";
-	}
-	std::string boincauth = sCPID + "<;>" + hashBestChain.ToString();
-	std::string http = GridcoinHttpPost("hashbestchain",boincauth,"Test404Page.aspx",true);
-	if (fDebug10) printf("Resp %s",http.c_str());
-	msPubKey = ExtractXML(http,key,keystop);
-	return msPubKey;
-}
-
-
-std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string urlPage, bool bUseDNS)
-{
-
-	try
-	{
-	// HTTP basic authentication
-    std::string strAuth1 = GlobalCPUMiningCPID.cpidv2;
-	std::string strAuth2 = hashBestChain.ToString();
-
-    map<string, string> mapRequestHeaders;
-    mapRequestHeaders["Miner"] = strAuth1+"<;>"+strAuth2+"<;>"+ boincauth + "<;>" + msg;
-	CService addrConnect;
-	std::string ip = "127.0.0.1";
-	std::string poolFullURL = mapArgs["-poolurl"];
-	poolFullURL = "http://pool.gridcoin.us";
-
-	if (poolFullURL=="")  return "ERR:Pool URL missing";
-	std::string domain = "";
-	if (poolFullURL.find("https://") != string::npos)
-	{
-		domain = poolFullURL.substr(8,poolFullURL.length()-8);
-	}
-	if(poolFullURL.find("http://") != string::npos)
-	{
-		domain = poolFullURL.substr(7,poolFullURL.length()-7);
-	}
-
-	if (domain=="")
-	{
-		if (fDebug10)		printf("Pool Domain Missing \r\n");
-		return "ERR:Pool Domain missing";
-	}
-    int port = 80;
-
-	CService addrIP(domain, port, true);
-
-	if (bUseDNS)
-	{
-		if (addrIP.IsValid())
-		{
-				addrConnect = addrIP;
-				if (fDebug10) printf("Domain Post IP valid\r\n %s",domain.c_str());
-		}
-	}
-	else
-	{
-  		addrConnect = CService(ip, port);
-	}
-	std::string strPost = GridHTTPPost(urlPage, domain, msg, mapRequestHeaders);
-    if (fDebug10) printf("querying getdata\r\n  %s \r\n",strPost.c_str());
-	std::string http = GetHttpContent(addrConnect, strPost);
-	if (fDebug10) printf("http:\r\n  %s\r\n",http.c_str());
-	return http;
-
-	}
-    catch (std::exception &e)
-	{
-        return "";
-
-    }
-	catch (...)
-	{
-		return "";
-	}
-
-}
-
 
 std::string ExtractDomainFromURL(std::string url, int partid)
 {

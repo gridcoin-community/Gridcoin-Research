@@ -20,28 +20,15 @@ using namespace boost;
 using namespace boost::assign;
 using namespace json_spirit;
 
-
-int UpgradeClient();
-
-extern std::string RoundToString(double d, int place);
 extern std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, int& out_rac);
 MiningCPID DeserializeBoincBlock(std::string block);
-void ExecuteCode();
-
-
 extern void Imker(void *kippel);
 extern Upgrader upgrader;
-
-
-
 
 #ifdef QT_GUI
 #include "qt/upgradedialog.h"
 extern Checker checker;
 #endif
-
-
-
 
 std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, double& out_rac)
 {
@@ -337,19 +324,6 @@ Value getrawtransaction(const Array& params, bool fHelp)
     TxToJSON(tx, hashBlock, result);
     return result;
 }
-
-
-
-std::string RoundToString(double d, int place)
-{
-	std::ostringstream ss;
-    ss << std::fixed << std::setprecision(place) << d ;
-    return ss.str() ;
-}
-
-
-
-
 
 Value listunspent(const Array& params, bool fHelp)
 {

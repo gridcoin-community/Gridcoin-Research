@@ -29,7 +29,10 @@
 #include "signverifymessagedialog.h"
 #include "optionsdialog.h"
 #include "aboutdialog.h"
+
+#ifndef WIN32
 #include "votingdialog.h"
+#endif
 
 #include "clientmodel.h"
 #include "walletmodel.h"
@@ -47,6 +50,8 @@
 #include "rpcconsole.h"
 #include "wallet.h"
 #include "init.h"
+#include "block.h"
+#include "util.h"
 
 #ifdef Q_OS_MAC
 #include "macdockiconhandler.h"
@@ -144,11 +149,7 @@ bool OutOfSyncByAge();
 void ThreadCPIDs();
 int Races(int iMax1000);
 std::string GetGlobalStatus();
-std::string GetHttpPage(std::string cpid);
 
-void LoadCPIDsInBackground();
-void InitializeCPIDs();
-void RestartGridcoinMiner();
 extern int UpgradeClient();
 extern void CheckForUpgrade();
 extern int CloseGuiMiner();
@@ -157,15 +158,8 @@ extern int AddressUser();
 bool IsConfigFileEmpty();
 
 extern void ExecuteCode();
-
-
 extern void startWireFrameRenderer();
 extern void stopWireFrameRenderer();
-
-
-std::string RetrieveMd5(std::string s1);
-void WriteAppCache(std::string key, std::string value);
-void RestartGridcoin10();
 
 void HarvestCPIDs(bool cleardata);
 extern int RestartClient();
@@ -176,7 +170,6 @@ QAxObject *globalcom = NULL;
 QAxObject *globalwire = NULL;
 #endif
 int ThreadSafeVersion();
-void FlushGridcoinBlockFile(bool fFinalize);
 extern int ReindexBlocks();
 bool OutOfSync();
 
@@ -965,12 +958,10 @@ void BitcoinGUI::createActions()
 	votingAction->setStatusTip(tr("Voting"));
 	votingAction->setMenuRole(QAction::TextHeuristicRole);
 
-
     votingReservedAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Voting Linux"), this);
 	votingReservedAction->setStatusTip(tr("Voting - Linux"));
 	votingReservedAction->setMenuRole(QAction::TextHeuristicRole);
-
-
+    
 	galazaAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Galaza (Game)"), this);
 	galazaAction->setStatusTip(tr("Galaza"));
 	galazaAction->setMenuRole(QAction::TextHeuristicRole);
@@ -1106,7 +1097,10 @@ void BitcoinGUI::createMenuBar()
 	qmAdvanced->addAction(votingAction);
 #endif /* defined(WIN32) */
     
+    // Only enable the Qt voting dialog on non-Windows targets for now.
+#ifndef WIN32
 	qmAdvanced->addAction(votingReservedAction);
+#endif
     
 #ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows 
 	qmAdvanced->addAction(tickerAction);
@@ -1310,9 +1304,11 @@ void BitcoinGUI::aboutClicked()
 
 void BitcoinGUI::votingReservedClicked()
 {
+#ifndef WIN32
     VotingDialog *dlg = new VotingDialog(this);
     dlg->resetData();
     dlg->show();
+#endif
 }
 
 
@@ -1709,7 +1705,7 @@ std::string RetrieveBlockAsString(int lSqlBlock)
 		if (lSqlBlock==0) lSqlBlock=1;
 		if (lSqlBlock > nBestHeight-2) return "";
 		CBlock block;
-		CBlockIndex* blockindex = MainFindBlockByHeight(lSqlBlock);
+		CBlockIndex* blockindex = BlockFinder().FindByHeight(lSqlBlock);
 		block.ReadFromDisk(blockindex);
 
 		std::string s = "";

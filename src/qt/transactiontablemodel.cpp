@@ -9,6 +9,7 @@
 #include "bitcoinunits.h"
 #include "wallet.h"
 #include "ui_interface.h"
+#include "util.h"
 
 #include <QLocale>
 #include <QList>
@@ -19,7 +20,6 @@
 
 
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
-std::string RoundToString(double d, int place);
 double CoinToDouble(double surrogate);
 extern bool IsPoR(double amt);
 
