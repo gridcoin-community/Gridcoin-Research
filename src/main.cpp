@@ -4006,21 +4006,6 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
     return true;
 }
 
-
-
-int BlockHeight(uint256 bh)
-{
-	int nGridHeight=0;
-	map<uint256, CBlockIndex*>::iterator iMapIndex = mapBlockIndex.find(bh);
-    if (iMapIndex != mapBlockIndex.end())
-	{
-		 CBlockIndex* pPrev = (*iMapIndex).second;
-		 nGridHeight = pPrev->nHeight+1;
-	}
-	return nGridHeight;
-}
-
-
 bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig, bool fLoadingIndex) const
 {
 
