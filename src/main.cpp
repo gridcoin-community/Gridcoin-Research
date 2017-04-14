@@ -90,7 +90,7 @@ bool HasActiveBeacon(const std::string& cpid);
 extern bool BlockNeedsChecked(int64_t BlockTime);
 extern void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector<CBlockIndex*> vConnect);
 int64_t GetEarliestWalletTransaction();
-extern void IncrementVersionCount(std::string Version);
+extern void IncrementVersionCount(const std::string& Version);
 double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_avg,bool bIgnoreBeacons);
 extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern bool UnusualActivityReport();
@@ -6059,10 +6059,8 @@ bool ComputeNeuralNetworkSupermajorityHashes()
 						WriteCache("neuralsecurity","pending",RoundToString((double)pblockindex->nHeight,0),GetAdjustedTime());
 					}
 				}
-				if (!bb.clientversion.empty())
-				{
-					IncrementVersionCount(bb.clientversion);
-				}
+
+				IncrementVersionCount(bb.clientversion);
 				//Increment Neural Network Hashes Supermajority (over the last N blocks)
 				IncrementNeuralNetworkSupermajority(bb.NeuralHash,bb.GRCAddress,(nMaxDepth-pblockindex->nHeight)+10);
 				IncrementCurrentNeuralNetworkSupermajority(bb.CurrentNeuralHash,bb.GRCAddress,(nMaxDepth-pblockindex->nHeight)+10);
@@ -9063,20 +9061,10 @@ void IncrementNeuralNetworkSupermajority(std::string NeuralHash, std::string GRC
 }
 
 
-void IncrementVersionCount(std::string Version)
+void IncrementVersionCount(const std::string& Version)
 {
-	if (Version.empty()) return;
-	double temp_vercount = 0;
-	if (mvNeuralVersion.size() > 0)
-	{
-			temp_vercount = mvNeuralVersion[Version];
-	}
-	if (temp_vercount == 0)
-	{
-		mvNeuralVersion.insert(map<std::string,double>::value_type(Version,0));
-	}
-	temp_vercount += 1;
-	mvNeuralVersion[Version] = temp_vercount;
+    if(!Version.empty())
+        mvNeuralVersion[Version]++;
 }
 
 
