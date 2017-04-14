@@ -262,7 +262,6 @@ HEADERS += src/qt/bitcoingui.h \
     src/clientversion.h \
     src/threadsafety.h \
     src/cpid.h \
-    src/sql.h \
     src/upgrader.h
 
 
@@ -339,7 +338,6 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/scrypt.cpp \
     src/pbkdf2.cpp \
     src/cpid.cpp \
-    src/sql.cpp \
     src/upgrader.cpp
 
 !win32 {
