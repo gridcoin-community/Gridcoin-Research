@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Gridcoin
+Exec=Gridcoin -min
+Terminal=false
+Hidden=false
