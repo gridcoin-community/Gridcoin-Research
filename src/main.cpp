@@ -2455,40 +2455,6 @@ const CTxOut& CTransaction::GetOutputFor(const CTxIn& input, const MapPrevTx& in
 }
 
 
-
-
-
-void WriteStringToFile(const boost::filesystem::path &path, std::string sOut)
-{
-    FILE* file = fopen(path.string().c_str(), "w");
-    if (file)
-    {
-        fprintf(file, "%s\r\n", sOut.c_str());
-        fclose(file);
-    }
-}
-
-
-
-
-std::vector<std::string> &split_bychar(const std::string &s, char delim, std::vector<std::string> &elems) {
-    std::stringstream ss(s);
-    std::string item;
-    while (std::getline(ss, item, delim)) {
-        elems.push_back(item);
-    }
-    return elems;
-}
-
-
-std::vector<std::string> split_bychar(const std::string &s, char delim)
-{
-    std::vector<std::string> elems;
-    split_bychar(s, delim, elems);
-    return elems;
-}
-
-
 std::vector<std::string> split(std::string s, std::string delim)
 {
 	//Split a std::string by a std::string delimiter into a vector of strings:
