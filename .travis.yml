@@ -1,0 +1,47 @@
+language: cpp
+sudo: required
+dist: trusty
+
+addons:
+  apt:
+    packages:
+    - libboost-filesystem-dev
+    - libboost-program-options-dev
+    - libboost-system-dev
+    - libboost-thread-dev
+    - libboost-test-dev
+    - build-essential
+    - libssl-dev
+    - libdb-dev
+    - libdb++-dev
+    - libqrencode-dev
+    - qt5-default
+    - qt5-qmake
+    - qttools5-dev-tools
+    - libminiupnpc-dev
+    - libzip-dev
+
+script:
+  - mkdir -p src/obj
+  - chmod 755 src/leveldb/build_detect_platform
+  - cd src
+  - make -f makefile.unix DEBUGFLAGS="" USE_UPNP=1
+  - mkdir -p ../appdir/usr/bin
+  - # install -m 755 gridcoinresearchd ../appdir/usr/bin/gridcoinresearchd
+  - cd ..
+  - qmake "USE_QRCODE=1" "USE_UPNP=1" "NO_UPGRADE=1" PREFIX=/usr
+  - make -j4
+  - strip gridcoinresearch
+  - mkdir -p ./appdir/usr/share/applications
+  - cp ./share/gridcoinresearch.desktop ./appdir/usr/share/applications
+  - cp ./share/pixmaps/bitcoin256.png ./appdir/gridcoinresearch.png
+  - install -m 755 gridcoinresearch appdir/usr/bin/gridcoinresearch ; find appdir/
+
+after_success:
+  - wget -c "https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage" 
+  - chmod a+x linuxdeployqt*.AppImage
+  - unset QTDIR; unset QT_PLUGIN_PATH ; unset LD_LIBRARY_PATH
+  - ./linuxdeployqt*.AppImage ./appdir/usr/share/applications/*.desktop -bundle-non-qt-libs
+  - ./linuxdeployqt*.AppImage ./appdir/usr/share/applications/*.desktop -appimage
+  - find ./appdir -executable -type f -exec ldd {} \; | grep " => /usr" | cut -d " " -f 2-3 | sort | uniq
+  - curl --upload-file ./Gri*.AppImage https://transfer.sh/Gridcoin_Research-git.$(git rev-parse --short HEAD)-x86_64.AppImage
