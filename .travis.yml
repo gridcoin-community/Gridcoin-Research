@@ -33,8 +33,8 @@ script:
   - make -j4
   - strip gridcoinresearch
   - mkdir -p ./appdir/usr/share/applications
-  - cp ../share/gridcoin.desktop ./appdir/usr/share/applications
-  - cp ../share/pixmaps/bitcoin256.png ./appdir/gridcoin.png
+  - cp ../share/gridcoinresearch.desktop ./appdir/usr/share/applications
+  - cp ../share/pixmaps/bitcoin256.png ./appdir/gridcoinresearch.png
   - install -m 755 gridcoinresearch appdir/usr/bin/gridcoinresearch ; find appdir/
 
 after_success:
