@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=Gridcoin
-Exec=Gridcoin -min
+Name=Gridcoin Research
+Exec=gridcoinresearch
 Terminal=false
 Hidden=false
