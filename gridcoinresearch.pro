@@ -383,6 +383,16 @@ isEmpty(QMAKE_LRELEASE) {
     win32:QMAKE_LRELEASE = $$[QT_INSTALL_BINS]\\lrelease.exe
     else:QMAKE_LRELEASE = $$[QT_INSTALL_BINS]/lrelease
 }
+
+unix {
+    target.path = /usr/bin
+    INSTALLS += target
+
+    pixmaps.path = /usr/share/pixmaps
+    pixmaps.files = share/pixmaps/grc-small.png
+    INSTALLS += pixmaps
+}
+
 isEmpty(QM_DIR):QM_DIR = $$PWD/src/qt/locale
 # automatically build translations, so they can be included in resource file
 TSQM.name = lrelease ${QMAKE_FILE_IN}
