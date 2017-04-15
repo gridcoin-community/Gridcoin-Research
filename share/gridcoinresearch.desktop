@@ -2,5 +2,6 @@
 Type=Application
 Name=Gridcoin Research
 Exec=gridcoinresearch
+Icon=gridcoinresearch
 Terminal=false
 Hidden=false
