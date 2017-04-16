@@ -387,7 +387,7 @@ bool CKey::Sign(uint256 hash, std::vector<unsigned char>& vchSig)
         }
 
         BN_sub(nps, order, nps);
-        ECDSA_SIG_set0(sig, npr, nps);	
+        ECDSA_SIG_set0(sig, npr, nps);  
     }
     BN_CTX_end(ctx);
     BN_CTX_free(ctx);
@@ -515,7 +515,7 @@ bool CKey::SetCompactSignature(uint256 hash, const std::vector<unsigned char>& v
 
  bool CKey::Verify(uint256 hash, const std::vector<unsigned char>& vchSig) 
  {
-	    // BIP66 Compatibility:
+        // BIP66 Compatibility:
         // New versions of OpenSSL (1.0.0p+ and 1.0.1k+) will reject non-canonical DER signatures. de/re-serialize first.
         unsigned char *norm_der = NULL;
         ECDSA_SIG *norm_sig = ECDSA_SIG_new();

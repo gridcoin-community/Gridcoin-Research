@@ -36,14 +36,14 @@ std::string NeuralRequest(std::string MyNeuralRequest)
     // Find a Neural Network Node that is free
     LOCK(cs_vNodes);
     BOOST_FOREACH(CNode* pNode, vNodes) 
-	{
-		if (Contains(pNode->strSubVer,"1999"))
-		{
-			//printf("Node is a neural participant \r\n");
-			std::string reqid = "reqid";
-         	pNode->PushMessage("neural", MyNeuralRequest, reqid);
+    {
+        if (Contains(pNode->strSubVer,"1999"))
+        {
+            //printf("Node is a neural participant \r\n");
+            std::string reqid = "reqid";
+            pNode->PushMessage("neural", MyNeuralRequest, reqid);
             if (fDebug3) printf(" PUSH ");
-		}
+        }
     }
     return "";
 }
@@ -54,14 +54,14 @@ void GatherNeuralHashes()
     // Find a Neural Network Node that is free
     LOCK(cs_vNodes);
     BOOST_FOREACH(CNode* pNode, vNodes) 
-	{
-		if (Contains(pNode->strSubVer,"1999"))
-		{
-			std::string reqid = "reqid";
-			std::string command_name="neural_hash";
-         	pNode->PushMessage("neural", command_name, reqid);
+    {
+        if (Contains(pNode->strSubVer,"1999"))
+        {
+            std::string reqid = "reqid";
+            std::string command_name="neural_hash";
+            pNode->PushMessage("neural", command_name, reqid);
             if (fDebug10) printf(" Pushed ");
-		}
+        }
     }
 }
 
@@ -69,20 +69,20 @@ void GatherNeuralHashes()
 bool RequestSupermajorityNeuralData()
 {
     LOCK(cs_vNodes);
-	double dCurrentPopularity = 0;
-	std::string sCurrentNeuralSupermajorityHash = GetCurrentNeuralNetworkSupermajorityHash(dCurrentPopularity);
-	std::string reqid = DefaultWalletAddress();
-			
+    double dCurrentPopularity = 0;
+    std::string sCurrentNeuralSupermajorityHash = GetCurrentNeuralNetworkSupermajorityHash(dCurrentPopularity);
+    std::string reqid = DefaultWalletAddress();
+            
     BOOST_FOREACH(CNode* pNode, vNodes) 
-	{
-		if (!pNode->NeuralHash.empty() && !sCurrentNeuralSupermajorityHash.empty() && pNode->NeuralHash == sCurrentNeuralSupermajorityHash)
-		{
-			std::string command_name="neural_data";
-         	pNode->PushMessage("neural", command_name, reqid);
-         	return true;
-		}
+    {
+        if (!pNode->NeuralHash.empty() && !sCurrentNeuralSupermajorityHash.empty() && pNode->NeuralHash == sCurrentNeuralSupermajorityHash)
+        {
+            std::string command_name="neural_data";
+            pNode->PushMessage("neural", command_name, reqid);
+            return true;
+        }
     }
-	return false;
+    return false;
 }
 
 Value addnode(const Array& params, bool fHelp)
@@ -224,25 +224,25 @@ bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit)
 {
     // Find a Neural Network Node that is free
     LOCK(cs_vNodes);
-	int iContactCount = 0;
-	msNeuralResponse="";
+    int iContactCount = 0;
+    msNeuralResponse="";
     BOOST_FOREACH(CNode* pNode, vNodes) 
-	{
-		if (Contains(pNode->strSubVer,"1999"))
-		{
-			std::string reqid = cpid;
-		 	pNode->PushMessage("neural", command_name, reqid);
+    {
+        if (Contains(pNode->strSubVer,"1999"))
+        {
+            std::string reqid = cpid;
+            pNode->PushMessage("neural", command_name, reqid);
             //if (fDebug3) printf("Requested command %s \r\n",command_name.c_str());
-			iContactCount++;
-			if (iContactCount >= NodeLimit) return true;
-		}
+            iContactCount++;
+            if (iContactCount >= NodeLimit) return true;
+        }
     }
-	if (iContactCount==0) 
-	{
-		printf("No neural network nodes online.");
-		return false;
-	}
-	return true;
+    if (iContactCount==0) 
+    {
+        printf("No neural network nodes online.");
+        return false;
+    }
+    return true;
 }
 
 
@@ -289,14 +289,14 @@ Value getpeerinfo(const Array& params, bool fHelp)
     CopyNodeStats(vstats);
 
     Array ret;
-	GatherNeuralHashes();
-	
+    GatherNeuralHashes();
+    
     BOOST_FOREACH(const CNodeStats& stats, vstats) {
         Object obj;
 
         obj.push_back(Pair("addr", stats.addrName));
 
-		  if (!(stats.addrLocal.empty()))
+          if (!(stats.addrLocal.empty()))
             obj.push_back(Pair("addrlocal", stats.addrLocal));
 
         obj.push_back(Pair("services", strprintf("%08" PRIx64, stats.nServices)));
@@ -310,13 +310,13 @@ Value getpeerinfo(const Array& params, bool fHelp)
         obj.push_back(Pair("subver", stats.strSubVer));
         obj.push_back(Pair("inbound", stats.fInbound));
         obj.push_back(Pair("startingheight", stats.nStartingHeight));
-		obj.push_back(Pair("sNeuralNetworkVersion",stats.sNeuralNetwork));
-		obj.push_back(Pair("nTrust",stats.nTrust));
-	    obj.push_back(Pair("banscore", stats.nMisbehavior));
-		bool bNeural = false;
-		bNeural = Contains(stats.strSubVer,"1999");
-		obj.push_back(Pair("Neural Network", bNeural));
-		obj.push_back(Pair("Neural Hash",stats.NeuralHash));
+        obj.push_back(Pair("sNeuralNetworkVersion",stats.sNeuralNetwork));
+        obj.push_back(Pair("nTrust",stats.nTrust));
+        obj.push_back(Pair("banscore", stats.nMisbehavior));
+        bool bNeural = false;
+        bNeural = Contains(stats.strSubVer,"1999");
+        obj.push_back(Pair("Neural Network", bNeural));
+        obj.push_back(Pair("Neural Hash",stats.NeuralHash));
         ret.push_back(obj);
     }
 

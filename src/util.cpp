@@ -356,17 +356,17 @@ string real_strprintf(const std::string &format, int dummy, ...)
 
 int GetDayOfYear()
 {
-	try
-	{
-		boost::gregorian::date d=boost::posix_time::from_time_t(GetAdjustedTime()).date();
-		//		boost::gregorian::date d(year, month, day);
-		int dayNumber = d.day_of_year();
-		return dayNumber;
-	}
-	catch (std::out_of_range& e)
-	{
+    try
+    {
+        boost::gregorian::date d=boost::posix_time::from_time_t(GetAdjustedTime()).date();
+        //      boost::gregorian::date d(year, month, day);
+        int dayNumber = d.day_of_year();
+        return dayNumber;
+    }
+    catch (std::out_of_range& e)
+    {
     // Alternatively catch bad_year etc exceptions.
-		return 0;
+        return 0;
     }
 }
 
@@ -1038,48 +1038,48 @@ boost::filesystem::path GetDefaultDataDir()
     // Windows
     return GetSpecialFolderPath(CSIDL_APPDATA) / "GridcoinResearch";
 #else
-	    //2-25-2015
-		fs::path pathRet;
-		char* pszHome = getenv("HOME");
+        //2-25-2015
+        fs::path pathRet;
+        char* pszHome = getenv("HOME");
 
-		if (mapArgs.count("-datadir"))
-		{
-			fs::path path2015 = fs::system_complete(mapArgs["-datadir"]);
-			if (fs::is_directory(path2015))
-			{
-				pathRet = path2015;
-			}
-		}
-		else
-		{
-			if (pszHome == NULL || strlen(pszHome) == 0)
-				pathRet = fs::path("/");
-			else
-				pathRet = fs::path(pszHome);
-		}
+        if (mapArgs.count("-datadir"))
+        {
+            fs::path path2015 = fs::system_complete(mapArgs["-datadir"]);
+            if (fs::is_directory(path2015))
+            {
+                pathRet = path2015;
+            }
+        }
+        else
+        {
+            if (pszHome == NULL || strlen(pszHome) == 0)
+                pathRet = fs::path("/");
+            else
+                pathRet = fs::path(pszHome);
+        }
 #ifdef MAC_OSX
     // Mac
     pathRet /= "Library/Application Support";
     fs::create_directory(pathRet);
 
-	if (mapArgs.count("-datadir"))
-	{
-		return pathRet;
-	}
-	else
-	{
-		return pathRet / "GridcoinResearch";
-	}
+    if (mapArgs.count("-datadir"))
+    {
+        return pathRet;
+    }
+    else
+    {
+        return pathRet / "GridcoinResearch";
+    }
 #else
     // Unix
-	if (mapArgs.count("-datadir"))
-	{
-		return pathRet;
-	}
-	else
-	{
-		return pathRet / ".GridcoinResearch";
-	}
+    if (mapArgs.count("-datadir"))
+    {
+        return pathRet;
+    }
+    else
+    {
+        return pathRet / ".GridcoinResearch";
+    }
 #endif
 #endif
 }
@@ -1091,37 +1091,37 @@ const boost::filesystem::path &GetDataDir(bool fNetSpecific)
     static fs::path pathCached[2];
     static CCriticalSection csPathCached;
     static bool cachedPath[2] = {false, false};
-	//2-25-2015
+    //2-25-2015
     fs::path &path = pathCached[fNetSpecific];
 
     // This can be called during exceptions by printf, so we cache the
     // value so we don't have to do memory allocations after that.
     if (cachedPath[fNetSpecific]  && (fs::is_directory(path))  )
-	{
+    {
         return path;
-	}
+    }
 
     LOCK(csPathCached);
 
     if (mapArgs.count("-datadir"))
-	{
-		    path = fs::system_complete(mapArgs["-datadir"]);
-			if (!fs::is_directory(path))
-			{
-				path = "";
-				return path;
-			}
-	}
-	else
-	{
+    {
+            path = fs::system_complete(mapArgs["-datadir"]);
+            if (!fs::is_directory(path))
+            {
+                path = "";
+                return path;
+            }
+    }
+    else
+    {
         path = GetDefaultDataDir();
     }
     if ( (fNetSpecific && GetBoolArg("-testnet", false))  ||  GetBoolArg("-testnet",false) )
-	{
+    {
         path /= "testnet";
-	}
+    }
 
-	if (!fs::exists(path)) fs::create_directory(path);
+    if (!fs::exists(path)) fs::create_directory(path);
 
     cachedPath[fNetSpecific]=true;
     return path;
@@ -1188,10 +1188,10 @@ bool IsConfigFileEmpty()
 {
     boost::filesystem::ifstream streamConfig(GetConfigFile());
     if (!streamConfig.good())
-	{
+    {
         return true;
-	}
-	return false;
+    }
+    return false;
 
 }
 
@@ -1430,13 +1430,13 @@ std::string RoundToString(double d, int place)
 std::string GetNeuralVersion()
 {
 
-	std::string neural_v = "0";
+    std::string neural_v = "0";
 
-	#if defined(WIN32) && defined(QT_GUI)
-		double neural_id = 0;
-		neural_id = (double)IsNeural();
-		neural_v = RoundToString(MINOR_VERSION, 0) + "." + RoundToString(neural_id,0);
-	#endif
+    #if defined(WIN32) && defined(QT_GUI)
+        double neural_id = 0;
+        neural_id = (double)IsNeural();
+        neural_v = RoundToString(MINOR_VERSION, 0) + "." + RoundToString(neural_id,0);
+    #endif
 
     return neural_v;
 
@@ -1445,14 +1445,14 @@ std::string GetNeuralVersion()
 // Format the subversion field according to BIP 14 spec (https://en.bitcoin.it/wiki/BIP_0014)
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments)
 {
-	std::string neural_v = GetNeuralVersion();
+    std::string neural_v = GetNeuralVersion();
 
     std::ostringstream ss;
     ss << "/";
     ss << name << ":" << FormatVersion(nClientVersion);
 
     if (!comments.empty())         ss << "(" << boost::algorithm::join(comments, "; ") << ")";
-	ss << "(" << neural_v << ")";
+    ss << "(" << neural_v << ")";
 
     ss << "/";
     return ss.str();
