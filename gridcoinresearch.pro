@@ -196,6 +196,7 @@ HEADERS += src/qt/bitcoingui.h \
     src/base58.h \
     src/bignum.h \
     src/block.h \
+    src/beacon.h \
     src/checkpoints.h \
     src/compat.h \
     src/coincontrol.h \
@@ -262,7 +263,7 @@ HEADERS += src/qt/bitcoingui.h \
     src/clientversion.h \
     src/threadsafety.h \
     src/cpid.h \
-    src/upgrader.h
+    src/upgrader.h \
 
 
 
@@ -281,6 +282,7 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/bitcoinaddressvalidator.cpp \
     src/alert.cpp \
     src/block.cpp \
+    src/beacon.cpp \
     src/version.cpp \
     src/sync.cpp \
     src/util.cpp \

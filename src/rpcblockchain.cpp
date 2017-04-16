@@ -5,14 +5,16 @@
 
 #include "main.h"
 #include "bitcoinrpc.h"
-#include <fstream>
 #include "cpid.h"
 #include "kernel.h"
 #include "init.h" // for pwalletMain
 #include "block.h"
+#include "txdb.h"
+#include "beacon.h"
+
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
-#include "txdb.h"
+#include <fstream>
 
 using namespace json_spirit;
 using namespace std;
@@ -1188,37 +1190,6 @@ bool CPIDAcidTest2(std::string bpk, std::string externalcpid)
     std::string cpidv1 = cpidv2.substr(0,32);
     return (externalcpid==cpidv1);
 }
-
-int GenerateNewKeyPair(std::string sIndex, std::string &sOutPubKey, std::string &sOutPrivKey)
-{
-    // First Check the Index - if it already exists, use it
-    std::string sSuffix = fTestNet ? "testnet" : "";
-    sOutPrivKey = GetArgument("PrivateKey" + sIndex + sSuffix, "");
-    sOutPubKey  = GetArgument("PublicKey" + sIndex + sSuffix, "");
-    // If current keypair is not empty, but is invalid, allow the new keys to be stored, otherwise return 1: (10-25-2016)
-
-    if (!sOutPrivKey.empty() && !sOutPubKey.empty()) 
-    {
-            uint256 hashBlock = GetRandHash();
-            std::string sSignature = SignBlockWithCPID(sIndex,hashBlock.GetHex());
-            bool fResult = VerifyCPIDSignature(sIndex, hashBlock.GetHex(), sSignature);
-            if (fResult)
-            {
-                printf("\r\nGenerateNewKeyPair::Current keypair is valid.\r\n");
-                return 1;
-            }
-    }
-    // Generate the Keypair
-    CKey key;
-    key.MakeNewKey(false);
-    CPrivKey vchPrivKey = key.GetPrivKey();
-    sOutPrivKey = HexStr<CPrivKey::iterator>(vchPrivKey.begin(), vchPrivKey.end());
-    sOutPubKey = HexStr(key.GetPubKey().Raw());
-    // Store the Keypair
-    WriteKey("PrivateKey" + sIndex + sSuffix,sOutPrivKey);
-    WriteKey("PublicKey" + sIndex + sSuffix,sOutPubKey);
-    return 2;
-}
         
 
 bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage)
@@ -1255,7 +1226,7 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
                 return false;
             }
         
-            int iResult = GenerateNewKeyPair(GlobalCPUMiningCPID.cpid,sOutPubKey,sOutPrivKey);
+            int iResult = GenerateBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
             if (iResult < 1)
             {
                 sError = "Error generating keypair.";
