@@ -1253,6 +1253,7 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
             {
                 // Store the key 
                 sMessage = AddContract(sType,sName,sBase);
+                StoreBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
                 return true;
             }
             catch(Object& objError)

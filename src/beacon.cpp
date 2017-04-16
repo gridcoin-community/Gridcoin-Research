@@ -6,12 +6,19 @@
 extern std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 extern bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
 
+namespace
+{
+    std::string GetNetSuffix()
+    {
+        return fTestNet ? "testnet" : "";
+    }
+}
+
 int GenerateBeaconKeys(const std::string &cpid, std::string &sOutPubKey, std::string &sOutPrivKey)
 {
     // First Check the Index - if it already exists, use it
-    std::string sSuffix = fTestNet ? "testnet" : "";
-    sOutPrivKey = GetArgument("PrivateKey" + cpid + sSuffix, "");
-    sOutPubKey  = GetArgument("PublicKey" + cpid + sSuffix, "");
+    sOutPrivKey = GetArgument("PrivateKey" + cpid + GetNetSuffix(), "");
+    sOutPubKey  = GetArgument("PublicKey" + cpid + GetNetSuffix(), "");
     
     // If current keypair is not empty, but is invalid, allow the new keys to be stored, otherwise return 1: (10-25-2016)    
     if (!sOutPrivKey.empty() && !sOutPubKey.empty()) 
@@ -33,8 +40,14 @@ int GenerateBeaconKeys(const std::string &cpid, std::string &sOutPubKey, std::st
     sOutPrivKey = HexStr<CPrivKey::iterator>(vchPrivKey.begin(), vchPrivKey.end());
     sOutPubKey = HexStr(key.GetPubKey().Raw());
     
-    // Store the Keypair
-    WriteKey("PrivateKey" + cpid + sSuffix,sOutPrivKey);
-    WriteKey("PublicKey" + cpid + sSuffix,sOutPubKey);
     return 2;
+}
+
+void StoreBeaconKeys(
+        const std::string &cpid,
+        const std::string &pubKey,
+        const std::string &privKey)
+{
+    WriteKey("PublicKey" + cpid + GetNetSuffix(), pubKey);
+    WriteKey("PrivateKey" + cpid + GetNetSuffix(), privKey);
 }
