@@ -2,9 +2,7 @@
 #ifndef BZF_CPID_H
 #define BZF_CPID_H
 #include <cstring>
-#include <iostream>
 #include "util.h"
-#include <boost/algorithm/string/case_conv.hpp> 
 class CPID{public:typedef unsigned int size_type;
 CPID();CPID(std::string text);CPID(std::string text,int entropybit,uint256 
 block_hash);void update(const unsigned char*buf,size_type length);void update(

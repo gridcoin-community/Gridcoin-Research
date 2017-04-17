@@ -13,6 +13,10 @@
   <property name="windowTitle">
    <string>Address Book</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true">QWidget{color:rgb(0,0,0);}
+QPushButton{background-color: lightgray;}</string>
+  </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
     <widget class="QLabel" name="labelExplanation">
@@ -36,7 +40,7 @@
       <string>Double-click to edit address or label</string>
      </property>
      <property name="styleSheet">
-      <string notr="true">background-image: url(:/images/bkg);</string>
+      <string notr="true">QTableView{alternate-background-color:rgb(255,255,255); background-color:transparent;}</string>
      </property>
      <property name="tabKeyNavigation">
       <bool>false</bool>

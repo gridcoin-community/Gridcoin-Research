@@ -7,7 +7,7 @@
 #include <sstream>
 #ifdef WIN32
 #include <windows.h>
-#include <WinBase.h>
+#include <winbase.h>
 #else
 #include <unistd.h>     // for sleep
 #endif
@@ -516,11 +516,11 @@ pathvec Upgrader::fvector(bfs::path path)
 
 #if defined QT_GUI && defined WIN32
 wchar_t *convertCharArrayToLPCWSTR(const char* charArray)
-	{
-		wchar_t* wString=new wchar_t[4096];
-		MultiByteToWideChar(CP_ACP, 0, charArray, -1, wString, 4096);
-		return wString;
-	}
+    {
+        wchar_t* wString=new wchar_t[4096];
+        MultiByteToWideChar(CP_ACP, 0, charArray, -1, wString, 4096);
+        return wString;
+    }
 #endif
 
 
@@ -577,13 +577,13 @@ void Upgrader::launcher(int launchtarget, int launcharg)
         char * program =  new char[programstring.length()];
         strcpy(program, programstring.c_str());
 
-		#if defined QT_GUI && defined WIN32
-				wchar_t*  wcProgram = convertCharArrayToLPCWSTR(program);
-				wchar_t* wcArgument = convertCharArrayToLPCWSTR(argument);
-		        CreateProcess(wcProgram, wcArgument, NULL, NULL, FALSE, 0, NULL, NULL, &StartupInfo, &ProcessInfo);
-		#else
-		        CreateProcess(program, argument, NULL, NULL, FALSE, 0, NULL, NULL, &StartupInfo, &ProcessInfo);
-		#endif
+        #if defined QT_GUI && defined WIN32
+                wchar_t*  wcProgram = convertCharArrayToLPCWSTR(program);
+                wchar_t* wcArgument = convertCharArrayToLPCWSTR(argument);
+                CreateProcess(wcProgram, wcArgument, NULL, NULL, FALSE, 0, NULL, NULL, &StartupInfo, &ProcessInfo);
+        #else
+                CreateProcess(program, argument, NULL, NULL, FALSE, 0, NULL, NULL, &StartupInfo, &ProcessInfo);
+        #endif
 
         delete argument;
         delete program;
@@ -617,7 +617,7 @@ bool Upgrader::verifyPath(bfs::path path, bool create)
             //printf("%s does not exist and could not be created!\n", path.c_str());
             return false;
         }
-	return false;
+    return false;
 
 }
 

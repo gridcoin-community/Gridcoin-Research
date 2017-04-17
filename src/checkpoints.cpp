@@ -31,29 +31,29 @@ namespace Checkpoints
     static MapCheckpoints mapCheckpoints =
         boost::assign::map_list_of
         ( 0,       hashGenesisBlock )
-		( 40,      uint256("0x0000002c305541bceb763e6f7fce2f111cb752acf9777e64c6f02fab5ef4778c") )
-		( 50,      uint256("0x000000415ff618b8e72eda69e87dc2f2ff8798a5032babbef36b089da0ae2278") )
-		( 6000,    uint256("0x5976ff9d0da7626badf301a9e038ec05d776e5e50839e2505357512945d53b04") )
-		( 17000,   uint256("0x92fe9bafd6c9c1acbe8565ade79460505a70180ac5c3b360489037ef7a4aed42") )
-		( 27000,   uint256("0x1521cd45d0564cb016e816581dd6e2d030f6333a1dac5b79bea71ca8b0186e8d") )
-		( 36500,   uint256("0xcf26a63e66ca95bc7c0189a5239128fd983ef978088f187bd30817aebb2c8424") )
-		( 67000,   uint256("0x429a4ed792c6270a263fa679946ff2c510e55e9a3b7234fa789d66bacd3068a0") )
-		( 70000,   uint256("0x829c215851d7cdf756e7ba9e2c8eeef61e503b15488ffa4becab77c7961d30c5") )
-		( 71000,   uint256("0x708c3319912b19c3547fd9a9a2aa6426c3a4543e84f972b3070a24200bd4fcd3") )
-		( 85000,   uint256("0x928f0669b1f036561a2d53b7588b10c5ea2fcb9e2960a9be593b508a7fcceec1") )
-		( 91000,   uint256("0x8ed361fa50f6c16fbda4f2c7454dd818f2278151987324825bc1ec1eacfa9be2") )
-		(101000,   uint256("0x578efd18f7cd5191be3463a2b0db985375f48ee6e8a8940cc6b91d6847fa3614") ) 
-		(118000,   uint256("0x8f8ea6eaeae707ab935b517f1c334e6324df75ad8e5f9fbc4d9fb3cc7aa2e69f") )
-		(120000,   uint256("0xe64d19e39d564cc66e931e88c03207c19e4c9a873ca68ccef16ad712830da726") )
-		(122000,   uint256("0xb35d4f385bba3c3cb3f9b6914edd6621bde8f78c8c42f58ec47131ed6aac82a9") )
-		(124392,   uint256("0x1496cd55d7adad1ada774542165a04102a91f8f80c6e894c05f1d0c2ff7e5a39") )
-		(145000,   uint256("0x99f5d7166ad55d6d0e1ac5c7fffaee1d1dd1ff1409738e0d4f13ac1ae38234cc") )
-		(278000,   uint256("0x8066e63198c44b9840f664e795b0315d9b752773b267d6212f35593bc0e3b6f4") )
-		(361800,   uint256("0x801981d8a8f5809e34a2881ea97600259e1d9d778fa21752a5f6cff4defcd08d") )
-		(500000,   uint256("0x3916b53eaa0eb392ce5d7e4eaf7db4f745187743f167539ffa4dc1a30c06acbd") )
-		(700000,   uint256("0x2e45c8a834675b505b96792d198c2dc970f560429c635479c347204044acc59b") )
-		(770000,   uint256("0xfc13a63162bc0a5a09acc3f284cf959d6812a027bb54b342a0e1ccaaca8627ce") )
-		(850000,   uint256("0xc78b15f25ad990d02256907fab92ab37301d129eaea177fd04acacd56c0cbd22") ) 
+        ( 40,      uint256("0x0000002c305541bceb763e6f7fce2f111cb752acf9777e64c6f02fab5ef4778c") )
+        ( 50,      uint256("0x000000415ff618b8e72eda69e87dc2f2ff8798a5032babbef36b089da0ae2278") )
+        ( 6000,    uint256("0x5976ff9d0da7626badf301a9e038ec05d776e5e50839e2505357512945d53b04") )
+        ( 17000,   uint256("0x92fe9bafd6c9c1acbe8565ade79460505a70180ac5c3b360489037ef7a4aed42") )
+        ( 27000,   uint256("0x1521cd45d0564cb016e816581dd6e2d030f6333a1dac5b79bea71ca8b0186e8d") )
+        ( 36500,   uint256("0xcf26a63e66ca95bc7c0189a5239128fd983ef978088f187bd30817aebb2c8424") )
+        ( 67000,   uint256("0x429a4ed792c6270a263fa679946ff2c510e55e9a3b7234fa789d66bacd3068a0") )
+        ( 70000,   uint256("0x829c215851d7cdf756e7ba9e2c8eeef61e503b15488ffa4becab77c7961d30c5") )
+        ( 71000,   uint256("0x708c3319912b19c3547fd9a9a2aa6426c3a4543e84f972b3070a24200bd4fcd3") )
+        ( 85000,   uint256("0x928f0669b1f036561a2d53b7588b10c5ea2fcb9e2960a9be593b508a7fcceec1") )
+        ( 91000,   uint256("0x8ed361fa50f6c16fbda4f2c7454dd818f2278151987324825bc1ec1eacfa9be2") )
+        (101000,   uint256("0x578efd18f7cd5191be3463a2b0db985375f48ee6e8a8940cc6b91d6847fa3614") ) 
+        (118000,   uint256("0x8f8ea6eaeae707ab935b517f1c334e6324df75ad8e5f9fbc4d9fb3cc7aa2e69f") )
+        (120000,   uint256("0xe64d19e39d564cc66e931e88c03207c19e4c9a873ca68ccef16ad712830da726") )
+        (122000,   uint256("0xb35d4f385bba3c3cb3f9b6914edd6621bde8f78c8c42f58ec47131ed6aac82a9") )
+        (124392,   uint256("0x1496cd55d7adad1ada774542165a04102a91f8f80c6e894c05f1d0c2ff7e5a39") )
+        (145000,   uint256("0x99f5d7166ad55d6d0e1ac5c7fffaee1d1dd1ff1409738e0d4f13ac1ae38234cc") )
+        (278000,   uint256("0x8066e63198c44b9840f664e795b0315d9b752773b267d6212f35593bc0e3b6f4") )
+        (361800,   uint256("0x801981d8a8f5809e34a2881ea97600259e1d9d778fa21752a5f6cff4defcd08d") )
+        (500000,   uint256("0x3916b53eaa0eb392ce5d7e4eaf7db4f745187743f167539ffa4dc1a30c06acbd") )
+        (700000,   uint256("0x2e45c8a834675b505b96792d198c2dc970f560429c635479c347204044acc59b") )
+        (770000,   uint256("0xfc13a63162bc0a5a09acc3f284cf959d6812a027bb54b342a0e1ccaaca8627ce") )
+        (850000,   uint256("0xc78b15f25ad990d02256907fab92ab37301d129eaea177fd04acacd56c0cbd22") ) 
     ;
 
     // TestNet has no checkpoints
@@ -133,7 +133,7 @@ namespace Checkpoints
                     return error("ValidateSyncCheckpoint: pprev null - block index structure failure");
             if (pindex->GetBlockHash() != hashCheckpoint)
             {
-				if (CHECKPOINT_DISTRIBUTED_MODE==1)  SetAdvisory();
+                if (CHECKPOINT_DISTRIBUTED_MODE==1)  SetAdvisory();
                 hashInvalidCheckpoint = hashCheckpoint;
                 return error("ValidateSyncCheckpoint: new sync-checkpoint %s is conflicting with current sync-checkpoint %s", hashCheckpoint.ToString().c_str(), hashSyncCheckpoint.ToString().c_str());
             }
@@ -149,9 +149,9 @@ namespace Checkpoints
                 return error("ValidateSyncCheckpoint: pprev2 null - block index structure failure");
         if (pindex->GetBlockHash() != hashSyncCheckpoint)
         {
-		    hashInvalidCheckpoint = hashCheckpoint;
-			if (CHECKPOINT_DISTRIBUTED_MODE==1)  SetAdvisory();
-		    return error("ValidateSyncCheckpoint: new sync-checkpoint %s is not a descendant of current sync-checkpoint %s", hashCheckpoint.ToString().c_str(), hashSyncCheckpoint.ToString().c_str());
+            hashInvalidCheckpoint = hashCheckpoint;
+            if (CHECKPOINT_DISTRIBUTED_MODE==1)  SetAdvisory();
+            return error("ValidateSyncCheckpoint: new sync-checkpoint %s is not a descendant of current sync-checkpoint %s", hashCheckpoint.ToString().c_str(), hashSyncCheckpoint.ToString().c_str());
         }
         return true;
     }
@@ -194,11 +194,11 @@ namespace Checkpoints
                 if (!block.SetBestChain(txdb, pindexCheckpoint))
                 {
                     hashInvalidCheckpoint = hashPendingCheckpoint;
-					//SetAdvisory();
-					//if (!InAdvisory())
-					//{
-					return error("AcceptPendingSyncCheckpoint: SetBestChain failed for sync checkpoint %s", hashPendingCheckpoint.ToString().c_str());
-					//}
+                    //SetAdvisory();
+                    //if (!InAdvisory())
+                    //{
+                    return error("AcceptPendingSyncCheckpoint: SetBestChain failed for sync checkpoint %s", hashPendingCheckpoint.ToString().c_str());
+                    //}
                 }
             }
 
@@ -322,7 +322,7 @@ namespace Checkpoints
     {
         // Test signing a sync-checkpoint with genesis block
         CSyncCheckpoint checkpoint;
-		printf("Signing Genesis....");
+        printf("Signing Genesis....");
 
         checkpoint.hashCheckpoint = !fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet;
         CDataStream sMsg(SER_NETWORK, PROTOCOL_VERSION);
@@ -337,7 +337,7 @@ namespace Checkpoints
 
         // Test signing successful, proceed
         CSyncCheckpoint::strMasterPrivKey = strPrivKey;
-		printf("Signing succeeded\r\n");
+        printf("Signing succeeded\r\n");
         return true;
     }
 
@@ -346,16 +346,16 @@ namespace Checkpoints
     {
         CSyncCheckpoint checkpoint;
         checkpoint.hashCheckpoint = hashCheckpoint;
-		checkpoint.balance = nBalance;
-		checkpoint.SendingWalletAddress=SendingWalletAddress;
+        checkpoint.balance = nBalance;
+        checkpoint.SendingWalletAddress=SendingWalletAddress;
         CDataStream sMsg(SER_NETWORK, PROTOCOL_VERSION);
         sMsg << (CUnsignedSyncCheckpoint)checkpoint;
         checkpoint.vchMsg = std::vector<unsigned char>(sMsg.begin(), sMsg.end());
         if (nBalance < MINIMUM_CHECKPOINT_TRANSMISSION_BALANCE)
-		{
-			printf("SendSyncCheckpoint: Balance < 1mil");
+        {
+            printf("SendSyncCheckpoint: Balance < 1mil");
             return error("SendSyncCheckpoint: Balance < 1 mil");
-		}
+        }
 
         if(!checkpoint.ProcessSyncCheckpoint(NULL))
         {
@@ -373,15 +373,15 @@ namespace Checkpoints
     }
 
 
-	
+    
     bool SendSyncHashCheckpoint(uint256 hash1, std::string SendingWalletAddress)
     {
-		//11-23-2014 - R HALFORD - Relay Global Checkpoint to all nodes
-	    CSyncCheckpoint checkpoint;
+        //11-23-2014 - R HALFORD - Relay Global Checkpoint to all nodes
+        CSyncCheckpoint checkpoint;
         checkpoint.hashCheckpointGlobal = hash1;
-		checkpoint.hashCheckpoint = hash1;
-		checkpoint.balance = 0;
-		checkpoint.SendingWalletAddress=SendingWalletAddress;
+        checkpoint.hashCheckpoint = hash1;
+        checkpoint.balance = 0;
+        checkpoint.SendingWalletAddress=SendingWalletAddress;
         CDataStream sMsg(SER_NETWORK, PROTOCOL_VERSION);
         sMsg << (CUnsignedSyncCheckpoint)checkpoint;
         checkpoint.vchMsg = std::vector<unsigned char>(sMsg.begin(), sMsg.end());
@@ -391,7 +391,7 @@ namespace Checkpoints
             BOOST_FOREACH(CNode* pnode, vNodes)
                 checkpoint.RelayTo(pnode);
         }
-		printf("Global Sync checkpoint broadcast successfully %s\r\n",checkpoint.hashCheckpointGlobal.GetHex().c_str());
+        printf("Global Sync checkpoint broadcast successfully %s\r\n",checkpoint.hashCheckpointGlobal.GetHex().c_str());
         return true;
     }
 
@@ -406,14 +406,14 @@ namespace Checkpoints
         checkpoint.vchMsg = std::vector<unsigned char>(sMsg.begin(), sMsg.end());
 
         if (CSyncCheckpoint::strMasterPrivKey.empty())
-		{
-			printf("SendSyncCheckpoint: Checkpoint Key Unavailable");
+        {
+            printf("SendSyncCheckpoint: Checkpoint Key Unavailable");
             return error("SendSyncCheckpoint: Checkpoint master key unavailable.");
-		}
+        }
 
         std::vector<unsigned char> vchPrivKey = ParseHex(CSyncCheckpoint::strMasterPrivKey);
         
-		CKey key;
+        CKey key;
         key.SetPrivKey(CPrivKey(vchPrivKey.begin(), vchPrivKey.end())); // if key is not correct openssl may crash
         if (!key.Sign(Hash(checkpoint.vchMsg.begin(), checkpoint.vchMsg.end()), checkpoint.vchSig))
             return error("SendSyncCheckpoint: Unable to sign checkpoint, check private key?");
@@ -455,11 +455,11 @@ namespace Checkpoints
 // ppcoin: verify signature of sync-checkpoint message
 bool CSyncCheckpoint::CheckSignature()
 {
-	CKey key;
-	if (!key.SetPubKey(ParseHex(CSyncCheckpoint::strMasterPubKey)))
-			return error("CSyncCheckpoint::CheckSignature() : SetPubKey failed");
-	if (!key.Verify(Hash(vchMsg.begin(), vchMsg.end()), vchSig))
-			return error("CSyncCheckpoint::CheckSignature() : verify signature failed");
+    CKey key;
+    if (!key.SetPubKey(ParseHex(CSyncCheckpoint::strMasterPubKey)))
+            return error("CSyncCheckpoint::CheckSignature() : SetPubKey failed");
+    if (!key.Verify(Hash(vchMsg.begin(), vchMsg.end()), vchSig))
+            return error("CSyncCheckpoint::CheckSignature() : verify signature failed");
 
     // Now unserialize the data
     CDataStream sMsg(vchMsg, SER_NETWORK, PROTOCOL_VERSION);
@@ -471,16 +471,16 @@ bool CSyncCheckpoint::CheckSignature()
   // Gridcoin: verify signature of sync-checkpoint message by balance
   bool CSyncCheckpoint::CheckSignatureWithBalance()
   {
-	// Verify Senders Balance:
-	//double senders_balance = GetGridcoinBalance(SendersWalletAddress);
-	if (balance < 1000000)
-	{
-		CKey key;
-		if (!key.SetPubKey(ParseHex(CSyncCheckpoint::strMasterPubKey)))
-			return error("CSyncCheckpoint::CheckSignature() : SetPubKey failed");
-		if (!key.Verify(Hash(vchMsg.begin(), vchMsg.end()), vchSig))
-			return error("CSyncCheckpoint::CheckSignature() : verify signature failed");
-	}
+    // Verify Senders Balance:
+    //double senders_balance = GetGridcoinBalance(SendersWalletAddress);
+    if (balance < 1000000)
+    {
+        CKey key;
+        if (!key.SetPubKey(ParseHex(CSyncCheckpoint::strMasterPubKey)))
+            return error("CSyncCheckpoint::CheckSignature() : SetPubKey failed");
+        if (!key.Verify(Hash(vchMsg.begin(), vchMsg.end()), vchSig))
+            return error("CSyncCheckpoint::CheckSignature() : verify signature failed");
+    }
 
     // Now unserialize the data
     CDataStream sMsg(vchMsg, SER_NETWORK, PROTOCOL_VERSION);
@@ -493,10 +493,10 @@ bool CSyncCheckpoint::CheckSignature()
 bool CSyncCheckpoint::ProcessSyncCheckpoint(CNode* pfrom)
 {
     if (!CheckSignature())
-	{
-		printf("SyncCheckpoint::ProcessSyncCheckpoint::SignatureFailed");
+    {
+        printf("SyncCheckpoint::ProcessSyncCheckpoint::SignatureFailed");
         return false;
-	}
+    }
 
     LOCK(Checkpoints::cs_hashSyncCheckpoint);
     if (!mapBlockIndex.count(hashCheckpoint))
@@ -530,9 +530,9 @@ bool CSyncCheckpoint::ProcessSyncCheckpoint(CNode* pfrom)
         if (!block.SetBestChain(txdb, pindexCheckpoint))
         {
             Checkpoints::hashInvalidCheckpoint = hashCheckpoint;
-			if (CHECKPOINT_DISTRIBUTED_MODE==1)  SetAdvisory();
-			return error("ProcessSyncCheckpoint: SetBestChain failed for sync checkpoint %s", hashCheckpoint.ToString().c_str());
-			
+            if (CHECKPOINT_DISTRIBUTED_MODE==1)  SetAdvisory();
+            return error("ProcessSyncCheckpoint: SetBestChain failed for sync checkpoint %s", hashCheckpoint.ToString().c_str());
+            
         }
     }
 

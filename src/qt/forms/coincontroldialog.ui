@@ -13,6 +13,11 @@
   <property name="windowTitle">
    <string>Coin Control</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true">QDialog{background-image: url(:/images/bkg);}
+QWidget{color: black;}
+QPushButton{background-color: lightgray;}</string>
+  </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
     <layout class="QHBoxLayout" name="horizontalLayoutTop" stretch="0,0,0,0">
@@ -446,6 +451,11 @@
     <widget class="CoinControlTreeWidget" name="treeWidget">
      <property name="contextMenuPolicy">
       <enum>Qt::CustomContextMenu</enum>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">QHeaderView{background-color: lightgray;}
+QTreeWidget{color: rgb(0,0,0); background-color: transparent;}
+</string>
      </property>
      <property name="sortingEnabled">
       <bool>false</bool>

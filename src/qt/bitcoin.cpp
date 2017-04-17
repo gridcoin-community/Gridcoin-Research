@@ -5,6 +5,7 @@
 
 #include <QApplication>
 #include <QTimer>
+#include <boost/thread.hpp>
 
 #include "bitcoingui.h"
 #include "clientmodel.h"
@@ -38,8 +39,8 @@ static BitcoinGUI *guiref;
 static QSplashScreen *splashref;
 
 void ThreadAppInit2(void* parg);
-
 boost::thread_group threadGroup;
+
 //Global reference to globalcom
 
 #ifdef WIN32
@@ -109,8 +110,10 @@ static void InitMessage(const std::string &message)
 {
     if(splashref)
     {
-        splashref->showMessage(QString::fromStdString(message), Qt::AlignBottom|Qt::AlignHCenter, QColor(232,186,63));
-        QApplication::instance()->processEvents();
+        QMetaObject::invokeMethod(splashref, "showMessage",
+                                  Qt::QueuedConnection,
+                                  Q_ARG(QString, QString::fromStdString(message)),
+                                  Q_ARG(int, Qt::AlignBottom|Qt::AlignHCenter));
     }
 }
 

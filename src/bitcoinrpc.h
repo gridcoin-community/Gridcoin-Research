@@ -69,8 +69,6 @@ enum RPCErrorCode
 
 json_spirit::Object JSONRPCError(int code, const std::string& message);
 
-extern std::string RoundToString(double d, int place);
-
 void ThreadRPCServer(void* parg);
 int CommandLineRPC(int argc, char *argv[]);
 

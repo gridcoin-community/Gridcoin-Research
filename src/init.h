@@ -17,6 +17,5 @@ void Shutdown(void* parg);
 bool AppInit2();
 std::string HelpMessage();
 std::string LogSomething();
-extern boost::thread_group threadGroup;
 
 #endif

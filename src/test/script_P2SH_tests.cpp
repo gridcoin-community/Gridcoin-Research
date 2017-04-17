@@ -13,8 +13,7 @@ using namespace std;
 
 // Test routines internal to script.cpp:
 extern uint256 SignatureHash(CScript scriptCode, const CTransaction& txTo, unsigned int nIn, int nHashType);
-extern bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, const CTransaction& txTo, unsigned int nIn,
-                         bool fValidatePayToScriptHash, int nHashType);
+extern bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, const CTransaction& txTo, unsigned int nIn, int nHashType);
 
 // Helpers:
 static std::vector<unsigned char>
@@ -25,7 +24,7 @@ Serialize(const CScript& s)
 }
 
 static bool
-Verify(const CScript& scriptSig, const CScript& scriptPubKey, bool fStrict)
+Verify(const CScript& scriptSig, const CScript& scriptPubKey)
 {
     // Create dummy to/from transactions:
     CTransaction txFrom;
@@ -40,7 +39,7 @@ Verify(const CScript& scriptSig, const CScript& scriptPubKey, bool fStrict)
     txTo.vin[0].scriptSig = scriptSig;
     txTo.vout[0].nValue = 1;
 
-    return VerifyScript(scriptSig, scriptPubKey, txTo, 0, fStrict, 0);
+    return VerifyScript(scriptSig, scriptPubKey, txTo, 0, 0);
 }
 
 
@@ -82,7 +81,7 @@ BOOST_AUTO_TEST_CASE(sign)
         txFrom.vout[i].scriptPubKey = evalScripts[i];
         txFrom.vout[i+4].scriptPubKey = standardScripts[i];
     }
-    BOOST_CHECK(txFrom.IsStandard());
+    BOOST_CHECK(IsStandardTx(txFrom));
 
     CTransaction txTo[8]; // Spending transactions
     for (int i = 0; i < 8; i++)
@@ -105,7 +104,7 @@ BOOST_AUTO_TEST_CASE(sign)
         {
             CScript sigSave = txTo[i].vin[0].scriptSig;
             txTo[i].vin[0].scriptSig = txTo[j].vin[0].scriptSig;
-            bool sigOK = VerifySignature(txFrom, txTo[i], 0, true, 0);
+            bool sigOK = VerifySignature(txFrom, txTo[i], 0, 0);
             if (i == j)
                 BOOST_CHECK_MESSAGE(sigOK, strprintf("VerifySignature %d %d", i, j));
             else
@@ -128,7 +127,7 @@ BOOST_AUTO_TEST_CASE(norecurse)
     scriptSig << Serialize(invalidAsScript);
 
     // Should not verify, because it will try to execute OP_INVALIDOPCODE
-    BOOST_CHECK(!Verify(scriptSig, p2sh, true));
+    BOOST_CHECK(!Verify(scriptSig, p2sh));
 
     // Try to recur, and verification should succeed because
     // the inner HASH160 <> EQUAL should only check the hash:
@@ -137,7 +136,7 @@ BOOST_AUTO_TEST_CASE(norecurse)
     CScript scriptSig2;
     scriptSig2 << Serialize(invalidAsScript) << Serialize(p2sh);
 
-    BOOST_CHECK(Verify(scriptSig2, p2sh2, true));
+    BOOST_CHECK(Verify(scriptSig2, p2sh2));
 }
 
 BOOST_AUTO_TEST_CASE(set)
@@ -172,7 +171,7 @@ BOOST_AUTO_TEST_CASE(set)
     {
         txFrom.vout[i].scriptPubKey = outer[i];
     }
-    BOOST_CHECK(txFrom.IsStandard());
+    BOOST_CHECK(IsStandardTx(txFrom));
 
     CTransaction txTo[4]; // Spending transactions
     for (int i = 0; i < 4; i++)
@@ -188,7 +187,7 @@ BOOST_AUTO_TEST_CASE(set)
     for (int i = 0; i < 4; i++)
     {
         BOOST_CHECK_MESSAGE(SignSignature(keystore, txFrom, txTo[i], 0), strprintf("SignSignature %d", i));
-        BOOST_CHECK_MESSAGE(txTo[i].IsStandard(), strprintf("txTo[%d].IsStandard", i));
+        BOOST_CHECK_MESSAGE(IsStandardTx(txTo[i]), strprintf("IsStandardTx(txTo[%d])", i));
     }
 }
 
@@ -234,11 +233,8 @@ BOOST_AUTO_TEST_CASE(switchover)
     CScript fund;
     fund.SetDestination(notValid.GetID());
 
-
-    // Validation should succeed under old rules (hash is correct):
-    BOOST_CHECK(Verify(scriptSig, fund, false));
-    // Fail under new:
-    BOOST_CHECK(!Verify(scriptSig, fund, true));
+    // Validation should fail under new rules:
+    BOOST_CHECK(!Verify(scriptSig, fund));
 }
 
 BOOST_AUTO_TEST_CASE(AreInputsStandard)

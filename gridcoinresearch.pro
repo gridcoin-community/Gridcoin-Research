@@ -3,30 +3,41 @@ TARGET = gridcoinresearch
 VERSION = 3.1.0.1
 INCLUDEPATH += src src/json src/qt
 DEFINES += QT_GUI BOOST_THREAD_USE_LIB BOOST_SPIRIT_THREADSAFE
-CONFIG += no_include_pwd
-CONFIG += thread
-#QT += sql (Future Use)
+CONFIG += no_include_pwd thread c++11 exceptions concurrent
 QT += core gui network
-win32:QT += qaxcontainer
-#QT += axcontainer
-win32:QT += axserver
-QT += widgets
 
+win32 {
+    lessThan(QT_VERSION, 5.0.0) {
+        CONFIG += qaxcontainer
+    } else {
+        QT += axcontainer
+    }
+}
 
 greaterThan(QT_MAJOR_VERSION, 4) {
     QT += widgets
     DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+} else {
+    # qmake from Qt4 has no C++11 config so it has to be specified manually.
+    QMAKE_CXXFLAGS += -std=gnu++0x
 }
 
-win32:CONFIG += qaxcontainer
-CONFIG += exceptions
-
+lessThan(QT_VERSION, 5.8.0) {
+    # Qt charts not available
+}else{
+    QT += charts
+}
 
 # for boost 1.37, add -mt to the boost libraries
 # use: qmake BOOST_LIB_SUFFIX=-mt
 # for boost thread win32 with _win32 sufix
 # use: BOOST_THREAD_LIB_SUFFIX=_win32-...
 # or when linking against a specific BerkelyDB version: BDB_LIB_SUFFIX=-4.8
+
+# boost-1.55 has a bug where building with C++11 causes undefined references to
+# copy_file. This is fixed in boost-1.57 and backported to 1.56. This workaround
+# can be removed once boost is upgraded.
+DEFINES += BOOST_NO_CXX11_SCOPED_ENUMS
 
 # Dependency library locations can be customized with:
 #    BOOST_INCLUDE_PATH, BOOST_LIB_PATH, BDB_INCLUDE_PATH,
@@ -50,18 +61,17 @@ contains(RELEASE, 1) {
 }
 
 !win32 {
-# for extra security against potential buffer overflows: enable GCCs Stack Smashing Protection
-QMAKE_CXXFLAGS *= -fstack-protector-all --param ssp-buffer-size=1
-QMAKE_LFLAGS *= -fstack-protector-all --param ssp-buffer-size=1
-# We need to exclude this for Windows cross compile with MinGW 4.2.x, as it will result in a non-working executable!
-# This can be enabled for Windows, when we switch to MinGW >= 4.4.x.
+    # for extra security against potential buffer overflows: enable GCCs Stack Smashing Protection
+    QMAKE_CXXFLAGS *= -fstack-protector-all --param ssp-buffer-size=1
+    QMAKE_LFLAGS *= -fstack-protector-all --param ssp-buffer-size=1
+    # We need to exclude this for Windows cross compile with MinGW 4.2.x, as it will result in a non-working executable!
+    # This can be enabled for Windows, when we switch to MinGW >= 4.4.x.
+} else {
+    # for extra security on Windows: enable ASLR and DEP via GCC linker flags
+    QMAKE_LFLAGS *= -Wl,--dynamicbase -Wl,--nxcompat
+    # on Windows: enable GCC large address aware linker flag
+    QMAKE_LFLAGS *= -Wl,--large-address-aware
 }
-# for extra security on Windows: enable ASLR and DEP via GCC linker flags
-win32:QMAKE_LFLAGS *= -Wl,--dynamicbase -Wl,--nxcompat
-# on Windows: enable GCC large address aware linker flag
-win32:QMAKE_LFLAGS *= -Wl,--large-address-aware
-#HALFORD: Testing Crash Flags
-#win32:QMAKE_LFLAGS += -static-libgcc -static-libstdc++
 
 
 # use: qmake "USE_QRCODE=1"
@@ -122,7 +132,7 @@ LIBS += $$PWD/src/leveldb/libleveldb.a $$PWD/src/leveldb/libmemenv.a
 SOURCES += src/txdb-leveldb.cpp
 !win32 {
     # we use QMAKE_CXXFLAGS_RELEASE even without RELEASE=1 because we use RELEASE to indicate linking preferences not -O preferences
-    genleveldb.commands = cd $$PWD/src/leveldb && CC=$$QMAKE_CC CXX=$$QMAKE_CXX $(MAKE) OPT=\"$$QMAKE_CXXFLAGS $$QMAKE_CXXFLAGS_RELEASE\" libleveldb.a libmemenv.a
+    genleveldb.commands = cd $$PWD/src/leveldb && CC=\"$$QMAKE_CC\" CXX=\"$$QMAKE_CXX\" $(MAKE) OPT=\"$$QMAKE_CXXFLAGS $$QMAKE_CXXFLAGS_RELEASE\" libleveldb.a libmemenv.a
 } else {
     # make an educated guess about what the ranlib command is called
     isEmpty(QMAKE_RANLIB) {
@@ -166,8 +176,7 @@ contains(USE_O3, 1) {
 QMAKE_CXXFLAGS_WARN_ON = -fdiagnostics-show-option -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wformat-security -Wno-unused-parameter -Wstack-protector
 
 # Input
-# missing: src/qt/votingdialog.h \
-   
+
 DEPENDPATH += src src/json src/qt
 HEADERS += src/qt/bitcoingui.h \
     src/qt/transactiontablemodel.h \
@@ -186,6 +195,8 @@ HEADERS += src/qt/bitcoingui.h \
     src/addrman.h \
     src/base58.h \
     src/bignum.h \
+    src/block.h \
+    src/beacon.h \
     src/checkpoints.h \
     src/compat.h \
     src/coincontrol.h \
@@ -252,11 +263,9 @@ HEADERS += src/qt/bitcoingui.h \
     src/clientversion.h \
     src/threadsafety.h \
     src/cpid.h \
-    src/sql.h \
-    src/upgrader.h
-    
-    #missing:    src/qt/votingdialog.cpp \
- 
+    src/upgrader.h \
+
+
 
 SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/transactiontablemodel.cpp \
@@ -272,6 +281,8 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/editaddressdialog.cpp \
     src/qt/bitcoinaddressvalidator.cpp \
     src/alert.cpp \
+    src/block.cpp \
+    src/beacon.cpp \
     src/version.cpp \
     src/sync.cpp \
     src/util.cpp \
@@ -329,9 +340,13 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/scrypt.cpp \
     src/pbkdf2.cpp \
     src/cpid.cpp \
-    src/sql.cpp \
     src/upgrader.cpp
-    
+
+!win32 {
+    HEADERS += src/qt/votingdialog.h
+    SOURCES += src/qt/votingdialog.cpp
+}
+
 ##
 #RC_FILE  = qaxserver.rc
 #DEF_FILE = qaxserver.def
@@ -370,6 +385,16 @@ isEmpty(QMAKE_LRELEASE) {
     win32:QMAKE_LRELEASE = $$[QT_INSTALL_BINS]\\lrelease.exe
     else:QMAKE_LRELEASE = $$[QT_INSTALL_BINS]/lrelease
 }
+
+unix {
+    target.path = /usr/bin
+    INSTALLS += target
+
+    pixmaps.path = /usr/share/pixmaps
+    pixmaps.files = share/pixmaps/grc-small.png
+    INSTALLS += pixmaps
+}
+
 isEmpty(QM_DIR):QM_DIR = $$PWD/src/qt/locale
 # automatically build translations, so they can be included in resource file
 TSQM.name = lrelease ${QMAKE_FILE_IN}
@@ -381,7 +406,8 @@ QMAKE_EXTRA_COMPILERS += TSQM
 
 # "Other files" to show in Qt Creator
 OTHER_FILES += \
-    doc/*.rst doc/*.txt doc/README README.md res/bitcoin-qt.rc
+    doc/*.rst doc/*.txt doc/README README.md res/bitcoin-qt.rc \
+    src/test/*.cpp
 
 # platform specific defaults, if not overridden on command line
 isEmpty(BOOST_LIB_SUFFIX) {
@@ -428,17 +454,15 @@ windows:!contains(MINGW_THREAD_BUGFIX, 0) {
     QMAKE_LIBS_QT_ENTRY = -lmingwthrd $$QMAKE_LIBS_QT_ENTRY
 }
 
-macx:HEADERS += src/qt/macdockiconhandler.h
-macx:OBJECTIVE_SOURCES += src/qt/macdockiconhandler.mm
+macx:HEADERS += src/qt/macdockiconhandler.h src/qt/macnotificationhandler.h
+macx:OBJECTIVE_SOURCES += src/qt/macdockiconhandler.mm src/qt/macnotificationhandler.mm
 macx:LIBS += -framework Foundation -framework ApplicationServices -framework AppKit
 macx:DEFINES += MAC_OSX MSG_NOSIGNAL=0
-macx:ICON = src/qt/res/icons/bitcoin.icns
+macx:ICON = src/qt/res/icons/gridcoin.icns
 macx:TARGET = "gridcoinresearch"
 macx:QMAKE_CFLAGS_THREAD += -pthread
 macx:QMAKE_LFLAGS_THREAD += -pthread
 macx:QMAKE_CXXFLAGS_THREAD += -pthread
-macx:QT -= qaxcontainer axserver widgets
-macx:CONFIG -= qaxcontainer
 macx:CONFIG += link_pkgconfig
 macx:PKGCONFIG += libzip
 
@@ -458,7 +482,7 @@ windows:LIBS += -lws2_32 -lshlwapi -lmswsock -lole32 -loleaut32 -luuid -lgdi32
 #LIBS += -lboost_system$$BOOST_LIB_SUFFIX -lboost_filesystem$$BOOST_LIB_SUFFIX -lboost_program_options$$BOOST_LIB_SUFFIX -lboost_thread$$BOOST_THREAD_LIB_SUFFIX
 #LIBS += -lboost_system$$BOOST_LIB_SUFFIX -lboost_filesystem$$BOOST_LIB_SUFFIX -lboost_program_options$$BOOST_LIB_SUFFIX -lboost_thread$$BOOST_THREAD_LIB_SUFFIX
 LIBS += -lboost_system$$BOOST_LIB_SUFFIX -lboost_filesystem$$BOOST_LIB_SUFFIX -lboost_program_options$$BOOST_LIB_SUFFIX -lboost_thread$$BOOST_THREAD_LIB_SUFFIX -lcurl -lzip
- 
+
 windows:LIBS += -lboost_chrono$$BOOST_LIB_SUFFIX
 
 contains(RELEASE, 1) {
