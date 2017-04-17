@@ -18,6 +18,7 @@
 #include "cpid.h"
 #include "bitcoinrpc.h"
 #include "json/json_spirit_value.h"
+#include "boinc.h"
 
 #include <boost/lexical_cast.hpp>
 #include <boost/filesystem.hpp>
@@ -28,11 +29,10 @@
 #include <boost/algorithm/string/join.hpp>
 #include <boost/thread.hpp>
 #include <boost/asio.hpp>
+
 #include <openssl/md5.h>
-
 #include <ctime>
-#include <math.h>       /* pow */
-
+#include <math.h>
 
 int GetDayOfYear();
 extern std::string NodeAddress(CNode* pfrom);
@@ -238,7 +238,6 @@ std::string msMasterMessagePublicKey  = "044b2938fbc38071f24bede21e838a0758a52a0
 
 std::string BackupGridcoinWallet();
 extern double GetPoSKernelPS2();
-extern std::string GetBoincDataDir2();
 
 extern uint256 GridcoinMultipleAlgoHash(std::string t1);
 extern bool OutOfSyncByAgeWithChanceOfMining();
@@ -8288,37 +8287,6 @@ std::string ToOfficialNameNew(std::string proj)
         return proj;
 }
 
-
-
-
-std::string GetBoincDataDir2()
-{
-    std::string path = "";
-    /*       Default setting: boincdatadir=c:\\programdata\\boinc\\   */
-
-
-    if (mapArgs.count("-boincdatadir"))
-    {
-        path = mapArgs["-boincdatadir"];
-        if (path.length() > 0) return path;
-    }
-
-    #ifndef WIN32
-    #ifdef __linux__
-        path = "/var/lib/boinc-client/"; // Linux
-    #else
-        path = "/Library/Application Support/BOINC Data/"; // Mac OSX
-    #endif
-    #elif WINVER < 0x0600
-        path = "c:\\documents and settings\\all users\\application data\\boinc\\"; // Windows XP
-    #else
-        path = "c:\\programdata\\boinc\\"; // Windows Vista and up
-    #endif
-
-    return path;
-}
-
-
 std::string GetArgument(std::string arg, std::string defaultvalue)
 {
     std::string result = defaultvalue;
@@ -8395,8 +8363,7 @@ void HarvestCPIDs(bool cleardata)
 
  try
  {
-
-    std::string sourcefile = GetBoincDataDir2() + "client_state.xml";
+    std::string sourcefile = GetBoincDataDir() + "client_state.xml";
     std::string sout = "";
     sout = getfilecontents(sourcefile);
     if (sout == "-1")
