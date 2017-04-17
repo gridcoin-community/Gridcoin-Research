@@ -11,7 +11,7 @@
     <message>
         <location line="+47"/>
         <source>&lt;b&gt;Gridcoin&lt;/b&gt; </source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;b&gt;Gridcoin&lt;/b&gt;</translation>
     </message>
     <message>
         <source>&lt;b&gt;Gridcoin&lt;/b&gt; version</source>
@@ -67,7 +67,7 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
     <message>
         <location line="-11"/>
         <source>&amp;New Address</source>
-        <translation>Ny adress</translation>
+        <translation>&amp;Ny adress</translation>
     </message>
     <message>
         <location line="-49"/>
@@ -142,7 +142,7 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
     <message>
         <location line="+0"/>
         <source>Could not write to file %1.</source>
-        <translation>Kunde inte skriva till fil %1</translation>
+        <translation>Kunde inte skriva till fil %1.</translation>
     </message>
 </context>
 <context>
@@ -269,7 +269,7 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
     <message>
         <location line="-140"/>
         <source>Enter the new passphrase to the wallet.&lt;br/&gt;Please use a passphrase of &lt;b&gt;ten or more random characters&lt;/b&gt;, or &lt;b&gt;eight or more words&lt;/b&gt;.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ange det nya lösenordet för plånboken.&lt;br/&gt;Använd ett lösenord med &lt;/b&gt;10 eller fler slumpmässiga tecken&lt;/b&gt;, eller &lt;b&gt;8 eller fler ord&lt;/b&gt;.</translation>
     </message>
     <message>
         <location line="+82"/>
@@ -353,7 +353,7 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
     <message>
         <location line="+4"/>
         <source>&amp;Address Book</source>
-        <translation>&amp;Adress bok</translation>
+        <translation>&amp;Adressbok</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -532,17 +532,15 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
         <translation>&amp;Hjälp</translation>
     </message>
     <message>
-        <location line="-750"/>
-        <location line="+805"/>
         <source>Tabs toolbar</source>
-        <translation>Verktygsfält för Tabbar</translation>
+        <translation type="vanished">Verktygsfält för Tabbar</translation>
     </message>
     <message>
         <source>Actions toolbar</source>
         <translation type="vanished">Verktygsfält för handlingar</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+102"/>
         <location line="+9"/>
         <source>[testnet]</source>
         <translation>[testnet]</translation>
@@ -599,19 +597,14 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
         </translation>
     </message>
     <message>
-        <location line="-1054"/>
-        <source>Green bar</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+534"/>
+        <location line="-520"/>
         <source>&amp;Block Explorer</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Blockutforskare</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Block Explorer</source>
-        <translation type="unfinished"></translation>
+        <translation>Blockutforskare</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -622,7 +615,7 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
         <location line="+1"/>
         <location line="+8"/>
         <source>Web Site</source>
-        <translation type="unfinished"></translation>
+        <translation>Websida</translation>
     </message>
     <message>
         <location line="-5"/>
@@ -637,7 +630,7 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
     <message>
         <location line="+3"/>
         <source>&amp;Web Site</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Websida</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -653,42 +646,42 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
         <location line="+28"/>
         <location line="+171"/>
         <source>&amp;Rebuild Block Chain</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Bygg om Blockkedjan</translation>
     </message>
     <message>
         <location line="-170"/>
         <source>Rebuild Block Chain</source>
-        <translation type="unfinished"></translation>
+        <translation>Bygg om Blockkedjan</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Download Blocks</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Ladda Hem Block</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Download Blocks</source>
-        <translation type="unfinished"></translation>
+        <translation>Ladda Hem Block</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>&amp;Reboot Client</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Starta om Klienten</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Reboot Gridcoin</source>
-        <translation type="unfinished"></translation>
+        <translation>Starta om Gridcoin</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>&amp;Upgrade Client</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Uppgradera Klienten</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Upgrade Client</source>
-        <translation type="unfinished"></translation>
+        <translation>Uppgradera Klienten</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -703,12 +696,12 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
     <message>
         <location line="+4"/>
         <source>&amp;Advanced Configuration</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Avancerade Inställningar</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Advanced Configuration</source>
-        <translation type="unfinished"></translation>
+        <translation>Avancerade Inställningar</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -776,12 +769,12 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
     <message>
         <location line="+3"/>
         <source>&amp;Diagnostics</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Diagnostik</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Diagnostics</source>
-        <translation type="unfinished"></translation>
+        <translation>Diagnostik</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -796,7 +789,7 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
     <message>
         <location line="+14"/>
         <source>&amp;Unlock Wallet...</source>
-        <translation>Lås &amp;Upp plånboken</translation>
+        <translation>Lås &amp;Upp plånboken...</translation>
     </message>
     <message>
         <location line="+81"/>
@@ -806,7 +799,7 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
     <message>
         <location line="+14"/>
         <source>&amp;Advanced</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Avancerat</translation>
     </message>
     <message numerus="yes">
         <location line="+299"/>
@@ -1651,7 +1644,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+3"/>
         <source>Display coin &amp;control features (experts only!)</source>
-        <translation>Visa coin kontrollinställningar (endast avancerade användare!)</translation>
+        <translation>Visa &amp;coin kontrollinställningar (endast avancerade användare!)</translation>
     </message>
     <message>
         <location line="+74"/>
@@ -1732,7 +1725,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+13"/>
         <source>Unconfirmed</source>
-        <translation type="unfinished">Obekräftad</translation>
+        <translation>Obekräftade</translation>
     </message>
     <message>
         <location line="+28"/>
@@ -1752,7 +1745,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+7"/>
         <source>Total Balance     </source>
-        <translation type="unfinished"></translation>
+        <translation>Balans</translation>
     </message>
     <message>
         <location line="+153"/>
@@ -1945,12 +1938,12 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="-592"/>
         <source>Gridcoin - Debug Console</source>
-        <translation type="unfinished"></translation>
+        <translation>Gridcoin - Felsökningskonsol</translation>
     </message>
     <message>
         <location line="+446"/>
         <source>Boost version</source>
-        <translation type="unfinished"></translation>
+        <translation>Boost-version</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -1970,12 +1963,12 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+136"/>
         <source>Gridcoin Core:</source>
-        <translation type="unfinished"></translation>
+        <translation>Gridcoin-kärna:</translation>
     </message>
     <message>
         <location line="+95"/>
         <source>Network:</source>
-        <translation type="unfinished"></translation>
+        <translation>Nätverk:</translation>
     </message>
     <message>
         <location line="+39"/>
@@ -2047,32 +2040,32 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+74"/>
         <source>OpenSSL version</source>
-        <translation type="unfinished"></translation>
+        <translation>OpenSSL-version</translation>
     </message>
     <message>
         <location line="+25"/>
         <source>&amp;Network Traffic</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Nätverkstrafik</translation>
     </message>
     <message>
         <location line="+52"/>
         <source>&amp;Clear</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Rensa</translation>
     </message>
     <message>
         <location line="+13"/>
         <source>Totals</source>
-        <translation type="unfinished"></translation>
+        <translation>Totalt</translation>
     </message>
     <message>
         <location line="+64"/>
         <source>In:</source>
-        <translation type="unfinished"></translation>
+        <translation>In:</translation>
     </message>
     <message>
         <location line="+80"/>
         <source>Out:</source>
-        <translation type="unfinished"></translation>
+        <translation>Ut:</translation>
     </message>
     <message>
         <location line="+1349"/>
@@ -2101,37 +2094,37 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+111"/>
         <source>%1 B</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 B</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1 KB</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 kB</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1 MB</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 MB</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1 GB</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 GB</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>%1 m</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 m</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>%1 h</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 h</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1 h %2 m</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 h %2 m</translation>
     </message>
 </context>
 <context>
@@ -2199,7 +2192,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <location line="+86"/>
         <location line="+32"/>
         <source>0.00 GRC</source>
-        <translation type="unfinished"></translation>
+        <translation>0,00 GRC</translation>
     </message>
     <message>
         <location line="-191"/>
@@ -2269,7 +2262,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+16"/>
         <source>123.456 GRC</source>
-        <translation type="unfinished"></translation>
+        <translation>123,456 GRC</translation>
     </message>
     <message>
         <source>123.456 BC</source>
@@ -2292,7 +2285,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location filename="../sendcoinsdialog.cpp" line="-173"/>
         <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="unfinished"></translation>
+        <translation>Ange en Gridcoin-address (t.ex. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
     <message>
         <location line="+15"/>
@@ -2420,7 +2413,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+60"/>
         <source>Message:</source>
-        <translation type="unfinished">Meddelande:</translation>
+        <translation>Meddelande:</translation>
     </message>
     <message>
         <location line="+21"/>
@@ -2690,14 +2683,6 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
 </context>
 <context>
-    <name>TrafficGraphWidget</name>
-    <message>
-        <location filename="../trafficgraphwidget.cpp" line="+75"/>
-        <source>KB/s</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
     <name>TransactionDesc</name>
     <message>
         <location filename="../transactiondesc.cpp" line="+38"/>
@@ -2841,22 +2826,22 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+11"/>
         <source>Project</source>
-        <translation type="unfinished"></translation>
+        <translation>Projekt</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Block Type</source>
-        <translation type="unfinished"></translation>
+        <translation>Blocktyp</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Block Number</source>
-        <translation type="unfinished"></translation>
+        <translation>Blocknummer</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>RAC</source>
-        <translation type="unfinished"></translation>
+        <translation>RAC</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2940,12 +2925,12 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+13"/>
         <source>Track Coins</source>
-        <translation type="unfinished"></translation>
+        <translation>Spåra Mynt</translation>
     </message>
     <message>
         <location line="+13"/>
         <source>View Attachment</source>
-        <translation type="unfinished"></translation>
+        <translation>Visa Bifogning</translation>
     </message>
     <message>
         <location filename="../transactiondescdialog.cpp" line="+90"/>
@@ -2955,7 +2940,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+16"/>
         <source>Gridcoin Documents</source>
-        <translation type="unfinished"></translation>
+        <translation>Gridcoin-dokument</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3368,7 +3353,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+10"/>
         <source>Filter: </source>
-        <translation type="unfinished"></translation>
+        <translation>Filter:</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -3378,7 +3363,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+6"/>
         <source>Load History</source>
-        <translation type="unfinished"></translation>
+        <translation>Ladda Historik</translation>
     </message>
     <message>
         <location line="+6"/>
