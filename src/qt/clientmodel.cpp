@@ -7,12 +7,12 @@
 #include "alert.h"
 #include "main.h"
 #include "ui_interface.h"
+#include "util.h"
 
 #include <QDateTime>
 #include <QTimer>
 
 static const int64_t nClientStartupTime = GetTime();
-std::string RoundToString(double d, int place);
 double GetDifficulty(const CBlockIndex* blockindex = NULL);
 
 ClientModel::ClientModel(OptionsModel *optionsModel, QObject *parent) :

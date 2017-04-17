@@ -5,7 +5,6 @@
 #include <QMessageBox>
 #include <QModelIndex>
 
-std::string RoundToString(double d, int place);
 void ExecuteCode();
 extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 QString ToQString(std::string s);
@@ -113,24 +112,6 @@ void TransactionDescDialog::on_btnViewAttachment_clicked()
 		#if defined(WIN32) && defined(QT_GUI)
 			std::string sData = qtExecuteDotNetStringFunction("ShowForm","frmAddAttachment," + sTXID);
 		#endif
-	}
-
-}
-
-void TransactionDescDialog::on_btnExecute_clicked()
-{
-    //printf("Executing code... %s",hashBoinc.c_str());
-	std::string code = ExtractXML(msHashBoinc,"<CODE>","</CODE>");
-	if (code.length() > 1)
-	{
-		std::string narr2 = "Are you sure you want to execute this smart contract: " + code;
-		//bool result = askQuestion("Confirm Smart Contract Execution",narr2);
-		bool result = false;
-		askQuestion("Confirm Smart Contract Execution",narr2,&result);
-		if (result)
-		{
-			ExecuteCode();
-		}
 	}
 
 }

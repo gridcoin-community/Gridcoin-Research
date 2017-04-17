@@ -53,50 +53,49 @@ Value getmininginfo(const Array& params, bool fHelp)
     obj.push_back(Pair("currentblocktx",(uint64_t)nLastBlockTx));
     diff.push_back(Pair("proof-of-work",        GetDifficulty()));
     diff.push_back(Pair("proof-of-research",    GetDifficulty(GetLastBlockIndex(pindexBest, true))));
-	diff.push_back(Pair("proof-of-stake",    GetDifficulty(GetLastBlockIndex(pindexBest, true))));
+    diff.push_back(Pair("proof-of-stake",    GetDifficulty(GetLastBlockIndex(pindexBest, true))));
     diff.push_back(Pair("search-interval",      (int)nLastCoinStakeSearchInterval));
     obj.push_back(Pair("difficulty",    diff));
     obj.push_back(Pair("blockvalue",    (uint64_t)GetProofOfWorkReward(0,  GetAdjustedTime(),1)));
     obj.push_back(Pair("netmhashps",     GetPoWMHashPS()));
     obj.push_back(Pair("netstakeweight", GetPoSKernelPS()));
-	obj.push_back(Pair("netstakeweight2", GetPoSKernelPS2()));
+    obj.push_back(Pair("netstakeweight2", GetPoSKernelPS2()));
     obj.push_back(Pair("errors",        GetWarnings("statusbar")));
     obj.push_back(Pair("pooledtx",      (uint64_t)mempool.size()));
     weight.push_back(Pair("minimum",    (uint64_t)nWeight));
     weight.push_back(Pair("maximum",    (uint64_t)0));
     weight.push_back(Pair("combined",  (uint64_t)nWeight));
     obj.push_back(Pair("stakeweight", weight));
-	//double nCutoff =  GetAdjustedTime() - (60*60*24*14);
+    //double nCutoff =  GetAdjustedTime() - (60*60*24*14);
     obj.push_back(Pair("stakeinterest",    (uint64_t)GetCoinYearReward( GetAdjustedTime())));
     obj.push_back(Pair("testnet",       fTestNet));
-	double neural_popularity = 0;
-	std::string neural_hash = GetNeuralNetworkSupermajorityHash(neural_popularity);
-	obj.push_back(Pair("PopularNeuralHash", neural_hash));
-	//9-19-2015 - CM
-	std::string myNeuralHash = "";
-	#if defined(WIN32) && defined(QT_GUI)
-	           myNeuralHash = qtGetNeuralHash("");
-			   obj.push_back(Pair("MyNeuralHash", myNeuralHash));
-	#endif
+    double neural_popularity = 0;
+    std::string neural_hash = GetNeuralNetworkSupermajorityHash(neural_popularity);
+    obj.push_back(Pair("PopularNeuralHash", neural_hash));
+    //9-19-2015 - CM
+    std::string myNeuralHash = "";
+    #if defined(WIN32) && defined(QT_GUI)
+               myNeuralHash = qtGetNeuralHash("");
+               obj.push_back(Pair("MyNeuralHash", myNeuralHash));
+    #endif
 
-	obj.push_back(Pair("NeuralPopularity", neural_popularity));
-	obj.push_back(Pair("testnet",       fTestNet));
-	obj.push_back(Pair("CPID",msPrimaryCPID));
-	obj.push_back(Pair("RSAWeight",(double)GetRSAWeightByCPID(msPrimaryCPID)));
-	StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
-	obj.push_back(Pair("GRC Quote", network.GRCQuote/10000000000));
-	obj.push_back(Pair("BTC Quote", network.BTCQuote/100));
+    obj.push_back(Pair("NeuralPopularity", neural_popularity));
+    obj.push_back(Pair("CPID",msPrimaryCPID));
+    obj.push_back(Pair("RSAWeight",(double)GetRSAWeightByCPID(msPrimaryCPID)));
+    StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
+    obj.push_back(Pair("GRC Quote", network.GRCQuote/10000000000));
+    obj.push_back(Pair("BTC Quote", network.BTCQuote/100));
 
-	double dMagnitudeUnit = GRCMagnitudeUnit(GetAdjustedTime());
-	obj.push_back(Pair("Magnitude Unit",dMagnitudeUnit));
+    double dMagnitudeUnit = GRCMagnitudeUnit(GetAdjustedTime());
+    obj.push_back(Pair("Magnitude Unit",dMagnitudeUnit));
 
-	obj.push_back(Pair("MiningProject",msMiningProject));
-	obj.push_back(Pair("MiningInfo 1", msMiningErrors));
-	obj.push_back(Pair("MiningInfo 2", msMiningErrors2));
-	obj.push_back(Pair("MiningInfo 5", msMiningErrors5));
-	obj.push_back(Pair("MiningInfo 6", msMiningErrors6));
-	obj.push_back(Pair("MiningInfo 7", msMiningErrors7));
-	obj.push_back(Pair("MiningInfo 8", msMiningErrors8));
+    obj.push_back(Pair("MiningProject",msMiningProject));
+    obj.push_back(Pair("MiningInfo 1", msMiningErrors));
+    obj.push_back(Pair("MiningInfo 2", msMiningErrors2));
+    obj.push_back(Pair("MiningInfo 5", msMiningErrors5));
+    obj.push_back(Pair("MiningInfo 6", msMiningErrors6));
+    obj.push_back(Pair("MiningInfo 7", msMiningErrors7));
+    obj.push_back(Pair("MiningInfo 8", msMiningErrors8));
 
     return obj;
 }
@@ -109,7 +108,7 @@ Value getstakinginfo(const Array& params, bool fHelp)
             "Returns an object containing staking-related information.");
 
     uint64_t nWeight = 0;
-	pwalletMain->GetStakeWeight(nWeight);
+    pwalletMain->GetStakeWeight(nWeight);
 
     uint64_t nNetworkWeight = GetPoSKernelPS();
     bool staking = nLastCoinStakeSearchInterval && nWeight;
@@ -261,15 +260,15 @@ Value getworkex(const Array& params, bool fHelp)
             CDataStream(coinbase, SER_NETWORK, PROTOCOL_VERSION) >> pblock->vtx[0]; // FIXME - HACK!
 
         pblock->hashMerkleRoot = pblock->BuildMerkleTree();
-		if (CheckWork(pblock, *pwalletMain, reservekey))
-		{
-				return true;
-		}
-		else
-		{
-				printf("generated Block Is Stale");
-				return false;
-		}
+        if (CheckWork(pblock, *pwalletMain, reservekey))
+        {
+                return true;
+        }
+        else
+        {
+                printf("generated Block Is Stale");
+                return false;
+        }
     }
 }
 
@@ -384,12 +383,12 @@ Value getwork(const Array& params, bool fHelp)
         pblock->nNonce = pdata->nNonce;
         pblock->vtx[0].vin[0].scriptSig = mapNewBlock[pdata->hashMerkleRoot].second;
         pblock->hashMerkleRoot = pblock->BuildMerkleTree();
-		bool response = CheckWork(pblock, *pwalletMain, reservekey);
-		if (response)
-		{
-				msMiningErrors = "POW Block Mined";
-		}
-		return response;
+        bool response = CheckWork(pblock, *pwalletMain, reservekey);
+        if (response)
+        {
+                msMiningErrors = "POW Block Mined";
+        }
+        return response;
     }
 }
 
@@ -574,7 +573,7 @@ Value submitblock(const Array& params, bool fHelp)
     }
 
     //bool fAccepted = ProcessBlock(NULL, &block,false);
-	bool fAccepted = false;
+    bool fAccepted = false;
 
     if (!fAccepted)
         return "rejected";

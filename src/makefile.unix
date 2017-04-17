@@ -37,7 +37,12 @@ LIBS += \
    -l crypto \
    -l zip \
    -l curl
-   
+
+# boost-1.55 has a bug where building with C++11 causes undefined references to
+# copy_file. This is fixed in boost-1.57 and backported to 1.56. This workaround
+# can be removed once boost is upgraded.
+DEFS += -DBOOST_NO_CXX11_SCOPED_ENUMS
+
 ifndef USE_UPNP
 	override USE_UPNP = -
 endif
@@ -94,10 +99,9 @@ ifeq (${ARCH}, i686)
     EXT_OPTIONS=-msse2
 endif
 
-
 # CXXFLAGS can be specified on the make command line, so we use xCXXFLAGS that only
 # adds some defaults in front. Unfortunately, CXXFLAGS=... $(CXXFLAGS) does not work.
-xCXXFLAGS=-O2 $(EXT_OPTIONS) -pthread -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wformat-security -Wno-unused-parameter \
+xCXXFLAGS = -O2 $(EXT_OPTIONS) -std=c++11 -pthread -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wformat-security -Wno-unused-parameter \
     $(DEBUGFLAGS) $(DEFS) $(HARDENING) $(CXXFLAGS)
 
 # LDFLAGS can be specified on the make command line, so we use xLDFLAGS that only
@@ -130,7 +134,7 @@ OBJS= \
     obj/script.o \
     obj/sync.o \
     obj/util.o \
-	obj/upgrader.o \
+    obj/upgrader.o \
     obj/wallet.o \
     obj/walletdb.o \
     obj/noui.o \
@@ -140,7 +144,9 @@ OBJS= \
     obj/scrypt-arm.o \
     obj/scrypt-x86.o \
     obj/scrypt-x86_64.o \
-    obj/cpid.o 
+    obj/cpid.o \
+    obj/block.o \
+    obj/beacon.o
 
 all: gridcoinresearchd
 
@@ -181,8 +187,14 @@ gridcoinresearchd: $(OBJS:obj/%=obj/%)
 
 clean:
 	-rm -f gridcoinresearchd
+	-rm -f test_gridcoin
 	-rm -f obj/*.o
 	-rm -f obj/*.P
+	-rm -f obj-test/*.o
+	-rm -f obj-test/*.P
 	-rm -f obj/build.h
 
 FORCE:
+
+include Makefile.include.test
+

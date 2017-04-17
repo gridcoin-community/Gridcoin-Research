@@ -1,11 +1,11 @@
 Gridcoin-qt: Qt5 GUI for Gridcoin
-===============================
+=================================
 
 Build instructions
-===================
+==================
 
 Debian
--------
+------
 
 First, make sure that the required packages for Qt5 development of your
 distribution are installed, for Debian and Ubuntu these are:
@@ -30,7 +30,7 @@ An executable named `gridcoinresearch` will be built.
 
 
 Windows
---------
+-------
 
 Windows build instructions:
 
@@ -64,7 +64,7 @@ Mac OS X
 
 
 Build configuration options
-============================
+===========================
 
 UPNnP port forwarding
 ---------------------
@@ -91,7 +91,7 @@ Set USE_UPNP to a different value to control this:
 +------------+--------------------------------------------------------------------------+
 
 Notification support for recent (k)ubuntu versions
----------------------------------------------------
+--------------------------------------------------
 
 To see desktop notifications on (k)ubuntu versions starting from 10.04, enable usage of the
 FreeDesktop notification interface through DBUS using the following qmake option:
@@ -101,7 +101,7 @@ FreeDesktop notification interface through DBUS using the following qmake option
     qmake "USE_DBUS=1"
 
 Generation of QR codes
------------------------
+----------------------
 
 libqrencode may be used to generate QRCode images for payment requests. 
 It can be downloaded from http://fukuchi.org/works/qrencode/index.html.en, or installed via your package manager. Pass the USE_QRCODE 
@@ -114,16 +114,16 @@ flag to qmake to control this:
 +--------------+--------------------------------------------------------------------------+
 
 
-Berkely DB version warning
-==========================
+Berkeley DB version warning
+===========================
 
-A warning for people using the *static binary* version of Gridcoin on a Linux/UNIX-ish system (tl;dr: **Berkely DB databases are not forward compatible**).
+A warning for people using the *static binary* version of Gridcoin on a Linux/UNIX-ish system (tl;dr: **Berkeley DB databases are not forward compatible**).
 
 The static binary version of Gridcoin is linked against libdb 5.0 (see also `this Debian issue`_).
 
 Now the nasty thing is that databases from 5.X are not compatible with 4.X.
 
-If the globally installed development package of Berkely DB installed on your system is 5.X, any source you
+If the globally installed development package of Berkeley DB installed on your system is 5.X, any source you
 build yourself will be linked against that. The first time you run with a 5.X version the database will be upgraded,
 and 4.X cannot open the new format. This means that you cannot go back to the old statically linked version without
 significant hassle!
