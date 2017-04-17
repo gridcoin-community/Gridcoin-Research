@@ -959,8 +959,8 @@ void BitcoinGUI::createActions()
 	votingAction->setStatusTip(tr("Voting"));
 	votingAction->setMenuRole(QAction::TextHeuristicRole);
 
-    votingReservedAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Voting Linux"), this);
-	votingReservedAction->setStatusTip(tr("Voting - Linux"));
+    votingReservedAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Voting"), this);
+	votingReservedAction->setStatusTip(tr("Voting"));
 	votingReservedAction->setMenuRole(QAction::TextHeuristicRole);
     
 	galazaAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Galaza (Game)"), this);
