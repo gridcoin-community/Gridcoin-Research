@@ -317,7 +317,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
                                "}");
     frameBlocks->setObjectName("frame");
 	addToolBarBreak(Qt::LeftToolBarArea);
-    QToolBar *toolbar2 = addToolBar(tr("Tabs toolbar"));
+    QToolBar *toolbar2 = addToolBar("Tabs toolbar");
     addToolBar(Qt::LeftToolBarArea,toolbar2);
     toolbar2->setOrientation(Qt::Vertical);
     toolbar2->setMovable( false );
@@ -328,7 +328,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     toolbar2->addWidget(progressBar);
 
 	addToolBarBreak(Qt::TopToolBarArea);
-    QToolBar *toolbar3 = addToolBar(tr("Green bar"));
+    QToolBar *toolbar3 = addToolBar("Green bar");
     addToolBar(Qt::TopToolBarArea,toolbar3);
     toolbar3->setOrientation(Qt::Horizontal);
     toolbar3->setMovable( false );
@@ -1122,7 +1122,7 @@ void BitcoinGUI::createMenuBar()
 
 void BitcoinGUI::createToolBars()
 {
-    QToolBar *toolbar = addToolBar(tr("Tabs toolbar"));
+    QToolBar *toolbar = addToolBar("Tabs toolbar");
     toolbar->setObjectName("toolbar");
     addToolBar(Qt::LeftToolBarArea,toolbar);
     toolbar->setOrientation(Qt::Vertical);
