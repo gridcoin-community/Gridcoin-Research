@@ -264,7 +264,7 @@ HEADERS += src/qt/bitcoingui.h \
     src/threadsafety.h \
     src/cpid.h \
     src/upgrader.h \
-
+    src/boinc.h
 
 
 SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
@@ -340,7 +340,8 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/scrypt.cpp \
     src/pbkdf2.cpp \
     src/cpid.cpp \
-    src/upgrader.cpp
+    src/upgrader.cpp \
+    src/boinc.cpp
 
 !win32 {
     HEADERS += src/qt/votingdialog.h
