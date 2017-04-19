@@ -2641,14 +2641,6 @@ Value execute(const Array& params, bool fHelp)
             }
         }
     }
-    else if (sItem=="netexec")
-    {
-        
-            std::string myresponse = ExecuteRPCCommand("vote","gender_poll","male");
-            entry.push_back(Pair("Response",myresponse.c_str()));
-            results.push_back(entry);
-    
-    }
     else if (sItem=="staketime")
     {
 
