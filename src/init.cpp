@@ -24,7 +24,6 @@
 
 std::vector<std::string> split(std::string s, std::string delim);
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
-extern void InitializeBoincProjects();
 extern boost::thread_group threadGroup;
 
 StructCPID GetStructCPID();
@@ -57,7 +56,7 @@ extern unsigned int nDerivationMethodIndex;
 extern unsigned int nMinerSleep;
 extern bool fUseFastIndex;
 extern enum Checkpoints::CPMode CheckpointsMode;
-extern void InitializeBoincProjects();
+void InitializeBoincProjects();
 void LoadCPIDsInBackground();
 
 
@@ -116,7 +115,7 @@ void DetectShutdownThread(boost::thread_group* threadGroup)
 }
 
 
-void InitializeBoincProjectsNew()
+void InitializeBoincProjects()
 {
        //Initialize GlobalCPUMiningCPID
         GlobalCPUMiningCPID.initialized = true;
@@ -165,13 +164,6 @@ void InitializeBoincProjectsNew()
                 }
        }
 
-}
-
-
-void InitializeBoincProjects()
-{
-    InitializeBoincProjectsNew();
-    return;
 }
 
 

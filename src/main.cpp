@@ -140,7 +140,6 @@ extern void WriteCache(std::string section, std::string key, std::string value, 
 
 std::string qtGetNeuralContract(std::string data);
 
-extern  std::string GetNetsoftProjects(std::string cpid);
 extern std::string GetNeuralNetworkReport();
 void qtSyncWithDPORNodes(std::string data);
 std::string qtGetNeuralHash(std::string data);
@@ -156,7 +155,6 @@ unsigned int nNodeLifespan;
 
 using namespace std;
 using namespace boost;
-std::string DefaultBoincHashArgs();
 
 //
 // Global state
@@ -306,7 +304,6 @@ BlockFinder blockFinder;
 
 // Gridcoin - Rob Halford
 
-extern std::string GetHttpPageFromCreditServerRetired(std::string cpid, bool usedns, bool clearcache);
 extern std::string RetrieveMd5(std::string s1);
 extern std::string aes_complex_hash(uint256 scrypt_hash);
 
@@ -7844,51 +7841,6 @@ void InitializeProjectStruct(StructCPID& project)
 }
 
 
-
-
-
-std::string GetNetsoftProjects(std::string cpid)
-{
-            std::string cc = GetHttpPageFromCreditServerRetired(cpid,true,true);
-            if (cc.length() < 10)
-            {
-                if (fDebug10) printf("Note: HTTP Page returned blank from netsoft for %s\r\n",cpid.c_str());
-                return "";
-            }
-
-            int iRow = 0;
-            std::vector<std::string> vCC = split(cc.c_str(),"<project>");
-
-            if (vCC.size() > 1)
-            {
-                for (unsigned int i = 0; i < vCC.size(); i++)
-                {
-                    std::string sProj  = ExtractXML(vCC[i],"<name>","</name>");
-                    std::string utc    = ExtractXML(vCC[i],"<total_credit>","</total_credit>");
-                    std::string rac    = ExtractXML(vCC[i],"<expavg_credit>","</expavg_credit>");
-                    std::string team   = ExtractXML(vCC[i],"<team_name>","</team_name>");
-                    std::string rectime= ExtractXML(vCC[i],"<expavg_time>","</expavg_time>");
-                    boost::to_lower(sProj);
-                    sProj = ToOfficialName(sProj);
-                    if (sProj == "mindmodeling@home") sProj = "mindmodeling@beta";
-                    if (sProj == "Quake Catcher Network") sProj = "Quake-Catcher Network";
-
-                    if (sProj.length() > 3)
-                    {
-                        std::string sKey = cpid + "+" + sProj;
-                        StructCPID strDPOR = GetInitializedStructCPID2(sKey,mvDPOR);
-                        iRow++;
-                        strDPOR.cpid = cpid;
-                        strDPOR.NetsoftRAC = cdbl(rac,0);
-                        mvDPOR[sKey] = strDPOR;
-                    }
-                }
-            }
-
-            return cc;
-}
-
-
 bool ProjectIsValid(std::string project)
 {
     boost::to_lower(project);
@@ -8031,7 +7983,6 @@ void HarvestCPIDs(bool cleardata)
             structcpid.NetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
             structcpid.email = GlobalCPUMiningCPID.email;
             // 2-6-2015 R Halford - Ensure CPIDv2 Is populated After deserializing GenBoincKey
-            std::string cpid_non = structcpid.cpidhash+structcpid.email;
             printf("GenBoincKey using email %s and cpidhash %s key %s \r\n",structcpid.email.c_str(),structcpid.cpidhash.c_str(),sDec.c_str());
             structcpid.cpidv2 = ComputeCPIDv2(structcpid.email, structcpid.cpidhash, 0);
             // Old link: structcpid.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + structcpid.cpid;
@@ -8290,7 +8241,6 @@ StructCPID GetStructCPID()
     c.BTCQuote = 0;
     c.GRCQuote = 0;
     c.ResearchAverageMagnitude = 0;
-    c.NetsoftRAC = 0;
     c.interestPayments = 0;
     c.payments = 0;
     c.LastBlock = 0;

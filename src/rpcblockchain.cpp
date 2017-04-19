@@ -76,7 +76,6 @@ int64_t GetMaximumBoincSubsidy(int64_t nTime);
 double GRCMagnitudeUnit(int64_t locktime);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 std::string ExtractHTML(std::string HTMLdata, std::string tagstartprefix,  std::string tagstart_suffix, std::string tag_end);
-extern  std::string GetNetsoftProjects(std::string cpid);
 std::string NeuralRequest(std::string MyNeuralRequest);
 extern bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 
@@ -2752,57 +2751,6 @@ Value execute(const Array& params, bool fHelp)
             }
             results.push_back(entry);
     }
-    else if (sItem == "rac")
-    {
-
-        //Compare the DPOR Rac Report to the Netsoft Rac Report
-        if (params.size() != 2)
-        {
-            entry.push_back(Pair("Error","You must specify a cpid."));
-            results.push_back(entry);
-        }
-        else
-        {
-
-                TallyMagnitudesInSuperblock();
-                std::string argcpid = params[1].get_str();
-                std::string np = GetNetsoftProjects(argcpid);
-                double NetworkProjectCountWithRAC = 0;
-                Object entry;
-                std::string narr = "";
-                narr = "Netsoft_RAC, DPOR_RAC, Project_RAC";
-                entry.push_back(Pair("RAC Reconciliation Report",narr));
-            
-                for(map<string,StructCPID>::iterator ibp=mvBoincProjects.begin(); ibp!=mvBoincProjects.end(); ++ibp) 
-                {
-                    StructCPID WhitelistedProject = mvBoincProjects[(*ibp).first];
-                    if (WhitelistedProject.initialized)
-                    {
-                        double ProjectRAC = GetNetworkAvgByProject(WhitelistedProject.projectname);
-                        if (ProjectRAC > 10) 
-                        {
-                                NetworkProjectCountWithRAC++;
-                        }
-                        //StructCPID structcpid = GetStrctCPID();
-                        StructCPID stDPORProject = mvDPOR[argcpid + "+" + WhitelistedProject.projectname];
-                        if (stDPORProject.initialized) 
-                        { 
-                              // Name, Netsoft, DPOR, Avg
-                              narr = RoundToString(stDPORProject.NetsoftRAC,0) + ", " + RoundToString(stDPORProject.rac,0) 
-                                  + ", " + RoundToString(ProjectRAC,0);
-                              entry.push_back(Pair(WhitelistedProject.projectname,narr));
-                        }
-        
-
-                    }
-                }
-                //entry.push_back(Pair("XML View",np));
-
-                results.push_back(entry);
-                return results;
-        }
-    }
-
     else if (sItem == "encrypt")
     {
         //Encrypt a phrase

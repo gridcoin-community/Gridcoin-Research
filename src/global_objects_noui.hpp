@@ -68,7 +68,6 @@ struct StructCPID
     int32_t LastBlock;
     double NetworkMagnitude;
     double NetworkAvgMagnitude;
-    double NetsoftRAC;
     double GRCQuote;
     double BTCQuote;
     std::string cpid;

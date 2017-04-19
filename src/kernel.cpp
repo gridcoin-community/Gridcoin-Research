@@ -12,7 +12,6 @@ using namespace std;
 MiningCPID DeserializeBoincBlock(std::string block);
 StructCPID GetStructCPID();
 extern int64_t GetRSAWeightByCPID(std::string cpid);
-double cdbl(std::string s, int place);
 extern int DetermineCPIDType(std::string cpid);
 extern int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
