@@ -81,8 +81,6 @@ Value getmininginfo(const Array& params, bool fHelp)
     obj.push_back(Pair("CPID",msPrimaryCPID));
     obj.push_back(Pair("RSAWeight",(double)GetRSAWeightByCPID(msPrimaryCPID)));
     StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
-    obj.push_back(Pair("GRC Quote", network.GRCQuote/10000000000));
-    obj.push_back(Pair("BTC Quote", network.BTCQuote/100));
 
     double dMagnitudeUnit = GRCMagnitudeUnit(GetAdjustedTime());
     obj.push_back(Pair("Magnitude Unit",dMagnitudeUnit));

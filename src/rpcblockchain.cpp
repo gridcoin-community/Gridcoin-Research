@@ -1101,9 +1101,6 @@ bool TallyMagnitudesInSuperblock()
         }
     }
 
-    network.GRCQuote = cdbl(ReadCache("quotes","grc"),4);
-    network.BTCQuote = cdbl(ReadCache("quotes","btc"),4);
-    if (fDebug3) printf(" GRC %f ",network.GRCQuote);
     mvNetworkCopy["NETWORK"] = network;
     if (fDebug3) printf(".TMS43.");
     return true;
@@ -4751,9 +4748,6 @@ Value listitem(const Array& params, bool fHelp)
                         entry.push_back(Pair("Network Interest %", iPct));
                         double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
                         entry.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
-                        entry.push_back(Pair("GRC Quote", stNet.GRCQuote/10000000000));
-                        entry.push_back(Pair("BTC Quote", stNet.BTCQuote/100));
-
                 }
                 results.push_back(entry);
 

@@ -8238,8 +8238,6 @@ StructCPID GetStructCPID()
     c.PaymentTimespan=0;
     c.ResearchSubsidy = 0;
     c.InterestSubsidy = 0;
-    c.BTCQuote = 0;
-    c.GRCQuote = 0;
     c.ResearchAverageMagnitude = 0;
     c.interestPayments = 0;
     c.payments = 0;
