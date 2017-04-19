@@ -153,9 +153,6 @@ extern double GetNetworkProjectCountWithRAC();
 int ReindexWallet();
 extern Array MagnitudeReportCSV(bool detail);
 std::string getfilecontents(std::string filename);
-std::string NewbieLevelToString(int newbie_level);
-void stopWireFrameRenderer();
-void startWireFrameRenderer();
 int CreateRestorePoint();
 int DownloadBlocks();
 double GetBlockValueByHash(uint256 hash);
@@ -3167,21 +3164,6 @@ Value execute(const Array& params, bool fHelp)
     {
         bExecuteCode = true;
         printf("Executing volatile code \r\n");
-    }
-    else if (sItem == "startwireframe")
-    {
-            #if defined(WIN32) && defined(QT_GUI)
-            
-            startWireFrameRenderer();
-            #endif
-
-    }
-    else if (sItem == "endwireframe")
-    {
-            #if defined(WIN32) && defined(QT_GUI)
-        
-            stopWireFrameRenderer();
-            #endif
     }
     else if (sItem == "testhash")
     {

@@ -159,8 +159,6 @@ extern int AddressUser();
 bool IsConfigFileEmpty();
 
 extern void ExecuteCode();
-extern void startWireFrameRenderer();
-extern void stopWireFrameRenderer();
 
 void HarvestCPIDs(bool cleardata);
 extern int RestartClient();
@@ -1891,36 +1889,6 @@ void BitcoinGUI::exchangeClicked()
 {
     QDesktopServices::openUrl(QUrl("https://c-cex.com/?p=grc-btc"));
 }
-
-
-void startWireFrameRenderer()
-{
-
-#ifdef WIN32
-	if (globalwire==NULL)
-	{
-		globalwire = new QAxObject("BoincStake.Utilization");
-	}
-
-      globalwire->dynamicCall("StartWireFrameRenderer()");
-#endif
-}
-
-void stopWireFrameRenderer()
-{
-
-#ifdef WIN32
-	if (globalwire==NULL)
-	{
-		globalwire = new QAxObject("BoincStake.Utilization");
-	}
-
-    globalwire->dynamicCall("StopWireFrameRenderer()");
-#endif
-}
-
-
-
 
 void BitcoinGUI::gotoOverviewPage()
 {

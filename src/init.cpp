@@ -537,16 +537,9 @@ bool AppInit2()
 
     printf("\r\nBoost Version: %s",s.str().c_str());
 
-    #if defined(WIN32) && defined(QT_GUI)
-            //startWireFrameRenderer();
-    #endif
-
-
     //Placeholder: Load Remote CPIDs Here
 
-    nNodeLifespan = GetArg("-addrlifespan", 7);
-
-    
+    nNodeLifespan = GetArg("-addrlifespan", 7);    
     fUseFastIndex = GetBoolArg("-fastindex", false);
 
     nMinerSleep = GetArg("-minersleep", 500);
@@ -1107,10 +1100,6 @@ bool AppInit2()
     LoadCPIDsInBackground();  //This calls HarvesCPIDs(true)
 
     uiInterface.InitMessage(_("Finding first applicable Research Project..."));
-
-    #if defined(WIN32) && defined(QT_GUI)
-        //stopWireFrameRenderer();
-    #endif
 
     if (!CheckDiskSpace())
         return false;
