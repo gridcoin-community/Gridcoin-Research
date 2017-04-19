@@ -926,10 +926,6 @@ void BitcoinGUI::createActions()
 	tickerAction->setStatusTip(tr("Live Ticker"));
 	tickerAction->setMenuRole(QAction::TextHeuristicRole);
 
-	ticketListAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Tickets"), this);
-	ticketListAction->setStatusTip(tr("Tickets"));
-	ticketListAction->setMenuRole(QAction::TextHeuristicRole);
-
 	newUserWizardAction = new QAction(QIcon(":/icons/bitcoin"), tr("&New User Wizard"), this);
 	newUserWizardAction->setStatusTip(tr("New User Wizard"));
 	newUserWizardAction->setMenuRole(QAction::TextHeuristicRole);
@@ -999,7 +995,6 @@ void BitcoinGUI::createActions()
     connect(votingAction, SIGNAL(triggered()), this, SLOT(votingClicked()));
 
 	connect(tickerAction, SIGNAL(triggered()), this, SLOT(tickerClicked()));
-	connect(ticketListAction, SIGNAL(triggered()), this, SLOT(ticketListClicked()));
 	connect(diagnosticsAction, SIGNAL(triggered()), this, SLOT(diagnosticsClicked()));
 
 	connect(foundationAction, SIGNAL(triggered()), this, SLOT(foundationClicked()));
@@ -1073,7 +1068,6 @@ void BitcoinGUI::createMenuBar()
     
 #ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows 
 	qmAdvanced->addAction(tickerAction);
-	qmAdvanced->addAction(ticketListAction);
 	qmAdvanced->addAction(newUserWizardAction);
 	qmAdvanced->addSeparator();
 	qmAdvanced->addAction(faqAction);
@@ -1736,16 +1730,6 @@ void BitcoinGUI::configClicked()
 	globalcom->dynamicCall("ShowConfig()");
 #endif
 
-}
-
-
-void BitcoinGUI::ticketListClicked()
-{
-#ifdef WIN32
-	if (!bGlobalcomInitialized) return;
-	qtSetSessionInfo(DefaultWalletAddress(), GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.Magnitude);
-    globalcom->dynamicCall("ShowTicketList()");
-#endif
 }
 
 void BitcoinGUI::diagnosticsClicked()
