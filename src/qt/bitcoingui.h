@@ -111,7 +111,6 @@ private:
 	QAction *configAction;
 	QAction *leaderboardAction;
 	QAction *tickerAction;
-	QAction *browserAction;
 
     QAction *votingAction;
 

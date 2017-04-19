@@ -925,10 +925,6 @@ void BitcoinGUI::createActions()
 	newUserWizardAction = new QAction(QIcon(":/icons/bitcoin"), tr("&New User Wizard"), this);
 	newUserWizardAction->setStatusTip(tr("New User Wizard"));
 	newUserWizardAction->setMenuRole(QAction::TextHeuristicRole);
-
-	//browserAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Browser"), this);
-	//browserAction->setStatusTip(tr("Browser"));
-	//browserAction->setMenuRole(QAction::TextHeuristicRole);
 	
 	votingAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Voting"), this);
 	votingAction->setStatusTip(tr("Voting"));
@@ -996,9 +992,6 @@ void BitcoinGUI::createActions()
 	connect(faqAction, SIGNAL(triggered()), this, SLOT(faqClicked()));
 	
 	connect(newUserWizardAction, SIGNAL(triggered()), this, SLOT(newUserWizardClicked()));
-
-	//connect(browserAction, SIGNAL(triggered()), this, SLOT(browserClicked()));
-
 }
 
 void BitcoinGUI::createMenuBar()
