@@ -7233,14 +7233,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             pfrom->nPingNonceSent = 0;
         }
     }
-    else if (strCommand=="addbeac_nresp")
-    {
-            std::string neural_response = "?";
-            vRecv >> neural_response;
-            pfrom->NeuralHash = neural_response;
-            if (fDebug3) printf("Add Beacon Neural Response %s \r\n",neural_response.c_str());
-            msMiningErrors7=neural_response;
-    }
     else if (strCommand == "hash_nresp")
     {
             std::string neural_response = "";
