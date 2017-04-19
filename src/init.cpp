@@ -580,10 +580,6 @@ bool AppInit2()
         SoftSetBoolArg("-irc", true);
     }
 
-
-    bPoolMiningMode = GetBoolArg("-poolmining");
-
-
     if (mapArgs.count("-bind")) {
         // when specifying an explicit binding address, you want to listen on it
         // even when -connect or -proxy is specified

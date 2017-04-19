@@ -434,12 +434,7 @@ std::map<std::string, int> mvTimers; // Contains event timers that reset after m
 // End of Gridcoin Global vars
 
 bool bDebugMode = false;
-bool bPoolMiningMode = false;
 bool bBoincSubsidyEligible = false;
-bool bCPUMiningMode = false;
-
-
-
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -603,7 +598,6 @@ void GetGlobalStatus()
         double weight = nWeight/COIN+boincmagnitude;
         double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
         std::string sWeight = RoundToString((double)weight,0);
-        std::string sOverviewCPID = bPoolMiningMode ? "POOL" : GlobalCPUMiningCPID.cpid;
 
         //9-6-2015 Add RSA fields to overview
         if ((double)weight > 100000000000000)
@@ -617,7 +611,7 @@ void GetGlobalStatus()
         GlobalStatusStruct.dporWeight = sWeight;
         GlobalStatusStruct.magnitude = RoundToString(boincmagnitude,2);
         GlobalStatusStruct.project = msMiningProject;
-        GlobalStatusStruct.cpid = sOverviewCPID;
+        GlobalStatusStruct.cpid = GlobalCPUMiningCPID.cpid;
         GlobalStatusStruct.status = msMiningErrors;
         GlobalStatusStruct.poll = msPoll;
         GlobalStatusStruct.errors =  msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + msMiningErrors8;

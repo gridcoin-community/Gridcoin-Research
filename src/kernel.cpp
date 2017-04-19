@@ -313,7 +313,9 @@ int64_t GetRSAWeightByCPIDWithRA(std::string cpid)
 {
     //Requires Magnitude > 0, be in superblock, with a lifetime cpid paid = 0
     //12-3-2015
-    if (cpid.empty() || cpid=="INVESTOR" || cpid=="POOL") return 0;
+    if (cpid.empty() || cpid=="INVESTOR")
+        return 0;
+
     double dWeight = 0;
     StructCPID stMagnitude = GetInitializedStructCPID2(cpid,mvMagnitudes);  
     StructCPID stLifetime  = GetInitializedStructCPID2(cpid,mvResearchAge);
