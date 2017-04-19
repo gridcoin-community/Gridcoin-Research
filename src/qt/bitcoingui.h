@@ -221,8 +221,6 @@ private slots:
 
 	void faqClicked();
     void diagnosticsClicked();
-
-	void tickerClicked();
 	
 	void newUserWizardClicked();
 

@@ -922,10 +922,6 @@ void BitcoinGUI::createActions()
 	configAction->setStatusTip(tr("Advanced Configuration"));
 	configAction->setMenuRole(QAction::TextHeuristicRole);
 
-	tickerAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Live Ticker"), this);
-	tickerAction->setStatusTip(tr("Live Ticker"));
-	tickerAction->setMenuRole(QAction::TextHeuristicRole);
-
 	newUserWizardAction = new QAction(QIcon(":/icons/bitcoin"), tr("&New User Wizard"), this);
 	newUserWizardAction->setStatusTip(tr("New User Wizard"));
 	newUserWizardAction->setMenuRole(QAction::TextHeuristicRole);
@@ -994,7 +990,6 @@ void BitcoinGUI::createActions()
 	connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
     connect(votingAction, SIGNAL(triggered()), this, SLOT(votingClicked()));
 
-	connect(tickerAction, SIGNAL(triggered()), this, SLOT(tickerClicked()));
 	connect(diagnosticsAction, SIGNAL(triggered()), this, SLOT(diagnosticsClicked()));
 
 	connect(foundationAction, SIGNAL(triggered()), this, SLOT(foundationClicked()));
@@ -1067,7 +1062,6 @@ void BitcoinGUI::createMenuBar()
     qmAdvanced->addAction(votingAction);
     
 #ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows 
-	qmAdvanced->addAction(tickerAction);
 	qmAdvanced->addAction(newUserWizardAction);
 	qmAdvanced->addSeparator();
 	qmAdvanced->addAction(faqAction);
@@ -1742,19 +1736,6 @@ void BitcoinGUI::diagnosticsClicked()
 #endif
 }
 
-
-
-/*
-void BitcoinGUI::browserClicked()
-{
-    QUrl url;
-    url = QUrl("http://www.google.com/");
-    GridcoinBrowser *browser = new GridcoinBrowser(url);
-    browser->showMaximized();
-	// Note: Some compact OS's may require browser->show();
-}
-*/
-
 void BitcoinGUI::foundationClicked()
 {
 #ifdef WIN32
@@ -1789,25 +1770,10 @@ void BitcoinGUI::newUserWizardClicked()
 #endif
 }
 
-
-void BitcoinGUI::tickerClicked()
-{
-#ifdef WIN32
-		if (!bGlobalcomInitialized) return;
-	    globalcom->dynamicCall("ShowTicker()");
-#endif
-
-}
-
-
-
-
 int ReindexBlocks()
 {
-
 	ReindexWallet();
 	return 1;
-
 }
 
 void BitcoinGUI::miningClicked()
