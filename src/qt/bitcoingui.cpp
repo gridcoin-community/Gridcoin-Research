@@ -942,11 +942,6 @@ void BitcoinGUI::createActions()
 	votingAction->setStatusTip(tr("Voting"));
 	votingAction->setMenuRole(QAction::TextHeuristicRole);
     
-	galazaAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Galaza (Game)"), this);
-	galazaAction->setStatusTip(tr("Galaza"));
-	galazaAction->setMenuRole(QAction::TextHeuristicRole);
-
-
 	foundationAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Foundation"), this);
 	foundationAction->setStatusTip(tr("Foundation"));
 	foundationAction->setMenuRole(QAction::TextHeuristicRole);
@@ -1010,7 +1005,6 @@ void BitcoinGUI::createActions()
 	connect(foundationAction, SIGNAL(triggered()), this, SLOT(foundationClicked()));
 	connect(faqAction, SIGNAL(triggered()), this, SLOT(faqClicked()));
 	
-	connect(galazaAction, SIGNAL(triggered()), this, SLOT(galazaClicked()));
 	connect(newUserWizardAction, SIGNAL(triggered()), this, SLOT(newUserWizardClicked()));
 
 	//connect(browserAction, SIGNAL(triggered()), this, SLOT(browserClicked()));
@@ -1081,13 +1075,6 @@ void BitcoinGUI::createMenuBar()
 	qmAdvanced->addAction(tickerAction);
 	qmAdvanced->addAction(ticketListAction);
 	qmAdvanced->addAction(newUserWizardAction);
-	std::string GalazaEnabled = GetArgument("galazaenabled", "false");
-	if (GalazaEnabled=="true")
-	{
-    	qmAdvanced->addSeparator();
-		qmAdvanced->addAction(galazaAction);
-	}
-
 	qmAdvanced->addSeparator();
 	qmAdvanced->addAction(faqAction);
 	qmAdvanced->addAction(foundationAction);
@@ -1816,17 +1803,6 @@ void BitcoinGUI::newUserWizardClicked()
 	if (!bGlobalcomInitialized) return;
     globalcom->dynamicCall("ShowNewUserWizard()");
 #endif
-}
-
-
-
-void BitcoinGUI::galazaClicked()
-{
-#ifdef WIN32
-	if (!bGlobalcomInitialized) return;
-    globalcom->dynamicCall("StartGalaza()");
-#endif
-
 }
 
 
