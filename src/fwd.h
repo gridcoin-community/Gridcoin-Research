@@ -4,3 +4,7 @@
 class CBlock;
 class CBlockIndex;
 
+// Gridcoin
+struct MiningCPID;
+struct StructCPID;
+struct StructCPIDCache;
