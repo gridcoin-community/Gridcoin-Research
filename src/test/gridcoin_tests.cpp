@@ -42,7 +42,7 @@ namespace
    };
 }
 
-BOOST_GLOBAL_FIXTURE(GridcoinTestsConfig)
+BOOST_GLOBAL_FIXTURE(GridcoinTestsConfig);
 
 BOOST_AUTO_TEST_SUITE(gridcoin_tests)
 
