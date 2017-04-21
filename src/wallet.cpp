@@ -24,7 +24,7 @@ static unsigned int GetStakeSplitAge() { return IsProtocolV2(nBestHeight) ? (10 
 static int64_t GetStakeCombineThreshold() { return IsProtocolV2(nBestHeight) ? (50 * COIN) : (1000 * COIN); }
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
-StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
+StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 double cdbl(std::string s, int place);
 std::string GetArgument(std::string arg, std::string defaultvalue);
 std::string SendReward(std::string sAddress, int64_t nAmount);

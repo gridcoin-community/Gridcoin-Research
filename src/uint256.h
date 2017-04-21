@@ -210,7 +210,6 @@ public:
         return ret;
     }
 
-
     friend inline bool operator<(const base_uint& a, const base_uint& b)
     {
         for (int i = base_uint::WIDTH-1; i >= 0; i--)
@@ -378,11 +377,13 @@ public:
         s.read((char*)pn, sizeof(pn));
     }
 
+    friend class uint128;
     friend class uint160;
     friend class uint256;
     friend inline int Testuint256AdHoc(std::vector<std::string> vArg);
 };
 
+typedef base_uint<128> base_uint128;
 typedef base_uint<160> base_uint160;
 typedef base_uint<256> base_uint256;
 
@@ -390,6 +391,118 @@ typedef base_uint<256> base_uint256;
 // uint160 and uint256 could be implemented as templates, but to keep
 // compile errors and debugging cleaner, they're copy and pasted.
 //
+
+
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// uint128
+//
+
+/** 128-bit unsigned integer */
+class uint128 : public base_uint128
+{
+public:
+    typedef base_uint128 basetype;
+
+    uint128()
+    {
+        for (int i = 0; i < WIDTH; i++)
+            pn[i] = 0;
+    }
+
+    uint128(const basetype& b)
+    {
+        for (int i = 0; i < WIDTH; i++)
+            pn[i] = b.pn[i];
+    }
+
+    uint128& operator=(const basetype& b)
+    {
+        for (int i = 0; i < WIDTH; i++)
+            pn[i] = b.pn[i];
+        return *this;
+    }
+
+    uint128(uint64_t b)
+    {
+        pn[0] = (unsigned int)b;
+        pn[1] = (unsigned int)(b >> 32);
+        for (int i = 2; i < WIDTH; i++)
+            pn[i] = 0;
+    }
+
+    uint128& operator=(uint64_t b)
+    {
+        pn[0] = (unsigned int)b;
+        pn[1] = (unsigned int)(b >> 32);
+        for (int i = 2; i < WIDTH; i++)
+            pn[i] = 0;
+        return *this;
+    }
+
+    explicit uint128(const std::string& str)
+    {
+        SetHex(str);
+    }
+
+    explicit uint128(const std::vector<unsigned char>& vch)
+    {
+        if (vch.size() == sizeof(pn))
+            memcpy(pn, &vch[0], sizeof(pn));
+        else
+            *this = 0;
+    }
+};
+
+inline bool operator==(const uint128& a, uint64_t b)                         { return (base_uint128)a == b; }
+inline bool operator!=(const uint128& a, uint64_t b)                         { return (base_uint128)a != b; }
+inline const uint128 operator<<(const base_uint128& a, unsigned int shift)   { return uint128(a) <<= shift; }
+inline const uint128 operator>>(const base_uint128& a, unsigned int shift)   { return uint128(a) >>= shift; }
+inline const uint128 operator<<(const uint128& a, unsigned int shift)        { return uint128(a) <<= shift; }
+inline const uint128 operator>>(const uint128& a, unsigned int shift)        { return uint128(a) >>= shift; }
+
+inline const uint128 operator^(const base_uint128& a, const base_uint128& b) { return uint128(a) ^= b; }
+inline const uint128 operator&(const base_uint128& a, const base_uint128& b) { return uint128(a) &= b; }
+inline const uint128 operator|(const base_uint128& a, const base_uint128& b) { return uint128(a) |= b; }
+inline const uint128 operator+(const base_uint128& a, const base_uint128& b) { return uint128(a) += b; }
+inline const uint128 operator-(const base_uint128& a, const base_uint128& b) { return uint128(a) -= b; }
+
+inline bool operator<(const base_uint128& a, const uint128& b)          { return (base_uint128)a <  (base_uint128)b; }
+inline bool operator<=(const base_uint128& a, const uint128& b)         { return (base_uint128)a <= (base_uint128)b; }
+inline bool operator>(const base_uint128& a, const uint128& b)          { return (base_uint128)a >  (base_uint128)b; }
+inline bool operator>=(const base_uint128& a, const uint128& b)         { return (base_uint128)a >= (base_uint128)b; }
+inline bool operator==(const base_uint128& a, const uint128& b)         { return (base_uint128)a == (base_uint128)b; }
+inline bool operator!=(const base_uint128& a, const uint128& b)         { return (base_uint128)a != (base_uint128)b; }
+inline const uint128 operator^(const base_uint128& a, const uint128& b) { return (base_uint128)a ^  (base_uint128)b; }
+inline const uint128 operator&(const base_uint128& a, const uint128& b) { return (base_uint128)a &  (base_uint128)b; }
+inline const uint128 operator|(const base_uint128& a, const uint128& b) { return (base_uint128)a |  (base_uint128)b; }
+inline const uint128 operator+(const base_uint128& a, const uint128& b) { return (base_uint128)a +  (base_uint128)b; }
+inline const uint128 operator-(const base_uint128& a, const uint128& b) { return (base_uint128)a -  (base_uint128)b; }
+
+inline bool operator<(const uint128& a, const base_uint128& b)          { return (base_uint128)a <  (base_uint128)b; }
+inline bool operator<=(const uint128& a, const base_uint128& b)         { return (base_uint128)a <= (base_uint128)b; }
+inline bool operator>(const uint128& a, const base_uint128& b)          { return (base_uint128)a >  (base_uint128)b; }
+inline bool operator>=(const uint128& a, const base_uint128& b)         { return (base_uint128)a >= (base_uint128)b; }
+inline bool operator==(const uint128& a, const base_uint128& b)         { return (base_uint128)a == (base_uint128)b; }
+inline bool operator!=(const uint128& a, const base_uint128& b)         { return (base_uint128)a != (base_uint128)b; }
+inline const uint128 operator^(const uint128& a, const base_uint128& b) { return (base_uint128)a ^  (base_uint128)b; }
+inline const uint128 operator&(const uint128& a, const base_uint128& b) { return (base_uint128)a &  (base_uint128)b; }
+inline const uint128 operator|(const uint128& a, const base_uint128& b) { return (base_uint128)a |  (base_uint128)b; }
+inline const uint128 operator+(const uint128& a, const base_uint128& b) { return (base_uint128)a +  (base_uint128)b; }
+inline const uint128 operator-(const uint128& a, const base_uint128& b) { return (base_uint128)a -  (base_uint128)b; }
+
+inline bool operator<(const uint128& a, const uint128& b)               { return (base_uint128)a <  (base_uint128)b; }
+inline bool operator<=(const uint128& a, const uint128& b)              { return (base_uint128)a <= (base_uint128)b; }
+inline bool operator>(const uint128& a, const uint128& b)               { return (base_uint128)a >  (base_uint128)b; }
+inline bool operator>=(const uint128& a, const uint128& b)              { return (base_uint128)a >= (base_uint128)b; }
+inline bool operator==(const uint128& a, const uint128& b)              { return (base_uint128)a == (base_uint128)b; }
+inline bool operator!=(const uint128& a, const uint128& b)              { return (base_uint128)a != (base_uint128)b; }
+inline const uint128 operator^(const uint128& a, const uint128& b)      { return (base_uint128)a ^  (base_uint128)b; }
+inline const uint128 operator&(const uint128& a, const uint128& b)      { return (base_uint128)a &  (base_uint128)b; }
+inline const uint128 operator|(const uint128& a, const uint128& b)      { return (base_uint128)a |  (base_uint128)b; }
+inline const uint128 operator+(const uint128& a, const uint128& b)      { return (base_uint128)a +  (base_uint128)b; }
+inline const uint128 operator-(const uint128& a, const uint128& b)      { return (base_uint128)a -  (base_uint128)b; }
 
 
 

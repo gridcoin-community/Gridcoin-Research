@@ -398,10 +398,9 @@ bool CTxDB::LoadBlockIndex()
         pindexNew->nNonce         = diskindex.nNonce;
 
         //9-26-2016 - Gridcoin - New Accrual Fields
-
         if (diskindex.nHeight > nNewIndex)
         {
-            pindexNew->sCPID             = diskindex.sCPID;
+            pindexNew->cpid              = diskindex.cpid;
             pindexNew->nResearchSubsidy  = diskindex.nResearchSubsidy;
             pindexNew->nInterestSubsidy  = diskindex.nInterestSubsidy;
             pindexNew->nMagnitude        = diskindex.nMagnitude;
@@ -665,11 +664,12 @@ bool CTxDB::LoadBlockIndex()
             }
 #endif
             
-            if (!pindex->sCPID.empty() &&
-                pindex->nResearchSubsidy > 0 &&
-                pindex->sCPID != "INVESTOR") 
+            const std::string& scpid = pindex->GetCPID();
+            if (pindex->nResearchSubsidy > 0 &&
+                !scpid.empty() &&
+                scpid != "INVESTOR")
             {
-                StructCPID& stCPID = mvResearchAge[pindex->sCPID];
+                StructCPID& stCPID = mvResearchAge[scpid];
                 
                 stCPID.InterestSubsidy += pindex->nInterestSubsidy;
                 stCPID.ResearchSubsidy += pindex->nResearchSubsidy;
@@ -689,7 +689,7 @@ bool CTxDB::LoadBlockIndex()
                 if (pindex->nTime < stCPID.LowLockTime)  stCPID.LowLockTime = pindex->nTime;
                 if (pindex->nTime > stCPID.HighLockTime) stCPID.HighLockTime = pindex->nTime;
                 
-                AddCPIDBlockHash(pindex->sCPID, pindex->GetBlockHash());
+                AddCPIDBlockHash(scpid, pindex->GetBlockHash());
             }
         }
     }
