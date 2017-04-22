@@ -16,7 +16,6 @@
 #include <QListWidget>
 #include <QListWidgetItem>
 
-#include <QtConcurrent/QtConcurrent>
 #include <QFuture>
 
 #include <QtGlobal>
