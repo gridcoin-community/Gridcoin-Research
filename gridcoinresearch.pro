@@ -230,7 +230,7 @@ HEADERS += src/qt/bitcoingui.h \
     src/qt/guiutil.h \
     src/qt/transactionrecord.h \
     src/qt/guiconstants.h \
-	src/qt/trafficgraphwidget.h \
+    src/qt/trafficgraphwidget.h \
     src/qt/optionsmodel.h \
     src/qt/monitoreddatamapper.h \
     src/qt/transactiondesc.h \
@@ -253,6 +253,7 @@ HEADERS += src/qt/bitcoingui.h \
     src/protocol.h \
     src/qt/notificator.h \
     src/qt/qtipcserver.h \
+    src/qt/votingdialog.h \
     src/allocators.h \
     src/ui_interface.h \
     src/qt/rpcconsole.h \
@@ -279,6 +280,7 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/upgradedialog.cpp \
     src/qt/editaddressdialog.cpp \
     src/qt/bitcoinaddressvalidator.cpp \
+    src/qt/votingdialog.cpp \
     src/alert.cpp \
     src/version.cpp \
     src/sync.cpp \
@@ -339,11 +341,6 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/cpid.cpp \
     src/sql.cpp \
     src/upgrader.cpp
-
-!win32 {
-    HEADERS += src/qt/votingdialog.h
-    SOURCES += src/qt/votingdialog.cpp
-}
 
 ##
 #RC_FILE  = qaxserver.rc
