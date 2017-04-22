@@ -15,7 +15,7 @@
 #include <QTableView>
 #include <QListWidget>
 #include <QListWidgetItem>
-
+#include <QDateTime>
 #include <QFuture>
 
 #include <QtGlobal>
@@ -56,7 +56,7 @@ class VotingItem {
 public:
     int rowNumber_;
     QString title_;
-    time_t expiration_;
+    QDateTime expiration_;
     QString shareType_;
     QString question_;
     QString answers_;
@@ -165,7 +165,7 @@ private:
     VotingVoteDialog *voteDialog_;
     NewPollDialog *pollDialog_;
     QLabel *loadingIndicator;
-    QFutureWatcher<void> *watcher;
+    QFutureWatcher<void> watcher;
 
 private:
     virtual void showEvent(QShowEvent *);
@@ -178,6 +178,7 @@ private slots:
 
 public slots:
     void filterTQAUChanged(const QString &);
+    void loadPolls(bool history);
     void resetData(void);
     void loadHistory(void);
     void showChartDialog(void);
