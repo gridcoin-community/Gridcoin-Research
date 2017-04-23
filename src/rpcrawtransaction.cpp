@@ -32,38 +32,38 @@ extern Checker checker;
 
 std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, double& out_rac)
 {
-	CTransaction tx;
+    CTransaction tx;
     uint256 hashBlock = 0;
-	std::string error_code = "";
+    std::string error_code = "";
 
 
     if (!GetTransaction(hash, tx, hashBlock))
-	{
-		return "";
-	}
+    {
+        return "";
+    }
     CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
     ssTx << tx;
     string strHex = HexStr(ssTx.begin(), ssTx.end());
-	CBlockIndex* pindexPrev = NULL;
-	CBlock block;
+    CBlockIndex* pindexPrev = NULL;
+    CBlock block;
     map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hashBlock);
     if (mi == mapBlockIndex.end())
-	{
-			return ""; //not found
-	}
+    {
+            return ""; //not found
+    }
     pindexPrev = (*mi).second;
-  	if (!block.ReadFromDisk(pindexPrev))
-	{
-			return ""; //failed to read
-	}
-	out_blocktype = block.nVersion;
-	out_blocknumber = pindexPrev->nHeight;
-	//Deserialize
+    if (!block.ReadFromDisk(pindexPrev))
+    {
+            return ""; //failed to read
+    }
+    out_blocktype = block.nVersion;
+    out_blocknumber = pindexPrev->nHeight;
+    //Deserialize
 
     MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
 
-	out_rac = bb.rac;
-	return bb.projectname;
+    out_rac = bb.rac;
+    return bb.projectname;
 
 }
 
@@ -161,16 +161,16 @@ Value downloadstate(const Array& params, bool fHelp)
 
 Value upgrade(const Array& params, bool fHelp)
 {
-		if (fHelp || params.size() != 0)
+        if (fHelp || params.size() != 0)
         throw runtime_error(
             "upgrade \n"
             "Upgrades client to the latest version.\n"
             "{}");
 
 
-		int target;
-		 #ifdef QT_GUI
-		    target = QT;
+        int target;
+         #ifdef QT_GUI
+            target = QT;
          #else
          target = DAEMON;
          #endif
@@ -226,14 +226,14 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, Object& entry)
     entry.push_back(Pair("version", tx.nVersion));
     entry.push_back(Pair("time", (int64_t)tx.nTime));
     entry.push_back(Pair("locktime", (int64_t)tx.nLockTime));
-	entry.push_back(Pair("hashboinc", tx.hashBoinc));
-	/*
-		if (tx.hashBoinc=="code")
-		{
-			printf("Executing .net code\r\n");
-    	    ExecuteCode();
-		}
-	*/
+    entry.push_back(Pair("hashboinc", tx.hashBoinc));
+    /*
+        if (tx.hashBoinc=="code")
+        {
+            printf("Executing .net code\r\n");
+            ExecuteCode();
+        }
+    */
 
     Array vin;
     BOOST_FOREACH(const CTxIn& txin, tx.vin)
@@ -435,12 +435,12 @@ Value createrawtransaction(const Array& params, bool fHelp)
             "createrawtransaction \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", \"{\\\"address\\\":0.01} "
             "createrawtransaction \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", \"{\\\"data\\\":\\\"00010203\\\"} "
         );
-	LOCK(cs_main);
+    LOCK(cs_main);
     RPCTypeCheck(params, list_of(array_type)(obj_type));
 
     Array inputs = params[0].get_array();
     Object sendTo = params[1].get_obj();
-	//UniValue sendTo2 = params[1].get_obj();
+    //UniValue sendTo2 = params[1].get_obj();
 
     CTransaction rawTx;
 
@@ -469,30 +469,30 @@ Value createrawtransaction(const Array& params, bool fHelp)
     set<CBitcoinAddress> setAddress;
     BOOST_FOREACH(const Pair& s, sendTo)
     {
-		 if (s.name_ == "data") 
-		 {
+         if (s.name_ == "data") 
+         {
             std::vector<unsigned char> data = ParseHexV(s.value_,"Data");
             CTxOut out(0, CScript() << OP_RETURN << data);
             rawTx.vout.push_back(out);
         }
-		else
-		{
+        else
+        {
 
-			CBitcoinAddress address(s.name_);
-			if (!address.IsValid())
-				throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("Invalid Gridcoin address: ")+s.name_);
+            CBitcoinAddress address(s.name_);
+            if (!address.IsValid())
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("Invalid Gridcoin address: ")+s.name_);
 
-			if (setAddress.count(address))
-				throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, duplicated address: ")+s.name_);
-			setAddress.insert(address);
+            if (setAddress.count(address))
+                throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, duplicated address: ")+s.name_);
+            setAddress.insert(address);
 
-			CScript scriptPubKey;
-			scriptPubKey.SetDestination(address.Get());
-			int64_t nAmount = AmountFromValue(s.value_);
+            CScript scriptPubKey;
+            scriptPubKey.SetDestination(address.Get());
+            int64_t nAmount = AmountFromValue(s.value_);
 
-			CTxOut out(nAmount, scriptPubKey);
-			rawTx.vout.push_back(out);
-		}
+            CTxOut out(nAmount, scriptPubKey);
+            rawTx.vout.push_back(out);
+        }
     }
 
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);

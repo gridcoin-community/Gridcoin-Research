@@ -90,6 +90,7 @@
 
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
+#include "boinc.h"
 
 extern CWallet* pwalletMain;
 extern int64_t nLastCoinStakeSearchInterval;
@@ -140,7 +141,6 @@ int nTick2 = 0;
 int nRegVersion;
 int nNeedsUpgrade = 0;
 
-std::string GetBoincDataDir2();
 extern int CreateRestorePoint();
 extern int DownloadBlocks();
 
@@ -292,7 +292,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
     frameBlocks->setObjectName("frame");
 	addToolBarBreak(Qt::LeftToolBarArea);
-    QToolBar *toolbar2 = addToolBar(tr("Tabs toolbar"));
+    QToolBar *toolbar2 = addToolBar("Tabs toolbar");
     addToolBar(Qt::LeftToolBarArea,toolbar2);
     toolbar2->setOrientation(Qt::Vertical);
     toolbar2->setMovable( false );
@@ -303,7 +303,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     toolbar2->addWidget(progressBar);
 
 	addToolBarBreak(Qt::TopToolBarArea);
-    QToolBar *toolbar3 = addToolBar(tr("Logo bar"));
+    QToolBar *toolbar3 = addToolBar("Logo bar");
     addToolBar(Qt::TopToolBarArea,toolbar3);
     toolbar3->setOrientation(Qt::Horizontal);
     toolbar3->setMovable( false );
@@ -958,8 +958,8 @@ void BitcoinGUI::createActions()
 	votingAction->setStatusTip(tr("Voting"));
 	votingAction->setMenuRole(QAction::TextHeuristicRole);
 
-    votingReservedAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Voting Linux"), this);
-	votingReservedAction->setStatusTip(tr("Voting - Linux"));
+    votingReservedAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Voting"), this);
+	votingReservedAction->setStatusTip(tr("Voting"));
 	votingReservedAction->setMenuRole(QAction::TextHeuristicRole);
     
 	galazaAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Galaza (Game)"), this);
@@ -1129,7 +1129,7 @@ void BitcoinGUI::createMenuBar()
 
 void BitcoinGUI::createToolBars()
 {
-    QToolBar *toolbar = addToolBar(tr("Tabs toolbar"));
+    QToolBar *toolbar = addToolBar("Tabs toolbar");
     toolbar->setObjectName("toolbar");
     addToolBar(Qt::LeftToolBarArea,toolbar);
     toolbar->setOrientation(Qt::Vertical);
@@ -1550,7 +1550,7 @@ void BitcoinGUI::NewUserWizard()
 	    QString boincemail = "";
 		//Typhoon- Check to see if boinc exists in default path - 11-19-2014
 
-		std::string sourcefile = GetBoincDataDir2() + "client_state.xml";
+		std::string sourcefile = GetBoincDataDir() + "client_state.xml";
 		std::string sout = "";
 		sout = getfilecontents(sourcefile);
 		//bool BoincInstalled = true;
@@ -1559,7 +1559,7 @@ void BitcoinGUI::NewUserWizard()
 		{
 			printf("Boinc not installed in default location! \r\n");
 			//BoincInstalled=false;
-			std::string nicePath = GetBoincDataDir2();
+			std::string nicePath = GetBoincDataDir();
 			sBoincNarr = "Boinc is not installed in default location " + nicePath + "!  Please set boincdatadir=c:\\programdata\\boinc\\    to the correct path where Boincs programdata directory resides.";
 		}
 

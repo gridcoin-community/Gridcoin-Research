@@ -134,26 +134,26 @@ public:
 CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 {
 
-	if (!bCPIDsLoaded)
-	{
-		printf("CPIDs not yet loaded...");
-		MilliSleep(500);
-		return NULL;
-	}
+    if (!bCPIDsLoaded)
+    {
+        printf("CPIDs not yet loaded...");
+        MilliSleep(500);
+        return NULL;
+    }
 
-	if (!bNetAveragesLoaded)
-	{
-		if (fDebug10) printf("CNB: Net averages not yet loaded...");
-		MilliSleep(1);
-		return NULL;
-	}
+    if (!bNetAveragesLoaded)
+    {
+        if (fDebug10) printf("CNB: Net averages not yet loaded...");
+        MilliSleep(1);
+        return NULL;
+    }
 
-	if (OutOfSyncByAgeWithChanceOfMining())
-	{
-	    if (msPrimaryCPID != "INVESTOR") printf("Wallet out of sync - unable to mine...");
-		MilliSleep(1);
-		return NULL;
-	}
+    if (OutOfSyncByAgeWithChanceOfMining())
+    {
+        if (msPrimaryCPID != "INVESTOR") printf("Wallet out of sync - unable to mine...");
+        MilliSleep(1);
+        return NULL;
+    }
 
     // Create new block
     std::unique_ptr<CBlock> pblock(new CBlock());
@@ -171,7 +171,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
     txNew.vin.resize(1);
     txNew.vin[0].prevout.SetNull();
     txNew.vout.resize(1);
-	
+    
     if (!fProofOfStake)
     {
         CReserveKey reservekey(pwallet);
@@ -180,13 +180,13 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
             return NULL;
         txNew.vout[0].scriptPubKey.SetDestination(pubkey.GetID());
 
-		printf("Generating PoW standard payment\r\n");
+        printf("Generating PoW standard payment\r\n");
     }
     else
     {
         // Height first in coinbase required for block.version=2
         txNew.vin[0].scriptSig = (CScript() << nHeight) + COINBASE_FLAGS;
-	    assert(txNew.vin[0].scriptSig.size() <= 100);
+        assert(txNew.vin[0].scriptSig.size() <= 100);
         txNew.vout[0].SetEmpty();
     
     }
@@ -219,8 +219,8 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
         ParseMoney(mapArgs["-mintxfee"], nMinTxFee);
 
     pblock->nBits = GetNextTargetRequired(pindexPrev, fProofOfStake);
-	msMiningErrorsIncluded = "";
-	msMiningErrorsExcluded = "";
+    msMiningErrorsIncluded = "";
+    msMiningErrorsExcluded = "";
 
     // Collect memory pool transactions into the block
     int64_t nFees = 0;
@@ -250,8 +250,8 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
                 // Read prev transaction
                 CTransaction txPrev;
                 CTxIndex txindex;
-			
-				if (fDebug10) printf("Enumerating tx %s ",tx.GetHash().GetHex().c_str());
+            
+                if (fDebug10) printf("Enumerating tx %s ",tx.GetHash().GetHex().c_str());
 
                 if (!txPrev.ReadFromDisk(txdb, txin.prevout, txindex))
                 {
@@ -274,8 +274,8 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
                         // Use list for automatic deletion
                         vOrphan.push_back(COrphan(&tx));
                         porphan = &vOrphan.back();
-						if (fDebug10) printf("Orphan tx %s ",tx.GetHash().GetHex().c_str());
-						msMiningErrorsExcluded += tx.GetHash().GetHex() + ":ORPHAN;";
+                        if (fDebug10) printf("Orphan tx %s ",tx.GetHash().GetHex().c_str());
+                        msMiningErrorsExcluded += tx.GetHash().GetHex() + ":ORPHAN;";
                     }
                     mapDependers[txin.prevout.hash].push_back(porphan);
                     porphan->setDependsOn.insert(txin.prevout.hash);
@@ -330,35 +330,35 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 
             // Size limits
             unsigned int nTxSize = ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);
-			if (fDebug10) printf("Tx Size for %s  %f",tx.GetHash().GetHex().c_str(),(double)nTxSize);
+            if (fDebug10) printf("Tx Size for %s  %f",tx.GetHash().GetHex().c_str(),(double)nTxSize);
 
             if (nBlockSize + nTxSize >= nBlockMaxSize)
-			{
-				if (fDebug10) printf("Tx size too large for tx %s  blksize %f , tx siz %f",tx.GetHash().GetHex().c_str(),(double)nBlockSize,(double)nTxSize);
-			 	msMiningErrorsExcluded += tx.GetHash().GetHex() + ":SizeTooLarge(" 
-					+ RoundToString((double)nBlockSize,0) + "," +RoundToString((double)nTxSize,0) + ")(" 
-					+ RoundToString((double)nBlockSize,0) + ");";
+            {
+                if (fDebug10) printf("Tx size too large for tx %s  blksize %f , tx siz %f",tx.GetHash().GetHex().c_str(),(double)nBlockSize,(double)nTxSize);
+                msMiningErrorsExcluded += tx.GetHash().GetHex() + ":SizeTooLarge(" 
+                    + RoundToString((double)nBlockSize,0) + "," +RoundToString((double)nTxSize,0) + ")(" 
+                    + RoundToString((double)nBlockSize,0) + ");";
             
                 continue;
-			}
+            }
 
             // Legacy limits on sigOps:
             unsigned int nTxSigOps = tx.GetLegacySigOpCount();
             if (nBlockSigOps + nTxSigOps >= MAX_BLOCK_SIGOPS)
-			{
-     		 	msMiningErrorsExcluded += tx.GetHash().GetHex() + ":LegacySigOpLimit(" + 
-					RoundToString((double)nBlockSigOps,0) + "," +RoundToString((double)nTxSigOps,0) + ")(" 
-					+ RoundToString((double)MAX_BLOCK_SIGOPS,0) + ");";
+            {
+                msMiningErrorsExcluded += tx.GetHash().GetHex() + ":LegacySigOpLimit(" + 
+                    RoundToString((double)nBlockSigOps,0) + "," +RoundToString((double)nTxSigOps,0) + ")(" 
+                    + RoundToString((double)MAX_BLOCK_SIGOPS,0) + ");";
                 continue;
-			}
+            }
 
             // Timestamp limit
             if (tx.nTime > GetAdjustedTime() || (fProofOfStake && tx.nTime > pblock->vtx[0].nTime))
-			{
-				msMiningErrorsExcluded += tx.GetHash().GetHex() + ":TimestampLimit(" + RoundToString((double)tx.nTime,0) + "," 
-					+RoundToString((double)pblock->vtx[0].nTime,0) + ");";
+            {
+                msMiningErrorsExcluded += tx.GetHash().GetHex() + ":TimestampLimit(" + RoundToString((double)tx.nTime,0) + "," 
+                    +RoundToString((double)pblock->vtx[0].nTime,0) + ");";
                 continue;
-			}
+            }
 
             // Transaction fee
             int64_t nMinFee = tx.GetMinFee(nBlockSize, GMF_BLOCK);
@@ -383,44 +383,44 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
             MapPrevTx mapInputs;
             bool fInvalid;
             if (!tx.FetchInputs(txdb, mapTestPoolTmp, false, true, mapInputs, fInvalid))
-			{
-				if (fDebug10) printf("Unable to fetch inputs for tx %s ",tx.GetHash().GetHex().c_str());
-				msMiningErrorsExcluded += tx.GetHash().GetHex() + ":UnableToFetchInputs;";
+            {
+                if (fDebug10) printf("Unable to fetch inputs for tx %s ",tx.GetHash().GetHex().c_str());
+                msMiningErrorsExcluded += tx.GetHash().GetHex() + ":UnableToFetchInputs;";
                 continue;
-			}
+            }
 
             int64_t nTxFees = tx.GetValueIn(mapInputs)-tx.GetValueOut();
             if (nTxFees < nMinFee)
-			{
-				if (fDebug10) printf("Not including tx %s  due to TxFees of %f ; bare min fee is %f",tx.GetHash().GetHex().c_str(),(double)nTxFees,(double)nMinFee);
-				msMiningErrorsExcluded += tx.GetHash().GetHex() + ":FeeTooSmall(" 
-					+ RoundToString(CoinToDouble(nFees),8) + "," +RoundToString(CoinToDouble(nMinFee),8) + ");";
+            {
+                if (fDebug10) printf("Not including tx %s  due to TxFees of %f ; bare min fee is %f",tx.GetHash().GetHex().c_str(),(double)nTxFees,(double)nMinFee);
+                msMiningErrorsExcluded += tx.GetHash().GetHex() + ":FeeTooSmall(" 
+                    + RoundToString(CoinToDouble(nFees),8) + "," +RoundToString(CoinToDouble(nMinFee),8) + ");";
                 continue;
-			}
+            }
 
             nTxSigOps += tx.GetP2SHSigOpCount(mapInputs);
             if (nBlockSigOps + nTxSigOps >= MAX_BLOCK_SIGOPS)
-			{
-				if (fDebug10) printf("Not including tx %s  due to exceeding max sigops of %f ; sigops is %f",
-					tx.GetHash().GetHex().c_str(),(double)(nBlockSigOps+nTxSigOps),(double)MAX_BLOCK_SIGOPS);
-				msMiningErrorsExcluded += tx.GetHash().GetHex() + ":ExceededSigOps(" 
-					+ RoundToString((double)nBlockSigOps,0) + "," +RoundToString((double)nTxSigOps,0) + ")(" 
-					+ RoundToString((double)MAX_BLOCK_SIGOPS,0) + ");";
+            {
+                if (fDebug10) printf("Not including tx %s  due to exceeding max sigops of %f ; sigops is %f",
+                    tx.GetHash().GetHex().c_str(),(double)(nBlockSigOps+nTxSigOps),(double)MAX_BLOCK_SIGOPS);
+                msMiningErrorsExcluded += tx.GetHash().GetHex() + ":ExceededSigOps(" 
+                    + RoundToString((double)nBlockSigOps,0) + "," +RoundToString((double)nTxSigOps,0) + ")(" 
+                    + RoundToString((double)MAX_BLOCK_SIGOPS,0) + ");";
             
                 continue;
-			}
+            }
 
             if (!tx.ConnectInputs(txdb, mapInputs, mapTestPoolTmp, CDiskTxPos(1,1,1), pindexPrev, false, true))
-			{
-				if (fDebug10) printf("Unable to connect inputs for tx %s ",tx.GetHash().GetHex().c_str());
-				msMiningErrorsExcluded += tx.GetHash().GetHex() + ":UnableToConnectInputs();";
+            {
+                if (fDebug10) printf("Unable to connect inputs for tx %s ",tx.GetHash().GetHex().c_str());
+                msMiningErrorsExcluded += tx.GetHash().GetHex() + ":UnableToConnectInputs();";
                 continue;
-			}
+            }
             mapTestPoolTmp[tx.GetHash()] = CTxIndex(CDiskTxPos(1,1,1), tx.vout.size());
             swap(mapTestPool, mapTestPoolTmp);
 
             // Added
-			msMiningErrorsIncluded += tx.GetHash().GetHex() + ";";
+            msMiningErrorsIncluded += tx.GetHash().GetHex() + ";";
             pblock->vtx.push_back(tx);
             nBlockSize += nTxSize;
             ++nBlockTx;
@@ -431,8 +431,8 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
             {
                 printf("priority %.1f feeperkb %.1f txid %s\n",
                        dPriority, dFeePerKb, tx.GetHash().ToString().c_str());
-		    }
-		
+            }
+        
             // Add transactions that depend on this one to the priority queue
             uint256 hash = tx.GetHash();
             if (mapDependers.count(hash))
@@ -457,33 +457,33 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 
         if (fDebug10 || GetBoolArg("-printpriority"))
             printf("CreateNewBlock(): total size %" PRIu64 "\n", nBlockSize);
-		//Add Boinc Hash - R HALFORD - 11-28-2014 - Add CPID v2
-		MiningCPID miningcpid = GetNextProject(false);
-		uint256 pbh = 0;
-		if (pindexPrev) pbh=pindexPrev->GetBlockHash();
-	    miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pbh);
-		miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
-		//12-9-2014 Verify RSA Weight is actually in the block
-		miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-		double out_por = 0;
-		double out_interest=0;
-		double dAccrualAge = 0;
-		double dMagnitudeUnit = 0;
-		double dAvgMag = 0;
-		//Halford: Use current time since we are creating a new stake
-		StructCPID st1 = GetLifetimeCPID(GlobalCPUMiningCPID.cpid,"CreateNewBlock()");
+        //Add Boinc Hash - R HALFORD - 11-28-2014 - Add CPID v2
+        MiningCPID miningcpid = GetNextProject(false);
+        uint256 pbh = 0;
+        if (pindexPrev) pbh=pindexPrev->GetBlockHash();
+        miningcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, pbh);
+        miningcpid.lastblockhash = pindexPrev->GetBlockHash().GetHex();
+        //12-9-2014 Verify RSA Weight is actually in the block
+        miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
+        double out_por = 0;
+        double out_interest=0;
+        double dAccrualAge = 0;
+        double dMagnitudeUnit = 0;
+        double dAvgMag = 0;
+        //Halford: Use current time since we are creating a new stake
+        StructCPID st1 = GetLifetimeCPID(GlobalCPUMiningCPID.cpid,"CreateNewBlock()");
 
-		GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,0,pindexBest->nTime,pindexBest,"createnewblock",
-			out_por,out_interest,dAccrualAge,dMagnitudeUnit,dAvgMag);
-	
-		miningcpid.ResearchSubsidy = out_por;
-		miningcpid.InterestSubsidy = out_interest;
-		miningcpid.enccpid = ""; //CPID V1 Boinc RunTime enc key
-		miningcpid.encboincpublickey = "";
-		miningcpid.encaes = "";
-		std::string hashBoinc = SerializeBoincBlock(miningcpid);
-	    if (fDebug10 && LessVerbose(10))  printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
-		pblock->vtx[0].hashBoinc = hashBoinc;
+        GetProofOfStakeReward(1,nFees,GlobalCPUMiningCPID.cpid,false,0,pindexBest->nTime,pindexBest,"createnewblock",
+            out_por,out_interest,dAccrualAge,dMagnitudeUnit,dAvgMag);
+    
+        miningcpid.ResearchSubsidy = out_por;
+        miningcpid.InterestSubsidy = out_interest;
+        miningcpid.enccpid = ""; //CPID V1 Boinc RunTime enc key
+        miningcpid.encboincpublickey = "";
+        miningcpid.encaes = "";
+        std::string hashBoinc = SerializeBoincBlock(miningcpid);
+        if (fDebug10 && LessVerbose(10))  printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
+        pblock->vtx[0].hashBoinc = hashBoinc;
 
         if (!fProofOfStake)
             pblock->vtx[0].vout[0].nValue = GetProofOfWorkReward(nFees, GetAdjustedTime(),nHeight);
@@ -493,17 +493,17 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
 
         // Fill in header  
         pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
-		if (!fProofOfStake)
-		{
+        if (!fProofOfStake)
+        {
 
-			pblock->nTime          = max(pindexPrev->GetPastTimeLimit()+1, pblock->GetMaxTransactionTime());
-			pblock->nTime          = max(pblock->GetBlockTime(), PastDrift(pindexPrev->GetBlockTime(), nHeight));
-		}
-		else
-		{
-						pblock->nTime      =     max(pblock->GetMaxTransactionTime(),GetAdjustedTime());
-				 	    pblock->nTime      =     pblock->vtx[1].nTime; //same as coinstake timestamp
-		}
+            pblock->nTime          = max(pindexPrev->GetPastTimeLimit()+1, pblock->GetMaxTransactionTime());
+            pblock->nTime          = max(pblock->GetBlockTime(), PastDrift(pindexPrev->GetBlockTime(), nHeight));
+        }
+        else
+        {
+                        pblock->nTime      =     max(pblock->GetMaxTransactionTime(),GetAdjustedTime());
+                        pblock->nTime      =     pblock->vtx[1].nTime; //same as coinstake timestamp
+        }
 
         if (!fProofOfStake)
             pblock->UpdateTime(pindexPrev);
@@ -600,10 +600,10 @@ bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
     {
         LOCK(cs_main);
         if (pblock->hashPrevBlock != hashBestChain)
-		{
-			msMiningErrors6 = "Generated block is stale.";
+        {
+            msMiningErrors6 = "Generated block is stale.";
             return error("CheckWork[] : generated block is stale");
-		}
+        }
 
         // Remove key from key pool
         reservekey.KeepKey();
@@ -616,12 +616,12 @@ bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
 
         // Process this block the same as if we had received it from another node
         if (!ProcessBlock(NULL, pblock, true))
-		{
-			msMiningErrors6 = "Block not accepted.";
+        {
+            msMiningErrors6 = "Block not accepted.";
             return error("CheckWork[] : ProcessBlock, block not accepted");
-		}
+        }
     }
-		
+        
     return true;
 }
 
@@ -651,108 +651,108 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
     if(!pblock->IsProofOfStake())
         return error("CheckStake() : %s is not a proof-of-stake block", hashBlock.GetHex().c_str());
     // verify hash target and signature of coinstake tx
-	if (pblock->vtx.size() < 1)
-	{
-		printf("CheckStake::HashBoinc too small\r\n");
-		return error("CheckStake()::HashBoinc too small");
-	}
-	if (pblock->nNonce < 10)
-	{
-		if (fDebug10) printf("CheckStake::Nonce too low\r\n");
-		nLastBlockSubmitted = 0;
-		return false;
-	}
+    if (pblock->vtx.size() < 1)
+    {
+        printf("CheckStake::HashBoinc too small\r\n");
+        return error("CheckStake()::HashBoinc too small");
+    }
+    if (pblock->nNonce < 10)
+    {
+        if (fDebug10) printf("CheckStake::Nonce too low\r\n");
+        nLastBlockSubmitted = 0;
+        return false;
+    }
 
 
-	//1-20-2015 Ensure this stake is above the minimum threshold; otherwise, vehemently reject
-	double PORDiff = GetBlockDifficulty(pblock->nBits);
-	MiningCPID boincblock = DeserializeBoincBlock(pblock->vtx[0].hashBoinc);
-	if (boincblock.cpid != "INVESTOR" && pindexBest->nHeight > nGrandfather)
-	{
-    		if (boincblock.projectname.empty() && !IsResearchAgeEnabled(pindexBest->nHeight)) 	return error("CheckStake()::PoR Project Name invalid");
-			if (!IsCPIDValidv2(boincblock,pindexBest->nHeight))
-			{
-					return error("Bad CPID (Generated By Me) : height %f, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc %s",(double)pindexBest->nHeight,
-							boincblock.cpid.c_str(),boincblock.cpidv2.c_str(),
-							boincblock.lastblockhash.c_str(), pblock->vtx[0].hashBoinc.c_str());
-			}
-	}
+    //1-20-2015 Ensure this stake is above the minimum threshold; otherwise, vehemently reject
+    double PORDiff = GetBlockDifficulty(pblock->nBits);
+    MiningCPID boincblock = DeserializeBoincBlock(pblock->vtx[0].hashBoinc);
+    if (boincblock.cpid != "INVESTOR" && pindexBest->nHeight > nGrandfather)
+    {
+            if (boincblock.projectname.empty() && !IsResearchAgeEnabled(pindexBest->nHeight))   return error("CheckStake()::PoR Project Name invalid");
+            if (!IsCPIDValidv2(boincblock,pindexBest->nHeight))
+            {
+                    return error("Bad CPID (Generated By Me) : height %f, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc %s",(double)pindexBest->nHeight,
+                            boincblock.cpid.c_str(),boincblock.cpidv2.c_str(),
+                            boincblock.lastblockhash.c_str(), pblock->vtx[0].hashBoinc.c_str());
+            }
+    }
 
-	//Verify research age in case we staked back to back blocks
-	double out_por = 0;
-	double out_interest=0;
-	double dAccrualAge = 0;
-	double dMagnitudeUnit = 0;
-	double dAvgMagnitude = 0;
-	int64_t nCoinAge = 0;
-	int64_t nFees = 0;		
-	//Checking Stake for Create CoinStake - int64_t nCalculatedResearch =
-	GetProofOfStakeReward(nCoinAge, nFees, boincblock.cpid, true, 0, pindexBest->nTime, 
-		pindexBest,"checkstake", out_por, out_interest, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+    //Verify research age in case we staked back to back blocks
+    double out_por = 0;
+    double out_interest=0;
+    double dAccrualAge = 0;
+    double dMagnitudeUnit = 0;
+    double dAvgMagnitude = 0;
+    int64_t nCoinAge = 0;
+    int64_t nFees = 0;      
+    //Checking Stake for Create CoinStake - int64_t nCalculatedResearch =
+    GetProofOfStakeReward(nCoinAge, nFees, boincblock.cpid, true, 0, pindexBest->nTime, 
+        pindexBest,"checkstake", out_por, out_interest, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 
-	if (boincblock.cpid != "INVESTOR" && out_por > 1)
-	{
-			// Research Age 8-9-2015
-			if (IsResearchAgeEnabled(pindexBest->nHeight))
-			{
-					StructCPID st1 = GetLifetimeCPID(boincblock.cpid,"CheckStake()");
-					if (boincblock.ResearchSubsidy > (out_por+1))
-					{
-						    if (fDebug3) printf("CheckStake[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and out_por %f with Out_Interest %f for CPID %s ",
-								(double)boincblock.InterestSubsidy,
-								(double)boincblock.ResearchSubsidy,(double)out_por,(double)out_interest,boincblock.cpid.c_str());
-							
-							return error("CheckStake[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and out_por %f with Out_Interest %f for CPID %s ",
-								(double)boincblock.InterestSubsidy,
-								(double)boincblock.ResearchSubsidy,(double)out_por,(double)out_interest,boincblock.cpid.c_str());
-				
-					}
-		
-			}
-	}
-	
-
-	
-	double total_subsidy = boincblock.ResearchSubsidy + boincblock.InterestSubsidy;
+    if (boincblock.cpid != "INVESTOR" && out_por > 1)
+    {
+            // Research Age 8-9-2015
+            if (IsResearchAgeEnabled(pindexBest->nHeight))
+            {
+                    StructCPID st1 = GetLifetimeCPID(boincblock.cpid,"CheckStake()");
+                    if (boincblock.ResearchSubsidy > (out_por+1))
+                    {
+                            if (fDebug3) printf("CheckStake[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and out_por %f with Out_Interest %f for CPID %s ",
+                                (double)boincblock.InterestSubsidy,
+                                (double)boincblock.ResearchSubsidy,(double)out_por,(double)out_interest,boincblock.cpid.c_str());
+                            
+                            return error("CheckStake[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and out_por %f with Out_Interest %f for CPID %s ",
+                                (double)boincblock.InterestSubsidy,
+                                (double)boincblock.ResearchSubsidy,(double)out_por,(double)out_interest,boincblock.cpid.c_str());
+                
+                    }
+        
+            }
+    }
     
-	if (fDebug10) printf("CheckStake[]: TotalSubsidy %f, cpid %s, Res %f, Interest %f, hb: %s \r\n",
-					(double)total_subsidy, boincblock.cpid.c_str(),	boincblock.ResearchSubsidy,boincblock.InterestSubsidy,pblock->vtx[0].hashBoinc.c_str());
-			
-	if (total_subsidy < MintLimiter(PORDiff,boincblock.RSAWeight,boincblock.cpid,pblock->GetBlockTime() ))
-	{
-			//Prevent Hackers from spamming the network with small blocks
-			if (fDebug10) printf("****CheckStake[]: Total Mint too Small %s, Res %f, Interest %f, hash %s \r\n",boincblock.cpid.c_str(),boincblock.ResearchSubsidy,boincblock.InterestSubsidy,pblock->vtx[0].hashBoinc.c_str());
-			return false;
-			//	return error("*****CheckStake[] : Total Mint too Small, %f",(double)boincblock.ResearchSubsidy+boincblock.InterestSubsidy);
-	}
-			
-	if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc, true, pblock->nNonce))
-	{	
-		if (fDebug3) printf("Hash boinc %s",pblock->vtx[0].hashBoinc.c_str());
+
+    
+    double total_subsidy = boincblock.ResearchSubsidy + boincblock.InterestSubsidy;
+    
+    if (fDebug10) printf("CheckStake[]: TotalSubsidy %f, cpid %s, Res %f, Interest %f, hb: %s \r\n",
+                    (double)total_subsidy, boincblock.cpid.c_str(), boincblock.ResearchSubsidy,boincblock.InterestSubsidy,pblock->vtx[0].hashBoinc.c_str());
+            
+    if (total_subsidy < MintLimiter(PORDiff,boincblock.RSAWeight,boincblock.cpid,pblock->GetBlockTime() ))
+    {
+            //Prevent Hackers from spamming the network with small blocks
+            if (fDebug10) printf("****CheckStake[]: Total Mint too Small %s, Res %f, Interest %f, hash %s \r\n",boincblock.cpid.c_str(),boincblock.ResearchSubsidy,boincblock.InterestSubsidy,pblock->vtx[0].hashBoinc.c_str());
+            return false;
+            //  return error("*****CheckStake[] : Total Mint too Small, %f",(double)boincblock.ResearchSubsidy+boincblock.InterestSubsidy);
+    }
+            
+    if (!CheckProofOfStake(mapBlockIndex[pblock->hashPrevBlock], pblock->vtx[1], pblock->nBits, proofHash, hashTarget, pblock->vtx[0].hashBoinc, true, pblock->nNonce))
+    {   
+        if (fDebug3) printf("Hash boinc %s",pblock->vtx[0].hashBoinc.c_str());
         return error("CheckStake() : proof-of-stake checking failed");
-	}
-		
+    }
+        
 
     //// debug print
-	double block_value = CoinToDouble(pblock->vtx[1].GetValueOut());
-	std::string sBlockValue = RoundToString(block_value,4);	
-	//Submit the block during the public key address second
-	
+    double block_value = CoinToDouble(pblock->vtx[1].GetValueOut());
+    std::string sBlockValue = RoundToString(block_value,4); 
+    //Submit the block during the public key address second
+    
     if (fDebug3) printf("CheckStake() : new proof-of-stake block found, BlockValue %s, \r\n hash: %s \nproofhash: %s  \ntarget: %s\n",
-					sBlockValue.c_str(), hashBlock.GetHex().c_str(), proofHash.GetHex().c_str(), hashTarget.GetHex().c_str());
-	if (fDebug)     pblock->print();
+                    sBlockValue.c_str(), hashBlock.GetHex().c_str(), proofHash.GetHex().c_str(), hashTarget.GetHex().c_str());
+    if (fDebug)     pblock->print();
     if (fDebug) printf("out %s\n", FormatMoney(pblock->vtx[1].GetValueOut()).c_str());
 
     // Found a solution
     {
         LOCK(cs_main);
         if (pblock->hashPrevBlock != hashBestChain)
-		{
-			msMiningErrors6="CheckStake[]: Generated block is stale.";
+        {
+            msMiningErrors6="CheckStake[]: Generated block is stale.";
             return error("CheckStake[] : generated block is stale");
-		}
+        }
 
-		
+        
         // Track how many getdata requests this block gets
         {
             LOCK(wallet.cs_wallet);
@@ -760,18 +760,18 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
         }
 
         // Process this block the same as if we had received it from another node
-		//Halford - Ensure Blocks have a minimum time spacing (allow newbies to participate easily)
-		if (!IsLockTimeWithinMinutes(nLastBlockSubmitted,5)) 
-		{
-			nLastBlockSubmitted = GetAdjustedTime();
-			if (!ProcessBlock(NULL, pblock, true))
-			{
-				msMiningErrors6="Block vehemently rejected.";
-				return error("CheckStake[] : ProcessBlock (by me), but block not accepted");
-			}
-		}
+        //Halford - Ensure Blocks have a minimum time spacing (allow newbies to participate easily)
+        if (!IsLockTimeWithinMinutes(nLastBlockSubmitted,5)) 
+        {
+            nLastBlockSubmitted = GetAdjustedTime();
+            if (!ProcessBlock(NULL, pblock, true))
+            {
+                msMiningErrors6="Block vehemently rejected.";
+                return error("CheckStake[] : ProcessBlock (by me), but block not accepted");
+            }
+        }
     }
-	nLastBlockSolved = GetAdjustedTime();
+    nLastBlockSolved = GetAdjustedTime();
     return true;
 
 }
@@ -786,79 +786,79 @@ void StakeMiner(CWallet *pwallet)
     RenameThread("grc-stake-miner");
 
     bool fTryToSync = true;
-	///////////////////////  Auto Unlock Feature for Research Miner
-	if (pwallet->IsLocked())
-		{
-			//11-5-2014 R Halford - If wallet is locked - see if user has an encrypted password stored:
-			std::string passphrase = "";
-			if (mapArgs.count("-autounlock"))
-			{
-				passphrase = GetArg("-autounlock", "");
-			}
-			if (passphrase.length() > 1)
-			{
-				std::string decrypted = AdvancedDecryptWithHWID(passphrase);
-				//Unlock the wallet for 10 days (Equivalent to: walletpassphrase mylongpass 999999) FOR STAKING ONLY!
-				int64_t nSleepTime = 9999999;
-				SecureString strWalletPass;
-				strWalletPass.reserve(100);
-				strWalletPass = decrypted.c_str();
-			    if (strWalletPass.length() > 0)
-			    {
-					if (!pwallet->Unlock(strWalletPass))
-					{
-						printf("GridcoinResearchMiner:AutoUnlock:Error: The wallet passphrase entered was incorrect.");
-					}
-					else
-					{
-						NewThread(ThreadTopUpKeyPool,NULL);
-						int64_t* pnSleepTime = new int64_t(nSleepTime);
-						NewThread(ThreadCleanWalletPassphrase, pnSleepTime);
-						fWalletUnlockStakingOnly = true;
-					}
-				}
-			}
-		}
-	
-	// End of AutoUnlock Feature
+    ///////////////////////  Auto Unlock Feature for Research Miner
+    if (pwallet->IsLocked())
+        {
+            //11-5-2014 R Halford - If wallet is locked - see if user has an encrypted password stored:
+            std::string passphrase = "";
+            if (mapArgs.count("-autounlock"))
+            {
+                passphrase = GetArg("-autounlock", "");
+            }
+            if (passphrase.length() > 1)
+            {
+                std::string decrypted = AdvancedDecryptWithHWID(passphrase);
+                //Unlock the wallet for 10 days (Equivalent to: walletpassphrase mylongpass 999999) FOR STAKING ONLY!
+                int64_t nSleepTime = 9999999;
+                SecureString strWalletPass;
+                strWalletPass.reserve(100);
+                strWalletPass = decrypted.c_str();
+                if (strWalletPass.length() > 0)
+                {
+                    if (!pwallet->Unlock(strWalletPass))
+                    {
+                        printf("GridcoinResearchMiner:AutoUnlock:Error: The wallet passphrase entered was incorrect.");
+                    }
+                    else
+                    {
+                        NewThread(ThreadTopUpKeyPool,NULL);
+                        int64_t* pnSleepTime = new int64_t(nSleepTime);
+                        NewThread(ThreadCleanWalletPassphrase, pnSleepTime);
+                        fWalletUnlockStakingOnly = true;
+                    }
+                }
+            }
+        }
+    
+    // End of AutoUnlock Feature
 
 
     while (true)
     {
 Inception:
         if (fShutdown)
-		{
-			printf("ResearchMiner:ShuttingDown..");
+        {
+            printf("ResearchMiner:ShuttingDown..");
             return;
-		}
+        }
 
-		
+        
         while (pwallet->IsLocked())
         {
             nLastCoinStakeSearchInterval = 0;
             MilliSleep(1000);
             if (fShutdown)
-			{
-				printf("ResearchMiner:Exiting(WalletLocked)");
+            {
+                printf("ResearchMiner:Exiting(WalletLocked)");
                 return;
-			}
+            }
         }
 
-		int iFutile=0;
-		while (!bNetAveragesLoaded)
-		{
-			if (LessVerbose(100) && msPrimaryCPID != "INVESTOR") printf("ResearchMiner:Net averages not yet loaded...");
-						
-			iFutile++;
-			if (iFutile > 50)
-			{
-				iFutile = 0;
-				goto Inception;				
-			}
-			MilliSleep(250);
-		}
+        int iFutile=0;
+        while (!bNetAveragesLoaded)
+        {
+            if (LessVerbose(100) && msPrimaryCPID != "INVESTOR") printf("ResearchMiner:Net averages not yet loaded...");
+                        
+            iFutile++;
+            if (iFutile > 50)
+            {
+                iFutile = 0;
+                goto Inception;             
+            }
+            MilliSleep(250);
+        }
 
-					
+                    
 
         while (vNodes.empty() || IsInitialBlockDownload())
         {
@@ -866,10 +866,10 @@ Inception:
             fTryToSync = true;
             MilliSleep(1);
             if (fShutdown)
-			{
-				printf("StakeMiner:Exiting(InitialBlockDownload)");
-				return;
-			}
+            {
+                printf("StakeMiner:Exiting(InitialBlockDownload)");
+                return;
+            }
         }
 
         if (fTryToSync)
@@ -877,58 +877,58 @@ Inception:
             fTryToSync = false;
             if (vNodes.size() < 3 || nBestHeight < GetNumBlocksOfPeers())
             {
-			    MilliSleep(1);
+                MilliSleep(1);
                 continue;
             }
         }
 Begin:
-		
-	
+        
+    
         //
         // Create new block
         //
         int64_t nFees;
-		
+        
         std::unique_ptr<CBlock> pblock(CreateNewBlock(pwallet, true, &nFees));
         if (!pblock.get())
-		{
-			//This can happen after reharvesting CPIDs... Because CreateNewBlock() requires a valid CPID..  Start Over.
-			if (fDebug10) printf(".StakeMiner Starting.");
-			MilliSleep(1);
-			goto Begin;
-		}
-		
+        {
+            //This can happen after reharvesting CPIDs... Because CreateNewBlock() requires a valid CPID..  Start Over.
+            if (fDebug10) printf(".StakeMiner Starting.");
+            MilliSleep(1);
+            goto Begin;
+        }
+        
 
-		//Verify we are still on the main chain
-	
-		if (IsLockTimeWithinMinutes(nLastBlockSolved,5)) 
-		{
-				if (fDebug10) printf("=");
-				MilliSleep(1);
-				goto Begin;
-		}
+        //Verify we are still on the main chain
+    
+        if (IsLockTimeWithinMinutes(nLastBlockSolved,5)) 
+        {
+                if (fDebug10) printf("=");
+                MilliSleep(1);
+                goto Begin;
+        }
 
-	    // Trying to sign a block
-			
+        // Trying to sign a block
+            
         if (pblock->SignBlock(*pwallet, nFees))
         {
 
             SetThreadPriority(THREAD_PRIORITY_NORMAL);
-			bool Staked = CheckStake(pblock.get(), *pwallet);
+            bool Staked = CheckStake(pblock.get(), *pwallet);
 
-			if (Staked)
-			{
-				msMiningErrors = "Stake block accepted!";
-				printf("Stake block accepted!\r\n");
-		  	    SetThreadPriority(THREAD_PRIORITY_LOWEST);
-        		mdPORNonce=0;
-			}
-			else
-			{
-				msMiningErrors = "Stake block rejected";
-				if (fDebug) printf("Stake block rejected \r\n");
-				MilliSleep(1000);
-			}
+            if (Staked)
+            {
+                msMiningErrors = "Stake block accepted!";
+                printf("Stake block accepted!\r\n");
+                SetThreadPriority(THREAD_PRIORITY_LOWEST);
+                mdPORNonce=0;
+            }
+            else
+            {
+                msMiningErrors = "Stake block rejected";
+                if (fDebug) printf("Stake block rejected \r\n");
+                MilliSleep(1000);
+            }
             SetThreadPriority(THREAD_PRIORITY_LOWEST);
             MilliSleep(500);
         }

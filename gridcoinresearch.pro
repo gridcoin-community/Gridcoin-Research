@@ -196,6 +196,7 @@ HEADERS += src/qt/bitcoingui.h \
     src/base58.h \
     src/bignum.h \
     src/block.h \
+    src/beacon.h \
     src/checkpoints.h \
     src/compat.h \
     src/coincontrol.h \
@@ -262,9 +263,8 @@ HEADERS += src/qt/bitcoingui.h \
     src/clientversion.h \
     src/threadsafety.h \
     src/cpid.h \
-    src/sql.h \
-    src/upgrader.h
-
+    src/upgrader.h \
+    src/boinc.h
 
 
 SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
@@ -282,6 +282,7 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/bitcoinaddressvalidator.cpp \
     src/alert.cpp \
     src/block.cpp \
+    src/beacon.cpp \
     src/version.cpp \
     src/sync.cpp \
     src/util.cpp \
@@ -339,8 +340,8 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/scrypt.cpp \
     src/pbkdf2.cpp \
     src/cpid.cpp \
-    src/sql.cpp \
-    src/upgrader.cpp
+    src/upgrader.cpp \
+    src/boinc.cpp
 
 !win32 {
     HEADERS += src/qt/votingdialog.h
@@ -385,6 +386,16 @@ isEmpty(QMAKE_LRELEASE) {
     win32:QMAKE_LRELEASE = $$[QT_INSTALL_BINS]\\lrelease.exe
     else:QMAKE_LRELEASE = $$[QT_INSTALL_BINS]/lrelease
 }
+
+unix {
+    target.path = /usr/bin
+    INSTALLS += target
+
+    pixmaps.path = /usr/share/pixmaps
+    pixmaps.files = share/pixmaps/grc-small.png
+    INSTALLS += pixmaps
+}
+
 isEmpty(QM_DIR):QM_DIR = $$PWD/src/qt/locale
 # automatically build translations, so they can be included in resource file
 TSQM.name = lrelease ${QMAKE_FILE_IN}

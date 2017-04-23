@@ -403,7 +403,7 @@ Copyright © 2014 The Gridcoin developers</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../bitcoingui.cpp" line="+208"/>
+        <location filename="../bitcoingui.cpp" line="+201"/>
         <source>Gridcoin</source>
         <translation type="unfinished"></translation>
     </message>
@@ -414,12 +414,12 @@ Copyright © 2014 The Gridcoin developers</source>
     </message>
     <message>
         <location line="+119"/>
-        <location line="+800"/>
+        <location line="+805"/>
         <source>Tabs toolbar</source>
         <translation type="unfinished">Панель вкладок</translation>
     </message>
     <message>
-        <location line="-789"/>
+        <location line="-794"/>
         <source>Green bar</source>
         <translation type="unfinished"></translation>
     </message>
@@ -531,12 +531,12 @@ Copyright © 2014 The Gridcoin developers</source>
     </message>
     <message>
         <location line="+6"/>
-        <location line="+173"/>
+        <location line="+171"/>
         <source>&amp;Rebuild Block Chain</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-172"/>
+        <location line="-170"/>
         <source>Rebuild Block Chain</source>
         <translation type="unfinished"></translation>
     </message>
@@ -627,32 +627,24 @@ Copyright © 2014 The Gridcoin developers</source>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+604"/>
+        <location line="+612"/>
         <source>New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-597"/>
+        <location line="-605"/>
+        <location line="+4"/>
         <source>&amp;Voting</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-3"/>
+        <location line="+4"/>
         <source>Voting</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>&amp;Reserved - Voting Linux</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Voting - Linux</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>&amp;Galaza (Game)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -807,12 +799,12 @@ Copyright © 2014 The Gridcoin developers</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+14"/>
         <source>&amp;Advanced</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+74"/>
+        <location line="+82"/>
         <location line="+9"/>
         <source>[testnet]</source>
         <translation type="unfinished">[тестовая сеть]</translation>
@@ -824,7 +816,7 @@ Copyright © 2014 The Gridcoin developers</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location line="+79"/>
+        <location line="+82"/>
         <source>%n active connection(s) to Gridcoin network</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -1992,6 +1984,80 @@ Address: %4
     </message>
 </context>
 <context>
+    <name>NewPollDialog</name>
+    <message>
+        <location filename="../votingdialog.cpp" line="+911"/>
+        <location line="+96"/>
+        <source>Create Poll</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-81"/>
+        <source>Title: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Days: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Question: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Discussion URL: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Share Type: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Add Item</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Remove Item</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Clear All</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <source>Creating poll failed! Title is missing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Creating poll failed! Days value is missing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Creating poll failed! Question is missing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Creating poll failed! URL is missing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Creating poll failed! Answer is missing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>OpenURIDialog</name>
     <message>
         <source>Open URI</source>
@@ -2667,7 +2733,7 @@ Address: %4
         <location line="+37"/>
         <location line="+39"/>
         <location line="+273"/>
-        <location filename="../rpcconsole.cpp" line="+392"/>
+        <location filename="../rpcconsole.cpp" line="+386"/>
         <source>N/A</source>
         <translation>Н/Д</translation>
     </message>
@@ -3770,7 +3836,7 @@ Address: %4
 <context>
     <name>TransactionDesc</name>
     <message>
-        <location filename="../transactiondesc.cpp" line="+37"/>
+        <location filename="../transactiondesc.cpp" line="+38"/>
         <source>Open until %1</source>
         <translation>Открыто до %1</translation>
     </message>
@@ -4018,7 +4084,7 @@ Address: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../transactiondescdialog.cpp" line="+91"/>
+        <location filename="../transactiondescdialog.cpp" line="+90"/>
         <source>Gridcoin Coin Tracking System</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4409,6 +4475,212 @@ Address: %4
     </message>
 </context>
 <context>
+    <name>VotingChartDialog</name>
+    <message>
+        <location filename="../votingdialog.cpp" line="-370"/>
+        <source>Poll Results</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+56"/>
+        <source>Q: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-50"/>
+        <location line="+51"/>
+        <source>Discussion URL: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-39"/>
+        <source>Chart</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>List</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+25"/>
+        <source>Best Answer: </source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>VotingDialog</name>
+    <message>
+        <location line="-340"/>
+        <source>Gridcoin Voting System 1.1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Active Polls (Right Click to Vote)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Filter: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Reload Polls</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Load History</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Create Poll</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>...loading data!</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>VotingTableModel</name>
+    <message>
+        <location line="-406"/>
+        <source>#</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Title</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Expiration</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Share Type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Question</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+165"/>
+        <source>Answers</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-164"/>
+        <source># Voters</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Total Shares</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>URL</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Best Answer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+151"/>
+        <source>Row Number.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Title.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Expiration.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Share Type.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Question.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Total Participants.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Total Shares.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>URL.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Best Answer.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>VotingVoteDialog</name>
+    <message>
+        <location line="+537"/>
+        <source>PlaceVote</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Q: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Discussion URL: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Best Answer: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Vote</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Vote failed! Select one or more items to vote.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>WalletFrame</name>
     <message>
         <source>No wallet has been loaded.</source>
@@ -4422,7 +4694,7 @@ Address: %4
         <translation type="vanished">Отправка</translation>
     </message>
     <message>
-        <location filename="../walletmodel.cpp" line="+279"/>
+        <location filename="../walletmodel.cpp" line="+278"/>
         <source>Sending...</source>
         <translation type="unfinished"></translation>
     </message>

@@ -54,12 +54,12 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     <message>
         <location line="-11"/>
         <source>&amp;New Address</source>
-        <translation>&amp;Novo Endereço></translation>
+        <translation>&amp;Novo Endereço&gt;</translation>
     </message>
     <message>
         <location line="-49"/>
         <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
-        <translation>Estes são os seus endereços do Gridcoin para receber pagamentos. Pode dar diferentes nomes a cada remetente, para que saiba quem lhe está a pagar></translation>
+        <translation>Estes são os seus endereços do Gridcoin para receber pagamentos. Pode dar diferentes nomes a cada remetente, para que saiba quem lhe está a pagar&gt;</translation>
     </message>
     <message>
         <location line="+63"/>
@@ -69,7 +69,7 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     <message>
         <location line="+11"/>
         <source>Show &amp;QR Code</source>
-        <translation>Código QR></translation>
+        <translation>Código QR&gt;</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -184,7 +184,7 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     </message>
     <message>
         <source>Enter the new passphrase to the wallet.&lt;br/&gt;Please use a passphrase of &lt;b&gt;10 or more random characters&lt;/b&gt;, or &lt;b&gt;eight or more words&lt;/b&gt;.</source>
-        <translation>Escreva a nova frase de segurança da sua carteira. &lt;br/&gt; Por favor, use uma frase de &lt;b&gt;10 ou mais caracteres aleatórios,&lt;/b&gt; ou &lt;b&gt;oito ou mais palavras&lt;/b&gt;.</translation>
+        <translation type="vanished">Escreva a nova frase de segurança da sua carteira. &lt;br/&gt; Por favor, use uma frase de &lt;b&gt;10 ou mais caracteres aleatórios,&lt;/b&gt; ou &lt;b&gt;oito ou mais palavras&lt;/b&gt;.</translation>
     </message>
     <message>
         <location filename="../askpassphrasedialog.cpp" line="+38"/>
@@ -308,17 +308,17 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+1008"/>
+        <location filename="../bitcoingui.cpp" line="+999"/>
         <source>Sign &amp;message...</source>
         <translation>Assinar &amp;mensagem...</translation>
     </message>
     <message>
-        <location line="+338"/>
+        <location line="+348"/>
         <source>Synchronizing with network...</source>
         <translation>Sincronizando com a rede...</translation>
     </message>
     <message>
-        <location line="-499"/>
+        <location line="-507"/>
         <source>&amp;Overview</source>
         <translation>Visão&amp; Geral</translation>
     </message>
@@ -379,14 +379,14 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     </message>
     <message>
         <source>About &amp;Qt</source>
-        <translation>Sobre &amp;Qt</translation>
+        <translation type="vanished">Sobre &amp;Qt</translation>
     </message>
     <message>
         <source>Show information about Qt</source>
-        <translation>Mostrar informações sobre;Qt</translation>
+        <translation type="vanished">Mostrar informações sobre;Qt</translation>
     </message>
     <message>
-        <location line="+56"/>
+        <location line="+54"/>
         <source>&amp;Options...</source>
         <translation>&amp;Opções...</translation>
     </message>
@@ -406,7 +406,7 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
         <translation>Mudar &amp;Frase de segurança...</translation>
     </message>
     <message numerus="yes">
-        <location line="+346"/>
+        <location line="+356"/>
         <source>~%n block(s) remaining</source>
         <translation>
             <numerusform>~%n block remaining</numerusform>
@@ -419,17 +419,17 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
         <translation>Transferidos %1 de %2 blocos da transação do histórico (%3% realizado)</translation>
     </message>
     <message>
-        <location line="-343"/>
+        <location line="-353"/>
         <source>&amp;Export...</source>
         <translation>&amp;Exportar...</translation>
     </message>
     <message>
-        <location line="-158"/>
+        <location line="-156"/>
         <source>Send coins to a Gridcoin address</source>
         <translation>Enviar moedas para um endereço Gridcoin</translation>
     </message>
     <message>
-        <location line="+141"/>
+        <location line="+139"/>
         <source>Modify configuration options for Gridcoin</source>
         <translation>Modificar opções de configuração para o Grdicoin</translation>
     </message>
@@ -469,7 +469,7 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
         <translation>&amp;Verificar mensagem...</translation>
     </message>
     <message>
-        <location line="-801"/>
+        <location line="-799"/>
         <source>Gridcoin</source>
         <translation>Gridcoin</translation>
     </message>
@@ -484,7 +484,7 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
         <translation>&amp;Sobre o Gridcoin</translation>
     </message>
     <message>
-        <location line="+60"/>
+        <location line="+58"/>
         <source>&amp;Show / Hide</source>
         <translation>&amp;Mostrar / Ocultar</translation>
     </message>
@@ -519,8 +519,8 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
         <translation>&amp;Ajuda</translation>
     </message>
     <message>
-        <location line="-752"/>
-        <location line="+800"/>
+        <location line="-750"/>
+        <location line="+805"/>
         <source>Tabs toolbar</source>
         <translation>Barra de separadores</translation>
     </message>
@@ -537,7 +537,7 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
         <translation>Cliente Gridcoin</translation>
     </message>
     <message numerus="yes">
-        <location line="+79"/>
+        <location line="+82"/>
         <source>%n active connection(s) to Gridcoin network</source>
         <translation>
             <numerusform>%n ligação ativa à rede Gridcoin</numerusform>
@@ -578,7 +578,7 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
         </translation>
     </message>
     <message>
-        <location line="-1046"/>
+        <location line="-1054"/>
         <source>Green bar</source>
         <translation>Barra verde</translation>
     </message>
@@ -630,12 +630,12 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     </message>
     <message>
         <location line="+28"/>
-        <location line="+173"/>
+        <location line="+171"/>
         <source>&amp;Rebuild Block Chain</source>
         <translation>&amp;Reconstruir Cadeia de Blocos</translation>
     </message>
     <message>
-        <location line="-172"/>
+        <location line="-170"/>
         <source>Rebuild Block Chain</source>
         <translation>Reconstruir Cadeia de Blocos</translation>
     </message>
@@ -716,32 +716,32 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     </message>
     <message>
         <location line="+1"/>
-        <location line="+604"/>
+        <location line="+612"/>
         <source>New User Wizard</source>
         <translation>Assistente de Novo Utilizador</translation>
     </message>
     <message>
-        <location line="-597"/>
+        <location line="-605"/>
+        <location line="+4"/>
         <source>&amp;Voting</source>
         <translation>&amp;Votações</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-3"/>
+        <location line="+4"/>
         <source>Voting</source>
         <translation>Votações</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>&amp;Reserved - Voting Linux</source>
-        <translation>&amp;Reservado - Votações em Linux</translation>
+        <translation type="vanished">&amp;Reservado - Votações em Linux</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Voting - Linux</source>
-        <translation>Votações - Linux</translation>
+        <translation type="vanished">Votações - Linux</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>&amp;Galaza (Game)</source>
         <translation>&amp; Galaza (Jogo)</translation>
     </message>
@@ -783,7 +783,7 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     <message>
         <location line="+14"/>
         <source>&amp;Unlock Wallet...</source>
-        <translation>&amp;Desbloquear Carteira...></translation>
+        <translation>&amp;Desbloquear Carteira...&gt;</translation>
     </message>
     <message>
         <location line="+81"/>
@@ -791,12 +791,12 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
         <translation>&amp;Actualizar Cliente QT</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+14"/>
         <source>&amp;Advanced</source>
         <translation>&amp;Avançado</translation>
     </message>
     <message numerus="yes">
-        <location line="+288"/>
+        <location line="+299"/>
         <source>%n minute(s) ago</source>
         <translation>
             <numerusform>há %n minuto</numerusform>
@@ -1388,6 +1388,80 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     </message>
 </context>
 <context>
+    <name>NewPollDialog</name>
+    <message>
+        <location filename="../votingdialog.cpp" line="+911"/>
+        <location line="+96"/>
+        <source>Create Poll</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-81"/>
+        <source>Title: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Days: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Question: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Discussion URL: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Share Type: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Add Item</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Remove Item</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Clear All</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <source>Creating poll failed! Title is missing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Creating poll failed! Days value is missing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Creating poll failed! Question is missing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Creating poll failed! URL is missing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Creating poll failed! Answer is missing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>OptionsDialog</name>
     <message>
         <location filename="../forms/optionsdialog.ui" line="+14"/>
@@ -1682,31 +1756,31 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     </message>
     <message>
         <source>Wallet</source>
-        <translation>Carteira</translation>
+        <translation type="vanished">Carteira</translation>
     </message>
     <message>
         <source>Your current spendable balance</source>
-        <translation>O seu saldo disponí­vel para gastar</translation>
+        <translation type="vanished">O seu saldo disponí­vel para gastar</translation>
     </message>
     <message>
         <source>Immature:</source>
-        <translation>Imaturo:</translation>
+        <translation type="vanished">Imaturo:</translation>
     </message>
     <message>
         <source>Mined balance that has not yet matured</source>
-        <translation>Saldo minado que ainda não maturou</translation>
+        <translation type="vanished">Saldo minado que ainda não maturou</translation>
     </message>
     <message>
         <source>Total:</source>
-        <translation>Total:</translation>
+        <translation type="vanished">Total:</translation>
     </message>
     <message>
         <source>Your current total balance</source>
-        <translation>O seu saldo total actual</translation>
+        <translation type="vanished">O seu saldo total actual</translation>
     </message>
     <message>
         <source>&lt;b&gt;Recent transactions&lt;/b&gt;</source>
-        <translation>&lt;b&gt;Transações recentes&lt;/b&gt;</translation>
+        <translation type="vanished">&lt;b&gt;Transações recentes&lt;/b&gt;</translation>
     </message>
     <message>
         <location line="-364"/>
@@ -1795,7 +1869,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <location line="+37"/>
         <location line="+39"/>
         <location line="+273"/>
-        <location filename="../rpcconsole.cpp" line="+392"/>
+        <location filename="../rpcconsole.cpp" line="+386"/>
         <source>N/A</source>
         <translation>N/D</translation>
     </message>
@@ -1811,7 +1885,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     </message>
     <message>
         <source>Using OpenSSL version</source>
-        <translation>Usando versão OpenSSL</translation>
+        <translation type="vanished">Usando versão OpenSSL</translation>
     </message>
     <message>
         <location line="+609"/>
@@ -1820,7 +1894,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     </message>
     <message>
         <source>Network</source>
-        <translation>Rede</translation>
+        <translation type="vanished">Rede</translation>
     </message>
     <message>
         <location line="-540"/>
@@ -2547,7 +2621,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
 <context>
     <name>TransactionDesc</name>
     <message>
-        <location filename="../transactiondesc.cpp" line="+37"/>
+        <location filename="../transactiondesc.cpp" line="+38"/>
         <source>Open until %1</source>
         <translation>Aberto até %1</translation>
     </message>
@@ -2710,7 +2784,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     </message>
     <message>
         <source>Debug information</source>
-        <translation>Informação de depuração</translation>
+        <translation type="vanished">Informação de depuração</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -2784,7 +2858,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <translation>Ver Anexos</translation>
     </message>
     <message>
-        <location filename="../transactiondescdialog.cpp" line="+91"/>
+        <location filename="../transactiondescdialog.cpp" line="+90"/>
         <source>Gridcoin Coin Tracking System</source>
         <translation>Sistema de Rastreamento de Moedas do Gridcoin</translation>
     </message>
@@ -2891,7 +2965,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     </message>
     <message>
         <source>This block was not received by any other nodes and will probably not be accepted!</source>
-        <translation>Este bloco não foi recebido por outros nódulos e provavelmente não será aceite pela rede!</translation>
+        <translation type="vanished">Este bloco não foi recebido por outros nódulos e provavelmente não será aceite pela rede!</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -2920,7 +2994,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     </message>
     <message>
         <source>Mined</source>
-        <translation>Minadas</translation>
+        <translation type="vanished">Minadas</translation>
     </message>
     <message>
         <location line="+81"/>
@@ -3146,9 +3220,215 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     </message>
 </context>
 <context>
+    <name>VotingChartDialog</name>
+    <message>
+        <location filename="../votingdialog.cpp" line="-370"/>
+        <source>Poll Results</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+56"/>
+        <source>Q: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-50"/>
+        <location line="+51"/>
+        <source>Discussion URL: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-39"/>
+        <source>Chart</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>List</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+25"/>
+        <source>Best Answer: </source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>VotingDialog</name>
+    <message>
+        <location line="-340"/>
+        <source>Gridcoin Voting System 1.1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Active Polls (Right Click to Vote)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Filter: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Reload Polls</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Load History</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Create Poll</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>...loading data!</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>VotingTableModel</name>
+    <message>
+        <location line="-406"/>
+        <source>#</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Title</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Expiration</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Share Type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Question</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+165"/>
+        <source>Answers</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-164"/>
+        <source># Voters</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Total Shares</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>URL</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Best Answer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+151"/>
+        <source>Row Number.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Title.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Expiration.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Share Type.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Question.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Total Participants.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Total Shares.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>URL.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Best Answer.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>VotingVoteDialog</name>
+    <message>
+        <location line="+537"/>
+        <source>PlaceVote</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Q: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Discussion URL: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Best Answer: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Vote</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Vote failed! Select one or more items to vote.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>WalletModel</name>
     <message>
-        <location filename="../walletmodel.cpp" line="+279"/>
+        <location filename="../walletmodel.cpp" line="+278"/>
         <source>Sending...</source>
         <translation>Enviando...</translation>
     </message>

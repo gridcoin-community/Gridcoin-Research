@@ -88,7 +88,7 @@ void ExitTimeout(void* parg)
 void StartShutdown()
 {
 
-	printf("Calling start shutdown...\r\n");
+    printf("Calling start shutdown...\r\n");
 
 #ifdef QT_GUI
     // ensure we leave the Qt main loop for a clean GUI exit (Shutdown() is called in bitcoin.cpp afterwards)
@@ -108,62 +108,62 @@ void DetectShutdownThread(boost::thread_group* threadGroup)
     {
         MilliSleep(200);
         if (fRequestShutdown)
-		{
-			printf("Shutting down forcefully...");
-		}
+        {
+            printf("Shutting down forcefully...");
+        }
     }
-	printf("Shutdown thread ended.");
+    printf("Shutdown thread ended.");
 }
 
 
 void InitializeBoincProjectsNew()
 {
-	   //Initialize GlobalCPUMiningCPID
-	    GlobalCPUMiningCPID.initialized = true;
-		GlobalCPUMiningCPID.cpid="";
-		GlobalCPUMiningCPID.cpidv2 = "";
-		GlobalCPUMiningCPID.projectname ="";
-		GlobalCPUMiningCPID.rac=0;
-		GlobalCPUMiningCPID.encboincpublickey = "";
-		GlobalCPUMiningCPID.boincruntimepublickey = "";
-		GlobalCPUMiningCPID.pobdifficulty = 0;
-		GlobalCPUMiningCPID.diffbytes = 0;
-		GlobalCPUMiningCPID.email = "";
-		GlobalCPUMiningCPID.RSAWeight = 0;
+       //Initialize GlobalCPUMiningCPID
+        GlobalCPUMiningCPID.initialized = true;
+        GlobalCPUMiningCPID.cpid="";
+        GlobalCPUMiningCPID.cpidv2 = "";
+        GlobalCPUMiningCPID.projectname ="";
+        GlobalCPUMiningCPID.rac=0;
+        GlobalCPUMiningCPID.encboincpublickey = "";
+        GlobalCPUMiningCPID.boincruntimepublickey = "";
+        GlobalCPUMiningCPID.pobdifficulty = 0;
+        GlobalCPUMiningCPID.diffbytes = 0;
+        GlobalCPUMiningCPID.email = "";
+        GlobalCPUMiningCPID.RSAWeight = 0;
 
-		//Loop through projects saved in the Gridcoin Persisted Data System
-		std::string sType = "project";
-	    for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii)
-	    {
-				std::string key_name  = (*ii).first;
-			   	if (key_name.length() > sType.length())
-				{
-					if (key_name.substr(0,sType.length())==sType)
-					{
-							std::string key_value = mvApplicationCache[(*ii).first];
-							std::vector<std::string> vKey = split(key_name,";");
-							if (vKey.size() > 0)
-							{
+        //Loop through projects saved in the Gridcoin Persisted Data System
+        std::string sType = "project";
+        for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii)
+        {
+                std::string key_name  = (*ii).first;
+                if (key_name.length() > sType.length())
+                {
+                    if (key_name.substr(0,sType.length())==sType)
+                    {
+                            std::string key_value = mvApplicationCache[(*ii).first];
+                            std::vector<std::string> vKey = split(key_name,";");
+                            if (vKey.size() > 0)
+                            {
 
-								std::string project_name = vKey[1];
-								printf("Proj %s ",project_name.c_str());
-								std::string project_value = key_value;
-								boost::to_lower(project_name);
-								std::string mainProject = ToOfficialName(project_name);
-								boost::to_lower(mainProject);
-						    	StructCPID structcpid = GetStructCPID();
-								mvBoincProjects.insert(map<string,StructCPID>::value_type(mainProject,structcpid));
-								structcpid = mvBoincProjects[mainProject];
-								structcpid.initialized = true;
-								structcpid.link = "http://";
-								structcpid.projectname = mainProject;
-								mvBoincProjects[mainProject] = structcpid;
-								WHITELISTED_PROJECTS++;
+                                std::string project_name = vKey[1];
+                                printf("Proj %s ",project_name.c_str());
+                                std::string project_value = key_value;
+                                boost::to_lower(project_name);
+                                std::string mainProject = ToOfficialName(project_name);
+                                boost::to_lower(mainProject);
+                                StructCPID structcpid = GetStructCPID();
+                                mvBoincProjects.insert(map<string,StructCPID>::value_type(mainProject,structcpid));
+                                structcpid = mvBoincProjects[mainProject];
+                                structcpid.initialized = true;
+                                structcpid.link = "http://";
+                                structcpid.projectname = mainProject;
+                                mvBoincProjects[mainProject] = structcpid;
+                                WHITELISTED_PROJECTS++;
 
-							}
-					 }
-				}
-	   }
+                            }
+                     }
+                }
+       }
 
 }
 
@@ -195,11 +195,11 @@ void Shutdown(void* parg)
     static bool fExit;
     if (fFirstThread)
     {
-		 printf("gridcoinresearch exiting...\r\n");
+         printf("gridcoinresearch exiting...\r\n");
 
         fShutdown = true;
         nTransactionsUpdated++;
-		//        CTxDB().Close();
+        //        CTxDB().Close();
         bitdb.Flush(false);
         StopNode();
         bitdb.Flush(true);
@@ -250,13 +250,13 @@ bool AppInit(int argc, char* argv[])
 
     try
     {
-		boost::thread* detectShutdownThread = NULL;
+        boost::thread* detectShutdownThread = NULL;
         //
         // Parameters
         //
         // If Qt is used, parameters/bitcoin.conf are parsed in qt/bitcoin.cpp's main()
         ParseParameters(argc, argv);
-		printf("AppInit");
+        printf("AppInit");
         if (!boost::filesystem::is_directory(GetDataDir(false)))
         {
             fprintf(stderr, "Error: Specified directory does not exist\n");
@@ -290,16 +290,16 @@ bool AppInit(int argc, char* argv[])
             int ret = CommandLineRPC(argc, argv);
             exit(ret);
         }
-		detectShutdownThread = new boost::thread(boost::bind(&DetectShutdownThread, &threadGroup));
+        detectShutdownThread = new boost::thread(boost::bind(&DetectShutdownThread, &threadGroup));
 
         fRet = AppInit2();
     }
     catch (std::exception& e) {
-		printf("AppInit()Exception1");
+        printf("AppInit()Exception1");
 
         PrintException(&e, "AppInit()");
     } catch (...) {
-		printf("AppInit()Exception2");
+        printf("AppInit()Exception2");
 
         PrintException(NULL, "AppInit()");
     }
@@ -353,7 +353,7 @@ bool static Bind(const CService &addr, bool fError = true) {
 // Core-specific options shared between UI and daemon
 std::string HelpMessage()
 {
-	//gridcoinresearch ports: testnet ? 32748 : 32749;
+    //gridcoinresearch ports: testnet ? 32748 : 32749;
     string strUsage = _("Options:") + "\n" +
         "  -?                     " + _("This help message") + "\n" +
         "  -conf=<file>           " + _("Specify configuration file (default: gridcoinresearch.conf)") + "\n" +
@@ -369,7 +369,7 @@ std::string HelpMessage()
         "  -dns                   " + _("Allow DNS lookups for -addnode, -seednode and -connect") + "\n" +
         "  -port=<port>           " + _("Listen for connections on <port> (default: 32749 or testnet: 32748)") + "\n" +
         "  -maxconnections=<n>    "    + _("Maintain at most <n> connections to peers (default: 125)") + "\n" +
-		"  -maxoutboundconnections=<n>"+ _("Maximum number of outbound connections (default: 8)") + "\n" +
+        "  -maxoutboundconnections=<n>"+ _("Maximum number of outbound connections (default: 8)") + "\n" +
         "  -addnode=<ip>          " + _("Add a node to connect to and attempt to keep the connection open") + "\n" +
         "  -connect=<ip>          " + _("Connect only to the specified node(s)") + "\n" +
         "  -seednode=<ip>         " + _("Connect to a node to retrieve peer addresses, and disconnect") + "\n" +
@@ -424,7 +424,7 @@ std::string HelpMessage()
         "  -keypool=<n>           " + _("Set key pool size to <n> (default: 100)") + "\n" +
         "  -rescan                " + _("Rescan the block chain for missing wallet transactions") + "\n" +
         "  -salvagewallet         " + _("Attempt to recover private keys from a corrupt wallet.dat") + "\n" +
-		"  -zapwallettxes=<mode>  " + _("Delete all wallet transactions and only recover those parts of the blockchain through -rescan on startup\n") +
+        "  -zapwallettxes=<mode>  " + _("Delete all wallet transactions and only recover those parts of the blockchain through -rescan on startup\n") +
         "  -checkblocks=<n>       " + _("How many blocks to check at startup (default: 2500, 0 = all)") + "\n" +
         "  -checklevel=<n>        " + _("How thorough the block verification is (0-6, default: 1)") + "\n" +
         "  -loadblock=<file>      " + _("Imports blocks from external blk000?.dat file") + "\n" +
@@ -467,11 +467,11 @@ void ThreadAppInit2(void* parg)
 {
     // Make this thread recognisable
     RenameThread("grc-appinit2");
-	bGridcoinGUILoaded=false;
-	printf("Initializing GUI...");
-	AppInit2();
-	printf("GUI Loaded...");
-	bGridcoinGUILoaded = true;
+    bGridcoinGUILoaded=false;
+    printf("Initializing GUI...");
+    AppInit2();
+    printf("GUI Loaded...");
+    bGridcoinGUILoaded = true;
 }
 
 
@@ -528,40 +528,40 @@ bool AppInit2()
     // ********************************************************* Step 2: parameter interactions
 
 
-	// Gridcoin - Check to see if config is empty?
-	if (IsConfigFileEmpty())
-	{
-		   uiInterface.ThreadSafeMessageBox(
+    // Gridcoin - Check to see if config is empty?
+    if (IsConfigFileEmpty())
+    {
+           uiInterface.ThreadSafeMessageBox(
                  "Configuration file empty.  \r\n" + _("Please wait for new user wizard to start..."), "", 0);
-	}
+    }
 
-	//6-10-2014: R Halford: Updating Boost version to 1.5.5 to prevent sync issues; print the boost version to verify:
-	std::string boost_version = "";
-	std::ostringstream s;
-	s << boost_version  << "Using Boost "
+    //6-10-2014: R Halford: Updating Boost version to 1.5.5 to prevent sync issues; print the boost version to verify:
+    std::string boost_version = "";
+    std::ostringstream s;
+    s << boost_version  << "Using Boost "
           << BOOST_VERSION / 100000     << "."  // major version
           << BOOST_VERSION / 100 % 1000 << "."  // minior version
           << BOOST_VERSION % 100                // patch level
           << "\r\n";
 
-	printf("\r\nBoost Version: %s",s.str().c_str());
+    printf("\r\nBoost Version: %s",s.str().c_str());
 
-	#if defined(WIN32) && defined(QT_GUI)
-			//startWireFrameRenderer();
-	#endif
+    #if defined(WIN32) && defined(QT_GUI)
+            //startWireFrameRenderer();
+    #endif
 
 
     //Placeholder: Load Remote CPIDs Here
 
     nNodeLifespan = GetArg("-addrlifespan", 7);
 
-	
-	fUseFastIndex = GetBoolArg("-fastindex", false);
+    
+    fUseFastIndex = GetBoolArg("-fastindex", false);
 
-	nMinerSleep = GetArg("-minersleep", 500);
+    nMinerSleep = GetArg("-minersleep", 500);
 
-	CheckpointsMode = Checkpoints::STRICT;
-	//CheckpointsMode = Checkpoints::ADVISORY;
+    CheckpointsMode = Checkpoints::STRICT;
+    //CheckpointsMode = Checkpoints::ADVISORY;
 
     std::string strCpMode = GetArg("-cppolicy", "strict");
 
@@ -582,7 +582,7 @@ bool AppInit2()
     }
 
 
-	bPoolMiningMode = GetBoolArg("-poolmining");
+    bPoolMiningMode = GetBoolArg("-poolmining");
 
 
     if (mapArgs.count("-bind")) {
@@ -618,48 +618,48 @@ bool AppInit2()
         SoftSetBoolArg("-rescan", true);
     }
 
-	 if (GetBoolArg("-zapwallettxes", false)) {
+     if (GetBoolArg("-zapwallettxes", false)) {
         // -zapwallettx implies a rescan
         SoftSetBoolArg("-rescan", true);
     }
 
-	// Verify testnet is using the testnet directory for the config file:
-	std::string sTestNetSpecificArg = GetArgument("testnetarg","default");
-	printf("Using specific arg %s",sTestNetSpecificArg.c_str());
+    // Verify testnet is using the testnet directory for the config file:
+    std::string sTestNetSpecificArg = GetArgument("testnetarg","default");
+    printf("Using specific arg %s",sTestNetSpecificArg.c_str());
 
 
     // ********************************************************* Step 3: parameter-to-internal-flags
 
-	fDebug=false;
+    fDebug=false;
 
     if (fDebug)
         fDebugNet = true;
     else
         fDebugNet = GetBoolArg("-debugnet");
 
-	if (GetArg("-debug", "false")=="true")
-	{
-			fDebug = true;
-			printf("Entering debug mode.\r\n");
-	}
+    if (GetArg("-debug", "false")=="true")
+    {
+            fDebug = true;
+            printf("Entering debug mode.\r\n");
+    }
 
-	fDebug2 = false;
+    fDebug2 = false;
 
-	if (GetArg("-debug2", "false")=="true")
-	{
-			fDebug2 = true;
-			printf("Entering GRC debug mode.\r\n");
-	}
+    if (GetArg("-debug2", "false")=="true")
+    {
+            fDebug2 = true;
+            printf("Entering GRC debug mode.\r\n");
+    }
 
-	fDebug3 = false;
-	if (GetArg("-debug3", "false")=="true")
-	{
-			fDebug3 = true;
-			printf("Entering GRC debug mode.\r\n");
-	}
-	fDebug4 = (GetArg("-debug4","false")=="true");
-	fDebug5 = (GetArg("-debug5","false")=="true");
-	fDebug10= (GetArg("-debug10","false")=="true");
+    fDebug3 = false;
+    if (GetArg("-debug3", "false")=="true")
+    {
+            fDebug3 = true;
+            printf("Entering GRC debug mode.\r\n");
+    }
+    fDebug4 = (GetArg("-debug4","false")=="true");
+    fDebug5 = (GetArg("-debug5","false")=="true");
+    fDebug10= (GetArg("-debug10","false")=="true");
 
 #if !defined(WIN32) && !defined(QT_GUI)
     fDaemon = GetBoolArg("-daemon");
@@ -679,7 +679,7 @@ bool AppInit2()
     fPrintToConsole = GetBoolArg("-printtoconsole");
     fPrintToDebugger = GetBoolArg("-printtodebugger");
     fLogTimestamps = GetBoolArg("-logtimestamps");
-	fLogTimestamps = true;
+    fLogTimestamps = true;
 
     if (mapArgs.count("-timeout"))
     {
@@ -747,9 +747,9 @@ bool AppInit2()
     }
 #endif
 
-	ShrinkDebugFile();
+    ShrinkDebugFile();
     printf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
-	printf("***************************************** GRIDCOIN RESEARCH ***************************************************\r\n");
+    printf("***************************************** GRIDCOIN RESEARCH ***************************************************\r\n");
 
     printf("Gridcoin version %s (%s)\n", FormatFullVersion().c_str(), CLIENT_DATE.c_str());
     printf("Using OpenSSL version %s\n", SSLeay_version(SSLEAY_VERSION));
@@ -793,7 +793,7 @@ bool AppInit2()
                                      " your balance or transactions are incorrect you should"
                                      " restore from a backup."), strDataDir.c_str());
             uiInterface.ThreadSafeMessageBox(msg, _("Gridcoin"),
-				CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
+                CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
         }
         if (r == CDBEnv::RECOVER_FAIL)
             return InitError(_("wallet.dat corrupt, salvage failed"));
@@ -1099,31 +1099,31 @@ bool AppInit2()
     printf("Loaded %i addresses from peers.dat  %" PRId64 "ms\n",  addrman.size(), GetTimeMillis() - nStart);
 
 
-	// ********************************************************* Step 11: start node
-	uiInterface.InitMessage(_("Loading Persisted Data Cache..."));
-	//
-	std::string sOut = "";
-	if (fDebug3) printf("Loading admin Messages %f",(double)0);
-	LoadAdminMessages(true,sOut);
-	printf("Done loading Admin messages%f",(double)0);
+    // ********************************************************* Step 11: start node
+    uiInterface.InitMessage(_("Loading Persisted Data Cache..."));
+    //
+    std::string sOut = "";
+    if (fDebug3) printf("Loading admin Messages %f",(double)0);
+    LoadAdminMessages(true,sOut);
+    printf("Done loading Admin messages%f",(double)0);
 
-	InitializeBoincProjects();
-	printf("Done loading boinc projects %f",(double)0);
-	uiInterface.InitMessage(_("Loading Network Averages..."));
-	if (fDebug3) printf("Loading network averages %f",(double)0);
-	BusyWaitForTally();
-	uiInterface.InitMessage(_("Compute Neural Network Hashes..."));
+    InitializeBoincProjects();
+    printf("Done loading boinc projects %f",(double)0);
+    uiInterface.InitMessage(_("Loading Network Averages..."));
+    if (fDebug3) printf("Loading network averages %f",(double)0);
+    BusyWaitForTally();
+    uiInterface.InitMessage(_("Compute Neural Network Hashes..."));
 
-	ComputeNeuralNetworkSupermajorityHashes();
+    ComputeNeuralNetworkSupermajorityHashes();
 
-	printf("Starting CPID thread...%f",(double)0);
-	LoadCPIDsInBackground();  //This calls HarvesCPIDs(true)
+    printf("Starting CPID thread...%f",(double)0);
+    LoadCPIDsInBackground();  //This calls HarvesCPIDs(true)
 
-	uiInterface.InitMessage(_("Finding first applicable Research Project..."));
+    uiInterface.InitMessage(_("Finding first applicable Research Project..."));
 
-	#if defined(WIN32) && defined(QT_GUI)
-		//stopWireFrameRenderer();
-	#endif
+    #if defined(WIN32) && defined(QT_GUI)
+        //stopWireFrameRenderer();
+    #endif
 
     if (!CheckDiskSpace())
         return false;
@@ -1131,14 +1131,14 @@ bool AppInit2()
     RandAddSeedPerfmon();
 
     //// debug print
-	if (fDebug)
-	{
-		printf("mapBlockIndex.size() = %" PRIszu "\n",   mapBlockIndex.size());
-		printf("nBestHeight = %d\n",            nBestHeight);
-		printf("setKeyPool.size() = %" PRIszu "\n",      pwalletMain->setKeyPool.size());
-		printf("mapWallet.size() = %" PRIszu "\n",       pwalletMain->mapWallet.size());
-		printf("mapAddressBook.size() = %" PRIszu "\n",  pwalletMain->mapAddressBook.size());
-	}
+    if (fDebug)
+    {
+        printf("mapBlockIndex.size() = %" PRIszu "\n",   mapBlockIndex.size());
+        printf("nBestHeight = %d\n",            nBestHeight);
+        printf("setKeyPool.size() = %" PRIszu "\n",      pwalletMain->setKeyPool.size());
+        printf("mapWallet.size() = %" PRIszu "\n",       pwalletMain->mapWallet.size());
+        printf("mapAddressBook.size() = %" PRIszu "\n",  pwalletMain->mapAddressBook.size());
+    }
 
 
     if (!NewThread(StartNode, NULL))
@@ -1164,6 +1164,6 @@ bool AppInit2()
     while (1)
         MilliSleep(5000);
 #endif
-	printf("\r\nExiting AppInit2\r\n");
+    printf("\r\nExiting AppInit2\r\n");
     return true;
 }

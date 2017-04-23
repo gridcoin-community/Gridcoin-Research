@@ -157,9 +157,9 @@ bool LoadGridKey(std::string gridkey, std::string salt)
     OPENSSL_cleanse(chKeyGridcoin, sizeof(chKeyGridcoin));
     OPENSSL_cleanse(chIVGridcoin, sizeof(chIVGridcoin));
     EVP_BytesToKey(EVP_aes_256_cbc(), EVP_sha512(),(unsigned char *)chSalt,
-		(unsigned char *)chGridKey, 
-		strlen(chGridKey), 1,
-		chKeyGridcoin, chIVGridcoin);
+        (unsigned char *)chGridKey, 
+        strlen(chGridKey), 1,
+        chKeyGridcoin, chIVGridcoin);
     fKeySetGridcoin = true;
     return true;
 }
@@ -266,133 +266,133 @@ char FromUnsigned( unsigned char ch )
 
 std::string UnsignedVectorToString(std::vector< unsigned char > v)
 {
-	std::string s;
-	s.reserve( v.size() );
-	std::transform( v.begin(), v.end(), back_inserter( s ), FromUnsigned );
-	return s;
+    std::string s;
+    s.reserve( v.size() );
+    std::transform( v.begin(), v.end(), back_inserter( s ), FromUnsigned );
+    return s;
 }
 
 
 std::string AdvancedCrypt(std::string boinchash)
 {
 
-	try 
-	{
-	   std::vector<unsigned char> vchSecret( boinchash.begin(), boinchash.end() );
-	   std::string d1 = "                                                                                                                                        ";
-	   std::vector<unsigned char> vchCryptedSecret(d1.begin(),d1.end());
+    try 
+    {
+       std::vector<unsigned char> vchSecret( boinchash.begin(), boinchash.end() );
+       std::string d1 = "                                                                                                                                        ";
+       std::vector<unsigned char> vchCryptedSecret(d1.begin(),d1.end());
        GridEncrypt(vchSecret, vchCryptedSecret);
-	   std::string encrypted = EncodeBase64(UnsignedVectorToString(vchCryptedSecret));
-	   return encrypted;
-	} 
-	catch (std::exception &e) 
-	{
-		printf("Error while encrypting %s",boinchash.c_str());
-		return "";
-	}
-	catch(...)
-	{
-		printf("Error while encrypting 2.");
-		return "";
-	}
+       std::string encrypted = EncodeBase64(UnsignedVectorToString(vchCryptedSecret));
+       return encrypted;
+    } 
+    catch (std::exception &e) 
+    {
+        printf("Error while encrypting %s",boinchash.c_str());
+        return "";
+    }
+    catch(...)
+    {
+        printf("Error while encrypting 2.");
+        return "";
+    }
               
 }
 
 std::string AdvancedDecrypt(std::string boinchash_encrypted)
 {
-	try{
+    try{
        std::string pre_encrypted_boinchash = DecodeBase64(boinchash_encrypted);
-	   std::string d2 = "                                                                                                                                        ";
-	   std::vector<unsigned char> vchCryptedSecret(pre_encrypted_boinchash.begin(),pre_encrypted_boinchash.end());
-	   std::vector<unsigned char> vchPlaintext(d2.begin(),d2.end());
-	   GridDecrypt(vchCryptedSecret,vchPlaintext);
-	   std::string decrypted = UnsignedVectorToString(vchPlaintext);
-	   return decrypted;
-	} catch (std::exception &e) 
-	{
-		printf("Error while decrypting %s",boinchash_encrypted.c_str());
-		return "";
-	}
-	catch(...)
-	{
-		printf("Error while decrypting 2.");
-		return "";
-	}
+       std::string d2 = "                                                                                                                                        ";
+       std::vector<unsigned char> vchCryptedSecret(pre_encrypted_boinchash.begin(),pre_encrypted_boinchash.end());
+       std::vector<unsigned char> vchPlaintext(d2.begin(),d2.end());
+       GridDecrypt(vchCryptedSecret,vchPlaintext);
+       std::string decrypted = UnsignedVectorToString(vchPlaintext);
+       return decrypted;
+    } catch (std::exception &e) 
+    {
+        printf("Error while decrypting %s",boinchash_encrypted.c_str());
+        return "";
+    }
+    catch(...)
+    {
+        printf("Error while decrypting 2.");
+        return "";
+    }
 }
      
 
 std::string AdvancedCryptWithHWID(std::string data)
 {
-	std::string HWID = getHardwareID();
-	std::string enc = "";
-	std::string salt = HWID;
-	for (unsigned int i = 0; i < 9; i++)
-	{
-		std::string old_salt = salt;
-		salt = RetrieveMd5(old_salt);
-	}
-	enc = AdvancedCryptWithSalt(data,salt);
-	return enc;
+    std::string HWID = getHardwareID();
+    std::string enc = "";
+    std::string salt = HWID;
+    for (unsigned int i = 0; i < 9; i++)
+    {
+        std::string old_salt = salt;
+        salt = RetrieveMd5(old_salt);
+    }
+    enc = AdvancedCryptWithSalt(data,salt);
+    return enc;
 }
 
 std::string AdvancedDecryptWithHWID(std::string data)
 {
-	std::string HWID = getHardwareID();
-	std::string salt = HWID;
-	for (unsigned int i = 0; i < 9; i++)
-	{
-		std::string old_salt = salt;
-		salt = RetrieveMd5(old_salt);
-	}
-	std::string dec = AdvancedDecryptWithSalt(data,salt);
-	return dec;
+    std::string HWID = getHardwareID();
+    std::string salt = HWID;
+    for (unsigned int i = 0; i < 9; i++)
+    {
+        std::string old_salt = salt;
+        salt = RetrieveMd5(old_salt);
+    }
+    std::string dec = AdvancedDecryptWithSalt(data,salt);
+    return dec;
 }
 
 std::string AdvancedCryptWithSalt(std::string boinchash, std::string salt)
 {
 
-	try 
-	{
-	   std::vector<unsigned char> vchSecret( boinchash.begin(), boinchash.end() );
-	   std::string d1 = "                                                                                                                                        ";
-	   std::vector<unsigned char> vchCryptedSecret(d1.begin(),d1.end());
+    try 
+    {
+       std::vector<unsigned char> vchSecret( boinchash.begin(), boinchash.end() );
+       std::string d1 = "                                                                                                                                        ";
+       std::vector<unsigned char> vchCryptedSecret(d1.begin(),d1.end());
        GridEncryptWithSalt(vchSecret, vchCryptedSecret,salt);
-	   std::string encrypted = EncodeBase64(UnsignedVectorToString(vchCryptedSecret));
+       std::string encrypted = EncodeBase64(UnsignedVectorToString(vchCryptedSecret));
 
-	   return encrypted;
-	} catch (std::exception &e) 
-	{
-		printf("Error while encrypting %s",boinchash.c_str());
-		return "";
-	}
-	catch(...)
-	{
-		printf("Error while encrypting 2.");
-		return "";
-	}
+       return encrypted;
+    } catch (std::exception &e) 
+    {
+        printf("Error while encrypting %s",boinchash.c_str());
+        return "";
+    }
+    catch(...)
+    {
+        printf("Error while encrypting 2.");
+        return "";
+    }
               
 }
 
 std::string AdvancedDecryptWithSalt(std::string boinchash_encrypted, std::string salt)
 {
-	try{
+    try{
        std::string pre_encrypted_boinchash = DecodeBase64(boinchash_encrypted);
-	   std::string d2 = "                                                                                                                                        ";
-	   std::vector<unsigned char> vchCryptedSecret(pre_encrypted_boinchash.begin(),pre_encrypted_boinchash.end());
-	   std::vector<unsigned char> vchPlaintext(d2.begin(),d2.end());
-	   GridDecryptWithSalt(vchCryptedSecret,vchPlaintext,salt);
-	   std::string decrypted = UnsignedVectorToString(vchPlaintext);
-	   return decrypted;
-	} catch (std::exception &e) 
-	{
-		printf("Error while decrypting %s",boinchash_encrypted.c_str());
-		return "";
-	}
-	catch(...)
-	{
-		printf("Error while decrypting 2.");
-		return "";
-	}
+       std::string d2 = "                                                                                                                                        ";
+       std::vector<unsigned char> vchCryptedSecret(pre_encrypted_boinchash.begin(),pre_encrypted_boinchash.end());
+       std::vector<unsigned char> vchPlaintext(d2.begin(),d2.end());
+       GridDecryptWithSalt(vchCryptedSecret,vchPlaintext,salt);
+       std::string decrypted = UnsignedVectorToString(vchPlaintext);
+       return decrypted;
+    } catch (std::exception &e) 
+    {
+        printf("Error while decrypting %s",boinchash_encrypted.c_str());
+        return "";
+    }
+    catch(...)
+    {
+        printf("Error while decrypting 2.");
+        return "";
+    }
 }
      
 

@@ -336,9 +336,9 @@ static CBlockIndex *InsertBlockIndex(const uint256& hash)
 
 bool CTxDB::LoadBlockIndex()
 {
-	int64_t nStart = GetTimeMillis();
-	int nHighest = 0;
-	double dBlockCount = 0;
+    int64_t nStart = GetTimeMillis();
+    int nHighest = 0;
+    double dBlockCount = 0;
 
     if (mapBlockIndex.size() > 0) {
         // Already loaded once in this session. It can happen during migration
@@ -354,10 +354,10 @@ bool CTxDB::LoadBlockIndex()
     ssStartKey << make_pair(string("blockindex"), uint256(0));
     iterator->Seek(ssStartKey.str());
 
-	int nLoaded = 0;
-	#if defined(WIN32) && defined(QT_GUI)
-		SetThreadPriority(THREAD_PRIORITY_HIGHEST);
-	#endif
+    int nLoaded = 0;
+    #if defined(WIN32) && defined(QT_GUI)
+        SetThreadPriority(THREAD_PRIORITY_HIGHEST);
+    #endif
     
     // Now read each entry.
     while (iterator->Valid())
@@ -397,32 +397,32 @@ bool CTxDB::LoadBlockIndex()
         pindexNew->nBits          = diskindex.nBits;
         pindexNew->nNonce         = diskindex.nNonce;
 
-		//9-26-2016 - Gridcoin - New Accrual Fields
+        //9-26-2016 - Gridcoin - New Accrual Fields
 
-		if (diskindex.nHeight > nNewIndex)
-		{
-			pindexNew->sCPID             = diskindex.sCPID;
-			pindexNew->nResearchSubsidy  = diskindex.nResearchSubsidy;
-			pindexNew->nInterestSubsidy  = diskindex.nInterestSubsidy;
-			pindexNew->nMagnitude        = diskindex.nMagnitude;
-			pindexNew->nIsContract       = diskindex.nIsContract;
-			pindexNew->nIsSuperBlock     = diskindex.nIsSuperBlock;
-		}
+        if (diskindex.nHeight > nNewIndex)
+        {
+            pindexNew->sCPID             = diskindex.sCPID;
+            pindexNew->nResearchSubsidy  = diskindex.nResearchSubsidy;
+            pindexNew->nInterestSubsidy  = diskindex.nInterestSubsidy;
+            pindexNew->nMagnitude        = diskindex.nMagnitude;
+            pindexNew->nIsContract       = diskindex.nIsContract;
+            pindexNew->nIsSuperBlock     = diskindex.nIsSuperBlock;
+        }
 
-		dBlockCount++;
+        dBlockCount++;
         // Watch for genesis block
         if (pindexGenesisBlock == NULL && blockHash == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
             pindexGenesisBlock = pindexNew;
-		#ifdef QT_GUI
-			if ((pindexNew->nHeight % 10000) == 0)
-			{
-				nLoaded +=10000;
-				if (nLoaded > nHighest) nHighest=nLoaded;
-				if (nHighest < nGrandfather) nHighest=nGrandfather;
-				std::string sBlocksLoaded = RoundToString((double)nLoaded,0) + "/" + RoundToString((double)nHighest,0) + " Blocks Loaded";
-				uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
-     		}
-		#endif
+        #ifdef QT_GUI
+            if ((pindexNew->nHeight % 10000) == 0)
+            {
+                nLoaded +=10000;
+                if (nLoaded > nHighest) nHighest=nLoaded;
+                if (nHighest < nGrandfather) nHighest=nGrandfather;
+                std::string sBlocksLoaded = RoundToString((double)nLoaded,0) + "/" + RoundToString((double)nHighest,0) + " Blocks Loaded";
+                uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
+            }
+        #endif
 
         // NovaCoin: build setStakeSeen
         if (pindexNew->IsProofOfStake())
@@ -431,11 +431,11 @@ bool CTxDB::LoadBlockIndex()
         iterator->Next();
     }
     delete iterator;
-	
-	
-	printf("Time to memorize diskindex containing %f blocks : %15" PRId64 ".%f ms\r\n", dBlockCount, GetTimeMillis() - nStart, (double)nHighest);
-	nStart = GetTimeMillis();
-	
+    
+    
+    printf("Time to memorize diskindex containing %f blocks : %15" PRId64 ".%f ms\r\n", dBlockCount, GetTimeMillis() - nStart, (double)nHighest);
+    nStart = GetTimeMillis();
+    
 
     if (fRequestShutdown)
         return true;
@@ -460,8 +460,8 @@ bool CTxDB::LoadBlockIndex()
     }
 
 
-	printf("Time to calculate Chain Trust %15" PRId64 "ms\n", GetTimeMillis() - nStart);
-	nStart = GetTimeMillis();
+    printf("Time to calculate Chain Trust %15" PRId64 "ms\n", GetTimeMillis() - nStart);
+    nStart = GetTimeMillis();
 
 
     // Load hashBestChain pointer to end of best chain
@@ -490,11 +490,11 @@ bool CTxDB::LoadBlockIndex()
     CBigNum bnBestInvalidTrust;
     ReadBestInvalidTrust(bnBestInvalidTrust);
     nBestInvalidTrust = bnBestInvalidTrust.getuint256();
-	nLoaded = 0;
+    nLoaded = 0;
     // Verify blocks in the best chain
     int nCheckLevel = GetArg("-checklevel", 1);
     int nCheckDepth = GetArg( "-checkblocks", 1000);
-	if (fTestNet) nCheckDepth = 3000; //Check the last 3000 blocks in TestNet since we want to rebuild the chain (8-19-2015)
+    if (fTestNet) nCheckDepth = 3000; //Check the last 3000 blocks in TestNet since we want to rebuild the chain (8-19-2015)
 
     if (nCheckDepth == 0)
         nCheckDepth = 1000000000; // suffices until the year 19000
@@ -513,16 +513,16 @@ bool CTxDB::LoadBlockIndex()
         // check level 1: verify block validity
         // check level 7: verify block signature too
 
-		#ifdef QT_GUI
-			if ((pindex->nHeight % 1000) == 0)
-			{
-				nLoaded +=1000;
-				if (nLoaded > nHighest) nHighest=nLoaded;
-				if (nHighest < nGrandfather) nHighest=nGrandfather;
-				std::string sBlocksLoaded = RoundToString((double)nLoaded,0) + "/" + RoundToString((double)nHighest,0) + " Blocks Verified";
-				uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
-     		}
-		#endif
+        #ifdef QT_GUI
+            if ((pindex->nHeight % 1000) == 0)
+            {
+                nLoaded +=1000;
+                if (nLoaded > nHighest) nHighest=nLoaded;
+                if (nHighest < nGrandfather) nHighest=nGrandfather;
+                std::string sBlocksLoaded = RoundToString((double)nLoaded,0) + "/" + RoundToString((double)nHighest,0) + " Blocks Verified";
+                uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
+            }
+        #endif
 
 
         if (nCheckLevel>0 && !block.CheckBlock("LoadBlockIndex", pindex->nHeight,pindex->nMint, true, true, (nCheckLevel>6), true))
@@ -624,8 +624,8 @@ bool CTxDB::LoadBlockIndex()
 
 
 
-	printf("Time to Verify Blocks %15" PRId64 "ms\n", GetTimeMillis() - nStart);
-	
+    printf("Time to Verify Blocks %15" PRId64 "ms\n", GetTimeMillis() - nStart);
+    
     if (pindexFork && !fRequestShutdown)
     {
         // Reorg back to the fork
@@ -694,13 +694,13 @@ bool CTxDB::LoadBlockIndex()
         }
     }
 
-	printf("RA Complete - RA Time %15" PRId64 "ms\n", GetTimeMillis() - nStart);
-	nStart = GetTimeMillis();
-	SetUpExtendedBlockIndexFieldsOnce();
-	printf("SetUpExtendedBlockIndexFieldsOnce Complete - Time %15" PRId64 "ms\n", GetTimeMillis() - nStart);
-	#if defined(WIN32) && defined(QT_GUI)
-		SetThreadPriority(THREAD_PRIORITY_NORMAL);
-	#endif
+    printf("RA Complete - RA Time %15" PRId64 "ms\n", GetTimeMillis() - nStart);
+    nStart = GetTimeMillis();
+    SetUpExtendedBlockIndexFieldsOnce();
+    printf("SetUpExtendedBlockIndexFieldsOnce Complete - Time %15" PRId64 "ms\n", GetTimeMillis() - nStart);
+    #if defined(WIN32) && defined(QT_GUI)
+        SetThreadPriority(THREAD_PRIORITY_NORMAL);
+    #endif
 
     return true;
 }
