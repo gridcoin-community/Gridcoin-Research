@@ -87,8 +87,6 @@ double GetCountOf(std::string datatype);
 extern double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons);
 extern bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
 
-void TestScan();
-void TestScan2();
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 bool FullSyncWithDPORNodes();
 bool LoadSuperblock(std::string data, int64_t nTime, double height);
@@ -2742,11 +2740,6 @@ Value execute(const Array& params, bool fHelp)
         }
 
         results.push_back(entry);
-    }
-    else if (sItem=="testscannew")
-    {
-        TestScan();
-        TestScan2();
     }
     else if (sItem == "tally")
     {

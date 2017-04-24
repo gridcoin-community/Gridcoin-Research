@@ -109,10 +109,6 @@ bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit)
 double qtExecuteGenericFunction(std::string function,std::string data);
 extern std::string GetQuorumHash(std::string data);
 extern bool FullSyncWithDPORNodes();
-extern  void TestScan();
-extern void TestScan2();
-
-
 
 std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
 
@@ -9300,36 +9296,6 @@ bool UnusualActivityReport()
 
 
     return true;
-}
-
-
-void TestScan()
-{
-    BOOST_FOREACH(const PAIRTYPE(uint256, CBlockIndex*)& item, mapBlockIndex)
-    {
-        CBlockIndex* pindex = item.second;
-        if (LessVerbose(1) || pindex->nHeight > nNewIndex2)
-        {
-            printf("map block index h %f ,  cpid %s   , Mag  %f , RS %f, INT %f \r\n",(double)pindex->nHeight,pindex->sCPID.c_str(), (double)pindex->nMagnitude,
-                pindex->nResearchSubsidy,pindex->nInterestSubsidy);
-        }
-    }
-}
-
-
-void TestScan2()
-{
-    CBlockIndex* pindex = pindexBest;
-    while (pindex->nHeight > 1)
-    {
-        pindex = pindex->pprev;
-        if (LessVerbose(1) || pindex->nHeight > nNewIndex2)
-        {
-            printf("map block index h %f ,  cpid %s   , Mag  %f , RS %f, INT %f \r\n",(double)pindex->nHeight,pindex->sCPID.c_str(), (double)pindex->nMagnitude,
-                pindex->nResearchSubsidy,pindex->nInterestSubsidy);
-        }
-
-    }
 }
 
 double GRCMagnitudeUnit(int64_t locktime)
