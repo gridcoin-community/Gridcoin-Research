@@ -12,12 +12,7 @@
 	#include <QtCharts/QPieSeries>
 #endif
 
-#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
-    #include <QtConcurrent/QtConcurrentRun>
-#else
-    #include <QtCore/QtConcurrentRun>
-#endif
-
+#include <QtConcurrentRun>
 #include <QClipboard>
 #include <QEvent>
 #include <QFont>
