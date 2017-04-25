@@ -51,7 +51,6 @@ LIBS_OLD= \
  -l boost_filesystem$(BOOST_SUFFIX) \
  -l boost_program_options$(BOOST_SUFFIX) \
  -l boost_thread$(BOOST_SUFFIX) \
- -l boost_chrono$(BOOST_SUFFIX) \
  -l db_cxx \
  -l ssl \
  -l crypto
@@ -69,7 +68,6 @@ LIBS= \
  -l crypto \
  -l curl \
  -l zip
-
 
 DEFS=-DWIN32 -D_WINDOWS -DBOOST_THREAD_USE_LIB -DBOOST_SPIRIT_THREADSAFE
 DEBUGFLAGS=-g

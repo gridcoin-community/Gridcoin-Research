@@ -31,11 +31,9 @@ LIBS= \
  -l boost_filesystem-mt \
  -l boost_program_options-mt \
  -l boost_thread_win32-mt \
- -l boost_chrono-mt \
  -l db_cxx \
  -l ssl \
  -l crypto \
- -l z
 
 DEFS=-D_MT -DWIN32 -D_WINDOWS -DBOOST_THREAD_USE_LIB -DBOOST_SPIRIT_THREADSAFE
 DEBUGFLAGS=-g
