@@ -29,11 +29,7 @@
 #include "signverifymessagedialog.h"
 #include "optionsdialog.h"
 #include "aboutdialog.h"
-
-#ifndef WIN32
 #include "votingdialog.h"
-#endif
-
 #include "clientmodel.h"
 #include "walletmodel.h"
 #include "editaddressdialog.h"
@@ -83,6 +79,7 @@
 #include <QUrl>
 #include <QStyle>
 #include <QNetworkInterface>
+#include <QDesktopWidget>
 
 #include <boost/lexical_cast.hpp>
 
@@ -196,7 +193,8 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 	upgrader(0),
     nWeight(0)
 {
-    setGeometry(0,0,980,550);
+
+    setGeometry(QStyle::alignedRect(Qt::LeftToRight,Qt::AlignCenter,QSize(980,550),qApp->desktop()->availableGeometry()));
     
     setWindowTitle(tr("Gridcoin") + " " + tr("Wallet"));
 	//4-9-2016
@@ -958,10 +956,6 @@ void BitcoinGUI::createActions()
 	votingAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Voting"), this);
 	votingAction->setStatusTip(tr("Voting"));
 	votingAction->setMenuRole(QAction::TextHeuristicRole);
-
-    votingReservedAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Voting"), this);
-	votingReservedAction->setStatusTip(tr("Voting"));
-	votingReservedAction->setMenuRole(QAction::TextHeuristicRole);
     
 	galazaAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Galaza (Game)"), this);
 	galazaAction->setStatusTip(tr("Galaza"));
@@ -1022,8 +1016,7 @@ void BitcoinGUI::createActions()
 	connect(configAction, SIGNAL(triggered()), this, SLOT(configClicked()));
 
 	connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
-	connect(votingAction, SIGNAL(triggered()), this, SLOT(votingClicked()));
-	connect(votingReservedAction, SIGNAL(triggered()), this, SLOT(votingReservedClicked()));
+    connect(votingAction, SIGNAL(triggered()), this, SLOT(votingClicked()));
 
 	connect(tickerAction, SIGNAL(triggered()), this, SLOT(tickerClicked()));
 	connect(ticketListAction, SIGNAL(triggered()), this, SLOT(ticketListClicked()));
@@ -1092,13 +1085,9 @@ void BitcoinGUI::createMenuBar()
 #ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows    
 	qmAdvanced->addAction(configAction);
 	qmAdvanced->addAction(miningAction);
-	qmAdvanced->addAction(votingAction);
 #endif /* defined(WIN32) */
     
-    // Only enable the Qt voting dialog on non-Windows targets for now.
-#ifndef WIN32
-	qmAdvanced->addAction(votingReservedAction);
-#endif
+    qmAdvanced->addAction(votingAction);
     
 #ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows 
 	qmAdvanced->addAction(tickerAction);
@@ -1297,14 +1286,12 @@ void BitcoinGUI::aboutClicked()
 }
 
 
-void BitcoinGUI::votingReservedClicked()
+void BitcoinGUI::votingClicked()
 {
-#ifndef WIN32
     VotingDialog *dlg = new VotingDialog(this);
     dlg->setStyleSheet("QDialog { background-image:url(:images/bkg);} QTabWidget{ background-color: transparent; color: black;} QTabWidget::pane { border: 1px solid rgb(100,100,100); } QTabBar::tab { background: rgb(150,150,150); color: black; border: 1px solid rgb(100,100,100); border-top-left-radius: 4px; border-top-right-radius: 4px; min-width: 8ex; padding: 2px; } QTabBar::tab:selected { background: rgb(200,200,200); border: 1px solid rgb(100,100,100); border-bottom-color: rgb(200,200,200); } QTabBar::tab:hover { background: rgb(76,155,195); } QTabBar::tab:!selected { margin-top: 2px; } QTableView { alternate-background-color:rgb(255,255,255); background-color:transparent; color:black;} QListWidget {color:black; background-color:transparent;} QLabel {color:black;} QGroupBox {background-color:transparent;} QLineEdit {background-color:lightgray; color:black} QHeaderView::section { background-color:lightgray; color:black; } QPushButton { background-color:lightgray; color:black; } QComboBox { background-color:lightgray; color:black; }");
     dlg->resetData();
     dlg->show();
-#endif
 }
 
 
@@ -1873,22 +1860,6 @@ int ReindexBlocks()
 	return 1;
 
 }
-
-void BitcoinGUI::votingClicked()
-{
-
-	#ifdef WIN32
-		if (!bGlobalcomInitialized) return;
-		std::string sVotingPayload = "";
-		GetJSONPollsReport(true,"",sVotingPayload,true);
-		double function_call = qtExecuteGenericFunction("SetGenericVotingData",sVotingPayload);
-		std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-		qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-		qtExecuteGenericFunction("ShowVotingConsole","");
-	#endif
-
-}
-
 
 void BitcoinGUI::miningClicked()
 {

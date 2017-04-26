@@ -12,6 +12,7 @@
 	#include <QtCharts/QPieSeries>
 #endif
 
+#include <QtConcurrentRun>
 #include <QClipboard>
 #include <QEvent>
 #include <QFont>
@@ -120,16 +121,8 @@ QVariant VotingTableModel::data(const QModelIndex &index, int role) const
             return QVariant(item->rowNumber_);
         case Title:
             return item->title_;
-        case Expiration: {
-            struct tm tm;
-            localtime_r(&item->expiration_, &tm);
-            char str[32];
-            asctime_r(&tm, str);
-            for(char *s=str; *s; s++)
-                if (*s == '\n')
-                    { *s = '\0'; break; }
-            return QVariant(QString(str));
-        }
+        case Expiration:
+            return item->expiration_.toString();
         case ShareType:
             return item->shareType_;
         case Question:
@@ -157,7 +150,7 @@ QVariant VotingTableModel::data(const QModelIndex &index, int role) const
         case Title:
             return item->title_;
         case Expiration:
-            return QVariant((unsigned int)item->expiration_);
+            return item->expiration_;
         case ShareType:
             return item->shareType_;
         case Question:
@@ -184,7 +177,7 @@ QVariant VotingTableModel::data(const QModelIndex &index, int role) const
         return item->title_;
 
     case ExpirationRole:
-        return (unsigned int) item->expiration_;
+        return item->expiration_;
 
     case ShareTypeRole:
         return item->shareType_;
@@ -309,15 +302,7 @@ void VotingTableModel::resetData(bool history)
         std::string sTitle = ExtractXML(vPolls[y], "<TITLE>", "</TITLE>");
         std::string sId = GetFoundationGuid(sTitle);
         if (sTitle.size() && (sId.empty())) {
-            std::string sExpiration = ExtractXML(vPolls[y], "<EXPIRATION>", "</EXPIRATION>");
-
-            struct tm tm;
-            memset(&tm, 0, sizeof(struct tm));
-            strptime(sExpiration.c_str(), "%m-%d-%Y %H:%M:%S", &tm);
-            time_t expiration = mktime(&tm);
-            //if (now > expiration + 7*24*60*60) // do not show items expired more than 7 days
-            //    continue;
-
+            QString sExpiration = QString::fromStdString(ExtractXML(vPolls[y], "<EXPIRATION>", "</EXPIRATION>"));
             std::string sShareType = ExtractXML(vPolls[y], "<SHARETYPE>", "</SHARETYPE>");
             std::string sQuestion = ExtractXML(vPolls[y], "<QUESTION>", "</QUESTION>");
             std::string sAnswers = ExtractXML(vPolls[y], "<ANSWERS>", "</ANSWERS>");
@@ -327,15 +312,10 @@ void VotingTableModel::resetData(bool history)
             std::string sUrl = ExtractXML(vPolls[y], "<URL>", "</URL>");
             std::string sBestAnswer = ExtractXML(vPolls[y], "<BESTANSWER>", "</BESTANSWER>");
 
-            // Dim lDateDiff As Long = DateDiff(DateInterval.Day, Now, GlobalCDate(sExpiration))
-            // If Len(sTitle) > 0 And lDateDiff > -7 Then
-            // If lDateDiff < 0 Then dgv.Rows(iRow).Cells(2).Style.BackColor = Drawing.Color.Red
-            // If Len(sAnswers) > 81 Then sAnswers = Mid(sAnswers, 1, 81) + "..."
-
             VotingItem *item = new VotingItem;
             item->rowNumber_ = items.size() + 1;
             item->title_ = QString::fromStdString(sTitle);
-            item->expiration_ = expiration;
+            item->expiration_ = QDateTime::fromString(sExpiration, "M-d-yyyy HH:mm:ss");
             item->shareType_ = QString::fromStdString(sShareType);
             item->question_ = QString::fromStdString(sQuestion);
             item->answers_ = QString::fromStdString(sAnswers);
@@ -469,14 +449,20 @@ VotingDialog::VotingDialog(QWidget *parent)
 
     tableView_->setModel(proxyModel_);
     tableView_->setFont(QFont("Arial", 8));
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
     tableView_->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+#else
+    tableView_->horizontalHeader()->setResizeMode(QHeaderView::Interactive);
+#endif
     tableView_->horizontalHeader()->setMinimumWidth(VOTINGDIALOG_WIDTH_RowNumber + VOTINGDIALOG_WIDTH_Title + VOTINGDIALOG_WIDTH_Expiration + VOTINGDIALOG_WIDTH_ShareType + VOTINGDIALOG_WIDTH_Question + VOTINGDIALOG_WIDTH_Answers + VOTINGDIALOG_WIDTH_TotalParticipants + VOTINGDIALOG_WIDTH_TotalShares + VOTINGDIALOG_WIDTH_Url + VOTINGDIALOG_WIDTH_BestAnswer);
 
     groupboxvlayout->addWidget(tableView_);
 
-    // loading overlay
-    watcher = new QFutureWatcher<void>();
-    connect(watcher, SIGNAL(finished()), this, SLOT(onLoadingFinished()));
+    // loading overlay. Due to a bug in QFutureWatcher for Qt <5.6.0 we
+    // have to track the running state ourselves. See
+    // https://bugreports.qt.io/browse/QTBUG-12358
+    watcher.setProperty("running", false);
+    connect(&watcher, SIGNAL(finished()), this, SLOT(onLoadingFinished()));
     loadingIndicator = new QLabel(this);
     loadingIndicator->setText(tr("...loading data!"));
     loadingIndicator->move(50,170);
@@ -484,34 +470,33 @@ VotingDialog::VotingDialog(QWidget *parent)
     chartDialog_ = new VotingChartDialog(this);
     voteDialog_ = new VotingVoteDialog(this);
     pollDialog_ = new NewPollDialog(this);
+}
 
+void VotingDialog::loadPolls(bool history)
+{
+    bool isRunning = watcher.property("running").toBool();
+    if (tableModel_&& !isRunning)
+    {
+        loadingIndicator->show();
+        QFuture<void> future = QtConcurrent::run(tableModel_, &VotingTableModel::resetData, history);
+        watcher.setProperty("running", true);
+        watcher.setFuture(future);
+    }
 }
 
 void VotingDialog::resetData(void)
 {
-    if (tableModel_){
-        // load the voting data (tableModel_->resetData(false);) in another thread
-        if (watcher->isFinished()){
-            loadingIndicator->show();
-            QFuture<void> future = QtConcurrent::run(tableModel_, &VotingTableModel::resetData,false);
-            watcher->setFuture(future);
-        }
-    }
+    loadPolls(false);
 }
 
 void VotingDialog::loadHistory(void)
 {
-    if (tableModel_){
-        if (watcher->isFinished()){
-            loadingIndicator->show();
-            QFuture<void> future = QtConcurrent::run(tableModel_, &VotingTableModel::resetData,true);
-            watcher->setFuture(future);
-        }
-    }
+    loadPolls(true);
 }
 
 void VotingDialog::onLoadingFinished(void)
 {
+    watcher.setProperty("loading", false);
     loadingIndicator->hide();
 }
 
@@ -711,7 +696,11 @@ VotingChartDialog::VotingChartDialog(QWidget *parent)
     answerTable_->setRowCount(0);
     answerTableHeader<<"Answer"<<"Shares"<<"Percentage";
     answerTable_->setHorizontalHeaderLabels(answerTableHeader);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 8, 0)
     answerTable_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+#else
+    answerTable_->horizontalHeader()->setResizeMode(QHeaderView::Stretch);
+#endif
     answerTable_->setEditTriggers( QAbstractItemView::NoEditTriggers );
     resTabWidget->addTab(answerTable_, tr("List"));
     vlayout->addWidget(resTabWidget);
