@@ -80,7 +80,7 @@ extern MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 json_spirit::Array MagnitudeReport(std::string cpid);
 extern void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash);
 extern void ZeroOutResearcherTotals(std::string cpid);
-extern StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
+extern StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 extern std::string getCpuHash();
 std::string getMacAddress();
 std::string TimestampToHRDate(double dtm);
@@ -2757,7 +2757,7 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
     BOOST_FOREACH(CTransaction& tx, vtx)
         SyncWithWallets(tx, this, false, false);
 
-    StructCPID stCPID = GetLifetimeCPID(pindex->sCPID,"DisconnectBlock()");
+    StructCPID stCPID = GetLifetimeCPID(pindex->GetCPID(),"DisconnectBlock()");
     // We normally fail to disconnect a block if we can't find the previous input due to "DisconnectInputs() : ReadTxIndex failed".  Imo, I believe we should let this call succeed, otherwise a chain can never be re-organized in this circumstance.
     if (bDiscTxFailed && fDebug3) printf("!DisconnectBlock()::Failed, recovering. ");
     return true;
@@ -3202,7 +3202,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     // Gridcoin: Store verified magnitude and CPID in block index (7-11-2015)
     if (pindex->nHeight > nNewIndex2)
     {
-        pindex->sCPID  = bb.cpid;
+        pindex->SetCPID(bb.cpid);
         pindex->nMagnitude = bb.Magnitude;
         pindex->nResearchSubsidy = bb.ResearchSubsidy;
         pindex->nInterestSubsidy = bb.InterestSubsidy;
@@ -3262,7 +3262,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                 {
                         if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
                         {
-                            StructCPID st1 = GetLifetimeCPID(pindex->sCPID,"ConnectBlock()");
+                            StructCPID st1 = GetLifetimeCPID(pindex->GetCPID(),"ConnectBlock()");
                             GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, nTime,
                                         pindex, "connectblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
                             if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
@@ -3568,20 +3568,14 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
     BOOST_FOREACH(CBlockIndex* pindex, vDisconnect)
     {
         if (pindex->pprev)
-        {
             pindex->pprev->pnext = NULL;
-            //if (IsResearchAgeEnabled(pindex->nHeight))    StructCPID st1 = GetLifetimeCPID(pindex->pprev->sCPID,"Reorganize()");
-        }
     }
 
     // Connect longer branch
     BOOST_FOREACH(CBlockIndex* pindex, vConnect)
     {
         if (pindex->pprev)
-        {
             pindex->pprev->pnext = pindex;
-            //if (IsResearchAgeEnabled(pindex->nHeight))    StructCPID st2 = GetLifetimeCPID(pindex->pprev->sCPID,"Reorganize()::ConnectLongerBranch()");
-        }
     }
 
     // Resurrect memory transactions that were in the disconnected branch
@@ -5619,46 +5613,46 @@ void AdjustTimestamps(StructCPID& strCPID, double timestamp, double subsidy)
 
 void AddResearchMagnitude(CBlockIndex* pIndex)
 {
-        // Headless critical section
-        if (pIndex->nResearchSubsidy > 0)
+    // Headless critical section
+    if (pIndex->nResearchSubsidy > 0)
+    {
+        try
         {
-            try
+            StructCPID stMag = GetInitializedStructCPID2(pIndex->GetCPID(),mvMagnitudesCopy);
+            stMag.cpid = pIndex->GetCPID();
+            stMag.GRCAddress = pIndex->sGRCAddress;
+            if (pIndex->nHeight > stMag.LastBlock)
             {
-                StructCPID stMag = GetInitializedStructCPID2(pIndex->sCPID,mvMagnitudesCopy);
-                stMag.cpid = pIndex->sCPID;
-                stMag.GRCAddress = pIndex->sGRCAddress;
-                if (pIndex->nHeight > stMag.LastBlock)
-                {
-                    stMag.LastBlock = pIndex->nHeight;
-                }
-                stMag.entries++;
-                stMag.payments += pIndex->nResearchSubsidy;
-                stMag.interestPayments += pIndex->nInterestSubsidy;
+                stMag.LastBlock = pIndex->nHeight;
+            }
+            stMag.entries++;
+            stMag.payments += pIndex->nResearchSubsidy;
+            stMag.interestPayments += pIndex->nInterestSubsidy;
 
-                AdjustTimestamps(stMag,(double)pIndex->nTime,pIndex->nResearchSubsidy);
-                // Track detailed payments made to each CPID
-                stMag.PaymentTimestamps         += RoundToString(pIndex->nTime,0) + ",";
-                stMag.PaymentAmountsResearch    += RoundToString(pIndex->nResearchSubsidy,2) + ",";
-                stMag.PaymentAmountsInterest    += RoundToString(pIndex->nInterestSubsidy,2) + ",";
-                stMag.PaymentAmountsBlocks      += RoundToString(pIndex->nHeight,0) + ",";
-                stMag.Accuracy++;
-                stMag.AverageRAC = stMag.rac / (stMag.entries+.01);
-                double total_owed = 0;
-                stMag.owed = GetOutstandingAmountOwed(stMag,
-                    pIndex->sCPID, pIndex->nTime,total_owed,pIndex->nMagnitude);
+            AdjustTimestamps(stMag,pIndex->nTime, pIndex->nResearchSubsidy);
+            // Track detailed payments made to each CPID
+            stMag.PaymentTimestamps         += RoundToString(pIndex->nTime,0) + ",";
+            stMag.PaymentAmountsResearch    += RoundToString(pIndex->nResearchSubsidy,2) + ",";
+            stMag.PaymentAmountsInterest    += RoundToString(pIndex->nInterestSubsidy,2) + ",";
+            stMag.PaymentAmountsBlocks      += RoundToString(pIndex->nHeight,0) + ",";
+            stMag.Accuracy++;
+            stMag.AverageRAC = stMag.rac / (stMag.entries+.01);
+            double total_owed = 0;
+            stMag.owed = GetOutstandingAmountOwed(stMag,
+                                                  pIndex->GetCPID(), pIndex->nTime, total_owed, pIndex->nMagnitude);
 
-                stMag.totalowed = total_owed;
-                mvMagnitudesCopy[pIndex->sCPID] = stMag;
-            }
-            catch (bad_alloc ba)
-            {
-                printf("\r\nBad Allocation in AddResearchMagnitude() \r\n");
-            }
-            catch(...)
-            {
-                printf("Exception in AddResearchMagnitude() \r\n");
-            }
+            stMag.totalowed = total_owed;
+            mvMagnitudesCopy[pIndex->GetCPID()] = stMag;
         }
+        catch (const std::bad_alloc& ba)
+        {
+            printf("\r\nBad Allocation in AddResearchMagnitude() \r\n");
+        }
+        catch(...)
+        {
+            printf("Exception in AddResearchMagnitude() \r\n");
+        }
+    }
 }
 
 
@@ -5714,7 +5708,10 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
         mvApplicationCacheTimestamp["nCPIDTime"] = GetAdjustedTime();
         return true;
     }
-    if (IsLockTimeWithinMinutes(nLastGRCtallied,100)) return true;
+
+    if (IsLockTimeWithinMinutes(nLastGRCtallied,100))
+        return true;
+
     nLastGRCtallied = GetAdjustedTime();
     int64_t nGRCTime = 0;
     int64_t nCPIDTime = 0;
@@ -5722,38 +5719,38 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
     int64_t nStart = GetTimeMillis();
     LOCK(cs_main);
     {
-            int nMaxDepth = nBestHeight;
-            int nLookback = BLOCKS_PER_DAY*6*30;  //6 months back for performance
-            int nMinDepth = nMaxDepth - nLookback;
-            if (nMinDepth < 2) nMinDepth = 2;
-            // Start at the earliest block index:
-            CBlockIndex* pblockindex = blockFinder.FindByHeight(nMinDepth);
-            while (pblockindex->nHeight < nMaxDepth-1)
+        int nMaxDepth = nBestHeight;
+        int nLookback = BLOCKS_PER_DAY*6*30;  //6 months back for performance
+        int nMinDepth = nMaxDepth - nLookback;
+        if (nMinDepth < 2) nMinDepth = 2;
+        // Start at the earliest block index:
+        CBlockIndex* pblockindex = blockFinder.FindByHeight(nMinDepth);
+        while (pblockindex->nHeight < nMaxDepth-1)
+        {
+            pblockindex = pblockindex->pnext;
+            if (pblockindex == pindexBest) break;
+            if (pblockindex == NULL || !pblockindex->IsInMainChain()) continue;
+            std::string myCPID = "";
+            if (pblockindex->nHeight < nNewIndex)
             {
-                        pblockindex = pblockindex->pnext;
-                        if (pblockindex == pindexBest) break;
-                        if (pblockindex == NULL || !pblockindex->IsInMainChain()) continue;
-                        std::string myCPID = "";
-                        if (pblockindex->nHeight < nNewIndex)
-                        {
-                            //Between block 1 and nNewIndex, unfortunately, we have to read from disk.
-                            block.ReadFromDisk(pblockindex);
-                            std::string hashboinc = "";
-                            if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
-                            MiningCPID bb = DeserializeBoincBlock(hashboinc);
-                            myCPID = bb.cpid;
-                        }
-                        else
-                        {
-                            myCPID = pblockindex->sCPID;
-                        }
-                        if (cpid == myCPID && nCPIDTime==0)
-                        {
-                            nCPIDTime = pblockindex->nTime;
-                            nGRCTime = pblockindex->nTime;
-                            break;
-                        }
+                //Between block 1 and nNewIndex, unfortunately, we have to read from disk.
+                block.ReadFromDisk(pblockindex);
+                std::string hashboinc = "";
+                if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
+                MiningCPID bb = DeserializeBoincBlock(hashboinc);
+                myCPID = bb.cpid;
             }
+            else
+            {
+                myCPID = pblockindex->GetCPID();
+            }
+            if (cpid == myCPID && nCPIDTime==0)
+            {
+                nCPIDTime = pblockindex->nTime;
+                nGRCTime = pblockindex->nTime;
+                break;
+            }
+        }
     }
     int64_t EarliestStakedWalletTx = GetEarliestWalletTransaction();
     if (EarliestStakedWalletTx > 0 && EarliestStakedWalletTx < nGRCTime) nGRCTime = EarliestStakedWalletTx;
@@ -5782,9 +5779,9 @@ void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash)
     mvCPIDBlockHashes[cpid].insert(blockhash);
 }
 
-StructCPID GetLifetimeCPID(std::string cpid, std::string sCalledFrom)
+StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFrom)
 {
-    //Eliminates issues with reorgs, disconnects, double counting, etc.. 
+    //Eliminates issues with reorgs, disconnects, double counting, etc..
     if (cpid.empty() || cpid=="INVESTOR")
         return GetInitializedStructCPID2("INVESTOR",mvResearchAge);
     
@@ -5793,23 +5790,24 @@ StructCPID GetLifetimeCPID(std::string cpid, std::string sCalledFrom)
     const HashSet& hashes = GetCPIDBlockHashes(cpid);
     ZeroOutResearcherTotals(cpid);
 
+
+    StructCPID stCPID = GetInitializedStructCPID2(cpid, mvResearchAge);
     for (HashSet::iterator it = hashes.begin(); it != hashes.end(); ++it)
     {
         const uint256& uHash = *it;
 
         // Ensure that we have this block.
         if (mapBlockIndex.count(uHash) == 0)
-           continue;
+            continue;
         
-        // Ensure that the block is valid.    
+        // Ensure that the block is valid
         CBlockIndex* pblockindex = mapBlockIndex[uHash];
         if(pblockindex == NULL ||
            pblockindex->IsInMainChain() == false ||
-           pblockindex->sCPID != cpid)
+           pblockindex->GetCPID() != cpid)
             continue;
 
         // Block located and verified.
-        StructCPID stCPID = GetInitializedStructCPID2(pblockindex->sCPID,mvResearchAge);
         if (pblockindex->nHeight > stCPID.LastBlock && pblockindex->nResearchSubsidy > 0)
         {
             stCPID.LastBlock = pblockindex->nHeight;
@@ -5826,10 +5824,11 @@ StructCPID GetLifetimeCPID(std::string cpid, std::string sCalledFrom)
 
         if (pblockindex->nTime < stCPID.LowLockTime)  stCPID.LowLockTime  = pblockindex->nTime;
         if (pblockindex->nTime > stCPID.HighLockTime) stCPID.HighLockTime = pblockindex->nTime;
-        mvResearchAge[pblockindex->sCPID]=stCPID;
     }
 
-    return GetInitializedStructCPID2(cpid, mvResearchAge);
+    // Save updated CPID data holder.
+    mvResearchAge[cpid] = stCPID;
+    return stCPID;
 }
 
 MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID>& vRef)
@@ -9298,6 +9297,7 @@ bool UnusualActivityReport()
     return true;
 }
 
+
 double GRCMagnitudeUnit(int64_t locktime)
 {
     //7-12-2015 - Calculate GRCMagnitudeUnit (Amount paid per magnitude per day)
@@ -9400,6 +9400,7 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
 CBlockIndex* GetHistoricalMagnitude(std::string cpid)
 {
     if (cpid=="INVESTOR") return pindexGenesisBlock;
+
     // Starting at the block prior to StartHeight, find the last instance of the CPID in the chain:
     // Limit lookback to 6 months
     int nMinIndex = pindexBest->nHeight-(6*30*BLOCKS_PER_DAY);
@@ -9411,7 +9412,7 @@ CBlockIndex* GetHistoricalMagnitude(std::string cpid)
         uint256 hash(stCPID.BlockHash);
         if (mapBlockIndex.count(hash) == 0) return pindexGenesisBlock;
         CBlockIndex* pblockindex = mapBlockIndex[hash];
-        if ((double)pblockindex->nHeight < nMinIndex)
+        if (pblockindex->nHeight < nMinIndex)
         {
             // In this case, the last staked block was Found, but it is over 6 months old....
             printf("Last staked block found at height %f, but cannot verify magnitude older than 6 months! \r\n",(double)pblockindex->nHeight);
@@ -9430,19 +9431,18 @@ void ZeroOutResearcherTotals(std::string cpid)
 {
     if (!cpid.empty())
     {
+        StructCPID stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
+        stCPID.LastBlock = 0;
+        stCPID.BlockHash = "";
+        stCPID.InterestSubsidy = 0;
+        stCPID.ResearchSubsidy = 0;
+        stCPID.Accuracy = 0;
+        stCPID.LowLockTime = std::numeric_limits<unsigned int>::max();
+        stCPID.HighLockTime = 0;
+        stCPID.TotalMagnitude = 0;
+        stCPID.ResearchAverageMagnitude = 0;
 
-                StructCPID stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
-                stCPID.LastBlock = 0;
-                stCPID.BlockHash = "";
-                stCPID.InterestSubsidy = 0;
-                stCPID.ResearchSubsidy = 0;
-                stCPID.Accuracy = 0;
-                stCPID.LowLockTime = std::numeric_limits<unsigned int>::max();
-                stCPID.HighLockTime = 0;
-                stCPID.TotalMagnitude = 0;
-                stCPID.ResearchAverageMagnitude = 0;
-
-                mvResearchAge[cpid]=stCPID;
+        mvResearchAge[cpid]=stCPID;
     }
 }
 

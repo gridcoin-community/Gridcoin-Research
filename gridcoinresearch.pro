@@ -264,8 +264,9 @@ HEADERS += src/qt/bitcoingui.h \
     src/threadsafety.h \
     src/cpid.h \
     src/upgrader.h \
-    src/boinc.h
-
+    src/boinc.h \
+    src/gridcoin.h \
+    src/*.hpp
 
 SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/transactiontablemodel.cpp \

@@ -67,7 +67,7 @@ bool UpdateNeuralNetworkQuorumData();
 extern Array LifetimeReport(std::string cpid);
 Array StakingReport();
 extern std::string AddContract(std::string sType, std::string sName, std::string sContract);
-StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
+StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
 bool HasActiveBeacon(const std::string& cpid);
 int64_t GetEarliestWalletTransaction();
@@ -3317,7 +3317,7 @@ Array LifetimeReport(std::string cpid)
             pindex = pindex->pnext;
             if (pindex==NULL || !pindex->IsInMainChain()) continue;
             if (pindex == pindexBest) break;
-            if (pindex->sCPID == cpid && (pindex->nResearchSubsidy > 0)) 
+            if (pindex->GetCPID() == cpid && (pindex->nResearchSubsidy > 0))
             {
                 entry.push_back(Pair(RoundToString((double)pindex->nHeight,0), RoundToString(pindex->nResearchSubsidy,2)));
             }
