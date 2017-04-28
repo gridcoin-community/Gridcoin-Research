@@ -780,12 +780,12 @@ Refresh:
         End If
 
         ' If TabControl1.SelectedIndex = 2 Then
-        '  WebBrowserChat.Navigate("https://kiwiirc.com/client/irc.freenode.net:6667/#gridcoin")
+        '  WebBrowserChat.Navigate("https://kiwiirc.com/client/irc.freenode.net:+7000/#gridcoin")
         ' End If
     End Sub
 
     Private Sub LinkLabel1_LinkClicked(sender As System.Object, e As System.Windows.Forms.LinkLabelLinkClickedEventArgs)
-        Dim sURL As String = "https://kiwiirc.com/client/irc.freenode.net:6667/#gridcoin"
+        Dim sURL As String = "https://kiwiirc.com/client/irc.freenode.net:+7000/#gridcoin"
         Process.Start(sURL)
 
     End Sub
