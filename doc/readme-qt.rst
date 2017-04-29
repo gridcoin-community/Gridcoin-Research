@@ -114,16 +114,16 @@ flag to qmake to control this:
 +--------------+--------------------------------------------------------------------------+
 
 
-Berkely DB version warning
+Berkeley DB version warning
 ==========================
 
-A warning for people using the *static binary* version of Gridcoin on a Linux/UNIX-ish system (tl;dr: **Berkely DB databases are not forward compatible**).
+A warning for people using the *static binary* version of Gridcoin on a Linux/UNIX-ish system (tl;dr: **Berkeley DB databases are not forward compatible**).
 
 The static binary version of Gridcoin is linked against libdb 5.0 (see also `this Debian issue`_).
 
 Now the nasty thing is that databases from 5.X are not compatible with 4.X.
 
-If the globally installed development package of Berkely DB installed on your system is 5.X, any source you
+If the globally installed development package of Berkeley DB installed on your system is 5.X, any source you
 build yourself will be linked against that. The first time you run with a 5.X version the database will be upgraded,
 and 4.X cannot open the new format. This means that you cannot go back to the old statically linked version without
 significant hassle!
