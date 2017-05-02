@@ -1,0 +1,24 @@
+---
+language: cpp
+
+addons:
+  apt:
+    packages:
+    - libboost-all-dev
+    - build-essential
+    - libssl-dev
+    - libdb-dev
+    - libdb++-dev
+    - libqrencode-dev
+    - qt5-default
+
+script:
+  - mkdir -p src/obj
+  - chmod 755 src/leveldb/build_detect_platform
+
+  - cd src
+  - make -f makefile.unix DEBUGFLAGS="" USE_UPNP=1
+  - cd ..
+  - qmake "USE_QRCODE=1" "USE_UPNP=1" "NO_UPGRADE=1"
+  - make
+
