@@ -19,6 +19,7 @@
 #include "bitcoinrpc.h"
 #include "json/json_spirit_value.h"
 #include "boinc.h"
+#include "beacon.h"
 
 #include <boost/lexical_cast.hpp>
 #include <boost/filesystem.hpp>
@@ -41,7 +42,6 @@ extern std::string ConvertHexToBin(std::string a);
 extern bool WalletOutOfSync();
 extern bool WriteKey(std::string sKey, std::string sValue);
 std::string GetBeaconPublicKey(const std::string& cpid);
-std::string GetLocalBeaconPrivateKey(const std::string& cpid);
 bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 extern void CleanInboundConnections(bool bClearAll);

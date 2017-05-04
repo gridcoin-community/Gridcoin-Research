@@ -31,10 +31,8 @@ bool AskForOutstandingBlocks(uint256 hashStart);
 bool WriteKey(std::string sKey, std::string sValue);
 bool CleanChain();
 extern std::string SendReward(std::string sAddress, int64_t nAmount);
-std::string GetLocalBeaconPublicKey(std::string cpid);
 extern double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID);
 std::string GetBeaconPublicKey(const std::string& cpid);
-std::string GetLocalBeaconPrivateKey(const std::string& cpid);
 extern std::string SuccessFail(bool f);
 extern Array GetUpgradedBeaconReport();
 extern Array MagnitudeReport(std::string cpid);
@@ -1779,7 +1777,7 @@ Value execute(const Array& params, bool fHelp)
         
         entry.push_back(Pair("CPID", sCPID));
         std::string sPubKey =  GetBeaconPublicKey(sCPID);
-        std::string sPrivKey = GetLocalBeaconPrivateKey(sCPID);
+        std::string sPrivKey = GetStoredBeaconPrivateKey(sCPID);
         int64_t iBeaconTimestamp = BeaconTimeStamp(sCPID, false);
         std::string timestamp = TimestampToHRDate(iBeaconTimestamp);
     
@@ -1800,7 +1798,7 @@ Value execute(const Array& params, bool fHelp)
             sErr += "Private Key Missing. ";
         }
         // Verify the users Local Public Key matches the Beacon Public Key
-        std::string sLocalPubKey = GetLocalBeaconPublicKey(sCPID);
+        std::string sLocalPubKey = GetStoredBeaconPublicKey(sCPID);
         entry.push_back(Pair("Local Configuration Public Key", sLocalPubKey.c_str()));
 
         if (sLocalPubKey.empty())
@@ -3568,22 +3566,6 @@ bool HasActiveBeacon(const std::string& cpid)
     return GetBeaconPublicKey(cpid).empty() == false;
 }
 
-std::string GetLocalBeaconPrivateKey(const std::string& cpid)
-{
-    // 10-15-2016: Add the Suffix to the PrivateKey, so TestNet uses distinct keys
-    std::string sSuffix = fTestNet ? "testnet" : "";
-    std::string sBeaconPrivKey = GetArgument("privatekey" + cpid + sSuffix, "");
-    return sBeaconPrivKey;
-}
-
-std::string GetLocalBeaconPublicKey(std::string cpid)
-{
-    // 10-15-2016: Add the Suffix to the PrivateKey, so TestNet uses distinct keys
-    std::string sSuffix = fTestNet ? "testnet" : "";
-    std::string sBeaconPubKey = GetArgument("publickey" + cpid + sSuffix, "");
-    return sBeaconPubKey;
-}
-
 std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds)
 {
     const std::string key = "beacon;" + cpid;
@@ -3625,7 +3607,7 @@ bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string 
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash)
 {
     // Returns the Signature of the CPID+BlockHash message. 
-    std::string sPrivateKey = GetLocalBeaconPrivateKey(sCPID);
+    std::string sPrivateKey = GetStoredBeaconPrivateKey(sCPID);
     std::string sMessage = sCPID + sBlockHash;
     std::string sSignature = SignMessage(sMessage,sPrivateKey);
     return sSignature;

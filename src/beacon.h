@@ -30,3 +30,17 @@ void StoreBeaconKeys(
         const std::string &cpid,
         const std::string &pubKey,
         const std::string &privKey);
+
+//!
+//! \brief Get beacon private key from permanent storage.
+//! \param cpid CPID tied to the private key.
+//! \return Stored beacon private key if available, otherwise an empty string.
+//!
+std::string GetStoredBeaconPrivateKey(const std::string& cpid);
+
+//!
+//! \brief Get beacon public key from permanent storage.
+//! \param cpid CPID tied to the public key.
+//! \return Stored beacon public key if available, otherwise an empty string.
+//!
+std::string GetStoredBeaconPublicKey(const std::string& cpid);
