@@ -202,7 +202,6 @@ std::string DefaultOrgKey(int key_length);
 
 extern std::string boinc_hash(const std::string str);
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
-extern std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 extern double GetBlockDifficulty(unsigned int nBits);
 double GetLastPaymentTimeByCPID(std::string cpid);
 extern bool Contains(std::string data, std::string instring);
@@ -8100,17 +8099,6 @@ MiningCPID DeserializeBoincBlock(std::string block)
     }
     return surrogate;
 }
-
-
-std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash)
-{
-        //if (GetBoolArg("-disablecpidv2")) return "";
-        CPID c = CPID();
-        std::string cpid_non = bpk+email;
-        std::string digest = c.CPID_V2(email,bpk,blockhash);
-        return digest;
-}
-
 
 
 std::string boinc_hash(const std::string str)

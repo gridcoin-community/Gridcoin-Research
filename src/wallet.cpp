@@ -30,7 +30,6 @@ std::string GetArgument(std::string arg, std::string defaultvalue);
 std::string SendReward(std::string sAddress, int64_t nAmount);
 void qtUpdateConfirm(std::string txid);
 bool Contains(std::string data, std::string instring);
-std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 extern double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
 bool IsLockTimeWithinMinutes(double locktime, int minutes);

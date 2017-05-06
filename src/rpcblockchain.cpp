@@ -139,7 +139,6 @@ std::string strReplace(std::string& str, const std::string& oldStr, const std::s
 std::string ReadCache(std::string section, std::string key);
 MiningCPID GetNextProject(bool bForce);
 std::string GetArgument(std::string arg, std::string defaultvalue);
-std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 extern std::string TimestampToHRDate(double dtm);
 
