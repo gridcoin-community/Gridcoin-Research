@@ -173,7 +173,6 @@ extern std::string ExtractHTML(std::string HTMLdata, std::string tagstartprefix,
 CTxMemPool mempool;
 unsigned int nTransactionsUpdated = 0;
 unsigned int REORGANIZE_FAILED = 0;
-extern void RemoveNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, double mint, bool IsStake);
 
 unsigned int WHITELISTED_PROJECTS = 0;
 unsigned int CHECKPOINT_VIOLATIONS = 0;
@@ -5563,43 +5562,6 @@ bool IsLockTimeWithinMinutes(int64_t locktime, int minutes)
 }
 
 
-double GetMagnitudeWeight(double LockTime)
-{
-    double age = ( GetAdjustedTime() - LockTime)/86400;
-    double inverse = 14-age;
-    if (inverse < 1) inverse=1;
-    return inverse*inverse;
-}
-
-
-
-
-void RemoveNetworkMagnitude(double LockTime, std::string cpid, MiningCPID bb, double mint, bool IsStake)
-{
-        if (!IsLockTimeWithin14days(LockTime)) return;
-        StructCPID structMagnitude = GetInitializedStructCPID2(cpid,mvMagnitudes);
-        structMagnitude.projectname = bb.projectname;
-        structMagnitude.entries--;
-        if (IsStake)
-        {
-            double interest = (double)mint - (double)bb.ResearchSubsidy;
-            structMagnitude.payments -= bb.ResearchSubsidy;
-            structMagnitude.interestPayments = structMagnitude.interestPayments - interest;
-            structMagnitude.LastPaymentTime = 0;
-        }
-        structMagnitude.cpid = cpid;
-        double total_owed = 0;
-        mvMagnitudes[cpid] = structMagnitude;
-        structMagnitude.owed = GetOutstandingAmountOwed(structMagnitude,cpid,LockTime,total_owed,bb.Magnitude);
-        structMagnitude.totalowed = total_owed;
-        mvMagnitudes[cpid] = structMagnitude;
-}
-
-
-
-
-
-
 void AdjustTimestamps(StructCPID& strCPID, double timestamp, double subsidy)
 {
         if (timestamp > strCPID.LastPaymentTime && subsidy > 0) strCPID.LastPaymentTime = timestamp;
@@ -9590,23 +9552,6 @@ std::string getHardDriveSerial()
     //if (fDebug3) printf("result %s",result.c_str());
     msHDDSerial = result;
     return result;
-}
-
-std::string GetBlockIndexData(std::string sKey)
-{
-    CTxDB txdb;
-    std::string sValue = "";
-    if (!txdb.ReadGenericData(sKey,sValue)) return "";
-    return sValue;
-}
-
-bool SetBlockIndexData(std::string sKey, std::string sValue)
-{
-        CTxDB txdb;
-        txdb.TxnBegin();
-        if (!txdb.WriteGenericData(sKey,sValue)) return false;
-        if (!txdb.TxnCommit()) return false;
-        return true;
 }
 
 bool IsContract(CBlockIndex* pIndex)
