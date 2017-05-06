@@ -1849,14 +1849,6 @@ void NetworkTimer()
 
 
 
-
-
-
-
-
-
-
-
 bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int64_t nSearchInterval, 
     int64_t nFees, CTransaction& txNew, CKey& key, int64_t& out_gridreward, std::string& out_hashboinc)
 {

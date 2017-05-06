@@ -7862,12 +7862,6 @@ bool Contains(std::string data, std::string instring)
     return false;
 }
 
-
-std::string NN(std::string value)
-{
-    return value.empty() ? "" : value;
-}
-
 double PendingSuperblockHeight()
 {
     double height = cdbl(ReadCache("neuralsecurity","pending"),0);
@@ -7970,20 +7964,20 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 
     std::string bb = mcpid.cpid + delim + mcpid.projectname + delim + mcpid.aesskein + delim + RoundToString(mcpid.rac,0)
                     + delim + RoundToString(mcpid.pobdifficulty,5) + delim + RoundToString((double)mcpid.diffbytes,0)
-                    + delim + NN(mcpid.enccpid)
-                    + delim + NN(mcpid.encaes) + delim + RoundToString(mcpid.nonce,0) + delim + RoundToString(mcpid.NetworkRAC,0)
-                    + delim + NN(version)
+                    + delim + mcpid.enccpid
+                    + delim + mcpid.encaes + delim + RoundToString(mcpid.nonce,0) + delim + RoundToString(mcpid.NetworkRAC,0)
+                    + delim + version
                     + delim + RoundToString(mcpid.ResearchSubsidy,2)
                     + delim + RoundToString(mcpid.LastPaymentTime,0)
                     + delim + RoundToString(mcpid.RSAWeight,0)
-                    + delim + NN(mcpid.cpidv2)
+                    + delim + mcpid.cpidv2
                     + delim + RoundToString(mcpid.Magnitude,0)
-                    + delim + NN(mcpid.GRCAddress) + delim + NN(mcpid.lastblockhash)
-                    + delim + RoundToString(mcpid.InterestSubsidy,2) + delim + NN(mcpid.Organization)
-                    + delim + NN(mcpid.OrganizationKey) + delim + mcpid.NeuralHash + delim + mcpid.superblock
+                    + delim + mcpid.GRCAddress + delim + mcpid.lastblockhash
+                    + delim + RoundToString(mcpid.InterestSubsidy,2) + delim + mcpid.Organization
+                    + delim + mcpid.OrganizationKey + delim + mcpid.NeuralHash + delim + mcpid.superblock
                     + delim + RoundToString(mcpid.ResearchSubsidy2,2) + delim + RoundToString(mcpid.ResearchAge,6)
                     + delim + RoundToString(mcpid.ResearchMagnitudeUnit,6) + delim + RoundToString(mcpid.ResearchAverageMagnitude,2)
-                    + delim + NN(mcpid.LastPORBlockHash) + delim + mcpid.CurrentNeuralHash + delim + mcpid.BoincPublicKey + delim + mcpid.BoincSignature;
+                    + delim + mcpid.LastPORBlockHash + delim + mcpid.CurrentNeuralHash + delim + mcpid.BoincPublicKey + delim + mcpid.BoincSignature;
     return bb;
 }
 

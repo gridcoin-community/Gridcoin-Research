@@ -1384,13 +1384,6 @@ int64_t AmountFromDouble(double dAmount)
     return nAmount;
 }
 
-std::string CallPutNarr(std::string sType)
-{
-    if (sType=="c" || sType=="call") return "call";
-    if (sType=="p" || sType=="put") return "put";
-    return "NA";
-}
-
 
 std::string GetDomainForSymbol(std::string sSymbol)
 {
@@ -3571,13 +3564,6 @@ double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID)
         return 0;
 }
 
-
-bool IsContractSettled(std::string sContractType, std::string sOpra)
-{
-    std::string sTXID = mvApplicationCache["paid_opra;" + sOpra];
-    return (!sTXID.empty());
-}
-
 bool HasActiveBeacon(const std::string& cpid)
 {
     return GetBeaconPublicKey(cpid).empty() == false;
@@ -3645,60 +3631,6 @@ std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash)
     std::string sSignature = SignMessage(sMessage,sPrivateKey);
     return sSignature;
 }
-
-Array ContractReportCSV()
-{
-          Array results;
-          Object c;
-          std::string Narr = "Open Contract Report - Generated " + RoundToString(GetAdjustedTime(),0);
-          c.push_back(Pair("Open Contract Report",Narr));
-          results.push_back(c);
-          double rows = 0;
-          std::string header = "Name,StartDate,Expiration,Content,Value \r\n";
-          std::string row = "";
-          std::string sType = "contract";
-          for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
-          {
-                std::string key_name  = (*ii).first;
-                if (key_name.length() > sType.length())
-                {
-                    if (key_name.substr(0,sType.length())==sType)
-                    {
-                                std::string key_value = mvApplicationCache[(*ii).first];
-                                std::vector<std::string> vContractValues = split(key_value.c_str(),";");
-                                std::string contract_name = strReplace(key_name,"contract;","");
-
-                                row = contract_name + "," + RoundToString(mvApplicationCacheTimestamp[(*ii).first],0) + "," 
-                                    + RoundToString(mvApplicationCacheTimestamp[(*ii).first]+86400,0) + ", , \n";
-                                header += row;
-                                rows++;
-                                for (unsigned int i = 0; i < vContractValues.size(); i++)
-                                {
-                                    std::vector<std::string> vContractSubValues = split(vContractValues[i].c_str(),",");
-                                    if (vContractSubValues.size() > 1)
-                                    {
-                                        std::string subkey = vContractSubValues[0];
-                                        std::string subvalue = vContractSubValues[1];
-                                        row = " , , ," + subkey + "," + subvalue + "\n";
-                                        header += row;
-                                    }
-
-                                }
-                                header +=  "\n";
-                    }
-               
-                }
-           }
-           int64_t timestamp = GetTime();
-           std::string footer = "Total: " + RoundToString(rows,0) + ", , , ," + "\n";
-           header += footer;
-           Object entry;
-           entry.push_back(Pair("CSV Complete",strprintf("\\reports\\open_contracts_%" PRId64 ".csv",timestamp)));
-           results.push_back(entry);
-           CSVToFile(strprintf("open_contracts_%" PRId64 ".csv",timestamp), header);
-           return results;
-}
-
 
 std::string GetPollContractByTitle(std::string objecttype, std::string title)
 {
@@ -4108,7 +4040,6 @@ Array GetJSONBeaconReport()
         Object entry;
         entry.push_back(Pair("CPID","GRCAddress"));
         std::string datatype="beacon";
-        std::string rows = "";
         std::string row = "";
         for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
         {
@@ -4279,18 +4210,6 @@ Array GetJSONCurrentNeuralNetworkReport()
 }
 
 
-
-double GetTotalContentsFromVector(map<std::string,double>& v)
-{
-      double votes = 0;
-      for(map<std::string,double>::iterator ii=v.begin(); ii!=v.end(); ++ii) 
-      {
-                double pop = v[(*ii).first];
-                votes += pop;
-      }
-      return votes;
-}
-
 Array GetJSONVersionReport()
 {
       Array results;
@@ -4301,8 +4220,11 @@ Array GetJSONVersionReport()
       double pct = 0;
       Object entry;
       entry.push_back(Pair("Version","Popularity,Percent %"));
-      double votes = GetTotalContentsFromVector(mvNeuralVersion);
-        
+      
+      double votes = 0;
+      for(auto it : mvNeuralVersion)
+          votes += it.second;
+      
       for(map<std::string,double>::iterator ii=mvNeuralVersion.begin(); ii!=mvNeuralVersion.end(); ++ii) 
       {
                 double popularity = mvNeuralVersion[(*ii).first];
@@ -4312,7 +4234,7 @@ Array GetJSONVersionReport()
                 {
                     row = neural_ver + "," + RoundToString(popularity,0);
                     report += row + "\r\n";
-                    pct = (((double)popularity)/(votes+.01))*100;
+                    pct = popularity/(votes+.01)*100;
                     entry.push_back(Pair(neural_ver,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%"));
                 }
       }
