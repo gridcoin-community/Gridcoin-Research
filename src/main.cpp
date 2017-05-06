@@ -200,7 +200,6 @@ extern bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
 std::string DefaultOrg();
 std::string DefaultOrgKey(int key_length);
 
-extern std::string boinc_hash(const std::string str);
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 extern double GetBlockDifficulty(unsigned int nBits);
 double GetLastPaymentTimeByCPID(std::string cpid);
@@ -8101,16 +8100,6 @@ MiningCPID DeserializeBoincBlock(std::string block)
 }
 
 
-std::string boinc_hash(const std::string str)
-{
-    // Return the boinc hash of a string:
-    CPID c = CPID(str);
-    return c.hexdigest();
-}
-
-
-
-
 void InitializeProjectStruct(StructCPID& project)
 {
     std::string email = GetArgument("email", "NA");
@@ -8119,7 +8108,7 @@ void InitializeProjectStruct(StructCPID& project)
     project.email = email;
     std::string cpid_non = project.cpidhash+email;
     project.boincruntimepublickey = project.cpidhash;
-    project.cpid = boinc_hash(cpid_non);
+    project.cpid = CPID(cpid_non).hexdigest();
     std::string ENCbpk = AdvancedCrypt(cpid_non);
     project.boincpublickey = ENCbpk;
     project.cpidv2 = ComputeCPIDv2(email, project.cpidhash, 0);
