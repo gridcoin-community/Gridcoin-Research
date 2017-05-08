@@ -99,7 +99,6 @@ extern std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_populari
 extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
        
 extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
-extern bool IsLockTimeWithin14days(double locktime);
 extern int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string operation, CBlockIndex* pindexLast, bool bVerifyingBlock, int VerificationPhase, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
 
 
@@ -204,7 +203,6 @@ extern double GetBlockDifficulty(unsigned int nBits);
 double GetLastPaymentTimeByCPID(std::string cpid);
 extern bool Contains(std::string data, std::string instring);
 
-extern bool LockTimeRecent(double locktime);
 extern double CoinToDouble(double surrogate);
 extern double PreviousBlockAge();
 void CheckForUpgrade();
@@ -240,8 +238,6 @@ int RebootClient();
 std::string YesNo(bool bin);
 
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
-extern bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
-extern bool IsLockTimeWithinMinutes(double locktime, int minutes);
 extern double CalculatedMagnitude(int64_t locktime,bool bUseLederstrumpf);
 extern int64_t GetCoinYearReward(int64_t nTime);
 extern void AddNMRetired(double height,double LockTime, std::string cpid, MiningCPID bb);
@@ -5519,7 +5515,7 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
 
 bool BlockNeedsChecked(int64_t BlockTime)
 {
-    if (IsLockTimeWithin14days((double)BlockTime))
+    if (IsLockTimeWithin14days(BlockTime))
     {
         if (fColdBoot) return false;
         bool fOut = OutOfSyncByMoreThan(30);
@@ -5531,43 +5527,11 @@ bool BlockNeedsChecked(int64_t BlockTime)
     }
 }
 
-bool IsLockTimeWithin14days(double locktime)
-{
-    //Within 14 days
-    double nCutoff =  GetAdjustedTime() - (60*60*24*14);
-    if (locktime < nCutoff) return false;
-    return true;
-}
-
-bool LockTimeRecent(double locktime)
-{
-    //Returns true if adjusted time is within 45 minutes
-    double nCutoff =  GetAdjustedTime() - (60*45);
-    if (locktime < nCutoff) return false;
-    return true;
-}
-
-bool IsLockTimeWithinMinutes(double locktime, int minutes)
-{
-    double nCutoff = GetAdjustedTime() - (60*minutes);
-    if (locktime < nCutoff) return false;
-    return true;
-}
-
-bool IsLockTimeWithinMinutes(int64_t locktime, int minutes)
-{
-    double nCutoff = GetAdjustedTime() - (60*minutes);
-    if (locktime < nCutoff) return false;
-    return true;
-}
-
-
 void AdjustTimestamps(StructCPID& strCPID, double timestamp, double subsidy)
 {
         if (timestamp > strCPID.LastPaymentTime && subsidy > 0) strCPID.LastPaymentTime = timestamp;
         if (timestamp < strCPID.EarliestPaymentTime) strCPID.EarliestPaymentTime = timestamp;
 }
-
 
 void AddResearchMagnitude(CBlockIndex* pIndex)
 {

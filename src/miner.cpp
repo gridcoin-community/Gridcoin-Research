@@ -8,6 +8,7 @@
 #include "miner.h"
 #include "kernel.h"
 #include "cpid.h"
+#include "util.h"
 
 #include <memory>
 
@@ -27,7 +28,6 @@ double CoinToDouble(double surrogate);
 StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 
 void ThreadTopUpKeyPool(void* parg);
-bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 
 int64_t GetRSAWeightByCPID(std::string cpid);
 bool OutOfSyncByAgeWithChanceOfMining();

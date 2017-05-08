@@ -1317,6 +1317,16 @@ int64_t GetAdjustedTime()
     return GetTime() + GetTimeOffset();
 }
 
+bool IsLockTimeWithin14days(int64_t locktime)
+{
+    return IsLockTimeWithinMinutes(locktime, 14 * 24 * 60);
+}
+
+bool IsLockTimeWithinMinutes(int64_t locktime, int minutes)
+{
+    int64_t cutOff = GetAdjustedTime() - minutes * 60;
+    return locktime >= cutOff;
+}
 
 #ifndef UPGRADERFLAG
 // avoid including unnecessary files for standalone upgrader
