@@ -8494,7 +8494,6 @@ StructCPID GetStructCPID()
     c.BTCQuote = 0;
     c.GRCQuote = 0;
     c.ResearchAverageMagnitude = 0;
-    c.Canary = 0;
     c.NetsoftRAC = 0;
     c.interestPayments = 0;
     c.payments = 0;
@@ -8525,7 +8524,6 @@ MiningCPID GetMiningCPID()
     mc.ResearchAge = 0;
     mc.ResearchMagnitudeUnit = 0;
     mc.ResearchAverageMagnitude = 0;
-    mc.Canary = 0; //Used to test for a memory overflow
     return mc;
 }
 

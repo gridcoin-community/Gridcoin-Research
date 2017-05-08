@@ -73,7 +73,6 @@ struct StructCPID
     double NetsoftRAC;
     double GRCQuote;
     double BTCQuote;
-    double Canary;
     std::string cpid;
     std::string emailhash;
     std::string cpidhash;
@@ -121,7 +120,6 @@ struct MiningCPID
     double ResearchMagnitudeUnit;
     double ResearchAverageMagnitude;
     double InterestSubsidy;
-    double Canary;
 
     std::string projectname;
     std::string encboincpublickey;
