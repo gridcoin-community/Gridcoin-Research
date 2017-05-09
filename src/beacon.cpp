@@ -20,8 +20,8 @@ int GenerateBeaconKeys(const std::string &cpid, std::string &sOutPubKey, std::st
     sOutPrivKey = GetArgument("PrivateKey" + cpid + GetNetSuffix(), "");
     sOutPubKey  = GetArgument("PublicKey" + cpid + GetNetSuffix(), "");
     
-    // If current keypair is not empty, but is invalid, allow the new keys to be stored, otherwise return 1: (10-25-2016)    
-    if (!sOutPrivKey.empty() && !sOutPubKey.empty()) 
+    // If current keypair is not empty, but is invalid, allow the new keys to be stored, otherwise return 1: (10-25-2016)
+    if (!sOutPrivKey.empty() && !sOutPubKey.empty())
     {
         uint256 hashBlock = GetRandHash();
         std::string sSignature = SignBlockWithCPID(cpid,hashBlock.GetHex());
@@ -50,4 +50,14 @@ void StoreBeaconKeys(
 {
     WriteKey("PublicKey" + cpid + GetNetSuffix(), pubKey);
     WriteKey("PrivateKey" + cpid + GetNetSuffix(), privKey);
+}
+
+std::string GetStoredBeaconPrivateKey(const std::string& cpid)
+{
+    return GetArgument("privatekey" + cpid + GetNetSuffix(), "");
+}
+
+std::string GetStoredBeaconPublicKey(const std::string& cpid)
+{
+    return GetArgument("publickey" + cpid + GetNetSuffix(), "");
 }

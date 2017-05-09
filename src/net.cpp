@@ -34,7 +34,6 @@ extern void BusyWaitForTally();
 extern void DoTallyResearchAverages(void* parg);
 extern void ExecGridcoinServices(void* parg);
 double cdbl(std::string s, int place);
-bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 std::string DefaultWalletAddress();
 std::string NodeAddress(CNode* pfrom);
 std::string GetNeuralVersion();

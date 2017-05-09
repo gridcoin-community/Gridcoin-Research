@@ -338,7 +338,7 @@ bool CTxDB::LoadBlockIndex()
 {
     int64_t nStart = GetTimeMillis();
     int nHighest = 0;
-    double dBlockCount = 0;
+    uint32_t nBlockCount = 0;
 
     if (mapBlockIndex.size() > 0) {
         // Already loaded once in this session. It can happen during migration
@@ -398,10 +398,9 @@ bool CTxDB::LoadBlockIndex()
         pindexNew->nNonce         = diskindex.nNonce;
 
         //9-26-2016 - Gridcoin - New Accrual Fields
-
         if (diskindex.nHeight > nNewIndex)
         {
-            pindexNew->sCPID             = diskindex.sCPID;
+            pindexNew->cpid              = diskindex.cpid;
             pindexNew->nResearchSubsidy  = diskindex.nResearchSubsidy;
             pindexNew->nInterestSubsidy  = diskindex.nInterestSubsidy;
             pindexNew->nMagnitude        = diskindex.nMagnitude;
@@ -409,7 +408,7 @@ bool CTxDB::LoadBlockIndex()
             pindexNew->nIsSuperBlock     = diskindex.nIsSuperBlock;
         }
 
-        dBlockCount++;
+        nBlockCount++;
         // Watch for genesis block
         if (pindexGenesisBlock == NULL && blockHash == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
             pindexGenesisBlock = pindexNew;
@@ -419,7 +418,7 @@ bool CTxDB::LoadBlockIndex()
                 nLoaded +=10000;
                 if (nLoaded > nHighest) nHighest=nLoaded;
                 if (nHighest < nGrandfather) nHighest=nGrandfather;
-                std::string sBlocksLoaded = RoundToString((double)nLoaded,0) + "/" + RoundToString((double)nHighest,0) + " Blocks Loaded";
+                std::string sBlocksLoaded = RoundToString(nLoaded,0) + "/" + RoundToString(nHighest,0) + " Blocks Loaded";
                 uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
             }
         #endif
@@ -433,7 +432,7 @@ bool CTxDB::LoadBlockIndex()
     delete iterator;
     
     
-    printf("Time to memorize diskindex containing %f blocks : %15" PRId64 ".%f ms\r\n", dBlockCount, GetTimeMillis() - nStart, (double)nHighest);
+    printf("Time to memorize diskindex containing %i blocks : %15" PRId64 "ms\r\n", nBlockCount, GetTimeMillis() - nStart);
     nStart = GetTimeMillis();
     
 
@@ -519,7 +518,7 @@ bool CTxDB::LoadBlockIndex()
                 nLoaded +=1000;
                 if (nLoaded > nHighest) nHighest=nLoaded;
                 if (nHighest < nGrandfather) nHighest=nGrandfather;
-                std::string sBlocksLoaded = RoundToString((double)nLoaded,0) + "/" + RoundToString((double)nHighest,0) + " Blocks Verified";
+                std::string sBlocksLoaded = RoundToString(nLoaded,0) + "/" + RoundToString(nHighest,0) + " Blocks Verified";
                 uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
             }
         #endif
@@ -646,7 +645,7 @@ bool CTxDB::LoadBlockIndex()
     nLoaded=pindex->nHeight;
     if (pindex && pindexBest && pindexBest->nHeight > 10 && pindex->pnext)
     {
-        printf(" RA Starting %f %f %f ",(double)pindex->nHeight,(double)pindex->pnext->nHeight,(double)pindexBest->nHeight);
+        printf(" RA Starting %i %i %i ", pindex->nHeight, pindex->pnext->nHeight, pindexBest->nHeight);
         while (pindex->nHeight < pindexBest->nHeight)
         {
             if (!pindex || !pindex->pnext) break;  
@@ -660,16 +659,17 @@ bool CTxDB::LoadBlockIndex()
                 nLoaded +=10000;
                 if (nLoaded > nHighest) nHighest=nLoaded;
                 if (nHighest < nGrandfather) nHighest=nGrandfather;
-                std::string sBlocksLoaded = RoundToString((double)nLoaded,0) + "/" + RoundToString((double)nHighest,0) + " POR Blocks Verified";
+                std::string sBlocksLoaded = RoundToString(nLoaded,0) + "/" + RoundToString(nHighest,0) + " POR Blocks Verified";
                 uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
             }
 #endif
             
-            if (!pindex->sCPID.empty() &&
-                pindex->nResearchSubsidy > 0 &&
-                pindex->sCPID != "INVESTOR") 
+            const std::string& scpid = pindex->GetCPID();
+            if (pindex->nResearchSubsidy > 0 &&
+                !scpid.empty() &&
+                scpid != "INVESTOR")
             {
-                StructCPID& stCPID = mvResearchAge[pindex->sCPID];
+                StructCPID& stCPID = mvResearchAge[scpid];
                 
                 stCPID.InterestSubsidy += pindex->nInterestSubsidy;
                 stCPID.ResearchSubsidy += pindex->nResearchSubsidy;
@@ -689,7 +689,7 @@ bool CTxDB::LoadBlockIndex()
                 if (pindex->nTime < stCPID.LowLockTime)  stCPID.LowLockTime = pindex->nTime;
                 if (pindex->nTime > stCPID.HighLockTime) stCPID.HighLockTime = pindex->nTime;
                 
-                AddCPIDBlockHash(pindex->sCPID, pindex->GetBlockHash());
+                AddCPIDBlockHash(scpid, pindex->GetBlockHash());
             }
         }
     }

@@ -532,17 +532,6 @@ bool CKey::SetCompactSignature(uint256 hash, const std::vector<unsigned char>& v
         return ret;
 }
 
-/*
-bool CKey::Verify_Retired(uint256 hash, const std::vector<unsigned char>& vchSig)
-{
-    // -1 = error, 0 = bad sig, 1 = good
-    if (ECDSA_verify(0, (unsigned char*)&hash, sizeof(hash), &vchSig[0], vchSig.size(), pkey) != 1)
-        return false;
-
-    return true;
-}
-*/
-
 
 bool CKey::IsValid()
 {

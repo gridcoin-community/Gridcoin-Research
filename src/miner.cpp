@@ -8,6 +8,7 @@
 #include "miner.h"
 #include "kernel.h"
 #include "cpid.h"
+#include "util.h"
 
 #include <memory>
 
@@ -23,12 +24,10 @@ MiningCPID GetNextProject(bool bForce);
 void ThreadCleanWalletPassphrase(void* parg);
 double GetBlockDifficulty(unsigned int nBits);
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
-std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 double CoinToDouble(double surrogate);
-StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
+StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 
 void ThreadTopUpKeyPool(void* parg);
-bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 
 int64_t GetRSAWeightByCPID(std::string cpid);
 bool OutOfSyncByAgeWithChanceOfMining();

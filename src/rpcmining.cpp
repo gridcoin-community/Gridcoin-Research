@@ -73,10 +73,8 @@ Value getmininginfo(const Array& params, bool fHelp)
     std::string neural_hash = GetNeuralNetworkSupermajorityHash(neural_popularity);
     obj.push_back(Pair("PopularNeuralHash", neural_hash));
     //9-19-2015 - CM
-    std::string myNeuralHash = "";
     #if defined(WIN32) && defined(QT_GUI)
-               myNeuralHash = qtGetNeuralHash("");
-               obj.push_back(Pair("MyNeuralHash", myNeuralHash));
+    obj.push_back(Pair("MyNeuralHash", qtGetNeuralHash("")));
     #endif
 
     obj.push_back(Pair("NeuralPopularity", neural_popularity));

@@ -31,10 +31,8 @@ bool AskForOutstandingBlocks(uint256 hashStart);
 bool WriteKey(std::string sKey, std::string sValue);
 bool CleanChain();
 extern std::string SendReward(std::string sAddress, int64_t nAmount);
-std::string GetLocalBeaconPublicKey(std::string cpid);
 extern double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID);
 std::string GetBeaconPublicKey(const std::string& cpid);
-std::string GetBeaconPrivateKey(const std::string& cpid);
 extern std::string SuccessFail(bool f);
 extern Array GetUpgradedBeaconReport();
 extern Array MagnitudeReport(std::string cpid);
@@ -67,7 +65,7 @@ bool UpdateNeuralNetworkQuorumData();
 extern Array LifetimeReport(std::string cpid);
 Array StakingReport();
 extern std::string AddContract(std::string sType, std::string sName, std::string sContract);
-StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
+StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
 bool HasActiveBeacon(const std::string& cpid);
 int64_t GetEarliestWalletTransaction();
@@ -87,8 +85,6 @@ double GetCountOf(std::string datatype);
 extern double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons);
 extern bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
 
-void TestScan();
-void TestScan2();
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 bool FullSyncWithDPORNodes();
 bool LoadSuperblock(std::string data, int64_t nTime, double height);
@@ -141,7 +137,6 @@ std::string strReplace(std::string& str, const std::string& oldStr, const std::s
 std::string ReadCache(std::string section, std::string key);
 MiningCPID GetNextProject(bool bForce);
 std::string GetArgument(std::string arg, std::string defaultvalue);
-std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 extern std::string TimestampToHRDate(double dtm);
 
@@ -1386,13 +1381,6 @@ int64_t AmountFromDouble(double dAmount)
     return nAmount;
 }
 
-std::string CallPutNarr(std::string sType)
-{
-    if (sType=="c" || sType=="call") return "call";
-    if (sType=="p" || sType=="put") return "put";
-    return "NA";
-}
-
 
 std::string GetDomainForSymbol(std::string sSymbol)
 {
@@ -1789,7 +1777,7 @@ Value execute(const Array& params, bool fHelp)
         
         entry.push_back(Pair("CPID", sCPID));
         std::string sPubKey =  GetBeaconPublicKey(sCPID);
-        std::string sPrivKey = GetBeaconPrivateKey(sCPID);
+        std::string sPrivKey = GetStoredBeaconPrivateKey(sCPID);
         int64_t iBeaconTimestamp = BeaconTimeStamp(sCPID, false);
         std::string timestamp = TimestampToHRDate(iBeaconTimestamp);
     
@@ -1810,7 +1798,7 @@ Value execute(const Array& params, bool fHelp)
             sErr += "Private Key Missing. ";
         }
         // Verify the users Local Public Key matches the Beacon Public Key
-        std::string sLocalPubKey = GetLocalBeaconPublicKey(sCPID);
+        std::string sLocalPubKey = GetStoredBeaconPublicKey(sCPID);
         entry.push_back(Pair("Local Configuration Public Key", sLocalPubKey.c_str()));
 
         if (sLocalPubKey.empty())
@@ -2743,11 +2731,6 @@ Value execute(const Array& params, bool fHelp)
 
         results.push_back(entry);
     }
-    else if (sItem=="testscannew")
-    {
-        TestScan();
-        TestScan2();
-    }
     else if (sItem == "tally")
     {
             bNetAveragesLoaded = false;
@@ -3324,7 +3307,7 @@ Array LifetimeReport(std::string cpid)
             pindex = pindex->pnext;
             if (pindex==NULL || !pindex->IsInMainChain()) continue;
             if (pindex == pindexBest) break;
-            if (pindex->sCPID == cpid && (pindex->nResearchSubsidy > 0)) 
+            if (pindex->GetCPID() == cpid && (pindex->nResearchSubsidy > 0))
             {
                 entry.push_back(Pair(RoundToString((double)pindex->nHeight,0), RoundToString(pindex->nResearchSubsidy,2)));
             }
@@ -3578,32 +3561,9 @@ double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID)
         return 0;
 }
 
-
-bool IsContractSettled(std::string sContractType, std::string sOpra)
-{
-    std::string sTXID = mvApplicationCache["paid_opra;" + sOpra];
-    return (!sTXID.empty());
-}
-
 bool HasActiveBeacon(const std::string& cpid)
 {
     return GetBeaconPublicKey(cpid).empty() == false;
-}
-
-std::string GetBeaconPrivateKey(const std::string& cpid)
-{
-    // 10-15-2016: Add the Suffix to the PrivateKey, so TestNet uses distinct keys
-    std::string sSuffix = fTestNet ? "testnet" : "";
-    std::string sBeaconPrivKey = GetArgument("privatekey" + cpid + sSuffix, "");
-    return sBeaconPrivKey;
-}
-
-std::string GetLocalBeaconPublicKey(std::string cpid)
-{
-    // 10-15-2016: Add the Suffix to the PrivateKey, so TestNet uses distinct keys
-    std::string sSuffix = fTestNet ? "testnet" : "";
-    std::string sBeaconPubKey = GetArgument("publickey" + cpid + sSuffix, "");
-    return sBeaconPubKey;
 }
 
 std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds)
@@ -3647,65 +3607,11 @@ bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string 
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash)
 {
     // Returns the Signature of the CPID+BlockHash message. 
-    std::string sPrivateKey = GetBeaconPrivateKey(sCPID);
+    std::string sPrivateKey = GetStoredBeaconPrivateKey(sCPID);
     std::string sMessage = sCPID + sBlockHash;
     std::string sSignature = SignMessage(sMessage,sPrivateKey);
     return sSignature;
 }
-
-Array ContractReportCSV()
-{
-          Array results;
-          Object c;
-          std::string Narr = "Open Contract Report - Generated " + RoundToString(GetAdjustedTime(),0);
-          c.push_back(Pair("Open Contract Report",Narr));
-          results.push_back(c);
-          double rows = 0;
-          std::string header = "Name,StartDate,Expiration,Content,Value \r\n";
-          std::string row = "";
-          std::string sType = "contract";
-          for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
-          {
-                std::string key_name  = (*ii).first;
-                if (key_name.length() > sType.length())
-                {
-                    if (key_name.substr(0,sType.length())==sType)
-                    {
-                                std::string key_value = mvApplicationCache[(*ii).first];
-                                std::vector<std::string> vContractValues = split(key_value.c_str(),";");
-                                std::string contract_name = strReplace(key_name,"contract;","");
-
-                                row = contract_name + "," + RoundToString(mvApplicationCacheTimestamp[(*ii).first],0) + "," 
-                                    + RoundToString(mvApplicationCacheTimestamp[(*ii).first]+86400,0) + ", , \n";
-                                header += row;
-                                rows++;
-                                for (unsigned int i = 0; i < vContractValues.size(); i++)
-                                {
-                                    std::vector<std::string> vContractSubValues = split(vContractValues[i].c_str(),",");
-                                    if (vContractSubValues.size() > 1)
-                                    {
-                                        std::string subkey = vContractSubValues[0];
-                                        std::string subvalue = vContractSubValues[1];
-                                        row = " , , ," + subkey + "," + subvalue + "\n";
-                                        header += row;
-                                    }
-
-                                }
-                                header +=  "\n";
-                    }
-               
-                }
-           }
-           int64_t timestamp = GetTime();
-           std::string footer = "Total: " + RoundToString(rows,0) + ", , , ," + "\n";
-           header += footer;
-           Object entry;
-           entry.push_back(Pair("CSV Complete",strprintf("\\reports\\open_contracts_%" PRId64 ".csv",timestamp)));
-           results.push_back(entry);
-           CSVToFile(strprintf("open_contracts_%" PRId64 ".csv",timestamp), header);
-           return results;
-}
-
 
 std::string GetPollContractByTitle(std::string objecttype, std::string title)
 {
@@ -4115,7 +4021,6 @@ Array GetJSONBeaconReport()
         Object entry;
         entry.push_back(Pair("CPID","GRCAddress"));
         std::string datatype="beacon";
-        std::string rows = "";
         std::string row = "";
         for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
         {
@@ -4286,18 +4191,6 @@ Array GetJSONCurrentNeuralNetworkReport()
 }
 
 
-
-double GetTotalContentsFromVector(map<std::string,double>& v)
-{
-      double votes = 0;
-      for(map<std::string,double>::iterator ii=v.begin(); ii!=v.end(); ++ii) 
-      {
-                double pop = v[(*ii).first];
-                votes += pop;
-      }
-      return votes;
-}
-
 Array GetJSONVersionReport()
 {
       Array results;
@@ -4308,8 +4201,11 @@ Array GetJSONVersionReport()
       double pct = 0;
       Object entry;
       entry.push_back(Pair("Version","Popularity,Percent %"));
-      double votes = GetTotalContentsFromVector(mvNeuralVersion);
-        
+      
+      double votes = 0;
+      for(auto it : mvNeuralVersion)
+          votes += it.second;
+      
       for(map<std::string,double>::iterator ii=mvNeuralVersion.begin(); ii!=mvNeuralVersion.end(); ++ii) 
       {
                 double popularity = mvNeuralVersion[(*ii).first];
@@ -4319,7 +4215,7 @@ Array GetJSONVersionReport()
                 {
                     row = neural_ver + "," + RoundToString(popularity,0);
                     report += row + "\r\n";
-                    pct = (((double)popularity)/(votes+.01))*100;
+                    pct = popularity/(votes+.01)*100;
                     entry.push_back(Pair(neural_ver,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%"));
                 }
       }

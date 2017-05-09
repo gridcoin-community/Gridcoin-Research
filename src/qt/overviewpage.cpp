@@ -265,8 +265,8 @@ void OverviewPage::on_btnBoinc_pressed()
 
 void OverviewPage::on_btnChat_pressed()
 {
-    //QDesktopServices::openUrl(QUrl("https://kiwiirc.com/client/irc.freenode.net:6667/#gridcoin"));
-	QDesktopServices::openUrl(QUrl("https://kiwiirc.com/client/irc.freenode.net:6667/#gridcoin-help"));
+    //QDesktopServices::openUrl(QUrl("https://kiwiirc.com/client/irc.freenode.net:6697/#gridcoin"));
+	QDesktopServices::openUrl(QUrl("https://kiwiirc.com/client/irc.freenode.net:6697/#gridcoin-help"));
 }
 
 void OverviewPage::on_btnExchange_pressed()

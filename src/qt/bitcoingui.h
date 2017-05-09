@@ -114,8 +114,7 @@ private:
 	QAction *browserAction;
 
 	QAction *ticketListAction;
-	QAction *votingAction;
-	QAction *votingReservedAction;
+    QAction *votingAction;
 
 	QAction *galazaAction;
 	QAction *newUserWizardAction;
@@ -220,8 +219,7 @@ private slots:
 	void rebootClicked();
 	void configClicked();
 	void miningClicked();
-	void votingClicked();
-	void votingReservedClicked();
+    void votingClicked();
 
 	void faqClicked();
     void diagnosticsClicked();

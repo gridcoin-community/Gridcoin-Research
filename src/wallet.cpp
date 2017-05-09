@@ -22,18 +22,15 @@ using namespace std;
 
 static unsigned int GetStakeSplitAge() { return IsProtocolV2(nBestHeight) ? (10 * 24 * 60 * 60) : (1 * 24 * 60 * 60); }
 static int64_t GetStakeCombineThreshold() { return IsProtocolV2(nBestHeight) ? (50 * COIN) : (1000 * COIN); }
-bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
-StructCPID GetLifetimeCPID(std::string cpid,std::string sFrom);
+StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 double cdbl(std::string s, int place);
 std::string GetArgument(std::string arg, std::string defaultvalue);
 std::string SendReward(std::string sAddress, int64_t nAmount);
 void qtUpdateConfirm(std::string txid);
 bool Contains(std::string data, std::string instring);
-std::string ComputeCPIDv2(std::string email, std::string bpk, uint256 blockhash);
 extern double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
-bool IsLockTimeWithinMinutes(double locktime, int minutes);
 double CoinToDouble(double surrogate);
 double GetBlockDifficulty(unsigned int nBits);
 void WriteAppCache(std::string key, std::string value);
@@ -645,7 +642,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
                         printf("reward locktime %f curr time %f",(double)wtxIn.nTime,(double)GetAdjustedTime());
                         printf(" reward shared %f",(double)dRewardShare);
                         printf(" addr %s",sRewardAddress.c_str());
-                        if (IsLockTimeWithinMinutes((double)wtxIn.nTime,10))
+                        if (IsLockTimeWithinMinutes(wtxIn.nTime,10))
                         {
                             std::string sResult = SendReward(sRewardAddress,CoinFromValue(dRewardShare));
                             printf("\r\nIssuing Reward Share of %f GRC to %s. Response: %s\r\n",dRewardShare,sRewardAddress.c_str(),sResult.c_str());
@@ -1846,14 +1843,6 @@ void NetworkTimer()
             mdPORNonce=0;
     }
 }
-
-
-
-
-
-
-
-
 
 
 
