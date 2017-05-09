@@ -240,7 +240,6 @@ std::string YesNo(bool bin);
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 extern double CalculatedMagnitude(int64_t locktime,bool bUseLederstrumpf);
 extern int64_t GetCoinYearReward(int64_t nTime);
-extern void AddNMRetired(double height,double LockTime, std::string cpid, MiningCPID bb);
 
 
 map<uint256, CBlockIndex*> mapBlockIndex;
@@ -5578,48 +5577,6 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
 }
 
 
-void AddNMRetired(double height, double LockTime, std::string cpid, MiningCPID bb)
-{
-    try
-    {
-        StructCPID stMag = GetInitializedStructCPID2(cpid,mvMagnitudes);
-        stMag.cpid = cpid;
-        stMag.GRCAddress = bb.GRCAddress;
-        if (height > stMag.LastBlock)
-        {
-            stMag.LastBlock = height;
-        }
-        stMag.projectname = bb.projectname;
-        stMag.rac += bb.rac;
-        stMag.entries++;
-        stMag.payments += bb.ResearchSubsidy;
-        stMag.interestPayments += bb.InterestSubsidy;
-        AdjustTimestamps(stMag,LockTime,bb.ResearchSubsidy);
-        // Per RTM 6-27-2015 - Track detailed payments made to each CPID
-        stMag.PaymentTimestamps         += RoundToString(LockTime,0) + ",";
-        stMag.PaymentAmountsResearch    += RoundToString(bb.ResearchSubsidy,2) + ",";
-        stMag.PaymentAmountsInterest    += RoundToString(bb.InterestSubsidy,2) + ",";
-        stMag.PaymentAmountsBlocks      += RoundToString((double)height,0) + ",";
-        stMag.Accuracy++;
-        stMag.AverageRAC = stMag.rac / (stMag.entries+.01);
-        double total_owed = 0;
-        stMag.owed = GetOutstandingAmountOwed(stMag,cpid,LockTime,total_owed,bb.Magnitude);
-        stMag.totalowed = total_owed;
-        mvMagnitudes[cpid] = stMag;
-    }
-    catch (std::exception &e)
-    {
-            printf("Error while Adding Network Magnitude.");
-    }
-    catch(...)
-    {
-            printf("Error while Adding Network Magnitude.");
-    }
-}
-
-
-
-
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 {
     if (nBestHeight < 15)
@@ -5797,101 +5754,6 @@ StructCPID GetInitializedStructCPID2(std::string name, std::map<std::string, Str
       return GetStructCPID();
     }
 }
-
-
-
-
-bool RetiredTN(bool Forcefully)
-{
-    //Iterate throught last 14 days, tally network averages
-    if (nBestHeight < 15)
-    {
-        bNetAveragesLoaded = true;
-        return true;
-    }
-
-    if (Forcefully) nLastTallied = 0;
-    int timespan = fTestNet ? 1 : 5;
-    if (IsLockTimeWithinMinutes(nLastTallied,timespan))
-    {
-        bNetAveragesLoaded=true;
-        return true;
-    }
-
-    printf("Gathering network avgs (begin)");
-    nLastTallied = GetAdjustedTime();
-    bNetAveragesLoaded = false;
-    bool superblockloaded = false;
-    double NetworkPayments = 0;
-    double NetworkInterest = 0;
-                    //7-5-2015 - R Halford - Start block and End block must be an exact range agreed by the network:
-                    int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
-                    int nLookback = BLOCKS_PER_DAY*14; //Daily block count * Lookback in days = 14 days
-                    int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
-                    if (fDebug3) printf("START BLOCK %f, END BLOCK %f ",(double)nMaxDepth,(double)nMinDepth);
-                    if (nMinDepth < 2)              nMinDepth = 2;
-                    if (mvMagnitudes.size() > 0)    mvMagnitudes.clear();
-                    CBlock block;
-                    CBlockIndex* pblockindex = pindexBest;
-
-                    while (pblockindex->nHeight > nMaxDepth)
-                    {
-                        if (!pblockindex || !pblockindex->pprev) return false;
-                        pblockindex = pblockindex->pprev;
-                        if (pblockindex == pindexGenesisBlock) return false;
-                    }
-
-                    if (fDebug) printf("\r\n GetMoneySupply::Max block %f",(double)pblockindex->nHeight);
-
-                    while (pblockindex->nHeight > nMinDepth)
-                    {
-                        if (!pblockindex || !pblockindex->pprev) return false;   //Avoid segfault
-                        pblockindex = pblockindex->pprev;
-                        if (pblockindex == pindexGenesisBlock) return false;
-                        if (pblockindex == NULL || !pblockindex->IsInMainChain()) continue;
-                        MiningCPID bb;
-                        
-                        if (!block.ReadFromDisk(pblockindex)) continue;
-                        if (block.vtx.size() > 0)
-                        {
-                                if (block.vtx[0].hashBoinc.empty()) continue;
-                                bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
-                        }
-                        else continue;
-
-                        NetworkPayments += bb.ResearchSubsidy;
-                        NetworkInterest += bb.InterestSubsidy;
-                        // Insert CPID, Magnitude, Payments
-                        AddNMRetired((double)pblockindex->nHeight,pblockindex->nTime,bb.cpid,bb);
-                        if (!superblockloaded && bb.superblock.length() > 20)
-                        {
-                                    std::string superblock = UnpackBinarySuperblock(bb.superblock);
-                                    if (VerifySuperblock(superblock,pblockindex->nHeight))
-                                    {
-                                            LoadSuperblock(superblock,pblockindex->nTime,pblockindex->nHeight);
-                                            superblockloaded=true;
-                                            if (fDebug3) printf(" Superblock Loaded %f \r\n",(double)pblockindex->nHeight);
-                                    }
-                            }
-
-                    }
-                    if (pblockindex && fDebug10)    printf("Min block %f \r\n",(double)pblockindex->nHeight);
-                    StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
-                    network.projectname="NETWORK";
-                    network.payments = NetworkPayments;
-                    network.InterestSubsidy = NetworkInterest;
-                    mvNetwork["NETWORK"] = network;
-                    TallyMagnitudesInSuperblock();
-                    GetNextProject(false);
-                    if (fDebug3) printf(".Done.\r\n %f",(double)0);
-                    bTallyStarted = false;
-                    bNetAveragesLoaded = true;
-                    return true;
-
-    bNetAveragesLoaded=true;
-    return false;
-}
-
 
 
 bool ComputeNeuralNetworkSupermajorityHashes()
@@ -6098,10 +5960,8 @@ bool TallyNetworkAverages(bool Forcefully)
     {
         return TallyResearchAverages(Forcefully);
     }
-    else
-    {
-        return RetiredTN(Forcefully);
-    }
+
+    return false;
 }
 
 
