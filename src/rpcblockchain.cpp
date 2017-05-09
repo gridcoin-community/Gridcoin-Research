@@ -3397,7 +3397,6 @@ Array MagnitudeReport(std::string cpid)
            double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
            msRSAOverview = "";
            if (!pindexBest) return results;
-           double nBalance = GetTotalBalance();
             
            try
            {

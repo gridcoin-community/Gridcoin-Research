@@ -250,7 +250,6 @@ bool AppInit(int argc, char* argv[])
 
     try
     {
-        boost::thread* detectShutdownThread = NULL;
         //
         // Parameters
         //
@@ -290,7 +289,7 @@ bool AppInit(int argc, char* argv[])
             int ret = CommandLineRPC(argc, argv);
             exit(ret);
         }
-        detectShutdownThread = new boost::thread(boost::bind(&DetectShutdownThread, &threadGroup));
+        boost::thread* detectShutdownThread = new boost::thread(boost::bind(&DetectShutdownThread, &threadGroup));
 
         fRet = AppInit2();
     }

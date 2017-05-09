@@ -3628,7 +3628,7 @@ bool CleanChain()
 
             printf(" Clean Chain succeeded. ");
     }
-    bool fResult = AskForOutstandingBlocks(uint256(0));
+    AskForOutstandingBlocks(uint256(0));
     return true;
 
 }
@@ -4659,10 +4659,9 @@ void CheckForLatestBlocks()
             mapOrphanBlocks.clear();
             setStakeSeen.clear();
             setStakeSeenOrphan.clear();
-            bool fResult = AskForOutstandingBlocks(uint256(0));
+            AskForOutstandingBlocks(uint256(0));
             printf("\r\n ** Clearing Orphan Blocks... ** \r\n");
-    }
-    
+    }  
 }
 
 void CleanInboundConnections(bool bClearAll)
@@ -6362,7 +6361,6 @@ bool PreventCommandAbuse(std::string sNeuralRequestID, std::string sCommandName)
 
 bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, int64_t nTimeReceived)
 {
-    static map<CService, CPubKey> mapReuseKey;
     RandAddSeedPerfmon();
     if (fDebug10)
         printf("received: %s (%" PRIszu " bytes)\n", strCommand.c_str(), vRecv.size());
@@ -6383,7 +6381,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
 
     // Message Attacks ////////////////////////////////////////////////////////
-    std::string precommand = strCommand;
     ///////////////////////////////////////////////////////////////////////////
 
     if (strCommand == "aries")
