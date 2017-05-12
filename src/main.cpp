@@ -601,7 +601,7 @@ std::string GetGlobalStatus()
         uint64_t nWeight = 0;
         pwalletMain->GetStakeWeight(nWeight);
         nBoincUtilization = boincmagnitude; //Legacy Support for the about screen
-        double weight = nWeight/COIN;
+        double weight = nWeight/COIN+boincmagnitude;
         double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
         std::string sWeight = RoundToString((double)weight,0);
         std::string sOverviewCPID = bPoolMiningMode ? "POOL" : GlobalCPUMiningCPID.cpid;
