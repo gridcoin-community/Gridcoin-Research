@@ -70,7 +70,7 @@ QToolTip { color: black; background-color: lightgray; border: none;}</string>
    <item row="3" column="0">
     <widget class="QLabel" name="label_2">
      <property name="text">
-      <string>Pay &amp;To:</string>
+      <string>Pa&amp;y To:</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -154,7 +154,7 @@ QToolTip { color: black; background-color: lightgray; border: none;}</string>
       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
      </property>
      <property name="buddy">
-      <cstring>Send Custom Message to Gridcoin Recipient</cstring>
+      <cstring>txtMessage</cstring>
      </property>
     </widget>
    </item>
