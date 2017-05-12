@@ -187,7 +187,8 @@ void OverviewPage::UpdateBoincUtilization()
      ui->labelProject->setText(QString::fromUtf8(GlobalStatusStruct.project.c_str()));
      ui->labelCpid->setText(QString::fromUtf8(GlobalStatusStruct.cpid.c_str()));
      ui->labelStatus->setText(QString::fromUtf8(GlobalStatusStruct.status.c_str()));
-
+     ui->labelPoll->setText(QString::fromUtf8(GlobalStatusStruct.poll.c_str()));
+     ui->labelErrors->setText(QString::fromUtf8(GlobalStatusStruct.errors.c_str()));
 }
 
 

@@ -89,7 +89,7 @@ Value getmininginfo(const Array& params, bool fHelp)
 
     obj.push_back(Pair("MiningProject",msMiningProject));
     obj.push_back(Pair("MiningInfo 1", msMiningErrors));
-    obj.push_back(Pair("MiningInfo 2", msMiningErrors2));
+    obj.push_back(Pair("MiningInfo 2", msPoll));
     obj.push_back(Pair("MiningInfo 5", msMiningErrors5));
     obj.push_back(Pair("MiningInfo 6", msMiningErrors6));
     obj.push_back(Pair("MiningInfo 7", msMiningErrors7));

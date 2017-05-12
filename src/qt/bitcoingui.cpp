@@ -145,7 +145,7 @@ void StopGridcoin3();
 bool OutOfSyncByAge();
 void ThreadCPIDs();
 int Races(int iMax1000);
-std::string GetGlobalStatus();
+void GetGlobalStatus();
 
 extern int UpgradeClient();
 extern void CheckForUpgrade();
@@ -2356,7 +2356,7 @@ void BitcoinGUI::timerfire()
 
 		if (Timer("status_update",5))
 		{
-			std::string status = GetGlobalStatus();
+            GetGlobalStatus();
 			bForceUpdate=true;
 		}
 

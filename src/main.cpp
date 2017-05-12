@@ -332,7 +332,7 @@ extern std::string AppCache(std::string key);
 extern void LoadCPIDsInBackground();
 
 extern void ThreadCPIDs();
-extern std::string GetGlobalStatus();
+extern void GetGlobalStatus();
 
 extern bool OutOfSyncByAge();
 extern std::vector<std::string> split(std::string s, std::string delim);
@@ -374,8 +374,7 @@ bool           mbBlocksDownloaded = false;
 std::string    msHashBoinc    = "";
 std::string    msHashBoincTxId= "";
 std::string    msMiningErrors = "";
-std::string    msMiningErrors2 = "";
-std::string    msMiningErrors3 = "";
+std::string    msPoll = "";
 std::string    msMiningErrors5 = "";
 std::string    msMiningErrors6 = "";
 std::string    msMiningErrors7 = "";
@@ -403,9 +402,8 @@ int nNewIndex2 = 364500;
 int64_t nGenesisSupply = 340569880;
 
 // Stats for Main Screen:
-std::string    msGlobalStatus = "";
 std::string    msLastPaymentTime = "";
-globalStatusType GlobalStatusStruct = {"","","","","","","",""};
+globalStatusType GlobalStatusStruct = {"","","","","","","","","","",""};
 
 bool fColdBoot = true;
 bool fEnforceCanonical = true;
@@ -590,7 +588,7 @@ double GetPoSKernelPS2()
 }
 
 
-std::string GetGlobalStatus()
+void GetGlobalStatus()
 {
     //Populate overview
 
@@ -611,13 +609,6 @@ std::string GetGlobalStatus()
         {
             sWeight = sWeight.substr(0,13) + "E" + RoundToString((double)sWeight.length()-13,0);
         }
-        status ="<table><tr><td><b>Blocks: &nbsp;</b>" + RoundToString((double)nBestHeight,0) + "</td><td><b>PoR Difficulty: &nbsp;</b>" + RoundToString(PORDiff,3) + "</td></tr>"
-                + "<tr><td><b>Net Weight: &nbsp;</b>" + RoundToString(GetPoSKernelPS2(),2) + " &nbsp;&nbsp;&nbsp;</td><td><b>DPOR Weight: &nbsp;</b>" + sWeight + "</td></tr>"
-                + "<tr><td><b>Magnitude: &nbsp;</b>" + RoundToString(boincmagnitude,2) + "</td><td><b>Project: &nbsp;</b>" + msMiningProject  + "</td></tr>"
-                + "<tr><td><b>CPID: &nbsp;</b>" + sOverviewCPID + " &nbsp;&nbsp;&nbsp;</td><td><b>Status: &nbsp;</b>" + msMiningErrors + "</td></tr>"
-                + "<tr><td colspan=\"2\">" +  msMiningErrors2 + "</td></tr>"
-                + "<tr><td colspan=\"2\">" + msMiningErrors5 + " &nbsp;" + msMiningErrors6 + " &nbsp;" + msMiningErrors7 + " &nbsp;" + msMiningErrors8 + "</td></tr>"
-                + "<tr><td colspan=\"2\">" + msRSAOverview + "</td></tr></table>";
 
         GlobalStatusStruct.blocks = RoundToString((double)nBestHeight,0);
         GlobalStatusStruct.difficulty = RoundToString(PORDiff,3);
@@ -627,22 +618,23 @@ std::string GetGlobalStatus()
         GlobalStatusStruct.project = msMiningProject;
         GlobalStatusStruct.cpid = sOverviewCPID;
         GlobalStatusStruct.status = msMiningErrors;
+        GlobalStatusStruct.poll = msPoll;
+        GlobalStatusStruct.errors =  msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + msMiningErrors8;
+        GlobalStatusStruct.rsaOverview =  msRSAOverview; // not displayed on overview page anymore.
 
-
-        msGlobalStatus = status;
-        return status;
+        return;
     }
     catch (std::exception& e)
     {
-        msMiningErrors = "Error obtaining status.";
+        msMiningErrors = _("Error obtaining status.");
 
         printf("Error obtaining status\r\n");
-        return "";
+        return;
     }
     catch(...)
     {
-        msMiningErrors = "Error obtaining status (08-18-2014).";
-        return "";
+        msMiningErrors = _("Error obtaining status (08-18-2014).");
+        return;
     }
 }
 
@@ -762,7 +754,7 @@ MiningCPID GetNextProject(bool bForce)
                     mdMiningNetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
                     GlobalCPUMiningCPID.Magnitude = CalculatedMagnitude(GetAdjustedTime(),false);
                     if (fDebug3) printf("(boinckey) For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
-                    msMiningErrors = (msMiningCPID == "INVESTOR" || msPrimaryCPID=="INVESTOR" || msMiningCPID.empty()) ? "Staking Interest" : "Mining";
+                    msMiningErrors = (msMiningCPID == "INVESTOR" || msPrimaryCPID=="INVESTOR" || msMiningCPID.empty()) ? _("Staking Interest") : _("Mining");
                     GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
                     GlobalCPUMiningCPID.LastPaymentTime = GetLastPaymentTimeByCPID(GlobalCPUMiningCPID.cpid);
                     return GlobalCPUMiningCPID;
@@ -885,7 +877,7 @@ MiningCPID GetNextProject(bool bForce)
                                         GlobalCPUMiningCPID.Magnitude = CalculatedMagnitude(GetAdjustedTime(),false);
                                         if (fDebug && LessVerbose(2)) printf("For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
                                         //Reserved for GRC Speech Synthesis
-                                        msMiningErrors = (msMiningCPID == "INVESTOR" || msPrimaryCPID=="INVESTOR" || msMiningCPID.empty() || msPrimaryCPID.empty()) ? "Staking Interest" : "Boinc Mining";
+                                        msMiningErrors = (msMiningCPID == "INVESTOR" || msPrimaryCPID=="INVESTOR" || msMiningCPID.empty() || msPrimaryCPID.empty()) ? _("Staking Interest") : _("Boinc Mining");
                                         GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
                                         GlobalCPUMiningCPID.LastPaymentTime = GetLastPaymentTimeByCPID(GlobalCPUMiningCPID.cpid);
                                         return GlobalCPUMiningCPID;
@@ -901,7 +893,7 @@ MiningCPID GetNextProject(bool bForce)
         }
         }
 
-        msMiningErrors = (msPrimaryCPID == "INVESTOR") ? "" : "All BOINC projects exhausted.";
+        msMiningErrors = (msPrimaryCPID == "INVESTOR") ? "" : _("All BOINC projects exhausted.");
         msMiningProject = "INVESTOR";
         msMiningCPID = "INVESTOR";
         mdMiningRAC = 0;
@@ -913,13 +905,13 @@ MiningCPID GetNextProject(bool bForce)
         }
         catch (std::exception& e)
         {
-            msMiningErrors = "Error obtaining next project.  Error 16172014.";
+            msMiningErrors = _("Error obtaining next project.  Error 16172014.");
 
             printf("Error obtaining next project\r\n");
         }
         catch(...)
         {
-            msMiningErrors = "Error obtaining next project.  Error 06172014.";
+            msMiningErrors = _("Error obtaining next project.  Error 06172014.");
             printf("Error obtaining next project 2.\r\n");
         }
         return GlobalCPUMiningCPID;
@@ -4566,7 +4558,7 @@ void GridcoinServices()
         {
             printf("BEACON ERROR!  Unable to send beacon %s \r\n",sError.c_str());
             printf("BEACON ERROR!  Unable to send beacon %s \r\n",sMessage.c_str());
-            msMiningErrors6 = "Unable To Send Beacon! Unlock Wallet!";
+            msMiningErrors6 = _("Unable To Send Beacon! Unlock Wallet!");
         }
     }
 
@@ -8922,12 +8914,12 @@ bool MemorizeMessage(std::string msg, int64_t nTime, double dAmount, std::string
                                 {
                                         if (Contains(sMessageKey,"[Foundation"))
                                         {
-                                                msMiningErrors2 = "Foundation Poll: " + sMessageKey;
+                                                msPoll = "Foundation Poll: " + sMessageKey;
 
                                         }
                                         else
                                         {
-                                                msMiningErrors2 = "Poll: " + sMessageKey;
+                                                msPoll = "Poll: " + sMessageKey;
                                         }
                                 }
 
