@@ -224,6 +224,19 @@ extern int nNewIndex2;
 // Stats for Main Screen:
 extern std::string    msGlobalStatus;
 extern std::string    msLastPaymentTime;
+struct globalStatusType
+{
+    std::string blocks;
+    std::string difficulty;
+    std::string netWeight;
+    std::string dporWeight;
+    std::string magnitude;
+    std::string project;
+    std::string cpid;
+    std::string status;
+};
+
+extern globalStatusType GlobalStatusStruct;
 
 
 class CReserveKey;

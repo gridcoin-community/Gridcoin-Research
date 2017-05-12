@@ -405,6 +405,7 @@ int64_t nGenesisSupply = 340569880;
 // Stats for Main Screen:
 std::string    msGlobalStatus = "";
 std::string    msLastPaymentTime = "";
+globalStatusType GlobalStatusStruct = {"","","","","","","",""};
 
 bool fColdBoot = true;
 bool fEnforceCanonical = true;
@@ -617,6 +618,17 @@ std::string GetGlobalStatus()
                 + "<tr><td colspan=\"2\">" +  msMiningErrors2 + "</td></tr>"
                 + "<tr><td colspan=\"2\">" + msMiningErrors5 + " &nbsp;" + msMiningErrors6 + " &nbsp;" + msMiningErrors7 + " &nbsp;" + msMiningErrors8 + "</td></tr>"
                 + "<tr><td colspan=\"2\">" + msRSAOverview + "</td></tr></table>";
+
+        GlobalStatusStruct.blocks = RoundToString((double)nBestHeight,0);
+        GlobalStatusStruct.difficulty = RoundToString(PORDiff,3);
+        GlobalStatusStruct.netWeight = RoundToString(GetPoSKernelPS2(),2);
+        GlobalStatusStruct.dporWeight = sWeight;
+        GlobalStatusStruct.magnitude = RoundToString(boincmagnitude,2);
+        GlobalStatusStruct.project = msMiningProject;
+        GlobalStatusStruct.cpid = sOverviewCPID;
+        GlobalStatusStruct.status = msMiningErrors;
+
+
         msGlobalStatus = status;
         return status;
     }

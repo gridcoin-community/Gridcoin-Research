@@ -1,5 +1,7 @@
 #include "coincontroltreewidget.h"
 #include "coincontroldialog.h"
+#include <QPainter>
+#include <QStyleOption>
 
 CoinControlTreeWidget::CoinControlTreeWidget(QWidget *parent) :
     QTreeWidget(parent)
@@ -26,3 +28,11 @@ void CoinControlTreeWidget::keyPressEvent(QKeyEvent *event)
         this->QTreeWidget::keyPressEvent(event);
     }
 }
+
+void CoinControlTreeWidget::paintEvent(QPaintEvent *)
+{
+    QStyleOption sOption;
+    sOption.initFrom(this);
+    QPainter painter(this);
+    style()->drawPrimitive(QStyle::PE_Widget, &sOption, &painter, this);
+};
