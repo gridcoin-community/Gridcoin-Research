@@ -3540,17 +3540,6 @@ std::string TimestampToHRDate(double dtm)
     return sDt;
 }
 
-struct CPIDOwed
-{
-    std::string cpid;
-    std::string GRCAddress;
-    bool initialized;
-    double owed;
-};
-
-bool SortByOwed(const CPIDOwed &magL, const CPIDOwed &magR) { return magL.owed > magR.owed; }
-
-
 double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID)
 {
         StructCPID structMag = mvMagnitudes[sCPID];
