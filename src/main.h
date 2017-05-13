@@ -194,8 +194,7 @@ extern std::string  msENCboincpublickey;
 extern std::string  msHashBoinc;
 extern std::string  msHashBoincTxId;
 extern std::string  msMiningErrors;
-extern std::string  msMiningErrors2;
-extern std::string  msMiningErrors3;
+extern std::string  msPoll;
 extern std::string  msMiningErrors5;
 extern std::string  msMiningErrors6;
 extern std::string  msMiningErrors7;
@@ -222,8 +221,24 @@ extern int nNewIndex;
 extern int nNewIndex2;
 
 // Stats for Main Screen:
-extern std::string    msGlobalStatus;
 extern std::string    msLastPaymentTime;
+
+struct globalStatusType
+{
+    std::string blocks;
+    std::string difficulty;
+    std::string netWeight;
+    std::string dporWeight;
+    std::string magnitude;
+    std::string project;
+    std::string cpid;
+    std::string status;
+    std::string poll;
+    std::string errors;
+    std::string rsaOverview;
+};
+
+extern globalStatusType GlobalStatusStruct;
 
 
 class CReserveKey;

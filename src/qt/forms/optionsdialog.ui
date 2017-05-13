@@ -13,18 +13,12 @@
   <property name="windowTitle">
    <string>Options</string>
   </property>
-  <property name="styleSheet">
-   <string notr="true"> background:rgb(69,65,63); color: rgb(169,192,7)</string>
-  </property>
   <property name="modal">
    <bool>true</bool>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
     <widget class="QTabWidget" name="tabWidget">
-     <property name="styleSheet">
-      <string notr="true"> background:rgb(69,65,63); color: rgb(169,192,7)</string>
-     </property>
      <property name="tabPosition">
       <enum>QTabWidget::North</enum>
      </property>
@@ -54,7 +48,7 @@
          <item>
           <widget class="QLabel" name="transactionFeeLabel">
            <property name="text">
-            <string>Pay transaction &amp;fee</string>
+            <string>Pa&amp;y transaction fee</string>
            </property>
            <property name="textFormat">
             <enum>Qt::PlainText</enum>
@@ -100,7 +94,7 @@
          <item>
           <widget class="QLabel" name="reserveBalanceLabel">
            <property name="text">
-            <string>Reserve</string>
+            <string>Reser&amp;ve</string>
            </property>
            <property name="textFormat">
             <enum>Qt::PlainText</enum>
@@ -193,7 +187,7 @@
          <item>
           <widget class="QLabel" name="proxyIpLabel">
            <property name="text">
-            <string>Proxy &amp;IP:</string>
+            <string>Prox&amp;y IP:</string>
            </property>
            <property name="textFormat">
             <enum>Qt::PlainText</enum>
@@ -386,14 +380,32 @@
         </layout>
        </item>
        <item>
-         <widget class="QCheckBox" name="displayAddresses">
-                    <property name="toolTip">
-                     <string>Whether to show Gridcoin addresses in the transaction list or not.</string>
+        <layout class="QHBoxLayout" name="horizontalLayout_5">
+         <item>
+          <widget class="QLabel" name="StyleLabel">
+           <property name="text">
+            <string>Style:</string>
            </property>
-                   <property name="text">
-                    <string>&amp;Display addresses in transaction list</string>
+          </widget>
+         </item>
+         <item>
+          <widget class="QComboBox" name="styleComboBox">
+           <property name="toolTip">
+            <string>Choose a stylesheet to change the look of the wallet.</string>
            </property>
-         </widget>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="displayAddresses">
+         <property name="toolTip">
+          <string>Whether to show Gridcoin addresses in the transaction list or not.</string>
+         </property>
+         <property name="text">
+          <string>&amp;Display addresses in transaction list</string>
+         </property>
+        </widget>
        </item>
        <item>
         <widget class="QCheckBox" name="coinControlFeatures">
@@ -409,6 +421,9 @@
         <spacer name="verticalSpacer_Display">
          <property name="orientation">
           <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeType">
+          <enum>QSizePolicy::Expanding</enum>
          </property>
          <property name="sizeHint" stdset="0">
           <size>
@@ -471,9 +486,6 @@
      </item>
      <item>
       <widget class="QPushButton" name="okButton">
-       <property name="styleSheet">
-        <string notr="true"> background:rgb(69,65,63); color: rgb(169,192,7)</string>
-       </property>
        <property name="text">
         <string>&amp;OK</string>
        </property>
@@ -481,9 +493,6 @@
      </item>
      <item>
       <widget class="QPushButton" name="cancelButton">
-       <property name="styleSheet">
-        <string notr="true"> background:rgb(69,65,63); color: rgb(169,192,7)</string>
-       </property>
        <property name="text">
         <string>&amp;Cancel</string>
        </property>
@@ -494,9 +503,6 @@
      </item>
      <item>
       <widget class="QPushButton" name="applyButton">
-       <property name="styleSheet">
-        <string notr="true"> background:rgb(69,65,63); color: rgb(169,192,7);border=1</string>
-       </property>
        <property name="text">
         <string>&amp;Apply</string>
        </property>
@@ -514,16 +520,17 @@
    <class>BitcoinAmountField</class>
    <extends>QSpinBox</extends>
    <header>bitcoinamountfield.h</header>
-  </customwidget>
-  <customwidget>
-   <class>QValueComboBox</class>
-   <extends>QComboBox</extends>
-   <header>qvaluecombobox.h</header>
+   <container>1</container>
   </customwidget>
   <customwidget>
    <class>QValidatedLineEdit</class>
    <extends>QLineEdit</extends>
    <header>qvalidatedlineedit.h</header>
+  </customwidget>
+  <customwidget>
+   <class>QValueComboBox</class>
+   <extends>QComboBox</extends>
+   <header>qvaluecombobox.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

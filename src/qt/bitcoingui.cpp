@@ -73,7 +73,13 @@
 #include <QDateTime>
 #include <QMovie>
 #include <QFileDialog>
+
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+#include <QStandardPaths>
+#else
 #include <QDesktopServices>
+#endif
+
 #include <QTimer>
 #include <QDragEnterEvent>
 #include <QUrl>
@@ -145,7 +151,7 @@ void StopGridcoin3();
 bool OutOfSyncByAge();
 void ThreadCPIDs();
 int Races(int iMax1000);
-std::string GetGlobalStatus();
+void GetGlobalStatus();
 
 extern int UpgradeClient();
 extern void CheckForUpgrade();
@@ -197,20 +203,6 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     setGeometry(QStyle::alignedRect(Qt::LeftToRight,Qt::AlignCenter,QSize(980,550),qApp->desktop()->availableGeometry()));
     
     setWindowTitle(tr("Gridcoin") + " " + tr("Wallet"));
-	//4-9-2016
-	double dFontSize = cdbl(GetArgument("fontsize", "10"),0);
-	std::string sFontSize10 = RoundToString(dFontSize,0);
-	std::string sFontSize12 = RoundToString(dFontSize+2,0);
-	std::string sPixelType = "px";
-	printf("Using fontsize %s",sFontSize10.c_str());
-
-    std::string sMainWindowHTML = "QMainWindow { background-image:url(:images/bkg);border:none;font-family:'Open Sans,sans-serif'; } #frame { } QToolBar QLabel { padding-top:15px;padding-bottom:10px;margin:0px; } #spacer { background:rgb(69,65,63);border:none; } #toolbar3 { border:none;width:1px; background-color: rgb(169,192,7); } #toolbar2 { border:none;width:10px; background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(210,220,7), stop: 1 rgb(98,116,3)); } #toolbar { border:none;height:100%;padding-top:20px; background: rgb(69,65,63); text-align: left; color: rgb(169,192,7); min-width:160px; max-width:160px;} QToolBar QToolButton:hover {background-color:qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,stop: 0 rgb(69,65,63), stop: 1 rgb(142,158,157));} QToolBar QToolButton { font-family:Century Gothic;padding-left:20px;padding-right:200px;padding-top:7px;padding-bottom:7px; width:100%; color: rgb(169,192,7); text-align: left; background-color: rgb(69,65,63) } #labelMiningIcon { ";
-	sMainWindowHTML += "padding-left:5px;font-family:Century Gothic;width:100%;font-size:" + sFontSize10 + sPixelType +";text-align:center;color: rgb(169,192,7); } QMenu { background: rgb(69,65,63); color: rgb(169,192,7); padding-bottom:10px; } QMenu::item { color: rgb(169,192,7); background-color: transparent; } QMenu::item:selected { background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(69,65,63), stop: 1 rgb(98,116,3)); } QMenuBar { background: rgb(69,65,63); color: rgb(169,192,7); } ";
-	sMainWindowHTML += "QMenuBar::item { font-size:" + sFontSize12 + sPixelType + ";padding-bottom:8px;padding-top:8px;padding-left:15px;padding-right:15px;color: rgb(169,192,7); background-color: transparent; } QMenuBar::item:selected { background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(69,65,63), stop: 1 rgb(98,116,3)); }";
-    sMainWindowHTML += "QToolTip { color: black; background-color: lightgray; border: none; }";
-
-
-    qApp->setStyleSheet(ToQstring(sMainWindowHTML));
 
 #ifndef Q_OS_MAC
     qApp->setWindowIcon(QIcon(":icons/bitcoin"));
@@ -242,7 +234,6 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     transactionView = new TransactionView(this);
     vbox->addWidget(transactionView);
     transactionsPage->setLayout(vbox);
-    transactionsPage->setStyleSheet("QTableView{background:transparent; color:black; alternate-background-color:white;} QScrollBar:vertical {background-color: lightgray; color:black;} QHeaderView::section { background-color:lightgray; color:black; } QComboBox { background-color:lightgray; color: black; } QComboBox QAbstractItemView { background-color:lightgray; color: black; } QLineEdit { background-color:lightgray; color: black; } QDateTimeEdit { background-color:lightgray; color: black; } QDateTimeEdit QAbstractItemView { background-color:lightgray; color: black; }");
 
     addressBookPage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::SendingTab);
 
@@ -265,7 +256,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
     // Status bar notification icons
     QFrame *frameBlocks = new QFrame();
-    frameBlocks->setStyleSheet("frameBlocks { background: rgb(127,154,131); }");
+
     frameBlocks->setContentsMargins(0,0,0,0);
 
     frameBlocks->setMinimumWidth(30);
@@ -302,17 +293,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     progressBar->setVisible(false);
     progressBar->setOrientation(Qt::Vertical);
     progressBar->setObjectName("progress");
-    progressBar->setStyleSheet("QProgressBar{"
-                               "border: 1px solid transparent;"
-							   "font-size:9px;"
-                               "text-align: center;"
-                               "color:rgba(0,0,0,100);"
-                               "border-radius: 5px;"
-                               "background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 rgba(182, 182, 182, 100), stop:1 rgba(209, 209, 209, 100));"
-                                   "}"
-                               "QProgressBar::chunk{"
-                               "background-color: rgba(0,255,0,100);"
-                               "}");
+
     frameBlocks->setObjectName("frame");
 	addToolBarBreak(Qt::LeftToolBarArea);
     QToolBar *toolbar2 = addToolBar("Tabs toolbar");
@@ -320,18 +301,31 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     toolbar2->setOrientation(Qt::Vertical);
     toolbar2->setMovable( false );
     toolbar2->setObjectName("toolbar2");
-    toolbar2->setFixedWidth(25);
+    toolbar2->setFixedWidth(26);
     toolbar2->addWidget(frameBlocks);
     toolbar2->addWidget(progressBarLabel);
     toolbar2->addWidget(progressBar);
 
 	addToolBarBreak(Qt::TopToolBarArea);
-    QToolBar *toolbar3 = addToolBar("Green bar");
+    QToolBar *toolbar3 = addToolBar("Logo bar");
     addToolBar(Qt::TopToolBarArea,toolbar3);
     toolbar3->setOrientation(Qt::Horizontal);
     toolbar3->setMovable( false );
     toolbar3->setObjectName("toolbar3");
-    toolbar3->setFixedHeight(2);
+    toolbar3->setFixedHeight(52);
+    QLabel *grcLogoLabel = new QLabel();
+    grcLogoLabel->setPixmap(QPixmap(":/images/logo_hz"));
+    toolbar3->addWidget(grcLogoLabel);
+    QWidget* logoSpacer = new QWidget();
+    logoSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    toolbar3->addWidget(logoSpacer);
+    logoSpacer->setObjectName("logoSpacer");
+    QLabel *boincLogoLabel = new QLabel();
+    boincLogoLabel->setText("<html><head/><body><p align=\"center\"><a href=\"https://boinc.berkeley.edu\"><span style=\" text-decoration: underline; color:#0000ff;\"><img src=\":/images/boinc\"/></span></a></p></body></html>");
+    boincLogoLabel->setTextFormat(Qt::RichText);
+    boincLogoLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    boincLogoLabel->setOpenExternalLinks(true);
+    toolbar3->addWidget(boincLogoLabel);
 
     syncIconMovie = new QMovie(":/movies/update_spinner", "GIF", this);
 
@@ -828,7 +822,19 @@ int CloseGuiMiner()
 }
 
 
+void BitcoinGUI::setOptionsStyleSheet(QString qssFileName)
+{
+    // setting the style sheets for the app
+    QFile qss(":stylesheets/"+qssFileName);
+    if (qss.open(QIODevice::ReadOnly)){
+        QTextStream qssStream(&qss);
+        QString sMainWindowHTML = qssStream.readAll();
+        qss.close();
 
+        qApp->setStyleSheet(sMainWindowHTML);
+    }
+
+}
 
 
 void BitcoinGUI::createActions()
@@ -868,10 +874,6 @@ void BitcoinGUI::createActions()
 	exchangeAction->setStatusTip(tr("Web Site"));
 	exchangeAction->setMenuRole(QAction::TextHeuristicRole);
 
-	boincAction = new QAction(QIcon(":/icons/boinc"), tr("&Boinc Stats"), this);
-	boincAction->setStatusTip(tr("Boinc Stats"));
-	boincAction->setMenuRole(QAction::TextHeuristicRole);
-
 	websiteAction = new QAction(QIcon(":/icons/www"), tr("&Web Site"), this);
 	websiteAction->setStatusTip(tr("Web Site"));
 	websiteAction->setMenuRole(QAction::TextHeuristicRole);
@@ -880,6 +882,9 @@ void BitcoinGUI::createActions()
 	chatAction->setStatusTip(tr("GRC Chatroom"));
 	chatAction->setMenuRole(QAction::TextHeuristicRole);
 
+    boincAction = new QAction(QIcon(":/images/boinc"), tr("&BOINC"), this);
+    boincAction->setStatusTip(tr("Gridcoin rewards distributed computing with BOINC"));
+    boincAction->setMenuRole(QAction::TextHeuristicRole);
 
     connect(overviewAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(overviewAction, SIGNAL(triggered()), this, SLOT(gotoOverviewPage()));
@@ -1060,10 +1065,13 @@ void BitcoinGUI::createMenuBar()
     settings->addSeparator();
     settings->addAction(optionsAction);
 
-    QMenu *help = appMenuBar->addMenu(tr("&Help"));
-    help->addAction(openRPCConsoleAction);
-    help->addSeparator();
-    help->addAction(aboutAction);
+    QMenu *community = appMenuBar->addMenu(tr("&Community"));
+    community->addAction(bxAction);
+    community->addAction(exchangeAction);
+    community->addAction(boincAction);
+    community->addAction(chatAction);
+    community->addSeparator();
+    community->addAction(websiteAction);
 
 #ifdef WIN32
 	QMenu *upgrade = appMenuBar->addMenu(tr("&Upgrade QT Client"));
@@ -1107,6 +1115,11 @@ void BitcoinGUI::createMenuBar()
 
 #endif /* defined(WIN32) */
 
+    QMenu *help = appMenuBar->addMenu(tr("&Help"));
+    help->addAction(openRPCConsoleAction);
+    help->addSeparator();
+    help->addAction(aboutAction);
+
 }
 
 void BitcoinGUI::createToolBars()
@@ -1116,7 +1129,7 @@ void BitcoinGUI::createToolBars()
     addToolBar(Qt::LeftToolBarArea,toolbar);
     toolbar->setOrientation(Qt::Vertical);
     toolbar->setMovable( false );
-    toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    toolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
     toolbar->setContextMenuPolicy(Qt::PreventContextMenu);
     toolbar->setIconSize(QSize(50,25));
     toolbar->addAction(overviewAction);
@@ -1124,13 +1137,7 @@ void BitcoinGUI::createToolBars()
     toolbar->addAction(receiveCoinsAction);
     toolbar->addAction(historyAction);
     toolbar->addAction(addressBookAction);
-    toolbar->addAction(bxAction);
-    toolbar->addAction(websiteAction);
-    toolbar->addAction(exchangeAction);
-    toolbar->addAction(boincAction);
-    toolbar->addAction(chatAction);
-//	toolbar->addAction(statisticsAction);
-//	toolbar->addAction(blockAction);
+
 	// Prevent Lock from falling off the page
 
     QWidget* spacer = new QWidget();
@@ -1184,6 +1191,10 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
 
         // Report errors from network/worker thread
         connect(clientModel, SIGNAL(error(QString,QString,bool)), this, SLOT(error(QString,QString,bool)));
+
+        // set stylesheet
+        setOptionsStyleSheet(this->clientModel->getOptionsModel()->getCurrentStyle());
+        connect(this->clientModel->getOptionsModel(),SIGNAL(walletStylesheetChanged(QString)),this,SLOT(setOptionsStyleSheet(QString)));
 
         rpcConsole->setClientModel(clientModel);
         addressBookPage->setOptionsModel(clientModel->getOptionsModel());
@@ -1289,7 +1300,6 @@ void BitcoinGUI::aboutClicked()
 void BitcoinGUI::votingClicked()
 {
     VotingDialog *dlg = new VotingDialog(this);
-    dlg->setStyleSheet("QDialog { background-image:url(:images/bkg);} QTabWidget{ background-color: transparent; color: black;} QTabWidget::pane { border: 1px solid rgb(100,100,100); } QTabBar::tab { background: rgb(150,150,150); color: black; border: 1px solid rgb(100,100,100); border-top-left-radius: 4px; border-top-right-radius: 4px; min-width: 8ex; padding: 2px; } QTabBar::tab:selected { background: rgb(200,200,200); border: 1px solid rgb(100,100,100); border-bottom-color: rgb(200,200,200); } QTabBar::tab:hover { background: rgb(76,155,195); } QTabBar::tab:!selected { margin-top: 2px; } QTableView { alternate-background-color:rgb(255,255,255); background-color:transparent; color:black;} QListWidget {color:black; background-color:transparent;} QLabel {color:black;} QGroupBox {background-color:transparent;} QLineEdit {background-color:lightgray; color:black} QHeaderView::section { background-color:lightgray; color:black; } QPushButton { background-color:lightgray; color:black; } QComboBox { background-color:lightgray; color:black; }");
     dlg->resetData();
     dlg->show();
 }
@@ -2088,7 +2098,11 @@ void BitcoinGUI::encryptWallet(bool status)
 
 void BitcoinGUI::backupWallet()
 {
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+    QString saveDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+#else
     QString saveDir = QDesktopServices::storageLocation(QDesktopServices::DocumentsLocation);
+#endif
     QString filename = QFileDialog::getSaveFileName(this, tr("Backup Wallet"), saveDir, tr("Wallet Data (*.dat)"));
     if(!filename.isEmpty()) {
         if(!walletModel->backupWallet(filename)) {
@@ -2352,7 +2366,7 @@ void BitcoinGUI::timerfire()
 
 		if (Timer("status_update",5))
 		{
-			std::string status = GetGlobalStatus();
+            GetGlobalStatus();
 			bForceUpdate=true;
 		}
 

@@ -1,0 +1,105 @@
+/* BEGIN Style main window*/
+QMainWindow {
+    font-family:'Open Sans,sans-serif';
+}
+
+QToolBar#toolbar2 QLabel{
+    border:none;
+    padding-top:15px;
+    padding-bottom:10px;
+    padding-left:4px;
+    padding-right:4px;
+    margin:0px;
+}
+
+QToolBar#toolbar3 QLabel{
+    padding-top:0px;
+    padding-bottom:0px;
+    margin:1px;
+}
+
+#spacer {
+    background-color:transparent;
+    border:none;
+}
+
+#toolbar3 {
+    border:none;
+    border-bottom : 2px solid rgb(160,175,5);
+}
+
+#toolbar2 {
+    border:none;
+    width:10px;
+    background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(160,175,5), stop: 1 rgb(160,175,5));
+}
+
+QMenuBar {
+    border-bottom : 2px solid rgb(160,175,5);
+}
+
+#listTransactions{ 
+    font-size: 12px;
+    background-color:transparent;
+}
+
+/* overview page */
+
+#OverviewPage{
+    font-family: "Open Sans";
+}
+
+#labelWalletStatus{
+    color: red;
+}
+
+#labelTransactionsStatus{
+    color: red;
+}
+
+/* coincontrol dialog*/
+#labelCoinControlFeatures{
+    font-weight:bold;
+}
+
+#labelCoinControlInsuffFunds{
+    color:red;
+    font-weight:bold;
+}
+
+#labelCoinControlBytesText{
+    font-weight:bold;
+}
+
+#labelCoinControlQuantityText{
+    font-weight:bold;
+}
+
+#labelCoinControlAmountText{
+    font-weight:bold;
+}
+
+#labelCoinControlPriorityText{
+    font-weight:bold;
+}
+
+#labelCoinControlFeeText{
+    font-weight:bold;
+}
+
+#labelCoinControlLowOutputText{
+    font-weight:bold;
+}
+
+#labelCoinControlAfterFeeText{
+    font-weight:bold;
+}
+
+#labelCoinControlChangeText{
+    font-weight:bold;
+}
+
+
+
+
+

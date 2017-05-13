@@ -82,6 +82,9 @@ OptionsDialog::OptionsDialog(QWidget *parent) :
 
     ui->unit->setModel(new BitcoinUnits(this));
 
+    ui->styleComboBox->addItem(tr("Native"),QVariant("native"));
+    ui->styleComboBox->addItem(tr("Light"),QVariant("light"));
+
     /* Widget-to-option mapper */
     mapper = new MonitoredDataMapper(this);
     mapper->setSubmitPolicy(QDataWidgetMapper::ManualSubmit);
@@ -116,6 +119,8 @@ void OptionsDialog::setModel(OptionsModel *model)
     /* update the display unit, to not use the default ("BTC") */
     updateDisplayUnit();
 
+    updateStyle();
+
     /* warn only when language selection changes by user action (placed here so init via mapper doesn't trigger this) */
     connect(ui->lang, SIGNAL(valueChanged()), this, SLOT(showRestartWarning_Lang()));
 
@@ -147,6 +152,7 @@ void OptionsDialog::setMapper()
     /* Display */
     mapper->addMapping(ui->lang, OptionsModel::Language);
     mapper->addMapping(ui->unit, OptionsModel::DisplayUnit);
+    mapper->addMapping(ui->styleComboBox, OptionsModel::WalletStylesheet,"currentData");
     mapper->addMapping(ui->coinControlFeatures, OptionsModel::CoinControlFeatures);
 	mapper->addMapping(ui->displayAddresses, OptionsModel::DisplayAddresses);
 }
@@ -220,6 +226,19 @@ void OptionsDialog::updateDisplayUnit()
     {
         /* Update transactionFee with the current unit */
         ui->transactionFee->setDisplayUnit(model->getDisplayUnit());
+    }
+}
+
+void OptionsDialog::updateStyle()
+{
+    if(model)
+    {
+        /* Update style with the current stylesheet */
+        QString value=model->getCurrentStyle();
+        int index = ui->styleComboBox->findData(value);
+        if ( index != -1 ) { // -1 for not found
+           ui->styleComboBox->setCurrentIndex(index);
+        }
     }
 }
 

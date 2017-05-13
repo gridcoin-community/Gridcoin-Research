@@ -1,5 +1,7 @@
 #include "coincontroltreewidget.h"
 #include "coincontroldialog.h"
+#include <QPainter>
+#include <QStyleOption>
 
 CoinControlTreeWidget::CoinControlTreeWidget(QWidget *parent) :
     QTreeWidget(parent)
