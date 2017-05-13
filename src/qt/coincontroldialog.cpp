@@ -608,9 +608,6 @@ void CoinControlDialog::updateView()
             itemWalletAddress->setFlags(flgTristate);
             itemWalletAddress->setCheckState(COLUMN_CHECKBOX,Qt::Unchecked);
             
-            for (int i = 0; i < ui->treeWidget->columnCount(); i++)
-                itemWalletAddress->setBackground(i, QColor(248, 247, 246));
-            
             // label
             itemWalletAddress->setText(COLUMN_LABEL, sWalletLabel);
 
