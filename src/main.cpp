@@ -6384,7 +6384,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     {
         if ((!IsLockTimeWithinMinutes(nLastAskedForBlocks,5) && WalletOutOfSync()) || (WalletOutOfSync() && fTestNet))
         {
-            printf("\r\nBootup\r\n");
+            if(fDebug) printf("\r\nBootup\r\n");
             AskForOutstandingBlocks(uint256(0));
         }
     }
@@ -7684,7 +7684,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
         if (!mcpid.BoincPublicKey.empty())
         {
             mcpid.BoincSignature = SignBlockWithCPID(mcpid.cpid,mcpid.lastblockhash);
-            printf("\r\nSigning Block for cpid %s and blockhash %s with sig %s\r\n",mcpid.cpid.c_str(),mcpid.lastblockhash.c_str(),mcpid.BoincSignature.c_str());
+            if(fDebug) printf("Signing Block for cpid %s and blockhash %s with sig %s\r\n",mcpid.cpid.c_str(),mcpid.lastblockhash.c_str(),mcpid.BoincSignature.c_str());
         }
     }
 
