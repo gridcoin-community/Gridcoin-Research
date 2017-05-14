@@ -8815,6 +8815,9 @@ bool MemorizeMessage(std::string msg, int64_t nTime, double dAmount, std::string
                                     WriteCache(sMessageType,sMessageKey+";BurnAmount",RoundToString(dAmount,2),nTime);
                                 }
                                 WriteCache(sMessageType,sMessageKey,sMessageValue,nTime);
+                                if(sMessageType=="beacon" && fDebug3){
+                                  printf("BEACON %s %s %s\r\n",sMessageKey.c_str(),DecodeBase64(sMessageValue).c_str(),TimestampToHRDate(nTime).c_str());
+                                }
                                 fMessageLoaded = true;
                                 if (sMessageType=="poll")
                                 {
