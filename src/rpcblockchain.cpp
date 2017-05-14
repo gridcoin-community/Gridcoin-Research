@@ -3472,7 +3472,7 @@ Array MagnitudeReport(std::string cpid)
                                                 entry.push_back(Pair("CPID Lifetime Payments Per Day", stCPID.ResearchSubsidy/(days+.01)));
                                                 entry.push_back(Pair("Last Blockhash Paid", stCPID.BlockHash));
                                                 entry.push_back(Pair("Last Block Paid",stCPID.LastBlock));
-                                                entry.push_back(Pair("Tx Count",stCPID.Accuracy));
+                                                entry.push_back(Pair("Tx Count",(int)stCPID.Accuracy));
                             
                                                 results.push_back(entry);
                                                 if (cpid==msPrimaryCPID && !msPrimaryCPID.empty() && msPrimaryCPID != "INVESTOR")

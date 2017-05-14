@@ -486,6 +486,11 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
         if (fDebug10 && LessVerbose(10))  printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
         pblock->vtx[0].hashBoinc = hashBoinc;
 
+        // Brod
+        GlobalCPUMiningCPID.ResearchSubsidy = out_por;
+        GlobalCPUMiningCPID.InterestSubsidy = out_interest;
+        GlobalCPUMiningCPID.ResearchMagnitudeUnit = dMagnitudeUnit;
+
         if (!fProofOfStake)
             pblock->vtx[0].vout[0].nValue = GetProofOfWorkReward(nFees, GetAdjustedTime(),nHeight);
 

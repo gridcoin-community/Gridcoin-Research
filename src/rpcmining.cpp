@@ -83,6 +83,8 @@ Value getmininginfo(const Array& params, bool fHelp)
 
     double dMagnitudeUnit = GRCMagnitudeUnit(GetAdjustedTime());
     obj.push_back(Pair("Magnitude Unit",dMagnitudeUnit));
+    obj.push_back(Pair("ResearchSubsidy",GlobalCPUMiningCPID.ResearchSubsidy));
+    obj.push_back(Pair("InterestSubsidy",GlobalCPUMiningCPID.InterestSubsidy));
 
     obj.push_back(Pair("MiningProject",msMiningProject));
     obj.push_back(Pair("MiningInfo 1", msMiningErrors));
