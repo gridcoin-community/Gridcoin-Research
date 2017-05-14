@@ -23,4 +23,4 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Fix freeze when clicking on the "Amount" field under Send Coins when using
   KDE, #210.
 - Fix OSX build issues, #174 (@coagmano).
-
+- Possible fix for invalid time check in diagnostic.

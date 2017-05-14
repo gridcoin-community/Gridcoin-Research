@@ -7,7 +7,7 @@ Public Class GRCDiagnostics
     Public Function GetNISTDateTime() As DateTime
         Try
 
-            Dim sNISTHOST As String = "time-nw.nist.gov" 'Atomic Clock Time Server in UTC
+            Dim sNISTHOST As String = "pool.ntp.org" 'Atomic Clock Time Server in UTC
             Dim client = New TcpClient(sNISTHOST, 13)
             Dim localDateTime As DateTime
 
