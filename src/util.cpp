@@ -227,7 +227,8 @@ inline int OutputDebugStringF(const char* pszFormat, ...)
         // print to console
         va_list arg_ptr;
         va_start(arg_ptr, pszFormat);
-        ret = vprintf(pszFormat, arg_ptr);
+        ret = vfprintf(stdout, pszFormat, arg_ptr);
+        fflush(stdout);
         va_end(arg_ptr);
     }
     else if (!fPrintToDebugger)
@@ -272,6 +273,7 @@ inline int OutputDebugStringF(const char* pszFormat, ...)
             va_list arg_ptr;
             va_start(arg_ptr, pszFormat);
             ret = vfprintf(fileout, pszFormat, arg_ptr);
+            fflush(fileout);
             va_end(arg_ptr);
         }
     }
