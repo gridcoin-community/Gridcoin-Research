@@ -339,21 +339,21 @@ extern std::string GetHttpPageFromCreditServerRetired(std::string cpid, bool use
 extern std::string RetrieveMd5(std::string s1);
 extern std::string aes_complex_hash(uint256 scrypt_hash);
 
-volatile bool bNetAveragesLoaded = false;
-volatile bool bTallyStarted      = false;
-volatile bool bRestartGridcoinMiner = false;
-volatile bool bForceUpdate = false;
-volatile bool bExecuteCode = false;
-volatile bool bAddressUser = false;
-volatile bool bCheckedForUpgrade = false;
-volatile bool bCheckedForUpgradeLive = false;
-volatile bool bGlobalcomInitialized = false;
-volatile bool bStakeMinerOutOfSyncWithNetwork = false;
-volatile bool bDoTally = false;
-volatile bool bExecuteGridcoinServices = false;
-volatile bool bTallyFinished = false;
-volatile bool bGridcoinGUILoaded = false;
-volatile bool bRequestFromHonestNode = false;
+bool bNetAveragesLoaded = false;
+bool bTallyStarted      = false;
+bool bRestartGridcoinMiner = false;
+bool bForceUpdate = false;
+bool bExecuteCode = false;
+bool bAddressUser = false;
+bool bCheckedForUpgrade = false;
+bool bCheckedForUpgradeLive = false;
+bool bGlobalcomInitialized = false;
+bool bStakeMinerOutOfSyncWithNetwork = false;
+bool bDoTally = false;
+bool bExecuteGridcoinServices = false;
+bool bTallyFinished = false;
+bool bGridcoinGUILoaded = false;
+bool bRequestFromHonestNode = false;
 
 extern bool CheckWorkCPU(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey);
 extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
@@ -479,7 +479,7 @@ extern void FlushGridcoinBlockFile(bool fFinalize);
 
  // CPU Miner threads global vars
 
- volatile double nGlobalHashCounter = 0;
+double nGlobalHashCounter = 0;
 
 
 bool fImporting = false;

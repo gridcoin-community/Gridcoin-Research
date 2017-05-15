@@ -22,8 +22,8 @@ double GetPoSKernelPS2();
 StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID>& vRef);
 double GRCMagnitudeUnit(int64_t locktime);
 std::string qtGetNeuralHash(std::string data);
-volatile bool bCPIDsLoaded;
-volatile bool bProjectsInitialized;
+bool bCPIDsLoaded;
+bool bProjectsInitialized;
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 
 int64_t GetRSAWeightByCPID(std::string cpid);
