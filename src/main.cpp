@@ -36,12 +36,13 @@
 #include <math.h>
 
 int GetDayOfYear();
+void GetBeaconElements(std::string sBeacon,std::string& out_cpid, std::string& out_address, std::string& out_publickey);
 extern std::string NodeAddress(CNode* pfrom);
 extern std::string ConvertBinToHex(std::string a);
 extern std::string ConvertHexToBin(std::string a);
 extern bool WalletOutOfSync();
 extern bool WriteKey(std::string sKey, std::string sValue);
-std::string GetBeaconPublicKey(const std::string& cpid);
+std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertisingBeacon);
 bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 extern void CleanInboundConnections(bool bClearAll);
@@ -7734,10 +7735,9 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
     if (mcpid.LastPORBlockHash.empty()) mcpid.LastPORBlockHash="0";
 
     // If this is a POR, sign the block proving ownership of the CPID
-
     if (!mcpid.cpid.empty() && mcpid.cpid != "INVESTOR" && mcpid.lastblockhash != "0")
     {
-        mcpid.BoincPublicKey = GetBeaconPublicKey(mcpid.cpid);
+        mcpid.BoincPublicKey = GetBeaconPublicKey(mcpid.cpid, false);
         if (!mcpid.BoincPublicKey.empty())
         {
             mcpid.BoincSignature = SignBlockWithCPID(mcpid.cpid,mcpid.lastblockhash);
@@ -8835,16 +8835,31 @@ bool MemorizeMessage(std::string msg, int64_t nTime, double dAmount, std::string
 
               if (sMessageType=="beacon" && sMessageAction=="A")
               {
-                    // If the Beacon Public Key is Not Empty - do not overwrite with a new beacon value
-                    std::string sBPK = GetBeaconPublicKey(sMessageKey);
-                    // Note that if the beacon is > 6 months old, this function now returns an empty string (allowing the beacon to be overwritten) : OK
-                    if (!sBPK.empty()) 
-                    {
-                        // Do not overwrite this beacon
-                        sMessageValue="";
-                        if (fDebug10) printf("\r\n**Beacon Public Key Not Empty %s : %s\r\n",sMessageKey.c_str(),sBPK.c_str());
-                    }
-
+                  // If the Beacon Public Key is Not Empty - do not overwrite with a new beacon value unless the public key is the same
+                  std::string sBPK = GetBeaconPublicKey(sMessageKey,false);
+                  if (!sBPK.empty())
+                  {
+                      std::string out_cpid = "";
+                      std::string out_address = "";
+                      std::string out_publickey = "";
+                      GetBeaconElements(sMessageValue, out_cpid, out_address, out_publickey);
+                      if (fDebug3 && LessVerbose(50)) 
+                      {
+                          printf("\r\n**Beacon Debug Message : beaconpubkey %s, message key %s, cpid %s, addr %s, base64 pub key %s \r\n ",sBPK.c_str(),
+                                 sMessageKey.c_str(),out_cpid.c_str(),out_address.c_str(), out_publickey.c_str());
+                      }
+                      if (sBPK == out_publickey)
+                      {
+                          // allow key to be reloaded in since this is a refreshed beacon
+                          if (fDebug10) printf("\r\n**Beacon Being Overwritten %s \r\n %s : %s\r\n",sBPK.c_str(),sMessageKey.c_str(),sBPK.c_str());
+                      }
+                      else
+                      {
+                          // In this case, the current Beacon is not empty and the keys are different - Do not overwrite this beacon
+                          sMessageValue="";
+                          if (fDebug10) printf("\r\n**Beacon Public Key Not Empty %s : %s\r\n",sMessageKey.c_str(),sBPK.c_str());
+                      }
+                  }
               }
 
               if (!sMessageType.empty() && !sMessageKey.empty() && !sMessageValue.empty() && !sMessageAction.empty() && !sSignature.empty())

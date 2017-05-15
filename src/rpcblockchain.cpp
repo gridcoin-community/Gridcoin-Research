@@ -27,12 +27,13 @@ double ReturnTotalRacByCPID(std::string cpid);
 std::string UnpackBinarySuperblock(std::string sBlock);
 std::string PackBinarySuperblock(std::string sBlock);
 int DetermineCPIDType(std::string cpid);
+extern void GetBeaconElements(std::string sBeacon,std::string& out_cpid, std::string& out_address, std::string& out_publickey);
 bool AskForOutstandingBlocks(uint256 hashStart);
 bool WriteKey(std::string sKey, std::string sValue);
 bool CleanChain();
 extern std::string SendReward(std::string sAddress, int64_t nAmount);
 extern double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID);
-std::string GetBeaconPublicKey(const std::string& cpid);
+std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertising);
 extern std::string SuccessFail(bool f);
 extern Array GetUpgradedBeaconReport();
 extern Array MagnitudeReport(std::string cpid);
@@ -1188,8 +1189,7 @@ bool CPIDAcidTest2(std::string bpk, std::string externalcpid)
         
 
 bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage)
-{
-                
+{	
      LOCK(cs_main);
      {
             GetNextProject(false);
@@ -1198,9 +1198,13 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
                 sError = "INVESTORS_CANNOT_SEND_BEACONS";
                 return bFromService ? true : false;
             }
+
             //If beacon is already in the chain, exit early
-            if (HasActiveBeacon(GlobalCPUMiningCPID.cpid))  
+            std::string sBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,true);
+            if (!sBeaconPublicKey.empty()) 
             {
+                // Ensure they can re-send the beacon if > 5 months old : GetBeaconPublicKey returns an empty string when > 5 months: OK.
+                // Note that we allow the client to re-advertise the beacon in 5 months, so that they have a seamless and uninterrupted keypair in use (prevents a hacker from hijacking a keypair that is in use)		
                 sError = "ALREADY_IN_CHAIN";
                 return bFromService ? true : false;
             }
@@ -1769,14 +1773,13 @@ Value execute(const Array& params, bool fHelp)
         // Search for beacon, and report on beacon status.
             
         std::string sCPID = msPrimaryCPID;
-
         if (params.size()==2)
         {
             sCPID = params[1].get_str();
         }
         
         entry.push_back(Pair("CPID", sCPID));
-        std::string sPubKey =  GetBeaconPublicKey(sCPID);
+        std::string sPubKey =  GetBeaconPublicKey(sCPID, false);
         std::string sPrivKey = GetStoredBeaconPrivateKey(sCPID);
         int64_t iBeaconTimestamp = BeaconTimeStamp(sCPID, false);
         std::string timestamp = TimestampToHRDate(iBeaconTimestamp);
@@ -3551,7 +3554,7 @@ double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID)
 
 bool HasActiveBeacon(const std::string& cpid)
 {
-    return GetBeaconPublicKey(cpid).empty() == false;
+    return GetBeaconPublicKey(cpid, false).empty() == false;
 }
 
 std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds)
@@ -3570,10 +3573,11 @@ std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxS
           : value;
 }
 
-std::string GetBeaconPublicKey(const std::string& cpid)
+std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertisingBeacon)
 {
-   //3-26-2017 - Ensure beacon public key is within 6 months of network age
-   int64_t iMaxSeconds = 60 * 24 * 30 * 6 * 60;
+   //3-26-2017 - Ensure beacon public key is within 6 months of network age (If advertising, let it be returned as missing after 5 months, to ensure the public key is renewed seamlessly).
+   int iMonths = bAdvertisingBeacon ? 5 : 6;
+   int64_t iMaxSeconds = 60 * 24 * 30 * iMonths * 60;
    std::string sBeacon = RetrieveBeaconValueWithMaxAge(cpid, iMaxSeconds);
    if (sBeacon.empty()) return "";
    // Beacon data structure: CPID,hashRand,Address,beacon public key: base64 encoded
@@ -3584,9 +3588,36 @@ std::string GetBeaconPublicKey(const std::string& cpid)
    return sBeaconPublicKey;
 }
 
+
+
+void GetBeaconElements(std::string sBeacon,std::string& out_cpid, std::string& out_address, std::string& out_publickey)
+{
+   if (sBeacon.empty()) return;
+   std::string sContract = DecodeBase64(sBeacon);
+   std::vector<std::string> vContract = split(sContract.c_str(),";");
+   if (vContract.size() < 4) return;
+   out_cpid = vContract[0];
+   out_address = vContract[2];
+   out_publickey = vContract[3];
+}
+
+
+
+
+std::string GetBeaconPublicKeyFromContract(std::string sEncContract)
+{
+   if (sEncContract.empty()) return "";
+   // Beacon data structure: CPID,hashRand,Address,beacon public key: base64 encoded
+   std::string sContract = DecodeBase64(sEncContract);
+   std::vector<std::string> vContract = split(sContract.c_str(),";");
+   if (vContract.size() < 4) return "";
+   std::string sBeaconPublicKey = vContract[3];
+   return sBeaconPublicKey;
+}
+
 bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature)
 {
-    std::string sBeaconPublicKey = GetBeaconPublicKey(sCPID);
+    std::string sBeaconPublicKey = GetBeaconPublicKey(sCPID, false);
     std::string sConcatMessage = sCPID + sBlockHash;
     bool bValid = CheckMessageSignature("R","cpid", sConcatMessage, sSignature, sBeaconPublicKey);
     return bValid;
@@ -4424,13 +4455,13 @@ Value listitem(const Array& params, bool fHelp)
         entry.push_back(Pair("RSA Owed",out_owed));
         results.push_back(entry);
 
-    }
+	}
     else if (sitem == "betatest")
     {
         Object entry;
         // Test a sample CPID keypair
         entry.push_back(Pair("CPID",msPrimaryCPID));
-        std::string sBeaconPublicKey = GetBeaconPublicKey(msPrimaryCPID);
+        std::string sBeaconPublicKey = GetBeaconPublicKey(msPrimaryCPID, false);
         entry.push_back(Pair("Beacon Public Key",sBeaconPublicKey));
         std::string sSignature = SignBlockWithCPID(msPrimaryCPID,"1000");
         entry.push_back(Pair("Signature",sSignature));
@@ -4443,7 +4474,7 @@ Value listitem(const Array& params, bool fHelp)
         entry.push_back(Pair("Right block, Wrong Signature Valid",fResult));
         // Missing Beacon, with wrong CPID
         std::string sCPID = "1234567890";
-        sBeaconPublicKey = GetBeaconPublicKey(sCPID);
+        sBeaconPublicKey = GetBeaconPublicKey(sCPID, false);
         sSignature = SignBlockWithCPID(sCPID,"1001");
         entry.push_back(Pair("Signature",sSignature));
         fResult = VerifyCPIDSignature(sCPID, "1001", sSignature);
