@@ -38,6 +38,7 @@
 #include "addresstablemodel.h"
 #include "transactionview.h"
 #include "overviewpage.h"
+#include "statisticspage.h"
 #include "bitcoinunits.h"
 #include "guiconstants.h"
 #include "askpassphrasedialog.h"
@@ -196,6 +197,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
     // Create tabs
     overviewPage = new OverviewPage();
+    statisticsPage = new StatisticsPage();
 
     transactionsPage = new QWidget(this);
     QVBoxLayout *vbox = new QVBoxLayout();
@@ -217,6 +219,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     centralWidget->addWidget(addressBookPage);
     centralWidget->addWidget(receiveCoinsPage);
     centralWidget->addWidget(sendCoinsPage);
+    centralWidget->addWidget(statisticsPage);
     setCentralWidget(centralWidget);
 
     // Create status bar
@@ -686,6 +689,11 @@ void BitcoinGUI::createActions()
     addressBookAction->setCheckable(true);
     addressBookAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_5));
 
+    statisticsAction = new QAction(QIcon(":/icons/statistics"), tr("&Statistics"), tabGroup);
+    statisticsAction->setToolTip(tr("Show detailed information about your wallet and the gridcoin network."));
+    statisticsAction->setCheckable(true);
+    statisticsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_6));
+
 	bxAction = new QAction(QIcon(":/icons/block"), tr("&Block Explorer"), this);
 	bxAction->setStatusTip(tr("Block Explorer"));
 	bxAction->setMenuRole(QAction::TextHeuristicRole);
@@ -716,6 +724,8 @@ void BitcoinGUI::createActions()
     connect(historyAction, SIGNAL(triggered()), this, SLOT(gotoHistoryPage()));
     connect(addressBookAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(addressBookAction, SIGNAL(triggered()), this, SLOT(gotoAddressBookPage()));
+    connect(statisticsAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
+    connect(statisticsAction, SIGNAL(triggered()), this, SLOT(gotoStatisticsPage()));
 
 	connect(websiteAction, SIGNAL(triggered()), this, SLOT(websiteClicked()));
 	connect(bxAction, SIGNAL(triggered()), this, SLOT(bxClicked()));
@@ -908,6 +918,7 @@ void BitcoinGUI::createToolBars()
     toolbar->addAction(receiveCoinsAction);
     toolbar->addAction(historyAction);
     toolbar->addAction(addressBookAction);
+    toolbar->addAction(statisticsAction);
 
 	// Prevent Lock from falling off the page
 
@@ -1591,6 +1602,15 @@ void BitcoinGUI::gotoSendCoinsPage()
     disconnect(exportAction, SIGNAL(triggered()), 0, 0);
 }
 
+void BitcoinGUI::gotoStatisticsPage()
+{
+    statisticsAction->setChecked(true);
+    centralWidget->setCurrentWidget(statisticsPage);
+
+    exportAction->setEnabled(false);
+    disconnect(exportAction, SIGNAL(triggered()), 0, 0);
+}
+
 void BitcoinGUI::gotoSignMessageTab(QString addr)
 {
     // call show() in showTab_SM()
@@ -1968,6 +1988,7 @@ void BitcoinGUI::timerfire()
 		{
 				bForceUpdate=false;
 				overviewPage->updateglobalstatus();
+                statisticsPage->updateglobalstatus();
 				setNumConnections(clientModel->getNumConnections());
 		}
 

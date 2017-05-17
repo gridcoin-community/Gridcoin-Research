@@ -204,13 +204,8 @@ void OverviewPage::UpdateBoincUtilization()
 {
 
      ui->labelBlocks->setText(QString::fromUtf8(GlobalStatusStruct.blocks.c_str()));
-     ui->labelDifficulty->setText(QString::fromUtf8(GlobalStatusStruct.difficulty.c_str()));
      ui->labelNetWeight->setText(QString::fromUtf8(GlobalStatusStruct.netWeight.c_str()));
-     ui->labelDporWeight->setText(QString::fromUtf8(GlobalStatusStruct.dporWeight.c_str()));
      ui->labelMagnitude->setText(QString::fromUtf8(GlobalStatusStruct.magnitude.c_str()));
-     ui->labelProject->setText(QString::fromUtf8(GlobalStatusStruct.project.c_str()));
-     ui->labelDporSubsidy->setText(QString::fromUtf8(GlobalStatusStruct.dporSubsidy.c_str()));
-     ui->labelDporMagUnit->setText(QString::fromUtf8(GlobalStatusStruct.dporMagUnit.c_str()));
      ui->labelCpid->setText(QString::fromUtf8(GlobalStatusStruct.cpid.c_str()));
      ui->labelStatus->setText(QString::fromUtf8(GlobalStatusStruct.status.c_str()));
      ui->labelPoll->setText(QString::fromUtf8(GlobalStatusStruct.poll.c_str()));

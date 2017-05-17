@@ -17,6 +17,7 @@ class ClientModel;
 class WalletModel;
 class TransactionView;
 class OverviewPage;
+class StatisticsPage;
 class AddressBookPage;
 class SendCoinsDialog;
 class SignVerifyMessageDialog;
@@ -74,6 +75,7 @@ private:
     QStackedWidget *centralWidget;
 
     OverviewPage *overviewPage;
+    StatisticsPage *statisticsPage;
     QWidget *transactionsPage;
     AddressBookPage *addressBookPage;
     AddressBookPage *receiveCoinsPage;
@@ -91,6 +93,7 @@ private:
     QAction *quitAction;
     QAction *sendCoinsAction;
     QAction *addressBookAction;
+    QAction *statisticsAction;
     QAction *signMessageAction;
 	QAction *bxAction;
 	QAction *websiteAction;
@@ -187,6 +190,8 @@ private slots:
     void gotoReceiveCoinsPage();
     /** Switch to send coins page */
     void gotoSendCoinsPage();
+    /** Switch to statistics page */
+    void gotoStatisticsPage();
 
     /** Show Sign/Verify Message dialog and switch to sign message tab */
     void gotoSignMessageTab(QString addr = "");
