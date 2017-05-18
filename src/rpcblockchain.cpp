@@ -3286,6 +3286,83 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("Execute Encrypt result3",s1out));
             results.push_back(entry);
     }
+    else if (sItem == "debug")
+    {
+	    if (params.size() == 2 && (params[1].get_str() == "true" || params[1].get_str() == "false"))
+	    {
+		    fDebug = (params[1].get_str() == "true") ? true : false;
+		    entry.push_back(Pair("Debug", fDebug ? "Entering debug mode." : "Exiting debug mode."));
+	    }
+	    else
+		    entry.push_back(Pair("Error","You must specify true or false as an option."));
+	    results.push_back(entry);
+    }    
+    else if (sItem == "debugnet")
+    {
+	    if (params.size() == 2 && (params[1].get_str() == "true" || params[1].get_str() == "false"))
+	    {
+		    fDebugNet = (params[1].get_str() == "true") ? true : false;
+		    entry.push_back(Pair("DebugNet", fDebugNet ? "Entering debug mode." : "Exiting debug mode."));
+	    }
+	    else
+		    entry.push_back(Pair("Error","You must specify true or false as an option."));
+	    results.push_back(entry);
+    }    
+    else if (sItem == "debug2")
+    {
+	    if (params.size() == 2 && (params[1].get_str() == "true" || params[1].get_str() == "false"))
+	    {
+		    fDebug2 = (params[1].get_str() == "true") ? true : false;
+		    entry.push_back(Pair("Debug2", fDebug2 ? "Entering debug mode." : "Exiting debug mode."));
+	    }
+	    else
+		    entry.push_back(Pair("Error","You must specify true or false as an option."));
+	    results.push_back(entry);
+    }    
+    else if (sItem == "debug3")
+    {
+	    if (params.size() == 2 && (params[1].get_str() == "true" || params[1].get_str() == "false"))
+	    {
+		    fDebug3 = (params[1].get_str() == "true") ? true : false;
+		    entry.push_back(Pair("Debug3", fDebug3 ? "Entering debug mode." : "Exiting debug mode."));
+	    }
+	    else
+		    entry.push_back(Pair("Error","You must specify true or false as an option."));
+	    results.push_back(entry);
+    }    
+    else if (sItem == "debug4")
+    {
+	    if (params.size() == 2 && (params[1].get_str() == "true" || params[1].get_str() == "false"))
+	    {
+		    fDebug4 = (params[1].get_str() == "true") ? true : false;
+		    entry.push_back(Pair("Debug4", fDebug4 ? "Entering debug mode." : "Exiting debug mode."));
+	    }
+	    else
+		    entry.push_back(Pair("Error","You must specify true or false as an option."));
+	    results.push_back(entry);
+    }    
+    else if (sItem == "debug5")
+    {
+	    if (params.size() == 2 && (params[1].get_str() == "true" || params[1].get_str() == "false"))
+	    {
+		    fDebug5 = (params[1].get_str() == "true") ? true : false;
+		    entry.push_back(Pair("Debug5", fDebug5 ? "Entering debug mode." : "Exiting debug mode."));
+	    }
+	    else
+		    entry.push_back(Pair("Error","You must specify true or false as an option."));
+	    results.push_back(entry);
+    }    
+    else if (sItem == "debug10")
+    {
+	    if (params.size() == 2 && (params[1].get_str() == "true" || params[1].get_str() == "false"))
+	    {
+		    fDebug10 = (params[1].get_str() == "true") ? true : false;
+		    entry.push_back(Pair("Debug10", fDebug10 ? "Entering debug mode." : "Exiting debug mode."));
+	    }
+	    else
+		    entry.push_back(Pair("Error","You must specify true or false as an option."));
+	    results.push_back(entry);
+    }    
     else
     {
             entry.push_back(Pair("Command " + sItem + " not found.",-1));
@@ -4632,13 +4709,6 @@ Value listitem(const Array& params, bool fHelp)
     {
         results = StakingReport();
         return results;
-    }
-    else if (sitem == "debug3")
-    {
-        fDebug3 = true;
-        Object entry;
-        entry.push_back(Pair("Entering Debug Mode 3",1));
-        results.push_back(entry);
     }
     else if (sitem == "currenttime")
     {
