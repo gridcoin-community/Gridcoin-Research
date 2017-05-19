@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
      the recent transactions.
    - Displayed DPOR weight should now be accurate. , #233 (@skcin).
  - Show as many of the recent transactions as we can fit.
+ - Update Portuguese translations (Miguel Veiga).
 
 ## [3.5.8.9] - 2017-05-15
 ### Added
