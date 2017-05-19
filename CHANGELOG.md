@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+ - Add RPC commands for changing debug flags: debug, debugnet, debug2, debug3,
+   debug4, debug5, debug10. #309 (@Foggyx420).
+ - Add support for themes via stylesheets, #233 (@skcin).
+ - Add support for OpenSSL 1.1.x, #164.
+
+### Changed
+ - Wallet overview cleanup, #233 (@skcin)
+   - The main overview page is now cleaner, more structured and holds more of
+     the recent transactions.
+   - Displayed DPOR weight should now be accurate. , #233 (@skcin).
+ - Show as many of the recent transactions as we can fit.
 
 ## [3.5.8.9] - 2017-05-15
 ### Added
