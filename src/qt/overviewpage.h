@@ -44,7 +44,13 @@ public slots:
 signals:
     void transactionClicked(const QModelIndex &index);
 
+protected:
+    void resizeEvent(QResizeEvent *event);
+    void showEvent(QShowEvent *event);
+    
 private:
+    void updateTransactions();
+    
     Ui::OverviewPage *ui;
     WalletModel *model;
     qint64 currentBalance;

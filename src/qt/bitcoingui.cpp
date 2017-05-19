@@ -155,7 +155,6 @@ void GetGlobalStatus();
 
 extern int UpgradeClient();
 extern void CheckForUpgrade();
-extern int CloseGuiMiner();
 extern int AddressUser();
 
 bool IsConfigFileEmpty();
@@ -805,22 +804,6 @@ int AddressUser()
 		#endif
 		return result;
 }
-
-int CloseGuiMiner()
-{
-	if (!bGlobalcomInitialized) return 0;
-
-	try
-	{
-#ifdef WIN32
-			globalcom->dynamicCall("CloseGUIMiner()");
-#endif
-	}
-	catch(...) { return 0; }
-
-	return 1;
-}
-
 
 void BitcoinGUI::setOptionsStyleSheet(QString qssFileName)
 {
