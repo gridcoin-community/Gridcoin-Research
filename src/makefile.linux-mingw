@@ -88,7 +88,8 @@ OBJS= \
     obj/scrypt.o \
     obj/scrypt-x86.o \
     obj/scrypt-x86_64.o \
-    obj/cpid.o 
+    obj/cpid.o \
+    obj/block.o 
 
 all: gridcoinresearchd.exe
 

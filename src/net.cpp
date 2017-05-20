@@ -10,6 +10,7 @@
 #include "strlcpy.h"
 #include "addrman.h"
 #include "ui_interface.h"
+#include "util.h"
 
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/array.hpp>
@@ -33,12 +34,9 @@ extern void BusyWaitForTally();
 extern void DoTallyResearchAverages(void* parg);
 extern void ExecGridcoinServices(void* parg);
 double cdbl(std::string s, int place);
-bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 std::string DefaultWalletAddress();
-void GridcoinServices();
 std::string NodeAddress(CNode* pfrom);
 std::string GetNeuralVersion();
-
 
 #ifndef QT_GUI
  boost::thread_group threadGroup;
@@ -47,31 +45,21 @@ extern std::string GetCommandNonce(std::string command);
 extern std::string DefaultOrg();
 extern std::string DefaultOrgKey(int key_length);
 extern std::string DefaultBlockKey(int key_length);
-extern std::string GetBestBlockHash(std::string sCPID);
-extern std::string TestHTTPProtocol(std::string sCPID);
 extern std::string GetHttpPage(std::string url);
 std::vector<std::string> split(std::string s, std::string delim);
-
-
-int64_t IsNeural();
 
 extern std::string OrgId();
 std::string DefaultBoincHashArgs();
 extern std::string LegacyDefaultBoincHashArgs();
 bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
 extern int nMaxConnections;
-MiningCPID GetNextProject(bool bForce);
 void HarvestCPIDs(bool cleardata);
-bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 extern std::string GetHttpPageFromCreditServerRetired(std::string cpid, bool UseDNS, bool ClearCache);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 std::string cached_boinchash_args = "";
-void WriteAppCache(std::string key, std::string value);
 std::string RetrieveMd5(std::string s1);
 
-extern std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string urlPage, bool bUseDNS);
 std::string msPubKey = "";
-std::string RoundToString(double d, int place);
 int MAX_OUTBOUND_CONNECTIONS = 8;
 
 void ThreadMessageHandler2(void* parg);
@@ -144,24 +132,24 @@ unsigned short GetListenPort()
 
 std::string GetCommandNonce(std::string command)
 {
-	//1-11-2015 Message Attacks - Halford
-	std::string sboinchashargs = DefaultOrgKey(12);
-	std::string nonce = RoundToString((double)GetAdjustedTime(),0);
-	std::string org = DefaultOrg();
-	std::string pub_key_prefix = OrgId();
-	std::string pw1 = RetrieveMd5(nonce+","+command+","+org+","+pub_key_prefix+","+sboinchashargs);
-	uint256 boincHashRandNonce = GetRandHash();
-	std::string bhrn = boincHashRandNonce.GetHex();
-	std::string grid_pass_encrypted = AdvancedCryptWithSalt(bhrn+nonce+org+pub_key_prefix,sboinchashargs);
-	std::string sComm = nonce+","+command+","+pw1+","+org+","+pub_key_prefix+","+bhrn+","+grid_pass_encrypted;
-	return sComm;
+    //1-11-2015 Message Attacks - Halford
+    std::string sboinchashargs = DefaultOrgKey(12);
+    std::string nonce = RoundToString((double)GetAdjustedTime(),0);
+    std::string org = DefaultOrg();
+    std::string pub_key_prefix = OrgId();
+    std::string pw1 = RetrieveMd5(nonce+","+command+","+org+","+pub_key_prefix+","+sboinchashargs);
+    uint256 boincHashRandNonce = GetRandHash();
+    std::string bhrn = boincHashRandNonce.GetHex();
+    std::string grid_pass_encrypted = AdvancedCryptWithSalt(bhrn+nonce+org+pub_key_prefix,sboinchashargs);
+    std::string sComm = nonce+","+command+","+pw1+","+org+","+pub_key_prefix+","+bhrn+","+grid_pass_encrypted;
+    return sComm;
 }
 
 
 
 void CNode::PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd, bool fForce)
 {
-	// The line of code below is the line of code that kept us from syncing to the best block (fForce forces the sync to continue).
+    // The line of code below is the line of code that kept us from syncing to the best block (fForce forces the sync to continue).
     if (pindexBegin == pindexLastGetBlocksBegin && hashEnd == hashLastGetBlocksEnd) return;  // Filter out duplicate requests
     pindexLastGetBlocksBegin = pindexBegin;
     hashLastGetBlocksEnd = hashEnd;
@@ -212,31 +200,31 @@ CAddress GetLocalAddress(const CNetAddr *paddrPeer)
 bool RecvLine2(SOCKET hSocket, string& strLine)
 {
 
-	try
-	{
+    try
+    {
     strLine = "";
-	clock_t begin = clock();
+    clock_t begin = clock();
 
     while (true)
     {
         char c;
-     	int nBytes = recv(hSocket, &c, 1,  0);
+        int nBytes = recv(hSocket, &c, 1,  0);
 
-		clock_t end = clock();
-		double elapsed_secs = double(end - begin) / (CLOCKS_PER_SEC+.01);
-		if (elapsed_secs > 5) return true;
+        clock_t end = clock();
+        double elapsed_secs = double(end - begin) / (CLOCKS_PER_SEC+.01);
+        if (elapsed_secs > 5) return true;
 
         if (nBytes > 0)
         {
             strLine += c;
             if (c == '\n')      return true;
             if (c == '\r')      return true;
-			//12-19-2015
-			if (strLine.find("</users>") != string::npos) return true;
-			if (strLine.find("</html>") != string::npos) return true;
-			if (strLine.find("<EOF>") != string::npos) return true;
+            //12-19-2015
+            if (strLine.find("</users>") != string::npos) return true;
+            if (strLine.find("</html>") != string::npos) return true;
+            if (strLine.find("<EOF>") != string::npos) return true;
 
-		    if (strLine.size() >= 39000)
+            if (strLine.size() >= 39000)
                 return true;
         }
         else if (nBytes <= 0)
@@ -252,9 +240,9 @@ bool RecvLine2(SOCKET hSocket, string& strLine)
                 if (nErr == WSAEWOULDBLOCK || nErr == WSAEINTR || nErr == WSAEINPROGRESS)
                 {
                     MilliSleep(1);
-					clock_t end = clock();
-					double elapsed_secs = double(end - begin) / (CLOCKS_PER_SEC+.01);
-					if (elapsed_secs > 3) return true;
+                    clock_t end = clock();
+                    double elapsed_secs = double(end - begin) / (CLOCKS_PER_SEC+.01);
+                    if (elapsed_secs > 3) return true;
                     continue;
                 }
             }
@@ -268,22 +256,22 @@ bool RecvLine2(SOCKET hSocket, string& strLine)
             else
             {
                 // socket error
-	            int nErr = WSAGetLastError();
+                int nErr = WSAGetLastError();
                 if (fDebug3) printf("recv socket err: %d\n", nErr);
                 return false;
             }
         }
     }
 
-	}
-	catch (std::exception &e)
-	{
+    }
+    catch (std::exception &e)
+    {
         return false;
     }
-	catch (...)
-	{
-		return false;
-	}
+    catch (...)
+    {
+        return false;
+    }
 
 }
 
@@ -379,12 +367,12 @@ bool AddLocal(const CService& addr, int nScore)
     if (IsLimited(addr))
         return false;
 
-	try
-	{
+    try
+    {
     if (fDebug10) printf("AddLocal(%s,%i)\n", addr.ToString().c_str(), nScore);
 
     {
-	    LOCK(cs_mapLocalHost);
+        LOCK(cs_mapLocalHost);
         bool fAlready = mapLocalHost.count(addr) > 0;
         LocalServiceInfo &info = mapLocalHost[addr];
         if (!fAlready || nScore >= info.nScore) {
@@ -395,12 +383,12 @@ bool AddLocal(const CService& addr, int nScore)
     }
 
     AdvertizeLocal();
-	}
-	catch(...)
-	{
+    }
+    catch(...)
+    {
 
-	}
-	printf("7..");
+    }
+    printf("7..");
     return true;
 }
 
@@ -463,9 +451,9 @@ bool IsReachable(const CNetAddr& addr)
 
 
 void StringToChar(std::string s, char* a)
-{	a=new char[s.size()+1];
-	a[s.size()]=0;
-	memcpy(a,s.c_str(),s.size());
+{   a=new char[s.size()+1];
+    a[s.size()]=0;
+    memcpy(a,s.c_str(),s.size());
 
 }
 
@@ -474,51 +462,51 @@ void StringToChar(std::string s, char* a)
 std::string GetLargeHttpContent(const CService& addrConnect, std::string getdata)
 {
 
-	try
-	{
-	char *pszGet = (char*)getdata.c_str();
+    try
+    {
+    char *pszGet = (char*)getdata.c_str();
 
     SOCKET hSocket;
     if (!ConnectSocket(addrConnect, hSocket))
-	{
+    {
         return "GetLargeHttpContent() : connection to address failed";
-	}
+    }
 
-	if (fDebug10) printf("Trying %s",getdata.c_str());
+    if (fDebug10) printf("Trying %s",getdata.c_str());
 
     send(hSocket, pszGet, strlen(pszGet), MSG_NOSIGNAL);
     string strLine;
-	std::string strOut="null";
-	MilliSleep(62);
-	double timeout = 0;
-	clock_t begin = clock();
+    std::string strOut="null";
+    MilliSleep(62);
+    double timeout = 0;
+    clock_t begin = clock();
     while (RecvLine2(hSocket, strLine))
     {
-	            strOut = strOut + strLine + "\r\n";
-				MilliSleep(10);
-				timeout=timeout+10;
-  			    clock_t end = clock();
-				double elapsed_secs = double(end - begin) / (CLOCKS_PER_SEC+.01);
-				if (timeout > 20000) break;
-				if (elapsed_secs > 20) break;
-			    if (strLine.find("<END>") != string::npos) break;
-				if (strLine.find("</html>") != string::npos) break;
-				if (strLine.find("</users>") != string::npos) break;
-				if (strLine.find("</error>") != string::npos) break;
+                strOut = strOut + strLine + "\r\n";
+                MilliSleep(10);
+                timeout=timeout+10;
+                clock_t end = clock();
+                double elapsed_secs = double(end - begin) / (CLOCKS_PER_SEC+.01);
+                if (timeout > 20000) break;
+                if (elapsed_secs > 20) break;
+                if (strLine.find("<END>") != string::npos) break;
+                if (strLine.find("</html>") != string::npos) break;
+                if (strLine.find("</users>") != string::npos) break;
+                if (strLine.find("</error>") != string::npos) break;
 
     }
     closesocket(hSocket);
-	return strOut;
-	}
+    return strOut;
+    }
     catch (std::exception &e)
-	{
+    {
         return "";
 
     }
-	catch (...)
-	{
-		return "";
-	}
+    catch (...)
+    {
+        return "";
+    }
 
 }
 
@@ -527,199 +515,81 @@ std::string GetLargeHttpContent(const CService& addrConnect, std::string getdata
 std::string GetHttpContent(const CService& addrConnect, std::string getdata)
 {
 
-	try
-	{
-	char *pszGet = (char*)getdata.c_str();
+    try
+    {
+    char *pszGet = (char*)getdata.c_str();
 
     SOCKET hSocket;
     if (!ConnectSocket(addrConnect, hSocket))
-	{
+    {
         return "GetHttpContent() : connection to address failed";
-	}
+    }
 
-	if (fDebug3) printf("Trying %s",getdata.c_str());
+    if (fDebug3) printf("Trying %s",getdata.c_str());
 
     send(hSocket, pszGet, strlen(pszGet), MSG_NOSIGNAL);
     string strLine;
-	std::string strOut="null";
-	MilliSleep(1);
-	double timeout = 0;
-	clock_t begin = clock();
+    std::string strOut="null";
+    MilliSleep(1);
+    double timeout = 0;
+    clock_t begin = clock();
     while (RecvLine2(hSocket, strLine))
     {
-	            strOut = strOut + strLine + "\r\n";
-				MilliSleep(1);
-				timeout=timeout+1;
-  			    clock_t end = clock();
-				double elapsed_secs = double(end - begin) / (CLOCKS_PER_SEC+.01);
-				if (elapsed_secs > 8) break;
-			    if (strLine.find("<END>") != string::npos) break;
-				if (strLine.find("</html>") != string::npos) break;
-				if (strLine.find("</user>") != string::npos) break;
+                strOut = strOut + strLine + "\r\n";
+                MilliSleep(1);
+                timeout=timeout+1;
+                clock_t end = clock();
+                double elapsed_secs = double(end - begin) / (CLOCKS_PER_SEC+.01);
+                if (elapsed_secs > 8) break;
+                if (strLine.find("<END>") != string::npos) break;
+                if (strLine.find("</html>") != string::npos) break;
+                if (strLine.find("</user>") != string::npos) break;
 
     }
     closesocket(hSocket);
-	return strOut;
-	}
+    return strOut;
+    }
     catch (std::exception &e)
-	{
+    {
         return "";
 
     }
-	catch (...)
-	{
-		return "";
-	}
-
-}
-
-
-std::string GridHTTPPost(std::string url, std::string hostheader, const string& strMsg, const map<string,string>& mapRequestHeaders)
-{
-    ostringstream s;
-    s << "POST /" + url + " HTTP/1.1\r\n"
-      << "User-Agent: Gridcoin-QT/" << FormatFullVersion() << "\r\n"
-	  << "Host: " + hostheader + "" << "\r\n"
-      << "Content-Length: " << strMsg.size() << "\r\n";
-
-    BOOST_FOREACH(const PAIRTYPE(string, string)& item, mapRequestHeaders)
-        s << item.first << ": " << item.second << "\r\n";
-        s << "\r\n" << strMsg;
-
-    return s.str();
-}
-
-std::string GetBestBlockHash(std::string sCPID)
-{
-	std::string key = "<ADDR>";
-	std::string keystop = "</ADDR>";
-	if (fTestNet)
-	{
-			key = "<ADDRESSTESTNET>";
-			keystop = "</ADDRESSTESTNET>";
-	}
-	std::string boincauth = sCPID + "<;>" + hashBestChain.ToString();
-	std::string http = GridcoinHttpPost("hashbestchain",boincauth,"GetBestBlockHash.aspx",true);
-	if (fDebug10) printf("Resp %s",http.c_str());
-	msPubKey = ExtractXML(http,key,keystop);
-	return msPubKey;
-}
-
-
-std::string TestHTTPProtocol(std::string sCPID)
-{
-	std::string key = "<ADDR>";
-	std::string keystop = "</ADDR>";
-	if (fTestNet)
-	{
-			key = "<ADDRESSTESTNET>";
-			keystop = "</ADDRESSTESTNET>";
-	}
-	std::string boincauth = sCPID + "<;>" + hashBestChain.ToString();
-	std::string http = GridcoinHttpPost("hashbestchain",boincauth,"Test404Page.aspx",true);
-	if (fDebug10) printf("Resp %s",http.c_str());
-	msPubKey = ExtractXML(http,key,keystop);
-	return msPubKey;
-}
-
-
-std::string GridcoinHttpPost(std::string msg, std::string boincauth, std::string urlPage, bool bUseDNS)
-{
-
-	try
-	{
-	// HTTP basic authentication
-    std::string strAuth1 = GlobalCPUMiningCPID.cpidv2;
-	std::string strAuth2 = hashBestChain.ToString();
-
-    map<string, string> mapRequestHeaders;
-    mapRequestHeaders["Miner"] = strAuth1+"<;>"+strAuth2+"<;>"+ boincauth + "<;>" + msg;
-	CService addrConnect;
-	std::string ip = "127.0.0.1";
-	std::string poolFullURL = mapArgs["-poolurl"];
-	poolFullURL = "http://pool.gridcoin.us";
-
-	if (poolFullURL=="")  return "ERR:Pool URL missing";
-	std::string domain = "";
-	if (poolFullURL.find("https://") != string::npos)
-	{
-		domain = poolFullURL.substr(8,poolFullURL.length()-8);
-	}
-	if(poolFullURL.find("http://") != string::npos)
-	{
-		domain = poolFullURL.substr(7,poolFullURL.length()-7);
-	}
-
-	if (domain=="")
-	{
-		if (fDebug10)		printf("Pool Domain Missing \r\n");
-		return "ERR:Pool Domain missing";
-	}
-    int port = 80;
-
-	CService addrIP(domain, port, true);
-
-	if (bUseDNS)
-	{
-		if (addrIP.IsValid())
-		{
-				addrConnect = addrIP;
-				if (fDebug10) printf("Domain Post IP valid\r\n %s",domain.c_str());
-		}
-	}
-	else
-	{
-  		addrConnect = CService(ip, port);
-	}
-	std::string strPost = GridHTTPPost(urlPage, domain, msg, mapRequestHeaders);
-    if (fDebug10) printf("querying getdata\r\n  %s \r\n",strPost.c_str());
-	std::string http = GetHttpContent(addrConnect, strPost);
-	if (fDebug10) printf("http:\r\n  %s\r\n",http.c_str());
-	return http;
-
-	}
-    catch (std::exception &e)
-	{
+    catch (...)
+    {
         return "";
-
     }
-	catch (...)
-	{
-		return "";
-	}
 
 }
-
 
 std::string ExtractDomainFromURL(std::string url, int partid)
 {
-	boost::to_lower(url);
+    boost::to_lower(url);
 
-//	std::string domain = "milkyway.cs.rpi.edu";
-	//std::string page = "milkyway/team_email_list.php?teamid=6566&xml=1";
-	std::string out_url = "";
-	std::string domain = "";
+//  std::string domain = "milkyway.cs.rpi.edu";
+    //std::string page = "milkyway/team_email_list.php?teamid=6566&xml=1";
+    std::string out_url = "";
+    std::string domain = "";
 
-	std::vector<std::string> vURL = split(url.c_str(),"http://");
-	if (vURL.size() > 0)
-	{
-		std::string protocol = vURL[0];
-		std::string raw_url = vURL[1];
-		//Extract the domain from the URL:
-		std::vector<std::string> vElements = split(raw_url.c_str(),"/");
-		domain = vElements[0];
-		//Join the remaining elements to obtain the actual URL
+    std::vector<std::string> vURL = split(url.c_str(),"http://");
+    if (vURL.size() > 0)
+    {
+        std::string protocol = vURL[0];
+        std::string raw_url = vURL[1];
+        //Extract the domain from the URL:
+        std::vector<std::string> vElements = split(raw_url.c_str(),"/");
+        domain = vElements[0];
+        //Join the remaining elements to obtain the actual URL
 
-		for (unsigned int i = 1; i < vElements.size(); i++)
-		{
-			out_url += vElements[i] + "/";
-		}
-	}
+        for (unsigned int i = 1; i < vElements.size(); i++)
+        {
+            out_url += vElements[i] + "/";
+        }
+    }
 
-	if (out_url.length() > 2) out_url = out_url.substr(0,out_url.length()-1);
-	if (partid == 0) return domain;
-	if (partid == 1) return out_url;
-	return "";
+    if (out_url.length() > 2) out_url = out_url.substr(0,out_url.length()-1);
+    if (partid == 0) return domain;
+    if (partid == 1) return out_url;
+    return "";
 }
 
 
@@ -727,45 +597,45 @@ std::string ExtractDomainFromURL(std::string url, int partid)
 std::string GetHttpPage(std::string url)
 {
 
-	try
-	{
+    try
+    {
 
-		std::string domain = ExtractDomainFromURL(url,0);
-		std::string page = ExtractDomainFromURL(url,1);
-		if (fDebug10) printf("domain %s, page %s\r\n",domain.c_str(),page.c_str());
+        std::string domain = ExtractDomainFromURL(url,0);
+        std::string page = ExtractDomainFromURL(url,1);
+        if (fDebug10) printf("domain %s, page %s\r\n",domain.c_str(),page.c_str());
 
-		CService addrConnect;
+        CService addrConnect;
 
-		CService addrIP(domain, 80, true);
+        CService addrIP(domain, 80, true);
         if (addrIP.IsValid())
-		{
-				addrConnect = addrIP;
-		}
-		else
-		{
-			return "";
-		}
+        {
+                addrConnect = addrIP;
+        }
+        else
+        {
+            return "";
+        }
 
-		std::string getdata = "GET /" + page + " HTTP/1.1\r\n"
+        std::string getdata = "GET /" + page + " HTTP/1.1\r\n"
                      "Host: " + domain + "\r\n"
-  				     "User-Agent: Mozilla/4.0\r\n"
+                     "User-Agent: Mozilla/4.0\r\n"
                      "\r\n";
 
-      	std::string http = GetHttpContent(addrConnect,getdata);
-		std::string resultset = "" + http;
-		return resultset;
-	}
+        std::string http = GetHttpContent(addrConnect,getdata);
+        std::string resultset = "" + http;
+        return resultset;
+    }
     catch (std::exception &e)
-	{
-		printf("Error while querying address for XML %s",url.c_str());
+    {
+        printf("Error while querying address for XML %s",url.c_str());
 
         return "";
     }
-	catch (...)
-	{
+    catch (...)
+    {
 
-		return "";
-	}
+        return "";
+    }
 
 }
 
@@ -774,76 +644,76 @@ std::string GetHttpPage(std::string url)
 
 std::string GetHttpPageFromCreditServerRetired(std::string cpid, bool UseDNS, bool ClearCache)
 {
-	
-	try
-	{
-	   if (cpid=="" || cpid.length() < 5)
-	   {
-				if (fDebug10) printf("Blank cpid supplied");
-				return "";
-	   }
-
-	   if (ClearCache)
-	   {
-			mvCPIDCache["cache"+cpid].initialized=false;
+    
+    try
+    {
+       if (cpid=="" || cpid.length() < 5)
+       {
+                if (fDebug10) printf("Blank cpid supplied");
+                return "";
        }
-	   StructCPIDCache c = mvCPIDCache["cache"+cpid];
-	   if (c.initialized)
-	   {
-		   if (c.xml.length() > 100)
-		   {
-			   return c.xml;
-		   }
 
-	   }
+       if (ClearCache)
+       {
+            mvCPIDCache["cache"+cpid].initialized=false;
+       }
+       StructCPIDCache c = mvCPIDCache["cache"+cpid];
+       if (c.initialized)
+       {
+           if (c.xml.length() > 100)
+           {
+               return c.xml;
+           }
+
+       }
 
 
-		CService addrConnect;
+        CService addrConnect;
 
-   		std::string url  = "http://cpid.gridcoin.us/get_user.php?cpid=";
-		std::string url3 = "cpid.gridcoin.us";
-		std::string url4 = "get_user.php?cpid=" + cpid;
-		int iCPIDPort = 5000;
-		if (fDebug10) printf("HTTP Request\r\n %s \r\n",url4.c_str());
+        std::string url  = "http://cpid.gridcoin.us/get_user.php?cpid=";
+        std::string url3 = "cpid.gridcoin.us";
+        std::string url4 = "get_user.php?cpid=" + cpid;
+        int iCPIDPort = 5000;
+        if (fDebug10) printf("HTTP Request\r\n %s \r\n",url4.c_str());
 
-		CService addrIP(url3, iCPIDPort, true);
-		if (UseDNS)
-		{
-			if (addrIP.IsValid())
-			{
-				addrConnect = addrIP;
-				printf("QA:%s",url4.c_str());
-		    }
-		}
-		else
-		{
-  			addrConnect = CService("216.165.179.26", 80);
-			printf("Invalid address...");
-		}
+        CService addrIP(url3, iCPIDPort, true);
+        if (UseDNS)
+        {
+            if (addrIP.IsValid())
+            {
+                addrConnect = addrIP;
+                printf("QA:%s",url4.c_str());
+            }
+        }
+        else
+        {
+            addrConnect = CService("216.165.179.26", 80);
+            printf("Invalid address...");
+        }
 
-		std::string getdata = "GET /" + url4 + " HTTP/1.1\r\n"
+        std::string getdata = "GET /" + url4 + " HTTP/1.1\r\n"
                      "Host: " + url3 + "\r\n"
-  				     "User-Agent: Mozilla/4.0\r\n"
+                     "User-Agent: Mozilla/4.0\r\n"
                      "\r\n";
 
-      	std::string http = GetHttpContent(addrConnect,getdata);
-		std::string resultset = "" + http;
-		c.initialized=true;
-		c.xml = resultset;
-		mvCPIDCache.insert(map<string,StructCPIDCache>::value_type("cache"+cpid,c));
-	    mvCPIDCache["cache"+cpid]=c;
-		return resultset;
-	}
+        std::string http = GetHttpContent(addrConnect,getdata);
+        std::string resultset = "" + http;
+        c.initialized=true;
+        c.xml = resultset;
+        mvCPIDCache.insert(map<string,StructCPIDCache>::value_type("cache"+cpid,c));
+        mvCPIDCache["cache"+cpid]=c;
+        return resultset;
+    }
     catch (std::exception &e)
-	{
-		printf("Error while querying address for cpid %s",cpid.c_str());
+    {
+        printf("Error while querying address for cpid %s",cpid.c_str());
         return "";
     }
-	catch (...)
-	{
+    catch (...)
+    {
 
-		return "";
-	}
+        return "";
+    }
 
 }
 
@@ -854,10 +724,10 @@ bool GetMyExternalIP2(const CService& addrConnect, const char* pszGet, const cha
 {
     SOCKET hSocket;
     if (!ConnectSocket(addrConnect, hSocket))
-	{
+    {
         if (fDebug10) printf("GetMyExternalIP() : unable to connect to %s ", addrConnect.ToString().c_str());
-		return false;
-	}
+        return false;
+    }
 
     send(hSocket, pszGet, strlen(pszGet), MSG_NOSIGNAL);
 
@@ -1089,59 +959,59 @@ void CNode::CloseSocketDisconnect()
 
 bool IsWindows()
 {
-	return BoincHashMerkleRootNew.substr(0,4) == "Elim" ?  true : false;
+    return BoincHashMerkleRootNew.substr(0,4) == "Elim" ?  true : false;
 }
 
 
 std::string LegacyDefaultBoincHashArgs()
 {
-	   std::string boinc2 = BoincHashMerkleRootNew;
-	   return boinc2;
+       std::string boinc2 = BoincHashMerkleRootNew;
+       return boinc2;
 }
 
 
 std::string DefaultBoincHashArgs()
 {
-	// (Gridcoin), add support for ProofOfBoinc Node Relay support:
-	std::string bha = GetArg("-boinchash", "boinchashargs");
-	if (bha=="boinchashargs") bha = BoincHashWindowsMerkleRootNew;
-	std::string org = DefaultOrg();
-	std::string ClientPublicKey = AdvancedDecryptWithSalt(bha,org);
-	return ClientPublicKey;
+    // (Gridcoin), add support for ProofOfBoinc Node Relay support:
+    std::string bha = GetArg("-boinchash", "boinchashargs");
+    if (bha=="boinchashargs") bha = BoincHashWindowsMerkleRootNew;
+    std::string org = DefaultOrg();
+    std::string ClientPublicKey = AdvancedDecryptWithSalt(bha,org);
+    return ClientPublicKey;
 }
 
 std::string OrgId()
 {
-	std::string bha = GetArg("-boinchash", "boinchashargs");
-	if (bha=="boinchashargs") bha = BoincHashWindowsMerkleRootNew;
-	std::string org = DefaultOrg();
-	if (bha.length() > 8) org += "-" + bha.substr(0,8);
-	std::string ClientPublicKey = AdvancedDecryptWithSalt(bha,org);
-	if (ClientPublicKey.length() > 8) org += "-" + ClientPublicKey.substr(0,5);
-	return org;
+    std::string bha = GetArg("-boinchash", "boinchashargs");
+    if (bha=="boinchashargs") bha = BoincHashWindowsMerkleRootNew;
+    std::string org = DefaultOrg();
+    if (bha.length() > 8) org += "-" + bha.substr(0,8);
+    std::string ClientPublicKey = AdvancedDecryptWithSalt(bha,org);
+    if (ClientPublicKey.length() > 8) org += "-" + ClientPublicKey.substr(0,5);
+    return org;
 }
 
 
 std::string DefaultOrg()
 {
-	std::string org = GetArg("-org", "windows");
-	return org;
+    std::string org = GetArg("-org", "windows");
+    return org;
 }
 
 
 std::string DefaultOrgKey(int key_length)
 {
-	std::string dok = DefaultBoincHashArgs();
-	if ((int)dok.length() >= key_length) return dok.substr(0,key_length);
-	return "";
+    std::string dok = DefaultBoincHashArgs();
+    if ((int)dok.length() >= key_length) return dok.substr(0,key_length);
+    return "";
 }
 
 
 std::string DefaultBlockKey(int key_length)
 {
-	std::string bha = GetArg("-boinchash", "boinchashargs");
-	if (bha=="boinchashargs") bha = BoincHashWindowsMerkleRootNew;
-	return (int)bha.length() >= key_length ? bha.substr(0,key_length) : "";
+    std::string bha = GetArg("-boinchash", "boinchashargs");
+    if (bha=="boinchashargs") bha = BoincHashWindowsMerkleRootNew;
+    return (int)bha.length() >= key_length ? bha.substr(0,key_length) : "";
 }
 
 
@@ -1153,21 +1023,21 @@ void CNode::PushVersion()
     CAddress addrMe = GetLocalAddress(&addr);
     RAND_bytes((unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce));
     if (fDebug10) printf("send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s\n",
-		PROTOCOL_VERSION, nBestHeight, addrMe.ToString().c_str(), addrYou.ToString().c_str(), addr.ToString().c_str());
+        PROTOCOL_VERSION, nBestHeight, addrMe.ToString().c_str(), addrYou.ToString().c_str(), addr.ToString().c_str());
 
-	std::string sboinchashargs = DefaultBoincHashArgs();
-	uint256 boincHashRandNonce = GetRandHash();
-	std::string nonce = boincHashRandNonce.GetHex();
-	std::string pw1 = RetrieveMd5(nonce+","+sboinchashargs);
-	std::string mycpid = GlobalCPUMiningCPID.cpidv2;
-	std::string acid = GetCommandNonce("aries");
-	std::string sGRCAddress = DefaultWalletAddress();
-	std::string sNeuralVersion = GetNeuralVersion();
+    std::string sboinchashargs = DefaultBoincHashArgs();
+    uint256 boincHashRandNonce = GetRandHash();
+    std::string nonce = boincHashRandNonce.GetHex();
+    std::string pw1 = RetrieveMd5(nonce+","+sboinchashargs);
+    std::string mycpid = GlobalCPUMiningCPID.cpidv2;
+    std::string acid = GetCommandNonce("aries");
+    std::string sGRCAddress = DefaultWalletAddress();
+    std::string sNeuralVersion = GetNeuralVersion();
 
     PushMessage("aries", PROTOCOL_VERSION, nonce, pw1,
-				mycpid, mycpid, acid, nLocalServices, nTime, addrYou, addrMe,
+                mycpid, mycpid, acid, nLocalServices, nTime, addrYou, addrMe,
                 nLocalHostNonce, FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()),
-				nBestHeight, sGRCAddress);
+                nBestHeight, sGRCAddress);
 
 
 }
@@ -1238,10 +1108,10 @@ void CNode::copyStats(CNodeStats &stats)
     X(fInbound);
     X(nStartingHeight);
     X(nMisbehavior);
-	X(sNeuralNetwork);
-	X(NeuralHash);
-	X(sGRCAddress);
-	X(nTrust);
+    X(sNeuralNetwork);
+    X(NeuralHash);
+    X(sGRCAddress);
+    X(nTrust);
 
 
     // It is common for nodes with good ping times to suddenly become lagged,
@@ -1258,7 +1128,7 @@ void CNode::copyStats(CNodeStats &stats)
     // Raw ping time is in microseconds, but show it to user as whole seconds (Bitcoin users should be well used to small numbers with many decimal places by now :)
     stats.dPingTime = (((double)nPingUsecTime) / 1e6);
     stats.dPingWait = (((double)nPingUsecWait) / 1e6);
-	stats.addrLocal = addrLocal.IsValid() ? addrLocal.ToString() : "";
+    stats.addrLocal = addrLocal.IsValid() ? addrLocal.ToString() : "";
 
 }
 #undef X
@@ -1350,14 +1220,14 @@ void SocketSendData(CNode *pnode)
     std::deque<CSerializeData>::iterator it = pnode->vSendMsg.begin();
 
     while (it != pnode->vSendMsg.end())
-	{
+    {
         const CSerializeData &data = *it;
         assert(data.size() > pnode->nSendOffset);
         int nBytes = send(pnode->hSocket, &data[pnode->nSendOffset], data.size() - pnode->nSendOffset, MSG_NOSIGNAL | MSG_DONTWAIT);
         if (nBytes > 0) {
             pnode->nLastSend = GetAdjustedTime();
             pnode->nSendOffset += nBytes;
-			pnode->RecordBytesSent(nBytes);
+            pnode->RecordBytesSent(nBytes);
             if (pnode->nSendOffset == data.size()) {
                 pnode->nSendOffset = 0;
                 pnode->nSendSize -= data.size();
@@ -1366,9 +1236,9 @@ void SocketSendData(CNode *pnode)
                 // could not send full message; stop sending more
                 break;
             }
-		}
-		else
-		{
+        }
+        else
+        {
             if (nBytes < 0) {
                 // error
                 int nErr = WSAGetLastError();
@@ -1481,8 +1351,8 @@ void ThreadSocketHandler2(void* parg)
             }
         }
 
-		if(vNodes.size() != nPrevNodeCount)
-		{
+        if(vNodes.size() != nPrevNodeCount)
+        {
             nPrevNodeCount = vNodes.size();
             uiInterface.NotifyNumConnectionsChanged(nPrevNodeCount);
         }
@@ -1583,7 +1453,7 @@ void ThreadSocketHandler2(void* parg)
             }
             else if (nInbound >= GetArg("-maxconnections", 250) - MAX_OUTBOUND_CONNECTIONS)
             {
-				if (fDebug10) printf("\r\n Surpassed max inbound connections maxconnections:%f minus max_outbound:%f",(double)GetArg("-maxconnections",250),(double)MAX_OUTBOUND_CONNECTIONS);
+                if (fDebug10) printf("\r\n Surpassed max inbound connections maxconnections:%f minus max_outbound:%f",(double)GetArg("-maxconnections",250),(double)MAX_OUTBOUND_CONNECTIONS);
                 closesocket(hSocket);
             }
             else if (CNode::IsBanned(addr))
@@ -1643,15 +1513,15 @@ void ThreadSocketHandler2(void* parg)
                             if (!pnode->ReceiveMsgBytes(pchBuf, nBytes))
                                 pnode->CloseSocketDisconnect();
                             pnode->nLastRecv = GetAdjustedTime();
-							pnode->RecordBytesRecv(nBytes);
+                            pnode->RecordBytesRecv(nBytes);
                         }
                         else if (nBytes == 0)
                         {
                             // socket closed gracefully
                             if (!pnode->fDisconnect)
-							{
+                            {
                               if (fDebug10)   printf("socket closed\n");
-							}
+                            }
                             pnode->CloseSocketDisconnect();
                         }
                         else if (nBytes < 0)
@@ -1661,9 +1531,9 @@ void ThreadSocketHandler2(void* parg)
                             if (nErr != WSAEWOULDBLOCK && nErr != WSAEMSGSIZE && nErr != WSAEINTR && nErr != WSAEINPROGRESS)
                             {
                                 if (!pnode->fDisconnect)
-								{
+                                {
                                    if (fDebug10)  printf("socket recv error %d\n", nErr);
-								}
+                                }
                                 pnode->CloseSocketDisconnect();
                             }
                         }
@@ -1686,22 +1556,22 @@ void ThreadSocketHandler2(void* parg)
             //
             // Inactivity checking
             //
-			// Allow newbies to connect easily
+            // Allow newbies to connect easily
             int64_t nTime = GetAdjustedTime();
-			if (nTime - pnode->nTimeConnected > 24)
+            if (nTime - pnode->nTimeConnected > 24)
             {
                 if (pnode->nLastRecv == 0 || pnode->nLastSend == 0)
                 {
                     if (fDebug10) printf("Socket no message in first 24 seconds, IP %s, %d %d\n", NodeAddress(pnode).c_str(), pnode->nLastRecv != 0, pnode->nLastSend != 0);
-					pnode->Misbehaving(1);
+                    pnode->Misbehaving(1);
                     pnode->fDisconnect = true;
                 }
-			}
-			   
-			if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && ((int)vNodes.size() > (MAX_OUTBOUND_CONNECTIONS*.75)))
-			{
-				    if (fDebug10) printf("Node %s connected longer than 2 hours with connection count of %f, disconnecting. \r\n", NodeAddress(pnode).c_str(), (double)vNodes.size());
-					pnode->fDisconnect = true;
+            }
+               
+            if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && ((int)vNodes.size() > (MAX_OUTBOUND_CONNECTIONS*.75)))
+            {
+                    if (fDebug10) printf("Node %s connected longer than 2 hours with connection count of %f, disconnecting. \r\n", NodeAddress(pnode).c_str(), (double)vNodes.size());
+                    pnode->fDisconnect = true;
             }
 
             if (nTime - pnode->nTimeConnected > 24)
@@ -1786,7 +1656,7 @@ void ThreadMapPort2(void* parg)
     int error = 0;
     devlist = upnpDiscover(2000, multicastif, minissdpdpath, 0, 0, &error);
 #else
-	/* miniupnpc 1.9.20150730 */
+    /* miniupnpc 1.9.20150730 */
     int error = 0;
     devlist = upnpDiscover(2000, multicastif, minissdpdpath, 0, 0, 2, &error);
 #endif
@@ -1907,9 +1777,9 @@ void MapPort()
 static const char *strDNSSeed[][2] = {
     {"node.gridcoin.us", "node.gridcoin.us"},
     {"gridcoin.asia", "gridcoin.asia"},
-	{"amsterdam.grcnode.co.uk", "amsterdam.grcnode.co.uk"},
-	{"london.grcnode.co.uk", "london.grcnode.co.uk"},
-	{"frankfurt.grcnode.co.uk", "frankfurt.grcnode.co.uk"},
+    {"amsterdam.grcnode.co.uk", "amsterdam.grcnode.co.uk"},
+    {"london.grcnode.co.uk", "london.grcnode.co.uk"},
+    {"frankfurt.grcnode.co.uk", "frankfurt.grcnode.co.uk"},
     {"", ""},
 };
 
@@ -2008,16 +1878,16 @@ begin:
         DoTallyResearchAverages(parg);
     }
     catch (std::exception& e)
-	{
+    {
         PrintException(&e, "ThreadTallyNetworkAverages()");
     }
-	catch(...)
-	{
-		printf("Error in ThreadTallyResearchAverages... Recovering ");
-	}
-	MilliSleep(10000);
+    catch(...)
+    {
+        printf("Error in ThreadTallyResearchAverages... Recovering ");
+    }
+    MilliSleep(10000);
     if (!fShutdown) printf("Thread TallyReasearchAverages exited, Restarting.. \r\n");
-	if (!fShutdown) goto begin;
+    if (!fShutdown) goto begin;
 
 }
 
@@ -2033,73 +1903,73 @@ begin:
     {
         ExecGridcoinServices(parg);
     }
-	catch (bad_alloc ba)
-	{
-		printf("\r\nBad Allocation Error in ThreadExecuteGridcoinServices... Recovering \r\n");
-	}
+    catch (bad_alloc ba)
+    {
+        printf("\r\nBad Allocation Error in ThreadExecuteGridcoinServices... Recovering \r\n");
+    }
     catch (std::exception& e)
-	{
+    {
         PrintException(&e, "ThreadExecuteGridcoinServices()");
     }
-	catch(...)
-	{
-		printf("Error in ThreadExecuteGridcoinServices... Recovering ");
-	}
-	MilliSleep(10000);
+    catch(...)
+    {
+        printf("Error in ThreadExecuteGridcoinServices... Recovering ");
+    }
+    MilliSleep(10000);
     if (!fShutdown) printf("Services Exited, Restarting.. \r\n");
-	if (!fShutdown) goto begin;
+    if (!fShutdown) goto begin;
 }
 
 
 
 void BusyWaitForTally()
 {
-	if (IsLockTimeWithinMinutes(nLastTallyBusyWait,10))
-	{
-		return;
-	}
-	if (fDebug10) printf("\r\n ** Busy Wait for Tally ** \r\n");
-	bTallyFinished=false;
-	bDoTally=true;
-	int iTimeout = 0;
-	while(!bTallyFinished)
-	{
-		MilliSleep(1);
-		iTimeout+=1;
-		if (iTimeout > 15000) break;
-	}
-	nLastTallyBusyWait = GetAdjustedTime();
+    if (IsLockTimeWithinMinutes(nLastTallyBusyWait,10))
+    {
+        return;
+    }
+    if (fDebug10) printf("\r\n ** Busy Wait for Tally ** \r\n");
+    bTallyFinished=false;
+    bDoTally=true;
+    int iTimeout = 0;
+    while(!bTallyFinished)
+    {
+        MilliSleep(1);
+        iTimeout+=1;
+        if (iTimeout > 15000) break;
+    }
+    nLastTallyBusyWait = GetAdjustedTime();
 }
 
 
 void DoTallyResearchAverages(void* parg)
 {
     vnThreadsRunning[THREAD_TALLY]++;
-	printf("\r\nStarting dedicated Tally thread...\r\n");
+    printf("\r\nStarting dedicated Tally thread...\r\n");
 
     while (!fShutdown)
     {
         MilliSleep(100);
-		if (bDoTally)
-		{
-			bTallyFinished = false;
-			bDoTally=false;
-			printf("\r\n[DoTallyRA_START] ");
-			try
-			{
-				TallyNetworkAverages(false);
-			}
-			catch (std::exception& e)
-			{
-				PrintException(&e, "ThreadTallyNetworkAverages()");
-			}
-			catch(...)
-			{
-				printf("\r\nError occurred in DoTallyResearchAverages...Recovering\r\n");
-			}
-			printf(" [DoTallyRA_END] \r\n");
-			bTallyFinished = true;
-		}
+        if (bDoTally)
+        {
+            bTallyFinished = false;
+            bDoTally=false;
+            printf("\r\n[DoTallyRA_START] ");
+            try
+            {
+                TallyNetworkAverages(false);
+            }
+            catch (std::exception& e)
+            {
+                PrintException(&e, "ThreadTallyNetworkAverages()");
+            }
+            catch(...)
+            {
+                printf("\r\nError occurred in DoTallyResearchAverages...Recovering\r\n");
+            }
+            printf(" [DoTallyRA_END] \r\n");
+            bTallyFinished = true;
+        }
     }
     vnThreadsRunning[THREAD_TALLY]--;
 }
@@ -2108,15 +1978,15 @@ void DoTallyResearchAverages(void* parg)
 void ExecGridcoinServices(void* parg)
 {
     vnThreadsRunning[THREAD_SERVICES]++;
-	printf("\r\nStarting dedicated Gridcoin Services thread...\r\n");
+    printf("\r\nStarting dedicated Gridcoin Services thread...\r\n");
 
     while (!fShutdown)
     {
         MilliSleep(5000);
-		if (bExecuteGridcoinServices)
-		{
-				bExecuteGridcoinServices=false;
-		}
+        if (bExecuteGridcoinServices)
+        {
+                bExecuteGridcoinServices=false;
+        }
     }
     vnThreadsRunning[THREAD_SERVICES]--;
 }
@@ -2196,10 +2066,10 @@ void static ThreadStakeMiner(void* parg)
 
     if (fDebug10) printf("ThreadStakeMiner started\n");
     CWallet* pwallet = (CWallet*)parg;
-	while (!bCPIDsLoaded)
-	{
-		MilliSleep(100);
-	}
+    while (!bCPIDsLoaded)
+    {
+        MilliSleep(100);
+    }
     try
     {
         vnThreadsRunning[THREAD_STAKE_MINER]++;
@@ -2532,9 +2402,9 @@ void ThreadMessageHandler2(void* parg)
         BOOST_FOREACH(CNode* pnode, vNodesCopy)
         {
 
-			if (pnode->fDisconnect)
+            if (pnode->fDisconnect)
                 continue;
-			//11-25-2015
+            //11-25-2015
             // Receive messages
             {
                 TRY_LOCK(pnode->cs_vRecvMsg, lockRecv);
@@ -2745,16 +2615,16 @@ void StartNode(void* parg)
 {
     // Make this thread recognisable as the startup thread
     RenameThread("grc-start");
-	fShutdown = false;
-	MAX_OUTBOUND_CONNECTIONS = (int)GetArg("-maxoutboundconnections", 8);
-	int nMaxOutbound = 0;
+    fShutdown = false;
+    MAX_OUTBOUND_CONNECTIONS = (int)GetArg("-maxoutboundconnections", 8);
+    int nMaxOutbound = 0;
     if (semOutbound == NULL) {
         // initialize semaphore
         nMaxOutbound = min(MAX_OUTBOUND_CONNECTIONS, (int)GetArg("-maxconnections", 125));
         semOutbound = new CSemaphore(nMaxOutbound);
     }
 
-	printf("\r\nUsing %f OutboundConnections with a MaxConnections of %f\r\n",(double)MAX_OUTBOUND_CONNECTIONS,(double)GetArg("-maxconnections", 125));
+    printf("\r\nUsing %f OutboundConnections with a MaxConnections of %f\r\n",(double)MAX_OUTBOUND_CONNECTIONS,(double)GetArg("-maxconnections", 125));
 
     if (pnodeLocalHost == NULL)
         pnodeLocalHost = new CNode(INVALID_SOCKET, CAddress(CService("127.0.0.1", 0), nLocalServices));
@@ -2799,13 +2669,13 @@ void StartNode(void* parg)
     if (!NewThread(ThreadDumpAddress, NULL))
         printf("Error; NewThread(ThreadDumpAddress) failed\n");
 
-	// Tally network averages
-	if (!NewThread(ThreadTallyResearchAverages, NULL))
+    // Tally network averages
+    if (!NewThread(ThreadTallyResearchAverages, NULL))
         printf("Error; NewThread(ThreadTally) failed\n");
 
-	// Services
-	if (!NewThread(ThreadExecuteGridcoinServices, NULL))
-	   printf("Error; NewThread(ThreadExecuteGridcoinServices) failed\r\n");
+    // Services
+    if (!NewThread(ThreadExecuteGridcoinServices, NULL))
+       printf("Error; NewThread(ThreadExecuteGridcoinServices) failed\r\n");
 
     // Mine proof-of-stake blocks in the background
     if (!GetBoolArg("-staking", true))
@@ -2846,8 +2716,8 @@ bool StopNode()
     if (vnThreadsRunning[THREAD_DNSSEED] > 0)          printf("ThreadDNSAddressSeed still running\n");
     if (vnThreadsRunning[THREAD_ADDEDCONNECTIONS] > 0) printf("ThreadOpenAddedConnections still running\n");
     if (vnThreadsRunning[THREAD_DUMPADDRESS] > 0)      printf("ThreadDumpAddresses still running\n");
-	if (vnThreadsRunning[THREAD_TALLY] > 0)            printf("ThreadTally still running\n");
-	if (vnThreadsRunning[THREAD_SERVICES] > 0)         printf("ThreadServices still running\n");
+    if (vnThreadsRunning[THREAD_TALLY] > 0)            printf("ThreadTally still running\n");
+    if (vnThreadsRunning[THREAD_SERVICES] > 0)         printf("ThreadServices still running\n");
     if (vnThreadsRunning[THREAD_STAKE_MINER] > 0)      printf("ThreadStakeMiner still running\n");
     while (vnThreadsRunning[THREAD_MESSAGEHANDLER] > 0 || vnThreadsRunning[THREAD_RPCHANDLER] > 0)
         MilliSleep(20);

@@ -9,21 +9,9 @@
         <translation>Sobre Gridcoin</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+42"/>
         <source>&lt;b&gt;Gridcoin&lt;/b&gt; </source>
         <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;Gridcoin&lt;/b&gt; version</source>
-        <translation type="vanished">versió &lt;b&gt;Gridcoin&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <source>Copyright © 2009-2014 The Bitcoin developers
-Copyright © 2012-2014 The NovaCoin developers
-Copyright © 2014 The Gridcoin developers</source>
-        <translation type="vanished">Copyright © 2009-2014 The Bitcoin developers
-Copyright © 2012-2014 The NovaCoin developers
-Copyright © 2014 The Gridcoin developers</translation>
     </message>
     <message>
         <location line="+58"/>
@@ -44,12 +32,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Llibreta d&apos;adreces</translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="+22"/>
         <source>Double-click to edit address or label</source>
         <translation>Feu doble clic per editar l&apos;adreça o l&apos;etiqueta</translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="+27"/>
         <source>Create a new address</source>
         <translation>Crear una nova adreça</translation>
     </message>
@@ -64,12 +52,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>&amp;Nova adreça</translation>
     </message>
     <message>
-        <location line="-49"/>
+        <location line="-46"/>
         <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
         <translation>Aquestes són les teves adreces de Gridcoin per rebre els pagaments. És possible que vulgueu donar una diferent a cada remitent per a poder realitzar un seguiment de qui li está pagant.</translation>
     </message>
     <message>
-        <location line="+63"/>
+        <location line="+60"/>
         <source>&amp;Copy Address</source>
         <translation>&amp;Copiar adreça</translation>
     </message>
@@ -109,7 +97,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>&amp;Esborrar</translation>
     </message>
     <message>
-        <location filename="../addressbookpage.cpp" line="+66"/>
+        <location filename="../addressbookpage.cpp" line="+65"/>
         <source>Copy &amp;Label</source>
         <translation>Copiar &amp;Etiqueta</translation>
     </message>
@@ -188,10 +176,6 @@ This product includes software developed by the OpenSSL Project for use in the O
         <location line="+3"/>
         <source>For staking only</source>
         <translation>Només per a fer &quot;stake&quot;</translation>
-    </message>
-    <message>
-        <source>Enter the new passphrase to the wallet.&lt;br/&gt;Please use a passphrase of &lt;b&gt;10 or more random characters&lt;/b&gt;, or &lt;b&gt;eight or more words&lt;/b&gt;.</source>
-        <translation type="vanished">Introdueixi la nova contrasenya al moneder&lt;br/&gt;Si us plau useu una contrasenya de &lt;b&gt;10 o més caracters aleatoris&lt;/b&gt;, o &lt;b&gt;vuit o més paraules&lt;/b&gt;.</translation>
     </message>
     <message>
         <location filename="../askpassphrasedialog.cpp" line="+38"/>
@@ -315,17 +299,17 @@ This product includes software developed by the OpenSSL Project for use in the O
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+1008"/>
+        <location filename="../bitcoingui.cpp" line="+998"/>
         <source>Sign &amp;message...</source>
         <translation>Signar &amp;missatge...</translation>
     </message>
     <message>
-        <location line="+338"/>
+        <location line="+346"/>
         <source>Synchronizing with network...</source>
         <translation>Sincronitzant amb la xarxa ...</translation>
     </message>
     <message>
-        <location line="-499"/>
+        <location line="-500"/>
         <source>&amp;Overview</source>
         <translation>&amp;Panorama general</translation>
     </message>
@@ -370,7 +354,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>&amp;Enviar monedes</translation>
     </message>
     <message>
-        <location line="+58"/>
+        <location line="+57"/>
         <source>E&amp;xit</source>
         <translation>S&amp;ortir</translation>
     </message>
@@ -385,15 +369,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Mostra informació sobre Gridcoin</translation>
     </message>
     <message>
-        <source>About &amp;Qt</source>
-        <translation type="vanished">Sobre &amp;Qt</translation>
-    </message>
-    <message>
-        <source>Show information about Qt</source>
-        <translation type="vanished">Mostra informació sobre Qt</translation>
-    </message>
-    <message>
-        <location line="+56"/>
+        <location line="+50"/>
         <source>&amp;Options...</source>
         <translation>&amp;Opcions...</translation>
     </message>
@@ -413,12 +389,11 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>&amp;Canviar contrasenya...</translation>
     </message>
     <message numerus="yes">
-        <location line="+346"/>
+        <location line="+354"/>
         <source>~%n block(s) remaining</source>
         <translation>
             <numerusform>~%n bloc restant</numerusform>
             <numerusform>~%n blocs restants</numerusform>
-            <numerusform></numerusform>
         </translation>
     </message>
     <message>
@@ -427,17 +402,17 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Descarregats %1 de %2 blocs d&apos;historial de transaccions (%3% completat).</translation>
     </message>
     <message>
-        <location line="-343"/>
+        <location line="-351"/>
         <source>&amp;Export...</source>
         <translation>&amp;Exportar...</translation>
     </message>
     <message>
-        <location line="-158"/>
+        <location line="-151"/>
         <source>Send coins to a Gridcoin address</source>
         <translation>Enviar monedes a una adreça Gridcoin</translation>
     </message>
     <message>
-        <location line="+141"/>
+        <location line="+134"/>
         <source>Modify configuration options for Gridcoin</source>
         <translation>Modificar les opcions de configuració per a Gridcoin</translation>
     </message>
@@ -477,7 +452,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>&amp;Verifica el missatge..</translation>
     </message>
     <message>
-        <location line="-801"/>
+        <location line="-794"/>
         <source>Gridcoin</source>
         <translation>Gridcoin</translation>
     </message>
@@ -487,12 +462,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Moneder</translation>
     </message>
     <message>
-        <location line="+728"/>
+        <location line="+727"/>
         <source>&amp;About Gridcoin</source>
         <translation>&amp;Sobre Gridcoin</translation>
     </message>
     <message>
-        <location line="+60"/>
+        <location line="+54"/>
         <source>&amp;Show / Hide</source>
         <translation>&amp;Mostrar / Amagar</translation>
     </message>
@@ -512,7 +487,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Bloquejar moneder</translation>
     </message>
     <message>
-        <location line="+55"/>
+        <location line="+54"/>
         <source>&amp;File</source>
         <translation>&amp;Arxiu</translation>
     </message>
@@ -522,29 +497,19 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>&amp;Configuració</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+59"/>
         <source>&amp;Help</source>
         <translation>&amp;Ajuda</translation>
     </message>
     <message>
-        <location line="-752"/>
-        <location line="+800"/>
-        <source>Tabs toolbar</source>
-        <translation>Barra d&apos;eines de seccions</translation>
-    </message>
-    <message>
-        <source>Actions toolbar</source>
-        <translation type="vanished">Barra d&apos;eines d&apos;accions</translation>
-    </message>
-    <message>
-        <location line="+47"/>
+        <location line="+50"/>
         <location line="+9"/>
         <source>[testnet]</source>
         <translation>[testnet]</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+60"/>
+        <location line="+64"/>
         <source>Gridcoin client</source>
         <translation>Client Gridcoin</translation>
     </message>
@@ -554,7 +519,6 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>
             <numerusform>%n conexió activa a la xarxa Gridcoin</numerusform>
             <numerusform>%n conexions actives a la xarxa Gridcoin</numerusform>
-            <numerusform></numerusform>
         </translation>
     </message>
     <message>
@@ -563,11 +527,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Descarregats %1 blocs d&apos;historial de transaccions</translation>
     </message>
     <message>
-        <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;Expected time to earn reward is %3</source>
-        <translation type="vanished">Fent &quot;stake&quot;.&lt;br&gt;El teu pes és %1&lt;br&gt;El pes de la xarxa és %2&lt;br&gt;El temps estimat per a guanyar una recompensa és 3%</translation>
-    </message>
-    <message>
-        <location line="+1116"/>
+        <location line="+1104"/>
         <source>Not staking because wallet is locked</source>
         <translation>No s&apos;està fent &quot;stake&quot; perquè el moneder esa bloquejat</translation>
     </message>
@@ -587,21 +547,15 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>No s&apos;està fent &quot;stake&quot; perquè no tens monedes madures</translation>
     </message>
     <message numerus="yes">
-        <location line="-1113"/>
+        <location line="-1101"/>
         <source>%n second(s) ago</source>
         <translation>
             <numerusform>fa %n segon</numerusform>
             <numerusform>fa %n segons</numerusform>
-            <numerusform></numerusform>
         </translation>
     </message>
     <message>
-        <location line="-1046"/>
-        <source>Green bar</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+534"/>
+        <location line="-513"/>
         <source>&amp;Block Explorer</source>
         <translation type="unfinished"></translation>
     </message>
@@ -617,22 +571,12 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="+1"/>
-        <location line="+8"/>
+        <location line="+4"/>
         <source>Web Site</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-5"/>
-        <source>&amp;Boinc Stats</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Boinc Stats</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="-1"/>
         <source>&amp;Web Site</source>
         <translation type="unfinished"></translation>
     </message>
@@ -647,13 +591,23 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+28"/>
-        <location line="+173"/>
+        <location line="+3"/>
+        <source>&amp;BOINC</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Gridcoin rewards distributed computing with BOINC</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <location line="+169"/>
         <source>&amp;Rebuild Block Chain</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-172"/>
+        <location line="-168"/>
         <source>Rebuild Block Chain</source>
         <translation type="unfinished"></translation>
     </message>
@@ -734,12 +688,12 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="+1"/>
-        <location line="+604"/>
+        <location line="+606"/>
         <source>New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-597"/>
+        <location line="-599"/>
         <source>&amp;Voting</source>
         <translation type="unfinished"></translation>
     </message>
@@ -749,17 +703,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>&amp;Reserved - Voting Linux</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Voting - Linux</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>&amp;Galaza (Game)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -804,22 +748,26 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>&amp;Desbloquejar moneder</translation>
     </message>
     <message>
-        <location line="+81"/>
+        <location line="+74"/>
+        <source>&amp;Community</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>&amp;Upgrade QT Client</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+14"/>
         <source>&amp;Advanced</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location line="+288"/>
+        <location line="+295"/>
         <source>%n minute(s) ago</source>
         <translation>
             <numerusform>fa %n minut</numerusform>
             <numerusform>fa %n minuts</numerusform>
-            <numerusform></numerusform>
         </translation>
     </message>
     <message numerus="yes">
@@ -828,7 +776,6 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>
             <numerusform>fa %n hora</numerusform>
             <numerusform>fa %n hores</numerusform>
-            <numerusform></numerusform>
         </translation>
     </message>
     <message numerus="yes">
@@ -837,7 +784,6 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>
             <numerusform>fa %n dia</numerusform>
             <numerusform>fa %n dies</numerusform>
-            <numerusform></numerusform>
         </translation>
     </message>
     <message>
@@ -915,7 +861,7 @@ Address: %4
         <translation>Data: %1\nQuantitat %2\n Tipus: %3\n Adreça: %4\n</translation>
     </message>
     <message>
-        <location line="+421"/>
+        <location line="+405"/>
         <location line="+15"/>
         <source>URI handling</source>
         <translation>Manejant URI</translation>
@@ -937,7 +883,7 @@ Address: %4
         <translation>El moneder està &lt;b&gt;encriptat&lt;/b&gt; i actualment &lt;b&gt;bloquejat&lt;/b&gt;</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+29"/>
         <source>Backup Wallet</source>
         <translation>Realitzar còpia de seguretat del moneder</translation>
     </message>
@@ -962,7 +908,6 @@ Address: %4
         <translation>
             <numerusform>%n segon</numerusform>
             <numerusform>%n segons</numerusform>
-            <numerusform></numerusform>
         </translation>
     </message>
     <message numerus="yes">
@@ -971,7 +916,6 @@ Address: %4
         <translation>
             <numerusform>%n minut</numerusform>
             <numerusform>%n minuts</numerusform>
-            <numerusform></numerusform>
         </translation>
     </message>
     <message numerus="yes">
@@ -980,7 +924,6 @@ Address: %4
         <translation>
             <numerusform>%n hora</numerusform>
             <numerusform>%n hores</numerusform>
-            <numerusform></numerusform>
         </translation>
     </message>
     <message numerus="yes">
@@ -989,7 +932,6 @@ Address: %4
         <translation>
             <numerusform>%n dia</numerusform>
             <numerusform>%n dies</numerusform>
-            <numerusform></numerusform>
         </translation>
     </message>
     <message>
@@ -1034,32 +976,32 @@ Address: %4
         <translation>Opcions del control de monedes</translation>
     </message>
     <message>
-        <location line="+36"/>
+        <location line="+28"/>
         <source>Quantity:</source>
         <translation>Quantitat:</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+29"/>
         <source>Bytes:</source>
         <translation>Bytes:</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="+45"/>
         <source>Amount:</source>
         <translation>Quantitat:</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+29"/>
         <source>Priority:</source>
         <translation>Prioritat:</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="+45"/>
         <source>Fee:</source>
         <translation>Quota:</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+32"/>
         <source>Low Output:</source>
         <translation>Sortida baixa:</translation>
     </message>
@@ -1069,12 +1011,12 @@ Address: %4
         <translation>no</translation>
     </message>
     <message>
-        <location filename="../forms/coincontroldialog.ui" line="+51"/>
+        <location filename="../forms/coincontroldialog.ui" line="+48"/>
         <source>After Fee:</source>
         <translation>Quota posterior:</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+32"/>
         <source>Change:</source>
         <translation>Canvi:</translation>
     </message>
@@ -1085,8 +1027,8 @@ Address: %4
     </message>
     <message>
         <location line="+13"/>
-        <source>Tree mode</source>
-        <translation>Mode arbre</translation>
+        <source>Tree &amp;mode</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+16"/>
@@ -1094,7 +1036,7 @@ Address: %4
         <translation>Mode llista</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+45"/>
         <source>Amount</source>
         <translation>Quantitat</translation>
     </message>
@@ -1279,7 +1221,7 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
     </message>
     <message>
         <location line="+37"/>
-        <location line="+66"/>
+        <location line="+63"/>
         <source>(no label)</source>
         <translation>(sense etiqueta)</translation>
     </message>
@@ -1411,6 +1353,80 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
     </message>
 </context>
 <context>
+    <name>NewPollDialog</name>
+    <message>
+        <location filename="../votingdialog.cpp" line="+900"/>
+        <location line="+96"/>
+        <source>Create Poll</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-81"/>
+        <source>Title: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Days: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Question: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Discussion URL: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Share Type: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Add Item</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Remove Item</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Clear All</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <source>Creating poll failed! Title is missing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Creating poll failed! Days value is missing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Creating poll failed! Question is missing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Creating poll failed! URL is missing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Creating poll failed! Answer is missing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>OptionsDialog</name>
     <message>
         <location filename="../forms/optionsdialog.ui" line="+14"/>
@@ -1418,7 +1434,7 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>Opcions</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+16"/>
         <source>&amp;Main</source>
         <translation>&amp;Principal</translation>
     </message>
@@ -1428,22 +1444,12 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>Comisió opcional per kB que ajuda a assegurar-se que les seves transaccions es processen ràpidament. La majoria de les transaccions són 1 kB. Comisió d&apos;0.01 recomenada.</translation>
     </message>
     <message>
-        <location line="+15"/>
-        <source>Pay transaction &amp;fee</source>
-        <translation>Pagar &amp;comisió de transacció</translation>
-    </message>
-    <message>
-        <location line="+31"/>
+        <location line="+46"/>
         <source>Reserved amount does not participate in staking and is therefore spendable at any time.</source>
         <translation>La quantitat reservada no participa en fer &quot;stake&quot; i per tant esta disponible en qualsevol moment.</translation>
     </message>
     <message>
-        <location line="+15"/>
-        <source>Reserve</source>
-        <translation>Reserva</translation>
-    </message>
-    <message>
-        <location line="+31"/>
+        <location line="+46"/>
         <source>Automatically start Gridcoin after logging in to the system.</source>
         <translation>Inicia automàticament Gridcoin després d&apos;entrar en el sistema.</translation>
     </message>
@@ -1488,9 +1494,19 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>&amp;Conectar a través d&apos;un proxy SOCKS:</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>Proxy &amp;IP:</source>
-        <translation>&amp;IP del proxy:</translation>
+        <location line="-130"/>
+        <source>Pa&amp;y transaction fee</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+46"/>
+        <source>Reser&amp;ve</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+93"/>
+        <source>Prox&amp;y IP:</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+19"/>
@@ -1568,6 +1584,16 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>Sel·lecciona la unitat de subdivisió per defecte per mostrar en la interficie quan s&apos;envien monedes.</translation>
     </message>
     <message>
+        <location line="+11"/>
+        <source>Style:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Choose a stylesheet to change the look of the wallet.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location line="+9"/>
         <source>Whether to show Gridcoin addresses in the transaction list or not.</source>
         <translation>Per mostrar Gridcoin adreces a la llista de transaccions o no.</translation>
@@ -1593,12 +1619,12 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>&amp;OK</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+7"/>
         <source>&amp;Cancel</source>
         <translation>&amp;Cancel·la</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+10"/>
         <source>&amp;Apply</source>
         <translation>&amp;Aplicar</translation>
     </message>
@@ -1608,7 +1634,17 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>Per defecte</translation>
     </message>
     <message>
-        <location line="+148"/>
+        <location line="+30"/>
+        <source>Native</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Light</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+123"/>
         <location line="+9"/>
         <source>Warning</source>
         <translation>Avís</translation>
@@ -1620,7 +1656,7 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>Aquesta configuració s&apos;aplicarà després de reiniciar Gridcoin.</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="+42"/>
         <source>The supplied proxy address is invalid.</source>
         <translation>L&apos;adreça proxy introduïda és invalida.</translation>
     </message>
@@ -1633,18 +1669,18 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>Formulari</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="+44"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:20px; font-weight:600; color:#000000;&quot;&gt;Wallet&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+349"/>
+        <location line="+411"/>
         <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</source>
         <translation>La informació mostrada pot estar fora de data. El seu moneder es sincronitza automàticament amb la xarxa Gridcoin després d&apos;establir una connexió, però aquest procés no s&apos;ha completat encara.</translation>
     </message>
     <message>
-        <location line="-307"/>
+        <location line="-372"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Balance:&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1689,68 +1725,64 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+153"/>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:20px; font-weight:600; color:#000000;&quot;&gt;Recent transactions&lt;/span&gt;&lt;small&gt;&lt;span&gt;&lt;font color=blue&gt;&amp;nbsp;&amp;nbsp;(Beacons and Votes cost .00011GRC)&lt;/span&gt;&lt;/font&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
+        <location line="+46"/>
+        <source>Blocks:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+121"/>
-        <source>...</source>
+        <location line="+14"/>
+        <source>Difficulty:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+26"/>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;http://boincstats.com/en/stats/-1/team/detail/118094994/overview&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0000ff;&quot;&gt;&lt;img src=&quot;:/images/wallet2&quot;/&gt;&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
+        <location line="+14"/>
+        <source>Net Weight:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Stake:</source>
-        <translation type="vanished">En &quot;stake&quot;:</translation>
+        <location line="+14"/>
+        <source>DPOR Weight:</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Unconfirmed:</source>
-        <translation type="vanished">Sense confirmar:</translation>
+        <location line="+7"/>
+        <source>Magnitude:</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Wallet</source>
-        <translation type="vanished">Moneder</translation>
+        <location line="+7"/>
+        <source>Project:</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Spendable:</source>
-        <translation type="vanished">Disponible:</translation>
+        <location line="+7"/>
+        <source>CPID:</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Your current spendable balance</source>
-        <translation type="vanished">El balanç de saldo actual disponible</translation>
+        <location line="+7"/>
+        <source>Status:</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Immature:</source>
-        <translation type="vanished">Immatur:</translation>
+        <location line="+102"/>
+        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:20px; font-weight:600; color:#000000;&quot;&gt;Recent transactions&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Mined balance that has not yet matured</source>
-        <translation type="vanished">Balanç minat que encara no ha madurat</translation>
+        <location line="+96"/>
+        <source>Current Poll:</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Total:</source>
-        <translation type="vanished">Total:</translation>
+        <location line="+14"/>
+        <source>Client Messages:</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Your current total balance</source>
-        <translation type="vanished">El seu balanç total</translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;Recent transactions&lt;/b&gt;</source>
-        <translation type="vanished">&lt;b&gt;Transaccions recents&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <location line="-364"/>
+        <location line="-392"/>
         <source>Total of transactions that have yet to be confirmed, and do not yet count toward the current balance</source>
         <translation>Total de transaccions que encara no s&apos;han confirmat, i encara no compten per al balanç actual</translation>
-    </message>
-    <message>
-        <source>Total of coins that was staked, and do not yet count toward the current balance</source>
-        <translation type="vanished">Total de les monedes que s&apos;han posat a fer &quot;stake&quot; (en joc, aposta), i encara no compten per al balanç actual</translation>
     </message>
     <message>
         <location filename="../overviewpage.cpp" line="+134"/>
@@ -1820,94 +1852,86 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
 <context>
     <name>RPCConsole</name>
     <message>
-        <location filename="../forms/rpcconsole.ui" line="+1096"/>
+        <location filename="../forms/rpcconsole.ui" line="+491"/>
         <source>Client name</source>
         <translation>Nom del client</translation>
     </message>
     <message>
-        <location line="-593"/>
-        <location line="+45"/>
+        <location line="-418"/>
         <location line="+42"/>
-        <location line="+57"/>
+        <location line="+42"/>
+        <location line="+54"/>
         <location line="+19"/>
         <location line="+29"/>
-        <location line="+37"/>
+        <location line="+34"/>
         <location line="+39"/>
-        <location line="+273"/>
-        <location filename="../rpcconsole.cpp" line="+392"/>
+        <location line="+107"/>
+        <location filename="../rpcconsole.cpp" line="+386"/>
         <source>N/A</source>
         <translation>N/A</translation>
     </message>
     <message>
-        <location line="-410"/>
+        <location line="-241"/>
         <source>Client version</source>
         <translation>Versió del client</translation>
     </message>
     <message>
-        <location line="-183"/>
+        <location line="-168"/>
         <source>&amp;Information</source>
         <translation>&amp;Informació</translation>
     </message>
     <message>
-        <source>Using OpenSSL version</source>
-        <translation type="vanished">Utilitzant OpenSSL versió</translation>
-    </message>
-    <message>
-        <location line="+609"/>
+        <location line="+425"/>
         <source>Startup time</source>
         <translation>&amp;Temps d&apos;inici</translation>
     </message>
     <message>
-        <source>Network</source>
-        <translation type="vanished">Xarxa</translation>
-    </message>
-    <message>
-        <location line="-540"/>
+        <location line="-366"/>
         <source>Number of connections</source>
         <translation>Nombre de connexions</translation>
     </message>
     <message>
-        <location line="+228"/>
+        <location line="+220"/>
         <source>On testnet</source>
         <translation>A testnet</translation>
     </message>
     <message>
-        <location line="-142"/>
+        <location line="-136"/>
         <source>Block chain</source>
         <translation>Bloquejar cadena</translation>
     </message>
     <message>
-        <location line="-592"/>
+        <location line="-159"/>
         <source>Gridcoin - Debug Console</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+446"/>
+        <location line="+25"/>
         <source>Boost version</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+7"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;N/A&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+7"/>
         <source>Proof Of Research Difficulty</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+7"/>
         <source>1</source>
         <translation type="unfinished">1</translation>
     </message>
     <message>
-        <location line="+136"/>
+        <location line="+128"/>
         <source>Gridcoin Core:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+95"/>
+        <location line="+92"/>
         <source>Network:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1922,12 +1946,12 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>Total estimat de blocs</translation>
     </message>
     <message>
-        <location line="-223"/>
+        <location line="-217"/>
         <source>Last block time</source>
         <translation>Últim temps de bloc</translation>
     </message>
     <message>
-        <location line="+423"/>
+        <location line="+248"/>
         <source>&amp;Open</source>
         <translation>&amp;Obrir</translation>
     </message>
@@ -1937,44 +1961,32 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>Opcions de la línia d&apos;ordres</translation>
     </message>
     <message>
-        <source>Show the Gridcoin-Qt help message to get a list with possible Gridcoin command-line options.</source>
-        <translation type="vanished">Mostra el missatge d&apos;ajuda de Gridcoin-Qt per obtenir una llista amb les possibles opcions de línia d&apos;ordres Gridcoin.</translation>
-    </message>
-    <message>
-        <location line="+13"/>
+        <location line="+16"/>
         <source>&amp;Show</source>
         <translation>&amp;Mostra</translation>
     </message>
     <message>
-        <location line="+759"/>
+        <location line="+265"/>
         <source>&amp;Console</source>
         <translation>&amp;Consola</translation>
     </message>
     <message>
-        <location line="-1092"/>
+        <location line="-429"/>
         <source>Build date</source>
         <translation>Data de compilació</translation>
     </message>
     <message>
-        <source>Gridcoin - Debug window</source>
-        <translation type="vanished">Gridcoin - Finestra Depuració</translation>
-    </message>
-    <message>
-        <source>Gridcoin Core</source>
-        <translation type="vanished">Nucli Gridcoin</translation>
-    </message>
-    <message>
-        <location line="+120"/>
+        <location line="+117"/>
         <source>Debug log file</source>
         <translation>Dietàri de depuració</translation>
     </message>
     <message>
-        <location line="+179"/>
+        <location line="+10"/>
         <source>Open the Gridcoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
         <translation>Obriu el fitxer de registre de depuració Gridcoin des del directori de dades actual. Això pot trigar uns segons en els arxius de registre de grans dimensions.</translation>
     </message>
     <message>
-        <location line="+28"/>
+        <location line="+31"/>
         <source>Show the Gridcoin help message to get a list with possible Gridcoin command-line options.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1984,7 +1996,7 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+21"/>
         <source>&amp;Network Traffic</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1999,23 +2011,19 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+64"/>
+        <location line="+27"/>
         <source>In:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+43"/>
         <source>Out:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1349"/>
+        <location line="+97"/>
         <source>Clear console</source>
         <translation>Netejar consola</translation>
-    </message>
-    <message>
-        <source>Welcome to the Gridcoin RPC console.</source>
-        <translation type="vanished">Benvingut a la consola RPC de Gridcoin.</translation>
     </message>
     <message>
         <location filename="../rpcconsole.cpp" line="-35"/>
@@ -2083,7 +2091,7 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>Enviar monedes</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+73"/>
         <source>Coin Control Features</source>
         <translation>(Opcions del control del Coin)</translation>
     </message>
@@ -2098,18 +2106,18 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>Seleccionat automàticament</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+16"/>
         <source>Insufficient funds!</source>
         <translation>Fons insuficient</translation>
     </message>
     <message>
-        <location line="+86"/>
+        <location line="+83"/>
         <source>Quantity:</source>
         <translation>Quantitat:</translation>
     </message>
     <message>
         <location line="+22"/>
-        <location line="+35"/>
+        <location line="+32"/>
         <source>0</source>
         <translation>0</translation>
     </message>
@@ -2119,24 +2127,20 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>Bytes:</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+48"/>
         <source>Amount:</source>
         <translation>Quantitat:</translation>
     </message>
     <message>
-        <source>0.00 BC</source>
-        <translation type="vanished">123.456 BC {0.00 ?}</translation>
-    </message>
-    <message>
         <location line="+22"/>
-        <location line="+86"/>
-        <location line="+86"/>
-        <location line="+32"/>
+        <location line="+80"/>
+        <location line="+80"/>
+        <location line="+29"/>
         <source>0.00 GRC</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-191"/>
+        <location line="-179"/>
         <source>Priority:</source>
         <translation>Prioritat:</translation>
     </message>
@@ -2146,12 +2150,12 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>mig</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+29"/>
         <source>Fee:</source>
         <translation>Quota:</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+32"/>
         <source>Low Output:</source>
         <translation>Sortida baixa:</translation>
     </message>
@@ -2161,12 +2165,12 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>no</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+29"/>
         <source>After Fee:</source>
         <translation>Quota posterior:</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+32"/>
         <source>Change</source>
         <translation>Canvi</translation>
     </message>
@@ -2176,7 +2180,7 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>Adreça de canvi pròpia</translation>
     </message>
     <message>
-        <location line="+121"/>
+        <location line="+115"/>
         <source>Send to multiple recipients at once</source>
         <translation>Enviar a multiples destinataris al mateix temps</translation>
     </message>
@@ -2206,10 +2210,6 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>123.456 BC</source>
-        <translation type="vanished">123.456 BC</translation>
-    </message>
-    <message>
         <location line="+31"/>
         <source>Confirm the send action</source>
         <translation>Confirmi l&apos;acció d&apos;enviament</translation>
@@ -2218,10 +2218,6 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <location line="+3"/>
         <source>S&amp;end</source>
         <translation>E&amp;nviar</translation>
-    </message>
-    <message>
-        <source>Enter a Gridcoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="vanished">Introdueix una adreça Gridcoin (p.ex. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
     <message>
         <location filename="../sendcoinsdialog.cpp" line="-173"/>
@@ -2347,7 +2343,12 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>Formulari</translation>
     </message>
     <message>
-        <location line="+77"/>
+        <location line="+48"/>
+        <source>Pa&amp;y To:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+18"/>
         <source>The address to send the payment to  (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2377,12 +2378,7 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-128"/>
-        <source>Pay &amp;To:</source>
-        <translation>Pagar &amp;A:</translation>
-    </message>
-    <message>
-        <location line="-9"/>
+        <location line="-137"/>
         <location filename="../sendcoinsentry.cpp" line="+29"/>
         <source>Enter a label for this address to add it to your address book</source>
         <translation>Introdueixi una etiquera per a aquesta adreça per afegir-la a la llibreta d&apos;adreces</translation>
@@ -2391,10 +2387,6 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <location line="-21"/>
         <source>&amp;Label:</source>
         <translation>&amp;Etiqueta:</translation>
-    </message>
-    <message>
-        <source>The address to send the payment to  (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="vanished">L&apos;adreça per a enviar el pagament (per exemple: B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
     <message>
         <location line="+58"/>
@@ -2422,10 +2414,6 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>Eliminar aquest destinatari</translation>
     </message>
     <message>
-        <source>Enter a Gridcoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="vanished">Introdueix una adreça Gridcoin (p.ex. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
-    </message>
-    <message>
         <location filename="../sendcoinsentry.cpp" line="+1"/>
         <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
         <translation type="unfinished"></translation>
@@ -2448,10 +2436,6 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <location line="-118"/>
         <source>You can sign messages with your addresses to prove you own them. Be careful not to sign anything vague, as phishing attacks may try to trick you into signing your identity over to them. Only sign fully-detailed statements you agree to.</source>
         <translation>Pots signar missatges amb la teva adreça per provar que són teus. Sigues cautelòs al signar qualsevol cosa, ja que els atacs phising poden intentar confondre&apos;t per a que els hi signis amb la teva identitat. Tan sols signa als documents completament detallats amb els que hi estàs d&apos;acord.</translation>
-    </message>
-    <message>
-        <source>The address to sign the message with (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="vanished">L&apos;adreça per a signar el missatge (per exemple B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
     <message>
         <location line="+18"/>
@@ -2523,10 +2507,6 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>The address the message was signed with (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="vanished">La direcció que va ser signada amb un missatge (per exemple B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
-    </message>
-    <message>
         <location line="+40"/>
         <source>Verify the message to ensure it was signed with the specified Gridcoin address</source>
         <translation>Comproveu el missatge per assegurar-se que es va signar amb l&apos;adreça Gridcoin especificada.</translation>
@@ -2535,10 +2515,6 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <location line="+17"/>
         <source>Reset all verify message fields</source>
         <translation>Neteja tots els camps de verificació de missatge</translation>
-    </message>
-    <message>
-        <source>Enter a Gridcoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="vanished">Introdueix una adreça Gridcoin (p.ex. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
     <message>
         <location filename="../signverifymessagedialog.cpp" line="+27"/>
@@ -2624,27 +2600,11 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
     </message>
 </context>
 <context>
-    <name>TrafficGraphWidget</name>
-    <message>
-        <location filename="../trafficgraphwidget.cpp" line="+75"/>
-        <source>KB/s</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
     <name>TransactionDesc</name>
     <message>
-        <location filename="../transactiondesc.cpp" line="+37"/>
+        <location filename="../transactiondesc.cpp" line="+38"/>
         <source>Open until %1</source>
         <translation>Obert fins %1</translation>
-    </message>
-    <message numerus="yes">
-        <source>Open for %n block(s)</source>
-        <translation type="vanished">
-            <numerusform>Obert per a %n bloc</numerusform>
-            <numerusform>Obert per a %n blocs</numerusform>
-            <numerusform></numerusform>
-        </translation>
     </message>
     <message>
         <location line="+6"/>
@@ -2677,7 +2637,6 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>
             <numerusform>, transmès a través de %n node</numerusform>
             <numerusform>, transmès a través de %n nodes</numerusform>
-            <numerusform></numerusform>
         </translation>
     </message>
     <message>
@@ -2734,7 +2693,6 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>
             <numerusform>madura en %n bloc més</numerusform>
             <numerusform>madura en %n blocs més</numerusform>
-            <numerusform></numerusform>
         </translation>
     </message>
     <message>
@@ -2806,14 +2764,6 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Generated coins must mature 510 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
-        <translation type="vanished">Les monedes generades han de madurar 510 blocs abans per a poder estar disponibles. En generar aquest bloc, que va ser transmès a la xarxa per ser afegit a la cadena de bloc. Si no aconsegueix entrar a la cadena, el seu estat canviarà a &quot;no acceptat&quot; i no es podrà gastar. Això pot succeir de tant en tant si un altre node genera un bloc a pocs segons del seu.</translation>
-    </message>
-    <message>
-        <source>Debug information</source>
-        <translation type="vanished">Informació de depuració</translation>
-    </message>
-    <message>
         <location line="+8"/>
         <source>Transaction</source>
         <translation>Transacció</translation>
@@ -2849,7 +2799,6 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation type="unfinished">
             <numerusform>Obert per a %n bloc més</numerusform>
             <numerusform>Obert per a %n blocs més</numerusform>
-            <numerusform></numerusform>
         </translation>
     </message>
     <message>
@@ -2871,22 +2820,27 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>Aquest panell mostra una descripció detallada de la transacció</translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+42"/>
         <source>Execute Contract</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+7"/>
+        <source>Close</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-17"/>
         <source>Track Coins</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="-7"/>
         <source>View Attachment</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../transactiondescdialog.cpp" line="+91"/>
+        <location filename="../transactiondescdialog.cpp" line="+90"/>
         <source>Gridcoin Coin Tracking System</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2974,7 +2928,6 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>
             <numerusform>Obert per a %n bloc més</numerusform>
             <numerusform>Obert per a %n blocs més</numerusform>
-            <numerusform></numerusform>
         </translation>
     </message>
     <message>
@@ -2988,21 +2941,9 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>Sense confirmar</translation>
     </message>
     <message>
-        <source>Confirming (%1 of %2 recommended confirmations)</source>
-        <translation type="vanished">Confirmant (%1 de %2 confirmacions recomanat)</translation>
-    </message>
-    <message>
         <location line="+9"/>
         <source>Conflicted</source>
         <translation>Conflicte</translation>
-    </message>
-    <message>
-        <source>Immature (%1 confirmations, will be available after %2)</source>
-        <translation type="vanished">Immadurs (%1 confirmacions, estaran disponibles després de %2)</translation>
-    </message>
-    <message>
-        <source>This block was not received by any other nodes and will probably not be accepted!</source>
-        <translation type="vanished">Aquest bloc no ha estat rebut per cap altre node i probablement no serà acceptat!</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -3028,10 +2969,6 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <location line="+2"/>
         <source>Payment to yourself</source>
         <translation>Pagament a un mateix</translation>
-    </message>
-    <message>
-        <source>Mined</source>
-        <translation type="vanished">Minat</translation>
     </message>
     <message>
         <location line="+81"/>
@@ -3241,7 +3178,7 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+68"/>
+        <location line="+65"/>
         <source>Retry Download</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3257,9 +3194,215 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
     </message>
 </context>
 <context>
+    <name>VotingChartDialog</name>
+    <message>
+        <location filename="../votingdialog.cpp" line="-374"/>
+        <source>Poll Results</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+60"/>
+        <source>Q: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-54"/>
+        <location line="+55"/>
+        <source>Discussion URL: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-43"/>
+        <source>Chart</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>List</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+25"/>
+        <source>Best Answer: </source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>VotingDialog</name>
+    <message>
+        <location line="-349"/>
+        <source>Gridcoin Voting System 1.1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Active Polls (Right Click to Vote)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Filter: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Reload Polls</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Load History</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Create Poll</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>...loading data!</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>VotingTableModel</name>
+    <message>
+        <location line="-391"/>
+        <source>#</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Title</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Expiration</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Share Type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Question</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+157"/>
+        <source>Answers</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-156"/>
+        <source># Voters</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Total Shares</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>URL</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Best Answer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+143"/>
+        <source>Row Number.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Title.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Expiration.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Share Type.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Question.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Total Participants.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Total Shares.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>URL.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Best Answer.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>VotingVoteDialog</name>
+    <message>
+        <location line="+533"/>
+        <source>PlaceVote</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Q: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Discussion URL: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Best Answer: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Vote</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Vote failed! Select one or more items to vote.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>WalletModel</name>
     <message>
-        <location filename="../walletmodel.cpp" line="+279"/>
+        <location filename="../walletmodel.cpp" line="+278"/>
         <source>Sending...</source>
         <translation>Enviant...</translation>
     </message>
@@ -3277,10 +3420,6 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>Ús:</translation>
     </message>
     <message>
-        <source>Send command to -server or Gridcoind</source>
-        <translation type="vanished">Enviar comandes a -server o Gridcoind</translation>
-    </message>
-    <message>
         <location line="+2"/>
         <source>List commands</source>
         <translation>Llista d&apos;ordres</translation>
@@ -3294,14 +3433,6 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <location line="+2"/>
         <source>Options:</source>
         <translation>Opcions:</translation>
-    </message>
-    <message>
-        <source>Specify configuration file (default: Gridcoin.conf)</source>
-        <translation type="vanished">Especifiqueu el fitxer de configuració (per defecte: Gridcoin.conf)</translation>
-    </message>
-    <message>
-        <source>Specify pid file (default: Gridcoind.pid)</source>
-        <translation type="vanished">Especificar arxiu pid (per defecte: Gridcoind.pid)</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -3324,10 +3455,6 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>Configurar la mida del registre en disc de la base de dades en megabytes (per defecte: 100)</translation>
     </message>
     <message>
-        <source>Listen for connections on &lt;port&gt; (default: 15714 or testnet: 25714)</source>
-        <translation type="vanished">Escoltar connexions en &lt;port&gt; (per defecte: 15714 o testnet: 25714)</translation>
-    </message>
-    <message>
         <location line="+7"/>
         <source>Maintain at most &lt;n&gt; connections to peers (default: 125)</source>
         <translation>Mantenir com a molt &lt;n&gt; connexions a peers (per defecte: 125)</translation>
@@ -3348,10 +3475,6 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <translation>Enllaçar a l&apos;adreça donada. Utilitzeu la notació [host]:port per a IPv6</translation>
     </message>
     <message>
-        <source>Stake your coins to support network and gain reward (default: 1)</source>
-        <translation type="vanished">Posa les teves monedes a fer &quot;stake&quot; per donar suport a la xarxa i obtenir una recompensa (per defecte: 1)</translation>
-    </message>
-    <message>
         <location line="+6"/>
         <source>Threshold for disconnecting misbehaving peers (default: 100)</source>
         <translation>Límit per a desconectar connexions errònies (per defecte: 100)</translation>
@@ -3365,10 +3488,6 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
         <location line="-43"/>
         <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
         <translation>Ha sorgit un error al configurar el port RPC %u escoltant a IPv4: %s</translation>
-    </message>
-    <message>
-        <source>Detach block and address databases. Increases shutdown time (default: 0)</source>
-        <translation type="vanished">Separeu el bloc i les bases de dades d&apos;adreces. Augmenta el temps d&apos;apagada (per defecte: 0)</translation>
     </message>
     <message>
         <location line="+157"/>
@@ -3668,30 +3787,6 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Contrasenya per a connexions JSON-RPC</translation>
     </message>
     <message>
-        <source>%s, you must set a rpcpassword in the configuration file:
- %s
-It is recommended you use the following random password:
-rpcuser=Gridcoinrpc
-rpcpassword=%s
-(you do not need to remember this password)
-The username and password MUST NOT be the same.
-If the file does not exist, create it with owner-readable-only file permissions.
-It is also recommended to set alertnotify so you are notified of problems;
-for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
-</source>
-        <translation type="vanished">%s, ha d&apos;establir un rpcpassword al fitxer de configuració:
-%s
-Es recomana utilitzar la següent contrasenya aleatòria:
-rpcuser=Gridcoinrpc
-rpcpassword=%s
-(No cal recordar aquesta contrasenya)
-El nom d&apos;usuari i contrasenya NO HA DE SER el mateix.
-Si no hi ha l&apos;arxiu, s&apos;ha de crear amb els permisos de només lectura per al propietari.
-També es recomana establir alertnotify per a que se li notifiquin els problemes;
-per exemple: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
-</translation>
-    </message>
-    <message>
         <location line="-30"/>
         <source>Find peers using internet relay chat (default: 0)</source>
         <translation>Trobar companys utilitzant l&apos;IRC (per defecte: 1) {0)?}</translation>
@@ -3956,10 +4051,6 @@ Executar una ordre quan es rep un avís rellevant (%s en cmd es substitueix per 
         <location line="+8"/>
         <source>Cannot downgrade wallet</source>
         <translation>No es pot reduir la versió del moneder</translation>
-    </message>
-    <message>
-        <source>Cannot initialize keypool</source>
-        <translation type="vanished">No es pot inicialitzar el keypool</translation>
     </message>
     <message>
         <location line="+1"/>

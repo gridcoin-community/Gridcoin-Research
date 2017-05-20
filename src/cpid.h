@@ -1,8 +1,8 @@
+#pragma once
 
-#ifndef BZF_CPID_H
-#define BZF_CPID_H
 #include <cstring>
 #include "util.h"
+
 class CPID{public:typedef unsigned int size_type;
 CPID();CPID(std::string text);CPID(std::string text,int entropybit,uint256 
 block_hash);void update(const unsigned char*buf,size_type length);void update(
@@ -34,5 +34,5 @@ HH(uint4&a,uint4 b,uint4 c,uint4 d,uint4 x,uint4 s,uint4 ac);static inline void
 II(uint4&a,uint4 b,uint4 c,uint4 d,uint4 x,uint4 s,uint4 ac);};std::string cpid(
 const std::string str);bool CPID_IsCPIDValid(std::string cpid,std::string 
 longcpid,uint256 blockhash);
-#endif
 
+std::string ComputeCPIDv2(const std::string &email, const std::string &bpk, const uint256 &blockhash);

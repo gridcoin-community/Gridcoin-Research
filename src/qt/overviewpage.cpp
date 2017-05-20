@@ -1,6 +1,7 @@
 
 
 #include <QWidget>
+#include <QListView>
 
 #include "overviewpage.h"
 #include "ui_overviewpage.h"
@@ -28,7 +29,6 @@
 #endif
 
 #define DECORATION_SIZE 64
-#define NUM_ITEMS 3
 
 class TxViewDelegate : public QAbstractItemDelegate
 {
@@ -125,8 +125,8 @@ OverviewPage::OverviewPage(QWidget *parent) :
     // Recent transactions
     ui->listTransactions->setItemDelegate(txdelegate);
     ui->listTransactions->setIconSize(QSize(DECORATION_SIZE, DECORATION_SIZE));
-    ui->listTransactions->setMinimumHeight(NUM_ITEMS * (DECORATION_SIZE + 2));
     ui->listTransactions->setAttribute(Qt::WA_MacShowFocusRect, false);
+    updateTransactions();
 
     connect(ui->listTransactions, SIGNAL(clicked(QModelIndex)), this, SLOT(handleTransactionClicked(QModelIndex)));
 
@@ -144,6 +144,32 @@ void OverviewPage::handleTransactionClicked(const QModelIndex &index)
 
     if(filter)
         emit transactionClicked(filter->mapToSource(index));
+}
+
+void OverviewPage::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    updateTransactions();
+}
+
+void OverviewPage::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    updateTransactions();
+}
+
+void OverviewPage::updateTransactions()
+{    
+    if(filter)
+    {
+        // Show the maximum number of transactions the transaction list widget
+        // can hold without overflowing.
+        const size_t itemHeight = DECORATION_SIZE + ui->listTransactions->spacing();
+        const size_t contentsHeight = ui->listTransactions->height();
+        const size_t numItems = contentsHeight / itemHeight;
+        filter->setLimit(numItems);
+        ui->listTransactions->update();
+    }
 }
 
 OverviewPage::~OverviewPage()
@@ -179,11 +205,16 @@ void OverviewPage::setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBa
 void OverviewPage::UpdateBoincUtilization()
 {
 
-	 QString qsStatus = QString::fromUtf8(msGlobalStatus.c_str());
-	 //QString qsLastPaymentTime = QString::fromUtf8(msLastPaymentTime.c_str());
-	 ui->txtDisplay->setText(qsStatus);
-	 //ui->txtLastPaymentTime->setText(qsLastPaymentTime);
-
+     ui->labelBlocks->setText(QString::fromUtf8(GlobalStatusStruct.blocks.c_str()));
+     ui->labelDifficulty->setText(QString::fromUtf8(GlobalStatusStruct.difficulty.c_str()));
+     ui->labelNetWeight->setText(QString::fromUtf8(GlobalStatusStruct.netWeight.c_str()));
+     ui->labelDporWeight->setText(QString::fromUtf8(GlobalStatusStruct.dporWeight.c_str()));
+     ui->labelMagnitude->setText(QString::fromUtf8(GlobalStatusStruct.magnitude.c_str()));
+     ui->labelProject->setText(QString::fromUtf8(GlobalStatusStruct.project.c_str()));
+     ui->labelCpid->setText(QString::fromUtf8(GlobalStatusStruct.cpid.c_str()));
+     ui->labelStatus->setText(QString::fromUtf8(GlobalStatusStruct.status.c_str()));
+     ui->labelPoll->setText(QString::fromUtf8(GlobalStatusStruct.poll.c_str()));
+     ui->labelErrors->setText(QString::fromUtf8(GlobalStatusStruct.errors.c_str()));
 }
 
 
@@ -197,7 +228,6 @@ void OverviewPage::setModel(WalletModel *model)
         // Set up transaction list
         filter = new TransactionFilterProxy();
         filter->setSourceModel(model->getTransactionTableModel());
-        filter->setLimit(NUM_ITEMS);
         filter->setDynamicSortFilter(true);
         filter->setSortRole(Qt::EditRole);
         filter->setShowInactive(false);
@@ -205,14 +235,13 @@ void OverviewPage::setModel(WalletModel *model)
 
         ui->listTransactions->setModel(filter);
         ui->listTransactions->setModelColumn(TransactionTableModel::ToAddress);
-
+        
         // Keep up to date with wallet
         setBalance(model->getBalance(), model->getStake(), model->getUnconfirmedBalance(), model->getImmatureBalance());
         connect(model, SIGNAL(balanceChanged(qint64, qint64, qint64, qint64)), this, SLOT(setBalance(qint64, qint64, qint64, qint64)));
 
         connect(model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
-		OverviewPage::UpdateBoincUtilization();
-
+        UpdateBoincUtilization();
     }
 
     // update the display unit, to not use the default ("BTC")
@@ -254,7 +283,7 @@ void OverviewPage::on_btnWebsite_pressed()
 
 void OverviewPage::on_btnBX_pressed()
 {
-    QDesktopServices::openUrl(QUrl("http://www.gridresearchcorp.com/gridcoin/"));
+    QDesktopServices::openUrl(QUrl("https://www.gridcoinstats.eu/block/"));
 }
 
 
@@ -265,8 +294,8 @@ void OverviewPage::on_btnBoinc_pressed()
 
 void OverviewPage::on_btnChat_pressed()
 {
-    //QDesktopServices::openUrl(QUrl("https://kiwiirc.com/client/irc.freenode.net:6667/#gridcoin"));
-	QDesktopServices::openUrl(QUrl("https://kiwiirc.com/client/irc.freenode.net:6667/#gridcoin-help"));
+    //QDesktopServices::openUrl(QUrl("https://kiwiirc.com/client/irc.freenode.net:6697/#gridcoin"));
+	QDesktopServices::openUrl(QUrl("https://kiwiirc.com/client/irc.freenode.net:6697/#gridcoin-help"));
 }
 
 void OverviewPage::on_btnExchange_pressed()

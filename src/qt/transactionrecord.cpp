@@ -3,8 +3,6 @@
 #include "base58.h"
 
 std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, double& out_rac);
-std::string RoundToString(double d, int place);
-bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
 
 bool IsSmartContractForDPOR(const CWalletTx &wtx)
 {

@@ -130,7 +130,7 @@ OBJS= \
     obj/script.o \
     obj/sync.o \
     obj/util.o \
-	obj/upgrader.o \
+    obj/upgrader.o \
     obj/wallet.o \
     obj/walletdb.o \
     obj/noui.o \
@@ -140,7 +140,10 @@ OBJS= \
     obj/scrypt-arm.o \
     obj/scrypt-x86.o \
     obj/scrypt-x86_64.o \
-    obj/cpid.o 
+    obj/cpid.o \
+    obj/block.o \
+    obj/beacon.o \
+    obj/boinc.o
 
 all: gridcoinresearchd
 

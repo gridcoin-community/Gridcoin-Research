@@ -59,11 +59,11 @@ void TrafficGraphWidget::paintPath(QPainterPath &path, QQueue<float> &samples)
 void TrafficGraphWidget::paintEvent(QPaintEvent *)
 {
     QPainter painter(this);
-    painter.fillRect(rect(), Qt::black);
+    painter.fillRect(rect(), Qt::lightGray);
 
     if(fMax <= 0.0f) return;
 
-    QColor axisCol(Qt::gray);
+    QColor axisCol(Qt::black);
     int h = height() - YMARGIN * 2;
     painter.setPen(axisCol);
     painter.drawLine(XMARGIN, YMARGIN + h, width() - XMARGIN, YMARGIN + h);
@@ -72,10 +72,9 @@ void TrafficGraphWidget::paintEvent(QPaintEvent *)
     int base = floor(log10(fMax));
     float val = pow(10.0f, base);
 
-    const QString units = tr("KB/s");
     // draw lines
     painter.setPen(axisCol);
-    painter.drawText(XMARGIN, YMARGIN + h - h * val / fMax, QString("%1 %2").arg(val).arg(units));
+    painter.drawText(XMARGIN, YMARGIN + h - h * val / fMax, QString("%1 kB/s").arg(val));
     for(float y = val; y < fMax; y += val) {
         int yy = YMARGIN + h - h * y / fMax;
         painter.drawLine(XMARGIN, yy, width() - XMARGIN, yy);
@@ -85,7 +84,7 @@ void TrafficGraphWidget::paintEvent(QPaintEvent *)
         axisCol = axisCol.darker();
         val = pow(10.0f, base - 1);
         painter.setPen(axisCol);
-        painter.drawText(XMARGIN, YMARGIN + h - h * val / fMax, QString("%1 %2").arg(val).arg(units));
+        painter.drawText(XMARGIN, YMARGIN + h - h * val / fMax, QString("%1 kB/s").arg(val));
         int count = 1;
         for(float y = val; y < fMax; y += val, count++) {
             // don't overwrite lines drawn above

@@ -83,6 +83,7 @@ void TransactionFilterProxy::setMinAmount(qint64 minimum)
 void TransactionFilterProxy::setLimit(int limit)
 {
     this->limitRows = limit;
+    invalidate();
 }
 
 void TransactionFilterProxy::setShowInactive(bool showInactive)

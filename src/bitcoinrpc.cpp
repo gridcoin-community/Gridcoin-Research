@@ -204,7 +204,7 @@ Value help(const Array& params, bool fHelp)
 
 Value stop(const Array& params, bool fHelp)
 {
-	printf("Stopping...");
+    printf("Stopping...");
 
     // Accept the deprecated and ignored 'detach´ boolean argument
     if (fHelp || params.size() > 1)
@@ -228,14 +228,14 @@ static const CRPCCommand vRPCCommands[] =
   //  ------------------------  -----------------------  ------  --------
     { "help",                   &help,                   true,   true },
     { "stop",                   &stop,                   true,   true },
-	{ "addnode",                &addnode,                true,   true  },
-	{ "getaddednodeinfo",       &getaddednodeinfo,       true,   true  },
+    { "addnode",                &addnode,                true,   true  },
+    { "getaddednodeinfo",       &getaddednodeinfo,       true,   true  },
     { "getbestblockhash",       &getbestblockhash,       true,   false },
     { "getblockcount",          &getblockcount,          true,   false },
     { "getconnectioncount",     &getconnectioncount,     true,   false },
     { "getpeerinfo",            &getpeerinfo,            true,   false },
     { "ping",                   &ping,                   true,   false },
-	{ "getnettotals",           &getnettotals,           true,   true  },
+    { "getnettotals",           &getnettotals,           true,   true  },
     { "getdifficulty",          &getdifficulty,          true,   false },
     { "getinfo",                &getinfo,                true,   false },
     { "getsubsidy",             &getsubsidy,             true,   false },
@@ -274,7 +274,7 @@ static const CRPCCommand vRPCCommands[] =
     { "listtransactions",       &listtransactions,       false,  false },
     { "listaddressgroupings",   &listaddressgroupings,   false,  false },
     { "signmessage",            &signmessage,            false,  false },
-	{ "showblock",              &showblock,              false,  false },
+    { "showblock",              &showblock,              false,  false },
     { "verifymessage",          &verifymessage,          false,  false },
     { "getwork",                &getwork,                true,   false },
     { "getworkex",              &getworkex,              true,   false },
@@ -288,15 +288,15 @@ static const CRPCCommand vRPCCommands[] =
     { "importwallet",           &importwallet,           false,  false },
     { "importprivkey",          &importprivkey,          false,  false },
     { "listunspent",            &listunspent,            false,  false },
-	{ "list",                   &listitem,               false,  false },
-	{ "upgrade",                &upgrade,                false,  false },
-	{ "downloadblocks",         &downloadblocks,         false,  false },
-	{ "downloadstate",          &downloadstate,          false,  false },
-	{ "downloadcancel",         &downloadcancel,         false,  false },
-	{ "restart",                &restart,                false,  false },
-	{ "execute",                &execute,                false,  false },
-	{ "option",                 &option,                 false,  false },
-	{ "dao",                    &dao,                    false,  false },
+    { "list",                   &listitem,               false,  false },
+    { "upgrade",                &upgrade,                false,  false },
+    { "downloadblocks",         &downloadblocks,         false,  false },
+    { "downloadstate",          &downloadstate,          false,  false },
+    { "downloadcancel",         &downloadcancel,         false,  false },
+    { "restart",                &restart,                false,  false },
+    { "execute",                &execute,                false,  false },
+    { "option",                 &option,                 false,  false },
+    { "dao",                    &dao,                    false,  false },
     { "getrawtransaction",      &getrawtransaction,      false,  false },
     { "createrawtransaction",   &createrawtransaction,   false,  false },
     { "decoderawtransaction",   &decoderawtransaction,   false,  false },
@@ -1193,7 +1193,7 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     //
     // Special case non-string parameter types
     //
-	//if (strMethod == "importprivkey"          && n > 1) ConvertTo<bool>(params[1]);
+    //if (strMethod == "importprivkey"          && n > 1) ConvertTo<bool>(params[1]);
     if (strMethod == "stop"                   && n > 0) ConvertTo<bool>(params[0]);
     if (strMethod == "sendtoaddress"          && n > 1) ConvertTo<double>(params[1]);
     if (strMethod == "settxfee"               && n > 0) ConvertTo<double>(params[0]);
@@ -1208,8 +1208,8 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     if (strMethod == "getblockbynumber"       && n > 0) ConvertTo<int64_t>(params[0]);
     if (strMethod == "getblockbynumber"       && n > 1) ConvertTo<bool>(params[1]);
     if (strMethod == "getblockhash"           && n > 0) ConvertTo<int64_t>(params[0]);
-	if (strMethod == "getaddednodeinfo"       && n > 0) ConvertTo<bool>(params[0]);
-	if (strMethod == "showblock"              && n > 0) ConvertTo<boost::int64_t>(params[0]);
+    if (strMethod == "getaddednodeinfo"       && n > 0) ConvertTo<bool>(params[0]);
+    if (strMethod == "showblock"              && n > 0) ConvertTo<boost::int64_t>(params[0]);
     if (strMethod == "move"                   && n > 2) ConvertTo<double>(params[2]);
     if (strMethod == "move"                   && n > 3) ConvertTo<int64_t>(params[3]);
     if (strMethod == "sendfrom"               && n > 2) ConvertTo<double>(params[2]);
@@ -1235,10 +1235,10 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     if (strMethod == "addmultisigaddress"     && n > 0) ConvertTo<int64_t>(params[0]);
     if (strMethod == "addmultisigaddress"     && n > 1) ConvertTo<Array>(params[1]);
     if (strMethod == "listunspent"            && n > 0) ConvertTo<int64_t>(params[0]);
-	if (strMethod == "upgrade"                && n > 0) ConvertTo<boost::int64_t>(params[0]);
-	if (strMethod == "downloadblocks"         && n > 0) ConvertTo<boost::int64_t>(params[0]);
-	if (strMethod == "downloadstate"          && n > 0) ConvertTo<boost::int64_t>(params[0]);
-	if (strMethod == "downloadcancel"         && n > 0) ConvertTo<boost::int64_t>(params[0]);
+    if (strMethod == "upgrade"                && n > 0) ConvertTo<boost::int64_t>(params[0]);
+    if (strMethod == "downloadblocks"         && n > 0) ConvertTo<boost::int64_t>(params[0]);
+    if (strMethod == "downloadstate"          && n > 0) ConvertTo<boost::int64_t>(params[0]);
+    if (strMethod == "downloadcancel"         && n > 0) ConvertTo<boost::int64_t>(params[0]);
     if (strMethod == "listunspent"            && n > 1) ConvertTo<int64_t>(params[1]);
     if (strMethod == "listunspent"            && n > 2) ConvertTo<Array>(params[2]);
     if (strMethod == "getrawtransaction"      && n > 1) ConvertTo<int64_t>(params[1]);

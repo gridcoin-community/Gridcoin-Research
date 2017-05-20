@@ -3,7 +3,7 @@
 #include <cstdio>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <iomanip>
-std::string YesNo(bool bin);
+
 #define S11 (0x9e5+1366-0xf34)
 #define S12 (0x161b+3182-0x227d)
 #define S13 (0x39b+3002-0xf44)
@@ -272,3 +272,8 @@ return false;if(cpid1=="\x49\x4e\x56\x45\x53\x54\x4f\x52"||longcpid==
 "\x4e\x55\x4c\x4c\x20\x43\x70\x69\x64\x20\x72\x65\x63\x65\x69\x76\x65\x64" "\r\n"
 );return false;}if(longcpid.length()<(0x39f+6435-0x1cbd))return false;
 bool compared=CompareCPID(cpid1,longcpid,blockhash);return compared;}
+
+std::string ComputeCPIDv2(const std::string &email, const std::string &bpk, const uint256 &blockhash)
+{
+    return CPID().CPID_V2(email, bpk, blockhash);
+}

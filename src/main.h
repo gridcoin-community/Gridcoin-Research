@@ -42,13 +42,11 @@ static const double NeuralNetworkMultiplier = 115000;
 extern int64_t nLastBlockSolved;
 extern int64_t nLastBlockSubmitted;
 
-extern uint256 muGlobalCheckpointHash;
 extern uint256 muGlobalCheckpointHashRelayed;
-extern int muGlobalCheckpointHashCounter;
 extern std::string msMasterProjectPublicKey;
 extern std::string msMasterMessagePublicKey;
 extern std::string msMasterMessagePrivateKey;
-extern std::string msTestNetSeedSuperblocks;extern std::string msTestNetSeedContracts;extern std::string msProdSeedSuperblocks;extern std::string msProdSeedContracts400000;extern std::string msProdSeedContracts500000;extern std::string msProdSeedContracts550000;extern std::string msProdSeedContracts575000;extern std::string msProdSeedContracts600000;extern bool bNewUserWizardNotified;
+extern bool bNewUserWizardNotified;
 
 /** The maximum allowed size for a serialized block, in bytes (network rule) */
 static const unsigned int MAX_BLOCK_SIZE = 1000000;
@@ -136,7 +134,6 @@ extern unsigned int nStakeMaxAge;
 extern unsigned int nNodeLifespan;
 extern int nCoinbaseMaturity;
 extern int nBestHeight;
-extern int nLastBestHeight;
 extern uint256 nBestChainTrust;
 extern uint256 nBestInvalidTrust;
 extern uint256 hashBestChain;
@@ -152,10 +149,7 @@ extern std::set<CWallet*> setpwalletRegistered;
 extern unsigned char pchMessageStart[4];
 extern std::map<uint256, CBlock*> mapOrphanBlocks;
 
-extern int64_t COIN_YEAR_REWARD;
-extern bool bRemotePaymentsEnabled;
 extern bool bOPReturnEnabled;
-extern bool bOptionPaymentsEnabled;
 
 // Settings
 extern int64_t nTransactionFee;
@@ -174,8 +168,6 @@ extern int64_t nCPIDsLoaded;
 extern int64_t nLastGRCtallied;
 extern int64_t nLastCleaned;
 extern int64_t nLastTallyBusyWait;
-
-
 
 extern bool fUseFastIndex;
 extern unsigned int nDerivationMethodIndex;
@@ -202,8 +194,7 @@ extern std::string  msENCboincpublickey;
 extern std::string  msHashBoinc;
 extern std::string  msHashBoincTxId;
 extern std::string  msMiningErrors;
-extern std::string  msMiningErrors2;
-extern std::string  msMiningErrors3;
+extern std::string  msPoll;
 extern std::string  msMiningErrors5;
 extern std::string  msMiningErrors6;
 extern std::string  msMiningErrors7;
@@ -229,18 +220,25 @@ extern int nGrandfather;
 extern int nNewIndex;
 extern int nNewIndex2;
 
-// PoB GPU Miner Global Vars:
-extern std::string 	msGPUMiningProject;
-extern std::string 	msGPUMiningCPID;
-extern double    	mdGPUMiningRAC;
-extern double       mdGPUMiningNetworkRAC;
-extern std::string  msGPUENCboincpublickey;
-extern std::string  msGPUboinckey;
 // Stats for Main Screen:
-extern double         mdLastPoBDifficulty;
-extern double         mdLastDifficulty;
-extern std::string    msGlobalStatus;
 extern std::string    msLastPaymentTime;
+
+struct globalStatusType
+{
+    std::string blocks;
+    std::string difficulty;
+    std::string netWeight;
+    std::string dporWeight;
+    std::string magnitude;
+    std::string project;
+    std::string cpid;
+    std::string status;
+    std::string poll;
+    std::string errors;
+    std::string rsaOverview;
+};
+
+extern globalStatusType GlobalStatusStruct;
 
 
 class CReserveKey;
@@ -256,15 +254,12 @@ FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszM
 FILE* AppendBlockFile(unsigned int& nFileRet);
 bool LoadBlockIndex(bool fAllowNew=true);
 void PrintBlockTree();
-CBlockIndex* FindBlockByHeight(int nHeight);
-
-CBlockIndex* RPCFindBlockByHeight(int nHeight);
-
-CBlockIndex* MainFindBlockByHeight(int nHeight);
 
 bool ProcessMessages(CNode* pfrom);
 bool SendMessages(CNode* pto, bool fSendTrickle);
 bool LoadExternalBlockFile(FILE* fileIn);
+bool WriteKey(std::string sKey, std::string sValue);
+std::string GetArgument(std::string arg, std::string defaultvalue);
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfStake);
@@ -1301,7 +1296,7 @@ public:
     int64_t nMint;
     int64_t nMoneySupply;
 	// Gridcoin (7-11-2015) Add new Accrual Fields to block index
-	std::string sCPID;
+    uint128 cpid;
 	double nResearchSubsidy;
 	double nInterestSubsidy;
 	double nMagnitude;
@@ -1316,6 +1311,8 @@ public:
         BLOCK_PROOF_OF_STAKE = (1 << 0), // is proof-of-stake block
         BLOCK_STAKE_ENTROPY  = (1 << 1), // entropy bit for stake modifier
         BLOCK_STAKE_MODIFIER = (1 << 2), // regenerated stake modifier
+        EMPTY_CPID           = (1 << 3), // CPID is empty
+        INVESTOR_CPID        = (1 << 4), // CPID equals "INVESTOR"
     };
 
     uint64_t nStakeModifier; // hash modifier for proof-of-stake
@@ -1358,7 +1355,6 @@ public:
         nBits          = 0;
         nNonce         = 0;
 		//7-11-2015 - Gridcoin - New Accrual Fields
-		sCPID = "";
 		nResearchSubsidy = 0;
 		nInterestSubsidy = 0;
 		nMagnitude = 0;
@@ -1478,6 +1474,11 @@ public:
         nFlags |= BLOCK_PROOF_OF_STAKE;
     }
 
+    bool IsUserCPID() const
+    {        
+        return !(nFlags & (INVESTOR_CPID | EMPTY_CPID));
+    }
+
     unsigned int GetStakeEntropyBit() const
     {
         return ((nFlags & BLOCK_STAKE_ENTROPY) >> 1);
@@ -1503,6 +1504,30 @@ public:
             nFlags |= BLOCK_STAKE_MODIFIER;
     }
 
+    void SetCPID(const std::string& cpid_hex)
+    {
+        // Clear current CPID state.
+        cpid = 0;
+        nFlags &= ~(EMPTY_CPID | INVESTOR_CPID);
+        if(cpid_hex.empty())
+            nFlags |= EMPTY_CPID;
+        else if(cpid_hex == "INVESTOR")
+            nFlags |= INVESTOR_CPID;
+        else
+            cpid.SetHex(cpid_hex);
+    }
+
+    std::string GetCPID() const
+    {
+        if(nFlags & EMPTY_CPID)
+            return "";
+        else if(nFlags == INVESTOR_CPID)
+            return "INVESTOR";
+        else
+            return cpid.GetHex();
+    }
+
+
     std::string ToString() const
     {
         return strprintf("CBlockIndex(nprev=%p, pnext=%p, nFile=%u, nBlockPos=%-6d nHeight=%d, nMint=%s, nMoneySupply=%s, nFlags=(%s)(%d)(%s), nStakeModifier=%016" PRIx64 ", nStakeModifierChecksum=%08x, hashProof=%s, prevoutStake=(%s), nStakeTime=%d merkle=%s, hashBlock=%s)",
@@ -1514,7 +1539,7 @@ public:
             prevoutStake.ToString().c_str(), nStakeTime,
             hashMerkleRoot.ToString().c_str(),
             GetBlockHash().ToString().c_str());
-    }
+    }    
 
     void print() const
     {
@@ -1581,7 +1606,11 @@ public:
         READWRITE(nNonce);
         READWRITE(blockHash);
 		//7-11-2015 - Gridcoin - New Accrual Fields (Note, Removing the determinstic block number to make this happen all the time):
-		READWRITE(sCPID);
+        std::string cpid_hex = GetCPID();
+        READWRITE(cpid_hex);
+        if(fRead)
+            const_cast<CDiskBlockIndex*>(this)->SetCPID(cpid_hex);
+            
 		READWRITE(nResearchSubsidy);
 		READWRITE(nInterestSubsidy);
 		READWRITE(nMagnitude);

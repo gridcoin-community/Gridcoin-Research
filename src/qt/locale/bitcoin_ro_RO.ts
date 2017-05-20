@@ -9,21 +9,9 @@
         <translation>Despre Gridcoin</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+42"/>
         <source>&lt;b&gt;Gridcoin&lt;/b&gt; </source>
         <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;Gridcoin&lt;/b&gt; version</source>
-        <translation type="vanished">Versiune &lt;b&gt;Gridcoin&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <source>Copyright © 2009-2014 The Bitcoin developers
-Copyright © 2012-2014 The NovaCoin developers
-Copyright © 2014 The Gridcoin developers</source>
-        <translation type="vanished">Copyright © 2009-2014 The Bitcoin developers
-Copyright © 2012-2014 The NovaCoin developers
-Copyright © 2014 The Gridcoin developers</translation>
     </message>
     <message>
         <location line="+58"/>
@@ -49,12 +37,12 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
         <translation>Agend?</translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="+22"/>
         <source>Double-click to edit address or label</source>
         <translation>Dublu-click pentru a edita adresa sau eticheta</translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="+27"/>
         <source>Create a new address</source>
         <translation>Creeaz? o adres? nou?</translation>
     </message>
@@ -69,12 +57,12 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
         <translation>Adres? nou?</translation>
     </message>
     <message>
-        <location line="-49"/>
+        <location line="-46"/>
         <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
         <translation>Acestea sunt adresele Gridcoin pentru a primi pl??i. Poate dori?i sa da?i o adresa noua fiecarui expeditor pentru a putea ?ine eviden?a la cine efectueaz? pl?ti.</translation>
     </message>
     <message>
-        <location line="+63"/>
+        <location line="+60"/>
         <source>&amp;Copy Address</source>
         <translation>&amp;Copiaz? adresa</translation>
     </message>
@@ -114,7 +102,7 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
         <translation>?te&amp;rge</translation>
     </message>
     <message>
-        <location filename="../addressbookpage.cpp" line="+66"/>
+        <location filename="../addressbookpage.cpp" line="+65"/>
         <source>Copy &amp;Label</source>
         <translation>Copiaz? &amp;eticheta</translation>
     </message>
@@ -193,10 +181,6 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
         <location line="+3"/>
         <source>For staking only</source>
         <translation>Doar pentru staking</translation>
-    </message>
-    <message>
-        <source>Enter the new passphrase to the wallet.&lt;br/&gt;Please use a passphrase of &lt;b&gt;10 or more random characters&lt;/b&gt;, or &lt;b&gt;eight or more words&lt;/b&gt;.</source>
-        <translation type="vanished">Introdu noua parol? a portofelului electronic.&lt;br/&gt;Te rog folose?te &lt;b&gt;minim 10 caractere aleatoare&lt;/b&gt;, sau &lt;b&gt;minim 8 cuvinte&lt;/b&gt;.</translation>
     </message>
     <message>
         <location filename="../askpassphrasedialog.cpp" line="+38"/>
@@ -320,17 +304,17 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+1008"/>
+        <location filename="../bitcoingui.cpp" line="+998"/>
         <source>Sign &amp;message...</source>
         <translation>Semneaz? &amp;mesaj...</translation>
     </message>
     <message>
-        <location line="+338"/>
+        <location line="+346"/>
         <source>Synchronizing with network...</source>
         <translation>Se sincronizeaz? cu re?eaua...</translation>
     </message>
     <message>
-        <location line="-499"/>
+        <location line="-500"/>
         <source>&amp;Overview</source>
         <translation>&amp;Imagine de ansamblu</translation>
     </message>
@@ -375,7 +359,7 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
         <translation>&amp;Trimite monede</translation>
     </message>
     <message>
-        <location line="+58"/>
+        <location line="+57"/>
         <source>E&amp;xit</source>
         <translation>&amp;Ie?ire</translation>
     </message>
@@ -390,15 +374,7 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
         <translation>Arat? informa?ii despre Gridcoin</translation>
     </message>
     <message>
-        <source>About &amp;Qt</source>
-        <translation type="vanished">Despre &amp;Qt</translation>
-    </message>
-    <message>
-        <source>Show information about Qt</source>
-        <translation type="vanished">Arat? informa?ii despre Qt</translation>
-    </message>
-    <message>
-        <location line="+56"/>
+        <location line="+50"/>
         <source>&amp;Options...</source>
         <translation>&amp;Set?ri...</translation>
     </message>
@@ -418,7 +394,7 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
         <translation>S&amp;chimb? parola...</translation>
     </message>
     <message numerus="yes">
-        <location line="+346"/>
+        <location line="+354"/>
         <source>~%n block(s) remaining</source>
         <translation>
             <numerusform>~%n bloc r?mas</numerusform>
@@ -432,17 +408,17 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
         <translation>Desc?rcat %1 din %2  blocuri din istoricul tranzac?iilor(%3% terminat).</translation>
     </message>
     <message>
-        <location line="-343"/>
+        <location line="-351"/>
         <source>&amp;Export...</source>
         <translation>&amp;Export?</translation>
     </message>
     <message>
-        <location line="-158"/>
+        <location line="-151"/>
         <source>Send coins to a Gridcoin address</source>
         <translation>Trimite monede c?tre o adres? Gridcoin</translation>
     </message>
     <message>
-        <location line="+141"/>
+        <location line="+134"/>
         <source>Modify configuration options for Gridcoin</source>
         <translation>Modific? op?iuni de configurare pentru Gridcoin</translation>
     </message>
@@ -482,7 +458,7 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
         <translation>&amp;Verific? mesajul...</translation>
     </message>
     <message>
-        <location line="-801"/>
+        <location line="-794"/>
         <source>Gridcoin</source>
         <translation>Gridcoin</translation>
     </message>
@@ -492,12 +468,12 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
         <translation>Portofelul</translation>
     </message>
     <message>
-        <location line="+728"/>
+        <location line="+727"/>
         <source>&amp;About Gridcoin</source>
         <translation>Despre Gridcoin</translation>
     </message>
     <message>
-        <location line="+60"/>
+        <location line="+54"/>
         <source>&amp;Show / Hide</source>
         <translation>Arata/Ascunde</translation>
     </message>
@@ -517,7 +493,7 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
         <translation>Blocheaz? portofelul</translation>
     </message>
     <message>
-        <location line="+55"/>
+        <location line="+54"/>
         <source>&amp;File</source>
         <translation>&amp;Fi?ier</translation>
     </message>
@@ -527,29 +503,19 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
         <translation>&amp;Set?ri</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+59"/>
         <source>&amp;Help</source>
         <translation>A&amp;jutor</translation>
     </message>
     <message>
-        <location line="-752"/>
-        <location line="+800"/>
-        <source>Tabs toolbar</source>
-        <translation>Bara de file</translation>
-    </message>
-    <message>
-        <source>Actions toolbar</source>
-        <translation type="vanished">Bara de instrumente Actiuni</translation>
-    </message>
-    <message>
-        <location line="+47"/>
+        <location line="+50"/>
         <location line="+9"/>
         <source>[testnet]</source>
         <translation>[testnet]</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+60"/>
+        <location line="+64"/>
         <source>Gridcoin client</source>
         <translation>Clientul Gridcoin</translation>
     </message>
@@ -568,11 +534,7 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
         <translation>Desc?rcat %1 blocuri din istoricul tranzac?iilor.</translation>
     </message>
     <message>
-        <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;Expected time to earn reward is %3</source>
-        <translation type="vanished">Staking. &lt;br&gt;Greutatea este %1&lt;br&gt;Greutatea retelei este %2&lt;br&gt;Timp estimat pentru a castiga recompensa este %3</translation>
-    </message>
-    <message>
-        <location line="+1116"/>
+        <location line="+1104"/>
         <source>Not staking because wallet is locked</source>
         <translation>Nu este in modul stake deoarece portofelul este blocat</translation>
     </message>
@@ -592,7 +554,7 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
         <translation>Nu este in modul stake deoarece nu sunt destule monede maturate</translation>
     </message>
     <message numerus="yes">
-        <location line="-1113"/>
+        <location line="-1101"/>
         <source>%n second(s) ago</source>
         <translation>
             <numerusform>%n secund? în urm?</numerusform>
@@ -601,12 +563,7 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
         </translation>
     </message>
     <message>
-        <location line="-1046"/>
-        <source>Green bar</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+534"/>
+        <location line="-513"/>
         <source>&amp;Block Explorer</source>
         <translation type="unfinished"></translation>
     </message>
@@ -622,22 +579,12 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
     </message>
     <message>
         <location line="+1"/>
-        <location line="+8"/>
+        <location line="+4"/>
         <source>Web Site</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-5"/>
-        <source>&amp;Boinc Stats</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Boinc Stats</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="-1"/>
         <source>&amp;Web Site</source>
         <translation type="unfinished"></translation>
     </message>
@@ -652,13 +599,23 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+28"/>
-        <location line="+173"/>
+        <location line="+3"/>
+        <source>&amp;BOINC</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Gridcoin rewards distributed computing with BOINC</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <location line="+169"/>
         <source>&amp;Rebuild Block Chain</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-172"/>
+        <location line="-168"/>
         <source>Rebuild Block Chain</source>
         <translation type="unfinished"></translation>
     </message>
@@ -739,12 +696,12 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
     </message>
     <message>
         <location line="+1"/>
-        <location line="+604"/>
+        <location line="+606"/>
         <source>New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-597"/>
+        <location line="-599"/>
         <source>&amp;Voting</source>
         <translation type="unfinished"></translation>
     </message>
@@ -754,17 +711,7 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>&amp;Reserved - Voting Linux</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Voting - Linux</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>&amp;Galaza (Game)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -809,17 +756,22 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
         <translation>&amp;Deblocheaz? portofelul</translation>
     </message>
     <message>
-        <location line="+81"/>
+        <location line="+74"/>
+        <source>&amp;Community</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>&amp;Upgrade QT Client</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+14"/>
         <source>&amp;Advanced</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location line="+288"/>
+        <location line="+295"/>
         <source>%n minute(s) ago</source>
         <translation>
             <numerusform>%n minut în urm?</numerusform>
@@ -924,7 +876,7 @@ Adresa: %4
 </translation>
     </message>
     <message>
-        <location line="+421"/>
+        <location line="+405"/>
         <location line="+15"/>
         <source>URI handling</source>
         <translation>Manipulare URI</translation>
@@ -946,7 +898,7 @@ Adresa: %4
         <translation>Portofelul este &lt;b&gt;criptat&lt;/b&gt; iar în momentul de fa?? este &lt;b&gt;blocat&lt;/b&gt;</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+29"/>
         <source>Backup Wallet</source>
         <translation>F? o copie de siguran?? a portofelului</translation>
     </message>
@@ -1043,32 +995,32 @@ Adresa: %4
         <translation>Controleaz? moneda</translation>
     </message>
     <message>
-        <location line="+36"/>
+        <location line="+28"/>
         <source>Quantity:</source>
         <translation>Cantitate:</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+29"/>
         <source>Bytes:</source>
         <translation>Octe?i:</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="+45"/>
         <source>Amount:</source>
         <translation>Sum?:</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+29"/>
         <source>Priority:</source>
         <translation>Prioritate:</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="+45"/>
         <source>Fee:</source>
         <translation>Taxa:</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+32"/>
         <source>Low Output:</source>
         <translation>Ie?ire minim?: </translation>
     </message>
@@ -1078,12 +1030,12 @@ Adresa: %4
         <translation>nu</translation>
     </message>
     <message>
-        <location filename="../forms/coincontroldialog.ui" line="+51"/>
+        <location filename="../forms/coincontroldialog.ui" line="+48"/>
         <source>After Fee:</source>
         <translation>Dup? taxe:</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+32"/>
         <source>Change:</source>
         <translation>Schimb:</translation>
     </message>
@@ -1094,8 +1046,8 @@ Adresa: %4
     </message>
     <message>
         <location line="+13"/>
-        <source>Tree mode</source>
-        <translation>Modul arborescent</translation>
+        <source>Tree &amp;mode</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+16"/>
@@ -1103,7 +1055,7 @@ Adresa: %4
         <translation>Modul lista</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+45"/>
         <source>Amount</source>
         <translation>Sum?</translation>
     </message>
@@ -1288,7 +1240,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location line="+37"/>
-        <location line="+66"/>
+        <location line="+63"/>
         <source>(no label)</source>
         <translation>(f?r? etichet?)</translation>
     </message>
@@ -1420,6 +1372,80 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
 </context>
 <context>
+    <name>NewPollDialog</name>
+    <message>
+        <location filename="../votingdialog.cpp" line="+900"/>
+        <location line="+96"/>
+        <source>Create Poll</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-81"/>
+        <source>Title: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Days: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Question: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Discussion URL: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Share Type: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Add Item</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Remove Item</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Clear All</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <source>Creating poll failed! Title is missing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Creating poll failed! Days value is missing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Creating poll failed! Question is missing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Creating poll failed! URL is missing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Creating poll failed! Answer is missing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>OptionsDialog</name>
     <message>
         <location filename="../forms/optionsdialog.ui" line="+14"/>
@@ -1427,7 +1453,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Set?ri</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+16"/>
         <source>&amp;Main</source>
         <translation>&amp;Principal</translation>
     </message>
@@ -1437,22 +1463,12 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Comision de tranzac?ie op?ional pe kB, care v? ajut? ca tranzac?iile sa fie procesate rapid. Majoritatea tranzactiilor sunt de 1 kB. Comision de 0.01 recomandat</translation>
     </message>
     <message>
-        <location line="+15"/>
-        <source>Pay transaction &amp;fee</source>
-        <translation>Pl?te?te comision pentru tranzac?ie &amp;f</translation>
-    </message>
-    <message>
-        <location line="+31"/>
+        <location line="+46"/>
         <source>Reserved amount does not participate in staking and is therefore spendable at any time.</source>
         <translation>Suma rezervat? nu particip? la maturare ?i, prin urmare, se poate cheltui  în orice moment.</translation>
     </message>
     <message>
-        <location line="+15"/>
-        <source>Reserve</source>
-        <translation>Rezerv?</translation>
-    </message>
-    <message>
-        <location line="+31"/>
+        <location line="+46"/>
         <source>Automatically start Gridcoin after logging in to the system.</source>
         <translation>Porne?te Gridcoin imdiat dup? logarea în sistem</translation>
     </message>
@@ -1497,9 +1513,19 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Conecteaz?-te printr-un proxy socks</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>Proxy &amp;IP:</source>
-        <translation>Proxy &amp;IP:</translation>
+        <location line="-130"/>
+        <source>Pa&amp;y transaction fee</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+46"/>
+        <source>Reser&amp;ve</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+93"/>
+        <source>Prox&amp;y IP:</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+19"/>
@@ -1577,6 +1603,16 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Alege subdiviziunea folosit? la afi?area interfe?ei ?i la trimiterea de bitcoin.</translation>
     </message>
     <message>
+        <location line="+11"/>
+        <source>Style:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Choose a stylesheet to change the look of the wallet.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location line="+9"/>
         <source>Whether to show Gridcoin addresses in the transaction list or not.</source>
         <translation>Dac? s? arate adrese Gridcoin din lista de tranzac?ie sau nu.</translation>
@@ -1602,12 +1638,12 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>&amp; OK</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+7"/>
         <source>&amp;Cancel</source>
         <translation>&amp; Renunta</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+10"/>
         <source>&amp;Apply</source>
         <translation>&amp;Aplica</translation>
     </message>
@@ -1617,7 +1653,17 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Initial</translation>
     </message>
     <message>
-        <location line="+148"/>
+        <location line="+30"/>
+        <source>Native</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Light</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+123"/>
         <location line="+9"/>
         <source>Warning</source>
         <translation>Avertizare</translation>
@@ -1629,7 +1675,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Aceasta setare va avea efect dupa repornirea Gridcoin.</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="+42"/>
         <source>The supplied proxy address is invalid.</source>
         <translation>Adresa bitcoin pe care a-ti specificat-o este invalida</translation>
     </message>
@@ -1642,18 +1688,18 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Form</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="+44"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:20px; font-weight:600; color:#000000;&quot;&gt;Wallet&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+349"/>
+        <location line="+411"/>
         <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</source>
         <translation>Informatia afisata poate fi depasita.  Portofel se sincronizeaz? automat cu re?eaua Gridcoin dup? ce se stabile?te o conexiune, dar acest proces nu s-a finalizat înc?.</translation>
     </message>
     <message>
-        <location line="-307"/>
+        <location line="-372"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Balance:&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1698,68 +1744,64 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+153"/>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:20px; font-weight:600; color:#000000;&quot;&gt;Recent transactions&lt;/span&gt;&lt;small&gt;&lt;span&gt;&lt;font color=blue&gt;&amp;nbsp;&amp;nbsp;(Beacons and Votes cost .00011GRC)&lt;/span&gt;&lt;/font&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
+        <location line="+46"/>
+        <source>Blocks:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+121"/>
-        <source>...</source>
+        <location line="+14"/>
+        <source>Difficulty:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+26"/>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;http://boincstats.com/en/stats/-1/team/detail/118094994/overview&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0000ff;&quot;&gt;&lt;img src=&quot;:/images/wallet2&quot;/&gt;&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
+        <location line="+14"/>
+        <source>Net Weight:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Stake:</source>
-        <translation type="vanished">Stake:</translation>
+        <location line="+14"/>
+        <source>DPOR Weight:</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Unconfirmed:</source>
-        <translation type="vanished">Neconfirmat:</translation>
+        <location line="+7"/>
+        <source>Magnitude:</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Wallet</source>
-        <translation type="vanished">Portofel</translation>
+        <location line="+7"/>
+        <source>Project:</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Spendable:</source>
-        <translation type="vanished">Cheltuibil:</translation>
+        <location line="+7"/>
+        <source>CPID:</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Your current spendable balance</source>
-        <translation type="vanished">Balan?a ta curent? de cheltuieli</translation>
+        <location line="+7"/>
+        <source>Status:</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Immature:</source>
-        <translation type="vanished">Nematurizat:</translation>
+        <location line="+102"/>
+        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:20px; font-weight:600; color:#000000;&quot;&gt;Recent transactions&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Mined balance that has not yet matured</source>
-        <translation type="vanished">Balanta minata care nu s-a maturizat inca</translation>
+        <location line="+96"/>
+        <source>Current Poll:</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Total:</source>
-        <translation type="vanished">Total:</translation>
+        <location line="+14"/>
+        <source>Client Messages:</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Your current total balance</source>
-        <translation type="vanished">Balan?a total? curent?</translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;Recent transactions&lt;/b&gt;</source>
-        <translation type="vanished">&lt;b&gt;Tranzac?ii recente&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <location line="-364"/>
+        <location line="-392"/>
         <source>Total of transactions that have yet to be confirmed, and do not yet count toward the current balance</source>
         <translation>Total al tranzac?iilor care nu au fost confirmate  înc? ?i nu conteaz? fa?? de balan?a curent?</translation>
-    </message>
-    <message>
-        <source>Total of coins that was staked, and do not yet count toward the current balance</source>
-        <translation type="vanished">Totalul de monede care au fost in stake si nu sunt numarate in balanta curenta</translation>
     </message>
     <message>
         <location filename="../overviewpage.cpp" line="+134"/>
@@ -1829,94 +1871,86 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
 <context>
     <name>RPCConsole</name>
     <message>
-        <location filename="../forms/rpcconsole.ui" line="+1096"/>
+        <location filename="../forms/rpcconsole.ui" line="+491"/>
         <source>Client name</source>
         <translation>Nume client</translation>
     </message>
     <message>
-        <location line="-593"/>
-        <location line="+45"/>
+        <location line="-418"/>
         <location line="+42"/>
-        <location line="+57"/>
+        <location line="+42"/>
+        <location line="+54"/>
         <location line="+19"/>
         <location line="+29"/>
-        <location line="+37"/>
+        <location line="+34"/>
         <location line="+39"/>
-        <location line="+273"/>
-        <location filename="../rpcconsole.cpp" line="+392"/>
+        <location line="+107"/>
+        <location filename="../rpcconsole.cpp" line="+386"/>
         <source>N/A</source>
         <translation>N/A</translation>
     </message>
     <message>
-        <location line="-410"/>
+        <location line="-241"/>
         <source>Client version</source>
         <translation>Versiune client</translation>
     </message>
     <message>
-        <location line="-183"/>
+        <location line="-168"/>
         <source>&amp;Information</source>
         <translation>&amp;Informa?ie</translation>
     </message>
     <message>
-        <source>Using OpenSSL version</source>
-        <translation type="vanished">Foloseste versiunea OpenSSL</translation>
-    </message>
-    <message>
-        <location line="+609"/>
+        <location line="+425"/>
         <source>Startup time</source>
         <translation>Durata pornirii</translation>
     </message>
     <message>
-        <source>Network</source>
-        <translation type="vanished">Re?ea</translation>
-    </message>
-    <message>
-        <location line="-540"/>
+        <location line="-366"/>
         <source>Number of connections</source>
         <translation>Num?rul de conexiuni</translation>
     </message>
     <message>
-        <location line="+228"/>
+        <location line="+220"/>
         <source>On testnet</source>
         <translation>Pe testnet</translation>
     </message>
     <message>
-        <location line="-142"/>
+        <location line="-136"/>
         <source>Block chain</source>
         <translation>Lan? de blocuri</translation>
     </message>
     <message>
-        <location line="-592"/>
+        <location line="-159"/>
         <source>Gridcoin - Debug Console</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+446"/>
+        <location line="+25"/>
         <source>Boost version</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+7"/>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;N/A&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+7"/>
         <source>Proof Of Research Difficulty</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+7"/>
         <source>1</source>
         <translation type="unfinished">1</translation>
     </message>
     <message>
-        <location line="+136"/>
+        <location line="+128"/>
         <source>Gridcoin Core:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+95"/>
+        <location line="+92"/>
         <source>Network:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1931,12 +1965,12 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Blocurile totale estimate</translation>
     </message>
     <message>
-        <location line="-223"/>
+        <location line="-217"/>
         <source>Last block time</source>
         <translation>Data ultimului bloc</translation>
     </message>
     <message>
-        <location line="+423"/>
+        <location line="+248"/>
         <source>&amp;Open</source>
         <translation>&amp;Deschide</translation>
     </message>
@@ -1946,44 +1980,32 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Optiuni linii de comand?</translation>
     </message>
     <message>
-        <source>Show the Gridcoin-Qt help message to get a list with possible Gridcoin command-line options.</source>
-        <translation type="vanished">Afi?a mesajul de ajutor Gridcoin-Qt pentru a ob?ine o list? cu posibile op?iuni de linie de comand? Gridcoin.</translation>
-    </message>
-    <message>
-        <location line="+13"/>
+        <location line="+16"/>
         <source>&amp;Show</source>
         <translation>&amp;Arat?</translation>
     </message>
     <message>
-        <location line="+759"/>
+        <location line="+265"/>
         <source>&amp;Console</source>
         <translation>&amp;Consol?</translation>
     </message>
     <message>
-        <location line="-1092"/>
+        <location line="-429"/>
         <source>Build date</source>
         <translation>Construit la data</translation>
     </message>
     <message>
-        <source>Gridcoin - Debug window</source>
-        <translation type="vanished">Gridcoin - fereastr? depanare</translation>
-    </message>
-    <message>
-        <source>Gridcoin Core</source>
-        <translation type="vanished">Gridcoin Core</translation>
-    </message>
-    <message>
-        <location line="+120"/>
+        <location line="+117"/>
         <source>Debug log file</source>
         <translation>Loguri debug</translation>
     </message>
     <message>
-        <location line="+179"/>
+        <location line="+10"/>
         <source>Open the Gridcoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
         <translation>Deschideti fisierul de depanare Gridcoin din folderul curent. Acest lucru poate dura cateva secunde pentru fisiere de log mari.</translation>
     </message>
     <message>
-        <location line="+28"/>
+        <location line="+31"/>
         <source>Show the Gridcoin help message to get a list with possible Gridcoin command-line options.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1993,7 +2015,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+21"/>
         <source>&amp;Network Traffic</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2008,23 +2030,19 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+64"/>
+        <location line="+27"/>
         <source>In:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+43"/>
         <source>Out:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1349"/>
+        <location line="+97"/>
         <source>Clear console</source>
         <translation>Cur??? consola</translation>
-    </message>
-    <message>
-        <source>Welcome to the Gridcoin RPC console.</source>
-        <translation type="vanished">Bine ati venit la consola Gridcoin RPC.</translation>
     </message>
     <message>
         <location filename="../rpcconsole.cpp" line="-35"/>
@@ -2092,7 +2110,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Trimite monede</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+73"/>
         <source>Coin Control Features</source>
         <translation>Caracteristici control ale monedei</translation>
     </message>
@@ -2107,18 +2125,18 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Selectie automatic?</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+16"/>
         <source>Insufficient funds!</source>
         <translation>Fonduri insuficiente!</translation>
     </message>
     <message>
-        <location line="+86"/>
+        <location line="+83"/>
         <source>Quantity:</source>
         <translation>Cantitate:</translation>
     </message>
     <message>
         <location line="+22"/>
-        <location line="+35"/>
+        <location line="+32"/>
         <source>0</source>
         <translation>0</translation>
     </message>
@@ -2128,24 +2146,20 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Octe?i:</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+48"/>
         <source>Amount:</source>
         <translation>Sum?:</translation>
     </message>
     <message>
-        <source>0.00 BC</source>
-        <translation type="vanished">123.456 BC {0.00 ?}</translation>
-    </message>
-    <message>
         <location line="+22"/>
-        <location line="+86"/>
-        <location line="+86"/>
-        <location line="+32"/>
+        <location line="+80"/>
+        <location line="+80"/>
+        <location line="+29"/>
         <source>0.00 GRC</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-191"/>
+        <location line="-179"/>
         <source>Priority:</source>
         <translation>Prioritate:</translation>
     </message>
@@ -2155,12 +2169,12 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>mediu</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+29"/>
         <source>Fee:</source>
         <translation>Taxa:</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+32"/>
         <source>Low Output:</source>
         <translation>Ie?ire minim?: </translation>
     </message>
@@ -2170,12 +2184,12 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>nu</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+29"/>
         <source>After Fee:</source>
         <translation>Dup? taxe:</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+32"/>
         <source>Change</source>
         <translation>Schimb?:</translation>
     </message>
@@ -2185,7 +2199,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>personalizeaz? schimbarea adresei</translation>
     </message>
     <message>
-        <location line="+121"/>
+        <location line="+115"/>
         <source>Send to multiple recipients at once</source>
         <translation>Trimite simultan c?tre mai mul?i destinatari</translation>
     </message>
@@ -2215,10 +2229,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>123.456 BC</source>
-        <translation type="vanished">123.456 BC</translation>
-    </message>
-    <message>
         <location line="+31"/>
         <source>Confirm the send action</source>
         <translation>Confirm? opera?iunea de trimitere</translation>
@@ -2227,10 +2237,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <location line="+3"/>
         <source>S&amp;end</source>
         <translation>&amp;S Trimite</translation>
-    </message>
-    <message>
-        <source>Enter a Gridcoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="vanished">Introduce?i o adres? Gridcoin(ex:B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
     <message>
         <location filename="../sendcoinsdialog.cpp" line="-173"/>
@@ -2356,7 +2362,12 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Formular</translation>
     </message>
     <message>
-        <location line="+77"/>
+        <location line="+48"/>
+        <source>Pa&amp;y To:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+18"/>
         <source>The address to send the payment to  (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2386,12 +2397,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-128"/>
-        <source>Pay &amp;To:</source>
-        <translation>Pl?te?te c?&amp;tre:</translation>
-    </message>
-    <message>
-        <location line="-9"/>
+        <location line="-137"/>
         <location filename="../sendcoinsentry.cpp" line="+29"/>
         <source>Enter a label for this address to add it to your address book</source>
         <translation>Introdu o etichet? pentru aceast? adres? pentru a fi ad?ugat? în lista ta de adrese</translation>
@@ -2400,10 +2406,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <location line="-21"/>
         <source>&amp;Label:</source>
         <translation>&amp;Etichet?:</translation>
-    </message>
-    <message>
-        <source>The address to send the payment to  (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="vanished">Adresa catre care trimiteti plata(ex. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
     <message>
         <location line="+58"/>
@@ -2431,10 +2433,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Scoateti acest destinatar</translation>
     </message>
     <message>
-        <source>Enter a Gridcoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="vanished">Introduce?i o adres? Gridcoin(ex:B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
-    </message>
-    <message>
         <location filename="../sendcoinsentry.cpp" line="+1"/>
         <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
         <translation type="unfinished"></translation>
@@ -2457,10 +2455,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <location line="-118"/>
         <source>You can sign messages with your addresses to prove you own them. Be careful not to sign anything vague, as phishing attacks may try to trick you into signing your identity over to them. Only sign fully-detailed statements you agree to.</source>
         <translation>Puteti semna mesaje cu adresa dumneavoastra pentru a demostra ca sunteti proprietarul lor. Aveti grija sa nu semnati nimic vag, deoarece atacurile de tip phishing va pot pacali sa le transferati identitatea. Semnati numai declaratiile detaliate cu care sunteti deacord.</translation>
-    </message>
-    <message>
-        <source>The address to sign the message with (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="vanished">Adresa cu care semnati mesajul(ex. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
     <message>
         <location line="+18"/>
@@ -2532,10 +2526,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>The address the message was signed with (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="vanished">Adresa cu care a fost semnat mesajul(ex. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
-    </message>
-    <message>
         <location line="+40"/>
         <source>Verify the message to ensure it was signed with the specified Gridcoin address</source>
         <translation>Verific? un mesaj pentru a v? asigura c? a fost semnat cu o anumit? adres? Gridcoin</translation>
@@ -2544,10 +2534,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <location line="+17"/>
         <source>Reset all verify message fields</source>
         <translation>Reseteaza toate spatiile mesajelor semnate.</translation>
-    </message>
-    <message>
-        <source>Enter a Gridcoin address (e.g. B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="vanished">Introduce?i o adres? Gridcoin(ex:B8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
     <message>
         <location filename="../signverifymessagedialog.cpp" line="+27"/>
@@ -2633,27 +2619,11 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
 </context>
 <context>
-    <name>TrafficGraphWidget</name>
-    <message>
-        <location filename="../trafficgraphwidget.cpp" line="+75"/>
-        <source>KB/s</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
     <name>TransactionDesc</name>
     <message>
-        <location filename="../transactiondesc.cpp" line="+37"/>
+        <location filename="../transactiondesc.cpp" line="+38"/>
         <source>Open until %1</source>
         <translation>Deschis pân? la %1</translation>
-    </message>
-    <message numerus="yes">
-        <source>Open for %n block(s)</source>
-        <translation type="vanished">
-            <numerusform>Deschde pentru înc? %1 bloc</numerusform>
-            <numerusform>Deschde pentru înc? %1 blocuri</numerusform>
-            <numerusform>Deschde pentru înc? %1 blocuri</numerusform>
-        </translation>
     </message>
     <message>
         <location line="+6"/>
@@ -2815,14 +2785,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Generated coins must mature 510 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
-        <translation type="vanished">Monedele generate trebuie s? se maturizeze 510 blocuri înainte de a fi cheltuite. Când a?i generat acest bloc,  a fost trimis la re?ea pentru a fi ad?ugat la lan?ul de blocuri. În cazul în care nu reu?e?te s? intre în lan?, starea sa se ??va schimba in &quot;nu a fost acceptat&quot;, ?i nu va putea fi cheltuit. Acest lucru se poate întâmpla din când în când, dac? un alt nod genereaz? un bloc cu câteva secunde inaintea blocului tau.</translation>
-    </message>
-    <message>
-        <source>Debug information</source>
-        <translation type="vanished">Informatii pentru debug</translation>
-    </message>
-    <message>
         <location line="+8"/>
         <source>Transaction</source>
         <translation>Tranzac?ie</translation>
@@ -2880,22 +2842,27 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Acest panou afi?eaz? o descriere detaliat? a tranzac?iei</translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+42"/>
         <source>Execute Contract</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+7"/>
+        <source>Close</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-17"/>
         <source>Track Coins</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="-7"/>
         <source>View Attachment</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../transactiondescdialog.cpp" line="+91"/>
+        <location filename="../transactiondescdialog.cpp" line="+90"/>
         <source>Gridcoin Coin Tracking System</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2997,21 +2964,9 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Neconfirmat</translation>
     </message>
     <message>
-        <source>Confirming (%1 of %2 recommended confirmations)</source>
-        <translation type="vanished">Confirmare (%1 dintre %2 confirm?ri recomandate)</translation>
-    </message>
-    <message>
         <location line="+9"/>
         <source>Conflicted</source>
         <translation>Conflictual</translation>
-    </message>
-    <message>
-        <source>Immature (%1 confirmations, will be available after %2)</source>
-        <translation type="vanished">Nematurate(%1 confirmari, vor fi valabile dupa %2)</translation>
-    </message>
-    <message>
-        <source>This block was not received by any other nodes and will probably not be accepted!</source>
-        <translation type="vanished">Acest bloc nu a fost recep?ionat de niciun alt nod ?i probabil nu va fi acceptat!</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -3037,10 +2992,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <location line="+2"/>
         <source>Payment to yourself</source>
         <translation>Plat? c?tre tine</translation>
-    </message>
-    <message>
-        <source>Mined</source>
-        <translation type="vanished">Produs</translation>
     </message>
     <message>
         <location line="+81"/>
@@ -3250,7 +3201,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+68"/>
+        <location line="+65"/>
         <source>Retry Download</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3266,9 +3217,215 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
 </context>
 <context>
+    <name>VotingChartDialog</name>
+    <message>
+        <location filename="../votingdialog.cpp" line="-374"/>
+        <source>Poll Results</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+60"/>
+        <source>Q: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-54"/>
+        <location line="+55"/>
+        <source>Discussion URL: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-43"/>
+        <source>Chart</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>List</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+25"/>
+        <source>Best Answer: </source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>VotingDialog</name>
+    <message>
+        <location line="-349"/>
+        <source>Gridcoin Voting System 1.1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Active Polls (Right Click to Vote)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Filter: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Reload Polls</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Load History</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Create Poll</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>...loading data!</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>VotingTableModel</name>
+    <message>
+        <location line="-391"/>
+        <source>#</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Title</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Expiration</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Share Type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Question</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+157"/>
+        <source>Answers</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-156"/>
+        <source># Voters</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Total Shares</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>URL</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Best Answer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+143"/>
+        <source>Row Number.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Title.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Expiration.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Share Type.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Question.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Total Participants.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Total Shares.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>URL.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Best Answer.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>VotingVoteDialog</name>
+    <message>
+        <location line="+533"/>
+        <source>PlaceVote</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Q: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Discussion URL: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Best Answer: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Vote</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Vote failed! Select one or more items to vote.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>WalletModel</name>
     <message>
-        <location filename="../walletmodel.cpp" line="+279"/>
+        <location filename="../walletmodel.cpp" line="+278"/>
         <source>Sending...</source>
         <translation>Se trimite...</translation>
     </message>
@@ -3286,10 +3443,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Uz:</translation>
     </message>
     <message>
-        <source>Send command to -server or Gridcoind</source>
-        <translation type="vanished">Trimite comanda catre server sau Gridcoind</translation>
-    </message>
-    <message>
         <location line="+2"/>
         <source>List commands</source>
         <translation>List? de comenzi</translation>
@@ -3303,14 +3456,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <location line="+2"/>
         <source>Options:</source>
         <translation>Set?ri:</translation>
-    </message>
-    <message>
-        <source>Specify configuration file (default: Gridcoin.conf)</source>
-        <translation type="vanished">Specifica fisier de configurare(implicit: Gridcoin.conf)</translation>
-    </message>
-    <message>
-        <source>Specify pid file (default: Gridcoind.pid)</source>
-        <translation type="vanished">Speficica fisier pid(implicit: Gridcoin.pid)</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -3333,10 +3478,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Seteaz? m?rimea cache a bazei de date în megabi?i (implicit: 100)</translation>
     </message>
     <message>
-        <source>Listen for connections on &lt;port&gt; (default: 15714 or testnet: 25714)</source>
-        <translation type="vanished">Ascult? pentru conect?ri pe &lt;port&gt; (implicit:  15714 sau testnet: 25714) </translation>
-    </message>
-    <message>
         <location line="+7"/>
         <source>Maintain at most &lt;n&gt; connections to peers (default: 125)</source>
         <translation>Men?ine cel mult &lt;n&gt; conexiuni cu partenerii (implicit: 125)</translation>
@@ -3357,10 +3498,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Leaga la o adresa data. Utilizeaza notatie [host]:port pt IPv6</translation>
     </message>
     <message>
-        <source>Stake your coins to support network and gain reward (default: 1)</source>
-        <translation type="vanished">Pune monedele in modul stake pentru a ajuta reteaua si a castiva bonusuri(implicit: 1)</translation>
-    </message>
-    <message>
         <location line="+6"/>
         <source>Threshold for disconnecting misbehaving peers (default: 100)</source>
         <translation>Prag pentru deconectarea partenerilor care nu func?ioneaz? corect (implicit: 100)</translation>
@@ -3374,10 +3511,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <location line="-43"/>
         <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
         <translation>A intervenit o eroare in timp ce se seta portul RPC %u pentru ascultare pe IPv4: %s</translation>
-    </message>
-    <message>
-        <source>Detach block and address databases. Increases shutdown time (default: 0)</source>
-        <translation type="vanished">Detaseaza bloc si baza de date de adrese. Creste timpul de inchidere(implicit:0)</translation>
     </message>
     <message>
         <location line="+157"/>
@@ -3677,28 +3810,6 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Parola pentru conexiunile JSON-RPC</translation>
     </message>
     <message>
-        <source>%s, you must set a rpcpassword in the configuration file:
- %s
-It is recommended you use the following random password:
-rpcuser=Gridcoinrpc
-rpcpassword=%s
-(you do not need to remember this password)
-The username and password MUST NOT be the same.
-If the file does not exist, create it with owner-readable-only file permissions.
-It is also recommended to set alertnotify so you are notified of problems;
-for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
-</source>
-        <translation type="vanished">%s, trebuie s? configura?i o parol? rpc în fi?ierul de configurare: %s
-Este recomandat s? folosi?i urm?toarea parol? generat? aleator: rpcuser=Gridcoinrpc
-rpcpassword=%s
-(nu trebuie s? ?ine?i minte aceast? parol?)
-Username-ul ?i parola NU TREBUIE s? fie acelea?i.
-Dac? fi?ierul nu exist?, crea?i-l cu drepturi de citire doar de c?tre de?in?tor.
-Este deasemenea recomandat s? seta?i alertnotify pentru a fi notificat de probleme;
-de exemplu: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
-</translation>
-    </message>
-    <message>
         <location line="-30"/>
         <source>Find peers using internet relay chat (default: 0)</source>
         <translation>Gaseste noduri fosoling irc (implicit: 1) {0)?}</translation>
@@ -3962,10 +4073,6 @@ de exemplu: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.
         <location line="+8"/>
         <source>Cannot downgrade wallet</source>
         <translation>Nu se poate retrograda portofelul</translation>
-    </message>
-    <message>
-        <source>Cannot initialize keypool</source>
-        <translation type="vanished">Nu se poate initializa keypool</translation>
     </message>
     <message>
         <location line="+1"/>

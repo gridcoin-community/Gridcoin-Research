@@ -1090,21 +1090,21 @@ bool EvalScript(vector<vector<unsigned char> >& stack, const CScript& script, co
                         if (nSigsCount > nKeysCount)
                             fSuccess = false;
                     }
-					 // Clean up stack of actual arguments
+                     // Clean up stack of actual arguments
                     while (i-- > 1)
                         popstack(stack);
 
-					unsigned int flags = 0;
-					// A bug causes CHECKMULTISIG to consume one extra argument
+                    unsigned int flags = 0;
+                    // A bug causes CHECKMULTISIG to consume one extra argument
                     // whose contents were not checked in any way.
                     //
                     // Unfortunately this is a potential source of mutability,
                     // so optionally verify it is exactly equal to zero prior
                     // to removing it from the stack.
-					if (stack.size() < 1)
+                    if (stack.size() < 1)
                         return false;
 
-					if ((flags & SCRIPT_VERIFY_NULLDUMMY) && stacktop(-1).size())
+                    if ((flags & SCRIPT_VERIFY_NULLDUMMY) && stacktop(-1).size())
                         return error("CHECKMULTISIG dummy argument not null");
 
                     popstack(stack);
@@ -1475,7 +1475,7 @@ bool Solver(const CKeyStore& keystore, const CScript& scriptPubKey, uint256 hash
     case TX_NONSTANDARD:
     case TX_NULL_DATA:
         return false;
-		
+        
     case TX_PUBKEY:
         keyID = CPubKey(vSolutions[0]).GetID();
         return Sign1(keyID, keystore, hash, nHashType, scriptSigRet);
@@ -1505,11 +1505,11 @@ int ScriptSigArgsExpected(txnouttype t, const std::vector<std::vector<unsigned c
     switch (t)
     {
     case TX_NONSTANDARD:
-		return -1; // Note, this was empty (thats -1);
+        return -1; // Note, this was empty (thats -1);
     case TX_NULL_DATA:
-		return (bOPReturnEnabled) ? -1 : -1;
-		// Script Sig Args Expected:  Bitcoin=-1, PPCoin=1
-	case TX_PUBKEY:
+        return (bOPReturnEnabled) ? -1 : -1;
+        // Script Sig Args Expected:  Bitcoin=-1, PPCoin=1
+    case TX_PUBKEY:
         return 1;
     case TX_PUBKEYHASH:
         return 2;
@@ -1585,8 +1585,8 @@ bool IsMine(const CKeyStore &keystore, const CScript& scriptPubKey)
     {
     case TX_NONSTANDARD:
     case TX_NULL_DATA:
-		// Note this was always false, til 3-13-2016.
-		return (bOPReturnEnabled) ? true : false;
+        // Note this was always false, til 3-13-2016.
+        return (bOPReturnEnabled) ? true : false;
     case TX_PUBKEY:
         keyID = CPubKey(vSolutions[0]).GetID();
         return keystore.HaveKey(keyID);
@@ -1620,8 +1620,8 @@ bool ExtractDestination(const CScript& scriptPubKey, CTxDestination& addressRet)
     txnouttype whichType;
     if (!Solver(scriptPubKey, whichType, vSolutions))
         return false;
-	
-	if (bOPReturnEnabled && whichType == TX_NULL_DATA)
+    
+    if (bOPReturnEnabled && whichType == TX_NULL_DATA)
         return true;
 
     if (whichType == TX_PUBKEY)
@@ -1688,7 +1688,7 @@ bool ExtractDestinations(const CScript& scriptPubKey, txnouttype& typeRet, vecto
     if (!Solver(scriptPubKey, typeRet, vSolutions))
         return false;
     if (typeRet == TX_NULL_DATA)
-	{
+    {
         // This is data, not addresses
         return false;
     }

@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 ### Added
+ - Add RPC commands for changing debug flags: debug, debugnet, debug2, debug3,
+   debug4, debug5, debug10. #309 (@Foggyx420).
+ - Add support for themes via stylesheets, #233 (@skcin).
+ - Add support for OpenSSL 1.1.x, #164.
+
+### Changed
+ - Wallet overview cleanup, #233 (@skcin)
+   - The main overview page is now cleaner, more structured and holds more of
+     the recent transactions.
+   - Displayed DPOR weight should now be accurate, #233 (@skcin).
+ - Show as many of the recent transactions as we can fit.
+ - Update Portuguese translations (Miguel Veiga).
+ - Gridcoinstats is now used as block explorer, #308.
+
+## [3.5.8.9] - 2017-05-15
+### Added
 - Implement voting functionality for Linux and OSX (@skcin).
 
 ### Changed
@@ -26,5 +42,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Fix freeze when clicking on the "Amount" field under Send Coins when using
   KDE, #210.
 - Fix OSX build issues, #174 (@coagmano).
-- Add man pages to doc folder, #135 (@carak).
+- Add man pages to doc folder, #135 (@caraka).
 - Remove lots of dead, obsolete code.
+- Possible fix for invalid time check in diagnostic.
