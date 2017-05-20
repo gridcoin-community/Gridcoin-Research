@@ -10,15 +10,29 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
    debug4, debug5, debug10. #309 (@Foggyx420).
  - Add support for themes via stylesheets, #233 (@skcin).
  - Add support for OpenSSL 1.1.x, #164.
+ - BOINC data dir auto detection, #242 (@tonemackay)
+ - Add install (make install) target for UNIX systems.
+ - Add aarch64 support, #151 (@datenklause).
 
 ### Changed
  - Wallet overview cleanup, #233 (@skcin)
    - The main overview page is now cleaner, more structured and holds more of
      the recent transactions.
    - Displayed DPOR weight should now be accurate, #233 (@skcin).
- - Show as many of the recent transactions as we can fit.
- - Update Portuguese translations (Miguel Veiga).
+ - Show as many of the recent transactions as we can fit on the overview page.
+ - Translation updates
+   - Portuguese (Miguel Veiga)
+   - Slovak (@tomasbrod)
+   - Swedish (@denravonska)
+   - Afrikaan and Spanish (@philipswift)
+   - French (@PsiPhiTheta)
  - Gridcoinstats is now used as block explorer, #308.
+ - Slight RAM usage reduction.
+ - Fix a bug where beacons were stored even though none were generated due
+   to the wallet being locked, #264.
+ - Improve beacon advertise error message, #133 (@comprehendreality).
+ - Remove empty "wcgtest" RPC command.
+
 
 ## [3.5.8.9] - 2017-05-15
 ### Added
