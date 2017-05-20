@@ -311,7 +311,6 @@ volatile bool bNetAveragesLoaded = false;
 volatile bool bTallyStarted      = false;
 volatile bool bForceUpdate = false;
 volatile bool bExecuteCode = false;
-volatile bool bAddressUser = false;
 volatile bool bCheckedForUpgrade = false;
 volatile bool bCheckedForUpgradeLive = false;
 volatile bool bGlobalcomInitialized = false;

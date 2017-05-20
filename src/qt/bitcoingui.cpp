@@ -154,7 +154,6 @@ void GetGlobalStatus();
 
 extern int UpgradeClient();
 extern void CheckForUpgrade();
-extern int AddressUser();
 
 bool IsConfigFileEmpty();
 
@@ -769,38 +768,6 @@ int UpgradeClient()
 			return 1;
 }
 
-QString IntToQstring(int o)
-{
-	std::string pre="";
-	pre=strprintf("%d",o);
-	QString str1 = QString::fromUtf8(pre.c_str());
-	return str1;
-}
-
-
-int AddressUser()
-{
-		int result = 0;
-		#if defined(WIN32) && defined(QT_GUI)
-			double out_magnitude = 0;
-			double out_owed = 0;
-			try
-			{
-				printf("11302015");
-				if (!bGlobalcomInitialized) return 0;
-				out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid,out_owed);
-				std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-				qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-				if (fDebug3) printf("AddressUser with Boinc Magnitude %f \r\n",out_magnitude);
-				result = globalcom->dynamicCall("AddressUser(Qstring)",IntToQstring((int)out_magnitude)).toInt();
-			}
-			catch(...)
-			{
-				printf("Catastrophic Error");
-			}
-		#endif
-		return result;
-}
 
 void BitcoinGUI::setOptionsStyleSheet(QString qssFileName)
 {
@@ -2110,16 +2077,6 @@ void ReinstantiateGlobalcom()
 
 			}
 			bGlobalcomInitialized = true;
-			if (!bAddressUser)
-			{
-									bAddressUser = true;
-									#if defined(WIN32) && defined(QT_GUI)
-									    printf("Addressing user.");
-										AddressUser();
-									#endif
-			}
-
-
 #endif
 }
 

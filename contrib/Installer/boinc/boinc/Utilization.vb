@@ -509,21 +509,6 @@ Public Class Utilization
         ResetCPIDsForManualSync()
         Call UpdateMagnitudes()
     End Sub
-    Public Sub AddressUserThread()
-        Try
-            Log("Speaking " + Trim(mlSpeakMagnitude))
-            Dim s As New SpeechSynthesis
-            s.AddressUserBySurname(mlSpeakMagnitude)
-        Catch ex As Exception
-            Log("Unable to initialize speech")
-        End Try
-    End Sub
-    Public Function AddressUser(sMagnitude As String) As Double
-        Dim t As New Threading.Thread(AddressOf AddressUserThread)
-        mlSpeakMagnitude = Val("0" + Trim(sMagnitude))
-        t.Start()
-        Return 1
-    End Function
     Public Sub SetSqlBlock(ByVal data As String)
         Exit Sub
     End Sub

@@ -16,7 +16,6 @@ extern volatile bool CreatingNewBlock;
 extern volatile bool bNetAveragesLoaded;
 extern volatile bool bForceUpdate;
 extern volatile bool bExecuteCode;
-extern volatile bool bAddressUser;
 extern volatile bool bCheckedForUpgrade;
 extern volatile bool bCheckedForUpgradeLive;
 extern volatile bool bGlobalcomInitialized;
