@@ -4352,9 +4352,11 @@ Array MagnitudeReportCSV(bool detail)
                     {
                         outstanding = structMag.totalowed - structMag.payments;
                         
-                        StructCPID stDPOR = mvDPOR[structMag.cpid];
-                    
-                        row = structMag.cpid + "," + structMag.GRCAddress + "," + RoundToString(structMag.Magnitude,2) + "," 
+			// 2017-05-20 - Remove GRC address from blocks and StructCPID.
+			// In the CSV export this is replaced with and empty string
+			// in order to not break existing parsers. This can be removed
+			// in the future. /Marco 
+                        row = structMag.cpid + ",," + RoundToString(structMag.Magnitude,2) + "," 
                             + RoundToString(structMag.PaymentMagnitude,0) + "," + RoundToString(structMag.Accuracy,0) + "," + RoundToString(structMag.totalowed,2) 
                             + "," + RoundToString(structMag.totalowed/14,2)
                             + "," + RoundToString(structMag.payments,2) + "," 

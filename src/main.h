@@ -978,7 +978,7 @@ class CBlock
 {
 public:
     // header
-    static const int CURRENT_VERSION = 7;
+    static const int CURRENT_VERSION = 8;
     int nVersion;
     uint256 hashPrevBlock;
     uint256 hashMerkleRoot;
@@ -1303,7 +1303,6 @@ public:
 	// Indicators (9-13-2015)
 	unsigned int nIsSuperBlock;
 	unsigned int nIsContract;
-	std::string sGRCAddress;
 
     unsigned int nFlags;  // ppcoin: block index flags
     enum  
@@ -1360,7 +1359,6 @@ public:
 		nMagnitude = 0;
 		nIsSuperBlock = 0;
 		nIsContract = 0;
-		sGRCAddress = "";
     }
 
     CBlockIndex(unsigned int nFileIn, unsigned int nBlockPosIn, CBlock& block)
@@ -1596,7 +1594,7 @@ public:
             const_cast<CDiskBlockIndex*>(this)->nStakeTime = 0;
         }
         READWRITE(hashProof);
-
+        
         // block header
         READWRITE(this->nVersion);
         READWRITE(hashPrev);
@@ -1605,29 +1603,26 @@ public:
         READWRITE(nBits);
         READWRITE(nNonce);
         READWRITE(blockHash);
-		//7-11-2015 - Gridcoin - New Accrual Fields (Note, Removing the determinstic block number to make this happen all the time):
+        //7-11-2015 - Gridcoin - New Accrual Fields (Note, Removing the determinstic block number to make this happen all the time):
         std::string cpid_hex = GetCPID();
         READWRITE(cpid_hex);
         if(fRead)
             const_cast<CDiskBlockIndex*>(this)->SetCPID(cpid_hex);
-            
-		READWRITE(nResearchSubsidy);
-		READWRITE(nInterestSubsidy);
-		READWRITE(nMagnitude);
-	    //9-13-2015 - Indicators
-		if (this->nHeight > nNewIndex2)
-		{
-			READWRITE(nIsSuperBlock);
-			READWRITE(nIsContract);
-			READWRITE(sGRCAddress);
+        
+        READWRITE(nResearchSubsidy);
+        READWRITE(nInterestSubsidy);
+        READWRITE(nMagnitude);
+        //9-13-2015 - Indicators
+        if (this->nHeight > nNewIndex2)
+        {
+            READWRITE(nIsSuperBlock);
+            READWRITE(nIsContract);
 
-                        // Blocks used to come with a reserved string. Keep (de)serializing
-                        // it until it's used.
-                        std::string sReserved;
-                        READWRITE(sReserved);
-		}
-
-
+            // Blocks used to come with a Gridcoin address and a reserved string
+            // (in that order) here. Both of these have been removed since block
+            // version 8. Since they were the last variables to be deserialized
+            // we can skip them entirely.
+        }
     )
 
     uint256 GetBlockHash() const

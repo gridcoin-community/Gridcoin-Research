@@ -32,7 +32,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
    to the wallet being locked, #264.
  - Improve beacon advertise error message, #133 (@comprehendreality).
  - Remove empty "wcgtest" RPC command.
-
+ - Remove address from blocks to save RAM. Address in CSV export are now always
+   empty.
 
 ## [3.5.8.9] - 2017-05-15
 ### Added
