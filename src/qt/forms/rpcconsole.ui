@@ -23,7 +23,7 @@
       <bool>false</bool>
      </property>
      <property name="currentIndex">
-      <number>0</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="tab_info">
       <attribute name="title">
@@ -586,7 +586,7 @@
                </widget>
               </item>
               <item>
-               <widget class="QLabel" name="label_16">
+               <widget class="QLabel" name="label_17">
                 <property name="text">
                  <string>In:</string>
                 </property>
@@ -629,7 +629,7 @@
                </widget>
               </item>
               <item>
-               <widget class="QLabel" name="label_17">
+               <widget class="QLabel" name="label_18">
                 <property name="text">
                  <string>Out:</string>
                 </property>
