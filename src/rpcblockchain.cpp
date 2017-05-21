@@ -3317,7 +3317,7 @@ Value execute(const Array& params, bool fHelp)
         }
         else
             entry.push_back(Pair("Error","You must specify true or false as an option."));
-            results.push_back(entry);
+        results.push_back(entry);
     }
     else if (sItem == "debug3")
     {
