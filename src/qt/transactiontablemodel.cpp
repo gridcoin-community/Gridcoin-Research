@@ -547,7 +547,7 @@ QString TransactionTableModel::formatTooltip(const TransactionRecord *rec) const
     if(rec->type==TransactionRecord::RecvFromOther || rec->type==TransactionRecord::SendToOther ||
        rec->type==TransactionRecord::SendToAddress || rec->type==TransactionRecord::RecvWithAddress)
     {
-        tooltip += QString(" <p>") + formatTxToAddress(rec, true) + QString("</p>");
+        tooltip += QString(" ") + formatTxToAddress(rec, true);
     }
     return tooltip;
 }
