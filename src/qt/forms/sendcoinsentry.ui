@@ -143,7 +143,7 @@
       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
      </property>
      <property name="buddy">
-      <cstring>Send Custom Message to Gridcoin Recipient</cstring>
+      <cstring>txtMessage</cstring>
      </property>
     </widget>
    </item>

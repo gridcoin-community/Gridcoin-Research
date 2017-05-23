@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - BOINC data dir auto detection, #242 (@tonemackay)
  - Add install (make install) target for UNIX systems.
  - Add aarch64 support, #151 (@datenklause).
+ - Add diagnostic message for if web lookup fails for cpid valid test,
+   #175 (@fooforever).
 
 ### Changed
  - Wallet overview cleanup, #233 (@skcin)
