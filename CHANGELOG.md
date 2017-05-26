@@ -34,7 +34,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
    to the wallet being locked, #264.
  - Improve beacon advertise error message, #133 (@comprehendreality).
  - Remove empty "wcgtest" RPC command.
-
+ - Fix incorrect WCG URL, #323 (@3ullShark).
+ - Fix alt key shortcut order, #326 (@TheCharlatan).
+ - Code cleanup (@Foggyx420).
 
 ## [3.5.8.9] - 2017-05-15
 ### Added

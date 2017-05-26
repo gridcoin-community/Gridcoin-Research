@@ -832,12 +832,12 @@ void BitcoinGUI::createActions()
     sendCoinsAction = new QAction(QIcon(":/icons/send"), tr("&Send coins"), tabGroup);
     sendCoinsAction->setToolTip(tr("Send coins to a Gridcoin address"));
     sendCoinsAction->setCheckable(true);
-    sendCoinsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_3));
+    sendCoinsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_2));
 
     receiveCoinsAction = new QAction(QIcon(":/icons/receiving_addresses"), tr("&Receive coins"), tabGroup);
     receiveCoinsAction->setToolTip(tr("Show the list of addresses for receiving payments"));
     receiveCoinsAction->setCheckable(true);
-    receiveCoinsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_2));
+    receiveCoinsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_3));
 
     historyAction = new QAction(QIcon(":/icons/history"), tr("&Transactions"), tabGroup);
     historyAction->setToolTip(tr("Browse transaction history"));
