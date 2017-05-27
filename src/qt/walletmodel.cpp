@@ -158,14 +158,6 @@ bool WalletModel::validateAddress(const QString &address)
     return addressParsed.IsValid();
 }
 
-
-
-double dblFromAmount(int64_t amount)
-{
-    return (double)amount / (double)COIN;
-}
-
-
 WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipient> &recipients, const CCoinControl *coinControl)
 {
     qint64 total = 0;
