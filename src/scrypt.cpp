@@ -35,6 +35,7 @@
 
 #include "util.h"
 #include "net.h"
+#include "uint256.h"
 
 #define SCRYPT_BUFFER_SIZE (131072 + 63)
 
