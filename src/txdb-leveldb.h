@@ -8,10 +8,7 @@
 
 #include "main.h"
 
-#include <map>
 #include <string>
-#include <vector>
-
 #include <leveldb/db.h>
 #include <leveldb/write_batch.h>
 

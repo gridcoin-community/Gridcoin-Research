@@ -5,7 +5,6 @@
 #ifndef BITCOIN_MAIN_H
 #define BITCOIN_MAIN_H
 
-#include "bignum.h"
 #include "sync.h"
 #include "net.h"
 #include "script.h"
