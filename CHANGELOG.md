@@ -36,7 +36,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Remove empty "wcgtest" RPC command.
  - Fix incorrect WCG URL, #323 (@3ullShark).
  - Fix alt key shortcut order, #326 (@TheCharlatan).
- - Code cleanup (@Foggyx420).
+ - Code cleanup (@Foggyx420, @TheCharlatan).
 
 ## [3.5.8.9] - 2017-05-15
 ### Added
