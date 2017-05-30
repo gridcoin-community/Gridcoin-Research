@@ -3501,8 +3501,8 @@ Array MagnitudeReport(std::string cpid)
                                                 double days = (GetAdjustedTime() - stCPID.LowLockTime) / 86400.0;
                                                 entry.push_back(Pair("CPID",structMag.cpid));
                                                 // entry.push_back(Pair("PoolMining",bPoolMiningMode));
-                                                double dWeight = (double)GetRSAWeightByCPID(structMag.cpid);
-                                                //entry.push_back(Pair("RSA Weight",dWeight));
+                                                // double dWeight = (double)GetRSAWeightByCPID(structMag.cpid);
+                                                // entry.push_back(Pair("RSA Weight",dWeight));
                                                 StructCPID UH = GetInitializedStructCPID2(cpid,mvMagnitudes);
                                                 // entry.push_back(Pair("RSA block count",UH.Accuracy));
                                                 // entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
