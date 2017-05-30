@@ -865,25 +865,17 @@ void BitcoinGUI::createActions()
 	downloadAction->setStatusTip(tr("Download Blocks"));
 	downloadAction->setMenuRole(QAction::TextHeuristicRole);
 
-
-	rebootAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Reboot Client"), this);
-	rebootAction->setStatusTip(tr("Reboot Gridcoin"));
-	rebootAction->setMenuRole(QAction::TextHeuristicRole);
-
-
 	upgradeAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Upgrade Client"), this);
 	upgradeAction->setStatusTip(tr("Upgrade Client"));
 	upgradeAction->setMenuRole(QAction::TextHeuristicRole);
 
-
-    aboutAction = new QAction(QIcon(":/icons/bitcoin"), tr("&About Gridcoin"), this);
-    aboutAction->setToolTip(tr("Show information about Gridcoin"));
-    aboutAction->setMenuRole(QAction::AboutRole);
+   aboutAction = new QAction(QIcon(":/icons/bitcoin"), tr("&About Gridcoin"), this);
+   aboutAction->setToolTip(tr("Show information about Gridcoin"));
+   aboutAction->setMenuRole(QAction::AboutRole);
 
 	miningAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Neural Network"), this);
 	miningAction->setStatusTip(tr("Neural Network"));
 	miningAction->setMenuRole(QAction::TextHeuristicRole);
-
 
 	configAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Advanced Configuration"), this);
 	configAction->setStatusTip(tr("Advanced Configuration"));
@@ -947,7 +939,6 @@ void BitcoinGUI::createActions()
 	connect(rebuildAction, SIGNAL(triggered()), this, SLOT(rebuildClicked()));
 	connect(upgradeAction, SIGNAL(triggered()), this, SLOT(upgradeClicked()));
 	connect(downloadAction, SIGNAL(triggered()), this, SLOT(downloadClicked()));
-	connect(rebootAction, SIGNAL(triggered()), this, SLOT(rebootClicked()));
 	connect(configAction, SIGNAL(triggered()), this, SLOT(configClicked()));
 
 	connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
@@ -1008,8 +999,6 @@ void BitcoinGUI::createMenuBar()
 	rebuild->addAction(rebuildAction);
 	rebuild->addSeparator();
 	rebuild->addAction(downloadAction);
-	rebuild->addSeparator();
-	rebuild->addAction(rebootAction);
 	rebuild->addSeparator();
 
 	QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
@@ -1666,12 +1655,6 @@ void BitcoinGUI::upgradeClicked()
 void BitcoinGUI::downloadClicked()
 {
 	DownloadBlocks();
-
-}
-
-void BitcoinGUI::rebootClicked()
-{
-	RebootClient();
 }
 
 

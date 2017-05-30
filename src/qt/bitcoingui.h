@@ -106,7 +106,6 @@ private:
 	QAction *rebuildAction;
 	QAction *upgradeAction;
 	QAction *downloadAction;
-	QAction *rebootAction;
 
 	QAction *configAction;
 	QAction *leaderboardAction;
@@ -213,7 +212,6 @@ private slots:
 	void rebuildClicked();
 	void upgradeClicked();
 	void downloadClicked();
-	void rebootClicked();
 	void configClicked();
 	void miningClicked();
     void votingClicked();
