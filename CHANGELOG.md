@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
    debug4, debug5, debug10. #309 (@Foggyx420).
  - Add support for themes via stylesheets, #233 (@skcin).
  - Add support for OpenSSL 1.1.x, #164.
- - BOINC data dir auto detection, #242 (@tonemackay)
+ - BOINC data dir auto detection, #242 (@3ullShark)
  - Add install (make install) target for UNIX systems.
  - Add aarch64 support, #151 (@datenklause).
  - Add diagnostic message for if web lookup fails for cpid valid test,
