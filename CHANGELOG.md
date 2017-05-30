@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
    - Swedish (@denravonska)
    - Afrikaan and Spanish (@philipswift)
    - French (@PsiPhiTheta)
+   - Russian (@rambinho)
  - Gridcoinstats is now used as block explorer, #308.
  - Slight RAM usage reduction.
  - Fix a bug where beacons were stored even though none were generated due
