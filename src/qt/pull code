@@ -1,0 +1,28 @@
+src/qt/bitcoin.cpp:467:6 throws warning that 'int result = 0' is not used and i can confirm it is not used in the function
+src/qt/bitcoin.cpp:516:9 throws warning that 'double return_code = 0;' is not used and i can confirm it is not used in that function.
+
+src/main.cpp:6249:16 throws a warning that 'double timediff = std::abs(GetAdjustedTime() - cdbl(nonce,0));' is unused variable. I don't see timediff being used in that function but you should look as there is if statements present and one below is if false thou compiler denys it is used.
+
+in development src/main.cpp:9331:13 throws a warning that 'static void getCpuid( unsigned int* p, unsigned int ax )' is defined by not used.
+in master its on line 10298 -> guess we butchered some code recently.
+
+
+src/qt/transactionrecord.cpp:9:9 throws warning that 'bool result = false;' is unused. Nowhere else in the cpp file is result used. Could be cut out.
+
+src/qt/transactiondescdialog.cpp:81:8 throws warning that 'bool received = false;' is unused and it is not used anywhere else in cpp file. Could be cut out.
+
+src/qt/transactionfilterproxy.cpp:40:5 throws a warning that if clause does not guard. line 42 to 44 Could be brought back into proper indent to eliminate the warning.
+src/qt/transactionfilterproxy.cpp:43:2 throws a warning that misleading indent which above will also solve.
+src/qt/walletmodel.cpp:275:10 throws a warning that 'double dblAmt = dblFromAmount(wtx.vout[0].nValue);' is unused. I can confirm its no where else in the cpp file and I believe the above line was replacement for that line. However the above line is simular it is also not in the cpp file anymore but doesn't give off a unused warning. from searching it is only used in rpcwallet.cpp and transactiontablemodel.cpp in which both are set in those places. DblAmt also does not exist anywhere else in the code. the samt is used in 2 other cpp files but set there as well. Seems like dead code.
+
+src/qt/sendcoinsentry.cpp:81:6 throws a warning that 'int high_level_model = 0;' is set but not used. on line 87 and 93 it also sets 'high_level_model = state;' I believe this is dead code as its no where else in the repo code. I believe trackChecked replaced this. However I don't know if tracking actually works down in line 107 to 114 its an empty area of code/commented out dealing with trackChecked. If you can confirm its dead code I believe line 107 to 114 can go. also trackChangeChecked from line 79 to 99 is related to that and I don't think its needed if trackChecked doesn't work or wont be working. thou commenting it out can be an option. trackChangeChecked is only locally in this cpp file and I consider it dead. concur? its also in the .h file as well. line 35 is what calls the track but it does nothing.
+
+src/cpid.cpp:165:1 throws if clause does not guard. there is alot of this in that file and idk if i want to touch that indentfree file and I think we should leave this one alone.... lol it may give off 19 warning/notes but that format thou..
+
+src/upgrader.cpp:25:12 throws a warning that 'static int cancelDownloader(void *p, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow)' is defined but not used. I can confirm on line 255 that the call for it is commented out.will functionality of cancelDownloader be restored or is removal intended? it is located in upgradedialog.cpp as well and rpcrawtransaction.cpp. Its intended to work but wont as its commented out. have a look.
+
+this all the current compiler warnings. so far i've seen.
+
+the dWeight one I commented out in rpcblockchain.cpp can be removed as well but I left it commented out as the user of it was commented out
+
+
