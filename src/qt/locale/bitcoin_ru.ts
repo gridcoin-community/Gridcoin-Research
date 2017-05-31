@@ -27,33 +27,6 @@ This product includes software developed by the OpenSSL Project for use in the O
 Этот продукт включает программное обеспечение, разработанное OpenSSL Project для использования в OpenSSL Toolkit (http://www.openssl.org/) и криптографическом программном обеспечении, написанном Эриком Яном (eay@cryptsoft.com) и программным обеспечением UPnP, написанным Томасом Бернардом.
 </translation>
     </message>
-    <message>
-        <source>&lt;b&gt;Gridcoin&lt;/b&gt; version</source>
-        <translation type="vanished">&lt;b&gt;Gridcoin&lt;/b&gt; Gridcoin</translation>
-    </message>
-    <message>
-        <source>Copyright © 2009-2014 The Bitcoin developers
-Copyright © 2012-2014 The NovaCoin developers
-Copyright © 2014 The Gridcoin developers</source>
-        <translation type="vanished">
-Это экспериментальная программа.
-
-Распространяется на правах лицензии MIT/X11, см. файл license.txt или http://www.opensource.org/licenses/mit-license.php.
-
-Этот продукт включает ПО, разработанное OpenSSL Project для использования в OpenSSL Toolkit (http://www.openssl.org/) и криптографическое ПО, написанное Eric Young (eay@cryptsoft.com) и ПО для работы с UPnP, написанное Thomas Bernard.</translation>
-    </message>
-    <message>
-        <source>Copyright</source>
-        <translation type="vanished">Все права защищены</translation>
-    </message>
-    <message>
-        <source>The Bitcoin and DigiByte Core developers</source>
-        <translation type="vanished">Разработчики DigiByte Core</translation>
-    </message>
-    <message>
-        <source>(%1-bit)</source>
-        <translation type="vanished">(%1-бит)</translation>
-    </message>
 </context>
 <context>
     <name>AddressBookPage</name>
@@ -83,21 +56,9 @@ Copyright © 2014 The Gridcoin developers</source>
         <translation>&amp;Новый адрес</translation>
     </message>
     <message>
-        <source>&amp;New</source>
-        <translation type="vanished">&amp;Новый</translation>
-    </message>
-    <message>
         <location line="+11"/>
         <source>Copy the currently selected address to the system clipboard</source>
         <translation>Копировать текущий выделенный адрес в буфер обмена</translation>
-    </message>
-    <message>
-        <source>&amp;Copy</source>
-        <translation type="vanished">&amp;Копировать</translation>
-    </message>
-    <message>
-        <source>C&amp;lose</source>
-        <translation type="vanished">&amp;Закрыть</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -135,45 +96,9 @@ Copyright © 2014 The Gridcoin developers</source>
         <translation>Удалить выбранный адрес из списка</translation>
     </message>
     <message>
-        <source>Export the data in the current tab to a file</source>
-        <translation type="vanished">Экспортировать данные из вкладки в файл</translation>
-    </message>
-    <message>
-        <source>&amp;Export</source>
-        <translation type="vanished">&amp;Экспорт</translation>
-    </message>
-    <message>
         <location line="+3"/>
         <source>&amp;Delete</source>
         <translation>&amp;Удалить</translation>
-    </message>
-    <message>
-        <source>Choose the address to send coins to</source>
-        <translation type="vanished">Выберите адрес для отправки на него монет</translation>
-    </message>
-    <message>
-        <source>Choose the address to receive coins with</source>
-        <translation type="vanished">Выберите адрес для получения монет</translation>
-    </message>
-    <message>
-        <source>C&amp;hoose</source>
-        <translation type="vanished">&amp;Выбрать</translation>
-    </message>
-    <message>
-        <source>Sending addresses</source>
-        <translation type="vanished">Адреса отправки</translation>
-    </message>
-    <message>
-        <source>Receiving addresses</source>
-        <translation type="vanished">Адреса получения</translation>
-    </message>
-    <message>
-        <source>These are your DigiByte addresses for sending payments. Always check the amount and the receiving address before sending coins.</source>
-        <translation type="vanished">Это ваши адреса DigiByte для отправки платежей. Всегда проверяйте количество и адрес получателя перед отправкой перевода.</translation>
-    </message>
-    <message>
-        <source>These are your DigiByte addresses for receiving payments. It is recommended to use a new receiving address for each transaction.</source>
-        <translation type="vanished">Это ваши адреса DigiByte для приёма платежей. Рекомендуется использовать новый адрес получения для каждой транзакции.</translation>
     </message>
     <message>
         <location filename="../addressbookpage.cpp" line="+65"/>
@@ -201,21 +126,9 @@ Copyright © 2014 The Gridcoin developers</source>
         <translation>Не могу сохранить в файл %1.</translation>
     </message>
     <message>
-        <source>Export Address List</source>
-        <translation type="vanished">Экспортировать список адресов</translation>
-    </message>
-    <message>
         <location line="-13"/>
         <source>Comma separated file (*.csv)</source>
         <translation>Текст, разделённый запятыми (*.csv)</translation>
-    </message>
-    <message>
-        <source>Exporting Failed</source>
-        <translation type="vanished">Экспорт не удался</translation>
-    </message>
-    <message>
-        <source>There was an error trying to save the address list to %1.</source>
-        <translation type="vanished">Произошла ошибка при сохранении списка адресов в %1.</translation>
     </message>
 </context>
 <context>
@@ -269,10 +182,6 @@ Copyright © 2014 The Gridcoin developers</source>
         <translation>Только для staking</translation>
     </message>
     <message>
-        <source>Enter the new passphrase to the wallet.&lt;br/&gt;Please use a passphrase of &lt;b&gt;10 or more random characters&lt;/b&gt;, or &lt;b&gt;eight or more words&lt;/b&gt;.</source>
-        <translation type="vanished">Введите новый пароль для бумажника. &lt;br/&gt; Пожалуйста, используйте фразы из &lt;b&gt;10 или более случайных символов,&lt;/b&gt; или &lt;b&gt;восьми и более слов.&lt;/b&gt;</translation>
-    </message>
-    <message>
         <location filename="../askpassphrasedialog.cpp" line="+37"/>
         <source>Enter the new passphrase to the wallet.&lt;br/&gt;Please use a passphrase of &lt;b&gt;ten or more random characters&lt;/b&gt;, or &lt;b&gt;eight or more words&lt;/b&gt;.</source>
         <translation>Введите новый пароль к кошельку.&lt;br/&gt;Пожалуйста используйте пароль из&lt;b&gt;десяти или более знаков&lt;/b&gt;,или&lt;b&gt;восемь или более слов&lt;/b&gt;.</translation>
@@ -318,10 +227,6 @@ Copyright © 2014 The Gridcoin developers</source>
         <translation>Подтвердите шифрование бумажника</translation>
     </message>
     <message>
-        <source>Warning: If you encrypt your wallet and lose your passphrase, you will &lt;b&gt;LOSE ALL OF YOUR DIGIBYTES&lt;/b&gt;!</source>
-        <translation type="vanished">Внимание: если вы зашифруете бумажник и потеряете пароль, вы &lt;b&gt;ПОТЕРЯЕТЕ ВСЕ ВАШИ БИТКОЙНЫ&lt;/b&gt;!</translation>
-    </message>
-    <message>
         <location line="+1"/>
         <source>Are you sure you wish to encrypt your wallet?</source>
         <translation>Вы уверены, что хотите зашифровать ваш бумажник?</translation>
@@ -352,10 +257,6 @@ Copyright © 2014 The Gridcoin developers</source>
         <location line="+60"/>
         <source>Wallet encrypted</source>
         <translation>Бумажник зашифрован</translation>
-    </message>
-    <message>
-        <source>DigiByte will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your digibytes from being stolen by malware infecting your computer.</source>
-        <translation type="vanished">Сейчас программа закроется для завершения процесса шифрования. Помните, что шифрование вашего бумажника не может полностью защитить ваши биткойны от кражи с помощью инфицирования вашего компьютера вредоносным ПО.</translation>
     </message>
     <message>
         <location line="-45"/>
@@ -415,14 +316,6 @@ Copyright © 2014 The Gridcoin developers</source>
         <location line="+0"/>
         <source>Wallet</source>
         <translation>Бумажник</translation>
-    </message>
-    <message>
-        <source>Tabs toolbar</source>
-        <translation type="vanished">Панель вкладок</translation>
-    </message>
-    <message>
-        <source>Green bar</source>
-        <translation type="vanished">Грин бар</translation>
     </message>
     <message>
         <location line="+623"/>
@@ -494,14 +387,6 @@ Copyright © 2014 The Gridcoin developers</source>
         <location line="+4"/>
         <source>Web Site</source>
         <translation>Веб сайт</translation>
-    </message>
-    <message>
-        <source>&amp;Boinc Stats</source>
-        <translation type="vanished">&amp;Boinc статистика</translation>
-    </message>
-    <message>
-        <source>Boinc Stats</source>
-        <translation type="vanished">Boinc статистика</translation>
     </message>
     <message>
         <location line="-1"/>
@@ -639,14 +524,6 @@ Copyright © 2014 The Gridcoin developers</source>
         <location line="+1"/>
         <source>Voting</source>
         <translation>Голосование</translation>
-    </message>
-    <message>
-        <source>&amp;Reserved - Voting Linux</source>
-        <translation type="vanished">&amp;Зарезервировано - Голосование Linux</translation>
-    </message>
-    <message>
-        <source>Voting - Linux</source>
-        <translation type="vanished">Голосование - Linux</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1112,10 +989,6 @@ Address: %4
 <context>
     <name>CoinControlDialog</name>
     <message>
-        <source>Coin Control Address Selection</source>
-        <translation type="vanished">Выбор адреса контроля монет</translation>
-    </message>
-    <message>
         <location filename="../forms/coincontroldialog.ui" line="+14"/>
         <source>Coin Control</source>
         <translation>Контроль монет</translation>
@@ -1169,10 +1042,6 @@ Address: %4
         <location line="+13"/>
         <source>Tree &amp;mode</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Tree mode</source>
-        <translation type="vanished">Режим дерева</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -1234,14 +1103,6 @@ Address: %4
         <location line="-25"/>
         <source>Copy transaction ID</source>
         <translation>Скопировать ID транзакции</translation>
-    </message>
-    <message>
-        <source>Lock unspent</source>
-        <translation type="vanished">Заблокировать непотраченное</translation>
-    </message>
-    <message>
-        <source>Unlock unspent</source>
-        <translation type="vanished">Разблокировать непотраченное</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -1336,10 +1197,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 Это означает, что требуется плата не менее%2.</translation>
     </message>
     <message>
-        <source>higher</source>
-        <translation type="vanished">выше</translation>
-    </message>
-    <message>
         <location line="-176"/>
         <source>high</source>
         <translation>высокий</translation>
@@ -1365,25 +1222,9 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>низкий</translation>
     </message>
     <message>
-        <source>lower</source>
-        <translation type="vanished">ниже</translation>
-    </message>
-    <message>
         <location line="+1"/>
         <source>lowest</source>
         <translation>самый низкий</translation>
-    </message>
-    <message>
-        <source>(%1 locked)</source>
-        <translation type="vanished">(%1 заблокировано)</translation>
-    </message>
-    <message>
-        <source>none</source>
-        <translation type="vanished">ничего</translation>
-    </message>
-    <message>
-        <source>Dust</source>
-        <translation type="vanished">Пыль</translation>
     </message>
     <message>
         <location line="+155"/>
@@ -1394,42 +1235,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+0"/>
         <source>no</source>
         <translation>нет</translation>
-    </message>
-    <message>
-        <source>This label turns red, if the transaction size is greater than 1000 bytes.</source>
-        <translation type="vanished">Эта пометка становится красной, если размер транзакции больше 1000 байт.</translation>
-    </message>
-    <message>
-        <source>This means a fee of at least %1 per kB is required.</source>
-        <translation type="vanished">Это значит, что требуется комиссия как минимум %1 на КБ.</translation>
-    </message>
-    <message>
-        <source>Can vary +/- 1 byte per input.</source>
-        <translation type="vanished">Может отличаться на +/- 1 байт на вход.</translation>
-    </message>
-    <message>
-        <source>Transactions with higher priority are more likely to get included into a block.</source>
-        <translation type="vanished">Транзакции с более высоким приоритетом будут вероятнее других включены в блок.</translation>
-    </message>
-    <message>
-        <source>This label turns red, if the priority is smaller than &quot;medium&quot;.</source>
-        <translation type="vanished">Эта пометка становится красной, если приоритет ниже, чем &quot;средний&quot;.</translation>
-    </message>
-    <message>
-        <source>This label turns red, if any recipient receives an amount smaller than %1.</source>
-        <translation type="vanished">Эта пометка становится красной, если какой-либо из адресатов получает сумму менее %1.</translation>
-    </message>
-    <message>
-        <source>This means a fee of at least %1 is required.</source>
-        <translation type="vanished">Это значит, что требуется комиссия как минимум %1.</translation>
-    </message>
-    <message>
-        <source>Amounts below 0.546 times the minimum relay fee are shown as dust.</source>
-        <translation type="vanished">Суммы ниже, чем 0.546 минимальных комиссий ретрансляции, показаны как пыль.</translation>
-    </message>
-    <message>
-        <source>This label turns red, if the change is smaller than %1.</source>
-        <translation type="vanished">Эта пометка становится красной, если сдача меньше %1.</translation>
     </message>
     <message>
         <location line="+50"/>
@@ -1446,333 +1251,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+1"/>
         <source>(change)</source>
         <translation>(размен)</translation>
-    </message>
-</context>
-<context>
-    <name>DigiByteGUI</name>
-    <message>
-        <source>Sign &amp;message...</source>
-        <translation type="vanished">&amp;Подписать сообщение...</translation>
-    </message>
-    <message>
-        <source>Synchronizing with network...</source>
-        <translation type="vanished">Синхронизация с сетью...</translation>
-    </message>
-    <message>
-        <source>&amp;Overview</source>
-        <translation type="vanished">&amp;Обзор</translation>
-    </message>
-    <message>
-        <source>Node</source>
-        <translation type="vanished">Узел</translation>
-    </message>
-    <message>
-        <source>Show general overview of wallet</source>
-        <translation type="vanished">Показать общий обзор действий с бумажником</translation>
-    </message>
-    <message>
-        <source>&amp;Transactions</source>
-        <translation type="vanished">&amp;Транзакции</translation>
-    </message>
-    <message>
-        <source>Browse transaction history</source>
-        <translation type="vanished">Показать историю транзакций</translation>
-    </message>
-    <message>
-        <source>E&amp;xit</source>
-        <translation type="vanished">В&amp;ыход</translation>
-    </message>
-    <message>
-        <source>Quit application</source>
-        <translation type="vanished">Закрыть приложение</translation>
-    </message>
-    <message>
-        <source>Show information about DigiByte</source>
-        <translation type="vanished">Показать информацию о DigiByte</translation>
-    </message>
-    <message>
-        <source>About &amp;Qt</source>
-        <translation type="vanished">О &amp;Qt</translation>
-    </message>
-    <message>
-        <source>Show information about Qt</source>
-        <translation type="vanished">Показать информацию о Qt</translation>
-    </message>
-    <message>
-        <source>&amp;Options...</source>
-        <translation type="vanished">Опции</translation>
-    </message>
-    <message>
-        <source>&amp;Encrypt Wallet...</source>
-        <translation type="vanished">&amp;Зашифровать бумажник...</translation>
-    </message>
-    <message>
-        <source>&amp;Backup Wallet...</source>
-        <translation type="vanished">&amp;Сделать резервную копию бумажника...</translation>
-    </message>
-    <message>
-        <source>&amp;Change Passphrase...</source>
-        <translation type="vanished">&amp;Изменить пароль...</translation>
-    </message>
-    <message>
-        <source>&amp;Sending addresses...</source>
-        <translation type="vanished">&amp;Адреса отправки...</translation>
-    </message>
-    <message>
-        <source>&amp;Receiving addresses...</source>
-        <translation type="vanished">Адреса &amp;получения...</translation>
-    </message>
-    <message>
-        <source>Open &amp;URI...</source>
-        <translation type="vanished">Открыть &amp;URI...</translation>
-    </message>
-    <message>
-        <source>Importing blocks from disk...</source>
-        <translation type="vanished">Импортируются блоки с диска...</translation>
-    </message>
-    <message>
-        <source>Reindexing blocks on disk...</source>
-        <translation type="vanished">Идёт переиндексация блоков на диске...</translation>
-    </message>
-    <message>
-        <source>Send coins to a DigiByte address</source>
-        <translation type="vanished">Отправить монеты на указанный адрес DigiByte</translation>
-    </message>
-    <message>
-        <source>Modify configuration options for DigiByte</source>
-        <translation type="vanished">Изменить параметры конфигурации DigiByte</translation>
-    </message>
-    <message>
-        <source>Backup wallet to another location</source>
-        <translation type="vanished">Сделать резервную копию бумажника в другом месте</translation>
-    </message>
-    <message>
-        <source>Change the passphrase used for wallet encryption</source>
-        <translation type="vanished">Изменить пароль шифрования бумажника</translation>
-    </message>
-    <message>
-        <source>&amp;Debug window</source>
-        <translation type="vanished">&amp;Окно отладки</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation type="vanished">Открыть консоль отладки и диагностики</translation>
-    </message>
-    <message>
-        <source>&amp;Verify message...</source>
-        <translation type="vanished">&amp;Проверить сообщение...</translation>
-    </message>
-    <message>
-        <source>DigiByte</source>
-        <translation type="vanished">DigiByte</translation>
-    </message>
-    <message>
-        <source>Wallet</source>
-        <translation type="vanished">Бумажник</translation>
-    </message>
-    <message>
-        <source>&amp;Send</source>
-        <translation type="vanished">&amp;Отправить</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation type="vanished">&amp;Получить</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation type="vanished">&amp;Показать / Скрыть</translation>
-    </message>
-    <message>
-        <source>Show or hide the main Window</source>
-        <translation type="vanished">Показать или скрыть главное окно</translation>
-    </message>
-    <message>
-        <source>Encrypt the private keys that belong to your wallet</source>
-        <translation type="vanished">Зашифровать приватные ключи, принадлежащие вашему бумажнику</translation>
-    </message>
-    <message>
-        <source>Sign messages with your DigiByte addresses to prove you own them</source>
-        <translation type="vanished">Подписать сообщения вашим адресом DigiByte, чтобы доказать, что вы им владеете</translation>
-    </message>
-    <message>
-        <source>Verify messages to ensure they were signed with specified DigiByte addresses</source>
-        <translation type="vanished">Проверить сообщения, чтобы удостовериться, что они были подписаны определённым адресом DigiByte</translation>
-    </message>
-    <message>
-        <source>&amp;File</source>
-        <translation type="vanished">&amp;Файл</translation>
-    </message>
-    <message>
-        <source>&amp;Settings</source>
-        <translation type="vanished">&amp;Настройки</translation>
-    </message>
-    <message>
-        <source>&amp;Help</source>
-        <translation type="vanished">&amp;Помощь</translation>
-    </message>
-    <message>
-        <source>Tabs toolbar</source>
-        <translation type="vanished">Панель вкладок</translation>
-    </message>
-    <message>
-        <source>[testnet]</source>
-        <translation type="vanished">[тестовая сеть]</translation>
-    </message>
-    <message>
-        <source>DigiByte Core</source>
-        <translation type="vanished">DigiByte Core</translation>
-    </message>
-    <message>
-        <source>Request payments (generates QR codes and digibyte: URIs)</source>
-        <translation type="vanished">Запросить платежи (создаёт QR-коды и digibyte: ссылки)</translation>
-    </message>
-    <message>
-        <source>&amp;About DigiByte Core</source>
-        <translation type="vanished">&amp;О DigiByte Core</translation>
-    </message>
-    <message>
-        <source>Show the list of used sending addresses and labels</source>
-        <translation type="vanished">Показать список использованных адресов и меток отправки</translation>
-    </message>
-    <message>
-        <source>Show the list of used receiving addresses and labels</source>
-        <translation type="vanished">Показать список использованных адресов и меток получения</translation>
-    </message>
-    <message>
-        <source>Open a digibyte: URI or payment request</source>
-        <translation type="vanished">Открыть digibyte: URI или запрос платежа</translation>
-    </message>
-    <message>
-        <source>&amp;Command-line options</source>
-        <translation type="vanished">&amp;Опции командной строки</translation>
-    </message>
-    <message>
-        <source>Show the DigiByte Core help message to get a list with possible DigiByte command-line options</source>
-        <translation type="vanished">Показать помощь по DigiByte Core и получить список доступных опций командной строки.</translation>
-    </message>
-    <message>
-        <source>DigiByte client</source>
-        <translation type="vanished">DigiByte клиент</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n active connection(s) to DigiByte network</source>
-        <translation type="vanished">
-            <numerusform>%n активное соединение с сетью</numerusform>
-            <numerusform>%n активных соединений с сетью</numerusform>
-            <numerusform>%n активных соединений с сетью DigiByte</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>No block source available...</source>
-        <translation type="vanished">Источник блоков недоступен...</translation>
-    </message>
-    <message>
-        <source>Processed %1 of %2 (estimated) blocks of transaction history.</source>
-        <translation type="vanished">Обработано %1 из %2 (примерно) блоков истории транзакций.</translation>
-    </message>
-    <message>
-        <source>Processed %1 blocks of transaction history.</source>
-        <translation type="vanished">Обработано %1 блоков истории транзакций.</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n hour(s)</source>
-        <translation type="vanished">
-            <numerusform>%n час</numerusform>
-            <numerusform>%n часа</numerusform>
-            <numerusform>%n часов</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <source>%n day(s)</source>
-        <translation type="vanished">
-            <numerusform>%n день</numerusform>
-            <numerusform>%n дня</numerusform>
-            <numerusform>%n дней</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <source>%n week(s)</source>
-        <translation type="vanished">
-            <numerusform>%n неделя</numerusform>
-            <numerusform>%n недели</numerusform>
-            <numerusform>%n недель</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>%1 and %2</source>
-        <translation type="vanished">%1 и %2</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n year(s)</source>
-        <translation type="vanished">
-            <numerusform>%n год</numerusform>
-            <numerusform>%n лет</numerusform>
-            <numerusform>%n года</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>%1 behind</source>
-        <translation type="vanished">%1 позади</translation>
-    </message>
-    <message>
-        <source>Last received block was generated %1 ago.</source>
-        <translation type="vanished">Последний полученный блок был сгенерирован %1 назад.</translation>
-    </message>
-    <message>
-        <source>Transactions after this will not yet be visible.</source>
-        <translation type="vanished">Транзакции после него пока не будут видны.</translation>
-    </message>
-    <message>
-        <source>Error</source>
-        <translation type="vanished">Ошибка</translation>
-    </message>
-    <message>
-        <source>Warning</source>
-        <translation type="vanished">Внимание</translation>
-    </message>
-    <message>
-        <source>Information</source>
-        <translation type="vanished">Информация</translation>
-    </message>
-    <message>
-        <source>Up to date</source>
-        <translation type="vanished">Синхронизировано</translation>
-    </message>
-    <message>
-        <source>Catching up...</source>
-        <translation type="vanished">Синхронизируется...</translation>
-    </message>
-    <message>
-        <source>Sent transaction</source>
-        <translation type="vanished">Исходящая транзакция</translation>
-    </message>
-    <message>
-        <source>Incoming transaction</source>
-        <translation type="vanished">Входящая транзакция</translation>
-    </message>
-    <message>
-        <source>Date: %1
-Amount: %2
-Type: %3
-Address: %4
-</source>
-        <translation type="vanished">Дата: %1
-Сумма: %2
-Тип: %3
-Адрес: %4
-</translation>
-    </message>
-    <message>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
-        <translation type="vanished">Бумажник &lt;b&gt;зашифрован&lt;/b&gt; и в настоящее время &lt;b&gt;разблокирован&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
-        <translation type="vanished">Бумажник &lt;b&gt;зашифрован&lt;/b&gt; и в настоящее время &lt;b&gt;заблокирован&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <source>A fatal error occurred. DigiByte can no longer continue safely and will quit.</source>
-        <translation type="vanished">Произошла неисправимая ошибка. DigiByte не может безопасно продолжать работу и будет закрыт.</translation>
     </message>
 </context>
 <context>
@@ -1796,14 +1274,6 @@ Address: %4
         <location line="+17"/>
         <source>The address associated with this address book entry. This can only be modified for sending addresses.</source>
         <translation>Адрес, связанный с этой записью адресной книги. Здесь  можно изменить только для отправки адресов.</translation>
-    </message>
-    <message>
-        <source>The label associated with this address list entry</source>
-        <translation type="vanished">Метка, связанная с этой записью списка адресов</translation>
-    </message>
-    <message>
-        <source>The address associated with this address list entry. This can only be modified for sending addresses.</source>
-        <translation type="vanished">Адрес, связанный с этой записью списка адресов. Он может быть изменён только для адресов отправки.</translation>
     </message>
     <message>
         <location line="-10"/>
@@ -1841,10 +1311,6 @@ Address: %4
         <translation>Введённый адрес «%1» уже находится в адресной книге.</translation>
     </message>
     <message>
-        <source>The entered address &quot;%1&quot; is not a valid DigiByte address.</source>
-        <translation type="vanished">Введённый адрес &quot;%1&quot; не является правильным DigiByte-адресом.</translation>
-    </message>
-    <message>
         <location line="+5"/>
         <source>Could not unlock wallet.</source>
         <translation>Не удается разблокировать бумажник.</translation>
@@ -1853,29 +1319,6 @@ Address: %4
         <location line="+5"/>
         <source>New key generation failed.</source>
         <translation>Генерация нового ключа не удалась.</translation>
-    </message>
-</context>
-<context>
-    <name>FreespaceChecker</name>
-    <message>
-        <source>A new data directory will be created.</source>
-        <translation type="vanished">Будет создан новый каталог данных.</translation>
-    </message>
-    <message>
-        <source>name</source>
-        <translation type="vanished">имя</translation>
-    </message>
-    <message>
-        <source>Directory already exists. Add %1 if you intend to create a new directory here.</source>
-        <translation type="vanished">Каталог уже существует. Добавьте %1, если вы хотите создать здесь новый каталог.</translation>
-    </message>
-    <message>
-        <source>Path already exists, and is not a directory.</source>
-        <translation type="vanished">Путь уже существует и не является каталогом.</translation>
-    </message>
-    <message>
-        <source>Cannot create data directory here.</source>
-        <translation type="vanished">Не удаётся создать здесь каталог данных.</translation>
     </message>
 </context>
 <context>
@@ -1924,100 +1367,6 @@ Address: %4
         <location line="+2"/>
         <source>Gridcoin-Qt</source>
         <translation>Gridcoin-Qt</translation>
-    </message>
-</context>
-<context>
-    <name>HelpMessageDialog</name>
-    <message>
-        <source>DigiByte Core - Command-line options</source>
-        <translation type="vanished">DigiByte Core - опции командной строки</translation>
-    </message>
-    <message>
-        <source>DigiByte Core</source>
-        <translation type="vanished">DigiByte Core</translation>
-    </message>
-    <message>
-        <source>version</source>
-        <translation type="vanished">версия</translation>
-    </message>
-    <message>
-        <source>Usage:</source>
-        <translation type="vanished">Использование:</translation>
-    </message>
-    <message>
-        <source>command-line options</source>
-        <translation type="vanished">опции командной строки</translation>
-    </message>
-    <message>
-        <source>UI options</source>
-        <translation type="vanished">Опции интерфейса</translation>
-    </message>
-    <message>
-        <source>Set language, for example &quot;de_DE&quot; (default: system locale)</source>
-        <translation type="vanished">Выберите язык, например &quot;de_DE&quot; (по умолчанию: как в системе)</translation>
-    </message>
-    <message>
-        <source>Start minimized</source>
-        <translation type="vanished">Запускать свёрнутым</translation>
-    </message>
-    <message>
-        <source>Set SSL root certificates for payment request (default: -system-)</source>
-        <translation type="vanished">Указать корневые SSL-сертификаты для запроса платежа (по умолчанию: -system-)</translation>
-    </message>
-    <message>
-        <source>Show splash screen on startup (default: 1)</source>
-        <translation type="vanished">Показывать сплэш при запуске (по умолчанию: 1)</translation>
-    </message>
-    <message>
-        <source>Choose data directory on startup (default: 0)</source>
-        <translation type="vanished">Выбрать каталог данных при запуске (по умолчанию: 0)</translation>
-    </message>
-</context>
-<context>
-    <name>Intro</name>
-    <message>
-        <source>Welcome</source>
-        <translation type="vanished">Добро пожаловать</translation>
-    </message>
-    <message>
-        <source>Welcome to DigiByte Core.</source>
-        <translation type="vanished">Добро пожаловать в DigiByte Core.</translation>
-    </message>
-    <message>
-        <source>As this is the first time the program is launched, you can choose where DigiByte Core will store its data.</source>
-        <translation type="vanished">Так как вы впервые запустили программу, вы можете выбрать, где DigiByte Core будет хранить данные.</translation>
-    </message>
-    <message>
-        <source>DigiByte Core will download and store a copy of the DigiByte block chain. At least %1GB of data will be stored in this directory, and it will grow over time. The wallet will also be stored in this directory.</source>
-        <translation type="vanished">DigiByte Core скачает и сохранит копию цепи блоков. Как минимум, %1ГБ данных будет храниться в этом каталоге, и со временем он будет расти. Бумажник будет также сохранён в этом каталоге.</translation>
-    </message>
-    <message>
-        <source>Use the default data directory</source>
-        <translation type="vanished">Использовать каталог данных по умолчанию</translation>
-    </message>
-    <message>
-        <source>Use a custom data directory:</source>
-        <translation type="vanished">Использовать другой каталог данных:</translation>
-    </message>
-    <message>
-        <source>DigiByte</source>
-        <translation type="vanished">DigiByte</translation>
-    </message>
-    <message>
-        <source>Error: Specified data directory &quot;%1&quot; can not be created.</source>
-        <translation type="vanished">Ошибка: не удалось создать указанный каталог данных &quot;%1&quot;.</translation>
-    </message>
-    <message>
-        <source>Error</source>
-        <translation type="vanished">Ошибка</translation>
-    </message>
-    <message>
-        <source>GB of free space available</source>
-        <translation type="vanished">ГБ свободного места доступно</translation>
-    </message>
-    <message>
-        <source>(of %1GB needed)</source>
-        <translation type="vanished">(из необходимых %1ГБ)</translation>
     </message>
 </context>
 <context>
@@ -2095,29 +1444,6 @@ Address: %4
     </message>
 </context>
 <context>
-    <name>OpenURIDialog</name>
-    <message>
-        <source>Open URI</source>
-        <translation type="vanished">Открыть URI</translation>
-    </message>
-    <message>
-        <source>Open payment request from URI or file</source>
-        <translation type="vanished">Открыть запрос платежа из URI или файла</translation>
-    </message>
-    <message>
-        <source>URI:</source>
-        <translation type="vanished">URI:</translation>
-    </message>
-    <message>
-        <source>Select payment request file</source>
-        <translation type="vanished">Выбрать файл запроса платежа</translation>
-    </message>
-    <message>
-        <source>Select payment request file to open</source>
-        <translation type="vanished">Выберите файл запроса платежа</translation>
-    </message>
-</context>
-<context>
     <name>OptionsDialog</name>
     <message>
         <location filename="../forms/optionsdialog.ui" line="+14"/>
@@ -2130,97 +1456,9 @@ Address: %4
         <translation>&amp;Главная</translation>
     </message>
     <message>
-        <source>Optional transaction fee per kB that helps make sure your transactions are processed quickly. Most transactions are 1 kB.</source>
-        <translation type="vanished">Необязательная комиссия за каждый КБ транзакции, которая ускоряет обработку Ваших транзакций.  Большинство транзакций занимают 1КБ.</translation>
-    </message>
-    <message>
-        <source>Pay transaction &amp;fee</source>
-        <translation type="vanished">Заплатить ко&amp;миссию</translation>
-    </message>
-    <message>
-        <source>Automatically start DigiByte after logging in to the system.</source>
-        <translation type="vanished">Автоматически запускать DigiByte после входа в систему</translation>
-    </message>
-    <message>
-        <source>&amp;Start DigiByte on system login</source>
-        <translation type="vanished">&amp;Запускать DigiByte при входе в систему</translation>
-    </message>
-    <message>
-        <source>Size of &amp;database cache</source>
-        <translation type="vanished">Размер кэша &amp;БД</translation>
-    </message>
-    <message>
-        <source>MB</source>
-        <translation type="vanished">МБ</translation>
-    </message>
-    <message>
-        <source>Number of script &amp;verification threads</source>
-        <translation type="vanished">Число потоков проверки &amp;сценария</translation>
-    </message>
-    <message>
-        <source>Connect to the DigiByte network through a SOCKS proxy.</source>
-        <translation type="vanished">Подключаться к сети DigiByte через прокси SOCKS.</translation>
-    </message>
-    <message>
-        <source>&amp;Connect through SOCKS proxy (default proxy):</source>
-        <translation type="vanished">&amp;Подключаться через SOCKS прокси (прокси по умолчанию):</translation>
-    </message>
-    <message>
-        <source>IP address of the proxy (e.g. IPv4: 127.0.0.1 / IPv6: ::1)</source>
-        <translation type="vanished">IP-адрес прокси (например IPv4: 127.0.0.1 / IPv6: ::1)</translation>
-    </message>
-    <message>
-        <source>Third party URLs (e.g. a block explorer) that appear in the transactions tab as context menu items. %s in the URL is replaced by transaction hash. Multiple URLs are separated by vertical bar |.</source>
-        <translation type="vanished">Сторонние URL (например, block explorer), которые отображаются на вкладке транзакций как пункты контекстного меню. %s в URL заменяется хэшем транзакции. URL отделяются друг от друга вертикальной чертой |.</translation>
-    </message>
-    <message>
-        <source>Third party transaction URLs</source>
-        <translation type="vanished">Сторонние URL транзакций.</translation>
-    </message>
-    <message>
-        <source>Active command-line options that override above options:</source>
-        <translation type="vanished">Активные опции командной строки, которые перекрывают вышеуказанные опции:</translation>
-    </message>
-    <message>
-        <source>Reset all client options to default.</source>
-        <translation type="vanished">Сбросить все опции клиента на значения по умолчанию.</translation>
-    </message>
-    <message>
-        <source>&amp;Reset Options</source>
-        <translation type="vanished">&amp;Сбросить опции</translation>
-    </message>
-    <message>
         <location line="+132"/>
         <source>&amp;Network</source>
         <translation>&amp;Сеть</translation>
-    </message>
-    <message>
-        <source>(0 = auto, &lt;0 = leave that many cores free)</source>
-        <translation type="vanished">(0 = автоматически, &lt;0 = оставить столько незагруженных ядер)</translation>
-    </message>
-    <message>
-        <source>W&amp;allet</source>
-        <translation type="vanished">Б&amp;умажник</translation>
-    </message>
-    <message>
-        <source>Expert</source>
-        <translation type="vanished">Эксперт</translation>
-    </message>
-    <message>
-        <source>Enable coin &amp;control features</source>
-        <translation type="vanished">Включить управление входами</translation>
-    </message>
-    <message>
-        <source>If you disable the spending of unconfirmed change, the change from a transaction cannot be used until that transaction has at least one confirmation. This also affects how your balance is computed.</source>
-        <translation type="vanished">При отключении траты неподтверждённой сдачи, сдача от транзакции не может быть использована до тех пор пока у этой транзакции не будет хотя бы одно подтверждение. Это также влияет как ваш баланс рассчитывается.</translation>
-    </message>
-    <message>
-        <source>&amp;Spend unconfirmed change</source>
-        <translation type="vanished">&amp;Тратить неподтверждённую сдачу</translation>
-    </message>
-    <message>
-        <source>Automatically open the DigiByte client port on the router. This only works when your router supports UPnP and it is enabled.</source>
-        <translation type="vanished">Автоматически открыть порт для DigiByte-клиента на роутере. Работает только если Ваш роутер поддерживает UPnP, и данная функция включена.</translation>
     </message>
     <message>
         <location line="-126"/>
@@ -2237,10 +1475,6 @@ Address: %4
         <source>Reserved amount does not participate in staking and is therefore spendable at any time.</source>
         <translation>
 Зарезервированная сумма не участвует в размещении и поэтому может быть использована в любое время.</translation>
-    </message>
-    <message>
-        <source>Reserve</source>
-        <translation type="vanished">Резерв</translation>
     </message>
     <message>
         <location line="+46"/>
@@ -2281,10 +1515,6 @@ Address: %4
         <location line="+3"/>
         <source>&amp;Connect through SOCKS proxy:</source>
         <translation>&amp;Соединение через SOCKS proxy:</translation>
-    </message>
-    <message>
-        <source>Proxy &amp;IP:</source>
-        <translation type="vanished">&amp;IP Прокси: </translation>
     </message>
     <message>
         <location line="-84"/>
@@ -2382,10 +1612,6 @@ Address: %4
         <translation>&amp;Подтвердить</translation>
     </message>
     <message>
-        <source>The user interface language can be set here. This setting will take effect after restarting DigiByte.</source>
-        <translation type="vanished">Здесь можно выбрать язык интерфейса. Настройки вступят в силу после перезапуска DigiByte.</translation>
-    </message>
-    <message>
         <location line="-144"/>
         <source>&amp;Unit to show amounts in:</source>
         <translation>&amp;Отображать суммы в единицах: </translation>
@@ -2394,10 +1620,6 @@ Address: %4
         <location line="+13"/>
         <source>Choose the default subdivision unit to show in the interface and when sending coins.</source>
         <translation>Выберите единицу измерения монет при отображении и отправке.</translation>
-    </message>
-    <message>
-        <source>Whether to show DigiByte addresses in the transaction list or not.</source>
-        <translation type="vanished">Показывать ли адреса DigiByte в списке транзакций.</translation>
     </message>
     <message>
         <location line="+30"/>
@@ -2450,26 +1672,6 @@ Address: %4
         <location line="+9"/>
         <source>This setting will take effect after restarting Gridcoin.</source>
         <translation>Этот параметр вступает в силу после перезапуска Gridcoin.</translation>
-    </message>
-    <message>
-        <source>none</source>
-        <translation type="vanished">ничего</translation>
-    </message>
-    <message>
-        <source>Confirm options reset</source>
-        <translation type="vanished">Подтвердите сброс опций</translation>
-    </message>
-    <message>
-        <source>Client restart required to activate changes.</source>
-        <translation type="vanished">Для применения изменений требуется перезапуск клиента.</translation>
-    </message>
-    <message>
-        <source>Client will be shutdown, do you want to proceed?</source>
-        <translation type="vanished">Клиент будет выключен, желаете продолжить?</translation>
-    </message>
-    <message>
-        <source>This change would require a client restart.</source>
-        <translation type="vanished">Это изменение потребует перезапуска клиента.</translation>
     </message>
     <message>
         <location line="+42"/>
@@ -2586,33 +1788,9 @@ Address: %4
         <translation>Итоговый баланс     </translation>
     </message>
     <message>
-        <source>...</source>
-        <translation type="vanished">...</translation>
-    </message>
-    <message>
-        <source>The displayed information may be out of date. Your wallet automatically synchronizes with the DigiByte network after a connection is established, but this process has not completed yet.</source>
-        <translation type="vanished">Отображаемая информация может быть устаревшей. Ваш бумажник автоматически синхронизируется с сетью DigiByte после подключения, но этот процесс пока не завершён.</translation>
-    </message>
-    <message>
         <location line="-205"/>
         <source>Wallet</source>
         <translation>Бумажник</translation>
-    </message>
-    <message>
-        <source>Available:</source>
-        <translation type="vanished">Доступно:</translation>
-    </message>
-    <message>
-        <source>Your current spendable balance</source>
-        <translation type="vanished">Ваш текущий расходный баланс</translation>
-    </message>
-    <message>
-        <source>Pending:</source>
-        <translation type="vanished">В ожидании:</translation>
-    </message>
-    <message>
-        <source>Total of transactions that have yet to be confirmed, and do not yet count toward the spendable balance</source>
-        <translation type="vanished">Общая сумма всех транзакций, которые до сих пор не подтверждены, и до сих пор не учитываются в расходном балансе</translation>
     </message>
     <message>
         <location line="+148"/>
@@ -2620,125 +1798,15 @@ Address: %4
         <translation>Незрелые:</translation>
     </message>
     <message>
-        <source>Mined balance that has not yet matured</source>
-        <translation type="vanished">Баланс добытых монет, который ещё не созрел</translation>
-    </message>
-    <message>
         <location line="+50"/>
         <source>Total:</source>
         <translation>Итого:</translation>
-    </message>
-    <message>
-        <source>Your current total balance</source>
-        <translation type="vanished">Ваш текущий общий баланс</translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;Recent transactions&lt;/b&gt;</source>
-        <translation type="vanished">&lt;b&gt;Недавние транзакции&lt;/b&gt;</translation>
     </message>
     <message>
         <location filename="../overviewpage.cpp" line="+134"/>
         <location line="+1"/>
         <source>out of sync</source>
         <translation>не синхронизировано</translation>
-    </message>
-</context>
-<context>
-    <name>PaymentServer</name>
-    <message>
-        <source>URI handling</source>
-        <translation type="vanished">Обработка URI</translation>
-    </message>
-    <message>
-        <source>URI can not be parsed! This can be caused by an invalid DigiByte address or malformed URI parameters.</source>
-        <translation type="vanished">Не удалось разобрать URI! Это может быть связано с неверным адресом DigiByte или неправильными параметрами URI.</translation>
-    </message>
-    <message>
-        <source>Requested payment amount of %1 is too small (considered dust).</source>
-        <translation type="vanished">Запрошенная сумма платежа %1 слишком мала (считается пылью).</translation>
-    </message>
-    <message>
-        <source>Payment request error</source>
-        <translation type="vanished">Ошибка запроса платежа</translation>
-    </message>
-    <message>
-        <source>Cannot start digibyte: click-to-pay handler</source>
-        <translation type="vanished">Не удаётся запустить digibyte: обработчик click-to-pay</translation>
-    </message>
-    <message>
-        <source>Net manager warning</source>
-        <translation type="vanished">Предупреждение менеджера сети</translation>
-    </message>
-    <message>
-        <source>Your active proxy doesn&apos;t support SOCKS5, which is required for payment requests via proxy.</source>
-        <translation type="vanished">Активный прокси не поддерживает SOCKS5, который необходим для запроса платежей через прокси.</translation>
-    </message>
-    <message>
-        <source>Payment request fetch URL is invalid: %1</source>
-        <translation type="vanished">Неверный URL запроса платежа: %1</translation>
-    </message>
-    <message>
-        <source>Payment request file handling</source>
-        <translation type="vanished">Обработка файла запроса платежа</translation>
-    </message>
-    <message>
-        <source>Payment request file can not be read or processed! This can be caused by an invalid payment request file.</source>
-        <translation type="vanished">Файл запроса платежа не может быть прочитан или обработан! Обычно это происходит из-за неверного файла запроса платежа.</translation>
-    </message>
-    <message>
-        <source>Unverified payment requests to custom payment scripts are unsupported.</source>
-        <translation type="vanished">Непроверенные запросы платежей с нестандартными платёжными сценариями не поддерживаются.</translation>
-    </message>
-    <message>
-        <source>Refund from %1</source>
-        <translation type="vanished">Возврат от %1</translation>
-    </message>
-    <message>
-        <source>Error communicating with %1: %2</source>
-        <translation type="vanished">Ошибка связи с %1: %2</translation>
-    </message>
-    <message>
-        <source>Payment request can not be parsed or processed!</source>
-        <translation type="vanished">Запрос платежа не может быть разобран или обработан!</translation>
-    </message>
-    <message>
-        <source>Bad response from server %1</source>
-        <translation type="vanished">Плохой ответ от сервера %1</translation>
-    </message>
-    <message>
-        <source>Payment acknowledged</source>
-        <translation type="vanished">Платёж принят</translation>
-    </message>
-    <message>
-        <source>Network request error</source>
-        <translation type="vanished">Ошибка сетевого запроса</translation>
-    </message>
-</context>
-<context>
-    <name>QObject</name>
-    <message>
-        <source>DigiByte</source>
-        <translation type="vanished">DigiByte</translation>
-    </message>
-    <message>
-        <source>Error: Specified data directory &quot;%1&quot; does not exist.</source>
-        <translation type="vanished">Ошибка: указанный каталог &quot;%1&quot; не существует.</translation>
-    </message>
-    <message>
-        <source>Error: Cannot parse configuration file: %1. Only use key=value syntax.</source>
-        <translation type="vanished">Ошибка: не удалось разобрать конфигурационный файл: %1. Используйте синтаксис вида ключ=значение.</translation>
-    </message>
-    <message>
-        <source>Error: Invalid combination of -regtest and -testnet.</source>
-        <translation type="vanished">Ошибка: неверная комбинация -regtest и -testnet.</translation>
-    </message>
-    <message>
-        <source>DigiByte Core didn&apos;t yet exit safely...</source>
-        <translation type="vanished">DigiByte Core ещё не завершился безопасно...</translation>
-    </message>
-    <message>
-        <source>Enter a DigiByte address (e.g. DNS17iag9jJgTHD1VXjvLCEnZuQ3rJDE9L)</source>
-        <translation type="vanished">Введите DigiByte-адрес (например DNS17iag9jJgTHD1VXjvLCEnZuQ3rJDE9L)</translation>
     </message>
 </context>
 <context>
@@ -2800,25 +1868,6 @@ Address: %4
     </message>
 </context>
 <context>
-    <name>QRImageWidget</name>
-    <message>
-        <source>&amp;Save Image...</source>
-        <translation type="vanished">&amp;Сохранить изображение...</translation>
-    </message>
-    <message>
-        <source>&amp;Copy Image</source>
-        <translation type="vanished">&amp;Копировать изображение</translation>
-    </message>
-    <message>
-        <source>Save QR Code</source>
-        <translation type="vanished">Сохранить QR-код</translation>
-    </message>
-    <message>
-        <source>PNG Image (*.png)</source>
-        <translation type="vanished">Изображение PNG (*.png)</translation>
-    </message>
-</context>
-<context>
     <name>RPCConsole</name>
     <message>
         <location filename="../forms/rpcconsole.ui" line="+491"/>
@@ -2851,29 +1900,9 @@ Address: %4
         <translation>&amp;Информация</translation>
     </message>
     <message>
-        <source>Debug window</source>
-        <translation type="vanished">Окно отладки</translation>
-    </message>
-    <message>
-        <source>General</source>
-        <translation type="vanished">Общие</translation>
-    </message>
-    <message>
-        <source>Using OpenSSL version</source>
-        <translation type="vanished">Используется версия OpenSSL</translation>
-    </message>
-    <message>
         <location line="+425"/>
         <source>Startup time</source>
         <translation>Время запуска</translation>
-    </message>
-    <message>
-        <source>Network</source>
-        <translation type="vanished">Сеть</translation>
-    </message>
-    <message>
-        <source>Name</source>
-        <translation type="vanished">Имя</translation>
     </message>
     <message>
         <location line="-366"/>
@@ -3006,17 +2035,9 @@ Address: %4
         <translation>Отладочный лог-файл</translation>
     </message>
     <message>
-        <source>Open the DigiByte debug log file from the current data directory. This can take a few seconds for large log files.</source>
-        <translation type="vanished">Открыть отладочный лог-файл DigiByte из текущего каталога данных. Это может занять несколько секунд для больших лог-файлов.</translation>
-    </message>
-    <message>
         <location line="+368"/>
         <source>Clear console</source>
         <translation>Очистить консоль</translation>
-    </message>
-    <message>
-        <source>Welcome to the DigiByte RPC console.</source>
-        <translation type="vanished">Добро пожаловать в RPC-консоль DigiByte.</translation>
     </message>
     <message>
         <location filename="../rpcconsole.cpp" line="-35"/>
@@ -3067,175 +2088,6 @@ Address: %4
         <location line="+2"/>
         <source>%1 h %2 m</source>
         <translation>%1 ч %2 мин</translation>
-    </message>
-</context>
-<context>
-    <name>ReceiveCoinsDialog</name>
-    <message>
-        <source>&amp;Amount:</source>
-        <translation type="vanished">&amp;Сумма:</translation>
-    </message>
-    <message>
-        <source>&amp;Label:</source>
-        <translation type="vanished">&amp;Метка:</translation>
-    </message>
-    <message>
-        <source>&amp;Message:</source>
-        <translation type="vanished">&amp;Сообщение</translation>
-    </message>
-    <message>
-        <source>Reuse one of the previously used receiving addresses. Reusing addresses has security and privacy issues. Do not use this unless re-generating a payment request made before.</source>
-        <translation type="vanished">Повторно использовать один из ранее использованных адресов. Повторное использование адресов несёт риски безопасности и приватности. Не используйте эту опцию, если вы не создаёте повторно ранее сделанный запрос платежа.</translation>
-    </message>
-    <message>
-        <source>R&amp;euse an existing receiving address (not recommended)</source>
-        <translation type="vanished">&amp;Повторно использовать существующий адрес получения (не рекомендуется)</translation>
-    </message>
-    <message>
-        <source>An optional message to attach to the payment request, which will be displayed when the request is opened. Note: The message will not be sent with the payment over the DigiByte network.</source>
-        <translation type="vanished">Необязательное сообщение для запроса платежа, которое будет показано при открытии запроса. Заметьте: сообщение не будет отправлено вместе с платежом через сеть DigiByte.</translation>
-    </message>
-    <message>
-        <source>An optional label to associate with the new receiving address.</source>
-        <translation type="vanished">Необязательная метка для нового адреса получения.</translation>
-    </message>
-    <message>
-        <source>Use this form to request payments. All fields are &lt;b&gt;optional&lt;/b&gt;.</source>
-        <translation type="vanished">Заполните форму для запроса платежей. Все поля &lt;b&gt;необязательны&lt;/b&gt;.</translation>
-    </message>
-    <message>
-        <source>An optional amount to request. Leave this empty or zero to not request a specific amount.</source>
-        <translation type="vanished">Необязательная сумма для запроса. Оставьте пустым или укажите ноль, чтобы запросить неопределённую сумму.</translation>
-    </message>
-    <message>
-        <source>Clear all fields of the form.</source>
-        <translation type="vanished">Очистить все поля формы.</translation>
-    </message>
-    <message>
-        <source>Clear</source>
-        <translation type="vanished">Очистить</translation>
-    </message>
-    <message>
-        <source>Requested payments history</source>
-        <translation type="vanished">История запрошенных платежей</translation>
-    </message>
-    <message>
-        <source>&amp;Request payment</source>
-        <translation type="vanished">&amp;Запросить платёж</translation>
-    </message>
-    <message>
-        <source>Show the selected request (does the same as double clicking an entry)</source>
-        <translation type="vanished">Показать выбранный запрос (то же самое, что и двойной клик по записи)</translation>
-    </message>
-    <message>
-        <source>Show</source>
-        <translation type="vanished">Показать</translation>
-    </message>
-    <message>
-        <source>Remove the selected entries from the list</source>
-        <translation type="vanished">Удалить выбранные записи из списка</translation>
-    </message>
-    <message>
-        <source>Remove</source>
-        <translation type="vanished">Удалить</translation>
-    </message>
-    <message>
-        <source>Copy label</source>
-        <translation type="vanished">Копировать метку</translation>
-    </message>
-    <message>
-        <source>Copy message</source>
-        <translation type="vanished">Копировать сообщение</translation>
-    </message>
-    <message>
-        <source>Copy amount</source>
-        <translation type="vanished">Скопировать сумму</translation>
-    </message>
-</context>
-<context>
-    <name>ReceiveRequestDialog</name>
-    <message>
-        <source>QR Code</source>
-        <translation type="vanished">QR код</translation>
-    </message>
-    <message>
-        <source>Copy &amp;URI</source>
-        <translation type="vanished">Копировать &amp;URI</translation>
-    </message>
-    <message>
-        <source>Copy &amp;Address</source>
-        <translation type="vanished">Копировать &amp;адрес</translation>
-    </message>
-    <message>
-        <source>&amp;Save Image...</source>
-        <translation type="vanished">&amp;Сохранить изображение...</translation>
-    </message>
-    <message>
-        <source>Request payment to %1</source>
-        <translation type="vanished">Запросить платёж на %1</translation>
-    </message>
-    <message>
-        <source>Payment information</source>
-        <translation type="vanished">Информация платежа</translation>
-    </message>
-    <message>
-        <source>URI</source>
-        <translation type="vanished">URI</translation>
-    </message>
-    <message>
-        <source>Address</source>
-        <translation type="vanished">Адрес</translation>
-    </message>
-    <message>
-        <source>Amount</source>
-        <translation type="vanished">Сумма</translation>
-    </message>
-    <message>
-        <source>Label</source>
-        <translation type="vanished">Метка</translation>
-    </message>
-    <message>
-        <source>Message</source>
-        <translation type="vanished">Сообщение</translation>
-    </message>
-    <message>
-        <source>Resulting URI too long, try to reduce the text for label / message.</source>
-        <translation type="vanished">Получившийся URI слишком длинный, попробуйте сократить текст метки / сообщения.</translation>
-    </message>
-    <message>
-        <source>Error encoding URI into QR Code.</source>
-        <translation type="vanished">Ошибка кодирования URI в QR-код</translation>
-    </message>
-</context>
-<context>
-    <name>RecentRequestsTableModel</name>
-    <message>
-        <source>Date</source>
-        <translation type="vanished">Дата</translation>
-    </message>
-    <message>
-        <source>Label</source>
-        <translation type="vanished">Метка</translation>
-    </message>
-    <message>
-        <source>Message</source>
-        <translation type="vanished">Сообщение</translation>
-    </message>
-    <message>
-        <source>Amount</source>
-        <translation type="vanished">Сумма</translation>
-    </message>
-    <message>
-        <source>(no label)</source>
-        <translation type="vanished">[нет метки]</translation>
-    </message>
-    <message>
-        <source>(no message)</source>
-        <translation type="vanished">(нет сообщения)</translation>
-    </message>
-    <message>
-        <source>(no amount)</source>
-        <translation type="vanished">(нет суммы)</translation>
     </message>
 </context>
 <context>
@@ -3347,18 +2199,6 @@ Address: %4
         <translation>Удалить все поля транзакций</translation>
     </message>
     <message>
-        <source>Change:</source>
-        <translation type="vanished">Размен:</translation>
-    </message>
-    <message>
-        <source>If this is activated, but the change address is empty or invalid, change will be sent to a newly generated address.</source>
-        <translation type="vanished">Если это выбрано, но адрес сдачи пустой или неверный, сдача будет отправлена на новый сгенерированный адрес.</translation>
-    </message>
-    <message>
-        <source>Custom change address</source>
-        <translation type="vanished">Свой адрес для сдачи</translation>
-    </message>
-    <message>
         <location line="-23"/>
         <source>Send to multiple recipients at once</source>
         <translation>Отправить нескольким получателям одновременно</translation>
@@ -3367,10 +2207,6 @@ Address: %4
         <location line="+3"/>
         <source>Add &amp;Recipient</source>
         <translation>&amp;Добавить получателя</translation>
-    </message>
-    <message>
-        <source>Clear all fields of the form.</source>
-        <translation type="vanished">Очистить все поля формы</translation>
     </message>
     <message>
         <location line="+23"/>
@@ -3401,10 +2237,6 @@ Address: %4
         <location filename="../sendcoinsdialog.cpp" line="-60"/>
         <source>Confirm send coins</source>
         <translation>Подтвердите отправку монет</translation>
-    </message>
-    <message>
-        <source>%1 to %2</source>
-        <translation type="vanished">С %1 на %2</translation>
     </message>
     <message>
         <location line="-113"/>
@@ -3487,14 +2319,6 @@ Address: %4
         <translation>ПРЕДУПРЕЖДЕНИЕ: неизвестное изменение адреса</translation>
     </message>
     <message>
-        <source>Total Amount %1 (= %2)</source>
-        <translation type="vanished">Общая сумма %1 (= %2)</translation>
-    </message>
-    <message>
-        <source>or</source>
-        <translation type="vanished">или</translation>
-    </message>
-    <message>
         <location line="-299"/>
         <source>The recipient address is not valid, please recheck.</source>
         <translation>Адрес получателя неверный, пожалуйста, перепроверьте.</translation>
@@ -3520,41 +2344,9 @@ Address: %4
         <translation>Обнаружен дублирующийся адрес. Отправка на один и тот же адрес возможна только один раз за одну операцию отправки.</translation>
     </message>
     <message>
-        <source>Transaction creation failed!</source>
-        <translation type="vanished">Не удалось создать транзакцию!</translation>
-    </message>
-    <message>
-        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation type="vanished">Транзакция была отклонена! Такое может произойти, если некоторые монеты уже были потрачены, например, если Вы используете одну копию бумажника (wallet.dat), а монеты были потрачены из другой копии, но не были отмечены как потраченные в этой.</translation>
-    </message>
-    <message>
-        <source>Warning: Invalid DigiByte address</source>
-        <translation type="vanished">Внимание: неверный адрес DigiByte</translation>
-    </message>
-    <message>
         <location line="+274"/>
         <source>(no label)</source>
         <translation>[нет метки]</translation>
-    </message>
-    <message>
-        <source>Warning: Unknown change address</source>
-        <translation type="vanished">Внимание: неизвестный адрес для сдачи</translation>
-    </message>
-    <message>
-        <source>Are you sure you want to send?</source>
-        <translation type="vanished">Вы уверены, что хотите отправить?</translation>
-    </message>
-    <message>
-        <source>added as transaction fee</source>
-        <translation type="vanished">добавлено как комиссия</translation>
-    </message>
-    <message>
-        <source>Payment request expired</source>
-        <translation type="vanished">Запрос платежа просрочен</translation>
-    </message>
-    <message>
-        <source>Invalid payment address %1</source>
-        <translation type="vanished">Неверный адрес платежа %1</translation>
     </message>
 </context>
 <context>
@@ -3563,14 +2355,6 @@ Address: %4
         <location filename="../forms/sendcoinsentry.ui" line="+170"/>
         <source>A&amp;mount:</source>
         <translation>Ко&amp;личество:</translation>
-    </message>
-    <message>
-        <source>Pay &amp;To:</source>
-        <translation type="vanished">Полу&amp;чатель:</translation>
-    </message>
-    <message>
-        <source>The address to send the payment to (e.g. DNS17iag9jJgTHD1VXjvLCEnZuQ3rJDE9L)</source>
-        <translation type="vanished">Адрес, на который будет выслан платёж (например DNS17iag9jJgTHD1VXjvLCEnZuQ3rJDE9L)</translation>
     </message>
     <message>
         <location line="-117"/>
@@ -3582,14 +2366,6 @@ Address: %4
         <location line="-21"/>
         <source>&amp;Label:</source>
         <translation>&amp;Метка:</translation>
-    </message>
-    <message>
-        <source>Choose previously used address</source>
-        <translation type="vanished">Выберите ранее использованный адрес</translation>
-    </message>
-    <message>
-        <source>This is a normal payment.</source>
-        <translation type="vanished">Это нормальный платёж.</translation>
     </message>
     <message>
         <location line="-18"/>
@@ -3647,53 +2423,14 @@ Address: %4
         <translation>Добавить приложение</translation>
     </message>
     <message>
-        <source>Remove this entry</source>
-        <translation type="vanished">Удалить эту запись</translation>
-    </message>
-    <message>
         <location line="-50"/>
         <source>Message:</source>
         <translation>Сообщение:</translation>
     </message>
     <message>
-        <source>This is a verified payment request.</source>
-        <translation type="vanished">Это проверенный запрос платежа.</translation>
-    </message>
-    <message>
-        <source>Enter a label for this address to add it to the list of used addresses</source>
-        <translation type="vanished">Введите метку для этого адреса, чтобы добавить его в список использованных</translation>
-    </message>
-    <message>
-        <source>A message that was attached to the digibyte: URI which will be stored with the transaction for your reference. Note: This message will not be sent over the DigiByte network.</source>
-        <translation type="vanished">К digibyte: URI было прикреплено сообщение, которое будет сохранено вместе с транзакцией для вашего сведения. Заметьте: сообщение не будет отправлено через сеть DigiByte.</translation>
-    </message>
-    <message>
-        <source>This is an unverified payment request.</source>
-        <translation type="vanished">Это непроверенный запрос платежа.</translation>
-    </message>
-    <message>
-        <source>Pay To:</source>
-        <translation type="vanished">Получатель:</translation>
-    </message>
-    <message>
-        <source>Memo:</source>
-        <translation type="vanished">Примечание:</translation>
-    </message>
-    <message>
         <location filename="../sendcoinsentry.cpp" line="+1"/>
         <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
         <translation>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
-    </message>
-</context>
-<context>
-    <name>ShutdownWindow</name>
-    <message>
-        <source>DigiByte Core is shutting down...</source>
-        <translation type="vanished">DigiByte Core выключается...</translation>
-    </message>
-    <message>
-        <source>Do not shut down the computer until this window disappears.</source>
-        <translation type="vanished">Не выключайте компьютер, пока это окно не исчезнет.</translation>
     </message>
 </context>
 <context>
@@ -3713,14 +2450,6 @@ Address: %4
         <location line="-118"/>
         <source>You can sign messages with your addresses to prove you own them. Be careful not to sign anything vague, as phishing attacks may try to trick you into signing your identity over to them. Only sign fully-detailed statements you agree to.</source>
         <translation>Вы можете подписывать сообщения своими адресами, чтобы доказать владение ими. Будьте осторожны, не подписывайте что-то неопределённое, так как фишинговые атаки могут обманным путём заставить вас подписать нежелательные сообщения. Подписывайте только те сообщения, с которыми вы согласны вплоть до мелочей.</translation>
-    </message>
-    <message>
-        <source>The address to sign the message with (e.g. DNS17iag9jJgTHD1VXjvLCEnZuQ3rJDE9L)</source>
-        <translation type="vanished">Адрес, которым вы хотите подписать сообщение  (напр. DNS17iag9jJgTHD1VXjvLCEnZuQ3rJDE9L)</translation>
-    </message>
-    <message>
-        <source>Choose previously used address</source>
-        <translation type="vanished">Выберите ранее использованный адрес</translation>
     </message>
     <message>
         <location line="+18"/>
@@ -3771,21 +2500,9 @@ Address: %4
         <translation>Проверьте сообщение, чтобы убедиться, что он был подписан с указанным адресом Gridcoin</translation>
     </message>
     <message>
-        <source>Signature</source>
-        <translation type="vanished">Подпись</translation>
-    </message>
-    <message>
         <location line="-167"/>
         <source>Copy the current signature to the system clipboard</source>
         <translation>Скопировать текущую подпись в системный буфер обмена</translation>
-    </message>
-    <message>
-        <source>Sign the message to prove you own this DigiByte address</source>
-        <translation type="vanished">Подписать сообщение, чтобы доказать владение адресом DigiByte</translation>
-    </message>
-    <message>
-        <source>Sign &amp;Message</source>
-        <translation type="vanished">Подписать &amp;Сообщение</translation>
     </message>
     <message>
         <location line="+38"/>
@@ -3810,25 +2527,9 @@ Address: %4
         <translation>Введите ниже адрес для подписи, сообщение (убедитесь, что переводы строк, пробелы, табы и т.п. в точности скопированы) и подпись, чтобы проверить сообщение. Убедитесь, что не скопировали лишнего в подпись, по сравнению с самим подписываемым сообщением, чтобы не стать жертвой атаки &quot;man-in-the-middle&quot;.</translation>
     </message>
     <message>
-        <source>The address the message was signed with (e.g. DNS17iag9jJgTHD1VXjvLCEnZuQ3rJDE9L)</source>
-        <translation type="vanished">Адрес, которым было подписано сообщение (напр. DNS17iag9jJgTHD1VXjvLCEnZuQ3rJDE9L)</translation>
-    </message>
-    <message>
-        <source>Verify the message to ensure it was signed with the specified DigiByte address</source>
-        <translation type="vanished">Проверить сообщение, чтобы убедиться, что оно было подписано указанным адресом DigiByte</translation>
-    </message>
-    <message>
-        <source>Verify &amp;Message</source>
-        <translation type="vanished">Проверить &amp;Сообщение</translation>
-    </message>
-    <message>
         <location line="+78"/>
         <source>Reset all verify message fields</source>
         <translation>Сбросить все поля проверки сообщения</translation>
-    </message>
-    <message>
-        <source>Enter a DigiByte address (e.g. DNS17iag9jJgTHD1VXjvLCEnZuQ3rJDE9L)</source>
-        <translation type="vanished">Введите адрес DigiByte (напр. DNS17iag9jJgTHD1VXjvLCEnZuQ3rJDE9L)</translation>
     </message>
     <message>
         <location filename="../signverifymessagedialog.cpp" line="+27"/>
@@ -3911,28 +2612,6 @@ Address: %4
         <location line="+5"/>
         <source>Message verified.</source>
         <translation>Сообщение проверено.</translation>
-    </message>
-</context>
-<context>
-    <name>SplashScreen</name>
-    <message>
-        <source>DigiByte Core</source>
-        <translation type="vanished">DigiByte Core</translation>
-    </message>
-    <message>
-        <source>The Bitcoin and DigiByte Core developers</source>
-        <translation type="vanished">Разработчики DigiByte Core</translation>
-    </message>
-    <message>
-        <source>[testnet]</source>
-        <translation type="vanished">[тестовая сеть]</translation>
-    </message>
-</context>
-<context>
-    <name>TrafficGraphWidget</name>
-    <message>
-        <source>KB/s</source>
-        <translation type="vanished">КБ/сек</translation>
     </message>
 </context>
 <context>
@@ -4102,18 +2781,6 @@ Address: %4
         <translation>Информация</translation>
     </message>
     <message>
-        <source>Merchant</source>
-        <translation type="vanished">Продавец</translation>
-    </message>
-    <message>
-        <source>Generated coins must mature %1 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
-        <translation type="vanished">Сгенерированные монеты должны подождать %1 блоков, прежде чем они могут быть потрачены. Когда Вы сгенерировали этот блок, он был отправлен в сеть для добавления в цепочку блоков. Если он не попадёт в цепь, его статус изменится на &quot;не принят&quot;, и монеты будут недействительны. Это иногда происходит в случае, если другой узел сгенерирует блок на несколько секунд раньше вас.</translation>
-    </message>
-    <message>
-        <source>Debug information</source>
-        <translation type="vanished">Отладочная информация</translation>
-    </message>
-    <message>
         <location line="+8"/>
         <source>Transaction</source>
         <translation>Транзакция</translation>
@@ -4228,10 +2895,6 @@ Address: %4
         <source>Amount</source>
         <translation>Сумма</translation>
     </message>
-    <message>
-        <source>Immature (%1 confirmations, will be available after %2)</source>
-        <translation type="vanished">Незрелый (%1 подтверждений, будет доступен после %2)</translation>
-    </message>
     <message numerus="yes">
         <location line="+52"/>
         <source>Open for %n more block(s)</source>
@@ -4257,10 +2920,6 @@ Address: %4
         <translation>Подтверждено (%1 подтверждений)</translation>
     </message>
     <message>
-        <source>This block was not received by any other nodes and will probably not be accepted!</source>
-        <translation type="vanished">Этот блок не был получен другими узлами и, возможно, не будет принят!</translation>
-    </message>
-    <message>
         <location line="+12"/>
         <source>Generated but not accepted</source>
         <translation>Сгенерированно, но не подтверждено</translation>
@@ -4274,10 +2933,6 @@ Address: %4
         <location line="+3"/>
         <source>Unconfirmed</source>
         <translation>Неподтверждено</translation>
-    </message>
-    <message>
-        <source>Confirming (%1 of %2 recommended confirmations)</source>
-        <translation type="vanished">Подтверждено(%1 подтверждений, рекомендуется 2% подтверждений)</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -4333,10 +2988,6 @@ Address: %4
         <location line="+4"/>
         <source>Mined - Interest</source>
         <translation>Добыто - интерес</translation>
-    </message>
-    <message>
-        <source>Mined</source>
-        <translation type="vanished">Добыто</translation>
     </message>
     <message>
         <location line="+58"/>
@@ -4476,26 +3127,6 @@ Address: %4
         <location line="+146"/>
         <source>Export Transaction Data</source>
         <translation>Экспорт данных транзакции</translation>
-    </message>
-    <message>
-        <source>Export Transaction History</source>
-        <translation type="vanished">Экспортировать историю транзакций</translation>
-    </message>
-    <message>
-        <source>Exporting Failed</source>
-        <translation type="vanished">Экспорт не удался</translation>
-    </message>
-    <message>
-        <source>There was an error trying to save the transaction history to %1.</source>
-        <translation type="vanished">Произошла ошибка при сохранении истории транзакций в %1.</translation>
-    </message>
-    <message>
-        <source>Exporting Successful</source>
-        <translation type="vanished">Экспорт успешно завершён</translation>
-    </message>
-    <message>
-        <source>The transaction history was successfully saved to %1.</source>
-        <translation type="vanished">История транзакций была успешно сохранена в %1.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -4788,57 +3419,11 @@ Address: %4
     </message>
 </context>
 <context>
-    <name>WalletFrame</name>
-    <message>
-        <source>No wallet has been loaded.</source>
-        <translation type="vanished">Не был загружен ни один бумажник.</translation>
-    </message>
-</context>
-<context>
     <name>WalletModel</name>
-    <message>
-        <source>Send Coins</source>
-        <translation type="vanished">Отправка</translation>
-    </message>
     <message>
         <location filename="../walletmodel.cpp" line="+269"/>
         <source>Sending...</source>
         <translation>Отправка...</translation>
-    </message>
-</context>
-<context>
-    <name>WalletView</name>
-    <message>
-        <source>&amp;Export</source>
-        <translation type="vanished">&amp;Экспорт</translation>
-    </message>
-    <message>
-        <source>Export the data in the current tab to a file</source>
-        <translation type="vanished">Экспортировать данные из вкладки в файл</translation>
-    </message>
-    <message>
-        <source>Backup Wallet</source>
-        <translation type="vanished">Сделать резервную копию бумажника</translation>
-    </message>
-    <message>
-        <source>Wallet Data (*.dat)</source>
-        <translation type="vanished">Данные бумажника (*.dat)</translation>
-    </message>
-    <message>
-        <source>Backup Failed</source>
-        <translation type="vanished">Резервное копирование не удалось</translation>
-    </message>
-    <message>
-        <source>There was an error trying to save the wallet data to %1.</source>
-        <translation type="vanished">Произошла ошибка при сохранении данных бумажника в %1.</translation>
-    </message>
-    <message>
-        <source>The wallet data was successfully saved to %1.</source>
-        <translation type="vanished">Данные бумажника были успешно сохранены в %1.</translation>
-    </message>
-    <message>
-        <source>Backup Successful</source>
-        <translation type="vanished">Резервное копирование успешно завершено</translation>
     </message>
 </context>
 <context>
@@ -4865,21 +3450,9 @@ Address: %4
         <translation>Опции:</translation>
     </message>
     <message>
-        <source>Specify configuration file (default: digibyte.conf)</source>
-        <translation type="vanished">Указать конфигурационный файл (по умолчанию: digibyte.conf)</translation>
-    </message>
-    <message>
-        <source>Specify pid file (default: digibyted.pid)</source>
-        <translation type="vanished">Задать pid-файл (по умолчанию: bitcoin.pid)</translation>
-    </message>
-    <message>
         <location line="+4"/>
         <source>Specify data directory</source>
         <translation>Задать каталог данных</translation>
-    </message>
-    <message>
-        <source>Listen for connections on &lt;port&gt; (default: 8333 or testnet: 18333)</source>
-        <translation type="vanished">Принимать входящие подключения на &lt;port&gt; (по умолчанию: 8333 или 18333 в тестовой сети)</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -4912,17 +3485,9 @@ Address: %4
         <translation>Произошла ошибка при открытии RPC-порта %u для прослушивания на IPv4: %s</translation>
     </message>
     <message>
-        <source>Listen for JSON-RPC connections on &lt;port&gt; (default: 8332 or testnet: 18332)</source>
-        <translation type="vanished">Прослушивать подключения JSON-RPC на &lt;порту&gt; (по умолчанию: 8332 или для testnet: 18332)</translation>
-    </message>
-    <message>
         <location line="+54"/>
         <source>Accept command line and JSON-RPC commands</source>
         <translation>Принимать командную строку и команды JSON-RPC</translation>
-    </message>
-    <message>
-        <source>DigiByte Core RPC client version</source>
-        <translation type="vanished">Версия RPC-клиента DigiByte Core</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -4940,65 +3505,9 @@ Address: %4
         <translation>Принимать подключения извне (по умолчанию: 1, если не используется -proxy или -connect)</translation>
     </message>
     <message>
-        <source>%s, you must set a rpcpassword in the configuration file:
-%s
-It is recommended you use the following random password:
-rpcuser=digibyterpc
-rpcpassword=%s
-(you do not need to remember this password)
-The username and password MUST NOT be the same.
-If the file does not exist, create it with owner-readable-only file permissions.
-It is also recommended to set alertnotify so you are notified of problems;
-for example: alertnotify=echo %%s | mail -s &quot;DigiByte Alert&quot; admin@foo.com
-</source>
-        <translation type="vanished">%s, вы должны установить опцию rpcpassword в конфигурационном файле:
- %s
-Рекомендуется использовать следующий случайный пароль:
-rpcuser=digibyterpc
-rpcpassword=%s
-(вам не нужно запоминать этот пароль)
-Имя и пароль ДОЛЖНЫ различаться.
-Если файл не существует, создайте его и установите права доступа только для владельца, только для чтения.
-Также рекомендуется включить alertnotify для оповещения о проблемах;
-Например: alertnotify=echo %%s | mail -s &quot;DigiByte Alert&quot; admin@foo.com
-</translation>
-    </message>
-    <message>
-        <source>Acceptable ciphers (default: TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH)</source>
-        <translation type="vanished">Разрешённые алгоритмы(по умолчанию: TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH)</translation>
-    </message>
-    <message>
         <location line="-38"/>
         <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
         <translation>Произошла ошибка при открытии на прослушивание IPv6 RCP-порта %u, возвращаемся к IPv4: %s</translation>
-    </message>
-    <message>
-        <source>Bind to given address and always listen on it. Use [host]:port notation for IPv6</source>
-        <translation type="vanished">Привязаться к указанному адресу и всегда прослушивать только его. Используйте [хост]:порт для IPv6</translation>
-    </message>
-    <message>
-        <source>Continuously rate-limit free transactions to &lt;n&gt;*1000 bytes per minute (default:15)</source>
-        <translation type="vanished">Ограничить скорость передачи бесплатных транзакций до &lt;n&gt;*1000 байт в минуту (по умолчанию: 15)</translation>
-    </message>
-    <message>
-        <source>Enter regression test mode, which uses a special chain in which blocks can be solved instantly. This is intended for regression testing tools and app development.</source>
-        <translation type="vanished">Войти в режим тестирования на регрессии, в котором используется специальная цепь, где блоки находятся мгновенно. Этот режим рассчитан на инструменты регрессионного тестирования и разработку приложений.</translation>
-    </message>
-    <message>
-        <source>Enter regression test mode, which uses a special chain in which blocks can be solved instantly.</source>
-        <translation type="vanished">Войти в режим тестирования на регрессии, в котором используется специальная цепь, где блоки находятся мгновенно.</translation>
-    </message>
-    <message>
-        <source>Error: Listening for incoming connections failed (listen returned error %d)</source>
-        <translation type="vanished">Ошибка: не удалось начать прослушивание входящих подключений (прослушивание вернуло ошибку %d)</translation>
-    </message>
-    <message>
-        <source>Error: The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation type="vanished">Ошибка: транзакция была отклонена! Это могло произойти в случае, если некоторые монеты в вашем бумажнике уже были потрачены, например, если вы используете копию wallet.dat, и монеты были использованы в копии, но не отмечены как потраченные здесь.</translation>
-    </message>
-    <message>
-        <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds!</source>
-        <translation type="vanished">Ошибка: эта транзакция требует комиссию как минимум %s из-за суммы, сложности или использования недавно полученных средств!</translation>
     </message>
     <message>
         <location line="+75"/>
@@ -5006,57 +3515,9 @@ rpcpassword=%s
         <translation>Выполнить команду, когда меняется транзакция в бумажнике (%s в команде заменяется на TxID)</translation>
     </message>
     <message>
-        <source>Fees smaller than this are considered zero fee (for transaction creation) (default:</source>
-        <translation type="vanished">Комиссии меньшие этого значения считаются нулевыми (для создания транзакции) (по умолчанию:</translation>
-    </message>
-    <message>
-        <source>Flush database activity from memory pool to disk log every &lt;n&gt; megabytes (default: 100)</source>
-        <translation type="vanished">Сбрасывать активность базы данных из памяти на диск каждые &lt;n&gt; мегабайт (по умолчанию: 100)</translation>
-    </message>
-    <message>
-        <source>How thorough the block verification of -checkblocks is (0-4, default: 3)</source>
-        <translation type="vanished">Насколько тщательна проверка контрольных блоков -checkblocks (0-4, по умолчанию: 3)</translation>
-    </message>
-    <message>
-        <source>In this mode -genproclimit controls how many blocks are generated immediately.</source>
-        <translation type="vanished">В этом режиме -genproclimit определяет, сколько блоков генерируется немедленно.</translation>
-    </message>
-    <message>
-        <source>Set the number of script verification threads (%u to %d, 0 = auto, &lt;0 = leave that many cores free, default: %d)</source>
-        <translation type="vanished">Задать число потоков проверки скрипта (от %u до %d, 0=авто, &lt;0 = оставить столько ядер свободными, по умолчанию: %d)</translation>
-    </message>
-    <message>
-        <source>Set the processor limit for when generation is on (-1 = unlimited, default: -1)</source>
-        <translation type="vanished">Задать лимит процессора, когда генерация работает (-1 = безлимитно, по умолчанию: -1)</translation>
-    </message>
-    <message>
-        <source>This is a pre-release test build - use at your own risk - do not use for mining or merchant applications</source>
-        <translation type="vanished">Это пре-релизная тестовая сборка - используйте на свой страх и риск - не используйте для добычи или торговых приложений</translation>
-    </message>
-    <message>
-        <source>Unable to bind to %s on this computer. DigiByte Core is probably already running.</source>
-        <translation type="vanished">Не удалось забиндиться на %s на этом компьютере. Возможно, DigiByte Core уже запущен.</translation>
-    </message>
-    <message>
-        <source>Use separate SOCKS5 proxy to reach peers via Tor hidden services (default: -proxy)</source>
-        <translation type="vanished">Использовать отдельный прокси SOCKS5 для соединения с участниками через скрытые сервисы Tor (по умолчанию: -proxy)</translation>
-    </message>
-    <message>
         <location line="+30"/>
         <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
         <translation>Внимание: установлено очень большое значение -paytxfee. Это комиссия, которую вы заплатите при проведении транзакции.</translation>
-    </message>
-    <message>
-        <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong DigiByte will not work properly.</source>
-        <translation type="vanished">Внимание: убедитесь, что дата и время на Вашем компьютере выставлены верно. Если Ваши часы идут неправильно, DigiByte будет работать некорректно.</translation>
-    </message>
-    <message>
-        <source>Warning: The network does not appear to fully agree! Some miners appear to be experiencing issues.</source>
-        <translation type="vanished">Внимание: похоже, в сети нет полного согласия! Некоторый майнеры, возможно, испытывают проблемы.</translation>
-    </message>
-    <message>
-        <source>Warning: We do not appear to fully agree with our peers! You may need to upgrade, or other nodes may need to upgrade.</source>
-        <translation type="vanished">Внимание: мы не полностью согласны с подключенными участниками! Вам или другим узлам, возможно, следует обновиться.</translation>
     </message>
     <message>
         <location line="+31"/>
@@ -5069,25 +3530,9 @@ rpcpassword=%s
         <translation>Внимание: wallet.dat повреждён, данные спасены! Оригинальный wallet.dat сохранён как wallet.{timestamp}.bak в %s; если ваш баланс или транзакции некорректны, вы должны восстановить файл из резервной копии.</translation>
     </message>
     <message>
-        <source>(default: 1)</source>
-        <translation type="vanished">(по умолчанию: 1)</translation>
-    </message>
-    <message>
-        <source>(default: wallet.dat)</source>
-        <translation type="vanished">(по умолчанию: wallet.dat)</translation>
-    </message>
-    <message>
-        <source>&lt;category&gt; can be:</source>
-        <translation type="vanished">&lt;category&gt; может быть:</translation>
-    </message>
-    <message>
         <location line="-31"/>
         <source>Attempt to recover private keys from a corrupt wallet.dat</source>
         <translation>Попытаться восстановить приватные ключи из повреждённого wallet.dat</translation>
-    </message>
-    <message>
-        <source>DigiByte Core Daemon</source>
-        <translation type="vanished">Демон DigiByte Core</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -5095,37 +3540,9 @@ rpcpassword=%s
         <translation>Параметры создания блоков:</translation>
     </message>
     <message>
-        <source>Clear list of wallet transactions (diagnostic tool; implies -rescan)</source>
-        <translation type="vanished">Очистить список транзакций кошелька (диагностический инструмент; включает в себя -rescan)</translation>
-    </message>
-    <message>
         <location line="-59"/>
         <source>Connect only to the specified node(s)</source>
         <translation>Подключаться только к указанному узлу(ам)</translation>
-    </message>
-    <message>
-        <source>Connect through SOCKS proxy</source>
-        <translation type="vanished">Подключаться через SOCKS прокси</translation>
-    </message>
-    <message>
-        <source>Connect to JSON-RPC on &lt;port&gt; (default: 8332 or testnet: 18332)</source>
-        <translation type="vanished">Подключаться к JSON-RPC на &lt;порт&gt; (по умолчанию: 8332 или testnet: 18332)</translation>
-    </message>
-    <message>
-        <source>Connection options:</source>
-        <translation type="vanished">Параметры подключения:</translation>
-    </message>
-    <message>
-        <source>Corrupted block database detected</source>
-        <translation type="vanished">БД блоков повреждена</translation>
-    </message>
-    <message>
-        <source>Debugging/Testing options:</source>
-        <translation type="vanished">Параметры отладки/тестирования:</translation>
-    </message>
-    <message>
-        <source>Disable safemode, override a real safe mode event (default: 0)</source>
-        <translation type="vanished">Отключить безопасный режим, отклонить реальное событие безопасного режима (по умолчанию: 0)</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -5133,246 +3550,14 @@ rpcpassword=%s
         <translation>Определить свой IP (по умолчанию: 1 при прослушивании и если не используется -externalip)</translation>
     </message>
     <message>
-        <source>Do not load the wallet and disable wallet RPC calls</source>
-        <translation type="vanished">Не загружать бумажник и запретить обращения к нему через RPC</translation>
-    </message>
-    <message>
-        <source>Do you want to rebuild the block database now?</source>
-        <translation type="vanished">Пересобрать БД блоков прямо сейчас?</translation>
-    </message>
-    <message>
-        <source>Error initializing block database</source>
-        <translation type="vanished">Ошибка инициализации БД блоков</translation>
-    </message>
-    <message>
-        <source>Error initializing wallet database environment %s!</source>
-        <translation type="vanished">Ошибка инициализации окружения БД бумажника %s!</translation>
-    </message>
-    <message>
-        <source>Error loading block database</source>
-        <translation type="vanished">Ошибка чтения базы данных блоков</translation>
-    </message>
-    <message>
-        <source>Error opening block database</source>
-        <translation type="vanished">Не удалось открыть БД блоков</translation>
-    </message>
-    <message>
-        <source>Error: Disk space is low!</source>
-        <translation type="vanished">Ошибка: мало места на диске!</translation>
-    </message>
-    <message>
-        <source>Error: Wallet locked, unable to create transaction!</source>
-        <translation type="vanished">Ошибка: бумажник заблокирован, невозможно создать транзакцию!</translation>
-    </message>
-    <message>
-        <source>Error: system error: </source>
-        <translation type="vanished">Ошибка: системная ошибка:</translation>
-    </message>
-    <message>
         <location line="+92"/>
         <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
         <translation>Не удалось начать прослушивание на порту. Используйте -listen=0 если вас это устраивает.</translation>
     </message>
     <message>
-        <source>Failed to read block info</source>
-        <translation type="vanished">Не удалось прочитать информацию блока</translation>
-    </message>
-    <message>
-        <source>Failed to read block</source>
-        <translation type="vanished">Не удалось прочитать блок</translation>
-    </message>
-    <message>
-        <source>Failed to sync block index</source>
-        <translation type="vanished">Не удалось синхронизировать индекс блоков</translation>
-    </message>
-    <message>
-        <source>Failed to write block index</source>
-        <translation type="vanished">Не удалось записать индекс блоков</translation>
-    </message>
-    <message>
-        <source>Failed to write block info</source>
-        <translation type="vanished">Не удалось записать информацию блока</translation>
-    </message>
-    <message>
-        <source>Failed to write block</source>
-        <translation type="vanished">Не удалось записать блок</translation>
-    </message>
-    <message>
-        <source>Failed to write file info</source>
-        <translation type="vanished">Не удалось записать информацию файла</translation>
-    </message>
-    <message>
-        <source>Failed to write to coin database</source>
-        <translation type="vanished">Не удалось записать БД монет</translation>
-    </message>
-    <message>
-        <source>Failed to write transaction index</source>
-        <translation type="vanished">Не удалось записать индекс транзакций</translation>
-    </message>
-    <message>
-        <source>Failed to write undo data</source>
-        <translation type="vanished">Не удалось записать данные для отмены</translation>
-    </message>
-    <message>
-        <source>Fee per kB to add to transactions you send</source>
-        <translation type="vanished">Комиссия на КБ, добавляемая к вашим переводам</translation>
-    </message>
-    <message>
-        <source>Fees smaller than this are considered zero fee (for relaying) (default:</source>
-        <translation type="vanished">Комиссии меньшие этого значения считаются нулевыми (для ретрансляции) (по умолчанию:</translation>
-    </message>
-    <message>
-        <source>Find peers using DNS lookup (default: 1 unless -connect)</source>
-        <translation type="vanished">Искать узлы с помощью DNS (по умолчанию: 1, если не указан -connect)</translation>
-    </message>
-    <message>
-        <source>Force safe mode (default: 0)</source>
-        <translation type="vanished">Принудительный безопасный режим (по умолчанию: 0)</translation>
-    </message>
-    <message>
-        <source>Generate coins (default: 0)</source>
-        <translation type="vanished">Включить добычу монет (по умолчанию: 0)</translation>
-    </message>
-    <message>
-        <source>How many blocks to check at startup (default: 288, 0 = all)</source>
-        <translation type="vanished">Сколько блоков проверять при запуске (по умолчанию: 288, 0 = все)</translation>
-    </message>
-    <message>
-        <source>If &lt;category&gt; is not supplied, output all debugging information.</source>
-        <translation type="vanished">Если &lt;category&gt; не предоставлена, выводить всю отладочную информацию.</translation>
-    </message>
-    <message>
-        <source>Importing...</source>
-        <translation type="vanished">Импорт ...</translation>
-    </message>
-    <message>
-        <source>Incorrect or no genesis block found. Wrong datadir for network?</source>
-        <translation type="vanished">Неверный или отсутствующий начальный блок. Неправильный каталог данных для сети?</translation>
-    </message>
-    <message>
-        <source>Invalid -onion address: &apos;%s&apos;</source>
-        <translation type="vanished">Неверный -onion адрес: &apos;%s&apos;</translation>
-    </message>
-    <message>
-        <source>Not enough file descriptors available.</source>
-        <translation type="vanished">Недостаточно файловых дескрипторов.</translation>
-    </message>
-    <message>
-        <source>Prepend debug output with timestamp (default: 1)</source>
-        <translation type="vanished">Дописывать отметки времени к отладочному выводу (по умолчанию: 1)</translation>
-    </message>
-    <message>
-        <source>RPC client options:</source>
-        <translation type="vanished">Параметры RPC клиента:</translation>
-    </message>
-    <message>
-        <source>Rebuild block chain index from current blk000??.dat files</source>
-        <translation type="vanished">Перестроить индекс цепи блоков из текущих файлов blk000??.dat</translation>
-    </message>
-    <message>
-        <source>Select SOCKS version for -proxy (4 or 5, default: 5)</source>
-        <translation type="vanished">Выбрать версию SOCKS для -proxy (4 или 5, по умолчанию: 5)</translation>
-    </message>
-    <message>
-        <source>Set database cache size in megabytes (%d to %d, default: %d)</source>
-        <translation type="vanished">Установить размер кэша БД в мегабайтах(от %d до %d, по умолчанию: %d)</translation>
-    </message>
-    <message>
-        <source>Set maximum block size in bytes (default: %d)</source>
-        <translation type="vanished">Задать максимальный размер блока в байтах (по умолчанию: %d)</translation>
-    </message>
-    <message>
-        <source>Set the number of threads to service RPC calls (default: 4)</source>
-        <translation type="vanished">Задать число потоков выполнения(по умолчанию: 4)</translation>
-    </message>
-    <message>
         <location line="-107"/>
         <source>Specify wallet file (within data directory)</source>
         <translation>Укажите файл бумажника (внутри каталога данных)</translation>
-    </message>
-    <message>
-        <source>Spend unconfirmed change when sending transactions (default: 1)</source>
-        <translation type="vanished">Тратить неподтвержденную сдачу при отправке транзакций (по умолчанию: 1)</translation>
-    </message>
-    <message>
-        <source>This is intended for regression testing tools and app development.</source>
-        <translation type="vanished">Это рассчитано на инструменты регрессионного тестирования и разработку приложений.</translation>
-    </message>
-    <message>
-        <source>Usage (deprecated, use digibyte-cli):</source>
-        <translation type="vanished">Использование (устарело, используйте digibyte-cli):</translation>
-    </message>
-    <message>
-        <source>Verifying blocks...</source>
-        <translation type="vanished">Проверка блоков...</translation>
-    </message>
-    <message>
-        <source>Verifying wallet...</source>
-        <translation type="vanished">Проверка бумажника...</translation>
-    </message>
-    <message>
-        <source>Wait for RPC server to start</source>
-        <translation type="vanished">Ожидание запуска RPC сервера</translation>
-    </message>
-    <message>
-        <source>Wallet %s resides outside data directory %s</source>
-        <translation type="vanished">Бумажник %s располагается вне каталога данных %s</translation>
-    </message>
-    <message>
-        <source>Wallet options:</source>
-        <translation type="vanished">Опции бумажника:</translation>
-    </message>
-    <message>
-        <source>Warning: Deprecated argument -debugnet ignored, use -debug=net</source>
-        <translation type="vanished">Внимание: устаревший аргумент -debugnet проигнорирован, используйте -debug=net</translation>
-    </message>
-    <message>
-        <source>You need to rebuild the database using -reindex to change -txindex</source>
-        <translation type="vanished">Вам необходимо пересобрать базы данных с помощью -reindex, чтобы изменить -txindex</translation>
-    </message>
-    <message>
-        <source>Imports blocks from external blk000??.dat file</source>
-        <translation type="vanished">Импортировать блоки из внешнего файла blk000??.dat</translation>
-    </message>
-    <message>
-        <source>Cannot obtain a lock on data directory %s. DigiByte Core is probably already running.</source>
-        <translation type="vanished">Не удалось установить блокировку на каталог данных %s. Возможно, DigiByte Core уже запущен.</translation>
-    </message>
-    <message>
-        <source>Execute command when a relevant alert is received or we see a really long fork (%s in cmd is replaced by message)</source>
-        <translation type="vanished">Выполнить команду, когда приходит соответствующее сообщение о тревоге или наблюдается очень длинное расщепление цепи (%s в команде заменяется на сообщение)</translation>
-    </message>
-    <message>
-        <source>Output debugging information (default: 0, supplying &lt;category&gt; is optional)</source>
-        <translation type="vanished">Выводить отладочную информацию (по умолчанию: 0, указание &lt;category&gt; необязательно)</translation>
-    </message>
-    <message>
-        <source>Set maximum size of high-priority/low-fee transactions in bytes (default: %d)</source>
-        <translation type="vanished">Задать максимальный размер высокоприоритетных/низкокомиссионных транзакций в байтах (по умолчанию: %d)</translation>
-    </message>
-    <message>
-        <source>Information</source>
-        <translation type="vanished">Информация</translation>
-    </message>
-    <message>
-        <source>Invalid amount for -minrelaytxfee=&lt;amount&gt;: &apos;%s&apos;</source>
-        <translation type="vanished">Неверная сумма в параметре -minrelaytxfee=&lt;кол-во&gt;: &apos;%s&apos;</translation>
-    </message>
-    <message>
-        <source>Invalid amount for -mintxfee=&lt;amount&gt;: &apos;%s&apos;</source>
-        <translation type="vanished">Неверная сумма в параметре -mintxfee=&lt;кол-во&gt;: &apos;%s&apos;</translation>
-    </message>
-    <message>
-        <source>Limit size of signature cache to &lt;n&gt; entries (default: 50000)</source>
-        <translation type="vanished">Ограничить размер кэша подписей &lt;n&gt; записями (по умолчанию: 50000)</translation>
-    </message>
-    <message>
-        <source>Log transaction priority and fee per kB when mining blocks (default: 0)</source>
-        <translation type="vanished">Записывать в лог приоритет транзакции и комиссию на килобайт во время добычи блоков (по умолчанию: 0)</translation>
-    </message>
-    <message>
-        <source>Maintain a full transaction index (default: 0)</source>
-        <translation type="vanished">Держать полный индекс транзакций (по умолчанию: 0)</translation>
     </message>
     <message>
         <location line="+28"/>
@@ -5385,50 +3570,9 @@ rpcpassword=%s
         <translation>Максимальный размер буфера отправки на соединение, &lt;n&gt;*1000 байт (по умолчанию: 1000)</translation>
     </message>
     <message>
-        <source>Only accept block chain matching built-in checkpoints (default: 1)</source>
-        <translation type="vanished">Принимать цепь блоков, только если она соответствует встроенным контрольным точкам (по умолчанию: 1)</translation>
-    </message>
-    <message>
         <location line="-15"/>
         <source>Only connect to nodes in network &lt;net&gt; (IPv4, IPv6 or Tor)</source>
         <translation>Подключаться только к узлам из сети &lt;net&gt; (IPv4, IPv6 или Tor)</translation>
-    </message>
-    <message>
-        <source>Print block on startup, if found in block index</source>
-        <translation type="vanished">Печатать блок при запуске, если он найден в индексе блоков</translation>
-    </message>
-    <message>
-        <source>Print block tree on startup (default: 0)</source>
-        <translation type="vanished">Печатать дерево блоков при запуске (по умолчанию: 0)</translation>
-    </message>
-    <message>
-        <source>RPC SSL options: (see the DigiByte Wiki for SSL setup instructions)</source>
-        <translation type="vanished">Параметры RPC SSL: (см. DigiByte вики для инструкций по настройке SSL)</translation>
-    </message>
-    <message>
-        <source>RPC server options:</source>
-        <translation type="vanished">Параметры сервера RPC:</translation>
-    </message>
-    <message>
-        <source>Randomly drop 1 of every &lt;n&gt; network messages</source>
-        <translation type="vanished">Случайно отбрасывать 1 из каждых &lt;n&gt; сетевых сообщений</translation>
-    </message>
-    <message>
-        <source>Randomly fuzz 1 of every &lt;n&gt; network messages</source>
-        <translation type="vanished">Случайно разбрасывать 1 из каждых &lt;n&gt; сетевых сообщений</translation>
-    </message>
-    <message>
-        <source>Run a thread to flush wallet periodically (default: 1)</source>
-        <translation type="vanished">Запустить поток для периодического сохранения бумажника (по умолчанию: 1)</translation>
-    </message>
-    <message>
-        <source>SSL options: (see the DigiByte Wiki for SSL setup instructions)</source>
-        <translation type="vanished">
-Параметры SSL: (см. DigiByte Wiki для инструкций по настройке SSL)</translation>
-    </message>
-    <message>
-        <source>Send command to DigiByte Core</source>
-        <translation type="vanished">Отправить команду DigiByte Core</translation>
     </message>
     <message>
         <location line="+29"/>
@@ -5441,50 +3585,14 @@ rpcpassword=%s
         <translation>Минимальный размер блока в байтах (по умолчанию: 0)</translation>
     </message>
     <message>
-        <source>Sets the DB_PRIVATE flag in the wallet db environment (default: 1)</source>
-        <translation type="vanished">Установить флаг DB_PRIVATE в окружении базы данных бумажника (по умолчанию: 1)</translation>
-    </message>
-    <message>
-        <source>Show all debugging options (usage: --help -help-debug)</source>
-        <translation type="vanished">Показать все отладочные параметры (использование: --help -help-debug)</translation>
-    </message>
-    <message>
-        <source>Show benchmark information (default: 0)</source>
-        <translation type="vanished">Показать информацию нагрузочного тестирования (по умолчанию: 0)</translation>
-    </message>
-    <message>
         <location line="-29"/>
         <source>Shrink debug.log file on client startup (default: 1 when no -debug)</source>
         <translation>Сжимать файл debug.log при запуске клиента (по умолчанию: 1, если нет -debug)</translation>
     </message>
     <message>
-        <source>Signing transaction failed</source>
-        <translation type="vanished">Не удалось подписать транзакцию</translation>
-    </message>
-    <message>
         <location line="-39"/>
         <source>Specify connection timeout in milliseconds (default: 5000)</source>
         <translation>Тайм-аут соединения в миллисекундах (по умолчанию: 5000)</translation>
-    </message>
-    <message>
-        <source>Start DigiByte Core Daemon</source>
-        <translation type="vanished">Запустить DigiByte Core демон</translation>
-    </message>
-    <message>
-        <source>System error: </source>
-        <translation type="vanished">Системная ошибка:</translation>
-    </message>
-    <message>
-        <source>Transaction amount too small</source>
-        <translation type="vanished">Сумма транзакции слишком мала</translation>
-    </message>
-    <message>
-        <source>Transaction amounts must be positive</source>
-        <translation type="vanished">Сумма транзакции должна быть положительна</translation>
-    </message>
-    <message>
-        <source>Transaction too large</source>
-        <translation type="vanished">Транзакция слишком большая</translation>
     </message>
     <message>
         <location line="+28"/>
@@ -5502,25 +3610,9 @@ rpcpassword=%s
         <translation>Имя для подключений JSON-RPC</translation>
     </message>
     <message>
-        <source>Warning</source>
-        <translation type="vanished">Внимание</translation>
-    </message>
-    <message>
         <location line="+103"/>
         <source>Warning: This version is obsolete, upgrade required!</source>
         <translation>Внимание: эта версия устарела, требуется обновление!</translation>
-    </message>
-    <message>
-        <source>Zapping all transactions from wallet...</source>
-        <translation type="vanished">Стираем все транзакции из кошелька...</translation>
-    </message>
-    <message>
-        <source>on startup</source>
-        <translation type="vanished">при запуске</translation>
-    </message>
-    <message>
-        <source>version</source>
-        <translation type="vanished">версия</translation>
     </message>
     <message>
         <location line="-47"/>
@@ -5796,14 +3888,6 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <location line="-12"/>
         <source>Error loading wallet.dat: Wallet corrupted</source>
         <translation>Ошибка загрузки wallet.dat: Бумажник поврежден</translation>
-    </message>
-    <message>
-        <source>Error loading wallet.dat: Wallet requires newer version of DigiByte</source>
-        <translation type="vanished">Ошибка загрузки wallet.dat: бумажник требует более новую версию DigiByte</translation>
-    </message>
-    <message>
-        <source>Wallet needed to be rewritten: restart DigiByte to complete</source>
-        <translation type="vanished">Необходимо перезаписать бумажник, перезапустите DigiByte для завершения операции.</translation>
     </message>
     <message>
         <location line="+6"/>
