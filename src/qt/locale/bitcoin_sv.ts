@@ -2978,7 +2978,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Betalning till dig själv</translation>
     </message>
     <message>
-        <location line="+81"/>
+        <location line="+80"/>
         <source>(n/a)</source>
         <translation>(n/a)</translation>
     </message>
@@ -3409,7 +3409,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
 <context>
     <name>WalletModel</name>
     <message>
-        <location filename="../walletmodel.cpp" line="+278"/>
+        <location filename="../walletmodel.cpp" line="+269"/>
         <source>Sending...</source>
         <translation>Skickar...</translation>
     </message>

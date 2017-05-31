@@ -2990,7 +2990,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Plat? c?tre tine</translation>
     </message>
     <message>
-        <location line="+81"/>
+        <location line="+80"/>
         <source>(n/a)</source>
         <translation>(n/a)</translation>
     </message>
@@ -3421,7 +3421,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
 <context>
     <name>WalletModel</name>
     <message>
-        <location filename="../walletmodel.cpp" line="+278"/>
+        <location filename="../walletmodel.cpp" line="+269"/>
         <source>Sending...</source>
         <translation>Se trimite...</translation>
     </message>

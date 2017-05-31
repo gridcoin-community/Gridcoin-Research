@@ -2977,7 +2977,7 @@ Dieses Label wird rot, wenn die Priorität kleiner ist als Mittel.
         <translation>Eigenüberweisung</translation>
     </message>
     <message>
-        <location line="+81"/>
+        <location line="+80"/>
         <source>(n/a)</source>
         <translation>(k.A.)</translation>
     </message>
@@ -3408,7 +3408,7 @@ Dieses Label wird rot, wenn die Priorität kleiner ist als Mittel.
 <context>
     <name>WalletModel</name>
     <message>
-        <location filename="../walletmodel.cpp" line="+278"/>
+        <location filename="../walletmodel.cpp" line="+269"/>
         <source>Sending...</source>
         <translation>Wird gesendet...</translation>
     </message>

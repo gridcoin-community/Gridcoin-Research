@@ -2955,7 +2955,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>?????</translation>
     </message>
     <message>
-        <location line="+81"/>
+        <location line="+80"/>
         <source>(n/a)</source>
         <translation>?????</translation>
     </message>
@@ -3386,7 +3386,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>WalletModel</name>
     <message>
-        <location filename="../walletmodel.cpp" line="+278"/>
+        <location filename="../walletmodel.cpp" line="+269"/>
         <source>Sending...</source>
         <translation>????</translation>
     </message>

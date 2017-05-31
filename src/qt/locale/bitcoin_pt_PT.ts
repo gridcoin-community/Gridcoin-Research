@@ -3002,7 +3002,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária.</translation>
         <translation>Pagamento ao próprio</translation>
     </message>
     <message>
-        <location line="+81"/>
+        <location line="+80"/>
         <source>(n/a)</source>
         <translation>(n/d)</translation>
     </message>
@@ -3433,7 +3433,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária.</translation>
 <context>
     <name>WalletModel</name>
     <message>
-        <location filename="../walletmodel.cpp" line="+278"/>
+        <location filename="../walletmodel.cpp" line="+269"/>
         <source>Sending...</source>
         <translation>Enviando...</translation>
     </message>

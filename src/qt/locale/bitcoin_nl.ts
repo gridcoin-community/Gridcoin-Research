@@ -2976,7 +2976,7 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Betaling aan uzelf</translation>
     </message>
     <message>
-        <location line="+81"/>
+        <location line="+80"/>
         <source>(n/a)</source>
         <translation>(nvt)</translation>
     </message>
@@ -3407,7 +3407,7 @@ Dit betekend dat een fee van %2 is vereist.</translation>
 <context>
     <name>WalletModel</name>
     <message>
-        <location filename="../walletmodel.cpp" line="+278"/>
+        <location filename="../walletmodel.cpp" line="+269"/>
         <source>Sending...</source>
         <translation>Versturen...</translation>
     </message>

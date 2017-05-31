@@ -2972,7 +2972,7 @@ Dit beteken dat &apos;n fooi van ten minste %2 word benodig.</translation>
         <translation>Betalings Aan/na jouself</translation>
     </message>
     <message>
-        <location line="+81"/>
+        <location line="+80"/>
         <source>(n/a)</source>
         <translation>(n.v.t)</translation>
     </message>
@@ -3403,7 +3403,7 @@ Dit beteken dat &apos;n fooi van ten minste %2 word benodig.</translation>
 <context>
     <name>WalletModel</name>
     <message>
-        <location filename="../walletmodel.cpp" line="+278"/>
+        <location filename="../walletmodel.cpp" line="+269"/>
         <source>Sending...</source>
         <translation>Stuur...</translation>
     </message>

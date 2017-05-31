@@ -2976,7 +2976,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Betaling til dig selv</translation>
     </message>
     <message>
-        <location line="+81"/>
+        <location line="+80"/>
         <source>(n/a)</source>
         <translation>(n/a)</translation>
     </message>
@@ -3407,7 +3407,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
 <context>
     <name>WalletModel</name>
     <message>
-        <location filename="../walletmodel.cpp" line="+278"/>
+        <location filename="../walletmodel.cpp" line="+269"/>
         <source>Sending...</source>
         <translation>Sender...</translation>
     </message>

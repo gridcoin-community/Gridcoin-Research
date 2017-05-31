@@ -2976,7 +2976,7 @@ Les montants inférieurs à  0.546 fois les frais minimum de relais apparaissent
         <translation>Paiement à vous-même</translation>
     </message>
     <message>
-        <location line="+81"/>
+        <location line="+80"/>
         <source>(n/a)</source>
         <translation>(n.d)</translation>
     </message>
@@ -3407,7 +3407,7 @@ Les montants inférieurs à  0.546 fois les frais minimum de relais apparaissent
 <context>
     <name>WalletModel</name>
     <message>
-        <location filename="../walletmodel.cpp" line="+278"/>
+        <location filename="../walletmodel.cpp" line="+269"/>
         <source>Sending...</source>
         <translation>Envoi...</translation>
     </message>
