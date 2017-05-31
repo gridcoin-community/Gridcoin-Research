@@ -4,7 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
+## Unreleased
+### Added
+### Changed
+ - Replace translations which were just question marks with new files from
+   the Bitcoin source tree: Arabic, Belarusian, Bulgarian, Greek, Persian,
+   Hebrew, Hindi, Japanese, Georgian, Kirghiz, Serbian, Thai, Ukranian,
+   Urdu and Chinese.
+
+## [Staging]
 ### Added
  - Add RPC commands for changing debug flags: debug, debugnet, debug2, debug3,
    debug4, debug5, debug10. #309 (@Foggyx420).
