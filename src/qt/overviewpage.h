@@ -32,11 +32,6 @@ public:
     void showOutOfSyncWarning(bool fShow);
 	void updateglobalstatus();
 	void UpdateBoincUtilization();
-	void on_btnWebsite_pressed();
-	void on_btnBX_pressed();
-	void on_btnBoinc_pressed();
-	void on_btnChat_pressed();
-	void on_btnExchange_pressed();
 
 public slots:
     void setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBalance, qint64 immatureBalance);

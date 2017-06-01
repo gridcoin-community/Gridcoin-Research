@@ -76,12 +76,11 @@
 
 #if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
 #include <QStandardPaths>
-#else
-#include <QDesktopServices>
 #endif
 
 #include <QTimer>
 #include <QDragEnterEvent>
+#include <QDesktopServices> // for opening URLs
 #include <QUrl>
 #include <QStyle>
 #include <QNetworkInterface>
@@ -1866,34 +1865,33 @@ void BitcoinGUI::miningClicked()
 }
 
 
-
+// links to websites and services outside the gridcoin client
 void BitcoinGUI::bxClicked()
 {
-	overviewPage->on_btnBX_pressed();
+    QDesktopServices::openUrl(QUrl("https://www.gridcoinstats.eu/block#pk_campaign=GridcoinWallet&pk_kwd=" + QString::fromStdString(FormatFullVersion())));
 }
 
 
 void BitcoinGUI::chatClicked()
 {
-	overviewPage->on_btnChat_pressed();
+    //QDesktopServices::openUrl(QUrl("https://kiwiirc.com/client/irc.freenode.net:6697/#gridcoin"));
+    QDesktopServices::openUrl(QUrl("https://kiwiirc.com/client/irc.freenode.net:6697/#gridcoin-help"));
 }
 
 void BitcoinGUI::boincClicked()
 {
-	overviewPage->on_btnBoinc_pressed();
+    QDesktopServices::openUrl(QUrl("https://boincstats.com/en/stats/-1/team/detail/118094994/overview"));
 }
 
 void BitcoinGUI::websiteClicked()
 {
-	overviewPage->on_btnWebsite_pressed();
-
+    QDesktopServices::openUrl(QUrl("https://www.gridcoin.us"));
 }
+
 void BitcoinGUI::exchangeClicked()
 {
-		overviewPage->on_btnExchange_pressed();
-
+    QDesktopServices::openUrl(QUrl("https://c-cex.com/?p=grc-btc"));
 }
-
 
 
 void startWireFrameRenderer()
