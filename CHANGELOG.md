@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
    the Bitcoin source tree: Arabic, Belarusian, Bulgarian, Greek, Persian,
    Hebrew, Hindi, Japanese, Georgian, Kirghiz, Serbian, Thai, Ukranian,
    Urdu and Chinese.
+ - External link now use HTTPS where possible, and the code has been cleaned
+   up, #339 (@skcin).
 
 ## [Staging]
 ### Added
