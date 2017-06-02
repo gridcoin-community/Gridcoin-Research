@@ -134,7 +134,7 @@
                </font>
               </property>
               <property name="text">
-               <string>Balance:</string>
+               <string>Available:</string>
               </property>
              </widget>
             </item>
@@ -149,7 +149,7 @@
                <cursorShape>IBeamCursor</cursorShape>
               </property>
               <property name="toolTip">
-               <string>Your current balance.</string>
+               <string>Your current spendable balance</string>
               </property>
               <property name="text">
                <string notr="true">0 GRC</string>
@@ -281,7 +281,7 @@
             <item row="5" column="1">
              <widget class="QLabel" name="labelTotal">
               <property name="toolTip">
-               <string>Total Balance     </string>
+               <string>Your current total balance</string>
               </property>
               <property name="text">
                <string notr="true">0</string>

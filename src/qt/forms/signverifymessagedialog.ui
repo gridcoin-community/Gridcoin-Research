@@ -20,7 +20,7 @@
    <item>
     <widget class="QTabWidget" name="tabWidget">
      <property name="currentIndex">
-      <number>1</number>
+      <number>0</number>
      </property>
      <widget class="QWidget" name="tabSignMessage">
       <attribute name="title">
@@ -148,7 +148,7 @@
             <string>Sign the message to prove you own this Gridcoin address</string>
            </property>
            <property name="text">
-            <string>&amp;Sign Message</string>
+            <string>Sign &amp;Message</string>
            </property>
            <property name="icon">
             <iconset resource="../bitcoin.qrc">

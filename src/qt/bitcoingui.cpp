@@ -828,12 +828,12 @@ void BitcoinGUI::createActions()
     overviewAction->setCheckable(true);
     overviewAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_1));
 
-    sendCoinsAction = new QAction(QIcon(":/icons/send"), tr("&Send coins"), tabGroup);
+    sendCoinsAction = new QAction(QIcon(":/icons/send"), tr("&Send"), tabGroup);
     sendCoinsAction->setToolTip(tr("Send coins to a Gridcoin address"));
     sendCoinsAction->setCheckable(true);
     sendCoinsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_2));
 
-    receiveCoinsAction = new QAction(QIcon(":/icons/receiving_addresses"), tr("&Receive coins"), tabGroup);
+    receiveCoinsAction = new QAction(QIcon(":/icons/receiving_addresses"), tr("&Receive"), tabGroup);
     receiveCoinsAction->setToolTip(tr("Show the list of addresses for receiving payments"));
     receiveCoinsAction->setCheckable(true);
     receiveCoinsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_3));
@@ -1330,8 +1330,6 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
             progressBar->setValue(count);
             progressBar->setVisible(true);
         }
-
-        tooltip = tr("Downloaded %1 of %2 blocks of transaction history (%3% done).").arg(count).arg(nTotalBlocks).arg(nPercentageDone, 0, 'f', 2);
     }
     else
     {
@@ -1339,8 +1337,9 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
             progressBarLabel->setVisible(false);
 
         progressBar->setVisible(false);
-        tooltip = tr("Downloaded %1 blocks of transaction history.").arg(count);
     }
+
+    tooltip = tr("Processed %n blocks of transaction history.", "", count);
 
     // Override progressBarLabel text and hide progress bar, when we have warnings to display
     if (!strStatusBarWarnings.isEmpty())

@@ -23,7 +23,7 @@
       <enum>QTabWidget::North</enum>
      </property>
      <property name="currentIndex">
-      <number>0</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="tabMain">
       <attribute name="title">
@@ -187,7 +187,7 @@
          <item>
           <widget class="QLabel" name="proxyIpLabel">
            <property name="text">
-            <string>Prox&amp;y IP:</string>
+            <string>Proxy &amp;IP:</string>
            </property>
            <property name="textFormat">
             <enum>Qt::PlainText</enum>
@@ -517,15 +517,15 @@
  </widget>
  <customwidgets>
   <customwidget>
+   <class>QValidatedLineEdit</class>
+   <extends>QLineEdit</extends>
+   <header>qvalidatedlineedit.h</header>
+  </customwidget>
+  <customwidget>
    <class>BitcoinAmountField</class>
    <extends>QSpinBox</extends>
    <header>bitcoinamountfield.h</header>
    <container>1</container>
-  </customwidget>
-  <customwidget>
-   <class>QValidatedLineEdit</class>
-   <extends>QLineEdit</extends>
-   <header>qvalidatedlineedit.h</header>
   </customwidget>
   <customwidget>
    <class>QValueComboBox</class>
