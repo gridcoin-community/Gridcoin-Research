@@ -305,12 +305,12 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+980"/>
+        <location filename="../bitcoingui.cpp" line="+920"/>
         <source>Sign &amp;message...</source>
         <translation>&amp;Allekirjoita viesti...</translation>
     </message>
     <message>
-        <location line="-153"/>
+        <location line="-128"/>
         <source>Show general overview of wallet</source>
         <translation>Lompakon tilanteen yleiskatsaus</translation>
     </message>
@@ -350,7 +350,7 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
         <translation>Sulje ohjelma</translation>
     </message>
     <message>
-        <location line="+76"/>
+        <location line="+51"/>
         <source>&amp;Options...</source>
         <translation>&amp;Asetukset...</translation>
     </message>
@@ -410,12 +410,12 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
         <translation>Varmista &amp;viesti...</translation>
     </message>
     <message>
-        <location line="-778"/>
+        <location line="-721"/>
         <source>Wallet</source>
         <translation>Lompakko</translation>
     </message>
     <message>
-        <location line="+765"/>
+        <location line="+708"/>
         <source>&amp;Show / Hide</source>
         <translation>&amp;Näytä / Piilota</translation>
     </message>
@@ -435,7 +435,7 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
         <translation>Lukitse lompakko</translation>
     </message>
     <message>
-        <location line="+54"/>
+        <location line="+47"/>
         <source>&amp;File</source>
         <translation>&amp;Tiedosto</translation>
     </message>
@@ -445,7 +445,7 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
         <translation>&amp;Asetukset</translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+48"/>
         <source>&amp;Help</source>
         <translation>&amp;Apua</translation>
     </message>
@@ -528,13 +528,13 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+436"/>
+        <location line="+351"/>
         <location line="+15"/>
         <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
         <translation>URI-merkkijonoa ei voida jäsentää! Tämä voi johtua väärästä Gridcoin-osoitteesta tai väärässä muodossa olevista URI-parametreistä.</translation>
     </message>
     <message>
-        <location line="+406"/>
+        <location line="+396"/>
         <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
         <translation type="unfinished"></translation>
     </message>
@@ -569,12 +569,12 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-2265"/>
+        <location line="-2095"/>
         <source>Gridcoin</source>
         <translation>Gridcoin</translation>
     </message>
     <message>
-        <location line="+633"/>
+        <location line="+601"/>
         <source>&amp;Receive</source>
         <translation>&amp;Vastaanota</translation>
     </message>
@@ -584,12 +584,12 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
         <translation>&amp;Lähetä</translation>
     </message>
     <message>
-        <location line="+145"/>
+        <location line="+120"/>
         <source>&amp;Unlock Wallet...</source>
         <translation>&amp;Aukaise lompakko</translation>
     </message>
     <message>
-        <location line="+405"/>
+        <location line="+387"/>
         <source>Up to date</source>
         <translation>Rahansiirtohistoria on ajan tasalla</translation>
     </message>
@@ -626,7 +626,7 @@ Tyyppi: %3
 Osoite: %4</translation>
     </message>
     <message>
-        <location line="-784"/>
+        <location line="-741"/>
         <source>&amp;Overview</source>
         <translation>&amp;Yleisnäkymä</translation>
     </message>
@@ -646,13 +646,13 @@ Osoite: %4</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1162"/>
+        <location line="+1034"/>
         <location line="+15"/>
         <source>URI handling</source>
         <translation>URI-merkkijonojen käsittely</translation>
     </message>
     <message>
-        <location line="-1174"/>
+        <location line="-1046"/>
         <source>&amp;Exchange</source>
         <translation type="unfinished"></translation>
     </message>
@@ -688,7 +688,7 @@ Osoite: %4</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1179"/>
+        <location line="+1051"/>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
         <translation>Lompakko on &lt;b&gt;salattu&lt;/b&gt; ja tällä hetkellä &lt;b&gt;avoinna&lt;/b&gt;</translation>
     </message>
@@ -698,13 +698,13 @@ Osoite: %4</translation>
         <translation>Lompakko on &lt;b&gt;salattu&lt;/b&gt; ja tällä hetkellä &lt;b&gt;lukittuna&lt;/b&gt;</translation>
     </message>
     <message>
-        <location line="-1162"/>
-        <location line="+169"/>
+        <location line="-1034"/>
+        <location line="+137"/>
         <source>&amp;Rebuild Block Chain</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-168"/>
+        <location line="-136"/>
         <source>Rebuild Block Chain</source>
         <translation type="unfinished"></translation>
     </message>
@@ -719,17 +719,7 @@ Osoite: %4</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>&amp;Reboot Client</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Reboot Gridcoin</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>&amp;Upgrade Client</source>
         <translation type="unfinished"></translation>
     </message>
@@ -739,7 +729,7 @@ Osoite: %4</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>&amp;About Gridcoin</source>
         <translation>&amp;Tietoa Gridcoinista</translation>
     </message>
@@ -749,7 +739,7 @@ Osoite: %4</translation>
         <translation>Näytä tietoja Gridcoinista</translation>
     </message>
     <message>
-        <location line="+1171"/>
+        <location line="+1050"/>
         <source>Backup Wallet</source>
         <translation>Varmuuskopioi lompakkosi</translation>
     </message>
@@ -759,7 +749,7 @@ Osoite: %4</translation>
         <translation>Lompakkodata (*.dat)</translation>
     </message>
     <message>
-        <location line="-1168"/>
+        <location line="-1047"/>
         <source>&amp;Neural Network</source>
         <translation type="unfinished"></translation>
     </message>
@@ -769,7 +759,7 @@ Osoite: %4</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1170"/>
+        <location line="+1049"/>
         <source>Backup Failed</source>
         <translation>Varmuuskopion luonti epäonnistui</translation>
     </message>
@@ -779,7 +769,7 @@ Osoite: %4</translation>
         <translation>Virhe tallentaessa lompakkotiedostoa uuteen sijaintiinsa.</translation>
     </message>
     <message>
-        <location line="-1166"/>
+        <location line="-1046"/>
         <source>&amp;Advanced Configuration</source>
         <translation type="unfinished"></translation>
     </message>
@@ -790,37 +780,17 @@ Osoite: %4</translation>
     </message>
     <message>
         <location line="+3"/>
-        <source>&amp;Live Ticker</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Live Ticker</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>&amp;Tickets</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Tickets</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
         <source>&amp;New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+605"/>
+        <location line="+578"/>
         <source>New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-598"/>
+        <location line="-575"/>
         <source>&amp;Voting</source>
         <translation type="unfinished"></translation>
     </message>
@@ -831,16 +801,6 @@ Osoite: %4</translation>
     </message>
     <message>
         <location line="+3"/>
-        <source>&amp;Galaza (Game)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Galaza</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
         <source>&amp;Foundation</source>
         <translation type="unfinished"></translation>
     </message>
@@ -875,7 +835,7 @@ Osoite: %4</translation>
         <translation>Mukauta Gridcoinin konfigurointiasetuksia</translation>
     </message>
     <message numerus="yes">
-        <location line="+1430"/>
+        <location line="+1317"/>
         <source>%n second(s)</source>
         <translation>
             <numerusform>%n sekunti</numerusform>
@@ -891,7 +851,7 @@ Osoite: %4</translation>
         </translation>
     </message>
     <message>
-        <location line="-1350"/>
+        <location line="-1244"/>
         <source>&amp;Community</source>
         <translation type="unfinished"></translation>
     </message>
@@ -901,12 +861,12 @@ Osoite: %4</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+12"/>
         <source>&amp;Advanced</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+86"/>
+        <location line="+77"/>
         <location line="+64"/>
         <source>Gridcoin client</source>
         <translation>Gridcoin-asiakas</translation>
@@ -933,7 +893,7 @@ Osoite: %4</translation>
         </translation>
     </message>
     <message numerus="yes">
-        <location line="+1076"/>
+        <location line="+981"/>
         <source>%n hour(s)</source>
         <translation>
             <numerusform>%n tunti</numerusform>
@@ -959,7 +919,7 @@ Osoite: %4</translation>
         <translation>Vakava virhe kohdattu. Gridcoin-ohjelma ei voi enää jatkaa turvallisesti ja sulkee itsensä.</translation>
     </message>
     <message numerus="yes">
-        <location filename="../bitcoingui.cpp" line="-1131"/>
+        <location filename="../bitcoingui.cpp" line="-1036"/>
         <source>Processed %n block(s) of transaction history.</source>
         <translation>
             <numerusform>Prosessoitu %n lohko rahansiirtohistoriasta.</numerusform>

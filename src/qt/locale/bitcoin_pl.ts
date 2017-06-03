@@ -304,12 +304,12 @@ This product includes software developed by the OpenSSL Project for use in the O
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+980"/>
+        <location filename="../bitcoingui.cpp" line="+920"/>
         <source>Sign &amp;message...</source>
         <translation>Podpisz wiado&amp;mość...</translation>
     </message>
     <message>
-        <location line="-153"/>
+        <location line="-128"/>
         <source>Show general overview of wallet</source>
         <translation>Pokazuje ogólny widok portfela</translation>
     </message>
@@ -349,7 +349,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Zamknij program</translation>
     </message>
     <message>
-        <location line="+76"/>
+        <location line="+51"/>
         <source>&amp;Options...</source>
         <translation>&amp;Opcje...</translation>
     </message>
@@ -409,12 +409,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>&amp;Zweryfikuj wiadomość...</translation>
     </message>
     <message>
-        <location line="-778"/>
+        <location line="-721"/>
         <source>Wallet</source>
         <translation>Portfel</translation>
     </message>
     <message>
-        <location line="+765"/>
+        <location line="+708"/>
         <source>&amp;Show / Hide</source>
         <translation>&amp;Pokaż / Ukryj</translation>
     </message>
@@ -434,7 +434,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+54"/>
+        <location line="+47"/>
         <source>&amp;File</source>
         <translation>&amp;Plik</translation>
     </message>
@@ -444,7 +444,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>P&amp;referencje</translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+48"/>
         <source>&amp;Help</source>
         <translation>Pomo&amp;c</translation>
     </message>
@@ -531,13 +531,13 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+436"/>
+        <location line="+351"/>
         <location line="+15"/>
         <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+406"/>
+        <location line="+396"/>
         <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
         <translation type="unfinished"></translation>
     </message>
@@ -572,12 +572,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-2265"/>
+        <location line="-2095"/>
         <source>Gridcoin</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+633"/>
+        <location line="+601"/>
         <source>&amp;Receive</source>
         <translation>Odbie&amp;rz</translation>
     </message>
@@ -587,12 +587,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Wyślij</translation>
     </message>
     <message>
-        <location line="+145"/>
+        <location line="+120"/>
         <source>&amp;Unlock Wallet...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+405"/>
+        <location line="+387"/>
         <source>Up to date</source>
         <translation>Aktualny</translation>
     </message>
@@ -630,7 +630,7 @@ Adres: %4
 </translation>
     </message>
     <message>
-        <location line="-784"/>
+        <location line="-741"/>
         <source>&amp;Overview</source>
         <translation>P&amp;odsumowanie</translation>
     </message>
@@ -650,13 +650,13 @@ Adres: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1162"/>
+        <location line="+1034"/>
         <location line="+15"/>
         <source>URI handling</source>
         <translation type="unfinished">Obsługa URI</translation>
     </message>
     <message>
-        <location line="-1174"/>
+        <location line="-1046"/>
         <source>&amp;Exchange</source>
         <translation type="unfinished"></translation>
     </message>
@@ -692,7 +692,7 @@ Adres: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1179"/>
+        <location line="+1051"/>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
         <translation>Portfel jest &lt;b&gt;zaszyfrowany&lt;/b&gt; i obecnie &lt;b&gt;odblokowany&lt;/b&gt;</translation>
     </message>
@@ -702,13 +702,13 @@ Adres: %4
         <translation>Portfel jest &lt;b&gt;zaszyfrowany&lt;/b&gt; i obecnie &lt;b&gt;zablokowany&lt;/b&gt;</translation>
     </message>
     <message>
-        <location line="-1162"/>
-        <location line="+169"/>
+        <location line="-1034"/>
+        <location line="+137"/>
         <source>&amp;Rebuild Block Chain</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-168"/>
+        <location line="-136"/>
         <source>Rebuild Block Chain</source>
         <translation type="unfinished"></translation>
     </message>
@@ -723,17 +723,7 @@ Adres: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>&amp;Reboot Client</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Reboot Gridcoin</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>&amp;Upgrade Client</source>
         <translation type="unfinished"></translation>
     </message>
@@ -743,7 +733,7 @@ Adres: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>&amp;About Gridcoin</source>
         <translation type="unfinished"></translation>
     </message>
@@ -753,7 +743,7 @@ Adres: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1171"/>
+        <location line="+1050"/>
         <source>Backup Wallet</source>
         <translation type="unfinished"></translation>
     </message>
@@ -763,7 +753,7 @@ Adres: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1168"/>
+        <location line="-1047"/>
         <source>&amp;Neural Network</source>
         <translation type="unfinished"></translation>
     </message>
@@ -773,7 +763,7 @@ Adres: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1170"/>
+        <location line="+1049"/>
         <source>Backup Failed</source>
         <translation type="unfinished"></translation>
     </message>
@@ -783,7 +773,7 @@ Adres: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1166"/>
+        <location line="-1046"/>
         <source>&amp;Advanced Configuration</source>
         <translation type="unfinished"></translation>
     </message>
@@ -794,37 +784,17 @@ Adres: %4
     </message>
     <message>
         <location line="+3"/>
-        <source>&amp;Live Ticker</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Live Ticker</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>&amp;Tickets</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Tickets</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
         <source>&amp;New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+605"/>
+        <location line="+578"/>
         <source>New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-598"/>
+        <location line="-575"/>
         <source>&amp;Voting</source>
         <translation type="unfinished"></translation>
     </message>
@@ -835,16 +805,6 @@ Adres: %4
     </message>
     <message>
         <location line="+3"/>
-        <source>&amp;Galaza (Game)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Galaza</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
         <source>&amp;Foundation</source>
         <translation type="unfinished"></translation>
     </message>
@@ -879,7 +839,7 @@ Adres: %4
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location line="+1430"/>
+        <location line="+1317"/>
         <source>%n second(s)</source>
         <translation type="unfinished">
             <numerusform>%n sekunda</numerusform>
@@ -897,7 +857,7 @@ Adres: %4
         </translation>
     </message>
     <message>
-        <location line="-1350"/>
+        <location line="-1244"/>
         <source>&amp;Community</source>
         <translation type="unfinished"></translation>
     </message>
@@ -907,12 +867,12 @@ Adres: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+12"/>
         <source>&amp;Advanced</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+86"/>
+        <location line="+77"/>
         <location line="+64"/>
         <source>Gridcoin client</source>
         <translation type="unfinished"></translation>
@@ -941,7 +901,7 @@ Adres: %4
         </translation>
     </message>
     <message numerus="yes">
-        <location line="+1076"/>
+        <location line="+981"/>
         <source>%n hour(s)</source>
         <translation>
             <numerusform>%n godzina</numerusform>
@@ -969,7 +929,7 @@ Adres: %4
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location filename="../bitcoingui.cpp" line="-1131"/>
+        <location filename="../bitcoingui.cpp" line="-1036"/>
         <source>Processed %n block(s) of transaction history.</source>
         <translation>
             <numerusform>Przetworzono %n bloków historii transakcji.</numerusform>

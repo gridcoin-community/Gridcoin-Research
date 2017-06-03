@@ -304,12 +304,12 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+980"/>
+        <location filename="../bitcoingui.cpp" line="+920"/>
         <source>Sign &amp;message...</source>
         <translation>Podpiši &amp;sporočilo ...</translation>
     </message>
     <message>
-        <location line="-153"/>
+        <location line="-128"/>
         <source>Show general overview of wallet</source>
         <translation>Oglejte si splošne informacije o vaši denarnici</translation>
     </message>
@@ -349,7 +349,7 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
         <translation>Ustavite program</translation>
     </message>
     <message>
-        <location line="+76"/>
+        <location line="+51"/>
         <source>&amp;Options...</source>
         <translation>&amp;Možnosti ...</translation>
     </message>
@@ -409,12 +409,12 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
         <translation>&amp;Preveri sporočilo ...</translation>
     </message>
     <message>
-        <location line="-778"/>
+        <location line="-721"/>
         <source>Wallet</source>
         <translation>Denarnica</translation>
     </message>
     <message>
-        <location line="+765"/>
+        <location line="+708"/>
         <source>&amp;Show / Hide</source>
         <translation>&amp;Prikaži / Skrij</translation>
     </message>
@@ -434,7 +434,7 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
         <translation>Zakleni denarnico</translation>
     </message>
     <message>
-        <location line="+54"/>
+        <location line="+47"/>
         <source>&amp;File</source>
         <translation>&amp;Datoteka</translation>
     </message>
@@ -444,7 +444,7 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
         <translation>&amp;Nastavitve</translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+48"/>
         <source>&amp;Help</source>
         <translation>&amp;Pomoč</translation>
     </message>
@@ -535,13 +535,13 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+436"/>
+        <location line="+351"/>
         <location line="+15"/>
         <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
         <translation>URI ne more biti raz?lenjen! To se lahko zgodi zaradi neveljavnega Gridcoin naslova ali slabih parametrov URI.</translation>
     </message>
     <message>
-        <location line="+406"/>
+        <location line="+396"/>
         <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
         <translation type="unfinished"></translation>
     </message>
@@ -576,12 +576,12 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-2265"/>
+        <location line="-2095"/>
         <source>Gridcoin</source>
         <translation>Gridcoin</translation>
     </message>
     <message>
-        <location line="+633"/>
+        <location line="+601"/>
         <source>&amp;Receive</source>
         <translation>P&amp;rejmi</translation>
     </message>
@@ -591,12 +591,12 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
         <translation>&amp;Pošlji</translation>
     </message>
     <message>
-        <location line="+145"/>
+        <location line="+120"/>
         <source>&amp;Unlock Wallet...</source>
         <translation>&amp;Odkleni denarnico...</translation>
     </message>
     <message>
-        <location line="+405"/>
+        <location line="+387"/>
         <source>Up to date</source>
         <translation>Posodobljeno</translation>
     </message>
@@ -634,7 +634,7 @@ Naslov: %4
 </translation>
     </message>
     <message>
-        <location line="-784"/>
+        <location line="-741"/>
         <source>&amp;Overview</source>
         <translation>Pre&amp;gled</translation>
     </message>
@@ -654,13 +654,13 @@ Naslov: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1162"/>
+        <location line="+1034"/>
         <location line="+15"/>
         <source>URI handling</source>
         <translation>Rokovanje z URI</translation>
     </message>
     <message>
-        <location line="-1174"/>
+        <location line="-1046"/>
         <source>&amp;Exchange</source>
         <translation type="unfinished"></translation>
     </message>
@@ -696,7 +696,7 @@ Naslov: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1179"/>
+        <location line="+1051"/>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
         <translation>Denarnica je &lt;b&gt;šifrirana&lt;/b&gt; in trenutno &lt;b&gt;odklenjena&lt;/b&gt;</translation>
     </message>
@@ -706,13 +706,13 @@ Naslov: %4
         <translation>Denarnica je &lt;b&gt;šifrirana&lt;/b&gt; in trenutno &lt;b&gt;zaklenjena&lt;/b&gt;</translation>
     </message>
     <message>
-        <location line="-1162"/>
-        <location line="+169"/>
+        <location line="-1034"/>
+        <location line="+137"/>
         <source>&amp;Rebuild Block Chain</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-168"/>
+        <location line="-136"/>
         <source>Rebuild Block Chain</source>
         <translation type="unfinished"></translation>
     </message>
@@ -727,17 +727,7 @@ Naslov: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>&amp;Reboot Client</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Reboot Gridcoin</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>&amp;Upgrade Client</source>
         <translation type="unfinished"></translation>
     </message>
@@ -747,7 +737,7 @@ Naslov: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>&amp;About Gridcoin</source>
         <translation>&amp;O Gridcoin</translation>
     </message>
@@ -757,7 +747,7 @@ Naslov: %4
         <translation>Pokaži informacije o Gridcoin</translation>
     </message>
     <message>
-        <location line="+1171"/>
+        <location line="+1050"/>
         <source>Backup Wallet</source>
         <translation>Napravi varnostno kopijo denarnice</translation>
     </message>
@@ -767,7 +757,7 @@ Naslov: %4
         <translation>Datoteka denarnice (*.dat)</translation>
     </message>
     <message>
-        <location line="-1168"/>
+        <location line="-1047"/>
         <source>&amp;Neural Network</source>
         <translation type="unfinished"></translation>
     </message>
@@ -777,7 +767,7 @@ Naslov: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1170"/>
+        <location line="+1049"/>
         <source>Backup Failed</source>
         <translation>Ustvarjanje varnostne kopije je spodeltelo </translation>
     </message>
@@ -787,7 +777,7 @@ Naslov: %4
         <translation>Prišlo je do napake ob poskušanju shranjevanja datoteke denarnice na novo lokacijo.</translation>
     </message>
     <message>
-        <location line="-1166"/>
+        <location line="-1046"/>
         <source>&amp;Advanced Configuration</source>
         <translation type="unfinished"></translation>
     </message>
@@ -798,37 +788,17 @@ Naslov: %4
     </message>
     <message>
         <location line="+3"/>
-        <source>&amp;Live Ticker</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Live Ticker</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>&amp;Tickets</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Tickets</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
         <source>&amp;New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+605"/>
+        <location line="+578"/>
         <source>New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-598"/>
+        <location line="-575"/>
         <source>&amp;Voting</source>
         <translation type="unfinished"></translation>
     </message>
@@ -839,16 +809,6 @@ Naslov: %4
     </message>
     <message>
         <location line="+3"/>
-        <source>&amp;Galaza (Game)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Galaza</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
         <source>&amp;Foundation</source>
         <translation type="unfinished"></translation>
     </message>
@@ -883,7 +843,7 @@ Naslov: %4
         <translation>Spremeni nastavitve za Gridcoin</translation>
     </message>
     <message numerus="yes">
-        <location line="+1430"/>
+        <location line="+1317"/>
         <source>%n second(s)</source>
         <translation>
             <numerusform>%n sekundo</numerusform>
@@ -903,7 +863,7 @@ Naslov: %4
         </translation>
     </message>
     <message>
-        <location line="-1350"/>
+        <location line="-1244"/>
         <source>&amp;Community</source>
         <translation type="unfinished"></translation>
     </message>
@@ -913,12 +873,12 @@ Naslov: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+12"/>
         <source>&amp;Advanced</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+86"/>
+        <location line="+77"/>
         <location line="+64"/>
         <source>Gridcoin client</source>
         <translation>Gridcoin program</translation>
@@ -949,7 +909,7 @@ Naslov: %4
         </translation>
     </message>
     <message numerus="yes">
-        <location line="+1076"/>
+        <location line="+981"/>
         <source>%n hour(s)</source>
         <translation>
             <numerusform>%n ura</numerusform>
@@ -979,7 +939,7 @@ Naslov: %4
         <translation>Prišlo je do usodne napake. Program Gridcoin se ne more ve? varno nadaljevati in se bo zato zaprl. </translation>
     </message>
     <message numerus="yes">
-        <location filename="../bitcoingui.cpp" line="-1131"/>
+        <location filename="../bitcoingui.cpp" line="-1036"/>
         <source>Processed %n block(s) of transaction history.</source>
         <translation>
             <numerusform>%n obdelan blok zgodovine transakcij.</numerusform>

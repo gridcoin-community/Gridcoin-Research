@@ -304,12 +304,12 @@ Tento produkt obsahuje softvér vyvinutý projektom OpenSSL Project pre použiti
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+980"/>
+        <location filename="../bitcoingui.cpp" line="+920"/>
         <source>Sign &amp;message...</source>
         <translation>Podpísať &amp;správu...</translation>
     </message>
     <message>
-        <location line="-153"/>
+        <location line="-128"/>
         <source>Show general overview of wallet</source>
         <translation>Zobraziť celkový prehľad o peňaženke</translation>
     </message>
@@ -349,7 +349,7 @@ Tento produkt obsahuje softvér vyvinutý projektom OpenSSL Project pre použiti
         <translation>Ukončiť program</translation>
     </message>
     <message>
-        <location line="+76"/>
+        <location line="+51"/>
         <source>&amp;Options...</source>
         <translation>&amp;Možnosti...</translation>
     </message>
@@ -409,12 +409,12 @@ Tento produkt obsahuje softvér vyvinutý projektom OpenSSL Project pre použiti
         <translation>O&amp;veriť správu...</translation>
     </message>
     <message>
-        <location line="-778"/>
+        <location line="-721"/>
         <source>Wallet</source>
         <translation>Peňaženka</translation>
     </message>
     <message>
-        <location line="+765"/>
+        <location line="+708"/>
         <source>&amp;Show / Hide</source>
         <translation>Zobraziť / skryť</translation>
     </message>
@@ -434,7 +434,7 @@ Tento produkt obsahuje softvér vyvinutý projektom OpenSSL Project pre použiti
         <translation type="unfinished">Zamknúť peňaženku</translation>
     </message>
     <message>
-        <location line="+54"/>
+        <location line="+47"/>
         <source>&amp;File</source>
         <translation>&amp;Súbor</translation>
     </message>
@@ -444,7 +444,7 @@ Tento produkt obsahuje softvér vyvinutý projektom OpenSSL Project pre použiti
         <translation>&amp;Nastavenia</translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+48"/>
         <source>&amp;Help</source>
         <translation>&amp;Pomoc</translation>
     </message>
@@ -531,13 +531,13 @@ Tento produkt obsahuje softvér vyvinutý projektom OpenSSL Project pre použiti
         <translation type="unfinished">Pozor! - Chybná cesta k BOINCu!</translation>
     </message>
     <message>
-        <location line="+436"/>
+        <location line="+351"/>
         <location line="+15"/>
         <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
         <translation type="unfinished">URI nemožno analyzovať! Toto môže byť spôsobené neplatnou Gridcoin adresu alebo chybnými URI parametrami.</translation>
     </message>
     <message>
-        <location line="+406"/>
+        <location line="+396"/>
         <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
         <translation type="unfinished">Stávkujem.&lt;br&gt;Vaša váha: %1&lt;br&gt;Váha siete: %2&lt;br&gt;Odmenu dostanete&lt;b&gt;odhadom&lt;/b&gt; o %3. %4</translation>
     </message>
@@ -572,12 +572,12 @@ Tento produkt obsahuje softvér vyvinutý projektom OpenSSL Project pre použiti
         <translation type="unfinished">Hľadám odležané mince</translation>
     </message>
     <message>
-        <location line="-2265"/>
+        <location line="-2095"/>
         <source>Gridcoin</source>
         <translation>Gridcoin</translation>
     </message>
     <message>
-        <location line="+633"/>
+        <location line="+601"/>
         <source>&amp;Receive</source>
         <translation>&amp;Prijať</translation>
     </message>
@@ -587,12 +587,12 @@ Tento produkt obsahuje softvér vyvinutý projektom OpenSSL Project pre použiti
         <translation>&amp;Odoslať</translation>
     </message>
     <message>
-        <location line="+145"/>
+        <location line="+120"/>
         <source>&amp;Unlock Wallet...</source>
         <translation type="unfinished">Odomknúť peňaženk&amp;u...</translation>
     </message>
     <message>
-        <location line="+405"/>
+        <location line="+387"/>
         <source>Up to date</source>
         <translation>Aktualizovaný</translation>
     </message>
@@ -629,7 +629,7 @@ Typ: %3
 Adresa: %4</translation>
     </message>
     <message>
-        <location line="-784"/>
+        <location line="-741"/>
         <source>&amp;Overview</source>
         <translation>&amp;Prehľad</translation>
     </message>
@@ -649,13 +649,13 @@ Adresa: %4</translation>
         <translation type="unfinished">Prehliadač blokov</translation>
     </message>
     <message>
-        <location line="+1162"/>
+        <location line="+1034"/>
         <location line="+15"/>
         <source>URI handling</source>
         <translation>URI manipulácia</translation>
     </message>
     <message>
-        <location line="-1174"/>
+        <location line="-1046"/>
         <source>&amp;Exchange</source>
         <translation type="unfinished">&amp;Zmenáreň</translation>
     </message>
@@ -691,7 +691,7 @@ Adresa: %4</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1179"/>
+        <location line="+1051"/>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
         <translation>Peňaženka je &lt;b&gt;zašifrovaná&lt;/b&gt; a momentálne &lt;b&gt;odomknutá&lt;/b&gt;</translation>
     </message>
@@ -701,13 +701,13 @@ Adresa: %4</translation>
         <translation>Peňaženka je &lt;b&gt;zašifrovaná&lt;/b&gt; a momentálne &lt;b&gt;zamknutá&lt;/b&gt;</translation>
     </message>
     <message>
-        <location line="-1162"/>
-        <location line="+169"/>
+        <location line="-1034"/>
+        <location line="+137"/>
         <source>&amp;Rebuild Block Chain</source>
         <translation type="unfinished">Vybudovať &amp;reťaz</translation>
     </message>
     <message>
-        <location line="-168"/>
+        <location line="-136"/>
         <source>Rebuild Block Chain</source>
         <translation type="unfinished">Vybudovať reťaz2</translation>
     </message>
@@ -722,17 +722,7 @@ Adresa: %4</translation>
         <translation type="unfinished">Stiahnuť reťaz</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>&amp;Reboot Client</source>
-        <translation type="unfinished">Reštartovať</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Reboot Gridcoin</source>
-        <translation type="unfinished">Reštartovať</translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>&amp;Upgrade Client</source>
         <translation type="unfinished">Aktualizovať</translation>
     </message>
@@ -742,7 +732,7 @@ Adresa: %4</translation>
         <translation type="unfinished">Aktualizovať</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>&amp;About Gridcoin</source>
         <translation type="unfinished">&amp;O programe</translation>
     </message>
@@ -752,7 +742,7 @@ Adresa: %4</translation>
         <translation type="unfinished">Zobraziť informácie o Gridcoin</translation>
     </message>
     <message>
-        <location line="+1171"/>
+        <location line="+1050"/>
         <source>Backup Wallet</source>
         <translation type="unfinished">Zálohovanie peňaženky</translation>
     </message>
@@ -762,7 +752,7 @@ Adresa: %4</translation>
         <translation type="unfinished">Dáta peňaženky (*.dat)</translation>
     </message>
     <message>
-        <location line="-1168"/>
+        <location line="-1047"/>
         <source>&amp;Neural Network</source>
         <translation type="unfinished">Neural Network</translation>
     </message>
@@ -772,7 +762,7 @@ Adresa: %4</translation>
         <translation type="unfinished">Neural Network</translation>
     </message>
     <message>
-        <location line="+1170"/>
+        <location line="+1049"/>
         <source>Backup Failed</source>
         <translation>Zálohovanie zlyhalo</translation>
     </message>
@@ -782,7 +772,7 @@ Adresa: %4</translation>
         <translation type="unfinished">Pri ukladaní dát peňaženky nastala Chyba.</translation>
     </message>
     <message>
-        <location line="-1166"/>
+        <location line="-1046"/>
         <source>&amp;Advanced Configuration</source>
         <translation type="unfinished">Pokročilé nastavenia</translation>
     </message>
@@ -793,37 +783,17 @@ Adresa: %4</translation>
     </message>
     <message>
         <location line="+3"/>
-        <source>&amp;Live Ticker</source>
-        <translation type="unfinished">Najnovší kurz</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Live Ticker</source>
-        <translation type="unfinished">Najnovší kurz</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>&amp;Tickets</source>
-        <translation type="unfinished">Hlásenie závad</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Tickets</source>
-        <translation type="unfinished">Hlásenie závad</translation>
-    </message>
-    <message>
-        <location line="+3"/>
         <source>&amp;New User Wizard</source>
         <translation type="unfinished">Sprevodca nastavením</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+605"/>
+        <location line="+578"/>
         <source>New User Wizard</source>
         <translation type="unfinished">Sprevodca nastavením</translation>
     </message>
     <message>
-        <location line="-598"/>
+        <location line="-575"/>
         <source>&amp;Voting</source>
         <translation type="unfinished">Hlasovanie</translation>
     </message>
@@ -834,16 +804,6 @@ Adresa: %4</translation>
     </message>
     <message>
         <location line="+3"/>
-        <source>&amp;Galaza (Game)</source>
-        <translation type="unfinished">Galaza (hra)</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Galaza</source>
-        <translation type="unfinished">Galaza (hra)</translation>
-    </message>
-    <message>
-        <location line="+4"/>
         <source>&amp;Foundation</source>
         <translation type="unfinished">Nadácia</translation>
     </message>
@@ -878,7 +838,7 @@ Adresa: %4</translation>
         <translation type="unfinished">Upraviť konfiguračné nastavenia pre Gridcoin</translation>
     </message>
     <message numerus="yes">
-        <location line="+1430"/>
+        <location line="+1317"/>
         <source>%n second(s)</source>
         <translation type="unfinished">
             <numerusform>%n sekunda</numerusform>
@@ -896,7 +856,7 @@ Adresa: %4</translation>
         </translation>
     </message>
     <message>
-        <location line="-1350"/>
+        <location line="-1244"/>
         <source>&amp;Community</source>
         <translation type="unfinished"></translation>
     </message>
@@ -906,12 +866,12 @@ Adresa: %4</translation>
         <translation type="unfinished">Aktualizovať QT klienta</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+12"/>
         <source>&amp;Advanced</source>
         <translation type="unfinished">Pokročilé</translation>
     </message>
     <message>
-        <location line="+86"/>
+        <location line="+77"/>
         <location line="+64"/>
         <source>Gridcoin client</source>
         <translation>Gridcoin klient</translation>
@@ -940,7 +900,7 @@ Adresa: %4</translation>
         </translation>
     </message>
     <message numerus="yes">
-        <location line="+1076"/>
+        <location line="+981"/>
         <source>%n hour(s)</source>
         <translation>
             <numerusform>%n hodina</numerusform>
@@ -968,7 +928,7 @@ Adresa: %4</translation>
         <translation type="unfinished">Došlo k závažnej chybe. Gridcoin už nemôže pokračovať bezpečne a bude ukončený.</translation>
     </message>
     <message numerus="yes">
-        <location filename="../bitcoingui.cpp" line="-1131"/>
+        <location filename="../bitcoingui.cpp" line="-1036"/>
         <source>Processed %n block(s) of transaction history.</source>
         <translation>
             <numerusform>Spracovaných %n blok transakčnej histórie.</numerusform>

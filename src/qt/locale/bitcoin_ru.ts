@@ -303,12 +303,12 @@ This product includes software developed by the OpenSSL Project for use in the O
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+980"/>
+        <location filename="../bitcoingui.cpp" line="+920"/>
         <source>Sign &amp;message...</source>
         <translation>&amp;Подписать сообщение...</translation>
     </message>
     <message>
-        <location line="-153"/>
+        <location line="-128"/>
         <source>Show general overview of wallet</source>
         <translation>Показать общий обзор действий с бумажником</translation>
     </message>
@@ -348,7 +348,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Закрыть приложение</translation>
     </message>
     <message>
-        <location line="+76"/>
+        <location line="+51"/>
         <source>&amp;Options...</source>
         <translation>&amp;Параметры</translation>
     </message>
@@ -408,12 +408,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>&amp;Проверить сообщение...</translation>
     </message>
     <message>
-        <location line="-778"/>
+        <location line="-721"/>
         <source>Wallet</source>
         <translation>Бумажник</translation>
     </message>
     <message>
-        <location line="+765"/>
+        <location line="+708"/>
         <source>&amp;Show / Hide</source>
         <translation>&amp;Показать / Скрыть</translation>
     </message>
@@ -433,7 +433,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Запереть кошелек</translation>
     </message>
     <message>
-        <location line="+54"/>
+        <location line="+47"/>
         <source>&amp;File</source>
         <translation>&amp;Файл</translation>
     </message>
@@ -453,12 +453,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>&amp;Обновить  QT клиент</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+12"/>
         <source>&amp;Advanced</source>
         <translation>&amp;Дополнительно</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+18"/>
         <source>&amp;Help</source>
         <translation>&amp;Помощь</translation>
     </message>
@@ -469,7 +469,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>[тестовая сеть]</translation>
     </message>
     <message>
-        <location line="+1285"/>
+        <location line="+1190"/>
         <source>Not staking because wallet is locked</source>
         <translation>Not staking по причине блокировки кошелька</translation>
     </message>
@@ -489,12 +489,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Not staking по причине отсутствия монет</translation>
     </message>
     <message>
-        <location line="-2260"/>
+        <location line="-2090"/>
         <source>Gridcoin</source>
         <translation>Gridcoin</translation>
     </message>
     <message>
-        <location line="+633"/>
+        <location line="+601"/>
         <source>&amp;Receive</source>
         <translation>&amp;Получить</translation>
     </message>
@@ -504,12 +504,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>&amp;Отправить</translation>
     </message>
     <message>
-        <location line="+145"/>
+        <location line="+120"/>
         <source>&amp;Unlock Wallet...</source>
         <translation>&amp;Разблокировать бумажник...</translation>
     </message>
     <message>
-        <location line="+405"/>
+        <location line="+387"/>
         <source>Up to date</source>
         <translation>Синхронизировано</translation>
     </message>
@@ -547,7 +547,7 @@ Address: %4
 </translation>
     </message>
     <message>
-        <location line="-784"/>
+        <location line="-741"/>
         <source>&amp;Overview</source>
         <translation>&amp;Обзор</translation>
     </message>
@@ -567,13 +567,13 @@ Address: %4
         <translation>Обозреватель блоков</translation>
     </message>
     <message>
-        <location line="+1162"/>
+        <location line="+1034"/>
         <location line="+15"/>
         <source>URI handling</source>
         <translation>Обработка URI</translation>
     </message>
     <message>
-        <location line="-1174"/>
+        <location line="-1046"/>
         <source>&amp;Exchange</source>
         <translation>&amp;Биржа</translation>
     </message>
@@ -609,7 +609,7 @@ Address: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1179"/>
+        <location line="+1051"/>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
         <translation>Бумажник &lt;b&gt;зашифрован&lt;/b&gt; и в настоящее время &lt;b&gt;разблокирован&lt;/b&gt;</translation>
     </message>
@@ -619,13 +619,13 @@ Address: %4
         <translation>Бумажник &lt;b&gt;зашифрован&lt;/b&gt; и в настоящее время &lt;b&gt;заблокирован&lt;/b&gt;</translation>
     </message>
     <message>
-        <location line="-1162"/>
-        <location line="+169"/>
+        <location line="-1034"/>
+        <location line="+137"/>
         <source>&amp;Rebuild Block Chain</source>
         <translation>&amp;Перестроить блок-чейн</translation>
     </message>
     <message>
-        <location line="-168"/>
+        <location line="-136"/>
         <source>Rebuild Block Chain</source>
         <translation>Перестроить блок-чейн</translation>
     </message>
@@ -640,17 +640,7 @@ Address: %4
         <translation>Загрузить блоки</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>&amp;Reboot Client</source>
-        <translation>&amp;Перезапустить клиент</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Reboot Gridcoin</source>
-        <translation>Перезапустить Gridcoin</translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>&amp;Upgrade Client</source>
         <translation>&amp;Обновить клиент</translation>
     </message>
@@ -660,7 +650,7 @@ Address: %4
         <translation>Обновить клиент</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>&amp;About Gridcoin</source>
         <translation>&amp;О Gridcoin</translation>
     </message>
@@ -670,7 +660,7 @@ Address: %4
         <translation>Информация о Gridcoin</translation>
     </message>
     <message>
-        <location line="+1171"/>
+        <location line="+1050"/>
         <source>Backup Wallet</source>
         <translation>Сделать резервную копию бумажника</translation>
     </message>
@@ -680,7 +670,7 @@ Address: %4
         <translation>Данные бумажника (*.dat)</translation>
     </message>
     <message>
-        <location line="-1168"/>
+        <location line="-1047"/>
         <source>&amp;Neural Network</source>
         <translation>&amp;Нейронная Сеть</translation>
     </message>
@@ -690,7 +680,7 @@ Address: %4
         <translation>Нейронная Сеть</translation>
     </message>
     <message>
-        <location line="+1170"/>
+        <location line="+1049"/>
         <source>Backup Failed</source>
         <translation>Резервное копирование не удалось</translation>
     </message>
@@ -700,7 +690,7 @@ Address: %4
         <translation>Обнаружена ошибка при попытке перенести wallet dat.</translation>
     </message>
     <message>
-        <location line="-1166"/>
+        <location line="-1046"/>
         <source>&amp;Advanced Configuration</source>
         <translation>&amp;Дополнительная Конфигурация</translation>
     </message>
@@ -711,37 +701,17 @@ Address: %4
     </message>
     <message>
         <location line="+3"/>
-        <source>&amp;Live Ticker</source>
-        <translation>&amp;Тикет в реальном времени</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Live Ticker</source>
-        <translation>Тикет в реальном времени</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>&amp;Tickets</source>
-        <translation>&amp;Тикеты</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Tickets</source>
-        <translation>Тикеты</translation>
-    </message>
-    <message>
-        <location line="+3"/>
         <source>&amp;New User Wizard</source>
         <translation>&amp;Мастер настройки нового пользователя</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+605"/>
+        <location line="+578"/>
         <source>New User Wizard</source>
         <translation>Мастер настройки нового пользователя</translation>
     </message>
     <message>
-        <location line="-598"/>
+        <location line="-575"/>
         <source>&amp;Voting</source>
         <translation>&amp;Голосование</translation>
     </message>
@@ -752,16 +722,6 @@ Address: %4
     </message>
     <message>
         <location line="+3"/>
-        <source>&amp;Galaza (Game)</source>
-        <translation>&amp;Galaza (Игра)</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Galaza</source>
-        <translation>Galaza</translation>
-    </message>
-    <message>
-        <location line="+4"/>
         <source>&amp;Foundation</source>
         <translation>&amp;Фонд</translation>
     </message>
@@ -796,7 +756,7 @@ Address: %4
         <translation>Изменение параметров конфигурации Gridcoin</translation>
     </message>
     <message numerus="yes">
-        <location line="+1430"/>
+        <location line="+1317"/>
         <source>%n second(s)</source>
         <translation>
             <numerusform>%n секунд</numerusform>
@@ -829,7 +789,7 @@ Address: %4
         <translation>Поиск монет... Пожалуйста подождите</translation>
     </message>
     <message>
-        <location line="-1309"/>
+        <location line="-1214"/>
         <location line="+64"/>
         <source>Gridcoin client</source>
         <translation>Gridcoin клиент</translation>
@@ -934,13 +894,13 @@ Address: %4
         <translation>Внимание! Boinc Ошибка пути!</translation>
     </message>
     <message>
-        <location line="+436"/>
+        <location line="+351"/>
         <location line="+15"/>
         <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
         <translation>URI не может быть проанализирован! Это может быть вызвано неправильным адресом Gridcoin или неправильными параметрами URI.</translation>
     </message>
     <message numerus="yes">
-        <location line="+375"/>
+        <location line="+365"/>
         <source>%n hour(s)</source>
         <translation>
             <numerusform>%n час</numerusform>
@@ -968,7 +928,7 @@ Address: %4
         <translation>Произошла фатальная ошибка. Gridcoin больше не может продолжать безопасно работать и закроется.</translation>
     </message>
     <message numerus="yes">
-        <location filename="../bitcoingui.cpp" line="-1131"/>
+        <location filename="../bitcoingui.cpp" line="-1036"/>
         <source>Processed %n block(s) of transaction history.</source>
         <translation>
             <numerusform>Обработан %n блок истории транзакций.</numerusform>
