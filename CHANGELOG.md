@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Fix incorrect WCG URL, #323 (@3ullShark).
  - Fix alt key shortcut order, #326 (@TheCharlatan).
  - Code cleanup (@Foggyx420, @TheCharlatan).
+ - Fix numerous beacon issues, #344, #321 and #334 (@Foggyx420).
 
 ## [3.5.8.9] - 2017-05-15
 ### Added
