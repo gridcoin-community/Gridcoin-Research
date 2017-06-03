@@ -49,50 +49,40 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
     <message>
         <location line="+14"/>
         <source>Copy the currently selected address to the system clipboard</source>
-        <translation>Kopeeri valitud aadress vahemällu</translation>
+        <translation>Kopeeri märgistatud aadress vahemällu</translation>
     </message>
     <message>
-        <location line="-11"/>
-        <source>&amp;New Address</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-46"/>
+        <location line="-57"/>
         <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
         <translation>Need on Sinu Gridcoin&apos;i aadressid maksete vastuvõtmiseks. Soovi korral saad anda igale saatjale eraldi aadressi, et hõlpsamini omada ülevaadet, et kellelt mündid laekuvad.</translation>
     </message>
     <message>
-        <location line="+60"/>
-        <source>&amp;Copy Address</source>
-        <translation>&amp;Aadressi kopeerimine</translation>
-    </message>
-    <message>
-        <location line="+11"/>
+        <location line="+71"/>
         <source>Show &amp;QR Code</source>
         <translation>Näita &amp;QR koodi.</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+14"/>
+        <source>Sign &amp;Message</source>
+        <translation type="unfinished">Allkirjasta &amp;Sõnum</translation>
+    </message>
+    <message>
+        <location line="-3"/>
         <source>Sign a message to prove you own a Gridcoin address</source>
         <translation>Allkirjasta sõnum Gridcoin&apos;i aadressi omamise tõestamiseks.</translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>Sign &amp;Message</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+25"/>
-        <source>Delete the currently selected address from the list</source>
-        <translation>Kustuta märgistatud aadress loetelust</translation>
-    </message>
-    <message>
-        <location line="-14"/>
+        <location line="+14"/>
         <source>Verify a message to ensure it was signed with a specified Gridcoin address</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+14"/>
+        <source>Delete the currently selected address from the list</source>
+        <translation>Kustuta märgistatud aadress loetelust</translation>
+    </message>
+    <message>
+        <location line="-11"/>
         <source>&amp;Verify Message</source>
         <translation type="unfinished">&amp;Kinnita Sõnum</translation>
     </message>
@@ -104,7 +94,7 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
     <message>
         <location filename="../addressbookpage.cpp" line="+65"/>
         <source>Copy &amp;Label</source>
-        <translation>&amp;Märgise kopeerimine</translation>
+        <translation>Kopeeri &amp;Silt</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -119,7 +109,7 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
     <message>
         <location line="+1"/>
         <source>Comma separated file (*.csv)</source>
-        <translation>Komaeraldatud fail (*.csv)</translation>
+        <translation>Komadega eraldatud väärtuste fail (*.csv)</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -131,13 +121,23 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
         <source>Could not write to file %1.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location filename="../forms/addressbookpage.ui" line="-67"/>
+        <source>&amp;New</source>
+        <translation>&amp;Uus</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>&amp;Copy</source>
+        <translation>&amp;Kopeeri</translation>
+    </message>
 </context>
 <context>
     <name>AddressTableModel</name>
     <message>
         <location filename="../addresstablemodel.cpp" line="+144"/>
         <source>Label</source>
-        <translation>Silt</translation>
+        <translation>Märge</translation>
     </message>
     <message>
         <location line="+0"/>
@@ -147,7 +147,7 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
     <message>
         <location line="+36"/>
         <source>(no label)</source>
-        <translation>(silti pole)</translation>
+        <translation>(märge puudub)</translation>
     </message>
 </context>
 <context>
@@ -160,12 +160,12 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
     <message>
         <location line="+21"/>
         <source>Enter passphrase</source>
-        <translation>Sisesta salasõna</translation>
+        <translation>Sisesta salafraas</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>New passphrase</source>
-        <translation>Uus salasõna</translation>
+        <translation>Uus salafraas</translation>
     </message>
     <message>
         <location line="+14"/>
@@ -190,27 +190,27 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
     <message>
         <location line="+7"/>
         <source>This operation needs your wallet passphrase to unlock the wallet.</source>
-        <translation>See toiming nõuab sinu rahakoti salafraasi.</translation>
+        <translation>Antud operatsioon vajab rahakoti lahtilukustamiseks salafraasi.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Unlock wallet</source>
-        <translation>Tee rahakott lukust lahti.</translation>
+        <translation>Ava rahakoti lukk</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>See toiming nõuab sinu rahakoti salafraasi.</translation>
+        <translation>Antud operatsioon vajab rahakoti dekrüpteerimiseks salafraasi.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Decrypt wallet</source>
-        <translation>Dekrüpteeri rahakott.</translation>
+        <translation>Dekrüpteeri rahakott</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Change passphrase</source>
-        <translation>Muuda salafraasi</translation>
+        <translation>Vaheta salafraasi</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -220,7 +220,7 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
     <message>
         <location line="+45"/>
         <source>Confirm wallet encryption</source>
-        <translation>Kinnita rahakoti krüpteering</translation>
+        <translation>Kinnita rahakoti krüpteerimine.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -230,10 +230,15 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
     <message>
         <location line="+0"/>
         <source>Are you sure you wish to encrypt your wallet?</source>
-        <translation>Kas soovid oma rahakoti krüpteerida?</translation>
+        <translation>Kas oled kindel, et soovid rahakoti krüpteerida?</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+11"/>
+        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>IMPORTANT: Any previous backups you have made of your wallet file should be replaced with the newly generated, encrypted wallet file. For security reasons, previous backups of the unencrypted wallet file will become useless as soon as you start using the new, encrypted wallet.</source>
         <translation>TÄHTIS: Kõik varasemad rahakoti varundfailid tuleks üle kirjutada äsja loodud krüpteeritud rahakoti failiga. Turvakaalutlustel tühistatakse krüpteerimata rahakoti failid alates uue, krüpteeritud rahakoti, kasutusele võtust.</translation>
     </message>
@@ -241,7 +246,7 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
         <location line="+103"/>
         <location line="+24"/>
         <source>Warning: The Caps Lock key is on!</source>
-        <translation>Hoiatus: Caps Lock on sisse lülitatud!</translation>
+        <translation>Hoiatus:Klaviatuuri suurtähelukk on peal.</translation>
     </message>
     <message>
         <location line="-133"/>
@@ -252,74 +257,59 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
     <message>
         <location line="-140"/>
         <source>Enter the new passphrase to the wallet.&lt;br/&gt;Please use a passphrase of &lt;b&gt;ten or more random characters&lt;/b&gt;, or &lt;b&gt;eight or more words&lt;/b&gt;.</source>
-        <translation type="unfinished"></translation>
+        <translation>Sisesta uus salafraas rahakotti.&lt;br/&gt;Kasuta salafraasi millles on&lt;b&gt;kümme või rohkem juhuslikku sümbolit&lt;b&gt;,või&lt;b&gt;kaheksa või rohkem sõna&lt;b/&gt;.</translation>
     </message>
     <message>
-        <location line="+82"/>
-        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+13"/>
+        <location line="+95"/>
         <location line="+7"/>
         <location line="+44"/>
         <location line="+6"/>
         <source>Wallet encryption failed</source>
-        <translation>Tõrge rahakoti krüpteerimisel</translation>
+        <translation>Rahakoti krüpteerimine ebaõnnestus</translation>
     </message>
     <message>
         <location line="-56"/>
         <source>Wallet encryption failed due to an internal error. Your wallet was not encrypted.</source>
-        <translation>Rahakoti krüpteering ebaõnnestus tõrke tõttu. Sinu rahakotti ei krüpteeritud.</translation>
+        <translation>Rahakoti krüpteerimine ebaõnnestus sisemise tõrke tõttu. Sinu rahakott ei ole krüpteeritud.</translation>
     </message>
     <message>
         <location line="+7"/>
         <location line="+50"/>
         <source>The supplied passphrases do not match.</source>
-        <translation>Salafraasid ei kattu.</translation>
+        <translation>Sisestatud salafraasid ei kattu.</translation>
     </message>
     <message>
         <location line="-38"/>
         <source>Wallet unlock failed</source>
-        <translation>Rahakoti avamine ebaõnnestus</translation>
+        <translation>Rahakoti lahtilukustamine ebaõnnestus</translation>
     </message>
     <message>
         <location line="+1"/>
         <location line="+12"/>
         <location line="+19"/>
         <source>The passphrase entered for the wallet decryption was incorrect.</source>
-        <translation>Rahakoti salafraas ei ole õige.</translation>
+        <translation>Rahakoti dekrüpteerimiseks sisestatud salafraas ei ole õige.</translation>
     </message>
     <message>
         <location line="-20"/>
         <source>Wallet decryption failed</source>
-        <translation>Rahakoti dekrüpteerimine ei õnnestunud</translation>
+        <translation>Rahakoti dekrüpteerimine ebaõnnestus</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Wallet passphrase was successfully changed.</source>
-        <translation>Rahakoti salafraasi muutmine õnnestus.</translation>
+        <translation>Rahakoti salafraas on edukalt vahetatud.</translation>
     </message>
 </context>
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+981"/>
+        <location filename="../bitcoingui.cpp" line="+980"/>
         <source>Sign &amp;message...</source>
         <translation>Signeeri &amp;sõnum</translation>
     </message>
     <message>
-        <location line="+346"/>
-        <source>Synchronizing with network...</source>
-        <translation>Võrgusünkimine...</translation>
-    </message>
-    <message>
-        <location line="-500"/>
-        <source>&amp;Overview</source>
-        <translation>&amp;Ülevaade</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="-153"/>
         <source>Show general overview of wallet</source>
         <translation>Kuva rahakoti üld-ülevaade</translation>
     </message>
@@ -344,22 +334,12 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-11"/>
-        <source>&amp;Receive coins</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="-10"/>
         <source>Show the list of addresses for receiving payments</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-6"/>
-        <source>&amp;Send coins</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+57"/>
+        <location line="+51"/>
         <source>E&amp;xit</source>
         <translation>V&amp;älju</translation>
     </message>
@@ -369,12 +349,7 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
         <translation>Väljumine</translation>
     </message>
     <message>
-        <location line="+26"/>
-        <source>Show information about Gridcoin</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+50"/>
+        <location line="+76"/>
         <source>&amp;Options...</source>
         <translation>&amp;Valikud...</translation>
     </message>
@@ -393,38 +368,15 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
         <source>&amp;Change Passphrase...</source>
         <translation>&amp;Salafraasi muutmine</translation>
     </message>
-    <message numerus="yes">
-        <location line="+354"/>
-        <source>~%n block(s) remaining</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
-    </message>
     <message>
-        <location line="+6"/>
-        <source>Downloaded %1 of %2 blocks of transaction history (%3% done).</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-351"/>
+        <location line="+9"/>
         <source>&amp;Export...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-151"/>
-        <source>Send coins to a Gridcoin address</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+134"/>
-        <source>Modify configuration options for Gridcoin</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+18"/>
+        <location line="+1"/>
         <source>Export the data in the current tab to a file</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Ekspordi kuvatava vahelehe sisu faili</translation>
     </message>
     <message>
         <location line="-14"/>
@@ -444,7 +396,7 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
     <message>
         <location line="+10"/>
         <source>&amp;Debug window</source>
-        <translation>&amp;Debugimise aken</translation>
+        <translation>&amp;Silumise aken</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -458,21 +410,11 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
     </message>
     <message>
         <location line="-778"/>
-        <source>Gridcoin</source>
-        <translation type="unfinished">Gridcoin</translation>
-    </message>
-    <message>
-        <location line="+0"/>
         <source>Wallet</source>
         <translation>Rahakott</translation>
     </message>
     <message>
-        <location line="+711"/>
-        <source>&amp;About Gridcoin</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+54"/>
+        <location line="+765"/>
         <source>&amp;Show / Hide</source>
         <translation>&amp;Näita / Peida</translation>
     </message>
@@ -512,27 +454,91 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
         <source>[testnet]</source>
         <translation>[testnet]</translation>
     </message>
-    <message>
-        <location line="+0"/>
-        <location line="+64"/>
-        <source>Gridcoin client</source>
-        <translation type="unfinished"></translation>
+    <message numerus="yes">
+        <location line="+204"/>
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
     </message>
     <message numerus="yes">
-        <location line="+79"/>
-        <source>%n active connection(s) to Gridcoin network</source>
+        <location line="+4"/>
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n day(s) ago</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
         </translation>
     </message>
     <message>
-        <location line="+40"/>
-        <source>Downloaded %1 blocks of transaction history.</source>
+        <location line="+23"/>
+        <source>Last received block was generated %1.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1104"/>
+        <location line="+70"/>
+        <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+74"/>
+        <source>Please enter your boinc E-mail address, or click &lt;Cancel&gt; to skip for now:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Created new Configuration File Successfully. </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New Account Created - Welcome Aboard!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New User Wizard - Skipped</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Attention! - Boinc Path Error!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+436"/>
+        <location line="+15"/>
+        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+406"/>
+        <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>Not staking because wallet is locked</source>
         <translation type="unfinished"></translation>
     </message>
@@ -547,20 +553,89 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+5"/>
+        <source>Not staking because you don&apos;t have mature coins and stake weight is too low.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Not staking because you don&apos;t have mature coins</source>
         <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
-        <location line="-1101"/>
-        <source>%n second(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
+    <message>
+        <location line="+5"/>
+        <source>Searching for mature coins... Please wait</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-513"/>
+        <location line="-2265"/>
+        <source>Gridcoin</source>
+        <translation type="unfinished">Gridcoin</translation>
+    </message>
+    <message>
+        <location line="+633"/>
+        <source>&amp;Receive</source>
+        <translation>&amp;Võta vastu</translation>
+    </message>
+    <message>
+        <location line="-5"/>
+        <source>&amp;Send</source>
+        <translation>&amp;Saada</translation>
+    </message>
+    <message>
+        <location line="+145"/>
+        <source>&amp;Unlock Wallet...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+405"/>
+        <source>Up to date</source>
+        <translation>Ajakohane</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Catching up...</source>
+        <translation>Jõuan järgi...</translation>
+    </message>
+    <message>
+        <location line="+85"/>
+        <source>Confirm transaction fee</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+135"/>
+        <source>Sent transaction</source>
+        <translation>Saadetud tehing</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Incoming transaction</source>
+        <translation>Sisenev tehing</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Date: %1
+Amount: %2
+Type: %3
+Address: %4
+</source>
+        <translation>Kuupäev: %1?
+Summa: %2?
+Tüüp: %3?
+Aadress: %4?</translation>
+    </message>
+    <message>
+        <location line="-784"/>
+        <source>&amp;Overview</source>
+        <translation>&amp;Ülevaade</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Send coins to a Gridcoin address</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+19"/>
         <source>&amp;Block Explorer</source>
         <translation type="unfinished"></translation>
     </message>
@@ -570,7 +645,13 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1162"/>
+        <location line="+15"/>
+        <source>URI handling</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-1174"/>
         <source>&amp;Exchange</source>
         <translation type="unfinished"></translation>
     </message>
@@ -606,7 +687,17 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+1179"/>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
+        <translation>Rahakott on &lt;b&gt;krüpteeritud&lt;/b&gt; ning hetkel &lt;b&gt;avatud&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
+        <translation>Rahakott on &lt;b&gt;krüpteeritud&lt;/b&gt; ning hetkel &lt;b&gt;suletud&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <location line="-1162"/>
         <location line="+169"/>
         <source>&amp;Rebuild Block Chain</source>
         <translation type="unfinished"></translation>
@@ -647,7 +738,27 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+4"/>
+        <source>&amp;About Gridcoin</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Show information about Gridcoin</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1171"/>
+        <source>Backup Wallet</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Wallet Data (*.dat)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-1168"/>
         <source>&amp;Neural Network</source>
         <translation type="unfinished"></translation>
     </message>
@@ -657,7 +768,17 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+1170"/>
+        <source>Backup Failed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>There was an error trying to save the wallet data to the new location.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-1166"/>
         <source>&amp;Advanced Configuration</source>
         <translation type="unfinished"></translation>
     </message>
@@ -693,12 +814,12 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
     </message>
     <message>
         <location line="+1"/>
-        <location line="+606"/>
+        <location line="+605"/>
         <source>New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-599"/>
+        <location line="-598"/>
         <source>&amp;Voting</source>
         <translation type="unfinished"></translation>
     </message>
@@ -748,170 +869,12 @@ Toode sisaldab OpenSSL Projekti all toodetud tarkvara, mis on kasutamiseks OpenS
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+14"/>
-        <source>&amp;Unlock Wallet...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+74"/>
-        <source>&amp;Community</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>&amp;Upgrade QT Client</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+14"/>
-        <source>&amp;Advanced</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message numerus="yes">
-        <location line="+295"/>
-        <source>%n minute(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+4"/>
-        <source>%n day(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Up to date</source>
-        <translation>Ajakohane</translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Catching up...</source>
-        <translation>Jõuan...</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Last received block was generated %1.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+70"/>
-        <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Confirm transaction fee</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+69"/>
-        <source>Please enter your boinc E-mail address, or click &lt;Cancel&gt; to skip for now:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Created new Configuration File Successfully. </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>New Account Created - Welcome Aboard!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>New User Wizard - Skipped</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+16"/>
-        <source>Attention! - Boinc Path Error!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+30"/>
-        <source>Sent transaction</source>
-        <translation>Saadetud tehing</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Incoming transaction</source>
-        <translation>Sisenev tehing</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Date: %1
-Amount: %2
-Type: %3
-Address: %4
-</source>
-        <translation>Kuupäev: %1?
-Summa: %2?
-Tüüp: %3?
-Aadress: %4?</translation>
-    </message>
-    <message>
-        <location line="+405"/>
-        <location line="+15"/>
-        <source>URI handling</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-15"/>
-        <location line="+15"/>
-        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+18"/>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
-        <translation>Rahakott on &lt;b&gt;krüpteeritud&lt;/b&gt; ning hetkel &lt;b&gt;avatud&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
-        <translation>Rahakott on &lt;b&gt;krüpteeritud&lt;/b&gt; ning hetkel &lt;b&gt;suletud&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <location line="+29"/>
-        <source>Backup Wallet</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Wallet Data (*.dat)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Backup Failed</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>There was an error trying to save the wallet data to the new location.</source>
+        <source>Modify configuration options for Gridcoin</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location line="+307"/>
+        <location line="+1430"/>
         <source>%n second(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -926,8 +889,50 @@ Aadress: %4?</translation>
             <numerusform></numerusform>
         </translation>
     </message>
+    <message>
+        <location line="-1350"/>
+        <source>&amp;Community</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>&amp;Upgrade QT Client</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>&amp;Advanced</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+86"/>
+        <location line="+64"/>
+        <source>Gridcoin client</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message numerus="yes">
-        <location line="+4"/>
+        <location line="+79"/>
+        <source>%n active connection(s) to Gridcoin network</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>Synchronizing with network...</source>
+        <translation>Võrgusünkimine...</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+2"/>
+        <source>~%n block(s) remaining</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1076"/>
         <source>%n hour(s)</source>
         <translation>
             <numerusform>%n tund</numerusform>
@@ -943,22 +948,7 @@ Aadress: %4?</translation>
         </translation>
     </message>
     <message>
-        <location line="+27"/>
-        <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+23"/>
-        <source>Not staking because you don&apos;t have mature coins and stake weight is too low.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Searching for mature coins... Please wait</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
+        <location line="+65"/>
         <source>Not staking</source>
         <translation type="unfinished"></translation>
     </message>
@@ -966,6 +956,14 @@ Aadress: %4?</translation>
         <location filename="../bitcoin.cpp" line="+145"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../bitcoingui.cpp" line="-1131"/>
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation>
+            <numerusform>Töödeldud %n plokk transaktsioonide ajaloost.</numerusform>
+            <numerusform>Töödeldud %n plokki transaktsioonide ajaloost.</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -986,12 +984,12 @@ Aadress: %4?</translation>
     <message>
         <location line="+28"/>
         <source>Quantity:</source>
-        <translation type="unfinished"></translation>
+        <translation>Kogus:</translation>
     </message>
     <message>
         <location line="+29"/>
         <source>Bytes:</source>
-        <translation type="unfinished"></translation>
+        <translation>Baiti:</translation>
     </message>
     <message>
         <location line="+45"/>
@@ -1006,7 +1004,7 @@ Aadress: %4?</translation>
     <message>
         <location line="+45"/>
         <source>Fee:</source>
-        <translation type="unfinished"></translation>
+        <translation>Tasu:</translation>
     </message>
     <message>
         <location line="+32"/>
@@ -1016,17 +1014,17 @@ Aadress: %4?</translation>
     <message>
         <location filename="../coincontroldialog.cpp" line="+551"/>
         <source>no</source>
-        <translation type="unfinished"></translation>
+        <translation>ei</translation>
     </message>
     <message>
         <location filename="../forms/coincontroldialog.ui" line="+48"/>
         <source>After Fee:</source>
-        <translation type="unfinished"></translation>
+        <translation>Peale tehingutasu:</translation>
     </message>
     <message>
         <location line="+32"/>
         <source>Change:</source>
-        <translation type="unfinished"></translation>
+        <translation>Vahetusraha:</translation>
     </message>
     <message>
         <location line="+69"/>
@@ -1041,7 +1039,7 @@ Aadress: %4?</translation>
     <message>
         <location line="+16"/>
         <source>List mode</source>
-        <translation type="unfinished"></translation>
+        <translation>Loetelu režiim</translation>
     </message>
     <message>
         <location line="+45"/>
@@ -1066,7 +1064,7 @@ Aadress: %4?</translation>
     <message>
         <location line="+5"/>
         <source>Confirmations</source>
-        <translation type="unfinished"></translation>
+        <translation>Kinnitused</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1081,12 +1079,12 @@ Aadress: %4?</translation>
     <message>
         <location filename="../coincontroldialog.cpp" line="-515"/>
         <source>Copy address</source>
-        <translation>Aadressi kopeerimine</translation>
+        <translation>Kopeeri aadress</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy label</source>
-        <translation>Märgise kopeerimine</translation>
+        <translation>Kopeeri märgis</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1102,12 +1100,12 @@ Aadress: %4?</translation>
     <message>
         <location line="+24"/>
         <source>Copy quantity</source>
-        <translation type="unfinished"></translation>
+        <translation>Kopeeri kogus</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Copy fee</source>
-        <translation type="unfinished"></translation>
+        <translation>Kopeeri tehingutasu</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1117,7 +1115,7 @@ Aadress: %4?</translation>
     <message>
         <location line="+1"/>
         <source>Copy bytes</source>
-        <translation type="unfinished"></translation>
+        <translation>Kopeeri baidid</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1132,7 +1130,7 @@ Aadress: %4?</translation>
     <message>
         <location line="+1"/>
         <source>Copy change</source>
-        <translation type="unfinished"></translation>
+        <translation>Kopeeri vahetusraha</translation>
     </message>
     <message>
         <location line="+317"/>
@@ -1177,7 +1175,7 @@ Aadress: %4?</translation>
     <message>
         <location line="+0"/>
         <source>yes</source>
-        <translation type="unfinished"></translation>
+        <translation>jah</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -1189,16 +1187,7 @@ Aadress: %4?</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Transactions with higher priority get more likely into a block.
-
-This label turns red, if the priority is smaller than &quot;medium&quot;.
-
- This means a fee of at least %1 per kb is required.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>This label turns red, if any recipient receives an amount smaller than %1.
 
  This means a fee of at least %2 is required. 
@@ -1217,17 +1206,26 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+37"/>
         <location line="+63"/>
         <source>(no label)</source>
-        <translation>(silti pole)</translation>
+        <translation>(märgis puudub)</translation>
     </message>
     <message>
-        <location line="-9"/>
+        <location line="-102"/>
+        <source>Transactions with higher priority get more likely into a block.
+
+This label turns red, if the priority is smaller than &quot;medium&quot;.
+
+ This means a fee of at least %1 per kb is required.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+93"/>
         <source>change from %1 (%2)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+1"/>
         <source>(change)</source>
-        <translation type="unfinished"></translation>
+        <translation>(vahetusraha)</translation>
     </message>
 </context>
 <context>
@@ -1260,60 +1258,50 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../editaddressdialog.cpp" line="+20"/>
         <source>New receiving address</source>
-        <translation>Uus sissetulev aadress</translation>
+        <translation>Uus vastu võttev aadress</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>New sending address</source>
-        <translation>Uus väljaminev aadress</translation>
+        <translation>Uus saatev aadress</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Edit receiving address</source>
-        <translation>Sissetulevate aadresside muutmine</translation>
+        <translation>Muuda vastuvõtvat aadressi</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Edit sending address</source>
-        <translation>Väljaminevate aadresside muutmine</translation>
+        <translation>Muuda saatvat aadressi</translation>
     </message>
     <message>
-        <location line="+76"/>
-        <source>The entered address &quot;%1&quot; is already in the address book.</source>
-        <translation>Selline aadress on juba olemas: &quot;%1&quot;</translation>
-    </message>
-    <message>
-        <location line="-5"/>
+        <location line="+71"/>
         <source>The entered address &quot;%1&quot; is not a valid Gridcoin address.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+5"/>
+        <source>The entered address &quot;%1&quot; is already in the address book.</source>
+        <translation>Sisestatud aadress &quot;%1&quot; on juba aadressi raamatus.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Could not unlock wallet.</source>
-        <translation>Rahakotti ei avatud</translation>
+        <translation>Rahakoti lahtilukustamine ebaõnnestus.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>New key generation failed.</source>
-        <translation>Tõrge uue võtme loomisel.</translation>
+        <translation>Uue võtme genereerimine ebaõnnestus.</translation>
     </message>
 </context>
 <context>
     <name>GUIUtil::HelpMessageBox</name>
     <message>
-        <location filename="../guiutil.cpp" line="+436"/>
-        <source>Gridcoin-Qt</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-12"/>
+        <location filename="../guiutil.cpp" line="+424"/>
         <source>version</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>gridcoinresearch</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">versioon</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -1323,7 +1311,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>command-line options</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">käsurea valikud</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -1343,6 +1331,11 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Show splash screen on startup (default: 1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Gridcoin-Qt</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1430,7 +1423,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+16"/>
         <source>&amp;Main</source>
-        <translation>%Peamine</translation>
+        <translation>&amp;Peamine</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -1443,7 +1436,47 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="+80"/>
+        <source>&amp;Network</source>
+        <translation>&amp;Võrk</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Map port using &amp;UPnP</source>
+        <translation>Suuna port &amp;UPnP kaudu</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Proxy &amp;IP:</source>
+        <translation>Proxi &amp;IP:</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>IP address of the proxy (e.g. 127.0.0.1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>&amp;Port:</source>
+        <translation>&amp;Port:</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Port of the proxy (e.g. 9050)</source>
+        <translation>Proxi port (nt 9050)</translation>
+    </message>
+    <message>
+        <location line="-184"/>
+        <source>Pa&amp;y transaction fee</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location line="+46"/>
+        <source>Reser&amp;ve</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+31"/>
         <source>Automatically start Gridcoin after logging in to the system.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1463,22 +1496,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+21"/>
-        <source>&amp;Network</source>
-        <translation>&amp;Võrk</translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="+27"/>
         <source>Automatically open the Gridcoin client port on the router. This only works when your router supports UPnP and it is enabled.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>Map port using &amp;UPnP</source>
-        <translation>Suuna port &amp;UPnP kaudu</translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location line="+10"/>
         <source>Connect to the Gridcoin network through a SOCKS proxy (e.g. when connecting through Tor).</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1488,37 +1511,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-130"/>
-        <source>Pa&amp;y transaction fee</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+46"/>
-        <source>Reser&amp;ve</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+93"/>
-        <source>Prox&amp;y IP:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+19"/>
-        <source>IP address of the proxy (e.g. 127.0.0.1)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>&amp;Port:</source>
-        <translation>&amp;Port:</translation>
-    </message>
-    <message>
-        <location line="+19"/>
-        <source>Port of the proxy (e.g. 9050)</source>
-        <translation>Proxi port (nt 9050)</translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location line="+61"/>
         <source>SOCKS &amp;Version:</source>
         <translation>Turva proxi SOCKS &amp;Version:</translation>
     </message>
@@ -1563,12 +1556,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Kasutajaliidese &amp;keel:</translation>
     </message>
     <message>
-        <location line="+13"/>
-        <source>The user interface language can be set here. This setting will take effect after restarting Gridcoin.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+11"/>
+        <location line="+24"/>
         <source>&amp;Unit to show amounts in:</source>
         <translation>Summade kuvamise &amp;Unit:</translation>
     </message>
@@ -1578,7 +1566,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Vali liideses ning müntide saatmisel kuvatav vaikimisi alajaotus.</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="-24"/>
+        <source>The user interface language can be set here. This setting will take effect after restarting Gridcoin.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+61"/>
+        <source>Whether to show coin control features or not.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Display coin &amp;control features (experts only!)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-29"/>
         <source>Style:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1598,17 +1601,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Tehingute loetelu &amp;Display aadress</translation>
     </message>
     <message>
-        <location line="+7"/>
-        <source>Whether to show coin control features or not.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Display coin &amp;control features (experts only!)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+74"/>
+        <location line="+84"/>
         <source>&amp;OK</source>
         <translation>&amp;OK</translation>
     </message>
@@ -1641,7 +1634,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+123"/>
         <location line="+9"/>
         <source>Warning</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Hoiatus</translation>
     </message>
     <message>
         <location line="-9"/>
@@ -1663,14 +1656,19 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Vorm</translation>
     </message>
     <message>
-        <location line="+57"/>
+        <location line="+47"/>
+        <source>Wallet</source>
+        <translation type="unfinished">Rahakott</translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <location line="+439"/>
         <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="-376"/>
-        <source>Your current balance.</source>
+        <source>Your current spendable balance</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1686,40 +1684,15 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+13"/>
         <source>Unconfirmed</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Kinnitamata</translation>
     </message>
     <message>
-        <location line="-114"/>
-        <source>Wallet</source>
-        <translation type="unfinished">Rahakott</translation>
-    </message>
-    <message>
-        <location line="+58"/>
-        <source>Balance:</source>
-        <translation type="unfinished">Jääk:</translation>
-    </message>
-    <message>
-        <location line="+90"/>
+        <location line="+34"/>
         <source>Immature:</source>
-        <translation type="unfinished"></translation>
+        <translation>Ebaküps:</translation>
     </message>
     <message>
-        <location line="+12"/>
-        <source>Total mined coins that have not yet matured.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+38"/>
-        <source>Total:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Total Balance     </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+46"/>
+        <location line="+103"/>
         <source>Blocks:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1761,7 +1734,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+109"/>
         <source>Recent transactions</source>
-        <translation type="unfinished"></translation>
+        <translation>Hiljutised tehingud</translation>
     </message>
     <message>
         <location line="+99"/>
@@ -1774,12 +1747,32 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-414"/>
+        <location line="-345"/>
+        <source>Total:</source>
+        <translation>Kokku:</translation>
+    </message>
+    <message>
+        <location line="-38"/>
+        <source>Total mined coins that have not yet matured.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-102"/>
+        <source>Available:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+147"/>
+        <source>Your current total balance</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-76"/>
         <source>Total of transactions that have yet to be confirmed, and do not yet count toward the current balance</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../overviewpage.cpp" line="+134"/>
+        <location filename="../overviewpage.cpp" line="+132"/>
         <location line="+1"/>
         <source>out of sync</source>
         <translation>sünkimata</translation>
@@ -1810,7 +1803,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+19"/>
         <source>Message:</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Sõnum:</translation>
     </message>
     <message>
         <location line="+71"/>
@@ -1830,12 +1823,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+23"/>
         <source>Resulting URI too long, try to reduce the text for label / message.</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">URI liiga pikk, proovi vähendada märke / sõnumi pikkust.</translation>
     </message>
     <message>
         <location line="+25"/>
         <source>Save QR Code</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Salvesta QR Kood</translation>
     </message>
     <message>
         <location line="+0"/>
@@ -1921,57 +1914,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+92"/>
-        <source>Network:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+39"/>
+        <location line="+131"/>
         <source>Current number of blocks</source>
         <translation>Plokkide hetkearv</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="-39"/>
+        <source>Network:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+68"/>
         <source>Estimated total blocks</source>
         <translation>Ligikaudne plokkide kogus</translation>
     </message>
     <message>
-        <location line="-217"/>
-        <source>Last block time</source>
-        <translation>Viimane ploki aeg</translation>
-    </message>
-    <message>
-        <location line="+248"/>
-        <source>&amp;Open</source>
-        <translation>&amp;Ava</translation>
-    </message>
-    <message>
-        <location line="+15"/>
-        <source>Command-line options</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+16"/>
-        <source>&amp;Show</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+265"/>
-        <source>&amp;Console</source>
-        <translation>&amp;Konsool</translation>
-    </message>
-    <message>
-        <location line="-429"/>
-        <source>Build date</source>
-        <translation>Valmistusaeg</translation>
-    </message>
-    <message>
-        <location line="+117"/>
-        <source>Debug log file</source>
-        <translation>Debugimise logifail</translation>
-    </message>
-    <message>
-        <location line="+10"/>
+        <location line="+25"/>
         <source>Open the Gridcoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1981,17 +1939,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+74"/>
-        <source>OpenSSL version</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+21"/>
+        <location line="+95"/>
         <source>&amp;Network Traffic</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+52"/>
+        <location line="-21"/>
+        <source>OpenSSL version</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+73"/>
         <source>&amp;Clear</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2011,17 +1969,47 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+97"/>
+        <location line="-503"/>
+        <source>Last block time</source>
+        <translation>Viimane ploki aeg</translation>
+    </message>
+    <message>
+        <location line="+248"/>
+        <source>&amp;Open</source>
+        <translation>&amp;Ava</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Command-line options</source>
+        <translation type="unfinished">Käsurea valikud</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>&amp;Show</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+265"/>
+        <source>&amp;Console</source>
+        <translation>&amp;Konsool</translation>
+    </message>
+    <message>
+        <location line="-429"/>
+        <source>Build date</source>
+        <translation>Valmistusaeg</translation>
+    </message>
+    <message>
+        <location line="+117"/>
+        <source>Debug log file</source>
+        <translation>Silumise logifail</translation>
+    </message>
+    <message>
+        <location line="+368"/>
         <source>Clear console</source>
         <translation>Puhasta konsool</translation>
     </message>
     <message>
-        <location filename="../rpcconsole.cpp" line="-35"/>
-        <source>Welcome to the Gridcoin RPC console! </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location filename="../rpcconsole.cpp" line="-34"/>
         <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
         <translation>Ajaloo sirvimiseks kasuta üles ja alla nooli, ekraani puhastamiseks &lt;b&gt;Ctrl-L&lt;/b&gt;.</translation>
     </message>
@@ -2031,24 +2019,29 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Ülevaateks võimalikest käsklustest trüki &lt;b&gt;help&lt;/b&gt;.</translation>
     </message>
     <message>
-        <location line="+111"/>
-        <source>%1 B</source>
+        <location line="-2"/>
+        <source>Welcome to the Gridcoin RPC console! </source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+113"/>
+        <source>%1 B</source>
+        <translation>%1 B</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1 KB</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 B</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1 MB</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 MB</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1 GB</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 GB</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -2088,22 +2081,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+20"/>
         <source>Inputs...</source>
-        <translation type="unfinished"></translation>
+        <translation>Sisendid...</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>automatically selected</source>
-        <translation type="unfinished"></translation>
+        <translation>automaatselt valitud</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Insufficient funds!</source>
-        <translation type="unfinished"></translation>
+        <translation>Liiga suur summa</translation>
     </message>
     <message>
         <location line="+83"/>
         <source>Quantity:</source>
-        <translation type="unfinished"></translation>
+        <translation>Kogus:</translation>
     </message>
     <message>
         <location line="+22"/>
@@ -2114,7 +2107,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="-19"/>
         <source>Bytes:</source>
-        <translation type="unfinished"></translation>
+        <translation>Baiti:</translation>
     </message>
     <message>
         <location line="+48"/>
@@ -2142,7 +2135,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+29"/>
         <source>Fee:</source>
-        <translation type="unfinished"></translation>
+        <translation>Tasu:</translation>
     </message>
     <message>
         <location line="+32"/>
@@ -2152,12 +2145,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+19"/>
         <source>no</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">ei</translation>
     </message>
     <message>
         <location line="+29"/>
         <source>After Fee:</source>
-        <translation type="unfinished"></translation>
+        <translation>Peale tehingutasu:</translation>
     </message>
     <message>
         <location line="+32"/>
@@ -2217,7 +2210,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+15"/>
         <source>Copy quantity</source>
-        <translation type="unfinished"></translation>
+        <translation>Kopeeri kogus</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2227,7 +2220,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Copy fee</source>
-        <translation type="unfinished"></translation>
+        <translation>Kopeeri tehingutasu</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2237,25 +2230,25 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Copy bytes</source>
-        <translation type="unfinished"></translation>
+        <translation>Kopeeri baidid</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Copy priority</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Copy low output</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy change</source>
+        <translation>Kopeeri vahetusraha</translation>
+    </message>
+    <message>
+        <location line="-2"/>
+        <source>Copy priority</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+86"/>
+        <location line="+88"/>
         <source>&lt;b&gt;%1&lt;/b&gt; to %2 (%3)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2310,17 +2303,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+251"/>
+        <location line="+264"/>
+        <source>(no label)</source>
+        <translation>(märgis puudub)</translation>
+    </message>
+    <message>
+        <location line="-13"/>
         <source>WARNING: Invalid Gridcoin address</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+13"/>
-        <source>(no label)</source>
-        <translation>(silti pole)</translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+17"/>
         <source>WARNING: unknown change address</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2333,42 +2326,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished">Vorm</translation>
     </message>
     <message>
-        <location line="+48"/>
-        <source>Pa&amp;y To:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+18"/>
-        <source>The address to send the payment to  (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+60"/>
-        <source>Message:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+21"/>
-        <source>Send Custom Message to a Gridcoin Recipient</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+9"/>
+        <location line="+156"/>
         <source>A&amp;mount:</source>
         <translation>S&amp;umma:</translation>
     </message>
     <message>
-        <location line="+13"/>
-        <source>Track Coins</source>
-        <translation type="unfinished"></translation>
+        <location line="-108"/>
+        <source>Pay &amp;To:</source>
+        <translation>Maksa &amp;:</translation>
     </message>
     <message>
-        <location line="+7"/>
-        <source>Add Attachment</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-137"/>
+        <location line="-9"/>
         <location filename="../sendcoinsentry.cpp" line="+29"/>
         <source>Enter a label for this address to add it to your address book</source>
         <translation>Aadressiraamatusse sisestamiseks märgista aadress</translation>
@@ -2379,7 +2347,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>&amp;Märgis</translation>
     </message>
     <message>
-        <location line="+58"/>
+        <location line="+48"/>
+        <source>The address to send the payment to  (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <source>Choose address from address book</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2404,6 +2377,26 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="+16"/>
+        <source>Message:</source>
+        <translation>Sõnum:</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Send Custom Message to a Gridcoin Recipient</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Track Coins</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Add Attachment</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../sendcoinsentry.cpp" line="+1"/>
         <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
         <translation type="unfinished"></translation>
@@ -2418,12 +2411,11 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+13"/>
-        <location line="+124"/>
         <source>&amp;Sign Message</source>
         <translation>&amp;Allkirjastamise teade</translation>
     </message>
     <message>
-        <location line="-118"/>
+        <location line="+6"/>
         <source>You can sign messages with your addresses to prove you own them. Be careful not to sign anything vague, as phishing attacks may try to trick you into signing your identity over to them. Only sign fully-detailed statements you agree to.</source>
         <translation>Omandiõigsuse tõestamiseks saad sõnumeid allkirjastada oma aadressiga. Ettevaatust petturitega, kes üritavad saada sinu allkirja endale saada. Allkirjasta ainult korralikult täidetud avaldusi, millega nõustud.</translation>
     </message>
@@ -2515,7 +2507,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="-2"/>
         <source>Click &quot;Sign Message&quot; to generate signature</source>
-        <translation>Signatuuri genereerimiseks vajuta &quot;Allkirjasta Sõnum&quot;</translation>
+        <translation>Allkirja loomiseks vajuta &quot;Allkirjasta Sõnum&quot;</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -2526,7 +2518,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+82"/>
         <location line="+81"/>
         <source>The entered address is invalid.</source>
-        <translation>Sisestatud aadress ei kehti.</translation>
+        <translation>Sisestatud aadress ei ole korrektne</translation>
     </message>
     <message>
         <location line="-81"/>
@@ -2534,7 +2526,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+73"/>
         <location line="+8"/>
         <source>Please check the address and try again.</source>
-        <translation>Palun kontrolli aadressi ning proovi uuesti.</translation>
+        <translation>Palun kontrolli aadressi ja proovi uuesti.</translation>
     </message>
     <message>
         <location line="-81"/>
@@ -2545,48 +2537,53 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="-73"/>
         <source>Wallet unlock was cancelled.</source>
-        <translation>Rahakoti avamine katkestati.</translation>
+        <translation>Rahakoti lahtilukustamine on katkestatud.</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Private key for the entered address is not available.</source>
-        <translation>Sisestatud aadressi privaatvõti ei ole saadaval.</translation>
+        <translation>Sisestatud aadressi privaatvõti pole saadaval.</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Message signing failed.</source>
-        <translation>Sõnumi signeerimine ebaõnnestus.</translation>
+        <translation>Sõnumi allkirjastamine ebaõnnestus.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Message signed.</source>
-        <translation>Sõnum signeeritud.</translation>
+        <translation>Sõnum allkirjastatud</translation>
     </message>
     <message>
         <location line="+59"/>
         <source>The signature could not be decoded.</source>
-        <translation>Signatuuri ei õnnestunud dekodeerida.</translation>
+        <translation>Allkirja polnud võimalik dekodeerida.</translation>
     </message>
     <message>
         <location line="+0"/>
         <location line="+13"/>
         <source>Please check the signature and try again.</source>
-        <translation>Palun kontrolli signatuuri ning proovi uuesti.</translation>
+        <translation>Palun kontrolli allkirja ja proovi uuesti.</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>The signature did not match the message digest.</source>
-        <translation>Signatuur ei kattunud sõnumi kokkuvõttega.</translation>
+        <translation>Allkiri ei vastanud sõnumi krüptoräsile.</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Message verification failed.</source>
-        <translation>Sõnumi kontroll ebaõnnestus.</translation>
+        <translation>Sõnumi verifitseerimine ebaõnnestus.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Message verified.</source>
-        <translation>Sõnum kontrollitud.</translation>
+        <translation>Sõnum verifitseeritud.</translation>
+    </message>
+    <message>
+        <location filename="../forms/signverifymessagedialog.ui" line="-160"/>
+        <source>Sign &amp;Message</source>
+        <translation>Allkirjasta &amp;Sõnum</translation>
     </message>
 </context>
 <context>
@@ -2619,7 +2616,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+45"/>
         <source>Status</source>
-        <translation>Staatus</translation>
+        <translation>Olek</translation>
     </message>
     <message numerus="yes">
         <location line="+7"/>
@@ -2688,7 +2685,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>not accepted</source>
-        <translation>mitte aktsepteeritud</translation>
+        <translation>pole vastu võetud</translation>
     </message>
     <message>
         <location line="+44"/>
@@ -2701,7 +2698,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="-60"/>
         <source>Transaction fee</source>
-        <translation>Tehingu tasu</translation>
+        <translation>Tehingutasu</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -2751,7 +2748,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+16"/>
         <source>Information</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Informatsioon</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -2766,17 +2763,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+26"/>
         <source>Amount</source>
-        <translation>Kogus</translation>
+        <translation>Summa</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>true</source>
-        <translation>õige</translation>
+        <translation>tõene</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>false</source>
-        <translation>vale</translation>
+        <translation>väär</translation>
     </message>
     <message>
         <location line="-255"/>
@@ -2810,24 +2807,24 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Paan kuvab tehingu detailid</translation>
     </message>
     <message>
-        <location line="+42"/>
+        <location line="+25"/>
+        <source>View Attachment</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Track Coins</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <source>Execute Contract</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Close</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-17"/>
-        <source>Track Coins</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-7"/>
-        <source>View Attachment</source>
-        <translation type="unfinished"></translation>
+        <source>C&amp;lose</source>
+        <translation type="unfinished">S&amp;ulge</translation>
     </message>
     <message>
         <location filename="../transactiondescdialog.cpp" line="+90"/>
@@ -2873,47 +2870,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Avatud kuni %1</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>Confirming (%1 of %2 recommended confirmations)&lt;br&gt;</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="+12"/>
         <source>Confirmed (%1 confirmations)</source>
         <translation>Kinnitatud (%1 kinnitust)</translation>
     </message>
-    <message>
-        <location line="+6"/>
-        <source>Immature (%1 confirmations, will be available after %2)&lt;br&gt;</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>This block was not received by any other nodes&lt;br&gt; and will probably not be accepted!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+80"/>
-        <source>Mined - DPOR</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Minted - (Local) DPOR</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Mined - PoR</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Mined - Interest</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message numerus="yes">
-        <location line="-117"/>
+        <location line="-15"/>
         <source>Open for %n more block(s)</source>
         <translation>
             <numerusform>Avaneb %n bloki pärast</numerusform>
@@ -2928,7 +2890,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+3"/>
         <source>Unconfirmed</source>
-        <translation type="unfinished"></translation>
+        <translation>Kinnitamata</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -2936,12 +2898,27 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="-6"/>
+        <source>Confirming (%1 of %2 recommended confirmations)&lt;br&gt;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+15"/>
         <source>Generated but not accepted</source>
         <translation>Loodud, kuid aktsepteerimata</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="-6"/>
+        <source>Immature (%1 confirmations, will be available after %2)&lt;br&gt;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>This block was not received by any other nodes&lt;br&gt; and will probably not be accepted!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+64"/>
         <source>Received with</source>
         <translation>Saadud koos</translation>
     </message>
@@ -2961,12 +2938,32 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Makse iseendale</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+9"/>
+        <source>Mined - DPOR</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+71"/>
         <source>(n/a)</source>
         <translation>(n/a)</translation>
     </message>
     <message>
-        <location line="+193"/>
+        <location line="-67"/>
+        <source>Minted - (Local) DPOR</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Mined - PoR</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Mined - Interest</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+251"/>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
         <translation>Tehingu staatus. Kinnituste arvu kuvamiseks liigu hiire noolega selle peale.</translation>
     </message>
@@ -3007,12 +3004,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>This week</source>
-        <translation>Jooksev nädal</translation>
+        <translation>Käesolev nädal</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>This month</source>
-        <translation>Jooksev kuu</translation>
+        <translation>Käesolev kuu</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3022,12 +3019,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>This year</source>
-        <translation>Jooksev aasta</translation>
+        <translation>Käesolev aasta</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Range...</source>
-        <translation>Ulatus...</translation>
+        <translation>Vahemik...</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -3062,17 +3059,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+7"/>
         <source>Min amount</source>
-        <translation>Vähim summa</translation>
+        <translation>Minimaalne summa</translation>
     </message>
     <message>
         <location line="+34"/>
         <source>Copy address</source>
-        <translation>Aadressi kopeerimine</translation>
+        <translation>Kopeeri aadress</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy label</source>
-        <translation>Märgise kopeerimine</translation>
+        <translation>Kopeeri märgis</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3102,7 +3099,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Comma separated file (*.csv)</source>
-        <translation>Komaeraldatud fail (*.csv)</translation>
+        <translation>Komadega eraldatud väärtuste fail (*.csv)</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -3180,7 +3177,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+7"/>
         <source>Hide</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Peida</translation>
     </message>
 </context>
 <context>
@@ -3400,12 +3397,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>bitcoin-core</name>
     <message>
-        <location filename="../bitcoinstrings.cpp" line="+33"/>
-        <source>Gridcoin version</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location filename="../bitcoinstrings.cpp" line="+34"/>
         <source>Usage:</source>
         <translation>Kasutus:</translation>
     </message>
@@ -3480,17 +3472,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>RPC pordi %u kuulamiseks seadistamisel ilmnes viga IPv4&apos;l: %s</translation>
     </message>
     <message>
-        <location line="+157"/>
-        <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-5"/>
-        <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-87"/>
+        <location line="+65"/>
         <source>Listen for JSON-RPC connections on &lt;port&gt; (default: 15715 or testnet: 25715)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3500,27 +3482,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Luba käsurea ning JSON-RPC käsklusi</translation>
     </message>
     <message>
-        <location line="+101"/>
-        <source>Error: Transaction creation failed  </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-5"/>
-        <source>Error: Wallet locked, unable to create transaction  </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-8"/>
-        <source>Importing blockchain data file.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location line="+1"/>
-        <source>Importing bootstrap blockchain data file.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-88"/>
         <source>Run in the background as a daemon and accept commands</source>
         <translation>Tööta taustal ning aktsepteeri käsklusi</translation>
     </message>
@@ -3535,32 +3497,27 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Luba välisühendusi (vaikeväärtus: 1 kui puudub -proxy või -connect)</translation>
     </message>
     <message>
-        <location line="-38"/>
+        <location line="+120"/>
+        <source>Error: Transaction creation failed  </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-160"/>
         <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
         <translation>RPC pordi %u kuulamiseks seadistamisel ilmnes viga IPv6&apos;l, lülitumine tagasi IPv4&apos;le : %s</translation>
     </message>
     <message>
-        <location line="+115"/>
-        <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-21"/>
-        <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+11"/>
+        <location line="+105"/>
         <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
         <translation>Hoiatus: -paytxfee on seatud väga kõrgeks! See on sinu poolt makstav tehingu lisatasu.</translation>
     </message>
     <message>
-        <location line="+61"/>
-        <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-30"/>
+        <location line="+31"/>
         <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
         <translation>Hoiatus: ilmnes tõrge wallet.dat faili lugemisel! Võtmed on terved, kuid tehingu andmed või aadressiraamatu kirjed võivad olla kadunud või vigased.</translation>
     </message>
@@ -3595,17 +3552,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Pordi kuulamine nurjus. Soovikorral kasuta -listen=0.</translation>
     </message>
     <message>
-        <location line="-88"/>
-        <source>Find peers using DNS lookup (default: 1)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Sync checkpoints policy (default: strict)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+82"/>
+        <location line="-2"/>
         <source>Invalid -tor address: &apos;%s&apos;</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3630,52 +3577,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Ühenda ainult node&apos;idega &lt;net&gt; võrgus (IPv4, IPv6 või Tor)</translation>
     </message>
     <message>
-        <location line="-49"/>
-        <source>%s, you must set a rpcpassword in the configuration file:
- %s
-It is recommended you use the following random password:
-rpcuser=gridcoinrpc
-rpcpassword=%s
-(you do not need to remember this password)
-The username and password MUST NOT be the same.
-If the file does not exist, create it with owner-readable-only file permissions.
-It is also recommended to set alertnotify so you are notified of problems;
-for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
-</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+26"/>
-        <source>Send command to -server or gridcoind</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Specify configuration file (default: gridcoin.conf)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Specify pid file (default: gridcoind.pid)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+31"/>
-        <source>Output extra debugging information. Implies all other -debug* options</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Output extra network debugging information</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+27"/>
         <source>Prepend debug output with timestamp</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3685,22 +3587,12 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>SSL valikud: (vaata Bitcoini Wikist või SSL sätete juhendist)</translation>
     </message>
     <message>
-        <location line="-71"/>
-        <source>Select the version of socks proxy to use (4-5, default: 5)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+38"/>
+        <location line="-33"/>
         <source>Send trace/debug info to console instead of debug.log file</source>
         <translation>Saada jälitus/debug, debug.log faili asemel, konsooli</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Send trace/debug info to debugger</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+28"/>
+        <location line="+29"/>
         <source>Set maximum block size in bytes (default: 250000)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3720,13 +3612,7 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Sea ühenduse timeout millisekundites (vaikeväärtus: 5000)</translation>
     </message>
     <message>
-        <location line="+107"/>
-        <source>Unable to sign checkpoint, wrong checkpointkey?
-</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-79"/>
+        <location line="+28"/>
         <source>Use UPnP to map the listening port (default: 0)</source>
         <translation>Kasuta kuulatava pordi määramiseks UPnP ühendust (vaikeväärtus: 0)</translation>
     </message>
@@ -3751,17 +3637,7 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+56"/>
-        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Warning: Disk space is low!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-2"/>
+        <location line="+55"/>
         <source>Warning: This version is obsolete, upgrade required!</source>
         <translation>Hoiatus: versioon on aegunud, uuendus on nõutav!</translation>
     </message>
@@ -3776,22 +3652,77 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>JSON-RPC ühenduste salasõna</translation>
     </message>
     <message>
-        <location line="-30"/>
-        <source>Find peers using internet relay chat (default: 0)</source>
+        <location line="-81"/>
+        <source>%s, you must set a rpcpassword in the configuration file:
+ %s
+It is recommended you use the following random password:
+rpcuser=gridcoinrpc
+rpcpassword=%s
+(you do not need to remember this password)
+The username and password MUST NOT be the same.
+If the file does not exist, create it with owner-readable-only file permissions.
+It is also recommended to set alertnotify so you are notified of problems;
+for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
+</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+24"/>
+        <source>Gridcoin version</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Send command to -server or gridcoind</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+29"/>
         <source>Sync time with other nodes. Disable if time on your system is precise e.g. syncing with NTP (default: 1)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="-23"/>
+        <source>Specify configuration file (default: gridcoin.conf)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Specify pid file (default: gridcoind.pid)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Select the version of socks proxy to use (4-5, default: 5)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+28"/>
         <source>When creating transactions, ignore inputs with value less than this (default: 0.01)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="-25"/>
+        <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Find peers using internet relay chat (default: 0)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Find peers using DNS lookup (default: 1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Sync checkpoints policy (default: strict)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+26"/>
         <source>Allow JSON-RPC connections from specified IP address</source>
         <translation>JSON-RPC ühenduste lubamine kindla IP pealt</translation>
     </message>
@@ -3816,17 +3747,22 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>Execute command when a relevant alert is received (%s in cmd is replaced by message)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="-21"/>
+        <source>Output extra debugging information. Implies all other -debug* options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Output extra network debugging information</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+23"/>
         <source>Upgrade wallet to latest format</source>
         <translation>Uuenda rahakott uusimasse vormingusse</translation>
     </message>
@@ -3841,12 +3777,12 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Otsi ploki jadast rahakoti kadunud tehinguid</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <source>How many blocks to check at startup (default: 2500, 0 = all)</source>
+        <location line="-21"/>
+        <source>Send trace/debug info to debugger</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+24"/>
         <source>How thorough the block verification is (0-6, default: 1)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3871,27 +3807,53 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Serveri privaatvõti (vaikeväärtus: server.pem)</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Acceptable ciphers (default: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</source>
+        <location line="-21"/>
+        <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+8"/>
-        <source>Initialization sanity check failed. Gridcoin is shutting down.</source>
+        <location line="+9"/>
+        <source>How many blocks to check at startup (default: 2500, 0 = all)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+6"/>
+        <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Unable to sign checkpoint, wrong checkpointkey?
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+23"/>
         <source>Error: Wallet unlocked for staking only, unable to create transaction.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+18"/>
-        <source>WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.</source>
+        <location line="+12"/>
+        <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-155"/>
+        <location line="+4"/>
+        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Warning: Disk space is low!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-154"/>
         <source>This help message</source>
         <translation>Käesolev abitekst</translation>
     </message>
@@ -3901,27 +3863,12 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Rahakott %s paikenb väljaspool kataloogi %s.</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-96"/>
-        <source>Gridcoin</source>
-        <translation>Gridcoin</translation>
-    </message>
-    <message>
-        <location line="+137"/>
+        <location line="+42"/>
         <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
         <translation>Selle arvutiga ei ole võimalik siduda %s külge (katse nurjus %d, %s tõttu)</translation>
     </message>
     <message>
-        <location line="-127"/>
-        <source>Connect through socks proxy</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="-124"/>
         <source>Allow DNS lookups for -addnode, -seednode and -connect</source>
         <translation>-addnode, -seednode ja -connect tohivad kasutada DNS lookup&apos;i</translation>
     </message>
@@ -3931,27 +3878,12 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Aadresside laadimine...</translation>
     </message>
     <message>
-        <location line="-14"/>
-        <source>Error loading blkindex.dat</source>
-        <translation>Viga faili blkindex.dat laadimisel</translation>
-    </message>
-    <message>
-        <location line="+2"/>
+        <location line="-12"/>
         <source>Error loading wallet.dat: Wallet corrupted</source>
         <translation>Viga wallet.dat käivitamisel. Vigane rahakkott</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
-        <translation>Viga faili wallet.dat laadimisel: rahakott vajab Gridcoin&apos;i uuemat versiooni.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
-        <translation>Rahakott on vaja üle kirjutada: käivita Gridcoin uuesti toimingu lõpetamiseks</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+6"/>
         <source>Error loading wallet.dat</source>
         <translation>Viga wallet.dat käivitamisel</translation>
     </message>
@@ -3966,12 +3898,7 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Kirjeldatud tundmatu võrgustik -onlynet&apos;is: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-1"/>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>Küsitud tundmatu -socks proxi versioon: %i</translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>Cannot resolve -bind address: &apos;%s&apos;</source>
         <translation>Tundmatu -bind aadress: &apos;%s&apos;</translation>
     </message>
@@ -3986,12 +3913,7 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>-paytxfee=&lt;amount&gt; jaoks vigane kogus: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+44"/>
-        <source>Error: could not start node</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+11"/>
+        <location line="+55"/>
         <source>Sending...</source>
         <translation>Saatmine...</translation>
     </message>
@@ -4016,27 +3938,47 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Lisa node ning hoia ühendus avatud</translation>
     </message>
     <message>
-        <location line="+119"/>
-        <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-97"/>
+        <location line="+22"/>
         <source>Fee per KB to add to transactions you send</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+55"/>
+        <location line="-38"/>
+        <source>Gridcoin</source>
+        <translation>Gridcoin</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Connect through socks proxy</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+83"/>
         <source>Invalid amount for -mininput=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="-7"/>
+        <source>Acceptable ciphers (default: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Initialization sanity check failed. Gridcoin is shutting down.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+25"/>
         <source>Loading wallet...</source>
         <translation>Rahakoti laadimine...</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="-23"/>
+        <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+31"/>
         <source>Cannot downgrade wallet</source>
         <translation>Rahakoti vanandamine ebaõnnestus</translation>
     </message>
@@ -4056,12 +3998,67 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Laetud</translation>
     </message>
     <message>
-        <location line="-164"/>
+        <location line="-26"/>
+        <source>Unknown -socks proxy version requested: %i</source>
+        <translation>Küsitud tundmatu -socks proxi versioon: %i</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Error loading blkindex.dat</source>
+        <translation>Viga faili blkindex.dat laadimisel</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
+        <translation>Viga faili wallet.dat laadimisel: rahakott vajab Gridcoin&apos;i uuemat versiooni.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
+        <translation>Rahakott on vaja üle kirjutada: käivita Gridcoin uuesti toimingu lõpetamiseks</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Importing blockchain data file.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Importing bootstrap blockchain data file.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Error: could not start node</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Error: Wallet locked, unable to create transaction  </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-170"/>
         <source>To use the %s option</source>
         <translation>%s valiku kasutamine</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+187"/>
+        <source>WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-173"/>
         <source>Error</source>
         <translation>Tõrge</translation>
     </message>

@@ -47,49 +47,39 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Salin alamat yang dipilih ke clipboard</translation>
     </message>
     <message>
-        <location line="-11"/>
-        <source>&amp;New Address</source>
-        <translation>&amp;Alamat Baru</translation>
-    </message>
-    <message>
-        <location line="-46"/>
+        <location line="-57"/>
         <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
         <translation>Ini adalah alamat Gridcoin Anda untuk menerima pembayaran. Anda dapat memberikan alamat yang berbeda untuk setiap pengirim, sehingga Anda dapat melacak siapa yang membayar Anda.</translation>
     </message>
     <message>
-        <location line="+60"/>
-        <source>&amp;Copy Address</source>
-        <translation>&amp;Salin Alamat</translation>
-    </message>
-    <message>
-        <location line="+11"/>
+        <location line="+71"/>
         <source>Show &amp;QR Code</source>
         <translation>Unjukkan &amp;Kode QR</translation>
     </message>
     <message>
-        <location line="+11"/>
-        <source>Sign a message to prove you own a Gridcoin address</source>
-        <translation>Masukan  pesan untuk membuktikan bahwa anda telah mempunyai adress Gridcoin</translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="+14"/>
         <source>Sign &amp;Message</source>
         <translation>Sign &amp; Pesan</translation>
     </message>
     <message>
-        <location line="+25"/>
-        <source>Delete the currently selected address from the list</source>
-        <translation>Menghapus alamat yang saat ini dipilih dari daftar yang tersedia</translation>
+        <location line="-3"/>
+        <source>Sign a message to prove you own a Gridcoin address</source>
+        <translation>Masukan  pesan untuk membuktikan bahwa anda telah mempunyai adress Gridcoin</translation>
     </message>
     <message>
-        <location line="-14"/>
+        <location line="+14"/>
         <source>Verify a message to ensure it was signed with a specified Gridcoin address</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+14"/>
+        <source>Delete the currently selected address from the list</source>
+        <translation>Hapus alamat yang sementara dipilih dari daftar</translation>
+    </message>
+    <message>
+        <location line="-11"/>
         <source>&amp;Verify Message</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">&amp;Verifikasi Pesan</translation>
     </message>
     <message>
         <location line="+14"/>
@@ -125,6 +115,16 @@ This product includes software developed by the OpenSSL Project for use in the O
         <location line="+0"/>
         <source>Could not write to file %1.</source>
         <translation>Penulisan data ke file gagal %1</translation>
+    </message>
+    <message>
+        <location filename="../forms/addressbookpage.ui" line="-67"/>
+        <source>&amp;New</source>
+        <translation>&amp;Baru</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>&amp;Copy</source>
+        <translation>&amp;Menyalin</translation>
     </message>
 </context>
 <context>
@@ -228,7 +228,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Apakah Anda yakin untuk mengenkripsi dompet Anda?</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+11"/>
+        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
+        <translation>Gridcoin akan ditutup untuk menyelesaikan proses enkripsi. Ingat bahwa dompet Anda tidak bisa di lindungi dengan enkripsi sepenuhny dari pencurian melalui infeksi malware di komputer Anda.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>IMPORTANT: Any previous backups you have made of your wallet file should be replaced with the newly generated, encrypted wallet file. For security reasons, previous backups of the unencrypted wallet file will become useless as soon as you start using the new, encrypted wallet.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -250,12 +255,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+82"/>
-        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
-        <translation>Gridcoin akan ditutup untuk menyelesaikan proses enkripsi. Ingat bahwa dompet Anda tidak bisa di lindungi dengan enkripsi sepenuhny dari pencurian melalui infeksi malware di komputer Anda.</translation>
-    </message>
-    <message>
-        <location line="+13"/>
+        <location line="+95"/>
         <location line="+7"/>
         <location line="+44"/>
         <location line="+6"/>
@@ -299,24 +299,14 @@ This product includes software developed by the OpenSSL Project for use in the O
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+981"/>
+        <location filename="../bitcoingui.cpp" line="+980"/>
         <source>Sign &amp;message...</source>
         <translation>Pesan &amp;penanda...</translation>
     </message>
     <message>
-        <location line="+346"/>
-        <source>Synchronizing with network...</source>
-        <translation>Sinkronisasi dengan jaringan...</translation>
-    </message>
-    <message>
-        <location line="-500"/>
-        <source>&amp;Overview</source>
-        <translation>&amp;Kilasan</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="-153"/>
         <source>Show general overview of wallet</source>
-        <translation>Tampilkan kilasan umum dari dompet</translation>
+        <translation>Tampilkan gambaran umum dompet Anda</translation>
     </message>
     <message>
         <location line="+14"/>
@@ -326,7 +316,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+1"/>
         <source>Browse transaction history</source>
-        <translation>Jelajah sejarah transaksi</translation>
+        <translation>Lihat riwayat transaksi</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -339,22 +329,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Mengedit daftar alamat-alamat dan label</translation>
     </message>
     <message>
-        <location line="-11"/>
-        <source>&amp;Receive coins</source>
-        <translation>&amp;Menerima koin</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="-10"/>
         <source>Show the list of addresses for receiving payments</source>
         <translation>Tampilkan daftar alamat untuk menerima pembayaran</translation>
     </message>
     <message>
-        <location line="-6"/>
-        <source>&amp;Send coins</source>
-        <translation>&amp;Kirim koin</translation>
-    </message>
-    <message>
-        <location line="+57"/>
+        <location line="+51"/>
         <source>E&amp;xit</source>
         <translation>K&amp;eluar</translation>
     </message>
@@ -364,19 +344,14 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Keluar dari aplikasi</translation>
     </message>
     <message>
-        <location line="+26"/>
-        <source>Show information about Gridcoin</source>
-        <translation>Tunjukkan informasi tentang Gridcoin</translation>
-    </message>
-    <message>
-        <location line="+50"/>
+        <location line="+76"/>
         <source>&amp;Options...</source>
         <translation>&amp;Pilihan...</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>&amp;Encrypt Wallet...</source>
-        <translation>%Enkripsi Dompet...</translation>
+        <translation>&amp;Enkripsi Dompet...</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -388,35 +363,13 @@ This product includes software developed by the OpenSSL Project for use in the O
         <source>&amp;Change Passphrase...</source>
         <translation>&amp;Ubah Kata Kunci...</translation>
     </message>
-    <message numerus="yes">
-        <location line="+354"/>
-        <source>~%n block(s) remaining</source>
-        <translation>
-            <numerusform>~%n blok yang tersisah</numerusform>
-        </translation>
-    </message>
     <message>
-        <location line="+6"/>
-        <source>Downloaded %1 of %2 blocks of transaction history (%3% done).</source>
-        <translation>%1 dari %2 telah diunduh, blok dari sejarah transaksi (%3% selesai).</translation>
-    </message>
-    <message>
-        <location line="-351"/>
+        <location line="+9"/>
         <source>&amp;Export...</source>
         <translation>&amp;Ekspor...</translation>
     </message>
     <message>
-        <location line="-151"/>
-        <source>Send coins to a Gridcoin address</source>
-        <translation>Kirim koin ke alamat Gridcoin</translation>
-    </message>
-    <message>
-        <location line="+134"/>
-        <source>Modify configuration options for Gridcoin</source>
-        <translation>Memodifikasi opsi aturan untuk Gridcoin</translation>
-    </message>
-    <message>
-        <location line="+18"/>
+        <location line="+1"/>
         <source>Export the data in the current tab to a file</source>
         <translation>Mengekspor data dari tab saat ini ke dalam file</translation>
     </message>
@@ -452,23 +405,13 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="-778"/>
-        <source>Gridcoin</source>
-        <translation>Gridcoin (CoinHitam)</translation>
-    </message>
-    <message>
-        <location line="+0"/>
         <source>Wallet</source>
         <translation>Dompet</translation>
     </message>
     <message>
-        <location line="+711"/>
-        <source>&amp;About Gridcoin</source>
-        <translation>&amp;Tentang Gridcoin</translation>
-    </message>
-    <message>
-        <location line="+54"/>
+        <location line="+765"/>
         <source>&amp;Show / Hide</source>
-        <translation>&amp;Tunjukkan / Sembunyikan</translation>
+        <translation>&amp;Tampilkan / Sembunyikan</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -506,26 +449,87 @@ This product includes software developed by the OpenSSL Project for use in the O
         <source>[testnet]</source>
         <translation>[testnet]</translation>
     </message>
-    <message>
-        <location line="+0"/>
-        <location line="+64"/>
-        <source>Gridcoin client</source>
-        <translation>Klien Gridcoin</translation>
-    </message>
     <message numerus="yes">
-        <location line="+79"/>
-        <source>%n active connection(s) to Gridcoin network</source>
+        <location line="+204"/>
+        <source>%n second(s) ago</source>
         <translation type="unfinished">
             <numerusform></numerusform>
         </translation>
     </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n minute(s) ago</source>
+        <translation>
+            <numerusform>%n menit yang lalu</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n hour(s) ago</source>
+        <translation>
+            <numerusform>%n jam yang lalu</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n day(s) ago</source>
+        <translation>
+            <numerusform>%n hari yang lalu</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+40"/>
-        <source>Downloaded %1 blocks of transaction history.</source>
+        <location line="+23"/>
+        <source>Last received block was generated %1.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1104"/>
+        <location line="+70"/>
+        <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+74"/>
+        <source>Please enter your boinc E-mail address, or click &lt;Cancel&gt; to skip for now:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Created new Configuration File Successfully. </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New Account Created - Welcome Aboard!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New User Wizard - Skipped</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Attention! - Boinc Path Error!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+436"/>
+        <location line="+15"/>
+        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+406"/>
+        <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>Not staking because wallet is locked</source>
         <translation type="unfinished"></translation>
     </message>
@@ -540,19 +544,90 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+5"/>
+        <source>Not staking because you don&apos;t have mature coins and stake weight is too low.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Not staking because you don&apos;t have mature coins</source>
         <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
-        <location line="-1101"/>
-        <source>%n second(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-        </translation>
+    <message>
+        <location line="+5"/>
+        <source>Searching for mature coins... Please wait</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-513"/>
+        <location line="-2265"/>
+        <source>Gridcoin</source>
+        <translation>Gridcoin (CoinHitam)</translation>
+    </message>
+    <message>
+        <location line="+633"/>
+        <source>&amp;Receive</source>
+        <translation>&amp;Menerima</translation>
+    </message>
+    <message>
+        <location line="-5"/>
+        <source>&amp;Send</source>
+        <translation>&amp;Kirim</translation>
+    </message>
+    <message>
+        <location line="+145"/>
+        <source>&amp;Unlock Wallet...</source>
+        <translation>&amp;Buka Dompet</translation>
+    </message>
+    <message>
+        <location line="+405"/>
+        <source>Up to date</source>
+        <translation>Terbaru</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Catching up...</source>
+        <translation>Menyusul...</translation>
+    </message>
+    <message>
+        <location line="+85"/>
+        <source>Confirm transaction fee</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+135"/>
+        <source>Sent transaction</source>
+        <translation>Transaksi terkirim</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Incoming transaction</source>
+        <translation>Transaksi diterima</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Date: %1
+Amount: %2
+Type: %3
+Address: %4
+</source>
+        <translation>Tanggal: %1
+Jumlah: %2
+Jenis: %3
+Alamat: %4
+</translation>
+    </message>
+    <message>
+        <location line="-784"/>
+        <source>&amp;Overview</source>
+        <translation>&amp;Kilasan</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Send coins to a Gridcoin address</source>
+        <translation>Kirim koin ke alamat Gridcoin</translation>
+    </message>
+    <message>
+        <location line="+19"/>
         <source>&amp;Block Explorer</source>
         <translation type="unfinished"></translation>
     </message>
@@ -562,7 +637,13 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1162"/>
+        <location line="+15"/>
+        <source>URI handling</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-1174"/>
         <source>&amp;Exchange</source>
         <translation type="unfinished"></translation>
     </message>
@@ -598,7 +679,17 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+1179"/>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
+        <translation>Dompet saat ini &lt;b&gt;terenkripsi&lt;/b&gt; dan &lt;b&gt;terbuka&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
+        <translation>Dompet saat ini &lt;b&gt;terenkripsi&lt;/b&gt; dan &lt;b&gt;terkunci&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <location line="-1162"/>
         <location line="+169"/>
         <source>&amp;Rebuild Block Chain</source>
         <translation type="unfinished"></translation>
@@ -639,7 +730,27 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+4"/>
+        <source>&amp;About Gridcoin</source>
+        <translation>&amp;Tentang Gridcoin</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Show information about Gridcoin</source>
+        <translation>Tunjukkan informasi tentang Gridcoin</translation>
+    </message>
+    <message>
+        <location line="+1171"/>
+        <source>Backup Wallet</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Wallet Data (*.dat)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-1168"/>
         <source>&amp;Neural Network</source>
         <translation type="unfinished"></translation>
     </message>
@@ -649,7 +760,17 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+1170"/>
+        <source>Backup Failed</source>
+        <translation>Back-up Gagal</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>There was an error trying to save the wallet data to the new location.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-1166"/>
         <source>&amp;Advanced Configuration</source>
         <translation type="unfinished"></translation>
     </message>
@@ -685,12 +806,12 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="+1"/>
-        <location line="+606"/>
+        <location line="+605"/>
         <source>New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-599"/>
+        <location line="-598"/>
         <source>&amp;Voting</source>
         <translation type="unfinished"></translation>
     </message>
@@ -740,12 +861,26 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+14"/>
-        <source>&amp;Unlock Wallet...</source>
-        <translation>&amp;Buka Dompet</translation>
+        <location line="+4"/>
+        <source>Modify configuration options for Gridcoin</source>
+        <translation>Memodifikasi opsi aturan untuk Gridcoin</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1430"/>
+        <source>%n second(s)</source>
+        <translation>
+            <numerusform>%n detik</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n minute(s)</source>
+        <translation>
+            <numerusform>%n menit</numerusform>
+        </translation>
     </message>
     <message>
-        <location line="+74"/>
+        <location line="-1350"/>
         <source>&amp;Community</source>
         <translation type="unfinished"></translation>
     </message>
@@ -759,163 +894,33 @@ This product includes software developed by the OpenSSL Project for use in the O
         <source>&amp;Advanced</source>
         <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
-        <location line="+295"/>
-        <source>%n minute(s) ago</source>
-        <translation>
-            <numerusform>%n menit yang lalu</numerusform>
-        </translation>
+    <message>
+        <location line="+86"/>
+        <location line="+64"/>
+        <source>Gridcoin client</source>
+        <translation>Klien Gridcoin</translation>
     </message>
     <message numerus="yes">
-        <location line="+4"/>
-        <source>%n hour(s) ago</source>
-        <translation>
-            <numerusform>%n jam yang lalu</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+4"/>
-        <source>%n day(s) ago</source>
-        <translation>
-            <numerusform>%n hari yang lalu</numerusform>
+        <location line="+79"/>
+        <source>%n active connection(s) to Gridcoin network</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
         </translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Up to date</source>
-        <translation>Terbaru</translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Catching up...</source>
-        <translation>Menyusul...</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Last received block was generated %1.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+70"/>
-        <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Confirm transaction fee</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+69"/>
-        <source>Please enter your boinc E-mail address, or click &lt;Cancel&gt; to skip for now:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Created new Configuration File Successfully. </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>New Account Created - Welcome Aboard!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>New User Wizard - Skipped</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+16"/>
-        <source>Attention! - Boinc Path Error!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+30"/>
-        <source>Sent transaction</source>
-        <translation>Transaksi terkirim</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Incoming transaction</source>
-        <translation>Transaksi diterima</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Date: %1
-Amount: %2
-Type: %3
-Address: %4
-</source>
-        <translation>Tanggal: %1
-Jumlah: %2
-Jenis: %3
-Alamat: %4
-</translation>
-    </message>
-    <message>
-        <location line="+405"/>
-        <location line="+15"/>
-        <source>URI handling</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-15"/>
-        <location line="+15"/>
-        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+18"/>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
-        <translation>Dompet saat ini &lt;b&gt;terenkripsi&lt;/b&gt; dan &lt;b&gt;terbuka&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
-        <translation>Dompet saat ini &lt;b&gt;terenkripsi&lt;/b&gt; dan &lt;b&gt;terkunci&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <location line="+29"/>
-        <source>Backup Wallet</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Wallet Data (*.dat)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Backup Failed</source>
-        <translation>Back-up Gagal</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>There was an error trying to save the wallet data to the new location.</source>
-        <translation type="unfinished"></translation>
+        <location line="+24"/>
+        <source>Synchronizing with network...</source>
+        <translation>Sinkronisasi dengan jaringan...</translation>
     </message>
     <message numerus="yes">
-        <location line="+307"/>
-        <source>%n second(s)</source>
+        <location line="+2"/>
+        <source>~%n block(s) remaining</source>
         <translation>
-            <numerusform>%n detik</numerusform>
+            <numerusform>~%n blok yang tersisah</numerusform>
         </translation>
     </message>
     <message numerus="yes">
-        <location line="+4"/>
-        <source>%n minute(s)</source>
-        <translation>
-            <numerusform>%n menit</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+4"/>
+        <location line="+1076"/>
         <source>%n hour(s)</source>
         <translation>
             <numerusform>%n jam</numerusform>
@@ -929,22 +934,7 @@ Alamat: %4
         </translation>
     </message>
     <message>
-        <location line="+27"/>
-        <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+23"/>
-        <source>Not staking because you don&apos;t have mature coins and stake weight is too low.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Searching for mature coins... Please wait</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
+        <location line="+65"/>
         <source>Not staking</source>
         <translation>Lagi tidak staking</translation>
     </message>
@@ -952,6 +942,13 @@ Alamat: %4
         <location filename="../bitcoin.cpp" line="+145"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../bitcoingui.cpp" line="-1131"/>
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation>
+            <numerusform>%n blok dari riwayat transaksi diproses.</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -972,7 +969,7 @@ Alamat: %4
     <message>
         <location line="+28"/>
         <source>Quantity:</source>
-        <translation>Jumlah:</translation>
+        <translation>Kuantitas:</translation>
     </message>
     <message>
         <location line="+29"/>
@@ -1007,17 +1004,17 @@ Alamat: %4
     <message>
         <location filename="../forms/coincontroldialog.ui" line="+48"/>
         <source>After Fee:</source>
-        <translation>Setelah biaya:</translation>
+        <translation>Dengan Biaya:</translation>
     </message>
     <message>
         <location line="+32"/>
         <source>Change:</source>
-        <translation>Perubahan:</translation>
+        <translation>Kembalian:</translation>
     </message>
     <message>
         <location line="+69"/>
         <source>(un)select all</source>
-        <translation type="unfinished"></translation>
+        <translation>(Tidak)memilih semua</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -1027,7 +1024,7 @@ Alamat: %4
     <message>
         <location line="+16"/>
         <source>List mode</source>
-        <translation>mode Daftar</translation>
+        <translation>Mode daftar</translation>
     </message>
     <message>
         <location line="+45"/>
@@ -1052,7 +1049,7 @@ Alamat: %4
     <message>
         <location line="+5"/>
         <source>Confirmations</source>
-        <translation type="unfinished"></translation>
+        <translation>Konfirmasi</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1175,16 +1172,7 @@ Alamat: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Transactions with higher priority get more likely into a block.
-
-This label turns red, if the priority is smaller than &quot;medium&quot;.
-
- This means a fee of at least %1 per kb is required.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>This label turns red, if any recipient receives an amount smaller than %1.
 
  This means a fee of at least %2 is required. 
@@ -1206,7 +1194,16 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>(tidak ada label)</translation>
     </message>
     <message>
-        <location line="-9"/>
+        <location line="-102"/>
+        <source>Transactions with higher priority get more likely into a block.
+
+This label turns red, if the priority is smaller than &quot;medium&quot;.
+
+ This means a fee of at least %1 per kb is required.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+93"/>
         <source>change from %1 (%2)</source>
         <translation>perubahan dari %1 (%2)</translation>
     </message>
@@ -1264,17 +1261,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Ubah alamat mengirim</translation>
     </message>
     <message>
-        <location line="+76"/>
-        <source>The entered address &quot;%1&quot; is already in the address book.</source>
-        <translation>Alamat yang dimasukkan &quot;%1&quot; sudah ada di dalam buku alamat.</translation>
-    </message>
-    <message>
-        <location line="-5"/>
+        <location line="+71"/>
         <source>The entered address &quot;%1&quot; is not a valid Gridcoin address.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+5"/>
+        <source>The entered address &quot;%1&quot; is already in the address book.</source>
+        <translation>Alamat yang dimasukkan &quot;%1&quot; sudah ada di dalam buku alamat.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Could not unlock wallet.</source>
         <translation>Tidak dapat membuka dompet.</translation>
     </message>
@@ -1287,19 +1284,9 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>GUIUtil::HelpMessageBox</name>
     <message>
-        <location filename="../guiutil.cpp" line="+436"/>
-        <source>Gridcoin-Qt</source>
-        <translation>Gridcoin-Qt</translation>
-    </message>
-    <message>
-        <location line="-12"/>
+        <location filename="../guiutil.cpp" line="+424"/>
         <source>version</source>
         <translation>versi</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>gridcoinresearch</source>
-        <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+2"/>
@@ -1309,7 +1296,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>command-line options</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">pilihan command-line</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -1319,17 +1306,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Set language, for example &quot;de_DE&quot; (default: system locale)</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Pilih bahasa, contoh &quot;id_ID&quot; (default: system locale)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Start minimized</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Start minimized</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Show splash screen on startup (default: 1)</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Gridcoin-Qt</source>
+        <translation>Gridcoin-Qt</translation>
     </message>
 </context>
 <context>
@@ -1429,7 +1421,47 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="+80"/>
+        <source>&amp;Network</source>
+        <translation>&amp;Jaringan</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Map port using &amp;UPnP</source>
+        <translation>Petakan port dengan &amp;UPnP</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Proxy &amp;IP:</source>
+        <translation>IP Proxy:</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>IP address of the proxy (e.g. 127.0.0.1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>&amp;Port:</source>
+        <translation>&amp;Port:</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Port of the proxy (e.g. 9050)</source>
+        <translation>Port proxy (cth. 9050)</translation>
+    </message>
+    <message>
+        <location line="-184"/>
+        <source>Pa&amp;y transaction fee</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location line="+46"/>
+        <source>Reser&amp;ve</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+31"/>
         <source>Automatically start Gridcoin after logging in to the system.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1449,22 +1481,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+21"/>
-        <source>&amp;Network</source>
-        <translation>&amp;Jaringan</translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="+27"/>
         <source>Automatically open the Gridcoin client port on the router. This only works when your router supports UPnP and it is enabled.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>Map port using &amp;UPnP</source>
-        <translation>Petakan port dengan &amp;UPnP</translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location line="+10"/>
         <source>Connect to the Gridcoin network through a SOCKS proxy (e.g. when connecting through Tor).</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1474,37 +1496,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-130"/>
-        <source>Pa&amp;y transaction fee</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+46"/>
-        <source>Reser&amp;ve</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+93"/>
-        <source>Prox&amp;y IP:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+19"/>
-        <source>IP address of the proxy (e.g. 127.0.0.1)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>&amp;Port:</source>
-        <translation>&amp;Port:</translation>
-    </message>
-    <message>
-        <location line="+19"/>
-        <source>Port of the proxy (e.g. 9050)</source>
-        <translation>Port proxy (cth. 9050)</translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location line="+61"/>
         <source>SOCKS &amp;Version:</source>
         <translation>Versi &amp;SOCKS:</translation>
     </message>
@@ -1549,22 +1541,32 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>&amp;Bahasa Antarmuka Pengguna:</translation>
     </message>
     <message>
-        <location line="+13"/>
-        <source>The user interface language can be set here. This setting will take effect after restarting Gridcoin.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+11"/>
+        <location line="+24"/>
         <source>&amp;Unit to show amounts in:</source>
-        <translation>&amp;Unit untuk menunjukkan jumlah:</translation>
+        <translation>&amp;Unit untuk menunjukkan nilai:</translation>
     </message>
     <message>
         <location line="+13"/>
         <source>Choose the default subdivision unit to show in the interface and when sending coins.</source>
+        <translation>Pilihan standar unit yang ingin ditampilkan pada layar aplikasi dan saat mengirim koin.</translation>
+    </message>
+    <message>
+        <location line="-24"/>
+        <source>The user interface language can be set here. This setting will take effect after restarting Gridcoin.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+61"/>
+        <source>Whether to show coin control features or not.</source>
+        <translation>Ingin menunjukkan cara pengaturan koin atau tidak.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Display coin &amp;control features (experts only!)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-29"/>
         <source>Style:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1584,17 +1586,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>&amp;Tampilkan alamat dalam daftar transaksi</translation>
     </message>
     <message>
-        <location line="+7"/>
-        <source>Whether to show coin control features or not.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Display coin &amp;control features (experts only!)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+74"/>
+        <location line="+84"/>
         <source>&amp;OK</source>
         <translation>&amp;YA</translation>
     </message>
@@ -1649,15 +1641,20 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Formulir</translation>
     </message>
     <message>
-        <location line="+57"/>
+        <location line="+47"/>
+        <source>Wallet</source>
+        <translation type="unfinished">Dompet</translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <location line="+439"/>
         <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="-376"/>
-        <source>Your current balance.</source>
-        <translation type="unfinished"></translation>
+        <source>Your current spendable balance</source>
+        <translation>Jumlah yang Anda bisa keluarkan sekarang</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -1675,37 +1672,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-114"/>
-        <source>Wallet</source>
-        <translation type="unfinished">Dompet</translation>
-    </message>
-    <message>
-        <location line="+58"/>
-        <source>Balance:</source>
-        <translation type="unfinished">Saldo:</translation>
-    </message>
-    <message>
-        <location line="+90"/>
+        <location line="+34"/>
         <source>Immature:</source>
-        <translation type="unfinished"></translation>
+        <translation>Terlalu Muda:</translation>
     </message>
     <message>
-        <location line="+12"/>
-        <source>Total mined coins that have not yet matured.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+38"/>
-        <source>Total:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Total Balance     </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+46"/>
+        <location line="+103"/>
         <source>Blocks:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1760,15 +1732,35 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-414"/>
+        <location line="-345"/>
+        <source>Total:</source>
+        <translation>Jumlah:</translation>
+    </message>
+    <message>
+        <location line="-38"/>
+        <source>Total mined coins that have not yet matured.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+45"/>
+        <source>Your current total balance</source>
+        <translation>Jumlah saldo Anda sekarang</translation>
+    </message>
+    <message>
+        <location line="-76"/>
         <source>Total of transactions that have yet to be confirmed, and do not yet count toward the current balance</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../overviewpage.cpp" line="+134"/>
+        <location filename="../overviewpage.cpp" line="+132"/>
         <location line="+1"/>
         <source>out of sync</source>
         <translation>tidak tersinkron</translation>
+    </message>
+    <message>
+        <location filename="../forms/overviewpage.ui" line="-71"/>
+        <source>Available:</source>
+        <translation>Tersedia:</translation>
     </message>
 </context>
 <context>
@@ -1907,22 +1899,62 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+92"/>
-        <source>Network:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+39"/>
+        <location line="+131"/>
         <source>Current number of blocks</source>
         <translation>Jumlah blok terkini</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="-39"/>
+        <source>Network:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+68"/>
         <source>Estimated total blocks</source>
         <translation>Perkiraan blok total</translation>
     </message>
     <message>
-        <location line="-217"/>
+        <location line="+25"/>
+        <source>Open the Gridcoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>Show the Gridcoin help message to get a list with possible Gridcoin command-line options.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+95"/>
+        <source>&amp;Network Traffic</source>
+        <translation>Kemacetan &amp;Jaringan </translation>
+    </message>
+    <message>
+        <location line="-21"/>
+        <source>OpenSSL version</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+73"/>
+        <source>&amp;Clear</source>
+        <translation>&amp;Kosongkan</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Totals</source>
+        <translation>Total</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>In:</source>
+        <translation>Masuk:</translation>
+    </message>
+    <message>
+        <location line="+43"/>
+        <source>Out:</source>
+        <translation>Keluar:</translation>
+    </message>
+    <message>
+        <location line="-503"/>
         <source>Last block time</source>
         <translation>Waktu blok terakhir</translation>
     </message>
@@ -1934,7 +1966,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+15"/>
         <source>Command-line options</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Pilihan Command-line</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -1954,60 +1986,15 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+117"/>
         <source>Debug log file</source>
-        <translation type="unfinished"></translation>
+        <translation>Berkas catatan debug</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <source>Open the Gridcoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+31"/>
-        <source>Show the Gridcoin help message to get a list with possible Gridcoin command-line options.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+74"/>
-        <source>OpenSSL version</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+21"/>
-        <source>&amp;Network Traffic</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+52"/>
-        <source>&amp;Clear</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+13"/>
-        <source>Totals</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+27"/>
-        <source>In:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+43"/>
-        <source>Out:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+97"/>
+        <location line="+368"/>
         <source>Clear console</source>
         <translation>Bersihkan konsol</translation>
     </message>
     <message>
-        <location filename="../rpcconsole.cpp" line="-35"/>
-        <source>Welcome to the Gridcoin RPC console! </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location filename="../rpcconsole.cpp" line="-34"/>
         <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
         <translation>Gunakan panah keatas dan kebawah untuk menampilkan sejarah, dan &lt;b&gt;Ctrl-L&lt;/b&gt; untuk bersihkan layar.</translation>
     </message>
@@ -2017,34 +2004,39 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Ketik &lt;b&gt;help&lt;/b&gt; untuk menampilkan perintah tersedia.</translation>
     </message>
     <message>
-        <location line="+111"/>
-        <source>%1 B</source>
+        <location line="-2"/>
+        <source>Welcome to the Gridcoin RPC console! </source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+113"/>
+        <source>%1 B</source>
+        <translation>%1 B</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1 KB</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 KB</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1 MB</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 MB</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1 GB</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 GB</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>%1 m</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">%1 menit</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>%1 h</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">%1 Jam</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -2069,27 +2061,27 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+73"/>
         <source>Coin Control Features</source>
-        <translation type="unfinished"></translation>
+        <translation>Cara Pengaturan Koin</translation>
     </message>
     <message>
         <location line="+20"/>
         <source>Inputs...</source>
-        <translation type="unfinished"></translation>
+        <translation>Masukan...</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>automatically selected</source>
-        <translation type="unfinished"></translation>
+        <translation>Pemilihan otomatis</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Insufficient funds!</source>
-        <translation>Jumlah dana dibutuhkan tidak mencukupi!</translation>
+        <translation>Saldo tidak mencukupi!</translation>
     </message>
     <message>
         <location line="+83"/>
         <source>Quantity:</source>
-        <translation>Jumlah:</translation>
+        <translation>Kuantitas:</translation>
     </message>
     <message>
         <location line="+22"/>
@@ -2105,7 +2097,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+48"/>
         <source>Amount:</source>
-        <translation>Jumlah:</translation>
+        <translation>Nilai:</translation>
     </message>
     <message>
         <location line="+22"/>
@@ -2143,7 +2135,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+29"/>
         <source>After Fee:</source>
-        <translation>Setelah Biaya:</translation>
+        <translation>Dengan Biaya:</translation>
     </message>
     <message>
         <location line="+32"/>
@@ -2163,7 +2155,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+3"/>
         <source>Add &amp;Recipient</source>
-        <translation type="unfinished"></translation>
+        <translation>Tambahlah &amp;Penerima</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -2173,7 +2165,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+3"/>
         <source>Clear &amp;All</source>
-        <translation>Hapus %Semua</translation>
+        <translation>Hapus &amp;Semua</translation>
     </message>
     <message>
         <location line="+28"/>
@@ -2193,7 +2185,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+3"/>
         <source>S&amp;end</source>
-        <translation type="unfinished"></translation>
+        <translation>K&amp;irim</translation>
     </message>
     <message>
         <location filename="../sendcoinsdialog.cpp" line="-173"/>
@@ -2226,12 +2218,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished">Salinkan bytes</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Copy priority</source>
-        <translation type="unfinished">Salinkan prioritas</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Copy low output</source>
         <translation type="unfinished">Salinkan output rendah</translation>
     </message>
@@ -2241,7 +2228,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished">Salinkan perubahan</translation>
     </message>
     <message>
-        <location line="+86"/>
+        <location line="-2"/>
+        <source>Copy priority</source>
+        <translation type="unfinished">Salinkan prioritas</translation>
+    </message>
+    <message>
+        <location line="+88"/>
         <source>&lt;b&gt;%1&lt;/b&gt; to %2 (%3)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2296,17 +2288,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+251"/>
-        <source>WARNING: Invalid Gridcoin address</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+13"/>
+        <location line="+264"/>
         <source>(no label)</source>
         <translation>(tidak ada label)</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-13"/>
+        <source>WARNING: Invalid Gridcoin address</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+17"/>
         <source>WARNING: unknown change address</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2319,42 +2311,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished">Formulir</translation>
     </message>
     <message>
-        <location line="+48"/>
-        <source>Pa&amp;y To:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+18"/>
-        <source>The address to send the payment to  (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+60"/>
-        <source>Message:</source>
-        <translation type="unfinished">Pesan:</translation>
-    </message>
-    <message>
-        <location line="+21"/>
-        <source>Send Custom Message to a Gridcoin Recipient</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+9"/>
+        <location line="+156"/>
         <source>A&amp;mount:</source>
         <translation>J&amp;umlah:</translation>
     </message>
     <message>
-        <location line="+13"/>
-        <source>Track Coins</source>
-        <translation type="unfinished"></translation>
+        <location line="-108"/>
+        <source>Pay &amp;To:</source>
+        <translation>Kirim &amp;Ke:</translation>
     </message>
     <message>
-        <location line="+7"/>
-        <source>Add Attachment</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-137"/>
+        <location line="-9"/>
         <location filename="../sendcoinsentry.cpp" line="+29"/>
         <source>Enter a label for this address to add it to your address book</source>
         <translation>Masukkan label bagi alamat ini untuk menambahkannya ke buku alamat Anda</translation>
@@ -2365,7 +2332,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>&amp;Label:</translation>
     </message>
     <message>
-        <location line="+58"/>
+        <location line="+48"/>
+        <source>The address to send the payment to  (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <source>Choose address from address book</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2390,6 +2362,26 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="+16"/>
+        <source>Message:</source>
+        <translation>Pesan:</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Send Custom Message to a Gridcoin Recipient</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Track Coins</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Add Attachment</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../sendcoinsentry.cpp" line="+1"/>
         <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
         <translation type="unfinished"></translation>
@@ -2400,16 +2392,15 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../forms/signverifymessagedialog.ui" line="+14"/>
         <source>Signatures - Sign / Verify a Message</source>
-        <translation type="unfinished"></translation>
+        <translation>Tanda Tangan / Verifikasi sebuah Pesan</translation>
     </message>
     <message>
         <location line="+13"/>
-        <location line="+124"/>
         <source>&amp;Sign Message</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Tandakan Pesan</translation>
     </message>
     <message>
-        <location line="-118"/>
+        <location line="+6"/>
         <source>You can sign messages with your addresses to prove you own them. Be careful not to sign anything vague, as phishing attacks may try to trick you into signing your identity over to them. Only sign fully-detailed statements you agree to.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2428,7 +2419,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="-193"/>
         <location line="+203"/>
         <source>Alt+A</source>
-        <translation>Alt+J</translation>
+        <translation>Alt+A</translation>
     </message>
     <message>
         <location line="-193"/>
@@ -2443,12 +2434,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+12"/>
         <source>Enter the message you want to sign here</source>
-        <translation type="unfinished"></translation>
+        <translation>Masukan pesan yang ingin ditandai disini</translation>
     </message>
     <message>
         <location line="+24"/>
         <source>Copy the current signature to the system clipboard</source>
-        <translation type="unfinished"></translation>
+        <translation>Salin tanda tangan terpilih ke sistem klipboard</translation>
     </message>
     <message>
         <location line="+21"/>
@@ -2458,19 +2449,19 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+17"/>
         <source>Reset all sign message fields</source>
-        <translation type="unfinished"></translation>
+        <translation>Hapus semua bidang penanda pesan</translation>
     </message>
     <message>
         <location line="+3"/>
         <location line="+146"/>
         <source>Clear &amp;All</source>
-        <translation>Hapus %Semua</translation>
+        <translation>Hapus &amp;Semua</translation>
     </message>
     <message>
         <location line="-87"/>
         <location line="+70"/>
         <source>&amp;Verify Message</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Verifikasi Pesan</translation>
     </message>
     <message>
         <location line="-64"/>
@@ -2490,7 +2481,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+17"/>
         <source>Reset all verify message fields</source>
-        <translation type="unfinished"></translation>
+        <translation>Hapus semua bidang verifikasi pesan</translation>
     </message>
     <message>
         <location filename="../signverifymessagedialog.cpp" line="+27"/>
@@ -2573,6 +2564,11 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+5"/>
         <source>Message verified.</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../forms/signverifymessagedialog.ui" line="-160"/>
+        <source>Sign &amp;Message</source>
+        <translation>Tandakan &amp;Pesan</translation>
     </message>
 </context>
 <context>
@@ -2735,7 +2731,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+16"/>
         <source>Information</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Informasi</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -2793,24 +2789,24 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Jendela ini menampilkan deskripsi rinci dari transaksi tersebut</translation>
     </message>
     <message>
-        <location line="+42"/>
+        <location line="+25"/>
+        <source>View Attachment</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Track Coins</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <source>Execute Contract</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Close</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-17"/>
-        <source>Track Coins</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-7"/>
-        <source>View Attachment</source>
-        <translation type="unfinished"></translation>
+        <source>C&amp;lose</source>
+        <translation type="unfinished">T&amp;utup</translation>
     </message>
     <message>
         <location filename="../transactiondescdialog.cpp" line="+90"/>
@@ -2856,47 +2852,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Buka hingga %1</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>Confirming (%1 of %2 recommended confirmations)&lt;br&gt;</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="+12"/>
         <source>Confirmed (%1 confirmations)</source>
         <translation>Terkonfirmasi (%1 konfirmasi)</translation>
     </message>
-    <message>
-        <location line="+6"/>
-        <source>Immature (%1 confirmations, will be available after %2)&lt;br&gt;</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>This block was not received by any other nodes&lt;br&gt; and will probably not be accepted!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+80"/>
-        <source>Mined - DPOR</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Minted - (Local) DPOR</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Mined - PoR</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Mined - Interest</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message numerus="yes">
-        <location line="-117"/>
+        <location line="-15"/>
         <source>Open for %n more block(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -2918,12 +2879,27 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="-6"/>
+        <source>Confirming (%1 of %2 recommended confirmations)&lt;br&gt;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+15"/>
         <source>Generated but not accepted</source>
         <translation>Terbuat tetapi tidak diterima</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="-6"/>
+        <source>Immature (%1 confirmations, will be available after %2)&lt;br&gt;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>This block was not received by any other nodes&lt;br&gt; and will probably not be accepted!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+64"/>
         <source>Received with</source>
         <translation>Diterima dengan</translation>
     </message>
@@ -2943,12 +2919,32 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Pembayaran ke Anda sendiri</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+9"/>
+        <source>Mined - DPOR</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+71"/>
         <source>(n/a)</source>
         <translation>(t/s)</translation>
     </message>
     <message>
-        <location line="+193"/>
+        <location line="-67"/>
+        <source>Minted - (Local) DPOR</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Mined - PoR</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Mined - Interest</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+251"/>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
         <translation>Status transaksi. Arahkan ke bagian ini untuk menampilkan jumlah konfrimasi.</translation>
     </message>
@@ -3382,12 +3378,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>bitcoin-core</name>
     <message>
-        <location filename="../bitcoinstrings.cpp" line="+33"/>
-        <source>Gridcoin version</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location filename="../bitcoinstrings.cpp" line="+34"/>
         <source>Usage:</source>
         <translation>Penggunaan:</translation>
     </message>
@@ -3409,7 +3400,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+5"/>
         <source>Specify wallet file (within data directory)</source>
-        <translation type="unfinished"></translation>
+        <translation>Tentukan arsip dompet (dalam direktori data)</translation>
     </message>
     <message>
         <location line="-1"/>
@@ -3462,17 +3453,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+157"/>
-        <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-5"/>
-        <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-87"/>
+        <location line="+65"/>
         <source>Listen for JSON-RPC connections on &lt;port&gt; (default: 15715 or testnet: 25715)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3482,27 +3463,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Menerima perintah baris perintah dan JSON-RPC</translation>
     </message>
     <message>
-        <location line="+101"/>
-        <source>Error: Transaction creation failed  </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-5"/>
-        <source>Error: Wallet locked, unable to create transaction  </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-8"/>
-        <source>Importing blockchain data file.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location line="+1"/>
-        <source>Importing bootstrap blockchain data file.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-88"/>
         <source>Run in the background as a daemon and accept commands</source>
         <translation>Berjalan dibelakang sebagai daemin dan menerima perintah</translation>
     </message>
@@ -3517,32 +3478,27 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-38"/>
+        <location line="+120"/>
+        <source>Error: Transaction creation failed  </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-160"/>
         <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+115"/>
-        <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-21"/>
-        <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+11"/>
+        <location line="+105"/>
         <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+61"/>
-        <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-30"/>
+        <location line="+31"/>
         <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3559,7 +3515,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+4"/>
         <source>Block creation options:</source>
-        <translation type="unfinished"></translation>
+        <translation>Pilihan pembuatan blok:</translation>
     </message>
     <message>
         <location line="-59"/>
@@ -3577,17 +3533,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-88"/>
-        <source>Find peers using DNS lookup (default: 1)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Sync checkpoints policy (default: strict)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+82"/>
+        <location line="-2"/>
         <source>Invalid -tor address: &apos;%s&apos;</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3612,52 +3558,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-49"/>
-        <source>%s, you must set a rpcpassword in the configuration file:
- %s
-It is recommended you use the following random password:
-rpcuser=gridcoinrpc
-rpcpassword=%s
-(you do not need to remember this password)
-The username and password MUST NOT be the same.
-If the file does not exist, create it with owner-readable-only file permissions.
-It is also recommended to set alertnotify so you are notified of problems;
-for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
-</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+26"/>
-        <source>Send command to -server or gridcoind</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Specify configuration file (default: gridcoin.conf)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Specify pid file (default: gridcoind.pid)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+31"/>
-        <source>Output extra debugging information. Implies all other -debug* options</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Output extra network debugging information</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+27"/>
         <source>Prepend debug output with timestamp</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3667,22 +3568,12 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-71"/>
-        <source>Select the version of socks proxy to use (4-5, default: 5)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+38"/>
+        <location line="-33"/>
         <source>Send trace/debug info to console instead of debug.log file</source>
-        <translation>Kirim info lacak/debug ke konsol sebaliknya dari berkas debug.log</translation>
+        <translation>Kirim info jejak/debug ke konsol bukan berkas debug.log</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Send trace/debug info to debugger</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+28"/>
+        <location line="+29"/>
         <source>Set maximum block size in bytes (default: 250000)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3694,7 +3585,7 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="-29"/>
         <source>Shrink debug.log file on client startup (default: 1 when no -debug)</source>
-        <translation type="unfinished"></translation>
+        <translation>Mengecilkan berkas debug.log saat klien berjalan  (Standar: 1 jika tidak -debug)</translation>
     </message>
     <message>
         <location line="-39"/>
@@ -3702,13 +3593,7 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+107"/>
-        <source>Unable to sign checkpoint, wrong checkpointkey?
-</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-79"/>
+        <location line="+28"/>
         <source>Use UPnP to map the listening port (default: 0)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3733,17 +3618,7 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+56"/>
-        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Warning: Disk space is low!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-2"/>
+        <location line="+55"/>
         <source>Warning: This version is obsolete, upgrade required!</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3758,22 +3633,77 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Kata sandi untuk hubungan JSON-RPC</translation>
     </message>
     <message>
-        <location line="-30"/>
-        <source>Find peers using internet relay chat (default: 0)</source>
+        <location line="-81"/>
+        <source>%s, you must set a rpcpassword in the configuration file:
+ %s
+It is recommended you use the following random password:
+rpcuser=gridcoinrpc
+rpcpassword=%s
+(you do not need to remember this password)
+The username and password MUST NOT be the same.
+If the file does not exist, create it with owner-readable-only file permissions.
+It is also recommended to set alertnotify so you are notified of problems;
+for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
+</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+24"/>
+        <source>Gridcoin version</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Send command to -server or gridcoind</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+29"/>
         <source>Sync time with other nodes. Disable if time on your system is precise e.g. syncing with NTP (default: 1)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="-23"/>
+        <source>Specify configuration file (default: gridcoin.conf)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Specify pid file (default: gridcoind.pid)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Select the version of socks proxy to use (4-5, default: 5)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+28"/>
         <source>When creating transactions, ignore inputs with value less than this (default: 0.01)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="-25"/>
+        <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Find peers using internet relay chat (default: 0)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Find peers using DNS lookup (default: 1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Sync checkpoints policy (default: strict)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+26"/>
         <source>Allow JSON-RPC connections from specified IP address</source>
         <translation>Izinkan hubungan JSON-RPC dari alamat IP yang ditentukan</translation>
     </message>
@@ -3790,7 +3720,7 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="+3"/>
         <source>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</source>
-        <translation type="unfinished"></translation>
+        <translation>Jalankan perintah ketika perubahan transaksi dompet (%s di cmd digantikan oleh TxID)</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -3798,17 +3728,22 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>Execute command when a relevant alert is received (%s in cmd is replaced by message)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="-21"/>
+        <source>Output extra debugging information. Implies all other -debug* options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Output extra network debugging information</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+23"/>
         <source>Upgrade wallet to latest format</source>
         <translation>Perbarui dompet ke format terbaru</translation>
     </message>
@@ -3823,12 +3758,12 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Pindai ulang rantai-blok untuk transaksi dompet yang hilang</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <source>How many blocks to check at startup (default: 2500, 0 = all)</source>
+        <location line="-21"/>
+        <source>Send trace/debug info to debugger</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+24"/>
         <source>How thorough the block verification is (0-6, default: 1)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3853,27 +3788,53 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Kunci pribadi server (standar: server.pem)</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Acceptable ciphers (default: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</source>
+        <location line="-21"/>
+        <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+8"/>
-        <source>Initialization sanity check failed. Gridcoin is shutting down.</source>
+        <location line="+9"/>
+        <source>How many blocks to check at startup (default: 2500, 0 = all)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+6"/>
+        <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Unable to sign checkpoint, wrong checkpointkey?
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+23"/>
         <source>Error: Wallet unlocked for staking only, unable to create transaction.</source>
         <translation>Eror: Dompet hanya di-buka hanya untuk staking, transaksi gagal dilaksanakan</translation>
     </message>
     <message>
-        <location line="+18"/>
-        <source>WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.</source>
+        <location line="+12"/>
+        <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-155"/>
+        <location line="+4"/>
+        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Warning: Disk space is low!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-154"/>
         <source>This help message</source>
         <translation>Pesan bantuan ini</translation>
     </message>
@@ -3883,27 +3844,12 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-96"/>
-        <source>Gridcoin</source>
-        <translation>Gridcoin</translation>
-    </message>
-    <message>
-        <location line="+137"/>
+        <location line="+42"/>
         <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
         <translation>Tidak dapat mengikat ke %s dengan komputer ini (ikatan gagal %d, %s)</translation>
     </message>
     <message>
-        <location line="-127"/>
-        <source>Connect through socks proxy</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="-124"/>
         <source>Allow DNS lookups for -addnode, -seednode and -connect</source>
         <translation>Izinkan peninjauan DNS untuk -addnote, -seednode dan -connect</translation>
     </message>
@@ -3913,27 +3859,12 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Memuat alamat...</translation>
     </message>
     <message>
-        <location line="-14"/>
-        <source>Error loading blkindex.dat</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+2"/>
+        <location line="-12"/>
         <source>Error loading wallet.dat: Wallet corrupted</source>
         <translation>Gagal memuat wallet.dat: Dompet rusak</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+6"/>
         <source>Error loading wallet.dat</source>
         <translation>Gagal memuat wallet.dat</translation>
     </message>
@@ -3948,12 +3879,7 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Jaringan tidak diketahui yang ditentukan dalam -onlynet: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-1"/>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>Diminta versi proxy -socks tidak diketahui: %i</translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>Cannot resolve -bind address: &apos;%s&apos;</source>
         <translation>Tidak dapat menyelesaikan alamat -bind: &apos;%s&apos;</translation>
     </message>
@@ -3968,12 +3894,7 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Jumlah salah untuk -paytxfee=&lt;amount&gt;: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+44"/>
-        <source>Error: could not start node</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+11"/>
+        <location line="+55"/>
         <source>Sending...</source>
         <translation>Mengirim...</translation>
     </message>
@@ -3998,27 +3919,47 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Tambahkan node untuk dihubungkan dan upaya untuk menjaga hubungan tetap terbuka</translation>
     </message>
     <message>
-        <location line="+119"/>
-        <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-97"/>
+        <location line="+22"/>
         <source>Fee per KB to add to transactions you send</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+55"/>
+        <location line="-38"/>
+        <source>Gridcoin</source>
+        <translation>Gridcoin</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Connect through socks proxy</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+83"/>
         <source>Invalid amount for -mininput=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="-7"/>
+        <source>Acceptable ciphers (default: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Initialization sanity check failed. Gridcoin is shutting down.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+25"/>
         <source>Loading wallet...</source>
         <translation>Memuat dompet...</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="-23"/>
+        <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+31"/>
         <source>Cannot downgrade wallet</source>
         <translation>Tidak dapat menurunkan versi dompet</translation>
     </message>
@@ -4038,12 +3979,67 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Memuat selesai</translation>
     </message>
     <message>
-        <location line="-164"/>
+        <location line="-26"/>
+        <source>Unknown -socks proxy version requested: %i</source>
+        <translation>Diminta versi proxy -socks tidak diketahui: %i</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Error loading blkindex.dat</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Importing blockchain data file.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Importing bootstrap blockchain data file.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Error: could not start node</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Error: Wallet locked, unable to create transaction  </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-170"/>
         <source>To use the %s option</source>
         <translation>Gunakan pilihan %s</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+187"/>
+        <source>WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-173"/>
         <source>Error</source>
         <translation>Gagal</translation>
     </message>

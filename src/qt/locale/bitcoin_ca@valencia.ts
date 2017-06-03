@@ -39,72 +39,62 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+27"/>
         <source>Create a new address</source>
-        <translation>Crear nova direccio</translation>
+        <translation>Crea una nova adreça</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Copy the currently selected address to the system clipboard</source>
-        <translation>Copieu l&apos;adreça seleccionada al porta-retalls del sistema</translation>
+        <translation>Copia l&apos;adreça seleccionada al porta-retalls del sistema</translation>
     </message>
     <message>
-        <location line="-11"/>
-        <source>&amp;New Address</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-46"/>
+        <location line="-57"/>
         <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+60"/>
-        <source>&amp;Copy Address</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+11"/>
+        <location line="+71"/>
         <source>Show &amp;QR Code</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+14"/>
+        <source>Sign &amp;Message</source>
+        <translation type="unfinished">Signa el &amp;missatge</translation>
+    </message>
+    <message>
+        <location line="-3"/>
         <source>Sign a message to prove you own a Gridcoin address</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>Sign &amp;Message</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+25"/>
-        <source>Delete the currently selected address from the list</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-14"/>
+        <location line="+14"/>
         <source>Verify a message to ensure it was signed with a specified Gridcoin address</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+14"/>
+        <source>Delete the currently selected address from the list</source>
+        <translation>Elimina l&apos;adreça sel·leccionada actualment de la llista</translation>
+    </message>
+    <message>
+        <location line="-11"/>
         <source>&amp;Verify Message</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">&amp;Verifica el missatge</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>&amp;Delete</source>
-        <translation>Eliminar</translation>
+        <translation>&amp;Elimina</translation>
     </message>
     <message>
         <location filename="../addressbookpage.cpp" line="+65"/>
         <source>Copy &amp;Label</source>
-        <translation type="unfinished"></translation>
+        <translation>Copia l&apos;&amp;etiqueta</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>&amp;Edit</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Edita</translation>
     </message>
     <message>
         <location line="+250"/>
@@ -114,7 +104,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+1"/>
         <source>Comma separated file (*.csv)</source>
-        <translation type="unfinished"></translation>
+        <translation>Fitxer de separació amb comes (*.csv)</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -126,23 +116,33 @@ This product includes software developed by the OpenSSL Project for use in the O
         <source>Could not write to file %1.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location filename="../forms/addressbookpage.ui" line="-67"/>
+        <source>&amp;New</source>
+        <translation>&amp;Nova</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>&amp;Copy</source>
+        <translation>&amp;Copia</translation>
+    </message>
 </context>
 <context>
     <name>AddressTableModel</name>
     <message>
         <location filename="../addresstablemodel.cpp" line="+144"/>
         <source>Label</source>
-        <translation type="unfinished"></translation>
+        <translation>Etiqueta</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Address</source>
-        <translation type="unfinished"></translation>
+        <translation>Adreça</translation>
     </message>
     <message>
         <location line="+36"/>
         <source>(no label)</source>
-        <translation type="unfinished"></translation>
+        <translation>(sense etiqueta)</translation>
     </message>
 </context>
 <context>
@@ -150,22 +150,22 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location filename="../forms/askpassphrasedialog.ui" line="+26"/>
         <source>Passphrase Dialog</source>
-        <translation type="unfinished"></translation>
+        <translation>Diàleg de contrasenya</translation>
     </message>
     <message>
         <location line="+21"/>
         <source>Enter passphrase</source>
-        <translation type="unfinished"></translation>
+        <translation>Introduïu una contrasenya</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>New passphrase</source>
-        <translation type="unfinished"></translation>
+        <translation>Nova contrasenya</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Repeat new passphrase</source>
-        <translation type="unfinished"></translation>
+        <translation>Repetiu la nova contrasenya</translation>
     </message>
     <message>
         <location line="+33"/>
@@ -180,32 +180,32 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location filename="../askpassphrasedialog.cpp" line="+38"/>
         <source>Encrypt wallet</source>
-        <translation type="unfinished"></translation>
+        <translation>Encripta el moneder</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>This operation needs your wallet passphrase to unlock the wallet.</source>
-        <translation type="unfinished"></translation>
+        <translation>Esta operació requereix la contrasenya del moneder per a desbloquejar-lo.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Unlock wallet</source>
-        <translation type="unfinished"></translation>
+        <translation>Desbloqueja el moneder</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation type="unfinished"></translation>
+        <translation>Esta operació requereix la contrasenya del moneder per desencriptar-lo.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Decrypt wallet</source>
-        <translation type="unfinished"></translation>
+        <translation>Desencripta el moneder</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Change passphrase</source>
-        <translation type="unfinished"></translation>
+        <translation>Canvia la contrasenya</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -215,7 +215,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+45"/>
         <source>Confirm wallet encryption</source>
-        <translation type="unfinished"></translation>
+        <translation>Confirma l&apos;encriptació del moneder</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -225,108 +225,98 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+0"/>
         <source>Are you sure you wish to encrypt your wallet?</source>
+        <translation>Esteu segur que voleu encriptar el vostre moneder?</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+4"/>
         <source>IMPORTANT: Any previous backups you have made of your wallet file should be replaced with the newly generated, encrypted wallet file. For security reasons, previous backups of the unencrypted wallet file will become useless as soon as you start using the new, encrypted wallet.</source>
-        <translation type="unfinished"></translation>
+        <translation>IMPORTANT: Tota copia de seguretat que hàgeu realitzat hauria de ser reemplaçada pel, recentment generat, fitxer encriptat del moneder.</translation>
     </message>
     <message>
         <location line="+103"/>
         <location line="+24"/>
         <source>Warning: The Caps Lock key is on!</source>
-        <translation type="unfinished"></translation>
+        <translation>Avís: Les lletres majúscules estan activades!</translation>
     </message>
     <message>
         <location line="-133"/>
         <location line="+60"/>
         <source>Wallet encrypted</source>
-        <translation type="unfinished"></translation>
+        <translation>Moneder encriptat</translation>
     </message>
     <message>
         <location line="-140"/>
         <source>Enter the new passphrase to the wallet.&lt;br/&gt;Please use a passphrase of &lt;b&gt;ten or more random characters&lt;/b&gt;, or &lt;b&gt;eight or more words&lt;/b&gt;.</source>
-        <translation type="unfinished"></translation>
+        <translation>Introduïu la contrasenya nova al moneder.&lt;br/&gt;Utilitzeu una contrasenya de &lt;b&gt;deu o més caràcters aleatoris&lt;/b&gt;, o &lt;b&gt;vuit o més paraules&lt;/b&gt;.</translation>
     </message>
     <message>
-        <location line="+82"/>
-        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+13"/>
+        <location line="+95"/>
         <location line="+7"/>
         <location line="+44"/>
         <location line="+6"/>
         <source>Wallet encryption failed</source>
-        <translation type="unfinished"></translation>
+        <translation>L&apos;encriptació del moneder ha fallat</translation>
     </message>
     <message>
         <location line="-56"/>
         <source>Wallet encryption failed due to an internal error. Your wallet was not encrypted.</source>
-        <translation type="unfinished"></translation>
+        <translation>L&apos;encriptació del moneder ha fallat per un error intern. El moneder no ha estat encriptat.</translation>
     </message>
     <message>
         <location line="+7"/>
         <location line="+50"/>
         <source>The supplied passphrases do not match.</source>
-        <translation type="unfinished"></translation>
+        <translation>La contrasenya introduïda no coincideix.</translation>
     </message>
     <message>
         <location line="-38"/>
         <source>Wallet unlock failed</source>
-        <translation type="unfinished"></translation>
+        <translation>El desbloqueig del moneder ha fallat</translation>
     </message>
     <message>
         <location line="+1"/>
         <location line="+12"/>
         <location line="+19"/>
         <source>The passphrase entered for the wallet decryption was incorrect.</source>
-        <translation type="unfinished"></translation>
+        <translation>La contrasenya introduïda per a desencriptar el moneder és incorrecta.</translation>
     </message>
     <message>
         <location line="-20"/>
         <source>Wallet decryption failed</source>
-        <translation type="unfinished"></translation>
+        <translation>La desencriptació del moneder ha fallat</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Wallet passphrase was successfully changed.</source>
-        <translation type="unfinished"></translation>
+        <translation>La contrasenya del moneder ha estat modificada correctament.</translation>
     </message>
 </context>
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+981"/>
+        <location filename="../bitcoingui.cpp" line="+980"/>
         <source>Sign &amp;message...</source>
-        <translation type="unfinished"></translation>
+        <translation>Signa el &amp;missatge...</translation>
     </message>
     <message>
-        <location line="+346"/>
-        <source>Synchronizing with network...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-500"/>
-        <source>&amp;Overview</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="-153"/>
         <source>Show general overview of wallet</source>
-        <translation type="unfinished"></translation>
+        <translation>Mostra el panorama general del moneder</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>&amp;Transactions</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Transaccions</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Browse transaction history</source>
-        <translation type="unfinished"></translation>
+        <translation>Cerca a l&apos;historial de transaccions</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -339,87 +329,49 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-11"/>
-        <source>&amp;Receive coins</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="-10"/>
         <source>Show the list of addresses for receiving payments</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-6"/>
-        <source>&amp;Send coins</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+57"/>
+        <location line="+51"/>
         <source>E&amp;xit</source>
-        <translation type="unfinished"></translation>
+        <translation>I&amp;x</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Quit application</source>
-        <translation type="unfinished"></translation>
+        <translation>Ix de l&apos;aplicació</translation>
     </message>
     <message>
-        <location line="+26"/>
-        <source>Show information about Gridcoin</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+50"/>
+        <location line="+76"/>
         <source>&amp;Options...</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Opcions...</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>&amp;Encrypt Wallet...</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Encripta el moneder...</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Backup Wallet...</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Realitza una còpia de seguretat del moneder...</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>&amp;Change Passphrase...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message numerus="yes">
-        <location line="+354"/>
-        <source>~%n block(s) remaining</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
+        <translation>&amp;Canvia la contrasenya...</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Downloaded %1 of %2 blocks of transaction history (%3% done).</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-351"/>
+        <location line="+9"/>
         <source>&amp;Export...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-151"/>
-        <source>Send coins to a Gridcoin address</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+134"/>
-        <source>Modify configuration options for Gridcoin</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+18"/>
+        <location line="+1"/>
         <source>Export the data in the current tab to a file</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Exporta les dades de la pestanya actual a un fitxer</translation>
     </message>
     <message>
         <location line="-14"/>
@@ -429,52 +381,42 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+3"/>
         <source>Backup wallet to another location</source>
-        <translation type="unfinished"></translation>
+        <translation>Realitza una còpia de seguretat del moneder a una altra ubicació</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Change the passphrase used for wallet encryption</source>
-        <translation type="unfinished"></translation>
+        <translation>Canvia la contrasenya d&apos;encriptació del moneder</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>&amp;Debug window</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Finestra de depuració</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Open debugging and diagnostic console</source>
-        <translation type="unfinished"></translation>
+        <translation>Obri la consola de diagnòstic i depuració</translation>
     </message>
     <message>
         <location line="-5"/>
         <source>&amp;Verify message...</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Verifica el missatge...</translation>
     </message>
     <message>
         <location line="-778"/>
-        <source>Gridcoin</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+0"/>
         <source>Wallet</source>
-        <translation type="unfinished"></translation>
+        <translation>Moneder</translation>
     </message>
     <message>
-        <location line="+711"/>
-        <source>&amp;About Gridcoin</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+54"/>
+        <location line="+765"/>
         <source>&amp;Show / Hide</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Mostra / Amaga</translation>
     </message>
     <message>
         <location line="+9"/>
         <source>Unlock wallet</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Desbloqueja el moneder</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -489,45 +431,117 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+54"/>
         <source>&amp;File</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Fitxer</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>&amp;Settings</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Configuració</translation>
     </message>
     <message>
         <location line="+59"/>
         <source>&amp;Help</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Ajuda</translation>
     </message>
     <message>
         <location line="+50"/>
         <location line="+9"/>
         <source>[testnet]</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <location line="+64"/>
-        <source>Gridcoin client</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">[testnet]</translation>
     </message>
     <message numerus="yes">
-        <location line="+79"/>
-        <source>%n active connection(s) to Gridcoin network</source>
+        <location line="+183"/>
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+21"/>
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n day(s) ago</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
         </translation>
     </message>
     <message>
-        <location line="+40"/>
-        <source>Downloaded %1 blocks of transaction history.</source>
+        <location line="+23"/>
+        <source>Last received block was generated %1.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1104"/>
+        <location line="+70"/>
+        <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+74"/>
+        <source>Please enter your boinc E-mail address, or click &lt;Cancel&gt; to skip for now:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Created new Configuration File Successfully. </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New Account Created - Welcome Aboard!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New User Wizard - Skipped</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Attention! - Boinc Path Error!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+436"/>
+        <location line="+15"/>
+        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+406"/>
+        <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>Not staking because wallet is locked</source>
         <translation type="unfinished"></translation>
     </message>
@@ -542,20 +556,86 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+5"/>
+        <source>Not staking because you don&apos;t have mature coins and stake weight is too low.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Not staking because you don&apos;t have mature coins</source>
         <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
-        <location line="-1101"/>
-        <source>%n second(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
+    <message>
+        <location line="+5"/>
+        <source>Searching for mature coins... Please wait</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-513"/>
+        <location line="-2265"/>
+        <source>Gridcoin</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+633"/>
+        <source>&amp;Receive</source>
+        <translation>&amp;Rep</translation>
+    </message>
+    <message>
+        <location line="-5"/>
+        <source>&amp;Send</source>
+        <translation>&amp;Envia</translation>
+    </message>
+    <message>
+        <location line="+145"/>
+        <source>&amp;Unlock Wallet...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+405"/>
+        <source>Up to date</source>
+        <translation>Al dia</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Catching up...</source>
+        <translation>S&apos;està posant al dia ...</translation>
+    </message>
+    <message>
+        <location line="+85"/>
+        <source>Confirm transaction fee</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+135"/>
+        <source>Sent transaction</source>
+        <translation>Transacció enviada</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Incoming transaction</source>
+        <translation>Transacció entrant</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Date: %1
+Amount: %2
+Type: %3
+Address: %4
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-784"/>
+        <source>&amp;Overview</source>
+        <translation>&amp;Panorama general</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Send coins to a Gridcoin address</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+19"/>
         <source>&amp;Block Explorer</source>
         <translation type="unfinished"></translation>
     </message>
@@ -565,7 +645,13 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1162"/>
+        <location line="+15"/>
+        <source>URI handling</source>
+        <translation type="unfinished">Gestió d&apos;URI</translation>
+    </message>
+    <message>
+        <location line="-1174"/>
         <source>&amp;Exchange</source>
         <translation type="unfinished"></translation>
     </message>
@@ -601,7 +687,17 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+1179"/>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
+        <translation>El moneder està &lt;b&gt;encriptat&lt;/b&gt; i actualment &lt;b&gt;desbloquejat&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
+        <translation>El moneder està &lt;b&gt;encriptat&lt;/b&gt; i actualment &lt;b&gt;bloquejat&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <location line="-1162"/>
         <location line="+169"/>
         <source>&amp;Rebuild Block Chain</source>
         <translation type="unfinished"></translation>
@@ -642,7 +738,27 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+4"/>
+        <source>&amp;About Gridcoin</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Show information about Gridcoin</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1171"/>
+        <source>Backup Wallet</source>
+        <translation type="unfinished">Còpia de seguretat del moneder</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Wallet Data (*.dat)</source>
+        <translation type="unfinished">Dades del moneder (*.dat)</translation>
+    </message>
+    <message>
+        <location line="-1168"/>
         <source>&amp;Neural Network</source>
         <translation type="unfinished"></translation>
     </message>
@@ -652,7 +768,17 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+1170"/>
+        <source>Backup Failed</source>
+        <translation type="unfinished">Ha fallat la còpia de seguretat</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>There was an error trying to save the wallet data to the new location.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-1166"/>
         <source>&amp;Advanced Configuration</source>
         <translation type="unfinished"></translation>
     </message>
@@ -688,12 +814,12 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="+1"/>
-        <location line="+606"/>
+        <location line="+605"/>
         <source>New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-599"/>
+        <location line="-598"/>
         <source>&amp;Voting</source>
         <translation type="unfinished"></translation>
     </message>
@@ -743,167 +869,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+14"/>
-        <source>&amp;Unlock Wallet...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+74"/>
-        <source>&amp;Community</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>&amp;Upgrade QT Client</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+14"/>
-        <source>&amp;Advanced</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message numerus="yes">
-        <location line="+295"/>
-        <source>%n minute(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+4"/>
-        <source>%n day(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Up to date</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Catching up...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Last received block was generated %1.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+70"/>
-        <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Confirm transaction fee</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+69"/>
-        <source>Please enter your boinc E-mail address, or click &lt;Cancel&gt; to skip for now:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Created new Configuration File Successfully. </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>New Account Created - Welcome Aboard!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>New User Wizard - Skipped</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+16"/>
-        <source>Attention! - Boinc Path Error!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+30"/>
-        <source>Sent transaction</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Incoming transaction</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Date: %1
-Amount: %2
-Type: %3
-Address: %4
-</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+405"/>
-        <location line="+15"/>
-        <source>URI handling</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-15"/>
-        <location line="+15"/>
-        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+18"/>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+29"/>
-        <source>Backup Wallet</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Wallet Data (*.dat)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Backup Failed</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>There was an error trying to save the wallet data to the new location.</source>
+        <source>Modify configuration options for Gridcoin</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location line="+307"/>
+        <location line="+1430"/>
         <source>%n second(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -918,8 +889,50 @@ Address: %4
             <numerusform></numerusform>
         </translation>
     </message>
+    <message>
+        <location line="-1350"/>
+        <source>&amp;Community</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>&amp;Upgrade QT Client</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>&amp;Advanced</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+86"/>
+        <location line="+64"/>
+        <source>Gridcoin client</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message numerus="yes">
-        <location line="+4"/>
+        <location line="+79"/>
+        <source>%n active connection(s) to Gridcoin network</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>Synchronizing with network...</source>
+        <translation>S&apos;està sincronitzant amb la xarxa ...</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+2"/>
+        <source>~%n block(s) remaining</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1076"/>
         <source>%n hour(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -935,22 +948,7 @@ Address: %4
         </translation>
     </message>
     <message>
-        <location line="+27"/>
-        <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+23"/>
-        <source>Not staking because you don&apos;t have mature coins and stake weight is too low.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Searching for mature coins... Please wait</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
+        <location line="+65"/>
         <source>Not staking</source>
         <translation type="unfinished"></translation>
     </message>
@@ -978,17 +976,17 @@ Address: %4
     <message>
         <location line="+28"/>
         <source>Quantity:</source>
-        <translation type="unfinished"></translation>
+        <translation>Quantitat:</translation>
     </message>
     <message>
         <location line="+29"/>
         <source>Bytes:</source>
-        <translation type="unfinished"></translation>
+        <translation>Bytes:</translation>
     </message>
     <message>
         <location line="+45"/>
         <source>Amount:</source>
-        <translation type="unfinished"></translation>
+        <translation>Import:</translation>
     </message>
     <message>
         <location line="+29"/>
@@ -998,7 +996,7 @@ Address: %4
     <message>
         <location line="+45"/>
         <source>Fee:</source>
-        <translation type="unfinished"></translation>
+        <translation>Comissió</translation>
     </message>
     <message>
         <location line="+32"/>
@@ -1008,22 +1006,22 @@ Address: %4
     <message>
         <location filename="../coincontroldialog.cpp" line="+551"/>
         <source>no</source>
-        <translation type="unfinished"></translation>
+        <translation>no</translation>
     </message>
     <message>
         <location filename="../forms/coincontroldialog.ui" line="+48"/>
         <source>After Fee:</source>
-        <translation type="unfinished"></translation>
+        <translation>Comissió posterior:</translation>
     </message>
     <message>
         <location line="+32"/>
         <source>Change:</source>
-        <translation type="unfinished"></translation>
+        <translation>Canvi:</translation>
     </message>
     <message>
         <location line="+69"/>
         <source>(un)select all</source>
-        <translation type="unfinished"></translation>
+        <translation>(des)selecciona-ho tot</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -1033,37 +1031,37 @@ Address: %4
     <message>
         <location line="+16"/>
         <source>List mode</source>
-        <translation type="unfinished"></translation>
+        <translation>Mode llista</translation>
     </message>
     <message>
         <location line="+45"/>
         <source>Amount</source>
-        <translation type="unfinished"></translation>
+        <translation>Import</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Label</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Etiqueta</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Address</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Adreça</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Date</source>
-        <translation type="unfinished"></translation>
+        <translation>Data</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Confirmations</source>
-        <translation type="unfinished"></translation>
+        <translation>Confirmacions</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Confirmed</source>
-        <translation type="unfinished"></translation>
+        <translation>Confirmat</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -1073,43 +1071,43 @@ Address: %4
     <message>
         <location filename="../coincontroldialog.cpp" line="-515"/>
         <source>Copy address</source>
-        <translation type="unfinished"></translation>
+        <translation>Copiar adreça </translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy label</source>
-        <translation type="unfinished"></translation>
+        <translation>Copiar etiqueta</translation>
     </message>
     <message>
         <location line="+1"/>
         <location line="+26"/>
         <source>Copy amount</source>
-        <translation type="unfinished"></translation>
+        <translation>Copia l&apos;import</translation>
     </message>
     <message>
         <location line="-25"/>
         <source>Copy transaction ID</source>
-        <translation type="unfinished"></translation>
+        <translation>Copiar ID de transacció</translation>
     </message>
     <message>
         <location line="+24"/>
         <source>Copy quantity</source>
-        <translation type="unfinished"></translation>
+        <translation>Copia la quantitat</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Copy fee</source>
-        <translation type="unfinished"></translation>
+        <translation>Copia la comissió</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy after fee</source>
-        <translation type="unfinished"></translation>
+        <translation>Copia la comissió posterior</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy bytes</source>
-        <translation type="unfinished"></translation>
+        <translation>Copia els bytes</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1124,7 +1122,7 @@ Address: %4
     <message>
         <location line="+1"/>
         <source>Copy change</source>
-        <translation type="unfinished"></translation>
+        <translation>Copia el canvi</translation>
     </message>
     <message>
         <location line="+317"/>
@@ -1169,7 +1167,7 @@ Address: %4
     <message>
         <location line="+0"/>
         <source>yes</source>
-        <translation type="unfinished"></translation>
+        <translation>sí</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -1181,16 +1179,7 @@ Address: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Transactions with higher priority get more likely into a block.
-
-This label turns red, if the priority is smaller than &quot;medium&quot;.
-
- This means a fee of at least %1 per kb is required.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>This label turns red, if any recipient receives an amount smaller than %1.
 
  This means a fee of at least %2 is required. 
@@ -1209,17 +1198,26 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+37"/>
         <location line="+63"/>
         <source>(no label)</source>
+        <translation>(sense etiqueta)</translation>
+    </message>
+    <message>
+        <location line="-102"/>
+        <source>Transactions with higher priority get more likely into a block.
+
+This label turns red, if the priority is smaller than &quot;medium&quot;.
+
+ This means a fee of at least %1 per kb is required.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-9"/>
+        <location line="+93"/>
         <source>change from %1 (%2)</source>
-        <translation type="unfinished"></translation>
+        <translation>canvia de %1 (%2)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>(change)</source>
-        <translation type="unfinished"></translation>
+        <translation>(canvia)</translation>
     </message>
 </context>
 <context>
@@ -1227,12 +1225,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../forms/editaddressdialog.ui" line="+14"/>
         <source>Edit Address</source>
-        <translation type="unfinished"></translation>
+        <translation>Edita l&apos;adreça</translation>
     </message>
     <message>
         <location line="+11"/>
         <source>&amp;Label</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Etiqueta</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -1242,7 +1240,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+7"/>
         <source>&amp;Address</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Adreça</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -1252,70 +1250,60 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../editaddressdialog.cpp" line="+20"/>
         <source>New receiving address</source>
-        <translation type="unfinished"></translation>
+        <translation>Nova adreça de recepció.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>New sending address</source>
-        <translation type="unfinished"></translation>
+        <translation>Nova adreça d&apos;enviament</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Edit receiving address</source>
-        <translation type="unfinished"></translation>
+        <translation>Edita les adreces de recepció</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Edit sending address</source>
-        <translation type="unfinished"></translation>
+        <translation>Edita les adreces d&apos;enviament</translation>
     </message>
     <message>
-        <location line="+76"/>
-        <source>The entered address &quot;%1&quot; is already in the address book.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-5"/>
+        <location line="+71"/>
         <source>The entered address &quot;%1&quot; is not a valid Gridcoin address.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+5"/>
+        <source>The entered address &quot;%1&quot; is already in the address book.</source>
+        <translation>L&apos;adreça introduïda «%1» ja és present a la llibreta d&apos;adreces.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Could not unlock wallet.</source>
-        <translation type="unfinished"></translation>
+        <translation>No s&apos;ha pogut desbloquejar el moneder.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>New key generation failed.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ha fallat la generació d&apos;una nova clau.</translation>
     </message>
 </context>
 <context>
     <name>GUIUtil::HelpMessageBox</name>
     <message>
-        <location filename="../guiutil.cpp" line="+436"/>
-        <source>Gridcoin-Qt</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-12"/>
+        <location filename="../guiutil.cpp" line="+424"/>
         <source>version</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>gridcoinresearch</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">versió</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Usage:</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Ús:</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>command-line options</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Opcions de la línia d&apos;ordes</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -1325,16 +1313,21 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Set language, for example &quot;de_DE&quot; (default: system locale)</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Defineix un idioma, per exemple «de_DE» (per defecte: preferències locals de sistema)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Start minimized</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Inicia minimitzat</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Show splash screen on startup (default: 1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Gridcoin-Qt</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1417,12 +1410,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../forms/optionsdialog.ui" line="+14"/>
         <source>Options</source>
-        <translation type="unfinished"></translation>
+        <translation>Opcions</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>&amp;Main</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Principal</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -1435,7 +1428,47 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="+80"/>
+        <source>&amp;Network</source>
+        <translation>&amp;Xarxa</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Map port using &amp;UPnP</source>
+        <translation>Port obert amb &amp;UPnP</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Proxy &amp;IP:</source>
+        <translation>&amp;IP del proxy:</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>IP address of the proxy (e.g. 127.0.0.1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>&amp;Port:</source>
+        <translation>&amp;Port:</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Port of the proxy (e.g. 9050)</source>
+        <translation>Port del proxy (per exemple 9050)</translation>
+    </message>
+    <message>
+        <location line="-184"/>
+        <source>Pa&amp;y transaction fee</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location line="+46"/>
+        <source>Reser&amp;ve</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+31"/>
         <source>Automatically start Gridcoin after logging in to the system.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1455,22 +1488,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+21"/>
-        <source>&amp;Network</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="+27"/>
         <source>Automatically open the Gridcoin client port on the router. This only works when your router supports UPnP and it is enabled.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>Map port using &amp;UPnP</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location line="+10"/>
         <source>Connect to the Gridcoin network through a SOCKS proxy (e.g. when connecting through Tor).</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1480,37 +1503,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-130"/>
-        <source>Pa&amp;y transaction fee</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+46"/>
-        <source>Reser&amp;ve</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+93"/>
-        <source>Prox&amp;y IP:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+19"/>
-        <source>IP address of the proxy (e.g. 127.0.0.1)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>&amp;Port:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+19"/>
-        <source>Port of the proxy (e.g. 9050)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location line="+61"/>
         <source>SOCKS &amp;Version:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1522,17 +1515,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+36"/>
         <source>&amp;Window</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Finestra</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Show only a tray icon after minimizing the window.</source>
-        <translation type="unfinished"></translation>
+        <translation>Mostra només la icona de la barra en minimitzar la finestra.</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Minimize to the tray instead of the taskbar</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Minimitza a la barra d&apos;aplicacions en comptes de la barra de tasques</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -1542,35 +1535,45 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+3"/>
         <source>M&amp;inimize on close</source>
-        <translation type="unfinished"></translation>
+        <translation>M&amp;inimitza en tancar</translation>
     </message>
     <message>
         <location line="+21"/>
         <source>&amp;Display</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Pantalla</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>User Interface &amp;language:</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Llengua de la interfície d&apos;usuari:</translation>
     </message>
     <message>
-        <location line="+13"/>
-        <source>The user interface language can be set here. This setting will take effect after restarting Gridcoin.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+11"/>
+        <location line="+24"/>
         <source>&amp;Unit to show amounts in:</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Unitats per mostrar els imports en:</translation>
     </message>
     <message>
         <location line="+13"/>
         <source>Choose the default subdivision unit to show in the interface and when sending coins.</source>
+        <translation>Selecciona la unitat de subdivisió per defecte per mostrar en la interfície quan s&apos;envien monedes.</translation>
+    </message>
+    <message>
+        <location line="-24"/>
+        <source>The user interface language can be set here. This setting will take effect after restarting Gridcoin.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+61"/>
+        <source>Whether to show coin control features or not.</source>
+        <translation>Si voleu mostrar les funcions de control de monedes o no.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Display coin &amp;control features (experts only!)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-29"/>
         <source>Style:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1590,24 +1593,14 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+7"/>
-        <source>Whether to show coin control features or not.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Display coin &amp;control features (experts only!)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+74"/>
+        <location line="+84"/>
         <source>&amp;OK</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;D&apos;acord</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>&amp;Cancel</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Cancel·la</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -1617,7 +1610,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../optionsdialog.cpp" line="+55"/>
         <source>default</source>
-        <translation type="unfinished"></translation>
+        <translation>Per defecte</translation>
     </message>
     <message>
         <location line="+30"/>
@@ -1633,7 +1626,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+123"/>
         <location line="+9"/>
         <source>Warning</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Avís</translation>
     </message>
     <message>
         <location line="-9"/>
@@ -1644,7 +1637,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+42"/>
         <source>The supplied proxy address is invalid.</source>
-        <translation type="unfinished"></translation>
+        <translation>L&apos;adreça proxy introduïda és invalida.</translation>
     </message>
 </context>
 <context>
@@ -1652,18 +1645,23 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../forms/overviewpage.ui" line="+32"/>
         <source>Form</source>
-        <translation type="unfinished"></translation>
+        <translation>Formulari</translation>
     </message>
     <message>
-        <location line="+57"/>
+        <location line="+47"/>
+        <source>Wallet</source>
+        <translation type="unfinished">Moneder</translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <location line="+439"/>
         <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="-376"/>
-        <source>Your current balance.</source>
-        <translation type="unfinished"></translation>
+        <source>Your current spendable balance</source>
+        <translation>El balanç que podeu gastar actualment</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -1678,40 +1676,15 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+13"/>
         <source>Unconfirmed</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Sense confirmar</translation>
     </message>
     <message>
-        <location line="-114"/>
-        <source>Wallet</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+58"/>
-        <source>Balance:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+90"/>
+        <location line="+34"/>
         <source>Immature:</source>
-        <translation type="unfinished"></translation>
+        <translation>Immadur:</translation>
     </message>
     <message>
-        <location line="+12"/>
-        <source>Total mined coins that have not yet matured.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+38"/>
-        <source>Total:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Total Balance     </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+46"/>
+        <location line="+103"/>
         <source>Blocks:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1753,7 +1726,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+109"/>
         <source>Recent transactions</source>
-        <translation type="unfinished"></translation>
+        <translation>Transaccions recents</translation>
     </message>
     <message>
         <location line="+99"/>
@@ -1766,15 +1739,35 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-414"/>
+        <location line="-345"/>
+        <source>Total:</source>
+        <translation>Total:</translation>
+    </message>
+    <message>
+        <location line="-38"/>
+        <source>Total mined coins that have not yet matured.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+45"/>
+        <source>Your current total balance</source>
+        <translation>El balanç total actual</translation>
+    </message>
+    <message>
+        <location line="-76"/>
         <source>Total of transactions that have yet to be confirmed, and do not yet count toward the current balance</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../overviewpage.cpp" line="+134"/>
+        <location filename="../overviewpage.cpp" line="+132"/>
         <location line="+1"/>
         <source>out of sync</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../forms/overviewpage.ui" line="-71"/>
+        <source>Available:</source>
+        <translation>Disponible:</translation>
     </message>
 </context>
 <context>
@@ -1792,7 +1785,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+56"/>
         <source>Amount:</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Import:</translation>
     </message>
     <message>
         <location line="-44"/>
@@ -1802,7 +1795,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+19"/>
         <source>Message:</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Missatge:</translation>
     </message>
     <message>
         <location line="+71"/>
@@ -1812,7 +1805,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../qrcodedialog.cpp" line="+62"/>
         <source>Error encoding URI into QR Code.</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Error en codificar l&apos;URI en un codi QR.</translation>
     </message>
     <message>
         <location line="+40"/>
@@ -1822,12 +1815,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+23"/>
         <source>Resulting URI too long, try to reduce the text for label / message.</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">URI resultant massa llarga, intenta reduir el text per a la etiqueta / missatge</translation>
     </message>
     <message>
         <location line="+25"/>
         <source>Save QR Code</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Guarda el codi QR</translation>
     </message>
     <message>
         <location line="+0"/>
@@ -1855,27 +1848,27 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+107"/>
         <location filename="../rpcconsole.cpp" line="+386"/>
         <source>N/A</source>
-        <translation type="unfinished"></translation>
+        <translation>N/A</translation>
     </message>
     <message>
         <location line="-241"/>
         <source>Client version</source>
-        <translation type="unfinished"></translation>
+        <translation>Versió del client</translation>
     </message>
     <message>
         <location line="-168"/>
         <source>&amp;Information</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Informació</translation>
     </message>
     <message>
         <location line="+425"/>
         <source>Startup time</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Temps d&apos;inici</translation>
     </message>
     <message>
         <location line="-366"/>
         <source>Number of connections</source>
-        <translation type="unfinished"></translation>
+        <translation>Nombre de connexions</translation>
     </message>
     <message>
         <location line="+220"/>
@@ -1885,7 +1878,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="-136"/>
         <source>Block chain</source>
-        <translation type="unfinished"></translation>
+        <translation>Cadena de blocs</translation>
     </message>
     <message>
         <location line="-159"/>
@@ -1913,57 +1906,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+92"/>
+        <location line="+131"/>
+        <source>Current number of blocks</source>
+        <translation>Nombre de blocs actuals</translation>
+    </message>
+    <message>
+        <location line="-39"/>
         <source>Network:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+39"/>
-        <source>Current number of blocks</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+29"/>
+        <location line="+68"/>
         <source>Estimated total blocks</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-217"/>
-        <source>Last block time</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+248"/>
-        <source>&amp;Open</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+15"/>
-        <source>Command-line options</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+16"/>
-        <source>&amp;Show</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+265"/>
-        <source>&amp;Console</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-429"/>
-        <source>Build date</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+117"/>
-        <source>Debug log file</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
+        <location line="+25"/>
         <source>Open the Gridcoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1973,84 +1931,119 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+74"/>
+        <location line="+95"/>
+        <source>&amp;Network Traffic</source>
+        <translation>Trà&amp;nsit de la xarxa</translation>
+    </message>
+    <message>
+        <location line="-21"/>
         <source>OpenSSL version</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+21"/>
-        <source>&amp;Network Traffic</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+52"/>
+        <location line="+73"/>
         <source>&amp;Clear</source>
-        <translation type="unfinished"></translation>
+        <translation>Nete&amp;ja</translation>
     </message>
     <message>
         <location line="+13"/>
         <source>Totals</source>
-        <translation type="unfinished"></translation>
+        <translation>Totals</translation>
     </message>
     <message>
         <location line="+27"/>
         <source>In:</source>
-        <translation type="unfinished"></translation>
+        <translation>Dins:</translation>
     </message>
     <message>
         <location line="+43"/>
         <source>Out:</source>
+        <translation>Fora:</translation>
+    </message>
+    <message>
+        <location line="-503"/>
+        <source>Last block time</source>
+        <translation>Últim temps de bloc</translation>
+    </message>
+    <message>
+        <location line="+248"/>
+        <source>&amp;Open</source>
+        <translation>&amp;Obri</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Command-line options</source>
+        <translation type="unfinished">Opcions de línia d&apos;ordes</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>&amp;Show</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+97"/>
+        <location line="+265"/>
+        <source>&amp;Console</source>
+        <translation>&amp;Consola</translation>
+    </message>
+    <message>
+        <location line="-429"/>
+        <source>Build date</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+117"/>
+        <source>Debug log file</source>
+        <translation>Fitxer de registre de depuració</translation>
+    </message>
+    <message>
+        <location line="+368"/>
         <source>Clear console</source>
-        <translation type="unfinished"></translation>
+        <translation>Neteja la consola</translation>
     </message>
     <message>
-        <location filename="../rpcconsole.cpp" line="-35"/>
-        <source>Welcome to the Gridcoin RPC console! </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location filename="../rpcconsole.cpp" line="-34"/>
         <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation type="unfinished"></translation>
+        <translation>Utilitza les fletxes d&apos;amunt i avall per navegar per l&apos;historial, i &lt;b&gt;Ctrl-L&lt;\b&gt; per netejar la pantalla.</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
+        <translation>Escriviu &lt;b&gt;help&lt;\b&gt; per a obtindre un llistat de les ordes disponibles.</translation>
+    </message>
+    <message>
+        <location line="-2"/>
+        <source>Welcome to the Gridcoin RPC console! </source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+111"/>
+        <location line="+113"/>
         <source>%1 B</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 B</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1 KB</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 KB</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1 MB</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 MB</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1 GB</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 GB</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>%1 m</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">%1 m</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>%1 h</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">%1 h</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -2070,32 +2063,32 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+5"/>
         <location line="+5"/>
         <source>Send Coins</source>
-        <translation type="unfinished"></translation>
+        <translation>Envia monedes</translation>
     </message>
     <message>
         <location line="+73"/>
         <source>Coin Control Features</source>
-        <translation type="unfinished"></translation>
+        <translation>Característiques de control de les monedes</translation>
     </message>
     <message>
         <location line="+20"/>
         <source>Inputs...</source>
-        <translation type="unfinished"></translation>
+        <translation>Entrades...</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>automatically selected</source>
-        <translation type="unfinished"></translation>
+        <translation>seleccionat automàticament</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Insufficient funds!</source>
-        <translation type="unfinished"></translation>
+        <translation>Fons insuficients!</translation>
     </message>
     <message>
         <location line="+83"/>
         <source>Quantity:</source>
-        <translation type="unfinished"></translation>
+        <translation>Quantitat:</translation>
     </message>
     <message>
         <location line="+22"/>
@@ -2106,12 +2099,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="-19"/>
         <source>Bytes:</source>
-        <translation type="unfinished"></translation>
+        <translation>Bytes:</translation>
     </message>
     <message>
         <location line="+48"/>
         <source>Amount:</source>
-        <translation type="unfinished"></translation>
+        <translation>Import:</translation>
     </message>
     <message>
         <location line="+22"/>
@@ -2134,7 +2127,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+29"/>
         <source>Fee:</source>
-        <translation type="unfinished"></translation>
+        <translation>Comissió</translation>
     </message>
     <message>
         <location line="+32"/>
@@ -2144,12 +2137,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+19"/>
         <source>no</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">no</translation>
     </message>
     <message>
         <location line="+29"/>
         <source>After Fee:</source>
-        <translation type="unfinished"></translation>
+        <translation>Comissió posterior:</translation>
     </message>
     <message>
         <location line="+32"/>
@@ -2164,12 +2157,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+115"/>
         <source>Send to multiple recipients at once</source>
-        <translation type="unfinished"></translation>
+        <translation>Envia a múltiples destinataris al mateix temps</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Add &amp;Recipient</source>
-        <translation type="unfinished"></translation>
+        <translation>Afig &amp;destinatari</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -2179,12 +2172,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+3"/>
         <source>Clear &amp;All</source>
-        <translation type="unfinished"></translation>
+        <translation>Neteja-ho &amp;tot</translation>
     </message>
     <message>
         <location line="+28"/>
         <source>Balance:</source>
-        <translation type="unfinished"></translation>
+        <translation>Balanç:</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -2194,12 +2187,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+31"/>
         <source>Confirm the send action</source>
-        <translation type="unfinished"></translation>
+        <translation>Confirma l&apos;acció d&apos;enviament</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>S&amp;end</source>
-        <translation type="unfinished"></translation>
+        <translation>E&amp;nvia</translation>
     </message>
     <message>
         <location filename="../sendcoinsdialog.cpp" line="-173"/>
@@ -2209,52 +2202,52 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+15"/>
         <source>Copy quantity</source>
-        <translation type="unfinished"></translation>
+        <translation>Copia la quantitat</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy amount</source>
-        <translation type="unfinished"></translation>
+        <translation>Copia l&apos;import</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy fee</source>
-        <translation type="unfinished"></translation>
+        <translation>Copia la comissió</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy after fee</source>
-        <translation type="unfinished"></translation>
+        <translation>Copia la comissió posterior</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy bytes</source>
-        <translation type="unfinished"></translation>
+        <translation>Copia els bytes</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Copy priority</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Copy low output</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy change</source>
+        <translation>Copia el canvi</translation>
+    </message>
+    <message>
+        <location line="-2"/>
+        <source>Copy priority</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+86"/>
+        <location line="+88"/>
         <source>&lt;b&gt;%1&lt;/b&gt; to %2 (%3)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Confirm send coins</source>
-        <translation type="unfinished"></translation>
+        <translation>Confirma l&apos;enviament de monedes</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2274,17 +2267,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+5"/>
         <source>The amount to pay must be larger than 0.</source>
-        <translation type="unfinished"></translation>
+        <translation>L&apos;import a pagar ha de ser major que 0.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>The amount exceeds your balance.</source>
-        <translation type="unfinished"></translation>
+        <translation>L&apos;import supera el vostre balanç.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>The total exceeds your balance when the %1 transaction fee is included.</source>
-        <translation type="unfinished"></translation>
+        <translation>El total excedeix el teu balanç quan s&apos;afig la comissió a la transacció %1.</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -2302,17 +2295,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+251"/>
+        <location line="+264"/>
+        <source>(no label)</source>
+        <translation>(sense etiqueta)</translation>
+    </message>
+    <message>
+        <location line="-13"/>
         <source>WARNING: Invalid Gridcoin address</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+13"/>
-        <source>(no label)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+17"/>
         <source>WARNING: unknown change address</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2322,22 +2315,63 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../forms/sendcoinsentry.ui" line="+14"/>
         <source>Form</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Formulari</translation>
+    </message>
+    <message>
+        <location line="+156"/>
+        <source>A&amp;mount:</source>
+        <translation>Q&amp;uantitat:</translation>
+    </message>
+    <message>
+        <location line="-108"/>
+        <source>Pay &amp;To:</source>
+        <translation>Paga &amp;a:</translation>
+    </message>
+    <message>
+        <location line="-9"/>
+        <location filename="../sendcoinsentry.cpp" line="+29"/>
+        <source>Enter a label for this address to add it to your address book</source>
+        <translation>Introduïu una etiqueta per a esta adreça per afegir-la a la llibreta d&apos;adreces</translation>
+    </message>
+    <message>
+        <location line="-21"/>
+        <source>&amp;Label:</source>
+        <translation>&amp;Etiqueta:</translation>
     </message>
     <message>
         <location line="+48"/>
-        <source>Pa&amp;y To:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+18"/>
         <source>The address to send the payment to  (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+60"/>
-        <source>Message:</source>
+        <location line="+10"/>
+        <source>Choose address from address book</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Alt+A</source>
+        <translation>Alt+A</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Paste address from clipboard</source>
+        <translation>Apega l&apos;adreça del porta-retalls</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Alt+P</source>
+        <translation>Alt+P</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Remove this recipient</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Message:</source>
+        <translation>Missatge:</translation>
     </message>
     <message>
         <location line="+21"/>
@@ -2345,54 +2379,13 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>A&amp;mount:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+13"/>
+        <location line="+22"/>
         <source>Track Coins</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Add Attachment</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-137"/>
-        <location filename="../sendcoinsentry.cpp" line="+29"/>
-        <source>Enter a label for this address to add it to your address book</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-21"/>
-        <source>&amp;Label:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+58"/>
-        <source>Choose address from address book</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Alt+A</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Paste address from clipboard</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Alt+P</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Remove this recipient</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2406,16 +2399,15 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../forms/signverifymessagedialog.ui" line="+14"/>
         <source>Signatures - Sign / Verify a Message</source>
-        <translation type="unfinished"></translation>
+        <translation>Signatures - Signa / verifica un missatge</translation>
     </message>
     <message>
         <location line="+13"/>
-        <location line="+124"/>
         <source>&amp;Sign Message</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Signa el missatge</translation>
     </message>
     <message>
-        <location line="-118"/>
+        <location line="+6"/>
         <source>You can sign messages with your addresses to prove you own them. Be careful not to sign anything vague, as phishing attacks may try to trick you into signing your identity over to them. Only sign fully-detailed statements you agree to.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2434,27 +2426,27 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="-193"/>
         <location line="+203"/>
         <source>Alt+A</source>
-        <translation type="unfinished"></translation>
+        <translation>Alt+A</translation>
     </message>
     <message>
         <location line="-193"/>
         <source>Paste address from clipboard</source>
-        <translation type="unfinished"></translation>
+        <translation>Apega l&apos;adreça del porta-retalls</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Alt+P</source>
-        <translation type="unfinished"></translation>
+        <translation>Alt+P</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Enter the message you want to sign here</source>
-        <translation type="unfinished"></translation>
+        <translation>Introduïu ací el missatge que voleu signar</translation>
     </message>
     <message>
         <location line="+24"/>
         <source>Copy the current signature to the system clipboard</source>
-        <translation type="unfinished"></translation>
+        <translation>Copia la signatura actual al porta-retalls del sistema</translation>
     </message>
     <message>
         <location line="+21"/>
@@ -2464,19 +2456,19 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+17"/>
         <source>Reset all sign message fields</source>
-        <translation type="unfinished"></translation>
+        <translation>Neteja tots els camps de clau</translation>
     </message>
     <message>
         <location line="+3"/>
         <location line="+146"/>
         <source>Clear &amp;All</source>
-        <translation type="unfinished"></translation>
+        <translation>Neteja-ho &amp;tot</translation>
     </message>
     <message>
         <location line="-87"/>
         <location line="+70"/>
         <source>&amp;Verify Message</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Verifica el missatge</translation>
     </message>
     <message>
         <location line="-64"/>
@@ -2496,7 +2488,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+17"/>
         <source>Reset all verify message fields</source>
-        <translation type="unfinished"></translation>
+        <translation>Neteja tots els camps de verificació de missatge</translation>
     </message>
     <message>
         <location filename="../signverifymessagedialog.cpp" line="+27"/>
@@ -2507,7 +2499,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="-2"/>
         <source>Click &quot;Sign Message&quot; to generate signature</source>
-        <translation type="unfinished"></translation>
+        <translation>Feu clic a «Signa el missatge» per a generar una signatura</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -2518,7 +2510,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+82"/>
         <location line="+81"/>
         <source>The entered address is invalid.</source>
-        <translation type="unfinished"></translation>
+        <translation>L&apos;adreça introduïda no és vàlida.</translation>
     </message>
     <message>
         <location line="-81"/>
@@ -2526,59 +2518,64 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+73"/>
         <location line="+8"/>
         <source>Please check the address and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Comproveu l&apos;adreça i torneu-ho a provar.</translation>
     </message>
     <message>
         <location line="-81"/>
         <location line="+81"/>
         <source>The entered address does not refer to a key.</source>
-        <translation type="unfinished"></translation>
+        <translation>L&apos;adreça introduïda no referencia a cap clau.</translation>
     </message>
     <message>
         <location line="-73"/>
         <source>Wallet unlock was cancelled.</source>
-        <translation type="unfinished"></translation>
+        <translation>El desbloqueig del moneder ha estat cancelat.</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Private key for the entered address is not available.</source>
-        <translation type="unfinished"></translation>
+        <translation>La clau privada per a la adreça introduïda no està disponible.</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Message signing failed.</source>
-        <translation type="unfinished"></translation>
+        <translation>La signatura del missatge ha fallat.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Message signed.</source>
-        <translation type="unfinished"></translation>
+        <translation>Missatge signat.</translation>
     </message>
     <message>
         <location line="+59"/>
         <source>The signature could not be decoded.</source>
-        <translation type="unfinished"></translation>
+        <translation>La signatura no s&apos;ha pogut descodificar.</translation>
     </message>
     <message>
         <location line="+0"/>
         <location line="+13"/>
         <source>Please check the signature and try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Comproveu la signatura i torneu-ho a provar.</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>The signature did not match the message digest.</source>
-        <translation type="unfinished"></translation>
+        <translation>La signatura no coincideix amb el resum del missatge.</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Message verification failed.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ha fallat la verificació del missatge.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Message verified.</source>
-        <translation type="unfinished"></translation>
+        <translation>Missatge verificat.</translation>
+    </message>
+    <message>
+        <location filename="../forms/signverifymessagedialog.ui" line="-160"/>
+        <source>Sign &amp;Message</source>
+        <translation>Signa el &amp;missatge</translation>
     </message>
 </context>
 <context>
@@ -2586,7 +2583,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../transactiondesc.cpp" line="+38"/>
         <source>Open until %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Obert fins %1</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -2596,22 +2593,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>%1/offline</source>
-        <translation type="unfinished"></translation>
+        <translation>%1/fora de línia</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1/unconfirmed</source>
-        <translation type="unfinished"></translation>
+        <translation>%1/sense confirmar</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1 confirmations</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 confirmacions</translation>
     </message>
     <message>
         <location line="+45"/>
         <source>Status</source>
-        <translation type="unfinished"></translation>
+        <translation>Estat</translation>
     </message>
     <message numerus="yes">
         <location line="+7"/>
@@ -2624,41 +2621,41 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+4"/>
         <source>Date</source>
-        <translation type="unfinished"></translation>
+        <translation>Data</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Source</source>
-        <translation type="unfinished"></translation>
+        <translation>Font</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Generated</source>
-        <translation type="unfinished"></translation>
+        <translation>Generat</translation>
     </message>
     <message>
         <location line="+5"/>
         <location line="+17"/>
         <source>From</source>
-        <translation type="unfinished"></translation>
+        <translation>Des de</translation>
     </message>
     <message>
         <location line="+1"/>
         <location line="+22"/>
         <location line="+58"/>
         <source>To</source>
-        <translation type="unfinished"></translation>
+        <translation>A</translation>
     </message>
     <message>
         <location line="-77"/>
         <location line="+2"/>
         <source>own address</source>
-        <translation type="unfinished"></translation>
+        <translation>Adreça pròpia</translation>
     </message>
     <message>
         <location line="-2"/>
         <source>label</source>
-        <translation type="unfinished"></translation>
+        <translation>etiqueta</translation>
     </message>
     <message>
         <location line="+37"/>
@@ -2667,7 +2664,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+17"/>
         <location line="+51"/>
         <source>Credit</source>
-        <translation type="unfinished"></translation>
+        <translation>Crèdit</translation>
     </message>
     <message numerus="yes">
         <location line="-123"/>
@@ -2680,7 +2677,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>not accepted</source>
-        <translation type="unfinished"></translation>
+        <translation>no acceptat</translation>
     </message>
     <message>
         <location line="+44"/>
@@ -2688,32 +2685,32 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+15"/>
         <location line="+51"/>
         <source>Debit</source>
-        <translation type="unfinished"></translation>
+        <translation>Dèbit</translation>
     </message>
     <message>
         <location line="-60"/>
         <source>Transaction fee</source>
-        <translation type="unfinished"></translation>
+        <translation>Comissió de transacció</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Net amount</source>
-        <translation type="unfinished"></translation>
+        <translation>Import net</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Message</source>
-        <translation type="unfinished"></translation>
+        <translation>Missatge</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Comment</source>
-        <translation type="unfinished"></translation>
+        <translation>Comentar</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Transaction ID</source>
-        <translation type="unfinished"></translation>
+        <translation>ID de transacció</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -2743,37 +2740,37 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+16"/>
         <source>Information</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Informació</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Transaction</source>
-        <translation type="unfinished"></translation>
+        <translation>Transacció</translation>
     </message>
     <message>
         <location line="+25"/>
         <source>Inputs</source>
-        <translation type="unfinished"></translation>
+        <translation>Entrades</translation>
     </message>
     <message>
         <location line="+26"/>
         <source>Amount</source>
-        <translation type="unfinished"></translation>
+        <translation>Import</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>true</source>
-        <translation type="unfinished"></translation>
+        <translation>cert</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>false</source>
-        <translation type="unfinished"></translation>
+        <translation>fals</translation>
     </message>
     <message>
         <location line="-255"/>
         <source>, has not been successfully broadcast yet</source>
-        <translation type="unfinished"></translation>
+        <translation>, encara no ha estat emés correctement</translation>
     </message>
     <message numerus="yes">
         <location line="-64"/>
@@ -2786,7 +2783,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+99"/>
         <source>unknown</source>
-        <translation type="unfinished"></translation>
+        <translation>desconegut</translation>
     </message>
 </context>
 <context>
@@ -2799,27 +2796,27 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+9"/>
         <source>This pane shows a detailed description of the transaction</source>
+        <translation>Este panell mostra una descripció detallada de la transacció</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>View Attachment</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+42"/>
+        <location line="+7"/>
+        <source>Track Coins</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <source>Execute Contract</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Close</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-17"/>
-        <source>Track Coins</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-7"/>
-        <source>View Attachment</source>
-        <translation type="unfinished"></translation>
+        <source>C&amp;lose</source>
+        <translation type="unfinished">&amp;Tanca</translation>
     </message>
     <message>
         <location filename="../transactiondescdialog.cpp" line="+90"/>
@@ -2842,40 +2839,68 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../transactiontablemodel.cpp" line="+239"/>
         <source>Date</source>
-        <translation type="unfinished"></translation>
+        <translation>Data</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Type</source>
-        <translation type="unfinished"></translation>
+        <translation>Tipus</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Address</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Adreça</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Amount</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Import</translation>
     </message>
     <message>
         <location line="+55"/>
         <source>Open until %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Obert fins %1</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Confirmed (%1 confirmations)</source>
+        <translation>Confirmat (%1 confirmacions)</translation>
+    </message>
+    <message numerus="yes">
+        <location line="-15"/>
+        <source>Open for %n more block(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Offline</source>
+        <translation>Fora de línia</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Unconfirmed</source>
+        <translation>Sense confirmar</translation>
     </message>
     <message>
         <location line="+9"/>
+        <source>Conflicted</source>
+        <translation>En conflicte</translation>
+    </message>
+    <message>
+        <location line="-6"/>
         <source>Confirming (%1 of %2 recommended confirmations)&lt;br&gt;</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>Confirmed (%1 confirmations)</source>
-        <translation type="unfinished"></translation>
+        <location line="+15"/>
+        <source>Generated but not accepted</source>
+        <translation>Generat però no acceptat</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="-6"/>
         <source>Immature (%1 confirmations, will be available after %2)&lt;br&gt;</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2885,12 +2910,37 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+64"/>
+        <source>Received with</source>
+        <translation>Rebut amb</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Received from</source>
+        <translation>Rebut de</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Sent to</source>
+        <translation>Enviat a</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Payment to yourself</source>
+        <translation>Pagament a un mateix</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>Mined - DPOR</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+71"/>
+        <source>(n/a)</source>
+        <translation>(n/a)</translation>
+    </message>
+    <message>
+        <location line="-67"/>
         <source>Minted - (Local) DPOR</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2904,73 +2954,20 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <source>Mined - Interest</source>
         <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
-        <location line="-117"/>
-        <source>Open for %n more block(s)</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
-    </message>
     <message>
-        <location line="+6"/>
-        <source>Offline</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Unconfirmed</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Conflicted</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Generated but not accepted</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+61"/>
-        <source>Received with</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Received from</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Sent to</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Payment to yourself</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+80"/>
-        <source>(n/a)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+193"/>
+        <location line="+251"/>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
-        <translation type="unfinished"></translation>
+        <translation>Estat de la transacció. Desplaceu-vos sobre este camp per mostrar el nombre de confirmacions.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Date and time that the transaction was received.</source>
-        <translation type="unfinished"></translation>
+        <translation>Data i hora en que la transacció va ser rebuda.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Type of transaction.</source>
-        <translation type="unfinished"></translation>
+        <translation>Tipus de transacció.</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -2980,7 +2977,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>Amount removed from or added to balance.</source>
-        <translation type="unfinished"></translation>
+        <translation>Import extret o afegit del balanç.</translation>
     </message>
 </context>
 <context>
@@ -2989,102 +2986,102 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location filename="../transactionview.cpp" line="+55"/>
         <location line="+16"/>
         <source>All</source>
-        <translation type="unfinished"></translation>
+        <translation>Tot</translation>
     </message>
     <message>
         <location line="-15"/>
         <source>Today</source>
-        <translation type="unfinished"></translation>
+        <translation>Hui</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>This week</source>
-        <translation type="unfinished"></translation>
+        <translation>Esta setmana</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>This month</source>
-        <translation type="unfinished"></translation>
+        <translation>Este mes</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Last month</source>
-        <translation type="unfinished"></translation>
+        <translation>El mes passat</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>This year</source>
-        <translation type="unfinished"></translation>
+        <translation>Enguany</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Range...</source>
-        <translation type="unfinished"></translation>
+        <translation>Rang...</translation>
     </message>
     <message>
         <location line="+11"/>
         <source>Received with</source>
-        <translation type="unfinished"></translation>
+        <translation>Rebut amb</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Sent to</source>
-        <translation type="unfinished"></translation>
+        <translation>Enviat a</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>To yourself</source>
-        <translation type="unfinished"></translation>
+        <translation>A un mateix</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Mined</source>
-        <translation type="unfinished"></translation>
+        <translation>Minat</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Other</source>
-        <translation type="unfinished"></translation>
+        <translation>Altres</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Enter address or label to search</source>
-        <translation type="unfinished"></translation>
+        <translation>Introduïu una adreça o una etiqueta per cercar</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Min amount</source>
-        <translation type="unfinished"></translation>
+        <translation>Import mínim</translation>
     </message>
     <message>
         <location line="+34"/>
         <source>Copy address</source>
-        <translation type="unfinished"></translation>
+        <translation>Copiar adreça </translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy label</source>
-        <translation type="unfinished"></translation>
+        <translation>Copiar etiqueta</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy amount</source>
-        <translation type="unfinished"></translation>
+        <translation>Copia l&apos;import</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy transaction ID</source>
-        <translation type="unfinished"></translation>
+        <translation>Copiar ID de transacció</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Edit label</source>
-        <translation type="unfinished"></translation>
+        <translation>Editar etiqueta</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Show transaction details</source>
-        <translation type="unfinished"></translation>
+        <translation>Mostra detalls de la transacció</translation>
     </message>
     <message>
         <location line="+146"/>
@@ -3094,42 +3091,42 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Comma separated file (*.csv)</source>
-        <translation type="unfinished"></translation>
+        <translation>Fitxer de separació amb comes (*.csv)</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Confirmed</source>
-        <translation type="unfinished"></translation>
+        <translation>Confirmat</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Date</source>
-        <translation type="unfinished"></translation>
+        <translation>Data</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Type</source>
-        <translation type="unfinished"></translation>
+        <translation>Tipus</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Label</source>
-        <translation type="unfinished"></translation>
+        <translation>Etiqueta</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Address</source>
-        <translation type="unfinished"></translation>
+        <translation>Adreça</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Amount</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Import</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>ID</source>
-        <translation type="unfinished"></translation>
+        <translation>ID</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -3144,12 +3141,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+100"/>
         <source>Range:</source>
-        <translation type="unfinished"></translation>
+        <translation>Rang:</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>to</source>
-        <translation type="unfinished"></translation>
+        <translation>a</translation>
     </message>
 </context>
 <context>
@@ -3172,7 +3169,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+7"/>
         <source>Hide</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Amaga</translation>
     </message>
 </context>
 <context>
@@ -3392,14 +3389,9 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>bitcoin-core</name>
     <message>
-        <location filename="../bitcoinstrings.cpp" line="+33"/>
-        <source>Gridcoin version</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location filename="../bitcoinstrings.cpp" line="+34"/>
         <source>Usage:</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Ús:</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -3414,17 +3406,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>Options:</source>
-        <translation type="unfinished"></translation>
+        <translation>Opcions:</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Specify wallet file (within data directory)</source>
-        <translation type="unfinished"></translation>
+        <translation>Especifica un fitxer de moneder (dins del directori de dades)</translation>
     </message>
     <message>
         <location line="-1"/>
         <source>Specify data directory</source>
-        <translation type="unfinished"></translation>
+        <translation>Especifica el directori de dades</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -3444,12 +3436,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+3"/>
         <source>Connect to a node to retrieve peer addresses, and disconnect</source>
-        <translation type="unfinished"></translation>
+        <translation>Connecta al node per obtindre les adreces de les connexions, i desconnecta</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Specify your own public address</source>
-        <translation type="unfinished"></translation>
+        <translation>Especifiqueu la vostra adreça pública</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -3472,49 +3464,19 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+157"/>
-        <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-5"/>
-        <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-87"/>
+        <location line="+65"/>
         <source>Listen for JSON-RPC connections on &lt;port&gt; (default: 15715 or testnet: 25715)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="-11"/>
         <source>Accept command line and JSON-RPC commands</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+101"/>
-        <source>Error: Transaction creation failed  </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-5"/>
-        <source>Error: Wallet locked, unable to create transaction  </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-8"/>
-        <source>Importing blockchain data file.</source>
-        <translation type="unfinished"></translation>
+        <translation>Accepta la línia d&apos;ordes i ordes JSON-RPC </translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Importing bootstrap blockchain data file.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-88"/>
         <source>Run in the background as a daemon and accept commands</source>
-        <translation type="unfinished"></translation>
+        <translation>Executa en segon pla com a programa dimoni i accepta ordes</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3527,32 +3489,27 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-38"/>
+        <location line="+120"/>
+        <source>Error: Transaction creation failed  </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-160"/>
         <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+115"/>
-        <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-21"/>
-        <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+11"/>
+        <location line="+105"/>
         <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+61"/>
-        <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-30"/>
+        <location line="+31"/>
         <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3569,7 +3526,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+4"/>
         <source>Block creation options:</source>
-        <translation type="unfinished"></translation>
+        <translation>Opcions de la creació de blocs:</translation>
     </message>
     <message>
         <location line="-59"/>
@@ -3584,20 +3541,10 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+92"/>
         <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ha fallat escoltar a qualsevol port. Feu servir -listen=0 si voleu fer això.</translation>
     </message>
     <message>
-        <location line="-88"/>
-        <source>Find peers using DNS lookup (default: 1)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Sync checkpoints policy (default: strict)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+82"/>
+        <location line="-2"/>
         <source>Invalid -tor address: &apos;%s&apos;</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3622,52 +3569,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-49"/>
-        <source>%s, you must set a rpcpassword in the configuration file:
- %s
-It is recommended you use the following random password:
-rpcuser=gridcoinrpc
-rpcpassword=%s
-(you do not need to remember this password)
-The username and password MUST NOT be the same.
-If the file does not exist, create it with owner-readable-only file permissions.
-It is also recommended to set alertnotify so you are notified of problems;
-for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
-</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+26"/>
-        <source>Send command to -server or gridcoind</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Specify configuration file (default: gridcoin.conf)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Specify pid file (default: gridcoind.pid)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+31"/>
-        <source>Output extra debugging information. Implies all other -debug* options</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Output extra network debugging information</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+27"/>
         <source>Prepend debug output with timestamp</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3677,22 +3579,12 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-71"/>
-        <source>Select the version of socks proxy to use (4-5, default: 5)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+38"/>
+        <location line="-33"/>
         <source>Send trace/debug info to console instead of debug.log file</source>
-        <translation type="unfinished"></translation>
+        <translation>Envia informació de traça/depuració a la consola en comptes del fitxer debug.log</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Send trace/debug info to debugger</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+28"/>
+        <location line="+29"/>
         <source>Set maximum block size in bytes (default: 250000)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3704,7 +3596,7 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="-29"/>
         <source>Shrink debug.log file on client startup (default: 1 when no -debug)</source>
-        <translation type="unfinished"></translation>
+        <translation>Redueix el fitxer debug.log durant l&apos;inici del client (per defecte: 1 quan no -debug)</translation>
     </message>
     <message>
         <location line="-39"/>
@@ -3712,13 +3604,7 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+107"/>
-        <source>Unable to sign checkpoint, wrong checkpointkey?
-</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-79"/>
+        <location line="+28"/>
         <source>Use UPnP to map the listening port (default: 0)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3735,7 +3621,7 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="+39"/>
         <source>Username for JSON-RPC connections</source>
-        <translation type="unfinished"></translation>
+        <translation>Nom d&apos;usuari per a connexions JSON-RPC</translation>
     </message>
     <message>
         <location line="+48"/>
@@ -3743,17 +3629,7 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+56"/>
-        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Warning: Disk space is low!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-2"/>
+        <location line="+55"/>
         <source>Warning: This version is obsolete, upgrade required!</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3765,25 +3641,80 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="-55"/>
         <source>Password for JSON-RPC connections</source>
+        <translation>Contrasenya per a connexions JSON-RPC</translation>
+    </message>
+    <message>
+        <location line="-81"/>
+        <source>%s, you must set a rpcpassword in the configuration file:
+ %s
+It is recommended you use the following random password:
+rpcuser=gridcoinrpc
+rpcpassword=%s
+(you do not need to remember this password)
+The username and password MUST NOT be the same.
+If the file does not exist, create it with owner-readable-only file permissions.
+It is also recommended to set alertnotify so you are notified of problems;
+for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
+</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-30"/>
-        <source>Find peers using internet relay chat (default: 0)</source>
+        <location line="+24"/>
+        <source>Gridcoin version</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+2"/>
+        <source>Send command to -server or gridcoind</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+29"/>
         <source>Sync time with other nodes. Disable if time on your system is precise e.g. syncing with NTP (default: 1)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="-23"/>
+        <source>Specify configuration file (default: gridcoin.conf)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Specify pid file (default: gridcoind.pid)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Select the version of socks proxy to use (4-5, default: 5)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+28"/>
         <source>When creating transactions, ignore inputs with value less than this (default: 0.01)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="-25"/>
+        <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Find peers using internet relay chat (default: 0)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Find peers using DNS lookup (default: 1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Sync checkpoints policy (default: strict)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+26"/>
         <source>Allow JSON-RPC connections from specified IP address</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3795,12 +3726,12 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="+1"/>
         <source>Execute command when the best block changes (%s in cmd is replaced by block hash)</source>
-        <translation type="unfinished"></translation>
+        <translation>Executa l&apos;orde quan el millor bloc canvie (%s en cmd es reemplaça per un resum de bloc)</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</source>
-        <translation type="unfinished"></translation>
+        <translation>Executa una orde quan una transacció del moneder canvie (%s en cmd es canvia per TxID)</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -3808,17 +3739,22 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>Execute command when a relevant alert is received (%s in cmd is replaced by message)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="-21"/>
+        <source>Output extra debugging information. Implies all other -debug* options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Output extra network debugging information</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+23"/>
         <source>Upgrade wallet to latest format</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3833,12 +3769,12 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+2"/>
-        <source>How many blocks to check at startup (default: 2500, 0 = all)</source>
+        <location line="-21"/>
+        <source>Send trace/debug info to debugger</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+24"/>
         <source>How thorough the block verification is (0-6, default: 1)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3863,27 +3799,53 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Acceptable ciphers (default: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</source>
+        <location line="-21"/>
+        <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+8"/>
-        <source>Initialization sanity check failed. Gridcoin is shutting down.</source>
+        <location line="+9"/>
+        <source>How many blocks to check at startup (default: 2500, 0 = all)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+6"/>
+        <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Unable to sign checkpoint, wrong checkpointkey?
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+23"/>
         <source>Error: Wallet unlocked for staking only, unable to create transaction.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+18"/>
-        <source>WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.</source>
+        <location line="+12"/>
+        <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-155"/>
+        <location line="+4"/>
+        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Warning: Disk space is low!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-154"/>
         <source>This help message</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3893,77 +3855,42 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-96"/>
-        <source>Gridcoin</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+137"/>
+        <location line="+42"/>
         <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-127"/>
-        <source>Connect through socks proxy</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="-124"/>
         <source>Allow DNS lookups for -addnode, -seednode and -connect</source>
-        <translation type="unfinished"></translation>
+        <translation>Permet consultes DNS per a -addnode, -seednode i -connect</translation>
     </message>
     <message>
         <location line="+119"/>
         <source>Loading addresses...</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;estan carregant les adreces...</translation>
     </message>
     <message>
-        <location line="-14"/>
-        <source>Error loading blkindex.dat</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+2"/>
+        <location line="-12"/>
         <source>Error loading wallet.dat: Wallet corrupted</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+6"/>
         <source>Error loading wallet.dat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="-16"/>
         <source>Invalid -proxy address: &apos;%s&apos;</source>
-        <translation type="unfinished"></translation>
+        <translation>Adreça -proxy invalida: &apos;%s&apos;</translation>
     </message>
     <message>
         <location line="-1"/>
         <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
-        <translation type="unfinished"></translation>
+        <translation>Xarxa desconeguda especificada a -onlynet: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-1"/>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>Cannot resolve -bind address: &apos;%s&apos;</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3978,12 +3905,7 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+44"/>
-        <source>Error: could not start node</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+11"/>
+        <location line="+55"/>
         <source>Sending...</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3995,67 +3917,142 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="+1"/>
         <source>Insufficient funds</source>
-        <translation type="unfinished"></translation>
+        <translation>Balanç insuficient</translation>
     </message>
     <message>
         <location line="-33"/>
         <source>Loading block index...</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;està carregant l&apos;índex de blocs...</translation>
     </message>
     <message>
         <location line="-101"/>
         <source>Add a node to connect to and attempt to keep the connection open</source>
-        <translation type="unfinished"></translation>
+        <translation>Afig un node per a connectar-s&apos;hi i intenta mantindre-hi la connexió oberta</translation>
     </message>
     <message>
-        <location line="+119"/>
-        <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-97"/>
+        <location line="+22"/>
         <source>Fee per KB to add to transactions you send</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+55"/>
+        <location line="-38"/>
+        <source>Gridcoin</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Connect through socks proxy</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+83"/>
         <source>Invalid amount for -mininput=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+26"/>
-        <source>Loading wallet...</source>
+        <location line="-7"/>
+        <source>Acceptable ciphers (default: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+8"/>
-        <source>Cannot downgrade wallet</source>
+        <source>Initialization sanity check failed. Gridcoin is shutting down.</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Loading wallet...</source>
+        <translation>S&apos;està carregant el moneder...</translation>
+    </message>
+    <message>
+        <location line="-23"/>
+        <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>Cannot downgrade wallet</source>
+        <translation>No es pot reduir la versió del moneder</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Cannot write default address</source>
-        <translation type="unfinished"></translation>
+        <translation>No es pot escriure l&apos;adreça per defecte</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Rescanning...</source>
-        <translation type="unfinished"></translation>
+        <translation>S&apos;està reescanejant...</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Done loading</source>
+        <translation>Ha acabat la càrrega</translation>
+    </message>
+    <message>
+        <location line="-26"/>
+        <source>Unknown -socks proxy version requested: %i</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-164"/>
+        <location line="+10"/>
+        <source>Error loading blkindex.dat</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Importing blockchain data file.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Importing bootstrap blockchain data file.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Error: could not start node</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Error: Wallet locked, unable to create transaction  </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-170"/>
         <source>To use the %s option</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+14"/>
-        <source>Error</source>
+        <location line="+187"/>
+        <source>WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-173"/>
+        <source>Error</source>
+        <translation>Error</translation>
     </message>
     <message>
         <location line="+6"/>

@@ -63,7 +63,7 @@
         <string>Create a new address</string>
        </property>
        <property name="text">
-        <string>&amp;New Address</string>
+        <string>&amp;New</string>
        </property>
        <property name="icon">
         <iconset resource="../bitcoin.qrc">
@@ -77,7 +77,7 @@
         <string>Copy the currently selected address to the system clipboard</string>
        </property>
        <property name="text">
-        <string>&amp;Copy Address</string>
+        <string>&amp;Copy</string>
        </property>
        <property name="icon">
         <iconset resource="../bitcoin.qrc">
