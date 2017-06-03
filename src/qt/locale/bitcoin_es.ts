@@ -2724,8 +2724,8 @@ Esto significa que se requiere una cuota de al menos el %1 por kb.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Gridcoin generated coins must mature 120 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
-        <translation>Gridcoin generada monedas deben madurar 120 bloques antes de que se pueden gastar. Cuando se genera este bloque, se transmitió a la red para ser añadido a la cadena de bloque. Si no consigue entrar en la cadena, su estado cambia a &quot;no aceptado&quot; y no es gastar. Ocasionalmente esto puede ocurrir si otro nodo genera un bloque en unos segundos del tuyo.
+        <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
+        <translation>Gridcoin generada monedas deben madurar 110 bloques antes de que se pueden gastar. Cuando se genera este bloque, se transmitió a la red para ser añadido a la cadena de bloque. Si no consigue entrar en la cadena, su estado cambia a &quot;no aceptado&quot; y no es gastar. Ocasionalmente esto puede ocurrir si otro nodo genera un bloque en unos segundos del tuyo.
 </translation>
     </message>
     <message>
