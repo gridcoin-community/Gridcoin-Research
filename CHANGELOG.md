@@ -48,6 +48,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Fix incorrect WCG URL, #323 (@3ullShark).
  - Fix alt key shortcut order, #326 (@TheCharlatan).
  - Code cleanup (@Foggyx420, @TheCharlatan).
+ - Fix numerous beacon issues, #344, #321 and #334 (@Foggyx420).
 
 ## [3.5.8.9] - 2017-05-15
 ### Added
@@ -58,14 +59,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Replace Windows voting dialog with the new dialog.
 - Update Gridcoin icon on Windows.
 - Enable C++11.
+- Removed unused link dependencies: librt, boost_chrono, boost_date_time, libz
+  and libdl.
 - Update Hungarian translations (@matthew11).
 - Update Portuguese translations (Miguel Veiga).
 - Update icon set by @Peppernrino.
 - Update icon on OSX, #193 (@coagmano).
+- Lossless compression of resources, #227 (@Peppernrino).
 - Reduced memory usage by around 100MB+.
 - Improve UI when used with dark themes on Linux, #222 (@skcin).
 - Fix occasional crashes when starting on Linux, #139.
 - Fix freeze when clicking on the "Amount" field under Send Coins when using
   KDE, #210.
 - Fix OSX build issues, #174 (@coagmano).
+- Add man pages to doc folder, #135 (@caraka).
+- Remove lots of dead, obsolete code.
 - Possible fix for invalid time check in diagnostic.
