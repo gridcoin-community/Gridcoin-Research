@@ -1200,7 +1200,7 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
             }
 
             //If beacon is already in the chain, exit early
-            std::string sBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,true);
+            std::string sBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,bFromService);
             if (!sBeaconPublicKey.empty()) 
             {
                 // Ensure they can re-send the beacon if > 5 months old : GetBeaconPublicKey returns an empty string when > 5 months: OK.
