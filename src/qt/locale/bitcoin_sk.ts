@@ -878,16 +878,7 @@ Adresa: %4</translation>
         <translation type="unfinished">Upraviť konfiguračné nastavenia pre Gridcoin</translation>
     </message>
     <message numerus="yes">
-        <location line="+376"/>
-        <source>Processed %n blocks of transaction history.</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+1054"/>
+        <location line="+1430"/>
         <source>%n second(s)</source>
         <translation type="unfinished">
             <numerusform>%n sekunda</numerusform>
@@ -975,6 +966,15 @@ Adresa: %4</translation>
         <location filename="../bitcoin.cpp" line="+145"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
         <translation type="unfinished">Došlo k závažnej chybe. Gridcoin už nemôže pokračovať bezpečne a bude ukončený.</translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../bitcoingui.cpp" line="-1131"/>
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation>
+            <numerusform>Spracovaných %n blok transakčnej histórie.</numerusform>
+            <numerusform>Spracovaných %n bloky transakčnej histórie.</numerusform>
+            <numerusform>Spracovaných %n blokov transakčnej histórie.</numerusform>
+        </translation>
     </message>
 </context>
 <context>

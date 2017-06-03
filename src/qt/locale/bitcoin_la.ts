@@ -454,7 +454,15 @@ Hoc productum continet programmata composita ab OpenSSL Project pro utendo in Op
         <translation>[testnet]</translation>
     </message>
     <message numerus="yes">
-        <location line="+204"/>
+        <location line="+183"/>
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+21"/>
         <source>%n second(s) ago</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -874,15 +882,7 @@ Inscriptio: %4
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location line="+376"/>
-        <source>Processed %n blocks of transaction history.</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+1054"/>
+        <location line="+1430"/>
         <source>%n second(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>

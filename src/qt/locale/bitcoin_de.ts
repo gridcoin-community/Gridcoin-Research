@@ -876,15 +876,7 @@ Adresse: %4</translation>
         <translation>Verändere Konfigurationen von Gridcoin</translation>
     </message>
     <message numerus="yes">
-        <location line="+376"/>
-        <source>Processed %n blocks of transaction history.</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+1054"/>
+        <location line="+1430"/>
         <source>%n second(s)</source>
         <translation>
             <numerusform>%n Sekunde(n)</numerusform>
@@ -966,6 +958,14 @@ Adresse: %4</translation>
         <location filename="../bitcoin.cpp" line="+145"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
         <translation>Ein fataler Fehler passierte. Gridcoin kann nicht mehr länger sicher ausgführt werden und wird runterfahren.</translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../bitcoingui.cpp" line="-1131"/>
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation>
+            <numerusform>%n Block des Transaktionsverlaufs verarbeitet.</numerusform>
+            <numerusform>%n Blöcke des Transaktionsverlaufs verarbeitet.</numerusform>
+        </translation>
     </message>
 </context>
 <context>

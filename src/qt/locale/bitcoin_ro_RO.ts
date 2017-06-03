@@ -879,16 +879,7 @@ Adresa: %4
         <translation>Modific? op?iuni de configurare pentru Gridcoin</translation>
     </message>
     <message numerus="yes">
-        <location line="+376"/>
-        <source>Processed %n blocks of transaction history.</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+1054"/>
+        <location line="+1430"/>
         <source>%n second(s)</source>
         <translation>
             <numerusform>%n secund?</numerusform>
@@ -976,6 +967,15 @@ Adresa: %4
         <location filename="../bitcoin.cpp" line="+145"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
         <translation>A ap?rut o eroare fatal?. Gridcoin nu mai poate continua în condi?ii de siguran?? ?i va iesi.</translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../bitcoingui.cpp" line="-1131"/>
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation>
+            <numerusform>S-a procesat %n bloc din istoricul tranzacţiilor.</numerusform>
+            <numerusform>S-au procesat %n blocuri din istoricul tranzacţiilor.</numerusform>
+            <numerusform>S-au procesat %n de blocuri din istoricul tranzacţiilor.</numerusform>
+        </translation>
     </message>
 </context>
 <context>

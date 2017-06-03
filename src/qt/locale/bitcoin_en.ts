@@ -443,8 +443,16 @@ This product includes software developed by the OpenSSL Project for use in the O
         <source>&amp;Help</source>
         <translation>&amp;Help</translation>
     </message>
+    <message numerus="yes">
+        <location line="+242"/>
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation>
+            <numerusform>Processed %n block of transaction history.</numerusform>
+            <numerusform>Processed %n blocks of transaction history.</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+50"/>
+        <location line="-192"/>
         <location line="+9"/>
         <source>[testnet]</source>
         <translation>[testnet]</translation>
@@ -870,15 +878,7 @@ Address: %4
         <translation>Modify configuration options for Gridcoin</translation>
     </message>
     <message numerus="yes">
-        <location line="+376"/>
-        <source>Processed %n blocks of transaction history.</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+1054"/>
+        <location line="+1430"/>
         <source>%n second(s)</source>
         <translation>
             <numerusform>%n second</numerusform>

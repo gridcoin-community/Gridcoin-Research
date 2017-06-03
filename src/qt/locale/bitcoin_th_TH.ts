@@ -484,15 +484,8 @@ This product includes software developed by the OpenSSL Project for use in the O
         <source>&amp;Unlock Wallet...</source>
         <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
-        <location line="+366"/>
-        <source>Processed %n blocks of transaction history.</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-        </translation>
-    </message>
     <message>
-        <location line="+39"/>
+        <location line="+405"/>
         <source>Up to date</source>
         <translation>ทันสมัย</translation>
     </message>
@@ -945,6 +938,13 @@ Address: %4
         <location line="+10"/>
         <source>Searching for mature coins... Please wait</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <location line="-1126"/>
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation>
+            <numerusform>%n บล็อกในประวัติรายการ ได้รับการดำเนินการเรียบร้อยแล้ว</numerusform>
+        </translation>
     </message>
 </context>
 <context>

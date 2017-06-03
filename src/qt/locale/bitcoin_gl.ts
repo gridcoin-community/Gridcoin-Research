@@ -455,7 +455,15 @@ Este produto inclúe software desenvolvido polo OpenSSL Project para o uso no Op
         <translation>[testnet]</translation>
     </message>
     <message numerus="yes">
-        <location line="+204"/>
+        <location line="+183"/>
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+21"/>
         <source>%n second(s) ago</source>
         <translation>
             <numerusform>Fai %n segundo</numerusform>
@@ -875,15 +883,7 @@ Dirección: %4
         <translation>Modificar opcións de configuración para Gridcoin</translation>
     </message>
     <message numerus="yes">
-        <location line="+376"/>
-        <source>Processed %n blocks of transaction history.</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+1054"/>
+        <location line="+1430"/>
         <source>%n second(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
