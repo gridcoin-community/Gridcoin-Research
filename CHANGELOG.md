@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
    Urdu and Chinese.
  - External link now use HTTPS where possible, and the code has been cleaned
    up, #339 (@skcin).
+ - Removed obsolete functionality.
 
 ## [Staging]
 ### Added
