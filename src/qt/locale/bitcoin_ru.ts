@@ -2730,8 +2730,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+1"/>
-        <source>Gridcoin generated coins must mature 120 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
-        <translation>Сгенерированные гридкойны монеты должны вырасти до 120 блоков, прежде чем их можно будет потратить. Когда вы сгенерировали этот блок, он был передан в сеть для добавления в цепочку блоков. Если он не сможет попасть в цепочку, его состояние изменится на «не принято», и оно не будет потрачено. Это может случаться, если другой узел генерирует блок в течение нескольких секунд после вашего.</translation>
+        <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
+        <translation>Сгенерированные гридкойны монеты должны вырасти до 110 блоков, прежде чем их можно будет потратить. Когда вы сгенерировали этот блок, он был передан в сеть для добавления в цепочку блоков. Если он не сможет попасть в цепочку, его состояние изменится на «не принято», и оно не будет потрачено. Это может случаться, если другой узел генерирует блок в течение нескольких секунд после вашего.</translation>
     </message>
     <message>
         <location line="+16"/>
