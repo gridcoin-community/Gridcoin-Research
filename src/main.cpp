@@ -126,7 +126,6 @@ extern bool LoadSuperblock(std::string data, int64_t nTime, double height);
 extern CBlockIndex* GetHistoricalMagnitude(std::string cpid);
 
 extern double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
-extern StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID>& vRef);
 
 
 extern double GetOwedAmount(std::string cpid);
@@ -5714,37 +5713,35 @@ MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, Minin
 }
 
 
-StructCPID GetInitializedStructCPID2(std::string name, std::map<std::string, StructCPID>& vRef)
+StructCPID GetInitializedStructCPID2(const std::string& name, std::map<std::string, StructCPID>& vRef)
 {
     try
     {
-      StructCPID& cpid = vRef[name];
+        StructCPID& cpid = vRef[name];
         if (!cpid.initialized)
         {
-                cpid = GetStructCPID();
-                cpid.initialized=true;
-                cpid.LowLockTime = std::numeric_limits<unsigned int>::max();
-                cpid.HighLockTime = 0;
-                cpid.LastPaymentTime = 0;
-                cpid.EarliestPaymentTime = 99999999999;
-                cpid.Accuracy = 0;
-                return cpid;
+            cpid = GetStructCPID();
+            cpid.initialized=true;
+            cpid.LowLockTime = std::numeric_limits<unsigned int>::max();
+            cpid.HighLockTime = 0;
+            cpid.LastPaymentTime = 0;
+            cpid.EarliestPaymentTime = 99999999999;
+            cpid.Accuracy = 0;
         }
-        else
-        {
-                return cpid;
-        }
+
+        return cpid;
     }
-    catch (bad_alloc ba)
+    catch (const std::bad_alloc& ba)
     {
         printf("Bad alloc caught in GetInitializedStructCpid2 for %s",name.c_str());
-      return GetStructCPID();
     }
     catch(...)
     {
         printf("Exception caught in GetInitializedStructCpid2 for %s",name.c_str());
-      return GetStructCPID();
     }
+
+    // Error during map's heap allocation. Return an empty object.
+    return GetStructCPID();
 }
 
 

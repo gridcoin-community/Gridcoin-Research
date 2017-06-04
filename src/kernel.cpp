@@ -6,6 +6,7 @@
 #include "kernel.h"
 #include "txdb.h"
 #include "util.h"
+#include "main.h"
 
 bool IsCPIDValidv2(MiningCPID& mc,int height);
 using namespace std;
@@ -19,7 +20,6 @@ double GetBlockDifficulty(unsigned int nBits);
 extern double GetLastPaymentTimeByCPID(std::string cpid);
 extern double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 bool LessVerbose(int iMax1000);
-StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID>& vRef);
 
 typedef std::map<int, unsigned int> MapModifierCheckpoints;
 /*

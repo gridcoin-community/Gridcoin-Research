@@ -292,6 +292,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
 
 
 bool GetWalletFile(CWallet* pwallet, std::string &strWalletFileOut);
+StructCPID GetInitializedStructCPID2(const std::string& name, std::map<std::string, StructCPID>& vRef);
 
 /** Position on disk for a particular transaction. */
 class CDiskTxPos
