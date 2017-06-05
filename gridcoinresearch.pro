@@ -17,6 +17,10 @@ win32
     {
         QT += axcontainer
     }
+
+    # Fix for boost.asio build error. See
+    # https://stackoverflow.com/questions/20957727/boostasio-unregisterwaitex-has-not-been-declared
+    DEFINES += _WIN32_WINNT=0x0501 WINVER=0x0501
 }
 
 greaterThan(QT_MAJOR_VERSION, 4) {
