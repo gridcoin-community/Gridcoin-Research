@@ -86,7 +86,7 @@ extern std::string getCpuHash();
 std::string getMacAddress();
 std::string TimestampToHRDate(double dtm);
 bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
-
+extern std::string VectorToString(std::vector<unsigned char> v);
 bool HasActiveBeacon(const std::string& cpid);
 extern bool BlockNeedsChecked(int64_t BlockTime);
 extern void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector<CBlockIndex*> vConnect);
@@ -510,6 +510,19 @@ bool PushGridcoinDiagnostics()
                 return true;
         #endif
         return false;
+}
+
+
+vector<unsigned char> StringToVector(std::string sData)
+{
+        vector<unsigned char> v(sData.begin(), sData.end());
+		return v;
+}
+
+std::string VectorToString(vector<unsigned char> v)
+{
+        std::string s(v.begin(), v.end());
+        return s;
 }
 
 bool FullSyncWithDPORNodes()
@@ -3998,7 +4011,14 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
 
     if (bb.cpid != "INVESTOR" && IsProofOfStake() && height1 > nGrandfather && IsResearchAgeEnabled(height1) && BlockNeedsChecked(nTime) && !fLoadingIndex)
     {
-            int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 1, nTime,
+		    // 6-4-2017 - Verify researchers stored block magnitude
+		    double dNeuralNetworkMagnitude = CalculatedMagnitude2(bb.cpid, nTime, false);
+			if (bb.Magnitude > 0 && bb.Magnitude > (dNeuralNetworkMagnitude*1.25) && (fTestNet || height1 > 947000))
+			{
+				return error("CheckBlock[ResearchAge] : Researchers block magnitude > neural network magnitude: Block Magnitude %f, Neural Network Magnitude %f, CPID %s ",
+					(double)bb.Magnitude,(double)dNeuralNetworkMagnitude,bb.cpid.c_str());
+			}
+		    int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 1, nTime,
                 pindexBest, sCaller + "_checkblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
             if (bb.ResearchSubsidy > ((OUT_POR*1.25)+1))
             {
@@ -5588,8 +5608,8 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
         return true;
     }
 
-    if (IsLockTimeWithinMinutes(nLastGRCtallied,100))
-        return true;
+    if (IsLockTimeWithinMinutes(nLastGRCtallied,100) && (mvApplicationCacheTimestamp["nGRCTime"] > 0 ||
+		 mvApplicationCacheTimestamp["nCPIDTime"] > 0))  return true;
 
     nLastGRCtallied = GetAdjustedTime();
     int64_t nGRCTime = 0;
@@ -5621,9 +5641,9 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
                         }
                         else
                         {
-                myCPID = pblockindex->GetCPID();
+						    myCPID = pblockindex->GetCPID();
                         }
-                        if (cpid == myCPID && nCPIDTime==0)
+                        if (cpid == myCPID && nCPIDTime==0 && myCPID != "INVESTOR")
                         {
                             nCPIDTime = pblockindex->nTime;
                             nGRCTime = pblockindex->nTime;
@@ -5633,6 +5653,7 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
     }
     int64_t EarliestStakedWalletTx = GetEarliestWalletTransaction();
     if (EarliestStakedWalletTx > 0 && EarliestStakedWalletTx < nGRCTime) nGRCTime = EarliestStakedWalletTx;
+	if (cpid=="INVESTOR" && EarliestStakedWalletTx > 0) nGRCTime = EarliestStakedWalletTx;
     if (fTestNet) nGRCTime -= (86400*30);
     if (nGRCTime <= 0)  nGRCTime = GetAdjustedTime();
     if (nCPIDTime <= 0) nCPIDTime = GetAdjustedTime();
