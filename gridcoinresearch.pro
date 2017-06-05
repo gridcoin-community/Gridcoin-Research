@@ -6,15 +6,12 @@ DEFINES += QT_GUI BOOST_THREAD_USE_LIB BOOST_SPIRIT_THREADSAFE
 CONFIG += no_include_pwd thread c++11 exceptions concurrent
 QT += core gui network
 
-win32 
-{
+win32 {
     DEFINES += _WIN32_WINNT=0x0501 WINVER=0x0501
-    lessThan(QT_VERSION, 5.0.0) 
-    {
+    lessThan(QT_VERSION, 5.0.0) {
         CONFIG += qaxcontainer
     } 
-    else 
-    {
+    else {
         QT += axcontainer
     }
 
