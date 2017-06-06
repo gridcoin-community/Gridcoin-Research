@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
+## Unreleased
 ### Added
 ### Changed
  - Replace translations which were just question marks with new files from
@@ -14,9 +14,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - External link now use HTTPS where possible, and the code has been cleaned
    up, #339 (@skcin).
  - Removed obsolete functionality.
-
-## [Staging]
+ 
+## [3.5.9.0] - 2017-06-05
 ### Added
+=======
+ - Added execute unspentreport (shows proof of unspent coins in wallet).
  - Add RPC commands for changing debug flags: debug, debugnet, debug2, debug3,
    debug4, debug5, debug10. #309 (@Foggyx420).
  - Add support for themes via stylesheets, #233 (@skcin).
@@ -28,6 +30,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
    #175 (@fooforever).
 
 ### Changed
+ - Upgraded security on voting system - voting proof of balance and proof of
+   magnitude.
+ - Security enhancement (@tomasbrod)
  - Wallet overview cleanup, #233 (@skcin)
    - The main overview page is now cleaner, more structured and holds more of
      the recent transactions.

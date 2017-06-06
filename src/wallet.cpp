@@ -1299,7 +1299,7 @@ int64_t CWallet::GetImmatureBalance() const
 }
 
 // populate vCoins with vector of spendable COutputs
-void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const CCoinControl *coinControl) const
+void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const CCoinControl *coinControl, bool fIncludeStakedCoins) const
 {
     vCoins.clear();
 
@@ -1308,27 +1308,39 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
         for (map<uint256, CWalletTx>::const_iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
         {
             const CWalletTx* pcoin = &(*it).second;
+			int nDepth = pcoin->GetDepthInMainChain();
+		
+			if (!fIncludeStakedCoins)
+			{
+				if (!IsFinalTx(*pcoin))
+					continue;
 
-            if (!IsFinalTx(*pcoin))
-                continue;
+				if (fOnlyConfirmed && !pcoin->IsTrusted())
+					continue;
 
-            if (fOnlyConfirmed && !pcoin->IsTrusted())
-                continue;
+				if (pcoin->IsCoinBase() && pcoin->GetBlocksToMaturity() > 0)
+					continue;
 
-            if (pcoin->IsCoinBase() && pcoin->GetBlocksToMaturity() > 0)
-                continue;
+				if(pcoin->IsCoinStake() && pcoin->GetBlocksToMaturity() > 0)
+					continue;
 
-            if(pcoin->IsCoinStake() && pcoin->GetBlocksToMaturity() > 0)
-                continue;
-
-            int nDepth = pcoin->GetDepthInMainChain();
-            if (nDepth < 0)
-                continue;
+				if (nDepth < 0)
+					continue;
+			}
+			else
+			{
+				if (nDepth < 1) continue;
+			}
 
             for (unsigned int i = 0; i < pcoin->vout.size(); i++)
-                if (!(pcoin->IsSpent(i)) && IsMine(pcoin->vout[i]) && pcoin->vout[i].nValue >= nMinimumInputValue &&
-                (!coinControl || !coinControl->HasSelected() || coinControl->IsSelected((*it).first, i)))
-                    vCoins.push_back(COutput(pcoin, i, nDepth));
+			{
+                if ((!(pcoin->IsSpent(i)) && IsMine(pcoin->vout[i]) && pcoin->vout[i].nValue >= nMinimumInputValue &&
+                   (!coinControl || !coinControl->HasSelected() || coinControl->IsSelected((*it).first, i))) 
+	     	 	   || (fIncludeStakedCoins && pcoin->IsCoinStake() && pcoin->GetBlocksToMaturity() > 0 && pcoin->GetDepthInMainChain() > 0))
+				   {
+				        vCoins.push_back(COutput(pcoin, i, nDepth));
+				   }
+			}
 
         }
     }
@@ -1544,7 +1556,7 @@ bool CWallet::SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, 
 bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet, const CCoinControl* coinControl) const
 {
     vector<COutput> vCoins;
-    AvailableCoins(vCoins, true, coinControl);
+    AvailableCoins(vCoins, true, coinControl, false);
 
     // coin control -> return all selected outputs (we want all selected to go into the transaction for sure)
     if (coinControl && coinControl->HasSelected())
