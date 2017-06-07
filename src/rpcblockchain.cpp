@@ -3947,13 +3947,13 @@ double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityU
 		std::string sXmlSig = ExtractXML(vXML[x],"<SIG>","</SIG>");
 		std::string sXmlMsg = ExtractXML(vXML[x],"<MESSAGE>","</MESSAGE>");
 		std::string sScriptPubKeyXml = ExtractXML(vXML[x],"<SCRIPTPUBKEY>","</SCRIPTPUBKEY>");
-		int iPos = (int)cdbl(sPos,0);
+		int32_t iPos = cdbl(sPos,0);
 		std::string sPubKey = ExtractXML(vXML[x],"<PUBKEY>","</PUBKEY>");
 		if (!sPubKey.empty() && !sAmt.empty() && !sPos.empty() && uTXID > 0)
 		{
 			if (GetTransaction(uTXID, tx2, hashBlock))
 			{
-				if (iPos >= 0 && iPos < (unsigned int)tx2.vout.size())
+				if (iPos >= 0 && iPos < (int32_t) tx2.vout.size())
 				{
 					    int64_t nValue2 = tx2.vout[iPos].nValue;
 					    const CScript& pk2 = tx2.vout[iPos].scriptPubKey;
@@ -4147,7 +4147,7 @@ Array GetJsonUnspentReport()
 		std::string sXmlMsg = ExtractXML(vXML[x],"<MESSAGE>","</MESSAGE>");
 		std::string sScriptPubKeyXml = ExtractXML(vXML[x],"<SCRIPTPUBKEY>","</SCRIPTPUBKEY>");
 
-		int iPos = (int)cdbl(sPos,0);
+		int32_t iPos = cdbl(sPos,0);
 		std::string sPubKey = ExtractXML(vXML[x],"<PUBKEY>","</PUBKEY>");
 	
 		if (!sPubKey.empty() && !sAmt.empty() && !sPos.empty() && uTXID > 0)
@@ -4155,7 +4155,7 @@ Array GetJsonUnspentReport()
 
 			if (GetTransaction(uTXID, tx2, hashBlock))
 			{
-				if (iPos >= 0 && iPos < (unsigned int)tx2.vout.size())
+				if (iPos >= 0 && iPos < (int32_t) tx2.vout.size())
 				{
 					    int64_t nValue2 = tx2.vout[iPos].nValue;
 					    const CScript& pk2 = tx2.vout[iPos].scriptPubKey;
