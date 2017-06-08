@@ -1200,6 +1200,7 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
     uint256 pbh = 0;
     pbh=pindexPrev->GetBlockHash();
 
+    /*
     miningcpid.cpidv2 = ComputeCPIDv2(
         GlobalCPUMiningCPID.email,
         GlobalCPUMiningCPID.boincruntimepublickey,
@@ -1210,10 +1211,10 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
         GlobalCPUMiningCPID.cpid, blocknew.nTime,
         false );
 
-    //miningcpid.Magnitude=30000;
+    miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
+    */
 
     miningcpid.lastblockhash = pbh.GetHex();
-    miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
     miningcpid.ResearchSubsidy = OUT_POR;
     miningcpid.ResearchSubsidy2 = OUT_POR;
     miningcpid.ResearchAge = dAccrualAge;
@@ -1272,16 +1273,18 @@ bool IsMiningAllowed(CWallet *pwallet)
         return false;
     }
 
-    if (vNodes.empty() || IsInitialBlockDownload()
-        || vNodes.size() < 3 || nBestHeight < GetNumBlocksOfPeers())
+    if (vNodes.empty() || (!fTestNet&& IsInitialBlockDownload()) ||
+        (!fTestNet&& (vNodes.size() < 3 || nBestHeight < GetNumBlocksOfPeers()))
+        )
     {
         msMiningErrors5+="Offline; ";
         nLastCoinStakeSearchInterval = 0;
         return false;
     }
-    
+
+    /*
     //Verify we are still on the main chain
-    if (IsLockTimeWithinMinutes(nLastBlockSolved,5))
+    if (IsLockTimeWithinMinutes(nLastBlockSolved,3))
     {
         if (fDebug10) printf("=");
         msMiningErrors5+="We are not on the main chain; ";
@@ -1294,6 +1297,7 @@ bool IsMiningAllowed(CWallet *pwallet)
         if(fDebug) printf("Wallet out of sync - unable to stake.\n");
         return false;
     }
+    */
 
 
     return true;
@@ -1368,6 +1372,7 @@ void StakeMiner(CWallet *pwallet)
         continue;
     }
     printf("StakeMiner: block processed\n");
+    nLastBlockSolved = GetAdjustedTime();
 
   } //end while(!fShutdown)
 }
