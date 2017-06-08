@@ -4173,9 +4173,13 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     CBlockIndex* pindexPrev = (*mi).second;
     int nHeight = pindexPrev->nHeight+1;
 
-    if (IsProtocolV2(nHeight) && nVersion < 7)
+    if(       (IsProtocolV2(nHeight) && nVersion < 7)
+            ||(fTestNet && nHeight > 272200 && nVersion < 8)
+        )
         return DoS(100, error("AcceptBlock() : reject too old nVersion = %d", nVersion));
-    else if (!IsProtocolV2(nHeight) && nVersion > 6)
+    else if( (!IsProtocolV2(nHeight) && nVersion >= 7)
+            ||(fTestNet && nHeight < 271700 && nVersion >= 8)
+        )
         return DoS(100, error("AcceptBlock() : reject too new nVersion = %d", nVersion));
 
     if (IsProofOfWork() && nHeight > LAST_POW_BLOCK)
@@ -4209,7 +4213,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     uint256 hashProof;
 
     // Verify hash target and signature of coinstake tx
-    if (nHeight > nGrandfather)
+    if (nHeight > nGrandfather && nVersion <= 7)
     {
                 if (IsProofOfStake())
                 {
@@ -4221,7 +4225,17 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 
                 }
     }
-
+    if (nVersion >= 8)
+    {
+        //must be proof of stake
+        //no grandfather exceptions
+        //if (IsProofOfStake())
+        printf("AcceptBlock: Proof Of Stake V8 %d\n",nVersion);
+        if(!CheckProofOfStakeV8(pindexPrev, *this, generated_by_me, hashProof))
+        {
+            return error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    \n", hash.ToString().c_str(),(double)nNonce);
+        }
+    }
 
     // PoW is checked in CheckBlock[]
     if (IsProofOfWork())
