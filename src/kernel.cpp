@@ -798,3 +798,132 @@ bool CheckStakeModifierCheckpoints(int nHeight, unsigned int nStakeModifierCheck
     return true;
 }
 
+
+
+// V8 Kernel Protocol
+// Tomas Brod 05.06.2017 (dd.mm.yyy)
+// Plug proof-of-work exploit.
+// TODO: Stake modifier is included without much understanding.
+// Without the modifier, attacker can create transactions which output will
+// stake at desired time. In other words attacker can check wheter transaction
+// output will stake in the future and create transactions accordingly.
+// Thus including modifier, even not completly researched, increases security.
+// Note: Rsa or Magnitude weight not included due to multiplication issue.
+// Note: Payment age and magnitude restrictions not included as they are not
+// important in my view and are too restrictive for honest users.
+// TODO: flags?
+
+CBigNum CalculateStakeHashV8(
+    const CBlock &CoinBlock, const CTransaction &CoinTx,
+    unsigned CoinTxN, unsigned nTimeTx,
+    const MiningCPID &BoincData)
+{
+    CDataStream ss(SER_GETHASH, 0);
+    uint64_t nStakeModifier = 0;
+    int nStakeModifierHeight = 0;
+    int64_t nStakeModifierTime = 0;
+    if (!GetKernelStakeModifier(CoinBlock.GetHash(), nStakeModifier, nStakeModifierHeight, nStakeModifierTime, fDebug)) {
+        printf("CalculateStakeHashV8: Unable to get stake modifier\n");
+        nStakeModifier = 0;
+    }
+    ss << nStakeModifier;
+    ss << CoinBlock.nTime;
+    ss << CoinTx.nTime << CoinTx.GetHash() << CoinTxN;
+    ss << nTimeTx;
+    CBigNum hashProofOfStake( Hash(ss.begin(), ss.end()) );
+    return hashProofOfStake;
+}
+
+int64_t CalculateStakeWeightV8(
+    const CTransaction &CoinTx, unsigned CoinTxN,
+    const MiningCPID &BoincData)
+{
+    int64_t nValueIn = CoinTx.vout[CoinTxN].nValue;
+    nValueIn /= 1250000;
+    return nValueIn;
+}
+
+// Block Version 8+ check procedure
+
+bool CheckProofOfStakeV8(
+    CBlockIndex* pindexPrev, //previous block in chain index
+    CBlock &Block, //block to check
+    bool generated_by_me,
+    uint256& hashProofOfStake) //proof hash out-parameter
+{
+    //Block Transaction 0 is coin:base
+    //Block Transaction 1 is coin:stake
+    //First input of coinstake is the kernel
+
+    CTransaction *p_coinstake;
+
+    if(Block.nVersion==8) {
+        if (!Block.IsProofOfStake())
+            return error("CheckProofOfStakeV8() : called on non-coinstake block %s", Block.GetHash().ToString().c_str());
+        p_coinstake = &Block.vtx[1];
+    }
+    //for future coin:stake:base merging into one tx
+    else return false;
+
+    if (!p_coinstake->IsCoinStake())
+        return error("CheckProofOfStakeV8() : called on non-coinstake tx %s", Block.vtx[1].GetHash().ToString().c_str());
+
+    // Kernel (input 0) must match the stake hash target per coin age (nBits)
+    const CTransaction& tx = (*p_coinstake);
+    const CTxIn& txin = (*p_coinstake).vin[0];
+
+    // First try finding the previous transaction in database
+    CTxDB txdb("r");
+    CTransaction txPrev;
+    CTxIndex txindex;
+    if (!txPrev.ReadFromDisk(txdb, txin.prevout, txindex))
+        return tx.DoS(1, error("CheckProofOfStake() : INFO: read txPrev failed"));  // previous transaction not in main chain, may occur during initial download
+
+    // Verify signature
+    if (!VerifySignature(txPrev, tx, 0, 0))
+        return tx.DoS(100, error("CheckProofOfStake() : VerifySignature failed on coinstake %s", tx.GetHash().ToString().c_str()));
+
+    // Read block header
+    CBlock blockPrev;
+    if (!blockPrev.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
+        return fDebug? error("CheckProofOfStake() : read block failed") : false; // unable to read block of previous transaction
+
+    // Check times (todo: add some more, like mask check)
+    if (tx.nTime < txPrev.nTime)  // Transaction timestamp violation
+        return error("CheckProofOfStakeV8: nTime violation");
+
+    if (blockPrev.nTime + nStakeMinAge > tx.nTime) // Min age requirement
+        return error("CheckProofOfStakeV8: min age violation");
+
+    MiningCPID boincblock = DeserializeBoincBlock(Block.vtx[0].hashBoinc);
+
+    //Stake refactoring TomasBrod
+    int64_t Weight= CalculateStakeWeightV8(txPrev,txin.prevout.n,boincblock);
+    CBigNum bnHashProof= CalculateStakeHashV8(blockPrev,txPrev,txin.prevout.n,tx.nTime,boincblock);
+
+    // Base target
+    CBigNum bnTarget;
+    bnTarget.SetCompact(Block.nBits);
+    // Weighted target
+    bnTarget *= Weight;
+
+    hashProofOfStake=bnHashProof.getuint256();
+    //targetProofOfStake=bnTarget.getuint256();
+
+    if(fDebug) printf(
+"CheckProofOfStakeV8:%s Time1 %.f, Time2 %.f, Time3 %.f, Bits %u, Weight %.f\n"
+" Stk %72s\n"
+" Trg %72s\n", generated_by_me?" Local,":"",
+        (double)blockPrev.nTime, (double)txPrev.nTime, (double)tx.nTime,
+        Block.nBits, (double)Weight,
+        CBigNum(hashProofOfStake).GetHex().c_str(), bnTarget.GetHex().c_str()
+    );
+
+    // Now check if proof-of-stake hash meets target protocol
+
+    if (bnHashProof > bnTarget)
+    {
+        return false;
+    }
+    return true;
+}
