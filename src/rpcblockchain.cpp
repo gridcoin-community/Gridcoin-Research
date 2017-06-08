@@ -1255,7 +1255,8 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
                 sMessage = AddContract(sType,sName,sBase);
                 StoreBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
                 // Backup config with new keys with beacon suffix
-                boost::filesystem::path sBeaconBackupConfigTarget = GetDataDir() / "walletbackups" / GetBackupFilename("gridcoinresearch.conf", "beacon");
+                std::string sBeaconBackupConfigFilename = GetBackupFilename("gridcoinresearch.conf", "beacon");
+                boost::filesystem::path sBeaconBackupConfigTarget = GetDataDir() / "walletbackups" / sBeaconBackupConfigFilename;
                 BackupConfigFile(sBeaconBackupConfigTarget.string().c_str());
                 return true;
             }
