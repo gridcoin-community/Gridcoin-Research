@@ -1270,8 +1270,9 @@ bool IsMiningAllowed(CWallet *pwallet)
         return false;
     }
 
-    if (vNodes.empty() || IsInitialBlockDownload()
-        || vNodes.size() < 3 || nBestHeight < GetNumBlocksOfPeers())
+    if (vNodes.empty() || IsInitialBlockDownload() ||
+        (!fTestNet&& (vNodes.size() < 3 || nBestHeight < GetNumBlocksOfPeers()))
+        )
     {
         msMiningErrors5+="Offline; ";
         nLastCoinStakeSearchInterval = 0;
