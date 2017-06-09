@@ -6,13 +6,13 @@
 #include "kernel.h"
 #include "txdb.h"
 #include "util.h"
+#include "main.h"
 
 bool IsCPIDValidv2(MiningCPID& mc,int height);
 using namespace std;
 MiningCPID DeserializeBoincBlock(std::string block);
 StructCPID GetStructCPID();
 extern int64_t GetRSAWeightByCPID(std::string cpid);
-double cdbl(std::string s, int place);
 extern int DetermineCPIDType(std::string cpid);
 extern int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
@@ -20,7 +20,6 @@ double GetBlockDifficulty(unsigned int nBits);
 extern double GetLastPaymentTimeByCPID(std::string cpid);
 extern double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 bool LessVerbose(int iMax1000);
-StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID>& vRef);
 
 typedef std::map<int, unsigned int> MapModifierCheckpoints;
 /*
@@ -313,7 +312,9 @@ int64_t GetRSAWeightByCPIDWithRA(std::string cpid)
 {
     //Requires Magnitude > 0, be in superblock, with a lifetime cpid paid = 0
     //12-3-2015
-    if (cpid.empty() || cpid=="INVESTOR" || cpid=="POOL") return 0;
+    if (cpid.empty() || cpid=="INVESTOR")
+        return 0;
+
     double dWeight = 0;
     StructCPID stMagnitude = GetInitializedStructCPID2(cpid,mvMagnitudes);  
     StructCPID stLifetime  = GetInitializedStructCPID2(cpid,mvResearchAge);

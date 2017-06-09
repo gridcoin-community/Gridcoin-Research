@@ -34,6 +34,8 @@ bool OutOfSyncByAgeWithChanceOfMining();
 MiningCPID DeserializeBoincBlock(std::string block);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
+std::string PubKeyToAddress(const CScript& scriptPubKey);
+
 bool IsCPIDValidv2(MiningCPID& mc,int height);
 
 int static FormatHashBlocks(void* pbuffer, unsigned int len)
@@ -483,6 +485,11 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
         std::string hashBoinc = SerializeBoincBlock(miningcpid);
         if (fDebug10 && LessVerbose(10))  printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
         pblock->vtx[0].hashBoinc = hashBoinc;
+
+        // Brod
+        GlobalCPUMiningCPID.ResearchSubsidy = out_por;
+        GlobalCPUMiningCPID.InterestSubsidy = out_interest;
+        GlobalCPUMiningCPID.ResearchMagnitudeUnit = dMagnitudeUnit;
 
         if (!fProofOfStake)
             pblock->vtx[0].vout[0].nValue = GetProofOfWorkReward(nFees, GetAdjustedTime(),nHeight);

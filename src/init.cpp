@@ -24,7 +24,6 @@
 
 std::vector<std::string> split(std::string s, std::string delim);
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
-extern void InitializeBoincProjects();
 extern boost::thread_group threadGroup;
 
 StructCPID GetStructCPID();
@@ -57,7 +56,7 @@ extern unsigned int nDerivationMethodIndex;
 extern unsigned int nMinerSleep;
 extern bool fUseFastIndex;
 extern enum Checkpoints::CPMode CheckpointsMode;
-extern void InitializeBoincProjects();
+void InitializeBoincProjects();
 void LoadCPIDsInBackground();
 
 
@@ -116,7 +115,7 @@ void DetectShutdownThread(boost::thread_group* threadGroup)
 }
 
 
-void InitializeBoincProjectsNew()
+void InitializeBoincProjects()
 {
        //Initialize GlobalCPUMiningCPID
         GlobalCPUMiningCPID.initialized = true;
@@ -165,13 +164,6 @@ void InitializeBoincProjectsNew()
                 }
        }
 
-}
-
-
-void InitializeBoincProjects()
-{
-    InitializeBoincProjectsNew();
-    return;
 }
 
 
@@ -250,7 +242,6 @@ bool AppInit(int argc, char* argv[])
 
     try
     {
-        boost::thread* detectShutdownThread = NULL;
         //
         // Parameters
         //
@@ -290,7 +281,7 @@ bool AppInit(int argc, char* argv[])
             int ret = CommandLineRPC(argc, argv);
             exit(ret);
         }
-        detectShutdownThread = new boost::thread(boost::bind(&DetectShutdownThread, &threadGroup));
+        boost::thread* detectShutdownThread = new boost::thread(boost::bind(&DetectShutdownThread, &threadGroup));
 
         fRet = AppInit2();
     }
@@ -546,16 +537,9 @@ bool AppInit2()
 
     printf("\r\nBoost Version: %s",s.str().c_str());
 
-    #if defined(WIN32) && defined(QT_GUI)
-            //startWireFrameRenderer();
-    #endif
-
-
     //Placeholder: Load Remote CPIDs Here
 
-    nNodeLifespan = GetArg("-addrlifespan", 7);
-
-    
+    nNodeLifespan = GetArg("-addrlifespan", 7);    
     fUseFastIndex = GetBoolArg("-fastindex", false);
 
     nMinerSleep = GetArg("-minersleep", 8000);
@@ -580,10 +564,6 @@ bool AppInit2()
     if (fTestNet) {
         SoftSetBoolArg("-irc", true);
     }
-
-
-    bPoolMiningMode = GetBoolArg("-poolmining");
-
 
     if (mapArgs.count("-bind")) {
         // when specifying an explicit binding address, you want to listen on it
@@ -1120,10 +1100,6 @@ bool AppInit2()
     LoadCPIDsInBackground();  //This calls HarvesCPIDs(true)
 
     uiInterface.InitMessage(_("Finding first applicable Research Project..."));
-
-    #if defined(WIN32) && defined(QT_GUI)
-        //stopWireFrameRenderer();
-    #endif
 
     if (!CheckDiskSpace())
         return false;

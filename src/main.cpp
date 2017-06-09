@@ -36,12 +36,13 @@
 #include <math.h>
 
 int GetDayOfYear();
+void GetBeaconElements(std::string sBeacon,std::string& out_cpid, std::string& out_address, std::string& out_publickey);
 extern std::string NodeAddress(CNode* pfrom);
 extern std::string ConvertBinToHex(std::string a);
 extern std::string ConvertHexToBin(std::string a);
 extern bool WalletOutOfSync();
 extern bool WriteKey(std::string sKey, std::string sValue);
-std::string GetBeaconPublicKey(const std::string& cpid);
+std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertisingBeacon);
 bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 extern void CleanInboundConnections(bool bClearAll);
@@ -85,7 +86,7 @@ extern std::string getCpuHash();
 std::string getMacAddress();
 std::string TimestampToHRDate(double dtm);
 bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
-
+extern std::string VectorToString(std::vector<unsigned char> v);
 bool HasActiveBeacon(const std::string& cpid);
 extern bool BlockNeedsChecked(int64_t BlockTime);
 extern void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector<CBlockIndex*> vConnect);
@@ -125,7 +126,6 @@ extern bool LoadSuperblock(std::string data, int64_t nTime, double height);
 extern CBlockIndex* GetHistoricalMagnitude(std::string cpid);
 
 extern double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
-extern StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID>& vRef);
 
 
 extern double GetOwedAmount(std::string cpid);
@@ -139,7 +139,6 @@ extern void WriteCache(std::string section, std::string key, std::string value, 
 
 std::string qtGetNeuralContract(std::string data);
 
-extern  std::string GetNetsoftProjects(std::string cpid);
 extern std::string GetNeuralNetworkReport();
 void qtSyncWithDPORNodes(std::string data);
 std::string qtGetNeuralHash(std::string data);
@@ -155,7 +154,6 @@ unsigned int nNodeLifespan;
 
 using namespace std;
 using namespace boost;
-std::string DefaultBoincHashArgs();
 
 //
 // Global state
@@ -305,7 +303,6 @@ BlockFinder blockFinder;
 
 // Gridcoin - Rob Halford
 
-extern std::string GetHttpPageFromCreditServerRetired(std::string cpid, bool usedns, bool clearcache);
 extern std::string RetrieveMd5(std::string s1);
 extern std::string aes_complex_hash(uint256 scrypt_hash);
 
@@ -313,7 +310,6 @@ volatile bool bNetAveragesLoaded = false;
 volatile bool bTallyStarted      = false;
 volatile bool bForceUpdate = false;
 volatile bool bExecuteCode = false;
-volatile bool bAddressUser = false;
 volatile bool bCheckedForUpgrade = false;
 volatile bool bCheckedForUpgradeLive = false;
 volatile bool bGlobalcomInitialized = false;
@@ -433,12 +429,7 @@ std::map<std::string, int> mvTimers; // Contains event timers that reset after m
 // End of Gridcoin Global vars
 
 bool bDebugMode = false;
-bool bPoolMiningMode = false;
 bool bBoincSubsidyEligible = false;
-bool bCPUMiningMode = false;
-
-
-
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -509,6 +500,19 @@ bool PushGridcoinDiagnostics()
                 return true;
         #endif
         return false;
+}
+
+
+vector<unsigned char> StringToVector(std::string sData)
+{
+        vector<unsigned char> v(sData.begin(), sData.end());
+		return v;
+}
+
+std::string VectorToString(vector<unsigned char> v)
+{
+        std::string s(v.begin(), v.end());
+        return s;
 }
 
 bool FullSyncWithDPORNodes()
@@ -602,7 +606,6 @@ void GetGlobalStatus()
         double weight = nWeight/COIN+boincmagnitude;
         double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
         std::string sWeight = RoundToString((double)weight,0);
-        std::string sOverviewCPID = bPoolMiningMode ? "POOL" : GlobalCPUMiningCPID.cpid;
 
         //9-6-2015 Add RSA fields to overview
         if ((double)weight > 100000000000000)
@@ -616,7 +619,7 @@ void GetGlobalStatus()
         GlobalStatusStruct.dporWeight = sWeight;
         GlobalStatusStruct.magnitude = RoundToString(boincmagnitude,2);
         GlobalStatusStruct.project = msMiningProject;
-        GlobalStatusStruct.cpid = sOverviewCPID;
+        GlobalStatusStruct.cpid = GlobalCPUMiningCPID.cpid;
         GlobalStatusStruct.status = msMiningErrors;
         GlobalStatusStruct.poll = msPoll;
         GlobalStatusStruct.errors =  msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + msMiningErrors8;
@@ -857,7 +860,7 @@ MiningCPID GetNextProject(bool bForce)
                                         GlobalCPUMiningCPID.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey, pbh);
                                         GlobalCPUMiningCPID.lastblockhash = "0";
                                         // Sign the block
-                                        GlobalCPUMiningCPID.BoincPublicKey = GetBeaconPublicKey(structcpid.cpid);
+                                        GlobalCPUMiningCPID.BoincPublicKey = GetBeaconPublicKey(structcpid.cpid, false);
                                         GlobalCPUMiningCPID.BoincSignature = SignBlockWithCPID(GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.lastblockhash);
                                 
                                         if (!IsCPIDValidv2(GlobalCPUMiningCPID,1))
@@ -3629,7 +3632,7 @@ bool CleanChain()
 
             printf(" Clean Chain succeeded. ");
     }
-    bool fResult = AskForOutstandingBlocks(uint256(0));
+    AskForOutstandingBlocks(uint256(0));
     return true;
 
 }
@@ -3998,7 +4001,14 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
 
     if (bb.cpid != "INVESTOR" && IsProofOfStake() && height1 > nGrandfather && IsResearchAgeEnabled(height1) && BlockNeedsChecked(nTime) && !fLoadingIndex)
     {
-            int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 1, nTime,
+		    // 6-4-2017 - Verify researchers stored block magnitude
+		    double dNeuralNetworkMagnitude = CalculatedMagnitude2(bb.cpid, nTime, false);
+			if (bb.Magnitude > 0 && bb.Magnitude > (dNeuralNetworkMagnitude*1.25) && (fTestNet || height1 > 947000))
+			{
+				return error("CheckBlock[ResearchAge] : Researchers block magnitude > neural network magnitude: Block Magnitude %f, Neural Network Magnitude %f, CPID %s ",
+					(double)bb.Magnitude,(double)dNeuralNetworkMagnitude,bb.cpid.c_str());
+			}
+		    int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 1, nTime,
                 pindexBest, sCaller + "_checkblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
             if (bb.ResearchSubsidy > ((OUT_POR*1.25)+1))
             {
@@ -4660,10 +4670,9 @@ void CheckForLatestBlocks()
             mapOrphanBlocks.clear();
             setStakeSeen.clear();
             setStakeSeenOrphan.clear();
-            bool fResult = AskForOutstandingBlocks(uint256(0));
+            AskForOutstandingBlocks(uint256(0));
             printf("\r\n ** Clearing Orphan Blocks... ** \r\n");
-    }
-    
+    }  
 }
 
 void CleanInboundConnections(bool bClearAll)
@@ -5525,8 +5534,8 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
         return true;
     }
 
-    if (IsLockTimeWithinMinutes(nLastGRCtallied,100))
-        return true;
+    if (IsLockTimeWithinMinutes(nLastGRCtallied,100) && (mvApplicationCacheTimestamp["nGRCTime"] > 0 ||
+		 mvApplicationCacheTimestamp["nCPIDTime"] > 0))  return true;
 
     nLastGRCtallied = GetAdjustedTime();
     int64_t nGRCTime = 0;
@@ -5558,9 +5567,9 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
                         }
                         else
                         {
-                myCPID = pblockindex->GetCPID();
+						    myCPID = pblockindex->GetCPID();
                         }
-                        if (cpid == myCPID && nCPIDTime==0)
+                        if (cpid == myCPID && nCPIDTime==0 && myCPID != "INVESTOR")
                         {
                             nCPIDTime = pblockindex->nTime;
                             nGRCTime = pblockindex->nTime;
@@ -5570,6 +5579,7 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
     }
     int64_t EarliestStakedWalletTx = GetEarliestWalletTransaction();
     if (EarliestStakedWalletTx > 0 && EarliestStakedWalletTx < nGRCTime) nGRCTime = EarliestStakedWalletTx;
+	if (cpid=="INVESTOR" && EarliestStakedWalletTx > 0) nGRCTime = EarliestStakedWalletTx;
     if (fTestNet) nGRCTime -= (86400*30);
     if (nGRCTime <= 0)  nGRCTime = GetAdjustedTime();
     if (nCPIDTime <= 0) nCPIDTime = GetAdjustedTime();
@@ -5661,37 +5671,35 @@ MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, Minin
 }
 
 
-StructCPID GetInitializedStructCPID2(std::string name, std::map<std::string, StructCPID>& vRef)
+StructCPID GetInitializedStructCPID2(const std::string& name, std::map<std::string, StructCPID>& vRef)
 {
     try
     {
-      StructCPID& cpid = vRef[name];
+        StructCPID& cpid = vRef[name];
         if (!cpid.initialized)
         {
-                cpid = GetStructCPID();
-                cpid.initialized=true;
-                cpid.LowLockTime = std::numeric_limits<unsigned int>::max();
-                cpid.HighLockTime = 0;
-                cpid.LastPaymentTime = 0;
-                cpid.EarliestPaymentTime = 99999999999;
-                cpid.Accuracy = 0;
-                return cpid;
+            cpid = GetStructCPID();
+            cpid.initialized=true;
+            cpid.LowLockTime = std::numeric_limits<unsigned int>::max();
+            cpid.HighLockTime = 0;
+            cpid.LastPaymentTime = 0;
+            cpid.EarliestPaymentTime = 99999999999;
+            cpid.Accuracy = 0;
         }
-        else
-        {
-                return cpid;
-        }
+
+        return cpid;
     }
-    catch (bad_alloc ba)
+    catch (const std::bad_alloc& ba)
     {
         printf("Bad alloc caught in GetInitializedStructCpid2 for %s",name.c_str());
-      return GetStructCPID();
     }
     catch(...)
     {
         printf("Exception caught in GetInitializedStructCpid2 for %s",name.c_str());
-      return GetStructCPID();
     }
+
+    // Error during map's heap allocation. Return an empty object.
+    return GetStructCPID();
 }
 
 
@@ -6299,7 +6307,6 @@ bool PreventCommandAbuse(std::string sNeuralRequestID, std::string sCommandName)
 
 bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, int64_t nTimeReceived)
 {
-    static map<CService, CPubKey> mapReuseKey;
     RandAddSeedPerfmon();
     if (fDebug10)
         printf("received: %s (%" PRIszu " bytes)\n", strCommand.c_str(), vRecv.size());
@@ -6320,7 +6327,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
 
     // Message Attacks ////////////////////////////////////////////////////////
-    std::string precommand = strCommand;
     ///////////////////////////////////////////////////////////////////////////
 
     if (strCommand == "aries")
@@ -7181,14 +7187,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             pfrom->nPingNonceSent = 0;
         }
     }
-    else if (strCommand=="addbeac_nresp")
-    {
-            std::string neural_response = "?";
-            vRecv >> neural_response;
-            pfrom->NeuralHash = neural_response;
-            if (fDebug3) printf("Add Beacon Neural Response %s \r\n",neural_response.c_str());
-            msMiningErrors7=neural_response;
-    }
     else if (strCommand == "hash_nresp")
     {
             std::string neural_response = "";
@@ -7247,63 +7245,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                  if (results=="SUCCESS")  FullSyncWithDPORNodes();
             }
     }
-
-    else if (strCommand == "pong_old")
-    {
-        int64_t pingUsecEnd = nTimeReceived;
-        uint64_t nonce = 0;
-        size_t nAvail = vRecv.in_avail();
-        bool bPingFinished = false;
-        std::string sProblem;
-        if (nAvail >= sizeof(nonce)) {
-            vRecv >> nonce;
-
-            // Only process pong message if there is an outstanding ping (old ping without nonce should never pong)
-            if (pfrom->nPingNonceSent != 0) {
-                if (nonce == pfrom->nPingNonceSent) {
-                    // Matching pong received, this ping is no longer outstanding
-                    bPingFinished = true;
-                    int64_t pingUsecTime = pingUsecEnd - pfrom->nPingUsecStart;
-                    if (pingUsecTime >= -1) {
-                        // Successful ping time measurement, replace previous
-                        pfrom->nPingUsecTime = pingUsecTime;
-                    } else {
-                        // This should never happen
-                        sProblem = "Timing mishap";
-                    }
-                } else {
-                    // Nonce mismatches are normal when pings are overlapping
-                    sProblem = "Nonce mismatch";
-                    if (nonce == 0) {
-                        // This is most likely a bug in another implementation somewhere, cancel this ping
-                        bPingFinished = true;
-                        sProblem = "Nonce zero";
-                    }
-                }
-            } else {
-                sProblem = "Unsolicited pong without ping";
-            }
-        } else {
-            // This is most likely a bug in another implementation somewhere, cancel this ping
-            bPingFinished = true;
-            sProblem = "Short payload";
-        }
-
-        if (!(sProblem.empty())) {
-            printf("pong %s %s: %s, %" PRIx64 " expected, %" PRIx64 " received, %f bytes\n"
-                , pfrom->addr.ToString().c_str()
-                , pfrom->strSubVer.c_str()
-                , sProblem.c_str()
-                , pfrom->nPingNonceSent
-                , nonce
-                , (double)nAvail);
-        }
-        if (bPingFinished) {
-            pfrom->nPingNonceSent = 0;
-        }
-    }
-
-
     else if (strCommand == "alert")
     {
         CAlert alert;
@@ -7675,7 +7616,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 
     if (!mcpid.cpid.empty() && mcpid.cpid != "INVESTOR" && mcpid.lastblockhash != "0")
     {
-        mcpid.BoincPublicKey = GetBeaconPublicKey(mcpid.cpid);
+        mcpid.BoincPublicKey = GetBeaconPublicKey(mcpid.cpid, false);
     }
 
     std::string bb = mcpid.cpid + delim + mcpid.projectname + delim + mcpid.aesskein + delim + RoundToString(mcpid.rac,0)
@@ -7840,51 +7781,6 @@ void InitializeProjectStruct(StructCPID& project)
 }
 
 
-
-
-
-std::string GetNetsoftProjects(std::string cpid)
-{
-            std::string cc = GetHttpPageFromCreditServerRetired(cpid,true,true);
-            if (cc.length() < 10)
-            {
-                if (fDebug10) printf("Note: HTTP Page returned blank from netsoft for %s\r\n",cpid.c_str());
-                return "";
-            }
-
-            int iRow = 0;
-            std::vector<std::string> vCC = split(cc.c_str(),"<project>");
-
-            if (vCC.size() > 1)
-            {
-                for (unsigned int i = 0; i < vCC.size(); i++)
-                {
-                    std::string sProj  = ExtractXML(vCC[i],"<name>","</name>");
-                    std::string utc    = ExtractXML(vCC[i],"<total_credit>","</total_credit>");
-                    std::string rac    = ExtractXML(vCC[i],"<expavg_credit>","</expavg_credit>");
-                    std::string team   = ExtractXML(vCC[i],"<team_name>","</team_name>");
-                    std::string rectime= ExtractXML(vCC[i],"<expavg_time>","</expavg_time>");
-                    boost::to_lower(sProj);
-                    sProj = ToOfficialName(sProj);
-                    if (sProj == "mindmodeling@home") sProj = "mindmodeling@beta";
-                    if (sProj == "Quake Catcher Network") sProj = "Quake-Catcher Network";
-
-                    if (sProj.length() > 3)
-                    {
-                        std::string sKey = cpid + "+" + sProj;
-                        StructCPID strDPOR = GetInitializedStructCPID2(sKey,mvDPOR);
-                        iRow++;
-                        strDPOR.cpid = cpid;
-                        strDPOR.NetsoftRAC = cdbl(rac,0);
-                        mvDPOR[sKey] = strDPOR;
-                    }
-                }
-            }
-
-            return cc;
-}
-
-
 bool ProjectIsValid(std::string project)
 {
     boost::to_lower(project);
@@ -8027,7 +7923,6 @@ void HarvestCPIDs(bool cleardata)
             structcpid.NetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
             structcpid.email = GlobalCPUMiningCPID.email;
             // 2-6-2015 R Halford - Ensure CPIDv2 Is populated After deserializing GenBoincKey
-            std::string cpid_non = structcpid.cpidhash+structcpid.email;
             printf("GenBoincKey using email %s and cpidhash %s key %s \r\n",structcpid.email.c_str(),structcpid.cpidhash.c_str(),sDec.c_str());
             structcpid.cpidv2 = ComputeCPIDv2(structcpid.email, structcpid.cpidhash, 0);
             // Old link: structcpid.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + structcpid.cpid;
@@ -8283,10 +8178,7 @@ StructCPID GetStructCPID()
     c.PaymentTimespan=0;
     c.ResearchSubsidy = 0;
     c.InterestSubsidy = 0;
-    c.BTCQuote = 0;
-    c.GRCQuote = 0;
     c.ResearchAverageMagnitude = 0;
-    c.NetsoftRAC = 0;
     c.interestPayments = 0;
     c.payments = 0;
     c.LastBlock = 0;
@@ -8768,16 +8660,31 @@ bool MemorizeMessage(std::string msg, int64_t nTime, double dAmount, std::string
 
               if (sMessageType=="beacon" && sMessageAction=="A")
               {
-                    // If the Beacon Public Key is Not Empty - do not overwrite with a new beacon value
-                    std::string sBPK = GetBeaconPublicKey(sMessageKey);
-                    // Note that if the beacon is > 6 months old, this function now returns an empty string (allowing the beacon to be overwritten) : OK
-                    if (!sBPK.empty()) 
-                    {
-                        // Do not overwrite this beacon
-                        sMessageValue="";
-                        if (fDebug10) printf("\r\n**Beacon Public Key Not Empty %s : %s\r\n",sMessageKey.c_str(),sBPK.c_str());
-                    }
-
+                  // If the Beacon Public Key is Not Empty - do not overwrite with a new beacon value unless the public key is the same
+                  std::string sBPK = GetBeaconPublicKey(sMessageKey,false);
+                  if (!sBPK.empty())
+                  {
+                      std::string out_cpid = "";
+                      std::string out_address = "";
+                      std::string out_publickey = "";
+                      GetBeaconElements(sMessageValue, out_cpid, out_address, out_publickey);
+                      if (fDebug3 && LessVerbose(50)) 
+                      {
+                          printf("\r\n**Beacon Debug Message : beaconpubkey %s, message key %s, cpid %s, addr %s, base64 pub key %s \r\n ",sBPK.c_str(),
+                                 sMessageKey.c_str(),out_cpid.c_str(),out_address.c_str(), out_publickey.c_str());
+                      }
+                      if (sBPK == out_publickey)
+                      {
+                          // allow key to be reloaded in since this is a refreshed beacon
+                          if (fDebug10) printf("\r\n**Beacon Being Overwritten %s \r\n %s : %s\r\n",sBPK.c_str(),sMessageKey.c_str(),sBPK.c_str());
+                      }
+                      else
+                      {
+                          // In this case, the current Beacon is not empty and the keys are different - Do not overwrite this beacon
+                          sMessageValue="";
+                          if (fDebug10) printf("\r\n**Beacon Public Key Not Empty %s : %s\r\n",sMessageKey.c_str(),sBPK.c_str());
+                      }
+                  }
               }
 
               if (!sMessageType.empty() && !sMessageKey.empty() && !sMessageValue.empty() && !sMessageAction.empty() && !sSignature.empty())
@@ -9415,4 +9322,18 @@ bool StrLessThanReferenceHash(std::string rh)
     uint256 uRef = fTestNet ? uint256("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b") : uint256("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
     uint256 uADH = uint256("0x" + address_day_hash);
     return (uADH < uRef);
+}
+
+// Generate backup filenames with local date and time with suffix support
+std::string GetBackupFilename(const std::string& basename, const std::string& suffix)
+{
+    time_t biTime;
+    struct tm * blTime;
+    time (&biTime);
+    blTime = localtime(&biTime);
+    char boTime[200];
+    strftime(boTime, sizeof(boTime), "%FT%H-%M-%S", blTime);
+    return suffix.empty()
+        ? basename + "-" + std::string(boTime)
+        : basename + "-" + std::string(boTime) + "-" + suffix;
 }

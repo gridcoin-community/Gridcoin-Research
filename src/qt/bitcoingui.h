@@ -106,17 +106,13 @@ private:
 	QAction *rebuildAction;
 	QAction *upgradeAction;
 	QAction *downloadAction;
-	QAction *rebootAction;
 
 	QAction *configAction;
 	QAction *leaderboardAction;
 	QAction *tickerAction;
-	QAction *browserAction;
 
-	QAction *ticketListAction;
     QAction *votingAction;
 
-	QAction *galazaAction;
 	QAction *newUserWizardAction;
 	QAction *foundationAction;
 	QAction *faqAction;
@@ -216,18 +212,13 @@ private slots:
 	void rebuildClicked();
 	void upgradeClicked();
 	void downloadClicked();
-	void rebootClicked();
 	void configClicked();
 	void miningClicked();
     void votingClicked();
 
 	void faqClicked();
     void diagnosticsClicked();
-
-	void tickerClicked();
 	
-	void ticketListClicked();
-	void galazaClicked();
 	void newUserWizardClicked();
 
 

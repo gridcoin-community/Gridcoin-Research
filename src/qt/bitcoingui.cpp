@@ -76,12 +76,11 @@
 
 #if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
 #include <QStandardPaths>
-#else
-#include <QDesktopServices>
 #endif
 
 #include <QTimer>
 #include <QDragEnterEvent>
+#include <QDesktopServices> // for opening URLs
 #include <QUrl>
 #include <QStyle>
 #include <QNetworkInterface>
@@ -155,14 +154,10 @@ void GetGlobalStatus();
 
 extern int UpgradeClient();
 extern void CheckForUpgrade();
-extern int CloseGuiMiner();
-extern int AddressUser();
 
 bool IsConfigFileEmpty();
 
 extern void ExecuteCode();
-extern void startWireFrameRenderer();
-extern void stopWireFrameRenderer();
 
 void HarvestCPIDs(bool cleardata);
 extern int RestartClient();
@@ -773,54 +768,6 @@ int UpgradeClient()
 			return 1;
 }
 
-QString IntToQstring(int o)
-{
-	std::string pre="";
-	pre=strprintf("%d",o);
-	QString str1 = QString::fromUtf8(pre.c_str());
-	return str1;
-}
-
-
-int AddressUser()
-{
-		int result = 0;
-		#if defined(WIN32) && defined(QT_GUI)
-			double out_magnitude = 0;
-			double out_owed = 0;
-			try
-			{
-				printf("11302015");
-				if (!bGlobalcomInitialized) return 0;
-				out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid,out_owed);
-				std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-				qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-				if (fDebug3) printf("AddressUser with Boinc Magnitude %f \r\n",out_magnitude);
-				result = globalcom->dynamicCall("AddressUser(Qstring)",IntToQstring((int)out_magnitude)).toInt();
-			}
-			catch(...)
-			{
-				printf("Catastrophic Error");
-			}
-		#endif
-		return result;
-}
-
-int CloseGuiMiner()
-{
-	if (!bGlobalcomInitialized) return 0;
-
-	try
-	{
-#ifdef WIN32
-			globalcom->dynamicCall("CloseGUIMiner()");
-#endif
-	}
-	catch(...) { return 0; }
-
-	return 1;
-}
-
 
 void BitcoinGUI::setOptionsStyleSheet(QString qssFileName)
 {
@@ -846,15 +793,15 @@ void BitcoinGUI::createActions()
     overviewAction->setCheckable(true);
     overviewAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_1));
 
-    sendCoinsAction = new QAction(QIcon(":/icons/send"), tr("&Send coins"), tabGroup);
+    sendCoinsAction = new QAction(QIcon(":/icons/send"), tr("&Send"), tabGroup);
     sendCoinsAction->setToolTip(tr("Send coins to a Gridcoin address"));
     sendCoinsAction->setCheckable(true);
-    sendCoinsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_3));
+    sendCoinsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_2));
 
-    receiveCoinsAction = new QAction(QIcon(":/icons/receiving_addresses"), tr("&Receive coins"), tabGroup);
+    receiveCoinsAction = new QAction(QIcon(":/icons/receiving_addresses"), tr("&Receive"), tabGroup);
     receiveCoinsAction->setToolTip(tr("Show the list of addresses for receiving payments"));
     receiveCoinsAction->setCheckable(true);
-    receiveCoinsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_2));
+    receiveCoinsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_3));
 
     historyAction = new QAction(QIcon(":/icons/history"), tr("&Transactions"), tabGroup);
     historyAction->setToolTip(tr("Browse transaction history"));
@@ -918,55 +865,30 @@ void BitcoinGUI::createActions()
 	downloadAction->setStatusTip(tr("Download Blocks"));
 	downloadAction->setMenuRole(QAction::TextHeuristicRole);
 
-
-	rebootAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Reboot Client"), this);
-	rebootAction->setStatusTip(tr("Reboot Gridcoin"));
-	rebootAction->setMenuRole(QAction::TextHeuristicRole);
-
-
 	upgradeAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Upgrade Client"), this);
 	upgradeAction->setStatusTip(tr("Upgrade Client"));
 	upgradeAction->setMenuRole(QAction::TextHeuristicRole);
 
-
-    aboutAction = new QAction(QIcon(":/icons/bitcoin"), tr("&About Gridcoin"), this);
-    aboutAction->setToolTip(tr("Show information about Gridcoin"));
-    aboutAction->setMenuRole(QAction::AboutRole);
+   aboutAction = new QAction(QIcon(":/icons/bitcoin"), tr("&About Gridcoin"), this);
+   aboutAction->setToolTip(tr("Show information about Gridcoin"));
+   aboutAction->setMenuRole(QAction::AboutRole);
 
 	miningAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Neural Network"), this);
 	miningAction->setStatusTip(tr("Neural Network"));
 	miningAction->setMenuRole(QAction::TextHeuristicRole);
 
-
 	configAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Advanced Configuration"), this);
 	configAction->setStatusTip(tr("Advanced Configuration"));
 	configAction->setMenuRole(QAction::TextHeuristicRole);
 
-	tickerAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Live Ticker"), this);
-	tickerAction->setStatusTip(tr("Live Ticker"));
-	tickerAction->setMenuRole(QAction::TextHeuristicRole);
-
-	ticketListAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Tickets"), this);
-	ticketListAction->setStatusTip(tr("Tickets"));
-	ticketListAction->setMenuRole(QAction::TextHeuristicRole);
-
 	newUserWizardAction = new QAction(QIcon(":/icons/bitcoin"), tr("&New User Wizard"), this);
 	newUserWizardAction->setStatusTip(tr("New User Wizard"));
 	newUserWizardAction->setMenuRole(QAction::TextHeuristicRole);
-
-	//browserAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Browser"), this);
-	//browserAction->setStatusTip(tr("Browser"));
-	//browserAction->setMenuRole(QAction::TextHeuristicRole);
 	
 	votingAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Voting"), this);
 	votingAction->setStatusTip(tr("Voting"));
 	votingAction->setMenuRole(QAction::TextHeuristicRole);
     
-	galazaAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Galaza (Game)"), this);
-	galazaAction->setStatusTip(tr("Galaza"));
-	galazaAction->setMenuRole(QAction::TextHeuristicRole);
-
-
 	foundationAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Foundation"), this);
 	foundationAction->setStatusTip(tr("Foundation"));
 	foundationAction->setMenuRole(QAction::TextHeuristicRole);
@@ -1017,24 +939,17 @@ void BitcoinGUI::createActions()
 	connect(rebuildAction, SIGNAL(triggered()), this, SLOT(rebuildClicked()));
 	connect(upgradeAction, SIGNAL(triggered()), this, SLOT(upgradeClicked()));
 	connect(downloadAction, SIGNAL(triggered()), this, SLOT(downloadClicked()));
-	connect(rebootAction, SIGNAL(triggered()), this, SLOT(rebootClicked()));
 	connect(configAction, SIGNAL(triggered()), this, SLOT(configClicked()));
 
 	connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
     connect(votingAction, SIGNAL(triggered()), this, SLOT(votingClicked()));
 
-	connect(tickerAction, SIGNAL(triggered()), this, SLOT(tickerClicked()));
-	connect(ticketListAction, SIGNAL(triggered()), this, SLOT(ticketListClicked()));
 	connect(diagnosticsAction, SIGNAL(triggered()), this, SLOT(diagnosticsClicked()));
 
 	connect(foundationAction, SIGNAL(triggered()), this, SLOT(foundationClicked()));
 	connect(faqAction, SIGNAL(triggered()), this, SLOT(faqClicked()));
 	
-	connect(galazaAction, SIGNAL(triggered()), this, SLOT(galazaClicked()));
 	connect(newUserWizardAction, SIGNAL(triggered()), this, SLOT(newUserWizardClicked()));
-
-	//connect(browserAction, SIGNAL(triggered()), this, SLOT(browserClicked()));
-
 }
 
 void BitcoinGUI::createMenuBar()
@@ -1085,8 +1000,6 @@ void BitcoinGUI::createMenuBar()
 	rebuild->addSeparator();
 	rebuild->addAction(downloadAction);
 	rebuild->addSeparator();
-	rebuild->addAction(rebootAction);
-	rebuild->addSeparator();
 
 	QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
 	qmAdvanced->addSeparator();
@@ -1098,16 +1011,7 @@ void BitcoinGUI::createMenuBar()
     qmAdvanced->addAction(votingAction);
     
 #ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows 
-	qmAdvanced->addAction(tickerAction);
-	qmAdvanced->addAction(ticketListAction);
 	qmAdvanced->addAction(newUserWizardAction);
-	std::string GalazaEnabled = GetArgument("galazaenabled", "false");
-	if (GalazaEnabled=="true")
-	{
-    	qmAdvanced->addSeparator();
-		qmAdvanced->addAction(galazaAction);
-	}
-
 	qmAdvanced->addSeparator();
 	qmAdvanced->addAction(faqAction);
 	qmAdvanced->addAction(foundationAction);
@@ -1348,8 +1252,6 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
             progressBar->setValue(count);
             progressBar->setVisible(true);
         }
-
-        tooltip = tr("Downloaded %1 of %2 blocks of transaction history (%3% done).").arg(count).arg(nTotalBlocks).arg(nPercentageDone, 0, 'f', 2);
     }
     else
     {
@@ -1357,8 +1259,9 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
             progressBarLabel->setVisible(false);
 
         progressBar->setVisible(false);
-        tooltip = tr("Downloaded %1 blocks of transaction history.").arg(count);
     }
+
+    tooltip = tr("Processed %n block(s) of transaction history.", "", count);
 
     // Override progressBarLabel text and hide progress bar, when we have warnings to display
     if (!strStatusBarWarnings.isEmpty())
@@ -1752,12 +1655,6 @@ void BitcoinGUI::upgradeClicked()
 void BitcoinGUI::downloadClicked()
 {
 	DownloadBlocks();
-
-}
-
-void BitcoinGUI::rebootClicked()
-{
-	RebootClient();
 }
 
 
@@ -1772,16 +1669,6 @@ void BitcoinGUI::configClicked()
 
 }
 
-
-void BitcoinGUI::ticketListClicked()
-{
-#ifdef WIN32
-	if (!bGlobalcomInitialized) return;
-	qtSetSessionInfo(DefaultWalletAddress(), GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.Magnitude);
-    globalcom->dynamicCall("ShowTicketList()");
-#endif
-}
-
 void BitcoinGUI::diagnosticsClicked()
 {
 #ifdef WIN32
@@ -1791,19 +1678,6 @@ void BitcoinGUI::diagnosticsClicked()
     globalcom->dynamicCall("ShowDiagnostics()");
 #endif
 }
-
-
-
-/*
-void BitcoinGUI::browserClicked()
-{
-    QUrl url;
-    url = QUrl("http://www.google.com/");
-    GridcoinBrowser *browser = new GridcoinBrowser(url);
-    browser->showMaximized();
-	// Note: Some compact OS's may require browser->show();
-}
-*/
 
 void BitcoinGUI::foundationClicked()
 {
@@ -1839,36 +1713,10 @@ void BitcoinGUI::newUserWizardClicked()
 #endif
 }
 
-
-
-void BitcoinGUI::galazaClicked()
-{
-#ifdef WIN32
-	if (!bGlobalcomInitialized) return;
-    globalcom->dynamicCall("StartGalaza()");
-#endif
-
-}
-
-
-void BitcoinGUI::tickerClicked()
-{
-#ifdef WIN32
-		if (!bGlobalcomInitialized) return;
-	    globalcom->dynamicCall("ShowTicker()");
-#endif
-
-}
-
-
-
-
 int ReindexBlocks()
 {
-
 	ReindexWallet();
 	return 1;
-
 }
 
 void BitcoinGUI::miningClicked()
@@ -1883,64 +1731,33 @@ void BitcoinGUI::miningClicked()
 }
 
 
-
+// links to websites and services outside the gridcoin client
 void BitcoinGUI::bxClicked()
 {
-	overviewPage->on_btnBX_pressed();
+    QDesktopServices::openUrl(QUrl("https://www.gridcoinstats.eu/block#pk_campaign=GridcoinWallet&pk_kwd=" + QString::fromStdString(FormatFullVersion())));
 }
 
 
 void BitcoinGUI::chatClicked()
 {
-	overviewPage->on_btnChat_pressed();
+    //QDesktopServices::openUrl(QUrl("https://kiwiirc.com/client/irc.freenode.net:6697/#gridcoin"));
+    QDesktopServices::openUrl(QUrl("https://kiwiirc.com/client/irc.freenode.net:6697/#gridcoin-help"));
 }
 
 void BitcoinGUI::boincClicked()
 {
-	overviewPage->on_btnBoinc_pressed();
+    QDesktopServices::openUrl(QUrl("https://boincstats.com/en/stats/-1/team/detail/118094994/overview"));
 }
 
 void BitcoinGUI::websiteClicked()
 {
-	overviewPage->on_btnWebsite_pressed();
-
+    QDesktopServices::openUrl(QUrl("https://www.gridcoin.us"));
 }
+
 void BitcoinGUI::exchangeClicked()
 {
-		overviewPage->on_btnExchange_pressed();
-
+    QDesktopServices::openUrl(QUrl("https://c-cex.com/?p=grc-btc"));
 }
-
-
-
-void startWireFrameRenderer()
-{
-
-#ifdef WIN32
-	if (globalwire==NULL)
-	{
-		globalwire = new QAxObject("BoincStake.Utilization");
-	}
-
-      globalwire->dynamicCall("StartWireFrameRenderer()");
-#endif
-}
-
-void stopWireFrameRenderer()
-{
-
-#ifdef WIN32
-	if (globalwire==NULL)
-	{
-		globalwire = new QAxObject("BoincStake.Utilization");
-	}
-
-    globalwire->dynamicCall("StopWireFrameRenderer()");
-#endif
-}
-
-
-
 
 void BitcoinGUI::gotoOverviewPage()
 {
@@ -2243,16 +2060,6 @@ void ReinstantiateGlobalcom()
 
 			}
 			bGlobalcomInitialized = true;
-			if (!bAddressUser)
-			{
-									bAddressUser = true;
-									#if defined(WIN32) && defined(QT_GUI)
-									    printf("Addressing user.");
-										AddressUser();
-									#endif
-			}
-
-
 #endif
 }
 

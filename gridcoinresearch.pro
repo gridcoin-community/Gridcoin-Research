@@ -7,11 +7,17 @@ CONFIG += no_include_pwd thread c++11 exceptions concurrent
 QT += core gui network
 
 win32 {
+    DEFINES += _WIN32_WINNT=0x0501 WINVER=0x0501
     lessThan(QT_VERSION, 5.0.0) {
         CONFIG += qaxcontainer
-    } else {
+    } 
+    else {
         QT += axcontainer
     }
+
+    # Fix for boost.asio build error. See
+    # https://stackoverflow.com/questions/20957727/boostasio-unregisterwaitex-has-not-been-declared
+    DEFINES += _WIN32_WINNT=0x0501 WINVER=0x0501
 }
 
 greaterThan(QT_MAJOR_VERSION, 4) {
@@ -72,7 +78,6 @@ contains(RELEASE, 1) {
     # on Windows: enable GCC large address aware linker flag
     QMAKE_LFLAGS *= -Wl,--large-address-aware
 }
-
 
 # use: qmake "USE_QRCODE=1"
 # libqrencode (http://fukuchi.org/works/qrencode/index.en.html) must be installed for support
@@ -440,6 +445,7 @@ isEmpty(BOOST_INCLUDE_PATH) {
 
 windows:DEFINES += WIN32
 windows:RC_FILE = src/qt/res/bitcoin-qt.rc
+
 
 windows:!contains(MINGW_THREAD_BUGFIX, 0) {
     # At least qmake's win32-g++-cross profile is missing the -lmingwthrd

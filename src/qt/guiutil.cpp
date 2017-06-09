@@ -421,7 +421,7 @@ bool SetStartOnSystemStartup(bool fAutoStart) { return false; }
 HelpMessageBox::HelpMessageBox(QWidget *parent) :
     QMessageBox(parent)
 {
-    header = tr("gridcoinresearch") + " " + tr("version") + " " +
+    header = "gridcoinresearch " + tr("version") + " " +
         QString::fromStdString(FormatFullVersion()) + "\n\n" +
         tr("Usage:") + "\n" +
         "  gridcoin-qt [" + tr("command-line options") + "]                     " + "\n";

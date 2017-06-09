@@ -14,6 +14,7 @@ INPUT(
 ./build/upgradedialog.o
 ./build/editaddressdialog.o
 ./build/bitcoinaddressvalidator.o
+./build/votingdialog.o
 ./build/alert.o
 ./build/version.o
 ./build/sync.o
@@ -105,6 +106,7 @@ INPUT(
 ./build/moc_qvaluecombobox.o
 ./build/moc_askpassphrasedialog.o
 ./build/moc_notificator.o
+./build/moc_votingdialog.o
 ./build/moc_rpcconsole.o
 ./build/qrc_bitcoin.o
 ./build/qrc_jquery.o

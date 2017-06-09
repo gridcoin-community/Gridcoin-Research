@@ -4,34 +4,6 @@
 
 std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, double& out_rac);
 
-bool IsSmartContractForDPOR(const CWalletTx &wtx)
-{
-   bool result = false;
-   QList<TransactionRecord> parts;
-   int64_t nTime = wtx.GetTxTime();
-   uint256 hash = wtx.GetHash();
-   for (unsigned int nOut = 0; nOut < wtx.vout.size(); nOut++)
-   {
-                const CTxOut& txout = wtx.vout[nOut];
-                TransactionRecord sub(hash, nTime);
-                sub.idx = parts.size();
-                CTxDestination address;
-                if (ExtractDestination(txout.scriptPubKey, address))
-                {
-                    sub.type = TransactionRecord::SendToAddress;
-                    sub.address = CBitcoinAddress(address).ToString();
-					int64_t nDebit = wtx.GetDebit();
-				    if (nDebit==.00001)
-					{
-						return true;
-					}
-                }
-   }
-   return false;
-   //if (IsSmartContractForDPOR(wtx)) return false;
-
-}
-
 
 /* Return positive answer if transaction should be shown in list. */
 bool TransactionRecord::showTransaction(const CWalletTx &wtx)

@@ -9,7 +9,6 @@ Public Class frmConfiguration
 
     Private Sub btnSave_Click(sender As System.Object, e As System.EventArgs) Handles btnSave.Click
         WriteSetting(chkSpeech, "enablespeech")
-        WriteSetting(chkPoolMining, "poolmining")
         WriteSetting(chkUpgrade, "suppressupgrade")
         MsgBox("Configuration Updated.", MsgBoxStyle.Information, "Configuration")
 
@@ -23,7 +22,6 @@ Public Class frmConfiguration
         'Read keys
         lblTestnet.Text = IIf(mbTestNet, "TestNet", "")
         UpdateCheckbox(chkSpeech, "enablespeech")
-        UpdateCheckbox(chkPoolMining, "poolmining")
         UpdateCheckbox(chkUpgrade, "suppressupgrade")
     End Sub
     Private Sub UpdateCheckbox(oCheckbox As CheckBox, sSettingName As String)

@@ -665,13 +665,11 @@ bool CTxDB::LoadBlockIndex()
                 uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
             }
 #endif
-            
-            const std::string& scpid = pindex->GetCPID();
-            if (pindex->nResearchSubsidy > 0 &&
-                !scpid.empty() &&
-                scpid != "INVESTOR")
+                        
+            if (pindex->nResearchSubsidy > 0 && pindex->IsUserCPID())
             {
-                StructCPID& stCPID = mvResearchAge[scpid];
+                const std::string& scpid = pindex->GetCPID();
+                StructCPID stCPID = GetInitializedStructCPID2(scpid, mvResearchAge);
                 
                 stCPID.InterestSubsidy += pindex->nInterestSubsidy;
                 stCPID.ResearchSubsidy += pindex->nResearchSubsidy;
@@ -691,6 +689,8 @@ bool CTxDB::LoadBlockIndex()
                 if (pindex->nTime < stCPID.LowLockTime)  stCPID.LowLockTime = pindex->nTime;
                 if (pindex->nTime > stCPID.HighLockTime) stCPID.HighLockTime = pindex->nTime;
                 
+                // Store the updated struct.
+                mvResearchAge[scpid] = stCPID;
                 AddCPIDBlockHash(scpid, pindex->GetBlockHash());
             }
         }

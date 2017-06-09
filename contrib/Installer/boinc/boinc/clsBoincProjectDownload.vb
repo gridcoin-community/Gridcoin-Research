@@ -52,6 +52,7 @@ Public Class clsBoincProjectDownload
                     If sGzipURL Like "*einstein*" Then sGzipURL = Replace(sGzipURL, "user.gz", "user_id.gz")
                     If sGzipURL Like "*burp*" Then sGzipURL = Replace(sGzipURL, "user.gz", "user_id.gz")
                     If sGzipURL Like "*gorlaeus*" Then sGzipURL = Replace(sGzipURL, "user.gz", "user.xml.gz")
+                    If sGzipURL Like "*worldcommunitygrid*" Then sGzipURL = Replace(sGzipURL, "user.gz", "user.xml.gz")
                     'Download the Team file
                     Dim sPath As String = GetGridFolder() + "NeuralNetwork\" + sProject + ".gz"
                     Dim sTeamPath As String = Replace(sPath, ".gz", "team.gz")

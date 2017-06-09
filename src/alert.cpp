@@ -14,6 +14,7 @@
 #include "net.h"
 #include "sync.h"
 #include "ui_interface.h"
+#include "uint256.h"
 
 using namespace std;
 

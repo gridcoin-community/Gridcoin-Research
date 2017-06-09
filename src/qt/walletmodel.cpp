@@ -158,14 +158,6 @@ bool WalletModel::validateAddress(const QString &address)
     return addressParsed.IsValid();
 }
 
-
-
-double dblFromAmount(int64_t amount)
-{
-    return (double)amount / (double)COIN;
-}
-
-
 WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipient> &recipients, const CCoinControl *coinControl)
 {
     qint64 total = 0;
@@ -200,7 +192,7 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
 
     int64_t nBalance = 0;
     std::vector<COutput> vCoins;
-    wallet->AvailableCoins(vCoins, true, coinControl);
+    wallet->AvailableCoins(vCoins, true, coinControl,false);
 
     BOOST_FOREACH(const COutput& out, vCoins)
         nBalance += out.tx->vout[out.i].nValue;
@@ -232,7 +224,7 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
             vecSend.push_back(make_pair(scriptPubKey, rcp.amount));
 			if (rcp.CoinTracking) coinTracking=true;
 			messages += "<MESSAGE>" + AdvancedCrypt(FromQStringW(rcp.Message)) + "</MESSAGE>";
-        
+
         }
 
         CWalletTx wtx;
@@ -264,16 +256,15 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
             }
             return TransactionCreationFailed;
         }
-       
+
 		if (coinTracking)
 		{
 			printf("Tracking hashBoinc %s",wtx.hashBoinc.c_str());
 		}
-		
-		
+
+
 		std::string samt = FormatMoney(wtx.vout[0].nValue);
-		double dblAmt = dblFromAmount(wtx.vout[0].nValue);
-	
+
 
         if(!uiInterface.ThreadSafeAskFee(nFeeRequired, tr("Sending...").toStdString()))
         {
@@ -311,8 +302,8 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
 		if (txid.length() > 3 && rcp.CoinTracking)
 		{
 			//If Coin tracking enabled, Insert the SQL record into the P2P SQL Database
-			std::string Narr = "Sending " + RoundToString(rcp.amount,4) + "GRC from " + sFrom + " to " + strAddress + " with tracking " 
-				+ YesNo(rcp.CoinTracking) + " for TXID " + txid + " with hashBoinc " 
+			std::string Narr = "Sending " + RoundToString(rcp.amount,4) + "GRC from " + sFrom + " to " + strAddress + " with tracking "
+				+ YesNo(rcp.CoinTracking) + " for TXID " + txid + " with hashBoinc "
 				+ hashBoinc + ".";
 			//Insert via Boinc P2P SQL Server
 			printf("%s",Narr.c_str());
@@ -321,7 +312,7 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
 			#endif
 
 			printf("Tracked ");
-			
+
 		}
 
     }
@@ -449,7 +440,7 @@ void WalletModel::unsubscribeFromCoreSignals()
 WalletModel::UnlockContext WalletModel::requestUnlock()
 {
     bool was_locked = getEncryptionStatus() == Locked;
-    
+
     if ((!was_locked) && fWalletUnlockStakingOnly)
     {
        setWalletLocked(true);
@@ -491,7 +482,7 @@ void WalletModel::UnlockContext::CopyFrom(const UnlockContext& rhs)
 
 bool WalletModel::getPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const
 {
-    return wallet->GetPubKey(address, vchPubKeyOut);   
+    return wallet->GetPubKey(address, vchPubKeyOut);
 }
 
 // returns a list of COutputs from COutPoints
@@ -508,11 +499,11 @@ void WalletModel::getOutputs(const std::vector<COutPoint>& vOutpoints, std::vect
     }
 }
 
-// AvailableCoins + LockedCoins grouped by wallet address (put change in one group with wallet address) 
+// AvailableCoins + LockedCoins grouped by wallet address (put change in one group with wallet address)
 void WalletModel::listCoins(std::map<QString, std::vector<COutput> >& mapCoins) const
 {
     std::vector<COutput> vCoins;
-    wallet->AvailableCoins(vCoins);
+    wallet->AvailableCoins(vCoins,true,NULL,false);
 
     LOCK2(cs_main, wallet->cs_wallet); // ListLockedCoins, mapWallet
     std::vector<COutPoint> vLockedCoins;

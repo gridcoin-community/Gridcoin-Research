@@ -17,8 +17,8 @@ namespace
 int GenerateBeaconKeys(const std::string &cpid, std::string &sOutPubKey, std::string &sOutPrivKey)
 {
     // First Check the Index - if it already exists, use it
-    sOutPrivKey = GetArgument("PrivateKey" + cpid + GetNetSuffix(), "");
-    sOutPubKey  = GetArgument("PublicKey" + cpid + GetNetSuffix(), "");
+    sOutPrivKey = GetArgument("privatekey" + cpid + GetNetSuffix(), "");
+    sOutPubKey  = GetArgument("publickey" + cpid + GetNetSuffix(), "");
     
     // If current keypair is not empty, but is invalid, allow the new keys to be stored, otherwise return 1: (10-25-2016)
     if (!sOutPrivKey.empty() && !sOutPubKey.empty())
@@ -48,8 +48,8 @@ void StoreBeaconKeys(
         const std::string &pubKey,
         const std::string &privKey)
 {
-    WriteKey("PublicKey" + cpid + GetNetSuffix(), pubKey);
-    WriteKey("PrivateKey" + cpid + GetNetSuffix(), privKey);
+    WriteKey("publickey" + cpid + GetNetSuffix(), pubKey);
+    WriteKey("privatekey" + cpid + GetNetSuffix(), privKey);
 }
 
 std::string GetStoredBeaconPrivateKey(const std::string& cpid)

@@ -1,6 +1,7 @@
 
 
 #include <QWidget>
+#include <QListView>
 
 #include "overviewpage.h"
 #include "ui_overviewpage.h"
@@ -18,8 +19,6 @@
 
 #include <QAbstractItemDelegate>
 #include <QPainter>
-#include <QDesktopServices>  //Added for openURL()
-#include <QUrl>
 
 #ifdef WIN32
 #include <QAxObject>
@@ -28,7 +27,6 @@
 #endif
 
 #define DECORATION_SIZE 64
-#define NUM_ITEMS 3
 
 class TxViewDelegate : public QAbstractItemDelegate
 {
@@ -125,8 +123,8 @@ OverviewPage::OverviewPage(QWidget *parent) :
     // Recent transactions
     ui->listTransactions->setItemDelegate(txdelegate);
     ui->listTransactions->setIconSize(QSize(DECORATION_SIZE, DECORATION_SIZE));
-    ui->listTransactions->setMinimumHeight(NUM_ITEMS * (DECORATION_SIZE + 2));
     ui->listTransactions->setAttribute(Qt::WA_MacShowFocusRect, false);
+    updateTransactions();
 
     connect(ui->listTransactions, SIGNAL(clicked(QModelIndex)), this, SLOT(handleTransactionClicked(QModelIndex)));
 
@@ -144,6 +142,32 @@ void OverviewPage::handleTransactionClicked(const QModelIndex &index)
 
     if(filter)
         emit transactionClicked(filter->mapToSource(index));
+}
+
+void OverviewPage::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    updateTransactions();
+}
+
+void OverviewPage::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    updateTransactions();
+}
+
+void OverviewPage::updateTransactions()
+{    
+    if(filter)
+    {
+        // Show the maximum number of transactions the transaction list widget
+        // can hold without overflowing.
+        const size_t itemHeight = DECORATION_SIZE + ui->listTransactions->spacing();
+        const size_t contentsHeight = ui->listTransactions->height();
+        const size_t numItems = contentsHeight / itemHeight;
+        filter->setLimit(numItems);
+        ui->listTransactions->update();
+    }
 }
 
 OverviewPage::~OverviewPage()
@@ -202,7 +226,6 @@ void OverviewPage::setModel(WalletModel *model)
         // Set up transaction list
         filter = new TransactionFilterProxy();
         filter->setSourceModel(model->getTransactionTableModel());
-        filter->setLimit(NUM_ITEMS);
         filter->setDynamicSortFilter(true);
         filter->setSortRole(Qt::EditRole);
         filter->setShowInactive(false);
@@ -210,14 +233,13 @@ void OverviewPage::setModel(WalletModel *model)
 
         ui->listTransactions->setModel(filter);
         ui->listTransactions->setModelColumn(TransactionTableModel::ToAddress);
-
+        
         // Keep up to date with wallet
         setBalance(model->getBalance(), model->getStake(), model->getUnconfirmedBalance(), model->getImmatureBalance());
         connect(model, SIGNAL(balanceChanged(qint64, qint64, qint64, qint64)), this, SLOT(setBalance(qint64, qint64, qint64, qint64)));
 
         connect(model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
-		OverviewPage::UpdateBoincUtilization();
-
+        UpdateBoincUtilization();
     }
 
     // update the display unit, to not use the default ("BTC")
@@ -251,30 +273,3 @@ void OverviewPage::updateglobalstatus()
 	OverviewPage::UpdateBoincUtilization();
 }
 
-void OverviewPage::on_btnWebsite_pressed()
-{
-   QDesktopServices::openUrl(QUrl("http://www.gridcoin.us"));
-}
-
-
-void OverviewPage::on_btnBX_pressed()
-{
-    QDesktopServices::openUrl(QUrl("http://www.gridresearchcorp.com/gridcoin/"));
-}
-
-
-void OverviewPage::on_btnBoinc_pressed()
-{
-    QDesktopServices::openUrl(QUrl("http://boincstats.com/en/stats/-1/team/detail/118094994/overview"));
-}
-
-void OverviewPage::on_btnChat_pressed()
-{
-    //QDesktopServices::openUrl(QUrl("https://kiwiirc.com/client/irc.freenode.net:6697/#gridcoin"));
-	QDesktopServices::openUrl(QUrl("https://kiwiirc.com/client/irc.freenode.net:6697/#gridcoin-help"));
-}
-
-void OverviewPage::on_btnExchange_pressed()
-{
-	QDesktopServices::openUrl(QUrl("https://c-cex.com/?p=grc-btc"));
-}

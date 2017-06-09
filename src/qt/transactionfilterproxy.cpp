@@ -39,10 +39,11 @@ bool TransactionFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex &
 
     if(!showInactive && (status == TransactionStatus::Conflicted || status == TransactionStatus::NotAccepted))
         return false;
-	//1-2-2015 Halford - Mask Orphans from User View so they do not complain
-	std::string orphan_mask = GetArg("-showorphans", "false");
-	if (orphan_mask != "true") if ((status == TransactionStatus::Conflicted || status == TransactionStatus::NotAccepted))  return false;
-
+    //1-2-2015 Halford - Mask Orphans from User View so they do not complain
+    std::string orphan_mask = GetArg("-showorphans", "false");
+    if (orphan_mask != "true")
+        if (status == TransactionStatus::Conflicted || status == TransactionStatus::NotAccepted)
+            return false;
     if(!(TYPE(type) & typeFilter))
         return false;
     if(datetime < dateFrom || datetime > dateTo)
@@ -83,6 +84,7 @@ void TransactionFilterProxy::setMinAmount(qint64 minimum)
 void TransactionFilterProxy::setLimit(int limit)
 {
     this->limitRows = limit;
+    invalidate();
 }
 
 void TransactionFilterProxy::setShowInactive(bool showInactive)

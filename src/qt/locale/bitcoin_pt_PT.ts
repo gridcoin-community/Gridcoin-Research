@@ -11,7 +11,7 @@
     <message>
         <location line="+42"/>
         <source>&lt;b&gt;Gridcoin&lt;/b&gt; </source>
-        <translation>&lt;b&gt;Gridcoin&lt;/b&gt;</translation>
+        <translation>&lt;b&gt;Gridcoin&lt;/b&gt; </translation>
     </message>
     <message>
         <location line="+58"/>
@@ -49,50 +49,40 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     <message>
         <location line="+14"/>
         <source>Copy the currently selected address to the system clipboard</source>
-        <translation>Copie o endereço selecionado para a área de transferência</translation>
+        <translation>Copiar o endereço selecionado para a área de transferência</translation>
     </message>
     <message>
-        <location line="-11"/>
-        <source>&amp;New Address</source>
-        <translation>&amp;Novo Endereço&gt;</translation>
-    </message>
-    <message>
-        <location line="-46"/>
+        <location line="-57"/>
         <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
-        <translation>Estes são os seus endereços do Gridcoin para receber pagamentos. Pode dar diferentes nomes a cada remetente, para que saiba quem lhe está a pagar&gt;</translation>
+        <translation>Estes são os seus endereços do Gridcoin para receber pagamentos. Pode dar diferentes nomes a cada remetente, para que saiba quem lhe está a pagar.</translation>
     </message>
     <message>
-        <location line="+60"/>
-        <source>&amp;Copy Address</source>
-        <translation>&amp;Copiar Endereçoo</translation>
-    </message>
-    <message>
-        <location line="+11"/>
+        <location line="+71"/>
         <source>Show &amp;QR Code</source>
-        <translation>Código QR&gt;</translation>
+        <translation>Mostrar &amp;Código QR</translation>
     </message>
     <message>
-        <location line="+11"/>
-        <source>Sign a message to prove you own a Gridcoin address</source>
-        <translation>Assine a mensagem para provar que possui um endereço Gridcoin</translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="+14"/>
         <source>Sign &amp;Message</source>
         <translation>Assinar &amp;Mensagem</translation>
     </message>
     <message>
-        <location line="+25"/>
-        <source>Delete the currently selected address from the list</source>
-        <translation>Apagar o endereço selecionado da lista</translation>
+        <location line="-3"/>
+        <source>Sign a message to prove you own a Gridcoin address</source>
+        <translation>Assine a mensagem para provar que possui um endereço Gridcoin</translation>
     </message>
     <message>
-        <location line="-14"/>
+        <location line="+14"/>
         <source>Verify a message to ensure it was signed with a specified Gridcoin address</source>
         <translation>Verifica a mensagem para assegurar que foi assinada por um endereço Gridcoin especificado</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+14"/>
+        <source>Delete the currently selected address from the list</source>
+        <translation>Eliminar o endereço selecionado da lista</translation>
+    </message>
+    <message>
+        <location line="-11"/>
         <source>&amp;Verify Message</source>
         <translation>&amp;Verifique Mensagem</translation>
     </message>
@@ -104,7 +94,7 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     <message>
         <location filename="../addressbookpage.cpp" line="+65"/>
         <source>Copy &amp;Label</source>
-        <translation>Copiar &amp;Rótulo</translation>
+        <translation>Copiar &amp;Etiqueta</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -119,7 +109,7 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     <message>
         <location line="+1"/>
         <source>Comma separated file (*.csv)</source>
-        <translation>Ficheiro separado por ví­rgulas (*.csv)</translation>
+        <translation>Ficheiro separado por vírgulas (*.csv)</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -129,7 +119,17 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     <message>
         <location line="+0"/>
         <source>Could not write to file %1.</source>
-        <translation>Não foi possivel escrever para o ficheiro</translation>
+        <translation>Não foi possivel escrever para o ficheiro %1.</translation>
+    </message>
+    <message>
+        <location filename="../forms/addressbookpage.ui" line="-67"/>
+        <source>&amp;New</source>
+        <translation>&amp;Novo</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>&amp;Copy</source>
+        <translation>&amp;Copiar</translation>
     </message>
 </context>
 <context>
@@ -137,7 +137,7 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     <message>
         <location filename="../addresstablemodel.cpp" line="+144"/>
         <source>Label</source>
-        <translation>Rótulo</translation>
+        <translation>Etiqueta</translation>
     </message>
     <message>
         <location line="+0"/>
@@ -147,7 +147,7 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     <message>
         <location line="+36"/>
         <source>(no label)</source>
-        <translation>(sem rótulo)</translation>
+        <translation>(sem etiqueta)</translation>
     </message>
 </context>
 <context>
@@ -155,22 +155,22 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     <message>
         <location filename="../forms/askpassphrasedialog.ui" line="+26"/>
         <source>Passphrase Dialog</source>
-        <translation>Diálogo de Palavra-Passe</translation>
+        <translation>Janela da Frase de Segurança</translation>
     </message>
     <message>
         <location line="+21"/>
         <source>Enter passphrase</source>
-        <translation>Escreva a frase de segurança</translation>
+        <translation>Insira a frase de segurança</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>New passphrase</source>
-        <translation>Nova frase de segurança</translation>
+        <translation>Nova frase de frase de segurança</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Repeat new passphrase</source>
-        <translation>Repita a nova frase de segurança</translation>
+        <translation>Repita a nova frase de frase de segurança</translation>
     </message>
     <message>
         <location line="+33"/>
@@ -190,7 +190,7 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     <message>
         <location line="+7"/>
         <source>This operation needs your wallet passphrase to unlock the wallet.</source>
-        <translation>Este operação precisa da sua frase de segurança para desbloquear a carteira.</translation>
+        <translation>Esta operação precisa da sua frase de segurança da carteira para desbloquear a mesma.</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -200,7 +200,7 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     <message>
         <location line="+3"/>
         <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>Esta operação necessita da sua frase de segurança para desencriptar a carteira.</translation>
+        <translation>Esta operação precisa da sua frase de segurança da carteira para desencriptar a mesma.</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -230,10 +230,15 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     <message>
         <location line="+0"/>
         <source>Are you sure you wish to encrypt your wallet?</source>
-        <translation>Tem a certeza que deseja encriptar a carteira?</translation>
+        <translation>Tem a certeza que deseja encriptar a sua carteira?</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+11"/>
+        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
+        <translation>O Gridcoin irá agora terminar o processo de encriptação. Lembre-se que encriptar a sua carteira não garante que as suas moedas não possam ser roubadas por um malware que infecte o seu computador.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>IMPORTANT: Any previous backups you have made of your wallet file should be replaced with the newly generated, encrypted wallet file. For security reasons, previous backups of the unencrypted wallet file will become useless as soon as you start using the new, encrypted wallet.</source>
         <translation>IMPORTANTE: Qualquer cÓpia de seguranÇa anterior da carteira deverá ser substituida pelo novo ficheiro, atualmente encriptado na carteira. Por razões de segurança, cópias de segurança não encriptadas efectuadas anteriormente do ficheiro da carteira tornar-se-ão inúteis assim que começar a usar a nova carteira encriptada.</translation>
     </message>
@@ -241,7 +246,7 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
         <location line="+103"/>
         <location line="+24"/>
         <source>Warning: The Caps Lock key is on!</source>
-        <translation>Atençãoo: A tecla Caps Lock está ativa!</translation>
+        <translation>Aviso: a tecla Caps Lock está ligada!</translation>
     </message>
     <message>
         <location line="-133"/>
@@ -252,20 +257,15 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     <message>
         <location line="-140"/>
         <source>Enter the new passphrase to the wallet.&lt;br/&gt;Please use a passphrase of &lt;b&gt;ten or more random characters&lt;/b&gt;, or &lt;b&gt;eight or more words&lt;/b&gt;.</source>
-        <translation>Inisira a nova frase de segurança da sua carteira.&lt;br/&gt;Por favor use uma frase de segurança com &lt;b&gt;dez ou mais caracteres aleatórios&lt;/b&gt;, ou &lt;b&gt;oito ou mais palavras</translation>
+        <translation>Insira a nova frase de segurança para a carteira. &lt;br/&gt; Por favor, utilize uma frase de segurança de &lt;b&gt;10 ou mais carateres aleatórios,&lt;/b&gt; ou &lt;b&gt;oito ou mais palavras&lt;/b&gt;.</translation>
     </message>
     <message>
-        <location line="+82"/>
-        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
-        <translation>O Grdicoin irá agora terminar o processo de encriptação. Lembre-se que encriptar a sua carteira não garante que as suas moedas não possam ser roubadas por um malware que infecte o seu computador</translation>
-    </message>
-    <message>
-        <location line="+13"/>
+        <location line="+95"/>
         <location line="+7"/>
         <location line="+44"/>
         <location line="+6"/>
         <source>Wallet encryption failed</source>
-        <translation>A encriptação da carteira falhou</translation>
+        <translation>Encriptação da carteira falhou</translation>
     </message>
     <message>
         <location line="-56"/>
@@ -281,7 +281,7 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     <message>
         <location line="-38"/>
         <source>Wallet unlock failed</source>
-        <translation>O desbloqueio da carteira falhou</translation>
+        <translation>Desbloqueio da carteira falhou</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -293,35 +293,25 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     <message>
         <location line="-20"/>
         <source>Wallet decryption failed</source>
-        <translation>A desencriptação da carteira falhou</translation>
+        <translation>Desencriptação da carteira falhou</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Wallet passphrase was successfully changed.</source>
-        <translation>A frase de segurança da carteira foi alterada com êxito.</translation>
+        <translation>A frase de segurança da carteira foi alterada com sucesso.</translation>
     </message>
 </context>
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+998"/>
+        <location filename="../bitcoingui.cpp" line="+920"/>
         <source>Sign &amp;message...</source>
         <translation>Assinar &amp;mensagem...</translation>
     </message>
     <message>
-        <location line="+346"/>
-        <source>Synchronizing with network...</source>
-        <translation>Sincronizando com a rede...</translation>
-    </message>
-    <message>
-        <location line="-500"/>
-        <source>&amp;Overview</source>
-        <translation>Visão&amp; Geral</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="-128"/>
         <source>Show general overview of wallet</source>
-        <translation>Mostrar visão geral da carteira</translation>
+        <translation>Mostrar resumo geral da carteira</translation>
     </message>
     <message>
         <location line="+14"/>
@@ -331,7 +321,7 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     <message>
         <location line="+1"/>
         <source>Browse transaction history</source>
-        <translation>Navegar pelo histórico de transações</translation>
+        <translation>Explorar histórico das transações</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -344,24 +334,14 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
         <translation>Editar a lista de endereços e rótulos armazenados</translation>
     </message>
     <message>
-        <location line="-11"/>
-        <source>&amp;Receive coins</source>
-        <translation>&amp;Receber moedas</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="-10"/>
         <source>Show the list of addresses for receiving payments</source>
         <translation>Mostrar lista de endereços de pagamentos recebidos</translation>
     </message>
     <message>
-        <location line="-6"/>
-        <source>&amp;Send coins</source>
-        <translation>&amp;Enviar moedas</translation>
-    </message>
-    <message>
-        <location line="+57"/>
+        <location line="+51"/>
         <source>E&amp;xit</source>
-        <translation>S&amp;air</translation>
+        <translation>Fec&amp;har</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -369,60 +349,32 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
         <translation>Sair da aplicação</translation>
     </message>
     <message>
-        <location line="+26"/>
-        <source>Show information about Gridcoin</source>
-        <translation>Mostrar informaçõe sobre o Grdicoin</translation>
-    </message>
-    <message>
-        <location line="+50"/>
+        <location line="+51"/>
         <source>&amp;Options...</source>
         <translation>&amp;Opções...</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>&amp;Encrypt Wallet...</source>
-        <translation>amp;Encriptar Carteira...</translation>
+        <translation>E&amp;ncriptar Carteira...</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Backup Wallet...</source>
-        <translation>&amp;Guardar Carteira...</translation>
+        <translation>Efetuar &amp;Cópia de Segurança da Carteira...</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>&amp;Change Passphrase...</source>
-        <translation>Mudar &amp;Frase de segurança...</translation>
-    </message>
-    <message numerus="yes">
-        <location line="+354"/>
-        <source>~%n block(s) remaining</source>
-        <translation>
-            <numerusform>~%n block remaining</numerusform>
-            <numerusform>~%n bloco restantes</numerusform>
-        </translation>
+        <translation>Alterar &amp;Frase de Segurança...</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Downloaded %1 of %2 blocks of transaction history (%3% done).</source>
-        <translation>Transferidos %1 de %2 blocos da transação do histórico (%3% realizado)</translation>
-    </message>
-    <message>
-        <location line="-351"/>
+        <location line="+9"/>
         <source>&amp;Export...</source>
         <translation>&amp;Exportar...</translation>
     </message>
     <message>
-        <location line="-151"/>
-        <source>Send coins to a Gridcoin address</source>
-        <translation>Enviar moedas para um endereço Gridcoin</translation>
-    </message>
-    <message>
-        <location line="+134"/>
-        <source>Modify configuration options for Gridcoin</source>
-        <translation>Modificar opções de configuração para o Grdicoin</translation>
-    </message>
-    <message>
-        <location line="+18"/>
+        <location line="+1"/>
         <source>Export the data in the current tab to a file</source>
         <translation>Exportar os dados na aba atual para ficheiro</translation>
     </message>
@@ -434,17 +386,17 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     <message>
         <location line="+3"/>
         <source>Backup wallet to another location</source>
-        <translation>Faça uma cópia de segurança da carteira para outra localização</translation>
+        <translation>Efetue uma cópia de segurança da carteira para outra localização</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Change the passphrase used for wallet encryption</source>
-        <translation>Mudar a frase de segurança utilizada na encriptação da carteira</translation>
+        <translation>Alterar a frase de segurança utilizada na encriptação da carteira</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>&amp;Debug window</source>
-        <translation>&amp;Janela de depuração</translation>
+        <translation>Janela de &amp;Depuração</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -457,24 +409,14 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
         <translation>&amp;Verificar mensagem...</translation>
     </message>
     <message>
-        <location line="-794"/>
-        <source>Gridcoin</source>
-        <translation>Gridcoin</translation>
-    </message>
-    <message>
-        <location line="+0"/>
+        <location line="-721"/>
         <source>Wallet</source>
         <translation>Carteira</translation>
     </message>
     <message>
-        <location line="+727"/>
-        <source>&amp;About Gridcoin</source>
-        <translation>&amp;Sobre o Gridcoin</translation>
-    </message>
-    <message>
-        <location line="+54"/>
+        <location line="+708"/>
         <source>&amp;Show / Hide</source>
-        <translation>&amp;Mostrar / Ocultar</translation>
+        <translation>Mo&amp;strar / Ocultar</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -492,7 +434,7 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
         <translation>Bloquear carteira</translation>
     </message>
     <message>
-        <location line="+54"/>
+        <location line="+47"/>
         <source>&amp;File</source>
         <translation>&amp;Ficheiro</translation>
     </message>
@@ -502,7 +444,7 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
         <translation>&amp;Configurações</translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+48"/>
         <source>&amp;Help</source>
         <translation>&amp;Ajuda</translation>
     </message>
@@ -512,27 +454,91 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
         <source>[testnet]</source>
         <translation>[rede de testes]</translation>
     </message>
-    <message>
-        <location line="+0"/>
-        <location line="+64"/>
-        <source>Gridcoin client</source>
-        <translation>Cliente Gridcoin</translation>
+    <message numerus="yes">
+        <location line="+204"/>
+        <source>%n second(s) ago</source>
+        <translation>
+            <numerusform>%n há segundo</numerusform>
+            <numerusform>%n há segundos</numerusform>
+        </translation>
     </message>
     <message numerus="yes">
-        <location line="+79"/>
-        <source>%n active connection(s) to Gridcoin network</source>
+        <location line="+4"/>
+        <source>%n minute(s) ago</source>
         <translation>
-            <numerusform>%n ligação ativa à rede Gridcoin</numerusform>
-            <numerusform>%n ligaçãoes ativa à rede Gridcoin</numerusform>
+            <numerusform>há %n minuto</numerusform>
+            <numerusform>há %n minutos</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n hour(s) ago</source>
+        <translation>
+            <numerusform>há %n hora</numerusform>
+            <numerusform>há %n horas</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n day(s) ago</source>
+        <translation>
+            <numerusform>há %n dia</numerusform>
+            <numerusform>há %n dias</numerusform>
         </translation>
     </message>
     <message>
-        <location line="+40"/>
-        <source>Downloaded %1 blocks of transaction history.</source>
-        <translation>Transferidos %1 blocos do histórico de transações</translation>
+        <location line="+23"/>
+        <source>Last received block was generated %1.</source>
+        <translation>O último bloco recebido foi gerado %1.</translation>
     </message>
     <message>
-        <location line="+1104"/>
+        <location line="+70"/>
+        <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
+        <translation>Esta transação excede o limite de tamanho. Pode continuar a enviar com uma taxa de %1, que vais para os nódulos que processam a sua transação e ajudam a suportar a rede. Tem a certeza que quer pagar a taxa?</translation>
+    </message>
+    <message>
+        <location line="+74"/>
+        <source>Please enter your boinc E-mail address, or click &lt;Cancel&gt; to skip for now:</source>
+        <translation>Por favor insira o seu endereço de eMail, ou clique &lt;Cancelar&gt; para passar à frente para já:</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Created new Configuration File Successfully. </source>
+        <translation>Criado novo Ficheiro de Configuração com Sucesso.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New Account Created - Welcome Aboard!</source>
+        <translation>Nova Conta Criada - Bem vindo a bordo!</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. </source>
+        <translation>Para se iniciar no Boinc, execute o cliente boinc, escolha os projetos, depois edite o ficheiro gridcoinresearch.conf em %appdata%\GridcoinResearch e insira o seu eMail. Para correr este assistente novamente, por favor elimine o ficheiro gridcoinresearch.conf.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New User Wizard - Skipped</source>
+        <translation>Assistente de Novo Utilizador - Ignorado</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Attention! - Boinc Path Error!</source>
+        <translation>Atenção! - Erro na Diretoria do Boinc!</translation>
+    </message>
+    <message>
+        <location line="+351"/>
+        <location line="+15"/>
+        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
+        <translation>O URI não pode ser analisado! Isto pode ser causado por um endereço inválido de Gridcoin ou parâmetros de URI mal-formados.</translation>
+    </message>
+    <message>
+        <location line="+396"/>
+        <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
+        <translation>A realizar Staking.&lt;br&gt;O seu peso é de %1&lt;br&gt;Peso da rede é %2&lt;br&gt;&lt;b&gt;Tempo&lt;/b&gt; estimado para ganhar recompensa +e de %3. %4</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>Not staking because wallet is locked</source>
         <translation>Não está a fazer stake porque a carteira está trancada</translation>
     </message>
@@ -547,20 +553,90 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
         <translation>Não está a fazer stale porque a carteira esta a sincronizar</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+5"/>
+        <source>Not staking because you don&apos;t have mature coins and stake weight is too low.</source>
+        <translation>Não está a realizar stake porque não tem&apos; moedas maduras e o peso do stake é muito baixo.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Not staking because you don&apos;t have mature coins</source>
         <translation>Não a fazer stake porque não tem moedas maduras</translation>
     </message>
-    <message numerus="yes">
-        <location line="-1101"/>
-        <source>%n second(s) ago</source>
-        <translation>
-            <numerusform>%n há segundo</numerusform>
-            <numerusform>%n há segundos</numerusform>
-        </translation>
+    <message>
+        <location line="+5"/>
+        <source>Searching for mature coins... Please wait</source>
+        <translation>Procurando por moedas maduras... Por favor aguarde</translation>
     </message>
     <message>
-        <location line="-513"/>
+        <location line="-2095"/>
+        <source>Gridcoin</source>
+        <translation>Gridcoin</translation>
+    </message>
+    <message>
+        <location line="+601"/>
+        <source>&amp;Receive</source>
+        <translation>&amp;Receber</translation>
+    </message>
+    <message>
+        <location line="-5"/>
+        <source>&amp;Send</source>
+        <translation>&amp;Enviar</translation>
+    </message>
+    <message>
+        <location line="+120"/>
+        <source>&amp;Unlock Wallet...</source>
+        <translation>&amp;Desbloquear Carteira...</translation>
+    </message>
+    <message>
+        <location line="+387"/>
+        <source>Up to date</source>
+        <translation>Atualizado</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Catching up...</source>
+        <translation>Recuperando o atraso...</translation>
+    </message>
+    <message>
+        <location line="+85"/>
+        <source>Confirm transaction fee</source>
+        <translation>Confirme taxa de transação</translation>
+    </message>
+    <message>
+        <location line="+135"/>
+        <source>Sent transaction</source>
+        <translation>Transação enviada</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Incoming transaction</source>
+        <translation>Transação recebida</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Date: %1
+Amount: %2
+Type: %3
+Address: %4
+</source>
+        <translation>Data: %1
+Quantia: %2
+Tipo: %3
+Endereço: %4
+</translation>
+    </message>
+    <message>
+        <location line="-741"/>
+        <source>&amp;Overview</source>
+        <translation>&amp;Resumo</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Send coins to a Gridcoin address</source>
+        <translation>Enviar moedas para um endereço Gridcoin</translation>
+    </message>
+    <message>
+        <location line="+19"/>
         <source>&amp;Block Explorer</source>
         <translation>&amp;Explorador de Blocos</translation>
     </message>
@@ -570,7 +646,13 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
         <translation>Explorador de blocos</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1034"/>
+        <location line="+15"/>
+        <source>URI handling</source>
+        <translation>Manuseamento do URI</translation>
+    </message>
+    <message>
+        <location line="-1046"/>
         <source>&amp;Exchange</source>
         <translation>&amp;Cambiar</translation>
     </message>
@@ -598,21 +680,31 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     <message>
         <location line="+3"/>
         <source>&amp;BOINC</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;BOINC</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Gridcoin rewards distributed computing with BOINC</source>
-        <translation type="unfinished"></translation>
+        <translation>Recompensas Gridcoin distribuídas por computação com o BOINC</translation>
     </message>
     <message>
-        <location line="+27"/>
-        <location line="+169"/>
+        <location line="+1051"/>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
+        <translation>A carteira está &lt;b&gt;encriptada&lt;/b&gt; e atualmente &lt;b&gt;desbloqueada&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
+        <translation>A carteira está &lt;b&gt;encriptada&lt;/b&gt; e atualmente &lt;b&gt;bloqueada&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <location line="-1034"/>
+        <location line="+137"/>
         <source>&amp;Rebuild Block Chain</source>
         <translation>&amp;Reconstruir Cadeia de Blocos</translation>
     </message>
     <message>
-        <location line="-168"/>
+        <location line="-136"/>
         <source>Rebuild Block Chain</source>
         <translation>Reconstruir Cadeia de Blocos</translation>
     </message>
@@ -627,17 +719,7 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
         <translation>Transferir Blocos</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>&amp;Reboot Client</source>
-        <translation>&amp;Reiniciar Cliente</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Reboot Gridcoin</source>
-        <translation>Reiniciar Gridcoin</translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>&amp;Upgrade Client</source>
         <translation>&amp; Actualizar Cliente</translation>
     </message>
@@ -647,7 +729,27 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
         <translation>Actualizar Cliente</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+3"/>
+        <source>&amp;About Gridcoin</source>
+        <translation>&amp;Sobre o Gridcoin</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Show information about Gridcoin</source>
+        <translation>Mostrar informaçõe sobre o Grdicoin</translation>
+    </message>
+    <message>
+        <location line="+1050"/>
+        <source>Backup Wallet</source>
+        <translation>Fazer Backup da Carteira</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Wallet Data (*.dat)</source>
+        <translation>Dados da Carteira</translation>
+    </message>
+    <message>
+        <location line="-1047"/>
         <source>&amp;Neural Network</source>
         <translation>&amp;Rede Neural</translation>
     </message>
@@ -657,7 +759,17 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
         <translation>Rede Neural</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+1049"/>
+        <source>Backup Failed</source>
+        <translation>Backup Falhou</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>There was an error trying to save the wallet data to the new location.</source>
+        <translation>House um erro ao tentar guardar os dados da carteira para uma nova localização.</translation>
+    </message>
+    <message>
+        <location line="-1046"/>
         <source>&amp;Advanced Configuration</source>
         <translation>&amp;Configurações Avançadas</translation>
     </message>
@@ -668,37 +780,17 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     </message>
     <message>
         <location line="+3"/>
-        <source>&amp;Live Ticker</source>
-        <translation>&amp;Painel de Cotações Actuais</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Live Ticker</source>
-        <translation>Painel de Cotações</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>&amp;Tickets</source>
-        <translation>&amp;Tickets</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Tickets</source>
-        <translation>Tickets</translation>
-    </message>
-    <message>
-        <location line="+3"/>
         <source>&amp;New User Wizard</source>
         <translation>&amp;Assistente de Novo Utilizador</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+606"/>
+        <location line="+578"/>
         <source>New User Wizard</source>
         <translation>Assistente de Novo Utilizador</translation>
     </message>
     <message>
-        <location line="-599"/>
+        <location line="-575"/>
         <source>&amp;Voting</source>
         <translation>&amp;Votações</translation>
     </message>
@@ -709,16 +801,6 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     </message>
     <message>
         <location line="+3"/>
-        <source>&amp;Galaza (Game)</source>
-        <translation>&amp; Galaza (Jogo)</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Galaza</source>
-        <translation>Galaza</translation>
-    </message>
-    <message>
-        <location line="+4"/>
         <source>&amp;Foundation</source>
         <translation>&amp;Instituição</translation>
     </message>
@@ -748,171 +830,12 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
         <translation>FAQ</translation>
     </message>
     <message>
-        <location line="+14"/>
-        <source>&amp;Unlock Wallet...</source>
-        <translation>&amp;Desbloquear Carteira...&gt;</translation>
-    </message>
-    <message>
-        <location line="+74"/>
-        <source>&amp;Community</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>&amp;Upgrade QT Client</source>
-        <translation>&amp;Actualizar Cliente QT</translation>
-    </message>
-    <message>
-        <location line="+14"/>
-        <source>&amp;Advanced</source>
-        <translation>&amp;Avançado</translation>
-    </message>
-    <message numerus="yes">
-        <location line="+295"/>
-        <source>%n minute(s) ago</source>
-        <translation>
-            <numerusform>há %n minuto</numerusform>
-            <numerusform>há %n minutos</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s) ago</source>
-        <translation>
-            <numerusform>há %n hora</numerusform>
-            <numerusform>há %n horas</numerusform>
-        </translation>
+        <source>Modify configuration options for Gridcoin</source>
+        <translation>Modificar opções de configuração para o Grdicoin</translation>
     </message>
     <message numerus="yes">
-        <location line="+4"/>
-        <source>%n day(s) ago</source>
-        <translation>
-            <numerusform>há %n dia</numerusform>
-            <numerusform>há %n dias</numerusform>
-        </translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Up to date</source>
-        <translation>Atualizado</translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Catching up...</source>
-        <translation>Recuperando...</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Last received block was generated %1.</source>
-        <translation>O último bloco recebido foi gerado %1.</translation>
-    </message>
-    <message>
-        <location line="+70"/>
-        <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
-        <translation>Esta transação excede o limite de tamanho. Pode continuar a enviar com uma taxa de %1, que vais para os nódulos que processam a sua transação e ajudam a suportar a rede. Tem a certeza que quer pagar a taxa?</translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Confirm transaction fee</source>
-        <translation>Confirme taxa de transação</translation>
-    </message>
-    <message>
-        <location line="+69"/>
-        <source>Please enter your boinc E-mail address, or click &lt;Cancel&gt; to skip for now:</source>
-        <translation>Por favor insira o seu endereço de eMail, ou clique &lt;Cancelar&gt; para passar à frente para já:</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Created new Configuration File Successfully. </source>
-        <translation>Criado novo Ficheiro de Configuração com Sucesso</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>New Account Created - Welcome Aboard!</source>
-        <translation>Nova Conta Criada - Bem vindo a bordo!</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. </source>
-        <translation>Para se iniciar no Boinc, execute o cliente boinc, escolha os projetos, depois edite o ficheiro gridcoinresearch.conf em %appdata%\GridcoinResearch e insira o seu eMail. Para correr este assistente novamente, por favor elimine o ficheiro gridcoinresearch.conf.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>New User Wizard - Skipped</source>
-        <translation>Assistente de Novo Utilizador - Ignorado</translation>
-    </message>
-    <message>
-        <location line="+16"/>
-        <source>Attention! - Boinc Path Error!</source>
-        <translation>Atenção! - Erro na Diretoria do Boinc!</translation>
-    </message>
-    <message>
-        <location line="+30"/>
-        <source>Sent transaction</source>
-        <translation>Transação enviada</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Incoming transaction</source>
-        <translation>Transação recebida</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Date: %1
-Amount: %2
-Type: %3
-Address: %4
-</source>
-        <translation>Data: %1
-Quantia: %2
-Tipo: %3
-Endereço: %4
-</translation>
-    </message>
-    <message>
-        <location line="+405"/>
-        <location line="+15"/>
-        <source>URI handling</source>
-        <translation>Manuseamento do URI</translation>
-    </message>
-    <message>
-        <location line="-15"/>
-        <location line="+15"/>
-        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
-        <translation>O URI não pode ser analisado! Isto pode ser causado por um endereço inválido de Gridcoin ou parâmetros de URI mal-formados</translation>
-    </message>
-    <message>
-        <location line="+18"/>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
-        <translation>A carteira está¡ &lt;b&gt;encriptada&lt;/b&gt; e atualmente &lt;b&gt;desbloqueada&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
-        <translation>A carteira está¡ &lt;b&gt;encriptada&lt;/b&gt; e atualmente &lt;b&gt;bloqueada&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <location line="+29"/>
-        <source>Backup Wallet</source>
-        <translation>Fazer Backup da Carteira</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Wallet Data (*.dat)</source>
-        <translation>Dados da Carteira</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Backup Failed</source>
-        <translation>Backup Falhou</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>There was an error trying to save the wallet data to the new location.</source>
-        <translation>House um erro ao tentar guardar os dados da carteira para uma nova localização</translation>
-    </message>
-    <message numerus="yes">
-        <location line="+307"/>
+        <location line="+1317"/>
         <source>%n second(s)</source>
         <translation>
             <numerusform>%n segundo</numerusform>
@@ -927,8 +850,50 @@ Endereço: %4
             <numerusform>%n minutos</numerusform>
         </translation>
     </message>
+    <message>
+        <location line="-1244"/>
+        <source>&amp;Community</source>
+        <translation>&amp;Comunidade</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>&amp;Upgrade QT Client</source>
+        <translation>&amp;Actualizar Cliente QT</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>&amp;Advanced</source>
+        <translation>&amp;Avançado</translation>
+    </message>
+    <message>
+        <location line="+77"/>
+        <location line="+64"/>
+        <source>Gridcoin client</source>
+        <translation>Cliente Gridcoin</translation>
+    </message>
     <message numerus="yes">
-        <location line="+4"/>
+        <location line="+79"/>
+        <source>%n active connection(s) to Gridcoin network</source>
+        <translation>
+            <numerusform>%n ligação ativa à rede Gridcoin</numerusform>
+            <numerusform>%n ligaçãoes ativa à rede Gridcoin</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>Synchronizing with network...</source>
+        <translation>A sincronizar com a rede...</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+2"/>
+        <source>~%n block(s) remaining</source>
+        <translation>
+            <numerusform>~%n block remaining</numerusform>
+            <numerusform>~%n bloco restantes</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+981"/>
         <source>%n hour(s)</source>
         <translation>
             <numerusform>%n hora</numerusform>
@@ -944,22 +909,7 @@ Endereço: %4
         </translation>
     </message>
     <message>
-        <location line="+27"/>
-        <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
-        <translation>A realizar Staking.&lt;br&gt;O seu peso é de %1&lt;br&gt;Peso da rede é %2&lt;br&gt;&lt;b&gt;Tempo&lt;/b&gt; estimado para ganhar recompensa +e de %3. %4</translation>
-    </message>
-    <message>
-        <location line="+23"/>
-        <source>Not staking because you don&apos;t have mature coins and stake weight is too low.</source>
-        <translation>Não está a realizar stake porque não tem&apos; moedas maduras e o peso do stake é muito baixo.</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Searching for mature coins... Please wait</source>
-        <translation>Procurando por moedas maduras...</translation>
-    </message>
-    <message>
-        <location line="+5"/>
+        <location line="+65"/>
         <source>Not staking</source>
         <translation>Não realizando stake</translation>
     </message>
@@ -967,6 +917,14 @@ Endereço: %4
         <location filename="../bitcoin.cpp" line="+145"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
         <translation>Ocorreu um erro fatal. O Gridcoin não consegue continuar em segurança e vai fechar.</translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../bitcoingui.cpp" line="-1036"/>
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation>
+            <numerusform>Processado %n bloco do histórico de transações.</numerusform>
+            <numerusform>Processados %n blocos do histórico de transações.</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -997,7 +955,7 @@ Endereço: %4
     <message>
         <location line="+45"/>
         <source>Amount:</source>
-        <translation>Quantia:</translation>
+        <translation>Valor:</translation>
     </message>
     <message>
         <location line="+29"/>
@@ -1022,7 +980,7 @@ Endereço: %4
     <message>
         <location filename="../forms/coincontroldialog.ui" line="+48"/>
         <source>After Fee:</source>
-        <translation>Depois das taxas:</translation>
+        <translation>Depois da taxa:</translation>
     </message>
     <message>
         <location line="+32"/>
@@ -1032,12 +990,12 @@ Endereço: %4
     <message>
         <location line="+69"/>
         <source>(un)select all</source>
-        <translation>(des)seleccionar todos</translation>
+        <translation>(des)selecionar todos</translation>
     </message>
     <message>
         <location line="+13"/>
         <source>Tree &amp;mode</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;modo de Árvore</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -1047,7 +1005,7 @@ Endereço: %4
     <message>
         <location line="+45"/>
         <source>Amount</source>
-        <translation>Quantia</translation>
+        <translation>Valor</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -1072,7 +1030,7 @@ Endereço: %4
     <message>
         <location line="+3"/>
         <source>Confirmed</source>
-        <translation>Confirmado</translation>
+        <translation>Confirmada</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -1087,18 +1045,18 @@ Endereço: %4
     <message>
         <location line="+1"/>
         <source>Copy label</source>
-        <translation>Copiar rótulo</translation>
+        <translation>Copiar etiqueta</translation>
     </message>
     <message>
         <location line="+1"/>
         <location line="+26"/>
         <source>Copy amount</source>
-        <translation>Copiar quantia</translation>
+        <translation>Copiar valor</translation>
     </message>
     <message>
         <location line="-25"/>
         <source>Copy transaction ID</source>
-        <translation>Copiar ID da Transação</translation>
+        <translation>Copiar Id. da transação</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -1108,12 +1066,12 @@ Endereço: %4
     <message>
         <location line="+2"/>
         <source>Copy fee</source>
-        <translation>Taxa de cópia</translation>
+        <translation>Copiar taxa</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy after fee</source>
-        <translation>Taxa depois da cópia</translation>
+        <translation>Copiar depois da taxa</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1133,7 +1091,7 @@ Endereço: %4
     <message>
         <location line="+1"/>
         <source>Copy change</source>
-        <translation>Copiar alteração</translation>
+        <translation>Copiar troco</translation>
     </message>
     <message>
         <location line="+317"/>
@@ -1192,20 +1150,7 @@ Endereço: %4
 Isto significa que uma taxa de pelos menos %1 por kb é necesária.</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Transactions with higher priority get more likely into a block.
-
-This label turns red, if the priority is smaller than &quot;medium&quot;.
-
- This means a fee of at least %1 per kb is required.</source>
-        <translation>Transações com prioridade superior têm mais probabilidade de se tornar num bloco.
-
-Este rótulo fica vermelho, se a prioridade for inferior a quot;medium&quot;.
-
-Isto significa que uma taxa de pelo menos %1 por kb é necessária</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>This label turns red, if any recipient receives an amount smaller than %1.
 
  This means a fee of at least %2 is required. 
@@ -1222,25 +1167,38 @@ Quantias 0.546 vezes menores que o minímo, são mostradas como insignificantes.
         <source>This label turns red, if the change is smaller than %1.
 
  This means a fee of at least %2 is required.</source>
-        <translation>Este rótulo fica vermelho, se a alteração tops
+        <translation>Este rótulo fica vermelho, se a alteração for menor que %1.
 
-Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
+Isto significa que uma taxa de pelo menos %2 é necesária.</translation>
     </message>
     <message>
         <location line="+37"/>
         <location line="+63"/>
         <source>(no label)</source>
-        <translation>(Sem rótulo)</translation>
+        <translation>(sem etiqueta)</translation>
     </message>
     <message>
-        <location line="-9"/>
+        <location line="-102"/>
+        <source>Transactions with higher priority get more likely into a block.
+
+This label turns red, if the priority is smaller than &quot;medium&quot;.
+
+ This means a fee of at least %1 per kb is required.</source>
+        <translation>Transações com prioridade superior têm mais probabilidade de se tornar num bloco.
+
+Este rótulo fica vermelho, se a prioridade for inferior à;media&quot;.
+
+Isto significa que uma taxa de pelo menos %1 por kb é necessária.</translation>
+    </message>
+    <message>
+        <location line="+93"/>
         <source>change from %1 (%2)</source>
-        <translation>alteração de %1 (%2)</translation>
+        <translation>troco de %1 (%2)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>(change)</source>
-        <translation>(alteração)</translation>
+        <translation>(troco)</translation>
     </message>
 </context>
 <context>
@@ -1253,7 +1211,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+11"/>
         <source>&amp;Label</source>
-        <translation>&amp;Rótulo</translation>
+        <translation>&amp;Etiqueta</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -1263,7 +1221,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+7"/>
         <source>&amp;Address</source>
-        <translation>&amp;Endereço</translation>
+        <translation>E&amp;ndereço</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -1291,42 +1249,32 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <translation>Editar endereço de envio</translation>
     </message>
     <message>
-        <location line="+76"/>
+        <location line="+71"/>
+        <source>The entered address &quot;%1&quot; is not a valid Gridcoin address.</source>
+        <translation>O endereço inserido &quot;%1&quot;não é um endereço de Gridcoin válido.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>The entered address &quot;%1&quot; is already in the address book.</source>
         <translation>O endereço introduzido &quot;%1&quot; já se encontra no livro de endereços.</translation>
     </message>
     <message>
-        <location line="-5"/>
-        <source>The entered address &quot;%1&quot; is not a valid Gridcoin address.</source>
-        <translation>O endereço inserido &quot;%1&quot;não é um endereço de Gridcoin válido</translation>
-    </message>
-    <message>
-        <location line="+10"/>
+        <location line="+5"/>
         <source>Could not unlock wallet.</source>
-        <translation>Impossível desbloquear carteira.</translation>
+        <translation>Não foi possível desbloquear a carteira.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>New key generation failed.</source>
-        <translation>Falha ao gerar nova chave.</translation>
+        <translation>A criação da nova chave falhou.</translation>
     </message>
 </context>
 <context>
     <name>GUIUtil::HelpMessageBox</name>
     <message>
-        <location filename="../guiutil.cpp" line="+436"/>
-        <source>Gridcoin-Qt</source>
-        <translation>Gridcoin-Qt</translation>
-    </message>
-    <message>
-        <location line="-12"/>
+        <location filename="../guiutil.cpp" line="+424"/>
         <source>version</source>
         <translation>versão</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>gridcoinresearch</source>
-        <translation>pesquisagridcoin</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -1358,6 +1306,11 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <source>Show splash screen on startup (default: 1)</source>
         <translation>Mostrar ecrã de abertura no arranque (por defeito: 1)</translation>
     </message>
+    <message>
+        <location line="+2"/>
+        <source>Gridcoin-Qt</source>
+        <translation>Gridcoin-Qt</translation>
+    </message>
 </context>
 <context>
     <name>NewPollDialog</name>
@@ -1365,72 +1318,72 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <location filename="../votingdialog.cpp" line="+900"/>
         <location line="+96"/>
         <source>Create Poll</source>
-        <translation type="unfinished"></translation>
+        <translation>Criar Votação</translation>
     </message>
     <message>
         <location line="-81"/>
         <source>Title: </source>
-        <translation type="unfinished"></translation>
+        <translation>Título: </translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Days: </source>
-        <translation type="unfinished"></translation>
+        <translation>Dias: </translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Question: </source>
-        <translation type="unfinished"></translation>
+        <translation>Questão: </translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Discussion URL: </source>
-        <translation type="unfinished"></translation>
+        <translation>URL de Discussão: </translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Share Type: </source>
-        <translation type="unfinished"></translation>
+        <translation>Tipo de Partilha: </translation>
     </message>
     <message>
         <location line="+23"/>
         <source>Add Item</source>
-        <translation type="unfinished"></translation>
+        <translation>Adicionar Item</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Remove Item</source>
-        <translation type="unfinished"></translation>
+        <translation>Remover Item</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Clear All</source>
-        <translation type="unfinished"></translation>
+        <translation>Limpar Tudo</translation>
     </message>
     <message>
         <location line="+36"/>
         <source>Creating poll failed! Title is missing.</source>
-        <translation type="unfinished"></translation>
+        <translation>Criação de votação falhada! Falta o título.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Creating poll failed! Days value is missing.</source>
-        <translation type="unfinished"></translation>
+        <translation>Criação de votação falhada! Falta valor dos dias.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Creating poll failed! Question is missing.</source>
-        <translation type="unfinished"></translation>
+        <translation>Criação de votação falhada! Falta questão.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Creating poll failed! URL is missing.</source>
-        <translation type="unfinished"></translation>
+        <translation>Criação de votação falhada! Falta URL.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Creating poll failed! Answer is missing.</source>
-        <translation type="unfinished"></translation>
+        <translation>Criação de votação falhada! Falta resposta.</translation>
     </message>
 </context>
 <context>
@@ -1456,7 +1409,47 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <translation>Quantia reservadada não participa no stake e como tal está sempre disponível para ser gasta a qualquer altura.</translation>
     </message>
     <message>
+        <location line="+80"/>
+        <source>&amp;Network</source>
+        <translation>&amp;Rede</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Map port using &amp;UPnP</source>
+        <translation>Mapear porta, utilizando &amp;UPnP</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Proxy &amp;IP:</source>
+        <translation>&amp;IP do proxy:</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>IP address of the proxy (e.g. 127.0.0.1)</source>
+        <translation>Endereço IP do proxy</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>&amp;Port:</source>
+        <translation>&amp;Porto:</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Port of the proxy (e.g. 9050)</source>
+        <translation>Porto do proxy (p.ex. 9050)</translation>
+    </message>
+    <message>
+        <location line="-184"/>
+        <source>Pa&amp;y transaction fee</source>
+        <translation>Pa&amp;gar taxa de transação</translation>
+    </message>
+    <message>
         <location line="+46"/>
+        <source>Reser&amp;ve</source>
+        <translation>Reser&amp;var</translation>
+    </message>
+    <message>
+        <location line="+31"/>
         <source>Automatically start Gridcoin after logging in to the system.</source>
         <translation>Começar Gridcoin automaticamente depois de entrar no sistema.</translation>
     </message>
@@ -1468,7 +1461,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+7"/>
         <source>Detach block and address databases at shutdown. This means they can be moved to another data directory, but it slows down shutdown. The wallet is always detached.</source>
-        <translation>Desliga blocos e endereços da base de dados no encerramento. Isto significa que pode mover para outra diretoria de dados, mas atrasa o encerramento. A carteira está sempre desligada</translation>
+        <translation>Desliga blocos e endereços da base de dados no encerramento. Isto significa que pode mover para outra diretoria de dados, mas atrasa o encerramento. A carteira está sempre desligada.</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1476,62 +1469,22 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <translation>&amp;Desliga bases de dados no encerramento</translation>
     </message>
     <message>
-        <location line="+21"/>
-        <source>&amp;Network</source>
-        <translation>&amp;Rede</translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="+27"/>
         <source>Automatically open the Gridcoin client port on the router. This only works when your router supports UPnP and it is enabled.</source>
-        <translation>Abre a porta do cliente Gridcoin automaticamente no router. Isto apenas funciona quando o seu router suport UPnP e está habitilitado</translation>
+        <translation>Abre a porta do cliente Gridcoin automaticamente no router. Isto apenas funciona se o seu router suportar UPnP e estiver habitilitado.</translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>Map port using &amp;UPnP</source>
-        <translation>Mapear porta usando &amp;UPnP</translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location line="+10"/>
         <source>Connect to the Gridcoin network through a SOCKS proxy (e.g. when connecting through Tor).</source>
-        <translation type="unfinished"></translation>
+        <translation>Liga à rede Gridcoin atraves do proxy SOCKS (ex. quando ligado através do TOR).</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Connect through SOCKS proxy:</source>
-        <translation>&amp;Ligar através de um proxy SOCKS: (exemplo: quando a ligação é feita através do Tor).</translation>
+        <translation>&amp;Ligar através de um proxy SOCKS:</translation>
     </message>
     <message>
-        <location line="-130"/>
-        <source>Pa&amp;y transaction fee</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+46"/>
-        <source>Reser&amp;ve</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+93"/>
-        <source>Prox&amp;y IP:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+19"/>
-        <source>IP address of the proxy (e.g. 127.0.0.1)</source>
-        <translation>Endereço IP do proxy</translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>&amp;Port:</source>
-        <translation>&amp;Porta:</translation>
-    </message>
-    <message>
-        <location line="+19"/>
-        <source>Port of the proxy (e.g. 9050)</source>
-        <translation>Porta do proxy (p.ex. 9050)</translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location line="+61"/>
         <source>SOCKS &amp;Version:</source>
         <translation>&amp;Versão SOCKS:</translation>
     </message>
@@ -1548,12 +1501,12 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+6"/>
         <source>Show only a tray icon after minimizing the window.</source>
-        <translation>Apenas mostrar o Í­cone da bandeja depois de minimizar a janela.</translation>
+        <translation>Apenas mostrar o ícone da bandeja de sistema após minimizar a janela.</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Minimize to the tray instead of the taskbar</source>
-        <translation>&amp;Minimizar para a bandeja e não para a barra de ferramentas</translation>
+        <translation>&amp;Minimizar para a bandeja de sistema e não para a barra de ferramentas</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -1573,47 +1526,27 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+8"/>
         <source>User Interface &amp;language:</source>
-        <translation>Linguagem da interface de &amp; utilizador:</translation>
+        <translation>&amp;Linguagem da interface de utilizador:</translation>
     </message>
     <message>
-        <location line="+13"/>
-        <source>The user interface language can be set here. This setting will take effect after restarting Gridcoin.</source>
-        <translation>O idioma da interface de utilizador pode ser definida aqui. Estas definições farão efeito depois de reiniciar o Gridcin</translation>
-    </message>
-    <message>
-        <location line="+11"/>
+        <location line="+24"/>
         <source>&amp;Unit to show amounts in:</source>
-        <translation>&amp;Unidade a mostrar nas quantias em:</translation>
+        <translation>&amp;Unidade para mostrar quantias:</translation>
     </message>
     <message>
         <location line="+13"/>
         <source>Choose the default subdivision unit to show in the interface and when sending coins.</source>
-        <translation>Escolha a subdivisão unitária a ser mostrada por defeito na aplicação e ao enviar moedas.</translation>
+        <translation>Escolha a unidade da subdivisão predefinida para ser mostrada na interface e quando enviar as moedas.</translation>
     </message>
     <message>
-        <location line="+11"/>
-        <source>Style:</source>
-        <translation type="unfinished"></translation>
+        <location line="-24"/>
+        <source>The user interface language can be set here. This setting will take effect after restarting Gridcoin.</source>
+        <translation>O idioma da interface de utilizador pode ser definido aqui. Estas definições farão efeito depois de reiniciar o Gridcoin.</translation>
     </message>
     <message>
-        <location line="+7"/>
-        <source>Choose a stylesheet to change the look of the wallet.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Whether to show Gridcoin addresses in the transaction list or not.</source>
-        <translation>Mostrar ou não endereços de Gridcoin na lista de transações</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>&amp;Display addresses in transaction list</source>
-        <translation>&amp;Mostrar endereço na lista de transações</translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location line="+61"/>
         <source>Whether to show coin control features or not.</source>
-        <translation>Escolha para mostrar funcionalidades de controlo &quot;coin&quot; ou não.</translation>
+        <translation>Escolha se deve mostrar as funcionalidades de controlo de moedas ou não.</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1621,7 +1554,27 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <translation>Mostrar moeda &amp;funcionalidades de controlo (para especialistas apenas!)</translation>
     </message>
     <message>
-        <location line="+74"/>
+        <location line="-29"/>
+        <source>Style:</source>
+        <translation>Estilo:</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Choose a stylesheet to change the look of the wallet.</source>
+        <translation>Escolha um estilo para alterar o aspeto da sua carteira.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Whether to show Gridcoin addresses in the transaction list or not.</source>
+        <translation>Mostrar ou não endereços de Gridcoin na lista de transações.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>&amp;Display addresses in transaction list</source>
+        <translation>&amp;Mostrar endereço na lista de transações</translation>
+    </message>
+    <message>
+        <location line="+84"/>
         <source>&amp;OK</source>
         <translation>&amp;OK</translation>
     </message>
@@ -1638,17 +1591,17 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location filename="../optionsdialog.cpp" line="+55"/>
         <source>default</source>
-        <translation>por defeito</translation>
+        <translation>predefinição</translation>
     </message>
     <message>
         <location line="+30"/>
         <source>Native</source>
-        <translation type="unfinished"></translation>
+        <translation>Nativo</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Light</source>
-        <translation type="unfinished"></translation>
+        <translation>Light</translation>
     </message>
     <message>
         <location line="+123"/>
@@ -1660,7 +1613,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <location line="-9"/>
         <location line="+9"/>
         <source>This setting will take effect after restarting Gridcoin.</source>
-        <translation>Estas definições entrarão em efeito depois de reiniciar o Gridcoin</translation>
+        <translation>Estas definições entrarão em efeito depois de reiniciar o Gridcoin.</translation>
     </message>
     <message>
         <location line="+42"/>
@@ -1676,25 +1629,20 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <translation>Formulário</translation>
     </message>
     <message>
-        <location line="+44"/>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:20px; font-weight:600; color:#000000;&quot;&gt;Wallet&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:20px; font-weight:600; color:#000000;&quot;&gt;Wallet&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
+        <location line="+47"/>
+        <source>Wallet</source>
+        <translation type="unfinished">Carteira</translation>
     </message>
     <message>
-        <location line="+7"/>
-        <location line="+411"/>
+        <location line="+10"/>
+        <location line="+439"/>
         <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</source>
         <translation>A informação mostrada pode estar desatualizada. A sua carteira sincroniza automaticamente com a rede Gridcoin depois da ligação ser estabelecida, mas este processo ainda não está completo.</translation>
     </message>
     <message>
-        <location line="-372"/>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Balance:&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Balance:&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
-    </message>
-    <message>
-        <location line="+15"/>
-        <source>Your current balance.</source>
-        <translation>O seu balanço total</translation>
+        <location line="-376"/>
+        <source>Your current spendable balance</source>
+        <translation>O seu saldo (gastável) disponível</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -1712,90 +1660,95 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <translation>Não confirmado</translation>
     </message>
     <message>
-        <location line="+28"/>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Immature:&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Immature:&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
+        <location line="+34"/>
+        <source>Immature:</source>
+        <translation>Imaturo:</translation>
     </message>
     <message>
-        <location line="+12"/>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot;background:black; color:#ffffff;&quot;&gt;Total mined coins that have not yet matured&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot;background:black; color:#ffffff;&quot;&gt;Total mined coins that have not yet matured&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
-    </message>
-    <message>
-        <location line="+32"/>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Total:&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Total:&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Total Balance     </source>
-        <translation>Balanço Total     </translation>
-    </message>
-    <message>
-        <location line="+46"/>
+        <location line="+103"/>
         <source>Blocks:</source>
-        <translation type="unfinished"></translation>
+        <translation>Blocos:</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Difficulty:</source>
-        <translation type="unfinished"></translation>
+        <translation>Dificuldade:</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Net Weight:</source>
-        <translation type="unfinished"></translation>
+        <translation>Peso da Rede:</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>DPOR Weight:</source>
-        <translation type="unfinished"></translation>
+        <translation>Peso DPOR:</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Magnitude:</source>
-        <translation type="unfinished"></translation>
+        <translation>Magnitude:</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Project:</source>
-        <translation type="unfinished"></translation>
+        <translation>Projeto:</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>CPID:</source>
-        <translation type="unfinished"></translation>
+        <translation>CPID:</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Status:</source>
-        <translation type="unfinished"></translation>
+        <translation>Estado:</translation>
     </message>
     <message>
-        <location line="+102"/>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:20px; font-weight:600; color:#000000;&quot;&gt;Recent transactions&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation type="unfinished"></translation>
+        <location line="+109"/>
+        <source>Recent transactions</source>
+        <translation>transações recentes</translation>
     </message>
     <message>
-        <location line="+96"/>
+        <location line="+99"/>
         <source>Current Poll:</source>
-        <translation type="unfinished"></translation>
+        <translation>Votação Atual:</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Client Messages:</source>
+        <translation>Mensagens do Cliente:</translation>
+    </message>
+    <message>
+        <location line="-345"/>
+        <source>Total:</source>
+        <translation>Total:</translation>
+    </message>
+    <message>
+        <location line="-38"/>
+        <source>Total mined coins that have not yet matured.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-392"/>
+        <location line="+45"/>
+        <source>Your current total balance</source>
+        <translation>O seu saldo total actual</translation>
+    </message>
+    <message>
+        <location line="-76"/>
         <source>Total of transactions that have yet to be confirmed, and do not yet count toward the current balance</source>
         <translation>Total de transações que têm de ser ainda confirmadas, e ainda não contam para o balanço atual</translation>
     </message>
     <message>
-        <location filename="../overviewpage.cpp" line="+134"/>
+        <location filename="../overviewpage.cpp" line="+132"/>
         <location line="+1"/>
         <source>out of sync</source>
         <translation>fora de sincronia</translation>
+    </message>
+    <message>
+        <location filename="../forms/overviewpage.ui" line="-71"/>
+        <source>Available:</source>
+        <translation>Disponível:</translation>
     </message>
 </context>
 <context>
@@ -1864,7 +1817,8 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <translation>Nome do cliente</translation>
     </message>
     <message>
-        <location line="-418"/>
+        <location line="-445"/>
+        <location line="+27"/>
         <location line="+42"/>
         <location line="+42"/>
         <location line="+54"/>
@@ -1890,7 +1844,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+425"/>
         <source>Startup time</source>
-        <translation>Tempo de início</translation>
+        <translation>Hora de Arranque</translation>
     </message>
     <message>
         <location line="-366"/>
@@ -1918,12 +1872,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <translation>Versão de Boost</translation>
     </message>
     <message>
-        <location line="+7"/>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;N/A&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;N/A&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location line="+14"/>
         <source>Proof Of Research Difficulty</source>
         <translation>Prova da Dificuldade de Pesquisa</translation>
     </message>
@@ -1935,27 +1884,67 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+128"/>
         <source>Gridcoin Core:</source>
-        <translation>Núcleo Gridcoin</translation>
+        <translation>Núcleo Gridcoin:</translation>
     </message>
     <message>
-        <location line="+92"/>
+        <location line="+131"/>
+        <source>Current number of blocks</source>
+        <translation>Número actual de blocos</translation>
+    </message>
+    <message>
+        <location line="-39"/>
         <source>Network:</source>
         <translation>Rede:</translation>
     </message>
     <message>
-        <location line="+39"/>
-        <source>Current number of blocks</source>
-        <translation>Número ctual de blocos</translation>
-    </message>
-    <message>
-        <location line="+29"/>
+        <location line="+68"/>
         <source>Estimated total blocks</source>
         <translation>Total estimado de blocos</translation>
     </message>
     <message>
-        <location line="-217"/>
+        <location line="+25"/>
+        <source>Open the Gridcoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
+        <translation>Abre o ficheiro de depuração do Gridcoin na directoria atual. Isto pode levar alguns segundos para ficheiros de registo maiores.</translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>Show the Gridcoin help message to get a list with possible Gridcoin command-line options.</source>
+        <translation>Mostra a mensagem de ajudo do Gridcoin para obter uma lista com possiveis comandos da linha de comandos.</translation>
+    </message>
+    <message>
+        <location line="+95"/>
+        <source>&amp;Network Traffic</source>
+        <translation>&amp;Tráfego de Rede</translation>
+    </message>
+    <message>
+        <location line="-21"/>
+        <source>OpenSSL version</source>
+        <translation>Versão OpenSSL</translation>
+    </message>
+    <message>
+        <location line="+73"/>
+        <source>&amp;Clear</source>
+        <translation>&amp;Limpar</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Totals</source>
+        <translation>Totais</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>In:</source>
+        <translation>Entrada:</translation>
+    </message>
+    <message>
+        <location line="+43"/>
+        <source>Out:</source>
+        <translation>Saída:</translation>
+    </message>
+    <message>
+        <location line="-503"/>
         <source>Last block time</source>
-        <translation>Tempo do último bloco</translation>
+        <translation>Data do último bloco</translation>
     </message>
     <message>
         <location line="+248"/>
@@ -1988,67 +1977,27 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <translation>Ficheiro de registo de depuração</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <source>Open the Gridcoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
-        <translation>Abre o ficheiro de depuração do Gridcoin da directoria atual. Isto pode levar alguns segundos para ficheiros de registo maiores</translation>
-    </message>
-    <message>
-        <location line="+31"/>
-        <source>Show the Gridcoin help message to get a list with possible Gridcoin command-line options.</source>
-        <translation>Mostra a mensagem de ajudo do Gridcoin para obter uma lista com possiveis comandos da linha de comandos.</translation>
-    </message>
-    <message>
-        <location line="+74"/>
-        <source>OpenSSL version</source>
-        <translation>Versão OpenSSL</translation>
-    </message>
-    <message>
-        <location line="+21"/>
-        <source>&amp;Network Traffic</source>
-        <translation>&amp;Tráfigo da Rede</translation>
-    </message>
-    <message>
-        <location line="+52"/>
-        <source>&amp;Clear</source>
-        <translation>&amp;Limpar</translation>
-    </message>
-    <message>
-        <location line="+13"/>
-        <source>Totals</source>
-        <translation>Totais</translation>
-    </message>
-    <message>
-        <location line="+27"/>
-        <source>In:</source>
-        <translation>Para dentro:</translation>
-    </message>
-    <message>
-        <location line="+43"/>
-        <source>Out:</source>
-        <translation>Para fora</translation>
-    </message>
-    <message>
-        <location line="+97"/>
+        <location line="+368"/>
         <source>Clear console</source>
         <translation>Limpar consola</translation>
     </message>
     <message>
-        <location filename="../rpcconsole.cpp" line="-35"/>
-        <source>Welcome to the Gridcoin RPC console! </source>
-        <translation>Bem-vindo à consola RPC Grdicoin</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location filename="../rpcconsole.cpp" line="-34"/>
         <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
         <translation>Use as setas para cima e para baixo para navegar no histórico e &lt;b&gt;Ctrl-L&lt;/b&gt; para limpar o ecrã.</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
-        <translation>Digite &lt;b&gt;help&lt;/b&gt; para visualizar os comandos disponíveis.</translation>
+        <translation>Insira &lt;b&gt;help&lt;/b&gt; para visualizar os comandos disponíveis.</translation>
     </message>
     <message>
-        <location line="+111"/>
+        <location line="-2"/>
+        <source>Welcome to the Gridcoin RPC console! </source>
+        <translation>Bem-vindo à consola RPC Grdicoin! </translation>
+    </message>
+    <message>
+        <location line="+113"/>
         <source>%1 B</source>
         <translation>%1 B</translation>
     </message>
@@ -2100,7 +2049,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+73"/>
         <source>Coin Control Features</source>
-        <translation>Funcionalidades de Controlo de Moedas:</translation>
+        <translation>Funcionalidades do Controlo de Moedas:</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -2110,7 +2059,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+7"/>
         <source>automatically selected</source>
-        <translation>Seleção automática</translation>
+        <translation>selecionadas automáticamente</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -2239,17 +2188,17 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+1"/>
         <source>Copy amount</source>
-        <translation>Copiar quantia</translation>
+        <translation>Copiar valor</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy fee</source>
-        <translation>Taxa de cópia</translation>
+        <translation>Copiar taxa</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy after fee</source>
-        <translation>Taxa depois da cópia</translation>
+        <translation>Copiar depois da taxa</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2257,22 +2206,22 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <translation>Copiar bytes</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Copy priority</source>
-        <translation>Cópia prioritária</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Copy low output</source>
         <translation>Copiar output baixo</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy change</source>
-        <translation>Copiar alteração</translation>
+        <translation>Copiar troco</translation>
     </message>
     <message>
-        <location line="+86"/>
+        <location line="-2"/>
+        <source>Copy priority</source>
+        <translation>Cópia prioritária</translation>
+    </message>
+    <message>
+        <location line="+88"/>
         <source>&lt;b&gt;%1&lt;/b&gt; to %2 (%3)</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; a %2 (%3)</translation>
     </message>
@@ -2309,7 +2258,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+5"/>
         <source>The total exceeds your balance when the %1 transaction fee is included.</source>
-        <translation>O total excede o seu saldo quando a taxa de transação de %1 for incluí­da.</translation>
+        <translation>O total excede o seu saldo quando a taxa de transação %1 está incluída.</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -2327,17 +2276,17 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <translation>Erro: A transação foi rejeitada. Isso pode acontecer se algumas das suas moedas na carteira já tiverem sido gastas, exemplo: se tiver utilizado uma cópia da wallet.dat e as moedas não tiverem sido marcadas como gastas aqui.</translation>
     </message>
     <message>
-        <location line="+251"/>
+        <location line="+264"/>
+        <source>(no label)</source>
+        <translation>(sem etiqueta)</translation>
+    </message>
+    <message>
+        <location line="-13"/>
         <source>WARNING: Invalid Gridcoin address</source>
         <translation>AVISO:	Endereço Gridcoin inválido</translation>
     </message>
     <message>
-        <location line="+13"/>
-        <source>(no label)</source>
-        <translation>(Sem rótulo)</translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+17"/>
         <source>WARNING: unknown change address</source>
         <translation>AVISO: endereço desconhecido</translation>
     </message>
@@ -2350,42 +2299,17 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <translation>Formulário</translation>
     </message>
     <message>
-        <location line="+48"/>
-        <source>Pa&amp;y To:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+18"/>
-        <source>The address to send the payment to  (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
-        <translation>O endereço para enviar o pagamento a (exemplo:Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</translation>
-    </message>
-    <message>
-        <location line="+60"/>
-        <source>Message:</source>
-        <translation>Mensagem:</translation>
-    </message>
-    <message>
-        <location line="+21"/>
-        <source>Send Custom Message to a Gridcoin Recipient</source>
-        <translation>Enviar Mensagem Personalizada a um Destinatário Gridcoin</translation>
-    </message>
-    <message>
-        <location line="+9"/>
+        <location line="+156"/>
         <source>A&amp;mount:</source>
-        <translation>Q&amp;uantia:</translation>
+        <translation>Qu&amp;antia:</translation>
     </message>
     <message>
-        <location line="+13"/>
-        <source>Track Coins</source>
-        <translation>Rastrear Moedas</translation>
+        <location line="-108"/>
+        <source>Pay &amp;To:</source>
+        <translation>&amp;Pagar A:</translation>
     </message>
     <message>
-        <location line="+7"/>
-        <source>Add Attachment</source>
-        <translation>Adicionar Anexo</translation>
-    </message>
-    <message>
-        <location line="-137"/>
+        <location line="-9"/>
         <location filename="../sendcoinsentry.cpp" line="+29"/>
         <source>Enter a label for this address to add it to your address book</source>
         <translation>Escreva um rótulo para este endereço para o adicionar ao seu livro de endereços</translation>
@@ -2393,10 +2317,15 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="-21"/>
         <source>&amp;Label:</source>
-        <translation>&amp;Rótulo</translation>
+        <translation>Rótu&amp;lo:</translation>
     </message>
     <message>
-        <location line="+58"/>
+        <location line="+48"/>
+        <source>The address to send the payment to  (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
+        <translation>O endereço para enviar o pagamento a (exemplo:Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <source>Choose address from address book</source>
         <translation>Escolha endereço do livro de endereços</translation>
     </message>
@@ -2421,6 +2350,26 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <translation>Remover este destinatário</translation>
     </message>
     <message>
+        <location line="+16"/>
+        <source>Message:</source>
+        <translation>Mensagem:</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Send Custom Message to a Gridcoin Recipient</source>
+        <translation>Enviar Mensagem Personalizada a um Destinatário Gridcoin</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Track Coins</source>
+        <translation>Rastrear Moedas</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Add Attachment</source>
+        <translation>Adicionar Anexo</translation>
+    </message>
+    <message>
         <location filename="../sendcoinsentry.cpp" line="+1"/>
         <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
         <translation>Insira um endereço Gridcoin (exemplo:G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
@@ -2435,12 +2384,11 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     </message>
     <message>
         <location line="+13"/>
-        <location line="+124"/>
         <source>&amp;Sign Message</source>
         <translation>&amp;Assinar Mensagem</translation>
     </message>
     <message>
-        <location line="-118"/>
+        <location line="+6"/>
         <source>You can sign messages with your addresses to prove you own them. Be careful not to sign anything vague, as phishing attacks may try to trick you into signing your identity over to them. Only sign fully-detailed statements you agree to.</source>
         <translation>Pode assinar mensagens com os seus endereços para provar que são seus. Tenha atenção ao assinar mensagens ambí­guas, pois ataques de phishing podem tentar enganá-lo, de modo a assinar a sua identidade para os atacantes. Assine apenas declarações completamente detalhadas com as quais concorde.</translation>
     </message>
@@ -2464,7 +2412,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="-193"/>
         <source>Paste address from clipboard</source>
-        <translation>Cole endereço da área de transferência</translation>
+        <translation>Colar endereço da área de transferência</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -2479,7 +2427,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+24"/>
         <source>Copy the current signature to the system clipboard</source>
-        <translation>Copiar a assinatura atual para a Área de transferência</translation>
+        <translation>Copiar a assinatura actual para a área de transferência</translation>
     </message>
     <message>
         <location line="+21"/>
@@ -2489,7 +2437,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+17"/>
         <source>Reset all sign message fields</source>
-        <translation>Repôr todos os campos de assinatura da mensagem</translation>
+        <translation>Repor todos os campos de assinatura de mensagem</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -2521,7 +2469,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+17"/>
         <source>Reset all verify message fields</source>
-        <translation>Repôr todos os campos de verificação da mensagem</translation>
+        <translation>Repor todos os campos de verificação de mensagem</translation>
     </message>
     <message>
         <location filename="../signverifymessagedialog.cpp" line="+27"/>
@@ -2604,6 +2552,11 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <location line="+5"/>
         <source>Message verified.</source>
         <translation>Mensagem verificada.</translation>
+    </message>
+    <message>
+        <location filename="../forms/signverifymessagedialog.ui" line="-160"/>
+        <source>Sign &amp;Message</source>
+        <translation>Assinar &amp;Mensagem</translation>
     </message>
 </context>
 <context>
@@ -2762,8 +2715,8 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Gridcoin generated coins must mature 120 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
-        <translation>As moedas gerados pelo Gricoin devem maturar durante 120 blocos antes de poderem ser gastas. Quando gerou este bloco, ele foi transmitido à rede para ser adicionado à cadeia de blocos. Se falhar a entrada na cadeia, o seu estado será alterado para &quot;não aceite&quot; e não será&apos; possivel de usar. Isto pode acontecer ocasionalmente se outro módulo gerar um bloxo com segundos de diferença do seu.</translation>
+        <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
+        <translation>As moedas gerados pelo Gricoin devem maturar durante 110 blocos antes de poderem ser gastas. Quando gerou este bloco, ele foi transmitido à rede para ser adicionado à cadeia de blocos. Se falhar a entrada na cadeia, o seu estado será alterado para &quot;não aceite&quot; e não será&apos; possivel de usar. Isto pode acontecer ocasionalmente se outro módulo gerar um bloxo com segundos de diferença do seu.</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -2783,7 +2736,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+26"/>
         <source>Amount</source>
-        <translation>Quantia</translation>
+        <translation>Valor</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2827,24 +2780,24 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <translation>Esta janela mostra uma descrição detalhada da transação</translation>
     </message>
     <message>
-        <location line="+42"/>
+        <location line="+25"/>
+        <source>View Attachment</source>
+        <translation>Ver Anexos</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Track Coins</source>
+        <translation>Rastrear Moedas</translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <source>Execute Contract</source>
         <translation>Executar Contrato</translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Close</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-17"/>
-        <source>Track Coins</source>
-        <translation>Rastrear Moedas</translation>
-    </message>
-    <message>
-        <location line="-7"/>
-        <source>View Attachment</source>
-        <translation>Ver Anexos</translation>
+        <source>C&amp;lose</source>
+        <translation type="unfinished">F&amp;echar</translation>
     </message>
     <message>
         <location filename="../transactiondescdialog.cpp" line="+90"/>
@@ -2859,7 +2812,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+1"/>
         <source>Document cannot be found on P2P server.</source>
-        <translation>Documento não encontrado no servidor P2P</translation>
+        <translation>Documento não encontrado no servidor P2P.</translation>
     </message>
 </context>
 <context>
@@ -2890,47 +2843,12 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <translation>Aberto até %1</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>Confirming (%1 of %2 recommended confirmations)&lt;br&gt;</source>
-        <translation>Confirmando (%1 de %2 confirmações recomendadas)&lt;br&gt;</translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="+12"/>
         <source>Confirmed (%1 confirmations)</source>
         <translation>Confirmada (%1 confirmações)</translation>
     </message>
-    <message>
-        <location line="+6"/>
-        <source>Immature (%1 confirmations, will be available after %2)&lt;br&gt;</source>
-        <translation>Imatura (1% confirmações, estará disponivel depois de %2)&lt;br&gt;</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>This block was not received by any other nodes&lt;br&gt; and will probably not be accepted!</source>
-        <translation>Esye bloco não foi recebido por nenhum outros nódulos&lt;br&gt; e provavelmente não será aceite</translation>
-    </message>
-    <message>
-        <location line="+80"/>
-        <source>Mined - DPOR</source>
-        <translation>Minada - DPOR</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Minted - (Local) DPOR</source>
-        <translation>Minted - DPOR (Local)</translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Mined - PoR</source>
-        <translation>Minada - PoR</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Mined - Interest</source>
-        <translation>Minada - Interesse</translation>
-    </message>
     <message numerus="yes">
-        <location line="-117"/>
+        <location line="-15"/>
         <source>Open for %n more block(s)</source>
         <translation>
             <numerusform>Aberta por mais %n bloco(s)</numerusform>
@@ -2953,12 +2871,27 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <translation>Conflito</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="-6"/>
+        <source>Confirming (%1 of %2 recommended confirmations)&lt;br&gt;</source>
+        <translation>Confirmando (%1 de %2 confirmações recomendadas)&lt;br&gt;</translation>
+    </message>
+    <message>
+        <location line="+15"/>
         <source>Generated but not accepted</source>
         <translation>Gerado mas não aceite</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="-6"/>
+        <source>Immature (%1 confirmations, will be available after %2)&lt;br&gt;</source>
+        <translation>Imatura (%1 confirmações, estará disponivel depois de %2)&lt;br&gt;</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>This block was not received by any other nodes&lt;br&gt; and will probably not be accepted!</source>
+        <translation>Esye bloco não foi recebido por outros nódulos&lt;br&gt; e provavelmente não será aceite!</translation>
+    </message>
+    <message>
+        <location line="+64"/>
         <source>Received with</source>
         <translation>Recebido com</translation>
     </message>
@@ -2978,12 +2911,32 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <translation>Pagamento ao próprio</translation>
     </message>
     <message>
-        <location line="+81"/>
+        <location line="+9"/>
+        <source>Mined - DPOR</source>
+        <translation>Minada - DPOR</translation>
+    </message>
+    <message>
+        <location line="+71"/>
         <source>(n/a)</source>
         <translation>(n/d)</translation>
     </message>
     <message>
-        <location line="+193"/>
+        <location line="-67"/>
+        <source>Minted - (Local) DPOR</source>
+        <translation>Minted - DPOR (Local)</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Mined - PoR</source>
+        <translation>Minada - PoR</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Mined - Interest</source>
+        <translation>Minada - Interesse</translation>
+    </message>
+    <message>
+        <location line="+251"/>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
         <translation>Estado da transação. Colocar ponteiro por cima deste campo para mostrar o número de confirmações.</translation>
     </message>
@@ -3089,17 +3042,17 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+1"/>
         <source>Copy label</source>
-        <translation>Copiar rótulo</translation>
+        <translation>Copiar etiqueta</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy amount</source>
-        <translation>Copiar quantia</translation>
+        <translation>Copiar valor</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy transaction ID</source>
-        <translation>Copiar ID da Transação</translation>
+        <translation>Copiar Id. da transação</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3119,7 +3072,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+1"/>
         <source>Comma separated file (*.csv)</source>
-        <translation>Ficheiro separado por ví­rgula (*.csv)</translation>
+        <translation>Ficheiro separado por vírgulas (*.csv)</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -3139,7 +3092,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+1"/>
         <source>Label</source>
-        <translation>Rótulo</translation>
+        <translation>Etiqueta</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3164,7 +3117,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+0"/>
         <source>Could not write to file %1.</source>
-        <translation>Não foi possivel escrever para p ficheiro %1</translation>
+        <translation>Não foi possivel escrever para o ficheiro %1.</translation>
     </message>
     <message>
         <location line="+100"/>
@@ -3205,35 +3158,35 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location filename="../votingdialog.cpp" line="-374"/>
         <source>Poll Results</source>
-        <translation type="unfinished"></translation>
+        <translation>Resultados da Votação</translation>
     </message>
     <message>
         <location line="+7"/>
         <location line="+60"/>
         <source>Q: </source>
-        <translation type="unfinished"></translation>
+        <translation>Q: </translation>
     </message>
     <message>
         <location line="-54"/>
         <location line="+55"/>
         <source>Discussion URL: </source>
-        <translation type="unfinished"></translation>
+        <translation>URL de Discussão: </translation>
     </message>
     <message>
         <location line="-43"/>
         <source>Chart</source>
-        <translation type="unfinished"></translation>
+        <translation>Gráfico</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>List</source>
-        <translation type="unfinished"></translation>
+        <translation>Lista</translation>
     </message>
     <message>
         <location line="+5"/>
         <location line="+25"/>
         <source>Best Answer: </source>
-        <translation type="unfinished"></translation>
+        <translation>Melhor Resposta: </translation>
     </message>
 </context>
 <context>
@@ -3241,37 +3194,37 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="-349"/>
         <source>Gridcoin Voting System 1.1</source>
-        <translation type="unfinished"></translation>
+        <translation>Sistema de Votação Gridcoin 1.1</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Active Polls (Right Click to Vote)</source>
-        <translation type="unfinished"></translation>
+        <translation>Votações Ativas (Botão Direito para Votar)</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Filter: </source>
-        <translation type="unfinished"></translation>
+        <translation>Filtro: </translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Reload Polls</source>
-        <translation type="unfinished"></translation>
+        <translation>Recarregar Votações</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Load History</source>
-        <translation type="unfinished"></translation>
+        <translation>Carregar Histórico</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Create Poll</source>
-        <translation type="unfinished"></translation>
+        <translation>Criar Votação</translation>
     </message>
     <message>
         <location line="+37"/>
         <source>...loading data!</source>
-        <translation type="unfinished"></translation>
+        <translation>...carregando dados!</translation>
     </message>
 </context>
 <context>
@@ -3279,98 +3232,98 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="-391"/>
         <source>#</source>
-        <translation type="unfinished"></translation>
+        <translation>#</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Title</source>
-        <translation type="unfinished"></translation>
+        <translation>Título</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Expiration</source>
-        <translation type="unfinished"></translation>
+        <translation>Data de Término</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Share Type</source>
-        <translation type="unfinished"></translation>
+        <translation>Tipo de Partilha</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Question</source>
-        <translation type="unfinished"></translation>
+        <translation>Questão</translation>
     </message>
     <message>
         <location line="+1"/>
         <location line="+157"/>
         <source>Answers</source>
-        <translation type="unfinished"></translation>
+        <translation>Respostas</translation>
     </message>
     <message>
         <location line="-156"/>
         <source># Voters</source>
-        <translation type="unfinished"></translation>
+        <translation># Votantes</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Total Shares</source>
-        <translation type="unfinished"></translation>
+        <translation>Total de Partilhas</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>URL</source>
-        <translation type="unfinished"></translation>
+        <translation>URL</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Best Answer</source>
-        <translation type="unfinished"></translation>
+        <translation>Melhor Resposta</translation>
     </message>
     <message>
         <location line="+143"/>
         <source>Row Number.</source>
-        <translation type="unfinished"></translation>
+        <translation>Número da Linha.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Title.</source>
-        <translation type="unfinished"></translation>
+        <translation>Título.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Expiration.</source>
-        <translation type="unfinished"></translation>
+        <translation>Data de Término.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Share Type.</source>
-        <translation type="unfinished"></translation>
+        <translation>Tipo de Partilha.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Question.</source>
-        <translation type="unfinished"></translation>
+        <translation>Questão.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Total Participants.</source>
-        <translation type="unfinished"></translation>
+        <translation>Total de Participantes.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Total Shares.</source>
-        <translation type="unfinished"></translation>
+        <translation>Total de Partilhas.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>URL.</source>
-        <translation type="unfinished"></translation>
+        <translation>URL.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Best Answer.</source>
-        <translation type="unfinished"></translation>
+        <translation>Melhor Resposta.</translation>
     </message>
 </context>
 <context>
@@ -3378,38 +3331,38 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+533"/>
         <source>PlaceVote</source>
-        <translation type="unfinished"></translation>
+        <translation>ColocarVoto</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Q: </source>
-        <translation type="unfinished"></translation>
+        <translation>Q: </translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Discussion URL: </source>
-        <translation type="unfinished"></translation>
+        <translation>URL de Discussão: </translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Best Answer: </source>
-        <translation type="unfinished"></translation>
+        <translation>Melhor Resposta: </translation>
     </message>
     <message>
         <location line="+17"/>
         <source>Vote</source>
-        <translation type="unfinished"></translation>
+        <translation>Voto</translation>
     </message>
     <message>
         <location line="+37"/>
         <source>Vote failed! Select one or more items to vote.</source>
-        <translation type="unfinished"></translation>
+        <translation>Voto falhado! Seleccione um ou mais items para votar.</translation>
     </message>
 </context>
 <context>
     <name>WalletModel</name>
     <message>
-        <location filename="../walletmodel.cpp" line="+278"/>
+        <location filename="../walletmodel.cpp" line="+269"/>
         <source>Sending...</source>
         <translation>Enviando...</translation>
     </message>
@@ -3417,12 +3370,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
 <context>
     <name>bitcoin-core</name>
     <message>
-        <location filename="../bitcoinstrings.cpp" line="+33"/>
-        <source>Gridcoin version</source>
-        <translation>Versão do Gridcoin</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location filename="../bitcoinstrings.cpp" line="+34"/>
         <source>Usage:</source>
         <translation>Utilização:</translation>
     </message>
@@ -3439,17 +3387,17 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+2"/>
         <source>Options:</source>
-        <translation>Opçõess:</translation>
+        <translation>Opções:</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Specify wallet file (within data directory)</source>
-        <translation>Especifique ficheiro da carteira (dentro da pasta de dados)</translation>
+        <translation>Especifique ficheiro de carteira (dentro da pasta de dados)</translation>
     </message>
     <message>
         <location line="-1"/>
         <source>Specify data directory</source>
-        <translation>Especificar diretoria de dados</translation>
+        <translation>Especificar pasta de dados</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -3469,7 +3417,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+3"/>
         <source>Connect to a node to retrieve peer addresses, and disconnect</source>
-        <translation>Ligar a um nódulo para recuperar endereços de peers e, desligar</translation>
+        <translation>Ligar a um nó para recuperar endereços de pares, e desligar</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3497,49 +3445,19 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <translation>Ocorreu um erro ao definir a porta %u do serviço RPC a escutar em IPv4: %s</translation>
     </message>
     <message>
-        <location line="+157"/>
-        <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>Erro: A transação foi rejeitada. Isto pode acontecer se algumas das moedas na sua carteira já tiverem sido gastas, por exemplo se as usou na cópia da sua wallet.dat, mas não foram marcadas como gastas aqui.</translation>
-    </message>
-    <message>
-        <location line="-5"/>
-        <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
-        <translation>Erro: Esta transação necessita de uma taxa de transação de pelo menos %s devido a esta quantia, complexidade, ou utilização de fundos recebidos recentemente</translation>
-    </message>
-    <message>
-        <location line="-87"/>
+        <location line="+65"/>
         <source>Listen for JSON-RPC connections on &lt;port&gt; (default: 15715 or testnet: 25715)</source>
         <translation>Escuta para ligações JSON-RPC em &lt;port&gt; (por defeito: 15715 ou testnet: 25715)</translation>
     </message>
     <message>
         <location line="-11"/>
         <source>Accept command line and JSON-RPC commands</source>
-        <translation>Aceitar comandos da consola e JSON-RPC</translation>
-    </message>
-    <message>
-        <location line="+101"/>
-        <source>Error: Transaction creation failed  </source>
-        <translation>Erro: Criação de transação fallhou</translation>
-    </message>
-    <message>
-        <location line="-5"/>
-        <source>Error: Wallet locked, unable to create transaction  </source>
-        <translation>Erro: Carteira bloqueada, incapaz de criar transação</translation>
-    </message>
-    <message>
-        <location line="-8"/>
-        <source>Importing blockchain data file.</source>
-        <translation>Importando ficheiro de dados da cadeia</translation>
+        <translation>Aceitar comandos de linha de comandos e JSON-RPC</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Importing bootstrap blockchain data file.</source>
-        <translation>Importando ficheiro de dados do bootstrap da cadeia</translation>
-    </message>
-    <message>
-        <location line="-88"/>
         <source>Run in the background as a daemon and accept commands</source>
-        <translation>Correr o processo como um daemon e aceitar comandos</translation>
+        <translation>Correr o processo em segundo plano e aceitar comandos</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3552,32 +3470,27 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <translation>Aceitar ligações externas (por defeito: 1 sem -proxy ou -connect)</translation>
     </message>
     <message>
-        <location line="-38"/>
+        <location line="+120"/>
+        <source>Error: Transaction creation failed  </source>
+        <translation>Erro: Criação de transação fallhou</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
+        <translation>Erro: A transação foi rejeitada. Isto pode acontecer se algumas das moedas na sua carteira já tiverem sido gastas, por exemplo se as usou na cópia da sua wallet.dat, mas não foram marcadas como gastas aqui.</translation>
+    </message>
+    <message>
+        <location line="-160"/>
         <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
         <translation>Ocorreu um erro ao definir a porta %u do serviço RPC a escutar em IPv6, a uitlizar IPv4: %s</translation>
     </message>
     <message>
-        <location line="+115"/>
-        <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
-        <translation>Erro ao iniciar o ambiente da base de dados %s! Para recuperar, GUARDE ESSA DIRETORIA, depois remova tudo, exceto o wallet.dat.</translation>
-    </message>
-    <message>
-        <location line="-21"/>
-        <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
-        <translation>Definir tamanho máximo das transações de alta prioridade/baixa taxa em bytes (por defeito: 27000)</translation>
-    </message>
-    <message>
-        <location line="+11"/>
+        <location line="+105"/>
         <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
         <translation>Atenção: -paytxfee está definida com um valor muito elevado! Esta é a taxa que irá pagar se enviar uma transação.</translation>
     </message>
     <message>
-        <location line="+61"/>
-        <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
-        <translation>Aviso: Por favor verifique que a data e tempo &apos;s do seu computador estão corretos! Se o seu relógio estiver incorreto, o Gridcoin não funcionará bem.</translation>
-    </message>
-    <message>
-        <location line="-30"/>
+        <location line="+31"/>
         <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
         <translation>Atenção: erro ao ler wallet.dat! Todas as chaves foram lidas correctamente, mas dados de transação ou do livro de endereços podem estar em falta ou incorretos.</translation>
     </message>
@@ -3594,7 +3507,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+4"/>
         <source>Block creation options:</source>
-        <translation>Opções de criação de bloco:</translation>
+        <translation>Opções da criação de bloco:</translation>
     </message>
     <message>
         <location line="-59"/>
@@ -3609,20 +3522,10 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
     <message>
         <location line="+92"/>
         <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
-        <translation>Falhou a escuta em qualquer porta. Use -listen=0 se quer isto.</translation>
+        <translation>Falhou a escutar em qualquer porta. Use -listen=0 se quiser isto.</translation>
     </message>
     <message>
-        <location line="-88"/>
-        <source>Find peers using DNS lookup (default: 1)</source>
-        <translation>Encontrar peers utilizando o DNS lookup</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Sync checkpoints policy (default: strict)</source>
-        <translation>Sincronizar politíca de checkpoints (por defeito: rigoroso)</translation>
-    </message>
-    <message>
-        <location line="+82"/>
+        <location line="-2"/>
         <source>Invalid -tor address: &apos;%s&apos;</source>
         <translation>Endereço -tor inválido: &apos;%s&apos;</translation>
     </message>
@@ -3647,64 +3550,9 @@ Isto significa que uma taxa de pelo menos %2 é necesária. </translation>
         <translation>Apenas ligar a nódulos na rede &lt;net&gt; (IPv4, IPv6 ou Tor)</translation>
     </message>
     <message>
-        <location line="-49"/>
-        <source>%s, you must set a rpcpassword in the configuration file:
- %s
-It is recommended you use the following random password:
-rpcuser=gridcoinrpc
-rpcpassword=%s
-(you do not need to remember this password)
-The username and password MUST NOT be the same.
-If the file does not exist, create it with owner-readable-only file permissions.
-It is also recommended to set alertnotify so you are notified of problems;
-for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
-</source>
-        <translation>%s, tem de difinir uma palavra-passe rcp no ficheiro de configuração:
- %s
-É recomendado que utilize a seguine palavra-passe aleatória:
-rpcuser=gridcoinrpc
-rpcpassword=%s
-(não necessita de se lembrar desta palavra-passe)
-O nome de utilizador e palavra-passa NÃO devem ser o mesmo.
-Se o ficheiro não existir, crie-o com permissões de escrita.
-Também é recomendado que defina um alarme de notificações para que seja notificado de probelmas;
-por examplo: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
-</translation>
-    </message>
-    <message>
-        <location line="+26"/>
-        <source>Send command to -server or gridcoind</source>
-        <translation>Enviar comando ao -server ou gridcoin</translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Specify configuration file (default: gridcoin.conf)</source>
-        <translation>Especificar ficheiro de configuração (por defeito: gridcoin.conf)</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Specify pid file (default: gridcoind.pid)</source>
-        <translation>Especificar ficheiro pid (por defeito: gridcoin.pid)</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
-        <translation>Escutar ligações em on &lt;port&gt; (por defeito: 32749 na testnet: 32748)</translation>
-    </message>
-    <message>
-        <location line="+31"/>
-        <source>Output extra debugging information. Implies all other -debug* options</source>
-        <translation>Informação de depuração de saída. implica todas as outras opções de -debug*</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Output extra network debugging information</source>
-        <translation>Informação de depuração da rede de saída</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+27"/>
         <source>Prepend debug output with timestamp</source>
-        <translation type="unfinished"></translation>
+        <translation>Prepend debug output with timestamp</translation>
     </message>
     <message>
         <location line="+35"/>
@@ -3712,22 +3560,12 @@ por examplo: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Opções SSL: (ver a Wiki Bitcoin para instruções de configuração SSL)</translation>
     </message>
     <message>
-        <location line="-71"/>
-        <source>Select the version of socks proxy to use (4-5, default: 5)</source>
-        <translation>Seleccione a versão do socks proxy a utilizar (4-5. por defeito: 5)</translation>
-    </message>
-    <message>
-        <location line="+38"/>
+        <location line="-33"/>
         <source>Send trace/debug info to console instead of debug.log file</source>
-        <translation>Enviar informações de rastreio/depuração para a consola e não para o ficheiro debug.log</translation>
+        <translation>Enviar informação de rastreio/depuração para a consola e não para o ficheiro debug.log</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Send trace/debug info to debugger</source>
-        <translation>Enviar informações rastreio/depuração para o debugger</translation>
-    </message>
-    <message>
-        <location line="+28"/>
+        <location line="+29"/>
         <source>Set maximum block size in bytes (default: 250000)</source>
         <translation>Definir tamanho do bloco em bytes (por defeito: 250000)</translation>
     </message>
@@ -3747,13 +3585,7 @@ por examplo: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Especificar tempo de espera da ligação em millisegundos (por defeito: 5000)</translation>
     </message>
     <message>
-        <location line="+107"/>
-        <source>Unable to sign checkpoint, wrong checkpointkey?
-</source>
-        <translation>Incapaz de verificar checkpoint, chave de checkpoint errada?</translation>
-    </message>
-    <message>
-        <location line="-79"/>
+        <location line="+28"/>
         <source>Use UPnP to map the listening port (default: 0)</source>
         <translation>Usar UPnP para mapear a porta de escuta (padrão: 0)</translation>
     </message>
@@ -3778,17 +3610,7 @@ por examplo: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Verificando integridade da base de dados...</translation>
     </message>
     <message>
-        <location line="+56"/>
-        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
-        <translation>AVISO: violação detetada na sincronização de checkpoint, mas ignorada</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Warning: Disk space is low!</source>
-        <translation>Aviso: Pouco disco em espaço</translation>
-    </message>
-    <message>
-        <location line="-2"/>
+        <location line="+55"/>
         <source>Warning: This version is obsolete, upgrade required!</source>
         <translation>Atenção: Esta versão está obsoleta, actualização necessária!</translation>
     </message>
@@ -3803,22 +3625,87 @@ por examplo: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Palavra-passe para ligações JSON-RPC</translation>
     </message>
     <message>
-        <location line="-30"/>
-        <source>Find peers using internet relay chat (default: 0)</source>
-        <translation>Encontrar peers utilizando irc (por defeito: 0)</translation>
+        <location line="-81"/>
+        <source>%s, you must set a rpcpassword in the configuration file:
+ %s
+It is recommended you use the following random password:
+rpcuser=gridcoinrpc
+rpcpassword=%s
+(you do not need to remember this password)
+The username and password MUST NOT be the same.
+If the file does not exist, create it with owner-readable-only file permissions.
+It is also recommended to set alertnotify so you are notified of problems;
+for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
+</source>
+        <translation>%s, tem de difinir uma palavra-passe rcp no ficheiro de configuração:
+ %s
+É recomendado que utilize a seguine palavra-passe aleatória:
+rpcuser=gridcoinrpc
+rpcpassword=%s
+(não necessita de se lembrar desta palavra-passe)
+O nome de utilizador e palavra-passa NÃO devem ser o mesmo.
+Se o ficheiro não existir, crie-o com permissões de escrita.
+Também é recomendado que defina um alarme de notificações para que seja notificado de probelmas;
+por examplo: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
+</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+24"/>
+        <source>Gridcoin version</source>
+        <translation>Versão do Gridcoin</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Send command to -server or gridcoind</source>
+        <translation>Enviar comando ao -server ou gridcoin</translation>
+    </message>
+    <message>
+        <location line="+29"/>
         <source>Sync time with other nodes. Disable if time on your system is precise e.g. syncing with NTP (default: 1)</source>
         <translation>Sincronizar tempo com outros nódulos. Desabilitar se o tempo no seu sistema for preciso, por exemplo a sincronizar com NTP (por defeito: 1)</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="-23"/>
+        <source>Specify configuration file (default: gridcoin.conf)</source>
+        <translation>Especificar ficheiro de configuração (por defeito: gridcoin.conf)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Specify pid file (default: gridcoind.pid)</source>
+        <translation>Especificar ficheiro pid (por defeito: gridcoin.pid)</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Select the version of socks proxy to use (4-5, default: 5)</source>
+        <translation>Seleccione a versão do socks proxy a utilizar (4-5. por defeito: 5)</translation>
+    </message>
+    <message>
+        <location line="+28"/>
         <source>When creating transactions, ignore inputs with value less than this (default: 0.01)</source>
         <translation>Quando criando transações, ignorar entradas com valor inferior a este (por defeito: 0.01)</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="-25"/>
+        <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
+        <translation>Escutar ligações em on &lt;port&gt; (por defeito: 32749 na testnet: 32748)</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Find peers using internet relay chat (default: 0)</source>
+        <translation>Encontrar peers utilizando irc (por defeito: 0)</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Find peers using DNS lookup (default: 1)</source>
+        <translation>Encontrar peers utilizando o DNS lookup</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Sync checkpoints policy (default: strict)</source>
+        <translation>Sincronizar politíca de checkpoints (por defeito: rigoroso)</translation>
+    </message>
+    <message>
+        <location line="+26"/>
         <source>Allow JSON-RPC connections from specified IP address</source>
         <translation>Permitir ligações JSON-RPC do endereço IP especificado</translation>
     </message>
@@ -3830,12 +3717,12 @@ por examplo: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="+1"/>
         <source>Execute command when the best block changes (%s in cmd is replaced by block hash)</source>
-        <translation>Executar comando quando o melhor bloco altera(%s no comando é substituido pela hash do bloco)</translation>
+        <translation>Executar o comando quando o melhor bloco muda (no comando, %s é substituído pela hash do bloco)</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</source>
-        <translation>Executar comando quando uma das transações na carteira mudar (%s no cmd é substitui­do pelo TxID)</translation>
+        <translation>Executar o comando quando uma transação da carteira muda (no comando, %s é substituído pela Id. da Transação)</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -3843,17 +3730,22 @@ por examplo: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Necessita de confirmação para alteração (por defeito: 0)</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
-        <translation>Forçar scripts de transação a utilizarem operadores de PUSH</translation>
-    </message>
-    <message>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>Execute command when a relevant alert is received (%s in cmd is replaced by message)</source>
         <translation>Executar comando quando um alerta relevante foi recebido (%s no cmd é substituido pela mensagem)</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="-21"/>
+        <source>Output extra debugging information. Implies all other -debug* options</source>
+        <translation>Informação de depuração de saída. implica todas as outras opções de -debug*</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Output extra network debugging information</source>
+        <translation>Informação de depuração da rede de saída</translation>
+    </message>
+    <message>
+        <location line="+23"/>
         <source>Upgrade wallet to latest format</source>
         <translation>Atualize a carteira para o formato mais recente</translation>
     </message>
@@ -3868,12 +3760,12 @@ por examplo: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Reexaminar a cadeia de blocos para transações em falta na carteira</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <source>How many blocks to check at startup (default: 2500, 0 = all)</source>
-        <translation>Quanto blocos são verificados no arranque (por defeito: 2500, 0 = todos)</translation>
+        <location line="-21"/>
+        <source>Send trace/debug info to debugger</source>
+        <translation>Enviar informações rastreio/depuração para o debugger</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+24"/>
         <source>How thorough the block verification is (0-6, default: 1)</source>
         <translation>Quão minucioso é a verificação de blocos (0-6 por defeito: 1)</translation>
     </message>
@@ -3898,27 +3790,53 @@ por examplo: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Chave privada do servidor (por defeito: server.pem)</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Acceptable ciphers (default: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</source>
-        <translation>Cifras aceitáveus (por defeito: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</translation>
+        <location line="-21"/>
+        <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
+        <translation>Forçar scripts de transação a utilizarem operadores de PUSH</translation>
     </message>
     <message>
-        <location line="+8"/>
-        <source>Initialization sanity check failed. Gridcoin is shutting down.</source>
-        <translation>Inicialização de verificação de sanidade falhou. Gridcoin está a encerrar.</translation>
+        <location line="+9"/>
+        <source>How many blocks to check at startup (default: 2500, 0 = all)</source>
+        <translation>Quanto blocos são verificados no arranque (por defeito: 2500, 0 = todos)</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+6"/>
+        <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
+        <translation>Definir tamanho máximo das transações de alta prioridade/baixa taxa em bytes (por defeito: 27000)</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
+        <translation>Erro ao iniciar o ambiente da base de dados %s! Para recuperar, GUARDE ESSA DIRETORIA, depois remova tudo, exceto o wallet.dat.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Unable to sign checkpoint, wrong checkpointkey?
+</source>
+        <translation>Incapaz de verificar checkpoint, chave de checkpoint errada?</translation>
+    </message>
+    <message>
+        <location line="+23"/>
         <source>Error: Wallet unlocked for staking only, unable to create transaction.</source>
-        <translation>Erro: Carteira desbloqueada para stake apena, incapaz de criar transação</translation>
+        <translation>Erro: Carteira desbloqueada para stake apenas, incapaz de criar transação.</translation>
     </message>
     <message>
-        <location line="+18"/>
-        <source>WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.</source>
-        <translation>AVISO:	 Checkpoint inválido encontrado! As transações mostradas podem não ser corretas! Pode necessitar de actualizar ou notificar os desenvolvedorees.</translation>
+        <location line="+12"/>
+        <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
+        <translation>Aviso: Por favor verifique que a data e tempo &apos;s do seu computador estão corretos! Se o seu relógio estiver incorreto, o Gridcoin não funcionará bem.</translation>
     </message>
     <message>
-        <location line="-155"/>
+        <location line="+4"/>
+        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
+        <translation>AVISO: violação detetada na sincronização de checkpoint, mas ignorada!</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Warning: Disk space is low!</source>
+        <translation>Aviso: Pouco disco em espaço!</translation>
+    </message>
+    <message>
+        <location line="-154"/>
         <source>This help message</source>
         <translation>Esta mensagem de ajuda</translation>
     </message>
@@ -3928,64 +3846,34 @@ por examplo: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>A carteira %s reside fora da directoria de dados %s.</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
-        <translation>Não foi possivel cadear a diretoria de dados %s. O Gridcoin já está provavelmente em execução.</translation>
-    </message>
-    <message>
-        <location line="-96"/>
-        <source>Gridcoin</source>
-        <translation>Gridcoin</translation>
-    </message>
-    <message>
-        <location line="+137"/>
+        <location line="+42"/>
         <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
         <translation>Incapaz de vincular a %s neste computador (ligação retornou erro %d, %s)</translation>
     </message>
     <message>
-        <location line="-127"/>
-        <source>Connect through socks proxy</source>
-        <translation>Ligar através de socks proxy</translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="-124"/>
         <source>Allow DNS lookups for -addnode, -seednode and -connect</source>
         <translation>Permitir procuras DNS para -addnode, -seednode e -connect</translation>
     </message>
     <message>
         <location line="+119"/>
         <source>Loading addresses...</source>
-        <translation>Carregando endereços...</translation>
+        <translation>A carregar os endereços...</translation>
     </message>
     <message>
-        <location line="-14"/>
-        <source>Error loading blkindex.dat</source>
-        <translation>Erro ao carregar blkindex.dat</translation>
-    </message>
-    <message>
-        <location line="+2"/>
+        <location line="-12"/>
         <source>Error loading wallet.dat: Wallet corrupted</source>
         <translation>Erro ao carregar wallet.dat: Carteira corrompida</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
-        <translation>Erro ao carregar wallet.dat: A carteira necessira de uma versão mais recente do Gridcoin</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
-        <translation>A carteira precisa de ser reescrita: reinicie o Gridcoin para concluir</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+6"/>
         <source>Error loading wallet.dat</source>
         <translation>Erro ao carregar wallet.dat</translation>
     </message>
     <message>
         <location line="-16"/>
         <source>Invalid -proxy address: &apos;%s&apos;</source>
-        <translation>Endereço de -proxy inválido: &apos;%s&apos;</translation>
+        <translation>Endereço -proxy inválido: &apos;%s&apos;</translation>
     </message>
     <message>
         <location line="-1"/>
@@ -3993,12 +3881,7 @@ por examplo: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Rede desconhecida especificada em -onlynet: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-1"/>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>Versão de proxy desconhecida -socks necessária: %i</translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>Cannot resolve -bind address: &apos;%s&apos;</source>
         <translation>Não foi possivel resolver o endereço -bind: &apos;%s&apos;</translation>
     </message>
@@ -4013,12 +3896,7 @@ por examplo: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Quantia inválida para -paytxfee=&lt;amount&gt;: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+44"/>
-        <source>Error: could not start node</source>
-        <translation>Erro: Não possivel começar o nódulo</translation>
-    </message>
-    <message>
-        <location line="+11"/>
+        <location line="+55"/>
         <source>Sending...</source>
         <translation>Enviando...</translation>
     </message>
@@ -4035,35 +3913,55 @@ por examplo: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="-33"/>
         <source>Loading block index...</source>
-        <translation>Carregar índice de blocos...</translation>
+        <translation>A carregar o índice de blocos...</translation>
     </message>
     <message>
         <location line="-101"/>
         <source>Add a node to connect to and attempt to keep the connection open</source>
-        <translation>Adicione um nódulo ao qual se ligar e tentar manter a ligação aberta</translation>
+        <translation>Adicionar um nó para se ligar e tentar manter a ligação aberta</translation>
     </message>
     <message>
-        <location line="+119"/>
-        <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
-        <translation>Não foi possível ligar %s neste computador. O Gridcoin já está possivelmente a ser executado.</translation>
-    </message>
-    <message>
-        <location line="-97"/>
+        <location line="+22"/>
         <source>Fee per KB to add to transactions you send</source>
         <translation>Taxa por kb para adicionar às transações que enviou</translation>
     </message>
     <message>
-        <location line="+55"/>
+        <location line="-38"/>
+        <source>Gridcoin</source>
+        <translation>Gridcoin</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Connect through socks proxy</source>
+        <translation>Ligar através de socks proxy</translation>
+    </message>
+    <message>
+        <location line="+83"/>
         <source>Invalid amount for -mininput=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation>Quantia inválida para -mininput=&lt;amount&gt;: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+26"/>
-        <source>Loading wallet...</source>
-        <translation>Carregando a carteira...</translation>
+        <location line="-7"/>
+        <source>Acceptable ciphers (default: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</source>
+        <translation>Cifras aceitáveus (por defeito: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</translation>
     </message>
     <message>
         <location line="+8"/>
+        <source>Initialization sanity check failed. Gridcoin is shutting down.</source>
+        <translation>Inicialização de verificação de sanidade falhou. Gridcoin está a encerrar.</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Loading wallet...</source>
+        <translation>A carregar a carteira...</translation>
+    </message>
+    <message>
+        <location line="-23"/>
+        <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
+        <translation>Não foi possivel cadear a diretoria de dados %s. O Gridcoin já está provavelmente em execução.</translation>
+    </message>
+    <message>
+        <location line="+31"/>
         <source>Cannot downgrade wallet</source>
         <translation>Impossível mudar a carteira para uma versão anterior</translation>
     </message>
@@ -4080,15 +3978,70 @@ por examplo: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="+5"/>
         <source>Done loading</source>
-        <translation>Carregamento completo</translation>
+        <translation>Carregamento concluído</translation>
     </message>
     <message>
-        <location line="-164"/>
+        <location line="-26"/>
+        <source>Unknown -socks proxy version requested: %i</source>
+        <translation>Versão de proxy desconhecida -socks necessária: %i</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Error loading blkindex.dat</source>
+        <translation>Erro ao carregar blkindex.dat</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
+        <translation>Erro ao carregar wallet.dat: A carteira necessira de uma versão mais recente do Gridcoin</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
+        <translation>A carteira precisa de ser reescrita: reinicie o Gridcoin para concluir</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Importing blockchain data file.</source>
+        <translation>Importando ficheiro de dados da cadeia.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Importing bootstrap blockchain data file.</source>
+        <translation>Importando ficheiro de dados do bootstrap da cadeia.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Error: could not start node</source>
+        <translation>Erro: Não possivel começar o nódulo</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
+        <translation>Não foi possível ligar %s neste computador. O Gridcoin já está possivelmente a ser executado.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Error: Wallet locked, unable to create transaction  </source>
+        <translation>Erro: Carteira bloqueada, incapaz de criar transação</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
+        <translation>Erro: Esta transação necessita de uma taxa de transação de pelo menos %s devido a esta quantia, complexidade, ou utilização de fundos recebidos recentemente</translation>
+    </message>
+    <message>
+        <location line="-170"/>
         <source>To use the %s option</source>
         <translation>Para usar as %s opções %s</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+187"/>
+        <source>WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.</source>
+        <translation>AVISO:	 Checkpoint inválido encontrado! As transações mostradas podem não ser corretas! Pode necessitar de actualizar ou notificar os desenvolvedorees.</translation>
+    </message>
+    <message>
+        <location line="-173"/>
         <source>Error</source>
         <translation>Erro</translation>
     </message>

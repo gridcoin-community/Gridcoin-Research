@@ -6,12 +6,13 @@
     <message>
         <location filename="../forms/aboutdialog.ui" line="+14"/>
         <source>About Gridcoin</source>
-        <translation>? Gridcoin</translation>
+        <translatorcomment>О Gridcoin</translatorcomment>
+        <translation>О Gridcoin</translation>
     </message>
     <message>
         <location line="+42"/>
         <source>&lt;b&gt;Gridcoin&lt;/b&gt; </source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;b&gt;Gridcoin&lt;/b&gt; </translation>
     </message>
     <message>
         <location line="+58"/>
@@ -21,7 +22,13 @@ This is experimental software.
 Distributed under the MIT/X11 software license, see the accompanying file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 This product includes software developed by the OpenSSL Project for use in the OpenSSL Toolkit (http://www.openssl.org/) and cryptographic software written by Eric Young (eay@cryptsoft.com) and UPnP software written by Thomas Bernard.</source>
-        <translation type="unfinished"></translation>
+        <translation>
+Это экспериментальное программное обеспечение.
+
+Распространяется в соответствии с лицензией на программное обеспечение MIT / X11, см. Сопроводительный файл COPYING или http://www.opensource.org/licenses/mit-license.php.
+
+Этот продукт включает программное обеспечение, разработанное OpenSSL Project для использования в OpenSSL Toolkit (http://www.openssl.org/) и криптографическом программном обеспечении, написанном Эриком Яном (eay@cryptsoft.com) и программным обеспечением UPnP, написанным Томасом Бернардом.
+</translation>
     </message>
 </context>
 <context>
@@ -29,12 +36,12 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location filename="../forms/addressbookpage.ui" line="+14"/>
         <source>Address Book</source>
-        <translation type="unfinished"></translation>
+        <translation>Адресная книга</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
-        <translation type="unfinished"></translation>
+        <translation>Здесь находятся ваши адреса Gridcoin для получения платежей. Если захотите, создавайте разные для их отслеживания. (например Вы можетесоздать отдельный адрес для приема входящих транзакций от биржи Bittrex или любой другой сделки, просто подпишите метку на отдельном адресе, для удобства).</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -48,8 +55,8 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="+3"/>
-        <source>&amp;New Address</source>
-        <translation type="unfinished"></translation>
+        <source>&amp;New</source>
+        <translation>&amp;Новый</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -58,33 +65,33 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="+3"/>
-        <source>&amp;Copy Address</source>
-        <translation>&amp;Копировать адрес</translation>
+        <source>&amp;Copy</source>
+        <translation>&amp;Копировать</translation>
     </message>
     <message>
         <location line="+11"/>
         <source>Show &amp;QR Code</source>
-        <translation type="unfinished"></translation>
+        <translation>Показать &amp;QR код</translation>
     </message>
     <message>
         <location line="+11"/>
         <source>Sign a message to prove you own a Gridcoin address</source>
-        <translation type="unfinished"></translation>
+        <translation>Подпишите сообщение, чтобы доказать, что вы владеете адресом Gridcoin</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Sign &amp;Message</source>
-        <translation type="unfinished">Подписать &amp;Сообщение</translation>
+        <translation>Подписать &amp;Сообщение</translation>
     </message>
     <message>
         <location line="+11"/>
         <source>Verify a message to ensure it was signed with a specified Gridcoin address</source>
-        <translation type="unfinished"></translation>
+        <translation>Проверить сообщения, чтобы удостовериться, что они были подписаны определённым адресом Gridcoin</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Verify Message</source>
-        <translation type="unfinished">&amp;Проверить сообщение</translation>
+        <translation>&amp;Проверить сообщение</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -109,17 +116,17 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+250"/>
         <source>Export Address Book Data</source>
-        <translation type="unfinished"></translation>
+        <translation>Экспорт Адресная книга Данные</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Error exporting</source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка экспорта</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Could not write to file %1.</source>
-        <translation type="unfinished"></translation>
+        <translation>Не могу сохранить в файл %1.</translation>
     </message>
     <message>
         <location line="-13"/>
@@ -142,7 +149,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+36"/>
         <source>(no label)</source>
-        <translation>[нет метки]</translation>
+        <translation>(нет метки)</translation>
     </message>
 </context>
 <context>
@@ -170,17 +177,17 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+33"/>
         <source>Serves to disable the trivial sendmoney when OS account compromised. Provides no real security.</source>
-        <translation type="unfinished"></translation>
+        <translation>Служит для отключения тривиальных sendmoney, когда скомпрометирована учетная запись ОС. Не обеспечивает реальной безопасности.</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>For staking only</source>
-        <translation type="unfinished"></translation>
+        <translation>Только для стейкинга</translation>
     </message>
     <message>
         <location filename="../askpassphrasedialog.cpp" line="+37"/>
         <source>Enter the new passphrase to the wallet.&lt;br/&gt;Please use a passphrase of &lt;b&gt;ten or more random characters&lt;/b&gt;, or &lt;b&gt;eight or more words&lt;/b&gt;.</source>
-        <translation type="unfinished"></translation>
+        <translation>Введите новый пароль бумажника.&lt;br/&gt;Используйте пароль, состоящий из &lt;b&gt;десяти или более случайных символов&lt;/b&gt;, или &lt;b&gt;восьми или более слов&lt;/b&gt;.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -215,7 +222,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+1"/>
         <source>Enter the old and new passphrase to the wallet.</source>
-        <translation>Введите старый и новый пароль для бумажника.</translation>
+        <translation>Введите старый и придумайте новый пароль для бумажника.</translation>
     </message>
     <message>
         <location line="+45"/>
@@ -230,12 +237,12 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+0"/>
         <source>Warning: If you encrypt your wallet and lose your passphrase, you will &lt;b&gt;LOSE ALL OF YOUR COINS&lt;/b&gt;!</source>
-        <translation type="unfinished"></translation>
+        <translation>Предупреждение: Если вы зашифруете свой кошелек и потеряете пароль, вы &lt;b&gt; ПОТЕРЯЕТЕ ВСЕ ВАШИ ДЕНЬГИ&lt;/b&gt;!</translation>
     </message>
     <message>
         <location line="+11"/>
         <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
-        <translation type="unfinished"></translation>
+        <translation>Сейчас программа закроется для завершения процесса шифрования. Помните, что шифрование вашего бумажника не может полностью защитить ваши средства от кражи с помощью инфицирования вашего компьютера вредоносным ПО.</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -283,12 +290,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <location line="+12"/>
         <location line="+19"/>
         <source>The passphrase entered for the wallet decryption was incorrect.</source>
-        <translation>Указанный пароль не подходит.</translation>
+        <translation>Неверный пароль для расшифровки бумажника.</translation>
     </message>
     <message>
         <location line="-20"/>
         <source>Wallet decryption failed</source>
-        <translation>Расшифрование бумажника не удалось</translation>
+        <translation>Расшифровка бумажника не удалась</translation>
     </message>
     <message>
         <location line="+14"/>
@@ -301,546 +308,486 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location filename="../bitcoin.cpp" line="+145"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
-        <translation type="unfinished"></translation>
+        <translation>Произошла неисправимая ошибка. Gridcoin не может безопасно продолжать работу и будет закрыт.</translation>
     </message>
     <message>
-        <location filename="../bitcoingui.cpp" line="+205"/>
+        <location filename="../bitcoingui.cpp" line="+200"/>
         <source>Gridcoin</source>
-        <translation type="unfinished"></translation>
+        <translation>Gridcoin</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Wallet</source>
-        <translation type="unfinished">Бумажник</translation>
+        <translation>Бумажник</translation>
     </message>
     <message>
-        <location line="+639"/>
+        <location line="+591"/>
         <source>&amp;Overview</source>
-        <translation type="unfinished">&amp;Обзор</translation>
+        <translation>&amp;Обзор</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Show general overview of wallet</source>
-        <translation type="unfinished">Показать общий обзор действий с бумажником</translation>
+        <translation>Показать общий обзор действий с бумажником</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>&amp;Send coins</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>Send coins to a Gridcoin address</source>
-        <translation type="unfinished"></translation>
+        <translation>Отправить средства на адрес Gridcoin</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>&amp;Receive coins</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>Show the list of addresses for receiving payments</source>
-        <translation type="unfinished"></translation>
+        <translation>Показать список адресов для входящих платежей</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>&amp;Transactions</source>
-        <translation type="unfinished">&amp;Транзакции</translation>
+        <translation>&amp;Транзакции</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Browse transaction history</source>
-        <translation type="unfinished">Показать историю транзакций</translation>
+        <translation>Показать историю транзакций</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>&amp;Address Book</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Адресная книга</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Edit the list of stored addresses and labels</source>
-        <translation type="unfinished"></translation>
+        <translation>Редактирование списка сохраненных адресов и меток</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>&amp;Block Explorer</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Обзор блоков</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Block Explorer</source>
-        <translation type="unfinished"></translation>
+        <translation>Обзор блоков</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Exchange</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Биржа</translation>
     </message>
     <message>
         <location line="+1"/>
         <location line="+4"/>
         <source>Web Site</source>
-        <translation type="unfinished"></translation>
+        <translation>Веб сайт</translation>
     </message>
     <message>
         <location line="-1"/>
         <source>&amp;Web Site</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Веб сайт</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>&amp;GRC Chat Room</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;GRC Чат</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>GRC Chatroom</source>
-        <translation type="unfinished"></translation>
+        <translation>GRC Чат</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;BOINC</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;BOINC</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Gridcoin rewards distributed computing with BOINC</source>
-        <translation type="unfinished"></translation>
+        <translation>Gridcoin вознаграждает распределенные вычисления выполняемые для BOINC</translation>
     </message>
     <message>
         <location line="+20"/>
         <source>E&amp;xit</source>
-        <translation type="unfinished">В&amp;ыход</translation>
+        <translation>В&amp;ыход</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Quit application</source>
-        <translation type="unfinished">Закрыть приложение</translation>
+        <translation>Закрыть приложение</translation>
     </message>
     <message>
         <location line="+6"/>
-        <location line="+169"/>
+        <location line="+137"/>
         <source>&amp;Rebuild Block Chain</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Перестроить блокчейн</translation>
     </message>
     <message>
-        <location line="-168"/>
+        <location line="-136"/>
         <source>Rebuild Block Chain</source>
-        <translation type="unfinished"></translation>
+        <translation>Перестроить блокчейн</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Download Blocks</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Загрузить блоки</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Download Blocks</source>
-        <translation type="unfinished"></translation>
+        <translation>Загрузить блоки</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>&amp;Reboot Client</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Reboot Gridcoin</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>&amp;Upgrade Client</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Обновить клиент</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Upgrade Client</source>
-        <translation type="unfinished"></translation>
+        <translation>Обновить клиент</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>&amp;About Gridcoin</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;О Gridcoin</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Show information about Gridcoin</source>
-        <translation type="unfinished"></translation>
+        <translation>Информация о Gridcoin</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Neural Network</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Нейронная Сеть</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Neural Network</source>
-        <translation type="unfinished"></translation>
+        <translation>Нейронная Сеть</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>&amp;Advanced Configuration</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Дополнительная Конфигурация</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Advanced Configuration</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>&amp;Live Ticker</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Live Ticker</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>&amp;Tickets</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Tickets</source>
-        <translation type="unfinished"></translation>
+        <translation>Дополнительная Конфигурация</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;New User Wizard</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Мастер настройки нового пользователя</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+606"/>
+        <location line="+578"/>
         <source>New User Wizard</source>
-        <translation type="unfinished"></translation>
+        <translation>Мастер настройки нового пользователя</translation>
     </message>
     <message>
-        <location line="-599"/>
+        <location line="-575"/>
         <source>&amp;Voting</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Голосование</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Voting</source>
-        <translation type="unfinished"></translation>
+        <translation>Голосование</translation>
     </message>
     <message>
         <location line="+3"/>
-        <source>&amp;Galaza (Game)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Galaza</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
         <source>&amp;Foundation</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Организация</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Foundation</source>
-        <translation type="unfinished"></translation>
+        <translation>Организация</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Diagnostics</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Диагностика</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Diagnostics</source>
-        <translation type="unfinished"></translation>
+        <translation>Диагностика</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>FA&amp;Q</source>
-        <translation type="unfinished"></translation>
+        <translation>FA&amp;Q</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Interactive FAQ</source>
-        <translation type="unfinished"></translation>
+        <translation>Интерактивный FAQ</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Options...</source>
-        <translation type="unfinished">Опции</translation>
+        <translation>&amp;Параметры</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Modify configuration options for Gridcoin</source>
-        <translation type="unfinished"></translation>
+        <translation>Изменение параметров конфигурации Gridcoin</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>&amp;Show / Hide</source>
-        <translation type="unfinished">&amp;Показать / Скрыть</translation>
+        <translation>&amp;Показать / Скрыть</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>&amp;Encrypt Wallet...</source>
-        <translation type="unfinished">&amp;Зашифровать бумажник...</translation>
+        <translation>&amp;Зашифровать бумажник...</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Encrypt or decrypt wallet</source>
-        <translation type="unfinished"></translation>
+        <translation>Зашифровать или расшифровывать бумажник</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>&amp;Backup Wallet...</source>
-        <translation type="unfinished">&amp;Сделать резервную копию бумажника...</translation>
+        <translation>&amp;Сделать резервную копию бумажника...</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Backup wallet to another location</source>
-        <translation type="unfinished">Сделать резервную копию бумажника в другом месте</translation>
+        <translation>Сделать резервную копию бумажника в другом месте</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>&amp;Change Passphrase...</source>
-        <translation type="unfinished">&amp;Изменить пароль...</translation>
+        <translation>&amp;Изменить пароль...</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Change the passphrase used for wallet encryption</source>
-        <translation type="unfinished">Изменить пароль шифрования бумажника</translation>
+        <translation>Изменить пароль шифрования бумажника</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>&amp;Unlock Wallet...</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Разблокировать бумажник...</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Unlock wallet</source>
-        <translation type="unfinished">Разблокировать бумажник</translation>
+        <translation>Разблокировать бумажник</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>&amp;Lock Wallet</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Заблокировать кошелек</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Lock wallet</source>
-        <translation type="unfinished"></translation>
+        <translation>Заблокировать кошелек</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Sign &amp;message...</source>
-        <translation type="unfinished">&amp;Подписать сообщение...</translation>
+        <translation>&amp;Подписать сообщение...</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>&amp;Verify message...</source>
-        <translation type="unfinished">&amp;Проверить сообщение...</translation>
+        <translation>&amp;Проверить сообщение...</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>&amp;Export...</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Експорт...</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Export the data in the current tab to a file</source>
-        <translation type="unfinished">Экспортировать данные из вкладки в файл</translation>
+        <translation>Экспорт данных из текущей вкладки в файл</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>&amp;Debug window</source>
-        <translation type="unfinished">&amp;Окно отладки</translation>
+        <translation>&amp;Окно отладки</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Open debugging and diagnostic console</source>
-        <translation type="unfinished">Открыть консоль отладки и диагностики</translation>
+        <translation>Открыть консоль отладки и диагностики</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+40"/>
         <source>&amp;File</source>
-        <translation type="unfinished">&amp;Файл</translation>
+        <translation>&amp;Файл</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>&amp;Settings</source>
-        <translation type="unfinished">&amp;Настройки</translation>
+        <translation>&amp;Настройки</translation>
     </message>
     <message>
         <location line="+9"/>
         <source>&amp;Community</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Комьюнити</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+39"/>
         <source>&amp;Help</source>
-        <translation type="unfinished">&amp;Помощь</translation>
+        <translation>&amp;Помощь</translation>
     </message>
     <message>
-        <location line="-41"/>
+        <location line="-30"/>
         <source>&amp;Upgrade QT Client</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Обновить QT клиент</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+12"/>
         <source>&amp;Advanced</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Дополнительно</translation>
     </message>
     <message>
-        <location line="+77"/>
+        <location line="+68"/>
         <location line="+9"/>
         <source>[testnet]</source>
-        <translation type="unfinished">[тестовая сеть]</translation>
+        <translation>[тестовая сеть]</translation>
     </message>
     <message>
         <location line="+0"/>
         <location line="+64"/>
         <source>Gridcoin client</source>
-        <translation type="unfinished"></translation>
+        <translation>Gridcoin клиент</translation>
     </message>
     <message numerus="yes">
         <location line="+79"/>
         <source>%n active connection(s) to Gridcoin network</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
+        <translation>
+            <numerusform>%n Активные соединения в сети Gricoin</numerusform>
+            <numerusform>%n Активные соединения в сети Gricoin</numerusform>
+            <numerusform>%n Активные соединения в сети Gricoin</numerusform>
         </translation>
     </message>
     <message>
         <location line="+24"/>
         <source>Synchronizing with network...</source>
-        <translation type="unfinished">Синхронизация с сетью...</translation>
+        <translation>Синхронизация с сетью...</translation>
     </message>
     <message numerus="yes">
         <location line="+2"/>
         <source>~%n block(s) remaining</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
+        <translation>
+            <numerusform>~%n Блоков осталось</numerusform>
+            <numerusform>~%n Блоков осталось</numerusform>
+            <numerusform>~%n Блоков осталось</numerusform>
         </translation>
     </message>
-    <message>
-        <location line="+6"/>
-        <source>Downloaded %1 of %2 blocks of transaction history (%3% done).</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Downloaded %1 blocks of transaction history.</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message numerus="yes">
-        <location line="+22"/>
+        <location line="+35"/>
         <source>%n second(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
+        <translation>
+            <numerusform>%n секунд назад</numerusform>
+            <numerusform>%n секунд назад</numerusform>
+            <numerusform>%n секунд назад</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
         <source>%n minute(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
+        <translation>
+            <numerusform>%n минут назад</numerusform>
+            <numerusform>%n минут назад</numerusform>
+            <numerusform>%n минут назад</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
         <source>%n hour(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
+        <translation>
+            <numerusform>%n часов назад</numerusform>
+            <numerusform>%n часов назад</numerusform>
+            <numerusform>%n часов назад</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
         <source>%n day(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
+        <translation>
+            <numerusform>%n Дней назад</numerusform>
+            <numerusform>%n Дней назад</numerusform>
+            <numerusform>%n Дней назад</numerusform>
         </translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Up to date</source>
-        <translation type="unfinished">Синхронизировано</translation>
+        <translation>Синхронизировано</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Catching up...</source>
-        <translation type="unfinished">Синхронизируется...</translation>
+        <translation>Синхронизируется...</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Last received block was generated %1.</source>
-        <translation type="unfinished"></translation>
+        <translation>Последний полученный блок был сгенерирован %1.</translation>
     </message>
     <message>
         <location line="+70"/>
         <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
-        <translation type="unfinished"></translation>
+        <translation>Транзакция превышает разрешенный лимит, Вы можете отправить ее с помощью комиссии составляющей %1, комиссия направляется на развитие проекта. Заплатить?</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Confirm transaction fee</source>
-        <translation type="unfinished"></translation>
+        <translation>Подтвердить комиссию</translation>
     </message>
     <message>
         <location line="+69"/>
         <source>Please enter your boinc E-mail address, or click &lt;Cancel&gt; to skip for now:</source>
-        <translation type="unfinished"></translation>
+        <translation>Пожалуйста введите ваш boinc E-mail адресс, или нажмите &lt;Cancel&gt;:</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Created new Configuration File Successfully. </source>
-        <translation type="unfinished"></translation>
+        <translation>Файл конфигурации успешно создан. </translation>
     </message>
     <message>
         <location line="+1"/>
         <source>New Account Created - Welcome Aboard!</source>
-        <translation type="unfinished"></translation>
+        <translation>Аккаунт создан - Добро пожаловать!</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. </source>
-        <translation type="unfinished"></translation>
+        <translation>Чтобы начать работу с Boinc, запустите клиент boinc, выберите проекты, а затем запишите в файл gridcoinresearch.conf в% appdata% \ GridcoinResearch ваш boinc  адрес электронной почты. Чтобы снова запустить этот мастер, удалите файл gridcoinresearch.conf.</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>New User Wizard - Skipped</source>
-        <translation type="unfinished"></translation>
+        <translation>Мастер настройки нового пользователя - Пропущен</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Attention! - Boinc Path Error!</source>
-        <translation type="unfinished"></translation>
+        <translation>Внимание! - Boinc Ошибка пути!</translation>
     </message>
     <message>
         <location line="+30"/>
         <source>Sent transaction</source>
-        <translation type="unfinished">Исходящая транзакция</translation>
+        <translation>Исходящая транзакция</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Incoming transaction</source>
-        <translation type="unfinished">Входящая транзакция</translation>
+        <translation>Входящая транзакция</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -849,76 +796,76 @@ Amount: %2
 Type: %3
 Address: %4
 </source>
-        <translation type="unfinished">Дата: %1
+        <translation>Дата: %1
 Сумма: %2
 Тип: %3
 Адрес: %4
 </translation>
     </message>
     <message>
-        <location line="+405"/>
+        <location line="+319"/>
         <location line="+15"/>
         <source>URI handling</source>
-        <translation type="unfinished">Обработка URI</translation>
+        <translation>Обработка URI</translation>
     </message>
     <message>
         <location line="-15"/>
         <location line="+15"/>
         <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
-        <translation type="unfinished"></translation>
+        <translation>URI не может быть проанализирован! Это может быть вызвано неправильным адресом Gridcoin или неправильными параметрами URI.</translation>
     </message>
     <message>
         <location line="+18"/>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
-        <translation type="unfinished">Бумажник &lt;b&gt;зашифрован&lt;/b&gt; и в настоящее время &lt;b&gt;разблокирован&lt;/b&gt;</translation>
+        <translation>Бумажник &lt;b&gt;зашифрован&lt;/b&gt; и в настоящее время &lt;b&gt;разблокирован&lt;/b&gt;</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
-        <translation type="unfinished">Бумажник &lt;b&gt;зашифрован&lt;/b&gt; и в настоящее время &lt;b&gt;заблокирован&lt;/b&gt;</translation>
+        <translation>Бумажник &lt;b&gt;зашифрован&lt;/b&gt; и в настоящее время &lt;b&gt;заблокирован&lt;/b&gt;</translation>
     </message>
     <message>
         <location line="+29"/>
         <source>Backup Wallet</source>
-        <translation type="unfinished">Сделать резервную копию бумажника</translation>
+        <translation>Сделать резервную копию бумажника</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Wallet Data (*.dat)</source>
-        <translation type="unfinished">Данные бумажника (*.dat)</translation>
+        <translation>Данные бумажника (*.dat)</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Backup Failed</source>
-        <translation type="unfinished">Резервное копирование не удалось</translation>
+        <translation>Резервное копирование не удалось</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>There was an error trying to save the wallet data to the new location.</source>
-        <translation type="unfinished"></translation>
+        <translation>Обнаружена ошибка при попытке перенести wallet dat.</translation>
     </message>
     <message numerus="yes">
-        <location line="+307"/>
+        <location line="+297"/>
         <source>%n second(s)</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
+        <translation>
+            <numerusform>%n секунд</numerusform>
+            <numerusform>%n секунд</numerusform>
+            <numerusform>%n секунд</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
         <source>%n minute(s)</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
+        <translation>
+            <numerusform>%n минут</numerusform>
+            <numerusform>%n минут</numerusform>
+            <numerusform>%n минут</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
         <source>%n hour(s)</source>
-        <translation type="unfinished">
+        <translation>
             <numerusform>%n час</numerusform>
             <numerusform>%n часа</numerusform>
             <numerusform>%n часов</numerusform>
@@ -927,7 +874,7 @@ Address: %4
     <message numerus="yes">
         <location line="+4"/>
         <source>%n day(s)</source>
-        <translation type="unfinished">
+        <translation>
             <numerusform>%n день</numerusform>
             <numerusform>%n дня</numerusform>
             <numerusform>%n дней</numerusform>
@@ -936,42 +883,61 @@ Address: %4
     <message>
         <location line="+27"/>
         <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
-        <translation type="unfinished"></translation>
+        <translation>Стейкинг.&lt;br&gt; Ваша значимость %1&lt;br&gt;Сеть %2&lt;br&gt;&lt;b&gt;Установленое&lt;/b&gt; время до награды %3. %4</translation>
     </message>
     <message>
         <location line="+9"/>
         <source>Not staking because wallet is locked</source>
-        <translation type="unfinished"></translation>
+        <translation>Стейкинг отсутствует, по причине блокировки кошелька</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Not staking because wallet is offline</source>
-        <translation type="unfinished"></translation>
+        <translation>Стейкинг отсутствует, кошелек отключен от сети</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Not staking because wallet is syncing</source>
-        <translation type="unfinished"></translation>
+        <translation>Стейкинг отсутствует, так как идет синхронизация кошелька</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Not staking because you don&apos;t have mature coins and stake weight is too low.</source>
-        <translation type="unfinished"></translation>
+        <translation>Стейкинг отсутствует, потому что у вас нет сформировавшихся средств для этого, а ставка слишком мала.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Not staking because you don&apos;t have mature coins</source>
-        <translation type="unfinished"></translation>
+        <translation>Стейкинг отсутствует, по причине отсутствия монет</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Searching for mature coins... Please wait</source>
-        <translation type="unfinished"></translation>
+        <translation>Поиск монет... Пожалуйста подождите</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Not staking</source>
-        <translation type="unfinished"></translation>
+        <translation>Стейкинг отсутствует</translation>
+    </message>
+    <message>
+        <location line="-1504"/>
+        <source>&amp;Send</source>
+        <translation>&amp;Отправить</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>&amp;Receive</source>
+        <translation>&amp;Получить</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+463"/>
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation>
+            <numerusform>Обработан %n блок истории транзакций.</numerusform>
+            <numerusform>Обработано %n блока истории транзакций.</numerusform>
+            <numerusform>Обработано %n блоков истории транзакций.</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -987,7 +953,7 @@ Address: %4
     <message>
         <location filename="../forms/coincontroldialog.ui" line="+14"/>
         <source>Coin Control</source>
-        <translation type="unfinished"></translation>
+        <translation>Контроль монет</translation>
     </message>
     <message>
         <location line="+28"/>
@@ -1037,7 +1003,7 @@ Address: %4
     <message>
         <location line="+13"/>
         <source>Tree &amp;mode</source>
-        <translation type="unfinished"></translation>
+        <translation>Режим &amp;дерева</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -1052,7 +1018,7 @@ Address: %4
     <message>
         <location line="+5"/>
         <source>Label</source>
-        <translation type="unfinished">Метка</translation>
+        <translation>Метка</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -1093,12 +1059,12 @@ Address: %4
         <location line="+1"/>
         <location line="+26"/>
         <source>Copy amount</source>
-        <translation>Скопировать сумму</translation>
+        <translation>Копировать сумму</translation>
     </message>
     <message>
         <location line="-25"/>
         <source>Copy transaction ID</source>
-        <translation>Скопировать ID транзакции</translation>
+        <translation>Копировать ID транзакции</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -1143,7 +1109,7 @@ Address: %4
     <message>
         <location line="+164"/>
         <source>DUST</source>
-        <translation type="unfinished"></translation>
+        <translation>Пыль</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -1152,7 +1118,11 @@ Address: %4
  This means a fee of at least %1 per kb is required.
 
  Can vary +/- 1 Byte per input.</source>
-        <translation type="unfinished"></translation>
+        <translation>Эта метка становится красной, если размер транзакции превышает 10000 байт.
+
+Это означает, что требуется плата не менее%1 за килобайт
+
+Может варьироваться +/- 1 байт на вход.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1161,7 +1131,11 @@ Address: %4
 This label turns red, if the priority is smaller than &quot;medium&quot;.
 
  This means a fee of at least %1 per kb is required.</source>
-        <translation type="unfinished"></translation>
+        <translation>Транзакции с более высоким приоритетом становятся более вероятными в блоке.
+
+Эта метка становится красной, если приоритет меньше, чем «средний».
+
+Это означает, что требуется плата не менее%1 за килобайт.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1170,14 +1144,21 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
  This means a fee of at least %2 is required. 
 
  Amounts below 0.546 times the minimum relay fee are shown as DUST.</source>
-        <translation type="unfinished"></translation>
+        <translation>Эта метка становится красной, если какой-либо получатель получает сумму меньше%1
+
+Это означает, что требуется плата не менее%2.
+
+Суммы ниже 0,546 раз минимальная плата за транзит показаны как DUST.
+</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>This label turns red, if the change is smaller than %1.
 
  This means a fee of at least %2 is required.</source>
-        <translation type="unfinished"></translation>
+        <translation>Эта пометка становится красной, если сдача меньше %1.
+
+Это означает, что требуется плата не менее%2.</translation>
     </message>
     <message>
         <location line="-176"/>
@@ -1223,7 +1204,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+50"/>
         <location line="+63"/>
         <source>(no label)</source>
-        <translation>[нет метки]</translation>
+        <translation>(нет метки)</translation>
     </message>
     <message>
         <location line="-9"/>
@@ -1233,7 +1214,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>(change)</source>
-        <translation>(размен)</translation>
+        <translation>(сдача)</translation>
     </message>
 </context>
 <context>
@@ -1251,12 +1232,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+10"/>
         <source>The label associated with this address book entry</source>
-        <translation type="unfinished"></translation>
+        <translation>Метка, связанная с этой записью адресной книги</translation>
     </message>
     <message>
         <location line="+17"/>
         <source>The address associated with this address book entry. This can only be modified for sending addresses.</source>
-        <translation type="unfinished"></translation>
+        <translation>Адрес, связанный с этой записью адресной книги. Можно изменить только для посылаемых адресов.</translation>
     </message>
     <message>
         <location line="-10"/>
@@ -1266,32 +1247,32 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../editaddressdialog.cpp" line="+20"/>
         <source>New receiving address</source>
-        <translation>Новый адрес для получения</translation>
+        <translation>Новый адрес получения</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>New sending address</source>
-        <translation>Новый адрес для отправки</translation>
+        <translation>Новый адрес отправки</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Edit receiving address</source>
-        <translation>Изменение адреса для получения</translation>
+        <translation>Изменить адрес получения</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Edit sending address</source>
-        <translation>Изменение адреса для отправки</translation>
+        <translation>Изменить адрес отправки</translation>
     </message>
     <message>
         <location line="+71"/>
         <source>The entered address &quot;%1&quot; is not a valid Gridcoin address.</source>
-        <translation type="unfinished"></translation>
+        <translation>Введенный адрес «%1» не является допустимым адресом Gridcoin.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>The entered address &quot;%1&quot; is already in the address book.</source>
-        <translation>Введённый адрес «%1» уже находится в адресной книге.</translation>
+        <translation>Введённый адрес &quot;%1&quot; уже находится в адресной книге.</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -1308,48 +1289,43 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <name>GUIUtil::HelpMessageBox</name>
     <message>
         <location filename="../guiutil.cpp" line="+424"/>
-        <source>gridcoinresearch</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+0"/>
         <source>version</source>
-        <translation type="unfinished">версия</translation>
+        <translation>версия</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Usage:</source>
-        <translation type="unfinished">Использование:</translation>
+        <translation>Использование:</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>command-line options</source>
-        <translation type="unfinished">опции командной строки</translation>
+        <translation>опции командной строки</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>UI options</source>
-        <translation type="unfinished">Опции интерфейса</translation>
+        <translation>Опции интерфейса</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Set language, for example &quot;de_DE&quot; (default: system locale)</source>
-        <translation type="unfinished">Выберите язык, например &quot;de_DE&quot; (по умолчанию: как в системе)</translation>
+        <translation>Выберите язык, например &quot;de_DE&quot; (по умолчанию: как в системе)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Start minimized</source>
-        <translation type="unfinished">Запускать свёрнутым</translation>
+        <translation>Запускать свёрнутым</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Show splash screen on startup (default: 1)</source>
-        <translation type="unfinished">Показывать сплэш при запуске (по умолчанию: 1)</translation>
+        <translation>Показывать заставку при запуске (по умолчанию: 1)</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Gridcoin-Qt</source>
-        <translation type="unfinished"></translation>
+        <translation>Gridcoin-Qt</translation>
     </message>
 </context>
 <context>
@@ -1358,72 +1334,72 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location filename="../votingdialog.cpp" line="+900"/>
         <location line="+96"/>
         <source>Create Poll</source>
-        <translation type="unfinished"></translation>
+        <translation>Создать опрос</translation>
     </message>
     <message>
         <location line="-81"/>
         <source>Title: </source>
-        <translation type="unfinished"></translation>
+        <translation>Заглавие: </translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Days: </source>
-        <translation type="unfinished"></translation>
+        <translation>Дни:</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Question: </source>
-        <translation type="unfinished"></translation>
+        <translation>Вопрос: </translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Discussion URL: </source>
-        <translation type="unfinished"></translation>
+        <translation>Обсуждение URL: </translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Share Type: </source>
-        <translation type="unfinished"></translation>
+        <translation>Тематика: </translation>
     </message>
     <message>
         <location line="+23"/>
         <source>Add Item</source>
-        <translation type="unfinished"></translation>
+        <translation>Добавить Элемент</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Remove Item</source>
-        <translation type="unfinished"></translation>
+        <translation>Удалить Элемент</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Clear All</source>
-        <translation type="unfinished"></translation>
+        <translation>Очистить Все</translation>
     </message>
     <message>
         <location line="+36"/>
         <source>Creating poll failed! Title is missing.</source>
-        <translation type="unfinished"></translation>
+        <translation>Не удалось создать опрос! Отсутствует название.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Creating poll failed! Days value is missing.</source>
-        <translation type="unfinished"></translation>
+        <translation>Не удалось создать опрос! Отсутствует значение дней.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Creating poll failed! Question is missing.</source>
-        <translation type="unfinished"></translation>
+        <translation>Не удалось создать опрос! Отсутствует вопрос.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Creating poll failed! URL is missing.</source>
-        <translation type="unfinished"></translation>
+        <translation>Не удалось создать опрос! Отсутствует URL.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Creating poll failed! Answer is missing.</source>
-        <translation type="unfinished"></translation>
+        <translation>Не удалось создать опрос! Отсутствует ответ.</translation>
     </message>
 </context>
 <context>
@@ -1431,7 +1407,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../forms/optionsdialog.ui" line="+14"/>
         <source>Options</source>
-        <translation>Опции</translation>
+        <translation>Параметры</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -1446,42 +1422,47 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="-126"/>
         <source>Optional transaction fee per kB that helps make sure your transactions are processed quickly. Most transactions are 1 kB. Fee 0.01 recommended.</source>
-        <translation type="unfinished"></translation>
+        <translation>Дополнительная комиссия за транзакцию за каждый кб, которая помогает быстро обрабатывать транзакции. Большинство транзакций составляют 1 кБ. Плата  в размере 0,01 рекомендуется.</translation>
     </message>
     <message>
         <location line="+15"/>
         <source>Pa&amp;y transaction fee</source>
-        <translation type="unfinished"></translation>
+        <translation>Оп&amp;лата комиссии</translation>
     </message>
     <message>
         <location line="+31"/>
         <source>Reserved amount does not participate in staking and is therefore spendable at any time.</source>
-        <translation type="unfinished"></translation>
+        <translation>Зарезервированная сумма не участвует в стейкинге и поэтому может быть использована в любое время.</translation>
     </message>
     <message>
-        <location line="+46"/>
+        <location line="+15"/>
+        <source>Reser&amp;ve</source>
+        <translation>Резер&amp;в</translation>
+    </message>
+    <message>
+        <location line="+31"/>
         <source>Automatically start Gridcoin after logging in to the system.</source>
-        <translation type="unfinished"></translation>
+        <translation>Автоматически запускать Gridcoin после входа в систему.</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Start Gridcoin on system login</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Запуск Gridcoin при входе в систему</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Detach block and address databases at shutdown. This means they can be moved to another data directory, but it slows down shutdown. The wallet is always detached.</source>
-        <translation type="unfinished"></translation>
+        <translation>Отключайте блоки и адреса завершении работы базы данных. Это означает, что они могут быть перемещены в другой каталог данных, но это замедляет работу. Кошелек всегда отсоединяется.</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Detach databases at shutdown</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Отключить базы данных при завершении работы</translation>
     </message>
     <message>
         <location line="+27"/>
         <source>Automatically open the Gridcoin client port on the router. This only works when your router supports UPnP and it is enabled.</source>
-        <translation type="unfinished"></translation>
+        <translation>Автоматически открывать клиентский порт Gridcoin на маршрутизаторе. Работает в том случае, если ваш маршрутизатор поддерживает UPnP и включен.</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1491,27 +1472,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+7"/>
         <source>Connect to the Gridcoin network through a SOCKS proxy (e.g. when connecting through Tor).</source>
-        <translation type="unfinished"></translation>
+        <translation>Соединение к Gridcoin network через SOCKS proxy (e.g. when connecting through Tor).</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Connect through SOCKS proxy:</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Соединение через SOCKS proxy:</translation>
     </message>
     <message>
-        <location line="-84"/>
-        <source>Reser&amp;ve</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+93"/>
-        <source>Prox&amp;y IP:</source>
-        <translation type="unfinished"></translation>
+        <location line="+9"/>
+        <source>Proxy &amp;IP:</source>
+        <translation>&amp;IP Прокси: </translation>
     </message>
     <message>
         <location line="+19"/>
         <source>IP address of the proxy (e.g. 127.0.0.1)</source>
-        <translation type="unfinished"></translation>
+        <translation>Ip адресс прокси (например 127.0.0.1)</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -1571,27 +1547,27 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+13"/>
         <source>The user interface language can be set here. This setting will take effect after restarting Gridcoin.</source>
-        <translation type="unfinished"></translation>
+        <translation>Язык интерфейса пользователя можно установить здесь. Этот параметр вступает в силу после перезапуска Gridcoin.</translation>
     </message>
     <message>
         <location line="+35"/>
         <source>Style:</source>
-        <translation type="unfinished"></translation>
+        <translation>Стиль:</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Choose a stylesheet to change the look of the wallet.</source>
-        <translation type="unfinished"></translation>
+        <translation>Выбрать шаблон, для изменения внешнего вида кошелька.</translation>
     </message>
     <message>
         <location line="+9"/>
         <source>Whether to show Gridcoin addresses in the transaction list or not.</source>
-        <translation type="unfinished"></translation>
+        <translation>Отображать ли адреса Gridcoin в списке транзакций или нет.</translation>
     </message>
     <message>
         <location line="+104"/>
         <source>&amp;Apply</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Подтвердить</translation>
     </message>
     <message>
         <location line="-144"/>
@@ -1616,7 +1592,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+3"/>
         <source>Display coin &amp;control features (experts only!)</source>
-        <translation type="unfinished"></translation>
+        <translation>Отображение &amp;функций управления для средств (только для экспертов!)</translation>
     </message>
     <message>
         <location line="+74"/>
@@ -1636,24 +1612,24 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+30"/>
         <source>Native</source>
-        <translation type="unfinished"></translation>
+        <translation>Стандартный</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Light</source>
-        <translation type="unfinished"></translation>
+        <translation>Лайт</translation>
     </message>
     <message>
         <location line="+123"/>
         <location line="+9"/>
         <source>Warning</source>
-        <translation type="unfinished">Внимание</translation>
+        <translation>Внимание</translation>
     </message>
     <message>
         <location line="-9"/>
         <location line="+9"/>
         <source>This setting will take effect after restarting Gridcoin.</source>
-        <translation type="unfinished"></translation>
+        <translation>Этот параметр вступает в силу после перезапуска Gridcoin.</translation>
     </message>
     <message>
         <location line="+42"/>
@@ -1669,126 +1645,126 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Форма</translation>
     </message>
     <message>
-        <location line="+44"/>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:20px; font-weight:600; color:#000000;&quot;&gt;Wallet&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <location line="+411"/>
+        <location line="+57"/>
+        <location line="+439"/>
         <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</source>
-        <translation type="unfinished"></translation>
+        <translation>Отображаемая информация может быть устаревшей. Ваш кошелек автоматически синхронизируется с сетью Gridcoin после установления соединения, но процесс еще не завершен.</translation>
     </message>
     <message>
-        <location line="-372"/>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Balance:&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+15"/>
-        <source>Your current balance.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+13"/>
+        <location line="-363"/>
         <source>Stake</source>
-        <translation type="unfinished"></translation>
+        <translation>Стейк</translation>
     </message>
     <message>
         <location line="+15"/>
         <source>Total number of coins that are staking, and do not yet count toward the current balance</source>
-        <translation type="unfinished"></translation>
+        <translation>Общее количество монет на стейкинге, и еще не учитываются в текущем балансе</translation>
     </message>
     <message>
         <location line="+13"/>
         <source>Unconfirmed</source>
-        <translation type="unfinished">Неподтверждено</translation>
+        <translation>Не подтверждено</translation>
     </message>
     <message>
         <location line="+15"/>
         <source>Total of transactions that have yet to be confirmed, and do not yet count toward the current balance</source>
-        <translation type="unfinished"></translation>
+        <translation>Всего транзакций, которые еще не подтверждены, и еще не подсчитаны в отношении текущего баланса</translation>
     </message>
     <message>
-        <location line="+13"/>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Immature:&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation type="unfinished"></translation>
+        <location line="+31"/>
+        <source>Total mined coins that have not yet matured.</source>
+        <translation>Количество добытых (еще несфромировавшихся) монет.</translation>
     </message>
     <message>
-        <location line="+12"/>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot;background:black; color:#ffffff;&quot;&gt;Total mined coins that have not yet matured&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+32"/>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Total:&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Total Balance     </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+46"/>
+        <location line="+91"/>
         <source>Blocks:</source>
-        <translation type="unfinished"></translation>
+        <translation>Блоки:</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Difficulty:</source>
-        <translation type="unfinished"></translation>
+        <translation>Сложность:</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Net Weight:</source>
-        <translation type="unfinished"></translation>
+        <translation>Сеть:</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>DPOR Weight:</source>
-        <translation type="unfinished"></translation>
+        <translation>DPOR Влияние:</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Magnitude:</source>
-        <translation type="unfinished"></translation>
+        <translation>Магнитуда:</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Project:</source>
-        <translation type="unfinished"></translation>
+        <translation>Проект:</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>CPID:</source>
-        <translation type="unfinished"></translation>
+        <translation>CPID:</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Status:</source>
-        <translation type="unfinished"></translation>
+        <translation>Статус:</translation>
     </message>
     <message>
-        <location line="+102"/>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:20px; font-weight:600; color:#000000;&quot;&gt;Recent transactions&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+96"/>
+        <location line="+208"/>
         <source>Current Poll:</source>
-        <translation type="unfinished"></translation>
+        <translation>Текущий Опрос:</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Client Messages:</source>
-        <translation type="unfinished"></translation>
+        <translation>Сообщение клиента:</translation>
     </message>
     <message>
-        <location filename="../overviewpage.cpp" line="+134"/>
+        <location line="-543"/>
+        <source>Wallet</source>
+        <translation>Бумажник</translation>
+    </message>
+    <message>
+        <location line="+58"/>
+        <source>Available:</source>
+        <translation>Доступно:</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Your current spendable balance</source>
+        <translation>Ваш текущий расходный баланс</translation>
+    </message>
+    <message>
+        <location line="+75"/>
+        <source>Immature:</source>
+        <translation>Незрелые:</translation>
+    </message>
+    <message>
+        <location line="+50"/>
+        <source>Total:</source>
+        <translation>Итого:</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Your current total balance</source>
+        <translation>Ваш текущий общий баланс</translation>
+    </message>
+    <message>
+        <location filename="../overviewpage.cpp" line="+132"/>
         <location line="+1"/>
         <source>out of sync</source>
         <translation>не синхронизировано</translation>
+    </message>
+    <message>
+        <location filename="../forms/overviewpage.ui" line="+225"/>
+        <source>Recent transactions</source>
+        <translation>Последние транзакции</translation>
     </message>
 </context>
 <context>
@@ -1796,57 +1772,57 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../forms/qrcodedialog.ui" line="+14"/>
         <source>QR Code Dialog</source>
-        <translation type="unfinished"></translation>
+        <translation>QR Code Dialog</translation>
     </message>
     <message>
         <location line="+62"/>
         <source>Request Payment</source>
-        <translation type="unfinished"></translation>
+        <translation>Запрос платежа</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Label:</source>
-        <translation type="unfinished"></translation>
+        <translation>Метка:</translation>
     </message>
     <message>
         <location line="+19"/>
         <source>Message:</source>
-        <translation type="unfinished">Сообщение:</translation>
+        <translation>Сообщение:</translation>
     </message>
     <message>
         <location line="+25"/>
         <source>Amount:</source>
-        <translation type="unfinished">Сумма:</translation>
+        <translation>Сумма:</translation>
     </message>
     <message>
         <location line="+46"/>
         <source>&amp;Save As...</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Сохранить как...</translation>
     </message>
     <message>
         <location filename="../qrcodedialog.cpp" line="+62"/>
         <source>Error encoding URI into QR Code.</source>
-        <translation type="unfinished">Ошибка кодирования URI в QR-код</translation>
+        <translation>Ошибка кодирования URI в QR-код.</translation>
     </message>
     <message>
         <location line="+40"/>
         <source>The entered amount is invalid, please check.</source>
-        <translation type="unfinished"></translation>
+        <translation>Введенная сумма неверна, пожалуйста, перепроверьте.</translation>
     </message>
     <message>
         <location line="+23"/>
         <source>Resulting URI too long, try to reduce the text for label / message.</source>
-        <translation type="unfinished">Получившийся URI слишком длинный, попробуйте сократить текст метки / сообщения.</translation>
+        <translation>Получившийся URI слишком длинный, попробуйте сократить текст метки / сообщения.</translation>
     </message>
     <message>
         <location line="+25"/>
         <source>Save QR Code</source>
-        <translation type="unfinished">Сохранить QR-код</translation>
+        <translation>Сохранить QR-код</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>PNG Images (*.png)</source>
-        <translation type="unfinished"></translation>
+        <translation>PNG Изображения (*.png)</translation>
     </message>
 </context>
 <context>
@@ -1857,7 +1833,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Имя клиента</translation>
     </message>
     <message>
-        <location line="-418"/>
+        <location line="-445"/>
+        <location line="+27"/>
         <location line="+42"/>
         <location line="+42"/>
         <location line="+54"/>
@@ -1903,7 +1880,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+29"/>
         <source>Estimated total blocks</source>
-        <translation>Расчётное число блоков</translation>
+        <translation>Установленое число блоков</translation>
     </message>
     <message>
         <location line="-217"/>
@@ -1928,67 +1905,62 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="-485"/>
         <source>Gridcoin - Debug Console</source>
-        <translation type="unfinished"></translation>
+        <translation>Gridcoin - Консоль отладки</translation>
     </message>
     <message>
         <location line="+25"/>
         <source>Boost version</source>
-        <translation type="unfinished"></translation>
+        <translation>Boost версия</translation>
     </message>
     <message>
-        <location line="+7"/>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;N/A&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location line="+14"/>
         <source>Proof Of Research Difficulty</source>
-        <translation type="unfinished"></translation>
+        <translation>Proof Of Research Сложность</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>1</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <location line="+128"/>
         <source>Gridcoin Core:</source>
-        <translation type="unfinished"></translation>
+        <translation>Gridcoin Core:</translation>
     </message>
     <message>
         <location line="+92"/>
         <source>Network:</source>
-        <translation type="unfinished"></translation>
+        <translation>Сеть:</translation>
     </message>
     <message>
         <location line="+29"/>
         <source>On testnet</source>
-        <translation type="unfinished"></translation>
+        <translation>На тестовой сети</translation>
     </message>
     <message>
         <location line="+64"/>
         <source>Open the Gridcoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
-        <translation type="unfinished"></translation>
+        <translation>Откройте файл журнала отладки Gridcoin из текущего каталога данных. Может занять продолжительное время для больших файлов журнала.</translation>
     </message>
     <message>
         <location line="+21"/>
         <source>Command-line options</source>
-        <translation type="unfinished"></translation>
+        <translation>Параметры командной строки</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Show the Gridcoin help message to get a list with possible Gridcoin command-line options.</source>
-        <translation type="unfinished"></translation>
+        <translation>Показать сообщение справки Gridcoin чтобы получить возможный список комманд Gridcoin.</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>&amp;Show</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Show</translation>
     </message>
     <message>
         <location line="+68"/>
         <source>OpenSSL version</source>
-        <translation type="unfinished"></translation>
+        <translation>OpenSSL версия</translation>
     </message>
     <message>
         <location line="+73"/>
@@ -2028,7 +2000,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../rpcconsole.cpp" line="-35"/>
         <source>Welcome to the Gridcoin RPC console! </source>
-        <translation type="unfinished"></translation>
+        <translation>Добро пожаловать в Gridcoin RPC консоль! </translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2119,7 +2091,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+22"/>
         <location line="+32"/>
         <source>0</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <location line="-19"/>
@@ -2137,7 +2109,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+80"/>
         <location line="+29"/>
         <source>0.00 GRC</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <location line="-179"/>
@@ -2147,7 +2119,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+19"/>
         <source>medium</source>
-        <translation type="unfinished">средний</translation>
+        <translation>средний</translation>
     </message>
     <message>
         <location line="+29"/>
@@ -2162,7 +2134,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+19"/>
         <source>no</source>
-        <translation type="unfinished">нет</translation>
+        <translation>нет</translation>
     </message>
     <message>
         <location line="+29"/>
@@ -2172,17 +2144,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+32"/>
         <source>Change</source>
-        <translation type="unfinished"></translation>
+        <translation>Изменение</translation>
     </message>
     <message>
         <location line="+50"/>
         <source>custom change address</source>
-        <translation type="unfinished"></translation>
+        <translation>Изменить адрес в ручную</translation>
     </message>
     <message>
         <location line="+138"/>
         <source>Remove all transaction fields</source>
-        <translation type="unfinished"></translation>
+        <translation>Очистить все поля транзакций</translation>
     </message>
     <message>
         <location line="-23"/>
@@ -2207,7 +2179,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+16"/>
         <source>123.456 GRC</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <location line="+31"/>
@@ -2227,7 +2199,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="-113"/>
         <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="unfinished"></translation>
+        <translation>Введите Gridcoin адрес(например G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
     <message>
         <location line="+15"/>
@@ -2237,7 +2209,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Copy amount</source>
-        <translation>Скопировать сумму</translation>
+        <translation>Копировать сумму</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2267,42 +2239,42 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Copy change</source>
-        <translation>Копировать размен</translation>
+        <translation>Копировать сдачу</translation>
     </message>
     <message>
         <location line="+86"/>
         <source>&lt;b&gt;%1&lt;/b&gt; to %2 (%3)</source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;b&gt;%1&lt;/b&gt; для %2 (%3)</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Are you sure you want to send %1?</source>
-        <translation type="unfinished"></translation>
+        <translation>Вы уверены, что хотите послать %1?</translation>
     </message>
     <message>
         <location line="+0"/>
         <source> and </source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <location line="+55"/>
         <source>Error: Transaction creation failed.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка: не удалось произвести транзакию.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Error: The transaction was rejected. This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка: транзакция была отклонена. Это может произойти, если некоторые из монет в вашем бумажнике уже были потрачены, например, если вы использовали старую копию кошелька. Dat и монеты были потрачены в копии, но не отмечены как потраченные здесь.</translation>
     </message>
     <message>
         <location line="+251"/>
         <source>WARNING: Invalid Gridcoin address</source>
-        <translation type="unfinished"></translation>
+        <translation>ПРЕДУПРЕЖДЕНИЕ: Недействительный адрес Gridcoin</translation>
     </message>
     <message>
         <location line="+17"/>
         <source>WARNING: unknown change address</source>
-        <translation type="unfinished"></translation>
+        <translation>ПРЕДУПРЕЖДЕНИЕ: неизвестное изменение адреса</translation>
     </message>
     <message>
         <location line="-299"/>
@@ -2312,27 +2284,27 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+5"/>
         <source>The amount to pay must be larger than 0.</source>
-        <translation>Сумма для отправки должно быть больше 0.</translation>
+        <translation>Сумма для отправки должна быть больше 0.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>The amount exceeds your balance.</source>
-        <translation>Сумма превышает Ваш баланс</translation>
+        <translation>Сумма превышает ваш баланс.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>The total exceeds your balance when the %1 transaction fee is included.</source>
-        <translation>Сумма превысит Ваш баланс, если комиссия в размере %1 будет добавлена к транзакции</translation>
+        <translation>Сумма с учётом комиссии %1 превысит ваш баланс.</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Duplicate address found, can only send to each address once per send operation.</source>
-        <translation>Обнаружен дублирующийся адрес. Отправка на один и тот же адрес возможна только один раз за одну операцию отправки</translation>
+        <translation>Обнаружен дублирующийся адрес. Отправка на один и тот же адрес возможна только один раз за одну операцию отправки.</translation>
     </message>
     <message>
         <location line="+274"/>
         <source>(no label)</source>
-        <translation>[нет метки]</translation>
+        <translation>(нет метки)</translation>
     </message>
 </context>
 <context>
@@ -2343,10 +2315,15 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Ко&amp;личество:</translation>
     </message>
     <message>
-        <location line="-117"/>
+        <location line="-108"/>
+        <source>Pay &amp;To:</source>
+        <translation>Полу&amp;чатель:</translation>
+    </message>
+    <message>
+        <location line="-9"/>
         <location filename="../sendcoinsentry.cpp" line="+29"/>
         <source>Enter a label for this address to add it to your address book</source>
-        <translation>Введите метку для данного адреса (для добавления в адресную книгу)</translation>
+        <translation>Введите метку для данного адреса, чтобы добавить его в адресную книгу</translation>
     </message>
     <message>
         <location line="-21"/>
@@ -2356,22 +2333,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="-18"/>
         <source>Form</source>
-        <translation type="unfinished">Форма</translation>
+        <translation>Форма</translation>
     </message>
     <message>
-        <location line="+48"/>
-        <source>Pa&amp;y To:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+18"/>
+        <location line="+66"/>
         <source>The address to send the payment to  (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
-        <translation type="unfinished"></translation>
+        <translation>Адрес получателя (например Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Choose address from address book</source>
-        <translation type="unfinished"></translation>
+        <translation>Выберите адрес из адресной книги</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -2391,22 +2363,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+7"/>
         <source>Remove this recipient</source>
-        <translation type="unfinished"></translation>
+        <translation>Удалить получателя</translation>
     </message>
     <message>
         <location line="+37"/>
         <source>Send Custom Message to a Gridcoin Recipient</source>
-        <translation type="unfinished"></translation>
+        <translation>Отправить редактируемое сообщение получателю Gridcoin</translation>
     </message>
     <message>
         <location line="+22"/>
         <source>Track Coins</source>
-        <translation type="unfinished"></translation>
+        <translation>Трекинг средств</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Add Attachment</source>
-        <translation type="unfinished"></translation>
+        <translation>Добавить приложение</translation>
     </message>
     <message>
         <location line="-50"/>
@@ -2416,7 +2388,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../sendcoinsentry.cpp" line="+1"/>
         <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="unfinished"></translation>
+        <translation>Введите адрес Gridcoin (например  G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
 </context>
 <context>
@@ -2428,25 +2400,24 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+13"/>
-        <location line="+124"/>
         <source>&amp;Sign Message</source>
         <translation>&amp;Подписать сообщение</translation>
     </message>
     <message>
-        <location line="-118"/>
+        <location line="+6"/>
         <source>You can sign messages with your addresses to prove you own them. Be careful not to sign anything vague, as phishing attacks may try to trick you into signing your identity over to them. Only sign fully-detailed statements you agree to.</source>
-        <translation>Вы можете подписывать сообщения своими адресами, чтобы доказать владение ими. Будьте осторожны, не подписывайте что-то неопределённое, так как фишинговые атаки могут обманным путём заставить вас подписать нежелательные сообщения. Подписывайте только те сообщения, с которыми вы согласны вплоть до мелочей.</translation>
+        <translation>Вы можете подписывать сообщения своими адресами, чтобы доказать что вы владелец. Будьте осторожны, не подписывайте что-то неопределённое, так как фишинговые атаки могут обманным путём заставить вас подписать нежелательные сообщения. Подписывайте только те сообщения, с которыми вы согласны вплоть до мелочей.</translation>
     </message>
     <message>
         <location line="+18"/>
         <source>The address to sign the message with (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
-        <translation type="unfinished"></translation>
+        <translation>Адрес для подписи сообщения (например Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</translation>
     </message>
     <message>
         <location line="+10"/>
         <location line="+203"/>
         <source>Choose an address from the address book</source>
-        <translation type="unfinished"></translation>
+        <translation>Выберите адрес из адресной книги</translation>
     </message>
     <message>
         <location line="-193"/>
@@ -2472,17 +2443,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+45"/>
         <source>Sign the message to prove you own this Gridcoin address</source>
-        <translation type="unfinished"></translation>
+        <translation>Подпишите сообщение, для доказательства владения  этим адресом Gridcoin</translation>
     </message>
     <message>
         <location line="+106"/>
         <source>The address the message was signed with (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
-        <translation type="unfinished"></translation>
+        <translation>Адрес использованный для подписи сообщения (например Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</translation>
     </message>
     <message>
         <location line="+40"/>
         <source>Verify the message to ensure it was signed with the specified Gridcoin address</source>
-        <translation type="unfinished"></translation>
+        <translation>Проверьте сообщение, чтобы убедиться, что он был подписан с указанным адресом Gridcoin</translation>
     </message>
     <message>
         <location line="-167"/>
@@ -2490,7 +2461,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Скопировать текущую подпись в системный буфер обмена</translation>
     </message>
     <message>
-        <location line="+38"/>
+        <location line="+24"/>
+        <source>Sign &amp;Message</source>
+        <translation>Подписать &amp;Сообщение</translation>
+    </message>
+    <message>
+        <location line="+14"/>
         <source>Reset all sign message fields</source>
         <translation>Сбросить значения всех полей подписывания сообщений</translation>
     </message>
@@ -2509,7 +2485,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="-64"/>
         <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
-        <translation>Введите ниже адрес для подписи, сообщение (убедитесь, что переводы строк, пробелы, табы и т.п. в точности скопированы) и подпись, чтобы проверить сообщение. Убедитесь, что не скопировали лишнего в подпись, по сравнению с самим подписываемым сообщением, чтобы не стать жертвой атаки &quot;man-in-the-middle&quot;.</translation>
+        <translation>Введите ниже адрес для подписи (убедитесь, что переводы строк, пробелы, табы и т.п. в точности скопированы), чтобы проверить сообщение.Будьте осторожны! Убедитесь, что не скопировали лишнего в подпись, по сравнению с самим подписываемым сообщением, чтобы не стать жертвой атаки &quot;man-in-the-middle&quot;.</translation>
     </message>
     <message>
         <location line="+78"/>
@@ -2520,7 +2496,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location filename="../signverifymessagedialog.cpp" line="+27"/>
         <location line="+3"/>
         <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="unfinished"></translation>
+        <translation>Введите адрес Gridcoin (например G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
     <message>
         <location line="-2"/>
@@ -2530,13 +2506,13 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+3"/>
         <source>Enter Gridcoin signature</source>
-        <translation type="unfinished"></translation>
+        <translation>Введите подпись Gridcoin</translation>
     </message>
     <message>
         <location line="+82"/>
         <location line="+81"/>
         <source>The entered address is invalid.</source>
-        <translation>Введённый адрес неверен</translation>
+        <translation>Введённый адрес неверен.</translation>
     </message>
     <message>
         <location line="-81"/>
@@ -2550,7 +2526,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="-81"/>
         <location line="+81"/>
         <source>The entered address does not refer to a key.</source>
-        <translation>Введённый адрес не связан с ключом</translation>
+        <translation>Введённый адрес не связан с ключом.</translation>
     </message>
     <message>
         <location line="-73"/>
@@ -2560,17 +2536,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+8"/>
         <source>Private key for the entered address is not available.</source>
-        <translation>Для введённого адреса недоступен закрытый ключ</translation>
+        <translation>Недоступен секретный ключ для введённого адреса.</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Message signing failed.</source>
-        <translation>Не удалось подписать сообщение</translation>
+        <translation>Не удалось подписать сообщение.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Message signed.</source>
-        <translation>Сообщение подписано</translation>
+        <translation>Сообщение подписано.</translation>
     </message>
     <message>
         <location line="+59"/>
@@ -2591,7 +2567,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+7"/>
         <source>Message verification failed.</source>
-        <translation>Проверка сообщения не удалась.</translation>
+        <translation>Сообщение не прошло проверку.</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -2728,7 +2704,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>Comment</source>
-        <translation>Комментарий:</translation>
+        <translation>Комментарий</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -2738,32 +2714,32 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+11"/>
         <source>Project</source>
-        <translation type="unfinished"></translation>
+        <translation>Проект</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Block Type</source>
-        <translation type="unfinished"></translation>
+        <translation>Тип блока</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Block Number</source>
-        <translation type="unfinished"></translation>
+        <translation>Номер блока</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>RAC</source>
-        <translation type="unfinished"></translation>
+        <translation>RAC</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Gridcoin generated coins must mature 120 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
-        <translation type="unfinished"></translation>
+        <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
+        <translation>Сгенерированные гридкойн-монеты должны созреть до значения в 110 блоков, прежде чем их можно будет потратить. Когда вы сгенерировали блок, он будет передан в сеть для добавления в цепочку блоков. Если он не сможет попасть в цепочку, его состояние изменится на «не принято», в таком случае вы не сможете потратить монеты. Это может произойти, если другой узел генерирует блок в течение нескольких секунд после вашего.</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Information</source>
-        <translation type="unfinished">Информация</translation>
+        <translation>Информация</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -2825,37 +2801,37 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+42"/>
         <source>Execute Contract</source>
-        <translation type="unfinished"></translation>
+        <translation>Выполнить контракт</translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Close</source>
-        <translation type="unfinished"></translation>
+        <source>C&amp;lose</source>
+        <translation>&amp;Закрыть</translation>
     </message>
     <message>
         <location line="-17"/>
         <source>Track Coins</source>
-        <translation type="unfinished"></translation>
+        <translation>Трекинг средств</translation>
     </message>
     <message>
         <location line="-7"/>
         <source>View Attachment</source>
-        <translation type="unfinished"></translation>
+        <translation>Просмотр приложения</translation>
     </message>
     <message>
         <location filename="../transactiondescdialog.cpp" line="+90"/>
         <source>Gridcoin Coin Tracking System</source>
-        <translation type="unfinished"></translation>
+        <translation>Система отслеживания монет Gridcoin</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Gridcoin Documents</source>
-        <translation type="unfinished"></translation>
+        <translation>Документы Gridcoin</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Document cannot be found on P2P server.</source>
-        <translation type="unfinished"></translation>
+        <translation>Документ не может быть найден на сервере P2P.</translation>
     </message>
 </context>
 <context>
@@ -2897,7 +2873,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+9"/>
         <source>Confirming (%1 of %2 recommended confirmations)&lt;br&gt;</source>
-        <translation type="unfinished"></translation>
+        <translation>Подтверждение (%1 из %2 гарантированных подтверждений)&lt;br&gt;</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -2907,17 +2883,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+12"/>
         <source>Generated but not accepted</source>
-        <translation>Сгенерированно, но не подтверждено</translation>
+        <translation>Сгенерировано, но не принято</translation>
     </message>
     <message>
         <location line="-21"/>
         <source>Offline</source>
-        <translation>Нет активных соединений с сетью</translation>
+        <translation>Отключен</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Unconfirmed</source>
-        <translation>Неподтверждено</translation>
+        <translation>Не подтверждено</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -2927,17 +2903,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+3"/>
         <source>Immature (%1 confirmations, will be available after %2)&lt;br&gt;</source>
-        <translation type="unfinished"></translation>
+        <translation>Незрелые (%1 подтверждения будут доступны после%2)&lt;br&gt;</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>This block was not received by any other nodes&lt;br&gt; and will probably not be accepted!</source>
-        <translation type="unfinished"></translation>
+        <translation>Этот блок не был получен никакими другими узлами и, вероятно, не будет принят!</translation>
     </message>
     <message>
         <location line="+64"/>
         <source>Received with</source>
-        <translation>Получено</translation>
+        <translation>Получено на</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -2947,7 +2923,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+3"/>
         <source>Sent to</source>
-        <translation>Отправлено</translation>
+        <translation>Отправлено на</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -2957,37 +2933,37 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+9"/>
         <source>Mined - DPOR</source>
-        <translation type="unfinished"></translation>
+        <translation>Добыто - DPOR</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Minted - (Local) DPOR</source>
-        <translation type="unfinished"></translation>
+        <translation>Добыто - (Local) DPOR</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Mined - PoR</source>
-        <translation type="unfinished"></translation>
+        <translation>Добыто - PoR</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Mined - Interest</source>
-        <translation type="unfinished"></translation>
+        <translation>Добыто - интерес</translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+58"/>
         <source>(n/a)</source>
-        <translation>[не доступно]</translation>
+        <translation>(недоступно)</translation>
     </message>
     <message>
         <location line="+193"/>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
-        <translation>Статус транзакции. Подведите курсор к нужному полю для того, чтобы увидеть количество подтверждений.</translation>
+        <translation>Статус транзакции. Подведите курсор к этому полю, чтобы увидеть количество подтверждений.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Date and time that the transaction was received.</source>
-        <translation>Дата и время, когда транзакция была получена.</translation>
+        <translation>Дата и время получения транзакции.</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -3002,7 +2978,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>Amount removed from or added to balance.</source>
-        <translation>Сумма, добавленная, или снятая с баланса.</translation>
+        <translation>Снятая или добавленная к балансу сумма.</translation>
     </message>
 </context>
 <context>
@@ -3041,7 +3017,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Range...</source>
-        <translation>Промежуток...</translation>
+        <translation>Диапазон...</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -3056,12 +3032,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>To yourself</source>
-        <translation>Отправленные себе</translation>
+        <translation>Себе</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Mined</source>
-        <translation>Добытые</translation>
+        <translation>Добыто</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3091,12 +3067,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Copy amount</source>
-        <translation>Скопировать сумму</translation>
+        <translation>Копировать сумму</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy transaction ID</source>
-        <translation>Скопировать ID транзакции</translation>
+        <translation>Копировать ID транзакции</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3111,7 +3087,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+146"/>
         <source>Export Transaction Data</source>
-        <translation type="unfinished"></translation>
+        <translation>Экспорт данных транзакции</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3156,17 +3132,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+4"/>
         <source>Error exporting</source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка экспорта</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Could not write to file %1.</source>
-        <translation type="unfinished"></translation>
+        <translation>Невозможно записать в файл %1.</translation>
     </message>
     <message>
         <location line="+100"/>
         <source>Range:</source>
-        <translation>Промежуток от:</translation>
+        <translation>Диапазон:</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -3179,22 +3155,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../forms/upgradedialog.ui" line="+14"/>
         <source>Gridcoin Upgrading Facility</source>
-        <translation type="unfinished"></translation>
+        <translation>Обновление Gridcoin</translation>
     </message>
     <message>
         <location line="+65"/>
         <source>Retry Download</source>
-        <translation type="unfinished"></translation>
+        <translation>Повторить загрузку</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Upgrade</source>
-        <translation type="unfinished"></translation>
+        <translation>Обновить</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Hide</source>
-        <translation type="unfinished"></translation>
+        <translation>Скрыть</translation>
     </message>
 </context>
 <context>
@@ -3202,35 +3178,35 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../votingdialog.cpp" line="-374"/>
         <source>Poll Results</source>
-        <translation type="unfinished"></translation>
+        <translation>Результаты опроса</translation>
     </message>
     <message>
         <location line="+7"/>
         <location line="+60"/>
         <source>Q: </source>
-        <translation type="unfinished"></translation>
+        <translation>В: </translation>
     </message>
     <message>
         <location line="-54"/>
         <location line="+55"/>
         <source>Discussion URL: </source>
-        <translation type="unfinished"></translation>
+        <translation>Обсуждение URL: </translation>
     </message>
     <message>
         <location line="-43"/>
         <source>Chart</source>
-        <translation type="unfinished"></translation>
+        <translation>График</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>List</source>
-        <translation type="unfinished"></translation>
+        <translation>Список</translation>
     </message>
     <message>
         <location line="+5"/>
         <location line="+25"/>
         <source>Best Answer: </source>
-        <translation type="unfinished"></translation>
+        <translation>Лучший ответ: </translation>
     </message>
 </context>
 <context>
@@ -3238,37 +3214,37 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="-349"/>
         <source>Gridcoin Voting System 1.1</source>
-        <translation type="unfinished"></translation>
+        <translation>Gridcoin Система Голосования 1.1</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Active Polls (Right Click to Vote)</source>
-        <translation type="unfinished"></translation>
+        <translation>Активные опросы (правая кнопка для голосования)</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Filter: </source>
-        <translation type="unfinished"></translation>
+        <translation>Фильтр: </translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Reload Polls</source>
-        <translation type="unfinished"></translation>
+        <translation>Перезагрузить опросы</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Load History</source>
-        <translation type="unfinished"></translation>
+        <translation>Загрузить историю</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Create Poll</source>
-        <translation type="unfinished"></translation>
+        <translation>Создать опрос</translation>
     </message>
     <message>
         <location line="+37"/>
         <source>...loading data!</source>
-        <translation type="unfinished"></translation>
+        <translation>...загрузка данных!</translation>
     </message>
 </context>
 <context>
@@ -3276,98 +3252,98 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="-391"/>
         <source>#</source>
-        <translation type="unfinished"></translation>
+        <translation>#</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Title</source>
-        <translation type="unfinished"></translation>
+        <translation>Название</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Expiration</source>
-        <translation type="unfinished"></translation>
+        <translation>Истекает</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Share Type</source>
-        <translation type="unfinished"></translation>
+        <translation>Тематика</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Question</source>
-        <translation type="unfinished"></translation>
+        <translation>Вопрос</translation>
     </message>
     <message>
         <location line="+1"/>
         <location line="+157"/>
         <source>Answers</source>
-        <translation type="unfinished"></translation>
+        <translation>Ответы</translation>
     </message>
     <message>
         <location line="-156"/>
         <source># Voters</source>
-        <translation type="unfinished"></translation>
+        <translation># Голосующие</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Total Shares</source>
-        <translation type="unfinished"></translation>
+        <translation>Распространено</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>URL</source>
-        <translation type="unfinished"></translation>
+        <translation>URL</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Best Answer</source>
-        <translation type="unfinished"></translation>
+        <translation>Лучший ответ</translation>
     </message>
     <message>
         <location line="+143"/>
         <source>Row Number.</source>
-        <translation type="unfinished"></translation>
+        <translation>Номер строки.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Title.</source>
-        <translation type="unfinished"></translation>
+        <translation>Название.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Expiration.</source>
-        <translation type="unfinished"></translation>
+        <translation>Истекает.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Share Type.</source>
-        <translation type="unfinished"></translation>
+        <translation>Тематика.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Question.</source>
-        <translation type="unfinished"></translation>
+        <translation>Вопрос.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Total Participants.</source>
-        <translation type="unfinished"></translation>
+        <translation>Всего участников.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Total Shares.</source>
-        <translation type="unfinished"></translation>
+        <translation>Распространено.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>URL.</source>
-        <translation type="unfinished"></translation>
+        <translation>URL.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Best Answer.</source>
-        <translation type="unfinished"></translation>
+        <translation>Лучший ответ.</translation>
     </message>
 </context>
 <context>
@@ -3375,40 +3351,40 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+533"/>
         <source>PlaceVote</source>
-        <translation type="unfinished"></translation>
+        <translation>Место Голосования</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Q: </source>
-        <translation type="unfinished"></translation>
+        <translation>В: </translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Discussion URL: </source>
-        <translation type="unfinished"></translation>
+        <translation>Обсуждение URL: </translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Best Answer: </source>
-        <translation type="unfinished"></translation>
+        <translation>Лучший ответ: </translation>
     </message>
     <message>
         <location line="+17"/>
         <source>Vote</source>
-        <translation type="unfinished"></translation>
+        <translation>Голосовать</translation>
     </message>
     <message>
         <location line="+37"/>
         <source>Vote failed! Select one or more items to vote.</source>
-        <translation type="unfinished"></translation>
+        <translation>Проголосовать не удалось! Выберете один или несколько пунктов для голосования.</translation>
     </message>
 </context>
 <context>
     <name>WalletModel</name>
     <message>
-        <location filename="../walletmodel.cpp" line="+278"/>
+        <location filename="../walletmodel.cpp" line="+269"/>
         <source>Sending...</source>
-        <translation type="unfinished"></translation>
+        <translation>Отправка...</translation>
     </message>
 </context>
 <context>
@@ -3421,8 +3397,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>List commands</source>
-        <translation>Список команд
-</translation>
+        <translation>Список команд</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3432,7 +3407,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>Options:</source>
-        <translation>Опции:</translation>
+        <translation>Параметры:</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -3447,7 +3422,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+3"/>
         <source>Connect to a node to retrieve peer addresses, and disconnect</source>
-        <translation>Подключиться к узлу, чтобы получить список адресов других участников и отключиться</translation>
+        <translation>Подключиться к участнику, чтобы получить список адресов других участников и отключиться</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3622,122 +3597,132 @@ If the file does not exist, create it with owner-readable-only file permissions.
 It is also recommended to set alertnotify so you are notified of problems;
 for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
 </source>
-        <translation type="unfinished"></translation>
+        <translation>%s, вы должны установить опцию rpcpassword в конфигурационном файле:
+ %s
+Рекомендуется использовать следующий случайный пароль:
+rpcuser=digibyterpc
+rpcpassword=%s
+(вам не нужно запоминать этот пароль)
+Имя и пароль ДОЛЖНЫ различаться.
+Если файл не существует, создайте его и установите права доступа только для владельца, только для чтения.
+Также рекомендуется включить alertnotify для оповещения о проблемах;
+Например: alertnotify=echo %%s | mail -s &quot;DigiByte Alert&quot; admin@foo.com
+</translation>
     </message>
     <message>
         <location line="+24"/>
         <source>Gridcoin version</source>
-        <translation type="unfinished"></translation>
+        <translation>Gridcoin версия</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Send command to -server or gridcoind</source>
-        <translation type="unfinished"></translation>
+        <translation>Отправить команду -server или gridcoind</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Gridcoin</source>
-        <translation type="unfinished"></translation>
+        <translation>Gridcoin</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Specify configuration file (default: gridcoin.conf)</source>
-        <translation type="unfinished"></translation>
+        <translation>Укажите конфигурационный файл (по умолчанию: gridcoin.conf)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Specify pid file (default: gridcoind.pid)</source>
-        <translation type="unfinished"></translation>
+        <translation>Укажите файл pid (по умолчанию: gridcoind.pid)</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Set database cache size in megabytes (default: 25)</source>
-        <translation type="unfinished"></translation>
+        <translation>Задайть размер кеша базы данных в мегабайтах (по умолчанию: 25)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Set database disk log size in megabytes (default: 100)</source>
-        <translation type="unfinished"></translation>
+        <translation>Задайть размер журнала диска базы данных в мегабайтах (по умолчанию: 100)</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Connect through socks proxy</source>
-        <translation type="unfinished"></translation>
+        <translation>Подключение через прокси-сервер socks</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Select the version of socks proxy to use (4-5, default: 5)</source>
-        <translation type="unfinished"></translation>
+        <translation>Выберите версию прокси-сервера socks (4-5, по умолчанию: 5)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Use proxy to reach tor hidden services (default: same as -proxy)</source>
-        <translation type="unfinished"></translation>
+        <translation>Использовать прокси для доступа к скрытым службам (по умолчанию: то же, что и -proxy)</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
-        <translation type="unfinished">Принимать входящие подключения на &lt;port&gt; (по умолчанию: 8333 или 18333 в тестовой сети) {32749 ?} {32748)?}</translation>
+        <translation>Слушайте подключения по &lt;port&gt; (по умолчанию: 32749 или testnet: 32748)</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Find peers using internet relay chat (default: 0)</source>
-        <translation type="unfinished"></translation>
+        <translation>Найти сверстников с помощью интернет-ретрансляционного чата (по умолчанию: 0)</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Bind to given address. Use [host]:port notation for IPv6</source>
-        <translation type="unfinished"></translation>
+        <translation>Привязать к данному адресу. Используйте [host]: обозначение порта для IPv6</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Find peers using DNS lookup (default: 1)</source>
-        <translation type="unfinished"></translation>
+        <translation>Найти одноранговых узлов, использующих DNS-поиск (по умолчанию: 1)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Sync time with other nodes. Disable if time on your system is precise e.g. syncing with NTP (default: 1)</source>
-        <translation type="unfinished"></translation>
+        <translation>Синхронизируйте время с другими узлами. Отключите, если время в вашей системе точно, например. Синхронизация с NTP (по умолчанию: 1)</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Sync checkpoints policy (default: strict)</source>
-        <translation type="unfinished"></translation>
+        <translation>Политика синхронизации контрольных точек (по умолчанию: строгий)</translation>
     </message>
     <message>
         <location line="+9"/>
         <source>Fee per KB to add to transactions you send</source>
-        <translation type="unfinished"></translation>
+        <translation>Плата за КБ для добавления к транзакциям, которые вы отправляете</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>When creating transactions, ignore inputs with value less than this (default: 0.01)</source>
-        <translation type="unfinished"></translation>
+        <translation>При создании транзакции игнорируйте вводы меньше чем (default: 0.01)</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Output extra debugging information. Implies all other -debug* options</source>
-        <translation type="unfinished"></translation>
+        <translation>Вывод дополнительной информации об отладке. Подразумевает все другие опции -debug *</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Output extra network debugging information</source>
-        <translation type="unfinished"></translation>
+        <translation>Вывод дополнительной информации об отладке сети</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Prepend debug output with timestamp</source>
-        <translation type="unfinished"></translation>
+        <translation>Подготовить вывод отладки с меткой времени</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Send trace/debug info to debugger</source>
-        <translation type="unfinished"></translation>
+        <translation>Отправить трассировку / отладочную информацию в отладчик</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Listen for JSON-RPC connections on &lt;port&gt; (default: 15715 or testnet: 25715)</source>
-        <translation type="unfinished">Прослушивать подключения JSON-RPC на &lt;порту&gt; (по умолчанию: 8332 или для testnet: 18332) {15715 ?} {25715)?}</translation>
+        <translation>Слушайте подключения JSON-RPC на &lt;порт&gt; (по умолчанию: 15715 или testnet: 25715)</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -3757,17 +3742,17 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="+6"/>
         <source>Require a confirmations for change (default: 0)</source>
-        <translation type="unfinished"></translation>
+        <translation>Требовать подтверждения изменений (по умолчанию: 0)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
-        <translation type="unfinished"></translation>
+        <translation>Использовать сценарии транзакций для использования канонических операторов PUSH (по умолчанию: 1)</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Execute command when a relevant alert is received (%s in cmd is replaced by message)</source>
-        <translation type="unfinished"></translation>
+        <translation>Выполнить команду при получении соответствующего предупреждения (% s в cmd заменяется сообщением)</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -3787,32 +3772,32 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="+2"/>
         <source>How many blocks to check at startup (default: 2500, 0 = all)</source>
-        <translation type="unfinished">Сколько блоков проверять при запуске (по умолчанию: 288, 0 = все) {2500, 0 ?}</translation>
+        <translation>Сколько блоков проверяется при запуске (по умолчанию: 2500, 0 = все)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>How thorough the block verification is (0-6, default: 1)</source>
-        <translation type="unfinished"></translation>
+        <translation>Насколько тщательна проверка блока (0-6, значение по умолчанию: 1)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Imports blocks from external blk000?.dat file</source>
-        <translation type="unfinished"></translation>
+        <translation>Импортирует блоки из внешнего файла blk000? .dat</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Set maximum block size in bytes (default: 250000)</source>
-        <translation type="unfinished"></translation>
+        <translation>Установить максимальный размер блока в байтах (по умолчанию: 250000)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
-        <translation type="unfinished"></translation>
+        <translation>Установите максимальный размер транзакций с высоким приоритетом / низкой оплатой в байтах (по умолчанию: 27000)</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>SSL options: (see the Bitcoin Wiki for SSL setup instructions)</source>
-        <translation type="unfinished"></translation>
+        <translation>Параметры SSL: (см. Инструкции по настройке Bitcoin Wiki для SSL)</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3832,22 +3817,22 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="+66"/>
         <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
-        <translation type="unfinished"></translation>
+        <translation>Внимание: убедитесь, что дата и время на Вашем компьютере выставлены верно. Если Ваши часы идут неправильно, Gridcoin будет работать некорректно.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
-        <translation type="unfinished"></translation>
+        <translation>ПРЕДУПРЕЖДЕНИЕ: обнаружено нарушение синхронизированной контрольной точки, но пройдено!</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Warning: Disk space is low!</source>
-        <translation type="unfinished"></translation>
+        <translation>Внимание: Свободное место заканчивается!</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.</source>
-        <translation type="unfinished"></translation>
+        <translation>ПРЕДУПРЕЖДЕНИЕ. Неверная контрольная точка найдена! Отображаемые транзакции могут быть неверными! Возможно, вам потребуется обновиться или уведомить разработчиков.</translation>
     </message>
     <message>
         <location line="-155"/>
@@ -3912,37 +3897,37 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="+46"/>
         <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
-        <translation type="unfinished"></translation>
+        <translation>Невозможно забиндиться %s на этом компьютере. Gridcoin вероятно уже запущен.</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Error: Wallet locked, unable to create transaction  </source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка: кошелек заблокирован, невозможно создать транзакцию  </translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Error: Wallet unlocked for staking only, unable to create transaction.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка: Кошелек разблокирован только для стейкинга, невозможно создать транзакцию.</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка: эта транзакция требует комиссию как минимум %s из-за суммы, сложности или использования недавно полученных средств  </translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Error: Transaction creation failed  </source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка: Не удалось создать транзакцию  </translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Sending...</source>
-        <translation type="unfinished"></translation>
+        <translation>Отправка...</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка: транзакция была отклонена! Это могло произойти в случае, если некоторые монеты в вашем бумажнике уже были потрачены, например, если вы используете копию wallet.dat, и монеты были использованы в копии, но не отмечены как потраченные здесь.</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -3967,58 +3952,59 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="+70"/>
         <source>Acceptable ciphers (default: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</source>
-        <translation type="unfinished"></translation>
+        <translation>Допустимые алгоритмы (по умолчанию: TLSv1 + HIGH:! SSLv2:! ANULL:! ENULL:! AH:! 3DES: @STRENGTH)</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Invalid amount for -mininput=&lt;amount&gt;: &apos;%s&apos;</source>
-        <translation type="unfinished"></translation>
+        <translation>Недопустимая сумма для -mininput = &lt;amount&gt;: &apos;% s&apos;</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Initialization sanity check failed. Gridcoin is shutting down.</source>
-        <translation type="unfinished"></translation>
+        <translation>Инициализация проверки работоспособности не удалась. Gridcoin закрывается.</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Wallet %s resides outside data directory %s.</source>
-        <translation type="unfinished"></translation>
+        <translation>Бумажник %s располагается вне каталога данных %s.</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
-        <translation type="unfinished"></translation>
+        <translation>Не удается получить блокировку в каталоге данных% s. Гридкойн, вероятно, уже работает.</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Verifying database integrity...</source>
-        <translation type="unfinished"></translation>
+        <translation>Проверка целостности базы данных...</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка инициализации среды базы данных% s! Чтобы восстановить, СДЕЛАЙТЕ БЕКАП ДАННОЙ ДИРЕКТОРИИ, затем удалите все, кроме него, за исключением wallet.dat.</translation>
     </message>
     <message>
         <location line="+11"/>
         <source>Invalid -tor address: &apos;%s&apos;</source>
-        <translation type="unfinished"></translation>
+        <translation>Недопустимый адрес -tor: &apos;% s&apos;</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Invalid amount for -reservebalance=&lt;amount&gt;</source>
-        <translation type="unfinished"></translation>
+        <translation>Недопустимая сумма для -reservebalance = &lt;amount&gt;</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Unable to sign checkpoint, wrong checkpointkey?
 </source>
-        <translation type="unfinished"></translation>
+        <translation>Не удалось подписать контрольную точку, неверен checkpointkey?
+</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Error loading blkindex.dat</source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка при загрузке blkindex.dat</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -4028,12 +4014,12 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="+5"/>
         <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка загрузки wallet.dat: Бумажник требует более новой версии Gridcoin</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
-        <translation type="unfinished"></translation>
+        <translation>Необходимо перезаписать бумажник: перезапустите Gridcoin для завершения операции</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -4053,17 +4039,17 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="+1"/>
         <source>Importing blockchain data file.</source>
-        <translation type="unfinished"></translation>
+        <translation>Импорт файла блокчейн цепочки.</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Importing bootstrap blockchain data file.</source>
-        <translation type="unfinished"></translation>
+        <translation>Импорт файла данных блокировки bootstrap.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Error: could not start node</source>
-        <translation type="unfinished"></translation>
+        <translation>Ошибка: не удалось запустить узел</translation>
     </message>
     <message>
         <location line="+1"/>
