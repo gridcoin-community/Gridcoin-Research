@@ -360,6 +360,7 @@ bool CTxDB::LoadBlockIndex()
     #endif
     
     // Now read each entry.
+    printf("Loading DiskIndex %d\n",nHighest);
     while (iterator->Valid())
     {
         // Unpack keys and values.
@@ -420,6 +421,7 @@ bool CTxDB::LoadBlockIndex()
                 if (nHighest < nGrandfather) nHighest=nGrandfather;
                 std::string sBlocksLoaded = RoundToString(nLoaded,0) + "/" + RoundToString(nHighest,0) + " Blocks Loaded";
                 uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
+                fprintf(stdout,"%d ",nLoaded); fflush(stdout);
             }
         #endif
 
