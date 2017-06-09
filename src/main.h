@@ -289,7 +289,7 @@ std::string DefaultWalletAddress();
 bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
                         bool* pfMissingInputs);
 
-
+std::string GetBackupFilename(const std::string& basename, const std::string& suffix = "");
 
 bool GetWalletFile(CWallet* pwallet, std::string &strWalletFileOut);
 StructCPID GetInitializedStructCPID2(const std::string& name, std::map<std::string, StructCPID>& vRef);

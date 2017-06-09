@@ -637,8 +637,10 @@ std::string BackupGridcoinWallet()
     printf("Starting Wallet Backup\r\n");
     std::string filename = "grc_" + DateTimeStrFormat("%m-%d-%Y",  GetAdjustedTime()) + ".dat";
     std::string filename_backup = "backup.dat";
-    std::string standard_filename = "wallet_" + DateTimeStrFormat("%m-%d-%Y",  GetAdjustedTime()) + ".dat";
-    std::string sConfig_FileName = "gridcoinresearch_" + DateTimeStrFormat("%m-%d-%Y",  GetAdjustedTime()) + ".conf";
+    // std::string standard_filename = "wallet_" + DateTimeStrFormat("%m-%d-%Y",  GetAdjustedTime()) + ".dat";
+    // std::string sConfig_FileName = "gridcoinresearch_" + DateTimeStrFormat("%m-%d-%Y",  GetAdjustedTime()) + ".conf";
+    std::string standard_filename = GetBackupFilename("wallet.dat");
+    std::string sConfig_FileName = GetBackupFilename("gridcoinresearch.conf");
     std::string source_filename   = "wallet.dat";
     boost::filesystem::path path = GetDataDir() / "walletbackups" / filename;
     boost::filesystem::path target_path_standard = GetDataDir() / "walletbackups" / standard_filename;
@@ -1251,7 +1253,15 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
             {
                 // Store the key 
                 sMessage = AddContract(sType,sName,sBase);
+                // Backup config with old keys like a normal backup
+                std::string sBeaconBackupOldConfigFilename = GetBackupFilename("gridcoinresearch.conf");
+                boost::filesystem::path sBeaconBackupOldConfigTarget = GetDataDir() / "walletbackups" / sBeaconBackupOldConfigFilename;
+                BackupConfigFile(sBeaconBackupOldConfigTarget.string().c_str());
                 StoreBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
+                // Backup config with new keys with beacon suffix
+                std::string sBeaconBackupNewConfigFilename = GetBackupFilename("gridcoinresearch.conf", "beacon");
+                boost::filesystem::path sBeaconBackupNewConfigTarget = GetDataDir() / "walletbackups" / sBeaconBackupNewConfigFilename;
+                BackupConfigFile(sBeaconBackupNewConfigTarget.string().c_str());
                 return true;
             }
             catch(Object& objError)

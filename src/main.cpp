@@ -9386,3 +9386,17 @@ bool StrLessThanReferenceHash(std::string rh)
     uint256 uADH = uint256("0x" + address_day_hash);
     return (uADH < uRef);
 }
+
+// Generate backup filenames with local date and time with suffix support
+std::string GetBackupFilename(const std::string& basename, const std::string& suffix)
+{
+    time_t biTime;
+    struct tm * blTime;
+    time (&biTime);
+    blTime = localtime(&biTime);
+    char boTime[200];
+    strftime(boTime, sizeof(boTime), "%FT%H-%M-%S", blTime);
+    return suffix.empty()
+        ? basename + "-" + std::string(boTime)
+        : basename + "-" + std::string(boTime) + "-" + suffix;
+}
