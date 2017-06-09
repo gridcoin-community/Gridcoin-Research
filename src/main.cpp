@@ -8909,6 +8909,9 @@ bool MemorizeMessage(std::string msg, int64_t nTime, double dAmount, std::string
                                     WriteCache(sMessageType,sMessageKey+";BurnAmount",RoundToString(dAmount,2),nTime);
                                 }
                                 WriteCache(sMessageType,sMessageKey,sMessageValue,nTime);
+                                if(fDebug && sMessageType=="beacon" ){
+                                    printf("BEACON add %s %s %s\r\n",sMessageKey.c_str(),DecodeBase64(sMessageValue).c_str(),TimestampToHRDate(nTime).c_str());
+                                }
                                 fMessageLoaded = true;
                                 if (sMessageType=="poll")
                                 {
@@ -8927,6 +8930,9 @@ bool MemorizeMessage(std::string msg, int64_t nTime, double dAmount, std::string
                         else if(sMessageAction=="D")
                         {
                                 if (fDebug10) printf("Deleting key type %s Key %s Value %s\r\n",sMessageType.c_str(),sMessageKey.c_str(),sMessageValue.c_str());
+                                if(fDebug && sMessageType=="beacon" ){
+                                    printf("BEACON DEL %s - %s\r\n",sMessageKey.c_str(),TimestampToHRDate(nTime).c_str());
+                                }
                                 DeleteCache(sMessageType,sMessageKey);
                                 fMessageLoaded = true;
                         }
