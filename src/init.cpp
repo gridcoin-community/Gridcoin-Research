@@ -542,7 +542,7 @@ bool AppInit2()
     nNodeLifespan = GetArg("-addrlifespan", 7);    
     fUseFastIndex = GetBoolArg("-fastindex", false);
 
-    nMinerSleep = GetArg("-minersleep", 500);
+    nMinerSleep = GetArg("-minersleep", 8000);
 
     CheckpointsMode = Checkpoints::STRICT;
     //CheckpointsMode = Checkpoints::ADVISORY;

@@ -854,12 +854,13 @@ MiningCPID GetNextProject(bool bForce)
 
 
                                         GlobalCPUMiningCPID.boincruntimepublickey = structcpid.cpidhash;
-                                        printf("\r\n GNP: Setting bpk to %s\r\n",structcpid.cpidhash.c_str());
+                                        if(fDebug) printf("\r\n GNP: Setting bpk to %s\r\n",structcpid.cpidhash.c_str());
 
                                         uint256 pbh = 1;
                                         GlobalCPUMiningCPID.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey, pbh);
                                         GlobalCPUMiningCPID.lastblockhash = "0";
                                         // Sign the block
+                                        GlobalCPUMiningCPID.BoincPublicKey = GetBeaconPublicKey(structcpid.cpid, false);
                                         GlobalCPUMiningCPID.BoincSignature = SignBlockWithCPID(GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.lastblockhash);
                                 
                                         if (!IsCPIDValidv2(GlobalCPUMiningCPID,1))
@@ -4872,70 +4873,6 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 }
 
 
-
-// Gridcoin: (previously NovaCoin) : Attempt to generate suitable proof-of-stake
-bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
-{
-    // if we are trying to sign
-    //    something except proof-of-stake block template
-    if (!vtx[0].vout[0].IsEmpty())
-        return false;
-
-    // if we are trying to sign
-    //    a complete proof-of-stake block
-    if (IsProofOfStake())
-        return true;
-
-    static int64_t nLastCoinStakeSearchTime = GetAdjustedTime(); // startup timestamp
-
-    CKey key;
-    CTransaction txCoinStake;
-    if (IsProtocolV2(nBestHeight+1))
-        txCoinStake.nTime &= ~STAKE_TIMESTAMP_MASK;
-
-    int64_t nSearchTime = txCoinStake.nTime; // search to current time
-    int64_t out_gridreward = 0;
-
-    if (nSearchTime > nLastCoinStakeSearchTime)
-    {
-        int64_t nSearchInterval = IsProtocolV2(nBestHeight+1) ? 1 : nSearchTime - nLastCoinStakeSearchTime;
-        std::string out_hashboinc = "";
-        if (wallet.CreateCoinStake(wallet, nBits, nSearchInterval, nFees, txCoinStake, key, out_gridreward, out_hashboinc))
-        {
-            //1-8-2015 Extract solved Key
-            double solvedNonce = cdbl(AppCache(pindexBest->GetBlockHash().GetHex()),0);
-            nNonce=solvedNonce;
-            if (fDebug3) printf(".17. Nonce %f, SNonce %f, StakeTime %f, MaxHistTD %f, BBPTL %f, PDBTm %f \r\n",
-                (double)nNonce,(double)solvedNonce,(double)txCoinStake.nTime,
-                (double)max(pindexBest->GetPastTimeLimit()+1, PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1)),
-                (double)pindexBest->GetPastTimeLimit(), (double)PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1)    );
-            if (txCoinStake.nTime >= max(pindexBest->GetPastTimeLimit()+1, PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1)))
-            {
-                // make sure coinstake would meet timestamp protocol
-                //    as it would be the same as the block timestamp
-                vtx[0].nTime = nTime = txCoinStake.nTime;
-                nTime = max(pindexBest->GetPastTimeLimit()+1, GetMaxTransactionTime());
-                nTime = max(GetBlockTime(), PastDrift(pindexBest->GetBlockTime(), pindexBest->nHeight+1));
-
-
-                // we have to make sure that we have no future timestamps in
-                //    our transactions set
-                for (vector<CTransaction>::iterator it = vtx.begin(); it != vtx.end();)
-                    if (it->nTime > nTime) { it = vtx.erase(it); } else { ++it; }
-                vtx.insert(vtx.begin() + 1, txCoinStake);
-                vtx[0].hashBoinc= out_hashboinc;
-
-                hashMerkleRoot = BuildMerkleTree();
-                return key.Sign(GetHash(), vchBlockSig);
-            }
-        }
-        nLastCoinStakeSearchInterval = nSearchTime - nLastCoinStakeSearchTime;
-        nLastCoinStakeSearchTime = nSearchTime;
-    }
-
-    return false;
-}
-
 bool CBlock::CheckBlockSignature() const
 {
     if (IsProofOfWork())
@@ -7677,15 +7614,9 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
     if (mcpid.lastblockhash.empty()) mcpid.lastblockhash = "0";
     if (mcpid.LastPORBlockHash.empty()) mcpid.LastPORBlockHash="0";
 
-    // If this is a POR, sign the block proving ownership of the CPID
     if (!mcpid.cpid.empty() && mcpid.cpid != "INVESTOR" && mcpid.lastblockhash != "0")
     {
         mcpid.BoincPublicKey = GetBeaconPublicKey(mcpid.cpid, false);
-        if (!mcpid.BoincPublicKey.empty())
-        {
-            mcpid.BoincSignature = SignBlockWithCPID(mcpid.cpid,mcpid.lastblockhash);
-            if(fDebug) printf("Signing Block for cpid %s and blockhash %s with sig %s\r\n",mcpid.cpid.c_str(),mcpid.lastblockhash.c_str(),mcpid.BoincSignature.c_str());
-        }
     }
 
     std::string bb = mcpid.cpid + delim + mcpid.projectname + delim + mcpid.aesskein + delim + RoundToString(mcpid.rac,0)
@@ -8815,8 +8746,8 @@ bool MemorizeMessage(std::string msg, int64_t nTime, double dAmount, std::string
                                     WriteCache(sMessageType,sMessageKey+";BurnAmount",RoundToString(dAmount,2),nTime);
                                 }
                                 WriteCache(sMessageType,sMessageKey,sMessageValue,nTime);
-                                if(sMessageType=="beacon" && fDebug3){
-                                  printf("BEACON %s %s %s\r\n",sMessageKey.c_str(),DecodeBase64(sMessageValue).c_str(),TimestampToHRDate(nTime).c_str());
+                                if(fDebug && sMessageType=="beacon" ){
+                                    printf("BEACON add %s %s %s\r\n",sMessageKey.c_str(),DecodeBase64(sMessageValue).c_str(),TimestampToHRDate(nTime).c_str());
                                 }
                                 fMessageLoaded = true;
                                 if (sMessageType=="poll")
@@ -8836,6 +8767,9 @@ bool MemorizeMessage(std::string msg, int64_t nTime, double dAmount, std::string
                         else if(sMessageAction=="D")
                         {
                                 if (fDebug10) printf("Deleting key type %s Key %s Value %s\r\n",sMessageType.c_str(),sMessageKey.c_str(),sMessageValue.c_str());
+                                if(fDebug && sMessageType=="beacon" ){
+                                    printf("BEACON DEL %s - %s\r\n",sMessageKey.c_str(),TimestampToHRDate(nTime).c_str());
+                                }
                                 DeleteCache(sMessageType,sMessageKey);
                                 fMessageLoaded = true;
                         }

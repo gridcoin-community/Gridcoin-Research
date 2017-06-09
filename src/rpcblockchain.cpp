@@ -436,14 +436,18 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
     result.push_back(Pair("NeuralHash",bb.NeuralHash));
     if (bb.superblock.length() > 20)
     {
-        //result.push_back(Pair("SuperblockLength", RoundToString((double)bb.superblock.length(),0) ));
         //12-20-2015 Support for Binary Superblocks
         std::string superblock=UnpackBinarySuperblock(bb.superblock);
         std::string neural_hash = GetQuorumHash(superblock);
         result.push_back(Pair("SuperblockHash", neural_hash));
-        result.push_back(Pair("SuperblockLength", (double)bb.superblock.length()));
+        result.push_back(Pair("SuperblockUnpackedLength", (long)superblock.length()));
+        result.push_back(Pair("SuperblockLength", (long)bb.superblock.length()));
         bool bIsBinary = Contains(bb.superblock,"<BINARY>");
         result.push_back(Pair("IsBinary",bIsBinary));
+        if(fPrintTransactionDetail)
+        {
+            result.push_back(Pair("SuperblockContents", superblock));
+        }
     }
     result.push_back(Pair("IsSuperBlock", (int)blockindex->nIsSuperBlock));
     result.push_back(Pair("IsContract", (int)blockindex->nIsContract));
