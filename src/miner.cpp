@@ -1013,7 +1013,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     }
     BalanceToStake -= nReserveBalance;
 
-    if(fDebug) printf("\nCreateCoinStake: Staking nTime/16= %d Bits= %u\n",
+    if(fDebug2) printf("\nCreateCoinStake: Staking nTime/16= %d Bits= %u\n",
     txnew.nTime/16,blocknew.nBits);
 
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, CoinsToStake)
@@ -1060,7 +1060,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         StakeTarget*=CoinWeight;
         StakeWeightSum += CoinWeight;
 
-        if (fDebug) {
+        if (fDebug2) {
             int64_t RSA_WEIGHT = GetRSAWeightByBlock(GlobalCPUMiningCPID);
             printf(
 "CreateCoinStake: V%d Time %.f, Por_Nonce %.f, Bits %jd, Weight %jd\n"
