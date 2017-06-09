@@ -30,6 +30,15 @@ bool CheckStakeKernelHash(CBlockIndex* pindexPrev, unsigned int nBits, const CBl
 bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned int nBits, uint256& hashProofOfStake, 
 	uint256& targetProofOfStake, std::string hashBoinc, bool checking_local, double por_nonce);
 
+CBigNum CalculateStakeHashV3(
+    const CBlock &CoinBlock, const CTransaction &CoinTx,
+    unsigned CoinTxN, unsigned TxTime,
+    const MiningCPID &BoincData, double mdPORNonce);
+
+int64_t CalculateStakeWeightV3(
+    const CTransaction &CoinTx, unsigned CoinTxN,
+    const MiningCPID &BoincData);
+
 // Check whether the coinstake timestamp meets protocol
 bool CheckCoinStakeTimestamp(int nHeight, int64_t nTimeBlock, int64_t nTimeTx);
 
