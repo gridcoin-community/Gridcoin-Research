@@ -4174,12 +4174,12 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     int nHeight = pindexPrev->nHeight+1;
 
     if(       (IsProtocolV2(nHeight) && nVersion < 7)
-            ||(fTestNet && nHeight > 272200 && nVersion < 8)
+            ||(fTestNet && nHeight > 272280 && nVersion < 8)
         )
         return DoS(100, error("AcceptBlock() : reject too old nVersion = %d", nVersion));
     else if( (!IsProtocolV2(nHeight) && nVersion >= 7)
             ||(!fTestNet && nVersion >=8 )
-            ||(fTestNet && nHeight < 271700 && nVersion >= 8)
+            ||(fTestNet && nHeight < 272270 && nVersion >= 8)
         )
         return DoS(100, error("AcceptBlock() : reject too new nVersion = %d", nVersion));
 
