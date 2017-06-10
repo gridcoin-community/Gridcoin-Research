@@ -820,17 +820,11 @@ bool CheckStakeModifierCheckpoints(int nHeight, unsigned int nStakeModifierCheck
 CBigNum CalculateStakeHashV8(
     const CBlock &CoinBlock, const CTransaction &CoinTx,
     unsigned CoinTxN, unsigned nTimeTx,
+    uint64_t StakeModifier,
     const MiningCPID &BoincData)
 {
     CDataStream ss(SER_GETHASH, 0);
-    uint64_t nStakeModifier = 0;
-    int nStakeModifierHeight = 0;
-    int64_t nStakeModifierTime = 0;
-    if (!GetKernelStakeModifier(CoinBlock.GetHash(), nStakeModifier, nStakeModifierHeight, nStakeModifierTime, fDebug)) {
-        printf("CalculateStakeHashV8: Unable to get stake modifier\n");
-        nStakeModifier = 0;
-    }
-    ss << nStakeModifier;
+    ss << StakeModifier;
     ss << CoinBlock.nTime;
     ss << CoinTx.nTime << CoinTx.GetHash() << CoinTxN;
     ss << nTimeTx;
@@ -845,6 +839,27 @@ int64_t CalculateStakeWeightV8(
     int64_t nValueIn = CoinTx.vout[CoinTxN].nValue;
     nValueIn /= 1250000;
     return nValueIn;
+}
+
+// Another version of GetKernelStakeModifier (TomasBrod)
+// Todo: security considerations
+bool FindStakeModifierRev(uint64_t& nStakeModifier,CBlockIndex* pindexPrev)
+{
+    nStakeModifier = 0;
+    const CBlockIndex* pindex = pindexPrev;
+
+    while (1)
+    {
+        if(!pindex)
+            return error("FindStakeModifierRev: no previous block from %d",pindexPrev->nHeight);
+
+        if (pindex->GeneratedStakeModifier())
+        {
+            nStakeModifier = pindex->nStakeModifier;
+            return true;
+        }
+        pindex = pindex->pprev;
+    }
 }
 
 // Block Version 8+ check procedure
@@ -901,9 +916,14 @@ bool CheckProofOfStakeV8(
 
     MiningCPID boincblock = DeserializeBoincBlock(Block.vtx[0].hashBoinc);
 
+    //
+    uint64_t StakeModifier = 0;
+    if(!FindStakeModifierRev(StakeModifier,pindexPrev))
+        return error("CheckProofOfStakeV8: unable to find stake modifier");
+
     //Stake refactoring TomasBrod
     int64_t Weight= CalculateStakeWeightV8(txPrev,txin.prevout.n,boincblock);
-    CBigNum bnHashProof= CalculateStakeHashV8(blockPrev,txPrev,txin.prevout.n,tx.nTime,boincblock);
+    CBigNum bnHashProof= CalculateStakeHashV8(blockPrev,txPrev,txin.prevout.n,tx.nTime,StakeModifier,boincblock);
 
     // Base target
     CBigNum bnTarget;

@@ -984,7 +984,8 @@ int64_t GetRSAWeightByBlock(MiningCPID boincblock);
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 
 bool CreateCoinStake( CBlock &blocknew, CKey &key,
-    vector<const CWalletTx*> &StakeInputs, uint64_t &CoinAge, CWallet &wallet )
+    vector<const CWalletTx*> &StakeInputs, uint64_t &CoinAge,
+    CWallet &wallet, CBlockIndex* pindexPrev )
 {
     int64_t CoinWeight;
     CBigNum StakeKernelHash;
@@ -1050,8 +1051,11 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         }
         else if(blocknew.nVersion==8)
         {
+            uint64_t StakeModifier = 0;
+            if(!FindStakeModifierRev(StakeModifier,pindexPrev))
+                continue;
             CoinWeight = CalculateStakeWeightV8(CoinTx,CoinTxN,GlobalCPUMiningCPID);
-            StakeKernelHash= CalculateStakeHashV8(CoinBlock,CoinTx,CoinTxN,txnew.nTime,GlobalCPUMiningCPID);
+            StakeKernelHash= CalculateStakeHashV8(CoinBlock,CoinTx,CoinTxN,txnew.nTime,StakeModifier,GlobalCPUMiningCPID);
         }
         else return false;
 
@@ -1339,7 +1343,7 @@ void StakeMiner(CWallet *pwallet)
     CKey BlockKey;
     vector<const CWalletTx*> StakeInputs;
     uint64_t StakeCoinAge;
-    if( !CreateCoinStake( StakeBlock, BlockKey, StakeInputs, StakeCoinAge, *pwallet ) )
+    if( !CreateCoinStake( StakeBlock, BlockKey, StakeInputs, StakeCoinAge, *pwallet, pindexPrev ) )
         continue;
     StakeBlock.nTime= StakeTX.nTime;
     printf("StakeMiner: created coin stake\n");
