@@ -5272,12 +5272,12 @@ Value getcheckpoint(const Array& params, bool fHelp)
 }
 
 //Brod
-Value rpc_rollback(const Array& params, bool fHelp)
+Value rpc_reorganize(const Array& params, bool fHelp)
 {
     Object results;
     if (fHelp || params.size() != 1)
         throw runtime_error(
-            "reorganize <hash>\n"
+            "rollback <hash>\n"
             "Roll back the block chain to specified block hash.\n"
             "The block hash must already be present in block index");
 
