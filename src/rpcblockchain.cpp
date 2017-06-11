@@ -36,7 +36,7 @@ int DetermineCPIDType(std::string cpid);
 extern void GetBeaconElements(std::string sBeacon,std::string& out_cpid, std::string& out_address, std::string& out_publickey);
 bool AskForOutstandingBlocks(uint256 hashStart);
 bool WriteKey(std::string sKey, std::string sValue);
-bool CleanChain();
+bool ForceReorganizeToHash(uint256 NewHash);
 extern std::string SendReward(std::string sAddress, int64_t nAmount);
 extern double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID);
 std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertising);
@@ -1639,12 +1639,6 @@ Value execute(const Array& params, bool fHelp)
             #endif
             entry.push_back(Pair("Restarting",(double)iResult));
             results.push_back(entry);
-    }
-    else if (sItem == "cleanchain")
-    {
-        bool fResult = CleanChain();
-        entry.push_back(Pair("CleanChain",fResult));
-        results.push_back(entry);
     }
     else if (sItem == "sendblock")
     {
@@ -5277,3 +5271,20 @@ Value getcheckpoint(const Array& params, bool fHelp)
     return result;
 }
 
+//Brod
+Value rpc_rollback(const Array& params, bool fHelp)
+{
+    Object results;
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "reorganize <hash>\n"
+            "Roll back the block chain to specified block hash.\n"
+            "The block hash must already be present in block index");
+
+    uint256 NewHash;
+    NewHash.SetHex(params[0].get_str());
+
+    bool fResult = ForceReorganizeToHash(NewHash);
+    results.push_back(Pair("RollbackChain",fResult));
+    return results;
+}

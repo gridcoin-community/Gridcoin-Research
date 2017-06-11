@@ -3594,47 +3594,35 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
 }
 
 
-bool CleanChain()
+bool ForceReorganizeToHash(uint256 NewHash)
 {
     CTxDB txdb;
-   if (!txdb.TxnBegin())
-        return error("CleanChain() : TxnBegin failed");
 
-    if (nBestHeight < 1000) return true;
+    if(!mapBlockIndex.count(NewHash))
+        return error("ForceReorganizeToHash: failed to find requested block in block index");
 
-    printf("\r\n** CLEAN CHAIN **\r\n");
-    // Roll back a few blocks from best height
-    printf(" Current best height %f ",(double)pindexBest->nHeight);
-    CBlockIndex* pfork = pindexBest->pprev;
-    CBlockIndex* pindexNew = pfork->pprev;
-    printf(" Target height %f ",(double)pfork->nHeight);
+    CBlockIndex* pindexCur = pindexBest;
+    CBlockIndex* pindexNew = mapBlockIndex[NewHash];
+    printf("\r\n** Force Reorganize **\r\n");
+    printf(" Current best height %f hash %s\n",(double)pindexCur->nHeight,pindexCur->GetBlockHash().GetHex().c_str());
+    printf(" Target height %f hash %s\n",(double)pindexNew->nHeight,pindexNew->GetBlockHash().GetHex().c_str());
 
-    if (!Reorganize(txdb, pfork))
+    CBlock blockNew;
+    if (!blockNew.ReadFromDisk(pindexNew))
     {
-                    printf("Failed to Reorganize during Attempt #%f \r\n",(double)1);
-                    txdb.TxnAbort();
-                    //InvalidChainFound(pindexNew);
-                    return false;
+        printf("ForceReorganizeToHash: Fatal Error while reading new best block.\r\n");
+        return false;
     }
-    else
+
+    //Re-process the last block to trigger orphan and shit
+    if (!blockNew.SetBestChain(txdb, pindexNew))
     {
-            CBlock blockNew;
-            if (!blockNew.ReadFromDisk(pindexNew))
-            {
-                printf("CleanChain(): Fatal Error while reading new best block.\r\n");
-                return false;
-            }
-
-            if (!blockNew.SetBestChain(txdb, pindexNew))
-            {
-                return error("CleanChain(): Fatal Error while setting best chain.\r\n");
-            }
-
-            printf(" Clean Chain succeeded. ");
+        return error("ForceReorganizeToHash Fatal Error while setting best chain.\r\n");
     }
+
     AskForOutstandingBlocks(uint256(0));
+    printf("ForceReorganizeToHash: success! height %f hash %s\n\n",(double)pindexBest->nHeight,pindexBest->GetBlockHash().GetHex().c_str());
     return true;
-
 }
 
 
