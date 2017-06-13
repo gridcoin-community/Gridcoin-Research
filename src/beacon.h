@@ -45,3 +45,13 @@ std::string GetStoredBeaconPrivateKey(const std::string& cpid);
 //! \return Stored beacon public key if available, otherwise an empty string.
 //!
 std::string GetStoredBeaconPublicKey(const std::string& cpid);
+
+// Update stored keys in memory as this process is not automatic and currently requires a restart of client to do so.
+// This corrects issues where users who have deleted beacons and then advertise new ones.
+// This corrects issues where users who readvertise and the existing keypair is no longer valid.
+// This puts the new key pair in memory.
+
+void UpdateBeaconKeysInMemory(
+        const std::string &cpid,
+        const std::string &pubKey,
+        const std::string &privKey);
