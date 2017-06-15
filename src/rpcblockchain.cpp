@@ -1261,11 +1261,7 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
                 boost::filesystem::path sBeaconBackupNewConfigTarget = GetDataDir() / "walletbackups" / sBeaconBackupNewConfigFilename;
                 BackupConfigFile(sBeaconBackupNewConfigTarget.string().c_str());
                 // Update public and private keys in memory. This process is not automatic and has caused users who have a new keys to perform a restart of wallet.
-                // iResult = 2 means a new key pair was issued by GenerateBeaconKeys. Now that beacon is successful we update this in memory.
-                if (iResult = 2)
-                {
-                    UpdateBeaconKeysInMemory(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
-                }
+                UpdateBeaconKeysInMemory(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
                 return true;
             }
             catch(Object& objError)
