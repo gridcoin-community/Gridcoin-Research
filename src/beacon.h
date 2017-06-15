@@ -8,17 +8,12 @@
 
 //!
 //! \brief Generate beacon key pair.
-//! 
-//! Checks the current beacon keys for their validity and generate
-//! new ones if the old ones are invalid. If the old pair is valid
-//! they are returned.
-//! 
+//!
 //! \param cpid CPID to generate keys for.
 //! \param sOutPubKey Public key destination.
 //! \param sOutPrivKey Private key destination.
-//! \return \c 1 if keys were reused or \c 2 new keys were generated.
 //!
-int GenerateBeaconKeys(const std::string &cpid, std::string &sOutPubKey, std::string &sOutPrivKey);
+void GenerateBeaconKeys(const std::string &cpid, std::string &sOutPubKey, std::string &sOutPrivKey);
 
 //!
 //! \brief Store beacon keys in permanent storage.
