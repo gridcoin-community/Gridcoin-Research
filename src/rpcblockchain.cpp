@@ -1230,13 +1230,7 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
                 return false;
             }
         
-            int iResult = GenerateBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
-            if (iResult < 1)
-            {
-                sError = "Error generating keypair.";
-                return false;
-            }
-            
+            GenerateBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
             if (sOutPrivKey.empty() || sOutPubKey.empty())
             {
                 sError = "Keypair is empty.";
