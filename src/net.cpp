@@ -12,7 +12,6 @@
 #include "util.h"
 
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
-#include <boost/array.hpp>
 #include <boost/thread.hpp>
 
 #ifdef WIN32
@@ -88,7 +87,7 @@ static bool vfLimited[NET_MAX] = {};
 static CNode* pnodeLocalHost = NULL;
 CAddress addrSeenByPeer(CService("0.0.0.0", 0), nLocalServices);
 uint64_t nLocalHostNonce = 0;
-boost::array<int, THREAD_MAX> vnThreadsRunning;
+std::array<int, THREAD_MAX> vnThreadsRunning;
 static std::vector<SOCKET> vhListenSocket;
 CAddrMan addrman;
 
