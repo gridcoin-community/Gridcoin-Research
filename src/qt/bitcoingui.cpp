@@ -1014,10 +1014,10 @@ void BitcoinGUI::createMenuBar()
     help->addAction(openRPCConsoleAction);
     help->addSeparator();
     help->addAction(aboutAction);
-//#ifdef WIN32
-//	help->addSeparator();
-//	help->addAction(upgradeAction);
-//#endif
+#ifdef WIN32
+    help->addSeparator();
+	help->addAction(upgradeAction);
+#endif
 
 }
 
