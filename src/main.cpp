@@ -9337,3 +9337,12 @@ std::string GetBackupFilename(const std::string& basename, const std::string& su
         ? basename + "-" + std::string(boTime)
         : basename + "-" + std::string(boTime) + "-" + suffix;
 }
+
+// SetArgument - Set or alter arguments stored in memory
+
+void SetArgument(
+            const string &argKey,
+            const string &argValue)
+{
+    mapArgs["-" + argKey] = argValue;
+}
