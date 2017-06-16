@@ -990,8 +990,6 @@ void BitcoinGUI::createToolBars()
 
     frameBlocks->setContentsMargins(0,0,0,0);
 
-    frameBlocks->setMinimumWidth(30);
-    frameBlocks->setMaximumWidth(30);
     QVBoxLayout *frameBlocksLayout = new QVBoxLayout(frameBlocks);
     frameBlocksLayout->setContentsMargins(1,0,1,0);
     frameBlocksLayout->setSpacing(-1);
@@ -1023,7 +1021,6 @@ void BitcoinGUI::createToolBars()
     toolbar2->setOrientation(Qt::Vertical);
     toolbar2->setMovable( false );
     toolbar2->setObjectName("toolbar2");
-    toolbar2->setFixedWidth(26);
     toolbar2->addWidget(frameBlocks);
 
     addToolBarBreak(Qt::TopToolBarArea);
@@ -1032,7 +1029,6 @@ void BitcoinGUI::createToolBars()
     toolbar3->setOrientation(Qt::Horizontal);
     toolbar3->setMovable( false );
     toolbar3->setObjectName("toolbar3");
-    toolbar3->setFixedHeight(52);
     QLabel *grcLogoLabel = new QLabel();
     grcLogoLabel->setPixmap(QPixmap(":/images/logo_hz"));
     toolbar3->addWidget(grcLogoLabel);
