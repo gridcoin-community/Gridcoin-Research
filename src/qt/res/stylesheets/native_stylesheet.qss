@@ -3,6 +3,13 @@ QMainWindow {
     font-family:'Open Sans,sans-serif';
 }
 
+#line {
+    qproperty-maximumSize: 330px 16777215px;
+}
+#line_2 {
+    qproperty-maximumSize: 330px 16777215px;
+}
+
 #toolbar {
     min-width:160px;
     max-width:160px;

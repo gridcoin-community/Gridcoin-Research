@@ -4,6 +4,13 @@ QMainWindow {
     font-family:'Open Sans,sans-serif';
 }
 
+#line {
+    qproperty-maximumSize: 330px 16777215px;
+}
+#line_2 {
+    qproperty-maximumSize: 330px 16777215px;
+}
+
 QToolButton {
     color: black;
     background-color: qlineargradient(x1: 0, y1: 0, x2: 1.0, y2: 1.0,stop: 0 rgb(200,200,200), stop: 1 rgb(200,200,200));
