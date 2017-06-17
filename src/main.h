@@ -1300,6 +1300,9 @@ public:
 	double nResearchSubsidy;
 	double nInterestSubsidy;
 	double nMagnitude;
+    // Gridcoin (17.6.2017 Brod) Add dpor related back-pointers
+    CBlockIndex* ppCpid;  // previous block by same cpid
+    CBlockIndex* ppSuper; // previous superblock
 	// Indicators (9-13-2015)
 	unsigned int nIsSuperBlock;
 	unsigned int nIsContract;
@@ -1336,6 +1339,8 @@ public:
         phashBlock = NULL;
         pprev = NULL;
         pnext = NULL;
+        ppCpid  = NULL;
+        ppSuper = NULL;
         nFile = 0;
         nBlockPos = 0;
         nHeight = 0;
@@ -1368,6 +1373,8 @@ public:
         phashBlock = NULL;
         pprev = NULL;
         pnext = NULL;
+        ppCpid  = NULL;
+        ppSuper = NULL;
         nFile = nFileIn;
         nBlockPos = nBlockPosIn;
         nHeight = 0;
@@ -1545,7 +1552,45 @@ public:
     }
 };
 
+struct CBestChain
+{
+public:
+    CBlockIndex* top;  // ptr to top of best chain
+    CBlockIndex* p6m;  // 6 months ago
+    CBlockIndex* p14d; // 14 days ago
+    CBlockIndex* p10b; // 10 blocks ago
+    CBlockIndex* ppSuper; // previous superblock
+    //Data related to CPID
+    std::map<std::string, StructCPID> cpid;
+    // 14 day summary
+    struct {
+        double Research;
+        double Interest;
+        //...
+        int blocks;
+    } sum;
+    // network-wide superblock data
+    struct {
+        double Magnitude;
+        unsigned long CpidCount;
+        int ProjectCount;
+        int CpidCount;
+        uint256 hashBlock; // blockhash of superblock loaded
+        uint256 hash; // hash of superblock data loaded
+    } super;
+    // Network messages (cpid, project, poll, vote)
+    //...
+    // Neural things
+    //...
 
+    CBestChain()
+    {
+        top= p14d= p10b= pSuper= NULL;
+        hashActiveSuper= 0;
+    }
+};
+
+extern CBestChain Best;
 
 /** Used to marshal pointers into hashes for db storage. */
 class CDiskBlockIndex : public CBlockIndex
@@ -1619,10 +1664,10 @@ public:
 			READWRITE(nIsContract);
 			READWRITE(sGRCAddress);
 
-                        // Blocks used to come with a reserved string. Keep (de)serializing
-                        // it until it's used.
-                        std::string sReserved;
-                        READWRITE(sReserved);
+            // Blocks used to come with a reserved string. Keep (de)serializing
+            // it until it's used.
+            std::string sReserved;
+            READWRITE(sReserved);
 		}
 
 
