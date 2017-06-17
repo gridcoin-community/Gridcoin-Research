@@ -908,19 +908,6 @@ void BitcoinGUI::createMenuBar()
     community->addSeparator();
     community->addAction(websiteAction);
 
-#ifdef WIN32
-	QMenu *upgrade = appMenuBar->addMenu(tr("&Upgrade QT Client"));
-	upgrade->addSeparator();
-	upgrade->addAction(upgradeAction);
-#endif
-
-	QMenu *rebuild = appMenuBar->addMenu(tr("&Rebuild Block Chain"));
-	rebuild->addSeparator();
-	rebuild->addAction(rebuildAction);
-	rebuild->addSeparator();
-	rebuild->addAction(downloadAction);
-	rebuild->addSeparator();
-
 	QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
 	qmAdvanced->addSeparator();
 #ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows    
@@ -931,18 +918,25 @@ void BitcoinGUI::createMenuBar()
     qmAdvanced->addAction(votingAction);
     
 #ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows 
-	qmAdvanced->addAction(newUserWizardAction);
+//	qmAdvanced->addAction(newUserWizardAction);
 	qmAdvanced->addSeparator();
 	qmAdvanced->addAction(faqAction);
 	qmAdvanced->addAction(foundationAction);
-	qmAdvanced->addAction(diagnosticsAction);
+//	qmAdvanced->addAction(diagnosticsAction);
 
 #endif /* defined(WIN32) */
+    qmAdvanced->addSeparator();
+    qmAdvanced->addAction(rebuildAction);
+    qmAdvanced->addAction(downloadAction);
 
     QMenu *help = appMenuBar->addMenu(tr("&Help"));
     help->addAction(openRPCConsoleAction);
     help->addSeparator();
     help->addAction(aboutAction);
+#ifdef WIN32
+    help->addSeparator();
+	help->addAction(upgradeAction);
+#endif
 
 }
 
