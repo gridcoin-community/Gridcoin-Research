@@ -2759,6 +2759,7 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 
     StructCPID stCPID = GetLifetimeCPID(pindex->GetCPID(),"DisconnectBlock()");
     // We normally fail to disconnect a block if we can't find the previous input due to "DisconnectInputs() : ReadTxIndex failed".  Imo, I believe we should let this call succeed, otherwise a chain can never be re-organized in this circumstance.
+    // TODO
     if (bDiscTxFailed && fDebug3) printf("!DisconnectBlock()::Failed, recovering. ");
     return true;
 }
@@ -8890,6 +8891,8 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
             if (IsLockTimeWithinMinutes(iBeaconTimestamp, 60*24*30*6))
             {
                 double dNewbieAccrualAge = ((double)nTime - (double)iBeaconTimestamp) / 86400;
+                // BUG: dMagnitudeUnit unset, set to 0 by caller,
+                // that lifetime=0 shit is a lie
                 int64_t iAccrual = (int64_t)((dNewbieAccrualAge*dCurrentMagnitude*dMagnitudeUnit*COIN) + (1*COIN));
                 if ((dNewbieAccrualAge*dCurrentMagnitude*dMagnitudeUnit) > 500)
                 {
@@ -9239,6 +9242,7 @@ void SetUpExtendedBlockIndexFieldsOnce()
 double SnapToGrid(double d)
 {
     double dDither = .04;
+    // OMG, There is modulo operator FFS
     double dOut = cdbl(RoundToString(d*dDither,3),3) / dDither;
     return dOut;
 }

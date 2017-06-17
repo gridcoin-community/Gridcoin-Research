@@ -1552,7 +1552,62 @@ public:
     }
 };
 
-struct CBestChain
+struct StructCPID2
+{
+    double Sum14dMagnitude;
+    uint128 *cpid;
+    string GRCAddress;
+    int entries;
+            stMag.payments += pIndex->nResearchSubsidy;
+            stMag.interestPayments += pIndex->nInterestSubsidy;
+
+            AdjustTimestamps(stMag,pIndex->nTime, pIndex->nResearchSubsidy);
+            // Track detailed payments made to each CPID
+            stMag.PaymentTimestamps         += RoundToString(pIndex->nTime,0) + ",";
+            stMag.PaymentAmountsResearch    += RoundToString(pIndex->nResearchSubsidy,2) + ",";
+            stMag.PaymentAmountsInterest    += RoundToString(pIndex->nInterestSubsidy,2) + ",";
+            stMag.PaymentAmountsBlocks      += RoundToString(pIndex->nHeight,0) + ",";
+            stMag.Accuracy++;
+            stMag.AverageRAC = stMag.rac / (stMag.entries+.01);
+            double total_owed = 0;
+            stMag.owed = GetOutstandingAmountOwed(stMag,
+                                                  pIndex->GetCPID(), pIndex->nTime, total_owed, pIndex->nMagnitude);
+
+            stMag.totalowed = total_owed;
+    /* ComputeResearchAccrual:
+        -PPD, days, ReferencePPD
+        .LowLockTime(mvResearchAge)
+        .ResearchSubsidy(mvResearchAge)
+        *GetHistoricalMagnitude
+        .BlockHash(mvResearchAge)-
+        -pHistorical
+        *CalculatedMagnitude2
+        -dCurrentMagnitude
+        .Magnitude(mvDPOR)-
+        dMagnitudeUnit
+        *GRCMagnitudeUnit
+        .NetworkMagnitude(mvNetwork*)
+        .payments(mvNetwork*)
+        .ResearchAverageMagnitude(mvResearchAge)
+        ^-
+        // average magnitude of staked blocks
+        // connected while the node was running
+        *GetLifetimeCPID
+        (mvCPIDBlockHashes)
+        *AddCPIDBlockHash
+          connect every block
+          !!does not happen after restart
+
+    */
+    CBlockIndex* pLastBlock; // last block staked by this cpid
+    double SbMagnitude; // magnitude as in last superblock
+    
+    
+        
+        
+};
+
+class CBestChain
 {
 public:
     CBlockIndex* top;  // ptr to top of best chain
@@ -1561,7 +1616,8 @@ public:
     CBlockIndex* p10b; // 10 blocks ago
     CBlockIndex* ppSuper; // previous superblock
     //Data related to CPID
-    std::map<std::string, StructCPID> cpid;
+    // index: binary cpid; data: researcher info
+    std::map<uint128, StructCPID2> cpid;
     // 14 day summary
     struct {
         double Research;
@@ -1572,9 +1628,8 @@ public:
     // network-wide superblock data
     struct {
         double Magnitude;
-        unsigned long CpidCount;
-        int ProjectCount;
-        int CpidCount;
+        unsigned CpidCount;
+        unsigned ProjectCount;
         uint256 hashBlock; // blockhash of superblock loaded
         uint256 hash; // hash of superblock data loaded
     } super;
@@ -1585,8 +1640,10 @@ public:
 
     CBestChain()
     {
-        top= p14d= p10b= pSuper= NULL;
-        hashActiveSuper= 0;
+        top= p6m= p14d= p10b= ppSuper= NULL;
+        sum.Research= sum.Interest= 0;
+        super.Magnitude= super.CpidCount= super.ProjectCount= 0
+        super.hashBlock= super.hash= 0;
     }
 };
 
