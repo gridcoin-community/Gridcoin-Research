@@ -1111,7 +1111,8 @@ public:
 
     bool IsProofOfWork() const
     {
-        return !IsProofOfStake();
+        //must at least contain coinbase
+        return !vtx.empty() && !IsProofOfStake();
     }
 
     std::pair<COutPoint, unsigned int> GetProofOfStake() const
@@ -1259,9 +1260,9 @@ public:
     bool ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck=false, bool fReorganizing=false);
     bool ReadFromDisk(const CBlockIndex* pindex, bool fReadTransactions=true);
     bool SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew);
-    bool AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof);
-    bool CheckBlock(std::string sCaller, int height1, int64_t mint, bool fCheckPOW=true, bool fCheckMerkleRoot=true, bool fCheckSig=true, bool fLoadingIndex=false) const;
-    bool AcceptBlock(bool generated_by_me);
+    CBlockIndex* AddToBlockIndex(CTxDB &txdb, unsigned int nFile, unsigned int nBlockPos);
+    bool CheckBlock(std::string sCaller, int height1) const;
+    bool AcceptBlock(CBlockIndex** out_pinex,bool generated_by_me, CBlockIndex* pindexPrev);
     bool GetCoinAge(uint64_t& nCoinAge) const; // ppcoin: calculate total coin age spent in block
     bool CheckBlockSignature() const;
 
@@ -1483,12 +1484,10 @@ public:
         return ((nFlags & BLOCK_STAKE_ENTROPY) >> 1);
     }
 
-    bool SetStakeEntropyBit(unsigned int nEntropyBit)
+    void SetStakeEntropyBit(unsigned int nEntropyBit)
     {
-        if (nEntropyBit > 1)
-            return false;
+        assert (nEntropyBit == 1 || nEntropyBit == 0);
         nFlags |= (nEntropyBit? BLOCK_STAKE_ENTROPY : 0);
-        return true;
     }
 
     bool GeneratedStakeModifier() const
