@@ -72,6 +72,11 @@ inline bool MoneyRange(int64_t nValue) { return (nValue >= 0 && nValue <= MAX_MO
 static const unsigned int LOCKTIME_THRESHOLD = 500000000; // Tue Nov  5 00:53:20 1985 UTC
 static const unsigned int MINIMUM_CHECKPOINT_TRANSMISSION_BALANCE = 4000000;
 
+// SetArgument - Set or change arguments stored in the memory.
+
+void SetArgument(
+        const std::string &argKey,
+        const std::string &argValue);
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

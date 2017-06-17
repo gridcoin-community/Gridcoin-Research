@@ -61,3 +61,12 @@ std::string GetStoredBeaconPublicKey(const std::string& cpid)
 {
     return GetArgument("publickey" + cpid + GetNetSuffix(), "");
 }
+
+void ActivateBeaconKeys(
+        const std::string &cpid,
+        const std::string &pubKey,
+        const std::string &privKey)
+{
+    SetArgument("publickey" + cpid + GetNetSuffix(), pubKey);
+    SetArgument("privatekey" + cpid + GetNetSuffix(), privKey);
+}
