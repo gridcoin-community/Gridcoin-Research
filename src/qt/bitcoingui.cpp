@@ -457,7 +457,6 @@ int RestartClient()
 
 void qtUpdateConfirm(std::string txid)
 {
-	int result = 0;
 	if (!bGlobalcomInitialized) return;
 
 	#if defined(WIN32) && defined(QT_GUI)
@@ -506,7 +505,6 @@ double qtExecuteGenericFunction(std::string function, std::string data)
 {
 	if (!bGlobalcomInitialized) return 0;
 
-	double return_code = 0;
 	int result = 0;
 	#if defined(WIN32) && defined(QT_GUI)
 		QString qsData = ToQstring(data);
