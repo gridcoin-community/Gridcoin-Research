@@ -1274,7 +1274,7 @@ private:
 
 
 
-
+class CSuperblock;
 /** The block chain is a tree shaped structure starting with the
  * genesis block at the root, with each block potentially having multiple
  * candidates to be the next block.  pprev and pnext link a path through the
@@ -1303,6 +1303,7 @@ public:
     // Gridcoin (17.6.2017 Brod) Add dpor related back-pointers
     CBlockIndex* ppCpid;  // previous block by same cpid
     CBlockIndex* ppSuper; // previous superblock
+    CSuperblock* pDesSuper; // deserialized superblock data
 	// Indicators (9-13-2015)
 	unsigned int nIsSuperBlock;
 	unsigned int nIsContract;
@@ -1554,58 +1555,42 @@ public:
 
 struct StructCPID2
 {
-    double Sum14dMagnitude;
+    // main
+    CBlockIndex* pLastBlock; // last block minted by this cpid
+    // utility
     uint128 *cpid;
-    string GRCAddress;
-    int entries;
-            stMag.payments += pIndex->nResearchSubsidy;
-            stMag.interestPayments += pIndex->nInterestSubsidy;
-
-            AdjustTimestamps(stMag,pIndex->nTime, pIndex->nResearchSubsidy);
-            // Track detailed payments made to each CPID
-            stMag.PaymentTimestamps         += RoundToString(pIndex->nTime,0) + ",";
-            stMag.PaymentAmountsResearch    += RoundToString(pIndex->nResearchSubsidy,2) + ",";
-            stMag.PaymentAmountsInterest    += RoundToString(pIndex->nInterestSubsidy,2) + ",";
-            stMag.PaymentAmountsBlocks      += RoundToString(pIndex->nHeight,0) + ",";
-            stMag.Accuracy++;
-            stMag.AverageRAC = stMag.rac / (stMag.entries+.01);
-            double total_owed = 0;
-            stMag.owed = GetOutstandingAmountOwed(stMag,
-                                                  pIndex->GetCPID(), pIndex->nTime, total_owed, pIndex->nMagnitude);
-
-            stMag.totalowed = total_owed;
-    /* ComputeResearchAccrual:
-        -PPD, days, ReferencePPD
-        .LowLockTime(mvResearchAge)
-        .ResearchSubsidy(mvResearchAge)
-        *GetHistoricalMagnitude
-        .BlockHash(mvResearchAge)-
-        -pHistorical
-        *CalculatedMagnitude2
-        -dCurrentMagnitude
-        .Magnitude(mvDPOR)-
-        dMagnitudeUnit
-        *GRCMagnitudeUnit
-        .NetworkMagnitude(mvNetwork*)
-        .payments(mvNetwork*)
-        .ResearchAverageMagnitude(mvResearchAge)
-        ^-
-        // average magnitude of staked blocks
-        // connected while the node was running
-        *GetLifetimeCPID
-        (mvCPIDBlockHashes)
-        *AddCPIDBlockHash
-          connect every block
-          !!does not happen after restart
-
-    */
-    CBlockIndex* pLastBlock; // last block staked by this cpid
+    string GRCAddress; // last address used
+    // current superblock data
     double SbMagnitude; // magnitude as in last superblock
-    
-    
-        
-        
+    // beacon data (cache)
+    std::vector<unsigned char> BeaconPublicKey; // pk for signing
+    // lifetime averages for current reward calc
+    // Lft=lifetime, D14=14day
+    double LftFirstRewardTime; // time of first staked block
+    double LftSumReward; // dpor payment of all time
+    double LftSumMagnitude; // sum magnitude of all blocks
+    double LftCountReward; // count of all blocks
+    // averages for stats
+    double D14SumReward;
+    double LftSumInterest;
+    double D14SumInterest;
+    double D14SumMagnitude;
+    double D14CountReward;
 };
+
+class CTxMessage
+{
+public:
+    string sType;
+    string sIdent;
+    string sValue;
+    void* vpDeserialized;
+    bool fDelete;
+    // blocks that have message with same type and identifier
+    // bound by p6m and top
+    // sorted by height asc
+    std::deque <CBlockIndex*> vpBlocks;
+}
 
 class CBestChain
 {
@@ -1614,7 +1599,7 @@ public:
     CBlockIndex* p6m;  // 6 months ago
     CBlockIndex* p14d; // 14 days ago
     CBlockIndex* p10b; // 10 blocks ago
-    CBlockIndex* ppSuper; // previous superblock
+    CBlockIndex* pSuper; // superblock
     //Data related to CPID
     // index: binary cpid; data: researcher info
     std::map<uint128, StructCPID2> cpid;
@@ -1634,7 +1619,7 @@ public:
         uint256 hash; // hash of superblock data loaded
     } super;
     // Network messages (cpid, project, poll, vote)
-    //...
+    std::map<string, CTxMessage> msg;
     // Neural things
     //...
 
@@ -1644,6 +1629,8 @@ public:
         sum.Research= sum.Interest= 0;
         super.Magnitude= super.CpidCount= super.ProjectCount= 0
         super.hashBlock= super.hash= 0;
+        cpid.clear();
+        msg.clear();
     }
 };
 
