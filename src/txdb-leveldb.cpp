@@ -526,7 +526,7 @@ bool CTxDB::LoadBlockIndex()
         #endif
 
 
-        if (nCheckLevel>0 && !block.CheckBlock("LoadBlockIndex", pindex->nHeight,pindex->nMint, true, true, (nCheckLevel>6), true))
+        if (nCheckLevel>0 && !block.CheckBlock("LoadBlockIndex",pindex->nHeight))
         {
             printf("LoadBlockIndex() : *** found bad block at %d, hash=%s\n", pindex->nHeight, pindex->GetBlockHash().ToString().c_str());
             pindexFork = pindex->pprev;

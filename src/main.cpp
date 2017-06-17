@@ -2303,6 +2303,8 @@ void static InvalidChainFound(CBlockIndex* pindexNew)
         uiInterface.NotifyBlocksChanged();
     }
 
+    // TODO: mark that block/index as invalid so we don't try to connect it again
+
     uint256 nBestInvalidBlockTrust = pindexNew->nChainTrust - pindexNew->pprev->nChainTrust;
     uint256 nBestBlockTrust = pindexBest->nHeight != 0 ? (pindexBest->nChainTrust - pindexBest->pprev->nChainTrust) : pindexBest->nChainTrust;
 
@@ -2682,6 +2684,7 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
             // Skip ECDSA signature verification when connecting blocks (fBlock=true)
             // before the last blockchain checkpoint. This is safe because block merkle hashes are
             // still computed and checked, and any change will be caught at the next checkpoint.
+            // I don't think it is that safe... (Brod)
 
             if (!(fBlock && (nBestHeight < Checkpoints::GetTotalBlocksEstimate())))
             {
@@ -2712,11 +2715,9 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
 
             // Tally transaction fees
             int64_t nTxFee = nValueIn - GetValueOut();
-            if (nTxFee < 0)
-                return DoS(100, error("ConnectInputs() : %s nTxFee < 0", GetHash().ToString().substr(0,10).c_str()));
 
             // enforce transaction fees for every block
-            if (nTxFee < GetMinFee())
+            if (nTxFee < 0 || nTxFee < GetMinFee())
                 return fBlock? DoS(100, error("ConnectInputs() : %s not paying required fee=%s, paid=%s", GetHash().ToString().substr(0,10).c_str(), FormatMoney(GetMinFee()).c_str(), FormatMoney(nTxFee).c_str())) : false;
 
             nFees += nTxFee;
@@ -2743,6 +2744,7 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 
     // Update block index on disk without changing it in memory.
     // The memory index structure will be changed after the db commits.
+    // TODO verify if above is true
     if (pindex->pprev)
     {
         CDiskBlockIndex blockindexPrev(pindex->pprev);
@@ -3007,32 +3009,120 @@ int64_t ReturnCurrentMoneySupply(CBlockIndex* pindexcurrent)
     return (pindexcurrent->pprev? pindexcurrent->pprev->nMoneySupply : nGenesisSupply);
 }
 
+/*
+  *** Block Checking function ***
+Only ConnectBlock is context-sensitive.
+
+CheckBlock does checks on that block only. It is run when new block is
+recieved. Previous block may not be in index.
+
+AcceptBlock writes the block to disk and block index. Very little checks are
+done there. Previous block is already in index, but transactions from it may
+not be.
+
+ConnectBlock will after extensive checking of everything connect the block to
+previous block in best chain. The block is already on disk and in index as well
+as previous block and previous transactions. Gridcoin structures are consistent
+with previous block.
+
+*/
+
 bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, bool fReorganizing)
 {
+    int nHeight= pindex->nHeight;
+    uint256 BlockHash = GetHash();
+    printf("ConnectBlock.Begin{%s %d}\n",BlockHash.GetHex().c_str(),nHeight);
     // Check it again in case a previous version let a bad block in, but skip BlockSig checking
-    if (!CheckBlock("ConnectBlock",pindex->pprev->nHeight, 395*COIN, !fJustCheck, !fJustCheck, false,false))
+    if (!CheckBlock("ConnectBlock",nHeight))
     {
-        printf("ConnectBlock::Failed - \r\n");
+        printf("ConnectBlock: CheckBlock Failed - \r\n");
         return false;
     }
+
+    // check stake here again, TODO
+    {
+        uint256 hashProof;
+
+        // Verify hash target and signature of coinstake tx
+        if (nHeight > nGrandfather && nVersion <= 7)
+        {
+            if (IsProofOfStake())
+            {
+                uint256 targetProofOfStake;
+                if (!CheckProofOfStake(pindex->pprev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, false, nNonce) && IsLockTimeWithinMinutes(GetBlockTime(),600))
+                {
+                    return error("ConnectBlock: check proof-of-stake failed for block %s, nonce %f    \n", BlockHash.ToString().c_str(),(double)nNonce);
+                }
+            }
+        }
+        if (nVersion >= 8)
+        {
+            //must be proof of stake
+            //no grandfather exceptions
+            printf("ConnectBlock: Proof Of Stake V8 %d\n",nVersion);
+            if(!CheckProofOfStakeV8(pindex->pprev, *this, false, hashProof))
+            {
+                return error("ConnectBlock: check proof-of-stake v8 failed for block %s, nonce %f    \n", BlockHash.ToString().c_str(),(double)nNonce);
+            }
+        }
+        if (IsProofOfWork())
+        {
+            hashProof = GetPoWHash();
+        }
+
+        // Record proof hash value into block index
+        pindex->hashProof = hashProof;
+
+        // ppcoin: compute stake modifier
+        // requires proof hash to be available
+        uint64_t nStakeModifier = 0;
+        bool fGeneratedStakeModifier = false;
+        if (!ComputeNextStakeModifier(pindex->pprev, nStakeModifier, fGeneratedStakeModifier))
+        {
+            printf("ConnectBlock: ComputeNextStakeModifier() failed");
+        }
+        pindex->SetStakeModifier(nStakeModifier, fGeneratedStakeModifier);
+        pindex->nStakeModifierChecksum = GetStakeModifierChecksum(pindex);
+        //the block index will be saved at end of this function
+    }
+    //- end kernel verify
+
+
     //// issue here: it doesn't know the version
+    // WTF^?
+
+    //Deserialize gridcoin data from coinbase
+    MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc);
+    //todo: check deserialize
+
+    //Check Researcher CPID
+    if (bb.cpid != "INVESTOR" && nHeight > nGrandfather)
+    {
+        if (bb.projectname.empty() && !IsResearchAgeEnabled(nHeight))
+            return DoS(1,error("CheckBlock::PoR Project Name invalid"));
+        if(bb.cpid.length()!=32)
+            return DoS(1,error("Invalid CPID"));
+        if (!IsCPIDValidv2(bb, nHeight))
+        {
+            printf("ConnectBlock: Reloading for CPID check\n");
+            std::string sOut2 = "";
+            LoadAdminMessages(false,sOut2);
+            if (!IsCPIDValidv2(bb, nHeight))
+            {
+                return error("Bad CPID : height %d, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc %s",nHeight,
+                    bb.cpid.c_str(), bb.cpidv2.c_str(),
+                    bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str());
+            }
+        }
+    }
+
     unsigned int nTxPos;
-    if (fJustCheck)
-        // FetchInputs treats CDiskTxPos(1,1,1) as a special "refer to memorypool" indicator
-        // Since we're just checking the block and not actually connecting it, it might not (and probably shouldn't) be on the disk to get the transaction from
-        nTxPos = 1;
-    else
-        nTxPos = pindex->nBlockPos + ::GetSerializeSize(CBlock(), SER_DISK, CLIENT_VERSION) - (2 * GetSizeOfCompactSize(0)) + GetSizeOfCompactSize(vtx.size());
+    nTxPos = pindex->nBlockPos + ::GetSerializeSize(CBlock(), SER_DISK, CLIENT_VERSION) - (2 * GetSizeOfCompactSize(0)) + GetSizeOfCompactSize(vtx.size());
 
     map<uint256, CTxIndex> mapQueuedChanges;
-    int64_t nFees = 0;
-    int64_t nValueIn = 0;
-    int64_t nValueOut = 0;
-    int64_t nStakeReward = 0;
+    int64_t nBlockFees = 0;
+    int64_t nBlockReward = 0;
     unsigned int nSigOps = 0;
-    double DPOR_Paid = 0;
-
-    bool bIsDPOR = false;
 
 
     BOOST_FOREACH(CTransaction& tx, vtx)
@@ -3060,7 +3150,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
         nSigOps += tx.GetLegacySigOpCount();
         if (nSigOps > MAX_BLOCK_SIGOPS)
-            return DoS(100, error("ConnectBlock[] : too many sigops"));
+            return DoS(100, error("ConnectBlock: too many sigops"));
 
         CDiskTxPos posThisTx(pindex->nFile, pindex->nBlockPos, nTxPos);
         if (!fJustCheck)
@@ -3069,7 +3159,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         MapPrevTx mapInputs;
         if (tx.IsCoinBase())
         {
-            nValueOut += tx.GetValueOut();
+            //track reward amount
+            nBlockReward += tx.GetValueOut();
         }
         else
         {
@@ -3086,43 +3177,28 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
             int64_t nTxValueIn = tx.GetValueIn(mapInputs);
             int64_t nTxValueOut = tx.GetValueOut();
-            nValueIn += nTxValueIn;
-            nValueOut += nTxValueOut;
-            if (!tx.IsCoinStake())
-                nFees += nTxValueIn - nTxValueOut;
+
             if (tx.IsCoinStake())
             {
-                nStakeReward = nTxValueOut - nTxValueIn;
-                if (tx.vout.size() > 3 && pindex->nHeight > nGrandfather) bIsDPOR = true;
-                // ResearchAge: Verify vouts cannot contain any other payments except coinstake: PASS (GetValueOut returns the sum of all spent coins in the coinstake)
-                if (IsResearchAgeEnabled(pindex->nHeight) && fDebug10)
-                {
-                    int64_t nTotalCoinstake = 0;
-                    for (unsigned int i = 0; i < tx.vout.size(); i++)
-                    {
-                        nTotalCoinstake += tx.vout[i].nValue;
-                    }
-                    if (fDebug10)   printf(" nHeight %f; nTCS %f; nTxValueOut %f     ",
-                        (double)pindex->nHeight,CoinToDouble(nTotalCoinstake),CoinToDouble(nTxValueOut));
-                }
+                //track reward amount
+                nBlockReward += nTxValueOut - nTxValueIn;
 
+                // ResearchAge: Verify vouts cannot contain any other payments except coinstake: PASS (GetValueOut returns the sum of all spent coins in the coinstake)
                 // Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
-                if (bIsDPOR && pindex->nHeight > nGrandfather)
+                if (tx.vout.size() > 3 && pindex->nHeight > nGrandfather)
                 {
                     for (unsigned int i = 3; i < tx.vout.size(); i++)
-                    {
-                        std::string Recipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
-                        double      Amount    = CoinToDouble(tx.vout[i].nValue);
-                        if (fDebug10) printf("Iterating Recipient #%f  %s with Amount %f \r\n,",(double)i,Recipient.c_str(),Amount);
-                        if (Amount > 0)
-                        {
-                            if (fDebug3) printf("Iterating Recipient #%f  %s with Amount %f \r\n,",(double)i,Recipient.c_str(),Amount);
-                            printf("POR Payment results in an overpayment; Recipient %s, Amount %f \r\n",Recipient.c_str(), Amount);
-                            return DoS(50,error("POR Payment results in an overpayment; Recipient %s, Amount %f \r\n",
-                                                Recipient.c_str(), Amount));
-                        }
-                    }
+                        if (tx.vout[i].nValue > 0)
+                            return DoS(50,error("ConnectBlock: too many stake outputs"));
+                    //POR Payment results in an overpayment; Recipient %s, Amount %f \r\n",
                 }
+
+                // TODO Check the V8 kernel here when prev tx is available
+            }
+            else
+            {
+                //not stake nor base
+                nBlockFees += nTxValueIn - nTxValueOut;
             }
 
             if (!tx.ConnectInputs(txdb, mapInputs, mapQueuedChanges, posThisTx, pindex, true, false))
@@ -3134,68 +3210,135 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
     if (IsProofOfWork() && pindex->nHeight > nGrandfather)
     {
-        int64_t nReward = GetProofOfWorkMaxReward(nFees,nTime,pindex->nHeight);
+        int64_t nReward = GetProofOfWorkMaxReward(nBlockFees,nTime,pindex->nHeight);
         // Check coinbase reward
-        if (vtx[0].GetValueOut() > nReward)
+        if (nBlockReward > nReward)
             return DoS(50, error("ConnectBlock[] : coinbase reward exceeded (actual=%" PRId64 " vs calculated=%" PRId64 ")",
-                   vtx[0].GetValueOut(),
+                   nBlockReward,
                    nReward));
     }
 
-    MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc);
     uint64_t nCoinAge = 0;
 
-    double dStakeReward = CoinToDouble(nStakeReward+nFees) - DPOR_Paid; //DPOR Recipients checked above already
-    double dStakeRewardWithoutFees = CoinToDouble(nStakeReward) - DPOR_Paid;
+    double dStakeReward = CoinToDouble(nBlockReward);
+    double dBlockMint = CoinToDouble(nBlockReward-nBlockFees);
 
-    if (fDebug) printf("Stake Reward of %f , DPOR PAID %f    ",dStakeReward,DPOR_Paid);
+    if (fDebug) printf("Block Reward of %f , DPOR PAID %f    ",dStakeReward,(double)0);
 
-    if (IsProofOfStake() && pindex->nHeight > nGrandfather)
+    if (IsProofOfStake() && nHeight > nGrandfather)
     {
         // ppcoin: coin stake tx earns reward instead of paying fee
-        if (!vtx[1].GetCoinAge(txdb, nCoinAge))
+        if (!vtx[1].IsCoinStake() || !vtx[1].GetCoinAge(txdb, nCoinAge))
             return error("ConnectBlock[] : %s unable to get coin age for coinstake", vtx[1].GetHash().ToString().substr(0,10).c_str());
 
-        double dCalcStakeReward = CoinToDouble(GetProofOfStakeMaxReward(nCoinAge, nFees, nTime));
+        double dMaxStakeReward = CoinToDouble(GetProofOfStakeMaxReward(nCoinAge, nBlockFees, nTime));
 
-        if (dStakeReward > dCalcStakeReward+1 && !IsResearchAgeEnabled(pindex->nHeight))
-            return DoS(1, error("ConnectBlock[] : coinstake pays above maximum (actual= %f, vs calculated=%f )", dStakeReward, dCalcStakeReward));
+        if (dStakeReward > dMaxStakeReward+1 && !IsResearchAgeEnabled(pindex->nHeight))
+            return DoS(1, error("ConnectBlock[] : coinstake pays above maximum (actual= %f, vs calculated=%f )", dStakeReward, dMaxStakeReward));
 
-        //9-3-2015
-        double dMaxResearchAgeReward = CoinToDouble(GetMaximumBoincSubsidy(nTime) * COIN * 255);
-
-        if (bb.ResearchSubsidy > dMaxResearchAgeReward && IsResearchAgeEnabled(pindex->nHeight))
-            return DoS(1, error("ConnectBlock[ResearchAge] : Coinstake pays above maximum (actual= %f, vs calculated=%f )", dStakeRewardWithoutFees, dMaxResearchAgeReward));
-
-        if (bb.cpid=="INVESTOR" && dStakeReward > 1)
-        {
-            double OUT_POR = 0;
-            double OUT_INTEREST_OWED = 0;
-
-            double dAccrualAge = 0;
-            double dAccrualMagnitudeUnit = 0;
-            double dAccrualMagnitude = 0;
-
-            double dCalculatedResearchReward = CoinToDouble(GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 1, nTime,
-                    pindex, "connectblock_investor",
-                    OUT_POR, OUT_INTEREST_OWED, dAccrualAge, dAccrualMagnitudeUnit, dAccrualMagnitude));
-            if (dStakeReward > (OUT_INTEREST_OWED+1+nFees) )
-            {
-                    return DoS(10, error("ConnectBlock[] : Investor Reward pays too much : cpid %s (actual %f vs calculated %f), dCalcResearchReward %f, Fees %f",
-                    bb.cpid.c_str(), dStakeReward, OUT_INTEREST_OWED, dCalculatedResearchReward, (double)nFees));
-            }
-        }
+        // One more check that block reward matches that in boincblock
+        double dDrift = IsResearchAgeEnabled(pindex->nHeight) ? bb.ResearchSubsidy*.15 : 1;
+        if (IsResearchAgeEnabled(pindex->nHeight) && dDrift < 10) dDrift = 10;
+        if (dBlockMint > (bb.ResearchSubsidy + bb.InterestSubsidy + dDrift))
+            return DoS(10,error("ConnectBlock: Total Mint of %f does not match HashBoinc %s",
+                dBlockMint, vtx[0].hashBoinc.c_str()));
 
     }
 
+    if (nHeight > nGrandfather)
+    {
+        //Block Spamming
+        double mintlimit = MintLimiter(GetBlockDifficulty(nBits),bb.RSAWeight,bb.cpid,GetBlockTime());
+        if (dBlockMint < mintlimit && dBlockMint == 0)
+            return error("ConnectBlock: Mint %f too Small, min %f",dBlockMint,mintlimit);
+
+        //9-3-2015
+        double dMaxResearchAgeReward = CoinToDouble(GetMaximumBoincSubsidy(nTime) * COIN * 255);
+        if (bb.ResearchSubsidy > dMaxResearchAgeReward && IsResearchAgeEnabled(pindex->nHeight))
+            return DoS(1, error("ConnectBlock[ResearchAge] : Coinstake pays above maximum (actual= %f, vs calculated=%f )", bb.ResearchSubsidy, dMaxResearchAgeReward));
+
+        //Load research and interest reward
+        double OUT_POR = 0;
+        double OUT_INTEREST = 0;
+        double dAccrualAge = 0;
+        double dAccrualMagnitudeUnit = 0;
+        double dAccrualMagnitude = 0;
+        int64_t nCalculatedReward = GetProofOfStakeReward(nCoinAge, nBlockFees, bb.cpid, true, 1, nTime,
+            pindex->pprev, "ConnectBlock",
+            OUT_POR, OUT_INTEREST, dAccrualAge, dAccrualMagnitudeUnit, dAccrualMagnitude);
+
+        // 6-4-2017 - Verify researchers stored block magnitude
+        if(bb.cpid != "INVESTOR" && bb.Magnitude > 0 && (fTestNet || nHeight > 947000))
+        {
+            double dNeuralNetworkMagnitude = CalculatedMagnitude2(bb.cpid, nTime, false);
+            if (bb.Magnitude > (dNeuralNetworkMagnitude*1.25) && (fTestNet || nHeight > 947000))
+                return error("CheckBlock[ResearchAge] : Researchers block magnitude > neural network magnitude: Block Magnitude %f, Neural Network Magnitude %f, CPID %s ",
+                    (double)bb.Magnitude,(double)dNeuralNetworkMagnitude,bb.cpid.c_str());
+        }
+
+        //Verify the reward amount
+        if (dStakeReward > 1 && nBlockReward > nCalculatedReward)
+        {
+            // Sometimes it is necessary to reload dpor data
+            printf("ConnectBlock: Reloading for Reward check\n");
+            std::string sOut2 = "";
+            nLastTallied = 0;
+            nLastTallyBusyWait = nLastTallied;
+            LoadAdminMessages(false,sOut2);
+            BusyWaitForTally();
+            StructCPID st1 = GetLifetimeCPID(bb.cpid,"ConnectBlock()");
+            nCalculatedReward = GetProofOfStakeReward(nCoinAge, nBlockFees, bb.cpid, true, 1, nTime,
+                pindex->pprev, "ConnectBlock_2",
+                OUT_POR, OUT_INTEREST, dAccrualAge, dAccrualMagnitudeUnit, dAccrualMagnitude);
+
+            if (bb.ResearchSubsidy > ((OUT_POR*1.25)+1))
+                return DoS(10,error("ConnectBlock: Research Reward Pays too much: Claimed %f, Calculated %f, BlockReward %f, for CPID %s",
+                        bb.ResearchSubsidy,OUT_POR,dStakeReward,bb.cpid.c_str()));
+
+            if (bb.InterestSubsidy > (OUT_INTEREST+1))
+                return DoS(10,error("ConnectBlock: Interest Reward Pays too much: Claimed %f, Calculated %f, BlockReward %f, for CPID %s",
+                        bb.InterestSubsidy,OUT_INTEREST,dStakeReward,bb.cpid.c_str()));
+
+            if ((nBlockReward > ((nCalculatedReward*1.25)+(1*COIN)))
+                ||(dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nBlockFees))))
+                return DoS(10,error("ConnectBlock: Total Reward Pays too much: Claimed %f, Calculated %f, Fees %f, Research %f, Interest %f, for CPID %s",
+                        dStakeReward, CoinToDouble(nCalculatedReward),CoinToDouble(nBlockFees),OUT_POR,OUT_INTEREST,bb.cpid.c_str()));
+        }
+
+        // Some even crazyer check for dpor shit
+        if(!fReorganizing && !IsResearchAgeEnabled(pindex->nHeight))
+        {
+            if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))
+            {
+                StructCPID strUntrustedHost = GetInitializedStructCPID2(bb.cpid,mvMagnitudes);
+                if (bb.ResearchSubsidy > strUntrustedHost.totalowed)
+                {
+                    double deficit = strUntrustedHost.totalowed - bb.ResearchSubsidy;
+                    if ( (deficit < -500 && strUntrustedHost.Accuracy > 10) || (deficit < -150 && strUntrustedHost.Accuracy > 5) || deficit < -50)
+                    {
+                            printf("ConnectBlock: Researchers Reward results in deficit of %f for CPID %s with trust level of %f - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
+                             deficit, bb.cpid.c_str(), (double)strUntrustedHost.Accuracy, bb.ResearchSubsidy,
+                             OUT_POR, vtx[0].hashBoinc.c_str());
+                    }
+                    else
+                    {
+                        return error("ConnectBlock: Researchers W Reward for CPID %s pays too much - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
+                            bb.cpid.c_str(), bb.ResearchSubsidy,
+                            OUT_POR, vtx[0].hashBoinc.c_str());
+                    }
+                }
+            }
+            else printf("ConnectBlock: Owed Rewad check did not trigger. Owed=%f CPID=%s\n",GetOwedAmount(bb.cpid),bb.cpid.c_str());
+        }
+    }
 
     AddCPIDBlockHash(bb.cpid, pindex->GetBlockHash());
 
     // Track money supply and mint amount info
-    pindex->nMint = nValueOut - nValueIn + nFees;
+    pindex->nMint = nBlockReward;
     if (fDebug10) printf (".TMS.");
 
-    pindex->nMoneySupply = ReturnCurrentMoneySupply(pindex) + nValueOut - nValueIn;
+    pindex->nMoneySupply = ReturnCurrentMoneySupply(pindex) + nBlockReward - nBlockFees;
 
     // Gridcoin: Store verified magnitude and CPID in block index (7-11-2015)
     if (pindex->nHeight > nNewIndex2)
@@ -3218,93 +3361,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             iPos++;
         }
         pindex->sGRCAddress = bb.GRCAddress;
-    }
-
-    double mint = CoinToDouble(pindex->nMint);
-    double PORDiff = GetBlockDifficulty(nBits);
-
-    if (pindex->nHeight > nGrandfather && !fReorganizing)
-    {
-        // Block Spamming
-        if (mint < MintLimiter(PORDiff,bb.RSAWeight,bb.cpid,GetBlockTime()))
-        {
-            return error("CheckProofOfStake[] : Mint too Small, %f",(double)mint);
-        }
-
-        if (mint == 0) return error("CheckProofOfStake[] : Mint is ZERO! %f",(double)mint);
-
-        double OUT_POR = 0;
-        double OUT_INTEREST = 0;
-        double dAccrualAge = 0;
-        double dMagnitudeUnit = 0;
-        double dAvgMagnitude = 0;
-
-        // ResearchAge 1: 
-        GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 1, nTime,
-            pindex, "connectblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
-        if (bb.cpid != "INVESTOR" && dStakeReward > 1)
-        {
-            
-                //ResearchAge: Since the best block may increment before the RA is connected but After the RA is computed, the ResearchSubsidy can sometimes be slightly smaller than we calculate here due to the RA timespan increasing.  So we will allow for time shift before rejecting the block.
-                double dDrift = IsResearchAgeEnabled(pindex->nHeight) ? bb.ResearchSubsidy*.15 : 1;
-                if (IsResearchAgeEnabled(pindex->nHeight) && dDrift < 10) dDrift = 10;
-
-                if ((bb.ResearchSubsidy + bb.InterestSubsidy + dDrift) < dStakeRewardWithoutFees)
-                {
-                        return error("ConnectBlock[] : Researchers Interest %f + Research %f + TimeDrift %f and total Mint %f, [StakeReward] <> %f, with Out_Interest %f, OUT_POR %f, Fees %f, DPOR %f  for CPID %s does not match calculated research subsidy",
-                            (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dDrift,CoinToDouble(mint),dStakeRewardWithoutFees,
-                            (double)OUT_INTEREST,(double)OUT_POR,CoinToDouble(nFees),(double)DPOR_Paid,bb.cpid.c_str());
-
-                }
-                if (IsResearchAgeEnabled(pindex->nHeight) && BlockNeedsChecked(nTime))
-                {
-                        if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
-                        {
-                            StructCPID st1 = GetLifetimeCPID(pindex->GetCPID(),"ConnectBlock()");
-                            GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, nTime,
-                                        pindex, "connectblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
-                            if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
-                            {
-
-                                if (fDebug3) printf("ConnectBlockError[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-                                    (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str());
-
-                                return DoS(10,error("ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-                                    (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
-                            }
-                        }
-                }
-        }
-
-        //Approve first coinstake in DPOR block
-        if (bb.cpid != "INVESTOR" && IsLockTimeWithinMinutes(GetBlockTime(),15) && !IsResearchAgeEnabled(pindex->nHeight))
-        {
-                if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))
-                {
-                        bDoTally=true;
-                        if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))
-                        {
-                            StructCPID strUntrustedHost = GetInitializedStructCPID2(bb.cpid,mvMagnitudes);
-                            if (bb.ResearchSubsidy > strUntrustedHost.totalowed)
-                            {
-                                double deficit = strUntrustedHost.totalowed - bb.ResearchSubsidy;
-                                if ( (deficit < -500 && strUntrustedHost.Accuracy > 10) || (deficit < -150 && strUntrustedHost.Accuracy > 5) || deficit < -50)
-                                {
-                                        printf("ConnectBlock[] : Researchers Reward results in deficit of %f for CPID %s with trust level of %f - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
-                                         deficit, bb.cpid.c_str(), (double)strUntrustedHost.Accuracy, bb.ResearchSubsidy,
-                                         OUT_POR, vtx[0].hashBoinc.c_str());
-                                }
-                                else
-                                {
-                                    return error("ConnectBlock[] : Researchers Reward for CPID %s pays too much - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
-                                        bb.cpid.c_str(), bb.ResearchSubsidy,
-                                        OUT_POR, vtx[0].hashBoinc.c_str());
-                                }
-                            }
-                    }
-                }
-        }
-
     }
 
     //Gridcoin: Maintain network consensus for Payments and Neural popularity:  (As of 7-5-2015 this is now done exactly every 30 blocks)
@@ -3421,20 +3477,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         LoadAdminMessages(false,errors1);
     }
 
-    // Slow down Retallying when in RA mode so we minimize disruption of the network
-    if ( (pindex->nHeight % 60 == 0) && IsResearchAgeEnabled(pindex->nHeight) && BlockNeedsChecked(pindex->nTime))
-    {
-        if (fDebug3) printf("\r\n*BusyWaitForTally*\r\n");
-        BusyWaitForTally();
-    }
-
-
-    if (IsResearchAgeEnabled(pindex->nHeight) && !OutOfSyncByAge()) 
-    {
-            fColdBoot = false;
-            bDoTally=true;
-    }
-
     if (fJustCheck)
         return true;
 
@@ -3445,15 +3487,20 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             return error("ConnectBlock[] : UpdateTxIndex failed");
     }
 
-    // Update block index on disk without changing it in memory.
-    // The memory index structure will be changed after the db commits.
-    if (pindex->pprev)
-    {
-        CDiskBlockIndex blockindexPrev(pindex->pprev);
-        blockindexPrev.hashNext = pindex->GetBlockHash();
-        if (!txdb.WriteBlockIndex(blockindexPrev))
-            return error("ConnectBlock[] : WriteBlockIndex failed");
-    }
+    // Actually connect the block index to previous
+    assert(pindex->pprev);
+    assert(pindex->pprev->GetBlockHash()==hashPrevBlock);
+    pindex->pprev->pnext = pindex;
+
+    // Write new memory inex to database (changed proof hash)
+    CDiskBlockIndex blkdskix_cur(pindex);
+    if (!txdb.WriteBlockIndex(blkdskix_cur))
+        return error("ConnectBlock: WriteBlockIndex new failed");
+
+    // Write previous memory inex to database (changed next pointer)
+    CDiskBlockIndex blkdskix_prev(pindex->pprev);
+    if (!txdb.WriteBlockIndex(blkdskix_prev))
+        return error("ConnectBlock: WriteBlockIndex prev failed");
 
     // Watch for transactions paying to me
     BOOST_FOREACH(CTransaction& tx, vtx)
@@ -3462,6 +3509,278 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     return true;
 }
 
+/* Context-Free checks on the block */
+bool CBlock::CheckBlock(std::string sCaller, int height1) const
+{
+    bool HasStake= false;
+    double blockdiff = GetBlockDifficulty(nBits);
+    set<uint256> uniqueTx;
+    unsigned int nSigOps = 0;
+
+    if (GetHash()==hashGenesisBlock || GetHash()==hashGenesisBlockTestNet) return true;
+
+    // These are checks that are independent of context
+    // that can be verified before saving an orphan block.
+
+    if (nVersion > CURRENT_VERSION)
+        return DoS(100, error("CheckBlock: reject unknown block version %d", nVersion));
+
+    // Size limits
+    if (vtx.empty() || vtx.size() > MAX_BLOCK_SIZE || ::GetSerializeSize(*this, SER_NETWORK, PROTOCOL_VERSION) > MAX_BLOCK_SIZE)
+        return DoS(100, error("CheckBlock: size limits failed"));
+
+    //Reject blocks with diff that has grown to an extrordinary level (should never happen)
+    if (blockdiff > 10000000000000000)
+    {
+       return DoS(1, error("CheckBlock: Block Bits larger than 10000000000000000.\r\n"));
+    }
+
+    // Check transactions
+    // could use foreach but need the index
+    for(unsigned txi=0; txi < vtx.size(); txi++)
+    {
+        const CTransaction& tx= vtx[txi];
+
+        // ppcoin: check transaction timestamp
+        if (GetBlockTime() < (int64_t)tx.nTime)
+            return DoS(50, error("CheckBlock: block timestamp earlier than transaction timestamp"));
+
+        // First transaction must be coinbase, the rest must not be
+        if ((txi==0) != tx.IsCoinBase())
+            return DoS(100, error("CheckBlock: coinbase is not in first ransaction"));
+
+        // Second transaction must be coinstake, the rest must not be
+        if ((txi==1) && vtx[1].IsCoinStake())
+        {
+            HasStake= true;
+        }
+
+        if ((txi!=1) && vtx[txi].IsCoinStake())
+            return DoS(100, error("CheckBlock: more than one coinstake"));
+
+        if (!tx.CheckTransaction())
+            return DoS(tx.nDoS, error("CheckBlock: CheckTransaction failed"));
+
+        uniqueTx.insert(tx.GetHash());
+        nSigOps += tx.GetLegacySigOpCount();
+    }
+
+    if(HasStake != IsProofOfStake())
+        return error("CheckBlock: missing coinstake tx in PoS block");
+
+    // Check for duplicate txids. This is caught by ConnectInputs(),
+    // but catching it earlier avoids a potential DoS attack:
+    if (uniqueTx.size() != vtx.size())
+        return DoS(100, error("CheckBlock: duplicate transactions"));
+
+    if (nSigOps > MAX_BLOCK_SIGOPS)
+        return DoS(100, error("CheckBlock: too many Sig-Ops"));
+
+    if (height1 > nGrandfather)
+    {
+        const string &hashBoinc = vtx[0].hashBoinc;
+        MiningCPID bb = DeserializeBoincBlock(hashBoinc);
+        // TODO: check if deserialization failed
+
+        // Block client version
+        double bv = BlockVersion(bb.clientversion);
+        double cvn = ClientVersionNew();
+        if (fDebug10) printf("BV %f, CV %f   ",bv,cvn);
+        // if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
+        if (bv < 3588 && height1 > 860500 && !fTestNet) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
+        //if (bv < 3580 && fTestNet) return DoS(25, error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n"));
+
+        // Boinc Block field format validation
+
+        if (bb.cpid != "INVESTOR" && bb.cpid.length()!=32)
+            return error("CheckBlock: Invalid CPID format '%s'\n",bb.cpid.c_str());
+
+        if( bb.cpid=="INVESTOR" && bb.ResearchSubsidy > 0)
+            return error("Investor has non-zero research reward");
+
+        if (HasStake)
+        {
+            //Mint limiter checks 1-20-2015
+            //1-21-2015 - Prevent Hackers from spamming the network with small blocks
+            double total_subsidy = bb.ResearchSubsidy + bb.InterestSubsidy;
+            double limiter = MintLimiter(blockdiff,bb.RSAWeight,bb.cpid,GetBlockTime());
+            if (total_subsidy < limiter)
+                return error("CheckBlock: Total Mint too Small %f < %f Research %f Interest %f",
+                        total_subsidy,limiter,bb.ResearchSubsidy,bb.InterestSubsidy);
+        }
+    }
+
+    if (HasStake)
+    {
+        if (IsProofOfStake() && !CheckBlockSignature())
+            return DoS(100, error("CheckBlock: bad proof-of-stake block signature"));
+
+        // Coinbase output should be empty if proof-of-stake block
+        if (vtx[0].vout.size() != 1 || !vtx[0].vout[0].IsEmpty())
+            return DoS(100, error("CheckBlock: coinbase output not empty for proof-of-stake block"));
+
+    }
+    else if (IsProofOfWork())
+    {
+        // Check proof of work matches claimed amount
+        if(!CheckProofOfWork(GetPoWHash(), nBits))
+            return DoS(50, error("CheckBlock: proof of work failed"));
+    }
+    else return DoS(50, error("CheckBlock: has no proof"));
+
+    // Check merkle root
+    if (hashMerkleRoot != BuildMerkleTree())
+        return DoS(100, error("CheckBlock[] : hashMerkleRoot mismatch"));
+
+    //if (fDebug3) printf(".EOCB.");
+    return true;
+}
+
+bool CBlock::AcceptBlock(CBlockIndex** out_pinex,bool generated_by_me, CBlockIndex* pindexPrev)
+{
+    if(out_pinex) *out_pinex = NULL; //safe return
+    AssertLockHeld(cs_main); //WTF?
+
+    if (nVersion > CURRENT_VERSION)
+        return DoS(100, error("AcceptBlock() : reject unknown block version %d", nVersion));
+
+    // Check for duplicate
+    uint256 hash = GetHash();
+    if (mapBlockIndex.count(hash))
+        return error("AcceptBlock() : block already in mapBlockIndex");
+
+    int nHeight = pindexPrev? pindexPrev->nHeight+1 : 1;
+    assert(nGrandfather>0);
+
+    if(       (IsProtocolV2(nHeight) && nVersion < 7)
+            //||(fTestNet && nHeight > 272280 && nVersion < 8)
+        )
+        return DoS(100, error("AcceptBlock() : reject too old nVersion = %d", nVersion));
+    else if( (!IsProtocolV2(nHeight) && nVersion >= 7)
+            ||(!fTestNet && nVersion >=8 )
+            ||(fTestNet && nVersion >=8 )
+            ||(fTestNet && nHeight < 272270 && nVersion >= 8)
+        )
+        return DoS(100, error("AcceptBlock() : reject too new nVersion = %d", nVersion));
+
+    if (IsProofOfWork() && nHeight > LAST_POW_BLOCK)
+        return DoS(100, error("AcceptBlock() : reject proof-of-work at height %d", nHeight));
+
+    if (nHeight > nGrandfather)
+    {
+            // Check coinbase timestamp
+            if (GetBlockTime() > FutureDrift((int64_t)vtx[0].nTime, nHeight))
+                return DoS(80, error("AcceptBlock() : coinbase timestamp is too early"));
+
+            // Check timestamp against prev
+            if (GetBlockTime() <= pindexPrev->GetPastTimeLimit() || FutureDrift(GetBlockTime(), nHeight) < pindexPrev->GetBlockTime())
+                return DoS(60, error("AcceptBlock() : block's timestamp is too early"));
+
+            // Check proof-of-work or proof-of-stake
+            if (nBits != GetNextTargetRequired(pindexPrev, IsProofOfStake()))
+                return DoS(100, error("AcceptBlock() : incorrect %s", IsProofOfWork() ? "proof-of-work" : "proof-of-stake"));
+    }
+
+    // Check that all transactions are finalized
+    BOOST_FOREACH(const CTransaction& tx, vtx)
+        if (!IsFinalTx(tx, nHeight, GetBlockTime()))
+            return DoS(10, error("AcceptBlock() : contains a non-final transaction"));
+
+    // Check that the block chain matches the known block chain up to a checkpoint
+    if (!Checkpoints::CheckHardened(nHeight, hash))
+        return DoS(100, error("AcceptBlock() : rejected by hardened checkpoint lock-in at %d", nHeight));
+
+    //Grandfather
+    if (nHeight > nGrandfather)
+    {
+         bool cpSatisfies = Checkpoints::CheckSync(hash, pindexPrev);
+         // Check that the block satisfies synchronized checkpoint
+         if (CheckpointsMode == Checkpoints::STRICT && !cpSatisfies)
+         {
+            if (CHECKPOINT_DISTRIBUTED_MODE==1)
+            {
+                CHECKPOINT_VIOLATIONS++;
+                if (CHECKPOINT_VIOLATIONS > 3)
+                {
+                    //For stability, move the client into ADVISORY MODE:
+                    printf("Moving Gridcoin into Checkpoint ADVISORY mode.\r\n");
+                    CheckpointsMode = Checkpoints::ADVISORY;
+                }
+            }
+            return error("AcceptBlock() : rejected by synchronized checkpoint");
+         }
+
+        if (CheckpointsMode == Checkpoints::ADVISORY && !cpSatisfies)
+            strMiscWarning = _("WARNING: synchronized checkpoint violation detected, but skipped!");
+
+        if (CheckpointsMode == Checkpoints::ADVISORY && cpSatisfies && CHECKPOINT_DISTRIBUTED_MODE==1)
+        {
+            ///Move the client back into STRICT mode
+            CHECKPOINT_VIOLATIONS = 0;
+            printf("Moving Gridcoin into Checkpoint STRICT mode.\r\n");
+            strMiscWarning = "";
+            CheckpointsMode = Checkpoints::STRICT;
+        }
+
+        // Enforce rule that the coinbase starts with serialized block height
+        CScript expect = CScript() << nHeight;
+        if (vtx[0].vin[0].scriptSig.size() < expect.size() ||
+            !std::equal(expect.begin(), expect.end(), vtx[0].vin[0].scriptSig.begin()))
+            return DoS(100, error("AcceptBlock() : block height mismatch in coinbase"));
+    }
+
+    // Write block to history file
+    if (!CheckDiskSpace(::GetSerializeSize(*this, SER_DISK, CLIENT_VERSION)))
+        return error("AcceptBlock() : out of disk space");
+    unsigned int nFile = -1;
+    unsigned int nBlockPos = 0;
+    if (!WriteToDisk(nFile, nBlockPos))
+        return error("AcceptBlock() : WriteToDisk failed");
+
+    // Add to Block Index
+    CBlockIndex *pindexNew;
+    CTxDB txdb ("r+");
+    if (!(pindexNew=AddToBlockIndex(txdb, nFile, nBlockPos)))
+        return error("AcceptBlock() : AddToBlockIndex failed");
+
+    // Attempt to set as Best Chain
+    {
+        LOCK(cs_main);
+        if (pindexNew->nChainTrust > nBestChainTrust)
+            if (!SetBestChain(txdb, pindexNew))
+                return error("AcceptBlock: SetBestChain Failed");
+    }
+
+    // Relay inventory
+    // but don't relay old inventory during initial block download
+    int nBlockEstimate = Checkpoints::GetTotalBlocksEstimate();
+    LOCK(cs_vNodes);
+    BOOST_FOREACH(CNode* pnode, vNodes)
+        if (nBestHeight > (pnode->nStartingHeight != -1 ? pnode->nStartingHeight - 2000 : nBlockEstimate))
+            pnode->PushInventory(CInv(MSG_BLOCK, hash));
+
+    {
+        LOCK(cs_main);
+        // Notify UI to display prev block's coinbase if it was ours
+        if (pindexNew == pindexBest)
+        {
+            assert(hashBestChain == hash);
+            // TODO: move block changed and interface somewhere sensible
+            static uint256 hashPrevBestCoinBase;
+            UpdatedTransaction(hashPrevBestCoinBase);
+            hashPrevBestCoinBase = vtx[0].GetHash();
+        }
+        uiInterface.NotifyBlocksChanged();
+
+        // ppcoin: Check pending sync-checkpoint
+        Checkpoints::AcceptPendingSyncCheckpoint();
+        if (fDebug) printf("{ACC}");
+        nLastAskedForBlocks=GetAdjustedTime();
+        ResetTimerMain("OrphanBarrage");
+        if(out_pinex) *out_pinex = pindexNew;
+    }
+    return true;
+}
 
 
 
@@ -3499,6 +3818,7 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
     if (vDisconnect.size() > 0)
     {
         //Block was disconnected - User is Re-eligibile for staking
+        //WTF?
 
         StructCPID sMag = GetInitializedStructCPID2(GlobalCPUMiningCPID.cpid,mvMagnitudes);
 
@@ -3509,7 +3829,7 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
         }
         nLastBlockSolved = 0;
     }
-    printf("REORGANIZE Disc Size %f",(double)vDisconnect.size());
+    printf("REORGANIZE Disc Size %" PRIszu "\n",vDisconnect.size());
 
     // Disconnect shorter branch
     list<CTransaction> vResurrect;
@@ -3588,6 +3908,8 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
     }
 
     // Gridcoin: Now that the chain is back in order, Fix the researchers who were disrupted:
+
+    //WHERE?? TODO
     
     printf("REORGANIZE: done\n");
     return true;
@@ -3651,11 +3973,9 @@ bool CBlock::SetBestChainInner(CTxDB& txdb, CBlockIndex *pindexNew, bool fReorga
         InvalidChainFound(pindexNew);
         return false;
     }
+
     if (!txdb.TxnCommit())
         return error("SetBestChain() : TxnCommit failed");
-
-    // Add to current best branch
-    pindexNew->pprev->pnext = pindexNew;
 
     // Delete redundant memory transactions
     BOOST_FOREACH(CTransaction& tx, vtx)
@@ -3719,7 +4039,6 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
                     printf("Failed to Reorganize during Attempt #%f \r\n",(double)iRegression+1);
                     txdb.TxnAbort();
                     InvalidChainFound(pindexNew);
-                    printf("\r\nReorg BusyWait\r\n");
                     BusyWaitForTally();
                     REORGANIZE_FAILED++;
                     return error("SetBestChain() : Reorganize failed");
@@ -3769,7 +4088,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
     if (fDebug)
     {
         printf("{SBC} SetBestChain: new best=%s  height=%d  trust=%s  blocktrust=%" PRId64 "  date=%s\n",
-          hashBestChain.ToString().substr(0,20).c_str(), nBestHeight,
+          hashBestChain.ToString().c_str(), nBestHeight,
           CBigNum(nBestChainTrust).ToString().c_str(),
           nBestBlockTrust.Get64(),
           DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()).c_str());
@@ -3875,17 +4194,23 @@ bool CBlock::GetCoinAge(uint64_t& nCoinAge) const
     return true;
 }
 
-bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof)
+CBlockIndex* CBlock::AddToBlockIndex(CTxDB &txdb, unsigned int nFile, unsigned int nBlockPos)
 {
     // Check for duplicate
     uint256 hash = GetHash();
     if (mapBlockIndex.count(hash))
-        return error("AddToBlockIndex() : %s already exists", hash.ToString().substr(0,20).c_str());
+    {
+        error("AddToBlockIndex() : %s already exists", hash.ToString().substr(0,20).c_str());
+        return NULL;
+    }
 
     // Construct new block index object
     CBlockIndex* pindexNew = new CBlockIndex(nFile, nBlockPos, *this);
     if (!pindexNew)
-        return error("AddToBlockIndex() : new CBlockIndex failed");
+    {
+        error("AddToBlockIndex() : new CBlockIndex failed");
+        return NULL;
+    }
     pindexNew->phashBlock = &hash;
     map<uint256, CBlockIndex*>::iterator miPrev = mapBlockIndex.find(hashPrevBlock);
     if (miPrev != mapBlockIndex.end())
@@ -3898,406 +4223,28 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
     pindexNew->nChainTrust = (pindexNew->pprev ? pindexNew->pprev->nChainTrust : 0) + pindexNew->GetBlockTrust();
 
     // ppcoin: compute stake entropy bit for stake modifier
-    if (!pindexNew->SetStakeEntropyBit(GetStakeEntropyBit()))
-        return error("AddToBlockIndex() : SetStakeEntropyBit() failed");
+    // from block header hash
+    pindexNew->SetStakeEntropyBit(GetStakeEntropyBit());
 
-    // Record proof hash value
-    pindexNew->hashProof = hashProof;
-
-    // ppcoin: compute stake modifier
-    uint64_t nStakeModifier = 0;
-    bool fGeneratedStakeModifier = false;
-    if (!ComputeNextStakeModifier(pindexNew->pprev, nStakeModifier, fGeneratedStakeModifier))
-    {
-        printf("AddToBlockIndex() : ComputeNextStakeModifier() failed");
-    }
-    pindexNew->SetStakeModifier(nStakeModifier, fGeneratedStakeModifier);
-    pindexNew->nStakeModifierChecksum = GetStakeModifierChecksum(pindexNew);
-
+    // Proof hash value and Stake modifier moved to ConnectBlock (Brod)
+    
     // Add to mapBlockIndex
     map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.insert(make_pair(hash, pindexNew)).first;
     if (pindexNew->IsProofOfStake())
         setStakeSeen.insert(make_pair(pindexNew->prevoutStake, pindexNew->nStakeTime));
     pindexNew->phashBlock = &((*mi).first);
 
+    // We only adding to block index, no need to commit and hurr
+
     // Write to disk block index
-    CTxDB txdb;
-    if (!txdb.TxnBegin())
-        return false;
-    txdb.WriteBlockIndex(CDiskBlockIndex(pindexNew));
-    if (!txdb.TxnCommit())
-        return false;
-
-    LOCK(cs_main);
-
-    // New best
-    if (pindexNew->nChainTrust > nBestChainTrust)
-        if (!SetBestChain(txdb, pindexNew))
-            return false;
-
-    if (pindexNew == pindexBest)
+    if(!txdb.WriteBlockIndex(CDiskBlockIndex(pindexNew)))
     {
-        // Notify UI to display prev block's coinbase if it was ours
-        static uint256 hashPrevBestCoinBase;
-        UpdatedTransaction(hashPrevBestCoinBase);
-        hashPrevBestCoinBase = vtx[0].GetHash();
+        error("AddToBlockIndex DB write failed");
+        delete pindexNew;
+        return NULL;
     }
 
-    uiInterface.NotifyBlocksChanged();
-    return true;
-}
-
-bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig, bool fLoadingIndex) const
-{
-
-    if (GetHash()==hashGenesisBlock || GetHash()==hashGenesisBlockTestNet) return true;
-    // These are checks that are independent of context
-    // that can be verified before saving an orphan block.
-
-    // Size limits
-    if (vtx.empty() || vtx.size() > MAX_BLOCK_SIZE || ::GetSerializeSize(*this, SER_NETWORK, PROTOCOL_VERSION) > MAX_BLOCK_SIZE)
-        return DoS(100, error("CheckBlock[] : size limits failed"));
-
-    // Check proof of work matches claimed amount
-    if (fCheckPOW && IsProofOfWork() && !CheckProofOfWork(GetPoWHash(), nBits))
-        return DoS(50, error("CheckBlock[] : proof of work failed"));
-
-    //Reject blocks with diff that has grown to an extrordinary level (should never happen)
-    double blockdiff = GetBlockDifficulty(nBits);
-    if (height1 > nGrandfather && blockdiff > 10000000000000000)
-    {
-       return DoS(1, error("CheckBlock[] : Block Bits larger than 10000000000000000.\r\n"));
-    }
-
-    // First transaction must be coinbase, the rest must not be
-    if (vtx.empty() || !vtx[0].IsCoinBase())
-        return DoS(100, error("CheckBlock[] : first tx is not coinbase"));
-    for (unsigned int i = 1; i < vtx.size(); i++)
-        if (vtx[i].IsCoinBase())
-            return DoS(100, error("CheckBlock[] : more than one coinbase"));
-
-    //Research Age
-    MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc);
-    //For higher security, plus lets catch these bad blocks before adding them to the chain to prevent reorgs:
-    double OUT_POR = 0;
-    double OUT_INTEREST = 0;
-    double dAccrualAge = 0;
-    double dMagnitudeUnit = 0;
-    double dAvgMagnitude = 0;
-    int64_t nCoinAge = 0;
-    int64_t nFees = 0;
-
-    if (bb.cpid != "INVESTOR" && IsProofOfStake() && height1 > nGrandfather && IsResearchAgeEnabled(height1) && BlockNeedsChecked(nTime) && !fLoadingIndex)
-    {
-		    // 6-4-2017 - Verify researchers stored block magnitude
-		    double dNeuralNetworkMagnitude = CalculatedMagnitude2(bb.cpid, nTime, false);
-			if (bb.Magnitude > 0 && bb.Magnitude > (dNeuralNetworkMagnitude*1.25) && (fTestNet || height1 > 947000))
-			{
-				return error("CheckBlock[ResearchAge] : Researchers block magnitude > neural network magnitude: Block Magnitude %f, Neural Network Magnitude %f, CPID %s ",
-					(double)bb.Magnitude,(double)dNeuralNetworkMagnitude,bb.cpid.c_str());
-			}
-		    int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 1, nTime,
-                pindexBest, sCaller + "_checkblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
-            if (bb.ResearchSubsidy > ((OUT_POR*1.25)+1))
-            {
-                BusyWaitForTally();
-                StructCPID st1 = GetLifetimeCPID(bb.cpid,"CheckBlock()");
-                nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, nTime,
-                    pindexBest, sCaller + "_checkblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
-
-                if (bb.ResearchSubsidy > ((OUT_POR*1.25)+1))
-                {
-
-                            if (fDebug3) printf("CheckBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-                                    (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,CoinToDouble(nCalculatedResearch),(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str());
-    
-                            return DoS(10,error("CheckBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-                                    (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,CoinToDouble(nCalculatedResearch),(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
-                            // Reserved for future use.
-                }
-            }
-    
-    }
-
-
-    //ProofOfResearch
-    if (vtx.size() > 0)
-    {
-    //Orphan Flood Attack
-            if (height1 > nGrandfather)
-            {
-                    double bv = BlockVersion(bb.clientversion);
-                    double cvn = ClientVersionNew();
-                    if (fDebug10) printf("BV %f, CV %f   ",bv,cvn);
-                    // if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
-                    // Enforce Beacon Age
-                    if (bv < 3588 && height1 > 860500 && !fTestNet) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-                    //if (bv < 3580 && fTestNet) return DoS(25, error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n"));
-            }
-
-            if (bb.cpid != "INVESTOR" && height1 > nGrandfather && BlockNeedsChecked(nTime))
-            {
-                if (bb.projectname.empty() && !IsResearchAgeEnabled(height1))   return DoS(1,error("CheckBlock::PoR Project Name invalid"));
-                if (!fLoadingIndex && !IsCPIDValidv2(bb,height1))
-                {
-                        std::string sOut2 = "";
-                        LoadAdminMessages(false,sOut2);
-                        if (!fLoadingIndex && !IsCPIDValidv2(bb,height1))
-                        {
-                            return error("Bad CPID : height %f, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc %s",(double)height1,
-                                bb.cpid.c_str(), bb.cpidv2.c_str(),
-                                bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str());
-                        }
-                }
-
-            }
-
-            // Gridcoin: check proof-of-stake block signature
-            if (IsProofOfStake() && height1 > nGrandfather)
-            {
-                //Mint limiter checks 1-20-2015
-                double PORDiff = GetBlockDifficulty(nBits);
-                double mint1 = CoinToDouble(Mint);
-                double total_subsidy = bb.ResearchSubsidy + bb.InterestSubsidy;
-                double limiter = MintLimiter(PORDiff,bb.RSAWeight,bb.cpid,GetBlockTime());
-                if (fDebug10) printf("CheckBlock[]: TotalSubsidy %f, Height %f, %s, %f, Res %f, Interest %f, hb: %s \r\n",
-                        (double)total_subsidy,(double)height1, bb.cpid.c_str(),
-                        (double)mint1,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc.c_str());
-                if (total_subsidy < limiter)
-                {
-                    if (fDebug3) printf("****CheckBlock[]: Total Mint too Small %s, mint %f, Res %f, Interest %f, hash %s \r\n",bb.cpid.c_str(),
-                        (double)mint1,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc.c_str());
-                    //1-21-2015 - Prevent Hackers from spamming the network with small blocks
-                    return error("****CheckBlock[]: Total Mint too Small %f < %f Research %f Interest %f",
-                            total_subsidy,limiter,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc.c_str());
-                }
-
-                if (fCheckSig && !CheckBlockSignature())
-                    return DoS(100, error("CheckBlock[] : bad proof-of-stake block signature"));
-            }
-
-
-        }
-        else
-        {
-            return false;
-        }
-
-    // End of Proof Of Research
-
-    if (IsProofOfStake())
-    {
-        // Coinbase output should be empty if proof-of-stake block
-        if (vtx[0].vout.size() != 1 || !vtx[0].vout[0].IsEmpty())
-            return DoS(100, error("CheckBlock[] : coinbase output not empty for proof-of-stake block"));
-
-        // Second transaction must be coinstake, the rest must not be
-        if (vtx.empty() || !vtx[1].IsCoinStake())
-            return DoS(100, error("CheckBlock[] : second tx is not coinstake"));
-
-        for (unsigned int i = 2; i < vtx.size(); i++)
-        {
-            if (vtx[i].IsCoinStake())
-            {
-                printf("Found more than one coinstake in coinbase at location %f\r\n",(double)i);
-                return DoS(100, error("CheckBlock[] : more than one coinstake"));
-            }
-        }
-
-    }
-
-    // Check transactions
-    BOOST_FOREACH(const CTransaction& tx, vtx)
-    {
-        if (!tx.CheckTransaction())
-            return DoS(tx.nDoS, error("CheckBlock[] : CheckTransaction failed"));
-
-        // ppcoin: check transaction timestamp
-        if (GetBlockTime() < (int64_t)tx.nTime)
-            return DoS(50, error("CheckBlock[] : block timestamp earlier than transaction timestamp"));
-    }
-
-    // Check for duplicate txids. This is caught by ConnectInputs(),
-    // but catching it earlier avoids a potential DoS attack:
-    set<uint256> uniqueTx;
-    BOOST_FOREACH(const CTransaction& tx, vtx)
-    {
-        uniqueTx.insert(tx.GetHash());
-    }
-    if (uniqueTx.size() != vtx.size())
-        return DoS(100, error("CheckBlock[] : duplicate transaction"));
-
-    unsigned int nSigOps = 0;
-    BOOST_FOREACH(const CTransaction& tx, vtx)
-    {
-        nSigOps += tx.GetLegacySigOpCount();
-    }
-    if (nSigOps > MAX_BLOCK_SIGOPS)
-        return DoS(100, error("CheckBlock[] : out-of-bounds SigOpCount"));
-
-    // Check merkle root
-    if (fCheckMerkleRoot && hashMerkleRoot != BuildMerkleTree())
-        return DoS(100, error("CheckBlock[] : hashMerkleRoot mismatch"));
-
-    //if (fDebug3) printf(".EOCB.");
-    return true;
-}
-
-bool CBlock::AcceptBlock(bool generated_by_me)
-{
-    AssertLockHeld(cs_main);
-
-    if (nVersion > CURRENT_VERSION)
-        return DoS(100, error("AcceptBlock() : reject unknown block version %d", nVersion));
-
-    // Check for duplicate
-    uint256 hash = GetHash();
-    if (mapBlockIndex.count(hash))
-        return error("AcceptBlock() : block already in mapBlockIndex");
-
-    // Get prev block index
-    map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hashPrevBlock);
-    if (mi == mapBlockIndex.end())
-        return DoS(10, error("AcceptBlock() : prev block not found"));
-    CBlockIndex* pindexPrev = (*mi).second;
-    int nHeight = pindexPrev->nHeight+1;
-
-    if(       (IsProtocolV2(nHeight) && nVersion < 7)
-            ||(fTestNet && nHeight > 272280 && nVersion < 8)
-        )
-        return DoS(100, error("AcceptBlock() : reject too old nVersion = %d", nVersion));
-    else if( (!IsProtocolV2(nHeight) && nVersion >= 7)
-            ||(!fTestNet && nVersion >=8 )
-            ||(fTestNet && nHeight < 272270 && nVersion >= 8)
-        )
-        return DoS(100, error("AcceptBlock() : reject too new nVersion = %d", nVersion));
-
-    if (IsProofOfWork() && nHeight > LAST_POW_BLOCK)
-        return DoS(100, error("AcceptBlock() : reject proof-of-work at height %d", nHeight));
-
-    if (nHeight > nGrandfather)
-    {
-            // Check coinbase timestamp
-            if (GetBlockTime() > FutureDrift((int64_t)vtx[0].nTime, nHeight))
-            {
-                return DoS(80, error("AcceptBlock() : coinbase timestamp is too early"));
-            }
-            // Check timestamp against prev
-            if (GetBlockTime() <= pindexPrev->GetPastTimeLimit() || FutureDrift(GetBlockTime(), nHeight) < pindexPrev->GetBlockTime())
-                return DoS(60, error("AcceptBlock() : block's timestamp is too early"));
-            // Check proof-of-work or proof-of-stake
-            if (nBits != GetNextTargetRequired(pindexPrev, IsProofOfStake()))
-                return DoS(100, error("AcceptBlock() : incorrect %s", IsProofOfWork() ? "proof-of-work" : "proof-of-stake"));
-    }
-
-
-    // Check that all transactions are finalized
-    BOOST_FOREACH(const CTransaction& tx, vtx)
-        if (!IsFinalTx(tx, nHeight, GetBlockTime()))
-            return DoS(10, error("AcceptBlock() : contains a non-final transaction"));
-
-    // Check that the block chain matches the known block chain up to a checkpoint
-    if (!Checkpoints::CheckHardened(nHeight, hash))
-        return DoS(100, error("AcceptBlock() : rejected by hardened checkpoint lock-in at %d", nHeight));
-
-    uint256 hashProof;
-
-    // Verify hash target and signature of coinstake tx
-    if (nHeight > nGrandfather && nVersion <= 7)
-    {
-                if (IsProofOfStake())
-                {
-                    uint256 targetProofOfStake;
-                    if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me, nNonce) && IsLockTimeWithinMinutes(GetBlockTime(),600))
-                    {
-                        return error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    \n", hash.ToString().c_str(),(double)nNonce);
-                    }
-
-                }
-    }
-    if (nVersion >= 8)
-    {
-        //must be proof of stake
-        //no grandfather exceptions
-        //if (IsProofOfStake())
-        printf("AcceptBlock: Proof Of Stake V8 %d\n",nVersion);
-        if(!CheckProofOfStakeV8(pindexPrev, *this, generated_by_me, hashProof))
-        {
-            return error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    \n", hash.ToString().c_str(),(double)nNonce);
-        }
-    }
-
-    // PoW is checked in CheckBlock[]
-    if (IsProofOfWork())
-    {
-        hashProof = GetPoWHash();
-    }
-
-    //Grandfather
-    if (nHeight > nGrandfather)
-    {
-         bool cpSatisfies = Checkpoints::CheckSync(hash, pindexPrev);
-         // Check that the block satisfies synchronized checkpoint
-         if (CheckpointsMode == Checkpoints::STRICT && !cpSatisfies)
-         {
-            if (CHECKPOINT_DISTRIBUTED_MODE==1)
-            {
-                CHECKPOINT_VIOLATIONS++;
-                if (CHECKPOINT_VIOLATIONS > 3)
-                {
-                    //For stability, move the client into ADVISORY MODE:
-                    printf("Moving Gridcoin into Checkpoint ADVISORY mode.\r\n");
-                    CheckpointsMode = Checkpoints::ADVISORY;
-                }
-            }
-            return error("AcceptBlock() : rejected by synchronized checkpoint");
-         }
-
-        if (CheckpointsMode == Checkpoints::ADVISORY && !cpSatisfies)
-            strMiscWarning = _("WARNING: synchronized checkpoint violation detected, but skipped!");
-
-        if (CheckpointsMode == Checkpoints::ADVISORY && cpSatisfies && CHECKPOINT_DISTRIBUTED_MODE==1)
-        {
-            ///Move the client back into STRICT mode
-            CHECKPOINT_VIOLATIONS = 0;
-            printf("Moving Gridcoin into Checkpoint STRICT mode.\r\n");
-            strMiscWarning = "";
-            CheckpointsMode = Checkpoints::STRICT;
-        }
-
-        // Enforce rule that the coinbase starts with serialized block height
-        CScript expect = CScript() << nHeight;
-        if (vtx[0].vin[0].scriptSig.size() < expect.size() ||
-            !std::equal(expect.begin(), expect.end(), vtx[0].vin[0].scriptSig.begin()))
-            return DoS(100, error("AcceptBlock() : block height mismatch in coinbase"));
-    }
-
-    // Write block to history file
-    if (!CheckDiskSpace(::GetSerializeSize(*this, SER_DISK, CLIENT_VERSION)))
-        return error("AcceptBlock() : out of disk space");
-    unsigned int nFile = -1;
-    unsigned int nBlockPos = 0;
-    if (!WriteToDisk(nFile, nBlockPos))
-        return error("AcceptBlock() : WriteToDisk failed");
-    if (!AddToBlockIndex(nFile, nBlockPos, hashProof))
-        return error("AcceptBlock() : AddToBlockIndex failed");
-
-    // Relay inventory, but don't relay old inventory during initial block download
-    int nBlockEstimate = Checkpoints::GetTotalBlocksEstimate();
-    if (hashBestChain == hash)
-    {
-        LOCK(cs_vNodes);
-        BOOST_FOREACH(CNode* pnode, vNodes)
-            if (nBestHeight > (pnode->nStartingHeight != -1 ? pnode->nStartingHeight - 2000 : nBlockEstimate))
-                pnode->PushInventory(CInv(MSG_BLOCK, hash));
-    }
-
-    // ppcoin: check pending sync-checkpoint
-    Checkpoints::AcceptPendingSyncCheckpoint();
-    if (fDebug) printf("{ACC}");
-    nLastAskedForBlocks=GetAdjustedTime();
-    ResetTimerMain("OrphanBarrage");
-    return true;
+    return pindexNew;
 }
 
 
@@ -4762,6 +4709,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     if (mapOrphanBlocks.count(hash))
         return error("ProcessBlock() : already have block (orphan) %s", hash.ToString().c_str());
 
+    // todo: Move to CheckBlock
     // ppcoin: check proof-of-stake
     // Limited duplicity on stake: prevents block flood attack
     // Duplicate stake allowed only when there is orphan child block
@@ -4786,7 +4734,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     }
 
     // Preliminary checks
-    if (!pblock->CheckBlock("ProcessBlock", pindexBest->nHeight, 100*COIN))
+    if (!pblock->CheckBlock("ProcessBlock", pindexBest->nHeight))
         return error("ProcessBlock() : CheckBlock FAILED");
 
     // ppcoin: ask for pending sync-checkpoint if any
@@ -4843,9 +4791,11 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
         }
         return true;
     }
+    CBlockIndex *pindexPrev = mapBlockIndex[pblock->hashPrevBlock];
 
     // Store to disk
-    if (!pblock->AcceptBlock(generated_by_me))
+    CBlockIndex *pindexNew;
+    if (!pblock->AcceptBlock(&pindexNew,generated_by_me,pindexPrev))
         return error("ProcessBlock() : AcceptBlock FAILED");
 
     // Recursively process any orphan blocks that depended on this one
@@ -4854,12 +4804,14 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     for (unsigned int i = 0; i < vWorkQueue.size(); i++)
     {
         uint256 hashPrev = vWorkQueue[i];
+        CBlockIndex *pindexOrphanPrev= mapBlockIndex[hash];
         for (multimap<uint256, CBlock*>::iterator mi = mapOrphanBlocksByPrev.lower_bound(hashPrev);
              mi != mapOrphanBlocksByPrev.upper_bound(hashPrev);
              ++mi)
         {
             CBlock* pblockOrphan = (*mi).second;
-            if (pblockOrphan->AcceptBlock(generated_by_me))
+            assert(pindexNew->GetBlockHash()==pblockOrphan->hashPrevBlock);
+            if (pblockOrphan->AcceptBlock(NULL,generated_by_me,pindexOrphanPrev))
                 vWorkQueue.push_back(pblockOrphan->GetHash());
             mapOrphanBlocks.erase(pblockOrphan->GetHash());
             setStakeSeenOrphan.erase(pblockOrphan->GetProofOfStake());
@@ -5088,14 +5040,10 @@ bool LoadBlockIndex(bool fAllowNew)
         uint256 merkle_root = uint256("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f");
         assert(block.hashMerkleRoot == merkle_root);
         assert(block.GetHash() == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
-        assert(block.CheckBlock("LoadBlockIndex",1,10*COIN));
+        assert(block.CheckBlock("LoadBlockIndex",1));
 
         // Start new block file
-        unsigned int nFile;
-        unsigned int nBlockPos;
-        if (!block.WriteToDisk(nFile, nBlockPos))
-            return error("LoadBlockIndex() : writing genesis block to disk failed");
-        if (!block.AddToBlockIndex(nFile, nBlockPos, hashGenesisBlock))
+        if (!block.AcceptBlock(NULL,true,NULL))
             return error("LoadBlockIndex() : genesis block not accepted");
 
         // ppcoin: initialize synchronized checkpoint
@@ -5351,6 +5299,7 @@ bool IsCPIDValidv2(MiningCPID& mc, int height)
     else if (height >= cpidV3CutOverHeight)
     {
         if (mc.cpid == "INVESTOR" || mc.cpid=="investor") return true;
+        if(mc.cpid.empty()) return false;
         // V3 requires a beacon, a beacon public key and a valid block signature signed by the CPID's private key
         result = VerifyCPIDSignature(mc.cpid,mc.lastblockhash,mc.BoincSignature);
     }
@@ -7628,13 +7577,13 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
                     + delim + mcpid.enccpid
                     + delim + mcpid.encaes + delim + RoundToString(mcpid.nonce,0) + delim + RoundToString(mcpid.NetworkRAC,0)
                     + delim + version
-                    + delim + RoundToString(mcpid.ResearchSubsidy,2)
+                    + delim + RoundToString(mcpid.ResearchSubsidy,4)
                     + delim + RoundToString(mcpid.LastPaymentTime,0)
                     + delim + RoundToString(mcpid.RSAWeight,0)
                     + delim + mcpid.cpidv2
                     + delim + RoundToString(mcpid.Magnitude,0)
                     + delim + mcpid.GRCAddress + delim + mcpid.lastblockhash
-                    + delim + RoundToString(mcpid.InterestSubsidy,2) + delim + mcpid.Organization
+                    + delim + RoundToString(mcpid.InterestSubsidy,4) + delim + mcpid.Organization
                     + delim + mcpid.OrganizationKey + delim + mcpid.NeuralHash + delim + mcpid.superblock
                     + delim + RoundToString(mcpid.ResearchSubsidy2,2) + delim + RoundToString(mcpid.ResearchAge,6)
                     + delim + RoundToString(mcpid.ResearchMagnitudeUnit,6) + delim + RoundToString(mcpid.ResearchAverageMagnitude,2)
