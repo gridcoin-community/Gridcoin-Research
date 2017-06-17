@@ -68,7 +68,6 @@
 #include <QLocale>
 #include <QMessageBox>
 #include <QMimeData>
-#include <QProgressBar>
 #include <QStackedWidget>
 #include <QDateTime>
 #include <QMovie>
@@ -245,79 +244,6 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
     // Create status bar
     // statusBar();
-
-    // Status bar notification icons
-    QFrame *frameBlocks = new QFrame();
-
-    frameBlocks->setContentsMargins(0,0,0,0);
-
-    frameBlocks->setMinimumWidth(30);
-    frameBlocks->setMaximumWidth(30);
-    QVBoxLayout *frameBlocksLayout = new QVBoxLayout(frameBlocks);
-    frameBlocksLayout->setContentsMargins(1,0,1,0);
-    frameBlocksLayout->setSpacing(-1);
-    labelEncryptionIcon = new QLabel();
-    labelStakingIcon = new QLabel();
-    labelConnectionsIcon = new QLabel();
-    labelBlocksIcon = new QLabel();
-    frameBlocksLayout->addWidget(labelEncryptionIcon);
-		
-    frameBlocksLayout->addWidget(labelStakingIcon);
-    frameBlocksLayout->addWidget(labelConnectionsIcon);
-    frameBlocksLayout->addWidget(labelBlocksIcon);
-	//12-21-2015 Prevent Lock from falling off the page
-
-    frameBlocksLayout->addStretch();
-
-    if (GetBoolArg("-staking", true))
-    {
-        QTimer *timerStakingIcon = new QTimer(labelStakingIcon);
-        connect(timerStakingIcon, SIGNAL(timeout()), this, SLOT(updateStakingIcon()));
-        timerStakingIcon->start(30 * 1000);
-        updateStakingIcon();
-    }
-
-    // Progress bar and label for blocks download
-    progressBarLabel = new QLabel();
-    progressBarLabel->setVisible(false);
-    progressBar = new QProgressBar();
-    progressBar->setAlignment(Qt::AlignCenter);
-    progressBar->setVisible(false);
-    progressBar->setOrientation(Qt::Vertical);
-    progressBar->setObjectName("progress");
-
-    frameBlocks->setObjectName("frame");
-	addToolBarBreak(Qt::LeftToolBarArea);
-    QToolBar *toolbar2 = addToolBar("Tabs toolbar");
-    addToolBar(Qt::LeftToolBarArea,toolbar2);
-    toolbar2->setOrientation(Qt::Vertical);
-    toolbar2->setMovable( false );
-    toolbar2->setObjectName("toolbar2");
-    toolbar2->setFixedWidth(26);
-    toolbar2->addWidget(frameBlocks);
-    toolbar2->addWidget(progressBarLabel);
-    toolbar2->addWidget(progressBar);
-
-	addToolBarBreak(Qt::TopToolBarArea);
-    QToolBar *toolbar3 = addToolBar("Logo bar");
-    addToolBar(Qt::TopToolBarArea,toolbar3);
-    toolbar3->setOrientation(Qt::Horizontal);
-    toolbar3->setMovable( false );
-    toolbar3->setObjectName("toolbar3");
-    toolbar3->setFixedHeight(52);
-    QLabel *grcLogoLabel = new QLabel();
-    grcLogoLabel->setPixmap(QPixmap(":/images/logo_hz"));
-    toolbar3->addWidget(grcLogoLabel);
-    QWidget* logoSpacer = new QWidget();
-    logoSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    toolbar3->addWidget(logoSpacer);
-    logoSpacer->setObjectName("logoSpacer");
-    QLabel *boincLogoLabel = new QLabel();
-    boincLogoLabel->setText("<html><head/><body><p align=\"center\"><a href=\"https://boinc.berkeley.edu\"><span style=\" text-decoration: underline; color:#0000ff;\"><img src=\":/images/boinc\"/></span></a></p></body></html>");
-    boincLogoLabel->setTextFormat(Qt::RichText);
-    boincLogoLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
-    boincLogoLabel->setOpenExternalLinks(true);
-    toolbar3->addWidget(boincLogoLabel);
 
     syncIconMovie = new QMovie(":/movies/update_spinner", "GIF", this);
 
@@ -1054,6 +980,65 @@ void BitcoinGUI::createToolBars()
     webSpacer->setObjectName("WebSpacer");
 
 
+    // Status bar notification icons
+    QFrame *frameBlocks = new QFrame();
+
+    frameBlocks->setContentsMargins(0,0,0,0);
+
+    QVBoxLayout *frameBlocksLayout = new QVBoxLayout(frameBlocks);
+    frameBlocksLayout->setContentsMargins(1,0,1,0);
+    frameBlocksLayout->setSpacing(-1);
+    labelEncryptionIcon = new QLabel();
+    labelStakingIcon = new QLabel();
+    labelConnectionsIcon = new QLabel();
+    labelBlocksIcon = new QLabel();
+    frameBlocksLayout->addWidget(labelEncryptionIcon);
+
+    frameBlocksLayout->addWidget(labelStakingIcon);
+    frameBlocksLayout->addWidget(labelConnectionsIcon);
+    frameBlocksLayout->addWidget(labelBlocksIcon);
+    //12-21-2015 Prevent Lock from falling off the page
+
+    frameBlocksLayout->addStretch();
+
+    if (GetBoolArg("-staking", true))
+    {
+        QTimer *timerStakingIcon = new QTimer(labelStakingIcon);
+        connect(timerStakingIcon, SIGNAL(timeout()), this, SLOT(updateStakingIcon()));
+        timerStakingIcon->start(30 * 1000);
+        updateStakingIcon();
+    }
+
+    frameBlocks->setObjectName("frame");
+    addToolBarBreak(Qt::LeftToolBarArea);
+    QToolBar *toolbar2 = addToolBar("Tabs toolbar");
+    addToolBar(Qt::LeftToolBarArea,toolbar2);
+    toolbar2->setOrientation(Qt::Vertical);
+    toolbar2->setMovable( false );
+    toolbar2->setObjectName("toolbar2");
+    toolbar2->addWidget(frameBlocks);
+
+    addToolBarBreak(Qt::TopToolBarArea);
+    QToolBar *toolbar3 = addToolBar("Logo bar");
+    addToolBar(Qt::TopToolBarArea,toolbar3);
+    toolbar3->setOrientation(Qt::Horizontal);
+    toolbar3->setMovable( false );
+    toolbar3->setObjectName("toolbar3");
+    QLabel *grcLogoLabel = new QLabel();
+    grcLogoLabel->setPixmap(QPixmap(":/images/logo_hz"));
+    toolbar3->addWidget(grcLogoLabel);
+    QWidget* logoSpacer = new QWidget();
+    logoSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    toolbar3->addWidget(logoSpacer);
+    logoSpacer->setObjectName("logoSpacer");
+    QLabel *boincLogoLabel = new QLabel();
+    boincLogoLabel->setText("<html><head/><body><p align=\"center\"><a href=\"https://boinc.berkeley.edu\"><span style=\" text-decoration: underline; color:#0000ff;\"><img src=\":/images/boinc\"/></span></a></p></body></html>");
+    boincLogoLabel->setTextFormat(Qt::RichText);
+    boincLogoLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    boincLogoLabel->setOpenExternalLinks(true);
+    toolbar3->addWidget(boincLogoLabel);
+
+
 }
 
 void BitcoinGUI::setClientModel(ClientModel *clientModel)
@@ -1225,12 +1210,9 @@ void BitcoinGUI::setNumConnections(int count)
 
 void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
 {
-    // don't show / hide progress bar and its label if we have no connection to the network
+    // return if we have no connection to the network
     if (!clientModel || clientModel->getNumConnections() == 0)
     {
-        progressBarLabel->setVisible(false);
-        progressBar->setVisible(false);
-
         return;
     }
 
@@ -1241,34 +1223,9 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
     {
         int nRemainingBlocks = nTotalBlocks - count;
         float nPercentageDone = count / (nTotalBlocks * 0.01f);
-
-        if (strStatusBarWarnings.isEmpty())
-        {
-            progressBarLabel->setText(tr("Synchronizing with network..."));
-            progressBarLabel->setVisible(true);
-            progressBar->setFormat(tr("~%n block(s) remaining", "", nRemainingBlocks));
-            progressBar->setMaximum(nTotalBlocks);
-            progressBar->setValue(count);
-            progressBar->setVisible(true);
-        }
-    }
-    else
-    {
-        if (strStatusBarWarnings.isEmpty())
-            progressBarLabel->setVisible(false);
-
-        progressBar->setVisible(false);
     }
 
     tooltip = tr("Processed %n block(s) of transaction history.", "", count);
-
-    // Override progressBarLabel text and hide progress bar, when we have warnings to display
-    if (!strStatusBarWarnings.isEmpty())
-    {
-        progressBarLabel->setText(strStatusBarWarnings);
-        progressBarLabel->setVisible(true);
-        progressBar->setVisible(false);
-    }
 
     QDateTime lastBlockDate = clientModel->getLastBlockDate();
     int secs = lastBlockDate.secsTo(QDateTime::currentDateTime());
@@ -1323,8 +1280,6 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
     tooltip = QString("<nobr>") + tooltip + QString("</nobr>");
 
     labelBlocksIcon->setToolTip(tooltip);
-    progressBarLabel->setToolTip(tooltip);
-    progressBar->setToolTip(tooltip);
 }
 
 void BitcoinGUI::error(const QString &title, const QString &message, bool modal)

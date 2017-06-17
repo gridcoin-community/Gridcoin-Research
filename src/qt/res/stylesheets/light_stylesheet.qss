@@ -52,18 +52,6 @@ QToolBar#toolbar3 QLabel{
     border:none;
 }
 
-#toolbar3 {
-    border:none;
-    background-color:transparent;
-    border-bottom : 2px solid rgb(160,175,5);
-}
-
-#toolbar2 {
-    border:none;
-    width:10px;
-    background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(160,175,5), stop: 1 rgb(160,175,5));
-}
-
 #toolbar {
     border:none;
     height:100%;
@@ -72,6 +60,22 @@ QToolBar#toolbar3 QLabel{
     color: black;
     min-width:160px;
     max-width:160px;
+}
+
+#toolbar2 {
+    border:none;
+    width:10px;
+    background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(160,175,5), stop: 1 rgb(160,175,5));
+    min-width:26px;
+    max-width:26px;
+}
+
+#toolbar3 {
+    border:none;
+    background-color:transparent;
+    border-bottom : 2px solid rgb(160,175,5);
+    min-height:52px;
+    max-height:52px;
 }
 
 QToolBar#toolbar QToolButton {
