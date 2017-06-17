@@ -422,7 +422,7 @@ double qtPushGridcoinDiagnosticData(std::string data)
 			QString qsData = ToQstring(data);
 		    result = globalcom->dynamicCall("PushGridcoinDiagnosticData(Qstring)",qsData).toInt();
 	#endif
- 	return (double)result;
+ 	return result;
 }
 
 //R Halford - 6/19/2015 - Let's clean up the windows side by removing all these functions and making a generic interface for comm between Windows and Linux; Start with one new generic function here:
@@ -445,9 +445,8 @@ double qtExecuteGenericFunction(std::string function, std::string data)
 		{
 			result = globalcom->dynamicCall(sFunction.c_str(),qsData).toInt();
 		}
-		return (double)result;
 	#endif
- 	return (double)result;
+ 	return result;
 }
 
 
@@ -1217,15 +1216,7 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
     }
 
     QString strStatusBarWarnings = clientModel->getStatusBarWarnings();
-    QString tooltip;
-
-    if(count < nTotalBlocks)
-    {
-        int nRemainingBlocks = nTotalBlocks - count;
-        float nPercentageDone = count / (nTotalBlocks * 0.01f);
-    }
-
-    tooltip = tr("Processed %n block(s) of transaction history.", "", count);
+    QString tooltip(tr("Processed %n block(s) of transaction history.", "", count));
 
     QDateTime lastBlockDate = clientModel->getLastBlockDate();
     int secs = lastBlockDate.secsTo(QDateTime::currentDateTime());
