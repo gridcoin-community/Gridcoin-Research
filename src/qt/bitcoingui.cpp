@@ -1008,7 +1008,6 @@ void BitcoinGUI::createMenuBar()
     qmAdvanced->addSeparator();
     qmAdvanced->addAction(rebuildAction);
     qmAdvanced->addAction(downloadAction);
-    qmAdvanced->addAction(rebootAction);
 
     QMenu *help = appMenuBar->addMenu(tr("&Help"));
     help->addAction(openRPCConsoleAction);
