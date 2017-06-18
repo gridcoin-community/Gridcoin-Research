@@ -51,4 +51,22 @@ bool CheckStakeModifierCheckpoints(int nHeight, unsigned int nStakeModifierCheck
 // Get time weight using supplied timestamps
 int64_t GetWeight(int64_t nIntervalBeginning, int64_t nIntervalEnd);
 
+//Block version 8+ Staking
+bool CheckProofOfStakeV8(
+    CBlockIndex* pindexPrev, //previous block in chain index
+    CBlock &Block, //block to check
+    bool generated_by_me,
+    uint256& hashProofOfStake); //proof hash out-parameter
+bool FindStakeModifierRev(uint64_t& StakeModifier,CBlockIndex* pindexPrev);
+
+// Kernel for V8
+CBigNum CalculateStakeHashV8(
+    const CBlock &CoinBlock, const CTransaction &CoinTx,
+    unsigned CoinTxN, unsigned nTimeTx,
+    uint64_t StakeModifier,
+    const MiningCPID &BoincData);
+int64_t CalculateStakeWeightV8(
+    const CTransaction &CoinTx, unsigned CoinTxN,
+    const MiningCPID &BoincData);
+
 #endif // PPCOIN_KERNEL_H

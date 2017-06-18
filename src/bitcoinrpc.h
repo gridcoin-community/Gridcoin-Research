@@ -230,6 +230,8 @@ extern json_spirit::Value execute(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value option(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value dao(const json_spirit::Array& params, bool fHelp);
 
+extern json_spirit::Value rpc_reorganize(const json_spirit::Array& params, bool fHelp);
+
 //Upgrader RPC Commands:
 
  extern json_spirit::Value upgrade(const json_spirit::Array& params, bool fHelp);

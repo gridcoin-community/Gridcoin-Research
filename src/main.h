@@ -983,7 +983,7 @@ class CBlock
 {
 public:
     // header
-    static const int CURRENT_VERSION = 7;
+    static const int CURRENT_VERSION = 8;
     int nVersion;
     uint256 hashPrevBlock;
     uint256 hashMerkleRoot;
@@ -1116,7 +1116,8 @@ public:
 
     bool IsProofOfWork() const
     {
-        return !IsProofOfStake();
+        //must at least contain coinbase
+        return !vtx.empty() && !IsProofOfStake();
     }
 
     std::pair<COutPoint, unsigned int> GetProofOfStake() const
@@ -1264,9 +1265,9 @@ public:
     bool ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck=false, bool fReorganizing=false);
     bool ReadFromDisk(const CBlockIndex* pindex, bool fReadTransactions=true);
     bool SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew);
-    bool AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof);
-    bool CheckBlock(std::string sCaller, int height1, int64_t mint, bool fCheckPOW=true, bool fCheckMerkleRoot=true, bool fCheckSig=true, bool fLoadingIndex=false) const;
-    bool AcceptBlock(bool generated_by_me);
+    CBlockIndex* AddToBlockIndex(CTxDB &txdb, unsigned int nFile, unsigned int nBlockPos);
+    bool CheckBlock(std::string sCaller, int height1) const;
+    bool AcceptBlock(CBlockIndex** out_pinex,bool generated_by_me, CBlockIndex* pindexPrev);
     bool GetCoinAge(uint64_t& nCoinAge) const; // ppcoin: calculate total coin age spent in block
     bool CheckBlockSignature() const;
 
@@ -1278,7 +1279,7 @@ private:
 
 
 
-
+class CSuperblock;
 /** The block chain is a tree shaped structure starting with the
  * genesis block at the root, with each block potentially having multiple
  * candidates to be the next block.  pprev and pnext link a path through the
@@ -1304,6 +1305,10 @@ public:
 	double nResearchSubsidy;
 	double nInterestSubsidy;
 	double nMagnitude;
+    // Gridcoin (17.6.2017 Brod) Add dpor related back-pointers
+    CBlockIndex* ppCpid;  // previous block by same cpid
+    CBlockIndex* ppSuper; // previous superblock
+    CSuperblock* pDesSuper; // deserialized superblock data
 	// Indicators (9-13-2015)
 	unsigned int nIsSuperBlock;
 	unsigned int nIsContract;
@@ -1340,6 +1345,8 @@ public:
         phashBlock = NULL;
         pprev = NULL;
         pnext = NULL;
+        ppCpid  = NULL;
+        ppSuper = NULL;
         nFile = 0;
         nBlockPos = 0;
         nHeight = 0;
@@ -1372,6 +1379,8 @@ public:
         phashBlock = NULL;
         pprev = NULL;
         pnext = NULL;
+        ppCpid  = NULL;
+        ppSuper = NULL;
         nFile = nFileIn;
         nBlockPos = nBlockPosIn;
         nHeight = 0;
@@ -1488,12 +1497,10 @@ public:
         return ((nFlags & BLOCK_STAKE_ENTROPY) >> 1);
     }
 
-    bool SetStakeEntropyBit(unsigned int nEntropyBit)
+    void SetStakeEntropyBit(unsigned int nEntropyBit)
     {
-        if (nEntropyBit > 1)
-            return false;
+        assert (nEntropyBit == 1 || nEntropyBit == 0);
         nFlags |= (nEntropyBit? BLOCK_STAKE_ENTROPY : 0);
-        return true;
     }
 
     bool GeneratedStakeModifier() const
@@ -1551,7 +1558,88 @@ public:
     }
 };
 
+struct StructCPID2
+{
+    // main
+    CBlockIndex* pLastBlock; // last block minted by this cpid
+    // utility
+    uint128 *cpid;
+    string GRCAddress; // last address used
+    // current superblock data
+    double SbMagnitude; // magnitude as in last superblock
+    // beacon data (cache)
+    std::vector<unsigned char> BeaconPublicKey; // pk for signing
+    // lifetime averages for current reward calc
+    // Lft=lifetime, D14=14day
+    double LftFirstRewardTime; // time of first staked block
+    double LftSumReward; // dpor payment of all time
+    double LftSumMagnitude; // sum magnitude of all blocks
+    double LftCountReward; // count of all blocks
+    // averages for stats
+    double D14SumReward;
+    double LftSumInterest;
+    double D14SumInterest;
+    double D14SumMagnitude;
+    double D14CountReward;
+};
 
+class CTxMessage
+{
+public:
+    string sType;
+    string sIdent;
+    string sValue;
+    void* vpDeserialized;
+    bool fDelete;
+    // blocks that have message with same type and identifier
+    // bound by p6m and top
+    // sorted by height asc
+    std::deque <CBlockIndex*> vpBlocks;
+}
+
+class CBestChain
+{
+public:
+    CBlockIndex* top;  // ptr to top of best chain
+    CBlockIndex* p6m;  // 6 months ago
+    CBlockIndex* p14d; // 14 days ago
+    CBlockIndex* p10b; // 10 blocks ago
+    CBlockIndex* pSuper; // superblock
+    //Data related to CPID
+    // index: binary cpid; data: researcher info
+    std::map<uint128, StructCPID2> cpid;
+    // 14 day summary
+    struct {
+        double Research;
+        double Interest;
+        //...
+        int blocks;
+    } sum;
+    // network-wide superblock data
+    struct {
+        double Magnitude;
+        unsigned CpidCount;
+        unsigned ProjectCount;
+        uint256 hashBlock; // blockhash of superblock loaded
+        uint256 hash; // hash of superblock data loaded
+    } super;
+    // Network messages (cpid, project, poll, vote)
+    std::map<string, CTxMessage> msg;
+    // Neural things
+    //...
+
+    CBestChain()
+    {
+        top= p6m= p14d= p10b= ppSuper= NULL;
+        sum.Research= sum.Interest= 0;
+        super.Magnitude= super.CpidCount= super.ProjectCount= 0
+        super.hashBlock= super.hash= 0;
+        cpid.clear();
+        msg.clear();
+    }
+};
+
+extern CBestChain Best;
 
 /** Used to marshal pointers into hashes for db storage. */
 class CDiskBlockIndex : public CBlockIndex
@@ -1625,10 +1713,10 @@ public:
 			READWRITE(nIsContract);
 			READWRITE(sGRCAddress);
 
-                        // Blocks used to come with a reserved string. Keep (de)serializing
-                        // it until it's used.
-                        std::string sReserved;
-                        READWRITE(sReserved);
+            // Blocks used to come with a reserved string. Keep (de)serializing
+            // it until it's used.
+            std::string sReserved;
+            READWRITE(sReserved);
 		}
 
 
