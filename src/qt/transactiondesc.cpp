@@ -265,21 +265,15 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
 	msHashBoincTxId = wtx.GetHash().ToString();
 
     if (wtx.IsCoinBase() || wtx.IsCoinStake())
-	{
-		    //   strHTML += "<br>" + tr("Generated coins must mature 510 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to \"not accepted\" and it won't be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.") + "<br>";
-	
-			int out_blocknumber=0;
-			int out_blocktype = 0;
-			double out_rac = 0;
-			std::string project = GetTxProject(wtx.GetHash(),out_blocknumber, out_blocktype, out_rac);
-            strHTML += "<br>" + tr("Project") + ":</b> " + project.c_str() + 
-				       "<br>" + tr("Block Type") + ":</b> " + RoundToString(out_blocktype,0).c_str() + 
-					   "<br>" + tr("Block Number") + ":</b> " + RoundToString(out_blocknumber,0).c_str() +
-					   "<br>" + tr("RAC")           + ":</b> " + RoundToString(out_rac,0).c_str() +
-					   	"<br><br>" + tr("Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to \"not accepted\" and it won't be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.") + "<br>";
-
-
-	}
+    {
+        int out_blocknumber=0;
+        int out_blocktype = 0;
+        double out_rac = 0;
+        GetTxProject(wtx.GetHash(),out_blocknumber, out_blocktype, out_rac);
+        strHTML += "<br>" + tr("Block Type") + ":</b> " + RoundToString(out_blocktype,0).c_str() +
+                "<br>" + tr("Block Number") + ":</b> " + RoundToString(out_blocknumber,0).c_str() +
+                "<br><br>" + tr("Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to \"not accepted\" and it won't be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.") + "<br>";
+    }
 
     //
     // Debug view 12-7-2014 - Halford
@@ -287,7 +281,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
 
 	// Smart Contracts
 
-	msHashBoinc = "";
+    msHashBoinc = "";
 
 
     if (fDebug || true)
