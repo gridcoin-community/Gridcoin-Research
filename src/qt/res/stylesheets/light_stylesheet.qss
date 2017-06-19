@@ -43,9 +43,10 @@ QToolBar#toolbar2 QLabel{
     border:none;
     padding-top:15px;
     padding-bottom:10px;
-    padding-left:4px;
-    padding-right:4px;
+    padding-left:0px;
+    padding-right:0px;
     margin:0px;
+    qproperty-alignment: AlignCenter;
 }
 
 QToolBar#toolbar3 QLabel{
@@ -71,8 +72,10 @@ QToolBar#toolbar3 QLabel{
 
 #toolbar2 {
     border:none;
-    width:10px;
+    width:26px;
     background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(160,175,5), stop: 1 rgb(160,175,5));
+    padding-left: 0px;
+    padding-right: 0px;
     min-width:26px;
     max-width:26px;
 }
