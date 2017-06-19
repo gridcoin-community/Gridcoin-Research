@@ -199,7 +199,7 @@ std::string DefaultOrgKey(int key_length);
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 extern double GetBlockDifficulty(unsigned int nBits);
 double GetLastPaymentTimeByCPID(std::string cpid);
-extern bool Contains(std::string data, std::string instring);
+extern bool Contains(const std::string& data, const std::string& instring);
 
 extern double CoinToDouble(double surrogate);
 extern double PreviousBlockAge();
@@ -7514,16 +7514,6 @@ double LederstrumpfMagnitude2(double Magnitude, int64_t locktime)
     if (Magnitude >= MagCap*1.8 && Magnitude <= MagCap*1.9) out_mag = MagCap*.99;
     if (Magnitude >= MagCap*1.9)                            out_mag = MagCap*1.0;
     return out_mag;
-}
-
-
-
-bool Contains(std::string data, std::string instring)
-{
-    std::size_t found = 0;
-    found = data.find(instring);
-    if (found != std::string::npos) return true;
-    return false;
 }
 
 double PendingSuperblockHeight()

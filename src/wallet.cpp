@@ -28,7 +28,6 @@ double cdbl(std::string s, int place);
 std::string GetArgument(std::string arg, std::string defaultvalue);
 std::string SendReward(std::string sAddress, int64_t nAmount);
 void qtUpdateConfirm(std::string txid);
-bool Contains(std::string data, std::string instring);
 extern double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
 double CoinToDouble(double surrogate);

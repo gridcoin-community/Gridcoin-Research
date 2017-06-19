@@ -11,7 +11,6 @@
 
 using namespace json_spirit;
 using namespace std;
-bool Contains(std::string data, std::string instring);
 extern std::string NeuralRequest(std::string MyNeuralRequest);
 extern bool RequestSupermajorityNeuralData();
 std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);

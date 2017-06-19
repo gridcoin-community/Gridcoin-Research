@@ -137,8 +137,6 @@ std::string qtGetNeuralContract(std::string data);
 extern bool TallyMagnitudesInSuperblock();
 double GetTotalBalance();
 
-
-bool Contains(std::string data, std::string instring);
 std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
 std::string ReadCache(std::string section, std::string key);
 MiningCPID GetNextProject(bool bForce);

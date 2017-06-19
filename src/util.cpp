@@ -1438,6 +1438,11 @@ std::string RoundToString(double d, int place)
     return ss.str() ;
 }
 
+bool Contains(const std::string& data, const std::string& instring)
+{
+    return data.find(instring) != std::string::npos;
+}
+
 std::string GetNeuralVersion()
 {
 
