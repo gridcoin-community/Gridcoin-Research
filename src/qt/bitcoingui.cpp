@@ -95,7 +95,6 @@
 
 extern CWallet* pwalletMain;
 extern int64_t nLastCoinStakeSearchInterval;
-double GetPoSKernelPS();
 int ReindexWallet();
 extern int RebootClient();
 extern QString ToQstring(std::string s);
@@ -106,11 +105,8 @@ extern void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std
 extern void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double magnitude);
 extern void qtSyncWithDPORNodes(std::string data);
 extern double qtExecuteGenericFunction(std::string function,std::string data);
-std::string GetArgument(std::string arg, std::string defaultvalue);
 extern std::string getMacAddress();
 extern double qtPushGridcoinDiagnosticData(std::string data);
-
-bool PushGridcoinDiagnostics();
 
 extern std::string FromQString(QString qs);
 extern std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
@@ -124,31 +120,15 @@ std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end
 extern std::string qtGetNeuralHash(std::string data);
 extern std::string qtGetNeuralContract(std::string data);
 
-json_spirit::Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool bIncludeExpired);
-
 extern int64_t IsNeural();
 
 double cdbl(std::string s, int place);
 std::string getfilecontents(std::string filename);
-
-double GetUntrustedMagnitude(std::string cpid, double& out_owed);
-
-
 std::string BackupGridcoinWallet();
-int nTick = 0;
-int nTickRestart = 0;
-int nBlockCount = 0;
-int nTick2 = 0;
 int nRegVersion;
-int nNeedsUpgrade = 0;
 
 extern int CreateRestorePoint();
 extern int DownloadBlocks();
-
-void StopGridcoin3();
-bool OutOfSyncByAge();
-void ThreadCPIDs();
-int Races(int iMax1000);
 void GetGlobalStatus();
 
 extern int UpgradeClient();
@@ -160,16 +140,12 @@ extern void ExecuteCode();
 
 void HarvestCPIDs(bool cleardata);
 extern int RestartClient();
-
 extern int ReindexWallet();
+
 #ifdef WIN32
 QAxObject *globalcom = NULL;
 QAxObject *globalwire = NULL;
 #endif
-int ThreadSafeVersion();
-extern int ReindexBlocks();
-bool OutOfSync();
-
 
 QString ToQstring(std::string s)
 {
@@ -1479,123 +1455,22 @@ void BitcoinGUI::incomingTransaction(const QModelIndex & parent, int start, int 
     }
 }
 
-
-
-
-
-
-std::string Trim(int i)
-{
-	std::string s = "";
-	s=boost::lexical_cast<std::string>(i);
-	return s;
-}
-
-
-std::string TrimD(double i)
-{
-	std::string s = "";
-	s=boost::lexical_cast<std::string>(i);
-	return s;
-}
-
-
-
-
-
-
-
-
-
-bool IsInvalidChar(char c)
-{
-	int asc = (int)c;
-
-	if (asc >= 0 && asc < 32) return true;
-	if (asc > 128) return true;
-	if (asc == 124) return true;
-	return false;
-}
-
-std::string Clean(std::string s)
-{
-	char ch;
-	std::string sOut = "";
-	for (unsigned int i=0; i < s.length(); i++)
-	{
-		ch = s.at(i);
-		if (IsInvalidChar(ch)==false) sOut = sOut + ch;
-
-	}
-	return sOut;
-}
-
-std::string RetrieveBlockAsString(int lSqlBlock)
-{
-
-	//Insert into Blocks (hash,confirmations,size,height,version,merkleroot,tx,time,nonce,bits,difficulty,boinchash,previousblockhash,nextblockhash) VALUES ();
-
-	try {
-
-		if (lSqlBlock==0) lSqlBlock=1;
-		if (lSqlBlock > nBestHeight-2) return "";
-		CBlock block;
-		CBlockIndex* blockindex = BlockFinder().FindByHeight(lSqlBlock);
-		block.ReadFromDisk(blockindex);
-
-		std::string s = "";
-		std::string d = "|";
-
-		s = block.GetHash().GetHex() + d + "C" + d 	+ "1000" + d + Trim(blockindex->nHeight) + d;
-		s = s + Trim(block.nVersion) + d + block.hashMerkleRoot.GetHex() + d + "TX" + d + Trim(block.GetBlockTime()) + d + Trim(block.nNonce) + d + Trim(block.nBits) + d;
-		s = s + TrimD(GetDifficulty(blockindex)) + d	+		Clean(block.vtx[0].hashBoinc) + d 		+ blockindex->pprev->GetBlockHash().GetHex() + d;
-		s = s + blockindex->pnext->GetBlockHash().GetHex();
-		return s;
-	}
-	catch(...)
-	{
-		printf("Runtime error in RetrieveBlockAsString");
-		return "";
-
-	}
-
-}
-
-
-
-std::string RetrieveBlocksAsString(int lSqlBlock)
-{
-	std::string sout = "";
-	if (lSqlBlock > nBestHeight-5) return "";
-
-	for (int i = lSqlBlock; i < lSqlBlock+101; i++) {
-		sout = sout + RetrieveBlockAsString(i) + "{ROW}";
-	}
-	return sout;
-}
-
-
-
 void BitcoinGUI::rebuildClicked()
 {
 	printf("Rebuilding...");
-	ReindexBlocks();
+    ReindexWallet();
 }
-
-
 
 void BitcoinGUI::upgradeClicked()
 {
 	printf("Upgrading Gridcoin...");
 	UpgradeClient();
-
 }
 
 void BitcoinGUI::downloadClicked()
 {
 	DownloadBlocks();
 }
-
 
 void BitcoinGUI::configClicked()
 {
@@ -1605,7 +1480,6 @@ void BitcoinGUI::configClicked()
 	qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
 	globalcom->dynamicCall("ShowConfig()");
 #endif
-
 }
 
 void BitcoinGUI::diagnosticsClicked()
@@ -1650,12 +1524,6 @@ void BitcoinGUI::newUserWizardClicked()
 	if (!bGlobalcomInitialized) return;
     globalcom->dynamicCall("ShowNewUserWizard()");
 #endif
-}
-
-int ReindexBlocks()
-{
-	ReindexWallet();
-	return 1;
 }
 
 void BitcoinGUI::miningClicked()

@@ -11,6 +11,7 @@
 #include "block.h"
 #include "txdb.h"
 #include "beacon.h"
+#include "util.h"
 
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
@@ -23,8 +24,6 @@ bool BackupConfigFile(const string& strDest);
 std::string getHardDriveSerial();
 int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
 extern double DoubleFromAmount(int64_t amount);
-double ReturnTotalRacByCPID(std::string cpid);
-std::string VectorToString(std::vector<unsigned char> v);
 std::string PubKeyToAddress(const CScript& scriptPubKey);
 CBlockIndex* GetHistoricalMagnitude(std::string cpid);
 std::string UnpackBinarySuperblock(std::string sBlock);
@@ -32,10 +31,8 @@ std::string PackBinarySuperblock(std::string sBlock);
 extern std::string GetProvableVotingWeightXML();
 extern double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityUpgrade);
 extern double ReturnVerifiedVotingMagnitude(std::string sXML, bool bCreatedAfterSecurityUpgrade);
-int DetermineCPIDType(std::string cpid);
 extern void GetBeaconElements(std::string sBeacon,std::string& out_cpid, std::string& out_address, std::string& out_publickey);
 bool AskForOutstandingBlocks(uint256 hashStart);
-bool WriteKey(std::string sKey, std::string sValue);
 bool CleanChain();
 extern std::string SendReward(std::string sAddress, int64_t nAmount);
 extern double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID);
@@ -49,8 +46,6 @@ bool TallyResearchAverages(bool Forcefully);
 int RestartClient();
 extern std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress);
-double SnapToGrid(double d);
-double GetVolatility(std::string sPriceHistory);
 extern std::string GetBurnAddress();
 bool NeuralNodeParticipates();
 bool StrLessThanReferenceHash(std::string rh);
@@ -131,7 +126,6 @@ extern Array GetJSONBeaconReport();
 void GatherNeuralHashes();
 extern std::string GetListOf(std::string datatype);
 void qtSyncWithDPORNodes(std::string data);
-std::string qtGetNeuralHash(std::string data);
 std::string qtGetNeuralContract(std::string data);
 
 extern bool TallyMagnitudesInSuperblock();
@@ -140,11 +134,9 @@ double GetTotalBalance();
 std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
 std::string ReadCache(std::string section, std::string key);
 MiningCPID GetNextProject(bool bForce);
-std::string GetArgument(std::string arg, std::string defaultvalue);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 extern std::string TimestampToHRDate(double dtm);
 
-std::string qtGRCCodeExecutionSubsystem(std::string sCommand);
 std::string LegacyDefaultBoincHashArgs();
 std::string GetHttpPage(std::string url);
 double CoinToDouble(double surrogate);
@@ -153,20 +145,13 @@ double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spirit::Object& entry);
 extern enum Checkpoints::CPMode CheckpointsMode;
 int RebootClient();
-extern double GetNetworkProjectCountWithRAC();
 int ReindexWallet();
 extern Array MagnitudeReportCSV(bool detail);
 std::string getfilecontents(std::string filename);
-int CreateRestorePoint();
 int DownloadBlocks();
-double GetBlockValueByHash(uint256 hash);
 double cdbl(std::string s, int place);
-void ScriptPubKeyToJSON(const CScript& scriptPubKey, Object& out);
 std::vector<std::string> split(std::string s, std::string delim);
 double LederstrumpfMagnitude2(double mag,int64_t locktime);
-
-std::string TxToString(const CTransaction& tx, const uint256 hashBlock, int64_t& out_amount, int64_t& out_locktime, int64_t& out_projectid, 
-    std::string& out_projectaddress, std::string& comments, std::string& out_grcaddress);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
 std::string RetrieveMd5(std::string s1);
 
@@ -176,28 +161,8 @@ MiningCPID DeserializeBoincBlock(std::string block);
 extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
 std::string GetHttpPage(std::string cpid, bool usedns, bool clearcache);
-
-bool GridDecrypt(const std::vector<unsigned char>& vchCiphertext,std::vector<unsigned char>& vchPlaintext);
-bool GridEncrypt(std::vector<unsigned char> vchPlaintext, std::vector<unsigned char> &vchCiphertext);
 uint256 GridcoinMultipleAlgoHash(std::string t1);
-void ExecuteCode();
-double CalculatedMagnitude(int64_t locktime,bool bUseLederstrumpf);
 static BlockFinder RPCBlockFinder;
-
-
-double GetNetworkProjectCountWithRAC()
-{
-    double count = 0;
-    for(map<string,StructCPID>::iterator ibp=mvNetwork.begin(); ibp!=mvNetwork.end(); ++ibp) 
-    {
-        StructCPID NetworkProject = mvNetwork[(*ibp).first];
-        if (NetworkProject.initialized)
-        {
-            if (NetworkProject.AverageRAC > 10) count++;
-        }
-    }
-    return count;
-}
 
 double GetNetworkAvgByProject(std::string projectname)
 {
@@ -218,9 +183,6 @@ double GetNetworkTotalByProject(std::string projectname)
         double networkavgrac = structcpid.rac;
         return networkavgrac;
 }
-
-
-
 
 double GetDifficulty(const CBlockIndex* blockindex)
 {
@@ -3883,46 +3845,50 @@ std::string GetProvableVotingWeightXML()
     {
         int64_t nValue = out.tx->vout[out.i].nValue;
         const CScript& pk = out.tx->vout[out.i].scriptPubKey;
-	    Object entry;
+        Object entry;
         CTxDestination address;
         if (ExtractDestination(out.tx->vout[out.i].scriptPubKey, address))
         {
-				if (CoinToDouble(nValue) > dBloatThreshhold)
-				{
-   					std::string sScriptPubKey1 = HexStr(pk.begin(), pk.end());
-					std::string strAddress=CBitcoinAddress(address).ToString();
-					CKeyID keyID;
-					const CBitcoinAddress& bcAddress = CBitcoinAddress(address);
-					if (bcAddress.GetKeyID(keyID))   
-					{
-    					 bool IsCompressed;
-	     				 CKey vchSecret;
- 		    			 if (pwalletMain->GetKey(keyID, vchSecret))
-						 {
-							// Here we use the secret key to sign the coins, then we abandon the key.
-							CSecret csKey = vchSecret.GetSecret(IsCompressed);
-							CKey keyInner;
-    	     				keyInner.SetSecret(csKey,IsCompressed);
-              				std::string private_key = CBitcoinSecret(csKey,IsCompressed).ToString();
-						    std::string public_key = HexStr(keyInner.GetPubKey().Raw());
-						    std::vector<unsigned char> vchSig;
-							keyInner.Sign(out.tx->GetHash(), vchSig);
-							// Sign the coins we own
-				     	    std::string sSig = EncodeBase64(VectorToString(vchSig));
-							// Increment the total balance weight voting ability
- 	    					dTotal += CoinToDouble(nValue);
-							sRow = "<ROW><TXID>" + out.tx->GetHash().GetHex() + "</TXID><AMOUNT>" + RoundToString(CoinToDouble(nValue),2) 
-								+ "</AMOUNT><POS>" + RoundToString((double)out.i,0) + "</POS><PUBKEY>" + 
-								public_key + "</PUBKEY><SCRIPTPUBKEY>" + sScriptPubKey1  + "</SCRIPTPUBKEY><SIG>" + sSig + "</SIG><MESSAGE></MESSAGE></ROW>";
-							sXML += sRow;
-  							dCurrentItemCount++;
-							if (dCurrentItemCount >= dItemBloatThreshhold) break;
-						}
-
-					}
-		 	  }
-		}
-	}
+            if (CoinToDouble(nValue) > dBloatThreshhold)
+            {
+                std::string sScriptPubKey1 = HexStr(pk.begin(), pk.end());
+                std::string strAddress=CBitcoinAddress(address).ToString();
+                CKeyID keyID;
+                const CBitcoinAddress& bcAddress = CBitcoinAddress(address);
+                if (bcAddress.GetKeyID(keyID))
+                {
+                    bool IsCompressed;
+                    CKey vchSecret;
+                    if (pwalletMain->GetKey(keyID, vchSecret))
+                    {
+                        // Here we use the secret key to sign the coins, then we abandon the key.
+                        CSecret csKey = vchSecret.GetSecret(IsCompressed);
+                        CKey keyInner;
+                        keyInner.SetSecret(csKey,IsCompressed);
+                        std::string private_key = CBitcoinSecret(csKey,IsCompressed).ToString();
+                        std::string public_key = HexStr(keyInner.GetPubKey().Raw());
+                        std::vector<unsigned char> vchSig;
+                        keyInner.Sign(out.tx->GetHash(), vchSig);
+                        // Sign the coins we own
+                        std::string sSig(vchSig.begin(), vchSig.end());
+                        // Increment the total balance weight voting ability
+                        dTotal += CoinToDouble(nValue);
+                        sRow = "<ROW><TXID>" + out.tx->GetHash().GetHex() + "</TXID>" +
+                                "<AMOUNT>" + RoundToString(CoinToDouble(nValue),2) + "</AMOUNT>" +
+                                "<POS>" + RoundToString((double)out.i,0) + "</POS>" +
+                                "<PUBKEY>" + public_key + "</PUBKEY>" +
+                                "<SCRIPTPUBKEY>" + sScriptPubKey1  + "</SCRIPTPUBKEY>" +
+                                "<SIG>" + EncodeBase64(sSig) + "</SIG>" +
+                                "<MESSAGE></MESSAGE></ROW>";
+                        sXML += sRow;
+                        dCurrentItemCount++;
+                        if (dCurrentItemCount >= dItemBloatThreshhold)
+                            break;
+                    }
+                }
+            }
+        }
+    }
 
 
 	sXML += "<TOTALVOTEDBALANCE>" + RoundToString(dTotal,2) + "</TOTALVOTEDBALANCE>";
@@ -4093,50 +4059,55 @@ Array GetJsonUnspentReport()
     {
         int64_t nValue = out.tx->vout[out.i].nValue;
         const CScript& pk = out.tx->vout[out.i].scriptPubKey;
-	    Object entry;
+        Object entry;
         CTxDestination address;
         if (ExtractDestination(out.tx->vout[out.i].scriptPubKey, address))
         {
-				if (CoinToDouble(nValue) > dBloatThreshhold)
-				{
-   					entry.push_back(Pair("TXID", out.tx->GetHash().GetHex()));
-					entry.push_back(Pair("Address", CBitcoinAddress(address).ToString()));
-					std::string sScriptPubKey1 = HexStr(pk.begin(), pk.end());
-					entry.push_back(Pair("Amount",ValueFromAmount(nValue)));
-					std::string strAddress=CBitcoinAddress(address).ToString();
-					CKeyID keyID;
-					const CBitcoinAddress& bcAddress = CBitcoinAddress(address);
-					if (bcAddress.GetKeyID(keyID))   
-					{
-    					 bool IsCompressed;
-	     				 CKey vchSecret;
- 		    			 if (pwalletMain->GetKey(keyID, vchSecret))
-						 {
-							// Here we use the secret key to sign the coins, then we abandon the key.
-							CSecret csKey = vchSecret.GetSecret(IsCompressed);
-							CKey keyInner;
-    	     				keyInner.SetSecret(csKey,IsCompressed);
-              				std::string private_key = CBitcoinSecret(csKey,IsCompressed).ToString();
-						    std::string public_key = HexStr(keyInner.GetPubKey().Raw());
-						    std::vector<unsigned char> vchSig;
-							keyInner.Sign(out.tx->GetHash(), vchSig);
-							// Sign the coins we own
-				     	    std::string sSig = EncodeBase64(VectorToString(vchSig));
-							// Increment the total balance weight voting ability
- 	    					dTotal += CoinToDouble(nValue);
-							sRow = "<ROW><TXID>" + out.tx->GetHash().GetHex() + "</TXID><AMOUNT>" + RoundToString(CoinToDouble(nValue),2) 
-								+ "</AMOUNT><POS>" + RoundToString((double)out.i,0) + "</POS><PUBKEY>" + 
-								public_key + "</PUBKEY><SCRIPTPUBKEY>" + sScriptPubKey1  + "</SCRIPTPUBKEY><SIG>" + sSig + "</SIG><MESSAGE></MESSAGE></ROW>";
-							sXML += sRow;
-  							dCurrentItemCount++;
-							if (dCurrentItemCount >= dItemBloatThreshhold) break;
-						}
+            if (CoinToDouble(nValue) > dBloatThreshhold)
+            {
+                entry.push_back(Pair("TXID", out.tx->GetHash().GetHex()));
+                entry.push_back(Pair("Address", CBitcoinAddress(address).ToString()));
+                std::string sScriptPubKey1 = HexStr(pk.begin(), pk.end());
+                entry.push_back(Pair("Amount",ValueFromAmount(nValue)));
+                std::string strAddress=CBitcoinAddress(address).ToString();
+                CKeyID keyID;
+                const CBitcoinAddress& bcAddress = CBitcoinAddress(address);
+                if (bcAddress.GetKeyID(keyID))
+                {
+                    bool IsCompressed;
+                    CKey vchSecret;
+                    if (pwalletMain->GetKey(keyID, vchSecret))
+                    {
+                        // Here we use the secret key to sign the coins, then we abandon the key.
+                        CSecret csKey = vchSecret.GetSecret(IsCompressed);
+                        CKey keyInner;
+                        keyInner.SetSecret(csKey,IsCompressed);
+                        std::string private_key = CBitcoinSecret(csKey,IsCompressed).ToString();
+                        std::string public_key = HexStr(keyInner.GetPubKey().Raw());
+                        std::vector<unsigned char> vchSig;
+                        keyInner.Sign(out.tx->GetHash(), vchSig);
+                        // Sign the coins we own
+                        std::string sSig = std::string(vchSig.begin(), vchSig.end());
+                        // Increment the total balance weight voting ability
+                        dTotal += CoinToDouble(nValue);
+                        sRow = "<ROW><TXID>" + out.tx->GetHash().GetHex() + "</TXID>" +
+                                "<AMOUNT>" + RoundToString(CoinToDouble(nValue),2) + "</AMOUNT>" +
+                                "<POS>" + RoundToString((double)out.i,0) + "</POS>" +
+                                "<PUBKEY>" + public_key + "</PUBKEY>" +
+                                "<SCRIPTPUBKEY>" + sScriptPubKey1  + "</SCRIPTPUBKEY>" +
+                                "<SIG>" + EncodeBase64(sSig) + "</SIG>" +
+                                "<MESSAGE></MESSAGE></ROW>";
+                        sXML += sRow;
+                        dCurrentItemCount++;
+                        if (dCurrentItemCount >= dItemBloatThreshhold)
+                            break;
+                    }
 
-					}
-					results.push_back(entry);
-				}
-		}
-	}
+                }
+                results.push_back(entry);
+            }
+        }
+    }
 
 	// Now we will need to go back through the XML and Audit the claimed vote weight balance as a 3rd party
 

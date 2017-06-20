@@ -47,8 +47,6 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 extern void CleanInboundConnections(bool bClearAll);
 extern bool PushGridcoinDiagnostics();
-double qtPushGridcoinDiagnosticData(std::string data);
-int RestartClient();
 bool RequestSupermajorityNeuralData();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern bool CleanChain();
@@ -58,7 +56,6 @@ extern std::string PackBinarySuperblock(std::string sBlock);
 extern bool TallyResearchAverages(bool Forcefully);
 extern void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance);
 bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
-int DownloadBlocks();
 int DetermineCPIDType(std::string cpid);
 extern MiningCPID GetInitializedMiningCPID(std::string name, std::map<std::string, MiningCPID>& vRef);
 extern std::string getHardDriveSerial();
@@ -86,7 +83,6 @@ extern std::string getCpuHash();
 std::string getMacAddress();
 std::string TimestampToHRDate(double dtm);
 bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
-extern std::string VectorToString(std::vector<unsigned char> v);
 bool HasActiveBeacon(const std::string& cpid);
 extern bool BlockNeedsChecked(int64_t BlockTime);
 extern void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector<CBlockIndex*> vConnect);
@@ -136,13 +132,8 @@ extern void DeleteCache(std::string section, std::string keyname);
 extern void ClearCache(std::string section);
 bool TallyMagnitudesInSuperblock();
 extern void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
-
-std::string qtGetNeuralContract(std::string data);
-
 extern std::string GetNeuralNetworkReport();
 void qtSyncWithDPORNodes(std::string data);
-std::string qtGetNeuralHash(std::string data);
-std::string GetListOf(std::string datatype);
 
 std::string GetCommandNonce(std::string command);
 std::string DefaultBlockKey(int key_length);
@@ -207,7 +198,6 @@ void CheckForUpgrade();
 int64_t GetRSAWeightByCPID(std::string cpid);
 extern MiningCPID GetMiningCPID();
 extern StructCPID GetStructCPID();
-extern std::string GetArgument(std::string arg, std::string defaultvalue);
 
 extern void SetAdvisory();
 extern bool InAdvisory();
@@ -322,7 +312,6 @@ volatile bool bGridcoinGUILoaded = false;
 extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
 extern double cdbl(std::string s, int place);
 
-extern double GetBlockValueByHash(uint256 hash);
 extern void WriteAppCache(std::string key, std::string value);
 extern std::string AppCache(std::string key);
 extern void LoadCPIDsInBackground();
@@ -343,7 +332,6 @@ extern std::string getfilecontents(std::string filename);
 extern std::string ToOfficialName(std::string proj);
 extern bool LessVerbose(int iMax1000);
 extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
-extern bool OutOfSync();
 extern MiningCPID GetNextProject(bool bForce);
 extern void HarvestCPIDs(bool cleardata);
 
@@ -502,19 +490,6 @@ bool PushGridcoinDiagnostics()
         return false;
 }
 
-
-vector<unsigned char> StringToVector(std::string sData)
-{
-        vector<unsigned char> v(sData.begin(), sData.end());
-		return v;
-}
-
-std::string VectorToString(vector<unsigned char> v)
-{
-        std::string s(v.begin(), v.end());
-        return s;
-}
-
 bool FullSyncWithDPORNodes()
 {
             #if defined(WIN32) && defined(QT_GUI)
@@ -535,7 +510,7 @@ bool FullSyncWithDPORNodes()
                     if (bNodeOnline) return false;  // Async call to another node will continue after the node responds.
                 }
             
-                std::string errors1 = "";
+                std::string errors1;
                 LoadAdminMessages(false,errors1);
                 std::string cpiddata = GetListOf("beacon");
                 std::string sWhitelist = GetListOf("project");
@@ -7853,19 +7828,6 @@ std::string ToOfficialNameNew(std::string proj)
         return proj;
 }
 
-std::string GetArgument(std::string arg, std::string defaultvalue)
-{
-    std::string result = defaultvalue;
-    if (mapArgs.count("-" + arg))
-    {
-        result = GetArg("-" + arg, defaultvalue);
-    }
-    return result;
-
-}
-
-
-
 void HarvestCPIDs(bool cleardata)
 {
 
@@ -9326,13 +9288,4 @@ std::string GetBackupFilename(const std::string& basename, const std::string& su
     return suffix.empty()
         ? basename + "-" + std::string(boTime)
         : basename + "-" + std::string(boTime) + "-" + suffix;
-}
-
-// SetArgument - Set or alter arguments stored in memory
-
-void SetArgument(
-            const string &argKey,
-            const string &argValue)
-{
-    mapArgs["-" + argKey] = argValue;
 }

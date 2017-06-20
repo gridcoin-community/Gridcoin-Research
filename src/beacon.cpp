@@ -1,7 +1,8 @@
 #include "beacon.h"
-#include "main.h"
+#include "util.h"
 #include "uint256.h"
 #include "key.h"
+#include "main.h"
 
 extern std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 extern bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);

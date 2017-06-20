@@ -50,7 +50,6 @@ std::string DefaultBoincHashArgs();
 extern std::string LegacyDefaultBoincHashArgs();
 bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
 extern int nMaxConnections;
-void HarvestCPIDs(bool cleardata);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 std::string cached_boinchash_args = "";
 std::string RetrieveMd5(std::string s1);

@@ -369,6 +369,23 @@ inline bool IsSwitchChar(char c)
 std::string GetArg(const std::string& strArg, const std::string& strDefault);
 
 /**
+ * Return string argument or default value
+ *
+ * @param strArg Argument to get (e.g. "foo"). Will be prefixed with "-".
+ * @param default (e.g. "1")
+ * @return command-line argument or default value
+ */
+std::string GetArgument(const std::string& strArg, const std::string& strDefault);
+
+/**
+ * Set argument value.
+ *
+ * @param argKey Argument to set (e.g. "foo"). Will be prefixed with "-".
+ * @param argValue New argument value (e.g. "1")
+ */
+void SetArgument(const std::string &argKey, const std::string &argValue);
+
+/**
  * Return integer argument or default value
  *
  * @param strArg Argument to get (e.g. "-foo")

@@ -587,6 +587,22 @@ void ParseParameters(int argc, const char* const argv[])
     }
 }
 
+std::string GetArgument(const std::string& arg, const std::string& defaultvalue)
+{
+    if (mapArgs.count("-" + arg))
+        return mapArgs["-" + arg];
+
+    return defaultvalue;
+}
+
+// SetArgument - Set or alter arguments stored in memory
+void SetArgument(
+            const string &argKey,
+            const string &argValue)
+{
+    mapArgs["-" + argKey] = argValue;
+}
+
 std::string GetArg(const std::string& strArg, const std::string& strDefault)
 {
     if (mapArgs.count(strArg))

@@ -16,7 +16,6 @@ using namespace std;
 
 int64_t nWalletUnlockTime;
 static CCriticalSection cs_nWalletUnlockTime;
-extern std::string TimestampToHRDate(double dtm);
 
 extern void ThreadTopUpKeyPool(void* parg);
 

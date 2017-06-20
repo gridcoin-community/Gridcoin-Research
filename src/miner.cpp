@@ -31,12 +31,8 @@ void ThreadTopUpKeyPool(void* parg);
 
 int64_t GetRSAWeightByCPID(std::string cpid);
 bool OutOfSyncByAgeWithChanceOfMining();
-MiningCPID DeserializeBoincBlock(std::string block);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
-std::string PubKeyToAddress(const CScript& scriptPubKey);
-
-bool IsCPIDValidv2(MiningCPID& mc,int height);
 
 int static FormatHashBlocks(void* pbuffer, unsigned int len)
 {

@@ -27,8 +27,6 @@ bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern boost::thread_group threadGroup;
 
 StructCPID GetStructCPID();
-std::string GetArgument(std::string arg, std::string defaultvalue);
-void ThreadCPIDs();
 bool ComputeNeuralNetworkSupermajorityHashes();
 void BusyWaitForTally();
 extern void ThreadAppInit2(void* parg);
@@ -36,7 +34,6 @@ extern void ThreadAppInit2(void* parg);
 void LoadCPIDsInBackground();
 bool IsConfigFileEmpty();
 
-void HarvestCPIDs(bool cleardata);
 std::string ToOfficialName(std::string proj);
 
 #ifndef WIN32
@@ -48,7 +45,6 @@ using namespace boost;
 CWallet* pwalletMain;
 CClientUIInterface uiInterface;
 std::vector<std::string> split(std::string s, std::string delim);
-void ThreadCPIDs();
 extern bool fConfChange;
 extern bool fEnforceCanonical;
 extern unsigned int nNodeLifespan;
