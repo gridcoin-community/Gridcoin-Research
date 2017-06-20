@@ -48,13 +48,10 @@ private slots:
 	void on_btnAddAttachment_clicked();
     void on_pasteButton_clicked();
     void updateDisplayUnit();
-	void trackChangeChecked(int);
     
 private:
     Ui::SendCoinsEntry *ui;
     WalletModel *model;
-	bool trackChecked;
-
 };
 
 #endif // SENDCOINSENTRY_H

@@ -216,13 +216,11 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
 
         // Sendmany
         std::vector<std::pair<CScript, int64_t> > vecSend;
-		bool coinTracking = false;
 		foreach(const SendCoinsRecipient &rcp, recipients)
         {
             CScript scriptPubKey;
             scriptPubKey.SetDestination(CBitcoinAddress(rcp.address.toStdString()).Get());
             vecSend.push_back(make_pair(scriptPubKey, rcp.amount));
-			if (rcp.CoinTracking) coinTracking=true;
 			messages += "<MESSAGE>" + AdvancedCrypt(FromQStringW(rcp.Message)) + "</MESSAGE>";
 
         }
@@ -230,16 +228,6 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
         CWalletTx wtx;
         CReserveKey keyChange(wallet);
         int64_t nFeeRequired = 0;
-		if (coinTracking)
-		{
-			printf("Creating tracked tx : old hashboinc %s",wtx.hashBoinc.c_str());
-			wtx.hashBoinc = "<TRACK>" + wtx.GetHash().ToString() + "</TRACK>";
-			//Run time code execution feature - 12-7-2014
-			std::string q = "\"";
-			std::string code = "MsgBox(" + q + "Hello!" + q + ",MsgBoxStyle.Critical," + q + "Message Title" + q + ")\r\n";
-			wtx.hashBoinc += "<CODE>" + code + "</CODE>";
-		}
-
 		if (!msAttachmentGuid.empty())
 		{
 				printf("Adding attachment to tx %s",wtx.hashBoinc.c_str());
@@ -257,15 +245,7 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
             return TransactionCreationFailed;
         }
 
-		if (coinTracking)
-		{
-			printf("Tracking hashBoinc %s",wtx.hashBoinc.c_str());
-		}
-
-
 		std::string samt = FormatMoney(wtx.vout[0].nValue);
-
-
         if(!uiInterface.ThreadSafeAskFee(nFeeRequired, tr("Sending...").toStdString()))
         {
             return Aborted;
@@ -296,25 +276,6 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
                 wallet->SetAddressBookName(dest, strLabel);
             }
         }
-		//12-8-2014 :: R Halford :: Implement SQL Coin Confirm
-		std::string sFrom = DefaultWalletAddress();
-		//wtxIn.GetHash().ToString().c_str()
-		if (txid.length() > 3 && rcp.CoinTracking)
-		{
-			//If Coin tracking enabled, Insert the SQL record into the P2P SQL Database
-			std::string Narr = "Sending " + RoundToString(rcp.amount,4) + "GRC from " + sFrom + " to " + strAddress + " with tracking "
-				+ YesNo(rcp.CoinTracking) + " for TXID " + txid + " with hashBoinc "
-				+ hashBoinc + ".";
-			//Insert via Boinc P2P SQL Server
-			printf("%s",Narr.c_str());
-			#if defined(WIN32) && defined(QT_GUI)
-					qtInsertConfirm((double)total,sFrom,strAddress,txid);
-			#endif
-
-			printf("Tracked ");
-
-		}
-
     }
 
     return SendCoinsReturn(OK, 0, hex);
