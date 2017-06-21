@@ -421,6 +421,10 @@ bool SoftSetArg(const std::string& strArg, const std::string& strValue);
  */
 bool SoftSetBoolArg(const std::string& strArg, bool fValue);
 
+// Forces an arg setting. Called by SoftSetArg() if the arg hasn't already
+// been set. Also called directly in testing.
+void ForceSetArg(const std::string& strArg, const std::string& strValue);
+
 /**
  * MWC RNG of George Marsaglia
  * This is intended to be fast. It has a period of 2^59.3, though the
