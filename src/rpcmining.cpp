@@ -20,6 +20,7 @@ int64_t GetCoinYearReward(int64_t nTime);
 
 double GetPoSKernelPS2();
 double GRCMagnitudeUnit(int64_t locktime);
+std::string qtGetNeuralHash(std::string data);
 volatile bool bCPIDsLoaded;
 volatile bool bProjectsInitialized;
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);

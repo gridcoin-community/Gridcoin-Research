@@ -105,6 +105,7 @@ extern void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, do
 extern void qtSyncWithDPORNodes(std::string data);
 extern double qtExecuteGenericFunction(std::string function,std::string data);
 extern std::string getMacAddress();
+extern bool PushGridcoinDiagnostics();
 extern double qtPushGridcoinDiagnosticData(std::string data);
 
 extern std::string FromQString(QString qs);
@@ -118,6 +119,7 @@ std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end
 
 extern std::string qtGetNeuralHash(std::string data);
 extern std::string qtGetNeuralContract(std::string data);
+json_spirit::Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool bIncludeExpired);
 
 extern int64_t IsNeural();
 

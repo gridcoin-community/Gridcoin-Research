@@ -126,6 +126,7 @@ extern Array GetJSONBeaconReport();
 void GatherNeuralHashes();
 extern std::string GetListOf(std::string datatype);
 void qtSyncWithDPORNodes(std::string data);
+std::string qtGetNeuralHash(std::string data);
 std::string qtGetNeuralContract(std::string data);
 
 extern bool TallyMagnitudesInSuperblock();
@@ -137,6 +138,7 @@ MiningCPID GetNextProject(bool bForce);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 extern std::string TimestampToHRDate(double dtm);
 
+std::string qtGRCCodeExecutionSubsystem(std::string sCommand);
 std::string LegacyDefaultBoincHashArgs();
 std::string GetHttpPage(std::string url);
 double CoinToDouble(double surrogate);
@@ -148,6 +150,7 @@ int RebootClient();
 int ReindexWallet();
 extern Array MagnitudeReportCSV(bool detail);
 std::string getfilecontents(std::string filename);
+int CreateRestorePoint();
 int DownloadBlocks();
 double cdbl(std::string s, int place);
 std::vector<std::string> split(std::string s, std::string delim);
@@ -162,6 +165,7 @@ extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
 std::string GetHttpPage(std::string cpid, bool usedns, bool clearcache);
 uint256 GridcoinMultipleAlgoHash(std::string t1);
+void ExecuteCode();
 static BlockFinder RPCBlockFinder;
 
 double GetNetworkAvgByProject(std::string projectname)

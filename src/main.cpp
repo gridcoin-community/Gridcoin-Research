@@ -47,6 +47,8 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 extern void CleanInboundConnections(bool bClearAll);
 extern bool PushGridcoinDiagnostics();
+double qtPushGridcoinDiagnosticData(std::string data);
+int RestartClient();
 bool RequestSupermajorityNeuralData();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern bool CleanChain();
@@ -56,6 +58,7 @@ extern std::string PackBinarySuperblock(std::string sBlock);
 extern bool TallyResearchAverages(bool Forcefully);
 extern void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance);
 bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
+int DownloadBlocks();
 int DetermineCPIDType(std::string cpid);
 extern MiningCPID GetInitializedMiningCPID(std::string name, std::map<std::string, MiningCPID>& vRef);
 extern std::string getHardDriveSerial();
@@ -132,9 +135,11 @@ extern void DeleteCache(std::string section, std::string keyname);
 extern void ClearCache(std::string section);
 bool TallyMagnitudesInSuperblock();
 extern void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
+std::string qtGetNeuralContract(std::string data);
 extern std::string GetNeuralNetworkReport();
 void qtSyncWithDPORNodes(std::string data);
-
+std::string GetListOf(std::string datatype);
+std::string qtGetNeuralHash(std::string data);
 std::string GetCommandNonce(std::string command);
 std::string DefaultBlockKey(int key_length);
 
