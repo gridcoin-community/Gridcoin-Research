@@ -145,8 +145,12 @@ Public Class clsBoincProjectDownload
                         sTemp = Replace(sTemp, "<user>", "<project><name>" + sProjectLocal + "</name><team_name>gridcoin</team_name>")
                         sTemp = Replace(sTemp, "</user>", "</project>")
                         'Dont bother writing timestamps older than 32 days since we base mag off of RAC
-                        Dim lRowAgeInMins = GetRowAgeInMins(sTemp)
-                        If lRowAgeInMins < (60 * 24 * 32) Then
+                        'Dim lRowAgeInMins = GetRowAgeInMins(sTemp)
+                        'If lRowAgeInMins < (60 * 24 * 32) Then
+                        '    oSW.WriteLine(sTemp)
+                        'End If
+                        Dim rac As Double = Val(ExtractXML(sTemp, "<expavg_credit>", "</expavg_credit>"))
+                        If rac > 0 Then
                             oSW.WriteLine(sTemp)
                         End If
                     End While
