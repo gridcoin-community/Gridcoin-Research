@@ -1673,7 +1673,7 @@ Retry:
         Dim sTS As String = ExtractXML(sRow, "<expavg_time>", "</expavg_time>")
         Dim dStamp As Double = Val(sTS)
         Dim dTime As DateTime = UnixTimestampToDate(dStamp)
-        Dim iMins As Long = DateDiff(DateInterval.Minute, dTime, Now)
+        Dim iMins As Long = DateDiff(DateInterval.Minute, dTime, DateTime.UtcNow)
         Return iMins
     End Function
     Public Function GetUnixFileAge(sPath As String) As Double
