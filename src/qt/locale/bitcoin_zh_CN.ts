@@ -305,24 +305,24 @@ This product includes software developed by the OpenSSL Project for use in the O
     <name>BitcoinGUI</name>
     <message>
         <location filename="../bitcoingui.cpp" line="+981"/>
-        <source>Sign &amp;message...</source>        
+        <source>Sign &amp;message...</source>
         <translation>消息签名(&amp;M)...</translation>
     </message>
     <message>
         <location line="+346"/>
-        <source>Synchronizing with network...</source>        
+        <source>Synchronizing with network...</source>
         <translation>正在与网络同步...</translation>
     </message>
     <message>
         <location line="-500"/>
-        <source>&amp;Overview</source>        
-        <translation>概况(&amp;O)</translation>    
+        <source>&amp;Overview</source>
+        <translation>概况(&amp;O)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Show general overview of wallet</source>
-        <translation>显示钱包概况</translation>    
-    </message>    
+        <translation>显示钱包概况</translation>
+    </message>
     <message>
         <location line="+14"/>
         <source>&amp;Transactions</source>
@@ -333,7 +333,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <source>Browse transaction history</source>
         <translation>查看交易历史</translation>
     </message>
-    <message>        
+    <message>
         <location line="+4"/>
         <source>&amp;Address Book</source>
         <translation>地址簿(&amp;A)</translation>
@@ -350,7 +350,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="+1"/>
-        <source>Show the list of addresses for receiving payments</source>        
+        <source>Show the list of addresses for receiving payments</source>
         <translation>显示用于接收支付的地址列表</translation>
     </message>
     <message>
