@@ -665,63 +665,63 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+3"/>
         <source>&amp;Live Ticker</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;实时行情</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Live Ticker</source>
-        <translation type="unfinished"></translation>
+        <translation>实时行情</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Tickets</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;工单</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Tickets</source>
-        <translation type="unfinished"></translation>
+        <translation>工单</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;New User Wizard</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;新手导航</translation>
     </message>
     <message>
         <location line="+1"/>
         <location line="+606"/>
         <source>New User Wizard</source>
-        <translation type="unfinished"></translation>
+        <translation>新手导航</translation>
     </message>
     <message>
         <location line="-599"/>
         <source>&amp;Voting</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;投票</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Voting</source>
-        <translation type="unfinished"></translation>
+        <translation>投票</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Galaza (Game)</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;Galaza(游戏)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Galaza</source>
-        <translation type="unfinished"></translation>
+        <translation>Galaza</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>&amp;Foundation</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;基金会</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Foundation</source>
-        <translation type="unfinished"></translation>
+        <translation>基金会</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -731,7 +731,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+1"/>
         <source>Diagnostics</source>
-        <translation type="unfinished"></translation>
+        <translation>诊断</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -741,68 +741,68 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+1"/>
         <source>Interactive FAQ</source>
-        <translation type="unfinished"></translation>
+        <translation>交互式提问</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>&amp;Unlock Wallet...</source>
-        <translation>????(&amp;U)</translation>
+        <translation>解锁钱包(&amp;U)</translation>
     </message>
     <message>
         <location line="+74"/>
         <source>&amp;Community</source>
-        <translation type="unfinished"></translation>
+        <translation>社区</translation>
     </message>
     <message>
         <location line="+9"/>
         <source>&amp;Upgrade QT Client</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;升级QT客户端</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>&amp;Advanced</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;高级</translation>
     </message>
     <message numerus="yes">
         <location line="+295"/>
         <source>%n minute(s) ago</source>
         <translation>
-            <numerusform>%n ???</numerusform>
+            <numerusform>%n 分钟前</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
         <source>%n hour(s) ago</source>
         <translation>
-            <numerusform>%n ???</numerusform>
+            <numerusform>%n 小时前</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
         <source>%n day(s) ago</source>
         <translation>
-            <numerusform>%n ??</numerusform>
+            <numerusform>%n 天前</numerusform>
         </translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Up to date</source>
-        <translation>????</translation>
+        <translation>已是最新</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Catching up...</source>
-        <translation>???...</translation>
+        <translation>更新中...</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Last received block was generated %1.</source>
-        <translation>??????????%1</translation>
+        <translation>最新收到的区块产生于 %1。</translation>
     </message>
     <message>
         <location line="+70"/>
         <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
-        <translation>?????????????%1???????????????????????</translation>
+        <translation>交易%1???????????????????????</translation>
     </message>
     <message>
         <location line="+5"/>
