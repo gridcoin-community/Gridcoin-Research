@@ -685,13 +685,13 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+3"/>
         <source>&amp;New User Wizard</source>
-        <translation>&amp;新手导航</translation>
+        <translation>&amp;新用户向导</translation>
     </message>
     <message>
         <location line="+1"/>
         <location line="+606"/>
         <source>New User Wizard</source>
-        <translation>新手导航</translation>
+        <translation>新用户向导</translation>
     </message>
     <message>
         <location line="-599"/>
@@ -802,52 +802,52 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+70"/>
         <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
-        <translation>交易%1???????????????????????</translation>
+        <translation>交易数据量超限。您仍可发送这笔交易，只需为节点确认您的交易以及支持网络运行提供%1的交易费。您希望付费吗？</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Confirm transaction fee</source>
-        <translation>?????</translation>
+        <translation>确认交易费</translation>
     </message>
     <message>
         <location line="+69"/>
         <source>Please enter your boinc E-mail address, or click &lt;Cancel&gt; to skip for now:</source>
-        <translation type="unfinished"></translation>
+        <translation>请输入您的BOINC邮箱地址，或按Cancel键先跳过此步骤</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Created new Configuration File Successfully. </source>
-        <translation type="unfinished"></translation>
+        <translation>c成功创建新配置文件。</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>New Account Created - Welcome Aboard!</source>
-        <translation type="unfinished"></translation>
+        <translation>已创建新账号-欢迎上船！</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. </source>
-        <translation type="unfinished"></translation>
+        <translation>若要开始BOINC计算，请运行BOINC客户端，选择项目，然后在%appdata%\GridcoinResearch中的文件gridcoinresearch.conf中写入您的BOINC邮箱地址。如果要再次运行此向导，请删除gridcoinresearch.conf文件。</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>New User Wizard - Skipped</source>
-        <translation type="unfinished"></translation>
+        <translation>新用户向导 - 已跳过</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Attention! - Boinc Path Error!</source>
-        <translation type="unfinished"></translation>
+        <translation>注意！—— BOINC路径错误！</translation>
     </message>
     <message>
         <location line="+30"/>
         <source>Sent transaction</source>
-        <translation>????</translation>
+        <translation>发送交易</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Incoming transaction</source>
-        <translation>????</translation>
+        <translation>流入交易</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -856,86 +856,86 @@ Amount: %2
 Type: %3
 Address: %4
 </source>
-        <translation>??: %1
-??: %2
-??: %3
-??: %4
+        <translation>日期: %1
+金额: %2
+类型: %3
+地址: %4
 </translation>
     </message>
     <message>
         <location line="+405"/>
         <location line="+15"/>
         <source>URI handling</source>
-        <translation>URI??</translation>
+        <translation>URI处理</translation>
     </message>
     <message>
         <location line="-15"/>
         <location line="+15"/>
         <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
-        <translation>????URI????????????URI???</translation>
+        <translation>无法解析 URI 地址！可能是因为格雷德币地址无效，或是 URI 参数格式错误。</translation>
     </message>
     <message>
         <location line="+18"/>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
-        <translation>????&lt;b&gt;??&lt;/b&gt;????&lt;b&gt;??&lt;/b&gt;??</translation>
+        <translation>钱包已被&lt;b&gt;加密&lt;/b&gt;，当前为&lt;b&gt;解锁&lt;/b&gt;状态</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
-        <translation>????&lt;b&gt;??&lt;/b&gt;????&lt;b&gt;??&lt;/b&gt;??</translation>
+        <translation>钱包已被&lt;b&gt;加密&lt;/b&gt;，当前为&lt;b&gt;锁定&lt;/b&gt;状态</translation>
     </message>
     <message>
         <location line="+29"/>
         <source>Backup Wallet</source>
-        <translation>????</translation>
+        <translation>备份钱包</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Wallet Data (*.dat)</source>
-        <translation>??????(*.dat)</translation>
+        <translation>钱包数据(*.dat)</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Backup Failed</source>
-        <translation>????</translation>
+        <translation>备份失败</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>There was an error trying to save the wallet data to the new location.</source>
-        <translation>??????????????????</translation>
+        <translation>存储地址列表到新位置时发生错误。</translation>
     </message>
     <message numerus="yes">
         <location line="+307"/>
         <source>%n second(s)</source>
         <translation>
-            <numerusform>%n?</numerusform>
+            <numerusform>%n 秒</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
         <source>%n minute(s)</source>
         <translation>
-            <numerusform>%n ??</numerusform>
+            <numerusform>%n 分钟</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
         <source>%n hour(s)</source>
         <translation>
-            <numerusform>%n ??</numerusform>
+            <numerusform>%n 小时</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
         <source>%n day(s)</source>
         <translation>
-            <numerusform>%n ?</numerusform>
+            <numerusform>%n 天</numerusform>
         </translation>
     </message>
     <message>
         <location line="+27"/>
-        <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
-        <translation type="unfinished"></translation>
+        <source>Staking.&lt;br&gt;%1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
+        <translation></translation>
     </message>
     <message>
         <location line="+23"/>
