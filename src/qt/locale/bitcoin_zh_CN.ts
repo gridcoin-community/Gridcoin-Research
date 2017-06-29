@@ -558,7 +558,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="-513"/>
         <source>&amp;Block Explorer</source>
-        <translation>区块浏览器</translation>
+        <translation>&amp;区块浏览器</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -568,99 +568,99 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+3"/>
         <source>&amp;Exchange</source>
-        <translation>/translation>
+        <translation>交易所</translation>
     </message>
     <message>
         <location line="+1"/>
         <location line="+4"/>
         <source>Web Site</source>
-        <translation type="unfinished"></translation>
+        <translation>网站</translation>
     </message>
     <message>
         <location line="-1"/>
         <source>&amp;Web Site</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;网站</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>&amp;GRC Chat Room</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;GRC聊天室</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>GRC Chatroom</source>
-        <translation type="unfinished"></translation>
+        <translation>GRC聊天室</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;BOINC</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;BOINC</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Gridcoin rewards distributed computing with BOINC</source>
-        <translation type="unfinished"></translation>
+        <translation>格雷德币给BOINC分布式计算参与者提供报酬</translation>
     </message>
     <message>
         <location line="+27"/>
         <location line="+169"/>
         <source>&amp;Rebuild Block Chain</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;重建区块链</translation>
     </message>
     <message>
         <location line="-168"/>
         <source>Rebuild Block Chain</source>
-        <translation type="unfinished"></translation>
+        <translation>重建区块链</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Download Blocks</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;下载区块</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Download Blocks</source>
-        <translation type="unfinished"></translation>
+        <translation>下载区块</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>&amp;Reboot Client</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;重启客户端</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Reboot Gridcoin</source>
-        <translation type="unfinished"></translation>
+        <translation>重启客户端</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>&amp;Upgrade Client</source>
-        <translation type="unfinished"></translation>
+        <translation>更新客户端</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Upgrade Client</source>
-        <translation type="unfinished"></translation>
+        <translation>更新客户端</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>&amp;Neural Network</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;神经网络</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Neural Network</source>
-        <translation type="unfinished"></translation>
+        <translation>神经网络</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>&amp;Advanced Configuration</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;高级设置</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Advanced Configuration</source>
-        <translation type="unfinished"></translation>
+        <translation>高级设置</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -736,7 +736,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+4"/>
         <source>FA&amp;Q</source>
-        <translation type="unfinished"></translation>
+        <translation>常见问题</translation>
     </message>
     <message>
         <location line="+1"/>
