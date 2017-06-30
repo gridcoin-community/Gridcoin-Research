@@ -3475,96 +3475,95 @@ h       <translation>轻</translation>
     <message>
         <location line="-43"/>
         <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
-        <translation>设置RPC????%u?????, IPv4:%s</translation>
+        <translation>设置RPC端口%u以监听IPv4:%s时出现错误</translation>
     </message>
     <message>
         <location line="+157"/>
         <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>??????????????????????????????????????????????????????????????????</translation>
+        <translation>交易被拒绝。您钱包中的钱币可能已经被花费，例如当您使用wallet.dat文件的副本，钱币在该副本中被花费但未在这里标记为已花费时。</translation>
     </message>
     <message>
         <location line="-5"/>
         <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
-        <translation>???????????? %s ?????</translation>
+        <translation>错误：转账需要至少 %s 的转账费，因为其数额，复杂度或使用了近期收到的存款  </translation>
     </message>
     <message>
         <location line="-87"/>
         <source>Listen for JSON-RPC connections on &lt;port&gt; (default: 15715 or testnet: 25715)</source>
-        <translation>?? &lt;port&gt; ???JSON-RPC?? (??: 15715 ???: 25715)</translation>
+        <translation>使用 &lt;port&gt;端口监听 JSON-RPC 连接 (默认: 15715 ; testnet: 25715) </translation>
     </message>
     <message>
         <location line="-11"/>
         <source>Accept command line and JSON-RPC commands</source>
-        <translation>?????? JSON-RPC ??
+        <translation>接受命令行和 JSON-RPC 命令
 </translation>
     </message>
     <message>
         <location line="+101"/>
         <source>Error: Transaction creation failed  </source>
-        <translation>??????????</translation>
+        <translation>错误：交易创建失败 </translation>
     </message>
     <message>
         <location line="-5"/>
         <source>Error: Wallet locked, unable to create transaction  </source>
-        <translation>????????????????</translation>
+        <translation>错误：钱包已锁定，不能创建交易</translation>
     </message>
     <message>
         <location line="-8"/>
         <source>Importing blockchain data file.</source>
-        <translation>???????????</translation>
+        <translation>导入区块链数据文件。</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Importing bootstrap blockchain data file.</source>
-        <translation>?????????????</translation>
+        <translation>导入引导程序区块链数据文件。</translation>
     </message>
     <message>
         <location line="-88"/>
         <source>Run in the background as a daemon and accept commands</source>
-        <translation>??????????
-
+        <translation>在后台作为守护进程运行并接受指令
 </translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Use the test network</source>
-        <translation>??????
+        <translation>使用测试网络
 </translation>
     </message>
     <message>
         <location line="-21"/>
         <source>Accept connections from outside (default: 1 if no -proxy or -connect)</source>
-        <translation>????????? (??: ???? -proxy or -connect ?????1)</translation>
+        <translation>接受外部连接 (默认: 1，若无 -proxy 或 -connect)</translation>
     </message>
     <message>
         <location line="-38"/>
         <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
-        <translation>?IPv6?????RPC???? %u ??????IPv4??: %s</translation>
+        <translation>当设置RPC端口%u以进行IPv6监听时出错，回到IPv4: %s</translation>
     </message>
     <message>
         <location line="+115"/>
         <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
-        <translation>????? %s ????????????????????wallet.dat??????????</translation>
+        <translation>初始化数据库环境 %s 时出错！为恢复，备份该目录，然后删除除wallet.dat之外的全部文件</translation>
     </message>
     <message>
         <location line="-21"/>
         <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
-        <translation>??????/???????????? (??: 27000)</translation>
+        <translation>以比特为单位设置高优先级/低费用的转账的最大大小 (默认: 27000)</translation>
     </message>
     <message>
         <location line="+11"/>
         <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
-        <translation>???-paytxfee ??????????????????????</translation>
+        <translation>警告：-paytxfee 被设置得非常高！若您发送一个转账，这是您将支付的转账费。</translation>
     </message>
     <message>
         <location line="+61"/>
         <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
-        <translation>????????????????????????????????????</translation>
+        <translation>警告：请确认您的计算机日期和时间是准确的！若您的时钟错误，格雷德币不会完美运行。</translation>
     </message>
     <message>
         <location line="-30"/>
         <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>???????wallet.dat???????????????????????????????????????????????</translation>
+        <translation>警告： 读取wallet.dat时出现错误！???????????????????????????????????????????????</translation>
     </message>
     <message>
         <location line="-18"/>
