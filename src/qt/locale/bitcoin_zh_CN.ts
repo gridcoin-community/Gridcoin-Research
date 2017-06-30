@@ -1635,7 +1635,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Light</source>
-h       <translation>轻</translation>
+        <translation>轻</translation>
     </message>
     <message>
         <location line="+123"/>
