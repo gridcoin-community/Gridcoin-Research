@@ -84,7 +84,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+25"/>
         <source>Delete the currently selected address from the list</source>
-        <translation>?从列表中删除选中的地址</translation>
+        <translation>从列表中删除选中的地址</translation>
     </message>
     <message>
         <location line="-14"/>
@@ -225,7 +225,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+1"/>
         <source>Warning: If you encrypt your wallet and lose your passphrase, you will &lt;b&gt;LOSE ALL OF YOUR COINS&lt;/b&gt;!</source>
-        <translation>警告：如果您丢失了加密该钱包的密码，其中所有的格雷德币将会丢失！??????????????????????????????</translation>
+        <translation>警告：如果您丢失了加密该钱包的密码，其中所有的格雷德币将会丢失！</translation>
     </message>
     <message>
         <location line="+0"/>
@@ -1456,7 +1456,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+7"/>
         <source>Detach block and address databases at shutdown. This means they can be moved to another data directory, but it slows down shutdown. The wallet is always detached.</source>
-        <translation>?????????????????????????????????????????????????????</translation>
+        <translation>关闭时分开区块数据库和地址数据库。这意味着您可以将数据库文件移动至其他文件夹，但关闭会变慢。钱包文件始终是分开的。</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1481,7 +1481,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+7"/>
         <source>Connect to the Gridcoin network through a SOCKS proxy (e.g. when connecting through Tor).</source>
-        <translation>通过一个SOCKS4代理连接到格雷德币网络 (如使用Tor连接时)</translation>
+        <translation>通过一个SOCKS4代理连接到格雷德币网络 (如使用Tor连接时)。</translation>
     </message>
     <message>
         <location line="+3"/>
