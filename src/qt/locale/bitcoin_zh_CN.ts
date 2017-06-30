@@ -3633,7 +3633,7 @@ h       <translation>轻</translation>
     <message>
         <location line="-49"/>
         <source>%s, you must set a rpcpassword in the configuration file:
- %s
+%s
 It is recommended you use the following random password:
 rpcuser=gridcoinrpc
 rpcpassword=%s
@@ -3658,184 +3658,184 @@ rpcpassword=%s
     <message>
         <location line="+26"/>
         <source>Send command to -server or gridcoind</source>
-        <translation></translation>
+        <translation>向-server或gridcoind发送指令</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Specify configuration file (default: gridcoin.conf)</source>
-        <translation type="unfinished"></translation>
+        <translation>指定配置文件 (默认：gridcoin.conf)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Specify pid file (default: gridcoind.pid)</source>
-        <translation type="unfinished"></translation>
+        <translation>指定pid文件 (默认：gridcoind.pid)</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
-        <translation type="unfinished">??&lt;port&gt;????? (??: 15714 ???: 25714) {32749 ?} {32748)?}</translation>
+        <translation>使用&lt;port&gt;端口监听连接 (默认: 15714 或测试网络: 25714) {32749 ?} {32748)?}</translation>
     </message>
     <message>
         <location line="+31"/>
         <source>Output extra debugging information. Implies all other -debug* options</source>
-        <translation>????????????????????-debug??</translation>
+        <translation>输出调试信息。蕴含任何其他-debug*选项</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Output extra network debugging information</source>
-        <translation>???????????</translation>
+        <translation>输出额外网络调试信息</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Prepend debug output with timestamp</source>
-        <translation>????????????</translation>
+        <translation>输出调试信息时，前面加上时间戳</translation>
     </message>
     <message>
         <location line="+35"/>
         <source>SSL options: (see the Bitcoin Wiki for SSL setup instructions)</source>
-        <translation>SSL???(??Bitcoin Wiki??SSL????)</translation>
+        <translation>SSL选项：(见Bitcoin Wiki中SSL安装的讲解)</translation>
     </message>
     <message>
         <location line="-71"/>
         <source>Select the version of socks proxy to use (4-5, default: 5)</source>
-        <translation>??????SOCKS???? (4-5, ?? 5)</translation>
+        <translation>选择SOCKS服务器的使用版本(4-5, 默认： 5)</translation>
     </message>
     <message>
         <location line="+38"/>
         <source>Send trace/debug info to console instead of debug.log file</source>
-        <translation>??/??????????????? debug.log ??</translation>
+        <translation>跟踪/调试信息输出到控制台，不输出到 debug.log 文件</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Send trace/debug info to debugger</source>
-        <translation>????/????????</translation>
+        <translation>跟踪/调试信息发送到调试器</translation>
     </message>
     <message>
         <location line="+28"/>
         <source>Set maximum block size in bytes (default: 250000)</source>
-        <translation>???????? (???250000)</translation>
+        <translation>以比特为单位设置最大区块大小(默认: 250000)</</translation>
     </message>
     <message>
         <location line="-1"/>
         <source>Set minimum block size in bytes (default: 0)</source>
-        <translation>?????????(??:0)</translation>
+        <translation>以比特为单位设置最小区块大小(默认：0)</translation>
     </message>
     <message>
         <location line="-29"/>
         <source>Shrink debug.log file on client startup (default: 1 when no -debug)</source>
-        <translation>????????debug.log??(???no-debug????1)</translation>
+        <translation>客户端启动时压缩debug.log文件(缺省：no-debug模式时为1)</translation>
     </message>
     <message>
         <location line="-39"/>
         <source>Specify connection timeout in milliseconds (default: 5000)</source>
-        <translation>????????(???5000??)</translation>
+        <translation>指定连接超时毫秒数 (默认: 5000)</translation>
     </message>
     <message>
         <location line="+107"/>
         <source>Unable to sign checkpoint, wrong checkpointkey?
 </source>
-        <translation>??????????????????</translation>
+        <translation>无法签名检查点，检查点密钥错误？</translation>
     </message>
     <message>
         <location line="-79"/>
         <source>Use UPnP to map the listening port (default: 0)</source>
-        <translation>??UPnP?????? (??: 0)</translation>
+        <translation>使用UPnP暴露本机监听端口（默认：0）</translation>
     </message>
     <message>
         <location line="-1"/>
         <source>Use UPnP to map the listening port (default: 1 when listening)</source>
-        <translation>??UPnp??????(??: ??????1)</translation>
+        <translation>使用UPnP暴露本机监听端口（默认：1 当正在监听)</translation>
     </message>
     <message>
         <location line="-24"/>
         <source>Use proxy to reach tor hidden services (default: same as -proxy)</source>
-        <translation>??????????? (??: ?-proxy????)</translation>
+        <translation>使用代理到达隐藏服务器 (默认: 与-proxy相同)</translation>
     </message>
     <message>
         <location line="+39"/>
         <source>Username for JSON-RPC connections</source>
-        <translation>JSON-RPC ?????</translation>
+        <translation>JSON-RPC 连接用户名</translation>
     </message>
     <message>
         <location line="+48"/>
         <source>Verifying database integrity...</source>
-        <translation>??????????...</translation>
+        <translation>检查数据库完整性...</translation>
     </message>
     <message>
         <location line="+56"/>
         <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
-        <translation>??????????????????</translation>
+        <translation>警告：发现已同步的检查点有冲突，但已跳过！</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Warning: Disk space is low!</source>
-        <translation>?????????</translation>
+        <translation>警告：磁盘剩余空间低!</translation>
     </message>
     <message>
         <location line="-2"/>
         <source>Warning: This version is obsolete, upgrade required!</source>
-        <translation>????????????????</translation>
+        <translation>警告：此版本已被废弃，要求升级！</translation>
     </message>
     <message>
         <location line="-47"/>
         <source>wallet.dat corrupt, salvage failed</source>
-        <translation>????wallet.dat?????????</translation>
+        <translation>wallet.dat损坏，抢救失败</translation>
     </message>
     <message>
         <location line="-55"/>
         <source>Password for JSON-RPC connections</source>
-        <translation>JSON-RPC ????
+        <translation>JSON-RPC 连接密码
 </translation>
     </message>
     <message>
         <location line="-30"/>
         <source>Find peers using internet relay chat (default: 0)</source>
-        <translation>?????????????? (??: 1) {0)?}</translation>
+        <translation>寻找使用互联网中继聊天的同伴 (默认: 1) {0)?}</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Sync time with other nodes. Disable if time on your system is precise e.g. syncing with NTP (default: 1)</source>
-        <translation>???????????????????????????????(??: 1)</translation>
+        <translation>与其他节点同步时间。无效化之，若您的系统时间是准确的，例如与NTP同步(默认: 1)</translation>
     </message>
     <message>
         <location line="+13"/>
         <source>When creating transactions, ignore inputs with value less than this (default: 0.01)</source>
-        <translation>???????????????? (???0.01)</translation>
+        <translation>当生成交易时，忽略价值小于此的输入 (默认：0.01)</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Allow JSON-RPC connections from specified IP address</source>
-        <translation>?????IP???? JSON-RPC ??</translation>
+        <translation>允许来自指定IP地址的 JSON-RPC 连接</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Send commands to node running on &lt;ip&gt; (default: 127.0.0.1)</source>
-        <translation>?IP??? &lt;ip&gt; ??????? (??: 127.0.0.1)</translation>
+        <translation>向IP地址为 &lt;ip&gt; 的节点发送指令 (缺省: 127.0.0.1)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Execute command when the best block changes (%s in cmd is replaced by block hash)</source>
-        <translation>????????????? (????? %s ???????????)</translation>
+        <translation>当最佳区块变化时执行命令 (命令行中的 %s 会被替换成区块哈希值)</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</source>
-        <translation>???????????? (????? %s ??????????)</translation>
+        <translation>当钱包转账变化时执行命令 (命令行中的 %s 会被替换成TxID)</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Require a confirmations for change (default: 0)</source>
-        <translation>????????? (???0)</translation>
+        <translation>改变时要求一个确认 (默认：0)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
-        <translation>????????????PUSH?? (???1)</translation>
+        <translation>强制要求转账脚本使用PUSH运算(默认：1)</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Execute command when a relevant alert is received (%s in cmd is replaced by message)</source>
-        <translation>??????????? (????%s??????)</translation>
+        <translation>当收到相关 (????%s??????)</translation>
     </message>
     <message>
         <location line="+3"/>
