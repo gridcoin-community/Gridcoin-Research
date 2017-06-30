@@ -1188,9 +1188,9 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 
  This means a fee of at least %1 per kb is required.</source>
         <translation>具有更高优先权的交易更可能进入区块。
-            
-若优先权低于&quot;中值&quot，本标签会变红。
-            
+
+若优先权低于&quot;中值&quot;，本标签会变红。
+
 这意味着要求至少每Kb%1的费用。</translation>
     </message>
     <message>
@@ -1201,9 +1201,9 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 
  Amounts below 0.546 times the minimum relay fee are shown as DUST.</source>
         <translation>若任意收款方收到的金额小于%1，本标签会变红。
-            
+
 这意味着要求至少%2的费用。
-            
+
 金额少于最小广播费用的0.546倍的交易将显示为DUST。</translation>
     </message>
     <message>
