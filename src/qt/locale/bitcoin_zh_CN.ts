@@ -3919,176 +3919,178 @@ rpcpassword=%s
     <message>
         <location line="+1"/>
         <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
-        <translation>??????? %s ????.  ????????????.</translation>
+        <translation>无法给数据目录 %s 加锁。格雷德币进程可能已在运行。</translation>
     </message>
     <message>
         <location line="-96"/>
         <source>Gridcoin</source>
-        <translation>??</translation>
+        <translation>格雷德币</translation>
     </message>
     <message>
         <location line="+137"/>
         <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
-        <translation>???????? %s  (?????? %d, %s)</translation>
+        <translation>无法绑定本机端口 %s  (返回错误消息 %d, %s)</translation>
     </message>
     <message>
         <location line="-127"/>
         <source>Connect through socks proxy</source>
-        <translation>??socks????</translation>
+        <translation>通过 socks 代理连接</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Allow DNS lookups for -addnode, -seednode and -connect</source>
-        <translation>?? -addnode, -seednode ? -connect ???????DNS</translation>
+        <translation>使用 -addnode, -seednode 和 -connect选项时允许DNS查找</translation>
     </message>
     <message>
         <location line="+119"/>
         <source>Loading addresses...</source>
-        <translation>???????...</translation>
+        <translation>正在加载地址...</translation>
     </message>
     <message>
         <location line="-14"/>
         <source>Error loading blkindex.dat</source>
-        <translation>blkindex.dat ??????</translation>
+        <translation>blkindex.dat文件加载错误</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>wallet.dat ?????????????</translation>
+        <translation>wallet.dat钱包文件加载错误：钱包损坏</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
-        <translation>wallet.dat ??????????????????</translation>
+        <translation>wallet.dat钱包文件加载错误：请升级到最新格雷德币客户端</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
-        <translation>???????????????????</translation>
+        <translation>钱包文件需要重写：请退出并重新启动格雷德币客户端</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Error loading wallet.dat</source>
-        <translation>wallet.dat ????????</translation>
+        <translation>wallet.dat钱包文件加载错误</translation>
     </message>
     <message>
         <location line="-16"/>
         <source>Invalid -proxy address: &apos;%s&apos;</source>
-        <translation>????????%s</translation>
+        <translation>无效的代理地址: &apos;%s&apos;</translation>
     </message>
     <message>
         <location line="-1"/>
         <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
-        <translation>-onlynet ?????????%s</translation>
+        <translation>被指定的是未知网络 -onlynet: &apos;%s&apos;</translation>
     </message>
     <message>
         <location line="-1"/>
         <source>Unknown -socks proxy version requested: %i</source>
-        <translation>???????socks????: %i</translation>
+        <translation>被指定的是未知socks代理版本: %i</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Cannot resolve -bind address: &apos;%s&apos;</source>
-        <translation>???? -bind ????: &apos;%s&apos;</translation>
+        <translation>无法解析 -bind 端口地址: &apos;%s&apos;</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Cannot resolve -externalip address: &apos;%s&apos;</source>
-        <translation>???? -externalip ??: &apos;%s&apos;</translation>
+        <translation>无法解析 -externalip 地址: &apos;%s&apos;</translation>
     </message>
     <message>
         <location line="-25"/>
         <source>Invalid amount for -paytxfee=&lt;amount&gt;: &apos;%s&apos;</source>
-        <translation>???? -paytxfee=&lt;amount&gt;: &apos;%s&apos;</translation>
+        <translation>非法金额 -paytxfee=&lt;amount&gt;: &apos;%s&apos;</translation>
     </message>
     <message>
         <location line="+44"/>
         <source>Error: could not start node</source>
-        <translation>?????????</translation>
+        <translation>错误: 无法启动节点</translation>
     </message>
     <message>
         <location line="+11"/>
         <source>Sending...</source>
-        <translation>????</translation>
+        <translation>发送中...</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Invalid amount</source>
-        <translation>????</translation>
+        <translation>无效金额</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Insufficient funds</source>
-        <translation>????</translation>
+        <translation>存款不足</translation>
     </message>
     <message>
         <location line="-33"/>
         <source>Loading block index...</source>
-        <translation>?????????...</translation>
+        <translation>加载区块索引...</translation>
     </message>
     <message>
         <location line="-101"/>
         <source>Add a node to connect to and attempt to keep the connection open</source>
-        <translation>???????????</translation>
+        <translation>添加节点并与其保持连接</translation>
     </message>
     <message>
         <location line="+119"/>
         <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
-        <translation>??????????? %s. ?????????????</translation>
+        <translation>无法在本机绑定 %s 端口。比特币客户端软件可能已经在运行。</translation>
     </message>
     <message>
         <location line="-97"/>
         <source>Fee per KB to add to transactions you send</source>
-        <translation>?kB?????????</translation>
+        <translation>每发送1KB交易所需的费用</translation>
     </message>
     <message>
         <location line="+55"/>
         <source>Invalid amount for -mininput=&lt;amount&gt;: &apos;%s&apos;</source>
-        <translation>?????? -mininput=&lt;amount&gt;: &apos;%s&apos;</translation>
+        <translation>无效金额 -paytxfee=&lt;amount&gt;: &apos;%s&apos;</translation>
     </message>
     <message>
         <location line="+26"/>
         <source>Loading wallet...</source>
-        <translation>??????...</translation>
+        <translation>正在加载钱包...</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Cannot downgrade wallet</source>
-        <translation>??????</translation>
+        <translation>无法降级钱包</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Cannot write default address</source>
-        <translation>????????</translation>
+        <translation>无法写入缺省地址</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Rescanning...</source>
-        <translation>??????...</translation>
+        <translation>正在重新扫描...</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Done loading</source>
-        <translation>????</translation>
+        <translation>加载完成</translation>
     </message>
     <message>
         <location line="-164"/>
         <source>To use the %s option</source>
-        <translation>?? %s ??</translation>
+        <translation>使用 %s 选项</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Error</source>
-        <translation>??</translation>
+        <translation>错误</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
 %s
 If the file does not exist, create it with owner-readable-only file permissions.</source>
-        <translation>????????????? rpcpassword :
- %s
-?????????????????????????????????.</translation>
+        <translation>您必须在配置文件
+%s
+中加入选项
+rpcpassword=&lt;password&gt;
+如果配置文件不存在，请新建，并将文件权限设置为仅允许文件所有者读取。</translation>
     </message>
 </context>
 </TS>
