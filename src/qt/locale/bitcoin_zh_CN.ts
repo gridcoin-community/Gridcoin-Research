@@ -3835,86 +3835,86 @@ rpcpassword=%s
     <message>
         <location line="+2"/>
         <source>Execute command when a relevant alert is received (%s in cmd is replaced by message)</source>
-        <translation>当收到相关 (????%s??????)</translation>
+        <translation>当收到相关警报时执行指令 (命令行中的 %s 会被替换成消息)</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Upgrade wallet to latest format</source>
-        <translation>???????????</translation>
+        <translation>升级钱包到最新版</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Set key pool size to &lt;n&gt; (default: 100)</source>
-        <translation>???????? &lt;n&gt; (??: 100)
+        <translation>设置密钥池大小为 &lt;n&gt; (缺省: 100)
 </translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Rescan the block chain for missing wallet transactions</source>
-        <translation>?????????????????</translation>
+        <translation>重新扫描数据链以查找遗漏的交易</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>How many blocks to check at startup (default: 2500, 0 = all)</source>
-        <translation>?????????? (??: 2500, 0??????)</translation>
+        <translation>启动时需检查的区块数量 (缺省: 2500, 设置0为检查所有区块)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>How thorough the block verification is (0-6, default: 1)</source>
-        <translation>????????? (0-6, ??: 1)</translation>
+        <translation>需要几个确认 (0-6个, 缺省: 1个)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Imports blocks from external blk000?.dat file</source>
-        <translation>??? blk000?.dat ??????</translation>
+        <translation>从外来文件 blk000?.dat 导入区块数据</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Use OpenSSL (https) for JSON-RPC connections</source>
-        <translation>? JSON-RPC ???? OpenSSL (https) ??</translation>
+        <translation>为 JSON-RPC 连接使用 OpenSSL (https)连接</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Server certificate file (default: server.cert)</source>
-        <translation>????? (??? server.cert)
+        <translation>服务器证书 (默认为 server.cert)
 </translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Server private key (default: server.pem)</source>
-        <translation>????? (??? server.pem)
+        <translation>服务器私钥 (默认为 server.pem)
 </translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Acceptable ciphers (default: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</source>
-        <translation>?????? (??: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</translation>
+        <translation>可接受的加密器 (默认为 TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Initialization sanity check failed. Gridcoin is shutting down.</source>
-        <translation type="unfinished"></translation>
+        <translation>初始化完整性检查失败。格雷德币正在停止运行。</translation>
     </message>
     <message>
         <location line="+45"/>
         <source>Error: Wallet unlocked for staking only, unable to create transaction.</source>
-        <translation>????????????????????????</translation>
+        <translation>错误：钱包解锁仅用于权益增值，无法创建交易。</translation>
     </message>
     <message>
         <location line="+18"/>
         <source>WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.</source>
-        <translation>??????????????????????????????????????</translation>
+        <translation>警告：发现无效检查点！显示的转账可能不正确！您可能需要升级或告知开发者。</translation>
     </message>
     <message>
         <location line="-155"/>
         <source>This help message</source>
-        <translation>?????
+        <translation>该帮助信息
 </translation>
     </message>
     <message>
         <location line="+93"/>
         <source>Wallet %s resides outside data directory %s.</source>
-        <translation>?? %s ?????? %s ??.</translation>
+        <translation>钱包%s位于数据目录%s之外。</translation>
     </message>
     <message>
         <location line="+1"/>
