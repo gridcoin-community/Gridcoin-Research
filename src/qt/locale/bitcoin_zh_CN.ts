@@ -935,27 +935,27 @@ Address: %4
     <message>
         <location line="+27"/>
         <source>Staking.&lt;br&gt;%1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
-        <translation></translation>
+        <translation>权益增值中。&lt;br&gt;%1&lt;br&gt;全网权重为%2&lt;br&gt;&lt;b&gt;预计获得回报用时为%3. %4</translation>
     </message>
     <message>
         <location line="+23"/>
         <source>Not staking because you don&apos;t have mature coins and stake weight is too low.</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">未进行权益增值，因为钱包中没有成熟的格雷德币，且权益增值权重过低。</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Searching for mature coins... Please wait</source>
-        <translation type="unfinished"></translation>
+        <translation>搜寻成熟货币...</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Not staking</source>
-        <translation>???????</translation>
+        <translation>未进行权益增值</translation>
     </message>
     <message>
         <location filename="../bitcoin.cpp" line="+145"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
-        <translation>?????????????????</translation>
+        <translation>发生致命错误。格雷德币客户端的安全存在问题，将退出。</</translation>
     </message>
 </context>
 <context>
@@ -963,7 +963,7 @@ Address: %4
     <message>
         <location filename="../clientmodel.cpp" line="+116"/>
         <source>Network Alert</source>
-        <translation>????</translation>
+        <translation>网络警报</translation>
     </message>
 </context>
 <context>
@@ -971,193 +971,192 @@ Address: %4
     <message>
         <location filename="../forms/coincontroldialog.ui" line="+14"/>
         <source>Coin Control</source>
-        <translation>????</translation>
+        <translation>货币支配</translation>
     </message>
     <message>
         <location line="+28"/>
         <source>Quantity:</source>
-        <translation>???</translation>
+        <translation>数量：</translation>
     </message>
     <message>
         <location line="+29"/>
         <source>Bytes:</source>
-        <translation>???</translation>
+        <translation>比特数：</translation>
     </message>
     <message>
         <location line="+45"/>
         <source>Amount:</source>
-        <translation>???</translation>
+        <translation>金额：</translation>
     </message>
     <message>
-        <location line="+29"/>
-        <source>Priority:</source>
-        <translation>????</translation>
+        <location line="+29"/>        <source>Priority:</source>
+        <translation>优先权：</translation>
     </message>
     <message>
         <location line="+45"/>
         <source>Fee:</source>
-        <translation>???</translation>
+        <translation>费用：</translation>
     </message>
     <message>
         <location line="+32"/>
         <source>Low Output:</source>
-        <translation>???</translation>
+        <translation>输出：</translation>
     </message>
     <message>
         <location filename="../coincontroldialog.cpp" line="+551"/>
         <source>no</source>
-        <translation>?</translation>
+        <translation>否</translation>
     </message>
     <message>
         <location filename="../forms/coincontroldialog.ui" line="+48"/>
         <source>After Fee:</source>
-        <translation>???????:</translation>
+        <translation>后续费用:</translation>
     </message>
     <message>
         <location line="+32"/>
         <source>Change:</source>
-        <translation>?? : </translation>
+        <translation>更改 : </translation>
     </message>
     <message>
         <location line="+69"/>
         <source>(un)select all</source>
-        <translation>(?)??</translation>
+        <translation>(取消)全选</translation>
     </message>
     <message>
         <location line="+13"/>
         <source>Tree &amp;mode</source>
-        <translation type="unfinished"></translation>
+        <translation>树形模式</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>List mode</source>
-        <translation>????</translation>
+        <translation>列表模式</translation>
     </message>
     <message>
         <location line="+45"/>
         <source>Amount</source>
-        <translation>??</translation>
+        <translation>金额</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Label</source>
-        <translation>??</translation>
+        <translation>标签</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Address</source>
-        <translation>??</translation>
+        <translation>地址</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Date</source>
-        <translation>??</translation>
+        <translation>日期</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Confirmations</source>
-        <translation>??</translation>
+        <translation>确认数</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Confirmed</source>
-        <translation>???</translation>
+        <translation>已确认</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Priority</source>
-        <translation>???</translation>
+        <translation>优先权</translation>
     </message>
     <message>
         <location filename="../coincontroldialog.cpp" line="-515"/>
         <source>Copy address</source>
-        <translation>????</translation>
+        <translation>复制地址</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy label</source>
-        <translation>????</translation>
+        <translation>复制标签</translation>
     </message>
     <message>
         <location line="+1"/>
         <location line="+26"/>
         <source>Copy amount</source>
-        <translation>????</translation>
+        <translation>复制金额</translation>
     </message>
     <message>
         <location line="-25"/>
         <source>Copy transaction ID</source>
-        <translation>??????</translation>
+        <translation>复制转账ID</translation>
     </message>
     <message>
         <location line="+24"/>
         <source>Copy quantity</source>
-        <translation>????</translation>
+        <translation>复制数量</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Copy fee</source>
-        <translation>?????</translation>
+        <translation>复制费用</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy after fee</source>
-        <translation>?????????</translation>
+        <translation>复制后续费用</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy bytes</source>
-        <translation>????</translation>
+        <translation>复制比特数</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy priority</source>
-        <translation>?????</translation>
+        <translation>复制优先权</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy low output</source>
-        <translation>?????</translation>
+        <translation>复制低级输出</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy change</source>
-        <translation>????</translation>
+        <translation>复制更改</translation>
     </message>
     <message>
         <location line="+317"/>
         <source>highest</source>
-        <translation>??</translation>
+        <translation>极高</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>high</source>
-        <translation>?</translation>
+        <translation>高</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>medium-high</source>
-        <translation>??</translation>
+        <translation>中高</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>medium</source>
-        <translation>??</translation>
+        <translation>中等</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>low-medium</source>
-        <translation>??</translation>
+        <translation>中低</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>low</source>
-        <translation>?</translation>
+        <translation>低</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>lowest</source>
-        <translation>??</translation>
+        <translation>极低</translation>
     </message>
     <message>
         <location line="+155"/>
@@ -1167,18 +1166,19 @@ Address: %4
     <message>
         <location line="+0"/>
         <source>yes</source>
-        <translation>?</translation>
+        <translation>是</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <source>This label turns red, if the transaction size is bigger than 10000 bytes.
+        <location line="+10"/>        <source>This label turns red, if the transaction size is bigger than 10000 bytes.
 
  This means a fee of at least %1 per kb is required.
 
  Can vary +/- 1 Byte per input.</source>
-        <translation>???????10000????????????
-???kb??????? %1 ?????
-???+/-1??????</translation>
+        <translation>若转账数据量大于10000比特，本标签会变红。
+            
+这意味着要求至少每Kb%1的费用。
+            
+每次输入可能有+/-1字节的波动。</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1187,9 +1187,11 @@ Address: %4
 This label turns red, if the priority is smaller than &quot;medium&quot;.
 
  This means a fee of at least %1 per kb is required.</source>
-        <translation>????????????????????
-???????????????????
-???????kb %1 ?????</translation>
+        <translation>具有更高优先权的交易更可能进入区块。
+            
+若优先权低于&quot;中值&quot，本标签会变红。
+            
+这意味着要求至少每Kb%1的费用。</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1198,33 +1200,35 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
  This means a fee of at least %2 is required. 
 
  Amounts below 0.546 times the minimum relay fee are shown as DUST.</source>
-        <translation>??????????? %1?????????
-????? %2 ?????
-???????0.546?????????DUST?</translation>
+        <translation>若任意收款方收到的金额小于%1，本标签会变红。
+            
+这意味着要求至少%2的费用。
+            
+金额少于最小广播费用的0.546倍的交易将显示为DUST。</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>This label turns red, if the change is smaller than %1.
 
  This means a fee of at least %2 is required.</source>
-        <translation>?????? %1?????????
-????? %2 ?????</translation>
+        <translation>若更改少于%1，本标签会变红。
+这意味着要求至少%2的费用。</translation>
     </message>
     <message>
         <location line="+37"/>
         <location line="+63"/>
         <source>(no label)</source>
-        <translation>(????)</translation>
+        <translation>(无标签)</translation>
     </message>
     <message>
         <location line="-9"/>
         <source>change from %1 (%2)</source>
-        <translation>??%1??? (%2)</translation>
+        <translation>从%1的更改 (%2)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>(change)</source>
-        <translation>(??)</translation>
+        <translation>(更改)</translation>
     </message>
 </context>
 <context>
@@ -1232,67 +1236,67 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../forms/editaddressdialog.ui" line="+14"/>
         <source>Edit Address</source>
-        <translation>????</translation>
+        <translation>编辑地址</translation>
     </message>
     <message>
         <location line="+11"/>
         <source>&amp;Label</source>
-        <translation>??(&amp;L)</translation>
+        <translation>标签(&amp;L)</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>The label associated with this address book entry</source>
-        <translation>????????????</translation>
+        <translation>与此地址条目关联的标签</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>&amp;Address</source>
-        <translation>??(&amp;A)</translation>
+        <translation>地址(&amp;A)</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>The address associated with this address book entry. This can only be modified for sending addresses.</source>
-        <translation>???????????????“?????”???????????</translation>
+        <translation>该地址与地址簿中的条目已关联，无法作为发送地址编辑。</translation>
     </message>
     <message>
         <location filename="../editaddressdialog.cpp" line="+20"/>
         <source>New receiving address</source>
-        <translation>??????</translation>
+        <translation>新接收地址</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>New sending address</source>
-        <translation>??????</translation>
+        <translation>新发送地址</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Edit receiving address</source>
-        <translation>??????</translation>
+        <translation>编辑接收地址</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Edit sending address</source>
-        <translation>??????</translation>
+        <translation>编辑发送地址</translation>
     </message>
     <message>
         <location line="+76"/>
         <source>The entered address &quot;%1&quot; is already in the address book.</source>
-        <translation>?????“%1”??????????</translation>
+        <translation>输入的地址 &quot;%1&quot; 已经存在于地址薄。</translation>
     </message>
     <message>
         <location line="-5"/>
         <source>The entered address &quot;%1&quot; is not a valid Gridcoin address.</source>
-        <translation>“%1” ??????????</translation>
+        <translation>您输入的 &quot;%1&quot; 不是合法的格雷德币地址。</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Could not unlock wallet.</source>
-        <translation>??????</translation>
+        <translation>无法解锁钱包</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>New key generation failed.</source>
-        <translation>?????????</translation>
+        <translation>密钥创建失败。</translation>
     </message>
 </context>
 <context>
@@ -1300,47 +1304,47 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../guiutil.cpp" line="+436"/>
         <source>Gridcoin-Qt</source>
-        <translation>?????Gridcoin-Qt</translation>
+        <translation>Gridcoin-Qt</translation>
     </message>
     <message>
         <location line="-12"/>
         <source>version</source>
-        <translation>??</translation>
+        <translation>版本</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>gridcoinresearch</source>
-        <translation type="unfinished"></translation>
+        <translation>格雷德币-科研</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Usage:</source>
-        <translation>??</translation>
+        <translation>用途：</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>command-line options</source>
-        <translation>?????</translation>
+        <translation>命令行选项</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>UI options</source>
-        <translation>??????</translation>
+        <translation>UI选项</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Set language, for example &quot;de_DE&quot; (default: system locale)</source>
-        <translation>??????? “de_DE&quot; (?????????????)</translation>
+        <translation>设置语言, 例如 &quot;de_DE&quot; (缺省: 系统语言)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Start minimized</source>
-        <translation>??????</translation>
+        <translation>启动时最小化</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Show splash screen on startup (default: 1)</source>
-        <translation>?????Logo?? (????)</translation>
+y        <translation>启动时显示版权页 (缺省: 1)</translation>
     </message>
 </context>
 <context>
@@ -1349,72 +1353,72 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location filename="../votingdialog.cpp" line="+900"/>
         <location line="+96"/>
         <source>Create Poll</source>
-        <translation type="unfinished"></translation>
+        <translation>创建民意调查</translation>
     </message>
     <message>
         <location line="-81"/>
         <source>Title: </source>
-        <translation type="unfinished"></translation>
+        <translation>标题：</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Days: </source>
-        <translation type="unfinished"></translation>
+        <translation>天数：</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Question: </source>
-        <translation type="unfinished"></translation>
+        <translation>问题：</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Discussion URL: </source>
-        <translation type="unfinished"></translation>
+        <translation>讨论URL：</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Share Type: </source>
-        <translation type="unfinished"></translation>
+        <translation>分享类型：</translation>
     </message>
     <message>
         <location line="+23"/>
         <source>Add Item</source>
-        <translation type="unfinished"></translation>
+        <translation>增加条目</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Remove Item</source>
-        <translation type="unfinished"></translation>
+        <translation>移除条目</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Clear All</source>
-        <translation type="unfinished"></translation>
+        <translation>全部清除</translation>
     </message>
     <message>
         <location line="+36"/>
         <source>Creating poll failed! Title is missing.</source>
-        <translation type="unfinished"></translation>
+        <translation>创建民意调查失败！缺少标题。</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Creating poll failed! Days value is missing.</source>
-        <translation type="unfinished"></translation>
+        <translation>创建民意调查失败！缺少天数值。</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Creating poll failed! Question is missing.</source>
-        <translation type="unfinished"></translation>
+        <translation>创建民意调查失败！缺少问题。</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Creating poll failed! URL is missing.</source>
-        <translation type="unfinished"></translation>
+        <translation>创建民意调查失败！缺少URL。</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Creating poll failed! Answer is missing.</source>
-        <translation type="unfinished"></translation>
+        <translation>创建民意调查失败！缺少备选答案。</translation>
     </message>
 </context>
 <context>
@@ -1422,17 +1426,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../forms/optionsdialog.ui" line="+14"/>
         <source>Options</source>
-        <translation>??</translation>
+        <translation>选项</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>&amp;Main</source>
-        <translation>??(&amp;M)</translation>
+        <translation>主选项(&amp;M)</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Optional transaction fee per kB that helps make sure your transactions are processed quickly. Most transactions are 1 kB. Fee 0.01 recommended.</source>
-        <translation>???????????????(?kB)???????????1kB????0.01?</translation>
+        <translation>建议支付交易费用，有助于您的交易得到尽快处理。 绝大多数交易的字节数为 1 KB。建议支付0.01个格雷德币。</translation>
     </message>
     <message>
         <location line="+46"/>
