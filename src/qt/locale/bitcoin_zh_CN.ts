@@ -3343,7 +3343,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>URL.</source>
-.        <translation>网址。</translation>
+        <translation>网址。</translation>
     </message>
     <message>
         <location line="+2"/>
