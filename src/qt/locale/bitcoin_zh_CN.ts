@@ -1681,7 +1681,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+15"/>
         <source>Total number of coins that are staking, and do not yet count toward the current balance</source>
-        <translation>正在进行权益增值的货币数，尚未计入当前余额：<translation>
+        <translation>正在进行权益增值的货币数，尚未计入当前余额：</translation>
     </message>
     <message>
         <location line="+13"/>
