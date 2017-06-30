@@ -99,7 +99,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+14"/>
         <source>&amp;Delete</source>
-        <translation>??(&amp;删除)</translation>
+        <translation>删除(&amp;D)</translation>
     </message>
     <message>
         <location filename="../addressbookpage.cpp" line="+65"/>
@@ -2350,38 +2350,38 @@ h       <translation>轻</translation>
     <message>
         <location line="+21"/>
         <source>Send Custom Message to a Gridcoin Recipient</source>
-        <translation type="unfinished"></translation>
+        <translation>向格雷德币收款者发送常用消息</translation>
     </message>
     <message>
         <location line="+9"/>
         <source>A&amp;mount:</source>
-        <translation>??(&amp;M)</translation>
+        <translation>金额(&amp;M)</translation>
     </message>
     <message>
         <location line="+13"/>
         <source>Track Coins</source>
-        <translation type="unfinished"></translation>
+        <translation>追踪货币</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Add Attachment</source>
-        <translation type="unfinished"></translation>
+        <translation>添加附件</translation>
     </message>
     <message>
         <location line="-137"/>
         <location filename="../sendcoinsentry.cpp" line="+29"/>
         <source>Enter a label for this address to add it to your address book</source>
-        <translation>????????????????????????</translation>
+        <translation>为这个地址输入一个标签，以便将它添加到您的地址簿</translation>
     </message>
     <message>
         <location line="-21"/>
         <source>&amp;Label:</source>
-        <translation>??(&amp;L)?</translation>
+        <translation>标签(&amp;L)?</translation>
     </message>
     <message>
         <location line="+58"/>
         <source>Choose address from address book</source>
-        <translation>????????</translation>
+        <translation>从地址薄选择地址</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -2391,7 +2391,7 @@ h       <translation>轻</translation>
     <message>
         <location line="+7"/>
         <source>Paste address from clipboard</source>
-        <translation>????????</translation>
+        <translation>从剪贴板粘贴地址</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -2401,12 +2401,12 @@ h       <translation>轻</translation>
     <message>
         <location line="+7"/>
         <source>Remove this recipient</source>
-        <translation>?????</translation>
+        <translation>移除此接收者</translation>
     </message>
     <message>
         <location filename="../sendcoinsentry.cpp" line="+1"/>
         <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">请输入格雷德币地址 (例如:G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
 </context>
 <context>
@@ -2414,29 +2414,29 @@ h       <translation>轻</translation>
     <message>
         <location filename="../forms/signverifymessagedialog.ui" line="+14"/>
         <source>Signatures - Sign / Verify a Message</source>
-        <translation>?? - ?????/??????</translation>
+        <translation>签名 - 签名/验证一条消息</translation>
     </message>
     <message>
         <location line="+13"/>
         <location line="+124"/>
         <source>&amp;Sign Message</source>
-        <translation>????(&amp;S)</translation>
+        <translation>对消息签名(&amp;S)</translation>
     </message>
     <message>
         <location line="-118"/>
         <source>You can sign messages with your addresses to prove you own them. Be careful not to sign anything vague, as phishing attacks may try to trick you into signing your identity over to them. Only sign fully-detailed statements you agree to.</source>
-        <translation>??????????????????????????????????????????????????????????????????????????</translation>
+        <translation>您可以用你的地址对消息进行签名，以证明您是该地址的所有人。注意不要对模棱两可的消息签名，以免遭受钓鱼式攻击。请确保消息真实明确的表达了您的意愿。</translation>
     </message>
     <message>
         <location line="+18"/>
         <source>The address to sign the message with (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
-        <translation type="unfinished"></translation>
+        <translation>用来签名的格雷德币地址  (例如Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</translation>
     </message>
     <message>
         <location line="+10"/>
         <location line="+203"/>
         <source>Choose an address from the address book</source>
-        <translation>???????????</translation>
+        <translation>从地址簿选择地址</translation>
     </message>
     <message>
         <location line="-193"/>
@@ -2447,7 +2447,7 @@ h       <translation>轻</translation>
     <message>
         <location line="-193"/>
         <source>Paste address from clipboard</source>
-        <translation>????????</translation>
+        <translation>从剪贴板粘贴地址</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -2457,76 +2457,76 @@ h       <translation>轻</translation>
     <message>
         <location line="+12"/>
         <source>Enter the message you want to sign here</source>
-        <translation>????????????</translation>
+        <translation>请输入您要发送的签名消息</translation>
     </message>
     <message>
         <location line="+24"/>
         <source>Copy the current signature to the system clipboard</source>
-        <translation>??????????</translation>
+        <translation>复制当前签名至剪切板</translation>
     </message>
     <message>
         <location line="+21"/>
         <source>Sign the message to prove you own this Gridcoin address</source>
-        <translation>??????????????????????</translation>
+        <translation>发送签名消息以证明您是该格雷德币地址的拥有者</translation>
     </message>
     <message>
         <location line="+17"/>
         <source>Reset all sign message fields</source>
-        <translation>?????????</translation>
+        <translation>清空所有签名消息栏</translation>
     </message>
     <message>
         <location line="+3"/>
         <location line="+146"/>
         <source>Clear &amp;All</source>
-        <translation>????(&amp;A)</translation>
+        <translation>清除所有(&amp;A)</translation>
     </message>
     <message>
         <location line="-87"/>
         <location line="+70"/>
         <source>&amp;Verify Message</source>
-        <translation>????(&amp;V)</translation>
+        <translation>验证消息(&amp;V)</translation>
     </message>
     <message>
         <location line="-64"/>
         <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
-        <translation>?????????????????????????????????????????????????????????????</translation>
+        <translation>请在下面输入接收者地址、消息（确保换行符、空格符、制表符等完全相同）和签名以验证消息。请仔细核对签名信息，以提防中间人攻击。</translation>
     </message>
     <message>
         <location line="+21"/>
         <source>The address the message was signed with (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
-        <translation type="unfinished"></translation>
+        <translation>消息使用的签名地址 (例如Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</translation>
     </message>
     <message>
         <location line="+40"/>
         <source>Verify the message to ensure it was signed with the specified Gridcoin address</source>
-        <translation>????????????????????</translation>
+        <translation>验证消息，确保消息是由指定的格雷德币地址签名过的</translation>
     </message>
     <message>
         <location line="+17"/>
         <source>Reset all verify message fields</source>
-        <translation>?????????</translation>
+        <translation>清空所有验证消息栏</translation>
     </message>
     <message>
         <location filename="../signverifymessagedialog.cpp" line="+27"/>
         <location line="+3"/>
         <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="unfinished"></translation>
+        <translation>输入一个格雷德币地址 (例如G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
     <message>
         <location line="-2"/>
         <source>Click &quot;Sign Message&quot; to generate signature</source>
-        <translation>??“????“?????</translation>
+        <translation>单击“签名消息”产生签名。</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Enter Gridcoin signature</source>
-        <translation>??????</translation>
+        <translation>输入格雷德币签名</translation>
     </message>
     <message>
         <location line="+82"/>
         <location line="+81"/>
         <source>The entered address is invalid.</source>
-        <translation>????????</translation>
+        <translation>输入的地址非法</translation>
     </message>
     <message>
         <location line="-81"/>
