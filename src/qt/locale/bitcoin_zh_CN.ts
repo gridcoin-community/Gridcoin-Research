@@ -933,13 +933,14 @@ Address: %4
         </translation>
     </message>
     <message>
-        <location line="+27"/>        <source>Staking.&lt;br&gt;%1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
+        <location line="+27"/>
+        <source>Staking.&lt;br&gt;%1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
         <translation>权益增值中。&lt;br&gt;%1&lt;br&gt;全网权重为%2&lt;br&gt;&lt;b&gt;预计获得回报用时为%3. %4</translation>
     </message>
     <message>
         <location line="+23"/>
         <source>Not staking because you don&apos;t have mature coins and stake weight is too low.</source>
-        <translation type="unfinished">未进行权益增值，因为钱包中没有成熟的格雷德币，且权益增值权重过低。</translation>
+        <translation>未进行权益增值，因为钱包中没有成熟的格雷德币，且权益增值权重过低。</translation>
     </message>
     <message>
         <location line="+10"/>
