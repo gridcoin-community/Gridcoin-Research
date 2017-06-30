@@ -1761,7 +1761,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+109"/>
         <source>Recent transactions</source>
-        <translation>近期转账<translation>
+        <translation>近期转账</translation>
     </message>
     <message>
         <location line="+99"/>
