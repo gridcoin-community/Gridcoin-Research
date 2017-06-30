@@ -1010,7 +1010,7 @@ Address: %4
     <message>
         <location filename="../forms/coincontroldialog.ui" line="+48"/>
         <source>After Fee:</source>
-        <translation>后续费用:</translation>
+        <translation>加上费用后:</translation>
     </message>
     <message>
         <location line="+32"/>
@@ -1101,7 +1101,7 @@ Address: %4
     <message>
         <location line="+1"/>
         <source>Copy after fee</source>
-        <translation>复制后续费用</translation>
+        <translation>复制转账金额加费用</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2157,7 +2157,7 @@ h       <translation>轻</translation>
     <message>
         <location line="+29"/>
         <source>After Fee:</source>
-        <translation>后续费用:</translation>
+        <translation>加上费用后:</translation>
     </message>
     <message>
         <location line="+32"/>
@@ -2232,7 +2232,7 @@ h       <translation>轻</translation>
     <message>
         <location line="+1"/>
         <source>Copy after fee</source>
-        <translation>复制后续费用</translation>
+        <translation>复制转账金额加费用</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2534,59 +2534,59 @@ h       <translation>轻</translation>
         <location line="+73"/>
         <location line="+8"/>
         <source>Please check the address and try again.</source>
-        <translation>?????????</translation>
+        <translation>请检查地址后重试。</translation>
     </message>
     <message>
         <location line="-81"/>
         <location line="+81"/>
         <source>The entered address does not refer to a key.</source>
-        <translation>???????????????</translation>
+        <translation>输入的地址没有关联的公私钥对。</translation>
     </message>
     <message>
         <location line="-73"/>
         <source>Wallet unlock was cancelled.</source>
-        <translation>?????????</translation>
+        <translation>钱包解锁动作取消。</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Private key for the entered address is not available.</source>
-        <translation>?????????????</translation>
+        <translation>找不到输入地址关联的私钥。</translation>
     </message>
     <message>
         <location line="+12"/>
-        <source>Message signing failed.</source>
-        <translation>???????</translation>
+        <source>Message signing failed.</source> 
+        <translation>消息签名失败。</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Message signed.</source>
-        <translation>??????</translation>
+        <translation>消息已签名。</translation>
     </message>
     <message>
         <location line="+59"/>
         <source>The signature could not be decoded.</source>
-        <translation>???????</translation>
+        <translation>签名无法解码。</translation>
     </message>
     <message>
         <location line="+0"/>
         <location line="+13"/>
         <source>Please check the signature and try again.</source>
-        <translation>?????????</translation>
+        <translation>请检查签名后重试。</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>The signature did not match the message digest.</source>
-        <translation>???????????</translation>
+        <translation>签名与消息摘要不匹配。</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Message verification failed.</source>
-        <translation>???????</translation>
+        <translation>消息验证失败。</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Message verified.</source>
-        <translation>???????</translation>
+        <translation>消息验证成功。</translation>
     </message>
 </context>
 <context>
@@ -2594,78 +2594,78 @@ h       <translation>轻</translation>
     <message>
         <location filename="../transactiondesc.cpp" line="+38"/>
         <source>Open until %1</source>
-        <translation>? %1 ???????</translation>
+        <translation>至 %1 个数据块时开启</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>conflicted</source>
-        <translation>????</translation>
+        <translation>冲突</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1/offline</source>
-        <translation>%1 / ??</translation>
+        <translation>>%1 / 离线</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1/unconfirmed</source>
-        <translation>%1/???</translation>
+        <translation>%1/未确认</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1 confirmations</source>
-        <translation>%1 ???</translation>
+        <translation>%1 已确认</translation>
     </message>
     <message>
         <location line="+45"/>
         <source>Status</source>
-        <translation>??</translation>
+        <translation>状态</translation>
     </message>
     <message numerus="yes">
         <location line="+7"/>
         <source>, broadcast through %n node(s)</source>
         <translation>
-            <numerusform>?? %n ?????</numerusform>
+            <numerusform>, 通过 %n 个节点广播 </numerusform>
         </translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Date</source>
-        <translation>??</translation>
+        <translation>日期</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Source</source>
-        <translation>?</translation>
+        <translation>源</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Generated</source>
-        <translation>??</translation>
+        <translation>生成</translation>
     </message>
     <message>
         <location line="+5"/>
         <location line="+17"/>
         <source>From</source>
-        <translation>??</translation>
+        <translation>来自</translation>
     </message>
     <message>
         <location line="+1"/>
         <location line="+22"/>
         <location line="+58"/>
         <source>To</source>
-        <translation>?</translation>
+        <translation>到</translation>
     </message>
     <message>
         <location line="-77"/>
         <location line="+2"/>
         <source>own address</source>
-        <translation>?????</translation>
+        <translation>自己的地址</translation>
     </message>
     <message>
         <location line="-2"/>
         <source>label</source>
-        <translation>??</translation>
+        <translation>标签</translation>
     </message>
     <message>
         <location line="+37"/>
@@ -2674,19 +2674,19 @@ h       <translation>轻</translation>
         <location line="+17"/>
         <location line="+51"/>
         <source>Credit</source>
-        <translation>??</translation>
+        <translation>积分</translation>
     </message>
     <message numerus="yes">
         <location line="-123"/>
         <source>matures in %n more block(s)</source>
         <translation>
-            <numerusform>?? %n ???????</numerusform>
+            <numerusform>%n 个数据块后成熟(mature) </numerusform>
         </translation>
     </message>
     <message>
         <location line="+2"/>
         <source>not accepted</source>
-        <translation>????</translation>
+        <translation>未被接受</translation>
     </message>
     <message>
         <location line="+44"/>
@@ -2694,104 +2694,103 @@ h       <translation>轻</translation>
         <location line="+15"/>
         <location line="+51"/>
         <source>Debit</source>
-        <translation>??</translation>
+        <translation>支出</translation>
     </message>
     <message>
         <location line="-60"/>
         <source>Transaction fee</source>
-        <translation>???</translation>
+        <translation>交易费</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Net amount</source>
-        <translation>??</translation>
+        <translation>净额</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Message</source>
-        <translation>??</translation>
+        <translation>消息</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Comment</source>
-        <translation>??</translation>
+        <translation>备注</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Transaction ID</source>
-        <translation>??ID</translation>
+        <translation>转账ID</translation>
     </message>
     <message>
         <location line="+11"/>
         <source>Project</source>
-        <translation type="unfinished"></translation>
+        <translation>项目</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Block Type</source>
-        <translation type="unfinished"></translation>
+        <translation>区块类型</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Block Number</source>
-        <translation type="unfinished"></translation>
+        <translation>区块数</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>RAC</source>
-        <translation type="unfinished"></translation>
+        <translation>近期平均积分(RAC)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Gridcoin generated coins must mature 120 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
-        <translation type="unfinished"></translation>
+        <translation>生成的格雷德币在可以使用前必须有 %1 个成熟的区块。当您生成了此区块后，它将被广播到网络中以加入区块链。如果它未成功进入区块链，其状态将变其状态将变更为“不接受”并且不可使用。这可能偶尔会发生，如果另一个节点比你早几秒钟成功生成一个区块。</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Information</source>
-        <translation type="unfinished"></translation>
+        <translation>信息</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Transaction</source>
-        <translation>??</translation>
+        <translation>转账</translation>
     </message>
     <message>
         <location line="+25"/>
         <source>Inputs</source>
-        <translation>??</translation>
+        <translation>输入</translation>
     </message>
     <message>
         <location line="+26"/>
         <source>Amount</source>
-        <translation>??</translation>
+        <translation>金额</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>true</source>
-        <translation>??</translation>
+        <translation>是</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>false</source>
-        <translation>??</translation>
+        <translation>否</translation>
     </message>
     <message>
         <location line="-255"/>
         <source>, has not been successfully broadcast yet</source>
-        <translation>???????</translation>
+        <translation>，未被成功广播</translation>
     </message>
-    <message numerus="yes">
-        <location line="-64"/>
+    <message numerus="yes">        <location line="-64"/>
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished">
-            <numerusform>? %n ????????</numerusform>
+        <translation>
+            <numerusform>%n 个数据块后打开</numerusform>
         </translation>
     </message>
     <message>
         <location line="+99"/>
         <source>unknown</source>
-        <translation>??</translation>
+        <translation>未知</translation>
     </message>
 </context>
 <context>
@@ -2799,47 +2798,47 @@ h       <translation>轻</translation>
     <message>
         <location filename="../forms/transactiondescdialog.ui" line="+20"/>
         <source>Transaction details</source>
-        <translation>????</translation>
+        <translation>交易详情</translation>
     </message>
     <message>
         <location line="+9"/>
         <source>This pane shows a detailed description of the transaction</source>
-        <translation>??????????????</translation>
+        <translation>当前面板显示了交易的详细信息</translation>
     </message>
     <message>
         <location line="+42"/>
         <source>Execute Contract</source>
-        <translation type="unfinished"></translation>
+        <translation>履行合同</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Close</source>
-        <translation type="unfinished"></translation>
+        <translation>关闭</translation>
     </message>
     <message>
         <location line="-17"/>
         <source>Track Coins</source>
-        <translation type="unfinished"></translation>
+        <translation>追踪货币</translation>
     </message>
     <message>
         <location line="-7"/>
         <source>View Attachment</source>
-        <translation type="unfinished"></translation>
+        <translation>查看附件</translation>
     </message>
     <message>
         <location filename="../transactiondescdialog.cpp" line="+90"/>
         <source>Gridcoin Coin Tracking System</source>
-        <translation type="unfinished"></translation>
+        <translation>格雷德币货币追踪系统</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Gridcoin Documents</source>
-        <translation type="unfinished"></translation>
+        <translation>格雷德币文档</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Document cannot be found on P2P server.</source>
-        <translation type="unfinished"></translation>
+        <translation>文档在点对点服务器上未找到。</translation>
     </message>
 </context>
 <context>
@@ -2847,144 +2846,144 @@ h       <translation>轻</translation>
     <message>
         <location filename="../transactiontablemodel.cpp" line="+239"/>
         <source>Date</source>
-        <translation>??</translation>
+        <translation>日期</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Type</source>
-        <translation>??</translation>
+        <translation>类型</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Address</source>
-        <translation>??</translation>
+        <translation>地址</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Amount</source>
-        <translation>??</translation>
+        <translation>金额</translation>
     </message>
     <message>
         <location line="+55"/>
         <source>Open until %1</source>
-        <translation>? %1 ???????</translation>
+        <translation>直到 %1 后再打开</translation>
     </message>
     <message>
         <location line="+9"/>
         <source>Confirming (%1 of %2 recommended confirmations)&lt;br&gt;</source>
-        <translation type="unfinished"></translation>
+        <translation>确认中 (推荐 %2个确认，已经有 %1个确认)</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Confirmed (%1 confirmations)</source>
-        <translation>??? (%1 ?????)</translation>
+        <translation>已确认 (%1 条确认信息)</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Immature (%1 confirmations, will be available after %2)&lt;br&gt;</source>
-        <translation type="unfinished"></translation>
+        <translation>未成熟 (%1 个确认，将在 %2 个后可用)&lt;br&gt;</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>This block was not received by any other nodes&lt;br&gt; and will probably not be accepted!</source>
-        <translation type="unfinished"></translation>
+        <translation>此数据块未被任何其他节点接收，可能不被接受！</translation>
     </message>
     <message>
         <location line="+80"/>
         <source>Mined - DPOR</source>
-        <translation type="unfinished"></translation>
+        <translation>挖矿所得 - DPOR</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Minted - (Local) DPOR</source>
-        <translation type="unfinished"></translation>
+        <translation>新矿 - (本地)DPOR</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Mined - PoR</source>
-        <translation type="unfinished"></translation>
+        <translation>挖矿所得 - PoR</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Mined - Interest</source>
-        <translation type="unfinished"></translation>
+        <translation>挖矿所得 - 利息</translation>
     </message>
     <message numerus="yes">
         <location line="-117"/>
         <source>Open for %n more block(s)</source>
         <translation>
-            <numerusform>? %n ????????</numerusform>
+            <numerusform>在 %n 个区块后打开</numerusform>
         </translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Offline</source>
-        <translation>??</translation>
+        <translation>离线</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Unconfirmed</source>
-        <translation>???? </translation>
+        <translation>未确认的 </translation>
     </message>
     <message>
         <location line="+9"/>
         <source>Conflicted</source>
-        <translation>???</translation>
+        <translation>冲突的</translation>
     </message>
     <message>
         <location line="+9"/>
         <source>Generated but not accepted</source>
-        <translation>????????</translation>
+        <translation>已生成但未被接受</translation>
     </message>
     <message>
         <location line="+61"/>
         <source>Received with</source>
-        <translation>???</translation>
+        <translation>收款</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Received from</source>
-        <translation>????</translation>
+        <translation>收款来自</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Sent to</source>
-        <translation>???</translation>
+        <translation>付款</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Payment to yourself</source>
-        <translation>?????</translation>
+        <translation>付款给自己</translation>
     </message>
     <message>
         <location line="+81"/>
         <source>(n/a)</source>
-        <translation>?????</translation>
+        <translation>(不可用)</translation>
     </message>
     <message>
         <location line="+193"/>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
-        <translation>????? ????????????????</translation>
+        <translation>交易状态。 鼠标移到此区域可显示确认项数量。</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Date and time that the transaction was received.</source>
-        <translation>????????</translation>
+        <translation>接收到交易的时间</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Type of transaction.</source>
-        <translation>?????</translation>
+        <translation>交易类别。</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Destination address of transaction.</source>
-        <translation>???????</translation>
+        <translation>转账目标地址</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Amount removed from or added to balance.</source>
-        <translation>????????????</translation>
+        <translation>从余额添加或移除的金额。</translation>
     </message>
 </context>
 <context>
@@ -2993,92 +2992,92 @@ h       <translation>轻</translation>
         <location filename="../transactionview.cpp" line="+55"/>
         <location line="+16"/>
         <source>All</source>
-        <translation>??</translation>
+        <translation>全部</translation>
     </message>
     <message>
         <location line="-15"/>
         <source>Today</source>
-        <translation>??</translation>
+        <translation>今天</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>This week</source>
-        <translation>??</translation>
+        <translation>这星期</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>This month</source>
-        <translation>??</translation>
+        <translation>这个月</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Last month</source>
-        <translation>??</translation>
+        <translation>上个月</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>This year</source>
-        <translation>??</translation>
+        <translation>今年</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Range...</source>
-        <translation>??...</translation>
+        <translation>指定范围...</translation>
     </message>
     <message>
         <location line="+11"/>
         <source>Received with</source>
-        <translation>???</translation>
+        <translation>收款</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Sent to</source>
-        <translation>???</translation>
+        <translation>付款</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>To yourself</source>
-        <translation>???</translation>
+        <translation>给自己</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Mined</source>
-        <translation>????</translation>
+        <translation>挖矿所得</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Other</source>
-        <translation>??</translation>
+        <translation>其他</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Enter address or label to search</source>
-        <translation>???????????</translation>
+        <translation>输入地址或标签进行搜索</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Min amount</source>
-        <translation>????</translation>
+        <translation>最小金额</translation>
     </message>
     <message>
         <location line="+34"/>
         <source>Copy address</source>
-        <translation>????</translation>
+        <translation>复制地址</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy label</source>
-        <translation>????</translation>
+        <translation>复制标签</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy amount</source>
-        <translation>????</translation>
+        <translation>复制金额</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy transaction ID</source>
-        <translation>??????</translation>
+        <translation>复制交易识别码</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3088,47 +3087,47 @@ h       <translation>轻</translation>
     <message>
         <location line="+1"/>
         <source>Show transaction details</source>
-        <translation>??????</translation>
+        <translation>编辑标签</translation>
     </message>
     <message>
         <location line="+146"/>
         <source>Export Transaction Data</source>
-        <translation>??????</translation>
+        <translation>导出交易历史</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Comma separated file (*.csv)</source>
-        <translation>?????? (*.csv)</translation>
+        <translation>逗号分隔文件 (*.csv)</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Confirmed</source>
-        <translation>???</translation>
+        <translation>已确认</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Date</source>
-        <translation>??</translation>
+        <translation>日期</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Type</source>
-        <translation>??</translation>
+        <translation>类型</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Label</source>
-        <translation>??</translation>
+        <translation>标签</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Address</source>
-        <translation>??</translation>
+        <translation>地址</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Amount</source>
-        <translation>??</translation>
+        <translation>金额</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3138,22 +3137,22 @@ h       <translation>轻</translation>
     <message>
         <location line="+4"/>
         <source>Error exporting</source>
-        <translation>??????</translation>
+        <translation>导出时出错</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Could not write to file %1.</source>
-        <translation>?????? %1 ?</translation>
+        <translation>无法写入文件 %1 .</translation>
     </message>
     <message>
         <location line="+100"/>
         <source>Range:</source>
-        <translation>???</translation>
+        <translation>范围：</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>to</source>
-        <translation>?</translation>
+        <translation>到</translation>
     </message>
 </context>
 <context>
@@ -3161,22 +3160,22 @@ h       <translation>轻</translation>
     <message>
         <location filename="../forms/upgradedialog.ui" line="+14"/>
         <source>Gridcoin Upgrading Facility</source>
-        <translation type="unfinished"></translation>
+        <translation>格雷德币升级器</translation>
     </message>
     <message>
         <location line="+65"/>
         <source>Retry Download</source>
-        <translation type="unfinished"></translation>
+        <translation>重试下载</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Upgrade</source>
-        <translation type="unfinished"></translation>
+        <translation>升级</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Hide</source>
-        <translation type="unfinished"></translation>
+        <translation>隐藏</translation>
     </message>
 </context>
 <context>
@@ -3184,35 +3183,35 @@ h       <translation>轻</translation>
     <message>
         <location filename="../votingdialog.cpp" line="-374"/>
         <source>Poll Results</source>
-        <translation type="unfinished"></translation>
+        <translation>民意调查结果</translation>
     </message>
     <message>
         <location line="+7"/>
         <location line="+60"/>
         <source>Q: </source>
-        <translation type="unfinished"></translation>
+        <translation>问：</translation>
     </message>
     <message>
         <location line="-54"/>
         <location line="+55"/>
         <source>Discussion URL: </source>
-        <translation type="unfinished"></translation>
+        <translation>讨论网址：</translation>
     </message>
     <message>
         <location line="-43"/>
         <source>Chart</source>
-        <translation type="unfinished"></translation>
+        <translation>图表</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>List</source>
-        <translation type="unfinished"></translation>
+        <translation>列表</translation>
     </message>
     <message>
         <location line="+5"/>
         <location line="+25"/>
         <source>Best Answer: </source>
-        <translation type="unfinished"></translation>
+        <translation>最佳答案</translation>
     </message>
 </context>
 <context>
@@ -3220,37 +3219,37 @@ h       <translation>轻</translation>
     <message>
         <location line="-349"/>
         <source>Gridcoin Voting System 1.1</source>
-        <translation type="unfinished"></translation>
+        <translation>格雷德币投票系统1.1</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Active Polls (Right Click to Vote)</source>
-        <translation type="unfinished"></translation>
+        <translation>开放的民意调查 (点击右键以投票)</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Filter: </source>
-        <translation type="unfinished"></translation>
+        <translation>过滤器：</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Reload Polls</source>
-        <translation type="unfinished"></translation>
+        <translation>重新加载民意调查</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Load History</source>
-        <translation type="unfinished"></translation>
+        <translation>加载历史</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Create Poll</source>
-        <translation type="unfinished"></translation>
+        <translation>新建民意调查</translation>
     </message>
     <message>
         <location line="+37"/>
         <source>...loading data!</source>
-        <translation type="unfinished"></translation>
+        <translation>...正在加载数据！</translation>
     </message>
 </context>
 <context>
@@ -3258,43 +3257,43 @@ h       <translation>轻</translation>
     <message>
         <location line="-391"/>
         <source>#</source>
-        <translation type="unfinished"></translation>
+        <translation>#</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Title</source>
-        <translation type="unfinished"></translation>
+        <translation>标题</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Expiration</source>
-        <translation type="unfinished"></translation>
+        <translation>截止时间</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Share Type</source>
-        <translation type="unfinished"></translation>
+        <translation>分享类型</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Question</source>
-        <translation type="unfinished"></translation>
+        <translation>问题</translation>
     </message>
     <message>
         <location line="+1"/>
         <location line="+157"/>
         <source>Answers</source>
-        <translation type="unfinished"></translation>
+        <translation>答案</translation>
     </message>
     <message>
         <location line="-156"/>
         <source># Voters</source>
-        <translation type="unfinished"></translation>
+        <translation>#投票者</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Total Shares</source>
-        <translation type="unfinished"></translation>
+        <translation>总分享</translation>
     </message>
     <message>
         <location line="+1"/>
