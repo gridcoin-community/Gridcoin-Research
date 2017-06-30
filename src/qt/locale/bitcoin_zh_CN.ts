@@ -1015,7 +1015,7 @@ Address: %4
     <message>
         <location line="+32"/>
         <source>Change:</source>
-        <translation>更改 : </translation>
+        <translation>零钱 : </translation>
     </message>
     <message>
         <location line="+69"/>
@@ -1121,7 +1121,7 @@ Address: %4
     <message>
         <location line="+1"/>
         <source>Copy change</source>
-        <translation>复制更改</translation>
+        <translation>复制零钱</translation>
     </message>
     <message>
         <location line="+317"/>
@@ -1223,12 +1223,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="-9"/>
         <source>change from %1 (%2)</source>
-        <translation>从%1的更改 (%2)</translation>
+        <translation>来自%1的零钱 (%2)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>(change)</source>
-        <translation>(更改)</translation>
+        <translation>(零钱)</translation>
     </message>
 </context>
 <context>
@@ -1344,7 +1344,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Show splash screen on startup (default: 1)</source>
-y        <translation>启动时显示版权页 (缺省: 1)</translation>
+        <translation>启动时显示版权页 (缺省: 1)</translation>
     </message>
 </context>
 <context>
@@ -1441,17 +1441,17 @@ y        <translation>启动时显示版权页 (缺省: 1)</translation>
     <message>
         <location line="+46"/>
         <source>Reserved amount does not participate in staking and is therefore spendable at any time.</source>
-        <translation>???????????????????</translation>
+        <translation>保留金额不参与权益增值,在任何时刻均可消费。</translation>
     </message>
     <message>
         <location line="+46"/>
         <source>Automatically start Gridcoin after logging in to the system.</source>
-        <translation>???????????</translation>
+        <translation>登录系统后自动启动格雷德币。</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Start Gridcoin on system login</source>
-        <translation>????????????(&amp;S)</translation>
+        <translation>系统登录时启动格雷德币(&amp;S)</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -1461,199 +1461,198 @@ y        <translation>启动时显示版权页 (缺省: 1)</translation>
     <message>
         <location line="+3"/>
         <source>&amp;Detach databases at shutdown</source>
-        <translation>???????????????(&amp;D)</translation>
+        <translation>关闭时分开区块数据库和地址数据库(&amp;D)</translation>
     </message>
     <message>
         <location line="+21"/>
         <source>&amp;Network</source>
-        <translation>??(&amp;N)</translation>
+        <translation>网络(&amp;N)</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Automatically open the Gridcoin client port on the router. This only works when your router supports UPnP and it is enabled.</source>
-        <translation>?????????????????????????UPnP??????</translation>
+        <translation>自动在路由器中打开比特币端口。只有当您的路由器支持并开启 UPnP 选项时此功能才有效。</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Map port using &amp;UPnP</source>
-        <translation>?? &amp;UPnP ????</translation>
+        <translation>使用 &amp;UPnP 映射端口</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Connect to the Gridcoin network through a SOCKS proxy (e.g. when connecting through Tor).</source>
-        <translation>?SOCKS?????????(????Tor)</translation>
+        <translation>通过一个SOCKS4代理连接到格雷德币网络 (如使用Tor连接时)</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Connect through SOCKS proxy:</source>
-        <translation>?SOCKS????(&amp;C)</translation>
+        <translation>通过SOCKS4代理连接(&amp;C)</translation>
     </message>
     <message>
         <location line="-130"/>
         <source>Pa&amp;y transaction fee</source>
-        <translation type="unfinished"></translation>
+        <translation>支付转账费用</translation>
     </message>
     <message>
         <location line="+46"/>
         <source>Reser&amp;ve</source>
-        <translation type="unfinished"></translation>
+        <translation>保留</translation>
     </message>
     <message>
         <location line="+93"/>
         <source>Prox&amp;y IP:</source>
-        <translation type="unfinished"></translation>
+        <translation>代理IP：</translation>
     </message>
     <message>
         <location line="+19"/>
         <source>IP address of the proxy (e.g. 127.0.0.1)</source>
-        <translation>????(??127.0.0.1)</translation>
+        <translation>代理服务器的IP地址(例如127.0.0.1)</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>&amp;Port:</source>
-        <translation>??(&amp;P)?</translation>
+        <translation>端口(&amp;P)：</translation>
     </message>
     <message>
         <location line="+19"/>
-        <source>Port of the proxy (e.g. 9050)</source>
-        <translation>??????? 9050?</translation>
+        <source>Port of the proxy (e.g. 9050)</source> 
+        <translation>代理端口(例如9050)</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>SOCKS &amp;Version:</source>
-        <translation>Socks ??(&amp;V)?</translation>
+        <translation>Socks版本(&amp;V)：</translation>
     </message>
     <message>
         <location line="+13"/>
         <source>SOCKS version of the proxy (e.g. 5)</source>
-        <translation>Socks ??????? 5?</translation>
+        <translation>代理服务器的Socks版本(例如5)</translation>
     </message>
     <message>
         <location line="+36"/>
         <source>&amp;Window</source>
-        <translation>??(&amp;W)</translation>
+        <translation>窗口(&amp;W)</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Show only a tray icon after minimizing the window.</source>
-        <translation>?????????????</translation>
+        <translation>最小化窗口后只显示一个托盘标志</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Minimize to the tray instead of the taskbar</source>
-        <translation>??????(&amp;M)</translation>
+        <translation>最小化到托盘而非任务栏(&amp;M)</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
-        <translation>??????????????????????????????????????????</translation>
+        <translation>当窗口关闭时程序最小化而不是退出。当使用该选项时，程序只能通过在菜单中选择退出来关闭。</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>M&amp;inimize on close</source>
-        <translation>?????????(&amp;I)</translation>
+        <translation>关闭时最小化(&amp;I)</translation>
     </message>
     <message>
         <location line="+21"/>
         <source>&amp;Display</source>
-        <translation>??(&amp;D)</translation>
+        <translation>显示(&amp;D)</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>User Interface &amp;language:</source>
-        <translation>??????(&amp;L)?</translation>
+        <translation>使用界面语言(&amp;L)：</translation>
     </message>
     <message>
         <location line="+13"/>
         <source>The user interface language can be set here. This setting will take effect after restarting Gridcoin.</source>
-        <translation>????????????????????????</translation>
-    </message>
+        <translation>设置语言选项。需重启客户端软件才能生效。</translation>
+    </message>    
     <message>
         <location line="+11"/>
         <source>&amp;Unit to show amounts in:</source>
-        <translation>??????(&amp;U)?</translation>
+        <translation>格雷德币金额单位(&amp;U)：</translation>
     </message>
     <message>
         <location line="+13"/>
         <source>Choose the default subdivision unit to show in the interface and when sending coins.</source>
-        <translation>???????</translation>
+        <translation>选择显示及发送货币时使用的最小单位</translation>
     </message>
-    <message>
-        <location line="+11"/>
+    <message>        <location line="+11"/>
         <source>Style:</source>
-        <translation type="unfinished"></translation>
+        <translation>风格：</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Choose a stylesheet to change the look of the wallet.</source>
-        <translation type="unfinished"></translation>
+        <translation>选择样式表以更改钱包外观。</translation>
     </message>
     <message>
         <location line="+9"/>
         <source>Whether to show Gridcoin addresses in the transaction list or not.</source>
-        <translation>??????????????</translation>
+        <translation>在转账列表中是否显示格雷德币地址。</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Display addresses in transaction list</source>
-        <translation>????????????(&amp;D)</translation>
+        <translation>在转账列表中显示地址(&amp;D)</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Whether to show coin control features or not.</source>
-        <translation>??????????????</translation>
+        <translation>是否显示货币支配特征。</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Display coin &amp;control features (experts only!)</source>
-        <translation>????????(???????)</translation>
+        <translation>显示货币支配特征(仅限专家！)</translation>
     </message>
     <message>
         <location line="+74"/>
         <source>&amp;OK</source>
-        <translation>??(&amp;O)</translation>
+        <translation>确定(&amp;O)</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>&amp;Cancel</source>
-        <translation>??(&amp;C)</translation>
+        <translation>取消(&amp;C)</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>&amp;Apply</source>
-        <translation>??(&amp;A)</translation>
+        <translation>应用(&amp;A)</translation>
     </message>
     <message>
         <location filename="../optionsdialog.cpp" line="+55"/>
         <source>default</source>
-        <translation>??</translation>
+        <translation>默认</translation>
     </message>
     <message>
         <location line="+30"/>
         <source>Native</source>
-        <translation type="unfinished"></translation>
+        <translation>本地</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Light</source>
-        <translation type="unfinished"></translation>
+h       <translation>轻</translation>
     </message>
     <message>
         <location line="+123"/>
         <location line="+9"/>
         <source>Warning</source>
-        <translation>??</translation>
+        <translation>警告</translation>
     </message>
     <message>
         <location line="-9"/>
         <location line="+9"/>
         <source>This setting will take effect after restarting Gridcoin.</source>
-        <translation>??????????</translation>
+        <translation>这个设置将在格雷德币重启后生效。</translation>
     </message>
     <message>
         <location line="+42"/>
         <source>The supplied proxy address is invalid.</source>
-        <translation>?????????????</translation>
+        <translation>提供的代理地址无效。</translation>
     </message>
 </context>
 <context>
@@ -1661,129 +1660,129 @@ y        <translation>启动时显示版权页 (缺省: 1)</translation>
     <message>
         <location filename="../forms/overviewpage.ui" line="+32"/>
         <source>Form</source>
-        <translation>??</translation>
+        <translation>表单</translation>
     </message>
     <message>
         <location line="+57"/>
         <location line="+439"/>
         <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</source>
-        <translation>???????????????????????????????????????????</translation>
+        <translation>现在显示的消息可能是过期的. 在连接上格雷德币网络节点后，您的钱包将自动与网络同步，但是这个过程还没有完成。</translation>
     </message>
     <message>
         <location line="-376"/>
         <source>Your current balance.</source>
-        <translation type="unfinished"></translation>
+        <translation>您的当前余额</translation>
     </message>
     <message>
         <location line="+13"/>
         <source>Stake</source>
-        <translation type="unfinished"></translation>
+        <translation>权益增值</translation>
     </message>
     <message>
         <location line="+15"/>
         <source>Total number of coins that are staking, and do not yet count toward the current balance</source>
-        <translation type="unfinished"></translation>
+        <translation>正在进行权益增值的货币数，尚未计入当前余额：<translation>
     </message>
     <message>
         <location line="+13"/>
         <source>Unconfirmed</source>
-        <translation type="unfinished">???? </translation>
+        <translation>未确认</translation>
     </message>
     <message>
         <location line="-114"/>
         <source>Wallet</source>
-        <translation type="unfinished">??</translation>
+        <translation>钱包</translation>
     </message>
     <message>
         <location line="+58"/>
         <source>Balance:</source>
-        <translation type="unfinished">???</translation>
+        <translation>余额：</translation>
     </message>
     <message>
         <location line="+90"/>
         <source>Immature:</source>
-        <translation type="unfinished"></translation>
+        <translation>未成熟的：</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Total mined coins that have not yet matured.</source>
-        <translation type="unfinished"></translation>
+        <translation>全部已挖到而未成熟的货币。</translation>
     </message>
     <message>
         <location line="+38"/>
         <source>Total:</source>
-        <translation type="unfinished"></translation>
+        <translation>总计：</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Total Balance     </source>
-        <translation type="unfinished"></translation>
+        <translation>总余额     </translation>
     </message>
     <message>
         <location line="+46"/>
         <source>Blocks:</source>
-        <translation type="unfinished"></translation>
+        <translation>区块数：</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Difficulty:</source>
-        <translation type="unfinished"></translation>
+        <translation>难度：</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Net Weight:</source>
-        <translation type="unfinished"></translation>
+        <translation>全网权重：</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>DPOR Weight:</source>
-        <translation type="unfinished"></translation>
+        <translation>DPOR权重：</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Magnitude:</source>
-        <translation type="unfinished"></translation>
+        <translation>权重</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Project:</source>
-        <translation type="unfinished"></translation>
+        <translation>项目：</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>CPID:</source>
-        <translation type="unfinished"></translation>
+        <translation>CPID：</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Status:</source>
-        <translation type="unfinished"></translation>
+        <translation>状态：</translation>
     </message>
     <message>
         <location line="+109"/>
         <source>Recent transactions</source>
-        <translation type="unfinished"></translation>
+        <translation>近期转账<translation>
     </message>
     <message>
         <location line="+99"/>
         <source>Current Poll:</source>
-        <translation type="unfinished"></translation>
+        <translation>当前民意调查：</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Client Messages:</source>
-        <translation type="unfinished"></translation>
+        <translation>钱包消息：</translation>
     </message>
     <message>
         <location line="-414"/>
         <source>Total of transactions that have yet to be confirmed, and do not yet count toward the current balance</source>
-        <translation>????????????????????</translation>
+        <translation>尚未确认的交易总额, 未计入当前余额</translation>
     </message>
     <message>
         <location filename="../overviewpage.cpp" line="+134"/>
         <location line="+1"/>
         <source>out of sync</source>
-        <translation>?????</translation>
+        <translation>未完成同步</translation>
     </message>
 </context>
 <context>
@@ -1791,57 +1790,57 @@ y        <translation>启动时显示版权页 (缺省: 1)</translation>
     <message>
         <location filename="../forms/qrcodedialog.ui" line="+14"/>
         <source>QR Code Dialog</source>
-        <translation>QR??????</translation>
+        <translation>二维码对话框</translation>
     </message>
     <message>
         <location line="+62"/>
         <source>Request Payment</source>
-        <translation>????</translation>
+        <translation>要求支付</translation>
     </message>
     <message>
         <location line="+56"/>
         <source>Amount:</source>
-        <translation>???</translation>
+        <translation>金额:</translation>
     </message>
     <message>
         <location line="-44"/>
         <source>Label:</source>
-        <translation>???</translation>
+        <translation>标签：</translation>
     </message>
     <message>
         <location line="+19"/>
         <source>Message:</source>
-        <translation>???</translation>
+        <translation>消息：</translation>
     </message>
     <message>
         <location line="+71"/>
         <source>&amp;Save As...</source>
-        <translation>???(&amp;S)...</translation>
+        <translation>另存为(&amp;S)...</translation>
     </message>
     <message>
         <location filename="../qrcodedialog.cpp" line="+62"/>
         <source>Error encoding URI into QR Code.</source>
-        <translation>URI??QR???????</translation>
+        <translation>将URI编码为二维码时出现错误。</translation>
     </message>
     <message>
         <location line="+40"/>
         <source>The entered amount is invalid, please check.</source>
-        <translation>????????????</translation>
+        <translation>输入的金额无效，请检查。</translation>
     </message>
     <message>
         <location line="+23"/>
         <source>Resulting URI too long, try to reduce the text for label / message.</source>
-        <translation>???URI???????????????</translation>
+        <translation>得到的URI超长，请尝试缩减标签/消息中的文字。</translation>
     </message>
     <message>
         <location line="+25"/>
         <source>Save QR Code</source>
-        <translation>??QR???</translation>
+        <translation>保存二维码</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>PNG Images (*.png)</source>
-        <translation>PNG??(*.png)</translation>
+        <translation>PNG图片(*.png)</translation>
     </message>
 </context>
 <context>
@@ -1849,7 +1848,7 @@ y        <translation>启动时显示版权页 (缺省: 1)</translation>
     <message>
         <location filename="../forms/rpcconsole.ui" line="+491"/>
         <source>Client name</source>
-        <translation>?????</translation>
+        <translation>客户端名称</translation>
     </message>
     <message>
         <location line="-445"/>
@@ -1864,207 +1863,207 @@ y        <translation>启动时显示版权页 (缺省: 1)</translation>
         <location line="+107"/>
         <location filename="../rpcconsole.cpp" line="+386"/>
         <source>N/A</source>
-        <translation>???</translation>
+        <translation>不可用</translation>
     </message>
     <message>
         <location line="-241"/>
         <source>Client version</source>
-        <translation>?????</translation>
+        <translation>客户端版本</translation>
     </message>
     <message>
         <location line="-168"/>
         <source>&amp;Information</source>
-        <translation>??(&amp;I)</translation>
+        <translation>信息(&amp;I)</translation>
     </message>
     <message>
         <location line="+425"/>
         <source>Startup time</source>
-        <translation>????</translation>
+        <translation>启动时间</translation>
     </message>
     <message>
         <location line="-366"/>
         <source>Number of connections</source>
-        <translation>???</translation>
+        <translation>连接数</translation>
     </message>
     <message>
         <location line="+220"/>
         <source>On testnet</source>
-        <translation>???</translation>
+        <translation>测试网络</translation>
     </message>
     <message>
         <location line="-136"/>
         <source>Block chain</source>
-        <translation>???</translation>
+        <translation>区块链</translation>
     </message>
     <message>
         <location line="-159"/>
         <source>Gridcoin - Debug Console</source>
-        <translation type="unfinished"></translation>
+        <translation>格雷德币 - 调试控制台</translation>
     </message>
     <message>
         <location line="+25"/>
         <source>Boost version</source>
-        <translation type="unfinished"></translation>
+        <translation>加速器版本</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Proof Of Research Difficulty</source>
-        <translation type="unfinished"></translation>
+        <translation>科研证明难度</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>1</source>
-        <translation type="unfinished">1</translation>
+        <translation>1</translation>
     </message>
     <message>
         <location line="+128"/>
         <source>Gridcoin Core:</source>
-        <translation type="unfinished"></translation>
+        <translation>格雷德币核心：</translation>
     </message>
     <message>
         <location line="+92"/>
         <source>Network:</source>
-        <translation type="unfinished"></translation>
+        <translation>网络：</translation>
     </message>
     <message>
         <location line="+39"/>
         <source>Current number of blocks</source>
-        <translation>???????</translation>
+        <translation>当前区块数</translation>
     </message>
     <message>
         <location line="+29"/>
         <source>Estimated total blocks</source>
-        <translation>???????</translation>
+        <translation>预计区块总数</translation>
     </message>
     <message>
         <location line="-217"/>
         <source>Last block time</source>
-        <translation>???????</translation>
+        <translation>上个区块的时间</translation>
     </message>
     <message>
         <location line="+248"/>
         <source>&amp;Open</source>
-        <translation>??(&amp;O)</translation>
+        <translation>打开(&amp;O)</translation>
     </message>
     <message>
         <location line="+15"/>
         <source>Command-line options</source>
-        <translation>?????</translation>
+        <translation>命令行选项</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>&amp;Show</source>
-        <translation>??(&amp;S)</translation>
+        <translation>显示(&amp;S)</translation>
     </message>
     <message>
         <location line="+265"/>
         <source>&amp;Console</source>
-        <translation>???(&amp;C)</translation>
+        <translation>控制台(&amp;C)</translation>
     </message>
     <message>
         <location line="-429"/>
         <source>Build date</source>
-        <translation>????</translation>
+        <translation>创建日期</translation>
     </message>
     <message>
         <location line="+117"/>
         <source>Debug log file</source>
-        <translation>??????</translation>
+        <translation>调试日志文件</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Open the Gridcoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
-        <translation>??????????????????????????</translation>
+        <translation>在当前数据目录打开调试日志文件。大的日志文件需要几秒钟。</translation>
     </message>
     <message>
         <location line="+31"/>
         <source>Show the Gridcoin help message to get a list with possible Gridcoin command-line options.</source>
-        <translation type="unfinished"></translation>
+        <translation>显示格雷德币帮助信息以得到格雷德币命令行可能选项的列表。</translation>
     </message>
     <message>
         <location line="+74"/>
         <source>OpenSSL version</source>
-        <translation type="unfinished"></translation>
+        <translation>OpenSSL版本</translation>
     </message>
     <message>
         <location line="+21"/>
         <source>&amp;Network Traffic</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;网络流量</translation>
     </message>
     <message>
         <location line="+52"/>
         <source>&amp;Clear</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;清除</translation>
     </message>
     <message>
         <location line="+13"/>
         <source>Totals</source>
-        <translation type="unfinished"></translation>
+        <translation>总计</translation>
     </message>
     <message>
         <location line="+27"/>
         <source>In:</source>
-        <translation type="unfinished"></translation>
+        <translation>输入：</translation>
     </message>
     <message>
         <location line="+43"/>
         <source>Out:</source>
-        <translation type="unfinished"></translation>
+        <translation>输出：</translation>
     </message>
     <message>
         <location line="+97"/>
         <source>Clear console</source>
-        <translation>?????</translation>
+        <translation>清空控制台</translation>
     </message>
     <message>
         <location filename="../rpcconsole.cpp" line="-35"/>
         <source>Welcome to the Gridcoin RPC console! </source>
-        <translation type="unfinished"></translation>
+        <translation>欢迎来到格雷德币RPC控制台！</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>???????????,  &lt;b&gt;Ctrl-L&lt;/b&gt;?????</translation>
+        <translation>使用上下方向键浏览历史,  &lt;b&gt;Ctrl-L&lt;/b&gt;清除屏幕。</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
-        <translation>?? &lt;b&gt;help&lt;/b&gt; ?????????</translation>
+        <translation>使用 &lt;b&gt;help&lt;/b&gt; 命令显示帮助信息。</translation>
     </message>
     <message>
         <location line="+111"/>
         <source>%1 B</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 B</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1 KB</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 KB</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1 MB</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 MB</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1 GB</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 GB</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>%1 m</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 分</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>%1 h</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 时</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1 h %2 m</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 时 %2 分</translation>
     </message>
 </context>
 <context>
@@ -2079,32 +2078,32 @@ y        <translation>启动时显示版权页 (缺省: 1)</translation>
         <location line="+5"/>
         <location line="+5"/>
         <source>Send Coins</source>
-        <translation>????</translation>
+        <translation>付款</translation>
     </message>
     <message>
         <location line="+73"/>
         <source>Coin Control Features</source>
-        <translation>?????????</translation>
+        <translation>货币支配特征</translation>
     </message>
     <message>
         <location line="+20"/>
         <source>Inputs...</source>
-        <translation>??...</translation>
+        <translation>输入...</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>automatically selected</source>
-        <translation>????</translation>
+        <translation>已自动选择</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Insufficient funds!</source>
-        <translation>?????</translation>
+        <translation>金额不足</translation>
     </message>
     <message>
         <location line="+83"/>
         <source>Quantity:</source>
-        <translation>???</translation>
+        <translation>数量</translation>
     </message>
     <message>
         <location line="+22"/>
@@ -2115,12 +2114,12 @@ y        <translation>启动时显示版权页 (缺省: 1)</translation>
     <message>
         <location line="-19"/>
         <source>Bytes:</source>
-        <translation>???</translation>
+        <translation>字节数：</translation>
     </message>
     <message>
         <location line="+48"/>
         <source>Amount:</source>
-        <translation>???</translation>
+        <translation>金额：</translation>
     </message>
     <message>
         <location line="+22"/>
@@ -2128,202 +2127,202 @@ y        <translation>启动时显示版权页 (缺省: 1)</translation>
         <location line="+80"/>
         <location line="+29"/>
         <source>0.00 GRC</source>
-        <translation type="unfinished"></translation>
+        <translation>0.00 GRC</translation>
     </message>
     <message>
         <location line="-179"/>
         <source>Priority:</source>
-        <translation>????</translation>
+        <translation>优先权：</translation>
     </message>
     <message>
         <location line="+19"/>
         <source>medium</source>
-        <translation>??</translation>
+        <translation>中</translation>
     </message>
     <message>
         <location line="+29"/>
         <source>Fee:</source>
-        <translation>???</translation>
+        <translation>费用：</translation>
     </message>
     <message>
         <location line="+32"/>
         <source>Low Output:</source>
-        <translation>???</translation>
+        <translation>低级输出：</translation>
     </message>
     <message>
         <location line="+19"/>
         <source>no</source>
-        <translation>no</translation>
+        <translation>否</translation>
     </message>
     <message>
         <location line="+29"/>
         <source>After Fee:</source>
-        <translation>???????:</translation>
+        <translation>后续费用:</translation>
     </message>
     <message>
         <location line="+32"/>
         <source>Change</source>
-        <translation>??</translation>
+        <translation>零钱</translation>
     </message>
     <message>
         <location line="+50"/>
         <source>custom change address</source>
-        <translation>???????</translation>
+        <translation>惯用的零钱地址</translation>
     </message>
     <message>
         <location line="+115"/>
         <source>Send to multiple recipients at once</source>
-        <translation>??????????</translation>
+        <translation>一次发送给多个接收者</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Add &amp;Recipient</source>
-        <translation>?????(&amp;R)</translation>
+        <translation>添加接收人(&amp;R)</translation>
     </message>
     <message>
         <location line="+20"/>
         <source>Remove all transaction fields</source>
-        <translation>????????</translation>
+        <translation>移除所有交易项</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Clear &amp;All</source>
-        <translation>????(&amp;A)</translation>
+        <translation>清除所有(&amp;A)</translation>
     </message>
     <message>
         <location line="+28"/>
         <source>Balance:</source>
-        <translation>???</translation>
+        <translation>余额：</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>123.456 GRC</source>
-        <translation type="unfinished"></translation>
+        <translation>123.456 GRC</translation>
     </message>
     <message>
         <location line="+31"/>
         <source>Confirm the send action</source>
-        <translation>???????</translation>
+        <translation>确认并付款</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>S&amp;end</source>
-        <translation>??(&amp;E)</translation>
+        <translation>付款(&amp;E)</translation>
     </message>
     <message>
         <location filename="../sendcoinsdialog.cpp" line="-173"/>
         <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="unfinished"></translation>
+        <translation>输入一个格雷德币地址(例如G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
     <message>
         <location line="+15"/>
         <source>Copy quantity</source>
-        <translation>????</translation>
+        <translation>复制数额/translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy amount</source>
-        <translation>????</translation>
+        <translation>复制金额</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy fee</source>
-        <translation>?????</translation>
+        <translation>复制费用</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy after fee</source>
-        <translation>?????????</translation>
+        <translation>复制后续费用</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy bytes</source>
-        <translation>????</translation>
+        <translation>复制比特数</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy priority</source>
-        <translation>?????</translation>
+        <translation>复制优先权</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy low output</source>
-        <translation>?????</translation>
+        <translation>复制低级输出</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy change</source>
-        <translation>????</translation>
+        <translation>复制余额</translation>
     </message>
     <message>
         <location line="+86"/>
         <source>&lt;b&gt;%1&lt;/b&gt; to %2 (%3)</source>
-        <translation>&lt;b&gt;%1&lt;/b&gt; ? %2 (%3)</translation>
+        <translation>&lt;b&gt;%1&lt;/b&gt; 到 %2 (%3)</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Confirm send coins</source>
-        <translation>??????</translation>
+        <translation>确认付款</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Are you sure you want to send %1?</source>
-        <translation>????? %1 ?</translation>
+        <translation>您确定要付款 %1 吗?</translation>
     </message>
     <message>
         <location line="+0"/>
         <source> and </source>
-        <translation>?</translation>
+        <translation> 和 </translation>
     </message>
     <message>
         <location line="+29"/>
         <source>The recipient address is not valid, please recheck.</source>
-        <translation>?????????????</translation>
+        <translation>接收者地址不合法，请检查。</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>The amount to pay must be larger than 0.</source>
-        <translation>????????0?</translation>
+        <translation>支付金额必须大于0。</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>The amount exceeds your balance.</source>
-        <translation>???????????</translation>
+        <translation>金额超出您的账上余额。</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>The total exceeds your balance when the %1 transaction fee is included.</source>
-        <translation>?? %1 ????????????????</translation>
+        <translation>计入 %1 交易费后的金额超出您的账上余额。</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Duplicate address found, can only send to each address once per send operation.</source>
-        <translation>???????, ??????????????</translation>
+        <translation>发现重复的地址, 每次只能对同一地址发送一次。</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Error: Transaction creation failed.</source>
-        <translation>??????????</translation>
+        <translation>错误: 创建交易失败。</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Error: The transaction was rejected. This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>??????????????????????????????????????????????????????????????????</translation>
+        <translation>错误: 交易被拒绝. 如果您使用的是备份钱包，可能存在两个钱包不同步的情况，另一个钱包中的比特币已经被使用，但本地的这个钱包尚没有记录。</translation>
     </message>
     <message>
         <location line="+251"/>
         <source>WARNING: Invalid Gridcoin address</source>
-        <translation>??????????</translation>
+        <translation>警告：无效的格雷德币地址</translation>
     </message>
     <message>
         <location line="+13"/>
         <source>(no label)</source>
-        <translation>(????)</translation>
+        <translation>(无标签)</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>WARNING: unknown change address</source>
-        <translation>??????????</translation>
+        <translation>警告：未知的零钱地址</translation>
     </message>
 </context>
 <context>
@@ -2331,22 +2330,22 @@ y        <translation>启动时显示版权页 (缺省: 1)</translation>
     <message>
         <location filename="../forms/sendcoinsentry.ui" line="+14"/>
         <source>Form</source>
-        <translation>??</translation>
+        <translation>表单</translation>
     </message>
     <message>
         <location line="+48"/>
         <source>Pa&amp;y To:</source>
-        <translation type="unfinished"></translation>
+        <translation>付款到：</translation>
     </message>
     <message>
         <location line="+18"/>
         <source>The address to send the payment to  (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
-        <translation type="unfinished"></translation>
+        <translation>付款地址 (例如:Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</translation>
     </message>
     <message>
         <location line="+60"/>
         <source>Message:</source>
-        <translation type="unfinished">???</translation>
+        <translation>消息：</translation>
     </message>
     <message>
         <location line="+21"/>
