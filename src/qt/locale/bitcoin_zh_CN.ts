@@ -11,7 +11,7 @@
     <message>
         <location line="+42"/>
         <source>&lt;b&gt;Gridcoin&lt;/b&gt; </source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;b&gt;格雷德币&lt;/b&gt; </translation>
     </message>
     <message>
         <location line="+58"/>
@@ -933,8 +933,7 @@ Address: %4
         </translation>
     </message>
     <message>
-        <location line="+27"/>
-        <source>Staking.&lt;br&gt;%1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
+        <location line="+27"/>        <source>Staking.&lt;br&gt;%1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
         <translation>权益增值中。&lt;br&gt;%1&lt;br&gt;全网权重为%2&lt;br&gt;&lt;b&gt;预计获得回报用时为%3. %4</translation>
     </message>
     <message>
@@ -955,7 +954,7 @@ Address: %4
     <message>
         <location filename="../bitcoin.cpp" line="+145"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
-        <translation>发生致命错误。格雷德币客户端的安全存在问题，将退出。</</translation>
+        <translation>发生致命错误。格雷德币客户端的安全存在问题，将退出。</translation>
     </message>
 </context>
 <context>
