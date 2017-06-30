@@ -3293,62 +3293,62 @@ h       <translation>轻</translation>
     <message>
         <location line="+1"/>
         <source>Total Shares</source>
-        <translation>总分享</translation>
+        <translation>总分享次数</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>URL</source>
-        <translation type="unfinished"></translation>
+        <translation>网址</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Best Answer</source>
-        <translation type="unfinished"></translation>
+        <translation>最佳答案</translation>
     </message>
     <message>
         <location line="+143"/>
         <source>Row Number.</source>
-        <translation type="unfinished"></translation>
+        <translation>行数。</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Title.</source>
-        <translation type="unfinished"></translation>
+        <translation>标题。</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Expiration.</source>
-        <translation type="unfinished"></translation>
+        <translation>截止时间。</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Share Type.</source>
-        <translation type="unfinished"></translation>
+        <translation>分享类型。</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Question.</source>
-        <translation type="unfinished"></translation>
+        <translation>问题。</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Total Participants.</source>
-        <translation type="unfinished"></translation>
+        <translation>总参与人数。</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Total Shares.</source>
-        <translation type="unfinished"></translation>
+        <translation>总分享数。</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>URL.</source>
-        <translation type="unfinished"></translation>
+.        <translation>网址。</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Best Answer.</source>
-        <translation type="unfinished"></translation>
+        <translation>最佳答案。</translation>
     </message>
 </context>
 <context>
@@ -3356,32 +3356,31 @@ h       <translation>轻</translation>
     <message>
         <location line="+533"/>
         <source>PlaceVote</source>
-        <translation type="unfinished"></translation>
+        <translation>放置投票</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Q: </source>
-        <translation type="unfinished"></translation>
+        <translation>问题：</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Discussion URL: </source>
-        <translation type="unfinished"></translation>
-    </message>
+        <translation>讨论网址：</translation>    </message>
     <message>
         <location line="+10"/>
         <source>Best Answer: </source>
-        <translation type="unfinished"></translation>
+        <translation>最佳答案：</translation>
     </message>
     <message>
         <location line="+17"/>
         <source>Vote</source>
-        <translation type="unfinished"></translation>
-    </message>
+        <translation>投票</translation>
+    </message>    
     <message>
         <location line="+37"/>
         <source>Vote failed! Select one or more items to vote.</source>
-        <translation type="unfinished"></translation>
+        <translation>投票失败！选择一项或更多项后再投票。</translation>
     </message>
 </context>
 <context>
@@ -3389,7 +3388,7 @@ h       <translation>轻</translation>
     <message>
         <location filename="../walletmodel.cpp" line="+278"/>
         <source>Sending...</source>
-        <translation>????</translation>
+        <translation>正在发送...</translation>
     </message>
 </context>
 <context>
@@ -3397,86 +3396,86 @@ h       <translation>轻</translation>
     <message>
         <location filename="../bitcoinstrings.cpp" line="+33"/>
         <source>Gridcoin version</source>
-        <translation>????? ??</translation>
+        <translation>格雷德币版本</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Usage:</source>
-        <translation>???</translation>
+        <translation>使用：</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>List commands</source>
-        <translation>????
+        <translation>命令列表
 </translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Get help for a command</source>
-        <translation>?????????
+        <translation>得到关于某个命令的帮助
 </translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Options:</source>
-        <translation>???
+        <translation>选项：
 </translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Specify wallet file (within data directory)</source>
-        <translation>?????????????</translation>
+        <translation>指定钱包文件（数据目录内）</translation>
     </message>
     <message>
         <location line="-1"/>
         <source>Specify data directory</source>
-        <translation>??????
+        <translation>指定数据目录
 </translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Set database cache size in megabytes (default: 25)</source>
-        <translation>?????????? (??: 25MB)</translation>
+        <translation>设置以MB为单位的数据库缓存大小 (默认值： 25MB)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Set database disk log size in megabytes (default: 100)</source>
-        <translation>???????????(??MB????100)</translation>
+        <translation>设置以MB为单位的数据磁盘日志大小 (默认值： 100MB)</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Maintain at most &lt;n&gt; connections to peers (default: 125)</source>
-        <translation>????? &lt;n&gt; ???: 125?</translation>
+        <translation>保留最多 &lt;n&gt; 条节点连接 (默认: %u) </translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Connect to a node to retrieve peer addresses, and disconnect</source>
-        <translation>????????????????????</translation>
+        <translation>连接一个节点并获取对端地址，然后断开连接</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Specify your own public address</source>
-        <translation>????????</translation>
+        <translation>指定您的公共地址</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Bind to given address. Use [host]:port notation for IPv6</source>
-        <translation>?IPv6 [host]:????????</translation>
+        <translation>绑定指定的IP地址开始监听。IPv6地址请使用[host]:port 格式</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Threshold for disconnecting misbehaving peers (default: 100)</source>
-        <translation>?????????????: 100?</translation>
+        <translation>断开 非礼节点的阀值 (默认: 100) </translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Number of seconds to keep misbehaving peers from reconnecting (default: 86400)</source>
-        <translation>Number of seconds to keep misbehaving peers from reconnecting (??: 86400)</translation>
+        <translation>限制 非礼节点 若干秒内不能连接 (默认: 86400)  (??: 86400)</translation>
     </message>
     <message>
         <location line="-43"/>
         <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
-        <translation>??RPC????%u?????, IPv4:%s</translation>
+        <translation>设置RPC????%u?????, IPv4:%s</translation>
     </message>
     <message>
         <location line="+157"/>
