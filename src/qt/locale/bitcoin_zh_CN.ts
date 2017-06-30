@@ -3563,72 +3563,72 @@ h       <translation>轻</translation>
     <message>
         <location line="-30"/>
         <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>警告： 读取wallet.dat时出现错误！???????????????????????????????????????????????</translation>
+        <translation>警告： 读取wallet.dat时出现错误！所有密钥均已正确解读，但转账数据或地址簿条目可能缺失或不正确。</translation>
     </message>
     <message>
         <location line="-18"/>
         <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>???????wallet.dat??! ????????????%s????????{timestamp}.bak ?????????????????????????????????</translation>
+        <translation>警告：wallet.dat损坏，数据已抢救! 原始的wallet.dat文件已在%s中保存为wallet.{timestamp}.bak.若您的余额或转账记录有误，您应该从备份中恢复。</translation>
     </message>
     <message>
         <location line="-31"/>
         <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>??????????wallet.dat?????</translation>
+        <translation>尝试从一个损坏的wallet.dat文件中恢复私钥</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Block creation options:</source>
-        <translation>????????</translation>
+        <translation>区块生成选项：</translation>
     </message>
     <message>
         <location line="-59"/>
         <source>Connect only to the specified node(s)</source>
-        <translation>????????</translation>
+        <translation>只连接到特定的节点</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Discover own IP address (default: 1 when listening and no -externalip)</source>
-        <translation>?????IP??(??:?? -externalip ????????1)</translation>
+        <translation>找到您自己的IP地址(缺省:1，当监听时， 且无 -externalip)</translation>
     </message>
     <message>
         <location line="+92"/>
         <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
-        <translation>?????????? -listen=0 ???</translation>
+        <translation>连接任意端口失败。 若您希望如此，使用 -listen=0.</translation>
     </message>
     <message>
         <location line="-88"/>
         <source>Find peers using DNS lookup (default: 1)</source>
-        <translation>?DNS???????? (???1)</translation>
+        <translation>通过DNS查找网络上的节点 (缺省: 1)</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Sync checkpoints policy (default: strict)</source>
-        <translation>??????? (?????)</translation>
+        <translation>同步检查点策略 (缺省：严格)</translation>
     </message>
     <message>
         <location line="+82"/>
         <source>Invalid -tor address: &apos;%s&apos;</source>
-        <translation>??? -tor ??: &apos;%s&apos;</translation>
+        <translation>无效的 -tor 地址: &apos;%s&apos;</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Invalid amount for -reservebalance=&lt;amount&gt;</source>
-        <translation>-reservebalance=&lt;amount&gt; ????</translation>
+        <translation>对-reservebalance=&lt;amount&gt; 无效的金额</translation>
     </message>
     <message>
         <location line="-81"/>
         <source>Maximum per-connection receive buffer, &lt;n&gt;*1000 bytes (default: 5000)</source>
-        <translation>????????????&lt;n&gt;*1000 ??(???5000)</translation>
+        <translation>每个连接的最大接收缓存，&lt;n&gt;*1000 字节 (默认: 5000)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Maximum per-connection send buffer, &lt;n&gt;*1000 bytes (default: 1000)</source>
-        <translation>????????????&lt;n&gt;*1000 ??(???1000)</translation>
+        <translation>每个连接的最大发送缓存，&lt;n&gt;*1000 字节 (默认: 1000)</translation>
     </message>
     <message>
         <location line="-15"/>
         <source>Only connect to nodes in network &lt;net&gt; (IPv4, IPv6 or Tor)</source>
-        <translation>???????????&lt;net&gt;(IPv4, IPv6 ?? Tor)</translation>
+        <translation>只连接 &lt;net&gt;网络中的节点 (ipv4, ipv6 或 onion)</translation>
     </message>
     <message>
         <location line="-49"/>
@@ -3643,12 +3643,22 @@ If the file does not exist, create it with owner-readable-only file permissions.
 It is also recommended to set alertnotify so you are notified of problems;
 for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
 </source>
-        <translation type="unfinished"></translation>
+        <translation>%s,您必须在配置文件中设置一个RPC密码：
+%s
+推荐您使用以下随机密码：
+rpcuser=gridcoinrpc
+rpcpassword=%s
+(您不必记住此密码)
+用户名和密码绝对不能雷同。
+若文件不存在，按照仅所有者可读的许可创建之。    
+同样也推荐设置alertnotify，这样您可要接到问题通知；
+例如：alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
+        </translation>
     </message>
     <message>
         <location line="+26"/>
         <source>Send command to -server or gridcoind</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <location line="+6"/>
