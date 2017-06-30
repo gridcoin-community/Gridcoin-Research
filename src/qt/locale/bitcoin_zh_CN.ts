@@ -3713,7 +3713,7 @@ rpcpassword=%s
     <message>
         <location line="+28"/>
         <source>Set maximum block size in bytes (default: 250000)</source>
-        <translation>以比特为单位设置最大区块大小(默认: 250000)</</translation>
+        <translation>以比特为单位设置最大区块大小(默认: 250000)</translation>
     </message>
     <message>
         <location line="-1"/>
