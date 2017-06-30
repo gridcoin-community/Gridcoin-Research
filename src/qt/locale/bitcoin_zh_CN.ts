@@ -726,7 +726,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+3"/>
         <source>&amp;Diagnostics</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;诊断</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2406,7 +2406,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../sendcoinsentry.cpp" line="+1"/>
         <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="unfinished">请输入格雷德币地址 (例如:G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <translation>请输入格雷德币地址 (例如:G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
 </context>
 <context>
