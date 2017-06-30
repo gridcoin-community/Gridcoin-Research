@@ -3558,7 +3558,7 @@ h       <translation>轻</translation>
     <message>
         <location line="+61"/>
         <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
-        <translation>警告：请确认您的计算机日期和时间是准确的！若您的时钟错误，格雷德币不会完美运行。</translation>
+        <translation>警告：请确定您当前计算机的日期和时间是正确的！格雷德币将无法在错误的时间下正常工作。</translation>
     </message>
     <message>
         <location line="-30"/>
@@ -3593,7 +3593,7 @@ h       <translation>轻</translation>
     <message>
         <location line="+92"/>
         <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
-        <translation>连接任意端口失败。 若您希望如此，使用 -listen=0.</translation>
+        <translation>监听任意端口失败。 若您希望如此，使用 -listen=0.</translation>
     </message>
     <message>
         <location line="-88"/>
@@ -3648,9 +3648,9 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
 推荐您使用以下随机密码：
 rpcuser=gridcoinrpc
 rpcpassword=%s
-(您不必记住此密码)
+(您无需记忆该密码)
 用户名和密码绝对不能雷同。
-若文件不存在，按照仅所有者可读的许可创建之。    
+如果配置文件不存在，请新建，并将文件权限设置为仅允许文件所有者读取。    
 同样也推荐设置alertnotify，这样您可要接到问题通知；
 例如：alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
         </translation>
