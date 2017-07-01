@@ -758,7 +758,7 @@ Address: %4
     <message>
         <location line="+5"/>
         <source>Not staking because you don&apos;t have mature coins and stake weight is too low.</source>
-        <translation type="unfinished">未进行权益增值，因为钱包中没有成熟的格雷德币，且权益增值权重过低。</translation>
+        <translation>未进行权益增值，因为钱包中没有成熟的格雷德币，且权益增值权重过低。</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -2340,7 +2340,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../sendcoinsentry.cpp" line="+1"/>
         <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="unfinished">请输入格雷德币地址 (例如:G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <translation>请输入格雷德币地址 (例如:G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
 </context>
 <context>
@@ -2602,7 +2602,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+140"/>
         <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
-        <translation type="unfinished">生成的格雷德币在可以使用前必须有 %1 个成熟的区块。当您生成了此区块后，它将被广播到网络中以加入区块链。如果它未成功进入区块链，其状态将变其状态将变更为“不接受”并且不可使用。这可能偶尔会发生，如果另一个节点比你早几秒钟成功生成一个区块。 {110 ?}</translation>
+        <translation>生成的格雷德币在可以使用前必须有 %1 个成熟的区块。当您生成了此区块后，它将被广播到网络中以加入区块链。如果它未成功进入区块链，其状态将变其状态将变更为“不接受”并且不可使用。这可能偶尔会发生，如果另一个节点比你早几秒钟成功生成一个区块。 {110 ?}</translation>
     </message>
     <message>
         <location line="-2"/>
