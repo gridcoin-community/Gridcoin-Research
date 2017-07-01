@@ -11,7 +11,7 @@
     <message>
         <location line="+42"/>
         <source>&lt;b&gt;Gridcoin&lt;/b&gt; </source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;b&gt;格雷德币&lt;/b&gt; </translation>
     </message>
     <message>
         <location line="+58"/>
