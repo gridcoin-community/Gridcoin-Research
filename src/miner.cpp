@@ -1339,6 +1339,7 @@ void StakeMiner(CWallet *pwallet)
     printf("StakeMiner: signed boinchash, coinstake, wholeblock\n");
 
     // * delegate to ProcessBlock
+    LOCK(cs_main);
     if (!ProcessBlock(NULL, &StakeBlock, true))
     {
         msMiningErrors5+="Block vehemently rejected; ";
