@@ -632,7 +632,7 @@ bool SoftSetArg(const std::string& strArg, const std::string& strValue)
 {
     if (mapArgs.count(strArg))
         return false;
-    mapArgs[strArg] = strValue;
+    ForceSetArg(strArg, strValue);
     return true;
 }
 
@@ -644,6 +644,12 @@ bool SoftSetBoolArg(const std::string& strArg, bool fValue)
         return SoftSetArg(strArg, std::string("0"));
 }
 
+void ForceSetArg(const std::string& strArg, const std::string& strValue)
+{
+    mapArgs[strArg] = strValue;
+    mapMultiArgs[strArg].clear();
+    mapMultiArgs[strArg].push_back(strValue);
+}
 
 string EncodeBase64(const unsigned char* pch, size_t len)
 {

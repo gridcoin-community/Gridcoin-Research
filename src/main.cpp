@@ -74,7 +74,6 @@ extern bool NeuralNodeParticipates();
 extern bool StrLessThanReferenceHash(std::string rh);
 void BusyWaitForTally();
 extern bool TallyNetworkAverages(bool Forcefully);
-extern void SetUpExtendedBlockIndexFieldsOnce();
 extern bool IsContract(CBlockIndex* pIndex);
 std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
@@ -9188,66 +9187,12 @@ bool IsSuperBlock(CBlockIndex* pIndex)
     return pIndex->nIsSuperBlock==1 ? true : false;
 }
 
-void SetUpExtendedBlockIndexFieldsOnce()
-{
-    return;
-
-    printf("SETUPExtendedBIfieldsOnce Testnet: %s \r\n",YesNo(fTestNet).c_str());
-    if (fTestNet)
-    {
-        if (pindexBest->nHeight < 20000) return;    }
-    else
-    {
-        if (pindexBest->nHeight < 361873) return;
-    }
-
-    std::string sSuperblocks = "";
-    std::string sContracts   = "";
-    int iStartHeight = fTestNet ? 20000 : 361873;
-
-    CBlockIndex* pindex = blockFinder.FindByHeight(iStartHeight);
-    if (!pindex) return;
-
-    if (pindex && pindex->pnext)
-    {
-        while (pindex->nHeight < (nNewIndex2 + 1))
-        {
-                if (!pindex || !pindex->pnext) break;
-                pindex = pindex->pnext;
-                if (pindex==NULL || !pindex->IsInMainChain()) continue;
-                CBlock block;
-                if (!block.ReadFromDisk(pindex)) continue;
-                MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
-                if (bb.superblock.length() > 20)
-                {
-                        sSuperblocks += pindex->GetBlockHash().GetHex() + ",";
-                }
-
-                BOOST_FOREACH(const CTransaction &tx, block.vtx)
-                {
-                        if (tx.hashBoinc.length() > 20)
-                        {
-                            bool fMemorized = MemorizeMessage(tx.hashBoinc,tx.nTime,0,"");
-                            if (fMemorized)
-                            {
-                                sContracts += pindex->GetBlockHash().GetHex() + ",";
-                                break;
-                            }
-                        }
-                }
-        }
-    }
-}
-
-
 double SnapToGrid(double d)
 {
     double dDither = .04;
     double dOut = cdbl(RoundToString(d*dDither,3),3) / dDither;
     return dOut;
 }
-
-
 
 bool NeuralNodeParticipates()
 {

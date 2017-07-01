@@ -32,62 +32,57 @@ This product includes software developed by the OpenSSL Project for use in the O
 <context>
     <name>AddressBookPage</name>
     <message>
-        <location filename="../forms/addressbookpage.ui" line="+14"/>
-        <source>Address Book</source>
-        <translation>Adres Defteri</translation>
-    </message>
-    <message>
-        <location line="+22"/>
-        <source>Double-click to edit address or label</source>
-        <translation>Adresi ya da etiketi düzenlemek için çift t?klay?n?z</translation>
-    </message>
-    <message>
-        <location line="+27"/>
+        <location filename="../forms/addressbookpage.ui" line="+63"/>
         <source>Create a new address</source>
         <translation>Yeni bir adres oluştur</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+3"/>
+        <source>&amp;New</source>
+        <translation>&amp;Yeni</translation>
+    </message>
+    <message>
+        <location line="+11"/>
         <source>Copy the currently selected address to the system clipboard</source>
         <translation>Seçili adresi panoya kopyala</translation>
     </message>
     <message>
-        <location line="-57"/>
-        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
-        <translation>Bunlar, ödeme almak için Gridcoin adreslerinizdir. Her bir göndericiye farkl? birini verebilir, böylece size kimin ödeme yapt???n? takip edebilirsiniz.</translation>
+        <location line="+3"/>
+        <source>&amp;Copy</source>
+        <translation>&amp;Kopyala</translation>
     </message>
     <message>
-        <location line="+71"/>
+        <location line="+11"/>
         <source>Show &amp;QR Code</source>
         <translation>&amp;QR Kodunu Göster</translation>
     </message>
     <message>
-        <location line="+14"/>
-        <source>Sign &amp;Message</source>
-        <translation>&amp;Mesaj ?mzala</translation>
-    </message>
-    <message>
-        <location line="-3"/>
+        <location line="+11"/>
         <source>Sign a message to prove you own a Gridcoin address</source>
         <translation>Bir Gridcoin adresine sahip oldu?unu ispatlamak için bir mesaj imzala</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+3"/>
+        <source>Sign &amp;Message</source>
+        <translation>&amp;Mesaj ?mzala</translation>
+    </message>
+    <message>
+        <location line="+11"/>
         <source>Verify a message to ensure it was signed with a specified Gridcoin address</source>
         <translation>Mesaj?n, belirli bir Gridcoin adresiyle imzaland???ndan emin olmak için onu do?rula</translation>
     </message>
     <message>
-        <location line="+14"/>
-        <source>Delete the currently selected address from the list</source>
-        <translation>Seçili adresi listeden sil</translation>
-    </message>
-    <message>
-        <location line="-11"/>
+        <location line="+3"/>
         <source>&amp;Verify Message</source>
         <translation>Mesaj? &amp;Do?rula</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+11"/>
+        <source>Delete the currently selected address from the list</source>
+        <translation>Seçili adresi listeden sil</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>&amp;Delete</source>
         <translation>&amp;Sil</translation>
     </message>
@@ -107,12 +102,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Adres Defteri Verisini D??ar? Aktar</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Virgülle ayrılmış değerler dosyası (*.csv)</translation>
-    </message>
-    <message>
-        <location line="+13"/>
+        <location line="+14"/>
         <source>Error exporting</source>
         <translation>D??ar? aktar?m hatas?</translation>
     </message>
@@ -122,14 +112,24 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>%1 dosyas?na yaz?lamad?.</translation>
     </message>
     <message>
-        <location filename="../forms/addressbookpage.ui" line="-67"/>
-        <source>&amp;New</source>
-        <translation>&amp;Yeni</translation>
+        <location line="-13"/>
+        <source>Comma separated file (*.csv)</source>
+        <translation>Virgülle ayrılmış değerler dosyası (*.csv)</translation>
     </message>
     <message>
-        <location line="+14"/>
-        <source>&amp;Copy</source>
-        <translation>&amp;Kopyala</translation>
+        <location filename="../forms/addressbookpage.ui" line="-119"/>
+        <source>Address Book</source>
+        <translation>Adres Defteri</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
+        <translation>Bunlar, ödeme almak için Gridcoin adreslerinizdir. Her bir göndericiye farkl? birini verebilir, böylece size kimin ödeme yapt???n? takip edebilirsiniz.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Double-click to edit address or label</source>
+        <translation>Adresi ya da etiketi düzenlemek için çift t?klay?n?z</translation>
     </message>
 </context>
 <context>
@@ -183,7 +183,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Sadece pay almak için</translation>
     </message>
     <message>
-        <location filename="../askpassphrasedialog.cpp" line="+38"/>
+        <location filename="../askpassphrasedialog.cpp" line="+37"/>
+        <source>Enter the new passphrase to the wallet.&lt;br/&gt;Please use a passphrase of &lt;b&gt;ten or more random characters&lt;/b&gt;, or &lt;b&gt;eight or more words&lt;/b&gt;.</source>
+        <translation>Cüzdan için yeni parolayı giriniz.&lt;br/&gt;Lütfen &lt;b&gt;on ya da daha fazla rastgele karakter&lt;/b&gt; veya &lt;b&gt;sekiz ya da daha fazla kelime&lt;/b&gt; içeren bir parola kullanınız.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Encrypt wallet</source>
         <translation>Cüzdanı şifrele</translation>
     </message>
@@ -218,19 +223,9 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Cüzdan için eski ve yeni parolalar? giriniz.</translation>
     </message>
     <message>
-        <location line="+45"/>
-        <source>Confirm wallet encryption</source>
-        <translation>Cüzdan şifrelemesini onayla</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+46"/>
         <source>Warning: If you encrypt your wallet and lose your passphrase, you will &lt;b&gt;LOSE ALL OF YOUR COINS&lt;/b&gt;!</source>
         <translation>Uyar?: E?er cüzdan?n?z? ?ifreleyip parolan?z? kaybederseniz, &lt;b&gt; TÜM COINLER?N?Z? KAYBEDECEKS?N?Z&lt;/b&gt;!</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Are you sure you wish to encrypt your wallet?</source>
-        <translation>Cüzdanınızı şifrelemek istediğinizden emin misiniz?</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -238,29 +233,28 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Gridcoin, ?ifreleme i?lemini tamamlamak için ?imdi kapat?lacak. Cüzdan?n?z? ?ifrelemenin; coinlerinizin, bilgisayar?n?z? etkileyen zararl? yaz?l?mlar taraf?ndan çal?nmas?n? bütünüyle engelleyemeyebilece?ini unutmay?n?z.</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>IMPORTANT: Any previous backups you have made of your wallet file should be replaced with the newly generated, encrypted wallet file. For security reasons, previous backups of the unencrypted wallet file will become useless as soon as you start using the new, encrypted wallet.</source>
-        <translation>ÖNEMLİ: Önceden yapmış olduğunuz cüzdan dosyası yedeklemelerinin yeni oluşturulan şifrelenmiş cüzdan dosyası ile değiştirilmeleri gerekir. Güvenlik nedenleriyle yeni, şifrelenmiş cüzdanı kullanmaya başladığınızda eski şifrelenmemiş cüzdan dosyaları işe yaramaz hale gelecektir.</translation>
+        <location line="-12"/>
+        <source>Confirm wallet encryption</source>
+        <translation>Cüzdan şifrelemesini onayla</translation>
     </message>
     <message>
-        <location line="+103"/>
-        <location line="+24"/>
-        <source>Warning: The Caps Lock key is on!</source>
-        <translation>Uyarı: Caps Lock tuşu etkin durumda!</translation>
+        <location line="+1"/>
+        <source>Are you sure you wish to encrypt your wallet?</source>
+        <translation>Cüzdanınızı şifrelemek istediğinizden emin misiniz?</translation>
     </message>
     <message>
-        <location line="-133"/>
+        <location line="+9"/>
         <location line="+60"/>
         <source>Wallet encrypted</source>
         <translation>Cüzdan şifrelendi</translation>
     </message>
     <message>
-        <location line="-140"/>
-        <source>Enter the new passphrase to the wallet.&lt;br/&gt;Please use a passphrase of &lt;b&gt;ten or more random characters&lt;/b&gt;, or &lt;b&gt;eight or more words&lt;/b&gt;.</source>
-        <translation>Cüzdan için yeni parolayı giriniz.&lt;br/&gt;Lütfen &lt;b&gt;on ya da daha fazla rastgele karakter&lt;/b&gt; veya &lt;b&gt;sekiz ya da daha fazla kelime&lt;/b&gt; içeren bir parola kullanınız.</translation>
+        <location line="-54"/>
+        <source>IMPORTANT: Any previous backups you have made of your wallet file should be replaced with the newly generated, encrypted wallet file. For security reasons, previous backups of the unencrypted wallet file will become useless as soon as you start using the new, encrypted wallet.</source>
+        <translation>ÖNEMLİ: Önceden yapmış olduğunuz cüzdan dosyası yedeklemelerinin yeni oluşturulan şifrelenmiş cüzdan dosyası ile değiştirilmeleri gerekir. Güvenlik nedenleriyle yeni, şifrelenmiş cüzdanı kullanmaya başladığınızda eski şifrelenmemiş cüzdan dosyaları işe yaramaz hale gelecektir.</translation>
     </message>
     <message>
-        <location line="+95"/>
+        <location line="+9"/>
         <location line="+7"/>
         <location line="+44"/>
         <location line="+6"/>
@@ -300,16 +294,27 @@ This product includes software developed by the OpenSSL Project for use in the O
         <source>Wallet passphrase was successfully changed.</source>
         <translation>Cüzdan parolası başarılı bir şekilde değiştirildi.</translation>
     </message>
+    <message>
+        <location line="+48"/>
+        <location line="+24"/>
+        <source>Warning: The Caps Lock key is on!</source>
+        <translation>Uyarı: Caps Lock tuşu etkin durumda!</translation>
+    </message>
 </context>
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+920"/>
+        <location filename="../bitcoingui.cpp" line="+793"/>
         <source>Sign &amp;message...</source>
         <translation>&amp;İleti imzala...</translation>
     </message>
     <message>
-        <location line="-128"/>
+        <location line="-129"/>
+        <source>&amp;Overview</source>
+        <translation>&amp;Genel bakış</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Show general overview of wallet</source>
         <translation>Cüzdana genel bakışı göster</translation>
     </message>
@@ -324,22 +329,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>İşlem geçmişine gözat</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>&amp;Address Book</source>
-        <translation>&amp;Adres Defteri</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Edit the list of stored addresses and labels</source>
-        <translation>Kay?tl? adresler ve etiketler listesini düzenle</translation>
-    </message>
-    <message>
-        <location line="-10"/>
-        <source>Show the list of addresses for receiving payments</source>
-        <translation>Ödeme almak için kullan?lan adres listesini göster</translation>
-    </message>
-    <message>
-        <location line="+51"/>
+        <location line="+46"/>
         <source>E&amp;xit</source>
         <translation>Ç&amp;ık</translation>
     </message>
@@ -369,22 +359,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Parolayı &amp;Değiştir...</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>&amp;Export...</source>
-        <translation>&amp;D??ar? aktar...</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Export the data in the current tab to a file</source>
-        <translation>Mevcut sekmedeki veriyi bir dosyaya aktar</translation>
-    </message>
-    <message>
-        <location line="-14"/>
-        <source>Encrypt or decrypt wallet</source>
-        <translation>Cüzdan? ?ifrele veya cüzdan?n ?ifresini aç</translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="-1"/>
         <source>Backup wallet to another location</source>
         <translation>Cüzdanı diğer bir konumda yedekle</translation>
     </message>
@@ -409,32 +384,27 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>İletiyi &amp;kontrol et...</translation>
     </message>
     <message>
-        <location line="-721"/>
+        <location line="-618"/>
         <source>Wallet</source>
         <translation>Cüzdan</translation>
     </message>
     <message>
-        <location line="+708"/>
+        <location line="+493"/>
+        <source>&amp;Send</source>
+        <translation>&amp;Gönder</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>&amp;Receive</source>
+        <translation>&amp;Al</translation>
+    </message>
+    <message>
+        <location line="+107"/>
         <source>&amp;Show / Hide</source>
         <translation>&amp;Göster / Gizle</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>Unlock wallet</source>
-        <translation>Cüzdan?n kilidini aç</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>&amp;Lock Wallet</source>
-        <translation>Cüzdan? &amp;Kilitle</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Lock wallet</source>
-        <translation>Cüzdan? kilitle</translation>
-    </message>
-    <message>
-        <location line="+47"/>
+        <location line="+58"/>
         <source>&amp;File</source>
         <translation>&amp;Dosya</translation>
     </message>
@@ -444,147 +414,19 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>&amp;Ayarlar</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="+38"/>
         <source>&amp;Help</source>
         <translation>&amp;Yardım</translation>
     </message>
-    <message>
-        <location line="+50"/>
-        <location line="+9"/>
-        <source>[testnet]</source>
-        <translation>[testnet]</translation>
-    </message>
     <message numerus="yes">
-        <location line="+204"/>
-        <source>%n second(s) ago</source>
+        <location line="+281"/>
+        <source>Processed %n block(s) of transaction history.</source>
         <translation>
-            <numerusform>%n saniye önce</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+4"/>
-        <source>%n minute(s) ago</source>
-        <translation>
-            <numerusform>%n dakika önce</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+4"/>
-        <source>%n hour(s) ago</source>
-        <translation>
-            <numerusform>%n saat önce</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+4"/>
-        <source>%n day(s) ago</source>
-        <translation>
-            <numerusform>%n gün önce</numerusform>
+            <numerusform>Muamele tarihçesinden %n blok işlendi.</numerusform>
         </translation>
     </message>
     <message>
-        <location line="+23"/>
-        <source>Last received block was generated %1.</source>
-        <translation>Son al?nan blok, üretildi %1.</translation>
-    </message>
-    <message>
-        <location line="+70"/>
-        <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
-        <translation>Bu i?lem, büyüklük s?n?r?n?n üzerindedir. ??leminizi gerçekle?tirecek devrelere gidecek ve a?? desteklemeye yard?mc? olacak %1 ücretle coin gönderebilirsiniz. Ücreti ödemek istiyor musunuz?</translation>
-    </message>
-    <message>
-        <location line="+74"/>
-        <source>Please enter your boinc E-mail address, or click &lt;Cancel&gt; to skip for now:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Created new Configuration File Successfully. </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>New Account Created - Welcome Aboard!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>New User Wizard - Skipped</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+16"/>
-        <source>Attention! - Boinc Path Error!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+351"/>
-        <location line="+15"/>
-        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
-        <translation>URI ayr??t?r?lamad?! Bu, geçersiz bir Gridcoin adresi veya hatal? URI parametreleri nedeniyle olabilir.</translation>
-    </message>
-    <message>
-        <location line="+396"/>
-        <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Not staking because wallet is locked</source>
-        <translation>Pay al?nm?yor çünkü cüzdan kilitlidir</translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Not staking because wallet is offline</source>
-        <translation>Pay al?nm?yor çünkü cüzdan çevrimd???d?r</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Not staking because wallet is syncing</source>
-        <translation>Pay al?nm?yor çünkü cüzdan senkronize ediliyor</translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Not staking because you don&apos;t have mature coins and stake weight is too low.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Not staking because you don&apos;t have mature coins</source>
-        <translation>Pay al?nm?yor çünkü olgunla?m?? coininiz yoktur</translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Searching for mature coins... Please wait</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-2095"/>
-        <source>Gridcoin</source>
-        <translation>Gridcoin</translation>
-    </message>
-    <message>
-        <location line="+601"/>
-        <source>&amp;Receive</source>
-        <translation>&amp;Al</translation>
-    </message>
-    <message>
-        <location line="-5"/>
-        <source>&amp;Send</source>
-        <translation>&amp;Gönder</translation>
-    </message>
-    <message>
-        <location line="+120"/>
-        <source>&amp;Unlock Wallet...</source>
-        <translation>Cüzdan? &amp;Kilitle...</translation>
-    </message>
-    <message>
-        <location line="+387"/>
+        <location line="+31"/>
         <source>Up to date</source>
         <translation>Güncel</translation>
     </message>
@@ -594,12 +436,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Aralık kapatılıyor...</translation>
     </message>
     <message>
-        <location line="+85"/>
-        <source>Confirm transaction fee</source>
-        <translation>??lem ücretini onayla</translation>
-    </message>
-    <message>
-        <location line="+135"/>
+        <location line="+218"/>
         <source>Sent transaction</source>
         <translation>İşlem gönderildi</translation>
     </message>
@@ -609,30 +446,42 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Gelen işlem</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Date: %1
-Amount: %2
-Type: %3
-Address: %4
-</source>
-        <translation>Tarih: %1
-Miktar: %2
-Tür: %3
-Adres: %4
-</translation>
+        <location line="+245"/>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
+        <translation>Cüzdan &lt;b&gt;şifrelenmiştir&lt;/b&gt; ve şu anda &lt;b&gt;kilidi açıktır&lt;/b&gt;</translation>
     </message>
     <message>
-        <location line="-741"/>
-        <source>&amp;Overview</source>
-        <translation>&amp;Genel bakış</translation>
+        <location line="+10"/>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
+        <translation>Cüzdan &lt;b&gt;şifrelenmiştir&lt;/b&gt; ve şu anda &lt;b&gt;kilitlidir&lt;/b&gt;</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="-1502"/>
+        <source>Gridcoin</source>
+        <translation>Gridcoin</translation>
+    </message>
+    <message>
+        <location line="+494"/>
         <source>Send coins to a Gridcoin address</source>
         <translation>Bir Gridcoin adresine coin gönder</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+5"/>
+        <source>Show the list of addresses for receiving payments</source>
+        <translation>Ödeme almak için kullan?lan adres listesini göster</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>&amp;Address Book</source>
+        <translation>&amp;Adres Defteri</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Edit the list of stored addresses and labels</source>
+        <translation>Kay?tl? adresler ve etiketler listesini düzenle</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>&amp;Block Explorer</source>
         <translation type="unfinished"></translation>
     </message>
@@ -642,13 +491,7 @@ Adres: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1034"/>
-        <location line="+15"/>
-        <source>URI handling</source>
-        <translation>URI i?leme</translation>
-    </message>
-    <message>
-        <location line="-1046"/>
+        <location line="+3"/>
         <source>&amp;Exchange</source>
         <translation type="unfinished"></translation>
     </message>
@@ -684,23 +527,12 @@ Adres: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1051"/>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
-        <translation>Cüzdan &lt;b&gt;şifrelenmiştir&lt;/b&gt; ve şu anda &lt;b&gt;kilidi açıktır&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
-        <translation>Cüzdan &lt;b&gt;şifrelenmiştir&lt;/b&gt; ve şu anda &lt;b&gt;kilitlidir&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <location line="-1034"/>
-        <location line="+137"/>
+        <location line="+27"/>
         <source>&amp;Rebuild Block Chain</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-136"/>
+        <location line="+1"/>
         <source>Rebuild Block Chain</source>
         <translation type="unfinished"></translation>
     </message>
@@ -735,17 +567,7 @@ Adres: %4
         <translation>Gridcoin hakk?ndaki bilgiyi göster</translation>
     </message>
     <message>
-        <location line="+1050"/>
-        <source>Backup Wallet</source>
-        <translation>Cüzdan? Yedekle</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Wallet Data (*.dat)</source>
-        <translation>Cüzdan Verisi (*.dat)</translation>
-    </message>
-    <message>
-        <location line="-1047"/>
+        <location line="+3"/>
         <source>&amp;Neural Network</source>
         <translation type="unfinished"></translation>
     </message>
@@ -755,17 +577,7 @@ Adres: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1049"/>
-        <source>Backup Failed</source>
-        <translation>Yedekleme Ba?ar?s?z Oldu</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>There was an error trying to save the wallet data to the new location.</source>
-        <translation>Cüzdan verisi, yeni bir konuma kaydedilmeye çal???l?rken bir hata olu?tu.</translation>
-    </message>
-    <message>
-        <location line="-1046"/>
+        <location line="+3"/>
         <source>&amp;Advanced Configuration</source>
         <translation type="unfinished"></translation>
     </message>
@@ -781,12 +593,12 @@ Adres: %4
     </message>
     <message>
         <location line="+1"/>
-        <location line="+578"/>
+        <location line="+597"/>
         <source>New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-575"/>
+        <location line="-594"/>
         <source>&amp;Voting</source>
         <translation type="unfinished"></translation>
     </message>
@@ -830,8 +642,190 @@ Adres: %4
         <source>Modify configuration options for Gridcoin</source>
         <translation>Gridcoin yap?land?rma seçeneklerini de?i?tir</translation>
     </message>
+    <message>
+        <location line="+4"/>
+        <source>Encrypt or decrypt wallet</source>
+        <translation>Cüzdan? ?ifrele veya cüzdan?n ?ifresini aç</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>&amp;Unlock Wallet...</source>
+        <translation>Cüzdan? &amp;Kilitle...</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Unlock wallet</source>
+        <translation>Cüzdan?n kilidini aç</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>&amp;Lock Wallet</source>
+        <translation>Cüzdan? &amp;Kilitle</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Lock wallet</source>
+        <translation>Cüzdan? kilitle</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>&amp;Export...</source>
+        <translation>&amp;D??ar? aktar...</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Export the data in the current tab to a file</source>
+        <translation>Mevcut sekmedeki veriyi bir dosyaya aktar</translation>
+    </message>
+    <message>
+        <location line="+59"/>
+        <source>&amp;Community</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>&amp;Advanced</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+138"/>
+        <location line="+9"/>
+        <source>[testnet]</source>
+        <translation>[testnet]</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+64"/>
+        <source>Gridcoin client</source>
+        <translation>Gridcoin istemcisi</translation>
+    </message>
     <message numerus="yes">
-        <location line="+1317"/>
+        <location line="+79"/>
+        <source>%n active connection(s) to Gridcoin network</source>
+        <translation>
+            <numerusform>Gridcoin a??na %n etkin ba?lant?</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+25"/>
+        <source>%n second(s) ago</source>
+        <translation>
+            <numerusform>%n saniye önce</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n minute(s) ago</source>
+        <translation>
+            <numerusform>%n dakika önce</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n hour(s) ago</source>
+        <translation>
+            <numerusform>%n saat önce</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n day(s) ago</source>
+        <translation>
+            <numerusform>%n gün önce</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Last received block was generated %1.</source>
+        <translation>Son al?nan blok, üretildi %1.</translation>
+    </message>
+    <message>
+        <location line="+68"/>
+        <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
+        <translation>Bu i?lem, büyüklük s?n?r?n?n üzerindedir. ??leminizi gerçekle?tirecek devrelere gidecek ve a?? desteklemeye yard?mc? olacak %1 ücretle coin gönderebilirsiniz. Ücreti ödemek istiyor musunuz?</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Confirm transaction fee</source>
+        <translation>??lem ücretini onayla</translation>
+    </message>
+    <message>
+        <location line="+69"/>
+        <source>Please enter your boinc E-mail address, or click &lt;Cancel&gt; to skip for now:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Created new Configuration File Successfully. </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New Account Created - Welcome Aboard!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New User Wizard - Skipped</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Attention! - Boinc Path Error!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+32"/>
+        <source>Date: %1
+Amount: %2
+Type: %3
+Address: %4
+</source>
+        <translation>Tarih: %1
+Miktar: %2
+Tür: %3
+Adres: %4
+</translation>
+    </message>
+    <message>
+        <location line="+211"/>
+        <location line="+15"/>
+        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
+        <translation>URI ayr??t?r?lamad?! Bu, geçersiz bir Gridcoin adresi veya hatal? URI parametreleri nedeniyle olabilir.</translation>
+    </message>
+    <message>
+        <location line="-15"/>
+        <location line="+15"/>
+        <source>URI handling</source>
+        <translation>URI i?leme</translation>
+    </message>
+    <message>
+        <location line="+57"/>
+        <source>Backup Wallet</source>
+        <translation>Cüzdan? Yedekle</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Wallet Data (*.dat)</source>
+        <translation>Cüzdan Verisi (*.dat)</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Backup Failed</source>
+        <translation>Yedekleme Ba?ar?s?z Oldu</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>There was an error trying to save the wallet data to the new location.</source>
+        <translation>Cüzdan verisi, yeni bir konuma kaydedilmeye çal???l?rken bir hata olu?tu.</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+300"/>
         <source>%n second(s)</source>
         <translation>
             <numerusform>%n saniye</numerusform>
@@ -844,48 +838,8 @@ Adres: %4
             <numerusform>%n dakika</numerusform>
         </translation>
     </message>
-    <message>
-        <location line="-1244"/>
-        <source>&amp;Community</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>&amp;Upgrade QT Client</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+12"/>
-        <source>&amp;Advanced</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+77"/>
-        <location line="+64"/>
-        <source>Gridcoin client</source>
-        <translation>Gridcoin istemcisi</translation>
-    </message>
     <message numerus="yes">
-        <location line="+79"/>
-        <source>%n active connection(s) to Gridcoin network</source>
-        <translation>
-            <numerusform>Gridcoin a??na %n etkin ba?lant?</numerusform>
-        </translation>
-    </message>
-    <message>
-        <location line="+24"/>
-        <source>Synchronizing with network...</source>
-        <translation>Ağ ile senkronize ediliyor...</translation>
-    </message>
-    <message numerus="yes">
-        <location line="+2"/>
-        <source>~%n block(s) remaining</source>
-        <translation>
-            <numerusform>~%n blok kald?</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+981"/>
+        <location line="+4"/>
         <source>%n hour(s)</source>
         <translation>
             <numerusform>%n saat</numerusform>
@@ -899,7 +853,42 @@ Adres: %4
         </translation>
     </message>
     <message>
-        <location line="+65"/>
+        <location line="+27"/>
+        <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Not staking because wallet is locked</source>
+        <translation>Pay al?nm?yor çünkü cüzdan kilitlidir</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Not staking because wallet is offline</source>
+        <translation>Pay al?nm?yor çünkü cüzdan çevrimd???d?r</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Not staking because wallet is syncing</source>
+        <translation>Pay al?nm?yor çünkü cüzdan senkronize ediliyor</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Not staking because you don&apos;t have mature coins and stake weight is too low.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Not staking because you don&apos;t have mature coins</source>
+        <translation>Pay al?nm?yor çünkü olgunla?m?? coininiz yoktur</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Searching for mature coins... Please wait</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Not staking</source>
         <translation>Pay al?nm?yor</translation>
     </message>
@@ -907,13 +896,6 @@ Adres: %4
         <location filename="../bitcoin.cpp" line="+145"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
         <translation>Önemli bir hata olu?tu. Gridcoin art?k güvenli bir ?ekilde devam edemez ve ?imdi kapat?lacak.</translation>
-    </message>
-    <message numerus="yes">
-        <location filename="../bitcoingui.cpp" line="-1036"/>
-        <source>Processed %n block(s) of transaction history.</source>
-        <translation>
-            <numerusform>Muamele tarihçesinden %n blok işlendi.</numerusform>
-        </translation>
     </message>
 </context>
 <context>
@@ -927,12 +909,7 @@ Adres: %4
 <context>
     <name>CoinControlDialog</name>
     <message>
-        <location filename="../forms/coincontroldialog.ui" line="+14"/>
-        <source>Coin Control</source>
-        <translation>Coin Kontrolü</translation>
-    </message>
-    <message>
-        <location line="+28"/>
+        <location filename="../forms/coincontroldialog.ui" line="+42"/>
         <source>Quantity:</source>
         <translation>Miktar:</translation>
     </message>
@@ -962,12 +939,27 @@ Adres: %4
         <translation>Dü?ük Ç?kt?:</translation>
     </message>
     <message>
-        <location filename="../coincontroldialog.cpp" line="+551"/>
-        <source>no</source>
-        <translation>hayır</translation>
+        <location line="+162"/>
+        <source>Tree &amp;mode</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../forms/coincontroldialog.ui" line="+48"/>
+        <location line="+66"/>
+        <source>Label</source>
+        <translation>Etiket</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Address</source>
+        <translation>Adres</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Priority</source>
+        <translation>Öncelik</translation>
+    </message>
+    <message>
+        <location line="-203"/>
         <source>After Fee:</source>
         <translation>Ücretten sonra:</translation>
     </message>
@@ -982,12 +974,7 @@ Adres: %4
         <translation>tümünü seç(me)</translation>
     </message>
     <message>
-        <location line="+13"/>
-        <source>Tree &amp;mode</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+16"/>
+        <location line="+29"/>
         <source>List mode</source>
         <translation>Liste kipi</translation>
     </message>
@@ -997,17 +984,7 @@ Adres: %4
         <translation>Tutar</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>Label</source>
-        <translation>Etiket</translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Address</source>
-        <translation>Adres</translation>
-    </message>
-    <message>
-        <location line="+5"/>
+        <location line="+15"/>
         <source>Date</source>
         <translation>Tarih</translation>
     </message>
@@ -1022,12 +999,7 @@ Adres: %4
         <translation>Doğrulandı</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>Priority</source>
-        <translation>Öncelik</translation>
-    </message>
-    <message>
-        <location filename="../coincontroldialog.cpp" line="-515"/>
+        <location filename="../coincontroldialog.cpp" line="+36"/>
         <source>Copy address</source>
         <translation>Adres kopyala</translation>
     </message>
@@ -1048,27 +1020,7 @@ Adres: %4
         <translation>İşlem ID&apos;sini kopyala</translation>
     </message>
     <message>
-        <location line="+24"/>
-        <source>Copy quantity</source>
-        <translation>Miktarı kopyala</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Copy fee</source>
-        <translation>Ücreti kopyala</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Copy after fee</source>
-        <translation>Ücretten sonrasını kopyala</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Copy bytes</source>
-        <translation>Baytları kopyala</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+29"/>
         <source>Copy priority</source>
         <translation>Önceli?i kopyala</translation>
     </message>
@@ -1078,12 +1030,7 @@ Adres: %4
         <translation>Dü?ük ç?kt?y? kopyala</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Copy change</source>
-        <translation>Para üstünü kopyala</translation>
-    </message>
-    <message>
-        <location line="+317"/>
+        <location line="+318"/>
         <source>highest</source>
         <translation>en yüksek</translation>
     </message>
@@ -1123,11 +1070,6 @@ Adres: %4
         <translation>BOZUKLUK</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>yes</source>
-        <translation>evet</translation>
-    </message>
-    <message>
         <location line="+10"/>
         <source>This label turns red, if the transaction size is bigger than 10000 bytes.
 
@@ -1141,7 +1083,20 @@ Adres: %4
  Girdi ba??na +/- 1 Byte de?i?kenlik gösterebilir.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
+        <source>Transactions with higher priority get more likely into a block.
+
+This label turns red, if the priority is smaller than &quot;medium&quot;.
+
+ This means a fee of at least %1 per kb is required.</source>
+        <translation>Yüksek öncelikli i?lemler, daha yüksek ihtimalle bir blo?a dü?er.
+
+Öncelik &quot;orta&quot; seviyeden dü?ükse, bu etiket k?rm?z?ya döner.
+
+ Bu, kb ba??na en az %1 ücret gerekti?i anlam?na gelir.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>This label turns red, if any recipient receives an amount smaller than %1.
 
  This means a fee of at least %2 is required. 
@@ -1163,26 +1118,48 @@ Adres: %4
  Bu, en az %2 bir ücretin gerekti?i anlam?na gelir.</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="-501"/>
+        <source>Copy quantity</source>
+        <translation>Miktarı kopyala</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Copy fee</source>
+        <translation>Ücreti kopyala</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Copy after fee</source>
+        <translation>Ücretten sonrasını kopyala</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Copy bytes</source>
+        <translation>Baytları kopyala</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Copy change</source>
+        <translation>Para üstünü kopyala</translation>
+    </message>
+    <message>
+        <location line="+481"/>
+        <source>yes</source>
+        <translation>evet</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>no</source>
+        <translation>hayır</translation>
+    </message>
+    <message>
+        <location line="+50"/>
         <location line="+63"/>
         <source>(no label)</source>
         <translation>(etiket yok)</translation>
     </message>
     <message>
-        <location line="-102"/>
-        <source>Transactions with higher priority get more likely into a block.
-
-This label turns red, if the priority is smaller than &quot;medium&quot;.
-
- This means a fee of at least %1 per kb is required.</source>
-        <translation>Yüksek öncelikli i?lemler, daha yüksek ihtimalle bir blo?a dü?er.
-
-Öncelik &quot;orta&quot; seviyeden dü?ükse, bu etiket k?rm?z?ya döner.
-
- Bu, kb ba??na en az %1 ücret gerekti?i anlam?na gelir.</translation>
-    </message>
-    <message>
-        <location line="+93"/>
+        <location line="-9"/>
         <source>change from %1 (%2)</source>
         <translation>%1 ögesinden para üstü (%2)</translation>
     </message>
@@ -1190,6 +1167,11 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+1"/>
         <source>(change)</source>
         <translation>(para üstü)</translation>
+    </message>
+    <message>
+        <location filename="../forms/coincontroldialog.ui" line="-454"/>
+        <source>Coin Control</source>
+        <translation>Coin Kontrolü</translation>
     </message>
 </context>
 <context>
@@ -1210,14 +1192,14 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Bu adres defteri kayd?yla ili?kili etiket</translation>
     </message>
     <message>
-        <location line="+7"/>
-        <source>&amp;Address</source>
-        <translation>&amp;Adres</translation>
-    </message>
-    <message>
-        <location line="+10"/>
+        <location line="+17"/>
         <source>The address associated with this address book entry. This can only be modified for sending addresses.</source>
         <translation>Bu adres defteri kayd?yla ili?kili etiket. Bu, sadece gönderi adresleri için de?i?tirilebilir.</translation>
+    </message>
+    <message>
+        <location line="-10"/>
+        <source>&amp;Address</source>
+        <translation>&amp;Adres</translation>
     </message>
     <message>
         <location filename="../editaddressdialog.cpp" line="+20"/>
@@ -1395,47 +1377,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>??lemlerinizin h?zl?ca gerçekle?tirilmesini sa?layan kB ba??na opsiyonel i?lem ücreti. Birçok i?lem 1 kB&apos;t?r. Tavsiye edilen ücret 0.01&apos;dir.</translation>
     </message>
     <message>
-        <location line="+46"/>
-        <source>Reserved amount does not participate in staking and is therefore spendable at any time.</source>
-        <translation>Ayr?lan miktar, pay almaya kat?lam?yor ve bu yüzden herhangi bir anda harcanabilir.</translation>
-    </message>
-    <message>
-        <location line="+80"/>
-        <source>&amp;Network</source>
-        <translation>&amp;Ağ</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Map port using &amp;UPnP</source>
-        <translation>Portları &amp;UPnP kullanarak haritala</translation>
-    </message>
-    <message>
-        <location line="+19"/>
-        <source>Proxy &amp;IP:</source>
-        <translation>Vekil &amp;IP:</translation>
-    </message>
-    <message>
-        <location line="+19"/>
-        <source>IP address of the proxy (e.g. 127.0.0.1)</source>
-        <translation>Vekil sunucunun IP adresi (örn. 127.0.0.1)</translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>&amp;Port:</source>
-        <translation>&amp;Port:</translation>
-    </message>
-    <message>
-        <location line="+19"/>
-        <source>Port of the proxy (e.g. 9050)</source>
-        <translation>Vekil sunucunun portu (mesela 9050)</translation>
-    </message>
-    <message>
-        <location line="-184"/>
+        <location line="+15"/>
         <source>Pa&amp;y transaction fee</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+46"/>
+        <location line="+31"/>
+        <source>Reserved amount does not participate in staking and is therefore spendable at any time.</source>
+        <translation>Ayr?lan miktar, pay almaya kat?lam?yor ve bu yüzden herhangi bir anda harcanabilir.</translation>
+    </message>
+    <message>
+        <location line="+15"/>
         <source>Reser&amp;ve</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1475,7 +1427,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>SOCKS vekil sunucusu yoluyla &amp;ba?lan:</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="+28"/>
+        <source>IP address of the proxy (e.g. 127.0.0.1)</source>
+        <translation>Vekil sunucunun IP adresi (örn. 127.0.0.1)</translation>
+    </message>
+    <message>
+        <location line="+33"/>
         <source>SOCKS &amp;Version:</source>
         <translation>SOCKS &amp;sürümü:</translation>
     </message>
@@ -1485,7 +1442,72 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Vekil sunucunun SOCKS sürümü (mesela 5)</translation>
     </message>
     <message>
-        <location line="+36"/>
+        <location line="+52"/>
+        <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
+        <translation>Pencere kapat?ld???nda uygulamadan ç?kmak yerine uygulamay? küçültür. Bu seçenek etkinle?tirildi?inde, uygulama sadece menüden ç?k?? seçildi?inde kapanacakt?r.</translation>
+    </message>
+    <message>
+        <location line="+45"/>
+        <source>The user interface language can be set here. This setting will take effect after restarting Gridcoin.</source>
+        <translation>Kullan?c? arabirimi dili buradan ayarlanabilir. Ayar, Gridcoin yeniden ba?lat?ld???nda etkin olacakt?r.</translation>
+    </message>
+    <message>
+        <location line="+35"/>
+        <source>Style:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Choose a stylesheet to change the look of the wallet.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Whether to show Gridcoin addresses in the transaction list or not.</source>
+        <translation>Gridcoin adresinin i?lem listesinde gösterilmesi veya gösterilmemesi</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>&amp;Display addresses in transaction list</source>
+        <translation>Muamele listesinde adresleri &amp;göster</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Display coin &amp;control features (experts only!)</source>
+        <translation>Coin &amp;kontrol özelliklerini göster (sadece uzman ki?iler!)</translation>
+    </message>
+    <message>
+        <location line="+91"/>
+        <source>&amp;Apply</source>
+        <translation>&amp;Uygula</translation>
+    </message>
+    <message>
+        <location line="-345"/>
+        <source>&amp;Network</source>
+        <translation>&amp;Ağ</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Map port using &amp;UPnP</source>
+        <translation>Portları &amp;UPnP kullanarak haritala</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Proxy &amp;IP:</source>
+        <translation>Vekil &amp;IP:</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>&amp;Port:</source>
+        <translation>&amp;Port:</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Port of the proxy (e.g. 9050)</source>
+        <translation>Vekil sunucunun portu (mesela 9050)</translation>
+    </message>
+    <message>
+        <location line="+56"/>
         <source>&amp;Window</source>
         <translation>&amp;Pencere</translation>
     </message>
@@ -1500,12 +1522,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>İşlem çubuğu yerine sistem çekmecesine &amp;küçült</translation>
     </message>
     <message>
-        <location line="+7"/>
-        <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
-        <translation>Pencere kapat?ld???nda uygulamadan ç?kmak yerine uygulamay? küçültür. Bu seçenek etkinle?tirildi?inde, uygulama sadece menüden ç?k?? seçildi?inde kapanacakt?r.</translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="+10"/>
         <source>M&amp;inimize on close</source>
         <translation>Kapatma sırasında k&amp;üçült</translation>
     </message>
@@ -1530,42 +1547,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Bitcoin gönderildiğinde arayüzde gösterilecek varsayılan alt birimi seçiniz.</translation>
     </message>
     <message>
-        <location line="-24"/>
-        <source>The user interface language can be set here. This setting will take effect after restarting Gridcoin.</source>
-        <translation>Kullan?c? arabirimi dili buradan ayarlanabilir. Ayar, Gridcoin yeniden ba?lat?ld???nda etkin olacakt?r.</translation>
-    </message>
-    <message>
-        <location line="+61"/>
+        <location line="+37"/>
         <source>Whether to show coin control features or not.</source>
         <translation>Para kontrol özelliklerinin gösterilip gösterilmeyeceğini ayarlar.</translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>Display coin &amp;control features (experts only!)</source>
-        <translation>Coin &amp;kontrol özelliklerini göster (sadece uzman ki?iler!)</translation>
-    </message>
-    <message>
-        <location line="-29"/>
-        <source>Style:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Choose a stylesheet to change the look of the wallet.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Whether to show Gridcoin addresses in the transaction list or not.</source>
-        <translation>Gridcoin adresinin i?lem listesinde gösterilmesi veya gösterilmemesi</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>&amp;Display addresses in transaction list</source>
-        <translation>Muamele listesinde adresleri &amp;göster</translation>
-    </message>
-    <message>
-        <location line="+84"/>
+        <location line="+77"/>
         <source>&amp;OK</source>
         <translation>&amp;Tamam</translation>
     </message>
@@ -1573,11 +1560,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+7"/>
         <source>&amp;Cancel</source>
         <translation>&amp;İptal</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>&amp;Apply</source>
-        <translation>&amp;Uygula</translation>
     </message>
     <message>
         <location filename="../optionsdialog.cpp" line="+55"/>
@@ -1626,17 +1608,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+10"/>
-        <location line="+439"/>
+        <location line="+466"/>
         <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</source>
         <translation>Görüntülenen bilginin tarihi geçmi? olabilir. Cüzdan?n?z, ba?lant? kurulduktan sonra otomatik olarak Gridcoin a?? ile senkronize olur ancak bu süreç, henüz tamamlanmam??t?r.</translation>
     </message>
     <message>
-        <location line="-376"/>
-        <source>Your current spendable balance</source>
-        <translation>Güncel harcanabilir bakiyeniz</translation>
-    </message>
-    <message>
-        <location line="+13"/>
+        <location line="-390"/>
         <source>Stake</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1651,27 +1628,32 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished">Teyit edilmemi?</translation>
     </message>
     <message>
-        <location line="+34"/>
-        <source>Immature:</source>
-        <translation>Olgunlaşmamış:</translation>
+        <location line="+15"/>
+        <source>Total of transactions that have yet to be confirmed, and do not yet count toward the current balance</source>
+        <translation>Henüz onaylanmam?? ve mevcut bakiyede yer almayan i?lemler toplam?</translation>
     </message>
     <message>
-        <location line="+103"/>
+        <location line="+31"/>
+        <source>Total mined coins that have not yet matured.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+94"/>
         <source>Blocks:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+17"/>
         <source>Difficulty:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+17"/>
         <source>Net Weight:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+17"/>
         <source>DPOR Weight:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1696,50 +1678,50 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+109"/>
-        <source>Recent transactions</source>
-        <translation>Son işlemler</translation>
-    </message>
-    <message>
-        <location line="+99"/>
+        <location line="+223"/>
         <source>Current Poll:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+17"/>
         <source>Client Messages:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-345"/>
+        <location line="-515"/>
+        <source>Available:</source>
+        <translation>Mevcut:</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Your current spendable balance</source>
+        <translation>Güncel harcanabilir bakiyeniz</translation>
+    </message>
+    <message>
+        <location line="+75"/>
+        <source>Immature:</source>
+        <translation>Olgunlaşmamış:</translation>
+    </message>
+    <message>
+        <location line="+50"/>
         <source>Total:</source>
         <translation>Toplam:</translation>
     </message>
     <message>
-        <location line="-38"/>
-        <source>Total mined coins that have not yet matured.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+45"/>
+        <location line="+7"/>
         <source>Your current total balance</source>
         <translation>Güncel toplam bakiyeniz</translation>
     </message>
     <message>
-        <location line="-76"/>
-        <source>Total of transactions that have yet to be confirmed, and do not yet count toward the current balance</source>
-        <translation>Henüz onaylanmam?? ve mevcut bakiyede yer almayan i?lemler toplam?</translation>
+        <location line="+252"/>
+        <source>Recent transactions</source>
+        <translation>Son işlemler</translation>
     </message>
     <message>
         <location filename="../overviewpage.cpp" line="+132"/>
         <location line="+1"/>
         <source>out of sync</source>
         <translation>e?le?me d???</translation>
-    </message>
-    <message>
-        <location filename="../forms/overviewpage.ui" line="-71"/>
-        <source>Available:</source>
-        <translation>Mevcut:</translation>
     </message>
 </context>
 <context>
@@ -1755,12 +1737,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Ödeme Talep Et</translation>
     </message>
     <message>
-        <location line="+56"/>
-        <source>Amount:</source>
-        <translation>Miktar:</translation>
-    </message>
-    <message>
-        <location line="-44"/>
+        <location line="+12"/>
         <source>Label:</source>
         <translation>Etiket:</translation>
     </message>
@@ -1770,7 +1747,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Mesaj:</translation>
     </message>
     <message>
-        <location line="+71"/>
+        <location line="+25"/>
+        <source>Amount:</source>
+        <translation>Miktar:</translation>
+    </message>
+    <message>
+        <location line="+46"/>
         <source>&amp;Save As...</source>
         <translation>&amp;Farkl? Kaydet...</translation>
     </message>
@@ -1803,12 +1785,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>RPCConsole</name>
     <message>
-        <location filename="../forms/rpcconsole.ui" line="+491"/>
-        <source>Client name</source>
-        <translation>?stemci ismi</translation>
+        <location filename="../forms/rpcconsole.ui" line="+14"/>
+        <source>Gridcoin - Debug Console</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-445"/>
+        <location line="+25"/>
+        <source>Boost version</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <location line="+27"/>
         <location line="+42"/>
         <location line="+42"/>
@@ -1823,47 +1810,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Mevcut değil</translation>
     </message>
     <message>
-        <location line="-241"/>
-        <source>Client version</source>
-        <translation>İstemci sürümü</translation>
-    </message>
-    <message>
-        <location line="-168"/>
-        <source>&amp;Information</source>
-        <translation>&amp;Bilgi</translation>
-    </message>
-    <message>
-        <location line="+425"/>
-        <source>Startup time</source>
-        <translation>Başlama zamanı</translation>
-    </message>
-    <message>
-        <location line="-366"/>
-        <source>Number of connections</source>
-        <translation>Bağlantı sayısı</translation>
-    </message>
-    <message>
-        <location line="+220"/>
-        <source>On testnet</source>
-        <translation>Testnet üzerinde</translation>
-    </message>
-    <message>
-        <location line="-136"/>
-        <source>Block chain</source>
-        <translation>Blok zinciri</translation>
-    </message>
-    <message>
-        <location line="-159"/>
-        <source>Gridcoin - Debug Console</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+25"/>
-        <source>Boost version</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+14"/>
+        <location line="-386"/>
         <source>Proof Of Research Difficulty</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1878,17 +1825,27 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+131"/>
-        <source>Current number of blocks</source>
-        <translation>Güncel blok sayısı</translation>
+        <location line="+10"/>
+        <source>Client version</source>
+        <translation>İstemci sürümü</translation>
     </message>
     <message>
-        <location line="-39"/>
+        <location line="+48"/>
+        <source>Build date</source>
+        <translation>Derleme tarihi</translation>
+    </message>
+    <message>
+        <location line="+34"/>
         <source>Network:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+68"/>
+        <location line="+29"/>
+        <source>On testnet</source>
+        <translation>Testnet üzerinde</translation>
+    </message>
+    <message>
+        <location line="+39"/>
         <source>Estimated total blocks</source>
         <translation>Tahmini toplam blok say?s?</translation>
     </message>
@@ -1898,22 +1855,77 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Gridcoin hata ay?klama günlük kütü?ü dosyas?n?, mevcut veri klasöründen aç. Bu i?lem, büyük günlük kütü?ü dosyalar? için birkaç saniye sürebilir.</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+21"/>
+        <source>Command-line options</source>
+        <translation>Komut sat?r? seçenekleri</translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <source>Show the Gridcoin help message to get a list with possible Gridcoin command-line options.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+95"/>
-        <source>&amp;Network Traffic</source>
-        <translation>&amp;Ağ trafiği</translation>
+        <location line="+6"/>
+        <source>&amp;Show</source>
+        <translation>&amp;Göster</translation>
     </message>
     <message>
-        <location line="-21"/>
+        <location line="+68"/>
         <source>OpenSSL version</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+73"/>
+        <location line="+13"/>
+        <source>Client name</source>
+        <translation>?stemci ismi</translation>
+    </message>
+    <message>
+        <location line="-461"/>
+        <source>&amp;Information</source>
+        <translation>&amp;Bilgi</translation>
+    </message>
+    <message>
+        <location line="+425"/>
+        <source>Startup time</source>
+        <translation>Başlama zamanı</translation>
+    </message>
+    <message>
+        <location line="-366"/>
+        <source>Number of connections</source>
+        <translation>Bağlantı sayısı</translation>
+    </message>
+    <message>
+        <location line="+84"/>
+        <source>Block chain</source>
+        <translation>Blok zinciri</translation>
+    </message>
+    <message>
+        <location line="+146"/>
+        <source>Current number of blocks</source>
+        <translation>Güncel blok sayısı</translation>
+    </message>
+    <message>
+        <location line="-188"/>
+        <source>Last block time</source>
+        <translation>Son blok zamanı</translation>
+    </message>
+    <message>
+        <location line="+248"/>
+        <source>&amp;Open</source>
+        <translation>&amp;Aç</translation>
+    </message>
+    <message>
+        <location line="+296"/>
+        <source>&amp;Console</source>
+        <translation>&amp;Konsol</translation>
+    </message>
+    <message>
+        <location line="-176"/>
+        <source>&amp;Network Traffic</source>
+        <translation>&amp;Ağ trafiği</translation>
+    </message>
+    <message>
+        <location line="+52"/>
         <source>&amp;Clear</source>
         <translation>&amp;Temizle</translation>
     </message>
@@ -1933,37 +1945,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Dışarı:</translation>
     </message>
     <message>
-        <location line="-503"/>
-        <source>Last block time</source>
-        <translation>Son blok zamanı</translation>
-    </message>
-    <message>
-        <location line="+248"/>
-        <source>&amp;Open</source>
-        <translation>&amp;Aç</translation>
-    </message>
-    <message>
-        <location line="+15"/>
-        <source>Command-line options</source>
-        <translation>Komut sat?r? seçenekleri</translation>
-    </message>
-    <message>
-        <location line="+16"/>
-        <source>&amp;Show</source>
-        <translation>&amp;Göster</translation>
-    </message>
-    <message>
-        <location line="+265"/>
-        <source>&amp;Console</source>
-        <translation>&amp;Konsol</translation>
-    </message>
-    <message>
-        <location line="-429"/>
-        <source>Build date</source>
-        <translation>Derleme tarihi</translation>
-    </message>
-    <message>
-        <location line="+117"/>
+        <location line="-271"/>
         <source>Debug log file</source>
         <translation>Hata ayıklama kütük dosyası</translation>
     </message>
@@ -2127,7 +2109,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>özel adres de?i?ikli?i</translation>
     </message>
     <message>
-        <location line="+115"/>
+        <location line="+138"/>
+        <source>Remove all transaction fields</source>
+        <translation>Tüm i?lem alanlar?n? kald?r</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>123.456 GRC</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-70"/>
         <source>Send to multiple recipients at once</source>
         <translation>Birçok alıcıya aynı anda gönder</translation>
     </message>
@@ -2137,12 +2129,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>&amp;Alıcı ekle</translation>
     </message>
     <message>
-        <location line="+20"/>
-        <source>Remove all transaction fields</source>
-        <translation>Tüm i?lem alanlar?n? kald?r</translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="+23"/>
         <source>Clear &amp;All</source>
         <translation>Tümünü &amp;temizle</translation>
     </message>
@@ -2152,12 +2139,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Bakiye:</translation>
     </message>
     <message>
-        <location line="+16"/>
-        <source>123.456 GRC</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+31"/>
+        <location line="+47"/>
         <source>Confirm the send action</source>
         <translation>Yollama etkinliğini teyit ediniz</translation>
     </message>
@@ -2167,12 +2149,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>G&amp;önder</translation>
     </message>
     <message>
-        <location filename="../sendcoinsdialog.cpp" line="-173"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+15"/>
+        <location filename="../sendcoinsdialog.cpp" line="-158"/>
         <source>Copy quantity</source>
         <translation>Miktarı kopyala</translation>
     </message>
@@ -2197,32 +2174,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Baytları kopyala</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <source>Copy low output</source>
-        <translation>Dü?ük ç?kt?y? kopyala</translation>
-    </message>
-    <message>
         <location line="+1"/>
-        <source>Copy change</source>
-        <translation>Para üstünü kopyala</translation>
-    </message>
-    <message>
-        <location line="-2"/>
         <source>Copy priority</source>
         <translation>Önceli?i kopyala</translation>
     </message>
     <message>
-        <location line="+88"/>
+        <location line="+1"/>
+        <source>Copy low output</source>
+        <translation>Dü?ük ç?kt?y? kopyala</translation>
+    </message>
+    <message>
+        <location line="+87"/>
         <source>&lt;b&gt;%1&lt;/b&gt; to %2 (%3)</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; %2&apos;ye (%3)</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>Confirm send coins</source>
-        <translation>Bitcoin gönderimini onaylayın</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+6"/>
         <source>Are you sure you want to send %1?</source>
         <translation>%1 göndermek istedi?inizden emin misiniz?</translation>
     </message>
@@ -2237,22 +2204,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Al?c? adresi geçerli de?ildir, lütfen denetleyiniz.</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>The amount to pay must be larger than 0.</source>
-        <translation>Ödeyeceğiniz tutarın 0&apos;dan yüksek olması gerekir.</translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>The amount exceeds your balance.</source>
-        <translation>Tutar bakiyenizden yüksektir.</translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>The total exceeds your balance when the %1 transaction fee is included.</source>
-        <translation>Toplam, %1 işlem ücreti eklendiğinde bakiyenizi geçmektedir.</translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="+21"/>
         <source>Duplicate address found, can only send to each address once per send operation.</source>
         <translation>Çift adres bulundu, belli bir gönderi s?ras?nda her adrese sadece tek bir gönderide bulunulabilir.</translation>
     </message>
@@ -2267,12 +2219,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Hata: ??lem reddedildi. Bu, örne?in wallet.dat dosyas?n?n bir kopyas?n? kulland?ysan?z ve coinler, kopyada harcanm?? ve burada harcanm?? olarak i?aretlenmemi?se, cüzdan?n?zdaki coinlerin bir bölümünün harcanmas? nedeniyle olabilir. </translation>
     </message>
     <message>
-        <location line="+264"/>
-        <source>(no label)</source>
-        <translation>(etiket yok)</translation>
-    </message>
-    <message>
-        <location line="-13"/>
+        <location line="+251"/>
         <source>WARNING: Invalid Gridcoin address</source>
         <translation>UYARI: Geçersiz Gridcoin adresi</translation>
     </message>
@@ -2280,6 +2227,41 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+17"/>
         <source>WARNING: unknown change address</source>
         <translation>UYARI: bilinmeyen adres de?i?ikli?i</translation>
+    </message>
+    <message>
+        <location line="-420"/>
+        <source>Copy change</source>
+        <translation>Para üstünü kopyala</translation>
+    </message>
+    <message>
+        <location line="+91"/>
+        <source>Confirm send coins</source>
+        <translation>Bitcoin gönderimini onaylayın</translation>
+    </message>
+    <message>
+        <location line="+35"/>
+        <source>The amount to pay must be larger than 0.</source>
+        <translation>Ödeyeceğiniz tutarın 0&apos;dan yüksek olması gerekir.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>The amount exceeds your balance.</source>
+        <translation>Tutar bakiyenizden yüksektir.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>The total exceeds your balance when the %1 transaction fee is included.</source>
+        <translation>Toplam, %1 işlem ücreti eklendiğinde bakiyenizi geçmektedir.</translation>
+    </message>
+    <message>
+        <location line="+280"/>
+        <source>(no label)</source>
+        <translation>(etiket yok)</translation>
+    </message>
+    <message>
+        <location line="-438"/>
+        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -2290,28 +2272,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Form</translation>
     </message>
     <message>
-        <location line="+156"/>
-        <source>A&amp;mount:</source>
-        <translation>T&amp;utar:</translation>
-    </message>
-    <message>
-        <location line="-108"/>
-        <source>Pay &amp;To:</source>
-        <translation>&amp;Şu adrese öde:</translation>
-    </message>
-    <message>
-        <location line="-9"/>
-        <location filename="../sendcoinsentry.cpp" line="+29"/>
-        <source>Enter a label for this address to add it to your address book</source>
-        <translation>Adres defterinize eklemek için bu adrese bir etiket giriniz</translation>
-    </message>
-    <message>
-        <location line="-21"/>
-        <source>&amp;Label:</source>
-        <translation>&amp;Etiket:</translation>
-    </message>
-    <message>
-        <location line="+48"/>
+        <location line="+66"/>
         <source>The address to send the payment to  (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2321,7 +2282,42 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Adres defterinden adres seç</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+34"/>
+        <source>Remove this recipient</source>
+        <translation>Bu al?c?y? kald?r</translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Send Custom Message to a Gridcoin Recipient</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>A&amp;mount:</source>
+        <translation>T&amp;utar:</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Track Coins</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Add Attachment</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-128"/>
+        <source>Pay &amp;To:</source>
+        <translation>&amp;Şu adrese öde:</translation>
+    </message>
+    <message>
+        <location line="-30"/>
+        <source>&amp;Label:</source>
+        <translation>&amp;Etiket:</translation>
+    </message>
+    <message>
+        <location line="+68"/>
         <source>Alt+A</source>
         <translation>Alt+A</translation>
     </message>
@@ -2336,29 +2332,15 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Alt+P</translation>
     </message>
     <message>
-        <location line="+7"/>
-        <source>Remove this recipient</source>
-        <translation>Bu al?c?y? kald?r</translation>
-    </message>
-    <message>
-        <location line="+16"/>
+        <location line="+23"/>
         <source>Message:</source>
         <translation>İleti:</translation>
     </message>
     <message>
-        <location line="+21"/>
-        <source>Send Custom Message to a Gridcoin Recipient</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+22"/>
-        <source>Track Coins</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Add Attachment</source>
-        <translation type="unfinished"></translation>
+        <location line="-87"/>
+        <location filename="../sendcoinsentry.cpp" line="+29"/>
+        <source>Enter a label for this address to add it to your address book</source>
+        <translation>Adres defterinize eklemek için bu adrese bir etiket giriniz</translation>
     </message>
     <message>
         <location filename="../sendcoinsentry.cpp" line="+1"/>
@@ -2395,7 +2377,27 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Adres defterinden adres seç</translation>
     </message>
     <message>
-        <location line="-193"/>
+        <location line="-116"/>
+        <source>Sign the message to prove you own this Gridcoin address</source>
+        <translation>Bu Gridcoin adresine sahip oldu?unuzu ispatlamak için mesaj? imzala</translation>
+    </message>
+    <message>
+        <location line="+85"/>
+        <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
+        <translation>?mza için kullan?lan adresi, mesaj? (sat?r sonlar?, bo?luklar, sekmeler vs. karakterleri tam olarak kopyalad???n?zdan emin olunuz) ve imzay? a?a??da giriniz. Bir ortadaki adam sald?r?s? taraf?ndan kand?r?lmaya mâni olmak için imzadan, imzal? mesaj?n içeri?ini a?an bir anlam ç?karmamaya dikkat ediniz.</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>The address the message was signed with (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+40"/>
+        <source>Verify the message to ensure it was signed with the specified Gridcoin address</source>
+        <translation>Mesaj?n, belirtilen Gridcoin adresiyle imzaland???ndan emin olmak için onu do?rula</translation>
+    </message>
+    <message>
+        <location line="-223"/>
         <location line="+203"/>
         <source>Alt+A</source>
         <translation>Alt+A</translation>
@@ -2421,12 +2423,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Güncel imzayı sistem panosuna kopyala</translation>
     </message>
     <message>
-        <location line="+21"/>
-        <source>Sign the message to prove you own this Gridcoin address</source>
-        <translation>Bu Gridcoin adresine sahip oldu?unuzu ispatlamak için mesaj? imzala</translation>
+        <location line="+24"/>
+        <source>Sign &amp;Message</source>
+        <translation>&amp;İletiyi imzala</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+14"/>
         <source>Reset all sign message fields</source>
         <translation>Tüm ileti alanlarını sıfırla</translation>
     </message>
@@ -2443,33 +2445,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>İletiyi &amp;kontrol et</translation>
     </message>
     <message>
-        <location line="-64"/>
-        <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
-        <translation>?mza için kullan?lan adresi, mesaj? (sat?r sonlar?, bo?luklar, sekmeler vs. karakterleri tam olarak kopyalad???n?zdan emin olunuz) ve imzay? a?a??da giriniz. Bir ortadaki adam sald?r?s? taraf?ndan kand?r?lmaya mâni olmak için imzadan, imzal? mesaj?n içeri?ini a?an bir anlam ç?karmamaya dikkat ediniz.</translation>
-    </message>
-    <message>
-        <location line="+21"/>
-        <source>The address the message was signed with (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+40"/>
-        <source>Verify the message to ensure it was signed with the specified Gridcoin address</source>
-        <translation>Mesaj?n, belirtilen Gridcoin adresiyle imzaland???ndan emin olmak için onu do?rula</translation>
-    </message>
-    <message>
-        <location line="+17"/>
+        <location line="+14"/>
         <source>Reset all verify message fields</source>
         <translation>Tüm ileti kontrolü alanlarını sıfırla</translation>
     </message>
     <message>
-        <location filename="../signverifymessagedialog.cpp" line="+27"/>
-        <location line="+3"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-2"/>
+        <location filename="../signverifymessagedialog.cpp" line="+28"/>
         <source>Click &quot;Sign Message&quot; to generate signature</source>
         <translation>İmzayı oluşturmak için &quot;İletiyi İmzala&quot;ya tıklayın</translation>
     </message>
@@ -2545,15 +2526,23 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>İleti doğrulandı.</translation>
     </message>
     <message>
-        <location filename="../forms/signverifymessagedialog.ui" line="-160"/>
-        <source>Sign &amp;Message</source>
-        <translation>&amp;İletiyi imzala</translation>
+        <location line="-211"/>
+        <location line="+3"/>
+        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>TransactionDesc</name>
+    <message numerus="yes">
+        <location filename="../transactiondesc.cpp" line="+36"/>
+        <source>Open for %n more block(s)</source>
+        <translation>
+            <numerusform>%n taneden daha fazla blok için açık</numerusform>
+        </translation>
+    </message>
     <message>
-        <location filename="../transactiondesc.cpp" line="+38"/>
+        <location line="+2"/>
         <source>Open until %1</source>
         <translation>%1 değerine dek açık</translation>
     </message>
@@ -2582,8 +2571,13 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <source>Status</source>
         <translation>Durum</translation>
     </message>
+    <message>
+        <location line="+5"/>
+        <source>, has not been successfully broadcast yet</source>
+        <translation>, henüz başarılı bir şekilde yayınlanmadı</translation>
+    </message>
     <message numerus="yes">
-        <location line="+7"/>
+        <location line="+2"/>
         <source>, broadcast through %n node(s)</source>
         <translation>
             <numerusform>, %n düğüm aracılığıyla yayınlandı</numerusform>
@@ -2611,6 +2605,31 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Gönderen</translation>
     </message>
     <message>
+        <location line="+138"/>
+        <source>Block Type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Block Number</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Information</source>
+        <translation type="unfinished">Bilgi</translation>
+    </message>
+    <message>
+        <location line="-154"/>
+        <source>unknown</source>
+        <translation>bilinmiyor</translation>
+    </message>
+    <message>
         <location line="+1"/>
         <location line="+22"/>
         <location line="+58"/>
@@ -2633,12 +2652,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+12"/>
         <location line="+45"/>
         <location line="+17"/>
-        <location line="+51"/>
+        <location line="+45"/>
         <source>Credit</source>
         <translation>Alınan Tutar</translation>
     </message>
     <message numerus="yes">
-        <location line="-123"/>
+        <location line="-117"/>
         <source>matures in %n more block(s)</source>
         <translation>
             <numerusform>%n ek blok sonrasında olgunlaşacak</numerusform>
@@ -2653,12 +2672,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+44"/>
         <location line="+8"/>
         <location line="+15"/>
-        <location line="+51"/>
+        <location line="+45"/>
         <source>Debit</source>
         <translation>Çekilen Tutar</translation>
     </message>
     <message>
-        <location line="-60"/>
+        <location line="-54"/>
         <source>Transaction fee</source>
         <translation>İşlem ücreti</translation>
     </message>
@@ -2683,37 +2702,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>İşlem ID&apos;si</translation>
     </message>
     <message>
-        <location line="+11"/>
-        <source>Project</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Block Type</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Block Number</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>RAC</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+16"/>
-        <source>Information</source>
-        <translation type="unfinished">Bilgi</translation>
-    </message>
-    <message>
-        <location line="+8"/>
+        <location line="+33"/>
         <source>Transaction</source>
         <translation>İşlem</translation>
     </message>
@@ -2737,44 +2726,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <source>false</source>
         <translation>yanlış</translation>
     </message>
-    <message>
-        <location line="-255"/>
-        <source>, has not been successfully broadcast yet</source>
-        <translation>, henüz başarılı bir şekilde yayınlanmadı</translation>
-    </message>
-    <message numerus="yes">
-        <location line="-64"/>
-        <source>Open for %n more block(s)</source>
-        <translation>
-            <numerusform>%n taneden daha fazla blok için açık</numerusform>
-        </translation>
-    </message>
-    <message>
-        <location line="+99"/>
-        <source>unknown</source>
-        <translation>bilinmiyor</translation>
-    </message>
 </context>
 <context>
     <name>TransactionDescDialog</name>
     <message>
-        <location filename="../forms/transactiondescdialog.ui" line="+20"/>
-        <source>Transaction details</source>
-        <translation>Muamele detaylar?</translation>
-    </message>
-    <message>
-        <location line="+9"/>
+        <location filename="../forms/transactiondescdialog.ui" line="+29"/>
         <source>This pane shows a detailed description of the transaction</source>
         <translation>Bu pano işlemin ayrıntılı açıklamasını gösterir</translation>
     </message>
     <message>
         <location line="+25"/>
         <source>View Attachment</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Track Coins</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2788,12 +2750,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished">K&amp;apat</translation>
     </message>
     <message>
-        <location filename="../transactiondescdialog.cpp" line="+90"/>
-        <source>Gridcoin Coin Tracking System</source>
-        <translation type="unfinished"></translation>
+        <location line="-51"/>
+        <source>Transaction details</source>
+        <translation>Muamele detaylar?</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location filename="../transactiondescdialog.cpp" line="+40"/>
         <source>Gridcoin Documents</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2826,49 +2788,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Mebla?</translation>
     </message>
     <message>
-        <location line="+55"/>
-        <source>Open until %1</source>
-        <translation>%1 değerine dek açık</translation>
-    </message>
-    <message>
-        <location line="+12"/>
-        <source>Confirmed (%1 confirmations)</source>
-        <translation>Doğrulandı (%1 doğrulama)</translation>
-    </message>
-    <message numerus="yes">
-        <location line="-15"/>
-        <source>Open for %n more block(s)</source>
-        <translation>
-            <numerusform>%n taneden daha fazla blok için açık</numerusform>
-        </translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Offline</source>
-        <translation>Çevrim dışı</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Unconfirmed</source>
-        <translation>Doğrulanmamış</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Conflicted</source>
-        <translation>Uyuşmadı</translation>
-    </message>
-    <message>
-        <location line="-6"/>
+        <location line="+64"/>
         <source>Confirming (%1 of %2 recommended confirmations)&lt;br&gt;</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+15"/>
-        <source>Generated but not accepted</source>
-        <translation>Oluşturuldu ama kabul edilmedi</translation>
-    </message>
-    <message>
-        <location line="-6"/>
+        <location line="+9"/>
         <source>Immature (%1 confirmations, will be available after %2)&lt;br&gt;</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2878,7 +2803,69 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+64"/>
+        <location line="+80"/>
+        <source>Mined - DPOR</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Minted - (Local) DPOR</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Mined - PoR</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Mined - Interest</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+257"/>
+        <source>Destination address of transaction.</source>
+        <translation>Muamelenin al?c? adresi.</translation>
+    </message>
+    <message numerus="yes">
+        <location line="-374"/>
+        <source>Open for %n more block(s)</source>
+        <translation>
+            <numerusform>%n taneden daha fazla blok için açık</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Open until %1</source>
+        <translation>%1 değerine dek açık</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Offline</source>
+        <translation>Çevrim dışı</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Unconfirmed</source>
+        <translation>Doğrulanmamış</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Confirmed (%1 confirmations)</source>
+        <translation>Doğrulandı (%1 doğrulama)</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Conflicted</source>
+        <translation>Uyuşmadı</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Generated but not accepted</source>
+        <translation>Oluşturuldu ama kabul edilmedi</translation>
+    </message>
+    <message>
+        <location line="+61"/>
         <source>Received with</source>
         <translation>Şununla alındı</translation>
     </message>
@@ -2898,32 +2885,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Kendinize ödeme</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>Mined - DPOR</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+71"/>
+        <location line="+80"/>
         <source>(n/a)</source>
         <translation>(mevcut değil)</translation>
     </message>
     <message>
-        <location line="-67"/>
-        <source>Minted - (Local) DPOR</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Mined - PoR</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Mined - Interest</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+251"/>
+        <location line="+193"/>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
         <translation>İşlem durumu. Doğrulama sayısını görüntülemek için fare imlecini bu alanın üzerinde tutunuz.</translation>
     </message>
@@ -2938,12 +2905,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>İşlemin türü.</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <source>Destination address of transaction.</source>
-        <translation>Muamelenin al?c? adresi.</translation>
-    </message>
-    <message>
-        <location line="+2"/>
+        <location line="+4"/>
         <source>Amount removed from or added to balance.</source>
         <translation>Bakiyeden kaldırılan ya da bakiyeye eklenen tutar.</translation>
     </message>
@@ -3022,7 +2984,27 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>En düşük tutar</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+185"/>
+        <source>Export Transaction Data</source>
+        <translation>??lem Verisini D??ar? Aktar</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Amount</source>
+        <translation>Mebla?</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Error exporting</source>
+        <translation>D??ar? aktarmada hata</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Could not write to file %1.</source>
+        <translation>%1 dosyas?na yaz?lamad?.</translation>
+    </message>
+    <message>
+        <location line="-170"/>
         <source>Copy address</source>
         <translation>Adres kopyala</translation>
     </message>
@@ -3052,12 +3034,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>İşlem ayrıntılarını göster</translation>
     </message>
     <message>
-        <location line="+146"/>
-        <source>Export Transaction Data</source>
-        <translation>??lem Verisini D??ar? Aktar</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+147"/>
         <source>Comma separated file (*.csv)</source>
         <translation>Virgülle ayrılmış değerler dosyası (*.csv)</translation>
     </message>
@@ -3087,27 +3064,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Adres</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Amount</source>
-        <translation>Mebla?</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>ID</source>
         <translation>ID</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Error exporting</source>
-        <translation>D??ar? aktarmada hata</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Could not write to file %1.</source>
-        <translation>%1 dosyas?na yaz?lamad?.</translation>
-    </message>
-    <message>
-        <location line="+100"/>
+        <location line="+104"/>
         <source>Range:</source>
         <translation>Tarih Aralığı:</translation>
     </message>
@@ -3349,7 +3311,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>WalletModel</name>
     <message>
-        <location filename="../walletmodel.cpp" line="+269"/>
+        <location filename="../walletmodel.cpp" line="+249"/>
         <source>Sending...</source>
         <translation>Gönderiyor...</translation>
     </message>
@@ -3357,52 +3319,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>bitcoin-core</name>
     <message>
-        <location filename="../bitcoinstrings.cpp" line="+34"/>
-        <source>Usage:</source>
-        <translation>Kullan?m:</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>List commands</source>
-        <translation>Komutlar? listele</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Get help for a command</source>
-        <translation>Bir komut için yard?m al</translation>
-    </message>
-    <message>
-        <location line="+2"/>
+        <location filename="../bitcoinstrings.cpp" line="+39"/>
         <source>Options:</source>
         <translation>Seçenekler:</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>Specify wallet file (within data directory)</source>
-        <translation>Cüzdan dosyası belirtiniz (veri klasörünün içinde)</translation>
-    </message>
-    <message>
-        <location line="-1"/>
+        <location line="+4"/>
         <source>Specify data directory</source>
         <translation>Veri dizinini belirt</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <source>Set database cache size in megabytes (default: 25)</source>
-        <translation>Veritaban? önbellek boyutunu megabayt olarak belirt (varsay?lan: 25)</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Set database disk log size in megabytes (default: 100)</source>
-        <translation>Veritaban? disk log boyutunu megabayt olarak ayarla (varsay?lan: 100)</translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Maintain at most &lt;n&gt; connections to peers (default: 125)</source>
-        <translation>E?ler ile en çok &lt;n&gt; adet ba?lant? kur (varsay?lan: 125)</translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="+13"/>
         <source>Connect to a node to retrieve peer addresses, and disconnect</source>
         <translation>Eş adresleri elde etmek için bir düğüme bağlan ve ardından bağlantıyı kes</translation>
     </message>
@@ -3412,32 +3339,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Kendi genel adresinizi tanımlayın</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>Bind to given address. Use [host]:port notation for IPv6</source>
-        <translation>Belirtilen adrese ba?l?. IPv6 için [host]:port notasyonunu kullan</translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Threshold for disconnecting misbehaving peers (default: 100)</source>
-        <translation>Aksakl?k gösteren e?lerle ba?lant?y? kesme s?n?r? (varsay?lan: 100)</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Number of seconds to keep misbehaving peers from reconnecting (default: 86400)</source>
-        <translation>Aksakl?k gösteren e?lerle yeni ba?lant?lar? engelleme süresi, saniye olarak (varsay?lan: 86400)</translation>
-    </message>
-    <message>
-        <location line="-43"/>
-        <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
-        <translation>IPv4 üzerinde dinlemek için %u numaral? RPC portunun kurulumu s?ras?nda hata meydana geldi: %s</translation>
-    </message>
-    <message>
-        <location line="+65"/>
-        <source>Listen for JSON-RPC connections on &lt;port&gt; (default: 15715 or testnet: 25715)</source>
-        <translation>&lt;port&gt; üzerinde JSON-RPC ba?lant?lar?n? dinle (varsay?lan: 15715 veya testnet: 25715)</translation>
-    </message>
-    <message>
-        <location line="-11"/>
+        <location line="+23"/>
         <source>Accept command line and JSON-RPC commands</source>
         <translation>Komut satırı ve JSON-RPC komutlarını kabul et</translation>
     </message>
@@ -3447,389 +3349,52 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Arka planda daemon (servis) olarak çalış ve komutları kabul et</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Use the test network</source>
-        <translation>Deneme ?ebekesini kullan</translation>
-    </message>
-    <message>
-        <location line="-21"/>
-        <source>Accept connections from outside (default: 1 if no -proxy or -connect)</source>
-        <translation>D??ar?dan gelen ba?lant?lar? kabul et (varsay?lan: -proxy veya -connect yoksa 1)</translation>
-    </message>
-    <message>
-        <location line="+120"/>
-        <source>Error: Transaction creation failed  </source>
-        <translation>Hata: ??lem yaratma ba?ar?s?z oldu</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>Hata: ??lem reddedildi. Bu; cüzdan?n?zdaki baz? coinler, önceden harcanm??sa, örne?in wallet.dat dosyas?n?n bir kopyas?n? kulland?ysan?z ve bu kopyadaki coinler harcanm?? ve burada harcanm?? olarak i?aretlenmediyse gerçekle?ebilir.</translation>
-    </message>
-    <message>
-        <location line="-160"/>
-        <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
-        <translation>IPv6 üzerinde dinlemek için %u numaral? RPC portu kurulurken bir hata meydana geldi, IPv4&apos;e dönülüyor: %s</translation>
-    </message>
-    <message>
-        <location line="+105"/>
-        <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
-        <translation>Uyar?: -paytxfee çok yüksek bir de?ere ayarlanm??! Bu, muamele gönderirseniz ödeyece?iniz muamele ücretidir.</translation>
-    </message>
-    <message>
-        <location line="+31"/>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Uyar?: wallet.dat dosyas?n?n okunmas? s?ras?nda bir hata meydana geldi! Tüm anahtarlar do?ru bir ?ekilde okundu, ancak muamele verileri ya da adres defteri unsurlar? hatal? veya eksik olabilir.</translation>
-    </message>
-    <message>
-        <location line="-18"/>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Uyar?: wallet.dat bozuk, veriler geri kazan?ld?! Özgün wallet.dat, wallet.{zamandamgas?}.bak olarak %s klasörüne kaydedildi; bakiyeniz ya da muameleleriniz yanl??sa bir yedeklemeden tekrar yüklemeniz gerekir.</translation>
-    </message>
-    <message>
-        <location line="-31"/>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>Bozuk bir wallet.dat dosyas?ndan özel anahtarlar? geri kazanmay? dene</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Block creation options:</source>
-        <translation>Blok oluşturma seçenekleri:</translation>
-    </message>
-    <message>
-        <location line="-59"/>
-        <source>Connect only to the specified node(s)</source>
-        <translation>Sadece belirtilen dü?üme veya dü?ümlere ba?lan</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Discover own IP address (default: 1 when listening and no -externalip)</source>
-        <translation>Kendi IP adresini ke?fet (varsay?lan: dinlenildi?inde ve -externalip yoksa 1)</translation>
-    </message>
-    <message>
-        <location line="+92"/>
-        <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
-        <translation>Herhangi bir portun dinlenmesi başarısız oldu. Bunu istiyorsanız -listen=0 seçeneğini kullanınız.</translation>
-    </message>
-    <message>
-        <location line="-2"/>
-        <source>Invalid -tor address: &apos;%s&apos;</source>
-        <translation>Geçersiz -tor adresi: &apos;%s&apos;</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Invalid amount for -reservebalance=&lt;amount&gt;</source>
-        <translation>-reservebalance=&lt;amount&gt; için geçersiz miktar</translation>
-    </message>
-    <message>
-        <location line="-81"/>
-        <source>Maximum per-connection receive buffer, &lt;n&gt;*1000 bytes (default: 5000)</source>
-        <translation>Ba?lant? ba??na azami al?m tamponu, &lt;n&gt;*1000 bayt (varsay?lan: 5000)</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Maximum per-connection send buffer, &lt;n&gt;*1000 bytes (default: 1000)</source>
-        <translation>Ba?lant? ba??na azami yollama tamponu, &lt;n&gt;*1000 bayt (varsay?lan: 1000)</translation>
-    </message>
-    <message>
-        <location line="-15"/>
-        <source>Only connect to nodes in network &lt;net&gt; (IPv4, IPv6 or Tor)</source>
-        <translation>Sadece &lt;net&gt; ?ebekesindeki dü?ümlere ba?lan (IPv4, IPv6 ya da Tor)</translation>
-    </message>
-    <message>
-        <location line="+27"/>
-        <source>Prepend debug output with timestamp</source>
-        <translation>Tarih bilgisini, hata ay?klama ç?kt?s?n?n ba??na ekle</translation>
-    </message>
-    <message>
-        <location line="+35"/>
-        <source>SSL options: (see the Bitcoin Wiki for SSL setup instructions)</source>
-        <translation> SSL seçenekleri: (SSL kurulum bilgisi için Bitcoin vikisine bak?n?z)</translation>
-    </message>
-    <message>
-        <location line="-33"/>
-        <source>Send trace/debug info to console instead of debug.log file</source>
-        <translation>İzleme/hata ayıklama verilerini debug.log dosyası yerine konsola gönder</translation>
-    </message>
-    <message>
-        <location line="+29"/>
-        <source>Set maximum block size in bytes (default: 250000)</source>
-        <translation>Bayt olarak maksimum blok boyutunu belirle (varsay?lan: 250000)</translation>
-    </message>
-    <message>
-        <location line="-1"/>
-        <source>Set minimum block size in bytes (default: 0)</source>
-        <translation>Bayt olarak asgari blok boyutunu tan?mla (varsay?lan: 0)</translation>
-    </message>
-    <message>
-        <location line="-29"/>
-        <source>Shrink debug.log file on client startup (default: 1 when no -debug)</source>
-        <translation>İstemci başlatıldığında debug.log dosyasını küçült (varsayılan: -debug bulunmadığında 1)</translation>
-    </message>
-    <message>
-        <location line="-39"/>
-        <source>Specify connection timeout in milliseconds (default: 5000)</source>
-        <translation>Ba?lant? zaman a??m süresini milisaniye olarak belirt (varsay?lan: 5000)</translation>
-    </message>
-    <message>
-        <location line="+28"/>
-        <source>Use UPnP to map the listening port (default: 0)</source>
-        <translation>Dinlenecek portu haritalamak için UPnP kullan (varsay?lan: 0)</translation>
-    </message>
-    <message>
-        <location line="-1"/>
-        <source>Use UPnP to map the listening port (default: 1 when listening)</source>
-        <translation>Dinlenecek portu haritalamak için UPnP kullan (varsay?lan: dinlenildi?inde 1)</translation>
-    </message>
-    <message>
-        <location line="-24"/>
-        <source>Use proxy to reach tor hidden services (default: same as -proxy)</source>
-        <translation>Tor gizli servisine eri?im için vekil sunucu kullan (varsay?lan: -proxy ile ayn?)</translation>
-    </message>
-    <message>
-        <location line="+39"/>
-        <source>Username for JSON-RPC connections</source>
-        <translation>JSON-RPC bağlantıları için kullanıcı ismi</translation>
-    </message>
-    <message>
-        <location line="+48"/>
-        <source>Verifying database integrity...</source>
-        <translation>Veritaban? bütünlü?ü do?rulan?yor...</translation>
-    </message>
-    <message>
-        <location line="+55"/>
-        <source>Warning: This version is obsolete, upgrade required!</source>
-        <translation>Uyar?: Bu sürüm çok eskidir, güncellemeniz gerekir!</translation>
-    </message>
-    <message>
-        <location line="-47"/>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat bozuk, geri kazan?m ba?ar?s?z oldu</translation>
-    </message>
-    <message>
-        <location line="-55"/>
-        <source>Password for JSON-RPC connections</source>
-        <translation>JSON-RPC bağlantıları için parola</translation>
-    </message>
-    <message>
-        <location line="-81"/>
-        <source>%s, you must set a rpcpassword in the configuration file:
- %s
-It is recommended you use the following random password:
-rpcuser=gridcoinrpc
-rpcpassword=%s
-(you do not need to remember this password)
-The username and password MUST NOT be the same.
-If the file does not exist, create it with owner-readable-only file permissions.
-It is also recommended to set alertnotify so you are notified of problems;
-for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
-</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+24"/>
-        <source>Gridcoin version</source>
-        <translation>Gridcoin versiyonu</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Send command to -server or gridcoind</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+29"/>
-        <source>Sync time with other nodes. Disable if time on your system is precise e.g. syncing with NTP (default: 1)</source>
-        <translation>Di?er devrelerle saati senkronize et. Sisteminizdeki saat do?ru ise devre d??? b?rak?n, örn: NTC ile senkronize etme (varsay?lan: 1)</translation>
-    </message>
-    <message>
-        <location line="-23"/>
-        <source>Specify configuration file (default: gridcoin.conf)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Specify pid file (default: gridcoind.pid)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Select the version of socks proxy to use (4-5, default: 5)</source>
-        <translation>Kullan?lacak socks vekil sunucusunun versiyonunu seç (4-5, varsay?lan: 5)</translation>
-    </message>
-    <message>
-        <location line="+28"/>
-        <source>When creating transactions, ignore inputs with value less than this (default: 0.01)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-25"/>
-        <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
-        <translation type="unfinished">&lt;port&gt; üzerinde ba?lant?lar? dinle (varsay?lan: 15714 veya testnet: 25714) {32749 ?} {32748)?}</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Find peers using internet relay chat (default: 0)</source>
-        <translation>Internet aktar?ml? söyle?i kullanarak e?leri bul (varsay?lan: 1) {0)?}</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Find peers using DNS lookup (default: 1)</source>
-        <translation>DNS arama kullanarak e?leri bul (varsay?lan: 1)</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Sync checkpoints policy (default: strict)</source>
-        <translation>Kontrol noktas? politikas?n? senkronize et (varsay?lan: s?k?)</translation>
-    </message>
-    <message>
-        <location line="+26"/>
-        <source>Allow JSON-RPC connections from specified IP address</source>
-        <translation>Belirtilen ?P adresinden JSON-RPC ba?lant?lar?n? kabul et</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Send commands to node running on &lt;ip&gt; (default: 127.0.0.1)</source>
-        <translation>?u &lt;ip&gt; adresinde (varsay?lan: 127.0.0.1) çal??an dü?üme komut yolla</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Execute command when the best block changes (%s in cmd is replaced by block hash)</source>
-        <translation>En iyi blok değiştiğinde komutu çalıştır (komut için %s parametresi blok hash değeri ile değiştirilecektir)</translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="+17"/>
         <source>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</source>
         <translation>Bir cüzdan işlemi değiştiğinde komutu çalıştır (komuttaki %s işlem kimliği ile değiştirilecektir)</translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>Require a confirmations for change (default: 0)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Execute command when a relevant alert is received (%s in cmd is replaced by message)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-21"/>
-        <source>Output extra debugging information. Implies all other -debug* options</source>
-        <translation>Ekstra hata ay?klama bilgisini ç?kt? al. Di?er tüm -debug* seçeneklerini kapsar</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Output extra network debugging information</source>
-        <translation>Ekstra a? hata ay?klama bilgisini ç?kt? al</translation>
-    </message>
-    <message>
-        <location line="+23"/>
-        <source>Upgrade wallet to latest format</source>
-        <translation>Cüzdan? en yeni biçime güncelle</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Set key pool size to &lt;n&gt; (default: 100)</source>
-        <translation>Anahtar alan boyutunu &lt;n&gt; de?erine ayarla (varsay?lan: 100)</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Rescan the block chain for missing wallet transactions</source>
-        <translation>Blok zincirini eksik cüzdan muameleleri için tekrar tara</translation>
-    </message>
-    <message>
-        <location line="-21"/>
-        <source>Send trace/debug info to debugger</source>
-        <translation>Hata ay?klay?c?ya iz sürme/hata ay?klama bilgisi gönder</translation>
-    </message>
-    <message>
-        <location line="+24"/>
-        <source>How thorough the block verification is (0-6, default: 1)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Imports blocks from external blk000?.dat file</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Use OpenSSL (https) for JSON-RPC connections</source>
-        <translation>JSON-RPC ba?lant?lar? için OpenSSL (https) kullan</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Server certificate file (default: server.cert)</source>
-        <translation>Sunucu sertifika dosyas? (varsay?lan: server.cert)</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Server private key (default: server.pem)</source>
-        <translation>Sunucu özel anahtar? (varsay?lan: server.pem)</translation>
-    </message>
-    <message>
-        <location line="-21"/>
-        <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>How many blocks to check at startup (default: 2500, 0 = all)</source>
-        <translation type="unfinished">Başlangıçta kontrol edilecek blok sayısı (varsayılan: 500, 0 = tümü) {2500, 0 ?}</translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
-        <translation>Bayt olarak yüksek öncelikli/dü?ük ücretli i?lemlerin maksimum boyutunu belirle (varsay?lan: 27000)</translation>
-    </message>
-    <message>
-        <location line="+21"/>
-        <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
-        <translation>Veritaban? ortam? %s ba?lat?l?rken hata olu?tu! Kurtarmak için, ?LG?L? KLASÖRÜ YEDEKLEY?N, ard?ndan wallet.dat d???ndaki her ?eyi silin.</translation>
-    </message>
-    <message>
         <location line="+16"/>
-        <source>Unable to sign checkpoint, wrong checkpointkey?
-</source>
-        <translation>Kontrol noktas? imzalanamad?, bu bir hatal? kontrol noktas? anahtar? m??
-</translation>
+        <source>Block creation options:</source>
+        <translation>Blok oluşturma seçenekleri:</translation>
     </message>
     <message>
-        <location line="+23"/>
-        <source>Error: Wallet unlocked for staking only, unable to create transaction.</source>
-        <translation type="unfinished"></translation>
+        <location line="+37"/>
+        <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
+        <translation>Herhangi bir portun dinlenmesi başarısız oldu. Bunu istiyorsanız -listen=0 seçeneğini kullanınız.</translation>
     </message>
     <message>
-        <location line="+12"/>
-        <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
-        <translation>Uyar?: Lütfen bilgisayar?n?z?n tarih ve saatinin do?ru oldu?unu kontrol ediniz! Saatiniz yanl?? ise, Gridcoin düzgün çal??mayacakt?r.</translation>
+        <location line="-107"/>
+        <source>Specify wallet file (within data directory)</source>
+        <translation>Cüzdan dosyası belirtiniz (veri klasörünün içinde)</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
-        <translation>UYARI: senkronize edilen kontrol noktas? ihlali tespit edildi ancak atland?!</translation>
+        <location line="+43"/>
+        <source>Send trace/debug info to console instead of debug.log file</source>
+        <translation>İzleme/hata ayıklama verilerini debug.log dosyası yerine konsola gönder</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>Shrink debug.log file on client startup (default: 1 when no -debug)</source>
+        <translation>İstemci başlatıldığında debug.log dosyasını küçült (varsayılan: -debug bulunmadığında 1)</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Username for JSON-RPC connections</source>
+        <translation>JSON-RPC bağlantıları için kullanıcı ismi</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Warning: Disk space is low!</source>
-        <translation>Uyar?: Disk alan? dü?üktür!</translation>
+        <source>Password for JSON-RPC connections</source>
+        <translation>JSON-RPC bağlantıları için parola</translation>
     </message>
     <message>
-        <location line="-154"/>
-        <source>This help message</source>
-        <translation>Bu yard?m mesaj?</translation>
+        <location line="+5"/>
+        <source>Execute command when the best block changes (%s in cmd is replaced by block hash)</source>
+        <translation>En iyi blok değiştiğinde komutu çalıştır (komut için %s parametresi blok hash değeri ile değiştirilecektir)</translation>
     </message>
     <message>
-        <location line="+93"/>
-        <source>Wallet %s resides outside data directory %s.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+42"/>
-        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
-        <translation>Bu bilgisayarda %s unsuruna ba?lan?lamad?. (bind ?u hatay? iletti: %d, %s)</translation>
-    </message>
-    <message>
-        <location line="-124"/>
+        <location line="-44"/>
         <source>Allow DNS lookups for -addnode, -seednode and -connect</source>
         <translation>-addnode, -seednode ve -connect için DNS aramalarına izin ver</translation>
     </message>
@@ -3839,17 +3404,7 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Adresler yükleniyor...</translation>
     </message>
     <message>
-        <location line="-12"/>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>wallet.dat dosyas?n?n yüklenmesinde hata olu?tu: bozuk cüzdan</translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Error loading wallet.dat</source>
-        <translation>wallet.dat dosyas?n?n yüklenmesinde hata olu?tu</translation>
-    </message>
-    <message>
-        <location line="-16"/>
+        <location line="-22"/>
         <source>Invalid -proxy address: &apos;%s&apos;</source>
         <translation>Geçersiz -proxy adresi: &apos;%s&apos;</translation>
     </message>
@@ -3859,27 +3414,47 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>-onlynet için bilinmeyen bir ağ belirtildi: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>Cannot resolve -bind address: &apos;%s&apos;</source>
-        <translation>-bind adresi çözümlenemedi: &apos;%s&apos;</translation>
+        <location line="+26"/>
+        <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+2"/>
-        <source>Cannot resolve -externalip address: &apos;%s&apos;</source>
-        <translation>-externalip adresi çözümlenemedi: &apos;%s&apos;</translation>
+        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
+        <translation>Bu bilgisayarda %s unsuruna ba?lan?lamad?. (bind ?u hatay? iletti: %d, %s)</translation>
     </message>
     <message>
-        <location line="-25"/>
-        <source>Invalid amount for -paytxfee=&lt;amount&gt;: &apos;%s&apos;</source>
-        <translation>-paytxfee=&lt;mebla?&gt; için geçersiz mebla?: &apos;%s&apos;</translation>
+        <location line="+1"/>
+        <source>Error: Wallet locked, unable to create transaction  </source>
+        <translation>Hata: Cüzdan kilitli, i?lem yarat?lam?yor</translation>
     </message>
     <message>
-        <location line="+55"/>
+        <location line="+1"/>
+        <source>Error: Wallet unlocked for staking only, unable to create transaction.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
+        <translation>Hata: Bu i?lem; miktar?, karma??kl??? veya son al?nan miktar?n kullan?m? nedeniyle en az %s i?lem ücreti gerektirir</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Error: Transaction creation failed  </source>
+        <translation>Hata: ??lem yaratma ba?ar?s?z oldu</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Sending...</source>
         <translation type="unfinished">Gönderiyor...</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+1"/>
+        <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
+        <translation>Hata: ??lem reddedildi. Bu; cüzdan?n?zdaki baz? coinler, önceden harcanm??sa, örne?in wallet.dat dosyas?n?n bir kopyas?n? kulland?ysan?z ve bu kopyadaki coinler harcanm?? ve burada harcanm?? olarak i?aretlenmediyse gerçekle?ebilir.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>Invalid amount</source>
         <translation>Geçersiz mebla?</translation>
     </message>
@@ -3894,52 +3469,468 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Blok indeksi yükleniyor...</translation>
     </message>
     <message>
-        <location line="-101"/>
-        <source>Add a node to connect to and attempt to keep the connection open</source>
-        <translation>Bağlanılacak düğüm ekle ve bağlantıyı sürekli açık tutmaya çalış</translation>
+        <location line="-147"/>
+        <source>To use the %s option</source>
+        <translation>%s seçene?ini kullanmak için</translation>
     </message>
     <message>
-        <location line="+22"/>
-        <source>Fee per KB to add to transactions you send</source>
+        <location line="+1"/>
+        <source>%s, you must set a rpcpassword in the configuration file:
+ %s
+It is recommended you use the following random password:
+rpcuser=gridcoinrpc
+rpcpassword=%s
+(you do not need to remember this password)
+The username and password MUST NOT be the same.
+If the file does not exist, create it with owner-readable-only file permissions.
+It is also recommended to set alertnotify so you are notified of problems;
+for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
+</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-38"/>
+        <location line="+14"/>
+        <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
+        <translation>IPv6 üzerinde dinlemek için %u numaral? RPC portu kurulurken bir hata meydana geldi, IPv4&apos;e dönülüyor: %s</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
+        <translation>IPv4 üzerinde dinlemek için %u numaral? RPC portunun kurulumu s?ras?nda hata meydana geldi: %s</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
+%s
+If the file does not exist, create it with owner-readable-only file permissions.</source>
+        <translation>rpcpassword=&lt;parola&gt; ?u yap?land?rma dosyas?nda belirtilmelidir:
+%s
+Dosya mevcut de?ilse, sadece sahibi için okumayla s?n?rl? izin ile olu?turunuz.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Gridcoin version</source>
+        <translation>Gridcoin versiyonu</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Usage:</source>
+        <translation>Kullan?m:</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Send command to -server or gridcoind</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>List commands</source>
+        <translation>Komutlar? listele</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Get help for a command</source>
+        <translation>Bir komut için yard?m al</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Gridcoin</source>
         <translation type="unfinished">Gridcoin</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+2"/>
+        <source>This help message</source>
+        <translation>Bu yard?m mesaj?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Specify configuration file (default: gridcoin.conf)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Specify pid file (default: gridcoind.pid)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Set database cache size in megabytes (default: 25)</source>
+        <translation>Veritaban? önbellek boyutunu megabayt olarak belirt (varsay?lan: 25)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set database disk log size in megabytes (default: 100)</source>
+        <translation>Veritaban? disk log boyutunu megabayt olarak ayarla (varsay?lan: 100)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Specify connection timeout in milliseconds (default: 5000)</source>
+        <translation>Ba?lant? zaman a??m süresini milisaniye olarak belirt (varsay?lan: 5000)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Connect through socks proxy</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+83"/>
-        <source>Invalid amount for -mininput=&lt;amount&gt;: &apos;%s&apos;</source>
+        <location line="+1"/>
+        <source>Select the version of socks proxy to use (4-5, default: 5)</source>
+        <translation>Kullan?lacak socks vekil sunucusunun versiyonunu seç (4-5, varsay?lan: 5)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Use proxy to reach tor hidden services (default: same as -proxy)</source>
+        <translation>Tor gizli servisine eri?im için vekil sunucu kullan (varsay?lan: -proxy ile ayn?)</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
+        <translation type="unfinished">&lt;port&gt; üzerinde ba?lant?lar? dinle (varsay?lan: 15714 veya testnet: 25714) {32749 ?} {32748)?}</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Maintain at most &lt;n&gt; connections to peers (default: 125)</source>
+        <translation>E?ler ile en çok &lt;n&gt; adet ba?lant? kur (varsay?lan: 125)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Add a node to connect to and attempt to keep the connection open</source>
+        <translation>Bağlanılacak düğüm ekle ve bağlantıyı sürekli açık tutmaya çalış</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Connect only to the specified node(s)</source>
+        <translation>Sadece belirtilen dü?üme veya dü?ümlere ba?lan</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Only connect to nodes in network &lt;net&gt; (IPv4, IPv6 or Tor)</source>
+        <translation>Sadece &lt;net&gt; ?ebekesindeki dü?ümlere ba?lan (IPv4, IPv6 ya da Tor)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Discover own IP address (default: 1 when listening and no -externalip)</source>
+        <translation>Kendi IP adresini ke?fet (varsay?lan: dinlenildi?inde ve -externalip yoksa 1)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Find peers using internet relay chat (default: 0)</source>
+        <translation>Internet aktar?ml? söyle?i kullanarak e?leri bul (varsay?lan: 1) {0)?}</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Accept connections from outside (default: 1 if no -proxy or -connect)</source>
+        <translation>D??ar?dan gelen ba?lant?lar? kabul et (varsay?lan: -proxy veya -connect yoksa 1)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Bind to given address. Use [host]:port notation for IPv6</source>
+        <translation>Belirtilen adrese ba?l?. IPv6 için [host]:port notasyonunu kullan</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Find peers using DNS lookup (default: 1)</source>
+        <translation>DNS arama kullanarak e?leri bul (varsay?lan: 1)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sync time with other nodes. Disable if time on your system is precise e.g. syncing with NTP (default: 1)</source>
+        <translation>Di?er devrelerle saati senkronize et. Sisteminizdeki saat do?ru ise devre d??? b?rak?n, örn: NTC ile senkronize etme (varsay?lan: 1)</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Sync checkpoints policy (default: strict)</source>
+        <translation>Kontrol noktas? politikas?n? senkronize et (varsay?lan: s?k?)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Threshold for disconnecting misbehaving peers (default: 100)</source>
+        <translation>Aksakl?k gösteren e?lerle ba?lant?y? kesme s?n?r? (varsay?lan: 100)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Number of seconds to keep misbehaving peers from reconnecting (default: 86400)</source>
+        <translation>Aksakl?k gösteren e?lerle yeni ba?lant?lar? engelleme süresi, saniye olarak (varsay?lan: 86400)</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Maximum per-connection receive buffer, &lt;n&gt;*1000 bytes (default: 5000)</source>
+        <translation>Ba?lant? ba??na azami al?m tamponu, &lt;n&gt;*1000 bayt (varsay?lan: 5000)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Maximum per-connection send buffer, &lt;n&gt;*1000 bytes (default: 1000)</source>
+        <translation>Ba?lant? ba??na azami yollama tamponu, &lt;n&gt;*1000 bayt (varsay?lan: 1000)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Use UPnP to map the listening port (default: 1 when listening)</source>
+        <translation>Dinlenecek portu haritalamak için UPnP kullan (varsay?lan: dinlenildi?inde 1)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Use UPnP to map the listening port (default: 0)</source>
+        <translation>Dinlenecek portu haritalamak için UPnP kullan (varsay?lan: 0)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Fee per KB to add to transactions you send</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-7"/>
+        <location line="+1"/>
+        <source>When creating transactions, ignore inputs with value less than this (default: 0.01)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Use the test network</source>
+        <translation>Deneme ?ebekesini kullan</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Output extra debugging information. Implies all other -debug* options</source>
+        <translation>Ekstra hata ay?klama bilgisini ç?kt? al. Di?er tüm -debug* seçeneklerini kapsar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Output extra network debugging information</source>
+        <translation>Ekstra a? hata ay?klama bilgisini ç?kt? al</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Prepend debug output with timestamp</source>
+        <translation>Tarih bilgisini, hata ay?klama ç?kt?s?n?n ba??na ekle</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Send trace/debug info to debugger</source>
+        <translation>Hata ay?klay?c?ya iz sürme/hata ay?klama bilgisi gönder</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Listen for JSON-RPC connections on &lt;port&gt; (default: 15715 or testnet: 25715)</source>
+        <translation>&lt;port&gt; üzerinde JSON-RPC ba?lant?lar?n? dinle (varsay?lan: 15715 veya testnet: 25715)</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Allow JSON-RPC connections from specified IP address</source>
+        <translation>Belirtilen ?P adresinden JSON-RPC ba?lant?lar?n? kabul et</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Send commands to node running on &lt;ip&gt; (default: 127.0.0.1)</source>
+        <translation>?u &lt;ip&gt; adresinde (varsay?lan: 127.0.0.1) çal??an dü?üme komut yolla</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Require a confirmations for change (default: 0)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Execute command when a relevant alert is received (%s in cmd is replaced by message)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Upgrade wallet to latest format</source>
+        <translation>Cüzdan? en yeni biçime güncelle</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set key pool size to &lt;n&gt; (default: 100)</source>
+        <translation>Anahtar alan boyutunu &lt;n&gt; de?erine ayarla (varsay?lan: 100)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Rescan the block chain for missing wallet transactions</source>
+        <translation>Blok zincirini eksik cüzdan muameleleri için tekrar tara</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
+        <translation>Bozuk bir wallet.dat dosyas?ndan özel anahtarlar? geri kazanmay? dene</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>How many blocks to check at startup (default: 2500, 0 = all)</source>
+        <translation type="unfinished">Başlangıçta kontrol edilecek blok sayısı (varsayılan: 500, 0 = tümü) {2500, 0 ?}</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>How thorough the block verification is (0-6, default: 1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Imports blocks from external blk000?.dat file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Set minimum block size in bytes (default: 0)</source>
+        <translation>Bayt olarak asgari blok boyutunu tan?mla (varsay?lan: 0)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set maximum block size in bytes (default: 250000)</source>
+        <translation>Bayt olarak maksimum blok boyutunu belirle (varsay?lan: 250000)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
+        <translation>Bayt olarak yüksek öncelikli/dü?ük ücretli i?lemlerin maksimum boyutunu belirle (varsay?lan: 27000)</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>SSL options: (see the Bitcoin Wiki for SSL setup instructions)</source>
+        <translation> SSL seçenekleri: (SSL kurulum bilgisi için Bitcoin vikisine bak?n?z)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Use OpenSSL (https) for JSON-RPC connections</source>
+        <translation>JSON-RPC ba?lant?lar? için OpenSSL (https) kullan</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Server certificate file (default: server.cert)</source>
+        <translation>Sunucu sertifika dosyas? (varsay?lan: server.cert)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Server private key (default: server.pem)</source>
+        <translation>Sunucu özel anahtar? (varsay?lan: server.pem)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Acceptable ciphers (default: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+3"/>
+        <source>Invalid amount for -paytxfee=&lt;amount&gt;: &apos;%s&apos;</source>
+        <translation>-paytxfee=&lt;mebla?&gt; için geçersiz mebla?: &apos;%s&apos;</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
+        <translation>Uyar?: -paytxfee çok yüksek bir de?ere ayarlanm??! Bu, muamele gönderirseniz ödeyece?iniz muamele ücretidir.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Invalid amount for -mininput=&lt;amount&gt;: &apos;%s&apos;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Initialization sanity check failed. Gridcoin is shutting down.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+25"/>
-        <source>Loading wallet...</source>
-        <translation>Cüzdan yükleniyor...</translation>
+        <location line="+1"/>
+        <source>Wallet %s resides outside data directory %s.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-23"/>
+        <location line="+1"/>
         <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+3"/>
+        <source>Verifying database integrity...</source>
+        <translation>Veritaban? bütünlü?ü do?rulan?yor...</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
+        <translation>Veritaban? ortam? %s ba?lat?l?rken hata olu?tu! Kurtarmak için, ?LG?L? KLASÖRÜ YEDEKLEY?N, ard?ndan wallet.dat d???ndaki her ?eyi silin.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Uyar?: wallet.dat bozuk, veriler geri kazan?ld?! Özgün wallet.dat, wallet.{zamandamgas?}.bak olarak %s klasörüne kaydedildi; bakiyeniz ya da muameleleriniz yanl??sa bir yedeklemeden tekrar yüklemeniz gerekir.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>wallet.dat corrupt, salvage failed</source>
+        <translation>wallet.dat bozuk, geri kazan?m ba?ar?s?z oldu</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Unknown -socks proxy version requested: %i</source>
+        <translation>Bilinmeyen bir -socks vekil sürümü talep edildi: %i</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Invalid -tor address: &apos;%s&apos;</source>
+        <translation>Geçersiz -tor adresi: &apos;%s&apos;</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cannot resolve -bind address: &apos;%s&apos;</source>
+        <translation>-bind adresi çözümlenemedi: &apos;%s&apos;</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Cannot resolve -externalip address: &apos;%s&apos;</source>
+        <translation>-externalip adresi çözümlenemedi: &apos;%s&apos;</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Invalid amount for -reservebalance=&lt;amount&gt;</source>
+        <translation>-reservebalance=&lt;amount&gt; için geçersiz miktar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Unable to sign checkpoint, wrong checkpointkey?
+</source>
+        <translation>Kontrol noktas? imzalanamad?, bu bir hatal? kontrol noktas? anahtar? m??
+</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Error loading blkindex.dat</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Loading wallet...</source>
+        <translation>Cüzdan yükleniyor...</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Error loading wallet.dat: Wallet corrupted</source>
+        <translation>wallet.dat dosyas?n?n yüklenmesinde hata olu?tu: bozuk cüzdan</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Uyar?: wallet.dat dosyas?n?n okunmas? s?ras?nda bir hata meydana geldi! Tüm anahtarlar do?ru bir ?ekilde okundu, ancak muamele verileri ya da adres defteri unsurlar? hatal? veya eksik olabilir.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Error loading wallet.dat</source>
+        <translation>wallet.dat dosyas?n?n yüklenmesinde hata olu?tu</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Cannot downgrade wallet</source>
         <translation>Cüzdan eski biçime geri alınamaz</translation>
     </message>
@@ -3954,32 +3945,7 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation>Yeniden taranıyor...</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>Done loading</source>
-        <translation>Yükleme tamamlandı</translation>
-    </message>
-    <message>
-        <location line="-26"/>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>Bilinmeyen bir -socks vekil sürümü talep edildi: %i</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Error loading blkindex.dat</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location line="+1"/>
-        <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
         <source>Importing blockchain data file.</source>
         <translation>Blok zinciri veri dosyas? içeri aktar?l?yor.</translation>
     </message>
@@ -3994,27 +3960,32 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+2"/>
-        <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
-        <translation type="unfinished"></translation>
+        <location line="+1"/>
+        <source>Done loading</source>
+        <translation>Yükleme tamamlandı</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
+        <translation>Uyar?: Lütfen bilgisayar?n?z?n tarih ve saatinin do?ru oldu?unu kontrol ediniz! Saatiniz yanl?? ise, Gridcoin düzgün çal??mayacakt?r.</translation>
     </message>
     <message>
         <location line="+3"/>
-        <source>Error: Wallet locked, unable to create transaction  </source>
-        <translation>Hata: Cüzdan kilitli, i?lem yarat?lam?yor</translation>
+        <source>Warning: This version is obsolete, upgrade required!</source>
+        <translation>Uyar?: Bu sürüm çok eskidir, güncellemeniz gerekir!</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
-        <translation>Hata: Bu i?lem; miktar?, karma??kl??? veya son al?nan miktar?n kullan?m? nedeniyle en az %s i?lem ücreti gerektirir</translation>
+        <location line="+1"/>
+        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
+        <translation>UYARI: senkronize edilen kontrol noktas? ihlali tespit edildi ancak atland?!</translation>
     </message>
     <message>
-        <location line="-170"/>
-        <source>To use the %s option</source>
-        <translation>%s seçene?ini kullanmak için</translation>
+        <location line="+1"/>
+        <source>Warning: Disk space is low!</source>
+        <translation>Uyar?: Disk alan? dü?üktür!</translation>
     </message>
     <message>
-        <location line="+187"/>
+        <location line="+1"/>
         <source>WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4022,15 +3993,6 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <location line="-173"/>
         <source>Error</source>
         <translation>Hata</translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
-%s
-If the file does not exist, create it with owner-readable-only file permissions.</source>
-        <translation>rpcpassword=&lt;parola&gt; ?u yap?land?rma dosyas?nda belirtilmelidir:
-%s
-Dosya mevcut de?ilse, sadece sahibi için okumayla s?n?rl? izin ile olu?turunuz.</translation>
     </message>
 </context>
 </TS>
