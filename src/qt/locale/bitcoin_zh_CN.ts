@@ -503,7 +503,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+3"/>
         <source>&amp;Diagnostics</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;诊断</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2737,7 +2737,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+17"/>
         <source>C&amp;lose</source>
-        <translation type="unfinished">关闭(&amp;l)</translation>
+        <translation>关闭(&amp;l)</translation>
     </message>
     <message>
         <location line="-7"/>
