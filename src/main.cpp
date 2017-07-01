@@ -724,6 +724,8 @@ MiningCPID GetInitializedGlobalCPUMiningCPID(std::string cpid)
     mc.LastPaymentTime = nLastBlockSolved;
     mc.diffbytes = 0;
     mc.lastblockhash = "0";
+    // Reuse for debugging
+    mc.Organization = GetArg("-org", "");
     return mc;
 }
 
@@ -3146,7 +3148,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     double dStakeReward = CoinToDouble(nStakeReward+nFees) - DPOR_Paid; //DPOR Recipients checked above already
     double dStakeRewardWithoutFees = CoinToDouble(nStakeReward) - DPOR_Paid;
 
-    if (fDebug) printf("Stake Reward of %f , DPOR PAID %f    ",dStakeReward,DPOR_Paid);
+    if (fDebug) printf("Stake Reward of %f B %f I %f F %.f %s %s  ",
+        dStakeReward,bb.ResearchSubsidy,bb.InterestSubsidy,(double)nFees,bb.cpid.c_str(),bb.Organization.c_str());
 
     if (IsProofOfStake() && pindex->nHeight > nGrandfather)
     {
