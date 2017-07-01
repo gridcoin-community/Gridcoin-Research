@@ -738,7 +738,7 @@ Address: %4
     <message>
         <location line="+27"/>
         <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
-        <translation type="unfinished"></translation>
+        <translation>正在进行权益增值。&lt;br&gt;您的权重为%1&lt;br&gt;全网权重为%2&lt;br&gt;&lt;b&gt;估计&lt;/b&gt;获得回报的时间为%3. %4</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -895,7 +895,7 @@ Address: %4
     <message>
         <location filename="../bitcoin.cpp" line="+145"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
-        <translation type="unfinished"></translation>
+        <translation>发生致命错误。格雷德币不再安全，即将退出。</translation>
     </message>
 </context>
 <context>
@@ -3441,7 +3441,17 @@ If the file does not exist, create it with owner-readable-only file permissions.
 It is also recommended to set alertnotify so you are notified of problems;
 for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
 </source>
-        <translation type="unfinished"></translation>
+        <translation>%s,您必须在配置文件中设置RPC密码：
+ %s
+推荐您使用以下随机密码：
+rpcuser=gridcoinrpc
+rpcpassword=%s
+(您无需记忆此密码)
+用户名和密码绝对不能雷同。
+若文件不存在，请新建并设置为仅所有者可读。
+同样推荐设置alertnotify，这样当有问题时您会被通知到；
+例如： alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
+</translation>
     </message>
     <message>
         <location line="+45"/>
