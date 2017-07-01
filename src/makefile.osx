@@ -101,7 +101,8 @@ OBJS= \
     obj/upgrader.o \
     obj/block.o \
     obj/beacon.o \
-    obj/boinc.o
+    obj/boinc.o \
+    obj/neuralnet.o
 
 ifndef USE_UPNP
 	override USE_UPNP = -

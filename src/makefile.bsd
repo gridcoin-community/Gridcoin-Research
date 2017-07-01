@@ -90,43 +90,7 @@ xCXXFLAGS=-O0 -msse2 -pthread -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wf
 # adds some defaults in front. Unfortunately, LDFLAGS=... $(LDFLAGS) does not work.
 xLDFLAGS=$(LDHARDENING) $(LDFLAGS)
 
-OBJS= \
-    obj/alert.o \
-    obj/version.o \
-    obj/checkpoints.o \
-    obj/netbase.o \
-    obj/addrman.o \
-    obj/crypter.o \
-    obj/key.o \
-    obj/db.o \
-    obj/init.o \
-    obj/irc.o \
-    obj/keystore.o \
-    obj/main.o \
-    obj/miner.o \
-    obj/net.o \
-    obj/protocol.o \
-    obj/bitcoinrpc.o \
-    obj/rpcdump.o \
-    obj/rpcnet.o \
-    obj/rpcmining.o \
-    obj/rpcwallet.o \
-    obj/rpcblockchain.o \
-    obj/rpcrawtransaction.o \
-    obj/script.o \
-    obj/sync.o \
-    obj/util.o \
-    obj/wallet.o \
-    obj/walletdb.o \
-    obj/noui.o \
-    obj/kernel.o \
-    obj/pbkdf2.o \
-    obj/scrypt.o \
-    obj/scrypt-arm.o \
-    obj/scrypt-x86.o \
-    obj/scrypt-x86_64.o \
-    obj/block.o
-
+include Makefile.include.objs
 all: Gridcoind
 
 LIBS += $(CURDIR)/leveldb/libleveldb.a $(CURDIR)/leveldb/libmemenv.a
