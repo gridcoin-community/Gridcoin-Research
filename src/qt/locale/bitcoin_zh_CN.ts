@@ -11,7 +11,7 @@
     <message>
         <location line="+42"/>
         <source>&lt;b&gt;Gridcoin&lt;/b&gt; </source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;b&gt;格雷德币&lt;/b&gt; </translation>
     </message>
     <message>
         <location line="+58"/>
@@ -503,7 +503,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+3"/>
         <source>&amp;Diagnostics</source>
-        <translation type="unfinished"></translation>
+        <translation>&amp;诊断</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -738,7 +738,7 @@ Address: %4
     <message>
         <location line="+27"/>
         <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
-        <translation type="unfinished"></translation>
+        <translation>正在进行权益增值。&lt;br&gt;您的权重为%1&lt;br&gt;全网权重为%2&lt;br&gt;&lt;b&gt;估计&lt;/b&gt;获得回报的时间为%3. %4</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -758,7 +758,7 @@ Address: %4
     <message>
         <location line="+5"/>
         <source>Not staking because you don&apos;t have mature coins and stake weight is too low.</source>
-        <translation type="unfinished">未进行权益增值，因为钱包中没有成熟的格雷德币，且权益增值权重过低。</translation>
+        <translation>未进行权益增值，因为钱包中没有成熟的格雷德币，且权益增值权重过低。</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -895,7 +895,7 @@ Address: %4
     <message>
         <location filename="../bitcoin.cpp" line="+145"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
-        <translation type="unfinished"></translation>
+        <translation>发生致命错误。格雷德币不再安全，即将退出。</translation>
     </message>
 </context>
 <context>
@@ -2340,7 +2340,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../sendcoinsentry.cpp" line="+1"/>
         <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="unfinished">请输入格雷德币地址 (例如:G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <translation>请输入格雷德币地址 (例如:G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
 </context>
 <context>
@@ -2602,7 +2602,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+140"/>
         <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
-        <translation type="unfinished">生成的格雷德币在可以使用前必须有 %1 个成熟的区块。当您生成了此区块后，它将被广播到网络中以加入区块链。如果它未成功进入区块链，其状态将变其状态将变更为“不接受”并且不可使用。这可能偶尔会发生，如果另一个节点比你早几秒钟成功生成一个区块。 {110 ?}</translation>
+        <translation>生成的格雷德币在可以使用前必须有 %1 个成熟的区块。当您生成了此区块后，它将被广播到网络中以加入区块链。如果它未成功进入区块链，其状态将变其状态将变更为“不接受”并且不可使用。这可能偶尔会发生，如果另一个节点比你早几秒钟成功生成一个区块。 {110 ?}</translation>
     </message>
     <message>
         <location line="-2"/>
@@ -2737,7 +2737,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+17"/>
         <source>C&amp;lose</source>
-        <translation type="unfinished">关闭(&amp;l)</translation>
+        <translation>关闭(&amp;l)</translation>
     </message>
     <message>
         <location line="-7"/>
@@ -3441,7 +3441,17 @@ If the file does not exist, create it with owner-readable-only file permissions.
 It is also recommended to set alertnotify so you are notified of problems;
 for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
 </source>
-        <translation type="unfinished"></translation>
+        <translation>%s,您必须在配置文件中设置RPC密码：
+ %s
+推荐您使用以下随机密码：
+rpcuser=gridcoinrpc
+rpcpassword=%s
+(您无需记忆此密码)
+用户名和密码绝对不能雷同。
+若文件不存在，请新建并设置为仅所有者可读。
+同样推荐设置alertnotify，这样当有问题时您会被通知到；
+例如： alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
+</translation>
     </message>
     <message>
         <location line="+45"/>
