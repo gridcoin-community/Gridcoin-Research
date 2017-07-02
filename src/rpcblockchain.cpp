@@ -5246,3 +5246,167 @@ Value getcheckpoint(const Array& params, bool fHelp)
     return result;
 }
 
+// Brod
+static bool compare_second(const pair<std::string, long>  &p1, const pair<std::string, long> &p2)
+{
+    return p1.second > p2.second;
+}
+json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHelp)
+{
+    if(fHelp || params.size() < 1 || params.size() > 3 )
+        throw runtime_error(
+            "getblockstats mode [startheight [endheight]]\n"
+            "Show stats on what wallets and cpids staked recent blocks.\n");
+    long mode= std::stol(params[0].get_str());
+    (void)mode; //TODO
+    long lowheight= 0;
+    long highheight= INT_MAX;
+    if(params.size()>=2)
+        lowheight= std::stol(params[1].get_str());
+    if(params.size()>=3)
+        highheight= std::stol(params[2].get_str());
+    CBlockIndex* cur;
+    Object result1;
+    {
+        LOCK(cs_main);
+        cur= pindexBest;
+    }
+    long blockcount = 0;
+    long transactioncount = 0;
+    std::map<int,long> c_blockversion;
+    std::map<std::string,long> c_version;
+    std::map<std::string,long> c_cpid;
+    std::map<std::string,long> c_org;
+    long researchcount = 0;
+    double researchtotal = 0;
+    double interesttotal = 0;
+    int64_t minttotal = 0;
+    int64_t stakeinputtotal = 0;
+    long poscount = 0;
+    long emptyblockscount = 0;
+    long l_first = INT_MAX;
+    long l_last = 0;
+    int l_first_time,l_last_time;
+    for( ; (cur
+            &&( cur->nHeight>=lowheight )
+            &&( lowheight>0 || blockcount<=14000 )
+        );
+        cur= cur->pprev
+        )
+    {
+        if(cur->nHeight>highheight)
+            continue;
+        if(l_first>cur->nHeight)
+        {
+            l_first=cur->nHeight;
+            l_first_time=cur->nTime;
+        }
+        if(l_last<cur->nHeight)
+        {
+            l_last=cur->nHeight;
+            l_last_time=cur->nTime;
+        }
+        blockcount++;
+        CBlock block;
+        if(!block.ReadFromDisk(cur->nFile,cur->nBlockPos,true))
+            throw runtime_error("failed to read block");
+        assert(block.vtx.size() > 0);
+        unsigned txcountinblock = 0;
+        if(block.vtx.size()>=2)
+        {
+            txcountinblock+=block.vtx.size()-2;
+            if(block.vtx[1].IsCoinStake())
+            {
+                poscount++;
+                //stakeinputtotal+=block.vtx[1].vin[0].nValue;
+            }
+            else
+                txcountinblock+=1;
+        }
+        transactioncount+=txcountinblock;
+        emptyblockscount+=(txcountinblock==0);
+        c_blockversion[block.nVersion]++;
+        MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc,block.nVersion);
+        c_cpid[bb.cpid]++;
+        c_org[bb.Organization]++;
+        c_version[bb.clientversion]++;
+        researchtotal+=bb.ResearchSubsidy;
+        interesttotal+=bb.InterestSubsidy;
+        researchcount+=(bb.ResearchSubsidy>0.001);
+        minttotal+=cur->nMint;
+    }
+
+    {
+        Object result;
+        result.push_back(Pair("blocks", blockcount));
+        result.push_back(Pair("first_height", l_first));
+        result.push_back(Pair("last_height", l_last));
+        result.push_back(Pair("first_time", TimestampToHRDate(l_first_time)));
+        result.push_back(Pair("last_time", TimestampToHRDate(l_last_time)));
+        result.push_back(Pair("time_span_hour", ((double)l_last_time-(double)l_first_time)/(double)3600));
+        result1.push_back(Pair("general", result));
+    }
+    {
+        Object result;
+        result.push_back(Pair("block", blockcount));
+        result.push_back(Pair("empty_block", emptyblockscount));
+        result.push_back(Pair("transaction", transactioncount));
+        result.push_back(Pair("proof_of_stake", poscount));
+        result.push_back(Pair("boincreward", researchcount));
+        result1.push_back(Pair("counts", result));
+    }
+    {
+        Object result;
+        result.push_back(Pair("block", blockcount));
+        result.push_back(Pair("research", researchtotal));
+        result.push_back(Pair("interest", interesttotal));
+        result.push_back(Pair("mint", minttotal/(double)COIN));
+        result.push_back(Pair("stake_input", stakeinputtotal/(double)COIN));
+        result1.push_back(Pair("totals", result));
+    }
+    {
+        Object result;
+        result.push_back(Pair("research", researchtotal/(double)researchcount));
+        result.push_back(Pair("interest", interesttotal/(double)blockcount));
+        result.push_back(Pair("mint", (minttotal/(double)blockcount)/(double)COIN));
+        result.push_back(Pair("stake_input", (stakeinputtotal/(double)poscount)/(double)COIN));
+        result.push_back(Pair("spacing_sec", ((double)l_last_time-(double)l_first_time)/(double)blockcount));
+        result.push_back(Pair("block_per_day", ((double)blockcount*86400.0)/((double)l_last_time-(double)l_first_time)));
+        result.push_back(Pair("transaction", transactioncount/(double)(blockcount-emptyblockscount)));
+        result1.push_back(Pair("averages", result));
+    }
+    {
+        Object result;
+        std::vector<PAIRTYPE(std::string, long)> list;
+        std::copy(c_version.begin(), c_version.end(), back_inserter(list));
+        std::sort(list.begin(),list.end(),compare_second);
+        BOOST_FOREACH(const PAIRTYPE(std::string, long)& item, list)
+        {
+            result.push_back(Pair(item.first, item.second/(double)blockcount));
+        }
+        result1.push_back(Pair("versions", result));
+    }
+    {
+        Object result;
+        std::vector<PAIRTYPE(std::string, long)> list;
+        std::copy(c_cpid.begin(), c_cpid.end(), back_inserter(list));
+        std::sort(list.begin(),list.end(),compare_second);
+        BOOST_FOREACH(const PAIRTYPE(std::string, long)& item, list)
+        {
+            result.push_back(Pair(item.first, item.second/(double)blockcount));
+        }
+        result1.push_back(Pair("cpids", result));
+    }
+    {
+        Object result;
+        std::vector<PAIRTYPE(std::string, long)> list;
+        std::copy(c_org.begin(), c_org.end(), back_inserter(list));
+        std::sort(list.begin(),list.end(),compare_second);
+        BOOST_FOREACH(const PAIRTYPE(std::string, long)& item, list)
+        {
+            result.push_back(Pair(item.first, item.second/(double)blockcount));
+        }
+        result1.push_back(Pair("orgs", result));
+    }
+    return result1;
+}
