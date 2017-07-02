@@ -37,6 +37,5 @@ OBJS= \
     obj/cpid.o \
     obj/block.o \
     obj/beacon.o \
-    obj/boinc.o \
-    obj/neuralnet.o
+    obj/boinc.o
 
