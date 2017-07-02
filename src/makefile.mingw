@@ -43,33 +43,20 @@ UNIX_LIBPATHS?= \
   -L"$(CURDIR)/leveldb" \
   -L"$(DEPSDIR)/lib"
 
-
-LIBS_OLD= \
- -l leveldb \
- -l memenv \
- -l boost_system$(BOOST_SUFFIX) \
- -l boost_filesystem$(BOOST_SUFFIX) \
- -l boost_program_options$(BOOST_SUFFIX) \
- -l boost_thread$(BOOST_SUFFIX) \
- -l db_cxx \
- -l ssl \
- -l crypto
-
-
 LIBS= \
  -l leveldb \
- -l boost_system-mgw46-mt-1_55 \
- -l boost_filesystem-mgw46-mt-1_55 \
- -l boost_program_options-mgw46-mt-1_55 \
- -l boost_thread-mgw46-mt-1_55 \
- -l boost_chrono-mgw46-mt-1_55 \
+ -l boost_system(BOOST_SUFFIX) \
+ -l boost_filesystem(BOOST_SUFFIX) \
+ -l boost_program_options(BOOST_SUFFIX) \
+ -l boost_thread(BOOST_SUFFIX) \
+ -l boost_chrono(BOOST_SUFFIX) \
  -l db_cxx \
  -l ssl \
  -l crypto \
  -l curl \
  -l zip
 
-DEFS=-DWIN32 -D_WINDOWS -DBOOST_THREAD_USE_LIB -DBOOST_SPIRIT_THREADSAFE
+DEFS=-DWIN32 -D_WINDOWS -DBOOST_THREAD_USE_LIB -DBOOST_SPIRIT_THREADSAFE -D__USE_MINGW_ANSI_STDIO
 DEBUGFLAGS=-g
 CXXFLAGS=${ADDITIONALCXXFLAGS} -std=c++11 -mthreads -O3 -msse2 -w -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wformat-security -Wno-unused-parameter $(DEBUGFLAGS) $(DEFS) $(INCLUDEPATHS)
 LDFLAGS=-Wl,--dynamicbase -Wl,--nxcompat

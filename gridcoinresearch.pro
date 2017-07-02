@@ -7,7 +7,7 @@ CONFIG += no_include_pwd thread c++11 exceptions concurrent
 QT += core gui network
 
 win32 {
-    DEFINES += _WIN32_WINNT=0x0501 WINVER=0x0501
+    DEFINES += _WIN32_WINNT=0x0501 WINVER=0x0501 __USE_MINGW_ANSI_STDIO
     lessThan(QT_VERSION, 5.0.0) {
         CONFIG += qaxcontainer
     } 
