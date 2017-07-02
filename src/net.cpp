@@ -872,11 +872,6 @@ void CNode::CloseSocketDisconnect()
     }
 }
 
-bool IsWindows()
-{
-    return BoincHashMerkleRootNew.substr(0,4) == "Elim" ?  true : false;
-}
-
 
 std::string LegacyDefaultBoincHashArgs()
 {
