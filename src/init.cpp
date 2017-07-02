@@ -1079,20 +1079,20 @@ bool AppInit2()
     uiInterface.InitMessage(_("Loading Persisted Data Cache..."));
     //
     std::string sOut = "";
-    if (fDebug3) printf("Loading admin Messages %f",(double)0);
+    if (fDebug3) printf("Loading admin Messages");
     LoadAdminMessages(true,sOut);
-    printf("Done loading Admin messages%f",(double)0);
+    printf("Done loading Admin messages");
 
     InitializeBoincProjects();
-    printf("Done loading boinc projects %f",(double)0);
+    printf("Done loading boinc projects");
     uiInterface.InitMessage(_("Loading Network Averages..."));
-    if (fDebug3) printf("Loading network averages %f",(double)0);
+    if (fDebug3) printf("Loading network averages");
     BusyWaitForTally();
     uiInterface.InitMessage(_("Compute Neural Network Hashes..."));
 
     ComputeNeuralNetworkSupermajorityHashes();
 
-    printf("Starting CPID thread...%f",(double)0);
+    printf("Starting CPID thread...");
     LoadCPIDsInBackground();  //This calls HarvesCPIDs(true)
 
     uiInterface.InitMessage(_("Finding first applicable Research Project..."));
