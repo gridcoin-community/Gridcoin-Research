@@ -37,5 +37,6 @@ OBJS= \
     obj/cpid.o \
     obj/block.o \
     obj/beacon.o \
-    obj/boinc.o
+    obj/boinc.o \
+    obj/allocators.o
 
