@@ -132,6 +132,8 @@ extern Array GetJSONBeaconReport();
 
 void GatherNeuralHashes();
 extern std::string GetListOf(std::string datatype);
+extern std::string GetListOfWithConsensus(std::string datatype);
+
 void qtSyncWithDPORNodes(std::string data);
 std::string qtGetNeuralHash(std::string data);
 std::string qtGetNeuralContract(std::string data);
@@ -866,6 +868,8 @@ bool CheckMessageSignature(std::string sAction,std::string messagetype, std::str
 
      if (!strMessagePublicKey.empty()) strMasterPubKey = strMessagePublicKey;
      if (sAction=="D" && messagetype=="beacon") strMasterPubKey = msMasterProjectPublicKey;
+	 if (sAction=="D" && messagetype=="poll")   strMasterPubKey = msMasterProjectPublicKey;
+	 if (sAction=="D" && messagetype=="vote")   strMasterPubKey = msMasterProjectPublicKey;
 
      std::string db64 = DecodeBase64(sSig);
      CKey key;
@@ -1163,6 +1167,41 @@ std::string GetListOf(std::string datatype)
                 }
            }
            return rows;
+}
+
+
+
+std::string GetListOfWithConsensus(std::string datatype)
+{
+       std::string rows = "";
+       std::string row = "";
+	   int64_t iEndTime= (GetAdjustedTime()-CONSENSUS_LOOKBACK) - ( (GetAdjustedTime()-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
+       int64_t nLookback = 30 * 6 * 86400; 
+       int64_t iStartTime = (iEndTime - nLookback) - ( (iEndTime - nLookback) % BLOCK_GRANULARITY);
+       printf(" getlistofwithconsensus startime %f , endtime %f, lookback %f \r\n ",(double)iStartTime,(double)iEndTime, (double)nLookback);
+	   for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+       {
+             std::string key_name  = (*ii).first;
+             if (key_name.length() > datatype.length())
+             {
+                 if (key_name.substr(0,datatype.length())==datatype)
+                 {
+ 			           int64_t iBeaconTimestamp = mvApplicationCacheTimestamp[(*ii).first];
+				       if (iBeaconTimestamp > iStartTime && iBeaconTimestamp < iEndTime)
+					   {		
+							std::string key_value = mvApplicationCache[(*ii).first];
+							std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
+							row = subkey + "<COL>" + key_value;
+							if (Contains(row,"INVESTOR") && datatype=="beacon") row = "";
+							if (row != "")
+							{
+								rows += row + "<ROW>";
+							}
+						}
+                  }
+             }
+       }
+       return rows;
 }
 
 int64_t BeaconTimeStamp(std::string cpid, bool bZeroOutAfterPOR)
