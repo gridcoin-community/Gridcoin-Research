@@ -146,7 +146,7 @@ class NewPollDialog;
 // VotingDialog
 //
 class VotingDialog
-    : public QDialog
+    : public QWidget
 {
     Q_OBJECT
 

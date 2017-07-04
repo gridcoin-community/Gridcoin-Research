@@ -209,6 +209,8 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
     sendCoinsPage = new SendCoinsDialog(this);
 
+    votingPage = new VotingDialog(this);
+
     signVerifyMessageDialog = new SignVerifyMessageDialog(this);
 
     centralWidget = new QStackedWidget(this);
@@ -217,6 +219,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     centralWidget->addWidget(addressBookPage);
     centralWidget->addWidget(receiveCoinsPage);
     centralWidget->addWidget(sendCoinsPage);
+    centralWidget->addWidget(votingPage);
     setCentralWidget(centralWidget);
 
     // Create status bar
@@ -686,6 +689,11 @@ void BitcoinGUI::createActions()
     addressBookAction->setCheckable(true);
     addressBookAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_5));
 
+    votingAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Voting"), tabGroup);
+    votingAction->setToolTip(tr("Voting"));
+    votingAction->setCheckable(true);
+    votingAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_6));
+
 	bxAction = new QAction(QIcon(":/icons/block"), tr("&Block Explorer"), this);
 	bxAction->setStatusTip(tr("Block Explorer"));
 	bxAction->setMenuRole(QAction::TextHeuristicRole);
@@ -716,6 +724,7 @@ void BitcoinGUI::createActions()
     connect(historyAction, SIGNAL(triggered()), this, SLOT(gotoHistoryPage()));
     connect(addressBookAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(addressBookAction, SIGNAL(triggered()), this, SLOT(gotoAddressBookPage()));
+    connect(votingAction, SIGNAL(triggered()), this, SLOT(votingClicked()));
 
 	connect(websiteAction, SIGNAL(triggered()), this, SLOT(websiteClicked()));
 	connect(bxAction, SIGNAL(triggered()), this, SLOT(bxClicked()));
@@ -757,10 +766,6 @@ void BitcoinGUI::createActions()
 	newUserWizardAction = new QAction(QIcon(":/icons/bitcoin"), tr("&New User Wizard"), this);
 	newUserWizardAction->setStatusTip(tr("New User Wizard"));
 	newUserWizardAction->setMenuRole(QAction::TextHeuristicRole);
-	
-	votingAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Voting"), this);
-	votingAction->setStatusTip(tr("Voting"));
-	votingAction->setMenuRole(QAction::TextHeuristicRole);
     
 	foundationAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Foundation"), this);
 	foundationAction->setStatusTip(tr("Foundation"));
@@ -815,7 +820,6 @@ void BitcoinGUI::createActions()
 	connect(configAction, SIGNAL(triggered()), this, SLOT(configClicked()));
 
 	connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
-    connect(votingAction, SIGNAL(triggered()), this, SLOT(votingClicked()));
 
 	connect(diagnosticsAction, SIGNAL(triggered()), this, SLOT(diagnosticsClicked()));
 
@@ -862,15 +866,9 @@ void BitcoinGUI::createMenuBar()
     community->addAction(websiteAction);
 
 	QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
-	qmAdvanced->addSeparator();
 #ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows    
 	qmAdvanced->addAction(configAction);
 	qmAdvanced->addAction(miningAction);
-#endif /* defined(WIN32) */
-    
-    qmAdvanced->addAction(votingAction);
-    
-#ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows 
 //	qmAdvanced->addAction(newUserWizardAction);
 	qmAdvanced->addSeparator();
 	qmAdvanced->addAction(faqAction);
@@ -908,6 +906,7 @@ void BitcoinGUI::createToolBars()
     toolbar->addAction(receiveCoinsAction);
     toolbar->addAction(historyAction);
     toolbar->addAction(addressBookAction);
+    toolbar->addAction(votingAction);
 
 	// Prevent Lock from falling off the page
 
@@ -1133,9 +1132,12 @@ void BitcoinGUI::aboutClicked()
 
 void BitcoinGUI::votingClicked()
 {
-    VotingDialog *dlg = new VotingDialog(this);
-    dlg->resetData();
-    dlg->show();
+    votingAction->setChecked(true);
+    votingPage->resetData();
+    centralWidget->setCurrentWidget(votingPage);
+
+    exportAction->setEnabled(false);
+    disconnect(exportAction, SIGNAL(triggered()), 0, 0);
 }
 
 

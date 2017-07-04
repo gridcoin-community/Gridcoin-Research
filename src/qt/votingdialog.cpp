@@ -210,19 +210,20 @@ QVariant VotingTableModel::data(const QModelIndex &index, int role) const
     return QVariant();
 }
 
-QVariant VotingTableModel::headerData(int column, Qt::Orientation orientation, int role) const
+// section corresponds to column number for horizontal headers
+QVariant VotingTableModel::headerData(int section, Qt::Orientation orientation, int role) const
 {
-    if (orientation == Qt::Horizontal)
+    if (orientation == Qt::Horizontal && section >= 0)
     {
         if (role == Qt::DisplayRole)
-            return columns_[column];
+            return columns_[section];
         else
         if (role == Qt::TextAlignmentRole)
-            return column_alignments[column];
+            return column_alignments[section];
         else
         if (role == Qt::ToolTipRole)
         {
-            switch (column)
+            switch (section)
             {
             case RowNumber:
                 return tr("Row Number.");
@@ -370,7 +371,7 @@ bool VotingProxyModel::filterAcceptsRow(int row, const QModelIndex &sourceParent
 // VotingDialog
 //
 VotingDialog::VotingDialog(QWidget *parent)
-    : QDialog(parent),
+    : QWidget(parent),
     tableView_(0),
     tableModel_(0),
     proxyModel_(0),
@@ -381,11 +382,6 @@ VotingDialog::VotingDialog(QWidget *parent)
     tableModel_ = new VotingTableModel();
     proxyModel_ = new VotingProxyModel(this);
     proxyModel_->setSourceModel(tableModel_);
-
-    // view
-    setWindowTitle(tr("Gridcoin Voting System 1.1"));
-    setMinimumSize(400,300);
-    resize(1000,500);
 
     QVBoxLayout *vlayout = new QVBoxLayout(this);
 
@@ -496,7 +492,7 @@ void VotingDialog::loadHistory(void)
 
 void VotingDialog::onLoadingFinished(void)
 {
-    watcher.setProperty("loading", false);
+    watcher.setProperty("running", false);
     loadingIndicator->hide();
 }
 
