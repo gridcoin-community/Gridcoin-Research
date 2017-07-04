@@ -8,28 +8,32 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 ### Changed
  - Staking cleanup, #301 (@tomasbrod). This also solves several other issues:
-   - High CPU usage, #349.
-   - Repetetive block signing, #295
-   - Staking creates 1 cent output, #311
-   - Remove newbie boost, #332
  - UI:
-   - Wallet window can now be made smaller, #384 (@skcin). 
-   - Interest and Research subsidy visible in getmininginfo (@tomasbrod).
-   - External links now use HTTPS where possible, and the code has been cleaned
-     up, #339 (@skcin).
-   - Rearrange menu items to reduce the number of entries. Remove references
-     to broken function, #362 (@skcin).
- - Client no longer has be restarted for a beacon to activate, #253
-   (@Foggyx420).
+    - Wallet window can now be made smaller, #384 (@skcin). 
+    - Interest and Research subsidy visible in getmininginfo (@tomasbrod).
+    - External links now use HTTPS where possible, and the code has been cleaned
+      up, #339 (@skcin).
+    - Rearrange menu items to reduce the number of entries. Remove references
+      to broken function, #362 (@skcin).
  - Replace translations which were just question marks with new files from
    the Bitcoin source tree: Arabic, Belarusian, Bulgarian, Greek, Persian,
    Hebrew, Hindi, Japanese, Georgian, Kirghiz, Serbian, Thai, Ukranian,
    Urdu and Chinese.
- - Removed obsolete functionality.
  - Don't print the "Bootup" and "Signing block" messages unless fDebug (@tomasbrod). 
  - Print beacons as they are loaded and debug3=true (@tomasbrod).
  - Show superblock information in getblock (@tomasbrod).
  - Code cleanup (@skcin).
+
+### Fixed
+ - High CPU usage, #349 (@tomasbrod)
+ - Repetetive block signing, #295 (@tomasbrod)
+ - Staking creates 1 cent output, #311 (@tomasbrod)
+ - Client no longer has be restarted for a beacon to activate, #253
+   (@Foggyx420).
+
+### Removed
+ - Removed newbie boost, #332
+ - Removed obsolete functionality.
 
 ## [3.5.9.1] - 2017-07-03
 ### Changed
