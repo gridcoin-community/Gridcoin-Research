@@ -10,7 +10,7 @@ win32 {
     DEFINES += _WIN32_WINNT=0x0501 WINVER=0x0501
     lessThan(QT_VERSION, 5.0.0) {
         CONFIG += qaxcontainer
-    } 
+    }
     else {
         QT += axcontainer
     }
@@ -68,15 +68,15 @@ contains(RELEASE, 1) {
 
 !win32 {
     # for extra security against potential buffer overflows: enable GCCs Stack Smashing Protection
-    QMAKE_CXXFLAGS *= -fstack-protector-all --param ssp-buffer-size=1
-    QMAKE_LFLAGS *= -fstack-protector-all --param ssp-buffer-size=1
+    QMAKE_CXXFLAGS += -fstack-protector-all --param ssp-buffer-size=1
+    QMAKE_LFLAGS += -fstack-protector-all --param ssp-buffer-size=1
     # We need to exclude this for Windows cross compile with MinGW 4.2.x, as it will result in a non-working executable!
     # This can be enabled for Windows, when we switch to MinGW >= 4.4.x.
 } else {
     # for extra security on Windows: enable ASLR and DEP via GCC linker flags
-    QMAKE_LFLAGS *= -Wl,--dynamicbase -Wl,--nxcompat
+    QMAKE_LFLAGS += -Wl,--dynamicbase -Wl,--nxcompat
     # on Windows: enable GCC large address aware linker flag
-    QMAKE_LFLAGS *= -Wl,--large-address-aware
+    QMAKE_LFLAGS += -Wl,--large-address-aware
 }
 
 # use: qmake "USE_QRCODE=1"

@@ -2212,7 +2212,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+15"/>
-        <source>Copy quantity</source>
+        <source>Copy quantity</source> 
         <translation>复制数额 </translation>
     </message>
     <message>
