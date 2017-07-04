@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [3.5.9.1] - 2017-07-03
+### Changed
+ - Voting system security enhancement.
+ - Neural Network upgrade (allows us to come to a consensus, reduces ddos on
+   project servers).
+
 ## [3.5.9.0] - 2017-06-05
 ### Added
  - Added execute unspentreport (shows proof of unspent coins in wallet).
