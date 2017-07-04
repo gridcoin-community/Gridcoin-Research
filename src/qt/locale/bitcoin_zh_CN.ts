@@ -955,7 +955,7 @@ Address: %4
     <message>
         <location filename="../bitcoin.cpp" line="+145"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
-        <translation>发生致命错误。格雷德币客户端的安全存在问题，将退出。</</translation>
+        <translation>发生致命错误。格雷德币客户端的安全存在问题，将退出。</translation>
     </message>
 </context>
 <context>
@@ -1187,11 +1187,11 @@ Address: %4
 This label turns red, if the priority is smaller than &quot;medium&quot;.
 
  This means a fee of at least %1 per kb is required.</source>
-        <translation>具有更高优先权的交易更可能进入区块。
+        <translation>若转账数据量大于10000比特，本标签会变红。
             
-若优先权低于&quot;中值&quot，本标签会变红。
+这意味着要求至少每Kb%1的费用。
             
-这意味着要求至少每Kb%1的费用。</translation>
+每次输入可能有+/-1字节的波动。</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1635,7 +1635,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Light</source>
-h       <translation>轻</translation>
+       <translation>轻</translation>
     </message>
     <message>
         <location line="+123"/>
@@ -1681,7 +1681,7 @@ h       <translation>轻</translation>
     <message>
         <location line="+15"/>
         <source>Total number of coins that are staking, and do not yet count toward the current balance</source>
-        <translation>正在进行权益增值的货币数，尚未计入当前余额：<translation>
+        <translation>正在进行权益增值的货币数，尚未计入当前余额：</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -1761,7 +1761,7 @@ h       <translation>轻</translation>
     <message>
         <location line="+109"/>
         <source>Recent transactions</source>
-        <translation>近期转账<translation>
+        <translation>近期转账</translation>
     </message>
     <message>
         <location line="+99"/>
@@ -2217,7 +2217,7 @@ h       <translation>轻</translation>
     <message>
         <location line="+15"/>
         <source>Copy quantity</source>
-        <translation>复制数额/translation>
+        <translation>复制数额</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3343,7 +3343,7 @@ h       <translation>轻</translation>
     <message>
         <location line="+2"/>
         <source>URL.</source>
-.        <translation>网址。</translation>
+        <translation>网址。</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -3713,7 +3713,7 @@ rpcpassword=%s
     <message>
         <location line="+28"/>
         <source>Set maximum block size in bytes (default: 250000)</source>
-        <translation>以比特为单位设置最大区块大小(默认: 250000)</</translation>
+        <translation>以比特为单位设置最大区块大小(默认: 250000)</translation>
     </message>
     <message>
         <location line="-1"/>
