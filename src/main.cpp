@@ -61,6 +61,7 @@ bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string 
 int DownloadBlocks();
 int DetermineCPIDType(std::string cpid);
 extern MiningCPID GetInitializedMiningCPID(std::string name, std::map<std::string, MiningCPID>& vRef);
+std::string GetListOfWithConsensus(std::string datatype);
 extern std::string getHardDriveSerial();
 extern bool IsSuperBlock(CBlockIndex* pIndex);
 extern bool VerifySuperblock(std::string superblock, int nHeight);
@@ -516,9 +517,10 @@ bool FullSyncWithDPORNodes()
             
                 std::string errors1;
                 LoadAdminMessages(false,errors1);
-                std::string cpiddata = GetListOf("beacon");
-                std::string sWhitelist = GetListOf("project");
+                std::string cpiddata = GetListOfWithConsensus("beacon");
+		        std::string sWhitelist = GetListOf("project");
                 int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+				printf(" list of cpids %s \r\n",cpiddata.c_str());
                 double popularity = 0;
                 std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
                 std::string sAge = RoundToString((double)superblock_age,0);
@@ -527,7 +529,6 @@ bool FullSyncWithDPORNodes()
                 std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
                     + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
                     + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
-                //if (fDebug3) printf("Syncing neural network %s \r\n",data.c_str());
                 std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
                 qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
                 qtSyncWithDPORNodes(data);

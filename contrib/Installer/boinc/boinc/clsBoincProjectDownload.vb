@@ -3,22 +3,104 @@ Imports ICSharpCode.SharpZipLib.Core
 Imports System.IO
 Imports ICSharpCode.SharpZipLib.GZip
 
+Imports System.Net
 
 Public Class clsBoincProjectDownload
+    Public Shared Function GetHttpResponseHeaders(url As String) As Dictionary(Of String, String)
+        Dim headers As New Dictionary(Of String, String)()
+        Try
+            Dim webRequest As WebRequest = HttpWebRequest.Create(url)
+            webRequest.Method = "HEAD"
+            Using webResponse As WebResponse = webRequest.GetResponse()
+                For Each header As String In webResponse.Headers
+                    headers.Add(header, webResponse.Headers(header))
+                Next
+            End Using
+            Return headers
+        Catch ex As Exception
+            If ex.Message.Contains("404") Then
+                headers("ETag") = "404"
+                headers("Content-Length") = 0
+                headers("Date") = Trim(Now)
+                Return headers
+            Else
+                headers("ETag") = ex.Message
+                headers("Content-Length") = 0
+                headers("Date") = Trim(Now)
+                Return headers
+            End If
+        End Try
+    End Function
 
-    'Public msSeedProjects As String = "Bitcoin Utopia;http://www.bitcoinutopia.net/bitcoinutopia/,Citizen Science Grid;"                                       & "http://csgrid.org/csg/stats/,enigma@home;http://www.enigmaathome.net/,denis@home;http://denis.usj.es/denisathome/,universe@home;http://universeathome.pl/universe/,wuprop@home;http://wuprop.boinc-af.org/,World Community Grid;http://www.worldcommunitygrid.org/boinc/,yafu;http://yafu.myfirewall.org/yafu/,Gridcoin Finance;"                                       & "http://finance.gridcoin.us/finance/,seti@home;http://setiathome.berkeley.edu/,Rosetta@Home;"                                       & "http://boinc.bakerlab.org/,"                                       & "Einstein@Home;http://einstein.phys.uwm.edu/,"                                       & "MilkyWay@home;http://milkyway.cs.rpi.edu/milkyway/,PrimeGrid;"                                       & "http://www.primegrid.com/,"                                       & "theSkyNet POGS;http://pogs.theskynet.org/pogs/,Asteroids@home;"                                       & "http://asteroidsathome.net/boinc/;http://www.enigmaathome.net/,"                                       & "SZTAKI Desktop Grid;http://szdg.lpds.sztaki.hu/szdg/,"                                       & "Climate Prediction;http://climateapps2.oerc.ox.ac.uk/cpdnboinc/,"                                       & "POEM@HOME;http://boinc.fzk.de/poem/,"                                       & "Malaria Control;http://malariacontrol.net/,LHC@Home Classic;http://lhcathomeclassic.cern.ch/sixtrack/,yoyo@home;http://www.rechenkraft.net/yoyo/,"                                       & "Cosmology@Home;http://www.cosmologyathome.org/,SAT@home;http://sat.isa.ru/pdsat/,"                                       & "CAS@HOME;http://casathome.ihep.ac.cn/,NFS@Home;http://escatter11.fullerton.edu/nfs/,"                                       & "NumberFields@home;http://numberfields.asu.edu/NumberFields/,Leiden Classical;http://boinc.gorlaeus.net/,"                                       & "GPUGRID;http://www.gpugrid.net/,"                                       & "DistributedDataMining;http://www.distributeddatamining.org/DistributedDataMining/,"                                       & "EDGeS@Home;http://home.edges-grid.eu/home/,"                                       & "Albert@Home;http://albert.phys.uwm.edu/,"                                       & "The Lattice Project;http://boinc.umiacs.umd.edu/,"                                       & "Collatz Conjecture;http://boinc.thesonntags.com/collatz/,"                                       & "MindModeling@Home;http://mindmodeling.org/,"                                       & "vLHCathome;http://lhcathome2.cern.ch/vLHCathome/,"                                       & "FiND@Home;http://findah.ucd.ie/,ATLAS@Home;http://atlasathome.cern.ch/,Moowrap;http://moowrap.net/,BURP;http://burp.renderfarming.net/
+    Private Function AnalyzeProjectHeader(ByVal sGzipURL As String, ByRef sEtag As String, ByRef sEtagFilePath As String, ByVal sProjectName As String) As Integer
+        'Output
+        '1 = We already have the official etag version downloaded
+        '2 = We downloaded a new version
+        '3 = Download failed
+        Dim dictHeads As Dictionary(Of String, String) = GetHttpResponseHeaders(sGzipURL)
+        sEtag = dictHeads("ETag")
+        Dim sTimestamp As String
+        sTimestamp = dictHeads("Date")
 
-    Public Function DownloadGZipFiles() As Boolean
+        sEtag = Replace(sEtag, Chr(34), "")
+        sEtag = Replace(sEtag, "W", "")
+        Dim dStatus As Double = 0
+        Dim sGridcoinURL As String = "https://download.gridcoin.us/download/harvest/" + sEtag + ".gz"
+        Dim dictHeadsGRC As Dictionary(Of String, String) = GetHttpResponseHeaders(sGridcoinURL)
+        Dim dLength1 As Double = dictHeads("Content-Length")
+        Dim dLength2 As Double = dictHeadsGRC("Content-Length")
+        ' If Etag matches GRC's cache, and the filesize is the same use the GRCCache version to prevent DDosing the boinc servers (Gridcoin Foundation copies the files from the project sites to the Gridcoin.US web site once every 4 hours to help avoid stressing the project servers from the massive hit by our network)
+        Dim bCacheSiteHasSameFile As Boolean = (dLength2 > 0)
+        Dim sEtagOnFile As String = GetDataValue("etag", "tbetags", sGzipURL).DataColumn1
+        sEtagFilePath = ConstructTargetFileName(sEtag)
 
-        Dim lAgeOfMaster = GetUnixFileAge(GetGridFolder() + "NeuralNetwork\db.dat")
-        Log("UFA Timestamp: " + Trim(lAgeOfMaster))
+        If sEtagOnFile = sEtag Then
+            'We already have this file
+            Return 1
+        Else
+            'We do not have this file
+            'Only update Stored Value after we retrieve the file
+            Dim sSourceURL As String = IIf(bCacheSiteHasSameFile, sGridcoinURL, sGzipURL)
+            Dim bStatus As Boolean = ResilientDownload(sSourceURL, sEtagFilePath, sGzipURL)
+            'If all bytes downloaded then store the etag in the local table
+            If bStatus Then
+                StoreValue("etag", "tbetags", sGzipURL, sEtag)
+                StoreValue("etag", "timestamps", sProjectName, sTimestamp)
 
-        If lAgeOfMaster > SYNC_THRESHOLD Then
-            ReconnectToNeuralNetwork()
-            Dim bFail As Boolean = mGRCData.GetNeuralNetworkQuorumData(mbTestNet)
-            lAgeOfMaster = GetUnixFileAge(GetGridFolder() + "NeuralNetwork\db.dat")
+
+                'Save the Project Site GZ creation time
+                Return 2
+            Else
+                Return 3
+            End If
         End If
-        If lAgeOfMaster < SYNC_THRESHOLD Then Return True
+
+    End Function
+    Public Function ResilientDownload(sSourceUrl As String, sEtagFilePath As String, sBackupURL As String) As Boolean
+        'Doing this just in case we ddos our own website and keep receiving 404 or 500 errors:
+        For x As Integer = 1 To 5
+            Dim dictHeads As Dictionary(Of String, String) = GetHttpResponseHeaders(sSourceUrl)
+            Dim dLength1 As Double = dictHeads("Content-Length")
+            Dim w As New MyWebClient2
+            Log(" Downloading Attempt # " + Trim(x) + sSourceUrl)
+            w.DownloadFile(sSourceUrl, sEtagFilePath)
+            If GetFileSize(sEtagFilePath) = dLength1 And dLength1 > 0 Then Return True
+        Next
+        'As a last resort, pull from the Project Site
+        Dim dictHeads2 As Dictionary(Of String, String) = GetHttpResponseHeaders(sBackupURL)
+        Dim dLength2 As Double = dictHeads2("Content-Length")
+        Dim w2 As New MyWebClient2
+        Log(" Downloading BackupURL Attempt # " + Trim(1) + sBackupURL)
+        w2.DownloadFile(sBackupURL, sEtagFilePath)
+        If GetFileSize(sEtagFilePath) = dLength2 And dLength2 > 0 Then Return True Else Return False
+
+    End Function
+    Public Function DownloadGZipFiles() As Boolean
+        'Perform Housecleaning
+        Dim sFolder As String = GetGridFolder() + "NeuralNetwork\"
+        DeleteOlderThan(sFolder, 3, ".gz") 'Clean old gzip
+        DeleteOlderThan(sFolder, 3, ".dat")
+        DeleteOlderThan(sFolder, 3, ".xml")
         Dim rWhiteListedProjects As New Row
         rWhiteListedProjects.Database = "Whitelist"
         rWhiteListedProjects.Table = "Whitelist"
@@ -29,7 +111,6 @@ Public Class clsBoincProjectDownload
         If Directory.Exists(sNNFolder1) = False Then
             Directory.CreateDirectory(sNNFolder1)
         End If
-
         For Each rProject As Row In lstWhitelist
             sProject = LCase(Trim(rProject.PrimaryKey))
             sProjectURL = Trim(rProject.DataColumn1)
@@ -38,9 +119,6 @@ Public Class clsBoincProjectDownload
                 sProjectURL = Mid(sProjectURL, 1, Len(sProjectURL) - 1)
                 sProject = Replace(sProject, "_", " ")
                 sProjectURL = Replace(sProjectURL, "_", " ")
-                ' If LCase(sProjectURL) Like "*http://www.distributeddatamining.org/distributeddatamining/*" Then
-                'sProjectURL = "http://www.distributeddatamining.org/DistributedDataMining/"
-                'End If
                 Try
 
                     'Gather GZ Files:
@@ -59,60 +137,54 @@ Public Class clsBoincProjectDownload
                     Dim sTeamGzipURL As String = Replace(sGzipURL, "user.gz", "team.gz")
                     sTeamGzipURL = Replace(sTeamGzipURL, "user_id.gz", "team_id.gz")
                     sTeamGzipURL = Replace(sTeamGzipURL, "user.xml.gz", "team.xml.gz")
-                    Dim sTeamPathUnzipped As String = Replace(sTeamPath, ".gz", ".xml")
-                    Dim sGzipPathUnzipped As String = Replace(sPath, ".gz", ".xml")
-                    'If older than 7 days, download the team files again:
                     GuiDoEvents()
-                    If GetWindowsFileAge(sTeamPathUnzipped) > TEAM_SYNC_THRESHOLD Then
-                        Dim w As New MyWebClient
-                        For iRetry As Integer = 1 To 5
-                            Try
-                                'Find out what our team ID is
-                                msNeuralDetail = "Gathering Team " + sProject
-                                Log("Syncing Team " + sProject + " " + sTeamGzipURL)
-                                w.DownloadFile(sTeamGzipURL, sTeamPath)
-                                GuiDoEvents()
-                                'un-gzip the file
-                                ExtractGZipInnerArchive(sTeamPath, GetGridFolder() + "NeuralNetwork\")
-                                Exit For
-                            Catch ex As Exception
-                                Log("Error while downloading master team gz file: " + ex.Message + ", Retrying.")
-                            End Try
-                        Next
+                    'If Etag has changed, download the file:
+                    Dim sEtag As String = ""
+                    Dim sTeamEtagFilePath As String = ""
+                    Dim iStatus As Integer = AnalyzeProjectHeader(sTeamGzipURL, sEtag, sTeamEtagFilePath, sProject)
+                    Dim sProjectMasterFileName As String = GetGridFolder() + "NeuralNetwork\" + sProject + ".master.dat"
+
+                    If iStatus <> 1 Or Not File.Exists(sProjectMasterFileName) Then
+                        Try
+                            'Find out what our team ID is
+                            msNeuralDetail = "Gathering Team " + sProject
+                            Log("Syncing Team " + sProject + " " + sTeamGzipURL)
+                            GuiDoEvents()
+                            'un-gzip the file
+                            ExtractGZipInnerArchive(sTeamEtagFilePath, GetGridFolder() + "NeuralNetwork\")
+                        Catch ex As Exception
+                            Log("Error while downloading master team gz file: " + ex.Message + ", Retrying.")
+                        End Try
                     End If
+
 
                     'Sync the main RAC gz file            
-
-                    If GetWindowsFileAge(sGzipPathUnzipped) > PROJECT_SYNC_THRESHOLD Then
-                        Dim w As New MyWebClient
-                        For iRetry As Integer = 1 To 5
-                            Try
-                                'Find out what our team ID is
-                                msNeuralDetail = "Gather Project " + sProject
-                                Log("Syncing Project " + sProject + " " + sGzipURL)
-                                w.DownloadFile(sGzipURL, sPath)
-                                GuiDoEvents()
-                                'un-gzip the file
-                                ExtractGZipInnerArchive(sPath, GetGridFolder() + "NeuralNetwork\")
-                                'Delete the Project master.dat file
-                                If File.Exists(GetGridFolder() + "NeuralNetwork\" + sProject + ".master.dat") Then
-                                    File.Delete(GetGridFolder() + "NeuralNetwork\" + sProject + ".master.dat")
-                                End If
-                                Exit For
-                            Catch ex As Exception
-                                Dim sMsg As String = ex.Message
-                                Log("Error while downloading master project rac gz file : " + ex.Message + ", Retrying.")
-                            End Try
-                        Next
+                    Dim sRacEtagFilePath As String = ""
+                    iStatus = AnalyzeProjectHeader(sGzipURL, sEtag, sRacEtagFilePath, sProject)
+                    If iStatus <> 1 Or Not File.Exists(sProjectMasterFileName) Then
+                        Try
+                            'Find out what our team ID is
+                            msNeuralDetail = "Gather Project " + sProject
+                            Log("Syncing Project " + sProject + " " + sGzipURL)
+                            ExtractGZipInnerArchive(sRacEtagFilePath, GetGridFolder() + "NeuralNetwork\")
+                            'Delete the Project master.dat file
+                            If File.Exists(sProjectMasterFileName) Then
+                                File.Delete(sProjectMasterFileName)
+                            End If
+                        Catch ex As Exception
+                            Dim sMsg As String = ex.Message
+                            Log("Error while downloading master project rac gz file : " + ex.Message + ", Retrying.")
+                        End Try
                     End If
                     'Scan for the Gridcoin team inside this project:
-                    Dim lTeamID As Long = GetTeamID(sTeamPathUnzipped)
+                    Dim sTeamPathUnzipped As String = Replace(sTeamEtagFilePath, ".gz", ".xml")
+                    Dim sGzipPathUnzipped As String = Replace(sRacEtagFilePath, ".gz", ".xml")
 
+                    Dim lTeamID As Long = GetTeamID(sTeamPathUnzipped)
                     'Create the project master file
-                    If File.Exists(GetGridFolder() + "NeuralNetwork\" + sProject + ".master.dat") = False Then
+                    If Not File.Exists(sProjectMasterFileName) Then
                         EmitProjectFile(sGzipPathUnzipped, GetGridFolder() + "NeuralNetwork\", sProject, lTeamID)
                     End If
-
                     Debug.Print(sProject)
                 Catch ex As Exception
                     Log("Error while syncing " + sProject + ": " + ex.Message)
@@ -136,6 +208,8 @@ Public Class clsBoincProjectDownload
             If fi.Name Like "*.master.dat*" Then
                 sProjectLocal = Replace(fi.Name, ".master.dat", "")
                 iTotalProjectsSynced += 1
+                Dim sTimestamp As String = GetDataValue("etag", "timestamps", sProjectLocal).DataColumn1
+                Dim dtUTC As DateTime = TimeZoneInfo.ConvertTimeToUtc(CDate(sTimestamp))
                 Using oStream As New System.IO.FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
                     Dim objReader As New System.IO.StreamReader(oStream)
                     While objReader.EndOfStream = False
@@ -144,8 +218,8 @@ Public Class clsBoincProjectDownload
                         sTemp = Replace(sTemp, "</name>", "</username>")
                         sTemp = Replace(sTemp, "<user>", "<project><name>" + sProjectLocal + "</name><team_name>gridcoin</team_name>")
                         sTemp = Replace(sTemp, "</user>", "</project>")
-                        'Dont bother writing timestamps older than 32 days since we base mag off of RAC
-                        Dim lRowAgeInMins = GetRowAgeInMins(sTemp)
+                        'Dont bother writing timestamps older than 32 days since we base mag off of RAC (Filter RAC based on project header in UTC - RAC Updated UTC - BullShark)
+                        Dim lRowAgeInMins = GetRowAgeInMins(sTemp, dtUTC)
                         If lRowAgeInMins < (60 * 24 * 32) Then
                             oSW.WriteLine(sTemp)
                         End If

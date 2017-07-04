@@ -31,9 +31,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Show superblock information in getblock (@tomasbrod).
  - Code cleanup (@skcin).
 
+## [3.5.9.1] - 2017-07-03
+### Changed
+ - Voting system security enhancement.
+ - Neural Network upgrade (allows us to come to a consensus, reduces ddos on
+   project servers).
+
 ## [3.5.9.0] - 2017-06-05
 ### Added
-=======
  - Added execute unspentreport (shows proof of unspent coins in wallet).
  - Add RPC commands for changing debug flags: debug, debugnet, debug2, debug3,
    debug4, debug5, debug10. #309 (@Foggyx420).
