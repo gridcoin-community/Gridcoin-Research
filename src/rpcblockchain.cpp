@@ -2549,7 +2549,7 @@ Value execute(const Array& params, bool fHelp)
                 
                     if (nBalance < 100000)
                     {
-                        entry.push_back(Pair("Error","You must have a balance > 100,000 GRC to create a poll.  Please post the desired poll on cryptocointalk or PM RTM with the poll."));
+                        entry.push_back(Pair("Error","You must have a balance > 100,000 GRC to create a poll.  Please post the desired poll on https://cryptocurrencytalk.com/forum/464-gridcoin-grc/ or https://github.com/Erkan-Yilmaz/Gridcoin-tasks/issues/45"));
                         results.push_back(entry);
                     }
                     else
