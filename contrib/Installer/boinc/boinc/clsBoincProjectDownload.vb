@@ -21,12 +21,12 @@ Public Class clsBoincProjectDownload
             If ex.Message.Contains("404") Then
                 headers("ETag") = "404"
                 headers("Content-Length") = 0
-                headers("Date") = Trim(Now)
+                headers("Last-Modified") = Trim(Now)
                 Return headers
             Else
                 headers("ETag") = ex.Message
                 headers("Content-Length") = 0
-                headers("Date") = Trim(Now)
+                headers("Last-Modified") = Trim(Now)
                 Return headers
             End If
         End Try
@@ -40,7 +40,7 @@ Public Class clsBoincProjectDownload
         Dim dictHeads As Dictionary(Of String, String) = GetHttpResponseHeaders(sGzipURL)
         sEtag = dictHeads("ETag")
         Dim sTimestamp As String
-        sTimestamp = dictHeads("Date")
+        sTimestamp = dictHeads("Last-Modified")
 
         sEtag = Replace(sEtag, Chr(34), "")
         sEtag = Replace(sEtag, "W", "")
@@ -209,7 +209,7 @@ Public Class clsBoincProjectDownload
                 sProjectLocal = Replace(fi.Name, ".master.dat", "")
                 iTotalProjectsSynced += 1
                 Dim sTimestamp As String = GetDataValue("etag", "timestamps", sProjectLocal).DataColumn1
-                Dim dtUTC As DateTime = TimeZoneInfo.ConvertTimeToUtc(CDate(sTimestamp))
+                Dim dtUTC As DateTime = GetUtcDateTime(CDate(sTimestamp))
                 Using oStream As New System.IO.FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
                     Dim objReader As New System.IO.StreamReader(oStream)
                     While objReader.EndOfStream = False

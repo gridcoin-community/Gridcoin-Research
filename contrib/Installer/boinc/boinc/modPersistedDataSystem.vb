@@ -117,7 +117,17 @@ Module modPersistedDataSystem
 
 
     Public Function UnixTimestampToDate(ByVal timestamp As Double) As DateTime
-        Return New DateTime(1970, 1, 1, 0, 0, 0).AddSeconds(timestamp)
+        Try
+            Dim dt1 As New DateTime(1970, 1, 1, 0, 0, 0)
+            Dim dt2 As DateTime = TimeZoneInfo.ConvertTimeToUtc(dt1)
+            dt2 = dt2.AddSeconds(timestamp)
+            Return dt2
+        Catch ex As Exception
+            Log("Unable to convert timestamp " + Trim(timestamp) + " to UTC datetime.")
+            Dim dt3 As New DateTime(1970, 1, 1, 0, 0, 0)
+            dt3 = dt3.AddSeconds(timestamp)
+            Return dt3
+        End Try
     End Function
     Public Function GetMagnitudeContractDetails() As String
         Dim surrogateRow As New Row
@@ -1705,12 +1715,30 @@ Retry:
         Dim iMins As Long = DateDiff(DateInterval.Minute, fi.LastWriteTime, Now)
         Return iMins
     End Function
+    Public Function GetUtcDateTime(dtTime As DateTime) As DateTime
+        'When converting from a date time to a target datetime that falls within the window of a daylight savings time adjustment, an error is thrown since the target is technically no longer a valid date time, so we need to account for this just in case
+        'On July2nd 2017, the Western Sahara had a 2AM to 3AM local time change and an error was thrown when we pulled in a RAC timestamp of 2AM JUL 2 2017 and tried to convert it to UTC
+        'Step 1, try the natural conversion first
+        Try
+            Dim dTime As DateTime = TimeZoneInfo.ConvertTimeToUtc(dtTime)
+            Return dTime
+        Catch ex As Exception
+            'Next try 2 hours back
+            Log("Setting clock 2 hours back.")
+            Try
+                Dim dTime2 As DateTime = DateAdd(DateInterval.Hour, -2, dtTime)
+                Dim dTime2Return As DateTime = TimeZoneInfo.ConvertTimeToUtc(dTime2)
+                Return dTime2Return
+            Catch ex2 As Exception
+                Log("Still unable to convert to UTC from " + Trim(dtTime))
+                Return CDate("1-1-1970")
+            End Try
+        End Try
+    End Function
     Public Function GetRowAgeInMins(sRow As String, dtSyncTime As DateTime) As Double
         Dim sTS As String = ExtractXML(sRow, "<expavg_time>", "</expavg_time>")
         Dim dStamp As Double = Val(sTS)
-        Dim dTime As DateTime = TimeZoneInfo.ConvertTimeToUtc(UnixTimestampToDate(dStamp))
-
-   
+        Dim dTime As DateTime = UnixTimestampToDate(dStamp)
         Dim iMins As Long = DateDiff(DateInterval.Minute, dTime, dtSyncTime)
         Return iMins
     End Function
