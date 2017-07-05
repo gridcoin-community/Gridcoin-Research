@@ -4069,16 +4069,17 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
                 double PORDiff = GetBlockDifficulty(nBits);
                 double mint1 = CoinToDouble(Mint);
                 double total_subsidy = bb.ResearchSubsidy + bb.InterestSubsidy;
+                double limiter = MintLimiter(PORDiff,bb.RSAWeight,bb.cpid,GetBlockTime());
                 if (fDebug10) printf("CheckBlock[]: TotalSubsidy %f, Height %f, %s, %f, Res %f, Interest %f, hb: %s \r\n",
                         (double)total_subsidy,(double)height1, bb.cpid.c_str(),
                         (double)mint1,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc.c_str());
-                if (total_subsidy < MintLimiter(PORDiff,bb.RSAWeight,bb.cpid,GetBlockTime()))
+                if (total_subsidy < limiter)
                 {
                     if (fDebug3) printf("****CheckBlock[]: Total Mint too Small %s, mint %f, Res %f, Interest %f, hash %s \r\n",bb.cpid.c_str(),
                         (double)mint1,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc.c_str());
                     //1-21-2015 - Prevent Hackers from spamming the network with small blocks
-                    return error("****CheckBlock[]: Total Mint too Small %s, mint %f, Res %f, Interest %f, hash %s \r\n",bb.cpid.c_str(),
-                            (double)mint1,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc.c_str());
+                    return error("****CheckBlock[]: Total Mint too Small %f < %f Research %f Interest %f BOINC %s",
+                            total_subsidy,limiter,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc.c_str());
                 }
 
                 if (fCheckSig && !CheckBlockSignature())
@@ -5806,7 +5807,7 @@ bool TallyResearchAverages(bool Forcefully)
      int64_t nStart = GetTimeMillis();
 
 
-    if (fDebug3) printf("Tallying Research Averages (begin) ");
+    if (fDebug) printf("Tallying Research Averages (begin) ");
     nLastTallied = GetAdjustedTime();
     bNetAveragesLoaded = false;
     bool superblockloaded = false;
@@ -5863,7 +5864,7 @@ bool TallyResearchAverages(bool Forcefully)
                                         {
                                                 LoadSuperblock(superblock,pblockindex->nTime,pblockindex->nHeight);
                                                 superblockloaded=true;
-                                                if (fDebug3) printf(" Superblock Loaded %f \r\n",(double)pblockindex->nHeight);
+                                                if (fDebug) printf(" Superblock Loaded %f \r\n",(double)pblockindex->nHeight);
                                         }
                                 }
                             }
