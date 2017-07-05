@@ -21,7 +21,6 @@ using namespace boost::assign;
 using namespace json_spirit;
 
 extern std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, int& out_rac);
-MiningCPID DeserializeBoincBlock(std::string block);
 extern void Imker(void *kippel);
 extern Upgrader upgrader;
 
@@ -60,7 +59,7 @@ std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype,
     out_blocknumber = pindexPrev->nHeight;
     //Deserialize
 
-    MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
+    MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc,block.nVersion);
 
     out_rac = bb.rac;
     return bb.projectname;

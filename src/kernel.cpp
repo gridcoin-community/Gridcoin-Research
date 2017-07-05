@@ -10,7 +10,6 @@
 
 bool IsCPIDValidv2(MiningCPID& mc,int height);
 using namespace std;
-MiningCPID DeserializeBoincBlock(std::string block);
 StructCPID GetStructCPID();
 extern int64_t GetRSAWeightByCPID(std::string cpid);
 extern int DetermineCPIDType(std::string cpid);
@@ -297,7 +296,8 @@ double GetMagnitudeByHashBoinc(std::string hashBoinc, int height)
 {
     if (hashBoinc.length() > 1)
         {
-            MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
+            // block version not needed for now for mag
+            MiningCPID boincblock = DeserializeBoincBlock(hashBoinc,7);
             if (boincblock.cpid == "" || boincblock.cpid.length() < 6) return 0;  //Block has no CPID
             if (boincblock.cpid == "INVESTOR")  return 0;
             if (boincblock.projectname == "")   return 0;
@@ -483,7 +483,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
     bnTargetPerCoinDay.SetCompact(nBits);
     int64_t nValueIn = txPrev.vout[prevout.n].nValue;
     uint256 hashBlockFrom = blockFrom.GetHash();
-    MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
+    MiningCPID boincblock = DeserializeBoincBlock(hashBoinc,5);
     std::string cpid = boincblock.cpid;
     int64_t RSA_WEIGHT = 0;
     int oNC = 0;
@@ -634,7 +634,7 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits,
 {
 
     double PORDiff = GetBlockDifficulty(nBits);
-    MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
+    MiningCPID boincblock = DeserializeBoincBlock(hashBoinc,7);
     double payment_age = std::abs((double)nTimeTx-(double)boincblock.LastPaymentTime);
     int64_t RSA_WEIGHT = GetRSAWeightByBlock(boincblock);
     double coin_age = std::abs((double)nTimeTx-(double)txPrev.nTime);
@@ -915,7 +915,7 @@ bool CheckProofOfStakeV8(
     if (blockPrev.nTime + nStakeMinAge > tx.nTime) // Min age requirement
         return error("CheckProofOfStakeV8: min age violation");
 
-    MiningCPID boincblock = DeserializeBoincBlock(Block.vtx[0].hashBoinc);
+    MiningCPID boincblock = DeserializeBoincBlock(Block.vtx[0].hashBoinc,Block.nVersion);
 
     //
     uint64_t StakeModifier = 0;

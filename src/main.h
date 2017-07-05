@@ -268,6 +268,8 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 	bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast, std::string operation,
 	double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
 
+MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion);
+std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion);
 
 
 unsigned int ComputeMinWork(unsigned int nBase, int64_t nTime);

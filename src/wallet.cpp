@@ -40,9 +40,6 @@ void AddPeek(std::string data);
 
 double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
 
-std::string SerializeBoincBlock(MiningCPID mcpid);
-MiningCPID DeserializeBoincBlock(std::string block);
-
 MiningCPID GetMiningCPID();
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 bool LessVerbose(int iMax1000);
@@ -628,7 +625,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
             bool r = blk.ReadFromDisk(pBlk);
             if (r) 
             {
-                MiningCPID bb = DeserializeBoincBlock(blk.vtx[0].hashBoinc);
+                MiningCPID bb = DeserializeBoincBlock(blk.vtx[0].hashBoinc,blk.nVersion);
                 double dResearch = bb.ResearchSubsidy + bb.InterestSubsidy;
                 double dRewardShare = dResearch*.10;
                 // Only send Reward if > .10 GRC

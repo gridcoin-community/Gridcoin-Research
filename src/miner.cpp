@@ -31,8 +31,6 @@ void ThreadTopUpKeyPool(void* parg);
 
 int64_t GetRSAWeightByCPID(std::string cpid);
 bool OutOfSyncByAgeWithChanceOfMining();
-MiningCPID DeserializeBoincBlock(std::string block);
-std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
 std::string PubKeyToAddress(const CScript& scriptPubKey);
 
@@ -482,7 +480,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
         miningcpid.enccpid = ""; //CPID V1 Boinc RunTime enc key
         miningcpid.encboincpublickey = "";
         miningcpid.encaes = "";
-        std::string hashBoinc = SerializeBoincBlock(miningcpid);
+        std::string hashBoinc = SerializeBoincBlock(miningcpid,pblock->nVersion);
         if (fDebug10 && LessVerbose(10))  printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
         pblock->vtx[0].hashBoinc = hashBoinc;
 
@@ -1229,7 +1227,7 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
     miningcpid.BoincSignature = "";
 
     int64_t RSA_WEIGHT = GetRSAWeightByBlock(miningcpid);
-    std::string SerializedBoincData = SerializeBoincBlock(miningcpid);
+    std::string SerializedBoincData = SerializeBoincBlock(miningcpid,blocknew.nVersion);
     GlobalCPUMiningCPID.lastblockhash = miningcpid.lastblockhash;
 
     if (fDebug)  printf("CreateGridcoinReward: %s\r\n",SerializedBoincData.c_str());

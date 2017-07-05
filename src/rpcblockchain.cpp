@@ -143,7 +143,6 @@ std::string strReplace(std::string& str, const std::string& oldStr, const std::s
 std::string ReadCache(std::string section, std::string key);
 MiningCPID GetNextProject(bool bForce);
 std::string GetArgument(std::string arg, std::string defaultvalue);
-std::string SerializeBoincBlock(MiningCPID mcpid);
 extern std::string TimestampToHRDate(double dtm);
 
 std::string qtGRCCodeExecutionSubsystem(std::string sCommand);
@@ -173,7 +172,6 @@ bool IsCPIDValidv2(MiningCPID& mc, int height);
 std::string RetrieveMd5(std::string s1);
 
 std::string getfilecontents(std::string filename);
-MiningCPID DeserializeBoincBlock(std::string block);
 
 extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
@@ -368,7 +366,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
         result.push_back(Pair("previousblockhash", blockindex->pprev->GetBlockHash().GetHex()));
     if (blockindex->pnext)
         result.push_back(Pair("nextblockhash", blockindex->pnext->GetBlockHash().GetHex()));
-    MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
+    MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc,block.nVersion);
     uint256 blockhash = block.GetPoWHash();
     std::string sblockhash = blockhash.GetHex();
     bool IsPoR = false;
@@ -1244,7 +1242,7 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
             }
 
             GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
-            std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID);
+            std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID,pindexBest->nVersion);
             std::string GRCAddress = DefaultWalletAddress();
             // Public Signing Key is stored in Beacon
             std::string contract = GlobalCPUMiningCPID.cpidv2 + ";" + hashRand.GetHex() + ";" + GRCAddress + ";" + sOutPubKey;
@@ -2447,7 +2445,7 @@ Value execute(const Array& params, bool fHelp)
                             }
                             else
                             {
-                                std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID);
+                                std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID,pindexBest->nVersion);
                                 std::string GRCAddress = DefaultWalletAddress();
                                 StructCPID structMag = GetInitializedStructCPID2(GlobalCPUMiningCPID.cpid,mvMagnitudes);
                                 double dmag = structMag.Magnitude;
@@ -2813,7 +2811,8 @@ Value execute(const Array& params, bool fHelp)
         GlobalCPUMiningCPID.aesskein = email; //Good
         GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
 
-        std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID);
+        //block version not needed for keys for now
+        std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID,7);
         if (fDebug3) printf("GenBoincKey: Utilizing email %s with %s for  %s \r\n",GlobalCPUMiningCPID.email.c_str(),GlobalCPUMiningCPID.boincruntimepublickey.c_str(),sParam.c_str());
         std::string sBase = EncodeBase64(sParam);
         entry.push_back(Pair("[Specify in config file without quotes] boinckey=",sBase));

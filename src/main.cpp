@@ -333,8 +333,6 @@ extern void GetGlobalStatus();
 extern bool OutOfSyncByAge();
 extern std::vector<std::string> split(std::string s, std::string delim);
 extern bool ProjectIsValid(std::string project);
-extern std::string SerializeBoincBlock(MiningCPID mcpid);
-extern MiningCPID DeserializeBoincBlock(std::string block);
 
 double GetNetworkAvgByProject(std::string projectname);
 extern bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
@@ -3142,7 +3140,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                    nReward));
     }
 
-    MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc);
+    MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc,nVersion);
     uint64_t nCoinAge = 0;
 
     double dStakeReward = CoinToDouble(nStakeReward+nFees) - DPOR_Paid; //DPOR Recipients checked above already
@@ -3989,7 +3987,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
             return DoS(100, error("CheckBlock[] : more than one coinbase"));
 
     //Research Age
-    MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc);
+    MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc,nVersion);
     //For higher security, plus lets catch these bad blocks before adding them to the chain to prevent reorgs:
     double OUT_POR = 0;
     double OUT_INTEREST = 0;
@@ -5572,7 +5570,7 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
                             block.ReadFromDisk(pblockindex);
                             std::string hashboinc = "";
                             if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
-                            MiningCPID bb = DeserializeBoincBlock(hashboinc);
+                            MiningCPID bb = DeserializeBoincBlock(hashboinc,block.nVersion);
                             myCPID = bb.cpid;
                         }
                         else
@@ -5748,7 +5746,7 @@ bool ComputeNeuralNetworkSupermajorityHashes()
             if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
             if (!hashboinc.empty())
             {
-                MiningCPID bb = DeserializeBoincBlock(hashboinc);
+                MiningCPID bb = DeserializeBoincBlock(hashboinc,block.nVersion);
                 //If block is pending: 7-25-2015
                 if (bb.superblock.length() > 20)
                 {
@@ -7583,10 +7581,11 @@ std::string GetLastPORBlockHash(std::string cpid)
     return stCPID.BlockHash;
 }
 
-std::string SerializeBoincBlock(MiningCPID mcpid)
+std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion)
 {
     std::string delim = "<|>";
     std::string version = FormatFullVersion();
+    int subsidy_places= BlockVersion<8 ? 2 : 8;
     mcpid.GRCAddress = DefaultWalletAddress();
     if (!IsResearchAgeEnabled(pindexBest->nHeight))
     {
@@ -7634,13 +7633,13 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
                     + delim + mcpid.enccpid
                     + delim + mcpid.encaes + delim + RoundToString(mcpid.nonce,0) + delim + RoundToString(mcpid.NetworkRAC,0)
                     + delim + version
-                    + delim + RoundToString(mcpid.ResearchSubsidy,2)
+                    + delim + RoundToString(mcpid.ResearchSubsidy,subsidy_places)
                     + delim + RoundToString(mcpid.LastPaymentTime,0)
                     + delim + RoundToString(mcpid.RSAWeight,0)
                     + delim + mcpid.cpidv2
                     + delim + RoundToString(mcpid.Magnitude,0)
                     + delim + mcpid.GRCAddress + delim + mcpid.lastblockhash
-                    + delim + RoundToString(mcpid.InterestSubsidy,2) + delim + mcpid.Organization
+                    + delim + RoundToString(mcpid.InterestSubsidy,subsidy_places) + delim + mcpid.Organization
                     + delim + mcpid.OrganizationKey + delim + mcpid.NeuralHash + delim + mcpid.superblock
                     + delim + RoundToString(mcpid.ResearchSubsidy2,2) + delim + RoundToString(mcpid.ResearchAge,6)
                     + delim + RoundToString(mcpid.ResearchMagnitudeUnit,6) + delim + RoundToString(mcpid.ResearchAverageMagnitude,2)
@@ -7650,9 +7649,10 @@ std::string SerializeBoincBlock(MiningCPID mcpid)
 
 
 
-MiningCPID DeserializeBoincBlock(std::string block)
+MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion)
 {
     MiningCPID surrogate = GetMiningCPID();
+    int subsidy_places= BlockVersion<8 ? 2 : 8;
     try
     {
 
@@ -7708,7 +7708,7 @@ MiningCPID DeserializeBoincBlock(std::string block)
         }
         if (s.size() > 18)
         {
-            surrogate.InterestSubsidy = cdbl(s[18],2);
+            surrogate.InterestSubsidy = cdbl(s[18],subsidy_places);
         }
         if (s.size() > 19)
         {
@@ -7728,7 +7728,7 @@ MiningCPID DeserializeBoincBlock(std::string block)
         }
         if (s.size() > 23)
         {
-            surrogate.ResearchSubsidy2 = cdbl(s[23],2);
+            surrogate.ResearchSubsidy2 = cdbl(s[23],subsidy_places);
         }
         if (s.size() > 24)
         {
@@ -7903,7 +7903,8 @@ void HarvestCPIDs(bool cleardata)
         printf("Using key %s \r\n",sDec.c_str());
 
         if (sDec.empty()) printf("Error while deserializing boinc key!  Please use execute genboinckey to generate a boinc key from the host with boinc installed.\r\n");
-        GlobalCPUMiningCPID = DeserializeBoincBlock(sDec);
+        //Version not needed for keys for now
+        GlobalCPUMiningCPID = DeserializeBoincBlock(sDec,7);
 
         GlobalCPUMiningCPID.initialized = true;
 
@@ -8888,7 +8889,7 @@ bool UnusualActivityReport()
                     if (subsidy > max_subsidy)
                     {
                         std::string hb = block.vtx[0].hashBoinc;
-                        MiningCPID bb = DeserializeBoincBlock(hb);
+                        MiningCPID bb = DeserializeBoincBlock(hb,block.nVersion);
                         if (bb.cpid != "INVESTOR")
                         {
                                 printf("Block #%f:%f, Recipient %s, CPID %s, Paid %f, StakeReward %f \r\n",(double)ii,(double)0,
@@ -9110,7 +9111,7 @@ MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex)
     {
         std::string hashboinc = "";
         if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
-        bb = DeserializeBoincBlock(hashboinc);
+        bb = DeserializeBoincBlock(hashboinc,block.nVersion);
         bb.initialized=true;
         return bb;
     }
@@ -9270,7 +9271,7 @@ void SetUpExtendedBlockIndexFieldsOnce()
                 if (pindex==NULL || !pindex->IsInMainChain()) continue;
                 CBlock block;
                 if (!block.ReadFromDisk(pindex)) continue;
-                MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
+                MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc,block.nVersion);
                 if (bb.superblock.length() > 20)
                 {
                         sSuperblocks += pindex->GetBlockHash().GetHex() + ",";
