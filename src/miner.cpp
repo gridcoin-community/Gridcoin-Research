@@ -31,10 +31,8 @@ void ThreadTopUpKeyPool(void* parg);
 
 int64_t GetRSAWeightByCPID(std::string cpid);
 bool OutOfSyncByAgeWithChanceOfMining();
+std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
-std::string PubKeyToAddress(const CScript& scriptPubKey);
-
-bool IsCPIDValidv2(MiningCPID& mc,int height);
 
 int static FormatHashBlocks(void* pbuffer, unsigned int len)
 {
@@ -1365,6 +1363,7 @@ void StakeMiner(CWallet *pwallet)
     printf("StakeMiner: signed boinchash, coinstake, wholeblock\n");
 
     // * delegate to ProcessBlock
+    LOCK(cs_main);
     if (!ProcessBlock(NULL, &StakeBlock, true))
     {
         msMiningErrors5+="Block vehemently rejected; ";

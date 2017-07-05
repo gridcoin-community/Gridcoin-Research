@@ -30,7 +30,6 @@ class QLineEdit;
 class QTableView;
 class QAbstractItemModel;
 class QModelIndex;
-class QProgressBar;
 class QStackedWidget;
 class QUrl;
 QT_END_NAMESPACE
@@ -85,8 +84,6 @@ private:
     QLabel *labelStakingIcon;
     QLabel *labelConnectionsIcon;
     QLabel *labelBlocksIcon;
-    QLabel *progressBarLabel;
-    QProgressBar *progressBar;
 
     QMenuBar *appMenuBar;
     QAction *overviewAction;

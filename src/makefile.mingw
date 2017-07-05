@@ -43,33 +43,20 @@ UNIX_LIBPATHS?= \
   -L"$(CURDIR)/leveldb" \
   -L"$(DEPSDIR)/lib"
 
-
-LIBS_OLD= \
- -l leveldb \
- -l memenv \
- -l boost_system$(BOOST_SUFFIX) \
- -l boost_filesystem$(BOOST_SUFFIX) \
- -l boost_program_options$(BOOST_SUFFIX) \
- -l boost_thread$(BOOST_SUFFIX) \
- -l db_cxx \
- -l ssl \
- -l crypto
-
-
 LIBS= \
  -l leveldb \
- -l boost_system-mgw46-mt-1_55 \
- -l boost_filesystem-mgw46-mt-1_55 \
- -l boost_program_options-mgw46-mt-1_55 \
- -l boost_thread-mgw46-mt-1_55 \
- -l boost_chrono-mgw46-mt-1_55 \
+ -l boost_system(BOOST_SUFFIX) \
+ -l boost_filesystem(BOOST_SUFFIX) \
+ -l boost_program_options(BOOST_SUFFIX) \
+ -l boost_thread(BOOST_SUFFIX) \
+ -l boost_chrono(BOOST_SUFFIX) \
  -l db_cxx \
  -l ssl \
  -l crypto \
  -l curl \
  -l zip
 
-DEFS=-DWIN32 -D_WINDOWS -DBOOST_THREAD_USE_LIB -DBOOST_SPIRIT_THREADSAFE
+DEFS=-DWIN32 -D_WINDOWS -DBOOST_THREAD_USE_LIB -DBOOST_SPIRIT_THREADSAFE -D__USE_MINGW_ANSI_STDIO
 DEBUGFLAGS=-g
 CXXFLAGS=${ADDITIONALCXXFLAGS} -std=c++11 -mthreads -O3 -msse2 -w -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wformat-security -Wno-unused-parameter $(DEBUGFLAGS) $(DEFS) $(INCLUDEPATHS)
 LDFLAGS=-Wl,--dynamicbase -Wl,--nxcompat
@@ -93,44 +80,7 @@ LIBS += -l kernel32 -l user32 -l gdi32 -l comdlg32 -l winspool -l winmm -l shell
 # TODO: make the mingw builds smarter about dependencies, like the linux/osx builds are
 HEADERS = $(wildcard *.h)
 
-OBJS= \
-    leveldb/libleveldb.a \
-    obj/alert.o \
-    obj/version.o \
-    obj/checkpoints.o \
-    obj/netbase.o \
-    obj/addrman.o \
-    obj/crypter.o \
-    obj/key.o \
-    obj/db.o \
-    obj/init.o \
-    obj/irc.o \
-    obj/keystore.o \
-    obj/main.o \
-    obj/miner.o \
-    obj/net.o \
-    obj/protocol.o \
-    obj/bitcoinrpc.o \
-    obj/rpcdump.o \
-    obj/rpcnet.o \
-    obj/rpcmining.o \
-    obj/rpcwallet.o \
-    obj/rpcblockchain.o \
-    obj/rpcrawtransaction.o \
-    obj/script.o \
-    obj/sync.o \
-    obj/util.o \
-    obj/wallet.o \
-    obj/walletdb.o \
-    obj/noui.o \
-    obj/kernel.o \
-    obj/pbkdf2.o \
-    obj/scrypt.o \
-    obj/scrypt-x86.o \
-    obj/scrypt-x86_64.o \
-    obj/cpid.o \
-    obj/upgrader.o \
-    obj/block.o
+include Makefile.include.objs
 
 all: gridcoinresearchd.exe
 

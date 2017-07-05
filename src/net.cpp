@@ -12,7 +12,6 @@
 #include "util.h"
 
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
-#include <boost/array.hpp>
 #include <boost/thread.hpp>
 
 #ifdef WIN32
@@ -51,7 +50,6 @@ std::string DefaultBoincHashArgs();
 extern std::string LegacyDefaultBoincHashArgs();
 bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
 extern int nMaxConnections;
-void HarvestCPIDs(bool cleardata);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 std::string cached_boinchash_args = "";
 std::string RetrieveMd5(std::string s1);
@@ -88,7 +86,7 @@ static bool vfLimited[NET_MAX] = {};
 static CNode* pnodeLocalHost = NULL;
 CAddress addrSeenByPeer(CService("0.0.0.0", 0), nLocalServices);
 uint64_t nLocalHostNonce = 0;
-boost::array<int, THREAD_MAX> vnThreadsRunning;
+std::array<int, THREAD_MAX> vnThreadsRunning;
 static std::vector<SOCKET> vhListenSocket;
 CAddrMan addrman;
 
@@ -872,11 +870,6 @@ void CNode::CloseSocketDisconnect()
         if (lockRecv)
             vRecvMsg.clear();
     }
-}
-
-bool IsWindows()
-{
-    return BoincHashMerkleRootNew.substr(0,4) == "Elim" ?  true : false;
 }
 
 

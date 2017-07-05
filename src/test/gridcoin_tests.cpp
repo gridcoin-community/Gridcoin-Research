@@ -1,11 +1,11 @@
 #include "global_objects_noui.hpp"
 #include "util.h"
+#include "main.h"
 
 #include <boost/test/unit_test.hpp>
 #include <map>
 #include <string>
 
-extern StructCPID GetInitializedStructCPID2(std::string name,std::map<std::string, StructCPID>& vRef);
 extern double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
 extern std::map<std::string, StructCPID> mvDPOR;
 

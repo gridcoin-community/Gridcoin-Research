@@ -20,30 +20,16 @@
 
 using namespace std;
 
-static unsigned int GetStakeSplitAge() { return IsProtocolV2(nBestHeight) ? (10 * 24 * 60 * 60) : (1 * 24 * 60 * 60); }
-static int64_t GetStakeCombineThreshold() { return IsProtocolV2(nBestHeight) ? (50 * COIN) : (1000 * COIN); }
-std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
-StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 double cdbl(std::string s, int place);
-std::string GetArgument(std::string arg, std::string defaultvalue);
 std::string SendReward(std::string sAddress, int64_t nAmount);
 void qtUpdateConfirm(std::string txid);
-bool Contains(std::string data, std::string instring);
 extern double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
-bool IsCPIDValidv2(MiningCPID& mc, int height);
-double CoinToDouble(double surrogate);
-double GetBlockDifficulty(unsigned int nBits);
-void WriteAppCache(std::string key, std::string value);
-bool OutOfSyncByAgeWithChanceOfMining();
 int64_t GetRSAWeightByCPID(std::string cpid);
 void AddPeek(std::string data);
 
-double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
+MiningCPID DeserializeBoincBlock(std::string block);
 
-MiningCPID GetMiningCPID();
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
-bool LessVerbose(int iMax1000);
-MiningCPID GetNextProject(bool bForce);
 bool fConfChange;
 unsigned int nDerivationMethodIndex;
 

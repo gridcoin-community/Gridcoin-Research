@@ -317,11 +317,7 @@ string vstrprintf(const char *format, va_list ap)
     {
         va_list arg_ptr;
         va_copy(arg_ptr, ap);
-#ifdef WIN32
-        ret = _vsnprintf(p, limit, format, arg_ptr);
-#else
         ret = vsnprintf(p, limit, format, arg_ptr);
-#endif
         va_end(arg_ptr);
         if (ret >= 0 && ret < limit)
             break;
@@ -588,6 +584,22 @@ void ParseParameters(int argc, const char* const argv[])
     }
 }
 
+std::string GetArgument(const std::string& arg, const std::string& defaultvalue)
+{
+    if (mapArgs.count("-" + arg))
+        return mapArgs["-" + arg];
+
+    return defaultvalue;
+}
+
+// SetArgument - Set or alter arguments stored in memory
+void SetArgument(
+            const string &argKey,
+            const string &argValue)
+{
+    mapArgs["-" + argKey] = argValue;
+}
+
 std::string GetArg(const std::string& strArg, const std::string& strDefault)
 {
     if (mapArgs.count(strArg))
@@ -617,7 +629,7 @@ bool SoftSetArg(const std::string& strArg, const std::string& strValue)
 {
     if (mapArgs.count(strArg))
         return false;
-    mapArgs[strArg] = strValue;
+    ForceSetArg(strArg, strValue);
     return true;
 }
 
@@ -629,6 +641,12 @@ bool SoftSetBoolArg(const std::string& strArg, bool fValue)
         return SoftSetArg(strArg, std::string("0"));
 }
 
+void ForceSetArg(const std::string& strArg, const std::string& strValue)
+{
+    mapArgs[strArg] = strValue;
+    mapMultiArgs[strArg].clear();
+    mapMultiArgs[strArg].push_back(strValue);
+}
 
 string EncodeBase64(const unsigned char* pch, size_t len)
 {
@@ -1437,6 +1455,11 @@ std::string RoundToString(double d, int place)
     std::ostringstream ss;
     ss << std::fixed << std::setprecision(place) << d ;
     return ss.str() ;
+}
+
+bool Contains(const std::string& data, const std::string& instring)
+{
+    return data.find(instring) != std::string::npos;
 }
 
 std::string GetNeuralVersion()

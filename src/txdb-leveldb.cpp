@@ -26,7 +26,6 @@ using namespace boost;
 
 leveldb::DB *txdb; // global pointer for LevelDB object instance
 void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash);
-void SetUpExtendedBlockIndexFieldsOnce();
 
 static leveldb::Options GetOptions() {
     leveldb::Options options;
@@ -697,9 +696,6 @@ bool CTxDB::LoadBlockIndex()
     }
 
     printf("RA Complete - RA Time %15" PRId64 "ms\n", GetTimeMillis() - nStart);
-    nStart = GetTimeMillis();
-    SetUpExtendedBlockIndexFieldsOnce();
-    printf("SetUpExtendedBlockIndexFieldsOnce Complete - Time %15" PRId64 "ms\n", GetTimeMillis() - nStart);
     #if defined(WIN32) && defined(QT_GUI)
         SetThreadPriority(THREAD_PRIORITY_NORMAL);
     #endif

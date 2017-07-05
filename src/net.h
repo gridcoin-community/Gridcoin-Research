@@ -6,7 +6,7 @@
 #define BITCOIN_NET_H
 
 #include <deque>
-#include <boost/array.hpp>
+#include <array>
 #include <boost/foreach.hpp>
 #include <openssl/rand.h>
 
@@ -129,7 +129,7 @@ extern bool fUseUPnP;
 extern uint64_t nLocalServices;
 extern uint64_t nLocalHostNonce;
 extern CAddress addrSeenByPeer;
-extern boost::array<int, THREAD_MAX> vnThreadsRunning;
+extern std::array<int, THREAD_MAX> vnThreadsRunning;
 extern CAddrMan addrman;
 extern std::map<CInv, CDataStream> mapRelay;
 extern std::deque<std::pair<int64_t, CInv> > vRelayExpiration;

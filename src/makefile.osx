@@ -88,19 +88,21 @@ OBJS= \
     obj/script.o \
     obj/sync.o \
     obj/util.o \
-	obj/upgrader.o \
+    obj/upgrader.o \
     obj/wallet.o \
     obj/walletdb.o \
     obj/noui.o \
     obj/kernel.o \
     obj/pbkdf2.o \
     obj/scrypt.o \
-    obj/scrypt-arm.o \
     obj/scrypt-x86.o \
     obj/scrypt-x86_64.o \
     obj/cpid.o \
     obj/upgrader.o \
-    obj/block.o
+    obj/block.o \
+    obj/beacon.o \
+    obj/boinc.o \
+    obj/neuralnet.o
 
 ifndef USE_UPNP
 	override USE_UPNP = -

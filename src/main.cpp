@@ -74,7 +74,6 @@ extern bool NeuralNodeParticipates();
 extern bool StrLessThanReferenceHash(std::string rh);
 void BusyWaitForTally();
 extern bool TallyNetworkAverages(bool Forcefully);
-extern void SetUpExtendedBlockIndexFieldsOnce();
 extern bool IsContract(CBlockIndex* pIndex);
 std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
@@ -86,7 +85,6 @@ extern std::string getCpuHash();
 std::string getMacAddress();
 std::string TimestampToHRDate(double dtm);
 bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
-extern std::string VectorToString(std::vector<unsigned char> v);
 bool HasActiveBeacon(const std::string& cpid);
 extern bool BlockNeedsChecked(int64_t BlockTime);
 extern void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector<CBlockIndex*> vConnect);
@@ -136,14 +134,11 @@ extern void DeleteCache(std::string section, std::string keyname);
 extern void ClearCache(std::string section);
 bool TallyMagnitudesInSuperblock();
 extern void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
-
 std::string qtGetNeuralContract(std::string data);
-
 extern std::string GetNeuralNetworkReport();
 void qtSyncWithDPORNodes(std::string data);
-std::string qtGetNeuralHash(std::string data);
 std::string GetListOf(std::string datatype);
-
+std::string qtGetNeuralHash(std::string data);
 std::string GetCommandNonce(std::string command);
 std::string DefaultBlockKey(int key_length);
 
@@ -199,7 +194,7 @@ std::string DefaultOrgKey(int key_length);
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 extern double GetBlockDifficulty(unsigned int nBits);
 double GetLastPaymentTimeByCPID(std::string cpid);
-extern bool Contains(std::string data, std::string instring);
+extern bool Contains(const std::string& data, const std::string& instring);
 
 extern double CoinToDouble(double surrogate);
 extern double PreviousBlockAge();
@@ -207,7 +202,6 @@ void CheckForUpgrade();
 int64_t GetRSAWeightByCPID(std::string cpid);
 extern MiningCPID GetMiningCPID();
 extern StructCPID GetStructCPID();
-extern std::string GetArgument(std::string arg, std::string defaultvalue);
 
 extern void SetAdvisory();
 extern bool InAdvisory();
@@ -322,7 +316,6 @@ volatile bool bGridcoinGUILoaded = false;
 extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
 extern double cdbl(std::string s, int place);
 
-extern double GetBlockValueByHash(uint256 hash);
 extern void WriteAppCache(std::string key, std::string value);
 extern std::string AppCache(std::string key);
 extern void LoadCPIDsInBackground();
@@ -341,7 +334,6 @@ extern std::string getfilecontents(std::string filename);
 extern std::string ToOfficialName(std::string proj);
 extern bool LessVerbose(int iMax1000);
 extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
-extern bool OutOfSync();
 extern MiningCPID GetNextProject(bool bForce);
 extern void HarvestCPIDs(bool cleardata);
 
@@ -500,19 +492,6 @@ bool PushGridcoinDiagnostics()
         return false;
 }
 
-
-vector<unsigned char> StringToVector(std::string sData)
-{
-        vector<unsigned char> v(sData.begin(), sData.end());
-		return v;
-}
-
-std::string VectorToString(vector<unsigned char> v)
-{
-        std::string s(v.begin(), v.end());
-        return s;
-}
-
 bool FullSyncWithDPORNodes()
 {
             #if defined(WIN32) && defined(QT_GUI)
@@ -533,7 +512,7 @@ bool FullSyncWithDPORNodes()
                     if (bNodeOnline) return false;  // Async call to another node will continue after the node responds.
                 }
             
-                std::string errors1 = "";
+                std::string errors1;
                 LoadAdminMessages(false,errors1);
                 std::string cpiddata = GetListOf("beacon");
                 std::string sWhitelist = GetListOf("project");
@@ -7534,16 +7513,6 @@ double LederstrumpfMagnitude2(double Magnitude, int64_t locktime)
     return out_mag;
 }
 
-
-
-bool Contains(std::string data, std::string instring)
-{
-    std::size_t found = 0;
-    found = data.find(instring);
-    if (found != std::string::npos) return true;
-    return false;
-}
-
 double PendingSuperblockHeight()
 {
     double height = cdbl(ReadCache("neuralsecurity","pending"),0);
@@ -7882,19 +7851,6 @@ std::string ToOfficialNameNew(std::string proj)
         }
         return proj;
 }
-
-std::string GetArgument(std::string arg, std::string defaultvalue)
-{
-    std::string result = defaultvalue;
-    if (mapArgs.count("-" + arg))
-    {
-        result = GetArg("-" + arg, defaultvalue);
-    }
-    return result;
-
-}
-
-
 
 void HarvestCPIDs(bool cleardata)
 {
@@ -9252,57 +9208,6 @@ bool IsSuperBlock(CBlockIndex* pIndex)
     return pIndex->nIsSuperBlock==1 ? true : false;
 }
 
-void SetUpExtendedBlockIndexFieldsOnce()
-{
-    return;
-
-    printf("SETUPExtendedBIfieldsOnce Testnet: %s \r\n",YesNo(fTestNet).c_str());
-    if (fTestNet)
-    {
-        if (pindexBest->nHeight < 20000) return;    }
-    else
-    {
-        if (pindexBest->nHeight < 361873) return;
-    }
-
-    std::string sSuperblocks = "";
-    std::string sContracts   = "";
-    int iStartHeight = fTestNet ? 20000 : 361873;
-
-    CBlockIndex* pindex = blockFinder.FindByHeight(iStartHeight);
-    if (!pindex) return;
-
-    if (pindex && pindex->pnext)
-    {
-        while (pindex->nHeight < (nNewIndex2 + 1))
-        {
-                if (!pindex || !pindex->pnext) break;
-                pindex = pindex->pnext;
-                if (pindex==NULL || !pindex->IsInMainChain()) continue;
-                CBlock block;
-                if (!block.ReadFromDisk(pindex)) continue;
-                MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc,block.nVersion);
-                if (bb.superblock.length() > 20)
-                {
-                        sSuperblocks += pindex->GetBlockHash().GetHex() + ",";
-                }
-
-                BOOST_FOREACH(const CTransaction &tx, block.vtx)
-                {
-                        if (tx.hashBoinc.length() > 20)
-                        {
-                            bool fMemorized = MemorizeMessage(tx.hashBoinc,tx.nTime,0,"");
-                            if (fMemorized)
-                            {
-                                sContracts += pindex->GetBlockHash().GetHex() + ",";
-                                break;
-                            }
-                        }
-                }
-        }
-    }
-}
-
 
 double SnapToGrid(double d)
 {
@@ -9310,8 +9215,6 @@ double SnapToGrid(double d)
     double dOut = cdbl(RoundToString(d*dDither,3),3) / dDither;
     return dOut;
 }
-
-
 
 bool NeuralNodeParticipates()
 {

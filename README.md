@@ -1,7 +1,10 @@
+What is Gridcoin?
+=================
 
-Gridcoin development tree
+Gridcoin is a POS-based cryptocurrency that rewards users for participating on the BOINC network. 
+Gridcoin uses peer-to-peer technology to operate with no central authority: managing transactions, issuing money and contributing to scientific research are carried out collectively by the network. 
 
-Gridcoin is a PoS-based cryptocurrency.
+For Gridcoin binaries, as well as more information, see http://gridcoin.us/ . 
 
 Development process
 ===========================
@@ -52,4 +55,16 @@ bugs rained down from development. Using this is close to beta testing.
 Once the staging branch is stable and runs smoothly it is merged to *master*
 and a release is made available to the public. At this point the code is
 considered mature and ready for production.
+
+Community
+============
+
+For general questions see the forum https://cryptocurrencytalk.com/forum/464-gridcoin-grc/ , or freenode irc on #gridcoin. We also have a slack channel on teamgridcoin.slack.com .
+
+License
+--------
+
+Gridcoin is released under the terms of the MIT license. See [COPYING](COPYING) for more
+information or see https://opensource.org/licenses/MIT.
+
 

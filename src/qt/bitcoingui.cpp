@@ -68,7 +68,6 @@
 #include <QLocale>
 #include <QMessageBox>
 #include <QMimeData>
-#include <QProgressBar>
 #include <QStackedWidget>
 #include <QDateTime>
 #include <QMovie>
@@ -96,22 +95,18 @@
 
 extern CWallet* pwalletMain;
 extern int64_t nLastCoinStakeSearchInterval;
-double GetPoSKernelPS();
 int ReindexWallet();
 extern int RebootClient();
 extern QString ToQstring(std::string s);
-extern int qtTrackConfirm(std::string txid);
 extern std::string qtGRCCodeExecutionSubsystem(std::string sCommand);
 extern void qtUpdateConfirm(std::string txid);
 extern void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string txid);
 extern void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double magnitude);
 extern void qtSyncWithDPORNodes(std::string data);
 extern double qtExecuteGenericFunction(std::string function,std::string data);
-std::string GetArgument(std::string arg, std::string defaultvalue);
 extern std::string getMacAddress();
+extern bool PushGridcoinDiagnostics();
 extern double qtPushGridcoinDiagnosticData(std::string data);
-
-bool PushGridcoinDiagnostics();
 
 extern std::string FromQString(QString qs);
 extern std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
@@ -124,32 +119,17 @@ std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end
 
 extern std::string qtGetNeuralHash(std::string data);
 extern std::string qtGetNeuralContract(std::string data);
-
 json_spirit::Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool bIncludeExpired);
 
 extern int64_t IsNeural();
 
 double cdbl(std::string s, int place);
 std::string getfilecontents(std::string filename);
-
-double GetUntrustedMagnitude(std::string cpid, double& out_owed);
-
-
 std::string BackupGridcoinWallet();
-int nTick = 0;
-int nTickRestart = 0;
-int nBlockCount = 0;
-int nTick2 = 0;
 int nRegVersion;
-int nNeedsUpgrade = 0;
 
 extern int CreateRestorePoint();
 extern int DownloadBlocks();
-
-void StopGridcoin3();
-bool OutOfSyncByAge();
-void ThreadCPIDs();
-int Races(int iMax1000);
 void GetGlobalStatus();
 
 extern int UpgradeClient();
@@ -161,16 +141,12 @@ extern void ExecuteCode();
 
 void HarvestCPIDs(bool cleardata);
 extern int RestartClient();
-
 extern int ReindexWallet();
+
 #ifdef WIN32
 QAxObject *globalcom = NULL;
 QAxObject *globalwire = NULL;
 #endif
-int ThreadSafeVersion();
-extern int ReindexBlocks();
-bool OutOfSync();
-
 
 QString ToQstring(std::string s)
 {
@@ -218,9 +194,6 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     // Create the toolbars
     createToolBars();
 
-    // Create the tray icon (or setup the dock icon)
-    createTrayIcon();
-
     // Create tabs
     overviewPage = new OverviewPage();
 
@@ -248,79 +221,6 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
     // Create status bar
     // statusBar();
-
-    // Status bar notification icons
-    QFrame *frameBlocks = new QFrame();
-
-    frameBlocks->setContentsMargins(0,0,0,0);
-
-    frameBlocks->setMinimumWidth(30);
-    frameBlocks->setMaximumWidth(30);
-    QVBoxLayout *frameBlocksLayout = new QVBoxLayout(frameBlocks);
-    frameBlocksLayout->setContentsMargins(1,0,1,0);
-    frameBlocksLayout->setSpacing(-1);
-    labelEncryptionIcon = new QLabel();
-    labelStakingIcon = new QLabel();
-    labelConnectionsIcon = new QLabel();
-    labelBlocksIcon = new QLabel();
-    frameBlocksLayout->addWidget(labelEncryptionIcon);
-		
-    frameBlocksLayout->addWidget(labelStakingIcon);
-    frameBlocksLayout->addWidget(labelConnectionsIcon);
-    frameBlocksLayout->addWidget(labelBlocksIcon);
-	//12-21-2015 Prevent Lock from falling off the page
-
-    frameBlocksLayout->addStretch();
-
-    if (GetBoolArg("-staking", true))
-    {
-        QTimer *timerStakingIcon = new QTimer(labelStakingIcon);
-        connect(timerStakingIcon, SIGNAL(timeout()), this, SLOT(updateStakingIcon()));
-        timerStakingIcon->start(30 * 1000);
-        updateStakingIcon();
-    }
-
-    // Progress bar and label for blocks download
-    progressBarLabel = new QLabel();
-    progressBarLabel->setVisible(false);
-    progressBar = new QProgressBar();
-    progressBar->setAlignment(Qt::AlignCenter);
-    progressBar->setVisible(false);
-    progressBar->setOrientation(Qt::Vertical);
-    progressBar->setObjectName("progress");
-
-    frameBlocks->setObjectName("frame");
-	addToolBarBreak(Qt::LeftToolBarArea);
-    QToolBar *toolbar2 = addToolBar("Tabs toolbar");
-    addToolBar(Qt::LeftToolBarArea,toolbar2);
-    toolbar2->setOrientation(Qt::Vertical);
-    toolbar2->setMovable( false );
-    toolbar2->setObjectName("toolbar2");
-    toolbar2->setFixedWidth(26);
-    toolbar2->addWidget(frameBlocks);
-    toolbar2->addWidget(progressBarLabel);
-    toolbar2->addWidget(progressBar);
-
-	addToolBarBreak(Qt::TopToolBarArea);
-    QToolBar *toolbar3 = addToolBar("Logo bar");
-    addToolBar(Qt::TopToolBarArea,toolbar3);
-    toolbar3->setOrientation(Qt::Horizontal);
-    toolbar3->setMovable( false );
-    toolbar3->setObjectName("toolbar3");
-    toolbar3->setFixedHeight(52);
-    QLabel *grcLogoLabel = new QLabel();
-    grcLogoLabel->setPixmap(QPixmap(":/images/logo_hz"));
-    toolbar3->addWidget(grcLogoLabel);
-    QWidget* logoSpacer = new QWidget();
-    logoSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    toolbar3->addWidget(logoSpacer);
-    logoSpacer->setObjectName("logoSpacer");
-    QLabel *boincLogoLabel = new QLabel();
-    boincLogoLabel->setText("<html><head/><body><p align=\"center\"><a href=\"https://boinc.berkeley.edu\"><span style=\" text-decoration: underline; color:#0000ff;\"><img src=\":/images/boinc\"/></span></a></p></body></html>");
-    boincLogoLabel->setTextFormat(Qt::RichText);
-    boincLogoLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
-    boincLogoLabel->setOpenExternalLinks(true);
-    toolbar3->addWidget(boincLogoLabel);
 
     syncIconMovie = new QMovie(":/movies/update_spinner", "GIF", this);
 
@@ -460,7 +360,6 @@ int RestartClient()
 
 void qtUpdateConfirm(std::string txid)
 {
-	int result = 0;
 	if (!bGlobalcomInitialized) return;
 
 	#if defined(WIN32) && defined(QT_GUI)
@@ -500,7 +399,7 @@ double qtPushGridcoinDiagnosticData(std::string data)
 			QString qsData = ToQstring(data);
 		    result = globalcom->dynamicCall("PushGridcoinDiagnosticData(Qstring)",qsData).toInt();
 	#endif
- 	return (double)result;
+ 	return result;
 }
 
 //R Halford - 6/19/2015 - Let's clean up the windows side by removing all these functions and making a generic interface for comm between Windows and Linux; Start with one new generic function here:
@@ -509,7 +408,6 @@ double qtExecuteGenericFunction(std::string function, std::string data)
 {
 	if (!bGlobalcomInitialized) return 0;
 
-	double return_code = 0;
 	int result = 0;
 	#if defined(WIN32) && defined(QT_GUI)
 		QString qsData = ToQstring(data);
@@ -524,9 +422,8 @@ double qtExecuteGenericFunction(std::string function, std::string data)
 		{
 			result = globalcom->dynamicCall(sFunction.c_str(),qsData).toInt();
 		}
-		return (double)result;
 	#endif
- 	return (double)result;
+ 	return result;
 }
 
 
@@ -620,9 +517,6 @@ std::string qtGetNeuralHash(std::string data)
 	#endif
 }
 
-
-
-
 void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double magnitude)
 {
 
@@ -636,27 +530,6 @@ void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double ma
 		printf("rs%f",(double)result);
 	#endif
 }
-
-
-
-
-
-int qtTrackConfirm(std::string txid)
-{
-	double result = 0;
-	if (!bGlobalcomInitialized) return 0;
-
-	#if defined(WIN32) && defined(QT_GUI)
-		QString qsConfirm = ToQstring(txid);
-		printf("@t1");
-		QString qsResult = globalcom->dynamicCall("TrackConfirm(Qstring)",qsConfirm).toString();
-		std::string sResult = FromQString(qsResult);
-		result = cdbl(sResult,0);
-		printf("@t2 returned %f",(double)result);
-	#endif
-	return (int)result;
-}
-
 
 std::string qtGRCCodeExecutionSubsystem(std::string sCommand)
 {
@@ -988,19 +861,6 @@ void BitcoinGUI::createMenuBar()
     community->addSeparator();
     community->addAction(websiteAction);
 
-#ifdef WIN32
-	QMenu *upgrade = appMenuBar->addMenu(tr("&Upgrade QT Client"));
-	upgrade->addSeparator();
-	upgrade->addAction(upgradeAction);
-#endif
-
-	QMenu *rebuild = appMenuBar->addMenu(tr("&Rebuild Block Chain"));
-	rebuild->addSeparator();
-	rebuild->addAction(rebuildAction);
-	rebuild->addSeparator();
-	rebuild->addAction(downloadAction);
-	rebuild->addSeparator();
-
 	QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
 	qmAdvanced->addSeparator();
 #ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows    
@@ -1011,18 +871,25 @@ void BitcoinGUI::createMenuBar()
     qmAdvanced->addAction(votingAction);
     
 #ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows 
-	qmAdvanced->addAction(newUserWizardAction);
+//	qmAdvanced->addAction(newUserWizardAction);
 	qmAdvanced->addSeparator();
 	qmAdvanced->addAction(faqAction);
 	qmAdvanced->addAction(foundationAction);
-	qmAdvanced->addAction(diagnosticsAction);
+//	qmAdvanced->addAction(diagnosticsAction);
 
 #endif /* defined(WIN32) */
+    qmAdvanced->addSeparator();
+    qmAdvanced->addAction(rebuildAction);
+    qmAdvanced->addAction(downloadAction);
 
     QMenu *help = appMenuBar->addMenu(tr("&Help"));
     help->addAction(openRPCConsoleAction);
     help->addSeparator();
     help->addAction(aboutAction);
+#ifdef WIN32
+    help->addSeparator();
+	help->addAction(upgradeAction);
+#endif
 
 }
 
@@ -1059,6 +926,65 @@ void BitcoinGUI::createToolBars()
     webSpacer->setObjectName("WebSpacer");
 
 
+    // Status bar notification icons
+    QFrame *frameBlocks = new QFrame();
+
+    frameBlocks->setContentsMargins(0,0,0,0);
+
+    QVBoxLayout *frameBlocksLayout = new QVBoxLayout(frameBlocks);
+    frameBlocksLayout->setContentsMargins(1,0,1,0);
+    frameBlocksLayout->setSpacing(-1);
+    labelEncryptionIcon = new QLabel();
+    labelStakingIcon = new QLabel();
+    labelConnectionsIcon = new QLabel();
+    labelBlocksIcon = new QLabel();
+    frameBlocksLayout->addWidget(labelEncryptionIcon);
+
+    frameBlocksLayout->addWidget(labelStakingIcon);
+    frameBlocksLayout->addWidget(labelConnectionsIcon);
+    frameBlocksLayout->addWidget(labelBlocksIcon);
+    //12-21-2015 Prevent Lock from falling off the page
+
+    frameBlocksLayout->addStretch();
+
+    if (GetBoolArg("-staking", true))
+    {
+        QTimer *timerStakingIcon = new QTimer(labelStakingIcon);
+        connect(timerStakingIcon, SIGNAL(timeout()), this, SLOT(updateStakingIcon()));
+        timerStakingIcon->start(30 * 1000);
+        updateStakingIcon();
+    }
+
+    frameBlocks->setObjectName("frame");
+    addToolBarBreak(Qt::LeftToolBarArea);
+    QToolBar *toolbar2 = addToolBar("Tabs toolbar");
+    addToolBar(Qt::LeftToolBarArea,toolbar2);
+    toolbar2->setOrientation(Qt::Vertical);
+    toolbar2->setMovable( false );
+    toolbar2->setObjectName("toolbar2");
+    toolbar2->addWidget(frameBlocks);
+
+    addToolBarBreak(Qt::TopToolBarArea);
+    QToolBar *toolbar3 = addToolBar("Logo bar");
+    addToolBar(Qt::TopToolBarArea,toolbar3);
+    toolbar3->setOrientation(Qt::Horizontal);
+    toolbar3->setMovable( false );
+    toolbar3->setObjectName("toolbar3");
+    QLabel *grcLogoLabel = new QLabel();
+    grcLogoLabel->setPixmap(QPixmap(":/images/logo_hz"));
+    toolbar3->addWidget(grcLogoLabel);
+    QWidget* logoSpacer = new QWidget();
+    logoSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    toolbar3->addWidget(logoSpacer);
+    logoSpacer->setObjectName("logoSpacer");
+    QLabel *boincLogoLabel = new QLabel();
+    boincLogoLabel->setText("<html><head/><body><p align=\"center\"><a href=\"https://boinc.berkeley.edu\"><span style=\" text-decoration: underline; color:#0000ff;\"><img src=\":/images/boinc\"/></span></a></p></body></html>");
+    boincLogoLabel->setTextFormat(Qt::RichText);
+    boincLogoLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    boincLogoLabel->setOpenExternalLinks(true);
+    toolbar3->addWidget(boincLogoLabel);
+
+
 }
 
 void BitcoinGUI::setClientModel(ClientModel *clientModel)
@@ -1066,6 +992,10 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
     this->clientModel = clientModel;
     if(clientModel)
     {
+        // Create system tray menu (or setup the dock menu) that late to prevent users from calling actions,
+        // while the client has not yet fully loaded
+        createTrayIcon();
+
         // Replace some strings and icons, when using the testnet
         if(clientModel->isTestNet())
         {
@@ -1226,50 +1156,14 @@ void BitcoinGUI::setNumConnections(int count)
 
 void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
 {
-    // don't show / hide progress bar and its label if we have no connection to the network
+    // return if we have no connection to the network
     if (!clientModel || clientModel->getNumConnections() == 0)
     {
-        progressBarLabel->setVisible(false);
-        progressBar->setVisible(false);
-
         return;
     }
 
     QString strStatusBarWarnings = clientModel->getStatusBarWarnings();
-    QString tooltip;
-
-    if(count < nTotalBlocks)
-    {
-        int nRemainingBlocks = nTotalBlocks - count;
-        float nPercentageDone = count / (nTotalBlocks * 0.01f);
-
-        if (strStatusBarWarnings.isEmpty())
-        {
-            progressBarLabel->setText(tr("Synchronizing with network..."));
-            progressBarLabel->setVisible(true);
-            progressBar->setFormat(tr("~%n block(s) remaining", "", nRemainingBlocks));
-            progressBar->setMaximum(nTotalBlocks);
-            progressBar->setValue(count);
-            progressBar->setVisible(true);
-        }
-    }
-    else
-    {
-        if (strStatusBarWarnings.isEmpty())
-            progressBarLabel->setVisible(false);
-
-        progressBar->setVisible(false);
-    }
-
-    tooltip = tr("Processed %n block(s) of transaction history.", "", count);
-
-    // Override progressBarLabel text and hide progress bar, when we have warnings to display
-    if (!strStatusBarWarnings.isEmpty())
-    {
-        progressBarLabel->setText(strStatusBarWarnings);
-        progressBarLabel->setVisible(true);
-        progressBar->setVisible(false);
-    }
+    QString tooltip(tr("Processed %n block(s) of transaction history.", "", count));
 
     QDateTime lastBlockDate = clientModel->getLastBlockDate();
     int secs = lastBlockDate.secsTo(QDateTime::currentDateTime());
@@ -1324,8 +1218,6 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
     tooltip = QString("<nobr>") + tooltip + QString("</nobr>");
 
     labelBlocksIcon->setToolTip(tooltip);
-    progressBarLabel->setToolTip(tooltip);
-    progressBar->setToolTip(tooltip);
 }
 
 void BitcoinGUI::error(const QString &title, const QString &message, bool modal)
@@ -1540,123 +1432,22 @@ void BitcoinGUI::incomingTransaction(const QModelIndex & parent, int start, int 
     }
 }
 
-
-
-
-
-
-std::string Trim(int i)
-{
-	std::string s = "";
-	s=boost::lexical_cast<std::string>(i);
-	return s;
-}
-
-
-std::string TrimD(double i)
-{
-	std::string s = "";
-	s=boost::lexical_cast<std::string>(i);
-	return s;
-}
-
-
-
-
-
-
-
-
-
-bool IsInvalidChar(char c)
-{
-	int asc = (int)c;
-
-	if (asc >= 0 && asc < 32) return true;
-	if (asc > 128) return true;
-	if (asc == 124) return true;
-	return false;
-}
-
-std::string Clean(std::string s)
-{
-	char ch;
-	std::string sOut = "";
-	for (unsigned int i=0; i < s.length(); i++)
-	{
-		ch = s.at(i);
-		if (IsInvalidChar(ch)==false) sOut = sOut + ch;
-
-	}
-	return sOut;
-}
-
-std::string RetrieveBlockAsString(int lSqlBlock)
-{
-
-	//Insert into Blocks (hash,confirmations,size,height,version,merkleroot,tx,time,nonce,bits,difficulty,boinchash,previousblockhash,nextblockhash) VALUES ();
-
-	try {
-
-		if (lSqlBlock==0) lSqlBlock=1;
-		if (lSqlBlock > nBestHeight-2) return "";
-		CBlock block;
-		CBlockIndex* blockindex = BlockFinder().FindByHeight(lSqlBlock);
-		block.ReadFromDisk(blockindex);
-
-		std::string s = "";
-		std::string d = "|";
-
-		s = block.GetHash().GetHex() + d + "C" + d 	+ "1000" + d + Trim(blockindex->nHeight) + d;
-		s = s + Trim(block.nVersion) + d + block.hashMerkleRoot.GetHex() + d + "TX" + d + Trim(block.GetBlockTime()) + d + Trim(block.nNonce) + d + Trim(block.nBits) + d;
-		s = s + TrimD(GetDifficulty(blockindex)) + d	+		Clean(block.vtx[0].hashBoinc) + d 		+ blockindex->pprev->GetBlockHash().GetHex() + d;
-		s = s + blockindex->pnext->GetBlockHash().GetHex();
-		return s;
-	}
-	catch(...)
-	{
-		printf("Runtime error in RetrieveBlockAsString");
-		return "";
-
-	}
-
-}
-
-
-
-std::string RetrieveBlocksAsString(int lSqlBlock)
-{
-	std::string sout = "";
-	if (lSqlBlock > nBestHeight-5) return "";
-
-	for (int i = lSqlBlock; i < lSqlBlock+101; i++) {
-		sout = sout + RetrieveBlockAsString(i) + "{ROW}";
-	}
-	return sout;
-}
-
-
-
 void BitcoinGUI::rebuildClicked()
 {
 	printf("Rebuilding...");
-	ReindexBlocks();
+    ReindexWallet();
 }
-
-
 
 void BitcoinGUI::upgradeClicked()
 {
 	printf("Upgrading Gridcoin...");
 	UpgradeClient();
-
 }
 
 void BitcoinGUI::downloadClicked()
 {
 	DownloadBlocks();
 }
-
 
 void BitcoinGUI::configClicked()
 {
@@ -1666,7 +1457,6 @@ void BitcoinGUI::configClicked()
 	qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
 	globalcom->dynamicCall("ShowConfig()");
 #endif
-
 }
 
 void BitcoinGUI::diagnosticsClicked()
@@ -1711,12 +1501,6 @@ void BitcoinGUI::newUserWizardClicked()
 	if (!bGlobalcomInitialized) return;
     globalcom->dynamicCall("ShowNewUserWizard()");
 #endif
-}
-
-int ReindexBlocks()
-{
-	ReindexWallet();
-	return 1;
 }
 
 void BitcoinGUI::miningClicked()
@@ -1960,6 +1744,9 @@ void BitcoinGUI::lockWallet()
 
 void BitcoinGUI::showNormalIfMinimized(bool fToggleHidden)
 {
+    if(!clientModel)
+        return;
+
     // activateWindow() (sometimes) helps with keyboard focus on Windows
     if (isHidden())
     {

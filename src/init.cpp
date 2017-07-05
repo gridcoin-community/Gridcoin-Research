@@ -27,8 +27,6 @@ bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern boost::thread_group threadGroup;
 
 StructCPID GetStructCPID();
-std::string GetArgument(std::string arg, std::string defaultvalue);
-void ThreadCPIDs();
 bool ComputeNeuralNetworkSupermajorityHashes();
 void BusyWaitForTally();
 extern void ThreadAppInit2(void* parg);
@@ -36,7 +34,6 @@ extern void ThreadAppInit2(void* parg);
 void LoadCPIDsInBackground();
 bool IsConfigFileEmpty();
 
-void HarvestCPIDs(bool cleardata);
 std::string ToOfficialName(std::string proj);
 
 #ifndef WIN32
@@ -48,7 +45,6 @@ using namespace boost;
 CWallet* pwalletMain;
 CClientUIInterface uiInterface;
 std::vector<std::string> split(std::string s, std::string delim);
-void ThreadCPIDs();
 extern bool fConfChange;
 extern bool fEnforceCanonical;
 extern unsigned int nNodeLifespan;
@@ -1083,20 +1079,20 @@ bool AppInit2()
     uiInterface.InitMessage(_("Loading Persisted Data Cache..."));
     //
     std::string sOut = "";
-    if (fDebug3) printf("Loading admin Messages %f",(double)0);
+    if (fDebug3) printf("Loading admin Messages");
     LoadAdminMessages(true,sOut);
-    printf("Done loading Admin messages%f",(double)0);
+    printf("Done loading Admin messages");
 
     InitializeBoincProjects();
-    printf("Done loading boinc projects %f",(double)0);
+    printf("Done loading boinc projects");
     uiInterface.InitMessage(_("Loading Network Averages..."));
-    if (fDebug3) printf("Loading network averages %f",(double)0);
+    if (fDebug3) printf("Loading network averages");
     BusyWaitForTally();
     uiInterface.InitMessage(_("Compute Neural Network Hashes..."));
 
     ComputeNeuralNetworkSupermajorityHashes();
 
-    printf("Starting CPID thread...%f",(double)0);
+    printf("Starting CPID thread...");
     LoadCPIDsInBackground();  //This calls HarvesCPIDs(true)
 
     uiInterface.InitMessage(_("Finding first applicable Research Project..."));

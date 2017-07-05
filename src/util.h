@@ -48,42 +48,16 @@ static const int64_t CENT = 1000000;
 #define UINTBEGIN(a)        ((uint32_t*)&(a))
 #define CUINTBEGIN(a)        ((const uint32_t*)&(a))
 
-/* Format characters for (s)size_t and ptrdiff_t */
-#if defined(_MSC_VER) || defined(__MSVCRT__)
-  /* (s)size_t and ptrdiff_t have the same size specifier in MSVC:
-     http://msdn.microsoft.com/en-us/library/tcxf1dw6%28v=vs.100%29.aspx
-   */
-  #define PRIszx    "Ix"
-  #define PRIszu    "Iu"
-  #define PRIszd    "Id"
-  #define PRIpdx    "Ix"
-  #define PRIpdu    "Iu"
-  #define PRIpdd    "Id"
-#else /* C99 standard */
-  #define PRIszx    "zx"
-  #define PRIszu    "zu"
-  #define PRIszd    "zd"
-  #define PRIpdx    "tx"
-  #define PRIpdu    "tu"
-  #define PRIpdd    "td"
-#endif
+/* Format characters for (s)size_t and ptrdiff_t (C99 standard) */
+#define PRIszx    "zx"
+#define PRIszu    "zu"
+#define PRIszd    "zd"
+#define PRIpdx    "tx"
+#define PRIpdu    "tu"
+#define PRIpdd    "td"
 
 // This is needed because the foreach macro can't get over the comma in pair<t1, t2>
 #define PAIRTYPE(t1, t2)    std::pair<t1, t2>
-
-// Align by increasing pointer, must have extra space at end of buffer
-template <size_t nBytes, typename T>
-T* alignup(T* p)
-{
-    union
-    {
-        T* ptr;
-        size_t n;
-    } u;
-    u.ptr = p;
-    u.n = (u.n + (nBytes-1)) & ~(nBytes-1);
-    return u.ptr;
-}
 
 #ifdef WIN32
 #define MSG_NOSIGNAL        0
@@ -104,17 +78,10 @@ void MilliSleep(int64_t n);
  * Parameters count from 1.
  */
 #ifdef __GNUC__
-#define ATTR_WARN_PRINTF(X,Y) __attribute__((format(printf,X,Y)))
+#define ATTR_WARN_PRINTF(X,Y) __attribute__((format(gnu_printf,X,Y)))
 #else
 #define ATTR_WARN_PRINTF(X,Y)
 #endif
-
-
-
-
-
-
-
 
 extern std::map<std::string, std::string> mapArgs;
 extern std::map<std::string, std::vector<std::string> > mapMultiArgs;
@@ -226,6 +193,7 @@ std::string FormatSubVersion(const std::string& name, int nClientVersion, const 
 void AddTimeData(const CNetAddr& ip, int64_t nTime);
 void runCommand(std::string strCommand);
 std::string RoundToString(double d, int place);
+bool Contains(const std::string& data, const std::string& instring);
 
 inline std::string i64tostr(int64_t n)
 {
@@ -368,6 +336,23 @@ inline bool IsSwitchChar(char c)
 std::string GetArg(const std::string& strArg, const std::string& strDefault);
 
 /**
+ * Return string argument or default value
+ *
+ * @param strArg Argument to get (e.g. "foo"). Will be prefixed with "-".
+ * @param default (e.g. "1")
+ * @return command-line argument or default value
+ */
+std::string GetArgument(const std::string& strArg, const std::string& strDefault);
+
+/**
+ * Set argument value.
+ *
+ * @param argKey Argument to set (e.g. "foo"). Will be prefixed with "-".
+ * @param argValue New argument value (e.g. "1")
+ */
+void SetArgument(const std::string &argKey, const std::string &argValue);
+
+/**
  * Return integer argument or default value
  *
  * @param strArg Argument to get (e.g. "-foo")
@@ -402,6 +387,10 @@ bool SoftSetArg(const std::string& strArg, const std::string& strValue);
  * @return true if argument gets set, false if it already had a value
  */
 bool SoftSetBoolArg(const std::string& strArg, bool fValue);
+
+// Forces an arg setting. Called by SoftSetArg() if the arg hasn't already
+// been set. Also called directly in testing.
+void ForceSetArg(const std::string& strArg, const std::string& strValue);
 
 /**
  * MWC RNG of George Marsaglia
