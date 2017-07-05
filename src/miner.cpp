@@ -1322,7 +1322,7 @@ void StakeMiner(CWallet *pwallet)
     if(!IsMiningAllowed(pwallet))
         continue;
 
-    GetNextProject(false);
+    GetNextProject(true);
     //GlobalCPUMiningCPID.Magnitude=30000;
 
     // * Create a bare block
