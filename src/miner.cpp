@@ -1324,12 +1324,17 @@ void StakeMiner(CWallet *pwallet)
     // * Create a bare block
     CBlockIndex* pindexPrev = pindexBest;
     CBlock StakeBlock;
+    StakeBlock.nVersion = 7;
     StakeBlock.nTime= GetAdjustedTime();
     StakeBlock.nNonce= 0;
     StakeBlock.nBits = GetNextTargetRequired(pindexPrev, true);
     StakeBlock.vtx.resize(2);
     //tx 0 is coin_base
     CTransaction &StakeTX= StakeBlock.vtx[1]; //tx 1 is coin_stake
+
+    //New version
+    if(fTestNet && pindexPrev->nHeight > 288158)
+        StakeBlock.nVersion = 8;
 
     // * Try to create a CoinStake transaction
     CKey BlockKey;
