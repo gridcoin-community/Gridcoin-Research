@@ -35,6 +35,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Removed newbie boost, #332
  - Removed obsolete functionality.
 
+## [3.5.9.2] - 2017-07-04
+### Fixed
+ - Fix neural network project gather bug related to timezones.
+
 ## [3.5.9.1] - 2017-07-03
 ### Changed
  - Neural Network improvements:
