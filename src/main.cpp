@@ -604,6 +604,23 @@ void GetGlobalStatus()
         GlobalStatusStruct.errors =  msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + msMiningErrors8;
         GlobalStatusStruct.rsaOverview =  msRSAOverview; // not displayed on overview page anymore.
 
+        {
+            //calculate oved research reward
+            double OUT_POR = 0;
+            double out_interest = 0;
+            double dAccrualAge = 0;
+            double dAccrualMagnitudeUnit = 0;
+            double dAccrualMagnitude = 0;
+            uint64_t nCoinAge = 0;
+            int64_t nFees = 0;
+            int64_t nReward = GetProofOfStakeReward(
+                nCoinAge, nFees, GlobalCPUMiningCPID.cpid, false, 0,
+                pindexBest->nTime, pindexBest,"GetGlobalStatus",
+                OUT_POR,out_interest,dAccrualAge,dAccrualMagnitudeUnit,dAccrualMagnitude);
+            GlobalStatusStruct.dporSubsidy= RoundToString(OUT_POR,2);
+            GlobalStatusStruct.dporMagUnit= RoundToString(dAccrualMagnitudeUnit,4);
+        }
+
         return;
     }
     catch (std::exception& e)
