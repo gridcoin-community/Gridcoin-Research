@@ -496,7 +496,7 @@ void VotingDialog::loadHistory(void)
 
 void VotingDialog::onLoadingFinished(void)
 {
-    watcher.setProperty("loading", false);
+    watcher.setProperty("running", false);
     loadingIndicator->hide();
 }
 
