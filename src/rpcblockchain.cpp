@@ -5310,22 +5310,22 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         LOCK(cs_main);
         cur= pindexBest;
     }
-    long blockcount = 0;
-    long transactioncount = 0;
+    int64_t blockcount = 0;
+    int64_t transactioncount = 0;
     std::map<int,long> c_blockversion;
     std::map<std::string,long> c_version;
     std::map<std::string,long> c_cpid;
     std::map<std::string,long> c_org;
-    long researchcount = 0;
+    int64_t researchcount = 0;
     double researchtotal = 0;
     double interesttotal = 0;
     int64_t minttotal = 0;
     int64_t stakeinputtotal = 0;
-    long poscount = 0;
-    long emptyblockscount = 0;
-    long l_first = INT_MAX;
-    long l_last = 0;
-    int l_first_time,l_last_time;
+    int64_t poscount = 0;
+    int64_t emptyblockscount = 0;
+    int64_t l_first = INT_MAX;
+    int64_t l_last = 0;
+    unsigned int l_first_time,l_last_time;
     for( ; (cur
             &&( cur->nHeight>=lowheight )
             &&( lowheight>0 || blockcount<=14000 )
