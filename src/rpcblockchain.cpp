@@ -5325,7 +5325,8 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
     int64_t emptyblockscount = 0;
     int64_t l_first = INT_MAX;
     int64_t l_last = 0;
-    unsigned int l_first_time,l_last_time;
+    unsigned int l_first_time = 0;
+    unsigned int l_last_time = 0;
     for( ; (cur
             &&( cur->nHeight>=lowheight )
             &&( lowheight>0 || blockcount<=14000 )
