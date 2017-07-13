@@ -21,6 +21,10 @@ BITCOIN_TX_NAME=bitcoin-tx
 
 AC_CANONICAL_HOST
 
+AH_TOP([#ifndef GRIDCOIN_CONFIG_H])
+AH_TOP([#define GRIDCOIN_CONFIG_H])
+AH_BOTTOM([#endif //GRIDCOIN_CONFIG_H])
+
 dnl faketime breaks configure and is only needed for make. Disable it here.
 unset FAKETIME
 
