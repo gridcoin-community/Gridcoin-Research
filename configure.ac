@@ -9,6 +9,8 @@ define(_COPYRIGHT_YEAR, 2017)
 define(_COPYRIGHT_HOLDERS,[The %s developers])
 define(_COPYRIGHT_HOLDERS_SUBSTITUTION,[[Gridcoin Research]])
 AC_INIT([Gridcoin Research],[_CLIENT_VERSION_MAJOR._CLIENT_VERSION_MINOR._CLIENT_VERSION_REVISION],[https://github.com/gridcoin/Gridcoin-Research/issues],[gridcoin],[https://gridcoin.us/])
+AC_CONFIG_SRCDIR([src/validation.cpp])
+AC_CONFIG_HEADERS([src/config/bitcoin-config.h])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([build-aux/m4])
 
