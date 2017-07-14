@@ -26,7 +26,6 @@
 #endif
 
 using namespace std;
-using namespace boost;
 bool TallyNetworkAverages(bool ColdBoot);
 extern void BusyWaitForTally();
 extern void DoTallyResearchAverages(void* parg);
