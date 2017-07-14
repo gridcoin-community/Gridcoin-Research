@@ -3459,20 +3459,10 @@ Array MagnitudeReport(std::string cpid)
                                                 StructCPID stCPID = GetLifetimeCPID(structMag.cpid,"MagnitudeReport");
                                                 double days = (GetAdjustedTime() - stCPID.LowLockTime) / 86400.0;
                                                 entry.push_back(Pair("CPID",structMag.cpid));
-                                                double dWeight = GetRSAWeightByCPID(structMag.cpid);
-                                                //entry.push_back(Pair("RSA Weight",dWeight));
                                                 StructCPID UH = GetInitializedStructCPID2(cpid,mvMagnitudes);
-                                                // entry.push_back(Pair("RSA block count",UH.Accuracy));
-                                                // entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
                                                 entry.push_back(Pair("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime)));
                                                 entry.push_back(Pair("Magnitude (Last Superblock)", structMag.Magnitude));
                                                 entry.push_back(Pair("Research Payments (14 days)",structMag.payments));
-                                                // entry.push_back(Pair("Interest Payments (14 days)",structMag.interestPayments));
-                                                if (structMag.cpid == cpid)
-                                                {
-                                                    // double iPct = ( (structMag.interestPayments/14) * 365 / (nBalance+.01));
-                                                    // entry.push_back(Pair("Interest %", iPct));
-                                                }
                                                 entry.push_back(Pair("Daily Paid",structMag.payments/14));
                                                 // Research Age - Calculate Expected 14 Day Owed, and Daily Owed:
                                                 double dExpected14 = magnitude_unit * structMag.Magnitude * 14;

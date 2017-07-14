@@ -6197,9 +6197,6 @@ bool AcidTest(std::string precommand, std::string acid, CNode* pfrom)
             //pfrom->securityversion = pw1;
         }
         if (fDebug10) printf(" Nonce %s,comm %s,hash %s,pw1 %s \r\n",nonce.c_str(),command.c_str(),hash.c_str(),pw1.c_str());
-        //If timestamp too old; disconnect
-        double timediff = std::abs(GetAdjustedTime() - cdbl(nonce,0));
-    
         if (false && hash != pw1)
         {
             //2/16 18:06:48 Acid test failed for 192.168.1.4:32749 1478973994,encrypt,1b089d19d23fbc911c6967b948dd8324,windows          if (fDebug) printf("Acid test failed for %s %s.",NodeAddress(pfrom).c_str(),acid.c_str());
@@ -9143,6 +9140,7 @@ std::string getHardwareID()
     return hwid;
 }
 
+#ifdef WIN32
 static void getCpuid( unsigned int* p, unsigned int ax )
  {
     __asm __volatile
@@ -9154,6 +9152,7 @@ static void getCpuid( unsigned int* p, unsigned int ax )
         : "0" (ax)
     );
  }
+#endif
 
  std::string getCpuHash()
  {
