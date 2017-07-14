@@ -730,6 +730,38 @@ fi
 
 if test x$use_boost = xyes; then
 
+  if test x$HEXDUMP = x; then
+    AC_MSG_ERROR(hexdump is required for tests)
+  fi
+
+  
+  if test x$use_boost = xyes; then
+
+  AX_BOOST_UNIT_TEST_FRAMEWORK
+
+  dnl Determine if -DBOOST_TEST_DYN_LINK is needed
+  AC_MSG_CHECKING([for dynamic linked boost test])
+  TEMP_LIBS="$LIBS"
+  LIBS="$LIBS $BOOST_LDFLAGS $BOOST_UNIT_TEST_FRAMEWORK_LIB"
+  TEMP_CPPFLAGS="$CPPFLAGS"
+  CPPFLAGS="$CPPFLAGS $BOOST_CPPFLAGS"
+  AC_LINK_IFELSE([AC_LANG_SOURCE([
+       #define BOOST_TEST_DYN_LINK
+       #define BOOST_TEST_MAIN
+        #include <boost/test/unit_test.hpp>
+
+       ])],
+    [AC_MSG_RESULT(yes)]
+    [TESTDEFS="$TESTDEFS -DBOOST_TEST_DYN_LINK"],
+    [AC_MSG_RESULT(no)])
+  LIBS="$TEMP_LIBS"
+  CPPFLAGS="$TEMP_CPPFLAGS"
+
+  fi
+fi
+
+if test x$use_boost = xyes; then
+
 BOOST_LIBS="$BOOST_LDFLAGS $BOOST_SYSTEM_LIB $BOOST_FILESYSTEM_LIB $BOOST_PROGRAM_OPTIONS_LIB $BOOST_THREAD_LIB $BOOST_CHRONO_LIB"
 
 
@@ -1150,6 +1182,10 @@ AC_SUBST(ZMQ_LIBS)
 AC_SUBST(PROTOBUF_LIBS)
 AC_SUBST(QR_LIBS)
 AC_CONFIG_FILES([Makefile src/Makefile doc/man/Makefile share/setup.nsi share/qt/Info.plist test/config.ini])
+AC_CONFIG_FILES([contrib/devtools/split-debug.sh],[chmod +x contrib/devtools/split-debug.sh])
+AC_CONFIG_FILES([doc/Doxyfile])
+AC_CONFIG_LINKS([test/functional/test_runner.py:test/functional/test_runner.py])
+AC_CONFIG_LINKS([test/util/bitcoin-util-test.py:test/util/bitcoin-util-test.py])
 
 dnl boost's m4 checks do something really nasty: they export these vars. As a
 dnl result, they leak into secp256k1's configure and crazy things happen.
