@@ -89,7 +89,7 @@ extern bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::st
 double Round(double d, int place);
 bool UnusualActivityReport();
 double GetCountOf(std::string datatype);
-extern double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons);
+extern double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons,int nHeight);
 extern bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
 
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
@@ -969,7 +969,18 @@ double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid)
         return -1;
 }
 
-double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons)
+
+void GetSuperblockProjectCount(std::string data, double& out_project_count, double& out_whitelist_count)
+{
+	   // This is reserved in case we ever want to resync prematurely when the last superblock contains < .75% of whitelisted projects (remember we allow superblocks with up to .50% of the whitelisted projects, in case some project sites are being ddossed)
+       std::string avgs = ExtractXML(data,"<AVERAGES>","</AVERAGES>");
+       double avg_of_projects = GetAverageInList(avgs, out_project_count);
+       out_whitelist_count = GetCountOf("project");
+	   if (fDebug10) printf(" GSPC:CountOfProjInBlock %f vs WhitelistedCount %f  \r\n",(double)out_project_count,(double)out_whitelist_count);
+}
+
+
+double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons,int nHeight)
 {
     try
     {
@@ -981,12 +992,16 @@ double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out
         double avg_of_magnitudes = GetAverageInList(mags,mag_count);
         double avg_of_projects   = GetAverageInList(avgs,avg_count);
         if (!bIgnoreBeacons) out_beacon_count = GetCountOf("beacon");
+		double out_project_count = GetCountOf("project");
         out_participant_count = mag_count;
         out_average = avg_of_magnitudes;
         if (avg_of_magnitudes < 000010)  return -1;
         if (avg_of_magnitudes > 170000)  return -2;
         if (avg_of_projects   < 050000)  return -3;
+		// Note bIgnoreBeacons is passed in when the chain is syncing from 0 (this is because the lists of beacons and projects are not full at that point)
         if (!fTestNet && !bIgnoreBeacons && (mag_count < out_beacon_count*.90 || mag_count > out_beacon_count*1.10)) return -4;
+		if (fDebug10) printf(" CountOfProjInBlock %f vs WhitelistedCount %f Height %f \r\n",(double)avg_count,(double)out_project_count,(double)nHeight);
+		if (!fTestNet && !bIgnoreBeacons && nHeight > 972000 && (avg_count < out_project_count*.50)) return -5;
         return avg_of_magnitudes + avg_of_projects;
     }
     catch (std::exception &e) 
@@ -3015,7 +3030,7 @@ Value execute(const Array& params, bool fHelp)
         double out_beacon_count = 0;
         double out_participant_count = 0;
         double out_avg = 0;
-        double avg = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,false);
+        double avg = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,false,nBestHeight);
         entry.push_back(Pair("avg",avg));
         entry.push_back(Pair("beacon_count",out_beacon_count));
         entry.push_back(Pair("beacon_participant_count",out_participant_count));
@@ -3037,7 +3052,7 @@ Value execute(const Array& params, bool fHelp)
         double out_beacon_count = 0;
         double out_participant_count = 0;
         double out_avg = 0;
-        double avg = GetSuperblockAvgMag(contract,out_beacon_count,out_participant_count,out_avg,false);
+        double avg = GetSuperblockAvgMag(contract,out_beacon_count,out_participant_count,out_avg,false,nBestHeight);
         bool bValid = VerifySuperblock(contract,pindexBest->nHeight);
         entry.push_back(Pair("avg",avg));
         entry.push_back(Pair("beacon_count",out_beacon_count));
@@ -3492,7 +3507,7 @@ Array SuperblockReport(std::string cpid)
                                         double out_avg = 0;
                                         // Binary Support 12-20-2015
                                         std::string superblock = UnpackBinarySuperblock(bb.superblock);
-                                        double avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,true);
+                                        double avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,true,pblockindex->nHeight);
                                         if (avg_mag > 10)
                                         {
                                                 Object c;

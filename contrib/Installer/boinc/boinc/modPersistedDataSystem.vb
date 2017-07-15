@@ -134,6 +134,7 @@ Module modPersistedDataSystem
         surrogateRow.Database = "CPID"
         surrogateRow.Table = "CPIDS"
         Dim lstCPIDs As List(Of Row) = GetList(surrogateRow, "*")
+        'FAILED TO COMPARE ELEMENT IN ARRAY
         lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
         Dim sOut As String = ""
         For Each cpid As Row In lstCPIDs
@@ -169,6 +170,9 @@ Module modPersistedDataSystem
                 Return sData
             End If
 
+            Dim lAgeOfMaster As Long = GetWindowsFileAge(GetGridPath("NeuralNetwork") + "\db.dat")
+            If lAgeOfMaster > PROJECT_SYNC_THRESHOLD Then Return ""
+
             Dim surrogateRow As New Row
             surrogateRow.Database = "CPID"
             surrogateRow.Table = "CPIDS"
@@ -193,17 +197,7 @@ Module modPersistedDataSystem
                     lRows = lRows + 1
                     sOut += sRow
                     dMagAge = 0
-                    Try
-                        dMagAge = Math.Abs(DateDiff(DateInterval.Minute, Now, cpid.Added))
-
-                    Catch ex As Exception
-                    End Try
-
-                    If dMagAge > (PROJECT_SYNC_THRESHOLD) Then
-                        If Not mbDebugging Then Return ""
-                    End If
-
-
+                 
                 Else
                     Dim sRow As String = cpid.PrimaryKey + ",00;"
                     lTotal = lTotal + 0
@@ -231,6 +225,7 @@ Module modPersistedDataSystem
             If avg < 25 Then Return ""
             'APPEND the Averages:
 
+            Dim lProjectsInContract As Long = 0
             Dim surrogateWhitelistRow As New Row
             Dim lstWhitelist As List(Of Row)
             surrogateWhitelistRow.Database = "Whitelist"
@@ -248,11 +243,18 @@ Module modPersistedDataSystem
                         Dim sRow As String = r.PrimaryKey + "," + Num(r.AvgRAC) _
                                              + "," + Num(r.RAC) + ";"
                         lRows = lRows + 1
+                        lProjectsInContract += 1
                         sOut += sRow
                     End If
                 End If
 
             Next
+            Log("Contracts in Project : " + Trim(lProjectsInContract) + ", Whitelisted Count: " + lstP.Count.ToString())
+
+            If (lProjectsInContract < lstP.Count * 0.5) Then
+                Log("Not enough projects in contract.")
+                Return ""
+            End If
             sOut += "NeuralNetwork,2000000,20000000;"
             sOut += "</AVERAGES>"
             Return sOut
@@ -381,11 +383,11 @@ Module modPersistedDataSystem
         End Try
     End Function
     Public Sub SyncDPOR2()
-        If Math.Abs(DateDiff(DateInterval.Second, Now, mdLastSync)) > 60 * 10 Then bMagsDoneLoading = True
-        If bMagsDoneLoading = False Then
-            Log("Blocked call.")
-            Exit Sub
-        End If
+        '   If Math.Abs(DateDiff(DateInterval.Second, Now, mdLastSync)) > 60 * 10 Then bMagsDoneLoading = True
+        '   If bMagsDoneLoading = False Then
+        'Log("Blocked call.")
+        'Exit Sub
+        'End If
         If KeyValue("disableneuralnetwork") = "true" Then
             Log("Neural network is disabled.")
             Exit Sub
@@ -430,7 +432,7 @@ Module modPersistedDataSystem
         SoftKill(sPath + "*team.xml")
     End Sub
     Private Sub ClearWhitelistData()
-        Dim sPath As String = GetGridFolder() + "NeuralNetwork\"
+        Dim sPath As String = GetGridFolder() + "NeuralNetwork\Whitelist\"
         SoftKill(sPath + "whitelist*.dat")
     End Sub
     Public Function EnsureNNDirExists()
@@ -604,7 +606,7 @@ Module modPersistedDataSystem
                     Log("Unable to create neural network directory.")
                 End Try
             End If
-            Kill(sNN + sDatabase + "*.dat")
+            Kill(sNN + sDatabase + "\*.dat")
         Catch ex As Exception
             Log("EraseNeuralNetwork:" + ex.Message)
         End Try
@@ -667,7 +669,8 @@ Module modPersistedDataSystem
             surrogateRow1.Database = "CPID"
             surrogateRow1.Table = "CPIDS"
             EraseNeuralNetwork("cpid")
-            
+            EraseNeuralNetwork("cpids")
+
             For x As Integer = 0 To UBound(vCPIDs)
                 If Len(vCPIDs(x)) > 20 Then
                     Dim vRow() As String
@@ -1006,7 +1009,8 @@ Module modPersistedDataSystem
         Dim d As String = "<COL>"
         Dim x As New List(Of Row)
         Dim oLock As New Object
-        Dim sNNFolder As String = GetGridFolder() + "NeuralNetwork\"
+
+        Dim sNNFolder As String = GetGridFolder() + "NeuralNetwork\" + DataRow.Table + "\"
         Dim bBlacklist As Boolean
 
         SyncLock oLock
@@ -1030,7 +1034,11 @@ Module modPersistedDataSystem
                                     r.PrimaryKey = Replace(r.PrimaryKey, "_", " ")
                                     If IsInListExact(r.PrimaryKey, x) Then bBlacklist = True
                                 End If
-                                If Not bBlacklist Then x.Add(r)
+                                If Not bBlacklist Then
+                                    If Not r.PrimaryKey Is Nothing Then
+                                        x.Add(r)
+                                    End If
+                                End If
                             End If
                         End While
                         objReader.Close()
@@ -1256,10 +1264,6 @@ Retry:
         CPID.Table = "CPIDS"
         CPID.Magnitude = Trim(Math.Round(Magnitude, 2))
         Store(CPID)
-        Try
-            ' If bGenData Then mGRCData.VoteOnMagnitude(CPID.PrimaryKey, Magnitude, mbTestNet)
-        Catch ex As Exception
-        End Try
     End Function
     Private Function PersistProjectRAC(sCPID As String, rac As Double, Project As String, bGenData As Boolean) As Boolean
         'Store the CPID_PROJECT RAC:
@@ -1311,7 +1315,12 @@ Retry:
         vDate = Split(s, "/")
         Dim dtOut As Date = CDate("1-1-1900")
         If UBound(vDate) >= 5 Then
-            dtOut = New Date(Val(vDate(0)), Val(vDate(1)), Val(vDate(2)), Val(vDate(3)), Val(vDate(4)), Val(vDate(5)))
+            Try
+                dtOut = New Date(Val(vDate(0)), Val(vDate(1)), Val(vDate(2)), Val(vDate(3)), Val(vDate(4)), Val(vDate(5)))
+
+            Catch ex As Exception
+                Return CDate("1-1-1900")
+            End Try
         End If
         Return dtOut
     End Function
@@ -1422,6 +1431,7 @@ Retry:
         Dim bFound As Boolean
         If dataRow.Added = New Date Then dataRow.Added = Now
         SyncLock oLock
+            'FileMode.Create
             Dim oFileOutStream As New System.IO.FileStream(sPath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite)
             Using objWriter As New System.IO.StreamWriter(oFileOutStream)
                 objWriter.WriteLine(SerializeRow(dataRow))
@@ -1446,7 +1456,7 @@ Retry:
 
     Public Function GetPath(dataRow As Row) As String
         Dim sFilename As String = LCase(dataRow.Database) + "_" + LCase(dataRow.Table) + ".dat"
-        Dim sPath As String = GetGridFolder() + "NeuralNetwork\"
+        Dim sPath As String = GetGridFolder() + "NeuralNetwork\" + dataRow.Table + "\"
         If Not System.IO.Directory.Exists(sPath) Then
             Try
                 MkDir(sPath)
@@ -1459,9 +1469,16 @@ Retry:
     End Function
     Public Function GetEntryName(dataRow As Row, sPrimaryKey As String) As String
         Dim sFilename As String = LCase(dataRow.Database) + "_" + LCase(dataRow.Table) + "_" + sPrimaryKey + ".dat"
-        Dim sPath As String = GetGridFolder() + "NeuralNetwork\"
+        Dim sPath As String = GetGridFolder() + "NeuralNetwork\" + dataRow.Table + "\"
+        Try
+            If Not System.IO.Directory.Exists(sPath) Then MkDir(sPath)
+        Catch ex As Exception
+            Log("Unable to create folder " + sPath)
+        End Try
+
         Return sPath + sFilename
     End Function
+   
     Public Function GetEntryPrefix(dataRow As Row) As String
         Dim sFilename As String = LCase(dataRow.Database) + "_" + LCase(dataRow.Table) + "_"
         Return sFilename
@@ -1715,10 +1732,18 @@ Retry:
         Dim iMins As Long = DateDiff(DateInterval.Minute, fi.LastWriteTime, Now)
         Return iMins
     End Function
-    Public Function GetUtcDateTime(dtTime As DateTime) As DateTime
+    Public Function GetUtcDateTime(sDateTime As String) As DateTime
         'When converting from a date time to a target datetime that falls within the window of a daylight savings time adjustment, an error is thrown since the target is technically no longer a valid date time, so we need to account for this just in case
         'On July2nd 2017, the Western Sahara had a 2AM to 3AM local time change and an error was thrown when we pulled in a RAC timestamp of 2AM JUL 2 2017 and tried to convert it to UTC
         'Step 1, try the natural conversion first
+        If sDateTime = "" Then Return CDate("1-1-1970")
+        Dim dtTime As DateTime = CDate("1-1-1970")
+        Try
+            dtTime = CDate(sDateTime)
+        Catch ex As Exception
+            Log("Error while converting #" + Trim(sDateTime) + " to DateTime")
+            Return CDate("1-1-1970")
+        End Try
         Try
             Dim dTime As DateTime = TimeZoneInfo.ConvertTimeToUtc(dtTime)
             Return dTime
@@ -1742,6 +1767,9 @@ Retry:
         Dim iMins As Long = DateDiff(DateInterval.Minute, dTime, dtSyncTime)
         Return iMins
     End Function
+
+    
+
     Public Function GetUnixFileAge(sPath As String) As Double
         If File.Exists(sPath) = False Then Return 1000000
         Dim fi As New FileInfo(sPath)
@@ -1760,7 +1788,7 @@ Retry:
         sr.Close()
         Log("GUFA Timestamp: " + Trim(dMaxStamp))
         Dim dTime As DateTime = UnixTimestampToDate(dMaxStamp)
-        Dim iMins As Long = DateDiff(DateInterval.Minute, dTime, Now)
+        Dim iMins As Long = DateDiff(DateInterval.Minute, dTime, DateTime.UtcNow)
         Return iMins
     End Function
     Public Function GetQuorumHash(data As String)

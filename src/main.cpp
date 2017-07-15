@@ -93,7 +93,7 @@ extern bool BlockNeedsChecked(int64_t BlockTime);
 extern void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector<CBlockIndex*> vConnect);
 int64_t GetEarliestWalletTransaction();
 extern void IncrementVersionCount(const std::string& Version);
-double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_avg,bool bIgnoreBeacons);
+double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_avg,bool bIgnoreBeacons, int nHeight);
 extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern bool UnusualActivityReport();
 
@@ -4357,7 +4357,7 @@ bool VerifySuperblock(std::string superblock, int nHeight)
         double avg_mag = 0;
         if (superblock.length() > 20)
         {
-            avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,false);
+            avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,false,nHeight);
             bPassed=true;
             if (!IsResearchAgeEnabled(nHeight))
             {
@@ -4366,7 +4366,8 @@ bool VerifySuperblock(std::string superblock, int nHeight)
             // New rules added here:
             if (out_avg < 10 && fTestNet)  bPassed = false;
             if (out_avg < 70 && !fTestNet) bPassed = false;
-            if (avg_mag < 10)              bPassed = false;
+            if (avg_mag < 10 && !fTestNet) bPassed = false;
+			// Verify distinct project count matches whitelist
         }
         if (fDebug3 && !bPassed)
         {
@@ -4383,6 +4384,12 @@ bool NeedASuperblock()
         if (superblock.length() > 20 && !OutOfSyncByAge())
         {
             if (!VerifySuperblock(superblock,pindexBest->nHeight)) bDireNeedOfSuperblock = true;
+			/*
+			// Check project count in last superblock
+			double out_project_count = 0;
+			double out_whitelist_count = 0;
+			GetSuperblockProjectCount(superblock, out_project_count, out_whitelist_count);
+			*/
         }
         int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
         if ((double)superblock_age > (double)(GetSuperblockAgeSpacing(nBestHeight))) bDireNeedOfSuperblock = true;
@@ -4500,13 +4507,13 @@ void GridcoinServices()
     {
         if ((nBestHeight % 3) == 0)
         {
-            if (fDebug3) printf("#CNNSH# ");
+            if (fDebug10) printf("#CNNSH# ");
             ComputeNeuralNetworkSupermajorityHashes();
             UpdateNeuralNetworkQuorumData();
         }
         if ((nBestHeight % 20) == 0)
         {
-            if (fDebug3) printf("#TIB# ");
+            if (fDebug10) printf("#TIB# ");
             bDoTally = true;
         }
     }
@@ -8808,7 +8815,7 @@ bool MemorizeMessage(std::string msg, int64_t nTime, double dAmount, std::string
                       std::string out_address = "";
                       std::string out_publickey = "";
                       GetBeaconElements(sMessageValue, out_cpid, out_address, out_publickey);
-                      if (fDebug3 && LessVerbose(50)) 
+                      if (fDebug10 && LessVerbose(50)) 
                       {
                           printf("\r\n**Beacon Debug Message : beaconpubkey %s, message key %s, cpid %s, addr %s, base64 pub key %s \r\n ",sBPK.c_str(),
                                  sMessageKey.c_str(),out_cpid.c_str(),out_address.c_str(), out_publickey.c_str());

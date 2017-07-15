@@ -14,7 +14,7 @@ Public Class Utilization
     Private mlSpeakMagnitude As Double
     Public ReadOnly Property Version As Double
         Get
-            Return 412
+            Return 416
         End Get
     End Property
 
@@ -217,6 +217,9 @@ Public Class Utilization
         Dim sHash As String = clsQHA.QuorumHashingAlgorithm(sContract)
         Return sHash
     End Function
+    Public Sub ExportToCSVFile()
+        ExportToCSV2()
+    End Sub
     Public Function GetNeuralContract() As String
         Dim sContract As String = GetMagnitudeContract()
         Return sContract
@@ -509,6 +512,10 @@ Public Class Utilization
         ResetCPIDsForManualSync()
         Call UpdateMagnitudes()
     End Sub
+    Public Function clsGetBoincProjectHash(sURL As String) As String
+        Dim c As New clsBoincProjectDownload
+        Return c.GetBoincProjectHash(sURL)
+    End Function
     Public Sub AddressUserThread()
         Try
             Log("Speaking " + Trim(mlSpeakMagnitude))

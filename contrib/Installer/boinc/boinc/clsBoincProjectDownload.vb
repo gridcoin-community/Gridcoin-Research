@@ -31,6 +31,22 @@ Public Class clsBoincProjectDownload
             End If
         End Try
     End Function
+    Public Function RetrieveCacheProjectFilename(sGzipUrl As String) As String
+        Dim sOut As String = Replace(sGzipUrl, "/", "[fslash]")
+        sOut = Replace(sOut, ":", "[colon]")
+        Dim sDayOfYear = Trim(Now.DayOfYear)
+        sOut = Replace(sOut, ".gz", sDayOfYear + "[!]gz")
+        sOut = Replace(sOut, ".", "[period]")
+        sOut = Replace(sOut, "[!]", ".")
+        Return sOut
+    End Function
+    Public Function GetFileAge(sPath As String) As Double
+        If File.Exists(sPath) = False Then Return 1000000
+        Dim fi As New FileInfo(sPath)
+        If fi.Length = 0 Then Return 1000000
+        Dim iMins As Long = DateDiff(DateInterval.Minute, fi.LastWriteTime, Now)
+        Return iMins
+    End Function
 
     Private Function AnalyzeProjectHeader(ByVal sGzipURL As String, ByRef sEtag As String, ByRef sEtagFilePath As String, ByVal sProjectName As String) As Integer
         'Output
@@ -41,11 +57,11 @@ Public Class clsBoincProjectDownload
         sEtag = dictHeads("ETag")
         Dim sTimestamp As String
         sTimestamp = dictHeads("Last-Modified")
-
         sEtag = Replace(sEtag, Chr(34), "")
         sEtag = Replace(sEtag, "W", "")
         Dim dStatus As Double = 0
-        Dim sGridcoinURL As String = "https://download.gridcoin.us/download/harvest/" + sEtag + ".gz"
+        Dim sGridcoinBaseUrl As String = "https://download.gridcoin.us/download/harvest/"
+        Dim sGridcoinURL As String = sGridcoinBaseUrl + sEtag + ".gz"
         Dim dictHeadsGRC As Dictionary(Of String, String) = GetHttpResponseHeaders(sGridcoinURL)
         Dim dLength1 As Double = dictHeads("Content-Length")
         Dim dLength2 As Double = dictHeadsGRC("Content-Length")
@@ -53,28 +69,31 @@ Public Class clsBoincProjectDownload
         Dim bCacheSiteHasSameFile As Boolean = (dLength2 > 0)
         Dim sEtagOnFile As String = GetDataValue("etag", "tbetags", sGzipURL).DataColumn1
         sEtagFilePath = ConstructTargetFileName(sEtag)
-
-        If sEtagOnFile = sEtag Then
+        Dim lAgeInMins As Long = GetFileAge(sEtagFilePath)
+        If sEtagOnFile = sEtag And lAgeInMins < SYNC_THRESHOLD Then
             'We already have this file
             Return 1
         Else
             'We do not have this file
-            'Only update Stored Value after we retrieve the file
-            Dim sSourceURL As String = IIf(bCacheSiteHasSameFile, sGridcoinURL, sGzipURL)
-            Dim bStatus As Boolean = ResilientDownload(sSourceURL, sEtagFilePath, sGzipURL)
+            'Step 1, see if it exists in our cache before attempting to download from the project site
+            Dim sCacheFileName As String = RetrieveCacheProjectFilename(sGzipURL)
+            Dim bStatus As Boolean = ResilientDownload(sGridcoinBaseUrl + sCacheFileName, sEtagFilePath, sGridcoinBaseUrl + sCacheFileName)
+            If Not bStatus Then
+                Dim sSourceURL As String = IIf(bCacheSiteHasSameFile, sGridcoinURL, sGzipURL)
+                bStatus = ResilientDownload(sSourceURL, sEtagFilePath, sGzipURL)
+            End If
             'If all bytes downloaded then store the etag in the local table
+            'Only update Stored Value after we retrieve the file
             If bStatus Then
                 StoreValue("etag", "tbetags", sGzipURL, sEtag)
                 StoreValue("etag", "timestamps", sProjectName, sTimestamp)
-
-
+                StoreValue("etag", "tbetag2", sProjectName, sEtag)
                 'Save the Project Site GZ creation time
                 Return 2
             Else
                 Return 3
             End If
         End If
-
     End Function
     Public Function ResilientDownload(sSourceUrl As String, sEtagFilePath As String, sBackupURL As String) As Boolean
         'Doing this just in case we ddos our own website and keep receiving 404 or 500 errors:
@@ -143,6 +162,7 @@ Public Class clsBoincProjectDownload
                     Dim sTeamEtagFilePath As String = ""
                     Dim iStatus As Integer = AnalyzeProjectHeader(sTeamGzipURL, sEtag, sTeamEtagFilePath, sProject)
                     Dim sProjectMasterFileName As String = GetGridFolder() + "NeuralNetwork\" + sProject + ".master.dat"
+                    'store etag by project also
 
                     If iStatus <> 1 Or Not File.Exists(sProjectMasterFileName) Then
                         Try
@@ -179,10 +199,11 @@ Public Class clsBoincProjectDownload
                     'Scan for the Gridcoin team inside this project:
                     Dim sTeamPathUnzipped As String = Replace(sTeamEtagFilePath, ".gz", ".xml")
                     Dim sGzipPathUnzipped As String = Replace(sRacEtagFilePath, ".gz", ".xml")
-
+                    Log("Determining Team ID for Project " + sProject + " " + sGzipURL)
                     Dim lTeamID As Long = GetTeamID(sTeamPathUnzipped)
                     'Create the project master file
                     If Not File.Exists(sProjectMasterFileName) Then
+                        Log("Emitting Project File for Project " + sProject + " " + sGzipURL)
                         EmitProjectFile(sGzipPathUnzipped, GetGridFolder() + "NeuralNetwork\", sProject, lTeamID)
                     End If
                     Debug.Print(sProject)
@@ -193,7 +214,6 @@ Public Class clsBoincProjectDownload
 
         Next
         'Verify all the files exist
-
         Dim iTotalProjectsSynced As Integer = 0
         'Create master database
         Dim sNNFolder As String = GetGridFolder() + "NeuralNetwork\"
@@ -204,12 +224,15 @@ Public Class clsBoincProjectDownload
         Dim fi As FileInfo
         Dim sProjectLocal As String
         msNeuralDetail = "Combining Project Data"
+        Log("Combining Project Data")
+
         For Each fi In fiArr
             If fi.Name Like "*.master.dat*" Then
                 sProjectLocal = Replace(fi.Name, ".master.dat", "")
                 iTotalProjectsSynced += 1
                 Dim sTimestamp As String = GetDataValue("etag", "timestamps", sProjectLocal).DataColumn1
-                Dim dtUTC As DateTime = GetUtcDateTime(CDate(sTimestamp))
+                'Log the md5 of the master project file so we can determine regional differences
+                Dim iRows As Long = 0
                 Using oStream As New System.IO.FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
                     Dim objReader As New System.IO.StreamReader(oStream)
                     While objReader.EndOfStream = False
@@ -219,13 +242,15 @@ Public Class clsBoincProjectDownload
                         sTemp = Replace(sTemp, "<user>", "<project><name>" + sProjectLocal + "</name><team_name>gridcoin</team_name>")
                         sTemp = Replace(sTemp, "</user>", "</project>")
                         'Dont bother writing timestamps older than 32 days since we base mag off of RAC (Filter RAC based on project header in UTC - RAC Updated UTC - BullShark)
-                        Dim lRowAgeInMins = GetRowAgeInMins(sTemp, dtUTC)
-                        If lRowAgeInMins < (60 * 24 * 32) Then
-                            oSW.WriteLine(sTemp)
-                        End If
+                        iRows += 1
+                        oSW.WriteLine(sTemp)
                     End While
                     objReader.Close()
                 End Using
+                Dim sHash As String = GetMd5OfFile(fi.FullName)
+                Dim sEtagOnFile As String = GetDataValue("etag", "tbetag2", sProjectLocal).DataColumn1
+                Dim sOut As String = "***  COMBINING PROJECT FILE " + fi.Name + ", MD5 HASH: " + sHash + ", ROWS: " + Trim(iRows) + ", ETAG: " + sEtagOnFile + " ***"
+                Log(sOut)
             End If
         Next fi
         oSW.Close()
@@ -272,7 +297,78 @@ Public Class clsBoincProjectDownload
         swProj.Close()
         Return 0
     End Function
-
+    Private Function HexStr(iByte As Integer) As String
+        Dim sOut As String = "00" + Hex(iByte)
+        Return sOut.Substring(Len(sOut) - 2, 2)
+    End Function
+    Private Function GetGZChecksum(sURL As String) As String
+        Dim dictHeads As Dictionary(Of String, String) = GetHttpResponseHeaders(sURL)
+        'Extract the checksum using an HTTP range request
+        Dim request As WebRequest = WebRequest.Create(sURL)
+        Dim hWRQ As HttpWebRequest = CType(request, HttpWebRequest)
+        Dim lStart As Long = Val(dictHeads("Content-Length")) - 8 '2byte magic is in header, 4 byte CRC-32 Checksum is at offset 0 in header, then 4 byte uncompressed data size
+        hWRQ.AddRange(lStart, lStart + 8)
+        Dim response As WebResponse = request.GetResponse
+        Dim dataStream As Stream = response.GetResponseStream()
+        Dim sPath As String = "c:\path.gz"
+        '6a d3 6d cc checksum
+        Dim fs As New FileStream(sPath, FileMode.Create)
+        dataStream.CopyTo(fs)
+        fs.Close()
+        Dim mBytes As Byte() = File.ReadAllBytes(sPath)
+        Dim ckLenBytes(3) As Byte
+        Array.Copy(mBytes, 4, ckLenBytes, 0, 4)
+        Dim sCRC As String = HexStr(mBytes(3)) + HexStr(mBytes(2)) + HexStr(mBytes(1)) + HexStr(mBytes(0))
+        Return sCRC
+    End Function
+    Public Function SlimifyBoincFile(sSourceUserFile As String, sDestUserFile As String, dtSyncTime As DateTime) As Boolean
+        Dim srProj As New StreamReader(sSourceUserFile)
+        Dim swProj As New StreamWriter(sDestUserFile, False)
+        Dim sUser As String = ""
+        While srProj.EndOfStream = False
+            Dim sTemp As String = srProj.ReadLine()
+            sUser += sTemp
+            If (sTemp.Contains("</user>") Or srProj.EndOfStream) Then
+                Dim sCpid As String = ExtractXML(sUser, "<cpid>")
+                Dim sRac As String = ExtractXML(sUser, "<expavg_credit>")
+                Dim sTime As String = ExtractXML(sUser, "<expavg_time>")
+                'Dim lAge As Double = GetRowAgeInMins(sUser, dtSyncTime)
+                If Val(sRac) > 10 Then
+                    Dim sOut = sCpid + "," + sRac
+                    swProj.WriteLine(sOut)
+                End If
+                sUser = ""
+            End If
+        End While
+        srProj.Close()
+        swProj.Close()
+        Return True
+    End Function
+    'These functions are used to decentralize the Neural Network and therefore in the future it will not be necessary to have a centralized cache for boinc project files on gridcoin.us, but the dev team is still testing these new features currently; They are approximately 50% complete.
+    Public Function GetBoincProjectHash(sBaseURL As String) As String
+        Dim sTeamUrl = sBaseURL + "team.gz"
+        Dim sGzFN As String = GetGridFolder() + "NeuralNetwork\team_temp.gz"
+        Dim bStatus As Boolean = ResilientDownload(sTeamUrl, sGzFN, "")
+        ExtractGZipInnerArchive(sGzFN, GetGridFolder() + "NeuralNetwork\")
+        Dim sTPUZ As String = GetGridFolder() + "NeuralNetwork\" + "team_temp.xml"
+        Dim lTeamID As Long = GetTeamID(sTPUZ)
+        Dim sUserUrl As String = sBaseURL + "user.gz"
+        Dim sUsFn As String = GetGridFolder() + "NeuralNetwork\user_temp.gz"
+        bStatus = ResilientDownload(sUserUrl, sUsFn, "")
+        ExtractGZipInnerArchive(sUsFn, GetGridFolder() + "NeuralNetwork\")
+        Dim sUZ As String = GetGridFolder() + "NeuralNetwork\" + "user_temp.xml"
+        'Slmify the user file, then gzip it, then get hash
+        Dim sOutFile As String = GetGridFolder() + "NeuralNetwork\" + "slim1.xml"
+        Dim dictHeads As Dictionary(Of String, String) = GetHttpResponseHeaders(sUserUrl)
+        Dim sTimestamp As String = dictHeads("Last-Modified")
+        Dim dtUTC As DateTime = GetUtcDateTime(CDate(sTimestamp))
+        SlimifyBoincFile(sUZ, sOutFile, dtUTC)
+        'ReGzip this, then return the concatenated GZ hash + MD5 (uncompressed) + GZ Hash
+        Dim sNewGzFile As String = GetGridFolder() + "NeuralNetwork\" + "slim2.gz"
+        CreateGZ(sNewGzFile, sOutFile)
+        Dim sComplexHash As String = "MD5 Component " + " " + "GzComponentHash"
+        Return sComplexHash
+    End Function
     Public Function GetTeamID(sPath As String) As Double
         Dim swTeam As New StreamReader(sPath)
         Dim sChunk As String = ""
@@ -296,7 +392,6 @@ Public Class clsBoincProjectDownload
             End If
         End While
         swTeam.Close()
-
         Dim vChunk2() As String
         vChunk2 = Split(sChunk, "<team>")
         If LCase(sChunk.Contains("gridcoin")) Then
@@ -323,6 +418,16 @@ Public Class clsBoincProjectDownload
             End Using
         End Using
     End Sub
+    Private Sub CreateGZ(gzFilename As String, sourceFile As String)
+        Dim srcFile As System.IO.FileStream = File.OpenRead(sourceFile)
+        Dim zipFile As GZipOutputStream = New GZipOutputStream(File.Open(gzFilename, FileMode.Create))
+        Dim fileData As Byte() = New Byte(srcFile.Length) {}
+        srcFile.Read(fileData, 0, srcFile.Length)
+        zipFile.Write(fileData, 0, fileData.Length)
+        srcFile.Close()
+        zipFile.Close()
+    End Sub
+
     Public Sub ExtractZipFile(archiveFilenameIn As String, outFolder As String, bCreateSkeletonDirs As Boolean, bKillOriginal As Boolean)
         Dim zf As ZipFile = Nothing
         Try
