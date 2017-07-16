@@ -9,7 +9,7 @@ define(_COPYRIGHT_YEAR, 2017)
 define(_COPYRIGHT_HOLDERS,[The %s developers])
 define(_COPYRIGHT_HOLDERS_SUBSTITUTION,[[Bitcoin Core]])
 AC_INIT([Bitcoin Core],[_CLIENT_VERSION_MAJOR._CLIENT_VERSION_MINOR._CLIENT_VERSION_REVISION],[https://github.com/bitcoin/bitcoin/issues],[bitcoin],[https://bitcoincore.org/])
-AC_CONFIG_SRCDIR([src/validation.cpp])
+AC_CONFIG_SRCDIR([src/main.cpp])
 AC_CONFIG_HEADERS([src/config/bitcoin-config.h])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([build-aux/m4])
@@ -177,11 +177,11 @@ AC_ARG_WITH([system-univalue],
   [system_univalue=$withval],
   [system_univalue=no]
 )
-AC_ARG_ENABLE([zmq],
-  [AS_HELP_STRING([--disable-zmq],
-  [disable ZMQ notifications])],
-  [use_zmq=$enableval],
-  [use_zmq=yes])
+# AC_ARG_ENABLE([zmq],
+#   [AS_HELP_STRING([--disable-zmq],
+#   [disable ZMQ notifications])],
+#   [use_zmq=$enableval],
+#   [use_zmq=yes])
 
 AC_ARG_WITH([protoc-bindir],[AS_HELP_STRING([--with-protoc-bindir=BIN_DIR],[specify protoc bin path])], [protoc_bin_path=$withval], [])
 
@@ -894,15 +894,15 @@ if test x$use_pkgconfig = xyes; then
         fi
       fi
 
-      if test "x$use_zmq" = "xyes"; then
-        PKG_CHECK_MODULES([ZMQ],[libzmq >= 4],
-          [AC_DEFINE([ENABLE_ZMQ],[1],[Define to 1 to enable ZMQ functions])],
-          [AC_DEFINE([ENABLE_ZMQ],[0],[Define to 1 to enable ZMQ functions])
-           AC_MSG_WARN([libzmq version 4.x or greater not found, disabling])
-           use_zmq=no])
-      else
-          AC_DEFINE_UNQUOTED([ENABLE_ZMQ],[0],[Define to 1 to enable ZMQ functions])
-      fi
+      # if test "x$use_zmq" = "xyes"; then
+      #   PKG_CHECK_MODULES([ZMQ],[libzmq >= 4],
+      #     [AC_DEFINE([ENABLE_ZMQ],[1],[Define to 1 to enable ZMQ functions])],
+      #     [AC_DEFINE([ENABLE_ZMQ],[0],[Define to 1 to enable ZMQ functions])
+      #      AC_MSG_WARN([libzmq version 4.x or greater not found, disabling])
+      #      use_zmq=no])
+      # else
+      #     AC_DEFINE_UNQUOTED([ENABLE_ZMQ],[0],[Define to 1 to enable ZMQ functions])
+      # fi
     ]
   )
 else
@@ -920,28 +920,28 @@ else
     fi
   fi
 
-  if test "x$use_zmq" = "xyes"; then
-     AC_CHECK_HEADER([zmq.h],
-       [AC_DEFINE([ENABLE_ZMQ],[1],[Define to 1 to enable ZMQ functions])],
-       [AC_MSG_WARN([zmq.h not found, disabling zmq support])
-        use_zmq=no
-        AC_DEFINE([ENABLE_ZMQ],[0],[Define to 1 to enable ZMQ functions])])
-     AC_CHECK_LIB([zmq],[zmq_ctx_shutdown],ZMQ_LIBS=-lzmq,
-       [AC_MSG_WARN([libzmq >= 4.0 not found, disabling zmq support])
-        use_zmq=no
-        AC_DEFINE([ENABLE_ZMQ],[0],[Define to 1 to enable ZMQ functions])])
-  else
-    AC_DEFINE_UNQUOTED([ENABLE_ZMQ],[0],[Define to 1 to enable ZMQ functions])
-  fi
+  # if test "x$use_zmq" = "xyes"; then
+  #    AC_CHECK_HEADER([zmq.h],
+  #      [AC_DEFINE([ENABLE_ZMQ],[1],[Define to 1 to enable ZMQ functions])],
+  #      [AC_MSG_WARN([zmq.h not found, disabling zmq support])
+  #       use_zmq=no
+  #       AC_DEFINE([ENABLE_ZMQ],[0],[Define to 1 to enable ZMQ functions])])
+  #    AC_CHECK_LIB([zmq],[zmq_ctx_shutdown],ZMQ_LIBS=-lzmq,
+  #      [AC_MSG_WARN([libzmq >= 4.0 not found, disabling zmq support])
+  #       use_zmq=no
+  #       AC_DEFINE([ENABLE_ZMQ],[0],[Define to 1 to enable ZMQ functions])])
+  # else
+  #   AC_DEFINE_UNQUOTED([ENABLE_ZMQ],[0],[Define to 1 to enable ZMQ functions])
+  # fi
 
-  if test "x$use_zmq" = "xyes"; then
-    dnl Assume libzmq was built for static linking
-    case $host in
-      *mingw*)
-        ZMQ_CFLAGS="$ZMQ_CFLAGS -DZMQ_STATIC"
-      ;;
-    esac
-  fi
+  # if test "x$use_zmq" = "xyes"; then
+  #   dnl Assume libzmq was built for static linking
+  #   case $host in
+  #     *mingw*)
+  #       ZMQ_CFLAGS="$ZMQ_CFLAGS -DZMQ_STATIC"
+  #     ;;
+  #   esac
+  # fi
 
   BITCOIN_QT_CHECK(AC_CHECK_LIB([protobuf] ,[main],[PROTOBUF_LIBS=-lprotobuf], BITCOIN_QT_FAIL(libprotobuf not found)))
   if test x$use_qr != xno; then
@@ -1015,13 +1015,13 @@ AC_MSG_CHECKING([whether to build utils (bitcoin-cli bitcoin-tx)])
 AM_CONDITIONAL([BUILD_BITCOIN_UTILS], [test x$build_bitcoin_utils = xyes])
 AC_MSG_RESULT($build_bitcoin_utils)
 
-AC_MSG_CHECKING([whether to build libraries])
+# AC_MSG_CHECKING([whether to build libraries])
 AM_CONDITIONAL([BUILD_BITCOIN_LIBS], [test x$build_bitcoin_libs = xyes])
-if test x$build_bitcoin_libs = xyes; then
-  AC_DEFINE(HAVE_CONSENSUS_LIB, 1, [Define this symbol if the consensus lib has been built])
-  AC_CONFIG_FILES([libbitcoinconsensus.pc:libbitcoinconsensus.pc.in])
-fi
-AC_MSG_RESULT($build_bitcoin_libs)
+# if test x$build_bitcoin_libs = xyes; then
+#   AC_DEFINE(HAVE_CONSENSUS_LIB, 1, [Define this symbol if the consensus lib has been built])
+#   AC_CONFIG_FILES([libbitcoinconsensus.pc:libbitcoinconsensus.pc.in])
+# fi
+# AC_MSG_RESULT($build_bitcoin_libs)
 
 AC_LANG_POP
 
