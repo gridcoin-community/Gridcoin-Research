@@ -14,7 +14,7 @@ Public Class Utilization
     Private mlSpeakMagnitude As Double
     Public ReadOnly Property Version As Double
         Get
-            Return 412
+            Return 416
         End Get
     End Property
 
@@ -217,6 +217,9 @@ Public Class Utilization
         Dim sHash As String = clsQHA.QuorumHashingAlgorithm(sContract)
         Return sHash
     End Function
+    Public Sub ExportToCSVFile()
+        ExportToCSV2()
+    End Sub
     Public Function GetNeuralContract() As String
         Dim sContract As String = GetMagnitudeContract()
         Return sContract

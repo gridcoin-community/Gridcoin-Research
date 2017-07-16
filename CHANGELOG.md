@@ -37,6 +37,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Removed newbie boost, #332
  - Removed obsolete functionality.
 
+### Fixed
+ - Fix neural network inability to stake superblocks.
+
+## [3.5.9.3] - 2017-07-15
+### Changed
+ - Require superblocks to be populated with more than half of the
+   whitelisted projects.
+ - Add subfolders to Neural Network
+
 ## [3.5.9.2] - 2017-07-04
 ### Fixed
  - Fix neural network project gather bug related to timezones.
