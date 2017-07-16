@@ -223,7 +223,6 @@ std::string msMasterMessagePublicKey  = "044b2938fbc38071f24bede21e838a0758a52a0
 std::string BackupGridcoinWallet();
 extern double GetPoSKernelPS2();
 
-extern uint256 GridcoinMultipleAlgoHash(std::string t1);
 extern bool OutOfSyncByAgeWithChanceOfMining();
 
 int RebootClient();
@@ -7443,46 +7442,6 @@ bool ProcessMessages(CNode* pfrom)
 
     return fOk;
 }
-
-
-
-double checksum(std::string s)
-{
-    char ch;
-    double chk = 0;
-    std::string sOut = "";
-    for (unsigned int i=0;i < s.length(); i++)
-    {
-        ch = s.at(i);
-        int ascii = ch;
-        chk=chk+ascii;
-    }
-    return chk;
-}
-
-
-uint256 GridcoinMultipleAlgoHash(std::string t1)
-{
-        uint256 thash = 0;
-        std::string& t2 = t1;
-        thash = Hash(t2.begin(),t2.begin()+t2.length());
-        return thash;
-}
-
-
-std::string aes_complex_hash(uint256 scrypt_hash)
-{
-      if (scrypt_hash==0) return "0";
-
-            std::string sScryptHash = scrypt_hash.GetHex();
-            std::string sENCAES512 = AdvancedCrypt(sScryptHash);
-            double chk = checksum(sENCAES512);
-            uint256     hashSkein = GridcoinMultipleAlgoHash(sScryptHash);
-            hashSkein = hashSkein + chk;
-            std::string sSkeinAES512 = hashSkein.GetHex();
-            return sSkeinAES512;
-}
-
 
 double LederstrumpfMagnitude2(double Magnitude, int64_t locktime)
 {
