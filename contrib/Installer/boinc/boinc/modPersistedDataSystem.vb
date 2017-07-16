@@ -1011,6 +1011,13 @@ Module modPersistedDataSystem
         Dim oLock As New Object
 
         Dim sNNFolder As String = GetGridFolder() + "NeuralNetwork\" + DataRow.Table + "\"
+        If Not System.IO.Directory.Exists(sNNFolder) Then
+            Try
+                MkDir(sNNFolder)
+            Catch ex As Exception
+                Log("Unable to create Neural Network Subfolder : " + sNNFolder)
+            End Try
+        End If
         Dim bBlacklist As Boolean
 
         SyncLock oLock
