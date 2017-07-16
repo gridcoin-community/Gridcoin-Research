@@ -166,7 +166,6 @@ MiningCPID DeserializeBoincBlock(std::string block);
 extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
 std::string GetHttpPage(std::string cpid, bool usedns, bool clearcache);
-uint256 GridcoinMultipleAlgoHash(std::string t1);
 void ExecuteCode();
 static BlockFinder RPCBlockFinder;
 
@@ -767,15 +766,6 @@ std::string RestoreGridcoinBackupWallet()
     return errors;
 
 }
-
-
-uint256 Skein(std::string sInput)
-{
-    uint256 uiSkein = 0;
-    uiSkein = GridcoinMultipleAlgoHash(sInput);
-    return uiSkein;
-}   
-
 
 void WriteCPIDToRPC(std::string email, std::string bpk, uint256 block, Array &results)
 {
@@ -3193,13 +3183,6 @@ Value execute(const Array& params, bool fHelp)
     {
         bExecuteCode = true;
         printf("Executing volatile code \r\n");
-    }
-    else if (sItem == "testhash")
-    {
-            uint256 testhash = 0;
-            testhash = Skein("test1234");
-            entry.push_back(Pair("GMAH",testhash.GetHex()));
-            results.push_back(entry);
     }
     else if (sItem == "getnextproject")
     {
