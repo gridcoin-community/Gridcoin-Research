@@ -40,6 +40,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Fixed
  - Fix neural network inability to stake superblocks.
 
+## [3.5.9.4] - 2017-07-16
+### Changed
+ - Fix neural network missing folder error
+ - Fix speech bug
+ - Added checkpoint (block 950000)
+ 
 ## [3.5.9.3] - 2017-07-15
 ### Changed
  - Require superblocks to be populated with more than half of the
