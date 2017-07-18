@@ -223,6 +223,7 @@ extern std::string    msLastPaymentTime;
 
 struct globalStatusType
 {
+    CCriticalSection lock;
     std::string blocks;
     std::string difficulty;
     std::string netWeight;

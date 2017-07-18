@@ -391,8 +391,8 @@ int nNewIndex2 = 364500;
 int64_t nGenesisSupply = 340569880;
 
 // Stats for Main Screen:
-std::string    msLastPaymentTime = "";
-globalStatusType GlobalStatusStruct = {"","","","","","","","","","",""};
+std::string msLastPaymentTime;
+globalStatusType GlobalStatusStruct;
 
 bool fColdBoot = true;
 bool fEnforceCanonical = true;
@@ -593,6 +593,7 @@ void GetGlobalStatus()
             sWeight = sWeight.substr(0,13) + "E" + RoundToString((double)sWeight.length()-13,0);
         }
 
+        LOCK(GlobalStatusStruct.lock);
         GlobalStatusStruct.blocks = RoundToString((double)nBestHeight,0);
         GlobalStatusStruct.difficulty = RoundToString(PORDiff,3);
         GlobalStatusStruct.netWeight = RoundToString(GetPoSKernelPS2(),2);
