@@ -10,7 +10,6 @@
 
 bool IsCPIDValidv2(MiningCPID& mc,int height);
 using namespace std;
-MiningCPID DeserializeBoincBlock(std::string block);
 StructCPID GetStructCPID();
 extern int64_t GetRSAWeightByCPID(std::string cpid);
 extern int DetermineCPIDType(std::string cpid);
@@ -297,7 +296,8 @@ double GetMagnitudeByHashBoinc(std::string hashBoinc, int height)
 {
     if (hashBoinc.length() > 1)
         {
-            MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
+            // block version not needed for now for mag
+            MiningCPID boincblock = DeserializeBoincBlock(hashBoinc,7);
             if (boincblock.cpid == "" || boincblock.cpid.length() < 6) return 0;  //Block has no CPID
             if (boincblock.cpid == "INVESTOR")  return 0;
             if (boincblock.projectname == "")   return 0;
@@ -483,7 +483,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
     bnTargetPerCoinDay.SetCompact(nBits);
     int64_t nValueIn = txPrev.vout[prevout.n].nValue;
     uint256 hashBlockFrom = blockFrom.GetHash();
-    MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
+    MiningCPID boincblock = DeserializeBoincBlock(hashBoinc,5);
     std::string cpid = boincblock.cpid;
     int64_t RSA_WEIGHT = 0;
     int oNC = 0;
@@ -634,7 +634,7 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits,
 {
 
     double PORDiff = GetBlockDifficulty(nBits);
-    MiningCPID boincblock = DeserializeBoincBlock(hashBoinc);
+    MiningCPID boincblock = DeserializeBoincBlock(hashBoinc,7);
     double payment_age = std::abs((double)nTimeTx-(double)boincblock.LastPaymentTime);
     int64_t RSA_WEIGHT = GetRSAWeightByBlock(boincblock);
     double coin_age = std::abs((double)nTimeTx-(double)txPrev.nTime);
@@ -798,3 +798,157 @@ bool CheckStakeModifierCheckpoints(int nHeight, unsigned int nStakeModifierCheck
     return true;
 }
 
+
+
+// V8 Kernel Protocol
+// Tomas Brod 05.06.2017 (dd.mm.yyy)
+// Plug proof-of-work exploit.
+// TODO: Stake modifier is included without much understanding.
+// Without the modifier, attacker can create transactions which output will
+// stake at desired time. In other words attacker can check wheter transaction
+// output will stake in the future and create transactions accordingly.
+// Thus including modifier, even not completly researched, increases security.
+// Note: Rsa or Magnitude weight not included due to multiplication issue.
+// Note: Payment age and magnitude restrictions not included as they are not
+// important in my view and are too restrictive for honest users.
+// TODO: flags?
+// Note: Transaction hash is used here even thou ppcoin devs advised against it,
+// Gridcoin already used txhash in previous kernel, trying to brute-force
+// good tx hash is not possible as it is not known what stake modifier will be
+// after the coins mature!
+
+CBigNum CalculateStakeHashV8(
+    const CBlock &CoinBlock, const CTransaction &CoinTx,
+    unsigned CoinTxN, unsigned nTimeTx,
+    uint64_t StakeModifier,
+    const MiningCPID &BoincData)
+{
+    CDataStream ss(SER_GETHASH, 0);
+    ss << StakeModifier;
+    ss << (CoinBlock.nTime & ~STAKE_TIMESTAMP_MASK);
+    ss << CoinTx.GetHash();
+    ss << CoinTxN;
+    ss << (nTimeTx & ~STAKE_TIMESTAMP_MASK);
+    CBigNum hashProofOfStake( Hash(ss.begin(), ss.end()) );
+    return hashProofOfStake;
+}
+
+int64_t CalculateStakeWeightV8(
+    const CTransaction &CoinTx, unsigned CoinTxN,
+    const MiningCPID &BoincData)
+{
+    int64_t nValueIn = CoinTx.vout[CoinTxN].nValue;
+    nValueIn /= 1250000;
+    return nValueIn;
+}
+
+// Another version of GetKernelStakeModifier (TomasBrod)
+// Todo: security considerations
+bool FindStakeModifierRev(uint64_t& nStakeModifier,CBlockIndex* pindexPrev)
+{
+    nStakeModifier = 0;
+    const CBlockIndex* pindex = pindexPrev;
+
+    while (1)
+    {
+        if(!pindex)
+            return error("FindStakeModifierRev: no previous block from %d",pindexPrev->nHeight);
+
+        if (pindex->GeneratedStakeModifier())
+        {
+            nStakeModifier = pindex->nStakeModifier;
+            return true;
+        }
+        pindex = pindex->pprev;
+    }
+}
+
+// Block Version 8+ check procedure
+
+bool CheckProofOfStakeV8(
+    CBlockIndex* pindexPrev, //previous block in chain index
+    CBlock &Block, //block to check
+    bool generated_by_me,
+    uint256& hashProofOfStake) //proof hash out-parameter
+{
+    //Block Transaction 0 is coin:base
+    //Block Transaction 1 is coin:stake
+    //First input of coinstake is the kernel
+
+    CTransaction *p_coinstake;
+
+    if(Block.nVersion==8) {
+        if (!Block.IsProofOfStake())
+            return error("CheckProofOfStakeV8() : called on non-coinstake block %s", Block.GetHash().ToString().c_str());
+        p_coinstake = &Block.vtx[1];
+    }
+    //for future coin:stake:base merging into one tx
+    else return false;
+
+    if (!p_coinstake->IsCoinStake())
+        return error("CheckProofOfStakeV8() : called on non-coinstake tx %s", Block.vtx[1].GetHash().ToString().c_str());
+
+    // Kernel (input 0) must match the stake hash target per coin age (nBits)
+    const CTransaction& tx = (*p_coinstake);
+    const CTxIn& txin = (*p_coinstake).vin[0];
+
+    // First try finding the previous transaction in database
+    CTxDB txdb("r");
+    CTransaction txPrev;
+    CTxIndex txindex;
+    if (!txPrev.ReadFromDisk(txdb, txin.prevout, txindex))
+        return tx.DoS(1, error("CheckProofOfStake() : INFO: read txPrev failed"));  // previous transaction not in main chain, may occur during initial download
+
+    // Verify signature
+    if (!VerifySignature(txPrev, tx, 0, 0))
+        return tx.DoS(100, error("CheckProofOfStake() : VerifySignature failed on coinstake %s", tx.GetHash().ToString().c_str()));
+
+    // Read block header
+    CBlock blockPrev;
+    if (!blockPrev.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
+        return fDebug? error("CheckProofOfStake() : read block failed") : false; // unable to read block of previous transaction
+
+    // Check times (todo: add some more, like mask check)
+    if (tx.nTime < txPrev.nTime)  // Transaction timestamp violation
+        return error("CheckProofOfStakeV8: nTime violation");
+
+    if (blockPrev.nTime + nStakeMinAge > tx.nTime) // Min age requirement
+        return error("CheckProofOfStakeV8: min age violation");
+
+    MiningCPID boincblock = DeserializeBoincBlock(Block.vtx[0].hashBoinc,Block.nVersion);
+
+    //
+    uint64_t StakeModifier = 0;
+    if(!FindStakeModifierRev(StakeModifier,pindexPrev))
+        return error("CheckProofOfStakeV8: unable to find stake modifier");
+
+    //Stake refactoring TomasBrod
+    int64_t Weight= CalculateStakeWeightV8(txPrev,txin.prevout.n,boincblock);
+    CBigNum bnHashProof= CalculateStakeHashV8(blockPrev,txPrev,txin.prevout.n,tx.nTime,StakeModifier,boincblock);
+
+    // Base target
+    CBigNum bnTarget;
+    bnTarget.SetCompact(Block.nBits);
+    // Weighted target
+    bnTarget *= Weight;
+
+    hashProofOfStake=bnHashProof.getuint256();
+    //targetProofOfStake=bnTarget.getuint256();
+
+    if(fDebug) printf(
+"CheckProofOfStakeV8:%s Time1 %.f, Time2 %.f, Time3 %.f, Bits %u, Weight %.f\n"
+" Stk %72s\n"
+" Trg %72s\n", generated_by_me?" Local,":"",
+        (double)blockPrev.nTime, (double)txPrev.nTime, (double)tx.nTime,
+        Block.nBits, (double)Weight,
+        CBigNum(hashProofOfStake).GetHex().c_str(), bnTarget.GetHex().c_str()
+    );
+
+    // Now check if proof-of-stake hash meets target protocol
+
+    if (bnHashProof > bnTarget)
+    {
+        return false;
+    }
+    return true;
+}

@@ -478,7 +478,7 @@ CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake, int64_t* pFees)
         miningcpid.enccpid = ""; //CPID V1 Boinc RunTime enc key
         miningcpid.encboincpublickey = "";
         miningcpid.encaes = "";
-        std::string hashBoinc = SerializeBoincBlock(miningcpid);
+        std::string hashBoinc = SerializeBoincBlock(miningcpid,pblock->nVersion);
         if (fDebug10 && LessVerbose(10))  printf("Current hashboinc: %s\r\n",hashBoinc.c_str());
         pblock->vtx[0].hashBoinc = hashBoinc;
 
@@ -691,9 +691,6 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
 {
 
     int nHeight = pindexPrev->nHeight + 1;
-
-    if (!IsProtocolV2(nHeight))
-        block.nVersion = 6;
 
     // Create coinbase tx
     CTransaction &CoinBase= block.vtx[0];
@@ -983,8 +980,11 @@ int64_t GetRSAWeightByBlock(MiningCPID boincblock);
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 
 bool CreateCoinStake( CBlock &blocknew, CKey &key,
-    vector<const CWalletTx*> &StakeInputs, uint64_t &CoinAge, CWallet &wallet )
+    vector<const CWalletTx*> &StakeInputs, uint64_t &CoinAge,
+    CWallet &wallet, CBlockIndex* pindexPrev )
 {
+    int64_t CoinWeight;
+    CBigNum StakeKernelHash;
     CTxDB txdb("r");
     double StakeWeightSum = 0;
     CTransaction &txnew = blocknew.vtx[1]; // second tx is coinstake
@@ -1010,7 +1010,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     }
     BalanceToStake -= nReserveBalance;
 
-    if(fDebug) printf("\nCreateCoinStake: Staking nTime/16= %d Bits= %u\n",
+    if(fDebug2) printf("\nCreateCoinStake: Staking nTime/16= %d Bits= %u\n",
     txnew.nTime/16,blocknew.nBits);
 
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, CoinsToStake)
@@ -1039,22 +1039,37 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         if (CoinTx.vout[CoinTxN].nValue > BalanceToStake)
             continue;
 
-        NetworkTimer();
-        int64_t CoinWeight = CalculateStakeWeightV3(CoinTx,CoinTxN,GlobalCPUMiningCPID);
+        if(blocknew.nVersion==7)
+        {
+            NetworkTimer();
+            CoinWeight = CalculateStakeWeightV3(CoinTx,CoinTxN,GlobalCPUMiningCPID);
+            StakeKernelHash= CalculateStakeHashV3(CoinBlock,CoinTx,CoinTxN,txnew.nTime,GlobalCPUMiningCPID,mdPORNonce);
+        }
+        else if(blocknew.nVersion==8)
+        {
+            uint64_t StakeModifier = 0;
+            if(!FindStakeModifierRev(StakeModifier,pindexPrev))
+                continue;
+            CoinWeight = CalculateStakeWeightV8(CoinTx,CoinTxN,GlobalCPUMiningCPID);
+            StakeKernelHash= CalculateStakeHashV8(CoinBlock,CoinTx,CoinTxN,txnew.nTime,StakeModifier,GlobalCPUMiningCPID);
+        }
+        else return false;
+
         CBigNum StakeTarget;
         StakeTarget.SetCompact(blocknew.nBits);
         StakeTarget*=CoinWeight;
         StakeWeightSum += CoinWeight;
-        CBigNum StakeKernelHash= CalculateStakeHashV3(CoinBlock,CoinTx,CoinTxN,txnew.nTime,GlobalCPUMiningCPID,mdPORNonce);
 
-        if (fDebug) {
+        if (fDebug2) {
             int64_t RSA_WEIGHT = GetRSAWeightByBlock(GlobalCPUMiningCPID);
             printf(
-"CreateCoinStake: Time %.f, Por_Nonce %.f, Bits %jd, Weight %jd\n"
+"CreateCoinStake: V%d Time %.f, Por_Nonce %.f, Bits %jd, Weight %jd\n"
 " RSA_WEIGHT %.f\n"
 " Stk %72s\n"
 " Trg %72s\n",
-            (double)txnew.nTime, mdPORNonce,(intmax_t)blocknew.nBits,(intmax_t)CoinWeight,
+            blocknew.nVersion,
+            (double)txnew.nTime, mdPORNonce,
+            (intmax_t)blocknew.nBits,(intmax_t)CoinWeight,
             (double)RSA_WEIGHT,
             StakeKernelHash.GetHex().c_str(), StakeTarget.GetHex().c_str()
         );
@@ -1185,6 +1200,7 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
     uint256 pbh = 0;
     pbh=pindexPrev->GetBlockHash();
 
+    /*
     miningcpid.cpidv2 = ComputeCPIDv2(
         GlobalCPUMiningCPID.email,
         GlobalCPUMiningCPID.boincruntimepublickey,
@@ -1195,10 +1211,10 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
         GlobalCPUMiningCPID.cpid, blocknew.nTime,
         false );
 
-    //miningcpid.Magnitude=30000;
+    miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
+    */
 
     miningcpid.lastblockhash = pbh.GetHex();
-    miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
     miningcpid.ResearchSubsidy = OUT_POR;
     miningcpid.ResearchSubsidy2 = OUT_POR;
     miningcpid.ResearchAge = dAccrualAge;
@@ -1212,7 +1228,7 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
     miningcpid.BoincSignature = "";
 
     int64_t RSA_WEIGHT = GetRSAWeightByBlock(miningcpid);
-    std::string SerializedBoincData = SerializeBoincBlock(miningcpid);
+    std::string SerializedBoincData = SerializeBoincBlock(miningcpid,blocknew.nVersion);
     GlobalCPUMiningCPID.lastblockhash = miningcpid.lastblockhash;
 
     if (fDebug)  printf("CreateGridcoinReward: %s\r\n",SerializedBoincData.c_str());
@@ -1257,16 +1273,18 @@ bool IsMiningAllowed(CWallet *pwallet)
         return false;
     }
 
-    if (vNodes.empty() || IsInitialBlockDownload()
-        || vNodes.size() < 3 || nBestHeight < GetNumBlocksOfPeers())
+    if (vNodes.empty() || (!fTestNet&& IsInitialBlockDownload()) ||
+        (!fTestNet&& (vNodes.size() < 3 || nBestHeight < GetNumBlocksOfPeers()))
+        )
     {
         msMiningErrors5+="Offline; ";
         nLastCoinStakeSearchInterval = 0;
         return false;
     }
-    
+
+    /*
     //Verify we are still on the main chain
-    if (IsLockTimeWithinMinutes(nLastBlockSolved,5))
+    if (IsLockTimeWithinMinutes(nLastBlockSolved,3))
     {
         if (fDebug10) printf("=");
         msMiningErrors5+="We are not on the main chain; ";
@@ -1279,6 +1297,7 @@ bool IsMiningAllowed(CWallet *pwallet)
         if(fDebug) printf("Wallet out of sync - unable to stake.\n");
         return false;
     }
+    */
 
 
     return true;
@@ -1304,12 +1323,13 @@ void StakeMiner(CWallet *pwallet)
     if(!IsMiningAllowed(pwallet))
         continue;
 
-    GetNextProject(false);
+    GetNextProject(true);
     //GlobalCPUMiningCPID.Magnitude=30000;
 
     // * Create a bare block
     CBlockIndex* pindexPrev = pindexBest;
     CBlock StakeBlock;
+    StakeBlock.nVersion = 7;
     StakeBlock.nTime= GetAdjustedTime();
     StakeBlock.nNonce= 0;
     StakeBlock.nBits = GetNextTargetRequired(pindexPrev, true);
@@ -1317,11 +1337,15 @@ void StakeMiner(CWallet *pwallet)
     //tx 0 is coin_base
     CTransaction &StakeTX= StakeBlock.vtx[1]; //tx 1 is coin_stake
 
+    //New version
+    if(fTestNet && pindexPrev->nHeight > 288158)
+        StakeBlock.nVersion = 8;
+
     // * Try to create a CoinStake transaction
     CKey BlockKey;
     vector<const CWalletTx*> StakeInputs;
     uint64_t StakeCoinAge;
-    if( !CreateCoinStake( StakeBlock, BlockKey, StakeInputs, StakeCoinAge, *pwallet ) )
+    if( !CreateCoinStake( StakeBlock, BlockKey, StakeInputs, StakeCoinAge, *pwallet, pindexPrev ) )
         continue;
     StakeBlock.nTime= StakeTX.nTime;
     printf("StakeMiner: created coin stake\n");
@@ -1350,6 +1374,7 @@ void StakeMiner(CWallet *pwallet)
         continue;
     }
     printf("StakeMiner: block processed\n");
+    nLastBlockSolved = GetAdjustedTime();
 
   } //end while(!fShutdown)
 }

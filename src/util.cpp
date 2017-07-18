@@ -231,7 +231,8 @@ inline int OutputDebugStringF(const char* pszFormat, ...)
         fflush(stdout);
         va_end(arg_ptr);
     }
-    else if (!fPrintToDebugger)
+    //else
+    if (!fPrintToDebugger)
     {
         // print to debug.log
         static FILE* fileout = NULL;

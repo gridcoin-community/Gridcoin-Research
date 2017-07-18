@@ -611,7 +611,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
             bool r = blk.ReadFromDisk(pBlk);
             if (r) 
             {
-                MiningCPID bb = DeserializeBoincBlock(blk.vtx[0].hashBoinc);
+                MiningCPID bb = DeserializeBoincBlock(blk.vtx[0].hashBoinc,blk.nVersion);
                 double dResearch = bb.ResearchSubsidy + bb.InterestSubsidy;
                 double dRewardShare = dResearch*.10;
                 // Only send Reward if > .10 GRC

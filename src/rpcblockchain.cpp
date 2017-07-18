@@ -33,7 +33,8 @@ extern double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSe
 extern double ReturnVerifiedVotingMagnitude(std::string sXML, bool bCreatedAfterSecurityUpgrade);
 extern void GetBeaconElements(std::string sBeacon,std::string& out_cpid, std::string& out_address, std::string& out_publickey);
 bool AskForOutstandingBlocks(uint256 hashStart);
-bool CleanChain();
+bool WriteKey(std::string sKey, std::string sValue);
+bool ForceReorganizeToHash(uint256 NewHash);
 extern std::string SendReward(std::string sAddress, int64_t nAmount);
 extern double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID);
 std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertising);
@@ -161,7 +162,6 @@ bool IsCPIDValidv2(MiningCPID& mc, int height);
 std::string RetrieveMd5(std::string s1);
 
 std::string getfilecontents(std::string filename);
-MiningCPID DeserializeBoincBlock(std::string block);
 
 extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
@@ -333,7 +333,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
         result.push_back(Pair("previousblockhash", blockindex->pprev->GetBlockHash().GetHex()));
     if (blockindex->pnext)
         result.push_back(Pair("nextblockhash", blockindex->pnext->GetBlockHash().GetHex()));
-    MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
+    MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc,block.nVersion);
     uint256 blockhash = block.GetPoWHash();
     std::string sblockhash = blockhash.GetHex();
     bool IsPoR = false;
@@ -1246,7 +1246,7 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
             }
 
             GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
-            std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID);
+            std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID,pindexBest->nVersion);
             std::string GRCAddress = DefaultWalletAddress();
             // Public Signing Key is stored in Beacon
             std::string contract = GlobalCPUMiningCPID.cpidv2 + ";" + hashRand.GetHex() + ";" + GRCAddress + ";" + sOutPubKey;
@@ -1643,12 +1643,6 @@ Value execute(const Array& params, bool fHelp)
             #endif
             entry.push_back(Pair("Restarting",(double)iResult));
             results.push_back(entry);
-    }
-    else if (sItem == "cleanchain")
-    {
-        bool fResult = CleanChain();
-        entry.push_back(Pair("CleanChain",fResult));
-        results.push_back(entry);
     }
     else if (sItem == "sendblock")
     {
@@ -2451,7 +2445,7 @@ Value execute(const Array& params, bool fHelp)
                             }
                             else
                             {
-                                std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID);
+                                std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID,pindexBest->nVersion);
                                 std::string GRCAddress = DefaultWalletAddress();
                                 StructCPID structMag = GetInitializedStructCPID2(GlobalCPUMiningCPID.cpid,mvMagnitudes);
                                 double dmag = structMag.Magnitude;
@@ -2817,7 +2811,8 @@ Value execute(const Array& params, bool fHelp)
         GlobalCPUMiningCPID.aesskein = email; //Good
         GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
 
-        std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID);
+        //block version not needed for keys for now
+        std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID,7);
         if (fDebug3) printf("GenBoincKey: Utilizing email %s with %s for  %s \r\n",GlobalCPUMiningCPID.email.c_str(),GlobalCPUMiningCPID.boincruntimepublickey.c_str(),sParam.c_str());
         std::string sBase = EncodeBase64(sParam);
         entry.push_back(Pair("[Specify in config file without quotes] boinckey=",sBase));
@@ -5283,11 +5278,30 @@ Value getcheckpoint(const Array& params, bool fHelp)
     return result;
 }
 
+//Brod
+Value rpc_reorganize(const Array& params, bool fHelp)
+{
+    Object results;
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "rollback <hash>\n"
+            "Roll back the block chain to specified block hash.\n"
+            "The block hash must already be present in block index");
+
+    uint256 NewHash;
+    NewHash.SetHex(params[0].get_str());
+
+    bool fResult = ForceReorganizeToHash(NewHash);
+    results.push_back(Pair("RollbackChain",fResult));
+    return results;
+}
+
 // Brod
 static bool compare_second(const pair<std::string, long>  &p1, const pair<std::string, long> &p2)
 {
     return p1.second > p2.second;
 }
+
 json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHelp)
 {
     if(fHelp || params.size() < 1 || params.size() > 3 )

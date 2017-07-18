@@ -23,7 +23,7 @@ if [ -e "$(which git)" ]; then
 fi
 
 if [ -n "$DESC" ]; then
-    NEWINFO="#define BUILD_DESC \"$DESC\""
+    NEWINFO="#define BUILD_DESC \"v$DESC\""
 else
     NEWINFO="// No build information available"
 fi
