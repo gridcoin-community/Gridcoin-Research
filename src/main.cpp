@@ -3235,8 +3235,25 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                             (double)OUT_INTEREST,(double)OUT_POR,CoinToDouble(nFees),(double)DPOR_Paid,bb.cpid.c_str());
 
                 }
+
+				if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
+				{
+							std::string sNarr = "ConnectBlock[ResearchAge] : Historical DPOR Replay attack : lastblockhash != actual last block hash.";
+							printf("\r\n\r\n ******  %s ***** \r\n",sNarr.c_str());
+				}
+				
+
                 if (IsResearchAgeEnabled(pindex->nHeight) && BlockNeedsChecked(nTime))
                 {
+						// Mitigate DPOR Relay attack 
+						// bb.LastBlockhash should be equal to previous index lastblockhash, in order to check block signature correctly and prevent re-use of lastblockhash
+						if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
+						{
+							std::string sNarr = "ConnectBlock[ResearchAge] : DPOR Replay attack : lastblockhash != actual last block hash.";
+							printf("\r\n\r\n ******  %s ***** \r\n",sNarr.c_str());
+							if (fTestNet || (pindex->nHeight > 975000)) return error(" %s ",sNarr.c_str());
+                        }
+				
                         if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
                         {
                             StructCPID st1 = GetLifetimeCPID(pindex->GetCPID(),"ConnectBlock()");
@@ -3982,13 +3999,15 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
     {
 		    // 6-4-2017 - Verify researchers stored block magnitude
 		    double dNeuralNetworkMagnitude = CalculatedMagnitude2(bb.cpid, nTime, false);
-			if (bb.Magnitude > 0 && bb.Magnitude > (dNeuralNetworkMagnitude*1.25) && (fTestNet || height1 > 947000))
+			if (bb.Magnitude > 0 && bb.Magnitude > (dNeuralNetworkMagnitude*1.25) && (fTestNet || (!fTestNet && height1 > 947000)))
 			{
 				return error("CheckBlock[ResearchAge] : Researchers block magnitude > neural network magnitude: Block Magnitude %f, Neural Network Magnitude %f, CPID %s ",
 					(double)bb.Magnitude,(double)dNeuralNetworkMagnitude,bb.cpid.c_str());
 			}
 		    int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 1, nTime,
                 pindexBest, sCaller + "_checkblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+
+			
             if (bb.ResearchSubsidy > ((OUT_POR*1.25)+1))
             {
                 BusyWaitForTally();
@@ -4035,7 +4054,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
                         LoadAdminMessages(false,sOut2);
                         if (!fLoadingIndex && !IsCPIDValidv2(bb,height1))
                         {
-                            return error("Bad CPID : height %f, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc %s",(double)height1,
+                            return error("Bad CPID or Block Signature : height %f, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc %s",(double)height1,
                                 bb.cpid.c_str(), bb.cpidv2.c_str(),
                                 bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str());
                         }
