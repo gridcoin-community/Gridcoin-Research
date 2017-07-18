@@ -37,14 +37,22 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Removed newbie boost, #332
  - Removed obsolete functionality.
 
+## [3.5.9.4] - 2017-07-16
+### Changed
+ - Added checkpoint (block 950000).
+
 ### Fixed
- - Fix neural network inability to stake superblocks.
+ - Fix neural network missing folder error.
+ - Fix speech bug.
 
 ## [3.5.9.3] - 2017-07-15
 ### Changed
  - Require superblocks to be populated with more than half of the
    whitelisted projects.
  - Add subfolders to Neural Network
+
+### Fixed
+ - Fix neural network inability to stake superblocks.
 
 ## [3.5.9.2] - 2017-07-04
 ### Fixed
