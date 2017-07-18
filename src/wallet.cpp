@@ -605,7 +605,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
        
         if (wtxIn.IsCoinBase() || wtxIn.IsCoinStake())
         {
-            printf("\r\nCoinBase:CoinStake\r\n");
+            if (fDebug10) printf("\r\nCoinBase:CoinStake\r\n");
             CBlockIndex* pBlk = mapBlockIndex[wtxIn.hashBlock];
             CBlock blk;
             bool r = blk.ReadFromDisk(pBlk);

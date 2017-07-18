@@ -1075,6 +1075,8 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         );
         }
 
+        nLastCoinStakeSearchInterval= txnew.nTime;
+
         if( StakeKernelHash <= StakeTarget )
         {
             // Found a kernel
@@ -1316,6 +1318,7 @@ void StakeMiner(CWallet *pwallet)
     MilliSleep(nMinerSleep);
     //clear miner messages
     msMiningErrors5="";
+    nLastCoinStakeSearchInterval = 0;
 
     if(!IsMiningAllowed(pwallet))
         continue;

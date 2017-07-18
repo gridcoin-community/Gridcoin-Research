@@ -668,7 +668,7 @@ Dieses Produkt enthält Software, die vom OpenSSL-Projekt zur Verwendung im Open
     <message>
         <location line="+1"/>
         <source>Lock wallet</source>
-        <translation>Verchliesse Wallet</translation>
+        <translation>Verschliesse Wallet</translation>
     </message>
     <message>
         <location line="+4"/>

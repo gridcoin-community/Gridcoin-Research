@@ -84,7 +84,7 @@ extern bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::st
 double Round(double d, int place);
 bool UnusualActivityReport();
 double GetCountOf(std::string datatype);
-extern double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons);
+extern double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons,int nHeight);
 extern bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
 
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
@@ -126,6 +126,8 @@ extern Array GetJSONBeaconReport();
 
 void GatherNeuralHashes();
 extern std::string GetListOf(std::string datatype);
+extern std::string GetListOfWithConsensus(std::string datatype);
+
 void qtSyncWithDPORNodes(std::string data);
 std::string qtGetNeuralHash(std::string data);
 std::string qtGetNeuralContract(std::string data);
@@ -164,7 +166,6 @@ std::string getfilecontents(std::string filename);
 extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
 std::string GetHttpPage(std::string cpid, bool usedns, bool clearcache);
-uint256 GridcoinMultipleAlgoHash(std::string t1);
 void ExecuteCode();
 static BlockFinder RPCBlockFinder;
 
@@ -766,15 +767,6 @@ std::string RestoreGridcoinBackupWallet()
 
 }
 
-
-uint256 Skein(std::string sInput)
-{
-    uint256 uiSkein = 0;
-    uiSkein = GridcoinMultipleAlgoHash(sInput);
-    return uiSkein;
-}   
-
-
 void WriteCPIDToRPC(std::string email, std::string bpk, uint256 block, Array &results)
 {
     std::string output = "";
@@ -831,6 +823,8 @@ bool CheckMessageSignature(std::string sAction,std::string messagetype, std::str
 
      if (!strMessagePublicKey.empty()) strMasterPubKey = strMessagePublicKey;
      if (sAction=="D" && messagetype=="beacon") strMasterPubKey = msMasterProjectPublicKey;
+	 if (sAction=="D" && messagetype=="poll")   strMasterPubKey = msMasterProjectPublicKey;
+	 if (sAction=="D" && messagetype=="vote")   strMasterPubKey = msMasterProjectPublicKey;
 
      std::string db64 = DecodeBase64(sSig);
      CKey key;
@@ -930,7 +924,18 @@ double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid)
         return -1;
 }
 
-double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons)
+
+void GetSuperblockProjectCount(std::string data, double& out_project_count, double& out_whitelist_count)
+{
+	   // This is reserved in case we ever want to resync prematurely when the last superblock contains < .75% of whitelisted projects (remember we allow superblocks with up to .50% of the whitelisted projects, in case some project sites are being ddossed)
+       std::string avgs = ExtractXML(data,"<AVERAGES>","</AVERAGES>");
+       double avg_of_projects = GetAverageInList(avgs, out_project_count);
+       out_whitelist_count = GetCountOf("project");
+	   if (fDebug10) printf(" GSPC:CountOfProjInBlock %f vs WhitelistedCount %f  \r\n",(double)out_project_count,(double)out_whitelist_count);
+}
+
+
+double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons,int nHeight)
 {
     try
     {
@@ -942,12 +947,16 @@ double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out
         double avg_of_magnitudes = GetAverageInList(mags,mag_count);
         double avg_of_projects   = GetAverageInList(avgs,avg_count);
         if (!bIgnoreBeacons) out_beacon_count = GetCountOf("beacon");
+		double out_project_count = GetCountOf("project");
         out_participant_count = mag_count;
         out_average = avg_of_magnitudes;
         if (avg_of_magnitudes < 000010)  return -1;
         if (avg_of_magnitudes > 170000)  return -2;
         if (avg_of_projects   < 050000)  return -3;
+		// Note bIgnoreBeacons is passed in when the chain is syncing from 0 (this is because the lists of beacons and projects are not full at that point)
         if (!fTestNet && !bIgnoreBeacons && (mag_count < out_beacon_count*.90 || mag_count > out_beacon_count*1.10)) return -4;
+		if (fDebug10) printf(" CountOfProjInBlock %f vs WhitelistedCount %f Height %f \r\n",(double)avg_count,(double)out_project_count,(double)nHeight);
+		if (!fTestNet && !bIgnoreBeacons && nHeight > 972000 && (avg_count < out_project_count*.50)) return -5;
         return avg_of_magnitudes + avg_of_projects;
     }
     catch (std::exception &e) 
@@ -1125,6 +1134,41 @@ std::string GetListOf(std::string datatype)
                 }
            }
            return rows;
+}
+
+
+
+std::string GetListOfWithConsensus(std::string datatype)
+{
+       std::string rows = "";
+       std::string row = "";
+	   int64_t iEndTime= (GetAdjustedTime()-CONSENSUS_LOOKBACK) - ( (GetAdjustedTime()-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
+       int64_t nLookback = 30 * 6 * 86400; 
+       int64_t iStartTime = (iEndTime - nLookback) - ( (iEndTime - nLookback) % BLOCK_GRANULARITY);
+       printf(" getlistofwithconsensus startime %f , endtime %f, lookback %f \r\n ",(double)iStartTime,(double)iEndTime, (double)nLookback);
+	   for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+       {
+             std::string key_name  = (*ii).first;
+             if (key_name.length() > datatype.length())
+             {
+                 if (key_name.substr(0,datatype.length())==datatype)
+                 {
+ 			           int64_t iBeaconTimestamp = mvApplicationCacheTimestamp[(*ii).first];
+				       if (iBeaconTimestamp > iStartTime && iBeaconTimestamp < iEndTime)
+					   {		
+							std::string key_value = mvApplicationCache[(*ii).first];
+							std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
+							row = subkey + "<COL>" + key_value;
+							if (Contains(row,"INVESTOR") && datatype=="beacon") row = "";
+							if (row != "")
+							{
+								rows += row + "<ROW>";
+							}
+						}
+                  }
+             }
+       }
+       return rows;
 }
 
 int64_t BeaconTimeStamp(std::string cpid, bool bZeroOutAfterPOR)
@@ -2879,7 +2923,7 @@ Value execute(const Array& params, bool fHelp)
         double out_beacon_count = 0;
         double out_participant_count = 0;
         double out_avg = 0;
-        double avg = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,false);
+        double avg = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,false,nBestHeight);
         entry.push_back(Pair("avg",avg));
         entry.push_back(Pair("beacon_count",out_beacon_count));
         entry.push_back(Pair("beacon_participant_count",out_participant_count));
@@ -2901,7 +2945,7 @@ Value execute(const Array& params, bool fHelp)
         double out_beacon_count = 0;
         double out_participant_count = 0;
         double out_avg = 0;
-        double avg = GetSuperblockAvgMag(contract,out_beacon_count,out_participant_count,out_avg,false);
+        double avg = GetSuperblockAvgMag(contract,out_beacon_count,out_participant_count,out_avg,false,nBestHeight);
         bool bValid = VerifySuperblock(contract,pindexBest->nHeight);
         entry.push_back(Pair("avg",avg));
         entry.push_back(Pair("beacon_count",out_beacon_count));
@@ -3135,13 +3179,6 @@ Value execute(const Array& params, bool fHelp)
         bExecuteCode = true;
         printf("Executing volatile code \r\n");
     }
-    else if (sItem == "testhash")
-    {
-            uint256 testhash = 0;
-            testhash = Skein("test1234");
-            entry.push_back(Pair("GMAH",testhash.GetHex()));
-            results.push_back(entry);
-    }
     else if (sItem == "getnextproject")
     {
             GetNextProject(true);
@@ -3341,7 +3378,7 @@ Array SuperblockReport(std::string cpid)
                                         double out_avg = 0;
                                         // Binary Support 12-20-2015
                                         std::string superblock = UnpackBinarySuperblock(bb.superblock);
-                                        double avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,true);
+                                        double avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,true,pblockindex->nHeight);
                                         if (avg_mag > 10)
                                         {
                                                 Object c;
@@ -5257,4 +5294,171 @@ Value rpc_reorganize(const Array& params, bool fHelp)
     bool fResult = ForceReorganizeToHash(NewHash);
     results.push_back(Pair("RollbackChain",fResult));
     return results;
+}
+
+// Brod
+static bool compare_second(const pair<std::string, long>  &p1, const pair<std::string, long> &p2)
+{
+    return p1.second > p2.second;
+}
+
+json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHelp)
+{
+    if(fHelp || params.size() < 1 || params.size() > 3 )
+        throw runtime_error(
+            "getblockstats mode [startheight [endheight]]\n"
+            "Show stats on what wallets and cpids staked recent blocks.\n");
+    long mode= std::stol(params[0].get_str());
+    (void)mode; //TODO
+    long lowheight= 0;
+    long highheight= INT_MAX;
+    if(params.size()>=2)
+        lowheight= std::stol(params[1].get_str());
+    if(params.size()>=3)
+        highheight= std::stol(params[2].get_str());
+    CBlockIndex* cur;
+    Object result1;
+    {
+        LOCK(cs_main);
+        cur= pindexBest;
+    }
+    int64_t blockcount = 0;
+    int64_t transactioncount = 0;
+    std::map<int,long> c_blockversion;
+    std::map<std::string,long> c_version;
+    std::map<std::string,long> c_cpid;
+    std::map<std::string,long> c_org;
+    int64_t researchcount = 0;
+    double researchtotal = 0;
+    double interesttotal = 0;
+    int64_t minttotal = 0;
+    int64_t stakeinputtotal = 0;
+    int64_t poscount = 0;
+    int64_t emptyblockscount = 0;
+    int64_t l_first = INT_MAX;
+    int64_t l_last = 0;
+    unsigned int l_first_time = 0;
+    unsigned int l_last_time = 0;
+    for( ; (cur
+            &&( cur->nHeight>=lowheight )
+            &&( lowheight>0 || blockcount<=14000 )
+        );
+        cur= cur->pprev
+        )
+    {
+        if(cur->nHeight>highheight)
+            continue;
+        if(l_first>cur->nHeight)
+        {
+            l_first=cur->nHeight;
+            l_first_time=cur->nTime;
+        }
+        if(l_last<cur->nHeight)
+        {
+            l_last=cur->nHeight;
+            l_last_time=cur->nTime;
+        }
+        blockcount++;
+        CBlock block;
+        if(!block.ReadFromDisk(cur->nFile,cur->nBlockPos,true))
+            throw runtime_error("failed to read block");
+        assert(block.vtx.size() > 0);
+        unsigned txcountinblock = 0;
+        if(block.vtx.size()>=2)
+        {
+            txcountinblock+=block.vtx.size()-2;
+            if(block.vtx[1].IsCoinStake())
+            {
+                poscount++;
+                //stakeinputtotal+=block.vtx[1].vin[0].nValue;
+            }
+            else
+                txcountinblock+=1;
+        }
+        transactioncount+=txcountinblock;
+        emptyblockscount+=(txcountinblock==0);
+        c_blockversion[block.nVersion]++;
+        MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
+        c_cpid[bb.cpid]++;
+        c_org[bb.Organization]++;
+        c_version[bb.clientversion]++;
+        researchtotal+=bb.ResearchSubsidy;
+        interesttotal+=bb.InterestSubsidy;
+        researchcount+=(bb.ResearchSubsidy>0.001);
+        minttotal+=cur->nMint;
+    }
+
+    {
+        Object result;
+        result.push_back(Pair("blocks", blockcount));
+        result.push_back(Pair("first_height", l_first));
+        result.push_back(Pair("last_height", l_last));
+        result.push_back(Pair("first_time", TimestampToHRDate(l_first_time)));
+        result.push_back(Pair("last_time", TimestampToHRDate(l_last_time)));
+        result.push_back(Pair("time_span_hour", ((double)l_last_time-(double)l_first_time)/(double)3600));
+        result1.push_back(Pair("general", result));
+    }
+    {
+        Object result;
+        result.push_back(Pair("block", blockcount));
+        result.push_back(Pair("empty_block", emptyblockscount));
+        result.push_back(Pair("transaction", transactioncount));
+        result.push_back(Pair("proof_of_stake", poscount));
+        result.push_back(Pair("boincreward", researchcount));
+        result1.push_back(Pair("counts", result));
+    }
+    {
+        Object result;
+        result.push_back(Pair("block", blockcount));
+        result.push_back(Pair("research", researchtotal));
+        result.push_back(Pair("interest", interesttotal));
+        result.push_back(Pair("mint", minttotal/(double)COIN));
+        result.push_back(Pair("stake_input", stakeinputtotal/(double)COIN));
+        result1.push_back(Pair("totals", result));
+    }
+    {
+        Object result;
+        result.push_back(Pair("research", researchtotal/(double)researchcount));
+        result.push_back(Pair("interest", interesttotal/(double)blockcount));
+        result.push_back(Pair("mint", (minttotal/(double)blockcount)/(double)COIN));
+        result.push_back(Pair("stake_input", (stakeinputtotal/(double)poscount)/(double)COIN));
+        result.push_back(Pair("spacing_sec", ((double)l_last_time-(double)l_first_time)/(double)blockcount));
+        result.push_back(Pair("block_per_day", ((double)blockcount*86400.0)/((double)l_last_time-(double)l_first_time)));
+        result.push_back(Pair("transaction", transactioncount/(double)(blockcount-emptyblockscount)));
+        result1.push_back(Pair("averages", result));
+    }
+    {
+        Object result;
+        std::vector<PAIRTYPE(std::string, long)> list;
+        std::copy(c_version.begin(), c_version.end(), back_inserter(list));
+        std::sort(list.begin(),list.end(),compare_second);
+        BOOST_FOREACH(const PAIRTYPE(std::string, long)& item, list)
+        {
+            result.push_back(Pair(item.first, item.second/(double)blockcount));
+        }
+        result1.push_back(Pair("versions", result));
+    }
+    {
+        Object result;
+        std::vector<PAIRTYPE(std::string, long)> list;
+        std::copy(c_cpid.begin(), c_cpid.end(), back_inserter(list));
+        std::sort(list.begin(),list.end(),compare_second);
+        BOOST_FOREACH(const PAIRTYPE(std::string, long)& item, list)
+        {
+            result.push_back(Pair(item.first, item.second/(double)blockcount));
+        }
+        result1.push_back(Pair("cpids", result));
+    }
+    {
+        Object result;
+        std::vector<PAIRTYPE(std::string, long)> list;
+        std::copy(c_org.begin(), c_org.end(), back_inserter(list));
+        std::sort(list.begin(),list.end(),compare_second);
+        BOOST_FOREACH(const PAIRTYPE(std::string, long)& item, list)
+        {
+            result.push_back(Pair(item.first, item.second/(double)blockcount));
+        }
+        result1.push_back(Pair("orgs", result));
+    }
+    return result1;
 }

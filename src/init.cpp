@@ -53,7 +53,6 @@ extern unsigned int nMinerSleep;
 extern bool fUseFastIndex;
 extern enum Checkpoints::CPMode CheckpointsMode;
 void InitializeBoincProjects();
-void LoadCPIDsInBackground();
 
 
 //////////////////////////////////////////////////////////////////////////////

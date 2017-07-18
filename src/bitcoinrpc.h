@@ -240,5 +240,7 @@ extern json_spirit::Value rpc_reorganize(const json_spirit::Array& params, bool 
  extern json_spirit::Value downloadcancel(const json_spirit::Array& params, bool fHelp);
  extern json_spirit::Value restart(const json_spirit::Array& params, bool fHelp);
 
+// Brod
+extern json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHelp);
 
 #endif
