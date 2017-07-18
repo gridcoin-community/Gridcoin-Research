@@ -229,6 +229,8 @@ struct globalStatusType
     std::string dporWeight;
     std::string magnitude;
     std::string project;
+    std::string dporSubsidy;
+    std::string dporMagUnit;
     std::string cpid;
     std::string status;
     std::string poll;

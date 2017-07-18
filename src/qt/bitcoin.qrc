@@ -50,6 +50,7 @@
         <file alias="boinc">res/icons/boinc.png</file>
         <file alias="gold_cpumined">res/icons/gold_cpumined.png</file>
         <file alias="chat">res/icons/chat.png</file>
+        <file alias="statistics">res/icons/statistics.png</file>
     </qresource>
     <qresource prefix="/images">
         <file alias="about">res/images/about.png</file>
@@ -131,4 +132,5 @@
         <file alias="light">res/stylesheets/light_stylesheet.qss</file>
         <file alias="native">res/stylesheets/native_stylesheet.qss</file>
     </qresource>
+    <qresource prefix="/"/>
 </RCC>

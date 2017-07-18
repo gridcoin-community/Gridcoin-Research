@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>948</width>
-    <height>520</height>
+    <height>568</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -294,6 +294,13 @@
            </layout>
           </item>
           <item>
+           <widget class="Line" name="line_2">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+           </widget>
+          </item>
+          <item>
            <spacer name="verticalSpacer">
             <property name="orientation">
              <enum>Qt::Vertical</enum>
@@ -304,17 +311,10 @@
             <property name="sizeHint" stdset="0">
              <size>
               <width>20</width>
-              <height>20</height>
+              <height>40</height>
              </size>
             </property>
            </spacer>
-          </item>
-          <item>
-           <widget class="Line" name="line_2">
-            <property name="orientation">
-             <enum>Qt::Horizontal</enum>
-            </property>
-           </widget>
           </item>
           <item>
            <layout class="QFormLayout" name="formLayout">
@@ -345,30 +345,13 @@
              </widget>
             </item>
             <item row="1" column="0">
-             <widget class="QLabel" name="label_8">
-              <property name="text">
-               <string>Difficulty:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="1">
-             <widget class="QLabel" name="labelDifficulty">
-              <property name="text">
-               <string notr="true"/>
-              </property>
-              <property name="textInteractionFlags">
-               <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
-              </property>
-             </widget>
-            </item>
-            <item row="2" column="0">
              <widget class="QLabel" name="label_11">
               <property name="text">
                <string>Net Weight:</string>
               </property>
              </widget>
             </item>
-            <item row="2" column="1">
+            <item row="1" column="1">
              <widget class="QLabel" name="labelNetWeight">
               <property name="text">
                <string notr="true"/>
@@ -378,72 +361,28 @@
               </property>
              </widget>
             </item>
-            <item row="3" column="0">
-             <widget class="QLabel" name="label_7">
-              <property name="text">
-               <string>DPOR Weight:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="4" column="0">
+            <item row="2" column="0">
              <widget class="QLabel" name="label_13">
               <property name="text">
                <string>Magnitude:</string>
               </property>
              </widget>
             </item>
-            <item row="5" column="0">
-             <widget class="QLabel" name="label_14">
+            <item row="2" column="1">
+             <widget class="QLabel" name="labelMagnitude">
               <property name="text">
-               <string>Project:</string>
+               <string notr="true"/>
               </property>
              </widget>
             </item>
-            <item row="6" column="0">
+            <item row="3" column="0">
              <widget class="QLabel" name="label_15">
               <property name="text">
                <string>CPID:</string>
               </property>
              </widget>
             </item>
-            <item row="7" column="0">
-             <widget class="QLabel" name="label_16">
-              <property name="text">
-               <string>Status:</string>
-              </property>
-             </widget>
-            </item>
             <item row="3" column="1">
-             <widget class="QLabel" name="labelDporWeight">
-              <property name="text">
-               <string notr="true"/>
-              </property>
-              <property name="textInteractionFlags">
-               <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
-              </property>
-             </widget>
-            </item>
-            <item row="4" column="1">
-             <widget class="QLabel" name="labelMagnitude">
-              <property name="text">
-               <string notr="true"/>
-              </property>
-              <property name="textInteractionFlags">
-               <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
-              </property>
-             </widget>
-            </item>
-            <item row="5" column="1">
-             <widget class="QLabel" name="labelProject">
-              <property name="text">
-               <string notr="true"/>
-              </property>
-              <property name="textInteractionFlags">
-               <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
-              </property>
-             </widget>
-            </item>
-            <item row="6" column="1">
              <widget class="QLabel" name="labelCpid">
               <property name="text">
                <string notr="true"/>
@@ -453,7 +392,17 @@
               </property>
              </widget>
             </item>
-            <item row="7" column="1">
+            <item row="4" column="0">
+             <widget class="QLabel" name="label_16">
+              <property name="text">
+               <string>Status:</string>
+              </property>
+              <property name="textInteractionFlags">
+               <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="1">
              <widget class="QLabel" name="labelStatus">
               <property name="text">
                <string notr="true"/>
