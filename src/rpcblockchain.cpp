@@ -5378,7 +5378,7 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         transactioncount+=txcountinblock;
         emptyblockscount+=(txcountinblock==0);
         c_blockversion[block.nVersion]++;
-        MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
+        MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc, block.nVersion);
         c_cpid[bb.cpid]++;
         c_org[bb.Organization]++;
         c_version[bb.clientversion]++;
