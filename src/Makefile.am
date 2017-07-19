@@ -76,96 +76,59 @@ endif
 .PHONY: FORCE check-symbols check-security
 # bitcoin core #
 BITCOIN_CORE_H = \
-  addrdb.h \
   addrman.h \
+  alert.h \
+  allocators.h \
   base58.h \
-  bloom.h \
-  blockencodings.h \
-  chain.h \
-  chainparams.h \
-  chainparamsbase.h \
-  chainparamsseeds.h \
+  beacon.h \
+  bignum.h \
+  bitcoinrpc.h \
+  block.h \
+  boinc.h \
   checkpoints.h \
-  checkqueue.h \
   clientversion.h \
-  coins.h \
+  coincontrol.h \
   compat.h \
-  compat/byteswap.h \
-  compat/endian.h \
-  compat/sanity.h \
-  compressor.h \
-  consensus/consensus.h \
-  consensus/tx_verify.h \
-  core_io.h \
-  core_memusage.h \
-  cuckoocache.h \
-  fs.h \
-  httprpc.h \
-  httpserver.h \
-  indirectmap.h \
+  cpid.h \
+  crypter.h \
+  curlbuild.h \
+  curl.h \
+  curlrules.h \
+  curlver.h \
+  db.h \
+  easy.h \
+  fwd.h \
+  gridcoin.h \
   init.h \
+  irc.h \
+  kernel.h \
   key.h \
   keystore.h \
-  dbwrapper.h \
-  limitedmap.h \
-  memusage.h \
-  merkleblock.h \
+  main.h \
   miner.h \
-  net.h \
-  net_processing.h \
-  netaddress.h \
+  mprintf.h \
+  mruset.h \
+  multi.h \
   netbase.h \
-  netmessagemaker.h \
-  noui.h \
-  policy/feerate.h \
-  policy/fees.h \
-  policy/policy.h \
-  policy/rbf.h \
-  pow.h \
+  net.h \
+  pbkdf2.h \
   protocol.h \
-  random.h \
-  reverse_iterator.h \
-  reverselock.h \
-  rpc/blockchain.h \
-  rpc/client.h \
-  rpc/mining.h \
-  rpc/protocol.h \
-  rpc/server.h \
-  rpc/register.h \
-  scheduler.h \
-  script/sigcache.h \
-  script/sign.h \
-  script/standard.h \
-  script/ismine.h \
-  streams.h \
-  support/allocators/secure.h \
-  support/allocators/zeroafterfree.h \
-  support/cleanse.h \
-  support/events.h \
-  support/lockedpool.h \
+  script.h \
+  scrypt.h \
+  serialize.h \
+  stdcheaders.h \
+  strlcpy.h \
   sync.h \
   threadsafety.h \
-  threadinterrupt.h \
-  timedata.h \
-  torcontrol.h \
   txdb.h \
-  txmempool.h \
+  txdb-leveldb.h \
   ui_interface.h \
-  undo.h \
+  uint256.h \
+  upgrader.h \
   util.h \
-  utilmoneystr.h \
-  utiltime.h \
-  validation.h \
-  validationinterface.h \
-  versionbits.h \
-  wallet/coincontrol.h \
-  wallet/crypter.h \
-  wallet/db.h \
-  wallet/feebumper.h \
-  wallet/rpcwallet.h \
-  wallet/wallet.h \
-  wallet/walletdb.h \
-  warnings.h
+  version.h \
+  walletdb.h \
+  wallet.h
 #  zmq/zmqabstractnotifier.h \
 #  zmq/zmqconfig.h\
 #  zmq/zmqnotificationinterface.h \
