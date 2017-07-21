@@ -2,7 +2,7 @@
 #include <stdio.h>      // for input output to terminal
 #include <signal.h>
 #include "upgrader.h"
-#include <zip.h>
+/* #include <zip.h> */
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <sstream>
 #ifdef WIN32
@@ -333,64 +333,64 @@ int Upgrader::getFilePerc(long int sz)
     return (filesize > 0)? (sz*100/(filesize)) : 0;
 }
 
-bool Upgrader::unzipper(int targetfile)
-{
-    bfs::path target = path(DATA) / "upgrade";
-    if (!verifyPath(target.c_str(), true)) {return false;}
+bool Upgrader::unzipper(int targetfile) {return false;}
+/* { */
+/*     bfs::path target = path(DATA) / "upgrade"; */
+/*     if (!verifyPath(target.c_str(), true)) {return false;} */
 
-    const char *targetzip = (target / targetswitch(targetfile)).string().c_str();
+/*     const char *targetzip = (target / targetswitch(targetfile)).string().c_str(); */
 
-    struct zip *archive;
-    struct zip_file *zipfile;
-    struct zip_stat filestat;
-    char buffer[1024*1024];
-    FILE *file;
-    int bufferlength, err;
-    unsigned long long sum;
+/*     struct zip *archive; */
+/*     struct zip_file *zipfile; */
+/*     struct zip_stat filestat; */
+/*     char buffer[1024*1024]; */
+/*     FILE *file; */
+/*     int bufferlength, err; */
+/*     unsigned long long sum; */
 
-    printf("Extracting %s\n", targetzip);
+/*     printf("Extracting %s\n", targetzip); */
 
-    if ((archive = zip_open(targetzip, 0, &err)) == NULL) {
-        printf("Failed to open archive %s\n", targetzip);
-        return false;
-    }
+/*     if ((archive = zip_open(targetzip, 0, &err)) == NULL) { */
+/*         printf("Failed to open archive %s\n", targetzip); */
+/*         return false; */
+/*     } */
  
-    for (unsigned int i = 0; i < zip_get_num_entries(archive, 0); i++) 
-    {
-        if (zip_stat_index(archive, i, 0, &filestat) == 0)
-        {
-            verifyPath((target / filestat.name).parent_path(), true);
-            if (!is_directory(target / filestat.name))
-            {
-                zipfile = zip_fopen_index(archive, i, 0);
-                if (!zipfile) {
-                    printf("Could not open %s in archive\n", filestat.name);
-                    continue;
-                }
+/*     for (unsigned int i = 0; i < zip_get_num_entries(archive, 0); i++) */ 
+/*     { */
+/*         if (zip_stat_index(archive, i, 0, &filestat) == 0) */
+/*         { */
+/*             verifyPath((target / filestat.name).parent_path(), true); */
+/*             if (!is_directory(target / filestat.name)) */
+/*             { */
+/*                 zipfile = zip_fopen_index(archive, i, 0); */
+/*                 if (!zipfile) { */
+/*                     printf("Could not open %s in archive\n", filestat.name); */
+/*                     continue; */
+/*                 } */
 
-                file = fopen((target / filestat.name).string().c_str(), "w");
+/*                 file = fopen((target / filestat.name).string().c_str(), "w"); */
  
-                sum = 0;
-                while (sum != filestat.size) {
-                    bufferlength = zip_fread(zipfile, buffer, 1024*1024);
-                    fwrite(buffer, sizeof(char), bufferlength, file);
-                    sum += bufferlength;
-                }
-                printf("Finished extracting %s\n", filestat.name);
-                fclose(file);
-                zip_fclose(zipfile);
-            }
-        }
-    }
-    if (zip_close(archive) == -1) 
-    {
-        printf("Can't close zip archive %s\n", targetzip);
-        return false;
-    }
+/*                 sum = 0; */
+/*                 while (sum != filestat.size) { */
+/*                     bufferlength = zip_fread(zipfile, buffer, 1024*1024); */
+/*                     fwrite(buffer, sizeof(char), bufferlength, file); */
+/*                     sum += bufferlength; */
+/*                 } */
+/*                 printf("Finished extracting %s\n", filestat.name); */
+/*                 fclose(file); */
+/*                 zip_fclose(zipfile); */
+/*             } */
+/*         } */
+/*     } */
+/*     if (zip_close(archive) == -1) */ 
+/*     { */
+/*         printf("Can't close zip archive %s\n", targetzip); */
+/*         return false; */
+/*     } */
 
-    bfs::remove(target / targetswitch(targetfile));
-    return true;
-}
+/*     bfs::remove(target / targetswitch(targetfile)); */
+/*     return true; */
+/* } */
 
 bool Upgrader::juggler(int pf, bool recovery)           // for upgrade, backs up target and copies over upgraded file
 {                                                       // for recovery, copies over backup

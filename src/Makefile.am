@@ -362,8 +362,8 @@ bitcoind_SOURCES = addrman.cpp \
   util.cpp \
   version.cpp \
   wallet.cpp \
-  walletdb.cpp
-
+  walletdb.cpp \
+  $(BITCOIN_CORE_H)
 
 bitcoind_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 bitcoind_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
@@ -373,7 +373,10 @@ if TARGET_WINDOWS
 bitcoind_SOURCES += bitcoind-res.rc
 endif
 
-#bitcoind_LDADD = \
+bitcoind_LDADD = \
+ $(LIBLEVELDB) \
+ $(LIBLEVELDB_SSE42) \
+ $(LIBMEMENV)
 #  $(LIBBITCOIN_SERVER) \
 #  $(LIBBITCOIN_COMMON) \
 #  $(LIBUNIVALUE) \
@@ -381,13 +384,10 @@ endif
 #  $(LIBBITCOIN_WALLET) \
 #  $(LIBBITCOIN_CONSENSUS) \
 #  $(LIBBITCOIN_CRYPTO) \
-#  $(LIBLEVELDB) \
-#  $(LIBLEVELDB_SSE42) \
-#  $(LIBMEMENV) \
 #  $(LIBSECP256K1)
 #  $(LIBBITCOIN_ZMQ) 
 
-bitcoind_LDADD = $(BOOST_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS)
+bitcoind_LDADD += $(BOOST_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(CURL_LIBS)
 #bitcoind_LDADD += $(ZMQ_IBS)
 
 # bitcoin-cli binary #

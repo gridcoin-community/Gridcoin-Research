@@ -696,6 +696,17 @@ if test x$use_upnp != xno; then
   )
 fi
 
+if test x$use_upnp != xno; then
+  AC_CHECK_HEADERS(
+    [miniupnpc/miniwget.h miniupnpc/miniupnpc.h miniupnpc/upnpcommands.h miniupnpc/upnperrors.h],
+    [AC_CHECK_LIB([miniupnpc], [main],[MINIUPNPC_LIBS=-lcurl], [have_miniupnpc=no])],
+    [have_miniupnpc=no]
+  )
+fi
+
+# AC_CHECK_LIB([curl], [main], [CURL_LIBS=-lcurl], AC_MSG_ERROR(libcrypto missing))
+AC_SEARCH_LIBS([curl])
+
 BITCOIN_QT_INIT
 
 dnl sets $bitcoin_enable_qt, $bitcoin_enable_qt_test, $bitcoin_enable_qt_dbus
