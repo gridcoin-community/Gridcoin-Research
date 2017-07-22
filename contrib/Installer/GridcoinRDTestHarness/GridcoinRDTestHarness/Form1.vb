@@ -125,18 +125,13 @@ Public Class Form1
 
 
         Dim sNet As String = "TESTNET"
-        sNet = "PROD"
+        sNet = "TESTNET"
         mU.SetTestNetFlag(sNet)
-        'mU.ShowVotingConsole()
-       'mU.ExportToCSVFile()
         Dim sURL As String = "http://csgrid.org/csg/stats/" 'Try it with Citizen Science Group; 
-
-        '  Dim sHash As String = mU.clsGetBoincProjectHash(sURL)
-        '        MsgBox(sHash)
         Dim sContract As String = mU.GetNeuralContract()
 
         Dim sTest As String = sURL + ":1"
-        '   mU.TestGZIPBoincDownload()
+        mU.TestGZIPBoincDownload()
 
 
         Exit Sub

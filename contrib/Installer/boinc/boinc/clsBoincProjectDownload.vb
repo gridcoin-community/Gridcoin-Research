@@ -79,6 +79,7 @@ Public Class clsBoincProjectDownload
             Dim sCacheFileName As String = RetrieveCacheProjectFilename(sGzipURL)
             Dim bStatus As Boolean = ResilientDownload(sGridcoinBaseUrl + sCacheFileName, sEtagFilePath, sGridcoinBaseUrl + sCacheFileName)
             If Not bStatus Then
+                'This is the step where we download from the boinc project server if the cache either returns 404 or the bytes dont match the etag or filesize:
                 Dim sSourceURL As String = IIf(bCacheSiteHasSameFile, sGridcoinURL, sGzipURL)
                 bStatus = ResilientDownload(sSourceURL, sEtagFilePath, sGzipURL)
             End If
@@ -95,24 +96,31 @@ Public Class clsBoincProjectDownload
             End If
         End If
     End Function
+    Public Function DownloadFile(iAttemptNo As Integer, sSourceURL As String, sOutputPath As String) As Boolean
+        Try
+            Dim w As New MyWebClient2
+            Log(" Downloading Attempt #" + Trim(iAttemptNo) + " for URL " + sSourceURL)
+            w.DownloadFile(sSourceURL, sOutputPath)
+            Return True
+        Catch ex As Exception
+            Return False
+        End Try
+
+    End Function
     Public Function ResilientDownload(sSourceUrl As String, sEtagFilePath As String, sBackupURL As String) As Boolean
         'Doing this just in case we ddos our own website and keep receiving 404 or 500 errors:
         For x As Integer = 1 To 5
             Dim dictHeads As Dictionary(Of String, String) = GetHttpResponseHeaders(sSourceUrl)
             Dim dLength1 As Double = dictHeads("Content-Length")
-            Dim w As New MyWebClient2
-            Log(" Downloading Attempt # " + Trim(x) + sSourceUrl)
-            w.DownloadFile(sSourceUrl, sEtagFilePath)
-            If GetFileSize(sEtagFilePath) = dLength1 And dLength1 > 0 Then Return True
+            Dim bDownloadStatus As Boolean = DownloadFile(x, sSourceUrl, sEtagFilePath)
+            If bDownloadStatus And GetFileSize(sEtagFilePath) = dLength1 And dLength1 > 0 Then Return True
         Next
         'As a last resort, pull from the Project Site
         Dim dictHeads2 As Dictionary(Of String, String) = GetHttpResponseHeaders(sBackupURL)
         Dim dLength2 As Double = dictHeads2("Content-Length")
-        Dim w2 As New MyWebClient2
         Log(" Downloading BackupURL Attempt # " + Trim(1) + sBackupURL)
-        w2.DownloadFile(sBackupURL, sEtagFilePath)
+        DownloadFile(1, sBackupURL, sEtagFilePath)
         If GetFileSize(sEtagFilePath) = dLength2 And dLength2 > 0 Then Return True Else Return False
-
     End Function
     Public Function DownloadGZipFiles() As Boolean
         'Perform Housecleaning

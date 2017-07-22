@@ -250,8 +250,8 @@ Module modPersistedDataSystem
 
             Next
             Log("Contracts in Project : " + Trim(lProjectsInContract) + ", Whitelisted Count: " + lstP.Count.ToString())
-
-            If (lProjectsInContract < lstP.Count * 0.5) Then
+            'If less than 80% of the projects exist in the superblock, don't emit the contract
+            If (lProjectsInContract < lstP.Count * 0.8) Then
                 Log("Not enough projects in contract.")
                 Return ""
             End If
@@ -622,7 +622,7 @@ Module modPersistedDataSystem
             EraseNeuralNetwork("projects")
             surrogateRow1.Database = "Whitelist"
             surrogateRow1.Table = "Whitelist"
-            EraseNeuralNetwork("whitelist")
+            EraseNeuralNetwork("Whitelist")
             Dim sWhitelist As String
             sWhitelist = ExtractXML(msSyncData, "<WHITELIST>")
             Dim sCPIDData As String = ExtractXML(msSyncData, "<CPIDDATA>")

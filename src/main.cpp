@@ -7211,8 +7211,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
     else if (strCommand == "ping")
     {
-
-
         std::string acid = "";
         if (pfrom->nVersion > BIP0031_VERSION)
         {
