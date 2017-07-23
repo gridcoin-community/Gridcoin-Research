@@ -96,6 +96,7 @@ leveldb_libleveldb_a_SOURCES += leveldb/db/db_impl.cc
 leveldb_libleveldb_a_SOURCES += leveldb/db/db_iter.cc
 # leveldb_libleveldb_a_SOURCES += leveldb/db/dumpfile.cc
 leveldb_libleveldb_a_SOURCES += leveldb/db/filename.cc
+leveldb_libleveldb_a_SOURCES += leveldb/db/leveldb_main.cc
 leveldb_libleveldb_a_SOURCES += leveldb/db/log_reader.cc
 leveldb_libleveldb_a_SOURCES += leveldb/db/log_writer.cc
 leveldb_libleveldb_a_SOURCES += leveldb/db/memtable.cc
@@ -128,12 +129,12 @@ leveldb_libleveldb_a_SOURCES += leveldb/util/logging.cc
 leveldb_libleveldb_a_SOURCES += leveldb/util/options.cc
 leveldb_libleveldb_a_SOURCES += leveldb/util/status.cc
 
-# if TARGET_WINDOWS
-# leveldb_libleveldb_a_SOURCES += leveldb/util/env_win.cc
-# leveldb_libleveldb_a_SOURCES += leveldb/port/port_win.cc
-# else
-# leveldb_libleveldb_a_SOURCES += leveldb/port/port_posix.cc
-# endif
+if TARGET_WINDOWS
+leveldb_libleveldb_a_SOURCES += leveldb/util/env_win.cc
+leveldb_libleveldb_a_SOURCES += leveldb/port/port_win.cc
+else
+leveldb_libleveldb_a_SOURCES += leveldb/port/port_posix.cc
+endif
 
 leveldb_libmemenv_a_CPPFLAGS = $(leveldb_libleveldb_a_CPPFLAGS)
 leveldb_libmemenv_a_CXXFLAGS = $(leveldb_libleveldb_a_CXXFLAGS)
