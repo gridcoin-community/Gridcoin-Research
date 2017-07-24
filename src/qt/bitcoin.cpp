@@ -139,7 +139,7 @@ void timerfire()
  */
 static void handleRunawayException(std::exception *e)
 {
-    PrintExceptionContinue(e, "Runaway exception");
+    /* PrintExceptionContinue(e, "Runaway exception"); */
     QMessageBox::critical(0, "Runaway exception", BitcoinGUI::tr("A fatal error occurred. Gridcoin can no longer continue safely and will quit.") + QString("\n\n") + QString::fromStdString(strMiscWarning));
     exit(1);
 }
@@ -327,11 +327,11 @@ int main(int argc, char *argv[])
     }
 	catch (std::exception& e)
 	{
-        handleRunawayException(&e);
+        /* handleRunawayException(&e); */
     }
 	catch (...)
 	{
-        handleRunawayException(NULL);
+        /* handleRunawayException(NULL); */
     }
 
     // delete thread handler
