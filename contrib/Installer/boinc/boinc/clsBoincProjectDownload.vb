@@ -48,7 +48,27 @@ Public Class clsBoincProjectDownload
         Return iMins
     End Function
 
-    Private Function AnalyzeProjectHeader(ByVal sGzipURL As String, ByRef sEtag As String, ByRef sEtagFilePath As String, ByVal sProjectName As String) As Integer
+    Private Function AnalyzeProjectHeader2(ByVal sGzipURL As String, ByRef sEtag As String, ByRef sEtagFilePath As String, ByVal sProjectName As String) As Integer
+        Dim dStatus As Double = 0
+        sEtag = GetMd5String2(sGzipURL)
+        sEtagFilePath = ConstructTargetFileName(sEtag)
+
+        Dim sGridcoinBaseUrl As String = "https://download.gridcoin.us/download/harvest/"
+        Dim lAgeInMins As Long = GetFileAge(sEtagFilePath)
+        If lAgeInMins < SYNC_THRESHOLD Then
+            Return 1
+        Else
+            Dim sCacheFileName As String = RetrieveCacheProjectFilename(sGzipURL)
+            Dim bStatus As Boolean = ResilientDownload(sGridcoinBaseUrl + sCacheFileName, sEtagFilePath, sGridcoinBaseUrl + sCacheFileName)
+            If bStatus Then
+                Return 2
+            Else
+                Return 3
+            End If
+        End If
+    End Function
+
+    Private Function AnalyzeProjectHeaderRetired(ByVal sGzipURL As String, ByRef sEtag As String, ByRef sEtagFilePath As String, ByVal sProjectName As String) As Integer
         'Output
         '1 = We already have the official etag version downloaded
         '2 = We downloaded a new version
@@ -86,10 +106,6 @@ Public Class clsBoincProjectDownload
             'If all bytes downloaded then store the etag in the local table
             'Only update Stored Value after we retrieve the file
             If bStatus Then
-                StoreValue("etag", "tbetags", sGzipURL, sEtag)
-                StoreValue("etag", "timestamps", sProjectName, sTimestamp)
-                StoreValue("etag", "tbetag2", sProjectName, sEtag)
-                'Save the Project Site GZ creation time
                 Return 2
             Else
                 Return 3
@@ -168,7 +184,7 @@ Public Class clsBoincProjectDownload
                     'If Etag has changed, download the file:
                     Dim sEtag As String = ""
                     Dim sTeamEtagFilePath As String = ""
-                    Dim iStatus As Integer = AnalyzeProjectHeader(sTeamGzipURL, sEtag, sTeamEtagFilePath, sProject)
+                    Dim iStatus As Integer = AnalyzeProjectHeader2(sTeamGzipURL, sEtag, sTeamEtagFilePath, sProject)
                     Dim sProjectMasterFileName As String = GetGridFolder() + "NeuralNetwork\" + sProject + ".master.dat"
                     'store etag by project also
 
@@ -188,7 +204,7 @@ Public Class clsBoincProjectDownload
 
                     'Sync the main RAC gz file            
                     Dim sRacEtagFilePath As String = ""
-                    iStatus = AnalyzeProjectHeader(sGzipURL, sEtag, sRacEtagFilePath, sProject)
+                    iStatus = AnalyzeProjectHeader2(sGzipURL, sEtag, sRacEtagFilePath, sProject)
                     If iStatus <> 1 Or Not File.Exists(sProjectMasterFileName) Then
                         Try
                             'Find out what our team ID is
@@ -238,7 +254,7 @@ Public Class clsBoincProjectDownload
             If fi.Name Like "*.master.dat*" Then
                 sProjectLocal = Replace(fi.Name, ".master.dat", "")
                 iTotalProjectsSynced += 1
-                Dim sTimestamp As String = GetDataValue("etag", "timestamps", sProjectLocal).DataColumn1
+                'Dim sTimestamp As String = GetDataValue("etag", "timestamps", sProjectLocal).DataColumn1
                 'Log the md5 of the master project file so we can determine regional differences
                 Dim iRows As Long = 0
                 Using oStream As New System.IO.FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
@@ -256,8 +272,7 @@ Public Class clsBoincProjectDownload
                     objReader.Close()
                 End Using
                 Dim sHash As String = GetMd5OfFile(fi.FullName)
-                Dim sEtagOnFile As String = GetDataValue("etag", "tbetag2", sProjectLocal).DataColumn1
-                Dim sOut As String = "***  COMBINING PROJECT FILE " + fi.Name + ", MD5 HASH: " + sHash + ", ROWS: " + Trim(iRows) + ", ETAG: " + sEtagOnFile + " ***"
+                Dim sOut As String = "***  COMBINING PROJECT FILE " + fi.Name + ", MD5 HASH: " + sHash + ", ROWS: " + Trim(iRows) + "**"
                 Log(sOut)
             End If
         Next fi

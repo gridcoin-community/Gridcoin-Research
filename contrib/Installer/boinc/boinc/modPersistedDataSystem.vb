@@ -172,7 +172,7 @@ Module modPersistedDataSystem
 
             Dim lAgeOfMaster As Long = GetWindowsFileAge(GetGridPath("NeuralNetwork") + "\db.dat")
             If lAgeOfMaster > PROJECT_SYNC_THRESHOLD Then Return ""
-
+            
             Dim surrogateRow As New Row
             surrogateRow.Database = "CPID"
             surrogateRow.Table = "CPIDS"
@@ -194,7 +194,7 @@ Module modPersistedDataSystem
                     End If
 
                     lTotal = lTotal + Val("0" + Trim(cpid.Magnitude))
-                    lRows = lRows + 1
+                   lRows = lRows + 1
                     sOut += sRow
                     dMagAge = 0
                  
@@ -222,7 +222,11 @@ Module modPersistedDataSystem
             sOut += "</QUOTES><AVERAGES>"
             Dim avg As Double
             avg = lTotal / (lRows + 0.01)
-            If avg < 25 Then Return ""
+
+
+            If avg < 10 Or avg > 170000 Then
+                Return "<ERROR>Superblock Average " + Trim(avg) + " out of bounds</ERROR>"
+            End If
             'APPEND the Averages:
 
             Dim lProjectsInContract As Long = 0
@@ -232,6 +236,7 @@ Module modPersistedDataSystem
             surrogateWhitelistRow.Table = "Whitelist"
             lstWhitelist = GetList(surrogateWhitelistRow, "*")
             Dim rRow As New Row
+            Dim lTotalProjRac As Double = 0
             rRow.Database = "Project"
             rRow.Table = "Projects"
             Dim lstP As List(Of Row) = GetList(rRow, "*")
@@ -244,14 +249,19 @@ Module modPersistedDataSystem
                                              + "," + Num(r.RAC) + ";"
                         lRows = lRows + 1
                         lProjectsInContract += 1
+                        lTotalProjRac += Val(Num(r.RAC))
                         sOut += sRow
                     End If
                 End If
 
             Next
+            Dim lAvgProjRac As Double = lTotalProjRac / (lProjectsInContract + 0.01)
+            If lAvgProjRac < 50000 Then
+                Return "<ERROR>Superblock Project Average of " + Trim(lAvgProjRac) + " out of bounds</ERROR>"
+            End If
             Log("Contracts in Project : " + Trim(lProjectsInContract) + ", Whitelisted Count: " + lstP.Count.ToString())
             'If less than 80% of the projects exist in the superblock, don't emit the contract
-            If (lProjectsInContract < lstP.Count * 0.8) Then
+            If (lProjectsInContract < lstP.Count * 0.7) Then
                 Log("Not enough projects in contract.")
                 Return ""
             End If

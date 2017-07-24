@@ -125,12 +125,16 @@ Public Class Form1
 
 
         Dim sNet As String = "TESTNET"
-        sNet = "TESTNET"
+        sNet = "PROD"
         mU.SetTestNetFlag(sNet)
-        Dim sURL As String = "http://csgrid.org/csg/stats/" 'Try it with Citizen Science Group; 
+
+        'mU.AddressUserThread()
+
+
+        'Dim sURL As String = "http://csgrid.org/csg/stats/" 'Try it with Citizen Science Group; 
         Dim sContract As String = mU.GetNeuralContract()
 
-        Dim sTest As String = sURL + ":1"
+        'Dim sTest As String = sURL + ":1"
         mU.TestGZIPBoincDownload()
 
 
