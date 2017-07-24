@@ -47,8 +47,7 @@ extern Array GetUpgradedBeaconReport();
 extern Array MagnitudeReport(std::string cpid);
 std::string ConvertBinToHex(std::string a);
 std::string ConvertHexToBin(std::string a);
-extern std::vector<uint8_t> readFileToVector(std::string filename);
-
+extern std::vector<unsigned char> readFileToVector(std::string filename);
 bool TallyResearchAverages(bool Forcefully);
 int RestartClient();
 extern std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
@@ -248,8 +247,7 @@ std::string FileManifest()
    return sMyManifest;
 }
 
-
-std::vector<uint8_t> readFileToVector(std::string filename)
+std::vector<unsigned char> readFileToVector(std::string filename)
 {
     std::ifstream file(filename.c_str(), std::ios::binary);
     file.unsetf(std::ios::skipws);
@@ -257,9 +255,9 @@ std::vector<uint8_t> readFileToVector(std::string filename)
     file.seekg(0, std::ios::end);
     fileSize = file.tellg();
     file.seekg(0, std::ios::beg);
-    std::vector<uint8_t> vec;
+    std::vector<unsigned char> vec;
     vec.reserve(fileSize);
-    vec.insert(vec.begin(), std::istream_iterator<uint8_t>(file), std::istream_iterator<uint8_t>());
+    vec.insert(vec.begin(), std::istream_iterator<unsigned char>(file), std::istream_iterator<unsigned char>());
     return vec;
 }
 
@@ -5217,7 +5215,7 @@ Value listitem(const Array& params, bool fHelp)
 	{
 		// This is a unit test to prove viability of transmitting a file from node to node
 		std::string sFile = "C:\\test.txt";
-		std::vector<uint8_t> v = readFileToVector(sFile);
+        std::vector<unsigned char> v = readFileToVector(sFile);
 		Object entry;
 	    entry.push_back(Pair("byte1",v[1]));
         entry.push_back(Pair("bytes",(double)v.size()));

@@ -34,7 +34,7 @@ Public Class clsBoincProjectDownload
     Public Function RetrieveCacheProjectFilename(sGzipUrl As String) As String
         Dim sOut As String = Replace(sGzipUrl, "/", "[fslash]")
         sOut = Replace(sOut, ":", "[colon]")
-        Dim sDayOfYear = Trim(Now.DayOfYear)
+        Dim sDayOfYear = Trim(DateTime.UtcNow.DayOfYear)
         sOut = Replace(sOut, ".gz", sDayOfYear + "[!]gz")
         sOut = Replace(sOut, ".", "[period]")
         sOut = Replace(sOut, "[!]", ".")
