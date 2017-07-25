@@ -194,7 +194,7 @@ Module modPersistedDataSystem
                     End If
 
                     lTotal = lTotal + Val("0" + Trim(cpid.Magnitude))
-                   lRows = lRows + 1
+                    lRows = lRows + 1
                     sOut += sRow
                     dMagAge = 0
                  
@@ -205,6 +205,7 @@ Module modPersistedDataSystem
                     sOut += sRow
                 End If
             Next
+            sOut += "00000000000,275000;" 'This is a placeholder to be removed in Neural Network 2.0
             sOut += "</MAGNITUDES><QUOTES>"
 
             surrogateRow.Database = "Prices"
@@ -415,10 +416,16 @@ Module modPersistedDataSystem
         Dim sQuorumData As String = ExtractXML(msSyncData, "<QUORUMDATA>")
         Dim dAge As Double = Val(ExtractXML(sQuorumData, "<AGE>"))
         Log("EnsureTeamIsSynchronized: " + Trim(dAge))
+
+        If KeyValue("NEURAL_07252017") = "" Then
+            UpdateKey("NEURAL_07252017", "CLEARING") 'Start Fresh on July 25 2017, then once every 6 hours we clear.  Take this out when we move to NN2.
+            ClearProjectData()
+        End If
+
         Dim dWindow As Double = 60 * 60 '1 hour before and 1 hour after superblock expires:
         If dAge > (86400 - dWindow) And dAge < (86400 + dWindow) Then
             Dim lAgeOfMaster = GetUnixFileAge(GetGridFolder() + "NeuralNetwork\db.dat")
-            If lAgeOfMaster > SYNC_THRESHOLD Then
+            If lAgeOfMaster > (SYNC_THRESHOLD / 4) Then
                 'Clear out this nodes project data, so the node can sync with the team at the same exact time:
                 Log("Clearing project data so we can synchronize as a team.")
                 ClearProjectData()
@@ -435,11 +442,12 @@ Module modPersistedDataSystem
     End Sub
     Private Sub ClearProjectData()
         Dim sPath As String = GetGridFolder() + "NeuralNetwork\"
-
         SoftKill(sPath + "db.dat")
         'Erase the projects
         SoftKill(sPath + "*master.dat")
-        SoftKill(sPath + "*team.xml")
+        SoftKill(sPath + "*.xml")
+        SoftKill(sPath + "*.gz")
+        SoftKill(sPath + "*.dat")
     End Sub
     Private Sub ClearWhitelistData()
         Dim sPath As String = GetGridFolder() + "NeuralNetwork\Whitelist\"
