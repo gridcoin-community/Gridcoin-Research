@@ -4391,7 +4391,7 @@ bool VerifySuperblock(std::string superblock, int nHeight)
         if (fDebug3 && !bPassed)
         {
             if (fDebug) printf(" Verification of Superblock Failed ");
-            //          printf("\r\n Verification of Superblock Failed outavg: %f, avg_mag %f, Height %f, Out_Beacon_count %f, Out_participant_count %f, block %s", (double)out_avg,(double)avg_mag,(double)nHeight,(double)out_beacon_count,(double)out_participant_count,superblock.c_str());
+            //if (fDebug3) printf("\r\n Verification of Superblock Failed outavg: %f, avg_mag %f, Height %f, Out_Beacon_count %f, Out_participant_count %f, block %s", (double)out_avg,(double)avg_mag,(double)nHeight,(double)out_beacon_count,(double)out_participant_count,superblock.c_str());
         }
         return bPassed;
 }

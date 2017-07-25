@@ -14,7 +14,7 @@ Public Class Utilization
     Private mlSpeakMagnitude As Double
     Public ReadOnly Property Version As Double
         Get
-            Return 419
+            Return 421
         End Get
     End Property
 
@@ -239,6 +239,9 @@ Public Class Utilization
         fmVoting.Show()
         Return 1
     End Function
+    Public Sub CS1()
+        CompleteSync()
+    End Sub
     Public Function ShowForm(sFormName As String) As String
         Try
             Dim vFormName() As String
