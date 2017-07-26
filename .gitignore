@@ -40,6 +40,7 @@ qrc_*.cpp
 #mac specific
 .DS_Store
 build
+doc/Doxyfile
 
 !src/leveldb/Makefile
 
