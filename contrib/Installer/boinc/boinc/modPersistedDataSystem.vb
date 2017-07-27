@@ -197,7 +197,7 @@ Module modPersistedDataSystem
                     lRows = lRows + 1
                     sOut += sRow
                     dMagAge = 0
-                 
+
                 Else
                     Dim sRow As String = cpid.PrimaryKey + ",00;"
                     lTotal = lTotal + 0
@@ -205,7 +205,13 @@ Module modPersistedDataSystem
                     sOut += sRow
                 End If
             Next
-            sOut += "00000000000,275000;" 'This is a placeholder to be removed in Neural Network 2.0
+
+            'This is a placeholder to be removed in Neural Network 2.0.
+            'It is needed to bump the average magnitude above 70 to avoid having the superblock rejected.
+            'The CPID cannot be all 0 since it will be filtered out and the hashes of the ASCII and the
+            'binary superblock will diff. When the 70 average mag requirement has been lifted from the
+            'C++ code this placeholder can be removed.
+            sOut += "00000000000000000000000000000001,32767;"
             sOut += "</MAGNITUDES><QUOTES>"
 
             surrogateRow.Database = "Prices"
@@ -1823,7 +1829,7 @@ End Module
 
 Public Class MyWebClient2
     Inherits System.Net.WebClient
-    Private timeout As Long = 10000
+    Private timeout As Long = 5000
     Protected Overrides Function GetWebRequest(ByVal uri As Uri) As System.Net.WebRequest
         Dim w As System.Net.WebRequest = MyBase.GetWebRequest(uri)
         w.Timeout = timeout
