@@ -9279,28 +9279,28 @@ std::string CPIDHash(double dMagIn, std::string sCPID)
 
 std::string GetQuorumHash(const std::string& data)
 {
-        //Data includes the Magnitudes, and the Projects:
-        std::string sMags = ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>");
-        std::vector<std::string> vMags = split(sMags.c_str(),";");
-        std::string sHashIn = "";
-        for (unsigned int x = 0; x < vMags.size(); x++)
-        {
-            if (vMags[x].length() > 10)
-            {
-                std::vector<std::string> vRow = split(vMags[x].c_str(),",");
-                if (vRow.size() > 0)
-                {
-                  if (vRow[0].length() > 5)
-                  {
-                        std::string sCPID = vRow[0];
-                        double dMag = cdbl(vRow[1],0);
-                        sHashIn += CPIDHash(dMag, sCPID) + "<COL>";
-                   }
-                }
-            }
-        }
-        std::string sHash = RetrieveMd5(sHashIn);
-        return sHash;
+    //Data includes the Magnitudes, and the Projects:
+    std::string sMags = ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>");
+    std::vector<std::string> vMags = split(sMags.c_str(),";");
+    std::string sHashIn = "";
+    for (unsigned int x = 0; x < vMags.size(); x++)
+    {
+        std::vector<std::string> vRow = split(vMags[x].c_str(),",");
+
+        // Each row should consist of two fields, CPID and magnitude.
+        if(vRow.size() < 2)
+            continue;
+
+        // First row (CPID) must be exactly 32 bytes.
+        const std::string& sCPID = vRow[0];
+        if(sCPID.size() != 32)
+            continue;
+
+        double dMag = cdbl(vRow[1],0);
+        sHashIn += CPIDHash(dMag, sCPID) + "<COL>";
+    }
+
+    return RetrieveMd5(sHashIn);
 }
 
 
