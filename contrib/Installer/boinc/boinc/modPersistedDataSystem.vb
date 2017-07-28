@@ -172,7 +172,7 @@ Module modPersistedDataSystem
 
             Dim lAgeOfMaster As Long = GetWindowsFileAge(GetGridPath("NeuralNetwork") + "\db.dat")
             If lAgeOfMaster > PROJECT_SYNC_THRESHOLD Then Return ""
-
+            
             Dim surrogateRow As New Row
             surrogateRow.Database = "CPID"
             surrogateRow.Table = "CPIDS"
@@ -197,7 +197,7 @@ Module modPersistedDataSystem
                     lRows = lRows + 1
                     sOut += sRow
                     dMagAge = 0
-                 
+
                 Else
                     Dim sRow As String = cpid.PrimaryKey + ",00;"
                     lTotal = lTotal + 0
@@ -205,6 +205,13 @@ Module modPersistedDataSystem
                     sOut += sRow
                 End If
             Next
+
+            'This is a placeholder to be removed in Neural Network 2.0.
+            'It is needed to bump the average magnitude above 70 to avoid having the superblock rejected.
+            'The CPID cannot be all 0 since it will be filtered out and the hashes of the ASCII and the
+            'binary superblock will diff. When the 70 average mag requirement has been lifted from the
+            'C++ code this placeholder can be removed.
+            sOut += "00000000000000000000000000000001,32767;"
             sOut += "</MAGNITUDES><QUOTES>"
 
             surrogateRow.Database = "Prices"
@@ -222,7 +229,11 @@ Module modPersistedDataSystem
             sOut += "</QUOTES><AVERAGES>"
             Dim avg As Double
             avg = lTotal / (lRows + 0.01)
-            If avg < 25 Then Return ""
+
+
+            If avg < 10 Or avg > 170000 Then
+                Return "<ERROR>Superblock Average " + Trim(avg) + " out of bounds</ERROR>"
+            End If
             'APPEND the Averages:
 
             Dim lProjectsInContract As Long = 0
@@ -232,6 +243,7 @@ Module modPersistedDataSystem
             surrogateWhitelistRow.Table = "Whitelist"
             lstWhitelist = GetList(surrogateWhitelistRow, "*")
             Dim rRow As New Row
+            Dim lTotalProjRac As Double = 0
             rRow.Database = "Project"
             rRow.Table = "Projects"
             Dim lstP As List(Of Row) = GetList(rRow, "*")
@@ -244,14 +256,19 @@ Module modPersistedDataSystem
                                              + "," + Num(r.RAC) + ";"
                         lRows = lRows + 1
                         lProjectsInContract += 1
+                        lTotalProjRac += Val(Num(r.RAC))
                         sOut += sRow
                     End If
                 End If
 
             Next
+            Dim lAvgProjRac As Double = lTotalProjRac / (lProjectsInContract + 0.01)
+            If lAvgProjRac < 50000 Then
+                Return "<ERROR>Superblock Project Average of " + Trim(lAvgProjRac) + " out of bounds</ERROR>"
+            End If
             Log("Contracts in Project : " + Trim(lProjectsInContract) + ", Whitelisted Count: " + lstP.Count.ToString())
-
-            If (lProjectsInContract < lstP.Count * 0.5) Then
+            'If less than 80% of the projects exist in the superblock, don't emit the contract
+            If (lProjectsInContract < lstP.Count * 0.7) Then
                 Log("Not enough projects in contract.")
                 Return ""
             End If
@@ -405,10 +422,16 @@ Module modPersistedDataSystem
         Dim sQuorumData As String = ExtractXML(msSyncData, "<QUORUMDATA>")
         Dim dAge As Double = Val(ExtractXML(sQuorumData, "<AGE>"))
         Log("EnsureTeamIsSynchronized: " + Trim(dAge))
+
+        If KeyValue("NEURAL_07252017") = "" Then
+            UpdateKey("NEURAL_07252017", "CLEARING") 'Start Fresh on July 25 2017, then once every 6 hours we clear.  Take this out when we move to NN2.
+            ClearProjectData()
+        End If
+
         Dim dWindow As Double = 60 * 60 '1 hour before and 1 hour after superblock expires:
         If dAge > (86400 - dWindow) And dAge < (86400 + dWindow) Then
             Dim lAgeOfMaster = GetUnixFileAge(GetGridFolder() + "NeuralNetwork\db.dat")
-            If lAgeOfMaster > SYNC_THRESHOLD Then
+            If lAgeOfMaster > (SYNC_THRESHOLD / 4) Then
                 'Clear out this nodes project data, so the node can sync with the team at the same exact time:
                 Log("Clearing project data so we can synchronize as a team.")
                 ClearProjectData()
@@ -425,11 +448,12 @@ Module modPersistedDataSystem
     End Sub
     Private Sub ClearProjectData()
         Dim sPath As String = GetGridFolder() + "NeuralNetwork\"
-
         SoftKill(sPath + "db.dat")
         'Erase the projects
         SoftKill(sPath + "*master.dat")
-        SoftKill(sPath + "*team.xml")
+        SoftKill(sPath + "*.xml")
+        SoftKill(sPath + "*.gz")
+        SoftKill(sPath + "*.dat")
     End Sub
     Private Sub ClearWhitelistData()
         Dim sPath As String = GetGridFolder() + "NeuralNetwork\Whitelist\"
@@ -622,7 +646,7 @@ Module modPersistedDataSystem
             EraseNeuralNetwork("projects")
             surrogateRow1.Database = "Whitelist"
             surrogateRow1.Table = "Whitelist"
-            EraseNeuralNetwork("whitelist")
+            EraseNeuralNetwork("Whitelist")
             Dim sWhitelist As String
             sWhitelist = ExtractXML(msSyncData, "<WHITELIST>")
             Dim sCPIDData As String = ExtractXML(msSyncData, "<CPIDDATA>")
@@ -1805,7 +1829,7 @@ End Module
 
 Public Class MyWebClient2
     Inherits System.Net.WebClient
-    Private timeout As Long = 10000
+    Private timeout As Long = 5000
     Protected Overrides Function GetWebRequest(ByVal uri As Uri) As System.Net.WebRequest
         Dim w As System.Net.WebRequest = MyBase.GetWebRequest(uri)
         w.Timeout = timeout

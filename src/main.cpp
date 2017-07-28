@@ -106,7 +106,7 @@ extern int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::stri
 extern bool UpdateNeuralNetworkQuorumData();
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 double qtExecuteGenericFunction(std::string function,std::string data);
-extern std::string GetQuorumHash(std::string data);
+extern std::string GetQuorumHash(const std::string& data);
 extern bool FullSyncWithDPORNodes();
 
 std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
@@ -4360,7 +4360,7 @@ bool VerifySuperblock(std::string superblock, int nHeight)
         if (fDebug3 && !bPassed)
         {
             if (fDebug) printf(" Verification of Superblock Failed ");
-            //          printf("\r\n Verification of Superblock Failed outavg: %f, avg_mag %f, Height %f, Out_Beacon_count %f, Out_participant_count %f, block %s", (double)out_avg,(double)avg_mag,(double)nHeight,(double)out_beacon_count,(double)out_participant_count,superblock.c_str());
+            //if (fDebug3) printf("\r\n Verification of Superblock Failed outavg: %f, avg_mag %f, Height %f, Out_Beacon_count %f, Out_participant_count %f, block %s", (double)out_avg,(double)avg_mag,(double)nHeight,(double)out_beacon_count,(double)out_participant_count,superblock.c_str());
         }
         return bPassed;
 }
@@ -7111,8 +7111,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
     else if (strCommand == "ping")
     {
-
-
         std::string acid = "";
         if (pfrom->nVersion > BIP0031_VERSION)
         {
@@ -9059,30 +9057,30 @@ std::string CPIDHash(double dMagIn, std::string sCPID)
     return sHash;
 }
 
-std::string GetQuorumHash(std::string data)
+std::string GetQuorumHash(const std::string& data)
 {
-        //Data includes the Magnitudes, and the Projects:
-        std::string sMags = ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>");
-        std::vector<std::string> vMags = split(sMags.c_str(),";");
-        std::string sHashIn = "";
-        for (unsigned int x = 0; x < vMags.size(); x++)
-        {
-            if (vMags[x].length() > 10)
-            {
-                std::vector<std::string> vRow = split(vMags[x].c_str(),",");
-                if (vRow.size() > 0)
-                {
-                  if (vRow[0].length() > 5)
-                  {
-                        std::string sCPID = vRow[0];
-                        double dMag = cdbl(vRow[1],0);
-                        sHashIn += CPIDHash(dMag, sCPID) + "<COL>";
-                   }
-                }
-            }
-        }
-        std::string sHash = RetrieveMd5(sHashIn);
-        return sHash;
+    //Data includes the Magnitudes, and the Projects:
+    std::string sMags = ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>");
+    std::vector<std::string> vMags = split(sMags.c_str(),";");
+    std::string sHashIn = "";
+    for (unsigned int x = 0; x < vMags.size(); x++)
+    {
+        std::vector<std::string> vRow = split(vMags[x].c_str(),",");
+
+        // Each row should consist of two fields, CPID and magnitude.
+        if(vRow.size() < 2)
+            continue;
+
+        // First row (CPID) must be exactly 32 bytes.
+        const std::string& sCPID = vRow[0];
+        if(sCPID.size() != 32)
+            continue;
+
+        double dMag = cdbl(vRow[1],0);
+        sHashIn += CPIDHash(dMag, sCPID) + "<COL>";
+    }
+
+    return RetrieveMd5(sHashIn);
 }
 
 

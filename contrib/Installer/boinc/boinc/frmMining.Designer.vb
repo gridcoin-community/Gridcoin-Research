@@ -87,6 +87,7 @@ Partial Class frmMining
         Me.btnSync = New System.Windows.Forms.Button()
         Me.lblQueue = New System.Windows.Forms.Label()
         Me.lblNeuralDetail = New System.Windows.Forms.Label()
+        Me.lblAvgMagnitude = New System.Windows.Forms.Label()
         CType(Me.Chart1, System.ComponentModel.ISupportInitialize).BeginInit()
         CType(Me.chtCurCont, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.MenuStrip1.SuspendLayout()
@@ -694,6 +695,17 @@ Partial Class frmMining
         Me.lblNeuralDetail.TabIndex = 76
         Me.lblNeuralDetail.Text = " "
         '
+        'lblAvgMagnitude
+        '
+        Me.lblAvgMagnitude.AutoSize = True
+        Me.lblAvgMagnitude.BackColor = System.Drawing.Color.Transparent
+        Me.lblAvgMagnitude.Font = New System.Drawing.Font("Microsoft Sans Serif", 9.75!)
+        Me.lblAvgMagnitude.Location = New System.Drawing.Point(15, 715)
+        Me.lblAvgMagnitude.Name = "lblAvgMagnitude"
+        Me.lblAvgMagnitude.Size = New System.Drawing.Size(173, 16)
+        Me.lblAvgMagnitude.TabIndex = 77
+        Me.lblAvgMagnitude.Text = "Superblock Avg Magnitude:"
+        '
         'frmMining
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
@@ -702,6 +714,7 @@ Partial Class frmMining
         Me.BackgroundImage = Global.BoincStake.My.Resources.Resources.GradientU
         Me.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch
         Me.ClientSize = New System.Drawing.Size(1071, 793)
+        Me.Controls.Add(Me.lblAvgMagnitude)
         Me.Controls.Add(Me.lblNeuralDetail)
         Me.Controls.Add(Me.lblQueue)
         Me.Controls.Add(Me.btnSync)
@@ -734,7 +747,7 @@ Partial Class frmMining
         Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)
         Me.MainMenuStrip = Me.MenuStrip1
         Me.Name = "frmMining"
-        Me.Text = "Gridcoin Neural Network 3.3"
+        Me.Text = "Gridcoin Neural Network 3.4"
         CType(Me.Chart1, System.ComponentModel.ISupportInitialize).EndInit()
         CType(Me.chtCurCont, System.ComponentModel.ISupportInitialize).EndInit()
         Me.MenuStrip1.ResumeLayout(False)
@@ -798,4 +811,5 @@ Partial Class frmMining
     Friend WithEvents lblQueue As System.Windows.Forms.Label
     Friend WithEvents lblNeuralDetail As System.Windows.Forms.Label
     Friend WithEvents WebBrowserBoinc As System.Windows.Forms.WebBrowser
+    Friend WithEvents lblAvgMagnitude As System.Windows.Forms.Label
 End Class

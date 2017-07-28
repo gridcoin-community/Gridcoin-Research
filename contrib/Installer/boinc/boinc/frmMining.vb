@@ -280,6 +280,9 @@ Public Class frmMining
                 dgv.Columns(x).Visible = False
             End If
         Next
+        Dim dTotalMag As Double = 0
+        Dim dAvgMag As Double = 0
+
         dgv.Columns(8).Visible = True
         Dim vMagnitudes() As String = Split(sMagnitudes, ";")
         Dim vProjects() As String = Split(sProjects, ";")
@@ -290,9 +293,13 @@ Public Class frmMining
                 sReportRow = ""
                 dgv.Rows(iRow).Cells(0).Value = vRow(0)
                 dgv.Rows(iRow).Cells(1).Value = Val(vRow(1))
+                dTotalMag += Val(vRow(1))
+
                 iRow = iRow + 1
             End If
         Next
+
+        dAvgMag = dTotalMag / (iRow + 0.01)
 
         'Get the Neural Hash
         Dim sMyNeuralHash As String
@@ -333,6 +340,9 @@ Public Class frmMining
         For y = 0 To dgv.Rows.Count - 2
             dgv.Rows(y).Cells(8).Value = y + 1
         Next
+        'populate the average magnitude
+        lblAvgMagnitude.Text = "Average Magnitude: " + Trim(dAvgMag)
+
 
         SetAutoSizeMode2(vHeading, dgv)
 
