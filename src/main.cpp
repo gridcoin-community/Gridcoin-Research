@@ -106,7 +106,7 @@ extern int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::stri
 extern bool UpdateNeuralNetworkQuorumData();
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 double qtExecuteGenericFunction(std::string function,std::string data);
-extern std::string GetQuorumHash(std::string data);
+extern std::string GetQuorumHash(const std::string& data);
 extern bool FullSyncWithDPORNodes();
 
 std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
@@ -344,41 +344,29 @@ static boost::thread_group* cpidThreads = NULL;
 ///////////////////////////////
 
 //Global variables to display current mined project in various places:
-std::string     msMiningProject = "";
-std::string     msMiningCPID = "";
-std::string    msPrimaryCPID = "";
-std::string    msENCboincpublickey = "";
-double          mdMiningRAC =0;
-double         mdMiningNetworkRAC = 0;
-double          mdPORNonce = 0;
-double         mdPORNonceSolved = 0;
+std::string    msMiningProject;
+std::string    msMiningCPID;
+std::string    msPrimaryCPID;
+double         mdPORNonce = 0;
 double         mdLastPorNonce = 0;
-double         mdMachineTimer = 0;
 double         mdMachineTimerLast = 0;
 bool           mbBlocksDownloaded = false;
 // Mining status variables
-std::string    msHashBoinc    = "";
-std::string    msHashBoincTxId= "";
-std::string    msMiningErrors = "";
-std::string    msPoll = "";
-std::string    msMiningErrors5 = "";
-std::string    msMiningErrors6 = "";
-std::string    msMiningErrors7 = "";
-std::string    msMiningErrors8 = "";
-std::string    msPeek = "";
-std::string    msLastCommand = "";
-
-std::string    msAttachmentGuid = "";
-
-std::string    msMiningErrorsIncluded = "";
-std::string    msMiningErrorsExcluded = "";
-std::string    msContracts = "";
-
-std::string    msRSAOverview = "";
-std::string    Organization = "";
-std::string    OrganizationKey = "";
-std::string    msNeuralResponse = "";
-std::string    msHDDSerial = "";
+std::string    msHashBoinc;
+std::string    msMiningErrors;
+std::string    msPoll;
+std::string    msMiningErrors5;
+std::string    msMiningErrors6;
+std::string    msMiningErrors7;
+std::string    msMiningErrors8;
+std::string    msPeek;
+std::string    msLastCommand;
+std::string    msAttachmentGuid;
+std::string    msMiningErrorsIncluded;
+std::string    msMiningErrorsExcluded;
+std::string    msRSAOverview;
+std::string    msNeuralResponse;
+std::string    msHDDSerial;
 //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
 
 int nGrandfather = 860000;
@@ -388,7 +376,6 @@ int nNewIndex2 = 364500;
 int64_t nGenesisSupply = 340569880;
 
 // Stats for Main Screen:
-std::string msLastPaymentTime;
 globalStatusType GlobalStatusStruct;
 
 bool fColdBoot = true;
@@ -398,10 +385,7 @@ bool fUseFastIndex = false;
 // Gridcoin status    *************
 MiningCPID GlobalCPUMiningCPID = GetMiningCPID();
 int nBoincUtilization = 0;
-double nMinerPaymentCount = 0;
-std::string sRegVer = "";
-std::string sDefaultWalletAddress = "";
-
+std::string sRegVer;
 
 std::map<std::string, StructCPID> mvCPIDs;        //Contains the project stats at the user level
 std::map<std::string, StructCPID> mvCreditNode;   //Contains the verified stats at the user level
@@ -731,10 +715,10 @@ MiningCPID GetNextProject(bool bForce)
         if (fDebug3 && LessVerbose(50)) printf("Using cached boinckey for project %s\r\n",GlobalCPUMiningCPID.projectname.c_str());
                     msMiningProject = GlobalCPUMiningCPID.projectname;
                     msMiningCPID = GlobalCPUMiningCPID.cpid;
-                    if (LessVerbose(5)) printf("BoincKey - Mining project %s     RAC(%f)  enc %s\r\n",  GlobalCPUMiningCPID.projectname.c_str(), GlobalCPUMiningCPID.rac, msENCboincpublickey.c_str());
+                    if (LessVerbose(5))
+                        printf("BoincKey - Mining project %s     RAC(%f)\r\n",  GlobalCPUMiningCPID.projectname.c_str(), GlobalCPUMiningCPID.rac);
                     double ProjectRAC = GetNetworkAvgByProject(GlobalCPUMiningCPID.projectname);
                     GlobalCPUMiningCPID.NetworkRAC = ProjectRAC;
-                    mdMiningNetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
                     GlobalCPUMiningCPID.Magnitude = CalculatedMagnitude(GetAdjustedTime(),false);
                     if (fDebug3) printf("(boinckey) For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
                     msMiningErrors = (msMiningCPID == "INVESTOR" || msPrimaryCPID=="INVESTOR" || msMiningCPID.empty()) ? _("Staking Interest") : _("Mining");
@@ -746,8 +730,6 @@ MiningCPID GetNextProject(bool bForce)
     
     msMiningProject = "";
     msMiningCPID = "";
-    mdMiningRAC = 0;
-    msENCboincpublickey = "";
     GlobalCPUMiningCPID = GetInitializedGlobalCPUMiningCPID("");
 
     std::string email = GetArgument("email", "NA");
@@ -853,11 +835,9 @@ MiningCPID GetNextProject(bool bForce)
                                         //Only used for global status:
                                         msMiningProject = structcpid.projectname;
                                         msMiningCPID = structcpid.cpid;
-                                        mdMiningRAC = structcpid.rac;
 
                                         double ProjectRAC = GetNetworkAvgByProject(GlobalCPUMiningCPID.projectname);
                                         GlobalCPUMiningCPID.NetworkRAC = ProjectRAC;
-                                        mdMiningNetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
                                         GlobalCPUMiningCPID.Magnitude = CalculatedMagnitude(GetAdjustedTime(),false);
                                         if (fDebug && LessVerbose(2)) printf("For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
                                         //Reserved for GRC Speech Synthesis
@@ -880,10 +860,7 @@ MiningCPID GetNextProject(bool bForce)
         msMiningErrors = (msPrimaryCPID == "INVESTOR") ? "" : _("All BOINC projects exhausted.");
         msMiningProject = "INVESTOR";
         msMiningCPID = "INVESTOR";
-        mdMiningRAC = 0;
-        msENCboincpublickey = "";
         GlobalCPUMiningCPID = GetInitializedGlobalCPUMiningCPID("INVESTOR");
-        mdMiningNetworkRAC = 0;
         if (fDebug10) printf("-Investor mode-");
 
         }
@@ -1070,37 +1047,36 @@ unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans)
 
 std::string DefaultWalletAddress()
 {
+    static std::string sDefaultWalletAddress;
+    if (!sDefaultWalletAddress.empty())
+        return sDefaultWalletAddress;
+    
     try
     {
         //Gridcoin - Find the default public GRC address (since a user may have many receiving addresses):
-        if (!sDefaultWalletAddress.empty())
-            return sDefaultWalletAddress;
-        string strAccount;
         BOOST_FOREACH(const PAIRTYPE(CTxDestination, string)& item, pwalletMain->mapAddressBook)
         {
-             const CBitcoinAddress& address = item.first;
-             const std::string& strName = item.second;
-             bool fMine = IsMine(*pwalletMain, address.Get());
-             if (fMine && strName == "Default") 
-             {
-                 sDefaultWalletAddress=CBitcoinAddress(address).ToString();
-                 return sDefaultWalletAddress;
-             }
+            const CBitcoinAddress& address = item.first;
+            const std::string& strName = item.second;
+            bool fMine = IsMine(*pwalletMain, address.Get());
+            if (fMine && strName == "Default") 
+            {
+                sDefaultWalletAddress=CBitcoinAddress(address).ToString();
+                return sDefaultWalletAddress;
+            }
         }
-
-
-        //Cant Find
-
+        
+        //Cant Find        
         BOOST_FOREACH(const PAIRTYPE(CTxDestination, string)& item, pwalletMain->mapAddressBook)
         {
-             const CBitcoinAddress& address = item.first;
-             //const std::string& strName = item.second;
-             bool fMine = IsMine(*pwalletMain, address.Get());
-             if (fMine)
-             {
-                 sDefaultWalletAddress=CBitcoinAddress(address).ToString();
-                 return sDefaultWalletAddress;
-             }
+            const CBitcoinAddress& address = item.first;
+            //const std::string& strName = item.second;
+            bool fMine = IsMine(*pwalletMain, address.Get());
+            if (fMine)
+            {
+                sDefaultWalletAddress=CBitcoinAddress(address).ToString();
+                return sDefaultWalletAddress;
+            }
         }
     }
     catch (std::exception& e)
@@ -4365,7 +4341,7 @@ bool VerifySuperblock(std::string superblock, int nHeight)
         if (fDebug3 && !bPassed)
         {
             if (fDebug) printf(" Verification of Superblock Failed ");
-            //          printf("\r\n Verification of Superblock Failed outavg: %f, avg_mag %f, Height %f, Out_Beacon_count %f, Out_participant_count %f, block %s", (double)out_avg,(double)avg_mag,(double)nHeight,(double)out_beacon_count,(double)out_participant_count,superblock.c_str());
+            //if (fDebug3) printf("\r\n Verification of Superblock Failed outavg: %f, avg_mag %f, Height %f, Out_Beacon_count %f, Out_participant_count %f, block %s", (double)out_avg,(double)avg_mag,(double)nHeight,(double)out_beacon_count,(double)out_participant_count,superblock.c_str());
         }
         return bPassed;
 }
@@ -6202,9 +6178,6 @@ bool AcidTest(std::string precommand, std::string acid, CNode* pfrom)
             //pfrom->securityversion = pw1;
         }
         if (fDebug10) printf(" Nonce %s,comm %s,hash %s,pw1 %s \r\n",nonce.c_str(),command.c_str(),hash.c_str(),pw1.c_str());
-        //If timestamp too old; disconnect
-        double timediff = std::abs(GetAdjustedTime() - cdbl(nonce,0));
-    
         if (false && hash != pw1)
         {
             //2/16 18:06:48 Acid test failed for 192.168.1.4:32749 1478973994,encrypt,1b089d19d23fbc911c6967b948dd8324,windows          if (fDebug) printf("Acid test failed for %s %s.",NodeAddress(pfrom).c_str(),acid.c_str());
@@ -7120,8 +7093,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
     else if (strCommand == "ping")
     {
-
-
         std::string acid = "";
         if (pfrom->nVersion > BIP0031_VERSION)
         {
@@ -9071,30 +9042,30 @@ std::string CPIDHash(double dMagIn, std::string sCPID)
     return sHash;
 }
 
-std::string GetQuorumHash(std::string data)
+std::string GetQuorumHash(const std::string& data)
 {
-        //Data includes the Magnitudes, and the Projects:
-        std::string sMags = ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>");
-        std::vector<std::string> vMags = split(sMags.c_str(),";");
-        std::string sHashIn = "";
-        for (unsigned int x = 0; x < vMags.size(); x++)
-        {
-            if (vMags[x].length() > 10)
-            {
-                std::vector<std::string> vRow = split(vMags[x].c_str(),",");
-                if (vRow.size() > 0)
-                {
-                  if (vRow[0].length() > 5)
-                  {
-                        std::string sCPID = vRow[0];
-                        double dMag = cdbl(vRow[1],0);
-                        sHashIn += CPIDHash(dMag, sCPID) + "<COL>";
-                   }
-                }
-            }
-        }
-        std::string sHash = RetrieveMd5(sHashIn);
-        return sHash;
+    //Data includes the Magnitudes, and the Projects:
+    std::string sMags = ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>");
+    std::vector<std::string> vMags = split(sMags.c_str(),";");
+    std::string sHashIn = "";
+    for (unsigned int x = 0; x < vMags.size(); x++)
+    {
+        std::vector<std::string> vRow = split(vMags[x].c_str(),",");
+
+        // Each row should consist of two fields, CPID and magnitude.
+        if(vRow.size() < 2)
+            continue;
+
+        // First row (CPID) must be exactly 32 bytes.
+        const std::string& sCPID = vRow[0];
+        if(sCPID.size() != 32)
+            continue;
+
+        double dMag = cdbl(vRow[1],0);
+        sHashIn += CPIDHash(dMag, sCPID) + "<COL>";
+    }
+
+    return RetrieveMd5(sHashIn);
 }
 
 
@@ -9111,6 +9082,7 @@ std::string getHardwareID()
     return hwid;
 }
 
+#ifdef WIN32
 static void getCpuid( unsigned int* p, unsigned int ax )
  {
     __asm __volatile
@@ -9122,6 +9094,7 @@ static void getCpuid( unsigned int* p, unsigned int ax )
         : "0" (ax)
     );
  }
+#endif
 
  std::string getCpuHash()
  {

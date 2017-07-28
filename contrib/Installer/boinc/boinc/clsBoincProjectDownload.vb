@@ -34,7 +34,7 @@ Public Class clsBoincProjectDownload
     Public Function RetrieveCacheProjectFilename(sGzipUrl As String) As String
         Dim sOut As String = Replace(sGzipUrl, "/", "[fslash]")
         sOut = Replace(sOut, ":", "[colon]")
-        Dim sDayOfYear = Trim(Now.DayOfYear)
+        Dim sDayOfYear = Trim(DateTime.UtcNow.DayOfYear)
         sOut = Replace(sOut, ".gz", sDayOfYear + "[!]gz")
         sOut = Replace(sOut, ".", "[period]")
         sOut = Replace(sOut, "[!]", ".")
@@ -48,7 +48,27 @@ Public Class clsBoincProjectDownload
         Return iMins
     End Function
 
-    Private Function AnalyzeProjectHeader(ByVal sGzipURL As String, ByRef sEtag As String, ByRef sEtagFilePath As String, ByVal sProjectName As String) As Integer
+    Private Function AnalyzeProjectHeader2(ByVal sGzipURL As String, ByRef sEtag As String, ByRef sEtagFilePath As String, ByVal sProjectName As String) As Integer
+        Dim dStatus As Double = 0
+        sEtag = GetMd5String2(sGzipURL)
+        sEtagFilePath = ConstructTargetFileName(sEtag)
+
+        Dim sGridcoinBaseUrl As String = "https://download.gridcoin.us/download/harvest/"
+        Dim lAgeInMins As Long = GetFileAge(sEtagFilePath)
+        If lAgeInMins < SYNC_THRESHOLD Then
+            Return 1
+        Else
+            Dim sCacheFileName As String = RetrieveCacheProjectFilename(sGzipURL)
+            Dim bStatus As Boolean = ResilientDownload(sGridcoinBaseUrl + sCacheFileName, sEtagFilePath, sGridcoinBaseUrl + sCacheFileName)
+            If bStatus Then
+                Return 2
+            Else
+                Return 3
+            End If
+        End If
+    End Function
+
+    Private Function AnalyzeProjectHeaderRetired(ByVal sGzipURL As String, ByRef sEtag As String, ByRef sEtagFilePath As String, ByVal sProjectName As String) As Integer
         'Output
         '1 = We already have the official etag version downloaded
         '2 = We downloaded a new version
@@ -79,40 +99,44 @@ Public Class clsBoincProjectDownload
             Dim sCacheFileName As String = RetrieveCacheProjectFilename(sGzipURL)
             Dim bStatus As Boolean = ResilientDownload(sGridcoinBaseUrl + sCacheFileName, sEtagFilePath, sGridcoinBaseUrl + sCacheFileName)
             If Not bStatus Then
+                'This is the step where we download from the boinc project server if the cache either returns 404 or the bytes dont match the etag or filesize:
                 Dim sSourceURL As String = IIf(bCacheSiteHasSameFile, sGridcoinURL, sGzipURL)
                 bStatus = ResilientDownload(sSourceURL, sEtagFilePath, sGzipURL)
             End If
             'If all bytes downloaded then store the etag in the local table
             'Only update Stored Value after we retrieve the file
             If bStatus Then
-                StoreValue("etag", "tbetags", sGzipURL, sEtag)
-                StoreValue("etag", "timestamps", sProjectName, sTimestamp)
-                StoreValue("etag", "tbetag2", sProjectName, sEtag)
-                'Save the Project Site GZ creation time
                 Return 2
             Else
                 Return 3
             End If
         End If
     End Function
+    Public Function DownloadFile(iAttemptNo As Integer, sSourceURL As String, sOutputPath As String) As Boolean
+        Try
+            Dim w As New MyWebClient2
+            Log(" Downloading Attempt #" + Trim(iAttemptNo) + " for URL " + sSourceURL)
+            w.DownloadFile(sSourceURL, sOutputPath)
+            Return True
+        Catch ex As Exception
+            Return False
+        End Try
+
+    End Function
     Public Function ResilientDownload(sSourceUrl As String, sEtagFilePath As String, sBackupURL As String) As Boolean
         'Doing this just in case we ddos our own website and keep receiving 404 or 500 errors:
         For x As Integer = 1 To 5
             Dim dictHeads As Dictionary(Of String, String) = GetHttpResponseHeaders(sSourceUrl)
             Dim dLength1 As Double = dictHeads("Content-Length")
-            Dim w As New MyWebClient2
-            Log(" Downloading Attempt # " + Trim(x) + sSourceUrl)
-            w.DownloadFile(sSourceUrl, sEtagFilePath)
-            If GetFileSize(sEtagFilePath) = dLength1 And dLength1 > 0 Then Return True
+            Dim bDownloadStatus As Boolean = DownloadFile(x, sSourceUrl, sEtagFilePath)
+            If bDownloadStatus And GetFileSize(sEtagFilePath) = dLength1 And dLength1 > 0 Then Return True
         Next
         'As a last resort, pull from the Project Site
         Dim dictHeads2 As Dictionary(Of String, String) = GetHttpResponseHeaders(sBackupURL)
         Dim dLength2 As Double = dictHeads2("Content-Length")
-        Dim w2 As New MyWebClient2
         Log(" Downloading BackupURL Attempt # " + Trim(1) + sBackupURL)
-        w2.DownloadFile(sBackupURL, sEtagFilePath)
+        DownloadFile(1, sBackupURL, sEtagFilePath)
         If GetFileSize(sEtagFilePath) = dLength2 And dLength2 > 0 Then Return True Else Return False
-
     End Function
     Public Function DownloadGZipFiles() As Boolean
         'Perform Housecleaning
@@ -160,7 +184,7 @@ Public Class clsBoincProjectDownload
                     'If Etag has changed, download the file:
                     Dim sEtag As String = ""
                     Dim sTeamEtagFilePath As String = ""
-                    Dim iStatus As Integer = AnalyzeProjectHeader(sTeamGzipURL, sEtag, sTeamEtagFilePath, sProject)
+                    Dim iStatus As Integer = AnalyzeProjectHeader2(sTeamGzipURL, sEtag, sTeamEtagFilePath, sProject)
                     Dim sProjectMasterFileName As String = GetGridFolder() + "NeuralNetwork\" + sProject + ".master.dat"
                     'store etag by project also
 
@@ -180,7 +204,7 @@ Public Class clsBoincProjectDownload
 
                     'Sync the main RAC gz file            
                     Dim sRacEtagFilePath As String = ""
-                    iStatus = AnalyzeProjectHeader(sGzipURL, sEtag, sRacEtagFilePath, sProject)
+                    iStatus = AnalyzeProjectHeader2(sGzipURL, sEtag, sRacEtagFilePath, sProject)
                     If iStatus <> 1 Or Not File.Exists(sProjectMasterFileName) Then
                         Try
                             'Find out what our team ID is
@@ -230,7 +254,7 @@ Public Class clsBoincProjectDownload
             If fi.Name Like "*.master.dat*" Then
                 sProjectLocal = Replace(fi.Name, ".master.dat", "")
                 iTotalProjectsSynced += 1
-                Dim sTimestamp As String = GetDataValue("etag", "timestamps", sProjectLocal).DataColumn1
+                'Dim sTimestamp As String = GetDataValue("etag", "timestamps", sProjectLocal).DataColumn1
                 'Log the md5 of the master project file so we can determine regional differences
                 Dim iRows As Long = 0
                 Using oStream As New System.IO.FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
@@ -248,8 +272,7 @@ Public Class clsBoincProjectDownload
                     objReader.Close()
                 End Using
                 Dim sHash As String = GetMd5OfFile(fi.FullName)
-                Dim sEtagOnFile As String = GetDataValue("etag", "tbetag2", sProjectLocal).DataColumn1
-                Dim sOut As String = "***  COMBINING PROJECT FILE " + fi.Name + ", MD5 HASH: " + sHash + ", ROWS: " + Trim(iRows) + ", ETAG: " + sEtagOnFile + " ***"
+                Dim sOut As String = "***  COMBINING PROJECT FILE " + fi.Name + ", MD5 HASH: " + sHash + ", ROWS: " + Trim(iRows) + "**"
                 Log(sOut)
             End If
         Next fi

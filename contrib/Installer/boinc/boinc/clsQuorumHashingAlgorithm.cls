@@ -37,12 +37,19 @@
                     If Len(vRow(0)) > 5 Then
                         Dim sCPID As String = vRow(0)
                         Dim dMag = Math.Round(Val(vRow(1)), 0)
+                        Dim sRow = sCPID + "," + Trim(dMag)
+                        If KeyValue("DEBUG_QHA") = "TRUE" Then Log(sRow)
                         sHashIn += CPIDHash(dMag, sCPID) + "<COL>"
                     End If
                 End If
             End If
         Next x
         Dim sHash As String = GetMd5String(sHashIn)
+
+        If KeyValue("DEBUG_QHA") = "TRUE" Then
+            Log(sHashIn)
+            Log(sHash)
+        End If
         Return sHash
     End Function
     Private Function CPIDHash(dMagIn As Double, sCPID As String) As String

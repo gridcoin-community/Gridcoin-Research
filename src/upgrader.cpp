@@ -22,6 +22,7 @@ bool CANCEL_DOWNLOAD = false;
 
 Upgrader upgrader;
 
+/*
 static int cancelDownloader(void *p,
                     curl_off_t dltotal, curl_off_t dlnow,
                     curl_off_t ultotal, curl_off_t ulnow)
@@ -33,6 +34,7 @@ static int cancelDownloader(void *p,
     }
     return 0;
 }
+*/
 
 std::string geturl()
 {

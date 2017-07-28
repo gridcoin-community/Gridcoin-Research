@@ -36,11 +36,11 @@ Public Class SpeechSynthesis
             Catch ex As Exception
             End Try
             sSentence = "Good " + sDayInterval + " " + sSurname + " " + sName + ", Your Magnitude is " + sMag + "."
-            If mbTestNet Then sSentence += ",in Test Net." Else mbTestNet += ",in Production."
+            If mbTestNet Then sSentence += ", in Test Net." Else mbTestNet += ", in Production."
             Speak(sSentence)
             Return True
         Catch ex As Exception
-            Log("Error while Speaking " + Trim(sSentence) + ex.Message)
+            Log("Error while Addressing User: " + Trim(sSentence) + ": " + ex.Message)
         End Try
 
     End Function
@@ -60,7 +60,7 @@ Public Class SpeechSynthesis
             synth = Nothing
             Return True
         Catch ex As Exception
-            Log("Error while speaking " + sSentence + ": " + ex.Message)
+            Log("Error while enunciating " + sSentence + ": " + ex.Message)
         End Try
         Return False
     End Function

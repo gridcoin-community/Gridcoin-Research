@@ -162,10 +162,5 @@ extern MiningCPID GlobalCPUMiningCPID;
 extern std::map<std::string, StructCPID> mvBoincProjects; // Contains all of the allowed boinc projects;
 // Timers
 extern std::map<std::string, int> mvTimers; // Contains event timers that reset after max ms duration iterator is exceeded
-extern double nMinerPaymentCount;
-
 
 #endif /* GLOBAL_OBJECTS_NOUI_HPP */
-
-
-

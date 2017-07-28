@@ -276,7 +276,7 @@ bool AppInit(int argc, char* argv[])
             int ret = CommandLineRPC(argc, argv);
             exit(ret);
         }
-        boost::thread* detectShutdownThread = new boost::thread(boost::bind(&DetectShutdownThread, &threadGroup));
+        new boost::thread(boost::bind(&DetectShutdownThread, &threadGroup));
 
         fRet = AppInit2();
     }

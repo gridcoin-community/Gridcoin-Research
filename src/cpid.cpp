@@ -245,7 +245,7 @@ template<typename T>std::string LongToHex(T i){std::stringstream stream;stream<<
 boincdigest(std::string email,std::string bpk,uint256 hash_block){
 if(!finalized)return"";char buf[(0x151+8463-0x2250)];for(int i=
 (0x95f+3677-0x17bc);i<(0x13f8+3123-0x201b);i++){sprintf(buf+i*
-(0x639+7515-0x2392),"\x25\x30\x32\x78",digest[i]);}char ch;std::string 
+(0x639+7515-0x2392),"\x25\x30\x32\x78",digest[i]);}std::string
 non_finalized(buf);std::string shash=HashHex(hash_block);std::string debug="";
 boost::algorithm::to_lower(bpk);boost::algorithm::to_lower(email);std::string 
 cpid_non=bpk+email;for(int i=(0x450+3069-0x104d);i<(int)cpid_non.length();i++){

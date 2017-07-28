@@ -830,7 +830,7 @@ Module modGRC
                 Log("Unable to create Gridcoin Path " + sTemp)
             End Try
         End If
-        If mbTestNet Then sTemp += "Testnet\"
+        If mbTestNet Then sTemp += "\Testnet\"
         Return sTemp
     End Function
     Public Function GetGridFolder() As String

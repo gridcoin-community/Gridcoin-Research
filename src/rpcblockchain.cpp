@@ -13,6 +13,8 @@
 #include "beacon.h"
 #include "util.h"
 
+#include <boost/filesystem.hpp>
+#include <iostream>
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <fstream>
@@ -43,6 +45,7 @@ extern Array GetUpgradedBeaconReport();
 extern Array MagnitudeReport(std::string cpid);
 std::string ConvertBinToHex(std::string a);
 std::string ConvertHexToBin(std::string a);
+extern std::vector<unsigned char> readFileToVector(std::string filename);
 bool TallyResearchAverages(bool Forcefully);
 int RestartClient();
 extern std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
@@ -61,7 +64,7 @@ extern bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::
 bool NeedASuperblock();
 bool VerifySuperblock(std::string superblock, int nHeight);
 double ExtractMagnitudeFromExplainMagnitude();
-std::string GetQuorumHash(std::string data);
+std::string GetQuorumHash(const std::string& data);
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
 bool ComputeNeuralNetworkSupermajorityHashes();
 bool UpdateNeuralNetworkQuorumData();
@@ -187,6 +190,35 @@ double GetNetworkTotalByProject(std::string projectname)
         if (!structcpid.initialized) return 0;
         double networkavgrac = structcpid.rac;
         return networkavgrac;
+}
+
+std::string FileManifest()            
+{
+   boost::filesystem::path dir_path = GetDataDir() / "nn2";
+   boost::filesystem::directory_iterator it(dir_path), eod;
+   std::string sMyManifest = "";
+   BOOST_FOREACH(boost::filesystem::path const &p, std::make_pair(it, eod))   
+   { 
+      if(boost::filesystem::is_regular_file(p))
+      {
+        sMyManifest += p.string();
+      } 
+   }
+   return sMyManifest;
+}
+
+std::vector<unsigned char> readFileToVector(std::string filename)
+{
+    std::ifstream file(filename.c_str(), std::ios::binary);
+    file.unsetf(std::ios::skipws);
+    std::streampos fileSize;
+    file.seekg(0, std::ios::end);
+    fileSize = file.tellg();
+    file.seekg(0, std::ios::beg);
+    std::vector<unsigned char> vec;
+    vec.reserve(fileSize);
+    vec.insert(vec.begin(), std::istream_iterator<unsigned char>(file), std::istream_iterator<unsigned char>());
+    return vec;
 }
 
 double GetDifficulty(const CBlockIndex* blockindex)
@@ -3437,20 +3469,10 @@ Array MagnitudeReport(std::string cpid)
                                                 StructCPID stCPID = GetLifetimeCPID(structMag.cpid,"MagnitudeReport");
                                                 double days = (GetAdjustedTime() - stCPID.LowLockTime) / 86400.0;
                                                 entry.push_back(Pair("CPID",structMag.cpid));
-                                                double dWeight = GetRSAWeightByCPID(structMag.cpid);
-                                                //entry.push_back(Pair("RSA Weight",dWeight));
                                                 StructCPID UH = GetInitializedStructCPID2(cpid,mvMagnitudes);
-                                                // entry.push_back(Pair("RSA block count",UH.Accuracy));
-                                                // entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
                                                 entry.push_back(Pair("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime)));
                                                 entry.push_back(Pair("Magnitude (Last Superblock)", structMag.Magnitude));
                                                 entry.push_back(Pair("Research Payments (14 days)",structMag.payments));
-                                                // entry.push_back(Pair("Interest Payments (14 days)",structMag.interestPayments));
-                                                if (structMag.cpid == cpid)
-                                                {
-                                                    // double iPct = ( (structMag.interestPayments/14) * 365 / (nBalance+.01));
-                                                    // entry.push_back(Pair("Interest %", iPct));
-                                                }
                                                 entry.push_back(Pair("Daily Paid",structMag.payments/14));
                                                 // Research Age - Calculate Expected 14 Day Owed, and Daily Owed:
                                                 double dExpected14 = magnitude_unit * structMag.Magnitude * 14;
@@ -3477,7 +3499,6 @@ Array MagnitudeReport(std::string cpid)
                                                         + ", Act PPD: " + RoundToString(structMag.payments/14,0) 
                                                         + ", Fulf %: " + RoundToString(fulfilled,2) 
                                                         + ", GRCMagUnit: " + RoundToString(magnitude_unit,4);
-                                                    msLastPaymentTime = "Last Payment Time: " + TimestampToHRDate(structMag.LastPaymentTime);
                                                 }
                                             }
                                             else
@@ -5058,6 +5079,22 @@ Value listitem(const Array& params, bool fHelp)
         results = MagnitudeReportCSV(true);
         return results;
     }
+	else if (sitem == "seefile")
+	{
+		// This is a unit test to prove viability of transmitting a file from node to node
+		std::string sFile = "C:\\test.txt";
+        std::vector<unsigned char> v = readFileToVector(sFile);
+		Object entry;
+	    entry.push_back(Pair("byte1",v[1]));
+        entry.push_back(Pair("bytes",(double)v.size()));
+		for (int i = 0; i < v.size(); i++)
+		{
+			entry.push_back(Pair("bytes",v[i]));
+		}
+		std::string sManifest = FileManifest();
+		entry.push_back(Pair("manifest",sManifest));
+		results.push_back(entry);
+	}
     else if (sitem == "mymagnitude")
     {
             results = MagnitudeReport(msPrimaryCPID);
