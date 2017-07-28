@@ -3504,7 +3504,6 @@ Array MagnitudeReport(std::string cpid)
                                                         + ", Act PPD: " + RoundToString(structMag.payments/14,0) 
                                                         + ", Fulf %: " + RoundToString(fulfilled,2) 
                                                         + ", GRCMagUnit: " + RoundToString(magnitude_unit,4);
-                                                    msLastPaymentTime = "Last Payment Time: " + TimestampToHRDate(structMag.LastPaymentTime);
                                                 }
                                             }
                                             else

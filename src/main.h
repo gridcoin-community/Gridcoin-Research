@@ -180,17 +180,11 @@ extern std::string 	msMiningProject;
 extern std::string 	msMiningCPID;
 extern std::string  msPrimaryCPID;
 
-extern double    	mdMiningRAC;
-extern double       mdMiningNetworkRAC;
 extern double       mdPORNonce;
-extern double       mdPORNonceSolved;
 extern double       mdLastPorNonce;
-extern double       mdMachineTimer;
 extern double       mdMachineTimerLast;
 
-extern std::string  msENCboincpublickey;
 extern std::string  msHashBoinc;
-extern std::string  msHashBoincTxId;
 extern std::string  msMiningErrors;
 extern std::string  msPoll;
 extern std::string  msMiningErrors5;
@@ -203,23 +197,14 @@ extern std::string  msAttachmentGuid;
 
 extern std::string  msMiningErrorsIncluded;
 extern std::string  msMiningErrorsExcluded;
-extern std::string  msContracts;
 
 extern std::string  msRSAOverview;
 extern std::string  msNeuralResponse;
 extern std::string  msHDDSerial;
 extern bool         mbBlocksDownloaded;
-
-
-extern std::string  Organization;
-extern std::string  OrganizationKey;
-
 extern int nGrandfather;
 extern int nNewIndex;
 extern int nNewIndex2;
-
-// Stats for Main Screen:
-extern std::string    msLastPaymentTime;
 
 struct globalStatusType
 {

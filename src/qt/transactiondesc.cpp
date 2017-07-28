@@ -262,8 +262,6 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
         strHTML += "<br><b>" + tr("Comment") + ":</b><br>" + GUIUtil::HtmlEscape(wtx.mapValue["comment"], true) + "<br>";
 
     strHTML += "<b>" + tr("Transaction ID") + ":</b> " + wtx.GetHash().ToString().c_str() + "<br>";
-	msHashBoincTxId = wtx.GetHash().ToString();
-
     if (wtx.IsCoinBase() || wtx.IsCoinStake())
     {
         int out_blocknumber=0;

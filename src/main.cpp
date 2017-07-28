@@ -346,41 +346,29 @@ static boost::thread_group* cpidThreads = NULL;
 ///////////////////////////////
 
 //Global variables to display current mined project in various places:
-std::string     msMiningProject = "";
-std::string     msMiningCPID = "";
-std::string    msPrimaryCPID = "";
-std::string    msENCboincpublickey = "";
-double          mdMiningRAC =0;
-double         mdMiningNetworkRAC = 0;
-double          mdPORNonce = 0;
-double         mdPORNonceSolved = 0;
+std::string    msMiningProject;
+std::string    msMiningCPID;
+std::string    msPrimaryCPID;
+double         mdPORNonce = 0;
 double         mdLastPorNonce = 0;
-double         mdMachineTimer = 0;
 double         mdMachineTimerLast = 0;
 bool           mbBlocksDownloaded = false;
 // Mining status variables
-std::string    msHashBoinc    = "";
-std::string    msHashBoincTxId= "";
-std::string    msMiningErrors = "";
-std::string    msPoll = "";
-std::string    msMiningErrors5 = "";
-std::string    msMiningErrors6 = "";
-std::string    msMiningErrors7 = "";
-std::string    msMiningErrors8 = "";
-std::string    msPeek = "";
-std::string    msLastCommand = "";
-
-std::string    msAttachmentGuid = "";
-
-std::string    msMiningErrorsIncluded = "";
-std::string    msMiningErrorsExcluded = "";
-std::string    msContracts = "";
-
-std::string    msRSAOverview = "";
-std::string    Organization = "";
-std::string    OrganizationKey = "";
-std::string    msNeuralResponse = "";
-std::string    msHDDSerial = "";
+std::string    msHashBoinc;
+std::string    msMiningErrors;
+std::string    msPoll;
+std::string    msMiningErrors5;
+std::string    msMiningErrors6;
+std::string    msMiningErrors7;
+std::string    msMiningErrors8;
+std::string    msPeek;
+std::string    msLastCommand;
+std::string    msAttachmentGuid;
+std::string    msMiningErrorsIncluded;
+std::string    msMiningErrorsExcluded;
+std::string    msRSAOverview;
+std::string    msNeuralResponse;
+std::string    msHDDSerial;
 //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
 
 int nGrandfather = 860000;
@@ -390,7 +378,6 @@ int nNewIndex2 = 364500;
 int64_t nGenesisSupply = 340569880;
 
 // Stats for Main Screen:
-std::string msLastPaymentTime;
 globalStatusType GlobalStatusStruct;
 
 bool fColdBoot = true;
@@ -400,10 +387,7 @@ bool fUseFastIndex = false;
 // Gridcoin status    *************
 MiningCPID GlobalCPUMiningCPID = GetMiningCPID();
 int nBoincUtilization = 0;
-double nMinerPaymentCount = 0;
-std::string sRegVer = "";
-std::string sDefaultWalletAddress = "";
-
+std::string sRegVer;
 
 std::map<std::string, StructCPID> mvCPIDs;        //Contains the project stats at the user level
 std::map<std::string, StructCPID> mvCreditNode;   //Contains the verified stats at the user level
@@ -731,10 +715,10 @@ MiningCPID GetNextProject(bool bForce)
         if (fDebug3 && LessVerbose(50)) printf("Using cached boinckey for project %s\r\n",GlobalCPUMiningCPID.projectname.c_str());
                     msMiningProject = GlobalCPUMiningCPID.projectname;
                     msMiningCPID = GlobalCPUMiningCPID.cpid;
-                    if (LessVerbose(5)) printf("BoincKey - Mining project %s     RAC(%f)  enc %s\r\n",  GlobalCPUMiningCPID.projectname.c_str(), GlobalCPUMiningCPID.rac, msENCboincpublickey.c_str());
+                    if (LessVerbose(5))
+                        printf("BoincKey - Mining project %s     RAC(%f)\r\n",  GlobalCPUMiningCPID.projectname.c_str(), GlobalCPUMiningCPID.rac);
                     double ProjectRAC = GetNetworkAvgByProject(GlobalCPUMiningCPID.projectname);
                     GlobalCPUMiningCPID.NetworkRAC = ProjectRAC;
-                    mdMiningNetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
                     GlobalCPUMiningCPID.Magnitude = CalculatedMagnitude(GetAdjustedTime(),false);
                     if (fDebug3) printf("(boinckey) For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
                     msMiningErrors = (msMiningCPID == "INVESTOR" || msPrimaryCPID=="INVESTOR" || msMiningCPID.empty()) ? _("Staking Interest") : _("Mining");
@@ -746,8 +730,6 @@ MiningCPID GetNextProject(bool bForce)
     
     msMiningProject = "";
     msMiningCPID = "";
-    mdMiningRAC = 0;
-    msENCboincpublickey = "";
     GlobalCPUMiningCPID = GetInitializedGlobalCPUMiningCPID("");
 
     std::string email = GetArgument("email", "NA");
@@ -853,11 +835,9 @@ MiningCPID GetNextProject(bool bForce)
                                         //Only used for global status:
                                         msMiningProject = structcpid.projectname;
                                         msMiningCPID = structcpid.cpid;
-                                        mdMiningRAC = structcpid.rac;
 
                                         double ProjectRAC = GetNetworkAvgByProject(GlobalCPUMiningCPID.projectname);
                                         GlobalCPUMiningCPID.NetworkRAC = ProjectRAC;
-                                        mdMiningNetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
                                         GlobalCPUMiningCPID.Magnitude = CalculatedMagnitude(GetAdjustedTime(),false);
                                         if (fDebug && LessVerbose(2)) printf("For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
                                         //Reserved for GRC Speech Synthesis
@@ -880,10 +860,7 @@ MiningCPID GetNextProject(bool bForce)
         msMiningErrors = (msPrimaryCPID == "INVESTOR") ? "" : _("All BOINC projects exhausted.");
         msMiningProject = "INVESTOR";
         msMiningCPID = "INVESTOR";
-        mdMiningRAC = 0;
-        msENCboincpublickey = "";
         GlobalCPUMiningCPID = GetInitializedGlobalCPUMiningCPID("INVESTOR");
-        mdMiningNetworkRAC = 0;
         if (fDebug10) printf("-Investor mode-");
 
         }
@@ -1070,37 +1047,36 @@ unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans)
 
 std::string DefaultWalletAddress()
 {
+    static std::string sDefaultWalletAddress;
+    if (!sDefaultWalletAddress.empty())
+        return sDefaultWalletAddress;
+    
     try
     {
         //Gridcoin - Find the default public GRC address (since a user may have many receiving addresses):
-        if (!sDefaultWalletAddress.empty())
-            return sDefaultWalletAddress;
-        string strAccount;
         BOOST_FOREACH(const PAIRTYPE(CTxDestination, string)& item, pwalletMain->mapAddressBook)
         {
-             const CBitcoinAddress& address = item.first;
-             const std::string& strName = item.second;
-             bool fMine = IsMine(*pwalletMain, address.Get());
-             if (fMine && strName == "Default") 
-             {
-                 sDefaultWalletAddress=CBitcoinAddress(address).ToString();
-                 return sDefaultWalletAddress;
-             }
+            const CBitcoinAddress& address = item.first;
+            const std::string& strName = item.second;
+            bool fMine = IsMine(*pwalletMain, address.Get());
+            if (fMine && strName == "Default") 
+            {
+                sDefaultWalletAddress=CBitcoinAddress(address).ToString();
+                return sDefaultWalletAddress;
+            }
         }
-
-
-        //Cant Find
-
+        
+        //Cant Find        
         BOOST_FOREACH(const PAIRTYPE(CTxDestination, string)& item, pwalletMain->mapAddressBook)
         {
-             const CBitcoinAddress& address = item.first;
-             //const std::string& strName = item.second;
-             bool fMine = IsMine(*pwalletMain, address.Get());
-             if (fMine)
-             {
-                 sDefaultWalletAddress=CBitcoinAddress(address).ToString();
-                 return sDefaultWalletAddress;
-             }
+            const CBitcoinAddress& address = item.first;
+            //const std::string& strName = item.second;
+            bool fMine = IsMine(*pwalletMain, address.Get());
+            if (fMine)
+            {
+                sDefaultWalletAddress=CBitcoinAddress(address).ToString();
+                return sDefaultWalletAddress;
+            }
         }
     }
     catch (std::exception& e)
