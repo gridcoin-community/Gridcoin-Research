@@ -1311,71 +1311,71 @@ void StakeMiner(CWallet *pwallet)
 
     MinerAutoUnlockFeature(pwallet);
 
-  while (!fShutdown)
-  {
-
-    //wait for next round
-    MilliSleep(nMinerSleep);
-    //clear miner messages
-    msMiningErrors5="";
-    nLastCoinStakeSearchInterval = 0;
-
-    if(!IsMiningAllowed(pwallet))
-        continue;
-
-    GetNextProject(true);
-    //GlobalCPUMiningCPID.Magnitude=30000;
-
-    // * Create a bare block
-    CBlockIndex* pindexPrev = pindexBest;
-    CBlock StakeBlock;
-    StakeBlock.nVersion = 7;
-    StakeBlock.nTime= GetAdjustedTime();
-    StakeBlock.nNonce= 0;
-    StakeBlock.nBits = GetNextTargetRequired(pindexPrev, true);
-    StakeBlock.vtx.resize(2);
-    //tx 0 is coin_base
-    CTransaction &StakeTX= StakeBlock.vtx[1]; //tx 1 is coin_stake
-
-    //New version
-    if(fTestNet && pindexPrev->nHeight > 288158)
-        StakeBlock.nVersion = 8;
-
-    // * Try to create a CoinStake transaction
-    CKey BlockKey;
-    vector<const CWalletTx*> StakeInputs;
-    uint64_t StakeCoinAge;
-    if( !CreateCoinStake( StakeBlock, BlockKey, StakeInputs, StakeCoinAge, *pwallet, pindexPrev ) )
-        continue;
-    StakeBlock.nTime= StakeTX.nTime;
-    printf("StakeMiner: created coin stake\n");
-
-    // * create rest of the block
-    if( !CreateRestOfTheBlock(StakeBlock,pindexPrev) )
-        continue;
-    printf("StakeMiner: created rest of the block\n");
-
-    // * add gridcoin reward to coinstake
-    if( !CreateGridcoinReward(StakeBlock,StakeCoinAge,pindexPrev) )
-        continue;
-    printf("StakeMiner: added gridcoin reward to coinstake\n");
-
-    // * sign boinchash, coinstake, wholeblock
-    if( !SignStakeBlock(StakeBlock,BlockKey,StakeInputs,pwallet) )
-        continue;
-    printf("StakeMiner: signed boinchash, coinstake, wholeblock\n");
-
-    // * delegate to ProcessBlock
-    LOCK(cs_main);
-    if (!ProcessBlock(NULL, &StakeBlock, true))
+    while (!fShutdown)
     {
-        msMiningErrors5+="Block vehemently rejected; ";
-        error("StakeMiner: Block vehemently rejected");
-        continue;
-    }
-    printf("StakeMiner: block processed\n");
-    nLastBlockSolved = GetAdjustedTime();
 
-  } //end while(!fShutdown)
+        //wait for next round
+        MilliSleep(nMinerSleep);
+        //clear miner messages
+        msMiningErrors5="";
+        nLastCoinStakeSearchInterval = 0;
+
+        if(!IsMiningAllowed(pwallet))
+            continue;
+
+        GetNextProject(true);
+        //GlobalCPUMiningCPID.Magnitude=30000;
+
+        // * Create a bare block
+        CBlockIndex* pindexPrev = pindexBest;
+        CBlock StakeBlock;
+        StakeBlock.nVersion = 7;
+        StakeBlock.nTime= GetAdjustedTime();
+        StakeBlock.nNonce= 0;
+        StakeBlock.nBits = GetNextTargetRequired(pindexPrev, true);
+        StakeBlock.vtx.resize(2);
+        //tx 0 is coin_base
+        CTransaction &StakeTX= StakeBlock.vtx[1]; //tx 1 is coin_stake
+
+        //New version
+        if(fTestNet && pindexPrev->nHeight > 288158)
+            StakeBlock.nVersion = 8;
+
+        // * Try to create a CoinStake transaction
+        CKey BlockKey;
+        vector<const CWalletTx*> StakeInputs;
+        uint64_t StakeCoinAge;
+        if( !CreateCoinStake( StakeBlock, BlockKey, StakeInputs, StakeCoinAge, *pwallet, pindexPrev ) )
+            continue;
+        StakeBlock.nTime= StakeTX.nTime;
+        printf("StakeMiner: created coin stake\n");
+
+        // * create rest of the block
+        if( !CreateRestOfTheBlock(StakeBlock,pindexPrev) )
+            continue;
+        printf("StakeMiner: created rest of the block\n");
+
+        // * add gridcoin reward to coinstake
+        if( !CreateGridcoinReward(StakeBlock,StakeCoinAge,pindexPrev) )
+            continue;
+        printf("StakeMiner: added gridcoin reward to coinstake\n");
+
+        // * sign boinchash, coinstake, wholeblock
+        if( !SignStakeBlock(StakeBlock,BlockKey,StakeInputs,pwallet) )
+            continue;
+        printf("StakeMiner: signed boinchash, coinstake, wholeblock\n");
+
+        // * delegate to ProcessBlock
+        LOCK(cs_main);
+        if (!ProcessBlock(NULL, &StakeBlock, true))
+        {
+            msMiningErrors5+="Block vehemently rejected; ";
+            error("StakeMiner: Block vehemently rejected");
+            continue;
+        }
+        printf("StakeMiner: block processed\n");
+        nLastBlockSolved = GetAdjustedTime();
+
+    } //end while(!fShutdown)
 }
 
