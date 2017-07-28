@@ -1559,7 +1559,7 @@ bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pai
 
 // Select some coins without random shuffle or best subset approximation
 bool CWallet::SelectCoinsForStaking(int64_t nTargetValueIn, unsigned int nSpendTime, 
-    set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const
+    std::set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const
 {
     vector<COutput> vCoins;
     AvailableCoinsForStaking(vCoins, nSpendTime);
@@ -1574,7 +1574,7 @@ bool CWallet::SelectCoinsForStaking(int64_t nTargetValueIn, unsigned int nSpendT
     //      nTargetValue = nTargetValueIn/2;
     //}
     
-    BOOST_FOREACH(COutput output, vCoins)
+    for(const COutput& output : vCoins)
     {
         const CWalletTx *pcoin = output.tx;
         int i = output.i;

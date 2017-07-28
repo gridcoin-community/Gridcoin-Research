@@ -1013,7 +1013,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     if(fDebug2) printf("\nCreateCoinStake: Staking nTime/16= %d Bits= %u\n",
     txnew.nTime/16,blocknew.nBits);
 
-    BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, CoinsToStake)
+    for(const auto& pcoin : CoinsToStake)
     {
         const CTransaction &CoinTx =*pcoin.first; //transaction that produced this coin
         unsigned int CoinTxN =pcoin.second; //index of this coin inside it
