@@ -887,28 +887,30 @@ double GetAverageInList(std::string superblock,double& out_count)
 {
     try
     {
-        std::vector<std::string> vSuperblock = split(superblock.c_str(),";");
-        if (vSuperblock.size() < 2) return 0;
+        const std::vector<std::string>& vSuperblock = split(superblock.c_str(),";");
+        if (vSuperblock.size() < 2)
+            return 0;
+
         double rows_above_zero = 0;
         double rows_with_zero = 0;
         double total_mag = 0;
-        for (unsigned int i = 0; i < vSuperblock.size(); i++)
+        for (const std::string& row : vSuperblock)
         {
-            // For each CPID in the contract
-            if (vSuperblock[i].length() > 1)
+            const std::vector<std::string>& fields = split(row, ",");
+            if(fields.size() < 2)
+                continue;
+
+            const std::string& cpid = fields[0];
+            double magnitude = std::atoi(fields[1].c_str());
+            if (cpid.length() > 10)
             {
-                    std::string cpid = ExtractValue("0"+vSuperblock[i],",",0);
-                    double magnitude = cdbl(ExtractValue("0"+vSuperblock[i],",",1),0);
-                    if (cpid.length() > 10)
-                    {
-                        total_mag += magnitude;
-                        rows_above_zero++;
-                    }
-                    else
-                    {
-                        // Non-compressed legacy block placeholder
-                        rows_with_zero++;
-                    }
+                total_mag += magnitude;
+                rows_above_zero++;
+            }
+            else
+            {
+                // Non-compressed legacy block placeholder
+                rows_with_zero++;
             }
         }
         out_count = rows_above_zero + rows_with_zero;
