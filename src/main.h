@@ -105,6 +105,8 @@ inline int64_t PastDrift(int64_t nTime, int nHeight)   { return IsProtocolV2(nHe
 inline int64_t FutureDrift(int64_t nTime, int nHeight) { return IsProtocolV2(nHeight) ? nTime + 20 * 60  : nTime + 20 * 60; }
 inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight) ? 90 : 60; }
 
+extern bool IsNeuralNodeParticipant(const std::string& addr, int64_t locktime);
+
 extern std::map<std::string, std::string> mvApplicationCache;
 extern std::map<std::string, int64_t> mvApplicationCacheTimestamp;
 extern std::map<std::string, double> mvNeuralNetworkHash;
