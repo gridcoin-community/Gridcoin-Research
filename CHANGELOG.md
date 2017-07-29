@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
    (@Foggyx420).
  - Fixed a coin age bug which made it hard to stake on testnet (@denravonska)
  - Fixed reloading of polls in the voting GUI, #431 (@skcin) 
+ - Fix crash when listing receivedby on addresses with no transactions,
+   #456 (@denravonska).
 
 ### Removed
  - Removed newbie boost, #332
