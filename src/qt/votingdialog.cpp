@@ -858,8 +858,6 @@ QString VotingVoteDialog::GetVoteValue(void)
     return sVote;
 }
 
-// NewPollDialog
-//
 NewPollDialog::NewPollDialog(QWidget *parent)
     : QDialog(parent)
 {

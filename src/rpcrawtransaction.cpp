@@ -31,10 +31,10 @@ std::string GetShareType(double dShareType);
 bool PollCreatedAfterSecurityUpgrade(std::string pollname);
 double DoubleFromAmount(int64_t amount);
 
-#ifdef QT_GUI
-#include "qt/upgradedialog.h"
-extern Checker checker;
-#endif
+/* #ifdef QT_GUI */
+/* #include "qt/upgradedialog.h" */
+/* extern Checker checker; */
+/* #endif */
 
 std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const CMerkleTx& mtx)
 {
@@ -407,9 +407,9 @@ Value downloadblocks(const Array& params, bool fHelp)
         else
         {
             boost::thread(Imker, &upgrader);
-            #ifdef QT_GUI
-            QMetaObject::invokeMethod(&checker, "check", Qt::QueuedConnection);
-            #endif
+            /* #ifdef QT_GUI */
+            /* QMetaObject::invokeMethod(&checker, "check", Qt::QueuedConnection); */
+            /* #endif */
             return "Initiated download of blockchain";
         }
 }
@@ -507,9 +507,9 @@ Value upgrade(const Array& params, bool fHelp)
          else
          {
              boost::thread(Imker, &upgrader);
-             #ifdef QT_GUI
-              QMetaObject::invokeMethod(&checker, "check", Qt::QueuedConnection);
-             #endif
+             /* #ifdef QT_GUI */
+             /*  QMetaObject::invokeMethod(&checker, "check", Qt::QueuedConnection); */
+             /* #endif */
              return "Initiated download of client";
         }
 
@@ -793,7 +793,7 @@ Value createrawtransaction(const Array& params, bool fHelp)
     set<CBitcoinAddress> setAddress;
     for (auto const& s : sendTo)
     {
-         if (s.name_ == "data") 
+         if (s.name_ == "data")
          {
             std::vector<unsigned char> data = ParseHexV(s.value_,"Data");
             CTxOut out(0, CScript() << OP_RETURN << data);

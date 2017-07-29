@@ -31,7 +31,7 @@
 #include "signverifymessagedialog.h"
 #include "optionsdialog.h"
 #include "aboutdialog.h"
-#include "votingdialog.h"
+/* #include "votingdialog.h" */
 #include "clientmodel.h"
 #include "walletmodel.h"
 #include "editaddressdialog.h"
@@ -704,14 +704,10 @@ void BitcoinGUI::createActions()
     connect(upgradeAction, SIGNAL(triggered()), this, SLOT(upgradeClicked()));
     connect(downloadAction, SIGNAL(triggered()), this, SLOT(downloadClicked()));
     connect(configAction, SIGNAL(triggered()), this, SLOT(configClicked()));
-
     connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
-
     connect(diagnosticsAction, SIGNAL(triggered()), this, SLOT(diagnosticsClicked()));
-
     connect(foundationAction, SIGNAL(triggered()), this, SLOT(foundationClicked()));
     connect(faqAction, SIGNAL(triggered()), this, SLOT(faqClicked()));
-
     connect(newUserWizardAction, SIGNAL(triggered()), this, SLOT(newUserWizardClicked()));
 }
 
@@ -751,7 +747,8 @@ void BitcoinGUI::createMenuBar()
     community->addSeparator();
     community->addAction(websiteAction);
 
-    QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
+	QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
+
 #ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows
     qmAdvanced->addAction(configAction);
     qmAdvanced->addAction(miningAction);

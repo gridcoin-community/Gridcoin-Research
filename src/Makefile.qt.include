@@ -221,8 +221,9 @@ BITCOIN_QT_H = \
   qt/transactiontablemodel.h \
   qt/transactionview.h \
   qt/upgradedialog.h \
-  qt/votingdialog.h \
   qt/walletmodel.h
+  # qt/votingdialog.h \
+  # qt/walletmodel.h
 
 RES_ICONS = \
   qt/res/icons/add.png \
@@ -318,8 +319,9 @@ BITCOIN_QT_BASE_CPP = \
   qt/transactiontablemodel.cpp \
   qt/transactionview.cpp \
   qt/upgradedialog.cpp \
-  qt/votingdialog.cpp \
   qt/walletmodel.cpp
+  # qt/votingdialog.cpp \
+  # qt/walletmodel.cpp
 
 
 #BITCOIN_QT_WALLET_CPP = \
@@ -389,7 +391,7 @@ qt_bitcoin_qt_LDADD = qt/libbitcoinqt.a
 # if ENABLE_ZMQ
 # qt_bitcoin_qt_LDADD += $(LIBBITCOIN_ZMQ) $(ZMQ_LIBS)
 # endif
-qt_bitcoin_qt_LDADD += $(LIBUNIVALUE) $(LIBLEVELDB) $(LIBLEVELDB_SSE42) $(LIBMEMENV) \
+qt_bitcoin_qt_LDADD += $(LIBBITCOIN_UTIL) $(LIBUNIVALUE) $(LIBLEVELDB) $(LIBLEVELDB_SSE42) $(LIBMEMENV) \
   $(BOOST_LIBS) $(QT_LIBS) $(QT_DBUS_LIBS) $(QR_LIBS) $(PROTOBUF_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(LIBSECP256K1) \
   $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS)
 qt_bitcoin_qt_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(QT_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
@@ -421,7 +423,7 @@ $(QT_QRC_CPP): $(QT_QRC) $(QT_FORMS_H) $(RES_ICONS) $(RES_IMAGES) $(RES_MOVIES) 
 	$(AM_V_GEN) QT_SELECT=$(QT_SELECT) $(RCC) -name bitcoin $< | \
 	  $(SED) -e '/^\*\*.*Created:/d' -e '/^\*\*.*by:/d' > $@
 
-CLEAN_QT = $(QT_QM) $(QT_FORMS_H) qt/*.gcda qt/*.gcno
+CLEAN_QT = $(nodist_qt_libbitcoinqt_a_SOURCES) $(QT_QM) $(QT_FORMS_H) qt/*.gcda qt/*.gcno
 
 CLEANFILES += $(CLEAN_QT)
 
