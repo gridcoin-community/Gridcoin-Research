@@ -11,6 +11,7 @@ Public Class clsBoincProjectDownload
         Try
             Dim webRequest As WebRequest = HttpWebRequest.Create(url)
             webRequest.Method = "HEAD"
+            webRequest.Timeout = 10000
             Using webResponse As WebResponse = webRequest.GetResponse()
                 For Each header As String In webResponse.Headers
                     headers.Add(header, webResponse.Headers(header))
