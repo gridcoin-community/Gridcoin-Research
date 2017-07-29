@@ -68,7 +68,7 @@ extern bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::
 bool NeedASuperblock();
 bool VerifySuperblock(std::string superblock, int nHeight);
 double ExtractMagnitudeFromExplainMagnitude();
-std::string GetQuorumHash(std::string data);
+std::string GetQuorumHash(const std::string& data);
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
 bool ComputeNeuralNetworkSupermajorityHashes();
 bool UpdateNeuralNetworkQuorumData();

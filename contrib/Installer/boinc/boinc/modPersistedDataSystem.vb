@@ -216,6 +216,12 @@ Module modPersistedDataSystem
                 End If
             Next
             'sOut += "00000000000,275000;" 'This is a placeholder to be removed in Neural Network 2.0
+            'This is a placeholder to be removed in Neural Network 2.0.
+            'It is needed to bump the average magnitude above 70 to avoid having the superblock rejected.
+            'The CPID cannot be all 0 since it will be filtered out and the hashes of the ASCII and the
+            'binary superblock will diff. When the 70 average mag requirement has been lifted from the
+            'C++ code this placeholder can be removed.
+            '            sOut += "00000000000000000000000000000001,32767;"
             sOut += "</MAGNITUDES><QUOTES>"
 
             surrogateRow.Database = "Prices"
@@ -522,7 +528,7 @@ Module modPersistedDataSystem
         StoreHistoricalMagnitude()
         bNeedsDgvRefreshed = True
 
-       End Sub
+    End Sub
     Private Function GetMagByCPID(sCPID As String) As Row
         Dim dr As New Row
         dr.Database = "CPID"
@@ -809,8 +815,8 @@ Module modPersistedDataSystem
         Dim lNoWitnesses As Long = 0
 
         For Each cpid As Row In lstCPIDs
-                If cpid.Witnesses = 0 Then
-                    lNoWitnesses += 1
+            If cpid.Witnesses = 0 Then
+                lNoWitnesses += 1
             End If
         Next
         Return lNoWitnesses
@@ -1517,7 +1523,7 @@ Retry:
 
         Return sPath + sFilename
     End Function
-   
+
     Public Function GetEntryPrefix(dataRow As Row) As String
         Dim sFilename As String = LCase(dataRow.Database) + "_" + LCase(dataRow.Table) + "_"
         Return sFilename
@@ -1807,7 +1813,7 @@ Retry:
         Return iMins
     End Function
 
-    
+
 
     Public Function GetUnixFileAge(sPath As String) As Double
         If File.Exists(sPath) = False Then Return 1000000
@@ -1837,7 +1843,7 @@ End Module
 
 Public Class MyWebClient2
     Inherits System.Net.WebClient
-    Private timeout As Long = 10000
+    Private timeout As Long = 5000
     Protected Overrides Function GetWebRequest(ByVal uri As Uri) As System.Net.WebRequest
         Dim w As System.Net.WebRequest = MyBase.GetWebRequest(uri)
         w.Timeout = timeout
