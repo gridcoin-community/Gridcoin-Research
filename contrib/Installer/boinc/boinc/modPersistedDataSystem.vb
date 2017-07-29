@@ -185,17 +185,27 @@ Module modPersistedDataSystem
             Dim lstCPIDs As List(Of Row) = GetList(surrogateRow, "*")
             lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
             Dim dMagAge As Long = 0
+            Dim lMaxZeroShaveAmount = lstCPIDs.Count * 0.06 'Our superblocks must be within 10% tolerance (as compared to beacon count) to be accepted
+            Dim lShavedZeroCount As Long = 0
+
             For Each cpid As Row In lstCPIDs
                 If cpid.DataColumn5 = "True" Then
-                    Dim sRow As String = cpid.PrimaryKey + "," + Num(cpid.Magnitude) + ";"
+                    Dim dLocalMagnitude As Double = Val("0" + Num(cpid.Magnitude)) * 1.35 'Ensure culture is neutral first - and then that magnitude passes through the bar
+                    If dLocalMagnitude > 32766 Then dLocalMagnitude = 32766
+
+                    Dim sRow As String = cpid.PrimaryKey + "," + Num(dLocalMagnitude) + ";"
                     'Zero magnitude rule (We need a placeholder because of the beacon count rule)
-                    If Val(cpid.Magnitude) = 0 Then
+                    If Val(dLocalMagnitude) = 0 Then
                         sRow = "0,15;"
+                        If lShavedZeroCount < lMaxZeroShaveAmount Then
+                            lShavedZeroCount += 1
+                            sRow = "" 'Remove the row
+                        End If
                     End If
 
-                    lTotal = lTotal + Val("0" + Trim(cpid.Magnitude))
+                    lTotal = lTotal + Val("0" + Trim(dLocalMagnitude))
                     lRows = lRows + 1
-                    sOut += sRow
+                    If Len(sRow) > 0 Then sOut += sRow
                     dMagAge = 0
 
                 Else
@@ -205,13 +215,13 @@ Module modPersistedDataSystem
                     sOut += sRow
                 End If
             Next
-
+            'sOut += "00000000000,275000;" 'This is a placeholder to be removed in Neural Network 2.0
             'This is a placeholder to be removed in Neural Network 2.0.
             'It is needed to bump the average magnitude above 70 to avoid having the superblock rejected.
             'The CPID cannot be all 0 since it will be filtered out and the hashes of the ASCII and the
             'binary superblock will diff. When the 70 average mag requirement has been lifted from the
             'C++ code this placeholder can be removed.
-            sOut += "00000000000000000000000000000001,32767;"
+            '            sOut += "00000000000000000000000000000001,32767;"
             sOut += "</MAGNITUDES><QUOTES>"
 
             surrogateRow.Database = "Prices"
@@ -400,11 +410,11 @@ Module modPersistedDataSystem
         End Try
     End Function
     Public Sub SyncDPOR2()
-        '   If Math.Abs(DateDiff(DateInterval.Second, Now, mdLastSync)) > 60 * 10 Then bMagsDoneLoading = True
-        '   If bMagsDoneLoading = False Then
-        'Log("Blocked call.")
-        'Exit Sub
-        'End If
+        If Math.Abs(DateDiff(DateInterval.Second, Now, mdLastSync)) > 60 * 10 Then bMagsDoneLoading = True
+        If bMagsDoneLoading = False Then
+            Log("Blocked call.")
+            Exit Sub
+        End If
         If KeyValue("disableneuralnetwork") = "true" Then
             Log("Neural network is disabled.")
             Exit Sub
@@ -429,9 +439,13 @@ Module modPersistedDataSystem
         End If
 
         Dim dWindow As Double = 60 * 60 '1 hour before and 1 hour after superblock expires:
+        Dim lAgeOfMaster = GetUnixFileAge(GetGridFolder() + "NeuralNetwork\db.dat")
+        If lAgeOfMaster > (SYNC_THRESHOLD / 4) Then
+            Log("Clearing project data once every 6 hours.")
+            ClearProjectData()
+        End If
         If dAge > (86400 - dWindow) And dAge < (86400 + dWindow) Then
-            Dim lAgeOfMaster = GetUnixFileAge(GetGridFolder() + "NeuralNetwork\db.dat")
-            If lAgeOfMaster > (SYNC_THRESHOLD / 4) Then
+            If lAgeOfMaster > (SYNC_THRESHOLD) Then
                 'Clear out this nodes project data, so the node can sync with the team at the same exact time:
                 Log("Clearing project data so we can synchronize as a team.")
                 ClearProjectData()
@@ -514,7 +528,7 @@ Module modPersistedDataSystem
         StoreHistoricalMagnitude()
         bNeedsDgvRefreshed = True
 
-       End Sub
+    End Sub
     Private Function GetMagByCPID(sCPID As String) As Row
         Dim dr As New Row
         dr.Database = "CPID"
@@ -801,8 +815,8 @@ Module modPersistedDataSystem
         Dim lNoWitnesses As Long = 0
 
         For Each cpid As Row In lstCPIDs
-                If cpid.Witnesses = 0 Then
-                    lNoWitnesses += 1
+            If cpid.Witnesses = 0 Then
+                lNoWitnesses += 1
             End If
         Next
         Return lNoWitnesses
@@ -1509,7 +1523,7 @@ Retry:
 
         Return sPath + sFilename
     End Function
-   
+
     Public Function GetEntryPrefix(dataRow As Row) As String
         Dim sFilename As String = LCase(dataRow.Database) + "_" + LCase(dataRow.Table) + "_"
         Return sFilename
@@ -1799,7 +1813,7 @@ Retry:
         Return iMins
     End Function
 
-    
+
 
     Public Function GetUnixFileAge(sPath As String) As Double
         If File.Exists(sPath) = False Then Return 1000000

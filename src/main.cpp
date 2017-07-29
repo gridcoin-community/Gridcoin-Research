@@ -2873,7 +2873,6 @@ std::string UnpackBinarySuperblock(std::string sBlock)
 
 std::string PackBinarySuperblock(std::string sBlock)
 {
-
     std::string sMagnitudes = ExtractXML(sBlock,"<MAGNITUDES>","</MAGNITUDES>");
     std::string sAverages   = ExtractXML(sBlock,"<AVERAGES>","</AVERAGES>");
     std::string sQuotes     = ExtractXML(sBlock,"<QUOTES>","</QUOTES>");

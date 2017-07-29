@@ -39,6 +39,28 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Removed newbie boost, #332
  - Removed obsolete functionality.
 
+## [3.5.9.8] - 2017-07-29
+### Changed
+ - Revised Neural Network magnitude calculation to prevent diluted magnitudes.
+ - Cap magnitude to 32766 in NeuralNet to avoid future hash inconsistencies when packing binary superblocks.
+
+### Fixed
+ - Fix binary pack/unpack bug which could cause the contract to get a different hash when unpacked.
+ - Revised Neural Network business logic rule fix inability to stake current superblock.
+
+## [3.5.9.7] - 2017-07-25
+### Fixed
+ - Add artificial researcher to contract to push the average magnitude above 70. Without this the superblock is rejected by the wallet.
+
+## [3.5.9.6] - 2017-07-24
+### Fixed
+ - Use UTC time instead of local time when determining file mirror filename suffix.
+
+## [3.5.9.5] - 2017-07-22
+### Fixed
+ - Fix incorrect handling of 404 errors in NeuralNet.
+ - Fix a bug causing the NeuralNet to skip Rosetta.
+
 ## [3.5.9.4] - 2017-07-16
 ### Changed
  - Added checkpoint (block 950000).
