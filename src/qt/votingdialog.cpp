@@ -12,7 +12,7 @@
 	#include <QtCharts/QPieSeries>
 #endif
 
-#include <QtConcurrentRun>
+/* #include <QtConcurrentRun> */
 #include <QClipboard>
 #include <QEvent>
 #include <QFont>
@@ -438,9 +438,9 @@ void VotingDialog::loadPolls(bool history)
     {
         loadingIndicator->setText(tr("...loading data!"));
         loadingIndicator->show();
-        QFuture<void> future = QtConcurrent::run(tableModel_, &VotingTableModel::resetData, history);
-        watcher.setProperty("running", true);
-        watcher.setFuture(future);
+        /* QFuture<void> future = QtConcurrent::run(tableModel_, &VotingTableModel::resetData, history); */
+        /* watcher.setProperty("running", true); */
+        /* watcher.setFuture(future); */
     }
 }
 
