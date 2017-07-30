@@ -1768,7 +1768,11 @@ Value execute(const Array& params, bool fHelp)
                             }
                             else
                             {
+<<<<<<< HEAD
                                 std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID,pindexBest->nVersion);
+=======
+                                std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID);
+>>>>>>> 54ee0efa... Updated list of translations
                                 std::string GRCAddress = DefaultWalletAddress();
                                 StructCPID structMag = GetInitializedStructCPID2(GlobalCPUMiningCPID.cpid,mvMagnitudes);
                                 double dmag = structMag.Magnitude;
@@ -1783,6 +1787,7 @@ Value execute(const Array& params, bool fHelp)
                                 double cpid_age = GetAdjustedTime() - nCPIDTime;
                                 double stake_age = GetAdjustedTime() - nGRCTime;
 
+<<<<<<< HEAD
                                 StructCPID structGRC = GetInitializedStructCPID2(GRCAddress,mvMagnitudes);
 
 
@@ -1790,13 +1795,28 @@ Value execute(const Array& params, bool fHelp)
 
                                 double dShareType= RoundFromString(GetPollXMLElementByPollTitle(Title,"<SHARETYPE>","</SHARETYPE>"),0);
 
+=======
+                                // Phase II - Prevent Double Voting
+
+                                StructCPID structGRC = GetInitializedStructCPID2(GRCAddress,mvMagnitudes);
+
+
+                                printf("CPIDAge %f,StakeAge %f,Poll Duration %f \r\n",cpid_age,stake_age,poll_duration);
+
+                                double dShareType= cdbl(GetPollXMLElementByPollTitle(Title,"<SHARETYPE>","</SHARETYPE>"),0);
+
+>>>>>>> 54ee0efa... Updated list of translations
                                 // Share Type 1 == "Magnitude"
                                 // Share Type 2 == "Balance"
                                 // Share Type 3 == "Both"
                                 if (cpid_age < poll_duration) dmag = 0;
                                 if (stake_age < poll_duration) nBalance = 0;
 
+<<<<<<< HEAD
                                 if ((dShareType == 1) && cpid_age < poll_duration)
+=======
+                                if ((dShareType == 1) && cpid_age < poll_duration)
+>>>>>>> 54ee0efa... Updated list of translations
                                 {
                                     entry.push_back(Pair("Error","Sorry, When voting in a magnitude poll, your CPID must be older than the poll duration."));
                                     results.push_back(entry);
