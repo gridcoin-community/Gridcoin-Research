@@ -51,7 +51,6 @@ int RestartClient();
 extern std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress);
 extern std::string GetBurnAddress();
-bool NeuralNodeParticipates();
 bool StrLessThanReferenceHash(std::string rh);
 extern std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, std::string sSig, int64_t MinimumBalance, double dFees, std::string sPublicKey);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
@@ -2418,7 +2417,7 @@ Value execute(const Array& params, bool fHelp)
         {
                 std::string rh = params[1].get_str();
                 bool r1 = StrLessThanReferenceHash(rh);
-                bool r2 = NeuralNodeParticipates();
+                bool r2 = IsNeuralNodeParticipant(DefaultWalletAddress(), GetAdjustedTime());
                 entry.push_back(Pair("<Ref Hash",r1));
                 entry.push_back(Pair("WalletAddress<Ref Hash",r2));
                 results.push_back(entry);

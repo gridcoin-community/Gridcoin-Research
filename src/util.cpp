@@ -86,8 +86,6 @@ extern std::string GetNeuralVersion();
 
 int64_t IsNeural();
 
-extern int GetDayOfYear();
-
 void MilliSleep(int64_t n)
 {
 #if BOOST_VERSION >= 105000
@@ -352,11 +350,11 @@ string real_strprintf(const std::string &format, int dummy, ...)
     return str;
 }
 
-int GetDayOfYear()
+int GetDayOfYear(int64_t timestamp)
 {
     try
     {
-        boost::gregorian::date d=boost::posix_time::from_time_t(GetAdjustedTime()).date();
+        boost::gregorian::date d=boost::posix_time::from_time_t(timestamp).date();
         //      boost::gregorian::date d(year, month, day);
         int dayNumber = d.day_of_year();
         return dayNumber;

@@ -35,7 +35,6 @@
 #include <ctime>
 #include <math.h>
 
-int GetDayOfYear();
 void GetBeaconElements(std::string sBeacon,std::string& out_cpid, std::string& out_address, std::string& out_publickey);
 extern std::string NodeAddress(CNode* pfrom);
 extern std::string ConvertBinToHex(std::string a);
@@ -71,7 +70,6 @@ extern void GridcoinServices();
 int64_t BeaconTimeStamp(std::string cpid, bool bZeroOutAfterPOR);
 extern bool NeedASuperblock();
 extern double SnapToGrid(double d);
-extern bool NeuralNodeParticipates();
 extern bool StrLessThanReferenceHash(std::string rh);
 void BusyWaitForTally();
 extern bool TallyNetworkAverages(bool Forcefully);
@@ -4519,7 +4517,7 @@ void GridcoinServices()
         // Let's start syncing the neural network as soon as the LAST superblock is over 12 hours old.
         // Also, lets do this as a TEAM exactly every 30 blocks (~30 minutes) to try to reach an EXACT consensus every half hour:
         // For effeciency, the network sleeps for 20 hours after a good superblock is accepted
-        if (NeedASuperblock() && NeuralNodeParticipates())
+        if (NeedASuperblock() && IsNeuralNodeParticipant(DefaultWalletAddress(), GetAdjustedTime()))
         {
             if (fDebug3) printf("FSWDPOR ");
             FullSyncWithDPORNodes();
@@ -4529,7 +4527,7 @@ void GridcoinServices()
     if (( (nBestHeight-10) % 30 ) == 0)
     {
             // 10 Blocks after the network started syncing the neural network as a team, ask the neural network to come to a quorum
-            if (NeedASuperblock() && NeuralNodeParticipates())
+            if (NeedASuperblock() && IsNeuralNodeParticipant(DefaultWalletAddress(), GetAdjustedTime()))
             {
                 // First verify my node has a synced contract
                 std::string contract = "";
@@ -7469,7 +7467,7 @@ std::string GetNeuralNetworkSuperBlock()
 {
     //Only try to stake a superblock if the contract expired And the superblock is the highest popularity block And we do not have a pending superblock
     int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-    if (NeuralNodeParticipates() && NeedASuperblock() && PendingSuperblockHeight()==0)
+    if (IsNeuralNodeParticipant(DefaultWalletAddress(), GetAdjustedTime()) && NeedASuperblock() && PendingSuperblockHeight()==0)
     {
         std::string myNeuralHash = "";
         #if defined(WIN32) && defined(QT_GUI)
@@ -7534,7 +7532,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion)
     }
 
     //Add the neural hash only if necessary
-    if (!OutOfSyncByAge() && NeuralNodeParticipates() && NeedASuperblock())
+    if (!OutOfSyncByAge() && IsNeuralNodeParticipant(DefaultWalletAddress(), GetAdjustedTime()) && NeedASuperblock())
     {
         #if defined(WIN32) && defined(QT_GUI)
             mcpid.NeuralHash = sNeuralHash;
@@ -9163,11 +9161,12 @@ double SnapToGrid(double d)
     return dOut;
 }
 
-bool NeuralNodeParticipates()
+bool IsNeuralNodeParticipant(const std::string& addr, int64_t locktime)
 {
-    //Calculate the nodes GRC_Address_Day
-    std::string address_day = DefaultWalletAddress() + "_" + RoundToString(GetDayOfYear(),0);
-    std::string address_day_hash = RetrieveMd5(address_day);
+    //Calculate the neural network nodes abililty to particiapte by GRC_Address_Day
+    int address_day = GetDayOfYear(locktime);
+    std::string address_tohash = addr + "_" + std::to_string(address_day);
+    std::string address_day_hash = RetrieveMd5(address_tohash);
     // For now, let's call for a 25% participation rate (approx. 125 nodes):
     // When RA is enabled, 25% of the neural network nodes will work on a quorum at any given time to alleviate stress on the project sites:
     uint256 uRef;
@@ -9188,8 +9187,9 @@ bool NeuralNodeParticipates()
 
 bool StrLessThanReferenceHash(std::string rh)
 {
-    std::string address_day = rh + "_" + RoundToString(GetDayOfYear(),0);
-    std::string address_day_hash = RetrieveMd5(address_day);
+    int address_day = GetDayOfYear(GetAdjustedTime());
+    std::string address_tohash = rh + "_" + std::to_string(address_day);
+    std::string address_day_hash = RetrieveMd5(address_tohash);
     uint256 uRef = fTestNet ? uint256("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b") : uint256("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
     uint256 uADH = uint256("0x" + address_day_hash);
     return (uADH < uRef);

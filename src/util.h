@@ -83,6 +83,7 @@ void MilliSleep(int64_t n);
 #define ATTR_WARN_PRINTF(X,Y)
 #endif
 
+extern int GetDayOfYear(int64_t timestamp);
 extern std::map<std::string, std::string> mapArgs;
 extern std::map<std::string, std::vector<std::string> > mapMultiArgs;
 extern bool fDebug;
