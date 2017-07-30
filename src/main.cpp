@@ -3295,6 +3295,10 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             // Only reject superblock when it is new And when QuorumHash of Block != the Popular Quorum Hash:
             if (IsLockTimeWithinMinutes(GetBlockTime(),15)  && !fColdBoot)
             {
+                if (!IsNeuralNodeParticipant(bb.GRCAddress, nTime))
+                {
+                    return error("ConnectBlock[] : Superblock staked by ineligible neural node participant");
+                }
                 if (!VerifySuperblock(superblock,pindex->nHeight))
                 {
                     return error("ConnectBlock[] : Superblock avg mag below 10; SuperblockHash: %s, Consensus Hash: %s",
