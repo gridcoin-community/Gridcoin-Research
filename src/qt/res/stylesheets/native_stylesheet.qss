@@ -4,32 +4,32 @@ QMainWindow {
 }
 
 #toolbar {
-    min-width:160px;
-    max-width:160px;
+    min-width:120pt;
+    max-width:120pt;
 }
 
 QToolBar#toolbar QToolButton {
-    padding-left:20px;
-    padding-right:20px;
-    padding-top:7px;
-    padding-bottom:7px;
-    margin:3px;
+    padding-left:15pt;
+    padding-right:15pt;
+    padding-top:5.25pt;
+    padding-bottom:5.25pt;
+    margin:2.25pt;
     width:100%;
 }
 
 QToolBar#toolbar2 QLabel{
     border:none;
-    padding-top:15px;
-    padding-bottom:10px;
-    padding-left:4px;
-    padding-right:4px;
-    margin:0px;
+    padding-top:11.25px;
+    padding-bottom:7.5pt;
+    padding-left:3pt;
+    padding-right:3pt;
+    margin:0pt;
 }
 
 QToolBar#toolbar3 QLabel{
-    padding-top:0px;
-    padding-bottom:0px;
-    margin:1px;
+    padding-top:0pt;
+    padding-bottom:0pt;
+    margin:0.75pt;
 }
 
 #spacer {
@@ -39,21 +39,21 @@ QToolBar#toolbar3 QLabel{
 
 #toolbar3 {
     border:none;
-    border-bottom : 2px solid rgb(160,175,5);
+    border-bottom : 1.5pt solid rgb(160,175,5);
 }
 
 #toolbar2 {
     border:none;
-    width:10px;
+    width:7.5pt;
     background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(160,175,5), stop: 1 rgb(160,175,5));
 }
 
 QMenuBar {
-    border-bottom : 2px solid rgb(160,175,5);
+    border-bottom : 1.5pt solid rgb(160,175,5);
 }
 
 #listTransactions{ 
-    font-size: 12px;
+    font-size: 9pt;
     background-color:transparent;
 }
 
