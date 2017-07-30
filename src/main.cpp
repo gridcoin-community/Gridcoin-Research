@@ -9164,8 +9164,9 @@ double SnapToGrid(double d)
 bool IsNeuralNodeParticipant(const std::string& addr, int64_t locktime)
 {
     //Calculate the neural network nodes abililty to particiapte by GRC_Address_Day
-    std::string address_day = addr + "_" + RoundToString(GetDayOfYear(locktime),0);
-    std::string address_day_hash = RetrieveMd5(address_day);
+    int address_day = GetDayOfYear(locktime);
+    std::string address_tohash = addr + "_" + std::to_string(address_day);
+    std::string address_day_hash = RetrieveMd5(address_tohash);
     // For now, let's call for a 25% participation rate (approx. 125 nodes):
     // When RA is enabled, 25% of the neural network nodes will work on a quorum at any given time to alleviate stress on the project sites:
     uint256 uRef;
@@ -9186,8 +9187,9 @@ bool IsNeuralNodeParticipant(const std::string& addr, int64_t locktime)
 
 bool StrLessThanReferenceHash(std::string rh)
 {
-    std::string address_day = rh + "_" + RoundToString(GetDayOfYear(GetAdjustedTime()),0);
-    std::string address_day_hash = RetrieveMd5(address_day);
+    int address_day = GetDayOfYear(GetAdjustedTime());
+    std::string address_tohash = rh + "_" + std::to_string(address_day);
+    std::string address_day_hash = RetrieveMd5(address_tohash);
     uint256 uRef = fTestNet ? uint256("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b") : uint256("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
     uint256 uADH = uint256("0x" + address_day_hash);
     return (uADH < uRef);
