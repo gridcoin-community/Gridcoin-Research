@@ -21,8 +21,8 @@ endif
 BITCOIN_CONFIG_INCLUDES=-I$(builddir)/config
 BITCOIN_INCLUDES=-I$(builddir) -I$(builddir)/obj $(BDB_CPPFLAGS) $(BOOST_CPPFLAGS) $(LEVELDB_CPPFLAGS) $(CRYPTO_CFLAGS) $(SSL_CFLAGS)
 
-BITCOIN_INCLUDES += -I$(srcdir)/secp256k1/include
-BITCOIN_INCLUDES += $(UNIVALUE_CFLAGS)
+#BITCOIN_INCLUDES += -I$(srcdir)/secp256k1/include
+#BITCOIN_INCLUDES += $(UNIVALUE_CFLAGS)
 
 #LIBBITCOIN_SERVER=libbitcoin_server.a
 #LIBBITCOIN_COMMON=libbitcoin_common.a
@@ -43,8 +43,8 @@ LIBBITCOINQT=qt/libbitcoinqt.a
 #LIBBITCOIN_WALLET=libbitcoin_wallet.a
 #endif
 
-$(LIBSECP256K1): $(wildcard secp256k1/src/*) $(wildcard secp256k1/include/*)
-	$(AM_V_at)$(MAKE) $(AM_MAKEFLAGS) -C $(@D) $(@F)
+#$(LIBSECP256K1): $(wildcard secp256k1/src/*) $(wildcard secp256k1/include/*)
+#	$(AM_V_at)$(MAKE) $(AM_MAKEFLAGS) -C $(@D) $(@F)
 
 # Make is not made aware of per-object dependencies to avoid limiting building parallelization
 # But to build the less dependent modules first, we manually select their order here:
@@ -333,46 +333,7 @@ libbitcoin_util_a_SOURCES = addrman.cpp \
 #
 
 # bitcoind binary #
-bitcoind_SOURCES =
-#bitcoind_SOURCES = addrman.cpp \
-#  alert.cpp \
-#  beacon.cpp \
-#  bitcoinrpc.cpp \
-#  block.cpp \
-#  boinc.cpp \
-#  checkpoints.cpp \
-#  cpid.cpp \
-#  crypter.cpp \
-#  db.cpp \
-#  init.cpp \
-#  irc.cpp \
-#  kernel.cpp \
-#  key.cpp \
-#  keystore.cpp \
-#  main.cpp \
-#  miner.cpp \
-#  netbase.cpp \
-#  net.cpp \
-#  noui.cpp \
-#  pbkdf2.cpp \
-#  protocol.cpp \
-#  rpcblockchain.cpp \
-#  rpcdump.cpp \
-#  rpcmining.cpp \
-#  rpcnet.cpp \
-#  rpcrawtransaction.cpp \
-#  rpcwallet.cpp \
-#  script.cpp \
-#  scrypt.cpp \
-#  sync.cpp \
-#  txdb-leveldb.cpp \
-#  upgrader.cpp \
-#  util.cpp \
-#  version.cpp \
-#  wallet.cpp \
-#  walletdb.cpp \
-#  $(BITCOIN_CORE_H)
-
+bitcoind_SOURCES = bitcoind.cpp
 bitcoind_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 bitcoind_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 bitcoind_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
@@ -394,7 +355,6 @@ bitcoind_LDADD = \
 #  $(LIBBITCOIN_SERVER)
 #  $(LIBBITCOIN_COMMON)
 #  $(LIBUNIVALUE)
-
 
 bitcoind_LDADD += $(BOOST_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(CURL_LIBS)
 #bitcoind_LDADD += $(ZMQ_IBS)

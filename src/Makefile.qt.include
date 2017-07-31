@@ -208,7 +208,6 @@ RES_ICONS = \
   qt/res/icons/bitcoin_testnet.ico \
   qt/res/icons/block.png \
   qt/res/icons/boinc.png \
-  qt/res/icons/gridcoin.png \
   qt/res/icons/chat.png \
   qt/res/icons/clock1.png \
   qt/res/icons/clock2.png \
@@ -267,6 +266,8 @@ RES_ICONS = \
   # qt/res/icons/eye.png
   # qt/res/icons/eye_minus.png
   # qt/res/icons/eye_plus.png
+  # qt/res/icons/gridcoin.png
+
 
 BITCOIN_QT_BASE_CPP = \
   qt/aboutdialog.cpp \
