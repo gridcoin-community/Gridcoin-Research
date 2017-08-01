@@ -6,8 +6,10 @@
 #define BITCOIN_INIT_H
 
 #include "wallet.h"
+#include <boost/thread.hpp>
 
 extern CWallet* pwalletMain;
+extern boost::thread_group threadGroup;
 
 void StartShutdown();
 
@@ -19,5 +21,7 @@ void ThreadAppInit2(ThreadHandlerPtr th);
 
 std::string HelpMessage();
 std::string LogSomething();
+void DetectShutdownThread(boost::thread_group* threadGroup);
+
 
 #endif

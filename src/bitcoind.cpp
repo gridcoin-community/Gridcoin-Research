@@ -7,6 +7,7 @@
 #include "config/bitcoin-config.h"
 #endif
 
+#include "bitcoinrpc.h"
 #include "txdb.h"
 #include "walletdb.h"
 #include "net.h"
@@ -15,6 +16,7 @@
 #include "ui_interface.h"
 
 #include <boost/thread.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include "global_objects_noui.hpp"
 #include <stdio.h>
 
