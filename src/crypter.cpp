@@ -175,7 +175,7 @@ bool GridEncrypt(std::vector<unsigned char> vchPlaintext, std::vector<unsigned c
     LoadGridKey("gridcoin","cqiuehEJ2Tqdov");
     int nLen = vchPlaintext.size();
     int nCLen = nLen + AES_BLOCK_SIZE, nFLen = 0;
-    vchCiphertext = std::vector<unsigned char> (nCLen);
+    vchCiphertext.resize(nCLen);
     bool fOk = true;
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
     if(!ctx)
@@ -195,12 +195,12 @@ bool GridDecrypt(const std::vector<unsigned char>& vchCiphertext,std::vector<uns
 {
     LoadGridKey("gridcoin","cqiuehEJ2Tqdov");
     int nLen = vchCiphertext.size();
+    vchPlaintext.resize(nLen); //plain text will be smaller or eq than ciphertext
     int nPLen = nLen, nFLen = 0;
     bool fOk = true;
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
     if(!ctx)
         throw std::runtime_error("Error allocating cipher context");
-
     if (fOk) fOk = EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, chKeyGridcoin, chIVGridcoin);
     if (fOk) fOk = EVP_DecryptUpdate(ctx, &vchPlaintext[0], &nPLen, &vchCiphertext[0], nLen);
     if (fOk) fOk = EVP_DecryptFinal_ex(ctx, (&vchPlaintext[0])+nPLen, &nFLen);
@@ -279,8 +279,7 @@ std::string AdvancedCrypt(std::string boinchash)
     try 
     {
        std::vector<unsigned char> vchSecret( boinchash.begin(), boinchash.end() );
-       std::string d1 = "                                                                                                                                        ";
-       std::vector<unsigned char> vchCryptedSecret(d1.begin(),d1.end());
+       std::vector<unsigned char> vchCryptedSecret;
        GridEncrypt(vchSecret, vchCryptedSecret);
        std::string encrypted = EncodeBase64(UnsignedVectorToString(vchCryptedSecret));
        return encrypted;
@@ -302,9 +301,8 @@ std::string AdvancedDecrypt(std::string boinchash_encrypted)
 {
     try{
        std::string pre_encrypted_boinchash = DecodeBase64(boinchash_encrypted);
-       std::string d2 = "                                                                                                                                        ";
        std::vector<unsigned char> vchCryptedSecret(pre_encrypted_boinchash.begin(),pre_encrypted_boinchash.end());
-       std::vector<unsigned char> vchPlaintext(d2.begin(),d2.end());
+       std::vector<unsigned char> vchPlaintext;
        GridDecrypt(vchCryptedSecret,vchPlaintext);
        std::string decrypted = UnsignedVectorToString(vchPlaintext);
        return decrypted;
