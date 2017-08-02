@@ -520,13 +520,10 @@ Dieses Produkt enthält Software, die vom OpenSSL-Projekt zur Verwendung im Open
         <source>Gridcoin client</source>
         <translation>Gridcoin</translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+79"/>
-        <source>%n active connection(s) to Gridcoin network</source>
-        <translation>
-            <numerusform>%n aktive Verbindung(en) zum Gridcoin Netzwerk</numerusform>
-            <numerusform></numerusform>
-        </translation>
+        <source>%1 active connection(s) to Gridcoin network</source>
+        <translation>%1 aktive Verbindung(en) zum Gridcoin Netzwerk</translation>
     </message>
     <message>
         <location line="+40"/>
@@ -552,14 +549,6 @@ Dieses Produkt enthält Software, die vom OpenSSL-Projekt zur Verwendung im Open
         <location line="+10"/>
         <source>Not staking because you don&apos;t have mature coins</source>
         <translation>Nicht am Verzinsen, da keine keine reifen Coins vorhanden</translation>
-    </message>
-    <message numerus="yes">
-        <location line="-1101"/>
-        <source>%n second(s) ago</source>
-        <translation>
-            <numerusform>Vor %n Sekunde(n)</numerusform>
-            <numerusform></numerusform>
-        </translation>
     </message>
     <message>
         <location line="-513"/>
@@ -769,29 +758,25 @@ Dieses Produkt enthält Software, die vom OpenSSL-Projekt zur Verwendung im Open
         <source>&amp;Advanced</source>
         <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
+    <message>
+        <location line="-1101"/>
+        <source>%1 second(s) ago</source>
+        <translation>%1 Sekunde(n)</translation>
+    </message>
+    <message>
         <location line="+295"/>
-        <source>%n minute(s) ago</source>
-        <translation>
-            <numerusform>Vor %n Minute(n)</numerusform>
-            <numerusform></numerusform>
-        </translation>
+        <source>%1 minute(s) ago</source>
+        <translation>%1 Minute(n)</translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+4"/>
-        <source>%n hour(s) ago</source>
-        <translation>
-            <numerusform>Vor %n Stunde(n)</numerusform>
-            <numerusform></numerusform>
-        </translation>
+        <source>%1 hour(s) ago</source>
+        <translation>%1 Stunde(n)</translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+4"/>
-        <source>%n day(s) ago</source>
-        <translation>
-            <numerusform>Vor %n Tag(en)</numerusform>
-            <numerusform></numerusform>
-        </translation>
+        <source>%1 day(s) ago</source>
+        <translation>%1 Tag(en)</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -912,36 +897,30 @@ Adresse: %4</translation>
         <source>There was an error trying to save the wallet data to the new location.</source>
         <translation>Es gab einen Fehler beim speichern ihrer Wallet Datei in dem neuen Ort.</translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+307"/>
-        <source>%n second(s)</source>
+        <source>%1 second(s)</source>
+        <translation>%1 Sekunde(n)</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>%1 minute(s)</source>
+        <translation>%1 Minute(n)</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%1 hour(s)</source>
         <translation>
-            <numerusform>%n Sekunde(n)</numerusform>
-            <numerusform></numerusform>
+            <numerusform>%1 Stunde</numerusform>
+            <numerusform>%1 Stunden</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s)</source>
+        <source>%1 day(s)</source>
         <translation>
-            <numerusform>%n Minute(n)</numerusform>
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+4"/>
-        <source>%n hour(s)</source>
-        <translation>
-            <numerusform>%n Stunde</numerusform>
-            <numerusform>%n Stunden</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+4"/>
-        <source>%n day(s)</source>
-        <translation>
-            <numerusform>%n Tag</numerusform>
-            <numerusform>%n Tage</numerusform>
+            <numerusform>%1 Tag</numerusform>
+            <numerusform>%1 Tage</numerusform>
         </translation>
     </message>
     <message>
