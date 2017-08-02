@@ -1188,7 +1188,7 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
     }
     else
     {
-        text = tr("%1 hour(s) ago").arg(secs/(60*60));
+        text = tr("%1 day(s) ago").arg(secs/(60*60*24));
     }
 
     // Set icon state: spinning if catching up, tick otherwise
