@@ -1151,7 +1151,7 @@ void BitcoinGUI::setNumConnections(int count)
     default: icon = ":/icons/connect_4"; break;
     }
     labelConnectionsIcon->setPixmap(QIcon(icon).pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
-    labelConnectionsIcon->setToolTip(tr("%n active connection(s) to Gridcoin network", "", count));
+    labelConnectionsIcon->setToolTip(tr("%1 active connection(s) to Gridcoin network").arg(count));
 }
 
 void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
@@ -1176,19 +1176,19 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
     }
     else if(secs < 60)
     {
-        text = tr("%n second(s) ago","",secs);
+         text = tr("%1 second(s) ago").arg(secs);
     }
     else if(secs < 60*60)
     {
-        text = tr("%n minute(s) ago","",secs/60);
+        text = tr("%1 minute(s) ago").arg(secs/60);
     }
     else if(secs < 24*60*60)
     {
-        text = tr("%n hour(s) ago","",secs/(60*60));
+        text = tr("%1 hour(s) ago").arg(secs/(60*60));
     }
     else
     {
-        text = tr("%n day(s) ago","",secs/(60*60*24));
+        text = tr("%1 hour(s) ago").arg(secs/(60*60));
     }
 
     // Set icon state: spinning if catching up, tick otherwise
