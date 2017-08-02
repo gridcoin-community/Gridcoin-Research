@@ -9,7 +9,6 @@
 #include <boost/thread.hpp>
 
 extern CWallet* pwalletMain;
-extern boost::thread_group threadGroup;
 
 void StartShutdown();
 

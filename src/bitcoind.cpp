@@ -57,10 +57,9 @@
 //
 // Start
 //
-#if !defined(QT_GUI)
 bool AppInit(int argc, char* argv[])
 {
-
+    boost::thread_group threadGroup;
     bool fRet = false;
 
     try
@@ -137,4 +136,3 @@ int main(int argc, char* argv[])
 
     return 1;
 }
-#endif
