@@ -6,7 +6,7 @@
     <message>
         <location filename="../forms/aboutdialog.ui" line="+14"/>
         <source>About Gridcoin</source>
-        <translation type="unfinished"></translation>
+        <translation>Apie Gridcoin</translation>
     </message>
     <message>
         <location line="+42"/>
@@ -21,11 +21,11 @@ This is experimental software.
 Distributed under the MIT/X11 software license, see the accompanying file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 This product includes software developed by the OpenSSL Project for use in the OpenSSL Toolkit (http://www.openssl.org/) and cryptographic software written by Eric Young (eay@cryptsoft.com) and UPnP software written by Thomas Bernard.</source>
-        <translation>Tai eksperimentin? programa.
+        <translation>Tai eksperimentinė programa.
 
-Platinama pagal MIT/X11 licencij?, kuri? rasite faile COPYING arba http://www.opensource.org/licenses/mit-license.php.
+Platinama pagal MIT/X11 licenciją, kurią rasite faile COPYING arba http://www.opensource.org/licenses/mit-license.php.
 
-Šiame produkte yra OpenSSL projekto kuriamas OpenSSL Toolkit (http://www.openssl.org/), Eric Young parašyta kriptografin? programin? ?ranga bei Thomas Bernard sukurta UPnP programin? ?ranga.</translation>
+Šiame produkte yra OpenSSL projekto kuriamas OpenSSL Toolkit (http://www.openssl.org/), Eric Young parašyta kriptografinė programinė įranga bei Thomas Bernard sukurta UPnP programinė įranga.</translation>
     </message>
 </context>
 <context>
@@ -63,7 +63,7 @@ Platinama pagal MIT/X11 licencij?, kuri? rasite faile COPYING arba http://www.op
     <message>
         <location line="+3"/>
         <source>Sign &amp;Message</source>
-        <translation type="unfinished">Registruoti praneši&amp;mą</translation>
+        <translation>Registruoti praneši&amp;mą</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -73,7 +73,7 @@ Platinama pagal MIT/X11 licencij?, kuri? rasite faile COPYING arba http://www.op
     <message>
         <location line="+3"/>
         <source>&amp;Verify Message</source>
-        <translation type="unfinished">&amp;Patikrinti žinut?</translation>
+        <translation>&amp;Patikrinti žinutę</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -98,12 +98,12 @@ Platinama pagal MIT/X11 licencij?, kuri? rasite faile COPYING arba http://www.op
     <message>
         <location line="+16"/>
         <source>Double-click to edit address or label</source>
-        <translation>Spragtel?kite, kad pakeistum?te adres? arba žym?</translation>
+        <translation>Spragtelėkite, kad pakeistumėte adresą arba žymę</translation>
     </message>
     <message>
         <location filename="../addressbookpage.cpp" line="+65"/>
         <source>Copy &amp;Label</source>
-        <translation>Kopijuoti ž&amp;ym?</translation>
+        <translation>Kopijuoti ž&amp;ymę</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -136,7 +136,7 @@ Platinama pagal MIT/X11 licencij?, kuri? rasite faile COPYING arba http://www.op
     <message>
         <location filename="../addresstablemodel.cpp" line="+144"/>
         <source>Label</source>
-        <translation>Žym?</translation>
+        <translation>Žymė</translation>
     </message>
     <message>
         <location line="+0"/>
@@ -146,7 +146,7 @@ Platinama pagal MIT/X11 licencij?, kuri? rasite faile COPYING arba http://www.op
     <message>
         <location line="+36"/>
         <source>(no label)</source>
-        <translation>(n?ra žym?s)</translation>
+        <translation>(nėra žymės)</translation>
     </message>
 </context>
 <context>
@@ -189,42 +189,42 @@ Platinama pagal MIT/X11 licencij?, kuri? rasite faile COPYING arba http://www.op
     <message>
         <location line="+1"/>
         <source>Encrypt wallet</source>
-        <translation>Užšifruoti pinigin?</translation>
+        <translation>Užšifruoti piniginę</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>This operation needs your wallet passphrase to unlock the wallet.</source>
-        <translation>Ši operacija reikalauja j?s? pinigin?s slaptafraz?s jai atrakinti.</translation>
+        <translation>Ši operacija reikalauja jūsų piniginės slaptafrazės jai atrakinti.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Unlock wallet</source>
-        <translation>Atrakinti pinigin?</translation>
+        <translation>Atrakinti piniginę</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>Ši operacija reikalauja j?s? pinigin?s slaptafraz?s jai iššifruoti.</translation>
+        <translation>Ši operacija reikalauja jūsų piniginės slaptafrazės jai iššifruoti.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Decrypt wallet</source>
-        <translation>Iššifruoti pinigin?</translation>
+        <translation>Iššifruoti piniginę</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Change passphrase</source>
-        <translation>Pakeisti slaptafraz?</translation>
+        <translation>Pakeisti slaptafrazę</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Enter the old and new passphrase to the wallet.</source>
-        <translation>?veskite sen? ir nauj? pinigin?s slaptafrazes.</translation>
+        <translation>Įveskite seną ir naują piniginės slaptafrazes.</translation>
     </message>
     <message>
         <location line="+45"/>
         <source>Confirm wallet encryption</source>
-        <translation>Patvirtinkite pinigin?s užšifravim?</translation>
+        <translation>Patvirtinkite piniginės užšifravimą</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -234,13 +234,13 @@ Platinama pagal MIT/X11 licencij?, kuri? rasite faile COPYING arba http://www.op
     <message>
         <location line="+0"/>
         <source>Are you sure you wish to encrypt your wallet?</source>
-        <translation>Ar tikrai norite šifruoti savo pinigin??</translation>
+        <translation>Ar tikrai norite šifruoti savo piniginę?</translation>
     </message>
     <message>
         <location line="+9"/>
         <location line="+60"/>
         <source>Wallet encrypted</source>
-        <translation>Pinigin? užšifruota</translation>
+        <translation>Piniginė užšifruota</translation>
     </message>
     <message>
         <location line="-58"/>
@@ -258,46 +258,46 @@ Platinama pagal MIT/X11 licencij?, kuri? rasite faile COPYING arba http://www.op
         <location line="+44"/>
         <location line="+6"/>
         <source>Wallet encryption failed</source>
-        <translation>Nepavyko užšifruoti pinigin?</translation>
+        <translation>Nepavyko užšifruoti piniginės</translation>
     </message>
     <message>
         <location line="-56"/>
         <source>Wallet encryption failed due to an internal error. Your wallet was not encrypted.</source>
-        <translation>D?l vidin?s klaidos nepavyko užšifruoti pinigin?.Pinigin? neužšifruota.</translation>
+        <translation>Dėl vidinės klaidos nepavyko užšifruoti piniginės.Piniginė neužšifruota.</translation>
     </message>
     <message>
         <location line="+7"/>
         <location line="+50"/>
         <source>The supplied passphrases do not match.</source>
-        <translation>?vestos slaptafraz?s nesutampa.</translation>
+        <translation>Įvestos slaptafrazės nesutampa.</translation>
     </message>
     <message>
         <location line="-38"/>
         <source>Wallet unlock failed</source>
-        <translation>Nepavyko atrakinti pinigin?</translation>
+        <translation>Nepavyko atrakinti piniginės</translation>
     </message>
     <message>
         <location line="+1"/>
         <location line="+12"/>
         <location line="+19"/>
         <source>The passphrase entered for the wallet decryption was incorrect.</source>
-        <translation>Neteisingai ?vestas slaptažodis pinigin?s iššifravimui.</translation>
+        <translation>Neteisingai įvestas slaptažodis piniginės iššifravimui.</translation>
     </message>
     <message>
         <location line="-20"/>
         <source>Wallet decryption failed</source>
-        <translation>Nepavyko iššifruoti pinigin?s</translation>
+        <translation>Nepavyko iššifruoti piniginės</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Wallet passphrase was successfully changed.</source>
-        <translation>Pinigin?s slaptažodis s?kmingai pakeistas.</translation>
+        <translation>Piniginės slaptažodis sėkmingai pakeistas.</translation>
     </message>
     <message>
         <location line="+48"/>
         <location line="+24"/>
         <source>Warning: The Caps Lock key is on!</source>
-        <translation>?sp?jimas: ?jungtas Caps Lock klavišas!</translation>
+        <translation>Dėmesio: įjungtas Caps Lock klavišas!</translation>
     </message>
 </context>
 <context>
@@ -450,7 +450,7 @@ Platinama pagal MIT/X11 licencij?, kuri? rasite faile COPYING arba http://www.op
     <message>
         <location line="-1502"/>
         <source>Gridcoin</source>
-        <translation type="unfinished"></translation>
+        <translation>Gridcoin</translation>
     </message>
     <message>
         <location line="+494"/>
@@ -647,7 +647,7 @@ Platinama pagal MIT/X11 licencij?, kuri? rasite faile COPYING arba http://www.op
     <message>
         <location line="+1"/>
         <source>Unlock wallet</source>
-        <translation type="unfinished">Atrakinti pinigin?</translation>
+        <translation>Atrakinti piniginę</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -657,7 +657,7 @@ Platinama pagal MIT/X11 licencij?, kuri? rasite faile COPYING arba http://www.op
     <message>
         <location line="+1"/>
         <source>Lock wallet</source>
-        <translation type="unfinished"></translation>
+        <translation>Užrakinti piniginę</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -858,7 +858,7 @@ Adresas: %4</translation>
         <translation>
             <numerusform>%n valanda</numerusform>
             <numerusform>%n valandos</numerusform>
-            <numerusform>%n valand?</numerusform>
+            <numerusform>%n valandų</numerusform>
         </translation>
     </message>
     <message numerus="yes">
@@ -867,7 +867,7 @@ Adresas: %4</translation>
         <translation>
             <numerusform>%n diena</numerusform>
             <numerusform>%n dienos</numerusform>
-            <numerusform>%n dien?</numerusform>
+            <numerusform>%n dienų</numerusform>
         </translation>
     </message>
     <message>
@@ -921,7 +921,7 @@ Adresas: %4</translation>
     <message>
         <location filename="../clientmodel.cpp" line="+116"/>
         <source>Network Alert</source>
-        <translation>Tinklo ?sp?jimas</translation>
+        <translation>Tinklo įspėjimas</translation>
     </message>
 </context>
 <context>
@@ -964,7 +964,7 @@ Adresas: %4</translation>
     <message>
         <location line="+32"/>
         <source>Change:</source>
-        <translation>Graža:</translation>
+        <translation>Grąža:</translation>
     </message>
     <message>
         <location line="+69"/>
@@ -979,7 +979,7 @@ Adresas: %4</translation>
     <message>
         <location line="+66"/>
         <source>Label</source>
-        <translation type="unfinished">Žym?</translation>
+        <translation>Žymė</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -1024,18 +1024,18 @@ Adresas: %4</translation>
     <message>
         <location filename="../coincontroldialog.cpp" line="+36"/>
         <source>Copy address</source>
-        <translation>Kopijuoti adres?</translation>
+        <translation>Kopijuoti adresą</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy label</source>
-        <translation>Kopijuoti žym?</translation>
+        <translation>Kopijuoti žymę</translation>
     </message>
     <message>
         <location line="+1"/>
         <location line="+26"/>
         <source>Copy amount</source>
-        <translation>Kopijuoti sum?</translation>
+        <translation>Kopijuoti sumą</translation>
     </message>
     <message>
         <location line="-25"/>
@@ -1115,7 +1115,7 @@ Adresas: %4</translation>
     <message>
         <location line="+155"/>
         <source>no</source>
-        <translation type="unfinished"></translation>
+        <translation>ne</translation>
     </message>
     <message>
         <location line="+0"/>
@@ -1125,7 +1125,7 @@ Adresas: %4</translation>
     <message>
         <location line="+0"/>
         <source>yes</source>
-        <translation type="unfinished"></translation>
+        <translation>taip</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -1165,7 +1165,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+37"/>
         <location line="+63"/>
         <source>(no label)</source>
-        <translation>(n?ra žym?s)</translation>
+        <translation>(nėra žymės)</translation>
     </message>
     <message>
         <location line="-9"/>
@@ -1175,7 +1175,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>(change)</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">(grąža)</translation>
     </message>
 </context>
 <context>
@@ -1218,12 +1218,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+3"/>
         <source>Edit receiving address</source>
-        <translation>Keisti gavimo adres?</translation>
+        <translation>Keisti gavimo adresą</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Edit sending address</source>
-        <translation>Keisti siuntimo adres?</translation>
+        <translation>Keisti siuntimo adresą</translation>
     </message>
     <message>
         <location line="+71"/>
@@ -1233,12 +1233,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+5"/>
         <source>The entered address &quot;%1&quot; is already in the address book.</source>
-        <translation>?vestas adresas „%1“ jau yra adres? knygel?je.</translation>
+        <translation>Įvestas adresas „%1“ jau yra adresų knygelėje.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Could not unlock wallet.</source>
-        <translation>Nepavyko atrakinti pinigin?s.</translation>
+        <translation>Nepavyko atrakinti piniginės.</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -1251,7 +1251,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../guiutil.cpp" line="+424"/>
         <source>version</source>
-        <translation type="unfinished">versija</translation>
+        <translation>versija</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -1448,7 +1448,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+52"/>
         <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
-        <translation>Uždarant lang? neuždaryti programos. Kai ši parinktis ?jungta, programa bus uždaryta tik pasirinkus  meniu komand? Baigti.</translation>
+        <translation>Uždarant langą neuždaryti programos. Kai ši parinktis įjungta, programa bus uždaryta tik pasirinkus  meniu komandą Baigti.</translation>
     </message>
     <message>
         <location line="+45"/>
@@ -1473,7 +1473,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+3"/>
         <source>&amp;Display addresses in transaction list</source>
-        <translation>&amp;Rodyti adresus sandori? s?raše</translation>
+        <translation>&amp;Rodyti adresus sandorių sąraše</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -1608,7 +1608,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+47"/>
         <source>Wallet</source>
-        <translation type="unfinished">Pinigin?</translation>
+        <translation>Piniginė</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -1704,7 +1704,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+15"/>
         <source>Your current spendable balance</source>
-        <translation>Jūsų dabartinis išleidžiamas balansas</translation>
+        <translation>Jūsų dabartinis balansas, kurį galite išleisti</translation>
     </message>
     <message>
         <location line="+75"/>
@@ -1748,12 +1748,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+19"/>
         <source>Message:</source>
-        <translation type="unfinished">Žinutė:</translation>
+        <translation>Žinutė:</translation>
     </message>
     <message>
         <location line="+25"/>
         <source>Amount:</source>
-        <translation type="unfinished">Suma:</translation>
+        <translation>Suma:</translation>
     </message>
     <message>
         <location line="+46"/>
@@ -1861,7 +1861,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+21"/>
         <source>Command-line options</source>
-        <translation type="unfinished">Komandinės eilutės parametrai</translation>
+        <translation>Komandinės eilutės parametrai</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -2165,7 +2165,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Copy amount</source>
-        <translation>Kopijuoti sum?</translation>
+        <translation>Kopijuoti sumą</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2205,7 +2205,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+5"/>
         <source>Confirm send coins</source>
-        <translation>Patvirtinti monet? siuntim?</translation>
+        <translation>Patvirtinti monetų siuntimą</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2220,27 +2220,27 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+29"/>
         <source>The recipient address is not valid, please recheck.</source>
-        <translation>Negaliojantis gav?jo adresas. Patikrinkite.</translation>
+        <translation>Negaliojantis gavėjo adresas. Patikrinkite.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>The amount to pay must be larger than 0.</source>
-        <translation>Apmok?jimo suma turi b?ti didesn? nei 0.</translation>
+        <translation>Apmokėjimo suma turi būti didesnė nei 0.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>The amount exceeds your balance.</source>
-        <translation>Suma viršija j?s? balans?.</translation>
+        <translation>Suma viršija jūsų balansą.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>The total exceeds your balance when the %1 transaction fee is included.</source>
-        <translation>Jei pridedame sandorio mokest? %1 bendra suma viršija j?s? balans?.</translation>
+        <translation>Pridėjus sandorio mokestį %1 bendra suma viršija jūsų balansą.</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Duplicate address found, can only send to each address once per send operation.</source>
-        <translation>Rastas adreso dublikatas.</translation>
+        <translation type="unfinished">Rastas adreso dublikatas, į kiekvieną adresą galima siųsti tik vieną kartą per siuntimo veiksmą.</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -2260,7 +2260,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+13"/>
         <source>(no label)</source>
-        <translation>(n?ra žym?s)</translation>
+        <translation>(nėra žymės)</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -2279,7 +2279,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+39"/>
         <location filename="../sendcoinsentry.cpp" line="+29"/>
         <source>Enter a label for this address to add it to your address book</source>
-        <translation>?veskite žym? šiam adresui kad gal?tum?te ?traukti j? ? adres? knygel?</translation>
+        <translation>Įveskite žymę šiam adresui kad galėtumėte įtraukti jį į adresų knygelę</translation>
     </message>
     <message>
         <location line="+27"/>
@@ -2462,7 +2462,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="-2"/>
         <source>Click &quot;Sign Message&quot; to generate signature</source>
-        <translation>Spragtel?kite &quot;Registruotis žinut?&quot; tam, kad gauti paraš?</translation>
+        <translation>Spragtelėkite &quot;Registruotis žinutę&quot; tam, kad gauti parašą</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -2473,7 +2473,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+82"/>
         <location line="+81"/>
         <source>The entered address is invalid.</source>
-        <translation>?vestas adresas negalioja.</translation>
+        <translation>Įvestas adresas negalioja.</translation>
     </message>
     <message>
         <location line="-81"/>
@@ -2481,7 +2481,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+73"/>
         <location line="+8"/>
         <source>Please check the address and try again.</source>
-        <translation>Prašom patikrinti adres? ir bandyti iš naujo.</translation>
+        <translation>Prašom patikrinti adresą ir bandyti iš naujo.</translation>
     </message>
     <message>
         <location line="-81"/>
@@ -2492,7 +2492,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="-73"/>
         <source>Wallet unlock was cancelled.</source>
-        <translation>Pinigin?s atrakinimas atšauktas.</translation>
+        <translation>Piniginės atrakinimas atšauktas.</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -2502,12 +2502,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+12"/>
         <source>Message signing failed.</source>
-        <translation>Žinut?s pasirašymas nepavyko.</translation>
+        <translation>Žinutės pasirašymas nepavyko.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Message signed.</source>
-        <translation>Žinut? pasirašyta.</translation>
+        <translation>Žinutė pasirašyta.</translation>
     </message>
     <message>
         <location line="+59"/>
@@ -2518,22 +2518,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+0"/>
         <location line="+13"/>
         <source>Please check the signature and try again.</source>
-        <translation>Prašom patikrinti paraš? ir bandyti iš naujo.</translation>
+        <translation>Prašom patikrinti parašą ir bandyti iš naujo.</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>The signature did not match the message digest.</source>
-        <translation>Parašas neatitinka žinut?s.</translation>
+        <translation>Parašas neatitinka žinutės.</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Message verification failed.</source>
-        <translation>Žinut?s tikrinimas nepavyko.</translation>
+        <translation>Žinutės tikrinimas nepavyko.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Message verified.</source>
-        <translation>Žinut? patikrinta.</translation>
+        <translation>Žinutė patikrinta.</translation>
     </message>
 </context>
 <context>
@@ -2560,7 +2560,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>%1/offline</source>
-        <translation>%1/neprisijung?s</translation>
+        <translation>%1/neprisijungęs</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -2570,17 +2570,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>%1 confirmations</source>
-        <translation>%1 patvirtinim?</translation>
+        <translation>%1 patvirtinimų</translation>
     </message>
     <message>
         <location line="+45"/>
         <source>Status</source>
-        <translation>B?sena</translation>
+        <translation>Būsena</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>, has not been successfully broadcast yet</source>
-        <translation>, transliavimas dar nebuvo s?kmingas</translation>
+        <translation>, transliavimas dar nebuvo sėkmingas</translation>
     </message>
     <message numerus="yes">
         <location line="+2"/>
@@ -2633,7 +2633,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="-2"/>
         <source>label</source>
-        <translation>žym?</translation>
+        <translation>žymė</translation>
     </message>
     <message>
         <location line="+37"/>
@@ -2679,7 +2679,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+6"/>
         <source>Message</source>
-        <translation>Žinut?</translation>
+        <translation>Žinutė</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -2709,7 +2709,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+14"/>
         <source>Information</source>
-        <translation type="unfinished">Informacija</translation>
+        <translation>Informacija</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -2762,7 +2762,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="-51"/>
         <source>Transaction details</source>
-        <translation>Sandorio detel?s</translation>
+        <translation>Sandorio detalės</translation>
     </message>
     <message>
         <location filename="../transactiondescdialog.cpp" line="+40"/>
@@ -2864,12 +2864,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+3"/>
         <source>Sent to</source>
-        <translation>Si?sta </translation>
+        <translation>Siųsta </translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Payment to yourself</source>
-        <translation>Mok?jimas sau</translation>
+        <translation>Mokėjimas sau</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -2899,7 +2899,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+193"/>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
-        <translation>Sandorio b?kl?. Užvedus pel?s žymekl? ant šios srities matysite patvirtinim? skai?i?.</translation>
+        <translation>Sandorio būklė. Užvedus pelės žymeklį ant šios srities matysite patvirtinimų skaičių.</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -2919,7 +2919,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>Amount removed from or added to balance.</source>
-        <translation>Suma prid?ta ar išskai?iuota iš balanso</translation>
+        <translation>Suma pridėta ar išskaičiuota iš balanso</translation>
     </message>
 </context>
 <context>
@@ -2988,7 +2988,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+7"/>
         <source>Enter address or label to search</source>
-        <translation>?veskite adres? ar žym? ? paiešk?</translation>
+        <translation>Įveskite adresą ar žymę į paiešką</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -2998,17 +2998,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+34"/>
         <source>Copy address</source>
-        <translation>Kopijuoti adres?</translation>
+        <translation>Kopijuoti adresą</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy label</source>
-        <translation>Kopijuoti žym?</translation>
+        <translation>Kopijuoti žymę</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy amount</source>
-        <translation>Kopijuoti sum?</translation>
+        <translation>Kopijuoti sumą</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3018,12 +3018,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Edit label</source>
-        <translation>Taisyti žym?</translation>
+        <translation>Taisyti žymę</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Show transaction details</source>
-        <translation>Rodyti sand?rio detales</translation>
+        <translation>Rodyti sandorio detales</translation>
     </message>
     <message>
         <location line="+146"/>
@@ -3033,7 +3033,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Comma separated file (*.csv)</source>
-        <translation>Kableliais atskirt? duomen? failas (*.csv)</translation>
+        <translation>Kableliais atskirtų duomenų failas (*.csv)</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -3053,7 +3053,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Label</source>
-        <translation>Žym?</translation>
+        <translation>Žymė</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3083,7 +3083,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+100"/>
         <source>Range:</source>
-        <translation>Grup?:</translation>
+        <translation type="unfinished">Intervalas:</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -3510,7 +3510,7 @@ If the file does not exist, create it with owner-readable-only file permissions.
     <message>
         <location line="+2"/>
         <source>This help message</source>
-        <translation>Pagelbos žinut?</translation>
+        <translation>Pagalbos žinutė</translation>
     </message>
     <message>
         <location line="+1"/>
