@@ -5,10 +5,10 @@ QMainWindow {
 }
 
 #line {
-    qproperty-maximumSize: 330px 16777215px;
+    qproperty-maximumSize: 247.5pt 12582911.25pt;
 }
 #line_2 {
-    qproperty-maximumSize: 330px 16777215px;
+    qproperty-maximumSize: 247.5pt 12582911.25pt;
 }
 
 QToolButton {
@@ -34,25 +34,25 @@ QToolButton:checked:hover {
 }
 
 QToolBar#toolbar QLabel{
-    padding-top:5px;
-    padding-bottom:5px;
-    margin:0px;
+    padding-top:3.75pt;
+    padding-bottom:3.75pt;
+    margin:0pt;
 }
 
 QToolBar#toolbar2 QLabel{
     border:none;
-    padding-top:15px;
-    padding-bottom:10px;
-    padding-left:0px;
-    padding-right:0px;
-    margin:0px;
+    padding-top:11.25pt;
+    padding-bottom:7.5pt;
+    padding-left:0pt;
+    padding-right:0pt;
+    margin:0pt;
     qproperty-alignment: AlignCenter;
 }
 
 QToolBar#toolbar3 QLabel{
-    padding-top:0px;
-    padding-bottom:0px;
-    margin:1px;
+    padding-top:0pt;
+    padding-bottom:0pt;
+    margin:0.75pt;
 }
 
 #spacer {
@@ -63,44 +63,44 @@ QToolBar#toolbar3 QLabel{
 #toolbar {
     border:none;
     height:100%;
-    padding-top:20px;
+    padding-top:15pt;
     background: transparent;
     color: black;
-    min-width:160px;
-    max-width:160px;
+    min-width:120pt;
+    max-width:120pt;
 }
 
 #toolbar2 {
     border:none;
-    width:26px;
+    width:19.5pt;
     background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(160,175,5), stop: 1 rgb(160,175,5));
-    padding-left: 0px;
-    padding-right: 0px;
-    min-width:26px;
-    max-width:26px;
+    padding-left: 0pt;
+    padding-right: 0pt;
+    min-width:19.5pt;
+    max-width:19.5pt;
 }
 
 #toolbar3 {
     border:none;
     background-color:transparent;
-    border-bottom : 2px solid rgb(160,175,5);
-    min-height:52px;
-    max-height:52px;
+    border-bottom : 1.5pt solid rgb(160,175,5);
+    min-height:39pt;
+    max-height:39pt;
 }
 
 QToolBar#toolbar QToolButton {
-    padding-left:20px;
-    padding-right:20px;
-    padding-top:7px;
-    padding-bottom:7px;
-    margin:3px;
+    padding-left:15pt;
+    padding-right:15pt;
+    padding-top:5.25pt;
+    padding-bottom:5.25pt;
+    margin:2.25pt;
     width:100%;
 }
 
 QMenu {
     background: rgb(200,200,200);
     color: black;
-    padding-bottom:10px;
+    padding-bottom:7.5pt;
 }
 
 QMenu::item {
@@ -116,14 +116,14 @@ QMenu::item:selected {
 QMenuBar {
     background: rgba(200,200,200,25%);
     color: black;
-    border-bottom : 2px solid rgb(160,175,5);
+    border-bottom : 1.5pt solid rgb(160,175,5);
 }
 
 QMenuBar::item {
-    padding-bottom:8px;
-    padding-top:8px;
-    padding-left:15px;
-    padding-right:15px;
+    padding-bottom:6pt;
+    padding-top:6pt;
+    padding-left:11.25pt;
+    padding-right:11.25pt;
     color: black;
     background-color: transparent;
 }
@@ -137,22 +137,22 @@ QMenuBar::item:selected {
 
 QScrollBar:horizontal {
     background: rgb(200,200,200);
-    height: 10px;
+    height: 7.5pt;
     margin: 0 0 0 0;
 }
 
 QScrollBar::handle:horizontal {
     background: rgb(150,150,150);
-    border: 1px rgb(150,150,150);
-    border-radius: 3px;
-    min-width: 20px;
+    border: 0.75pt rgb(150,150,150);
+    border-radius: 2.25pt;
+    min-width: 15pt;
 }
 
 QScrollBar::handle:horizontal:hover {
     background: rgb(160,175,5);
-    border: 1px rgb(160,175,5);
-    border-radius: 3px;
-    min-width: 20px;
+    border: 0.75pt rgb(160,175,5);
+    border-radius: 2.25pt;
+    min-width: 15pt;
 }
 
 QScrollBar::add-line:horizontal {
@@ -173,22 +173,22 @@ QScrollBar::sub-line:horizontal {
 
 QScrollBar:vertical {
     background: rgb(200,200,200);
-    width: 10px;
+    width: 7.5pt;
     margin: 0 0 0 0;
 }
 
 QScrollBar::handle:vertical {
     background: rgb(150,150,150);
-    border: 1px rgb(150,150,150);
-    border-radius: 3px;
-    min-height: 20px;
+    border: 0.75pt rgb(150,150,150);
+    border-radius: 2.25pt;
+    min-height: 15pt;
 }
 
 QScrollBar::handle:vertical:hover {
     background: rgb(160,175,5);
-    border: 1px rgb(160,175,5);
-    border-radius: 3px;
-    min-height: 20px;
+    border: 0.75pt rgb(160,175,5);
+    border-radius: 2.25pt;
+    min-height: 15pt;
 }
 
 QScrollBar::add-line:vertical {
@@ -254,7 +254,7 @@ QComboBox {
     color: black; 
     selection-color: white;
     selection-background-color:rgb(160,175,5);
-    padding: 1px 0px 1px 3px;
+    padding: 0.75pt 0pt 0.75pt 2.25pt;
 } 
 
 
@@ -321,7 +321,7 @@ QWidget{
 }
 
 QWidget:focus{
-    border: 1px solid rgb(160,175,5);
+    border: 0.75pt solid rgb(160,175,5);
 }
 
 QPushButton{
@@ -341,7 +341,7 @@ QPushButton:hover{
 QPushButton:focus{
     background-color: rgb(200,200,200);
     color: black;
-    border: 1px solid rgb(160,175,5);
+    border: 0.75pt solid rgb(160,175,5);
 }
 
 QTreeWidget{
@@ -371,7 +371,7 @@ QListView::item:checked {
 }
 
 #listTransactions{ 
-    font-size: 12px;  
+    font-size: 9pt;  
 }
 
 QDoubleSpinBox{
@@ -383,20 +383,20 @@ QTabWidget{
 }
 
 QTabWidget::pane {  /* The tab widget frame */
-    border: 1px solid rgb(100,100,100);
+    border: 0.75pt solid rgb(100,100,100);
 } 
 
 QTabBar::tab {
     background: rgb(150,150,150);
-    border: 1px solid rgb(100,100,100);
-    min-height:20px;
+    border: 0.75pt solid rgb(100,100,100);
+    min-height:15pt;
     min-width: 8ex;
-    padding: 2px;
+    padding: 1.5pt;
 }
 
 QTabBar::tab:selected {
     background: rgb(200,200,200);
-    border: 1px solid rgb(100,100,100);
+    border: 0.75pt solid rgb(100,100,100);
     border-bottom-color: rgb(200,200,200);
 }
 
@@ -406,7 +406,7 @@ QTabBar::tab:hover {
 }
 
 QTabBar::tab:!selected {
-    margin-top: 3px;  /* make non-selected tabs look smaller */
+    margin-top: 2.25pt;  /* make non-selected tabs look smaller */
 }
 
 QPlainTextEdit{
