@@ -5355,7 +5355,7 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
     double researchtotal = 0;
     double interesttotal = 0;
     int64_t minttotal = 0;
-    int64_t stakeinputtotal = 0;
+    //int64_t stakeinputtotal = 0;
     int64_t poscount = 0;
     int64_t emptyblockscount = 0;
     int64_t l_first = INT_MAX;
@@ -5436,7 +5436,7 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         result.push_back(Pair("research", researchtotal));
         result.push_back(Pair("interest", interesttotal));
         result.push_back(Pair("mint", minttotal/(double)COIN));
-        result.push_back(Pair("stake_input", stakeinputtotal/(double)COIN));
+        //result.push_back(Pair("stake_input", stakeinputtotal/(double)COIN));
         result1.push_back(Pair("totals", result));
     }
     {
@@ -5444,7 +5444,7 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         result.push_back(Pair("research", researchtotal/(double)researchcount));
         result.push_back(Pair("interest", interesttotal/(double)blockcount));
         result.push_back(Pair("mint", (minttotal/(double)blockcount)/(double)COIN));
-        result.push_back(Pair("stake_input", (stakeinputtotal/(double)poscount)/(double)COIN));
+        //result.push_back(Pair("stake_input", (stakeinputtotal/(double)poscount)/(double)COIN));
         result.push_back(Pair("spacing_sec", ((double)l_last_time-(double)l_first_time)/(double)blockcount));
         result.push_back(Pair("block_per_day", ((double)blockcount*86400.0)/((double)l_last_time-(double)l_first_time)));
         result.push_back(Pair("transaction", transactioncount/(double)(blockcount-emptyblockscount)));
