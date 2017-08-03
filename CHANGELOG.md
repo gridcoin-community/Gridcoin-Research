@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - High CPU usage, #349 (@tomasbrod)
  - Repetetive block signing, #295 (@tomasbrod)
  - Staking creates 1 cent output, #311 (@tomasbrod)
- - Client no longer has be restarted for a beacon to activate, #253
+ - Client no longer has to be restarted for a beacon to activate, #253
    (@Foggyx420).
  - Fixed a coin age bug which made it hard to stake on testnet (@denravonska)
  - Fixed reloading of polls in the voting GUI, #431 (@skcin) 
