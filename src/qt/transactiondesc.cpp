@@ -299,7 +299,6 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
 		//Decrypt any embedded messages
 		std::string eGRCMessage = ExtractXML(wtx.hashBoinc,"<MESSAGE>","</MESSAGE>");
 		std::string sOptionsNarr = ExtractXML(wtx.hashBoinc,"<NARR>","</NARR>");
-        //std::string sGRCMessage = AdvancedDecrypt(eGRCMessage);
 		// Contracts
 		//std::string sContractLength = RoundToString((double)wtx.hashBoinc.length(),0);
 		//std::string sContractInfo = "";

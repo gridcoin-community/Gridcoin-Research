@@ -221,7 +221,6 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
             CScript scriptPubKey;
             scriptPubKey.SetDestination(CBitcoinAddress(rcp.address.toStdString()).Get());
             vecSend.push_back(make_pair(scriptPubKey, rcp.amount));
-            //messages += "<MESSAGE>" + AdvancedCrypt(FromQStringW(rcp.Message)) + "</MESSAGE>";
             messages += "<MESSAGE>" + FromQStringW(rcp.Message) + "</MESSAGE>";
 
         }
