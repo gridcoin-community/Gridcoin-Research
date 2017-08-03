@@ -5466,8 +5466,10 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         std::vector<PAIRTYPE(std::string, long)> list;
         std::copy(c_cpid.begin(), c_cpid.end(), back_inserter(list));
         std::sort(list.begin(),list.end(),compare_second);
+        int limit=64;
         BOOST_FOREACH(const PAIRTYPE(std::string, long)& item, list)
         {
+            if(!(limit--)) break;
             result.push_back(Pair(item.first, item.second/(double)blockcount));
         }
         result1.push_back(Pair("cpids", result));
@@ -5477,8 +5479,10 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         std::vector<PAIRTYPE(std::string, long)> list;
         std::copy(c_org.begin(), c_org.end(), back_inserter(list));
         std::sort(list.begin(),list.end(),compare_second);
+        int limit=64;
         BOOST_FOREACH(const PAIRTYPE(std::string, long)& item, list)
         {
+            if(!(limit--)) break;
             result.push_back(Pair(item.first, item.second/(double)blockcount));
         }
         result1.push_back(Pair("orgs", result));
