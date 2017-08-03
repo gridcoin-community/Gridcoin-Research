@@ -59,15 +59,14 @@ public:
 
 
 		//QColor foreground = option.palette.color(QPalette::Text);
-		//R Halford: 11-28-2013: 
+		//R Halford: 11-28-2013:
 		QColor foreground = QColor(200, 0, 0);
-		
+
         QVariant value = index.data(Qt::ForegroundRole);
-        //QColor foreground = option.palette.color(QPalette::Text);
-        /* if(qVariantCanConvert<QColor>(value)) */
-        /* { */
-        /*     foreground = qvariant_cast<QColor>(value); */
-        /* } */
+        if(value.canConvert<QBrush>())
+        {
+            foreground = qvariant_cast<QColor>(value);
+        }
 
         painter->setPen(foreground);
         painter->drawText(addressRect, Qt::AlignLeft|Qt::AlignVCenter, address);
@@ -157,7 +156,7 @@ void OverviewPage::showEvent(QShowEvent *event)
 }
 
 void OverviewPage::updateTransactions()
-{    
+{
     if(filter)
     {
         // Show the maximum number of transactions the transaction list widget
@@ -227,7 +226,7 @@ void OverviewPage::setModel(WalletModel *model)
 
         ui->listTransactions->setModel(filter);
         ui->listTransactions->setModelColumn(TransactionTableModel::ToAddress);
-        
+
         // Keep up to date with wallet
         setBalance(model->getBalance(), model->getStake(), model->getUnconfirmedBalance(), model->getImmatureBalance());
         connect(model, SIGNAL(balanceChanged(qint64, qint64, qint64, qint64)), this, SLOT(setBalance(qint64, qint64, qint64, qint64)));
