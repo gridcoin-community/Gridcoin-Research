@@ -355,6 +355,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
     result.push_back(Pair("merkleroot", block.hashMerkleRoot.GetHex()));
     double mint = CoinToDouble(blockindex->nMint);
     result.push_back(Pair("mint", mint));
+    result.push_back(Pair("MoneySupply", blockindex->nMoneySupply));
     result.push_back(Pair("time", (int64_t)block.GetBlockTime()));
     result.push_back(Pair("nonce", (uint64_t)block.nNonce));
     result.push_back(Pair("bits", strprintf("%08x", block.nBits)));
