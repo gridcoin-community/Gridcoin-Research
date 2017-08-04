@@ -306,7 +306,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
 		//if (wtx.hashBoinc.length() > 255) sContractInfo = ": " + wtx.hashBoinc.substr(0,255);
 		strHTML += "<br><b>Notes:</b><pre><font color=blue> " 
             + QString::fromStdString(sGRCMessage) + "</font></pre><p><br>";
-        if (eOptionsNarr.length() > 1)
+        if (sOptionsNarr.length() > 1)
 		{
             std::string oOptionsNarr = MakeSafeMessage(sOptionsNarr);
             strHTML += "<br><b>Options:</b><pre><font color=blue> " + QString::fromStdString(oOptionsNarr) + "</font></pre><p><br>";
