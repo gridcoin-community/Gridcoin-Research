@@ -1566,7 +1566,7 @@ std::string MakeSafeMessage(const std::string& messagestring)
                 case '>':     safemessage += "&gt;";      break;
                 case '<':     safemessage += "&lt;";      break;
                 case '\0':                                break;
-                default:      safemessage += chk;           break;
+                default:      safemessage += chk;         break;
             }
         }
     }
