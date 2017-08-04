@@ -702,42 +702,42 @@ Dit product bevat software ontwikkeld door het OpenSSL Project voor gebruik in d
     </message>
     <message numerus="yes">
         <location line="+79"/>
-        <source>%n active connection(s) to Gridcoin network</source>
+        <source>%1 active connection(s) to Gridcoin network</source>
         <translation>
-            <numerusform>%n actieve verbinding naar Gridcoin netwerk</numerusform>
-            <numerusform>%n actieve verbindingen naar Gridcoin netwerk</numerusform>
+            <numerusform>%1 actieve verbinding naar Gridcoin netwerk</numerusform>
+            <numerusform>%1 actieve verbindingen naar Gridcoin netwerk</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+25"/>
-        <source>%n second(s) ago</source>
+        <source>%1 second(s) ago</source>
         <translation>
-            <numerusform>%n seconden geleden</numerusform>
-            <numerusform>%n seconden geleden</numerusform>
+            <numerusform>%1 seconden geleden</numerusform>
+            <numerusform>%1 seconden geleden</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s) ago</source>
+        <source>%1 minute(s) ago</source>
         <translation>
-            <numerusform>%n minuut geleden</numerusform>
-            <numerusform>%n minuten geleden</numerusform>
+            <numerusform>%1 minuut geleden</numerusform>
+            <numerusform>%1 minuten geleden</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s) ago</source>
+        <source>%1 hour(s) ago</source>
         <translation>
-            <numerusform>%n uur geleden</numerusform>
-            <numerusform>%n uren geleden</numerusform>
+            <numerusform>%1 uur geleden</numerusform>
+            <numerusform>%1 uren geleden</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s) ago</source>
+        <source>%1 day(s) ago</source>
         <translation>
-            <numerusform>%n dag geleden</numerusform>
-            <numerusform>%n dagen geleden</numerusform>
+            <numerusform>%1 dag geleden</numerusform>
+            <numerusform>%1 dagen geleden</numerusform>
         </translation>
     </message>
     <message>
@@ -832,34 +832,34 @@ Adres: %4
     </message>
     <message numerus="yes">
         <location line="+300"/>
-        <source>%n second(s)</source>
+        <source>%1 second(s)</source>
         <translation>
-            <numerusform>%n seconden</numerusform>
-            <numerusform>%n seconden</numerusform>
+            <numerusform>%1 seconden</numerusform>
+            <numerusform>%1 seconden</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s)</source>
+        <source>%1 minute(s)</source>
         <translation>
-            <numerusform>%n minuut</numerusform>
-            <numerusform>%n minuten</numerusform>
+            <numerusform>%1 minuut</numerusform>
+            <numerusform>%1 minuten</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s)</source>
+        <source>%1 hour(s)</source>
         <translation>
-            <numerusform>%n uur</numerusform>
-            <numerusform>%n uur</numerusform>
+            <numerusform>%1 uur</numerusform>
+            <numerusform>%1 uur</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s)</source>
+        <source>%1 day(s)</source>
         <translation>
-            <numerusform>%n dag</numerusform>
-            <numerusform>%n dagen</numerusform>
+            <numerusform>%1 dag</numerusform>
+            <numerusform>%1 dagen</numerusform>
         </translation>
     </message>
     <message>
@@ -4010,3 +4010,4 @@ Als het bestand niet bestaat, maak het dan aan, met een alleen-lezen permissie.<
     </message>
 </context>
 </TS>
+

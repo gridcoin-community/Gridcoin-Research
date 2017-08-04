@@ -703,7 +703,7 @@ Tento produkt zahrnuje programy vyvinuté OpenSSL Projektem pro použití v Open
     </message>
     <message numerus="yes">
         <location line="+79"/>
-        <source>%n active connection(s) to Gridcoin network</source>
+        <source>%1 active connection(s) to Gridcoin network</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -712,7 +712,7 @@ Tento produkt zahrnuje programy vyvinuté OpenSSL Projektem pro použití v Open
     </message>
     <message numerus="yes">
         <location line="+25"/>
-        <source>%n second(s) ago</source>
+        <source>%1 second(s) ago</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -721,7 +721,7 @@ Tento produkt zahrnuje programy vyvinuté OpenSSL Projektem pro použití v Open
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s) ago</source>
+        <source>%1 minute(s) ago</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -730,7 +730,7 @@ Tento produkt zahrnuje programy vyvinuté OpenSSL Projektem pro použití v Open
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s) ago</source>
+        <source>%1 hour(s) ago</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -739,7 +739,7 @@ Tento produkt zahrnuje programy vyvinuté OpenSSL Projektem pro použití v Open
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s) ago</source>
+        <source>%1 day(s) ago</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -838,38 +838,38 @@ Adresa: %4
     </message>
     <message numerus="yes">
         <location line="+300"/>
-        <source>%n second(s)</source>
+        <source>%1 second(s)</source>
         <translation type="unfinished">
-            <numerusform>%n vteřinu</numerusform>
-            <numerusform>%n vteřiny</numerusform>
-            <numerusform>%n vteřin</numerusform>
+            <numerusform>%1 vteřinu</numerusform>
+            <numerusform>%1 vteřiny</numerusform>
+            <numerusform>%1 vteřin</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s)</source>
+        <source>%1 minute(s)</source>
         <translation type="unfinished">
-            <numerusform>%n minutu</numerusform>
-            <numerusform>%n minuty</numerusform>
-            <numerusform>%n minut</numerusform>
+            <numerusform>%1 minutu</numerusform>
+            <numerusform>%1 minuty</numerusform>
+            <numerusform>%1 minut</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s)</source>
+        <source>%1 hour(s)</source>
         <translation>
             <numerusform>hodinu</numerusform>
-            <numerusform>%n hodiny</numerusform>
-            <numerusform>%n hodin</numerusform>
+            <numerusform>%1 hodiny</numerusform>
+            <numerusform>%1 hodin</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s)</source>
+        <source>%1 day(s)</source>
         <translation>
             <numerusform>den</numerusform>
-            <numerusform>%n dny</numerusform>
-            <numerusform>%n dn?</numerusform>
+            <numerusform>%1 dny</numerusform>
+            <numerusform>%1 dn?</numerusform>
         </translation>
     </message>
     <message>
@@ -4009,3 +4009,4 @@ Pokud konfigura?ní soubor ješt? neexistuje, vytvo? ho tak, aby ho mohl ?íst p
     </message>
 </context>
 </TS>
+

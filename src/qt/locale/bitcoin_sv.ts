@@ -704,42 +704,42 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
     </message>
     <message numerus="yes">
         <location line="+79"/>
-        <source>%n active connection(s) to Gridcoin network</source>
+        <source>%1 active connection(s) to Gridcoin network</source>
         <translation>
-            <numerusform>%n aktiv anslutning till Gridcoin nätverket</numerusform>
-            <numerusform>%n aktiva anslutning till Gridcoin nätverket</numerusform>
+            <numerusform>%1 aktiv anslutning till Gridcoin nätverket</numerusform>
+            <numerusform>%1 aktiva anslutning till Gridcoin nätverket</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+25"/>
-        <source>%n second(s) ago</source>
+        <source>%1 second(s) ago</source>
         <translation>
-            <numerusform>%n sekund sen</numerusform>
-            <numerusform>%n sekunder sen</numerusform>
+            <numerusform>%1 sekund sen</numerusform>
+            <numerusform>%1 sekunder sen</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s) ago</source>
+        <source>%1 minute(s) ago</source>
         <translation>
-            <numerusform>%n minut sen</numerusform>
-            <numerusform>%n minuter sen</numerusform>
+            <numerusform>%1 minut sen</numerusform>
+            <numerusform>%1 minuter sen</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s) ago</source>
+        <source>%1 hour(s) ago</source>
         <translation>
-            <numerusform>%n timme sen</numerusform>
-            <numerusform>%n timmar sen</numerusform>
+            <numerusform>%1 timme sen</numerusform>
+            <numerusform>%1 timmar sen</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s) ago</source>
+        <source>%1 day(s) ago</source>
         <translation>
-            <numerusform>%n dag sen</numerusform>
-            <numerusform>%n dagar sen</numerusform>
+            <numerusform>%1 dag sen</numerusform>
+            <numerusform>%1 dagar sen</numerusform>
         </translation>
     </message>
     <message>
@@ -834,34 +834,34 @@ Adress: %4
     </message>
     <message numerus="yes">
         <location line="+300"/>
-        <source>%n second(s)</source>
+        <source>%1 second(s)</source>
         <translation>
-            <numerusform>%n sekund</numerusform>
-            <numerusform>%n sekunder</numerusform>
+            <numerusform>%1 sekund</numerusform>
+            <numerusform>%1 sekunder</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s)</source>
+        <source>%1 minute(s)</source>
         <translation>
-            <numerusform>%n minut</numerusform>
-            <numerusform>%n minuter</numerusform>
+            <numerusform>%1 minut</numerusform>
+            <numerusform>%1 minuter</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s)</source>
+        <source>%1 hour(s)</source>
         <translation>
-            <numerusform>%n timme</numerusform>
-            <numerusform>%n timmar</numerusform>
+            <numerusform>%1 timme</numerusform>
+            <numerusform>%1 timmar</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s)</source>
+        <source>%1 day(s)</source>
         <translation>
-            <numerusform>%n dag</numerusform>
-            <numerusform>%n dagar</numerusform>
+            <numerusform>%1 dag</numerusform>
+            <numerusform>%1 dagar</numerusform>
         </translation>
     </message>
     <message>
@@ -4012,3 +4012,4 @@ Om filen inte existerar, skapa den med filrättigheten endast läsbar för ägar
     </message>
 </context>
 </TS>
+

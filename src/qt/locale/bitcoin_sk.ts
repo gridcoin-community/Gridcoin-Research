@@ -703,47 +703,47 @@ Tento produkt obsahuje softvér vyvinutý projektom OpenSSL Project pre použiti
     </message>
     <message numerus="yes">
         <location line="+79"/>
-        <source>%n active connection(s) to Gridcoin network</source>
+        <source>%1 active connection(s) to Gridcoin network</source>
         <translation type="unfinished">
-            <numerusform>%n aktívne spojenie s Gridcoin sieťov</numerusform>
-            <numerusform>%n aktívne spojenia s Gridcoin sieťov</numerusform>
-            <numerusform>%n aktívnych spojení s Gridcoin sieťou</numerusform>
+            <numerusform>%1 aktívne spojenie s Gridcoin sieťov</numerusform>
+            <numerusform>%1 aktívne spojenia s Gridcoin sieťov</numerusform>
+            <numerusform>%1 aktívnych spojení s Gridcoin sieťou</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+25"/>
-        <source>%n second(s) ago</source>
+        <source>%1 second(s) ago</source>
         <translation>
-            <numerusform>pred %n sekundou</numerusform>
-            <numerusform>pred %n sekundami</numerusform>
-            <numerusform>pred %n sekundami</numerusform>
+            <numerusform>pred %1 sekundou</numerusform>
+            <numerusform>pred %1 sekundami</numerusform>
+            <numerusform>pred %1 sekundami</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s) ago</source>
+        <source>%1 minute(s) ago</source>
         <translation type="unfinished">
-            <numerusform>pred %n minútou</numerusform>
-            <numerusform>pred %n minútami</numerusform>
-            <numerusform>pred %n minútami</numerusform>
+            <numerusform>pred %1 minútou</numerusform>
+            <numerusform>pred %1 minútami</numerusform>
+            <numerusform>pred %1 minútami</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s) ago</source>
+        <source>%1 hour(s) ago</source>
         <translation>
-            <numerusform>pred %n hodinou</numerusform>
-            <numerusform>pred %n hodinami</numerusform>
-            <numerusform>pred %n hodinami</numerusform>
+            <numerusform>pred %1 hodinou</numerusform>
+            <numerusform>pred %1 hodinami</numerusform>
+            <numerusform>pred %1 hodinami</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s) ago</source>
+        <source>%1 day(s) ago</source>
         <translation type="unfinished">
-            <numerusform>pred %n dňom</numerusform>
-            <numerusform>pred %n dňami</numerusform>
-            <numerusform>pred %n dňami</numerusform>
+            <numerusform>pred %1 dňom</numerusform>
+            <numerusform>pred %1 dňami</numerusform>
+            <numerusform>pred %1 dňami</numerusform>
         </translation>
     </message>
     <message>
@@ -837,38 +837,38 @@ Adresa: %4</translation>
     </message>
     <message numerus="yes">
         <location line="+300"/>
-        <source>%n second(s)</source>
+        <source>%1 second(s)</source>
         <translation type="unfinished">
-            <numerusform>%n sekunda</numerusform>
-            <numerusform>%n sekundy</numerusform>
-            <numerusform>%n sekúnd</numerusform>
+            <numerusform>%1 sekunda</numerusform>
+            <numerusform>%1 sekundy</numerusform>
+            <numerusform>%1 sekúnd</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s)</source>
+        <source>%1 minute(s)</source>
         <translation type="unfinished">
-            <numerusform>%n minúta</numerusform>
-            <numerusform>%n minúy</numerusform>
-            <numerusform>%n minút</numerusform>
+            <numerusform>%1 minúta</numerusform>
+            <numerusform>%1 minúy</numerusform>
+            <numerusform>%1 minút</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s)</source>
+        <source>%1 hour(s)</source>
         <translation>
-            <numerusform>%n hodina</numerusform>
-            <numerusform>%n hodiny</numerusform>
-            <numerusform>%n hodín</numerusform>
+            <numerusform>%1 hodina</numerusform>
+            <numerusform>%1 hodiny</numerusform>
+            <numerusform>%1 hodín</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s)</source>
+        <source>%1 day(s)</source>
         <translation type="unfinished">
-            <numerusform>%n deň</numerusform>
-            <numerusform>%n dni</numerusform>
-            <numerusform>%n dní</numerusform>
+            <numerusform>%1 deň</numerusform>
+            <numerusform>%1 dni</numerusform>
+            <numerusform>%1 dní</numerusform>
         </translation>
     </message>
     <message>
@@ -4023,3 +4023,4 @@ Ak súbor neexistuje, vytvorte ho s oprávnením pre ?ítanie len vlastníkom (o
     </message>
 </context>
 </TS>
+

@@ -701,37 +701,37 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message numerus="yes">
         <location line="+79"/>
-        <source>%n active connection(s) to Gridcoin network</source>
+        <source>%1 active connection(s) to Gridcoin network</source>
         <translation>
-            <numerusform>Gridcoin a??na %n etkin ba?lant?</numerusform>
+            <numerusform>Gridcoin a??na %1 etkin ba?lant?</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+25"/>
-        <source>%n second(s) ago</source>
+        <source>%1 second(s) ago</source>
         <translation>
-            <numerusform>%n saniye önce</numerusform>
+            <numerusform>%1 saniye önce</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s) ago</source>
+        <source>%1 minute(s) ago</source>
         <translation>
-            <numerusform>%n dakika önce</numerusform>
+            <numerusform>%1 dakika önce</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s) ago</source>
+        <source>%1 hour(s) ago</source>
         <translation>
-            <numerusform>%n saat önce</numerusform>
+            <numerusform>%1 saat önce</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s) ago</source>
+        <source>%1 day(s) ago</source>
         <translation>
-            <numerusform>%n gün önce</numerusform>
+            <numerusform>%1 gün önce</numerusform>
         </translation>
     </message>
     <message>
@@ -826,30 +826,30 @@ Adres: %4
     </message>
     <message numerus="yes">
         <location line="+300"/>
-        <source>%n second(s)</source>
+        <source>%1 second(s)</source>
         <translation>
-            <numerusform>%n saniye</numerusform>
+            <numerusform>%1 saniye</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s)</source>
+        <source>%1 minute(s)</source>
         <translation>
-            <numerusform>%n dakika</numerusform>
+            <numerusform>%1 dakika</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s)</source>
+        <source>%1 hour(s)</source>
         <translation>
-            <numerusform>%n saat</numerusform>
+            <numerusform>%1 saat</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s)</source>
+        <source>%1 day(s)</source>
         <translation>
-            <numerusform>%n gün</numerusform>
+            <numerusform>%1 gün</numerusform>
         </translation>
     </message>
     <message>
@@ -3996,3 +3996,4 @@ Dosya mevcut de?ilse, sadece sahibi için okumayla s?n?rl? izin ile olu?turunuz.
     </message>
 </context>
 </TS>
+

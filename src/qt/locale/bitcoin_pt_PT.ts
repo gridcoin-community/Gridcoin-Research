@@ -702,42 +702,42 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
     </message>
     <message numerus="yes">
         <location line="+79"/>
-        <source>%n active connection(s) to Gridcoin network</source>
+        <source>%1 active connection(s) to Gridcoin network</source>
         <translation>
-            <numerusform>%n ligação ativa à rede Gridcoin</numerusform>
-            <numerusform>%n ligaçãoes ativa à rede Gridcoin</numerusform>
+            <numerusform>%1 ligação ativa à rede Gridcoin</numerusform>
+            <numerusform>%1 ligaçãoes ativa à rede Gridcoin</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+25"/>
-        <source>%n second(s) ago</source>
+        <source>%1 second(s) ago</source>
         <translation>
-            <numerusform>%n há segundo</numerusform>
-            <numerusform>%n há segundos</numerusform>
+            <numerusform>%1 há segundo</numerusform>
+            <numerusform>%1 há segundos</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s) ago</source>
+        <source>%1 minute(s) ago</source>
         <translation>
-            <numerusform>há %n minuto</numerusform>
-            <numerusform>há %n minutos</numerusform>
+            <numerusform>há %1 minuto</numerusform>
+            <numerusform>há %1 minutos</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s) ago</source>
+        <source>%1 hour(s) ago</source>
         <translation>
-            <numerusform>há %n hora</numerusform>
-            <numerusform>há %n horas</numerusform>
+            <numerusform>há %1 hora</numerusform>
+            <numerusform>há %1 horas</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s) ago</source>
+        <source>%1 day(s) ago</source>
         <translation>
-            <numerusform>há %n dia</numerusform>
-            <numerusform>há %n dias</numerusform>
+            <numerusform>há %1 dia</numerusform>
+            <numerusform>há %1 dias</numerusform>
         </translation>
     </message>
     <message>
@@ -832,34 +832,34 @@ Endereço: %4
     </message>
     <message numerus="yes">
         <location line="+300"/>
-        <source>%n second(s)</source>
+        <source>%1 second(s)</source>
         <translation>
-            <numerusform>%n segundo</numerusform>
-            <numerusform>%n segundos</numerusform>
+            <numerusform>%1 segundo</numerusform>
+            <numerusform>%1 segundos</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s)</source>
+        <source>%1 minute(s)</source>
         <translation>
-            <numerusform>%n minuto</numerusform>
-            <numerusform>%n minutos</numerusform>
+            <numerusform>%1 minuto</numerusform>
+            <numerusform>%1 minutos</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s)</source>
+        <source>%1 hour(s)</source>
         <translation>
-            <numerusform>%n hora</numerusform>
-            <numerusform>%n horas</numerusform>
+            <numerusform>%1 hora</numerusform>
+            <numerusform>%1 horas</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s)</source>
+        <source>%1 day(s)</source>
         <translation>
-            <numerusform>%n dia</numerusform>
-            <numerusform>%n dias</numerusform>
+            <numerusform>%1 dia</numerusform>
+            <numerusform>%1 dias</numerusform>
         </translation>
     </message>
     <message>
@@ -4017,3 +4017,4 @@ Se o ficheiro não existir, crie-o com permissões de leitura.</translation>
     </message>
 </context>
 </TS>
+

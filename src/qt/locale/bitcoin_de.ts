@@ -823,9 +823,9 @@ Adresse: %4</translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s)</source>
+        <source>%1 minute(s)</source>
         <translation>
-            <numerusform>%n Minute(n)</numerusform>
+            <numerusform>%1 Minute(n)</numerusform>
             <numerusform></numerusform>
         </translation>
     </message>
@@ -3992,3 +3992,4 @@ Falls die Konfigurationsdatei nicht existiert, erzeugen Sie diese mit Leserechte
     </message>
 </context>
 </TS>
+

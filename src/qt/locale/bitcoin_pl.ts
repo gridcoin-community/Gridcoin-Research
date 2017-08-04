@@ -703,7 +703,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message numerus="yes">
         <location line="+79"/>
-        <source>%n active connection(s) to Gridcoin network</source>
+        <source>%1 active connection(s) to Gridcoin network</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -712,7 +712,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message numerus="yes">
         <location line="+25"/>
-        <source>%n second(s) ago</source>
+        <source>%1 second(s) ago</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -721,7 +721,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s) ago</source>
+        <source>%1 minute(s) ago</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -730,7 +730,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s) ago</source>
+        <source>%1 hour(s) ago</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -739,7 +739,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s) ago</source>
+        <source>%1 day(s) ago</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -838,38 +838,38 @@ Adres: %4
     </message>
     <message numerus="yes">
         <location line="+300"/>
-        <source>%n second(s)</source>
+        <source>%1 second(s)</source>
         <translation type="unfinished">
-            <numerusform>%n sekunda</numerusform>
-            <numerusform>%n sekund</numerusform>
-            <numerusform>%n sekund</numerusform>
+            <numerusform>%1 sekunda</numerusform>
+            <numerusform>%1 sekund</numerusform>
+            <numerusform>%1 sekund</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s)</source>
+        <source>%1 minute(s)</source>
         <translation type="unfinished">
-            <numerusform>%n minuta</numerusform>
-            <numerusform>%n minut</numerusform>
-            <numerusform>%n minut</numerusform>
+            <numerusform>%1 minuta</numerusform>
+            <numerusform>%1 minut</numerusform>
+            <numerusform>%1 minut</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s)</source>
+        <source>%1 hour(s)</source>
         <translation>
-            <numerusform>%n godzina</numerusform>
-            <numerusform>%n godzin</numerusform>
-            <numerusform>%n godzin</numerusform>
+            <numerusform>%1 godzina</numerusform>
+            <numerusform>%1 godzin</numerusform>
+            <numerusform>%1 godzin</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s)</source>
+        <source>%1 day(s)</source>
         <translation>
-            <numerusform>%n dzie?</numerusform>
-            <numerusform>%n dni</numerusform>
-            <numerusform>%n dni</numerusform>
+            <numerusform>%1 dzie?</numerusform>
+            <numerusform>%1 dni</numerusform>
+            <numerusform>%1 dni</numerusform>
         </translation>
     </message>
     <message>
@@ -4009,3 +4009,4 @@ Je?eli plik nie istnieje, utwórz go z uprawnieniami w?a?ciciela-tylko-do-odczyt
     </message>
 </context>
 </TS>
+

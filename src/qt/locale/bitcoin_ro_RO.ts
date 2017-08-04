@@ -703,47 +703,47 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
     </message>
     <message numerus="yes">
         <location line="+79"/>
-        <source>%n active connection(s) to Gridcoin network</source>
+        <source>%1 active connection(s) to Gridcoin network</source>
         <translation>
-            <numerusform>%n conexiune activ? la reteaua Gridcoin</numerusform>
-            <numerusform>%n conexiuni active la reteaua Gridcoin</numerusform>
-            <numerusform>%n conexiuni active la reteaua Gridcoin</numerusform>
+            <numerusform>%1 conexiune activ? la reteaua Gridcoin</numerusform>
+            <numerusform>%1 conexiuni active la reteaua Gridcoin</numerusform>
+            <numerusform>%1 conexiuni active la reteaua Gridcoin</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+25"/>
-        <source>%n second(s) ago</source>
+        <source>%1 second(s) ago</source>
         <translation>
-            <numerusform>%n secund? în urm?</numerusform>
-            <numerusform>%n secunde în urm?</numerusform>
-            <numerusform>%n secunde în urm?</numerusform>
+            <numerusform>%1 secund? în urm?</numerusform>
+            <numerusform>%1 secunde în urm?</numerusform>
+            <numerusform>%1 secunde în urm?</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s) ago</source>
+        <source>%1 minute(s) ago</source>
         <translation>
-            <numerusform>%n minut în urm?</numerusform>
-            <numerusform>%n minute în urm?</numerusform>
-            <numerusform>%n minute în urm?</numerusform>
+            <numerusform>%1 minut în urm?</numerusform>
+            <numerusform>%1 minute în urm?</numerusform>
+            <numerusform>%1 minute în urm?</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s) ago</source>
+        <source>%1 hour(s) ago</source>
         <translation>
-            <numerusform>%n or? în urm?</numerusform>
-            <numerusform>%n ore în urm?</numerusform>
-            <numerusform>%n ore în urm?</numerusform>
+            <numerusform>%1 or? în urm?</numerusform>
+            <numerusform>%1 ore în urm?</numerusform>
+            <numerusform>%1 ore în urm?</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s) ago</source>
+        <source>%1 day(s) ago</source>
         <translation>
-            <numerusform>%n zi în urm?</numerusform>
-            <numerusform>%n zile în urm?</numerusform>
-            <numerusform>%n zile în urm?</numerusform>
+            <numerusform>%1 zi în urm?</numerusform>
+            <numerusform>%1 zile în urm?</numerusform>
+            <numerusform>%1 zile în urm?</numerusform>
         </translation>
     </message>
     <message>
@@ -838,38 +838,38 @@ Adresa: %4
     </message>
     <message numerus="yes">
         <location line="+300"/>
-        <source>%n second(s)</source>
+        <source>%1 second(s)</source>
         <translation>
-            <numerusform>%n secund?</numerusform>
-            <numerusform>%n secunde</numerusform>
-            <numerusform>%n secunde</numerusform>
+            <numerusform>%1 secund?</numerusform>
+            <numerusform>%1 secunde</numerusform>
+            <numerusform>%1 secunde</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s)</source>
+        <source>%1 minute(s)</source>
         <translation>
-            <numerusform>%n minut</numerusform>
-            <numerusform>%n minute</numerusform>
-            <numerusform>%n minute</numerusform>
+            <numerusform>%1 minut</numerusform>
+            <numerusform>%1 minute</numerusform>
+            <numerusform>%1 minute</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s)</source>
+        <source>%1 hour(s)</source>
         <translation>
-            <numerusform>%n or?</numerusform>
-            <numerusform>%n ore</numerusform>
-            <numerusform>%n ore</numerusform>
+            <numerusform>%1 or?</numerusform>
+            <numerusform>%1 ore</numerusform>
+            <numerusform>%1 ore</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s)</source>
+        <source>%1 day(s)</source>
         <translation>
-            <numerusform>%n zi</numerusform>
-            <numerusform>%n zile</numerusform>
-            <numerusform>%n zile</numerusform>
+            <numerusform>%1 zi</numerusform>
+            <numerusform>%1 zile</numerusform>
+            <numerusform>%1 zile</numerusform>
         </translation>
     </message>
     <message>
@@ -4024,3 +4024,4 @@ Dac? fi?ierul nu exist?, creeaz?-l cu permisiuni de citire doar de c?tre proprie
     </message>
 </context>
 </TS>
+

@@ -584,10 +584,10 @@ Este produto inclúe software desenvolvido polo OpenSSL Project para o uso no Op
     </message>
     <message numerus="yes">
         <location line="+79"/>
-        <source>%n active connection(s) to Gridcoin network</source>
+        <source>%1 active connection(s) to Gridcoin network</source>
         <translation>
-            <numerusform>%n conexión activa á red de Gridcoin</numerusform>
-            <numerusform>%n conexións activas á red de Gridcoin</numerusform>
+            <numerusform>%1 conexión activa á red de Gridcoin</numerusform>
+            <numerusform>%1 conexións activas á red de Gridcoin</numerusform>
         </translation>
     </message>
     <message numerus="yes">
@@ -600,34 +600,34 @@ Este produto inclúe software desenvolvido polo OpenSSL Project para o uso no Op
     </message>
     <message numerus="yes">
         <location line="+13"/>
-        <source>%n second(s) ago</source>
+        <source>%1 second(s) ago</source>
         <translation>
-            <numerusform>Fai %n segundo</numerusform>
-            <numerusform>Fai %n segundos</numerusform>
+            <numerusform>Fai %1 segundo</numerusform>
+            <numerusform>Fai %1 segundos</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s) ago</source>
+        <source>%1 minute(s) ago</source>
         <translation>
-            <numerusform>Fai %n minuto</numerusform>
-            <numerusform>Fai %n minutos</numerusform>
+            <numerusform>Fai %1 minuto</numerusform>
+            <numerusform>Fai %1 minutos</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s) ago</source>
+        <source>%1 hour(s) ago</source>
         <translation>
-            <numerusform>Fai %n hora</numerusform>
-            <numerusform>Fai %n horas</numerusform>
+            <numerusform>Fai %1 hora</numerusform>
+            <numerusform>Fai %1 horas</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s) ago</source>
+        <source>%1 day(s) ago</source>
         <translation>
-            <numerusform>Fai %n día</numerusform>
-            <numerusform>Fai %n días</numerusform>
+            <numerusform>Fai %1 día</numerusform>
+            <numerusform>Fai %1 días</numerusform>
         </translation>
     </message>
     <message>
@@ -722,7 +722,7 @@ Dirección: %4
     </message>
     <message numerus="yes">
         <location line="+300"/>
-        <source>%n second(s)</source>
+        <source>%1 second(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -730,7 +730,7 @@ Dirección: %4
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s)</source>
+        <source>%1 minute(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -738,18 +738,18 @@ Dirección: %4
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s)</source>
+        <source>%1 hour(s)</source>
         <translation>
-            <numerusform>%n hora</numerusform>
-            <numerusform>%n horas</numerusform>
+            <numerusform>%1 hora</numerusform>
+            <numerusform>%1 horas</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s)</source>
+        <source>%1 day(s)</source>
         <translation>
-            <numerusform>%n día</numerusform>
-            <numerusform>%n días</numerusform>
+            <numerusform>%1 día</numerusform>
+            <numerusform>%1 días</numerusform>
         </translation>
     </message>
     <message>
@@ -3995,3 +3995,4 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
     </message>
 </context>
 </TS>
+

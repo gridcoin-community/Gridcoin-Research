@@ -705,47 +705,47 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message numerus="yes">
         <location line="+79"/>
-        <source>%n active connection(s) to Gridcoin network</source>
+        <source>%1 active connection(s) to Gridcoin network</source>
         <translation>
-            <numerusform>%n Активные соединения в сети Gricoin</numerusform>
-            <numerusform>%n Активные соединения в сети Gricoin</numerusform>
-            <numerusform>%n Активные соединения в сети Gricoin</numerusform>
+            <numerusform>%1 Активные соединения в сети Gricoin</numerusform>
+            <numerusform>%1 Активные соединения в сети Gricoin</numerusform>
+            <numerusform>%1 Активные соединения в сети Gricoin</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+25"/>
-        <source>%n second(s) ago</source>
+        <source>%1 second(s) ago</source>
         <translation>
-            <numerusform>%n секунд назад</numerusform>
-            <numerusform>%n секунд назад</numerusform>
-            <numerusform>%n секунд назад</numerusform>
+            <numerusform>%1 секунд назад</numerusform>
+            <numerusform>%1 секунд назад</numerusform>
+            <numerusform>%1 секунд назад</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s) ago</source>
+        <source>%1 minute(s) ago</source>
         <translation>
-            <numerusform>%n минут назад</numerusform>
-            <numerusform>%n минут назад</numerusform>
-            <numerusform>%n минут назад</numerusform>
+            <numerusform>%1 минут назад</numerusform>
+            <numerusform>%1 минут назад</numerusform>
+            <numerusform>%1 минут назад</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s) ago</source>
+        <source>%1 hour(s) ago</source>
         <translation>
-            <numerusform>%n часов назад</numerusform>
-            <numerusform>%n часов назад</numerusform>
-            <numerusform>%n часов назад</numerusform>
+            <numerusform>%1 часов назад</numerusform>
+            <numerusform>%1 часов назад</numerusform>
+            <numerusform>%1 часов назад</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s) ago</source>
+        <source>%1 day(s) ago</source>
         <translation>
-            <numerusform>%n Дней назад</numerusform>
-            <numerusform>%n Дней назад</numerusform>
-            <numerusform>%n Дней назад</numerusform>
+            <numerusform>%1 Дней назад</numerusform>
+            <numerusform>%1 Дней назад</numerusform>
+            <numerusform>%1 Дней назад</numerusform>
         </translation>
     </message>
     <message>
@@ -840,38 +840,38 @@ Address: %4
     </message>
     <message numerus="yes">
         <location line="+300"/>
-        <source>%n second(s)</source>
+        <source>%1 second(s)</source>
         <translation>
-            <numerusform>%n секунд</numerusform>
-            <numerusform>%n секунд</numerusform>
-            <numerusform>%n секунд</numerusform>
+            <numerusform>%1 секунд</numerusform>
+            <numerusform>%1 секунд</numerusform>
+            <numerusform>%1 секунд</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s)</source>
+        <source>%1 minute(s)</source>
         <translation>
-            <numerusform>%n минут</numerusform>
-            <numerusform>%n минут</numerusform>
-            <numerusform>%n минут</numerusform>
+            <numerusform>%1 минут</numerusform>
+            <numerusform>%1 минут</numerusform>
+            <numerusform>%1 минут</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s)</source>
+        <source>%1 hour(s)</source>
         <translation>
-            <numerusform>%n час</numerusform>
-            <numerusform>%n часа</numerusform>
-            <numerusform>%n часов</numerusform>
+            <numerusform>%1 час</numerusform>
+            <numerusform>%1 часа</numerusform>
+            <numerusform>%1 часов</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s)</source>
+        <source>%1 day(s)</source>
         <translation>
-            <numerusform>%n день</numerusform>
-            <numerusform>%n дня</numerusform>
-            <numerusform>%n дней</numerusform>
+            <numerusform>%1 день</numerusform>
+            <numerusform>%1 дня</numerusform>
+            <numerusform>%1 дней</numerusform>
         </translation>
     </message>
     <message>
@@ -4037,3 +4037,4 @@ If the file does not exist, create it with owner-readable-only file permissions.
     </message>
 </context>
 </TS>
+

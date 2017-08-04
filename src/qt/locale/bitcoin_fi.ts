@@ -703,42 +703,42 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
     </message>
     <message numerus="yes">
         <location line="+79"/>
-        <source>%n active connection(s) to Gridcoin network</source>
+        <source>%1 active connection(s) to Gridcoin network</source>
         <translation>
-            <numerusform>%n aktiivinen yhteys Gridcoin-verkkoon</numerusform>
-            <numerusform>%n aktiivista yhteyttä Gridcoin-verkkoon</numerusform>
+            <numerusform>%1 aktiivinen yhteys Gridcoin-verkkoon</numerusform>
+            <numerusform>%1 aktiivista yhteyttä Gridcoin-verkkoon</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+25"/>
-        <source>%n second(s) ago</source>
+        <source>%1 second(s) ago</source>
         <translation>
-            <numerusform>%n sekunti sitten</numerusform>
-            <numerusform>%n sekuntia sitten</numerusform>
+            <numerusform>%1 sekunti sitten</numerusform>
+            <numerusform>%1 sekuntia sitten</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s) ago</source>
+        <source>%1 minute(s) ago</source>
         <translation>
-            <numerusform>%n minuutti sitten</numerusform>
-            <numerusform>%n minuuttia sitten</numerusform>
+            <numerusform>%1 minuutti sitten</numerusform>
+            <numerusform>%1 minuuttia sitten</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s) ago</source>
+        <source>%1 hour(s) ago</source>
         <translation>
-            <numerusform>%n tunti sitten</numerusform>
-            <numerusform>%n tuntia sitten</numerusform>
+            <numerusform>%1 tunti sitten</numerusform>
+            <numerusform>%1 tuntia sitten</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s) ago</source>
+        <source>%1 day(s) ago</source>
         <translation>
-            <numerusform>%n päivä sitten</numerusform>
-            <numerusform>%n päivää sitten</numerusform>
+            <numerusform>%1 päivä sitten</numerusform>
+            <numerusform>%1 päivää sitten</numerusform>
         </translation>
     </message>
     <message>
@@ -832,34 +832,34 @@ Osoite: %4</translation>
     </message>
     <message numerus="yes">
         <location line="+300"/>
-        <source>%n second(s)</source>
+        <source>%1 second(s)</source>
         <translation>
-            <numerusform>%n sekunti</numerusform>
-            <numerusform>%n sekuntia</numerusform>
+            <numerusform>%1 sekunti</numerusform>
+            <numerusform>%1 sekuntia</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s)</source>
+        <source>%1 minute(s)</source>
         <translation>
-            <numerusform>%n minuutti</numerusform>
-            <numerusform>%n minuuttia</numerusform>
+            <numerusform>%1 minuutti</numerusform>
+            <numerusform>%1 minuuttia</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s)</source>
+        <source>%1 hour(s)</source>
         <translation>
-            <numerusform>%n tunti</numerusform>
-            <numerusform>%n tuntia</numerusform>
+            <numerusform>%1 tunti</numerusform>
+            <numerusform>%1 tuntia</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s)</source>
+        <source>%1 day(s)</source>
         <translation>
-            <numerusform>%n päivä</numerusform>
-            <numerusform>%n päivää</numerusform>
+            <numerusform>%1 päivä</numerusform>
+            <numerusform>%1 päivää</numerusform>
         </translation>
     </message>
     <message>
@@ -4010,3 +4010,4 @@ Jos tiedostoa ei ole, niin luo se ainoastaan omistajan kirjoitusoikeuksin.</tran
     </message>
 </context>
 </TS>
+
