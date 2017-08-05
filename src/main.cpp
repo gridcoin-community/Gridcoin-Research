@@ -3295,7 +3295,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             // Only reject superblock when it is new And when QuorumHash of Block != the Popular Quorum Hash:
             if (IsLockTimeWithinMinutes(GetBlockTime(),15)  && !fColdBoot)
             {
-                // Let this take effect on block 1 million on prod and immediatly on testnet.
+                // Let this take effect on block 1 million on prod and immediatly on testnet. Subject To Change.
                 if (fTestNet || (pindex->nHeight > 1000000))
                 {
                     try
