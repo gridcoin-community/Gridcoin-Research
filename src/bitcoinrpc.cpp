@@ -292,7 +292,6 @@ static const CRPCCommand vRPCCommands[] =
     { "restart",                &restart,                false,  false },
     { "execute",                &execute,                false,  false },
     { "option",                 &option,                 false,  false },
-    { "dao",                    &dao,                    false,  false },
     { "getrawtransaction",      &getrawtransaction,      false,  false },
     { "createrawtransaction",   &createrawtransaction,   false,  false },
     { "decoderawtransaction",   &decoderawtransaction,   false,  false },
