@@ -4041,4 +4041,3 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
 </context>
 </TS>
 
-  
