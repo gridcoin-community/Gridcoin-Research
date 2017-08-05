@@ -5,7 +5,6 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
-### Added
 ### Changed
  - Staking cleanup, #301 (@tomasbrod). This also solves several other issues:
  - UI:
@@ -23,6 +22,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Print beacons as they are loaded and debug3=true (@tomasbrod).
  - Show superblock information in getblock (@tomasbrod).
  - Code cleanup (@skcin).
+ - Update Lithuanian translations, #469 (@Rytiss).
+ - Add block size min, max, avg to block stats RPC (@tomasbrod).
+ - Fields on overview page are now selectable.
 
 ### Fixed
  - High CPU usage, #349 (@tomasbrod)
@@ -34,6 +36,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Fixed reloading of polls in the voting GUI, #431 (@skcin) 
  - Fix crash when listing receivedby on addresses with no transactions,
    #456 (@denravonska).
+ - Fix buffer overflow in TX message unscambling, #468 (@tomasbrod).
+ - Splash screen can no longer be dismissed and the UI can no longer be shown
+   until the wallet has fully loaded, #353 (@denravonska).
 
 ### Removed
  - Removed newbie boost, #332
