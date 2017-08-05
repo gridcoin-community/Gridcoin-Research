@@ -764,7 +764,6 @@ Value createrawtransaction(const Array& params, bool fHelp)
 
     Array inputs = params[0].get_array();
     Object sendTo = params[1].get_obj();
-    //UniValue sendTo2 = params[1].get_obj();
 
     CTransaction rawTx;
 

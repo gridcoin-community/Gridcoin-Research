@@ -16,8 +16,6 @@ AC_CONFIG_MACRO_DIR([build-aux/m4])
 
 BITCOIN_DAEMON_NAME=bitcoind
 BITCOIN_GUI_NAME=bitcoin-qt
-#BITCOIN_CLI_NAME=bitcoin-cli
-#BITCOIN_TX_NAME=bitcoin-tx
 
 AC_CANONICAL_HOST
 
@@ -170,20 +168,6 @@ AC_ARG_ENABLE([glibc-back-compat],
   [enable backwards compatibility with glibc])],
   [use_glibc_compat=$enableval],
   [use_glibc_compat=no])
-
-AC_ARG_WITH([system-univalue],
-  [AS_HELP_STRING([--with-system-univalue],
-  [Build with system UniValue (default is no)])],
-  [system_univalue=$withval],
-  [system_univalue=no]
-)
-# AC_ARG_ENABLE([zmq],
-#   [AS_HELP_STRING([--disable-zmq],
-#   [disable ZMQ notifications])],
-#   [use_zmq=$enableval],
-#   [use_zmq=yes])
-
-# AC_ARG_WITH([protoc-bindir],[AS_HELP_STRING([--with-protoc-bindir=BIN_DIR],[specify protoc bin path])], [protoc_bin_path=$withval], [])
 
 AC_ARG_ENABLE(man,
     [AS_HELP_STRING([--disable-man],
@@ -697,9 +681,6 @@ if test x$use_upnp != xno; then
   )
 fi
 
-# AC_CHECK_LIB([curl], [main], [CURL_LIBS=-lcurl], AC_MSG_ERROR(libcrypto missing))
-#AC_SEARCH_LIBS([curl])
-
 BITCOIN_QT_INIT
 
 dnl sets $bitcoin_enable_qt, $bitcoin_enable_qt_test, $bitcoin_enable_qt_dbus
@@ -899,16 +880,6 @@ if test x$use_pkgconfig = xyes; then
           PKG_CHECK_MODULES([EVENT_PTHREADS], [libevent_pthreads],, [AC_MSG_ERROR(libevent_pthreads not found.)])
         fi
       fi
-
-      # if test "x$use_zmq" = "xyes"; then
-      #   PKG_CHECK_MODULES([ZMQ],[libzmq >= 4],
-      #     [AC_DEFINE([ENABLE_ZMQ],[1],[Define to 1 to enable ZMQ functions])],
-      #     [AC_DEFINE([ENABLE_ZMQ],[0],[Define to 1 to enable ZMQ functions])
-      #      AC_MSG_WARN([libzmq version 4.x or greater not found, disabling])
-      #      use_zmq=no])
-      # else
-      #     AC_DEFINE_UNQUOTED([ENABLE_ZMQ],[0],[Define to 1 to enable ZMQ functions])
-      # fi
     ]
   )
 else
@@ -932,30 +903,6 @@ else
     fi
   fi
 
-  # if test "x$use_zmq" = "xyes"; then
-  #    AC_CHECK_HEADER([zmq.h],
-  #      [AC_DEFINE([ENABLE_ZMQ],[1],[Define to 1 to enable ZMQ functions])],
-  #      [AC_MSG_WARN([zmq.h not found, disabling zmq support])
-  #       use_zmq=no
-  #       AC_DEFINE([ENABLE_ZMQ],[0],[Define to 1 to enable ZMQ functions])])
-  #    AC_CHECK_LIB([zmq],[zmq_ctx_shutdown],ZMQ_LIBS=-lzmq,
-  #      [AC_MSG_WARN([libzmq >= 4.0 not found, disabling zmq support])
-  #       use_zmq=no
-  #       AC_DEFINE([ENABLE_ZMQ],[0],[Define to 1 to enable ZMQ functions])])
-  # else
-  #   AC_DEFINE_UNQUOTED([ENABLE_ZMQ],[0],[Define to 1 to enable ZMQ functions])
-  # fi
-
-  # if test "x$use_zmq" = "xyes"; then
-  #   dnl Assume libzmq was built for static linking
-  #   case $host in
-  #     *mingw*)
-  #       ZMQ_CFLAGS="$ZMQ_CFLAGS -DZMQ_STATIC"
-  #     ;;
-  #   esac
-  # fi
-
-  # BITCOIN_QT_CHECK(AC_CHECK_LIB([protobuf] ,[main],[PROTOBUF_LIBS=-lprotobuf], BITCOIN_QT_FAIL(libprotobuf not found)))
   if test x$use_qr != xno; then
     BITCOIN_QT_CHECK([AC_CHECK_LIB([qrencode], [main],[QR_LIBS=-lqrencode], [have_qrencode=no])])
     BITCOIN_QT_CHECK([AC_CHECK_HEADER([qrencode.h],, have_qrencode=no)])
@@ -969,56 +916,6 @@ AC_CHECK_DECLS([EVP_MD_CTX_new],,,[AC_INCLUDES_DEFAULT
 ])
 CXXFLAGS="${save_CXXFLAGS}"
 
-dnl univalue check
-
-need_bundled_univalue=yes
-
-if test x$build_bitcoin_utils$build_bitcoind$bitcoin_enable_qt$use_tests$use_bench = xnonononono; then
-  need_bundled_univalue=no
-else
-
-if test x$system_univalue != xno ; then
-  found_univalue=no
-  if test x$use_pkgconfig = xyes; then
-    : #NOP
-    m4_ifdef(
-      [PKG_CHECK_MODULES],
-      [
-        PKG_CHECK_MODULES([UNIVALUE],[libunivalue],[found_univalue=yes],[true])
-      ]
-    )
-  else
-    AC_CHECK_HEADER([univalue.h],[
-      AC_CHECK_LIB([univalue],  [main],[
-        UNIVALUE_LIBS=-lunivalue
-        found_univalue=yes
-      ],[true])
-    ],[true])
-  fi
-
-  if test x$found_univalue = xyes ; then
-    system_univalue=yes
-    need_bundled_univalue=no
-  elif test x$system_univalue = xyes ; then
-    AC_MSG_ERROR([univalue not found])
-  else
-    system_univalue=no
-  fi
-fi
-
-if test x$need_bundled_univalue = xyes ; then
-  UNIVALUE_CFLAGS='-I$(srcdir)/univalue/include'
-  UNIVALUE_LIBS='univalue/libunivalue.la'
-fi
-
-fi
-
-AM_CONDITIONAL([EMBEDDED_UNIVALUE],[test x$need_bundled_univalue = xyes])
-AC_SUBST(UNIVALUE_CFLAGS)
-AC_SUBST(UNIVALUE_LIBS)
-
-# BITCOIN_QT_PATH_PROGS([PROTOC], [protoc],$protoc_bin_path)
-
 AC_MSG_CHECKING([whether to build bitcoind])
 AM_CONDITIONAL([BUILD_BITCOIND], [test x$build_bitcoind = xyes])
 AC_MSG_RESULT($build_bitcoind)
@@ -1026,14 +923,6 @@ AC_MSG_RESULT($build_bitcoind)
 AC_MSG_CHECKING([whether to build utils (bitcoin-cli bitcoin-tx)])
 AM_CONDITIONAL([BUILD_BITCOIN_UTILS], [test x$build_bitcoin_utils = xyes])
 AC_MSG_RESULT($build_bitcoin_utils)
-
-# AC_MSG_CHECKING([whether to build libraries])
-AM_CONDITIONAL([BUILD_BITCOIN_LIBS], [test x$build_bitcoin_libs = xyes])
-# if test x$build_bitcoin_libs = xyes; then
-#   AC_DEFINE(HAVE_CONSENSUS_LIB, 1, [Define this symbol if the consensus lib has been built])
-#   AC_CONFIG_FILES([libbitcoinconsensus.pc:libbitcoinconsensus.pc.in])
-# fi
-# AC_MSG_RESULT($build_bitcoin_libs)
 
 AC_LANG_POP
 
@@ -1191,8 +1080,6 @@ AC_SUBST(COPYRIGHT_HOLDERS_SUBSTITUTION, "_COPYRIGHT_HOLDERS_SUBSTITUTION")
 AC_SUBST(COPYRIGHT_HOLDERS_FINAL, "_COPYRIGHT_HOLDERS_FINAL")
 AC_SUBST(BITCOIN_DAEMON_NAME)
 AC_SUBST(BITCOIN_GUI_NAME)
-#AC_SUBST(BITCOIN_CLI_NAME)
-#AC_SUBST(BITCOIN_TX_NAME)
 
 AC_SUBST(RELDFLAGS)
 AC_SUBST(ERROR_CXXFLAGS)
@@ -1248,12 +1135,7 @@ PKGCONFIG_LIBDIR_TEMP="$PKG_CONFIG_LIBDIR"
 unset PKG_CONFIG_LIBDIR
 PKG_CONFIG_LIBDIR="$PKGCONFIG_LIBDIR_TEMP"
 
-if test x$need_bundled_univalue = xyes; then
-  AC_CONFIG_SUBDIRS([src/univalue])
-fi
-
 ac_configure_args="${ac_configure_args} --disable-shared --with-pic --with-bignum=no --enable-module-recovery"
-AC_CONFIG_SUBDIRS([src/secp256k1])
 
 AC_OUTPUT
 

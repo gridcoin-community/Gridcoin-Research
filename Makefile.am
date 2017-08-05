@@ -164,7 +164,6 @@ $(BITCOIND_BIN): FORCE
 
 if USE_LCOV
 LCOV_FILTER_PATTERN=-p "/usr/include/" -p "src/leveldb/" -p "src/secp256k1"
-#-p "src/bench/" -p "src/univalue" -p "src/crypto/ctaes"
 
 baseline.info:
 	$(LCOV) -c -i -d $(abs_builddir)/src -o $@
