@@ -5331,14 +5331,14 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         throw runtime_error(
             "getblockstats mode [startheight [endheight]]\n"
             "Show stats on what wallets and cpids staked recent blocks.\n");
-    long mode= std::stol(params[0].get_str());
+    long mode= cdbl(params[0].get_str(),0);
     (void)mode; //TODO
     long lowheight= 0;
     long highheight= INT_MAX;
     if(params.size()>=2)
-        lowheight= std::stol(params[1].get_str());
+        lowheight= cdbl(params[1].get_str(),0);
     if(params.size()>=3)
-        highheight= std::stol(params[2].get_str());
+        highheight= cdbl(params[2].get_str(),0);
     CBlockIndex* cur;
     Object result1;
     {
