@@ -1,7 +1,7 @@
 #ifndef GRC_UPGRADER
 #define GRC_UPGRADER
 
-#include <curl.h> // for downloading
+#include <curl/curl.h> // for downloading
 #include <string>
 #include <string.h>
 #include <boost/filesystem.hpp>
