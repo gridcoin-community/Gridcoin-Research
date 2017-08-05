@@ -1919,9 +1919,9 @@ Value execute(const Array& params, bool fHelp)
             vector<pair<CScript, int64_t> > vecSend;
             std::string sRecipients = params[1].get_str();
             std::string sRainCommand = ExtractXML(sRecipients,"<RAIN>","</RAIN>");
-            std::string sRain = "<NARR>Project Rain: " + ExtractXML(sRecipients,"<RAINMESSAGE>","</RAINMESSAGE>") + "</NARR>";
+            std::string sRainMessage = MakeSafeMessage(ExtractXML(sRecipients,"<RAINMESSAGE>","</RAINMESSAGE>"));
+            std::string sRain = "<NARR>Project Rain: " + sRainMessage + "</NARR>";
             if (!sRainCommand.empty()) sRecipients = sRainCommand;
-            //std::string sRainMessage = AdvancedCrypt(sRain);
             wtx.hashBoinc = sRain;
             int64_t totalAmount = 0;
             double dTotalToSend = 0;

@@ -196,6 +196,8 @@ void runCommand(std::string strCommand);
 std::string RoundToString(double d, int place);
 bool Contains(const std::string& data, const std::string& instring);
 
+std::string MakeSafeMessage(const std::string& messagestring);
+
 inline std::string i64tostr(int64_t n)
 {
     return strprintf("%" PRId64, n);

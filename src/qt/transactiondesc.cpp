@@ -298,17 +298,18 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
         CTxDB txdb("r"); // To fetch source txouts
 		//Decrypt any embedded messages
 		std::string eGRCMessage = ExtractXML(wtx.hashBoinc,"<MESSAGE>","</MESSAGE>");
-		std::string sOptionsNarr = ExtractXML(wtx.hashBoinc,"<NARR>","</NARR>");
-		std::string sGRCMessage = AdvancedDecrypt(eGRCMessage);
-		// Contracts
+        std::string sGRCMessage = MakeSafeMessage(eGRCMessage);
+        std::string sOptionsNarr = ExtractXML(wtx.hashBoinc,"<NARR>","</NARR>");
+        // Contracts
 		//std::string sContractLength = RoundToString((double)wtx.hashBoinc.length(),0);
 		//std::string sContractInfo = "";
 		//if (wtx.hashBoinc.length() > 255) sContractInfo = ": " + wtx.hashBoinc.substr(0,255);
 		strHTML += "<br><b>Notes:</b><pre><font color=blue> " 
-			+ QString::fromStdString(sGRCMessage) + "</font></pre><p><br>";
-		if (sOptionsNarr.length() > 1)
+            + QString::fromStdString(sGRCMessage) + "</font></pre><p><br>";
+        if (sOptionsNarr.length() > 1)
 		{
-			strHTML += "<br><b>Options:</b><pre><font color=blue> " + QString::fromStdString(sOptionsNarr) + "</font></pre><p><br>";
+            std::string oOptionsNarr = MakeSafeMessage(sOptionsNarr);
+            strHTML += "<br><b>Options:</b><pre><font color=blue> " + QString::fromStdString(oOptionsNarr) + "</font></pre><p><br>";
 		
 		}
 		if (fDebug3)
