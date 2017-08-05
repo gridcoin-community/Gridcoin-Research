@@ -182,6 +182,13 @@ void TransactionView::setModel(WalletModel *model)
                 TransactionTableModel::Date, 120);
         transactionView->horizontalHeader()->resizeSection(
                 TransactionTableModel::Type, 120);
+#if QT_VERSION < 0x050000
+        transactionView->horizontalHeader()->setResizeMode(
+                TransactionTableModel::ToAddress, QHeaderView::Stretch);
+#else
+        transactionView->horizontalHeader()->setSectionResizeMode(
+                TransactionTableModel::ToAddress, QHeaderView::Stretch);
+#endif
         transactionView->horizontalHeader()->setResizeMode(
                 TransactionTableModel::ToAddress, QHeaderView::Stretch);
         transactionView->horizontalHeader()->resizeSection(
