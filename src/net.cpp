@@ -572,12 +572,8 @@ void AddressCurrentlyConnected(const CService& addr)
 
 
 
-uint64_t CNode::nTotalBytesRecv = 0;
-uint64_t CNode::nTotalBytesSent = 0;
-CCriticalSection CNode::cs_totalBytesRecv;
-CCriticalSection CNode::cs_totalBytesSent;
-
-
+std::atomic<uint64_t> CNode::nTotalBytesRecv{ 0 };
+std::atomic<uint64_t> CNode::nTotalBytesSent{ 0 };
 
 CNode* FindNode(const CNetAddr& ip)
 {
@@ -1811,25 +1807,21 @@ void static ThreadStakeMiner(void* parg)
 
 void CNode::RecordBytesRecv(uint64_t bytes)
 {
-    LOCK(cs_totalBytesRecv);
     nTotalBytesRecv += bytes;
 }
 
 void CNode::RecordBytesSent(uint64_t bytes)
 {
-    LOCK(cs_totalBytesSent);
     nTotalBytesSent += bytes;
 }
 
 uint64_t CNode::GetTotalBytesRecv()
 {
-    LOCK(cs_totalBytesRecv);
     return nTotalBytesRecv;
 }
 
 uint64_t CNode::GetTotalBytesSent()
 {
-    LOCK(cs_totalBytesSent);
     return nTotalBytesSent;
 }
 
