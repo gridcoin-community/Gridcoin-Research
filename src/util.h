@@ -591,14 +591,6 @@ public:
 };
 
 bool NewThread(void(*pfn)(void*), void* parg);
-
-#ifndef WIN32
-inline void ExitThread(size_t nExitCode)
-{
-    pthread_exit((void*)nExitCode);
-}
-#endif
-
 void RenameThread(const char* name);
 
 #endif
