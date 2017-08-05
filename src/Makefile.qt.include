@@ -57,7 +57,6 @@ QT_TS = \
   qt/locale/bitcoin_pt_PT.ts \
   qt/locale/bitcoin_ro_RO.ts \
   qt/locale/bitcoin_ru.ts \
-  qt/locale/bitcoin_sah.ts \
   qt/locale/bitcoin_sk.ts \
   qt/locale/bitcoin_sl_SI.ts \
   qt/locale/bitcoin_sq.ts \
@@ -124,6 +123,7 @@ QT_MOC_CPP = \
   qt/moc_transactiontablemodel.cpp \
   qt/moc_transactionview.cpp \
   qt/moc_upgradedialog.cpp \
+  qt/moc_votingdialog.cpp \
   qt/moc_walletmodel.cpp
 
 BITCOIN_MM = \
@@ -179,6 +179,7 @@ GRIDCOINRESEARCH_H = \
   qt/transactiontablemodel.h \
   qt/transactionview.h \
   qt/upgradedialog.h \
+  qt/votingdialog.h \
   qt/walletmodel.h
 
 RES_ICONS = \
@@ -279,6 +280,7 @@ GRIDCOINRESEARCH_CPP = \
   qt/transactiontablemodel.cpp \
   qt/transactionview.cpp \
   qt/upgradedialog.cpp \
+  qt/votingdialog.cpp \
   qt/walletmodel.cpp
 
 RES_IMAGES = 

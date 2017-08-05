@@ -101,6 +101,7 @@ libgridcoin_util_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 libgridcoin_util_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libgridcoin_util_a_SOURCES = addrman.cpp \
   alert.cpp \
+  allocators.cpp \
   beacon.cpp \
   bitcoinrpc.cpp \
   block.cpp \

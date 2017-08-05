@@ -12,7 +12,11 @@
 	#include <QtCharts/QPieSeries>
 #endif
 
-#include <QtConcurrentRun>
+#if QT_VERSION < 0x050000
+    #include <QtConcurrentRun>
+#else
+    #include <QtConcurrent/QtConcurrentRun>
+#endif
 #include <QClipboard>
 #include <QEvent>
 #include <QFont>
@@ -662,10 +666,10 @@ VotingChartDialog::VotingChartDialog(QWidget *parent)
     answerTable_->setRowCount(0);
     answerTableHeader<<"Answer"<<"Shares"<<"Percentage";
     answerTable_->setHorizontalHeaderLabels(answerTableHeader);
-#if QT_VERSION >= QT_VERSION_CHECK(5, 8, 0)
-    answerTable_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-#else
+#if QT_VERSION < 0x050000
     answerTable_->horizontalHeader()->setResizeMode(QHeaderView::Stretch);
+#else
+    answerTable_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
 #endif
     answerTable_->setEditTriggers( QAbstractItemView::NoEditTriggers );
     resTabWidget->addTab(answerTable_, tr("List"));

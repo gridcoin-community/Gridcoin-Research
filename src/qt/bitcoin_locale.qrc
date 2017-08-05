@@ -50,7 +50,6 @@
         <file alias="pt_PT">locale/bitcoin_pt_PT.qm</file>
         <file alias="ro_RO">locale/bitcoin_ro_RO.qm</file>
         <file alias="ru">locale/bitcoin_ru.qm</file>
-        <file alias="sah">locale/bitcoin_sah.qm</file>
         <file alias="sk">locale/bitcoin_sk.qm</file>
         <file alias="sl_SI">locale/bitcoin_sl_SI.qm</file>
         <file alias="sq">locale/bitcoin_sq.qm</file>
