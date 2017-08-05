@@ -584,37 +584,37 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message numerus="yes">
         <location line="+79"/>
-        <source>%n active connection(s) to Gridcoin network</source>
+        <source>%1 active connection(s) to Gridcoin network</source>
         <translation>
-            <numerusform>与格雷德币网络建立了 %n 个可用连接</numerusform>
+            <numerusform>与格雷德币网络建立了 %1 个可用连接</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+25"/>
-        <source>%n second(s) ago</source>
+        <source>%1 second(s) ago</source>
         <translation>
-            <numerusform>%n 秒前</numerusform>
+            <numerusform>%1 秒前</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s) ago</source>
+        <source>%1 minute(s) ago</source>
         <translation>
-            <numerusform>%n 分钟前</numerusform>
+            <numerusform>%1 分钟前</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s) ago</source>
+        <source>%1 hour(s) ago</source>
         <translation>
-            <numerusform>%n 小时前</numerusform>
+            <numerusform>%1 小时前</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s) ago</source>
+        <source>%1 day(s) ago</source>
         <translation>
-            <numerusform>%n 天前</numerusform>
+            <numerusform>%1 天前</numerusform>
         </translation>
     </message>
     <message>
@@ -709,30 +709,30 @@ Address: %4
     </message>
     <message numerus="yes">
         <location line="+300"/>
-        <source>%n second(s)</source>
+        <source>%1 second(s)</source>
         <translation>
-            <numerusform>%n 秒</numerusform>
+            <numerusform>%1 秒</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s)</source>
+        <source>%1 minute(s)</source>
         <translation>
-            <numerusform>%n 分钟</numerusform>
+            <numerusform>%1 分钟</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s)</source>
+        <source>%1 hour(s)</source>
         <translation>
-            <numerusform>%n 小时</numerusform>
+            <numerusform>%1 小时</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s)</source>
+        <source>%1 day(s)</source>
         <translation>
-            <numerusform>%n 天</numerusform>
+            <numerusform>%1 天</numerusform>
         </translation>
     </message>
     <message>
@@ -4014,3 +4014,4 @@ rpcpassword=&lt;password&gt;
     </message>
 </context>
 </TS>
+

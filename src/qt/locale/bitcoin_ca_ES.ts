@@ -697,42 +697,42 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message numerus="yes">
         <location line="+79"/>
-        <source>%n active connection(s) to Gridcoin network</source>
+        <source>%1 active connection(s) to Gridcoin network</source>
         <translation>
-            <numerusform>%n conexió activa a la xarxa Gridcoin</numerusform>
-            <numerusform>%n conexions actives a la xarxa Gridcoin</numerusform>
+            <numerusform>%1 conexió activa a la xarxa Gridcoin</numerusform>
+            <numerusform>%1 conexions actives a la xarxa Gridcoin</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+25"/>
-        <source>%n second(s) ago</source>
+        <source>%1 second(s) ago</source>
         <translation>
-            <numerusform>fa %n segon</numerusform>
-            <numerusform>fa %n segons</numerusform>
+            <numerusform>fa %1 segon</numerusform>
+            <numerusform>fa %1 segons</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s) ago</source>
+        <source>%1 minute(s) ago</source>
         <translation>
-            <numerusform>fa %n minut</numerusform>
-            <numerusform>fa %n minuts</numerusform>
+            <numerusform>fa %1 minut</numerusform>
+            <numerusform>fa %1 minuts</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s) ago</source>
+        <source>%1 hour(s) ago</source>
         <translation>
-            <numerusform>fa %n hora</numerusform>
-            <numerusform>fa %n hores</numerusform>
+            <numerusform>fa %1 hora</numerusform>
+            <numerusform>fa %1 hores</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s) ago</source>
+        <source>%1 day(s) ago</source>
         <translation>
-            <numerusform>fa %n dia</numerusform>
-            <numerusform>fa %n dies</numerusform>
+            <numerusform>fa %1 dia</numerusform>
+            <numerusform>fa %1 dies</numerusform>
         </translation>
     </message>
     <message>
@@ -823,34 +823,34 @@ Address: %4
     </message>
     <message numerus="yes">
         <location line="+300"/>
-        <source>%n second(s)</source>
+        <source>%1 second(s)</source>
         <translation>
-            <numerusform>%n segon</numerusform>
-            <numerusform>%n segons</numerusform>
+            <numerusform>%1 segon</numerusform>
+            <numerusform>%1 segons</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s)</source>
+        <source>%1 minute(s)</source>
         <translation>
-            <numerusform>%n minut</numerusform>
-            <numerusform>%n minuts</numerusform>
+            <numerusform>%1 minut</numerusform>
+            <numerusform>%1 minuts</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s)</source>
+        <source>%1 hour(s)</source>
         <translation>
-            <numerusform>%n hora</numerusform>
-            <numerusform>%n hores</numerusform>
+            <numerusform>%1 hora</numerusform>
+            <numerusform>%1 hores</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s)</source>
+        <source>%1 day(s)</source>
         <translation>
-            <numerusform>%n dia</numerusform>
-            <numerusform>%n dies</numerusform>
+            <numerusform>%1 dia</numerusform>
+            <numerusform>%1 dies</numerusform>
         </translation>
     </message>
     <message>
@@ -4000,3 +4000,5 @@ Executar una ordre quan es rep un avís rellevant (%s en cmd es substitueix per 
     </message>
 </context>
 </TS>
+
+

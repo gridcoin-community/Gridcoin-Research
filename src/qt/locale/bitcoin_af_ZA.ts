@@ -629,10 +629,10 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message numerus="yes">
         <location line="+79"/>
-        <source>%n active connection(s) to Gridcoin network</source>
+        <source>%1 active connection(s) to Gridcoin network</source>
         <translation>
-            <numerusform>%n aktiewe verbinding aan Gridcoin netwerk</numerusform>
-            <numerusform>%n aktiewe verbindings aan Gridcoin netwerk</numerusform>
+            <numerusform>%1 aktiewe verbinding aan Gridcoin netwerk</numerusform>
+            <numerusform>%1 aktiewe verbindings aan Gridcoin netwerk</numerusform>
         </translation>
     </message>
     <message numerus="yes">
@@ -645,34 +645,34 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message numerus="yes">
         <location line="+13"/>
-        <source>%n second(s) ago</source>
+        <source>%1 second(s) ago</source>
         <translation>
-            <numerusform>%n second ago</numerusform>
-            <numerusform>%n seconds ago</numerusform>
+            <numerusform>%1 second ago</numerusform>
+            <numerusform>%1 seconds ago</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s) ago</source>
+        <source>%1 minute(s) ago</source>
         <translation>
-            <numerusform>%n minuut gelede</numerusform>
-            <numerusform>%n minuuts gelede</numerusform>
+            <numerusform>%1 minuut gelede</numerusform>
+            <numerusform>%1 minuuts gelede</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s) ago</source>
+        <source>%1 hour(s) ago</source>
         <translation>
-            <numerusform>%n uur gelede</numerusform>
-            <numerusform>%n ure gelede</numerusform>
+            <numerusform>%1 uur gelede</numerusform>
+            <numerusform>%1 ure gelede</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s) ago</source>
+        <source>%1 day(s) ago</source>
         <translation>
-            <numerusform>%n dag gelede</numerusform>
-            <numerusform>%n dae gelede</numerusform>
+            <numerusform>%1 dag gelede</numerusform>
+            <numerusform>%1 dae gelede</numerusform>
         </translation>
     </message>
     <message>
@@ -797,34 +797,34 @@ Adres: %4
     </message>
     <message numerus="yes">
         <location line="+300"/>
-        <source>%n second(s)</source>
+        <source>%1 second(s)</source>
         <translation>
-            <numerusform>%n second</numerusform>
-            <numerusform>%n seconds</numerusform>
+            <numerusform>%1 second</numerusform>
+            <numerusform>%1 seconds</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s)</source>
+        <source>%1 minute(s)</source>
         <translation>
-            <numerusform>%n minuute</numerusform>
-            <numerusform>%n minuute(s)</numerusform>
+            <numerusform>%1 minuute</numerusform>
+            <numerusform>%1 minuute(s)</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s)</source>
+        <source>%1 hour(s)</source>
         <translation>
-            <numerusform>%n uur</numerusform>
-            <numerusform>%n ure</numerusform>
+            <numerusform>%1 uur</numerusform>
+            <numerusform>%1 ure</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s)</source>
+        <source>%1 day(s)</source>
         <translation>
-            <numerusform>%n dag</numerusform>
-            <numerusform>%n dae</numerusform>
+            <numerusform>%1 dag</numerusform>
+            <numerusform>%1 dae</numerusform>
         </translation>
     </message>
     <message>
@@ -4005,3 +4005,5 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
     </message>
 </context>
 </TS>
+
+

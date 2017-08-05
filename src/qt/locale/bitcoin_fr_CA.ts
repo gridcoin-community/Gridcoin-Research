@@ -664,10 +664,10 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message numerus="yes">
         <location line="+79"/>
-        <source>%n active connection(s) to Gridcoin network</source>
+        <source>%1 active connection(s) to Gridcoin network</source>
         <translation>
-            <numerusform>%n connexion active au réseau Gridcoin</numerusform>
-            <numerusform>%n connexions actives au réseau Gridcoin</numerusform>
+            <numerusform>%1 connexion active au réseau Gridcoin</numerusform>
+            <numerusform>%1 connexions actives au réseau Gridcoin</numerusform>
         </translation>
     </message>
     <message numerus="yes">
@@ -680,34 +680,34 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message numerus="yes">
         <location line="+13"/>
-        <source>%n second(s) ago</source>
+        <source>%1 second(s) ago</source>
         <translation>
-            <numerusform>il y a %n seconde</numerusform>
-            <numerusform>il y a %n secondes</numerusform>
+            <numerusform>il y a %1 seconde</numerusform>
+            <numerusform>il y a %1 secondes</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s) ago</source>
+        <source>%1 minute(s) ago</source>
         <translation>
-            <numerusform>il y a %n minute</numerusform>
-            <numerusform>il y a %n minutes</numerusform>
+            <numerusform>il y a %1 minute</numerusform>
+            <numerusform>il y a %1 minutes</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s) ago</source>
+        <source>%1 hour(s) ago</source>
         <translation>
-            <numerusform>il y a %n heure</numerusform>
-            <numerusform>il y a %n heures</numerusform>
+            <numerusform>il y a %1 heure</numerusform>
+            <numerusform>il y a %1 heures</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s) ago</source>
+        <source>%1 day(s) ago</source>
         <translation>
-            <numerusform>il y a %n jour</numerusform>
-            <numerusform>il y a %n jours</numerusform>
+            <numerusform>il y a %1 jour</numerusform>
+            <numerusform>il y a %1 jours</numerusform>
         </translation>
     </message>
     <message>
@@ -832,34 +832,34 @@ Adresse : %4
     </message>
     <message numerus="yes">
         <location line="+300"/>
-        <source>%n second(s)</source>
+        <source>%1 second(s)</source>
         <translation>
-            <numerusform>%n seconde</numerusform>
-            <numerusform>%n secondes</numerusform>
+            <numerusform>%1 seconde</numerusform>
+            <numerusform>%1 secondes</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s)</source>
+        <source>%1 minute(s)</source>
         <translation>
-            <numerusform>%n minute</numerusform>
-            <numerusform>%n minutes</numerusform>
+            <numerusform>%1 minute</numerusform>
+            <numerusform>%1 minutes</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s)</source>
+        <source>%1 hour(s)</source>
         <translation>
-            <numerusform>%n heure</numerusform>
-            <numerusform>%n heures</numerusform>
+            <numerusform>%1 heure</numerusform>
+            <numerusform>%1 heures</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s)</source>
+        <source>%1 day(s)</source>
         <translation>
-            <numerusform>%n jour</numerusform>
-            <numerusform>%n jours</numerusform>
+            <numerusform>%1 jour</numerusform>
+            <numerusform>%1 jours</numerusform>
         </translation>
     </message>
     <message>
@@ -4010,3 +4010,4 @@ Si le fichier n&apos;existe pas, créez-le avec les droits de lecture seule acco
     </message>
 </context>
 </TS>
+

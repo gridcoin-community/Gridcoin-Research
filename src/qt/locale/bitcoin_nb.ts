@@ -702,7 +702,7 @@ Dette produktet inneholder programvare utviklet av OpenSSL prosjektet for bruk i
     </message>
     <message numerus="yes">
         <location line="+79"/>
-        <source>%n active connection(s) to Gridcoin network</source>
+        <source>%1 active connection(s) to Gridcoin network</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -710,34 +710,34 @@ Dette produktet inneholder programvare utviklet av OpenSSL prosjektet for bruk i
     </message>
     <message numerus="yes">
         <location line="+25"/>
-        <source>%n second(s) ago</source>
+        <source>%1 second(s) ago</source>
         <translation>
-            <numerusform>%n sekunder siden</numerusform>
-            <numerusform>%n sekunder siden</numerusform>
+            <numerusform>%1 sekunder siden</numerusform>
+            <numerusform>%1 sekunder siden</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s) ago</source>
+        <source>%1 minute(s) ago</source>
         <translation>
-            <numerusform>%n minutt siden</numerusform>
-            <numerusform>%n minutter siden</numerusform>
+            <numerusform>%1 minutt siden</numerusform>
+            <numerusform>%1 minutter siden</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s) ago</source>
+        <source>%1 hour(s) ago</source>
         <translation>
-            <numerusform>%n time siden</numerusform>
-            <numerusform>%n timer siden</numerusform>
+            <numerusform>%1 time siden</numerusform>
+            <numerusform>%1 timer siden</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s) ago</source>
+        <source>%1 day(s) ago</source>
         <translation>
-            <numerusform>%n dag siden</numerusform>
-            <numerusform>%n dager siden</numerusform>
+            <numerusform>%1 dag siden</numerusform>
+            <numerusform>%1 dager siden</numerusform>
         </translation>
     </message>
     <message>
@@ -832,34 +832,34 @@ Adresse: %4
     </message>
     <message numerus="yes">
         <location line="+300"/>
-        <source>%n second(s)</source>
+        <source>%1 second(s)</source>
         <translation>
-            <numerusform>%n sekund</numerusform>
-            <numerusform>%n sekunder</numerusform>
+            <numerusform>%1 sekund</numerusform>
+            <numerusform>%1 sekunder</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s)</source>
+        <source>%1 minute(s)</source>
         <translation>
-            <numerusform>%n minutt</numerusform>
-            <numerusform>%n minutter</numerusform>
+            <numerusform>%1 minutt</numerusform>
+            <numerusform>%1 minutter</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s)</source>
+        <source>%1 hour(s)</source>
         <translation>
-            <numerusform>%n time</numerusform>
-            <numerusform>%n timer</numerusform>
+            <numerusform>%1 time</numerusform>
+            <numerusform>%1 timer</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s)</source>
+        <source>%1 day(s)</source>
         <translation>
-            <numerusform>%n dag</numerusform>
-            <numerusform>%n dager</numerusform>
+            <numerusform>%1 dag</numerusform>
+            <numerusform>%1 dager</numerusform>
         </translation>
     </message>
     <message>
@@ -3997,3 +3997,4 @@ Hvis filen ikke finnes, opprett den med leserettighet kun for eier av filen.</tr
     </message>
 </context>
 </TS>
+

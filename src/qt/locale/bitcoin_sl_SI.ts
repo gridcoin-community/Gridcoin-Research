@@ -704,52 +704,52 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
     </message>
     <message numerus="yes">
         <location line="+79"/>
-        <source>%n active connection(s) to Gridcoin network</source>
+        <source>%1 active connection(s) to Gridcoin network</source>
         <translation>
-            <numerusform>%n aktivne povezave na Gridcoin omrežje</numerusform>
-            <numerusform>%n aktivnih povezav na Gridcoin omrežje</numerusform>
-            <numerusform>%n aktivnih povezav na Gridcoin omrežje</numerusform>
-            <numerusform>%n aktivnih povezav na Gridcoin omrežje</numerusform>
+            <numerusform>%1 aktivne povezave na Gridcoin omrežje</numerusform>
+            <numerusform>%1 aktivnih povezav na Gridcoin omrežje</numerusform>
+            <numerusform>%1 aktivnih povezav na Gridcoin omrežje</numerusform>
+            <numerusform>%1 aktivnih povezav na Gridcoin omrežje</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+25"/>
-        <source>%n second(s) ago</source>
+        <source>%1 second(s) ago</source>
         <translation>
-            <numerusform>pred %n sekundo</numerusform>
-            <numerusform>pred %n sekundama</numerusform>
-            <numerusform>pred %n sekundami</numerusform>
-            <numerusform>pred %n sekundami </numerusform>
+            <numerusform>pred %1 sekundo</numerusform>
+            <numerusform>pred %1 sekundama</numerusform>
+            <numerusform>pred %1 sekundami</numerusform>
+            <numerusform>pred %1 sekundami </numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s) ago</source>
+        <source>%1 minute(s) ago</source>
         <translation>
-            <numerusform>Pred %n minuto</numerusform>
-            <numerusform>Pred %n minutama</numerusform>
-            <numerusform>Pred %n minutami</numerusform>
-            <numerusform>Pred %n minutami</numerusform>
+            <numerusform>Pred %1 minuto</numerusform>
+            <numerusform>Pred %1 minutama</numerusform>
+            <numerusform>Pred %1 minutami</numerusform>
+            <numerusform>Pred %1 minutami</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s) ago</source>
+        <source>%1 hour(s) ago</source>
         <translation>
-            <numerusform>Pred %n uro.</numerusform>
-            <numerusform>Pred %n urama.</numerusform>
-            <numerusform>Pred %n urami.</numerusform>
-            <numerusform>Pred %n urami.</numerusform>
+            <numerusform>Pred %1 uro.</numerusform>
+            <numerusform>Pred %1 urama.</numerusform>
+            <numerusform>Pred %1 urami.</numerusform>
+            <numerusform>Pred %1 urami.</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s) ago</source>
+        <source>%1 day(s) ago</source>
         <translation>
-            <numerusform>Pred %n dnevom.</numerusform>
-            <numerusform>Pred %n dnevoma.</numerusform>
-            <numerusform>Pred %n dnevi.</numerusform>
-            <numerusform>Pred %n dnevi.</numerusform>
+            <numerusform>Pred %1 dnevom.</numerusform>
+            <numerusform>Pred %1 dnevoma.</numerusform>
+            <numerusform>Pred %1 dnevi.</numerusform>
+            <numerusform>Pred %1 dnevi.</numerusform>
         </translation>
     </message>
     <message>
@@ -844,42 +844,42 @@ Naslov: %4
     </message>
     <message numerus="yes">
         <location line="+300"/>
-        <source>%n second(s)</source>
+        <source>%1 second(s)</source>
         <translation>
-            <numerusform>%n sekundo</numerusform>
-            <numerusform>%n sekundama</numerusform>
-            <numerusform>%n sekund</numerusform>
-            <numerusform>%n sekund</numerusform>
+            <numerusform>%1 sekundo</numerusform>
+            <numerusform>%1 sekundama</numerusform>
+            <numerusform>%1 sekund</numerusform>
+            <numerusform>%1 sekund</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n minute(s)</source>
+        <source>%1 minute(s)</source>
         <translation>
-            <numerusform>%n minuto</numerusform>
-            <numerusform>%n minutama</numerusform>
-            <numerusform>%n minut</numerusform>
-            <numerusform>%n minut</numerusform>
+            <numerusform>%1 minuto</numerusform>
+            <numerusform>%1 minutama</numerusform>
+            <numerusform>%1 minut</numerusform>
+            <numerusform>%1 minut</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n hour(s)</source>
+        <source>%1 hour(s)</source>
         <translation>
-            <numerusform>%n ura</numerusform>
-            <numerusform>%n uri</numerusform>
-            <numerusform>%n ure</numerusform>
-            <numerusform>%n ura</numerusform>
+            <numerusform>%1 ura</numerusform>
+            <numerusform>%1 uri</numerusform>
+            <numerusform>%1 ure</numerusform>
+            <numerusform>%1 ura</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%n day(s)</source>
+        <source>%1 day(s)</source>
         <translation>
-            <numerusform>%n dan</numerusform>
-            <numerusform>%n dneva</numerusform>
-            <numerusform>%n dnevi</numerusform>
-            <numerusform>%n dni</numerusform>
+            <numerusform>%1 dan</numerusform>
+            <numerusform>%1 dneva</numerusform>
+            <numerusform>%1 dnevi</numerusform>
+            <numerusform>%1 dni</numerusform>
         </translation>
     </message>
     <message>
@@ -4038,3 +4038,4 @@ If the file does not exist, create it with owner-readable-only file permissions.
     </message>
 </context>
 </TS>
+
