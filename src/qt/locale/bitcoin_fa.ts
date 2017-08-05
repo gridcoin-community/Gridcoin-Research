@@ -27,7 +27,22 @@ This product includes software developed by the OpenSSL Project for use in the O
 <context>
     <name>AddressBookPage</name>
     <message>
-        <location filename="../forms/addressbookpage.ui" line="+63"/>
+        <location filename="../forms/addressbookpage.ui" line="+14"/>
+        <source>Address Book</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Double-click to edit address or label</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+27"/>
         <source>Create a new address</source>
         <translation>ایجاد نشانی جدید</translation>
     </message>
@@ -111,21 +126,6 @@ This product includes software developed by the OpenSSL Project for use in the O
         <source>Could not write to file %1.</source>
         <translation type="unfinished"></translation>
     </message>
-    <message>
-        <location filename="../forms/addressbookpage.ui" line="-119"/>
-        <source>Address Book</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+16"/>
-        <source>Double-click to edit address or label</source>
-        <translation type="unfinished"></translation>
-    </message>
 </context>
 <context>
     <name>AddressTableModel</name>
@@ -178,7 +178,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../askpassphrasedialog.cpp" line="+38"/>
+        <location filename="../askpassphrasedialog.cpp" line="+37"/>
+        <source>Enter the new passphrase to the wallet.&lt;br/&gt;Please use a passphrase of &lt;b&gt;ten or more random characters&lt;/b&gt;, or &lt;b&gt;eight or more words&lt;/b&gt;.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Encrypt wallet</source>
         <translation>رمزنگاری کیف پول</translation>
     </message>
@@ -213,19 +218,9 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+45"/>
-        <source>Confirm wallet encryption</source>
-        <translation>تأیید رمزنگاری کیف پول</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+46"/>
         <source>Warning: If you encrypt your wallet and lose your passphrase, you will &lt;b&gt;LOSE ALL OF YOUR COINS&lt;/b&gt;!</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Are you sure you wish to encrypt your wallet?</source>
-        <translation>آیا مطمئن هستید که می‌خواهید کیف پول خود را رمزنگاری کنید؟</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -251,18 +246,23 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-67"/>
+        <location line="-77"/>
+        <source>Confirm wallet encryption</source>
+        <translation>تأیید رمزنگاری کیف پول</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Are you sure you wish to encrypt your wallet?</source>
+        <translation>آیا مطمئن هستید که می‌خواهید کیف پول خود را رمزنگاری کنید؟</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <location line="+60"/>
         <source>Wallet encrypted</source>
         <translation>کیف پول رمزنگاری شد</translation>
     </message>
     <message>
-        <location line="-140"/>
-        <source>Enter the new passphrase to the wallet.&lt;br/&gt;Please use a passphrase of &lt;b&gt;ten or more random characters&lt;/b&gt;, or &lt;b&gt;eight or more words&lt;/b&gt;.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+95"/>
+        <location line="-45"/>
         <location line="+7"/>
         <location line="+44"/>
         <location line="+6"/>
@@ -299,12 +299,12 @@ This product includes software developed by the OpenSSL Project for use in the O
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+793"/>
+        <location filename="../bitcoingui.cpp" line="+798"/>
         <source>Sign &amp;message...</source>
         <translation>&amp;امضای پیام...</translation>
     </message>
     <message>
-        <location line="-129"/>
+        <location line="-131"/>
         <source>&amp;Overview</source>
         <translation>&amp;بررسی اجمالی</translation>
     </message>
@@ -314,149 +314,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>نمایش بررسی اجمالی کیف پول</translation>
     </message>
     <message>
-        <location line="+14"/>
-        <source>&amp;Transactions</source>
-        <translation>&amp;تراکنش‌ها</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Browse transaction history</source>
-        <translation>مرور تاریخچهٔ تراکنش‌ها</translation>
-    </message>
-    <message>
-        <location line="+46"/>
-        <source>E&amp;xit</source>
-        <translation>&amp;خروج</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Quit application</source>
-        <translation>خروج از برنامه</translation>
-    </message>
-    <message>
-        <location line="+51"/>
-        <source>&amp;Options...</source>
-        <translation>&amp;تنظیمات...</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>&amp;Encrypt Wallet...</source>
-        <translation>&amp;رمزنگاری کیف پول...</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>&amp;Backup Wallet...</source>
-        <translation>&amp;پیشتیبان‌گیری از کیف پول...</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>&amp;Change Passphrase...</source>
-        <translation>&amp;تغییر گذرواژه...</translation>
-    </message>
-    <message>
-        <location line="-1"/>
-        <source>Backup wallet to another location</source>
-        <translation>تهیهٔ پشتیبان از کیف پول در یک مکان دیگر</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Change the passphrase used for wallet encryption</source>
-        <translation>تغییر گذرواژهٔ مورد استفاده در رمزنگاری کیف پول</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>&amp;Debug window</source>
-        <translation>پنجرهٔ ا&amp;شکال‌زدایی</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Open debugging and diagnostic console</source>
-        <translation>باز کردن کنسول خطایابی و اشکال‌زدایی</translation>
-    </message>
-    <message>
-        <location line="-5"/>
-        <source>&amp;Verify message...</source>
-        <translation>با&amp;زبینی پیام...</translation>
-    </message>
-    <message>
-        <location line="-618"/>
-        <source>Wallet</source>
-        <translation>کیف پول</translation>
-    </message>
-    <message>
-        <location line="+493"/>
-        <source>&amp;Send</source>
-        <translation>&amp;ارسال</translation>
-    </message>
-    <message>
         <location line="+5"/>
-        <source>&amp;Receive</source>
-        <translation>&amp;دریافت</translation>
-    </message>
-    <message>
-        <location line="+107"/>
-        <source>&amp;Show / Hide</source>
-        <translation>&amp;نمایش/ عدم نمایش</translation>
-    </message>
-    <message>
-        <location line="+58"/>
-        <source>&amp;File</source>
-        <translation>&amp;فایل</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>&amp;Settings</source>
-        <translation>&amp;تنظیمات</translation>
-    </message>
-    <message>
-        <location line="+38"/>
-        <source>&amp;Help</source>
-        <translation>&amp;کمک‌رسانی</translation>
-    </message>
-    <message numerus="yes">
-        <location line="+281"/>
-        <source>Processed %n block(s) of transaction history.</source>
-        <translation>
-            <numerusform>پردازش %n  بلاک از تاریخچه ی تراکنش ها </numerusform>
-        </translation>
-    </message>
-    <message>
-        <location line="+31"/>
-        <source>Up to date</source>
-        <translation>وضعیت به‌روز</translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Catching up...</source>
-        <translation>به‌روز رسانی...</translation>
-    </message>
-    <message>
-        <location line="+218"/>
-        <source>Sent transaction</source>
-        <translation>تراکنش ارسال شد</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Incoming transaction</source>
-        <translation>تراکنش دریافت شد</translation>
-    </message>
-    <message>
-        <location line="+245"/>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
-        <translation>کیف پول &lt;b&gt;رمزنگاری شده&lt;/b&gt; است و هم‌اکنون &lt;b&gt;باز&lt;/b&gt; است</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
-        <translation>کیف پول &lt;b&gt;رمزنگاری شده&lt;/b&gt; است و هم‌اکنون &lt;b&gt;قفل&lt;/b&gt; است</translation>
-    </message>
-    <message>
-        <location line="-1502"/>
-        <source>Gridcoin</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+494"/>
         <source>Send coins to a Gridcoin address</source>
         <translation type="unfinished"></translation>
     </message>
@@ -466,7 +324,17 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+4"/>
+        <source>&amp;Transactions</source>
+        <translation>&amp;تراکنش‌ها</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Browse transaction history</source>
+        <translation>مرور تاریخچهٔ تراکنش‌ها</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>&amp;Address Book</source>
         <translation type="unfinished"></translation>
     </message>
@@ -476,7 +344,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+9"/>
         <source>&amp;Block Explorer</source>
         <translation type="unfinished"></translation>
     </message>
@@ -522,7 +390,117 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+21"/>
+        <source>E&amp;xit</source>
+        <translation>&amp;خروج</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Quit application</source>
+        <translation>خروج از برنامه</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>&amp;Options...</source>
+        <translation>&amp;تنظیمات...</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>&amp;Encrypt Wallet...</source>
+        <translation>&amp;رمزنگاری کیف پول...</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Encrypt or decrypt wallet</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>&amp;Backup Wallet...</source>
+        <translation>&amp;پیشتیبان‌گیری از کیف پول...</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>&amp;Change Passphrase...</source>
+        <translation>&amp;تغییر گذرواژه...</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>Backup wallet to another location</source>
+        <translation>تهیهٔ پشتیبان از کیف پول در یک مکان دیگر</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Change the passphrase used for wallet encryption</source>
+        <translation>تغییر گذرواژهٔ مورد استفاده در رمزنگاری کیف پول</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>&amp;Unlock Wallet...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Unlock wallet</source>
+        <translation type="unfinished">باز کردن قفل کیف پول</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>&amp;Lock Wallet</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Lock wallet</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>&amp;Export...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Export the data in the current tab to a file</source>
+        <translation type="unfinished">خروجی گرفتن داده‌های برگه‌ی فعلی به یک فایل</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>&amp;Debug window</source>
+        <translation>پنجرهٔ ا&amp;شکال‌زدایی</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Open debugging and diagnostic console</source>
+        <translation>باز کردن کنسول خطایابی و اشکال‌زدایی</translation>
+    </message>
+    <message>
+        <location line="-5"/>
+        <source>&amp;Verify message...</source>
+        <translation>با&amp;زبینی پیام...</translation>
+    </message>
+    <message>
+        <location line="-623"/>
+        <source>Wallet</source>
+        <translation>کیف پول</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Gridcoin</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+496"/>
+        <source>&amp;Send</source>
+        <translation>&amp;ارسال</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>&amp;Receive</source>
+        <translation>&amp;دریافت</translation>
+    </message>
+    <message>
+        <location line="+65"/>
         <source>&amp;Rebuild Block Chain</source>
         <translation type="unfinished"></translation>
     </message>
@@ -588,12 +566,12 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="+1"/>
-        <location line="+597"/>
+        <location line="+590"/>
         <source>New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-594"/>
+        <location line="-665"/>
         <source>&amp;Voting</source>
         <translation type="unfinished"></translation>
     </message>
@@ -603,7 +581,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+77"/>
         <source>&amp;Foundation</source>
         <translation type="unfinished"></translation>
     </message>
@@ -638,52 +616,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Encrypt or decrypt wallet</source>
-        <translation type="unfinished"></translation>
+        <location line="+2"/>
+        <source>&amp;Show / Hide</source>
+        <translation>&amp;نمایش/ عدم نمایش</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>&amp;Unlock Wallet...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Unlock wallet</source>
-        <translation type="unfinished">باز کردن قفل کیف پول</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>&amp;Lock Wallet</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Lock wallet</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>&amp;Export...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Export the data in the current tab to a file</source>
-        <translation type="unfinished">خروجی گرفتن داده‌های برگه‌ی فعلی به یک فایل</translation>
-    </message>
-    <message>
-        <location line="+59"/>
-        <source>&amp;Community</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>&amp;Advanced</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+138"/>
+        <location line="+215"/>
         <location line="+9"/>
         <source>[testnet]</source>
         <translation type="unfinished">آزمایش شبکه</translation>
@@ -694,40 +632,30 @@ This product includes software developed by the OpenSSL Project for use in the O
         <source>Gridcoin client</source>
         <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
-        <location line="+79"/>
+    <message>
+        <location line="+82"/>
         <source>%1 active connection(s) to Gridcoin network</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-        </translation>
+        <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+25"/>
         <source>%1 second(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-        </translation>
+        <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+4"/>
         <source>%1 minute(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-        </translation>
+        <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+4"/>
         <source>%1 hour(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-        </translation>
+        <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+4"/>
         <source>%1 day(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-        </translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+23"/>
@@ -775,28 +703,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+32"/>
-        <source>Date: %1
-Amount: %2
-Type: %3
-Address: %4
-</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+211"/>
-        <location line="+15"/>
-        <source>URI handling</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-15"/>
-        <location line="+15"/>
-        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+57"/>
+        <location line="+315"/>
         <source>Backup Wallet</source>
         <translation type="unfinished"></translation>
     </message>
@@ -817,28 +724,28 @@ Address: %4
     </message>
     <message numerus="yes">
         <location line="+300"/>
-        <source>%1 second(s)</source>
+        <source>%n second(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%1 minute(s)</source>
+        <source>%n minute(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%1 hour(s)</source>
+        <source>%n hour(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%1 day(s)</source>
+        <source>%n day(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
         </translation>
@@ -884,6 +791,89 @@ Address: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="-1246"/>
+        <source>&amp;File</source>
+        <translation>&amp;فایل</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>&amp;Settings</source>
+        <translation>&amp;تنظیمات</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>&amp;Community</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>&amp;Advanced</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>&amp;Help</source>
+        <translation>&amp;کمک‌رسانی</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+285"/>
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation>
+            <numerusform>پردازش %n  بلاک از تاریخچه ی تراکنش ها </numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>Up to date</source>
+        <translation>وضعیت به‌روز</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Catching up...</source>
+        <translation>به‌روز رسانی...</translation>
+    </message>
+    <message>
+        <location line="+218"/>
+        <source>Sent transaction</source>
+        <translation>تراکنش ارسال شد</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Incoming transaction</source>
+        <translation>تراکنش دریافت شد</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Date: %1
+Amount: %2
+Type: %3
+Address: %4
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+211"/>
+        <location line="+15"/>
+        <source>URI handling</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-15"/>
+        <location line="+15"/>
+        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
+        <translation>کیف پول &lt;b&gt;رمزنگاری شده&lt;/b&gt; است و هم‌اکنون &lt;b&gt;باز&lt;/b&gt; است</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
+        <translation>کیف پول &lt;b&gt;رمزنگاری شده&lt;/b&gt; است و هم‌اکنون &lt;b&gt;قفل&lt;/b&gt; است</translation>
+    </message>
+    <message>
         <location filename="../bitcoin.cpp" line="+145"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
         <translation type="unfinished"></translation>
@@ -900,7 +890,12 @@ Address: %4
 <context>
     <name>CoinControlDialog</name>
     <message>
-        <location filename="../forms/coincontroldialog.ui" line="+42"/>
+        <location filename="../forms/coincontroldialog.ui" line="+14"/>
+        <source>Coin Control</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+28"/>
         <source>Quantity:</source>
         <translation>تعداد:</translation>
     </message>
@@ -990,7 +985,12 @@ Address: %4
         <translation>تأیید شده</translation>
     </message>
     <message>
-        <location filename="../coincontroldialog.cpp" line="+37"/>
+        <location filename="../coincontroldialog.cpp" line="+36"/>
+        <source>Copy address</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Copy label</source>
         <translation>کپی برچسب</translation>
     </message>
@@ -1006,22 +1006,12 @@ Address: %4
         <translation>کپی شناسهٔ تراکنش</translation>
     </message>
     <message>
-        <location line="+26"/>
-        <source>Copy fee</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+27"/>
         <source>Copy after fee</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Copy bytes</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Copy priority</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1031,12 +1021,7 @@ Address: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Copy change</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+317"/>
+        <location line="+318"/>
         <source>highest</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1120,7 +1105,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>کپی تعداد</translation>
     </message>
     <message>
-        <location line="+488"/>
+        <location line="+2"/>
+        <source>Copy fee</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Copy bytes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Copy change</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+481"/>
         <source>yes</source>
         <translation>بله</translation>
     </message>
@@ -1139,16 +1139,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="-8"/>
         <source>(change)</source>
         <translation>(تغییر)</translation>
-    </message>
-    <message>
-        <location filename="../forms/coincontroldialog.ui" line="-454"/>
-        <source>Coin Control</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../coincontroldialog.cpp" line="-620"/>
-        <source>Copy address</source>
-        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1265,7 +1255,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>NewPollDialog</name>
     <message>
-        <location filename="../votingdialog.cpp" line="+900"/>
+        <location filename="../votingdialog.cpp" line="+896"/>
         <location line="+96"/>
         <source>Create Poll</source>
         <translation type="unfinished"></translation>
@@ -1762,7 +1752,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>RPCConsole</name>
     <message>
-        <location filename="../forms/rpcconsole.ui" line="+46"/>
+        <location filename="../forms/rpcconsole.ui" line="+14"/>
+        <source>Gridcoin - Debug Console</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Boost version</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <location line="+27"/>
         <location line="+42"/>
         <location line="+42"/>
@@ -1777,32 +1777,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>ناموجود</translation>
     </message>
     <message>
-        <location line="-241"/>
-        <source>Client version</source>
-        <translation>نسخهٔ کلاینت</translation>
-    </message>
-    <message>
-        <location line="-168"/>
-        <source>&amp;Information</source>
-        <translation>&amp;اطلاعات</translation>
-    </message>
-    <message>
-        <location line="+425"/>
-        <source>Startup time</source>
-        <translation>زمان آغاز به کار</translation>
-    </message>
-    <message>
-        <location line="-441"/>
-        <source>Gridcoin - Debug Console</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+25"/>
-        <source>Boost version</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+14"/>
+        <location line="-386"/>
         <source>Proof Of Research Difficulty</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1812,22 +1787,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+29"/>
-        <source>Number of connections</source>
-        <translation>تعداد ارتباطات</translation>
-    </message>
-    <message>
-        <location line="+84"/>
-        <source>Block chain</source>
-        <translation>زنجیرهٔ بلوک‌ها</translation>
-    </message>
-    <message>
-        <location line="+15"/>
+        <location line="+128"/>
         <source>Gridcoin Core:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+58"/>
+        <location line="+10"/>
+        <source>Client version</source>
+        <translation>نسخهٔ کلاینت</translation>
+    </message>
+    <message>
+        <location line="+48"/>
         <source>Build date</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1842,12 +1812,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+10"/>
-        <source>Current number of blocks</source>
-        <translation>تعداد فعلی بلوک‌ها</translation>
-    </message>
-    <message>
-        <location line="+29"/>
+        <location line="+39"/>
         <source>Estimated total blocks</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1892,12 +1857,32 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+83"/>
-        <source>Out:</source>
-        <translation type="unfinished"></translation>
+        <location line="-521"/>
+        <source>&amp;Information</source>
+        <translation>&amp;اطلاعات</translation>
     </message>
     <message>
-        <location line="-503"/>
+        <location line="+425"/>
+        <source>Startup time</source>
+        <translation>زمان آغاز به کار</translation>
+    </message>
+    <message>
+        <location line="-366"/>
+        <source>Number of connections</source>
+        <translation>تعداد ارتباطات</translation>
+    </message>
+    <message>
+        <location line="+84"/>
+        <source>Block chain</source>
+        <translation>زنجیرهٔ بلوک‌ها</translation>
+    </message>
+    <message>
+        <location line="+146"/>
+        <source>Current number of blocks</source>
+        <translation>تعداد فعلی بلوک‌ها</translation>
+    </message>
+    <message>
+        <location line="-188"/>
         <source>Last block time</source>
         <translation>زمان آخرین بلوک</translation>
     </message>
@@ -1922,7 +1907,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>در:</translation>
     </message>
     <message>
-        <location line="-228"/>
+        <location line="+43"/>
+        <source>Out:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-271"/>
         <source>Debug log file</source>
         <translation>فایلِ لاگِ اشکال زدایی</translation>
     </message>
@@ -1932,12 +1922,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>پاکسازی کنسول</translation>
     </message>
     <message>
-        <location filename="../rpcconsole.cpp" line="-35"/>
-        <source>Welcome to the Gridcoin RPC console! </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location filename="../rpcconsole.cpp" line="-34"/>
         <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
         <translation>دکمه‌های بالا و پایین برای پیمایش تاریخچه و &lt;b&gt;Ctrl-L&lt;/b&gt; برای پاک کردن صفحه.</translation>
     </message>
@@ -1979,6 +1964,11 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>%1 h %2 m</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-133"/>
+        <source>Welcome to the Gridcoin RPC console! </source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2126,12 +2116,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>&amp;ارسال</translation>
     </message>
     <message>
-        <location filename="../sendcoinsdialog.cpp" line="-173"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+15"/>
+        <location filename="../sendcoinsdialog.cpp" line="-158"/>
         <source>Copy quantity</source>
         <translation>کپی تعداد</translation>
     </message>
@@ -2240,11 +2225,51 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <source>WARNING: unknown change address</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location line="-442"/>
+        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
-        <location filename="../forms/sendcoinsentry.ui" line="+14"/>
+        <location filename="../forms/sendcoinsentry.ui" line="+170"/>
+        <source>A&amp;mount:</source>
+        <translation>A&amp;مبلغ :</translation>
+    </message>
+    <message>
+        <location line="-108"/>
+        <source>Pay &amp;To:</source>
+        <translation>پرداخ&amp;ت به:</translation>
+    </message>
+    <message>
+        <location line="-30"/>
+        <source>&amp;Label:</source>
+        <translation>&amp;برچسب:</translation>
+    </message>
+    <message>
+        <location line="+68"/>
+        <source>Alt+A</source>
+        <translation>Alt+A</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Paste address from clipboard</source>
+        <translation>چسباندن نشانی از حافظهٔ سیستم</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Alt+P</source>
+        <translation>Alt+P</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Message:</source>
+        <translation>پیام:</translation>
+    </message>
+    <message>
+        <location line="-126"/>
         <source>Form</source>
         <translation type="unfinished">فرم</translation>
     </message>
@@ -2275,12 +2300,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>A&amp;mount:</source>
-        <translation>A&amp;مبلغ :</translation>
-    </message>
-    <message>
-        <location line="+13"/>
+        <location line="+22"/>
         <source>Track Coins</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2288,36 +2308,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+7"/>
         <source>Add Attachment</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-128"/>
-        <source>Pay &amp;To:</source>
-        <translation>پرداخ&amp;ت به:</translation>
-    </message>
-    <message>
-        <location line="-30"/>
-        <source>&amp;Label:</source>
-        <translation>&amp;برچسب:</translation>
-    </message>
-    <message>
-        <location line="+68"/>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Paste address from clipboard</source>
-        <translation>چسباندن نشانی از حافظهٔ سیستم</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
-    </message>
-    <message>
-        <location line="+23"/>
-        <source>Message:</source>
-        <translation>پیام:</translation>
     </message>
     <message>
         <location filename="../sendcoinsentry.cpp" line="+1"/>
@@ -2609,12 +2599,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+12"/>
         <location line="+45"/>
         <location line="+17"/>
-        <location line="+45"/>
+        <location line="+43"/>
         <source>Credit</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location line="-117"/>
+        <location line="-115"/>
         <source>matures in %n more block(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -2629,12 +2619,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+44"/>
         <location line="+8"/>
         <location line="+15"/>
-        <location line="+45"/>
+        <location line="+43"/>
         <source>Debit</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-54"/>
+        <location line="-52"/>
         <source>Transaction fee</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2659,7 +2649,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+7"/>
         <source>Block Type</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2707,7 +2697,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>TransactionDescDialog</name>
     <message>
-        <location filename="../forms/transactiondescdialog.ui" line="+29"/>
+        <location filename="../forms/transactiondescdialog.ui" line="+20"/>
+        <source>Transaction details</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>This pane shows a detailed description of the transaction</source>
         <translation>این پانل شامل توصیف کاملی از جزئیات تراکنش است</translation>
     </message>
@@ -2725,11 +2720,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+7"/>
         <source>C&amp;lose</source>
         <translation type="unfinished">&amp;بستن</translation>
-    </message>
-    <message>
-        <location line="-51"/>
-        <source>Transaction details</source>
-        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../transactiondescdialog.cpp" line="+40"/>
@@ -2890,32 +2880,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>TransactionView</name>
     <message>
-        <location filename="../transactionview.cpp" line="+127"/>
-        <source>Copy label</source>
-        <translation>کپی برچسب</translation>
+        <location filename="../transactionview.cpp" line="+126"/>
+        <source>Copy address</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Copy amount</source>
-        <translation>کپی مقدار</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Copy transaction ID</source>
-        <translation>کپی شناسهٔ تراکنش</translation>
-    </message>
-    <message>
-        <location line="+160"/>
-        <source>Label</source>
-        <translation>برچسب</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Address</source>
-        <translation>آدرس</translation>
-    </message>
-    <message>
-        <location line="-235"/>
+        <location line="-71"/>
         <location line="+16"/>
         <source>All</source>
         <translation type="unfinished"></translation>
@@ -2986,12 +2956,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+34"/>
-        <source>Copy address</source>
-        <translation type="unfinished"></translation>
+        <location line="+35"/>
+        <source>Copy label</source>
+        <translation>کپی برچسب</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+1"/>
+        <source>Copy amount</source>
+        <translation>کپی مقدار</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Copy transaction ID</source>
+        <translation>کپی شناسهٔ تراکنش</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Edit label</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3026,7 +3006,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
+        <source>Label</source>
+        <translation>برچسب</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Address</source>
+        <translation>آدرس</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Amount</source>
         <translation type="unfinished">مبلغ</translation>
     </message>
@@ -3118,12 +3108,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>VotingDialog</name>
     <message>
-        <location line="-349"/>
-        <source>Gridcoin Voting System 1.1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="-343"/>
         <source>Active Polls (Right Click to Vote)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3156,7 +3141,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>VotingTableModel</name>
     <message>
-        <location line="-391"/>
+        <location line="-387"/>
         <source>#</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3182,12 +3167,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+1"/>
-        <location line="+157"/>
+        <location line="+158"/>
         <source>Answers</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-156"/>
+        <location line="-157"/>
         <source># Voters</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3207,7 +3192,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+143"/>
+        <location line="+144"/>
         <source>Row Number.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3255,7 +3240,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>VotingVoteDialog</name>
     <message>
-        <location line="+533"/>
+        <location line="+528"/>
         <source>PlaceVote</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3301,214 +3286,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>گزینه‌ها:</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Specify data directory</source>
-        <translation>مشخص کردن دایرکتوری داده‌ها</translation>
-    </message>
-    <message>
-        <location line="+13"/>
-        <source>Connect to a node to retrieve peer addresses, and disconnect</source>
-        <translation>اتصال به یک گره برای دریافت آدرس‌های همتا و قطع اتصال پس از اتمام عملیات</translation>
-    </message>
-    <message>
         <location line="+1"/>
-        <source>Specify your own public address</source>
-        <translation>آدرس عمومی خود را مشخص کنید</translation>
-    </message>
-    <message>
-        <location line="+23"/>
-        <source>Accept command line and JSON-RPC commands</source>
-        <translation>پذیرش دستورات خط فرمان و دستورات JSON-RPC</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Run in the background as a daemon and accept commands</source>
-        <translation>اجرا در پشت زمینه به‌صورت یک سرویس و پذیرش دستورات</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</source>
-        <translation>هنگامی که یک تراکنش در کیف پولی رخ می دهد، دستور را اجرا کن(%s در دستورات بوسیله ی TxID جایگزین می شود)</translation>
-    </message>
-    <message>
-        <location line="+16"/>
-        <source>Block creation options:</source>
-        <translation>بستن گزینه ایجاد</translation>
-    </message>
-    <message>
-        <location line="+37"/>
-        <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
-        <translation>شنیدن هر گونه درگاه انجام پذیر نیست. ازlisten=0  برای اینکار استفاده کیند.</translation>
-    </message>
-    <message>
-        <location line="-64"/>
-        <source>Send trace/debug info to console instead of debug.log file</source>
-        <translation>اطلاعات ردگیری/اشکال‌زدایی را به جای فایل لاگ اشکال‌زدایی به کنسول بفرستید</translation>
-    </message>
-    <message>
-        <location line="-1"/>
-        <source>Shrink debug.log file on client startup (default: 1 when no -debug)</source>
-        <translation>فایل debug.log  را در startup مشتری کوچک کن (پیش فرض:1 اگر اشکال زدایی روی نداد)</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Username for JSON-RPC connections</source>
-        <translation>JSON-RPC شناسه برای ارتباطات</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Password for JSON-RPC connections</source>
-        <translation>JSON-RPC عبارت عبور برای ارتباطات</translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Execute command when the best block changes (%s in cmd is replaced by block hash)</source>
-        <translation>زمانی که بهترین بلاک تغییر کرد، دستور را اجرا کن (%s در cmd با block hash جایگزین شده است)</translation>
-    </message>
-    <message>
-        <location line="-44"/>
-        <source>Allow DNS lookups for -addnode, -seednode and -connect</source>
-        <translation>به DNS اجازه بده تا برای addnode ، seednode و اتصال جستجو کند</translation>
-    </message>
-    <message>
-        <location line="+119"/>
-        <source>Loading addresses...</source>
-        <translation>بار گیری آدرس ها</translation>
-    </message>
-    <message>
-        <location line="-22"/>
-        <source>Invalid -proxy address: &apos;%s&apos;</source>
-        <translation>آدرس پراکسی اشتباه %s</translation>
-    </message>
-    <message>
-        <location line="-1"/>
-        <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
-        <translation>شبکه مشخص شده غیرقابل شناسایی در onlynet: &apos;%s&apos;</translation>
-    </message>
-    <message>
-        <location line="+26"/>
-        <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Error: Wallet locked, unable to create transaction  </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Error: Wallet unlocked for staking only, unable to create transaction.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Error: Transaction creation failed  </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Sending...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Invalid amount</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Insufficient funds</source>
-        <translation>بود جه نا کافی </translation>
-    </message>
-    <message>
-        <location line="-33"/>
-        <source>Loading block index...</source>
-        <translation>بار گیری شاخص بلوک</translation>
-    </message>
-    <message>
-        <location line="-147"/>
-        <source>To use the %s option</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>%s, you must set a rpcpassword in the configuration file:
- %s
-It is recommended you use the following random password:
-rpcuser=gridcoinrpc
-rpcpassword=%s
-(you do not need to remember this password)
-The username and password MUST NOT be the same.
-If the file does not exist, create it with owner-readable-only file permissions.
-It is also recommended to set alertnotify so you are notified of problems;
-for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
-</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+14"/>
-        <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
-%s
-If the file does not exist, create it with owner-readable-only file permissions.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Gridcoin version</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Usage:</source>
-        <translation type="unfinished">استفاده:</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Send command to -server or gridcoind</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>List commands</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Get help for a command</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Gridcoin</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+2"/>
         <source>This help message</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3523,7 +3301,12 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
+        <source>Specify data directory</source>
+        <translation>مشخص کردن دایرکتوری داده‌ها</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Specify wallet file (within data directory)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3568,17 +3351,22 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Add a node to connect to and attempt to keep the connection open</source>
-        <translation>به اتصال یک گره اضافه کنید و اتصال را باز نگاه دارید</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Connect only to the specified node(s)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
+        <source>Connect to a node to retrieve peer addresses, and disconnect</source>
+        <translation>اتصال به یک گره برای دریافت آدرس‌های همتا و قطع اتصال پس از اتمام عملیات</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Specify your own public address</source>
+        <translation>آدرس عمومی خود را مشخص کنید</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Only connect to nodes in network &lt;net&gt; (IPv4, IPv6 or Tor)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3658,7 +3446,17 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+3"/>
+        <source>Accept command line and JSON-RPC commands</source>
+        <translation>پذیرش دستورات خط فرمان و دستورات JSON-RPC</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Run in the background as a daemon and accept commands</source>
+        <translation>اجرا در پشت زمینه به‌صورت یک سرویس و پذیرش دستورات</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Use the test network</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3874,12 +3672,7 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Loading wallet...</source>
-        <translation>بار گیری والت</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Error loading wallet.dat: Wallet corrupted</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3904,22 +3697,7 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Cannot downgrade wallet</source>
-        <translation>امکان تنزل نسخه در wallet وجود ندارد</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Cannot write default address</source>
-        <translation>آدرس پیش فرض قابل ذخیره نیست</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Rescanning...</source>
-        <translation>اسکان مجدد</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+4"/>
         <source>Importing blockchain data file.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3934,12 +3712,52 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Done loading</source>
-        <translation>بار گیری انجام شده است</translation>
+        <location line="+2"/>
+        <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+2"/>
+        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Error: Wallet locked, unable to create transaction  </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Error: Wallet unlocked for staking only, unable to create transaction.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Error: Transaction creation failed  </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sending...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Invalid amount</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3964,10 +3782,176 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-173"/>
+        <location line="-97"/>
+        <source>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</source>
+        <translation>هنگامی که یک تراکنش در کیف پولی رخ می دهد، دستور را اجرا کن(%s در دستورات بوسیله ی TxID جایگزین می شود)</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Block creation options:</source>
+        <translation>بستن گزینه ایجاد</translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
+        <translation>شنیدن هر گونه درگاه انجام پذیر نیست. ازlisten=0  برای اینکار استفاده کیند.</translation>
+    </message>
+    <message>
+        <location line="-64"/>
+        <source>Send trace/debug info to console instead of debug.log file</source>
+        <translation>اطلاعات ردگیری/اشکال‌زدایی را به جای فایل لاگ اشکال‌زدایی به کنسول بفرستید</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>Shrink debug.log file on client startup (default: 1 when no -debug)</source>
+        <translation>فایل debug.log  را در startup مشتری کوچک کن (پیش فرض:1 اگر اشکال زدایی روی نداد)</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Username for JSON-RPC connections</source>
+        <translation>JSON-RPC شناسه برای ارتباطات</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Password for JSON-RPC connections</source>
+        <translation>JSON-RPC عبارت عبور برای ارتباطات</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Execute command when the best block changes (%s in cmd is replaced by block hash)</source>
+        <translation>زمانی که بهترین بلاک تغییر کرد، دستور را اجرا کن (%s در cmd با block hash جایگزین شده است)</translation>
+    </message>
+    <message>
+        <location line="-44"/>
+        <source>Allow DNS lookups for -addnode, -seednode and -connect</source>
+        <translation>به DNS اجازه بده تا برای addnode ، seednode و اتصال جستجو کند</translation>
+    </message>
+    <message>
+        <location line="-43"/>
+        <source>To use the %s option</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%s, you must set a rpcpassword in the configuration file:
+ %s
+It is recommended you use the following random password:
+rpcuser=gridcoinrpc
+rpcpassword=%s
+(you do not need to remember this password)
+The username and password MUST NOT be the same.
+If the file does not exist, create it with owner-readable-only file permissions.
+It is also recommended to set alertnotify so you are notified of problems;
+for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
+%s
+If the file does not exist, create it with owner-readable-only file permissions.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Gridcoin version</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Usage:</source>
+        <translation type="unfinished">استفاده:</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Send command to -server or gridcoind</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>List commands</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Get help for a command</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Gridcoin</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+132"/>
+        <source>Loading addresses...</source>
+        <translation>بار گیری آدرس ها</translation>
+    </message>
+    <message>
+        <location line="-22"/>
+        <source>Invalid -proxy address: &apos;%s&apos;</source>
+        <translation>آدرس پراکسی اشتباه %s</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
+        <translation>شبکه مشخص شده غیرقابل شناسایی در onlynet: &apos;%s&apos;</translation>
+    </message>
+    <message>
+        <location line="+41"/>
+        <source>Insufficient funds</source>
+        <translation>بود جه نا کافی </translation>
+    </message>
+    <message>
+        <location line="-33"/>
+        <source>Loading block index...</source>
+        <translation>بار گیری شاخص بلوک</translation>
+    </message>
+    <message>
+        <location line="-101"/>
+        <source>Add a node to connect to and attempt to keep the connection open</source>
+        <translation>به اتصال یک گره اضافه کنید و اتصال را باز نگاه دارید</translation>
+    </message>
+    <message>
+        <location line="+103"/>
+        <source>Loading wallet...</source>
+        <translation>بار گیری والت</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Cannot downgrade wallet</source>
+        <translation>امکان تنزل نسخه در wallet وجود ندارد</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cannot write default address</source>
+        <translation>آدرس پیش فرض قابل ذخیره نیست</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Rescanning...</source>
+        <translation>اسکان مجدد</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Done loading</source>
+        <translation>بار گیری انجام شده است</translation>
+    </message>
+    <message>
+        <location line="-150"/>
         <source>Error</source>
         <translation>خطا</translation>
     </message>
 </context>
 </TS>
-

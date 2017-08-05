@@ -27,7 +27,22 @@ This product includes software developed by the OpenSSL Project for use in the O
 <context>
     <name>AddressBookPage</name>
     <message>
-        <location filename="../forms/addressbookpage.ui" line="+63"/>
+        <location filename="../forms/addressbookpage.ui" line="+14"/>
+        <source>Address Book</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Double-click to edit address or label</source>
+        <translation>Adresi vai nosaukumu redi?? ar dubultklikš?i</translation>
+    </message>
+    <message>
+        <location line="+27"/>
         <source>Create a new address</source>
         <translation>Izveidot jaunu adresi</translation>
     </message>
@@ -80,21 +95,6 @@ This product includes software developed by the OpenSSL Project for use in the O
         <location line="+3"/>
         <source>&amp;Delete</source>
         <translation>&amp;Dzēst</translation>
-    </message>
-    <message>
-        <location line="-119"/>
-        <source>Address Book</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+16"/>
-        <source>Double-click to edit address or label</source>
-        <translation>Adresi vai nosaukumu redi?? ar dubultklikš?i</translation>
     </message>
     <message>
         <location filename="../addressbookpage.cpp" line="+65"/>
@@ -299,12 +299,12 @@ This product includes software developed by the OpenSSL Project for use in the O
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+793"/>
+        <location filename="../bitcoingui.cpp" line="+798"/>
         <source>Sign &amp;message...</source>
         <translation>Parakstīt &amp;ziņojumu...</translation>
     </message>
     <message>
-        <location line="-129"/>
+        <location line="-131"/>
         <source>&amp;Overview</source>
         <translation>&amp;Pārskats</translation>
     </message>
@@ -314,142 +314,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Rādīt vispārēju maciņa pārskatu</translation>
     </message>
     <message>
-        <location line="+14"/>
-        <source>&amp;Transactions</source>
-        <translation>&amp;Transakcijas</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Browse transaction history</source>
-        <translation>Skatīt transakciju vēsturi</translation>
-    </message>
-    <message>
-        <location line="+46"/>
-        <source>E&amp;xit</source>
-        <translation>&amp;Iziet</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Quit application</source>
-        <translation>Aizvērt programmu</translation>
-    </message>
-    <message>
-        <location line="+51"/>
-        <source>&amp;Options...</source>
-        <translation>&amp;Iespējas...</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>&amp;Encrypt Wallet...</source>
-        <translation>Šifrēt &amp;maciņu...</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>&amp;Backup Wallet...</source>
-        <translation>&amp;Maciņa Rezerves Kopija...</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>&amp;Change Passphrase...</source>
-        <translation>Mainīt &amp;Paroli...</translation>
-    </message>
-    <message>
-        <location line="-1"/>
-        <source>Backup wallet to another location</source>
-        <translation>Izveidot maciņa rezerves kopiju citur</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Change the passphrase used for wallet encryption</source>
-        <translation>Mainīt maciņa šifrēšanas paroli</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>&amp;Debug window</source>
-        <translation>&amp;Atkļūdošanas logs</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Open debugging and diagnostic console</source>
-        <translation>Atvērt atkļūdošanas un diagnostikas konsoli</translation>
-    </message>
-    <message>
-        <location line="-5"/>
-        <source>&amp;Verify message...</source>
-        <translation>&amp;Pārbaudīt ziņojumu...</translation>
-    </message>
-    <message>
-        <location line="-618"/>
-        <source>Wallet</source>
-        <translation>Maciņš</translation>
-    </message>
-    <message>
-        <location line="+493"/>
-        <source>&amp;Send</source>
-        <translation>&amp;Sūtīt</translation>
-    </message>
-    <message>
         <location line="+5"/>
-        <source>&amp;Receive</source>
-        <translation>&amp;Saņemt</translation>
-    </message>
-    <message>
-        <location line="+107"/>
-        <source>&amp;Show / Hide</source>
-        <translation>&amp;Rādīt / Paslēpt</translation>
-    </message>
-    <message>
-        <location line="+58"/>
-        <source>&amp;File</source>
-        <translation>&amp;Fails</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>&amp;Settings</source>
-        <translation>&amp;Uzstādījumi</translation>
-    </message>
-    <message>
-        <location line="+38"/>
-        <source>&amp;Help</source>
-        <translation>&amp;Palīdzība</translation>
-    </message>
-    <message>
-        <location line="+312"/>
-        <source>Up to date</source>
-        <translation>Sinhronizēts</translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Catching up...</source>
-        <translation>Sinhronizējos...</translation>
-    </message>
-    <message>
-        <location line="+218"/>
-        <source>Sent transaction</source>
-        <translation>Transakcija nosūtīta</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Incoming transaction</source>
-        <translation>Ienākoša transakcija</translation>
-    </message>
-    <message>
-        <location line="+245"/>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
-        <translation>Maciņš ir &lt;b&gt;šifrēts&lt;/b&gt; un pašlaik &lt;b&gt;atslēgts&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
-        <translation>Maciņš ir &lt;b&gt;šifrēts&lt;/b&gt; un pašlaik &lt;b&gt;slēgts&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <location line="-1502"/>
-        <source>Gridcoin</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+494"/>
         <source>Send coins to a Gridcoin address</source>
         <translation type="unfinished"></translation>
     </message>
@@ -459,7 +324,17 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+4"/>
+        <source>&amp;Transactions</source>
+        <translation>&amp;Transakcijas</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Browse transaction history</source>
+        <translation>Skatīt transakciju vēsturi</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>&amp;Address Book</source>
         <translation type="unfinished"></translation>
     </message>
@@ -469,7 +344,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+9"/>
         <source>&amp;Block Explorer</source>
         <translation type="unfinished"></translation>
     </message>
@@ -515,7 +390,117 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+21"/>
+        <source>E&amp;xit</source>
+        <translation>&amp;Iziet</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Quit application</source>
+        <translation>Aizvērt programmu</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>&amp;Options...</source>
+        <translation>&amp;Iespējas...</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>&amp;Encrypt Wallet...</source>
+        <translation>Šifrēt &amp;maciņu...</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Encrypt or decrypt wallet</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>&amp;Backup Wallet...</source>
+        <translation>&amp;Maciņa Rezerves Kopija...</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>&amp;Change Passphrase...</source>
+        <translation>Mainīt &amp;Paroli...</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>Backup wallet to another location</source>
+        <translation>Izveidot maciņa rezerves kopiju citur</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Change the passphrase used for wallet encryption</source>
+        <translation>Mainīt maciņa šifrēšanas paroli</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>&amp;Unlock Wallet...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Unlock wallet</source>
+        <translation type="unfinished">Atsl?gt maci?u</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>&amp;Lock Wallet</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Lock wallet</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>&amp;Export...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Export the data in the current tab to a file</source>
+        <translation type="unfinished">Datus no tekošā ieliktņa eksportēt uz failu</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>&amp;Debug window</source>
+        <translation>&amp;Atkļūdošanas logs</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Open debugging and diagnostic console</source>
+        <translation>Atvērt atkļūdošanas un diagnostikas konsoli</translation>
+    </message>
+    <message>
+        <location line="-5"/>
+        <source>&amp;Verify message...</source>
+        <translation>&amp;Pārbaudīt ziņojumu...</translation>
+    </message>
+    <message>
+        <location line="-623"/>
+        <source>Wallet</source>
+        <translation>Maciņš</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Gridcoin</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+496"/>
+        <source>&amp;Send</source>
+        <translation>&amp;Sūtīt</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>&amp;Receive</source>
+        <translation>&amp;Saņemt</translation>
+    </message>
+    <message>
+        <location line="+65"/>
         <source>&amp;Rebuild Block Chain</source>
         <translation type="unfinished"></translation>
     </message>
@@ -581,12 +566,12 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="+1"/>
-        <location line="+597"/>
+        <location line="+590"/>
         <source>New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-594"/>
+        <location line="-665"/>
         <source>&amp;Voting</source>
         <translation type="unfinished"></translation>
     </message>
@@ -596,7 +581,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+77"/>
         <source>&amp;Foundation</source>
         <translation type="unfinished"></translation>
     </message>
@@ -631,52 +616,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Encrypt or decrypt wallet</source>
-        <translation type="unfinished"></translation>
+        <location line="+2"/>
+        <source>&amp;Show / Hide</source>
+        <translation>&amp;Rādīt / Paslēpt</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>&amp;Unlock Wallet...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Unlock wallet</source>
-        <translation type="unfinished">Atsl?gt maci?u</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>&amp;Lock Wallet</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Lock wallet</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>&amp;Export...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Export the data in the current tab to a file</source>
-        <translation type="unfinished">Datus no tekošā ieliktņa eksportēt uz failu</translation>
-    </message>
-    <message>
-        <location line="+59"/>
-        <source>&amp;Community</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>&amp;Advanced</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+138"/>
+        <location line="+215"/>
         <location line="+9"/>
         <source>[testnet]</source>
         <translation>[testnet]</translation>
@@ -687,14 +632,10 @@ This product includes software developed by the OpenSSL Project for use in the O
         <source>Gridcoin client</source>
         <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
-        <location line="+79"/>
+    <message>
+        <location line="+82"/>
         <source>%1 active connection(s) to Gridcoin network</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
+        <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
         <location line="+12"/>
@@ -705,114 +646,28 @@ This product includes software developed by the OpenSSL Project for use in the O
             <numerusform></numerusform>
         </translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+13"/>
         <source>%1 second(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
+        <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+4"/>
         <source>%1 minute(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
+        <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+4"/>
         <source>%1 hour(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
+        <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+4"/>
         <source>%1 day(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message>
-        <location line="+23"/>
-        <source>Last received block was generated %1.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+68"/>
-        <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Confirm transaction fee</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+69"/>
-        <source>Please enter your boinc E-mail address, or click &lt;Cancel&gt; to skip for now:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Created new Configuration File Successfully. </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>New Account Created - Welcome Aboard!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>New User Wizard - Skipped</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+16"/>
-        <source>Attention! - Boinc Path Error!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+32"/>
-        <source>Date: %1
-Amount: %2
-Type: %3
-Address: %4
-</source>
-        <translation>Datums: %1
-Daudzums: %2
-Tips: %3
-Adrese: %4
-</translation>
-    </message>
-    <message>
-        <location line="+211"/>
-        <location line="+15"/>
-        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-15"/>
-        <location line="+15"/>
-        <source>URI handling</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+57"/>
+        <location line="+516"/>
         <source>Backup Wallet</source>
         <translation type="unfinished"></translation>
     </message>
@@ -833,7 +688,7 @@ Adrese: %4
     </message>
     <message numerus="yes">
         <location line="+300"/>
-        <source>%1 second(s)</source>
+        <source>%n second(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -842,7 +697,7 @@ Adrese: %4
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%1 minute(s)</source>
+        <source>%n minute(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -851,7 +706,7 @@ Adrese: %4
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%1 hour(s)</source>
+        <source>%n hour(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -860,7 +715,7 @@ Adrese: %4
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%1 day(s)</source>
+        <source>%n day(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -908,6 +763,131 @@ Adrese: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="-1246"/>
+        <source>&amp;File</source>
+        <translation>&amp;Fails</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>&amp;Settings</source>
+        <translation>&amp;Uzstādījumi</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>&amp;Community</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>&amp;Advanced</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>&amp;Help</source>
+        <translation>&amp;Palīdzība</translation>
+    </message>
+    <message>
+        <location line="+316"/>
+        <source>Up to date</source>
+        <translation>Sinhronizēts</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Catching up...</source>
+        <translation>Sinhronizējos...</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Last received block was generated %1.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+68"/>
+        <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Confirm transaction fee</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+69"/>
+        <source>Please enter your boinc E-mail address, or click &lt;Cancel&gt; to skip for now:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Created new Configuration File Successfully. </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New Account Created - Welcome Aboard!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New User Wizard - Skipped</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Attention! - Boinc Path Error!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Sent transaction</source>
+        <translation>Transakcija nosūtīta</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Incoming transaction</source>
+        <translation>Ienākoša transakcija</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Date: %1
+Amount: %2
+Type: %3
+Address: %4
+</source>
+        <translation>Datums: %1
+Daudzums: %2
+Tips: %3
+Adrese: %4
+</translation>
+    </message>
+    <message>
+        <location line="+211"/>
+        <location line="+15"/>
+        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-15"/>
+        <location line="+15"/>
+        <source>URI handling</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
+        <translation>Maciņš ir &lt;b&gt;šifrēts&lt;/b&gt; un pašlaik &lt;b&gt;atslēgts&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
+        <translation>Maciņš ir &lt;b&gt;šifrēts&lt;/b&gt; un pašlaik &lt;b&gt;slēgts&lt;/b&gt;</translation>
+    </message>
+    <message>
         <location filename="../bitcoin.cpp" line="+145"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
         <translation type="unfinished"></translation>
@@ -924,7 +904,12 @@ Adrese: %4
 <context>
     <name>CoinControlDialog</name>
     <message>
-        <location filename="../forms/coincontroldialog.ui" line="+42"/>
+        <location filename="../forms/coincontroldialog.ui" line="+14"/>
+        <source>Coin Control</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+28"/>
         <source>Quantity:</source>
         <translation>Daudzums:</translation>
     </message>
@@ -1012,11 +997,6 @@ Adrese: %4
         <location line="+3"/>
         <source>Confirmed</source>
         <translation>Apstiprināts</translation>
-    </message>
-    <message>
-        <location line="-454"/>
-        <source>Coin Control</source>
-        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../coincontroldialog.cpp" line="+36"/>
@@ -1289,7 +1269,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>NewPollDialog</name>
     <message>
-        <location filename="../votingdialog.cpp" line="+900"/>
+        <location filename="../votingdialog.cpp" line="+896"/>
         <location line="+96"/>
         <source>Create Poll</source>
         <translation type="unfinished"></translation>
@@ -1816,27 +1796,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Sākuma laiks</translation>
     </message>
     <message>
-        <location line="-366"/>
-        <source>Number of connections</source>
-        <translation>Savienojumu skaits</translation>
-    </message>
-    <message>
-        <location line="+84"/>
-        <source>Block chain</source>
-        <translation>Bloku virkne</translation>
-    </message>
-    <message>
-        <location line="+146"/>
-        <source>Current number of blocks</source>
-        <translation>Pašreizējais bloku skaits</translation>
-    </message>
-    <message>
-        <location line="-188"/>
-        <source>Last block time</source>
-        <translation>Pēdējā bloka laiks</translation>
-    </message>
-    <message>
-        <location line="-117"/>
+        <location line="-441"/>
         <source>Gridcoin - Debug Console</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1856,7 +1816,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+128"/>
+        <location line="+29"/>
+        <source>Number of connections</source>
+        <translation>Savienojumu skaits</translation>
+    </message>
+    <message>
+        <location line="+84"/>
+        <source>Block chain</source>
+        <translation>Bloku virkne</translation>
+    </message>
+    <message>
+        <location line="+15"/>
         <source>Gridcoin Core:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1876,7 +1846,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+10"/>
+        <source>Current number of blocks</source>
+        <translation>Pašreizējais bloku skaits</translation>
+    </message>
+    <message>
+        <location line="+29"/>
         <source>Estimated total blocks</source>
         <translation>Bloku skaita nov?rt?jums</translation>
     </message>
@@ -1886,12 +1861,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>&amp;Open</source>
-        <translation>&amp;Atvērt</translation>
-    </message>
-    <message>
-        <location line="+15"/>
+        <location line="+21"/>
         <source>Command-line options</source>
         <translation type="unfinished">Komandrindas iespējas</translation>
     </message>
@@ -1916,7 +1886,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Klienta v?rds</translation>
     </message>
     <message>
-        <location line="+184"/>
+        <location line="-360"/>
+        <source>Last block time</source>
+        <translation>Pēdējā bloka laiks</translation>
+    </message>
+    <message>
+        <location line="+248"/>
+        <source>&amp;Open</source>
+        <translation>&amp;Atvērt</translation>
+    </message>
+    <message>
+        <location line="+296"/>
         <source>&amp;Console</source>
         <translation>&amp;Konsole</translation>
     </message>
@@ -1956,12 +1936,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Notīrīt konsoli</translation>
     </message>
     <message>
-        <location filename="../rpcconsole.cpp" line="-35"/>
-        <source>Welcome to the Gridcoin RPC console! </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location filename="../rpcconsole.cpp" line="-34"/>
         <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
         <translation>Izmantojiet bultiņas uz augšu un leju, lai pārvietotos pa vēsturi, un &lt;b&gt;Ctrl-L&lt;/b&gt; ekrāna notīrīšanai.</translation>
     </message>
@@ -2003,6 +1978,11 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>%1 h %2 m</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-133"/>
+        <source>Welcome to the Gridcoin RPC console! </source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2268,7 +2248,42 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>SendCoinsEntry</name>
     <message>
-        <location filename="../forms/sendcoinsentry.ui" line="+14"/>
+        <location filename="../forms/sendcoinsentry.ui" line="+170"/>
+        <source>A&amp;mount:</source>
+        <translation>Apjo&amp;ms</translation>
+    </message>
+    <message>
+        <location line="-108"/>
+        <source>Pay &amp;To:</source>
+        <translation>&amp;Saņēmējs:</translation>
+    </message>
+    <message>
+        <location line="-30"/>
+        <source>&amp;Label:</source>
+        <translation>&amp;Nosaukums:</translation>
+    </message>
+    <message>
+        <location line="+68"/>
+        <source>Alt+A</source>
+        <translation>Alt+A</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Paste address from clipboard</source>
+        <translation>ielīmēt adresi no starpliktuves</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Alt+P</source>
+        <translation>Alt+P</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Message:</source>
+        <translation>Ziņojums:</translation>
+    </message>
+    <message>
+        <location line="-126"/>
         <source>Form</source>
         <translation type="unfinished">Forma</translation>
     </message>
@@ -2299,12 +2314,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>A&amp;mount:</source>
-        <translation>Apjo&amp;ms</translation>
-    </message>
-    <message>
-        <location line="+13"/>
+        <location line="+22"/>
         <source>Track Coins</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2312,36 +2322,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+7"/>
         <source>Add Attachment</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-128"/>
-        <source>Pay &amp;To:</source>
-        <translation>&amp;Saņēmējs:</translation>
-    </message>
-    <message>
-        <location line="-30"/>
-        <source>&amp;Label:</source>
-        <translation>&amp;Nosaukums:</translation>
-    </message>
-    <message>
-        <location line="+68"/>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Paste address from clipboard</source>
-        <translation>ielīmēt adresi no starpliktuves</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
-    </message>
-    <message>
-        <location line="+23"/>
-        <source>Message:</source>
-        <translation>Ziņojums:</translation>
     </message>
     <message>
         <location filename="../sendcoinsentry.cpp" line="+1"/>
@@ -2637,12 +2617,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+12"/>
         <location line="+45"/>
         <location line="+17"/>
-        <location line="+45"/>
+        <location line="+43"/>
         <source>Credit</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location line="-117"/>
+        <location line="-115"/>
         <source>matures in %n more block(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -2659,12 +2639,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+44"/>
         <location line="+8"/>
         <location line="+15"/>
-        <location line="+45"/>
+        <location line="+43"/>
         <source>Debit</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-54"/>
+        <location line="-52"/>
         <source>Transaction fee</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2689,7 +2669,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+7"/>
         <source>Block Type</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2737,7 +2717,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>TransactionDescDialog</name>
     <message>
-        <location filename="../forms/transactiondescdialog.ui" line="+29"/>
+        <location filename="../forms/transactiondescdialog.ui" line="+20"/>
+        <source>Transaction details</source>
+        <translation>Transakcijas deta?as</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>This pane shows a detailed description of the transaction</source>
         <translation>Šis panelis parāda transakcijas detaļas</translation>
     </message>
@@ -2755,11 +2740,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+7"/>
         <source>C&amp;lose</source>
         <translation type="unfinished">&amp;Aizvērt</translation>
-    </message>
-    <message>
-        <location line="-51"/>
-        <source>Transaction details</source>
-        <translation>Transakcijas deta?as</translation>
     </message>
     <message>
         <location filename="../transactiondescdialog.cpp" line="+40"/>
@@ -3150,12 +3130,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>VotingDialog</name>
     <message>
-        <location line="-349"/>
-        <source>Gridcoin Voting System 1.1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="-343"/>
         <source>Active Polls (Right Click to Vote)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3188,7 +3163,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>VotingTableModel</name>
     <message>
-        <location line="-391"/>
+        <location line="-387"/>
         <source>#</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3214,12 +3189,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+1"/>
-        <location line="+157"/>
+        <location line="+158"/>
         <source>Answers</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-156"/>
+        <location line="-157"/>
         <source># Voters</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3239,7 +3214,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+143"/>
+        <location line="+144"/>
         <source>Row Number.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3287,7 +3262,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>VotingVoteDialog</name>
     <message>
-        <location line="+533"/>
+        <location line="+528"/>
         <source>PlaceVote</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3328,7 +3303,127 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>bitcoin-core</name>
     <message>
-        <location filename="../bitcoinstrings.cpp" line="+8"/>
+        <location filename="../bitcoinstrings.cpp" line="+39"/>
+        <source>Options:</source>
+        <translation>Iespējas:</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Specify data directory</source>
+        <translation>Norādiet datu direktoriju</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Connect to a node to retrieve peer addresses, and disconnect</source>
+        <translation>Pievienoties mezglam, lai iegūtu citu mezglu adreses, un atvienoties</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Specify your own public address</source>
+        <translation>Norādiet savu publisko adresi</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Accept command line and JSON-RPC commands</source>
+        <translation>Pieņemt komandrindas un JSON-RPC komandas</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Run in the background as a daemon and accept commands</source>
+        <translation>Darbināt fonā kā servisu un pieņemt komandas</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <source>Block creation options:</source>
+        <translation>Bloka izveidošanas iestatījumi:</translation>
+    </message>
+    <message>
+        <location line="-27"/>
+        <source>Send trace/debug info to console instead of debug.log file</source>
+        <translation>Debug/trace informāciju izvadīt konsolē, nevis debug.log failā</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Username for JSON-RPC connections</source>
+        <translation>JSON-RPC savienojumu lietotājvārds</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Password for JSON-RPC connections</source>
+        <translation>JSON-RPC savienojumu parole</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Execute command when the best block changes (%s in cmd is replaced by block hash)</source>
+        <translation>Izpildīt komandu, kad labāk atbilstošais bloks izmainās (%s cmd aizvieto ar bloka hešu)</translation>
+    </message>
+    <message>
+        <location line="-44"/>
+        <source>Allow DNS lookups for -addnode, -seednode and -connect</source>
+        <translation>Atļaut DNS uzmeklēšanu priekš -addnode, -seednode un -connect</translation>
+    </message>
+    <message>
+        <location line="+119"/>
+        <source>Loading addresses...</source>
+        <translation>Ielādē adreses...</translation>
+    </message>
+    <message>
+        <location line="-22"/>
+        <source>Invalid -proxy address: &apos;%s&apos;</source>
+        <translation>Nederīga -proxy adrese: &apos;%s&apos;</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
+        <translation>-onlynet komandā norādīts nepazīstams tīkls: &apos;%s&apos;</translation>
+    </message>
+    <message>
+        <location line="+41"/>
+        <source>Insufficient funds</source>
+        <translation>Nepietiek bitkoinu</translation>
+    </message>
+    <message>
+        <location line="-33"/>
+        <source>Loading block index...</source>
+        <translation>Ielādē bloku indeksu...</translation>
+    </message>
+    <message>
+        <location line="-101"/>
+        <source>Add a node to connect to and attempt to keep the connection open</source>
+        <translation>Pievienot mezglu, kam pievienoties un turēt savienojumu atvērtu</translation>
+    </message>
+    <message>
+        <location line="+103"/>
+        <source>Loading wallet...</source>
+        <translation>Ielādē maciņu...</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Cannot downgrade wallet</source>
+        <translation>Nevar maciņa formātu padarīt vecāku</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cannot write default address</source>
+        <translation>Nevar ierakstīt adresi pēc noklusēšanas</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Rescanning...</source>
+        <translation>Skanēju no jauna...</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Done loading</source>
+        <translation>Ielāde pabeigta</translation>
+    </message>
+    <message>
+        <location line="-150"/>
+        <source>Error</source>
+        <translation>Kļūda</translation>
+    </message>
+    <message>
+        <location line="-14"/>
         <source>To use the %s option</source>
         <translation>Izmantot opciju %s</translation>
     </message>
@@ -3397,12 +3492,7 @@ Ja fails neeksist?, izveidojiet to ar at?auju las?šanai tikai ?pašniekam.</tra
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Options:</source>
-        <translation>Iespējas:</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>This help message</source>
         <translation>Šis pal?dz?bas pazi?ojums</translation>
     </message>
@@ -3417,12 +3507,7 @@ Ja fails neeksist?, izveidojiet to ar at?auju las?šanai tikai ?pašniekam.</tra
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Specify data directory</source>
-        <translation>Norādiet datu direktoriju</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Specify wallet file (within data directory)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3472,17 +3557,7 @@ Ja fails neeksist?, izveidojiet to ar at?auju las?šanai tikai ?pašniekam.</tra
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Connect to a node to retrieve peer addresses, and disconnect</source>
-        <translation>Pievienoties mezglam, lai iegūtu citu mezglu adreses, un atvienoties</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Specify your own public address</source>
-        <translation>Norādiet savu publisko adresi</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+3"/>
         <source>Only connect to nodes in network &lt;net&gt; (IPv4, IPv6 or Tor)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3562,17 +3637,7 @@ Ja fails neeksist?, izveidojiet to ar at?auju las?šanai tikai ?pašniekam.</tra
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>Accept command line and JSON-RPC commands</source>
-        <translation>Pieņemt komandrindas un JSON-RPC komandas</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Run in the background as a daemon and accept commands</source>
-        <translation>Darbināt fonā kā servisu un pieņemt komandas</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>Use the test network</source>
         <translation>Izmantot testa t?klu</translation>
     </message>
@@ -3912,96 +3977,5 @@ Ja fails neeksist?, izveidojiet to ar at?auju las?šanai tikai ?pašniekam.</tra
         <source>WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.</source>
         <translation type="unfinished"></translation>
     </message>
-    <message>
-        <location line="-81"/>
-        <source>Block creation options:</source>
-        <translation>Bloka izveidošanas iestatījumi:</translation>
-    </message>
-    <message>
-        <location line="-27"/>
-        <source>Send trace/debug info to console instead of debug.log file</source>
-        <translation>Debug/trace informāciju izvadīt konsolē, nevis debug.log failā</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Username for JSON-RPC connections</source>
-        <translation>JSON-RPC savienojumu lietotājvārds</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Password for JSON-RPC connections</source>
-        <translation>JSON-RPC savienojumu parole</translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Execute command when the best block changes (%s in cmd is replaced by block hash)</source>
-        <translation>Izpildīt komandu, kad labāk atbilstošais bloks izmainās (%s cmd aizvieto ar bloka hešu)</translation>
-    </message>
-    <message>
-        <location line="-44"/>
-        <source>Allow DNS lookups for -addnode, -seednode and -connect</source>
-        <translation>Atļaut DNS uzmeklēšanu priekš -addnode, -seednode un -connect</translation>
-    </message>
-    <message>
-        <location line="+119"/>
-        <source>Loading addresses...</source>
-        <translation>Ielādē adreses...</translation>
-    </message>
-    <message>
-        <location line="-22"/>
-        <source>Invalid -proxy address: &apos;%s&apos;</source>
-        <translation>Nederīga -proxy adrese: &apos;%s&apos;</translation>
-    </message>
-    <message>
-        <location line="-1"/>
-        <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
-        <translation>-onlynet komandā norādīts nepazīstams tīkls: &apos;%s&apos;</translation>
-    </message>
-    <message>
-        <location line="+41"/>
-        <source>Insufficient funds</source>
-        <translation>Nepietiek bitkoinu</translation>
-    </message>
-    <message>
-        <location line="-33"/>
-        <source>Loading block index...</source>
-        <translation>Ielādē bloku indeksu...</translation>
-    </message>
-    <message>
-        <location line="-101"/>
-        <source>Add a node to connect to and attempt to keep the connection open</source>
-        <translation>Pievienot mezglu, kam pievienoties un turēt savienojumu atvērtu</translation>
-    </message>
-    <message>
-        <location line="+103"/>
-        <source>Loading wallet...</source>
-        <translation>Ielādē maciņu...</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Cannot downgrade wallet</source>
-        <translation>Nevar maciņa formātu padarīt vecāku</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Cannot write default address</source>
-        <translation>Nevar ierakstīt adresi pēc noklusēšanas</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Rescanning...</source>
-        <translation>Skanēju no jauna...</translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Done loading</source>
-        <translation>Ielāde pabeigta</translation>
-    </message>
-    <message>
-        <location line="-150"/>
-        <source>Error</source>
-        <translation>Kļūda</translation>
-    </message>
 </context>
 </TS>
-

@@ -32,7 +32,22 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
 <context>
     <name>AddressBookPage</name>
     <message>
-        <location filename="../forms/addressbookpage.ui" line="+63"/>
+        <location filename="../forms/addressbookpage.ui" line="+14"/>
+        <source>Address Book</source>
+        <translation>Imenik</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
+        <translation>To so vaši Gridcoin naslovi za prejemanje pla?il. Priporo?eno je da vsakemu pošiljatelju namenite drugega in tako dobite ve?ji pregled nad svojimi nakazili.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Double-click to edit address or label</source>
+        <translation>Dvakrat kliknite za urejanje naslovov ali oznak</translation>
+    </message>
+    <message>
+        <location line="+27"/>
         <source>Create a new address</source>
         <translation>Ustvari nov naslov</translation>
     </message>
@@ -85,21 +100,6 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
         <location line="+3"/>
         <source>&amp;Delete</source>
         <translation>I&amp;zbriši</translation>
-    </message>
-    <message>
-        <location line="-119"/>
-        <source>Address Book</source>
-        <translation>Imenik</translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
-        <translation>To so vaši Gridcoin naslovi za prejemanje pla?il. Priporo?eno je da vsakemu pošiljatelju namenite drugega in tako dobite ve?ji pregled nad svojimi nakazili.</translation>
-    </message>
-    <message>
-        <location line="+16"/>
-        <source>Double-click to edit address or label</source>
-        <translation>Dvakrat kliknite za urejanje naslovov ali oznak</translation>
     </message>
     <message>
         <location filename="../addressbookpage.cpp" line="+65"/>
@@ -183,7 +183,17 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
         <translation>Samo za staking.</translation>
     </message>
     <message>
-        <location filename="../askpassphrasedialog.cpp" line="+37"/>
+        <location filename="../askpassphrasedialog.cpp" line="+50"/>
+        <source>Unlock wallet</source>
+        <translation>Odkleni denarnico</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Decrypt wallet</source>
+        <translation>Dešifriraj denarnico</translation>
+    </message>
+    <message>
+        <location line="-21"/>
         <source>Enter the new passphrase to the wallet.&lt;br/&gt;Please use a passphrase of &lt;b&gt;ten or more random characters&lt;/b&gt;, or &lt;b&gt;eight or more words&lt;/b&gt;.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -198,22 +208,12 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
         <translation>To dejanje zahteva geslo za odklepanje vaše denarnice.</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>Unlock wallet</source>
-        <translation>Odkleni denarnico</translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="+8"/>
         <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
         <translation>To dejanje zahteva geslo za dešifriranje vaše denarnice.</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>Decrypt wallet</source>
-        <translation>Dešifriraj denarnico</translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="+8"/>
         <source>Change passphrase</source>
         <translation>Zamenjaj geslo</translation>
     </message>
@@ -304,12 +304,12 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+793"/>
+        <location filename="../bitcoingui.cpp" line="+798"/>
         <source>Sign &amp;message...</source>
         <translation>Podpiši &amp;sporočilo ...</translation>
     </message>
     <message>
-        <location line="-129"/>
+        <location line="-131"/>
         <source>&amp;Overview</source>
         <translation>Pre&amp;gled</translation>
     </message>
@@ -319,152 +319,7 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
         <translation>Oglejte si splošne informacije o vaši denarnici</translation>
     </message>
     <message>
-        <location line="+14"/>
-        <source>&amp;Transactions</source>
-        <translation>&amp;Transakcije</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Browse transaction history</source>
-        <translation>Brskajte po zgodovini transakcij</translation>
-    </message>
-    <message>
-        <location line="+46"/>
-        <source>E&amp;xit</source>
-        <translation>I&amp;zhod</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Quit application</source>
-        <translation>Ustavite program</translation>
-    </message>
-    <message>
-        <location line="+51"/>
-        <source>&amp;Options...</source>
-        <translation>&amp;Možnosti ...</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>&amp;Encrypt Wallet...</source>
-        <translation>&amp;Šifriraj denarnico ...</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>&amp;Backup Wallet...</source>
-        <translation>Shrani &amp;varnostno kopijo denarnice ...</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>&amp;Change Passphrase...</source>
-        <translation>&amp;Spremeni geslo ...</translation>
-    </message>
-    <message>
-        <location line="-1"/>
-        <source>Backup wallet to another location</source>
-        <translation>Shranite varnostno kopijo svoje denarnice na drugo lokacijo</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Change the passphrase used for wallet encryption</source>
-        <translation>Spremenite geslo za šifriranje denarnice</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>&amp;Debug window</source>
-        <translation>&amp;Razhroščevalno okno</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Open debugging and diagnostic console</source>
-        <translation>Odprite razhroščevalno in diagnostično konzolo</translation>
-    </message>
-    <message>
-        <location line="-5"/>
-        <source>&amp;Verify message...</source>
-        <translation>&amp;Preveri sporočilo ...</translation>
-    </message>
-    <message>
-        <location line="-618"/>
-        <source>Wallet</source>
-        <translation>Denarnica</translation>
-    </message>
-    <message>
-        <location line="+493"/>
-        <source>&amp;Send</source>
-        <translation>&amp;Pošlji</translation>
-    </message>
-    <message>
         <location line="+5"/>
-        <source>&amp;Receive</source>
-        <translation>P&amp;rejmi</translation>
-    </message>
-    <message>
-        <location line="+107"/>
-        <source>&amp;Show / Hide</source>
-        <translation>&amp;Prikaži / Skrij</translation>
-    </message>
-    <message>
-        <location line="+58"/>
-        <source>&amp;File</source>
-        <translation>&amp;Datoteka</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>&amp;Settings</source>
-        <translation>&amp;Nastavitve</translation>
-    </message>
-    <message>
-        <location line="+38"/>
-        <source>&amp;Help</source>
-        <translation>&amp;Pomoč</translation>
-    </message>
-    <message numerus="yes">
-        <location line="+281"/>
-        <source>Processed %n block(s) of transaction history.</source>
-        <translation>
-            <numerusform>%n obdelan blok zgodovine transakcij.</numerusform>
-            <numerusform>%n obdelana bloka zgodovine transakcij.</numerusform>
-            <numerusform>%n obdelani bloki zgodovine transakcij.</numerusform>
-            <numerusform>%n obdelanih blokov zgodovine transakcij.</numerusform>
-        </translation>
-    </message>
-    <message>
-        <location line="+31"/>
-        <source>Up to date</source>
-        <translation>Posodobljeno</translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Catching up...</source>
-        <translation>Dohitevam omrežje ...</translation>
-    </message>
-    <message>
-        <location line="+218"/>
-        <source>Sent transaction</source>
-        <translation>Odlivi</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Incoming transaction</source>
-        <translation>Prilivi</translation>
-    </message>
-    <message>
-        <location line="+245"/>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
-        <translation>Denarnica je &lt;b&gt;šifrirana&lt;/b&gt; in trenutno &lt;b&gt;odklenjena&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
-        <translation>Denarnica je &lt;b&gt;šifrirana&lt;/b&gt; in trenutno &lt;b&gt;zaklenjena&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <location line="-1502"/>
-        <source>Gridcoin</source>
-        <translation>Gridcoin</translation>
-    </message>
-    <message>
-        <location line="+494"/>
         <source>Send coins to a Gridcoin address</source>
         <translation>Pošlji kovance na Gridcoin naslov</translation>
     </message>
@@ -474,7 +329,17 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
         <translation>Prikaži seznam naslovov za prejemanje pla?il. </translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+4"/>
+        <source>&amp;Transactions</source>
+        <translation>&amp;Transakcije</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Browse transaction history</source>
+        <translation>Brskajte po zgodovini transakcij</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>&amp;Address Book</source>
         <translation>&amp;Imenik</translation>
     </message>
@@ -484,7 +349,7 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
         <translation>Uredi seznam shranjenih naslovov in oznak</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+9"/>
         <source>&amp;Block Explorer</source>
         <translation type="unfinished"></translation>
     </message>
@@ -530,7 +395,117 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+21"/>
+        <source>E&amp;xit</source>
+        <translation>I&amp;zhod</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Quit application</source>
+        <translation>Ustavite program</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>&amp;Options...</source>
+        <translation>&amp;Možnosti ...</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>&amp;Encrypt Wallet...</source>
+        <translation>&amp;Šifriraj denarnico ...</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Encrypt or decrypt wallet</source>
+        <translation>Šifriraj ali dešifriraj denarnico</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>&amp;Backup Wallet...</source>
+        <translation>Shrani &amp;varnostno kopijo denarnice ...</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>&amp;Change Passphrase...</source>
+        <translation>&amp;Spremeni geslo ...</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>Backup wallet to another location</source>
+        <translation>Shranite varnostno kopijo svoje denarnice na drugo lokacijo</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Change the passphrase used for wallet encryption</source>
+        <translation>Spremenite geslo za šifriranje denarnice</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>&amp;Unlock Wallet...</source>
+        <translation>&amp;Odkleni denarnico...</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Unlock wallet</source>
+        <translation>Odkleni denarnico</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>&amp;Lock Wallet</source>
+        <translation>&amp;Zakleni denarnico</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Lock wallet</source>
+        <translation>Zakleni denarnico</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>&amp;Export...</source>
+        <translation>&amp;Izvozi...</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Export the data in the current tab to a file</source>
+        <translation>Izvozi podatke v izbranem zavihku v datoteko</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>&amp;Debug window</source>
+        <translation>&amp;Razhroščevalno okno</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Open debugging and diagnostic console</source>
+        <translation>Odprite razhroščevalno in diagnostično konzolo</translation>
+    </message>
+    <message>
+        <location line="-5"/>
+        <source>&amp;Verify message...</source>
+        <translation>&amp;Preveri sporočilo ...</translation>
+    </message>
+    <message>
+        <location line="-623"/>
+        <source>Wallet</source>
+        <translation>Denarnica</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Gridcoin</source>
+        <translation>Gridcoin</translation>
+    </message>
+    <message>
+        <location line="+496"/>
+        <source>&amp;Send</source>
+        <translation>&amp;Pošlji</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>&amp;Receive</source>
+        <translation>P&amp;rejmi</translation>
+    </message>
+    <message>
+        <location line="+65"/>
         <source>&amp;Rebuild Block Chain</source>
         <translation type="unfinished"></translation>
     </message>
@@ -596,12 +571,12 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
     </message>
     <message>
         <location line="+1"/>
-        <location line="+597"/>
+        <location line="+590"/>
         <source>New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-594"/>
+        <location line="-665"/>
         <source>&amp;Voting</source>
         <translation type="unfinished"></translation>
     </message>
@@ -611,7 +586,7 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+77"/>
         <source>&amp;Foundation</source>
         <translation type="unfinished"></translation>
     </message>
@@ -646,52 +621,12 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
         <translation>Spremeni nastavitve za Gridcoin</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Encrypt or decrypt wallet</source>
-        <translation>Šifriraj ali dešifriraj denarnico</translation>
+        <location line="+2"/>
+        <source>&amp;Show / Hide</source>
+        <translation>&amp;Prikaži / Skrij</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>&amp;Unlock Wallet...</source>
-        <translation>&amp;Odkleni denarnico...</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Unlock wallet</source>
-        <translation>Odkleni denarnico</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>&amp;Lock Wallet</source>
-        <translation>&amp;Zakleni denarnico</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Lock wallet</source>
-        <translation>Zakleni denarnico</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>&amp;Export...</source>
-        <translation>&amp;Izvozi...</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Export the data in the current tab to a file</source>
-        <translation>Izvozi podatke v izbranem zavihku v datoteko</translation>
-    </message>
-    <message>
-        <location line="+59"/>
-        <source>&amp;Community</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>&amp;Advanced</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+138"/>
+        <location line="+215"/>
         <location line="+9"/>
         <source>[testnet]</source>
         <translation>[testnet]</translation>
@@ -702,55 +637,30 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
         <source>Gridcoin client</source>
         <translation>Gridcoin program</translation>
     </message>
-    <message numerus="yes">
-        <location line="+79"/>
+    <message>
+        <location line="+82"/>
         <source>%1 active connection(s) to Gridcoin network</source>
-        <translation>
-            <numerusform>%1 aktivne povezave na Gridcoin omrežje</numerusform>
-            <numerusform>%1 aktivnih povezav na Gridcoin omrežje</numerusform>
-            <numerusform>%1 aktivnih povezav na Gridcoin omrežje</numerusform>
-            <numerusform>%1 aktivnih povezav na Gridcoin omrežje</numerusform>
-        </translation>
+        <translation type="unfinished">%1 aktivne povezave na Gridcoin omrežje</translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+25"/>
         <source>%1 second(s) ago</source>
-        <translation>
-            <numerusform>pred %1 sekundo</numerusform>
-            <numerusform>pred %1 sekundama</numerusform>
-            <numerusform>pred %1 sekundami</numerusform>
-            <numerusform>pred %1 sekundami </numerusform>
-        </translation>
+        <translation type="unfinished">pred %1 sekundo</translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+4"/>
         <source>%1 minute(s) ago</source>
-        <translation>
-            <numerusform>Pred %1 minuto</numerusform>
-            <numerusform>Pred %1 minutama</numerusform>
-            <numerusform>Pred %1 minutami</numerusform>
-            <numerusform>Pred %1 minutami</numerusform>
-        </translation>
+        <translation type="unfinished">Pred %1 minuto</translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+4"/>
         <source>%1 hour(s) ago</source>
-        <translation>
-            <numerusform>Pred %1 uro.</numerusform>
-            <numerusform>Pred %1 urama.</numerusform>
-            <numerusform>Pred %1 urami.</numerusform>
-            <numerusform>Pred %1 urami.</numerusform>
-        </translation>
+        <translation type="unfinished">Pred %1 uro.</translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+4"/>
         <source>%1 day(s) ago</source>
-        <translation>
-            <numerusform>Pred %1 dnevom.</numerusform>
-            <numerusform>Pred %1 dnevoma.</numerusform>
-            <numerusform>Pred %1 dnevi.</numerusform>
-            <numerusform>Pred %1 dnevi.</numerusform>
-        </translation>
+        <translation type="unfinished">Pred %1 dnevom.</translation>
     </message>
     <message>
         <location line="+23"/>
@@ -798,32 +708,7 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+32"/>
-        <source>Date: %1
-Amount: %2
-Type: %3
-Address: %4
-</source>
-        <translation>Datum: %1
-Koli?ina: %2
-Vrsta: %3
-Naslov: %4
-</translation>
-    </message>
-    <message>
-        <location line="+211"/>
-        <location line="+15"/>
-        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
-        <translation>URI ne more biti raz?lenjen! To se lahko zgodi zaradi neveljavnega Gridcoin naslova ali slabih parametrov URI.</translation>
-    </message>
-    <message>
-        <location line="-15"/>
-        <location line="+15"/>
-        <source>URI handling</source>
-        <translation>Rokovanje z URI</translation>
-    </message>
-    <message>
-        <location line="+57"/>
+        <location line="+315"/>
         <source>Backup Wallet</source>
         <translation>Napravi varnostno kopijo denarnice</translation>
     </message>
@@ -844,42 +729,42 @@ Naslov: %4
     </message>
     <message numerus="yes">
         <location line="+300"/>
-        <source>%1 second(s)</source>
-        <translation>
-            <numerusform>%1 sekundo</numerusform>
-            <numerusform>%1 sekundama</numerusform>
-            <numerusform>%1 sekund</numerusform>
-            <numerusform>%1 sekund</numerusform>
+        <source>%n second(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+            <numerusform></numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%1 minute(s)</source>
-        <translation>
-            <numerusform>%1 minuto</numerusform>
-            <numerusform>%1 minutama</numerusform>
-            <numerusform>%1 minut</numerusform>
-            <numerusform>%1 minut</numerusform>
+        <source>%n minute(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+            <numerusform></numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%1 hour(s)</source>
-        <translation>
-            <numerusform>%1 ura</numerusform>
-            <numerusform>%1 uri</numerusform>
-            <numerusform>%1 ure</numerusform>
-            <numerusform>%1 ura</numerusform>
+        <source>%n hour(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+            <numerusform></numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%1 day(s)</source>
-        <translation>
-            <numerusform>%1 dan</numerusform>
-            <numerusform>%1 dneva</numerusform>
-            <numerusform>%1 dnevi</numerusform>
-            <numerusform>%1 dni</numerusform>
+        <source>%n day(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+            <numerusform></numerusform>
         </translation>
     </message>
     <message>
@@ -923,6 +808,96 @@ Naslov: %4
         <translation>Ne deležite</translation>
     </message>
     <message>
+        <location line="-1246"/>
+        <source>&amp;File</source>
+        <translation>&amp;Datoteka</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>&amp;Settings</source>
+        <translation>&amp;Nastavitve</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>&amp;Community</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>&amp;Advanced</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>&amp;Help</source>
+        <translation>&amp;Pomoč</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+285"/>
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation>
+            <numerusform>%n obdelan blok zgodovine transakcij.</numerusform>
+            <numerusform>%n obdelana bloka zgodovine transakcij.</numerusform>
+            <numerusform>%n obdelani bloki zgodovine transakcij.</numerusform>
+            <numerusform>%n obdelanih blokov zgodovine transakcij.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>Up to date</source>
+        <translation>Posodobljeno</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Catching up...</source>
+        <translation>Dohitevam omrežje ...</translation>
+    </message>
+    <message>
+        <location line="+218"/>
+        <source>Sent transaction</source>
+        <translation>Odlivi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Incoming transaction</source>
+        <translation>Prilivi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Date: %1
+Amount: %2
+Type: %3
+Address: %4
+</source>
+        <translation>Datum: %1
+Koli?ina: %2
+Vrsta: %3
+Naslov: %4
+</translation>
+    </message>
+    <message>
+        <location line="+211"/>
+        <location line="+15"/>
+        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
+        <translation>URI ne more biti raz?lenjen! To se lahko zgodi zaradi neveljavnega Gridcoin naslova ali slabih parametrov URI.</translation>
+    </message>
+    <message>
+        <location line="-15"/>
+        <location line="+15"/>
+        <source>URI handling</source>
+        <translation>Rokovanje z URI</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
+        <translation>Denarnica je &lt;b&gt;šifrirana&lt;/b&gt; in trenutno &lt;b&gt;odklenjena&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
+        <translation>Denarnica je &lt;b&gt;šifrirana&lt;/b&gt; in trenutno &lt;b&gt;zaklenjena&lt;/b&gt;</translation>
+    </message>
+    <message>
         <location filename="../bitcoin.cpp" line="+145"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
         <translation>Prišlo je do usodne napake. Program Gridcoin se ne more ve? varno nadaljevati in se bo zato zaprl. </translation>
@@ -939,7 +914,12 @@ Naslov: %4
 <context>
     <name>CoinControlDialog</name>
     <message>
-        <location filename="../forms/coincontroldialog.ui" line="+42"/>
+        <location filename="../forms/coincontroldialog.ui" line="+14"/>
+        <source>Coin Control</source>
+        <translation>Kontrola kovancev</translation>
+    </message>
+    <message>
+        <location line="+28"/>
         <source>Quantity:</source>
         <translation>Št.vhodov:</translation>
     </message>
@@ -1029,12 +1009,13 @@ Naslov: %4
         <translation>Potrjeno</translation>
     </message>
     <message>
-        <location line="-454"/>
-        <source>Coin Control</source>
-        <translation>Kontrola kovancev</translation>
+        <location filename="../coincontroldialog.cpp" line="+601"/>
+        <location line="+63"/>
+        <source>(no label)</source>
+        <translation>(ni oznake)</translation>
     </message>
     <message>
-        <location filename="../coincontroldialog.cpp" line="+36"/>
+        <location line="-628"/>
         <source>Copy address</source>
         <translation>Kopiraj naslov</translation>
     </message>
@@ -1188,13 +1169,7 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
  To pomeni, da je zahtevana provizija vsaj %2.</translation>
     </message>
     <message>
-        <location line="+37"/>
-        <location line="+63"/>
-        <source>(no label)</source>
-        <translation>(ni oznake)</translation>
-    </message>
-    <message>
-        <location line="-9"/>
+        <location line="+91"/>
         <source>change from %1 (%2)</source>
         <translation>spremeni iz %1 (%2)</translation>
     </message>
@@ -1318,7 +1293,7 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
 <context>
     <name>NewPollDialog</name>
     <message>
-        <location filename="../votingdialog.cpp" line="+900"/>
+        <location filename="../votingdialog.cpp" line="+896"/>
         <location line="+96"/>
         <source>Create Poll</source>
         <translation type="unfinished"></translation>
@@ -1815,17 +1790,7 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
 <context>
     <name>RPCConsole</name>
     <message>
-        <location filename="../forms/rpcconsole.ui" line="+14"/>
-        <source>Gridcoin - Debug Console</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+25"/>
-        <source>Boost version</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location filename="../forms/rpcconsole.ui" line="+46"/>
         <location line="+27"/>
         <location line="+42"/>
         <location line="+42"/>
@@ -1840,77 +1805,12 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
         <translation>Neznano</translation>
     </message>
     <message>
-        <location line="-386"/>
-        <source>Proof Of Research Difficulty</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>1</source>
-        <translation type="unfinished">1</translation>
-    </message>
-    <message>
-        <location line="+128"/>
-        <source>Gridcoin Core:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
+        <location line="-241"/>
         <source>Client version</source>
         <translation>Različica odjemalca</translation>
     </message>
     <message>
-        <location line="+48"/>
-        <source>Build date</source>
-        <translation>Datum izgradnje</translation>
-    </message>
-    <message>
-        <location line="+34"/>
-        <source>Network:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+29"/>
-        <source>On testnet</source>
-        <translation>Na testnet</translation>
-    </message>
-    <message>
-        <location line="+39"/>
-        <source>Estimated total blocks</source>
-        <translation>Ocena vseh blokov</translation>
-    </message>
-    <message>
-        <location line="+25"/>
-        <source>Open the Gridcoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
-        <translation>Odpri Gridcoin datoteko zapisov odpravljanja napak iz trenutnega direktorija podatkov. ?e so datoteke zapisov velike, to lahko traja nekaj sekund.</translation>
-    </message>
-    <message>
-        <location line="+21"/>
-        <source>Command-line options</source>
-        <translation>Možnosti ukazne vrstice.</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Show the Gridcoin help message to get a list with possible Gridcoin command-line options.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>&amp;Show</source>
-        <translation>&amp;Prikaži</translation>
-    </message>
-    <message>
-        <location line="+68"/>
-        <source>OpenSSL version</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+13"/>
-        <source>Client name</source>
-        <translation>Ime odjemalca</translation>
-    </message>
-    <message>
-        <location line="-461"/>
+        <location line="-168"/>
         <source>&amp;Information</source>
         <translation>&amp;Informacije</translation>
     </message>
@@ -1985,12 +1885,7 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
         <translation>Počisti konzolo</translation>
     </message>
     <message>
-        <location filename="../rpcconsole.cpp" line="-35"/>
-        <source>Welcome to the Gridcoin RPC console! </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location filename="../rpcconsole.cpp" line="-34"/>
         <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
         <translation>Uporabite tipki gor in dol za navigacijo po zgodovini ukazov. Uporabite &lt;b&gt;Ctrl-L&lt;/b&gt; za izbris zaslona in zgodovine ukazov.</translation>
     </message>
@@ -2032,6 +1927,86 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
     <message>
         <location line="+2"/>
         <source>%1 h %2 m</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../forms/rpcconsole.ui" line="-717"/>
+        <source>Gridcoin - Debug Console</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Boost version</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Proof Of Research Difficulty</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>1</source>
+        <translation type="unfinished">1</translation>
+    </message>
+    <message>
+        <location line="+128"/>
+        <source>Gridcoin Core:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+58"/>
+        <source>Build date</source>
+        <translation>Datum izgradnje</translation>
+    </message>
+    <message>
+        <location line="+34"/>
+        <source>Network:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>On testnet</source>
+        <translation>Na testnet</translation>
+    </message>
+    <message>
+        <location line="+39"/>
+        <source>Estimated total blocks</source>
+        <translation>Ocena vseh blokov</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Open the Gridcoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
+        <translation>Odpri Gridcoin datoteko zapisov odpravljanja napak iz trenutnega direktorija podatkov. ?e so datoteke zapisov velike, to lahko traja nekaj sekund.</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Command-line options</source>
+        <translation>Možnosti ukazne vrstice.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Show the Gridcoin help message to get a list with possible Gridcoin command-line options.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>&amp;Show</source>
+        <translation>&amp;Prikaži</translation>
+    </message>
+    <message>
+        <location line="+68"/>
+        <source>OpenSSL version</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Client name</source>
+        <translation>Ime odjemalca</translation>
+    </message>
+    <message>
+        <location filename="../rpcconsole.cpp" line="-133"/>
+        <source>Welcome to the Gridcoin RPC console! </source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2179,7 +2154,12 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
         <translation>&amp;Pošlji</translation>
     </message>
     <message>
-        <location filename="../sendcoinsdialog.cpp" line="-173"/>
+        <location filename="../sendcoinsdialog.cpp" line="+265"/>
+        <source>(no label)</source>
+        <translation>(ni oznake)</translation>
+    </message>
+    <message>
+        <location line="-438"/>
         <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2284,12 +2264,7 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
         <translation>OPOZORILO: Neveljaven Gridcoin naslov</translation>
     </message>
     <message>
-        <location line="+13"/>
-        <source>(no label)</source>
-        <translation>(ni oznake)</translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+17"/>
         <source>WARNING: unknown change address</source>
         <translation>OPOZORILO: neznana sprememba naslova</translation>
     </message>
@@ -2297,7 +2272,42 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
 <context>
     <name>SendCoinsEntry</name>
     <message>
-        <location filename="../forms/sendcoinsentry.ui" line="+14"/>
+        <location filename="../forms/sendcoinsentry.ui" line="+170"/>
+        <source>A&amp;mount:</source>
+        <translation>&amp;Znesek:</translation>
+    </message>
+    <message>
+        <location line="-108"/>
+        <source>Pay &amp;To:</source>
+        <translation>Prejemnik &amp;plačila:</translation>
+    </message>
+    <message>
+        <location line="-30"/>
+        <source>&amp;Label:</source>
+        <translation>&amp;Oznaka:</translation>
+    </message>
+    <message>
+        <location line="+68"/>
+        <source>Alt+A</source>
+        <translation>Alt+A</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Paste address from clipboard</source>
+        <translation>Prilepite naslov iz odložišča</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Alt+P</source>
+        <translation>Alt+P</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Message:</source>
+        <translation>Sporočilo:</translation>
+    </message>
+    <message>
+        <location line="-126"/>
         <source>Form</source>
         <translation>Oblika</translation>
     </message>
@@ -2328,12 +2338,7 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>A&amp;mount:</source>
-        <translation>&amp;Znesek:</translation>
-    </message>
-    <message>
-        <location line="+13"/>
+        <location line="+22"/>
         <source>Track Coins</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2341,36 +2346,6 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
         <location line="+7"/>
         <source>Add Attachment</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-128"/>
-        <source>Pay &amp;To:</source>
-        <translation>Prejemnik &amp;plačila:</translation>
-    </message>
-    <message>
-        <location line="-30"/>
-        <source>&amp;Label:</source>
-        <translation>&amp;Oznaka:</translation>
-    </message>
-    <message>
-        <location line="+68"/>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Paste address from clipboard</source>
-        <translation>Prilepite naslov iz odložišča</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
-    </message>
-    <message>
-        <location line="+23"/>
-        <source>Message:</source>
-        <translation>Sporočilo:</translation>
     </message>
     <message>
         <location filename="../sendcoinsentry.cpp" line="+1"/>
@@ -2668,12 +2643,12 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
         <location line="+12"/>
         <location line="+45"/>
         <location line="+17"/>
-        <location line="+45"/>
+        <location line="+43"/>
         <source>Credit</source>
         <translation>Kredit</translation>
     </message>
     <message numerus="yes">
-        <location line="-117"/>
+        <location line="-115"/>
         <source>matures in %n more block(s)</source>
         <translation>
             <numerusform>dozori ?ez %n blok</numerusform>
@@ -2691,12 +2666,12 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
         <location line="+44"/>
         <location line="+8"/>
         <location line="+15"/>
-        <location line="+45"/>
+        <location line="+43"/>
         <source>Debit</source>
         <translation>Dolg</translation>
     </message>
     <message>
-        <location line="-54"/>
+        <location line="-52"/>
         <source>Transaction fee</source>
         <translation>Provizija transakcije</translation>
     </message>
@@ -2721,7 +2696,7 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
         <translation>ID transakcije</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+7"/>
         <source>Block Type</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2769,7 +2744,12 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
 <context>
     <name>TransactionDescDialog</name>
     <message>
-        <location filename="../forms/transactiondescdialog.ui" line="+29"/>
+        <location filename="../forms/transactiondescdialog.ui" line="+20"/>
+        <source>Transaction details</source>
+        <translation>Podrobnosti transakcije</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>This pane shows a detailed description of the transaction</source>
         <translation>V tem podoknu so prikazane podrobnosti o transakciji</translation>
     </message>
@@ -2787,11 +2767,6 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
         <location line="+7"/>
         <source>C&amp;lose</source>
         <translation type="unfinished">&amp;Zapri</translation>
-    </message>
-    <message>
-        <location line="-51"/>
-        <source>Transaction details</source>
-        <translation>Podrobnosti transakcije</translation>
     </message>
     <message>
         <location filename="../transactiondescdialog.cpp" line="+40"/>
@@ -2955,7 +2930,17 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
 <context>
     <name>TransactionView</name>
     <message>
-        <location filename="../transactionview.cpp" line="+55"/>
+        <location filename="../transactionview.cpp" line="+289"/>
+        <source>Label</source>
+        <translation>Oznaka</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Address</source>
+        <translation>Naslov</translation>
+    </message>
+    <message>
+        <location line="-235"/>
         <location line="+16"/>
         <source>All</source>
         <translation>Vse</translation>
@@ -3081,17 +3066,7 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
         <translation>Vrsta</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Label</source>
-        <translation>Oznaka</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Address</source>
-        <translation>Naslov</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+3"/>
         <source>Amount</source>
         <translation>Koli?ina</translation>
     </message>
@@ -3183,12 +3158,7 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
 <context>
     <name>VotingDialog</name>
     <message>
-        <location line="-349"/>
-        <source>Gridcoin Voting System 1.1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="-343"/>
         <source>Active Polls (Right Click to Vote)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3221,7 +3191,7 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
 <context>
     <name>VotingTableModel</name>
     <message>
-        <location line="-391"/>
+        <location line="-387"/>
         <source>#</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3247,12 +3217,12 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
     </message>
     <message>
         <location line="+1"/>
-        <location line="+157"/>
+        <location line="+158"/>
         <source>Answers</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-156"/>
+        <location line="-157"/>
         <source># Voters</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3272,7 +3242,7 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+143"/>
+        <location line="+144"/>
         <source>Row Number.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3320,7 +3290,7 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
 <context>
     <name>VotingVoteDialog</name>
     <message>
-        <location line="+533"/>
+        <location line="+528"/>
         <source>PlaceVote</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3366,221 +3336,7 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
         <translation>Možnosti:</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Specify data directory</source>
-        <translation>Izberite podatkovno mapo</translation>
-    </message>
-    <message>
-        <location line="+13"/>
-        <source>Connect to a node to retrieve peer addresses, and disconnect</source>
-        <translation>Povežite se z vozliščem za pridobitev naslovov soležnikov in nato prekinite povezavo.</translation>
-    </message>
-    <message>
         <location line="+1"/>
-        <source>Specify your own public address</source>
-        <translation>Določite vaš lasten javni naslov</translation>
-    </message>
-    <message>
-        <location line="+23"/>
-        <source>Accept command line and JSON-RPC commands</source>
-        <translation>Sprejemaj ukaze iz ukazne vrstice in preko JSON-RPC</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Run in the background as a daemon and accept commands</source>
-        <translation>Teci v ozadju in sprejemaj ukaze</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</source>
-        <translation>Izvedi ukaz, ko bo transakcija denarnice se spremenila (V cmd je bil TxID zamenjan za %s)</translation>
-    </message>
-    <message>
-        <location line="+16"/>
-        <source>Block creation options:</source>
-        <translation>Možnosti ustvarjanja blokov:</translation>
-    </message>
-    <message>
-        <location line="+37"/>
-        <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
-        <translation>Ni mogoče poslušati na nobenih vratih. Če to zares želite, uporabite opcijo -listen=0.</translation>
-    </message>
-    <message>
-        <location line="-107"/>
-        <source>Specify wallet file (within data directory)</source>
-        <translation>Ime datoteke z denarnico (znotraj podatkovne mape)</translation>
-    </message>
-    <message>
-        <location line="+43"/>
-        <source>Send trace/debug info to console instead of debug.log file</source>
-        <translation>Pošilja sledilne/razhroščevalne informacije na konzolo namesto v datoteko debug.log</translation>
-    </message>
-    <message>
-        <location line="-1"/>
-        <source>Shrink debug.log file on client startup (default: 1 when no -debug)</source>
-        <translation>Ob zagonu skrajšaj datoteko debug.log (privzeto: 1, če ni vklopljena opcija -debug)</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Username for JSON-RPC connections</source>
-        <translation>Uporabniško ime za povezave na JSON-RPC</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Password for JSON-RPC connections</source>
-        <translation>Geslo za povezave na JSON-RPC</translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Execute command when the best block changes (%s in cmd is replaced by block hash)</source>
-        <translation>Izvedi ukaz, ko je najden najboljši blok (niz %s v ukazu bo zamenjan s hash vrednostjo bloka)</translation>
-    </message>
-    <message>
-        <location line="-44"/>
-        <source>Allow DNS lookups for -addnode, -seednode and -connect</source>
-        <translation>Omogoči poizvedbe DNS za opcije -addnode, -seednode in -connect.</translation>
-    </message>
-    <message>
-        <location line="+119"/>
-        <source>Loading addresses...</source>
-        <translation>Nalagam naslove ...</translation>
-    </message>
-    <message>
-        <location line="-22"/>
-        <source>Invalid -proxy address: &apos;%s&apos;</source>
-        <translation>Neveljaven naslov -proxy: &apos;%s&apos;</translation>
-    </message>
-    <message>
-        <location line="-1"/>
-        <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
-        <translation>Neznano omrežje določeno v -onlynet: &apos;%s&apos;.</translation>
-    </message>
-    <message>
-        <location line="+26"/>
-        <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
-        <translation>Navezava v %s  na tem ra?unalniku ni mogo?a Gridcoin aplikacija je verjetno že zagnana.</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
-        <translation>Na tem ra?unalniku je bilo nemogo?e vezati na %s (bind returned error %d, %s)</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Error: Wallet locked, unable to create transaction  </source>
-        <translation>Napaka: Zaklenjena denarnica, ni mogo?e opraviti transakcije</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Error: Wallet unlocked for staking only, unable to create transaction.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
-        <translation>Napaka: Ta transakcija zahteva transakcijsko provizijo vsaj %s zaradi svoje koli?ine, kompleksnosti ali uporabo sredstev, ki ste jih prejeli pred kratkim. </translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Error: Transaction creation failed  </source>
-        <translation>Napaka: Ustvarjanje transakcije spodletelo</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Sending...</source>
-        <translation>Pošiljanje...</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>Napaka: Transakcija je bila zavrnjena. To se je lahko zgodilo, ?e so bili kovanci v vaši denarnici že zapravljeni, na primer ?e ste uporabili kopijo wallet.dat in so bili kovanci zapravljeni v kopiji, a tu še niso bili ozna?eni kot zapravljeni.</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Invalid amount</source>
-        <translation>Neveljavna koli?ina</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Insufficient funds</source>
-        <translation>Premalo sredstev</translation>
-    </message>
-    <message>
-        <location line="-33"/>
-        <source>Loading block index...</source>
-        <translation>Nalagam kazalo blokov ...</translation>
-    </message>
-    <message>
-        <location line="-147"/>
-        <source>To use the %s option</source>
-        <translation>Za uporabo %s opcije</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>%s, you must set a rpcpassword in the configuration file:
- %s
-It is recommended you use the following random password:
-rpcuser=gridcoinrpc
-rpcpassword=%s
-(you do not need to remember this password)
-The username and password MUST NOT be the same.
-If the file does not exist, create it with owner-readable-only file permissions.
-It is also recommended to set alertnotify so you are notified of problems;
-for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
-</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+14"/>
-        <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
-        <translation>Prišlo je do napake pri nastavljanju RPC porta %u za vhodne povezave na IPv6: %s</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
-        <translation>Prišlo je do napake pri nastavljanju RPC porta %u za vhodne povezave na IPv4: %s</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
-%s
-If the file does not exist, create it with owner-readable-only file permissions.</source>
-        <translation>Nastaviti morate rpcpassword=&lt;password&gt; v konfiguracijski datoteki: 
-%s
-?e datoteka ne obstaja, jo ustvarite z lastniškimi dovoljenji za datoteke.</translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Gridcoin version</source>
-        <translation>Gridcoin razli?ica</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Usage:</source>
-        <translation>Uporaba:</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Send command to -server or gridcoind</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>List commands</source>
-        <translation>Prikaži ukaze</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Get help for a command</source>
-        <translation>Prikaži pomo? za ukaz</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Gridcoin</source>
-        <translation>Gridcoin</translation>
-    </message>
-    <message>
-        <location line="+2"/>
         <source>This help message</source>
         <translation>To sporo?ilo pomo?i</translation>
     </message>
@@ -3595,7 +3351,12 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
+        <source>Specify data directory</source>
+        <translation>Izberite podatkovno mapo</translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Set database cache size in megabytes (default: 25)</source>
         <translation>Nastavi pomnilnik podatkovne zbirke v megabajtih (privzeto: 25)</translation>
     </message>
@@ -3635,17 +3396,22 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Obdrži maksimalno število &lt;n&gt; povezav (privzeto: 125)</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Add a node to connect to and attempt to keep the connection open</source>
-        <translation>Dodaj povezavo na vozlišče in jo skušaj držati odprto</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Connect only to the specified node(s)</source>
         <translation>Poveži se samo na dolo?ena vozliš?e(a)</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
+        <source>Connect to a node to retrieve peer addresses, and disconnect</source>
+        <translation>Povežite se z vozliščem za pridobitev naslovov soležnikov in nato prekinite povezavo.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Specify your own public address</source>
+        <translation>Določite vaš lasten javni naslov</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Only connect to nodes in network &lt;net&gt; (IPv4, IPv6 or Tor)</source>
         <translation>Poveži se samo z vozliš?i v omrežju &lt;net&gt; (IPv4, IPv6 in Tor)</translation>
     </message>
@@ -3725,7 +3491,17 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Ob ustvarjanju transakcij, prezri vnose z manjšo vrednostjo kot (privzeto: 0.01)</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+3"/>
+        <source>Accept command line and JSON-RPC commands</source>
+        <translation>Sprejemaj ukaze iz ukazne vrstice in preko JSON-RPC</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Run in the background as a daemon and accept commands</source>
+        <translation>Teci v ozadju in sprejemaj ukaze</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Use the test network</source>
         <translation>Uporabi testno omrežje</translation>
     </message>
@@ -3942,12 +3718,7 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Napaka pri nalaganju blkindex.dat</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Loading wallet...</source>
-        <translation>Nalagam denarnico ...</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Error loading wallet.dat: Wallet corrupted</source>
         <translation>Napaka pri nalaganju wallet.dat: denarnica pokvarjena</translation>
     </message>
@@ -3972,22 +3743,7 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Napaka pri nalaganju wallet.dat</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Cannot downgrade wallet</source>
-        <translation>Ne morem </translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Cannot write default address</source>
-        <translation>Ni mogoče zapisati privzetega naslova</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Rescanning...</source>
-        <translation>Ponovno pregledujem verigo ...</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+4"/>
         <source>Importing blockchain data file.</source>
         <translation>Uvažanje blockchain podatkovne datoteke.</translation>
     </message>
@@ -4002,12 +3758,52 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Napaka: ni mogo?e zagnati vozliš?a</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Done loading</source>
-        <translation>Nalaganje končano</translation>
+        <location line="+2"/>
+        <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
+        <translation>Navezava v %s  na tem ra?unalniku ni mogo?a Gridcoin aplikacija je verjetno že zagnana.</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+2"/>
+        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
+        <translation>Na tem ra?unalniku je bilo nemogo?e vezati na %s (bind returned error %d, %s)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Error: Wallet locked, unable to create transaction  </source>
+        <translation>Napaka: Zaklenjena denarnica, ni mogo?e opraviti transakcije</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Error: Wallet unlocked for staking only, unable to create transaction.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
+        <translation>Napaka: Ta transakcija zahteva transakcijsko provizijo vsaj %s zaradi svoje koli?ine, kompleksnosti ali uporabo sredstev, ki ste jih prejeli pred kratkim. </translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Error: Transaction creation failed  </source>
+        <translation>Napaka: Ustvarjanje transakcije spodletelo</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sending...</source>
+        <translation>Pošiljanje...</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
+        <translation>Napaka: Transakcija je bila zavrnjena. To se je lahko zgodilo, ?e so bili kovanci v vaši denarnici že zapravljeni, na primer ?e ste uporabili kopijo wallet.dat in so bili kovanci zapravljeni v kopiji, a tu še niso bili ozna?eni kot zapravljeni.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Invalid amount</source>
+        <translation>Neveljavna koli?ina</translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
         <translation>Opozorilo: Prosimo preverite svoj datum in ?as svojega ra?unalnika! ?e je vaša ura nastavljena napa?no Gridcoin ne bo deloval.</translation>
     </message>
@@ -4032,10 +3828,183 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>OPOZORILO: Najdene so bile neveljavne to?ke preverjanja! Prikazane transakcije so morda napa?ne! Poiš?ite novo razli?ico aplikacije ali pa obvestite razvijalce.</translation>
     </message>
     <message>
-        <location line="-173"/>
+        <location line="-97"/>
+        <source>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</source>
+        <translation>Izvedi ukaz, ko bo transakcija denarnice se spremenila (V cmd je bil TxID zamenjan za %s)</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Block creation options:</source>
+        <translation>Možnosti ustvarjanja blokov:</translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
+        <translation>Ni mogoče poslušati na nobenih vratih. Če to zares želite, uporabite opcijo -listen=0.</translation>
+    </message>
+    <message>
+        <location line="-107"/>
+        <source>Specify wallet file (within data directory)</source>
+        <translation>Ime datoteke z denarnico (znotraj podatkovne mape)</translation>
+    </message>
+    <message>
+        <location line="+43"/>
+        <source>Send trace/debug info to console instead of debug.log file</source>
+        <translation>Pošilja sledilne/razhroščevalne informacije na konzolo namesto v datoteko debug.log</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>Shrink debug.log file on client startup (default: 1 when no -debug)</source>
+        <translation>Ob zagonu skrajšaj datoteko debug.log (privzeto: 1, če ni vklopljena opcija -debug)</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Username for JSON-RPC connections</source>
+        <translation>Uporabniško ime za povezave na JSON-RPC</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Password for JSON-RPC connections</source>
+        <translation>Geslo za povezave na JSON-RPC</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Execute command when the best block changes (%s in cmd is replaced by block hash)</source>
+        <translation>Izvedi ukaz, ko je najden najboljši blok (niz %s v ukazu bo zamenjan s hash vrednostjo bloka)</translation>
+    </message>
+    <message>
+        <location line="-44"/>
+        <source>Allow DNS lookups for -addnode, -seednode and -connect</source>
+        <translation>Omogoči poizvedbe DNS za opcije -addnode, -seednode in -connect.</translation>
+    </message>
+    <message>
+        <location line="-43"/>
+        <source>To use the %s option</source>
+        <translation>Za uporabo %s opcije</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%s, you must set a rpcpassword in the configuration file:
+ %s
+It is recommended you use the following random password:
+rpcuser=gridcoinrpc
+rpcpassword=%s
+(you do not need to remember this password)
+The username and password MUST NOT be the same.
+If the file does not exist, create it with owner-readable-only file permissions.
+It is also recommended to set alertnotify so you are notified of problems;
+for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo.com
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
+        <translation>Prišlo je do napake pri nastavljanju RPC porta %u za vhodne povezave na IPv6: %s</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
+        <translation>Prišlo je do napake pri nastavljanju RPC porta %u za vhodne povezave na IPv4: %s</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
+%s
+If the file does not exist, create it with owner-readable-only file permissions.</source>
+        <translation>Nastaviti morate rpcpassword=&lt;password&gt; v konfiguracijski datoteki: 
+%s
+?e datoteka ne obstaja, jo ustvarite z lastniškimi dovoljenji za datoteke.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Gridcoin version</source>
+        <translation>Gridcoin razli?ica</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Usage:</source>
+        <translation>Uporaba:</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Send command to -server or gridcoind</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>List commands</source>
+        <translation>Prikaži ukaze</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Get help for a command</source>
+        <translation>Prikaži pomo? za ukaz</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Gridcoin</source>
+        <translation>Gridcoin</translation>
+    </message>
+    <message>
+        <location line="+132"/>
+        <source>Loading addresses...</source>
+        <translation>Nalagam naslove ...</translation>
+    </message>
+    <message>
+        <location line="-22"/>
+        <source>Invalid -proxy address: &apos;%s&apos;</source>
+        <translation>Neveljaven naslov -proxy: &apos;%s&apos;</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
+        <translation>Neznano omrežje določeno v -onlynet: &apos;%s&apos;.</translation>
+    </message>
+    <message>
+        <location line="+41"/>
+        <source>Insufficient funds</source>
+        <translation>Premalo sredstev</translation>
+    </message>
+    <message>
+        <location line="-33"/>
+        <source>Loading block index...</source>
+        <translation>Nalagam kazalo blokov ...</translation>
+    </message>
+    <message>
+        <location line="-101"/>
+        <source>Add a node to connect to and attempt to keep the connection open</source>
+        <translation>Dodaj povezavo na vozlišče in jo skušaj držati odprto</translation>
+    </message>
+    <message>
+        <location line="+103"/>
+        <source>Loading wallet...</source>
+        <translation>Nalagam denarnico ...</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Cannot downgrade wallet</source>
+        <translation>Ne morem </translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cannot write default address</source>
+        <translation>Ni mogoče zapisati privzetega naslova</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Rescanning...</source>
+        <translation>Ponovno pregledujem verigo ...</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Done loading</source>
+        <translation>Nalaganje končano</translation>
+    </message>
+    <message>
+        <location line="-150"/>
         <source>Error</source>
         <translation>Napaka</translation>
     </message>
 </context>
 </TS>
-

@@ -97,17 +97,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>&amp;Delete</translation>
     </message>
     <message>
-        <location filename="../addressbookpage.cpp" line="+331"/>
-        <source>Error exporting</source>
-        <translation>Error exporting</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Could not write to file %1.</source>
-        <translation>Could not write to file %1.</translation>
-    </message>
-    <message>
-        <location line="-266"/>
+        <location filename="../addressbookpage.cpp" line="+65"/>
         <source>Copy &amp;Label</source>
         <translation type="unfinished"></translation>
     </message>
@@ -117,14 +107,24 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+250"/>
+        <location line="+251"/>
+        <source>Comma separated file (*.csv)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-1"/>
         <source>Export Address Book Data</source>
         <translation>Export Address Book Data</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Comma separated file (*.csv)</source>
-        <translation type="unfinished"></translation>
+        <location line="+14"/>
+        <source>Error exporting</source>
+        <translation>Error exporting</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Could not write to file %1.</source>
+        <translation>Could not write to file %1.</translation>
     </message>
 </context>
 <context>
@@ -299,12 +299,12 @@ This product includes software developed by the OpenSSL Project for use in the O
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+793"/>
+        <location filename="../bitcoingui.cpp" line="+798"/>
         <source>Sign &amp;message...</source>
         <translation>Sign &amp;message...</translation>
     </message>
     <message>
-        <location line="-129"/>
+        <location line="-131"/>
         <source>&amp;Overview</source>
         <translation>&amp;Overview</translation>
     </message>
@@ -324,7 +324,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Browse transaction history</translation>
     </message>
     <message>
-        <location line="+46"/>
+        <location line="+52"/>
         <source>E&amp;xit</source>
         <translation>E&amp;xit</translation>
     </message>
@@ -334,7 +334,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Quit application</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+47"/>
         <source>&amp;Options...</source>
         <translation>&amp;Options...</translation>
     </message>
@@ -379,12 +379,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>&amp;Verify message...</translation>
     </message>
     <message>
-        <location line="-618"/>
+        <location line="-623"/>
         <source>Wallet</source>
         <translation>Wallet</translation>
     </message>
     <message>
-        <location line="+493"/>
+        <location line="+496"/>
         <source>&amp;Send</source>
         <translation>&amp;Send</translation>
     </message>
@@ -394,12 +394,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>&amp;Receive</translation>
     </message>
     <message>
-        <location line="+107"/>
+        <location line="+109"/>
         <source>&amp;Show / Hide</source>
         <translation>&amp;Show / Hide</translation>
     </message>
     <message>
-        <location line="+58"/>
+        <location line="+57"/>
         <source>&amp;File</source>
         <translation>&amp;File</translation>
     </message>
@@ -409,70 +409,35 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>&amp;Settings</translation>
     </message>
     <message>
-        <location line="+38"/>
+        <location line="+32"/>
         <source>&amp;Help</source>
         <translation>&amp;Help</translation>
     </message>
     <message numerus="yes">
-        <location line="+269"/>
-        <source>%1 active connection(s) to Gridcoin network</source>
-        <translation>
-            <numerusform>%1 active connection to Gridcoin network</numerusform>
-            <numerusform>%1 active connections to Gridcoin network</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+12"/>
+        <location line="+285"/>
         <source>Processed %n block(s) of transaction history.</source>
         <translation>
             <numerusform>Processed %n block of transaction history.</numerusform>
             <numerusform>Processed %n blocks of transaction history.</numerusform>
         </translation>
     </message>
-    <message numerus="yes">
-        <location line="+13"/>
-        <source>%1 second(s) ago</source>
-        <translation>
-            <numerusform>%1 second ago</numerusform>
-            <numerusform>%1 seconds ago</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+4"/>
-        <source>%1 minute(s) ago</source>
-        <translation>
-            <numerusform>%1 minute ago</numerusform>
-            <numerusform>%1 minutes ago</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+4"/>
-        <source>%1 hour(s) ago</source>
-        <translation>
-            <numerusform>%1 hour ago</numerusform>
-            <numerusform>%1 hours ago</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+4"/>
-        <source>%1 day(s) ago</source>
-        <translation>
-            <numerusform>%1 day ago</numerusform>
-            <numerusform>%1 days ago</numerusform>
-        </translation>
+    <message>
+        <location line="-12"/>
+        <source>%1 active connection(s) to Gridcoin network</source>
+        <translation type="unfinished">%1 active connection to Gridcoin network</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+43"/>
         <source>Up to date</source>
         <translation>Up to date</translation>
     </message>
     <message>
-        <location line="-1021"/>
+        <location line="-1023"/>
         <source>Gridcoin</source>
         <translation>Gridcoin</translation>
     </message>
     <message>
-        <location line="+494"/>
+        <location line="+497"/>
         <source>Send coins to a Gridcoin address</source>
         <translation>Send coins to a Gridcoin address</translation>
     </message>
@@ -492,7 +457,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Edit the list of stored addresses and labels</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+9"/>
         <source>&amp;Block Explorer</source>
         <translation type="unfinished"></translation>
     </message>
@@ -538,7 +503,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+28"/>
         <source>&amp;Rebuild Block Chain</source>
         <translation type="unfinished"></translation>
     </message>
@@ -604,12 +569,44 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="+1"/>
-        <location line="+597"/>
+        <location line="+590"/>
         <source>New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
+    <message numerus="yes">
+        <location line="+655"/>
+        <source>%n second(s)</source>
+        <translation type="unfinished">
+            <numerusform>%n second</numerusform>
+            <numerusform>%n seconds</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n minute(s)</source>
+        <translation type="unfinished">
+            <numerusform>%n minute</numerusform>
+            <numerusform>%n minutes</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n hour(s)</source>
+        <translation type="unfinished">
+            <numerusform>%n hour</numerusform>
+            <numerusform>%n hours</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n day(s)</source>
+        <translation type="unfinished">
+            <numerusform>%n day</numerusform>
+            <numerusform>%n days</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="-594"/>
+        <location line="-1332"/>
         <source>&amp;Voting</source>
         <translation type="unfinished"></translation>
     </message>
@@ -619,7 +616,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+77"/>
         <source>&amp;Foundation</source>
         <translation type="unfinished"></translation>
     </message>
@@ -689,7 +686,29 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Export the data in the current tab to a file</translation>
     </message>
     <message>
-        <location line="+407"/>
+        <location line="+58"/>
+        <source>&amp;Community</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>&amp;Advanced</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+133"/>
+        <location line="+9"/>
+        <source>[testnet]</source>
+        <translation>[testnet]</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+64"/>
+        <source>Gridcoin client</source>
+        <translation>Gridcoin client</translation>
+    </message>
+    <message>
+        <location line="+132"/>
         <source>Catching up...</source>
         <translation>Catching up...</translation>
     </message>
@@ -783,40 +802,8 @@ Address: %4
         <source>There was an error trying to save the wallet data to the new location.</source>
         <translation>There was an error trying to save the wallet data to the new location.</translation>
     </message>
-    <message numerus="yes">
-        <location line="+300"/>
-        <source>%1 second(s)</source>
-        <translation>
-            <numerusform>%1 second</numerusform>
-            <numerusform>%1 seconds</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+4"/>
-        <source>%1 minute(s)</source>
-        <translation>
-            <numerusform>%1 minute</numerusform>
-            <numerusform>%1 minutes</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+4"/>
-        <source>%1 hour(s)</source>
-        <translation>
-            <numerusform>%1 hour</numerusform>
-            <numerusform>%1 hours</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+4"/>
-        <source>%1 day(s)</source>
-        <translation>
-            <numerusform>%1 day</numerusform>
-            <numerusform>%1 days</numerusform>
-        </translation>
-    </message>
     <message>
-        <location line="+27"/>
+        <location line="+339"/>
         <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
         <translation type="unfinished"></translation>
     </message>
@@ -856,17 +843,7 @@ Address: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1231"/>
-        <source>&amp;Community</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>&amp;Advanced</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+558"/>
+        <location line="-665"/>
         <source>Sent transaction</source>
         <translation>Sent transaction</translation>
     </message>
@@ -876,19 +853,7 @@ Address: %4
         <translation>Incoming transaction</translation>
     </message>
     <message>
-        <location line="-421"/>
-        <location line="+9"/>
-        <source>[testnet]</source>
-        <translation>[testnet]</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <location line="+64"/>
-        <source>Gridcoin client</source>
-        <translation>Gridcoin client</translation>
-    </message>
-    <message>
-        <location line="+593"/>
+        <location line="+245"/>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
         <translation>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</translation>
     </message>
@@ -896,6 +861,26 @@ Address: %4
         <location line="+10"/>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
         <translation>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <location line="-499"/>
+        <source>%1 second(s) ago</source>
+        <translation type="unfinished">%1 second ago</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>%1 minute(s) ago</source>
+        <translation type="unfinished">%1 minute ago</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>%1 hour(s) ago</source>
+        <translation type="unfinished">%1 hour ago</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>%1 day(s) ago</source>
+        <translation type="unfinished">%1 day ago</translation>
     </message>
     <message>
         <location filename="../bitcoin.cpp" line="+145"/>
@@ -964,37 +949,22 @@ Address: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+102"/>
-        <source>Priority</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-73"/>
-        <source>List mode</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-16"/>
+        <location line="+13"/>
         <source>Tree &amp;mode</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="+16"/>
+        <source>List mode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+45"/>
         <source>Amount</source>
         <translation type="unfinished">Amount</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>Label</source>
-        <translation type="unfinished">Label</translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Address</source>
-        <translation type="unfinished">Address</translation>
-    </message>
-    <message>
-        <location line="+5"/>
+        <location line="+15"/>
         <source>Date</source>
         <translation type="unfinished">Date</translation>
     </message>
@@ -1007,6 +977,21 @@ Address: %4
         <location line="+3"/>
         <source>Confirmed</source>
         <translation type="unfinished">Confirmed</translation>
+    </message>
+    <message>
+        <location line="-18"/>
+        <source>Label</source>
+        <translation type="unfinished">Label</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Address</source>
+        <translation type="unfinished">Address</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Priority</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../coincontroldialog.cpp" line="+36"/>
@@ -1279,7 +1264,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>NewPollDialog</name>
     <message>
-        <location filename="../votingdialog.cpp" line="+900"/>
+        <location filename="../votingdialog.cpp" line="+896"/>
         <location line="+96"/>
         <source>Create Poll</source>
         <translation type="unfinished"></translation>
@@ -1363,12 +1348,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>&amp;Main</translation>
     </message>
     <message>
-        <location line="+477"/>
-        <source>&amp;Apply</source>
-        <translation>&amp;Apply</translation>
-    </message>
-    <message>
-        <location line="-345"/>
+        <location line="+132"/>
         <source>&amp;Network</source>
         <translation>&amp;Network</translation>
     </message>
@@ -1503,7 +1483,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>&amp;Window</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+216"/>
+        <source>&amp;Apply</source>
+        <translation>&amp;Apply</translation>
+    </message>
+    <message>
+        <location line="-210"/>
         <source>Show only a tray icon after minimizing the window.</source>
         <translation>Show only a tray icon after minimizing the window.</translation>
     </message>
@@ -1639,17 +1624,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Total of transactions that have yet to be confirmed, and do not yet count toward the current balance</translation>
     </message>
     <message>
-        <location line="+31"/>
-        <source>Total mined coins that have not yet matured.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+38"/>
+        <location line="+69"/>
         <source>Total:</source>
         <translation>Total:</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-38"/>
+        <source>Total mined coins that have not yet matured.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+45"/>
         <source>Your current total balance</source>
         <translation>Your current total balance</translation>
     </message>
@@ -1776,17 +1761,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>RPCConsole</name>
     <message>
-        <location filename="../forms/rpcconsole.ui" line="+14"/>
-        <source>Gridcoin - Debug Console</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+25"/>
-        <source>Boost version</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location filename="../forms/rpcconsole.ui" line="+46"/>
         <location line="+27"/>
         <location line="+42"/>
         <location line="+42"/>
@@ -1801,7 +1776,147 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>N/A</translation>
     </message>
     <message>
-        <location line="-386"/>
+        <location line="-241"/>
+        <source>Client version</source>
+        <translation>Client version</translation>
+    </message>
+    <message>
+        <location line="-168"/>
+        <source>&amp;Information</source>
+        <translation>&amp;Information</translation>
+    </message>
+    <message>
+        <location line="+425"/>
+        <source>Startup time</source>
+        <translation>Startup time</translation>
+    </message>
+    <message>
+        <location line="-366"/>
+        <source>Number of connections</source>
+        <translation>Number of connections</translation>
+    </message>
+    <message>
+        <location line="+84"/>
+        <source>Block chain</source>
+        <translation>Block chain</translation>
+    </message>
+    <message>
+        <location line="+146"/>
+        <source>Current number of blocks</source>
+        <translation>Current number of blocks</translation>
+    </message>
+    <message>
+        <location line="-188"/>
+        <source>Last block time</source>
+        <translation>Last block time</translation>
+    </message>
+    <message>
+        <location line="+248"/>
+        <source>&amp;Open</source>
+        <translation>&amp;Open</translation>
+    </message>
+    <message>
+        <location line="+172"/>
+        <source>&amp;Clear</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+124"/>
+        <source>&amp;Console</source>
+        <translation>&amp;Console</translation>
+    </message>
+    <message>
+        <location line="-176"/>
+        <source>&amp;Network Traffic</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+65"/>
+        <source>Totals</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>In:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+43"/>
+        <source>Out:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-271"/>
+        <source>Debug log file</source>
+        <translation>Debug log file</translation>
+    </message>
+    <message>
+        <location line="+368"/>
+        <source>Clear console</source>
+        <translation>Clear console</translation>
+    </message>
+    <message>
+        <location filename="../rpcconsole.cpp" line="-33"/>
+        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
+        <translation>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</translation>
+    </message>
+    <message>
+        <location line="-2"/>
+        <source>Welcome to the Gridcoin RPC console! </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</translation>
+    </message>
+    <message>
+        <location line="+112"/>
+        <source>%1 B</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>%1 KB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>%1 MB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>%1 GB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>%1 m</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>%1 h</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>%1 h %2 m</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../forms/rpcconsole.ui" line="-717"/>
+        <source>Gridcoin - Debug Console</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Boost version</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
         <source>Proof Of Research Difficulty</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1816,12 +1931,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+10"/>
-        <source>Client version</source>
-        <translation>Client version</translation>
-    </message>
-    <message>
-        <location line="+48"/>
+        <location line="+58"/>
         <source>Build date</source>
         <translation>Build date</translation>
     </message>
@@ -1869,131 +1979,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+13"/>
         <source>Client name</source>
         <translation>Client name</translation>
-    </message>
-    <message>
-        <location line="-461"/>
-        <source>&amp;Information</source>
-        <translation>&amp;Information</translation>
-    </message>
-    <message>
-        <location line="+425"/>
-        <source>Startup time</source>
-        <translation>Startup time</translation>
-    </message>
-    <message>
-        <location line="-366"/>
-        <source>Number of connections</source>
-        <translation>Number of connections</translation>
-    </message>
-    <message>
-        <location line="+84"/>
-        <source>Block chain</source>
-        <translation>Block chain</translation>
-    </message>
-    <message>
-        <location line="+146"/>
-        <source>Current number of blocks</source>
-        <translation>Current number of blocks</translation>
-    </message>
-    <message>
-        <location line="-188"/>
-        <source>Last block time</source>
-        <translation>Last block time</translation>
-    </message>
-    <message>
-        <location line="+248"/>
-        <source>&amp;Open</source>
-        <translation>&amp;Open</translation>
-    </message>
-    <message>
-        <location line="+296"/>
-        <source>&amp;Console</source>
-        <translation>&amp;Console</translation>
-    </message>
-    <message>
-        <location line="-176"/>
-        <source>&amp;Network Traffic</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+52"/>
-        <source>&amp;Clear</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+13"/>
-        <source>Totals</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+27"/>
-        <source>In:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+43"/>
-        <source>Out:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-271"/>
-        <source>Debug log file</source>
-        <translation>Debug log file</translation>
-    </message>
-    <message>
-        <location line="+368"/>
-        <source>Clear console</source>
-        <translation>Clear console</translation>
-    </message>
-    <message>
-        <location filename="../rpcconsole.cpp" line="-34"/>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</translation>
-    </message>
-    <message>
-        <location line="-1"/>
-        <source>Welcome to the Gridcoin RPC console! </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
-        <translation>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</translation>
-    </message>
-    <message>
-        <location line="+111"/>
-        <source>%1 B</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>%1 KB</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>%1 MB</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>%1 GB</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>%1 m</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>%1 h</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>%1 h %2 m</source>
-        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -2283,12 +2268,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+10"/>
-        <source>Choose address from address book</source>
-        <translation>Choose address from address book</translation>
-    </message>
-    <message>
-        <location line="+10"/>
+        <location line="+20"/>
         <source>Alt+A</source>
         <translation>Alt+A</translation>
     </message>
@@ -2298,7 +2278,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Paste address from clipboard</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="-17"/>
+        <source>Choose address from address book</source>
+        <translation>Choose address from address book</translation>
+    </message>
+    <message>
+        <location line="+27"/>
         <source>Alt+P</source>
         <translation>Alt+P</translation>
     </message>
@@ -2544,17 +2529,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-2"/>
-        <source>conflicted</source>
-        <translation></translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+2"/>
         <source>%1/unconfirmed</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-4"/>
+        <source>conflicted</source>
+        <translation></translation>
+    </message>
+    <message>
+        <location line="+6"/>
         <source>%1 confirmations</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2625,12 +2610,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+12"/>
         <location line="+45"/>
         <location line="+17"/>
-        <location line="+45"/>
+        <location line="+43"/>
         <source>Credit</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location line="-117"/>
+        <location line="-115"/>
         <source>matures in %n more block(s)</source>
         <translation>
             <numerusform>matures in %n more block</numerusform>
@@ -2646,12 +2631,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+44"/>
         <location line="+8"/>
         <location line="+15"/>
-        <location line="+45"/>
+        <location line="+43"/>
         <source>Debit</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-54"/>
+        <location line="-52"/>
         <source>Transaction fee</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2676,7 +2661,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+7"/>
         <source>Block Type</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2691,7 +2676,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+14"/>
+        <source>Information</source>
+        <translation type="unfinished">Information</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>Transaction</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2701,12 +2691,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-33"/>
-        <source>Information</source>
-        <translation type="unfinished">Information</translation>
-    </message>
-    <message>
-        <location line="+59"/>
+        <location line="+26"/>
         <source>Amount</source>
         <translation type="unfinished">Amount</translation>
     </message>
@@ -2724,7 +2709,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>TransactionDescDialog</name>
     <message>
-        <location filename="../forms/transactiondescdialog.ui" line="+29"/>
+        <location filename="../forms/transactiondescdialog.ui" line="+20"/>
+        <source>Transaction details</source>
+        <translation>Transaction details</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>This pane shows a detailed description of the transaction</source>
         <translation>This pane shows a detailed description of the transaction</translation>
     </message>
@@ -2742,11 +2732,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+7"/>
         <source>C&amp;lose</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-51"/>
-        <source>Transaction details</source>
-        <translation>Transaction details</translation>
     </message>
     <message>
         <location filename="../transactiondescdialog.cpp" line="+40"/>
@@ -3136,12 +3121,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>VotingDialog</name>
     <message>
-        <location line="-349"/>
-        <source>Gridcoin Voting System 1.1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="-343"/>
         <source>Active Polls (Right Click to Vote)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3174,7 +3154,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>VotingTableModel</name>
     <message>
-        <location line="-391"/>
+        <location line="-387"/>
         <source>#</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3200,12 +3180,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+1"/>
-        <location line="+157"/>
+        <location line="+158"/>
         <source>Answers</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-156"/>
+        <location line="-157"/>
         <source># Voters</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3225,7 +3205,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+143"/>
+        <location line="+144"/>
         <source>Row Number.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3273,7 +3253,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>VotingVoteDialog</name>
     <message>
-        <location line="+533"/>
+        <location line="+528"/>
         <source>PlaceVote</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3384,7 +3364,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Maintain at most &lt;n&gt; connections to peers (default: 125)</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+45"/>
+        <source>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</source>
+        <translation>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</translation>
+    </message>
+    <message>
+        <location line="-37"/>
         <source>Accept connections from outside (default: 1 if no -proxy or -connect)</source>
         <translation>Accept connections from outside (default: 1 if no -proxy or -connect)</translation>
     </message>
@@ -3404,12 +3389,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Number of seconds to keep misbehaving peers from reconnecting (default: 86400)</translation>
     </message>
     <message>
-        <location line="+29"/>
-        <source>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</source>
-        <translation>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</translation>
-    </message>
-    <message>
-        <location line="-16"/>
+        <location line="+13"/>
         <source>Use the test network</source>
         <translation>Use the test network</translation>
     </message>
@@ -3494,12 +3474,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Allow DNS lookups for -addnode, -seednode and -connect</translation>
     </message>
     <message>
-        <location line="+119"/>
-        <source>Loading addresses...</source>
-        <translation>Loading addresses...</translation>
-    </message>
-    <message>
-        <location line="-162"/>
+        <location line="-43"/>
         <source>To use the %s option</source>
         <translation>To use the %s option</translation>
     </message>
@@ -3808,7 +3783,12 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Unknown -socks proxy version requested: %i</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+2"/>
+        <source>Invalid -proxy address: &apos;%s&apos;</source>
+        <translation>Invalid -proxy address: &apos;%s&apos;</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Invalid -tor address: &apos;%s&apos;</source>
         <translation>Invalid -tor address: &apos;%s&apos;</translation>
     </message>
@@ -3869,7 +3849,12 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation></translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
+        <source>Loading addresses...</source>
+        <translation>Loading addresses...</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Error: could not start node</source>
         <translation>Error: could not start node</translation>
     </message>
@@ -3934,12 +3919,7 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation></translation>
     </message>
     <message>
-        <location line="-47"/>
-        <source>Invalid -proxy address: &apos;%s&apos;</source>
-        <translation>Invalid -proxy address: &apos;%s&apos;</translation>
-    </message>
-    <message>
-        <location line="-1"/>
+        <location line="-48"/>
         <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
         <translation>Unknown network specified in -onlynet: &apos;%s&apos;</translation>
     </message>
@@ -3990,4 +3970,3 @@ If the file does not exist, create it with owner-readable-only file permissions.
     </message>
 </context>
 </TS>
-

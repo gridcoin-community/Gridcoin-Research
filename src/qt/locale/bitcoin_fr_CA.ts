@@ -32,22 +32,7 @@ This product includes software developed by the OpenSSL Project for use in the O
 <context>
     <name>AddressBookPage</name>
     <message>
-        <location filename="../forms/addressbookpage.ui" line="+63"/>
-        <source>Create a new address</source>
-        <translation>Créer une nouvelle adresse</translation>
-    </message>
-    <message>
-        <location line="+14"/>
-        <source>Copy the currently selected address to the system clipboard</source>
-        <translation>Copier l&apos;adresse surligné a votre presse-papier</translation>
-    </message>
-    <message>
-        <location line="+56"/>
-        <source>&amp;Delete</source>
-        <translation>&amp;Supprimer</translation>
-    </message>
-    <message>
-        <location line="-119"/>
+        <location filename="../forms/addressbookpage.ui" line="+14"/>
         <source>Address Book</source>
         <translation>Répertoire d&apos;adresses</translation>
     </message>
@@ -62,12 +47,22 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Double cliquer afin de modifier l&apos;adresse ou l&apos;étiquette</translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="+27"/>
+        <source>Create a new address</source>
+        <translation>Créer une nouvelle adresse</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>&amp;New</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+11"/>
+        <source>Copy the currently selected address to the system clipboard</source>
+        <translation>Copier l&apos;adresse surligné a votre presse-papier</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>&amp;Copy</source>
         <translation type="unfinished"></translation>
     </message>
@@ -100,6 +95,11 @@ This product includes software developed by the OpenSSL Project for use in the O
         <location line="+11"/>
         <source>Delete the currently selected address from the list</source>
         <translation>Effacer l&apos;adresse actuellement sélectionnée de la liste</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>&amp;Delete</source>
+        <translation>&amp;Supprimer</translation>
     </message>
     <message>
         <location filename="../addressbookpage.cpp" line="+65"/>
@@ -153,7 +153,12 @@ This product includes software developed by the OpenSSL Project for use in the O
 <context>
     <name>AskPassphraseDialog</name>
     <message>
-        <location filename="../forms/askpassphrasedialog.ui" line="+47"/>
+        <location filename="../forms/askpassphrasedialog.ui" line="+26"/>
+        <source>Passphrase Dialog</source>
+        <translation>Dialogue de mot de passe</translation>
+    </message>
+    <message>
+        <location line="+21"/>
         <source>Enter passphrase</source>
         <translation>Entrer Mot de Passe</translation>
     </message>
@@ -176,11 +181,6 @@ This product includes software developed by the OpenSSL Project for use in the O
         <location line="+3"/>
         <source>For staking only</source>
         <translation>Pour &quot;staking&quot; seulement</translation>
-    </message>
-    <message>
-        <location line="-85"/>
-        <source>Passphrase Dialog</source>
-        <translation>Dialogue de mot de passe</translation>
     </message>
     <message>
         <location filename="../askpassphrasedialog.cpp" line="+37"/>
@@ -314,7 +314,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Gridcoin</translation>
     </message>
     <message>
-        <location line="+488"/>
+        <location line="+491"/>
         <source>&amp;Overview</source>
         <translation>&amp;Vue d&apos;ensemble</translation>
     </message>
@@ -364,7 +364,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Éditer la liste d&apos;adresses et libellés</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+9"/>
         <source>&amp;Block Explorer</source>
         <translation type="unfinished"></translation>
     </message>
@@ -410,7 +410,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+21"/>
         <source>E&amp;xit</source>
         <translation>Q&amp;uitter</translation>
     </message>
@@ -486,12 +486,12 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="+1"/>
-        <location line="+597"/>
+        <location line="+590"/>
         <source>New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-594"/>
+        <location line="-665"/>
         <source>&amp;Voting</source>
         <translation type="unfinished"></translation>
     </message>
@@ -501,7 +501,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+77"/>
         <source>&amp;Foundation</source>
         <translation type="unfinished"></translation>
     </message>
@@ -626,7 +626,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Ouvrir une console de débogage et de diagnostic</translation>
     </message>
     <message>
-        <location line="+40"/>
+        <location line="+39"/>
         <source>&amp;File</source>
         <translation>&amp;Fichier</translation>
     </message>
@@ -646,12 +646,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+15"/>
         <source>&amp;Help</source>
         <translation>&amp;Aide</translation>
     </message>
     <message>
-        <location line="+117"/>
+        <location line="+118"/>
         <location line="+9"/>
         <source>[testnet]</source>
         <translation>[testnet]</translation>
@@ -662,13 +662,10 @@ This product includes software developed by the OpenSSL Project for use in the O
         <source>Gridcoin client</source>
         <translation>Client Gridcoin</translation>
     </message>
-    <message numerus="yes">
-        <location line="+79"/>
+    <message>
+        <location line="+82"/>
         <source>%1 active connection(s) to Gridcoin network</source>
-        <translation>
-            <numerusform>%1 connexion active au réseau Gridcoin</numerusform>
-            <numerusform>%1 connexions actives au réseau Gridcoin</numerusform>
-        </translation>
+        <translation type="unfinished">%1 connexion active au réseau Gridcoin</translation>
     </message>
     <message numerus="yes">
         <location line="+12"/>
@@ -678,37 +675,25 @@ This product includes software developed by the OpenSSL Project for use in the O
             <numerusform></numerusform>
         </translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+13"/>
         <source>%1 second(s) ago</source>
-        <translation>
-            <numerusform>il y a %1 seconde</numerusform>
-            <numerusform>il y a %1 secondes</numerusform>
-        </translation>
+        <translation type="unfinished">il y a %1 seconde</translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+4"/>
         <source>%1 minute(s) ago</source>
-        <translation>
-            <numerusform>il y a %1 minute</numerusform>
-            <numerusform>il y a %1 minutes</numerusform>
-        </translation>
+        <translation type="unfinished">il y a %1 minute</translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+4"/>
         <source>%1 hour(s) ago</source>
-        <translation>
-            <numerusform>il y a %1 heure</numerusform>
-            <numerusform>il y a %1 heures</numerusform>
-        </translation>
+        <translation type="unfinished">il y a %1 heure</translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+4"/>
         <source>%1 day(s) ago</source>
-        <translation>
-            <numerusform>il y a %1 jour</numerusform>
-            <numerusform>il y a %1 jours</numerusform>
-        </translation>
+        <translation type="unfinished">il y a %1 jour</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -832,34 +817,34 @@ Adresse : %4
     </message>
     <message numerus="yes">
         <location line="+300"/>
-        <source>%1 second(s)</source>
-        <translation>
-            <numerusform>%1 seconde</numerusform>
-            <numerusform>%1 secondes</numerusform>
+        <source>%n second(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%1 minute(s)</source>
-        <translation>
-            <numerusform>%1 minute</numerusform>
-            <numerusform>%1 minutes</numerusform>
+        <source>%n minute(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%1 hour(s)</source>
-        <translation>
-            <numerusform>%1 heure</numerusform>
-            <numerusform>%1 heures</numerusform>
+        <source>%n hour(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%1 day(s)</source>
-        <translation>
-            <numerusform>%1 jour</numerusform>
-            <numerusform>%1 jours</numerusform>
+        <source>%n day(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
         </translation>
     </message>
     <message>
@@ -919,12 +904,7 @@ Adresse : %4
 <context>
     <name>CoinControlDialog</name>
     <message>
-        <location filename="../forms/coincontroldialog.ui" line="+371"/>
-        <source>(un)select all</source>
-        <translation>Toute sélectionner </translation>
-    </message>
-    <message>
-        <location line="-357"/>
+        <location filename="../forms/coincontroldialog.ui" line="+14"/>
         <source>Coin Control</source>
         <translation>Fonctions de contrôle des monnaies</translation>
     </message>
@@ -969,7 +949,12 @@ Adresse : %4
         <translation>Monnaie :</translation>
     </message>
     <message>
-        <location line="+82"/>
+        <location line="+69"/>
+        <source>(un)select all</source>
+        <translation>Toute sélectionner </translation>
+    </message>
+    <message>
+        <location line="+13"/>
         <source>Tree &amp;mode</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1187,7 +1172,12 @@ Les montants inférieurs à  0.546 fois les frais minimum de relais apparaissent
 <context>
     <name>EditAddressDialog</name>
     <message>
-        <location filename="../forms/editaddressdialog.ui" line="+25"/>
+        <location filename="../forms/editaddressdialog.ui" line="+14"/>
+        <source>Edit Address</source>
+        <translation>Modifier l&apos;adresse</translation>
+    </message>
+    <message>
+        <location line="+11"/>
         <source>&amp;Label</source>
         <translation>Record</translation>
     </message>
@@ -1205,11 +1195,6 @@ Les montants inférieurs à  0.546 fois les frais minimum de relais apparaissent
         <location line="+10"/>
         <source>The address associated with this address book entry. This can only be modified for sending addresses.</source>
         <translation>L&apos;intitulé associé à cette entrée du carnet d&apos;adresse. Seules les adresses d&apos;envoi peuvent être modifiées.</translation>
-    </message>
-    <message>
-        <location line="-38"/>
-        <source>Edit Address</source>
-        <translation>Modifier l&apos;adresse</translation>
     </message>
     <message>
         <location filename="../editaddressdialog.cpp" line="+20"/>
@@ -1298,7 +1283,7 @@ Les montants inférieurs à  0.546 fois les frais minimum de relais apparaissent
 <context>
     <name>NewPollDialog</name>
     <message>
-        <location filename="../votingdialog.cpp" line="+900"/>
+        <location filename="../votingdialog.cpp" line="+896"/>
         <location line="+96"/>
         <source>Create Poll</source>
         <translation type="unfinished"></translation>
@@ -2644,12 +2629,12 @@ Les montants inférieurs à  0.546 fois les frais minimum de relais apparaissent
         <location line="+12"/>
         <location line="+45"/>
         <location line="+17"/>
-        <location line="+45"/>
+        <location line="+43"/>
         <source>Credit</source>
         <translation>Crédit</translation>
     </message>
     <message numerus="yes">
-        <location line="-117"/>
+        <location line="-115"/>
         <source>matures in %n more block(s)</source>
         <translation>
             <numerusform>arrive à maturité dans %n bloc de plus</numerusform>
@@ -2665,12 +2650,12 @@ Les montants inférieurs à  0.546 fois les frais minimum de relais apparaissent
         <location line="+44"/>
         <location line="+8"/>
         <location line="+15"/>
-        <location line="+45"/>
+        <location line="+43"/>
         <source>Debit</source>
         <translation>Débit</translation>
     </message>
     <message>
-        <location line="-54"/>
+        <location line="-52"/>
         <source>Transaction fee</source>
         <translation>Frais de transaction</translation>
     </message>
@@ -2695,7 +2680,7 @@ Les montants inférieurs à  0.546 fois les frais minimum de relais apparaissent
         <translation>ID de la transaction</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+7"/>
         <source>Block Type</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3155,12 +3140,7 @@ Les montants inférieurs à  0.546 fois les frais minimum de relais apparaissent
 <context>
     <name>VotingDialog</name>
     <message>
-        <location line="-349"/>
-        <source>Gridcoin Voting System 1.1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="-343"/>
         <source>Active Polls (Right Click to Vote)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3193,7 +3173,7 @@ Les montants inférieurs à  0.546 fois les frais minimum de relais apparaissent
 <context>
     <name>VotingTableModel</name>
     <message>
-        <location line="-391"/>
+        <location line="-387"/>
         <source>#</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3219,12 +3199,12 @@ Les montants inférieurs à  0.546 fois les frais minimum de relais apparaissent
     </message>
     <message>
         <location line="+1"/>
-        <location line="+157"/>
+        <location line="+158"/>
         <source>Answers</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-156"/>
+        <location line="-157"/>
         <source># Voters</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3244,7 +3224,7 @@ Les montants inférieurs à  0.546 fois les frais minimum de relais apparaissent
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+143"/>
+        <location line="+144"/>
         <source>Row Number.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3292,7 +3272,7 @@ Les montants inférieurs à  0.546 fois les frais minimum de relais apparaissent
 <context>
     <name>VotingVoteDialog</name>
     <message>
-        <location line="+533"/>
+        <location line="+528"/>
         <source>PlaceVote</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4010,4 +3990,3 @@ Si le fichier n&apos;existe pas, créez-le avec les droits de lecture seule acco
     </message>
 </context>
 </TS>
-

@@ -27,17 +27,7 @@ This product includes software developed by the OpenSSL Project for use in the O
 <context>
     <name>AddressBookPage</name>
     <message>
-        <location filename="../forms/addressbookpage.ui" line="+63"/>
-        <source>Create a new address</source>
-        <translation>Жаң даректи жасоо</translation>
-    </message>
-    <message>
-        <location line="+70"/>
-        <source>&amp;Delete</source>
-        <translation>Ө&amp;чүрүү</translation>
-    </message>
-    <message>
-        <location line="-119"/>
+        <location filename="../forms/addressbookpage.ui" line="+14"/>
         <source>Address Book</source>
         <translation type="unfinished"></translation>
     </message>
@@ -52,7 +42,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="+27"/>
+        <source>Create a new address</source>
+        <translation>Жаң даректи жасоо</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>&amp;New</source>
         <translation type="unfinished"></translation>
     </message>
@@ -95,6 +90,11 @@ This product includes software developed by the OpenSSL Project for use in the O
         <location line="+11"/>
         <source>Delete the currently selected address from the list</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>&amp;Delete</source>
+        <translation>Ө&amp;чүрүү</translation>
     </message>
     <message>
         <location filename="../addressbookpage.cpp" line="+65"/>
@@ -299,42 +299,27 @@ This product includes software developed by the OpenSSL Project for use in the O
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+679"/>
+        <location filename="../bitcoingui.cpp" line="+682"/>
         <source>&amp;Transactions</source>
         <translation>&amp;Транзакциялар</translation>
     </message>
     <message>
-        <location line="+115"/>
+        <location line="+117"/>
         <source>&amp;Verify message...</source>
         <translation>Билдирүүнү &amp;текшерүү...</translation>
     </message>
     <message>
-        <location line="-618"/>
+        <location line="-623"/>
         <source>Wallet</source>
         <translation>Капчык</translation>
     </message>
     <message>
-        <location line="+663"/>
-        <source>&amp;File</source>
-        <translation>&amp;Файл</translation>
-    </message>
-    <message>
-        <location line="+46"/>
-        <source>&amp;Help</source>
-        <translation>&amp;Жардам</translation>
-    </message>
-    <message>
-        <location line="+312"/>
-        <source>Up to date</source>
-        <translation>Жаңыланган</translation>
-    </message>
-    <message>
-        <location line="-1021"/>
+        <location line="+0"/>
         <source>Gridcoin</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+488"/>
+        <location line="+491"/>
         <source>&amp;Overview</source>
         <translation type="unfinished"></translation>
     </message>
@@ -379,7 +364,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+9"/>
         <source>&amp;Block Explorer</source>
         <translation type="unfinished"></translation>
     </message>
@@ -425,7 +410,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+21"/>
         <source>E&amp;xit</source>
         <translation type="unfinished"></translation>
     </message>
@@ -501,12 +486,12 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="+1"/>
-        <location line="+597"/>
+        <location line="+590"/>
         <source>New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-594"/>
+        <location line="-665"/>
         <source>&amp;Voting</source>
         <translation type="unfinished"></translation>
     </message>
@@ -516,7 +501,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+77"/>
         <source>&amp;Foundation</source>
         <translation type="unfinished"></translation>
     </message>
@@ -636,7 +621,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="+39"/>
+        <source>&amp;File</source>
+        <translation>&amp;Файл</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>&amp;Settings</source>
         <translation type="unfinished"></translation>
     </message>
@@ -651,7 +641,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+138"/>
+        <location line="+15"/>
+        <source>&amp;Help</source>
+        <translation>&amp;Жардам</translation>
+    </message>
+    <message>
+        <location line="+118"/>
         <location line="+9"/>
         <source>[testnet]</source>
         <translation type="unfinished"></translation>
@@ -662,13 +657,10 @@ This product includes software developed by the OpenSSL Project for use in the O
         <source>Gridcoin client</source>
         <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
-        <location line="+79"/>
+    <message>
+        <location line="+82"/>
         <source>%1 active connection(s) to Gridcoin network</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
+        <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
         <location line="+12"/>
@@ -678,37 +670,25 @@ This product includes software developed by the OpenSSL Project for use in the O
             <numerusform></numerusform>
         </translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+13"/>
         <source>%1 second(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
+        <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+4"/>
         <source>%1 minute(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
+        <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+4"/>
         <source>%1 hour(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
+        <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+4"/>
         <source>%1 day(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+13"/>
@@ -823,7 +803,7 @@ Address: %4
     </message>
     <message numerus="yes">
         <location line="+300"/>
-        <source>%1 second(s)</source>
+        <source>%n second(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -831,7 +811,7 @@ Address: %4
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%1 minute(s)</source>
+        <source>%n minute(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -839,7 +819,7 @@ Address: %4
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%1 hour(s)</source>
+        <source>%n hour(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -847,7 +827,7 @@ Address: %4
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%1 day(s)</source>
+        <source>%n day(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -894,6 +874,11 @@ Address: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="-890"/>
+        <source>Up to date</source>
+        <translation>Жаңыланган</translation>
+    </message>
+    <message>
         <location filename="../bitcoin.cpp" line="+145"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
         <translation type="unfinished"></translation>
@@ -910,18 +895,7 @@ Address: %4
 <context>
     <name>CoinControlDialog</name>
     <message>
-        <location filename="../forms/coincontroldialog.ui" line="+460"/>
-        <source>Date</source>
-        <translation>Дата</translation>
-    </message>
-    <message>
-        <location filename="../coincontroldialog.cpp" line="+601"/>
-        <location line="+63"/>
-        <source>(no label)</source>
-        <translation>(аты жок)</translation>
-    </message>
-    <message>
-        <location filename="../forms/coincontroldialog.ui" line="-446"/>
+        <location filename="../forms/coincontroldialog.ui" line="+14"/>
         <source>Coin Control</source>
         <translation type="unfinished"></translation>
     </message>
@@ -996,7 +970,12 @@ Address: %4
         <translation type="unfinished">Дарек</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+5"/>
+        <source>Date</source>
+        <translation>Дата</translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Confirmations</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1011,7 +990,7 @@ Address: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../coincontroldialog.cpp" line="-628"/>
+        <location filename="../coincontroldialog.cpp" line="+36"/>
         <source>Copy address</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1151,7 +1130,13 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+91"/>
+        <location line="+37"/>
+        <location line="+63"/>
+        <source>(no label)</source>
+        <translation>(аты жок)</translation>
+    </message>
+    <message>
+        <location line="-9"/>
         <source>change from %1 (%2)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1164,12 +1149,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>EditAddressDialog</name>
     <message>
-        <location filename="../forms/editaddressdialog.ui" line="+42"/>
-        <source>&amp;Address</source>
-        <translation>&amp;Дарек</translation>
-    </message>
-    <message>
-        <location line="-28"/>
+        <location filename="../forms/editaddressdialog.ui" line="+14"/>
         <source>Edit Address</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1184,7 +1164,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+7"/>
+        <source>&amp;Address</source>
+        <translation>&amp;Дарек</translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <source>The address associated with this address book entry. This can only be modified for sending addresses.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1275,7 +1260,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>NewPollDialog</name>
     <message>
-        <location filename="../votingdialog.cpp" line="+900"/>
+        <location filename="../votingdialog.cpp" line="+896"/>
         <location line="+96"/>
         <source>Create Poll</source>
         <translation type="unfinished"></translation>
@@ -1349,7 +1334,64 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>OptionsDialog</name>
     <message>
-        <location filename="../forms/optionsdialog.ui" line="+14"/>
+        <location filename="../forms/optionsdialog.ui" line="+162"/>
+        <source>&amp;Network</source>
+        <translation>&amp;Тармак</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>&amp;Port:</source>
+        <translation>&amp;Порт:</translation>
+    </message>
+    <message>
+        <location line="+75"/>
+        <source>&amp;Window</source>
+        <translation>&amp;Терезе</translation>
+    </message>
+    <message>
+        <location line="+199"/>
+        <source>&amp;OK</source>
+        <translation>&amp;Жарайт</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>&amp;Cancel</source>
+        <translation>&amp;Жокко чыгаруу</translation>
+    </message>
+    <message>
+        <location filename="../optionsdialog.cpp" line="+55"/>
+        <source>default</source>
+        <translation>жарыяланбаган</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Native</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Light</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+123"/>
+        <location line="+9"/>
+        <source>Warning</source>
+        <translation type="unfinished">Эскертүү</translation>
+    </message>
+    <message>
+        <location line="-9"/>
+        <location line="+9"/>
+        <source>This setting will take effect after restarting Gridcoin.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+42"/>
+        <source>The supplied proxy address is invalid.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../forms/optionsdialog.ui" line="-483"/>
         <source>Options</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1399,12 +1441,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+21"/>
-        <source>&amp;Network</source>
-        <translation>&amp;Тармак</translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="+27"/>
         <source>Automatically open the Gridcoin client port on the router. This only works when your router supports UPnP and it is enabled.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1526,58 +1563,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+91"/>
         <source>&amp;Apply</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-291"/>
-        <source>&amp;Port:</source>
-        <translation>&amp;Порт:</translation>
-    </message>
-    <message>
-        <location line="+75"/>
-        <source>&amp;Window</source>
-        <translation>&amp;Терезе</translation>
-    </message>
-    <message>
-        <location line="+199"/>
-        <source>&amp;OK</source>
-        <translation>&amp;Жарайт</translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>&amp;Cancel</source>
-        <translation>&amp;Жокко чыгаруу</translation>
-    </message>
-    <message>
-        <location filename="../optionsdialog.cpp" line="+55"/>
-        <source>default</source>
-        <translation>жарыяланбаган</translation>
-    </message>
-    <message>
-        <location line="+30"/>
-        <source>Native</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Light</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+123"/>
-        <location line="+9"/>
-        <source>Warning</source>
-        <translation type="unfinished">Эскертүү</translation>
-    </message>
-    <message>
-        <location line="-9"/>
-        <location line="+9"/>
-        <source>This setting will take effect after restarting Gridcoin.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+42"/>
-        <source>The supplied proxy address is invalid.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1772,12 +1757,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>RPCConsole</name>
     <message>
-        <location filename="../forms/rpcconsole.ui" line="+14"/>
-        <source>Gridcoin - Debug Console</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+16"/>
+        <location filename="../forms/rpcconsole.ui" line="+30"/>
         <source>&amp;Information</source>
         <translation>Маалымат</translation>
     </message>
@@ -1942,6 +1922,11 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Консолду тазалоо</translation>
     </message>
     <message>
+        <location line="-717"/>
+        <source>Gridcoin - Debug Console</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../rpcconsole.cpp" line="-35"/>
         <source>Welcome to the Gridcoin RPC console! </source>
         <translation type="unfinished"></translation>
@@ -1995,23 +1980,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>SendCoinsDialog</name>
     <message>
-        <location filename="../forms/sendcoinsdialog.ui" line="+679"/>
-        <source>Clear &amp;All</source>
-        <translation>&amp;Бардыгын тазалоо</translation>
-    </message>
-    <message>
-        <location line="+78"/>
-        <source>S&amp;end</source>
-        <translation>&amp;Жөнөтүү</translation>
-    </message>
-    <message>
-        <location filename="../sendcoinsdialog.cpp" line="+478"/>
-        <source>(no label)</source>
-        <translation>(аты жок)</translation>
-    </message>
-    <message>
-        <location filename="../forms/sendcoinsdialog.ui" line="-743"/>
-        <location filename="../sendcoinsdialog.cpp" line="-296"/>
+        <location filename="../forms/sendcoinsdialog.ui" line="+14"/>
+        <location filename="../sendcoinsdialog.cpp" line="+182"/>
         <location line="+5"/>
         <location line="+5"/>
         <location line="+5"/>
@@ -2126,7 +2096,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+3"/>
+        <source>Clear &amp;All</source>
+        <translation>&amp;Бардыгын тазалоо</translation>
+    </message>
+    <message>
+        <location line="+28"/>
         <source>Balance:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2139,6 +2114,11 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+31"/>
         <source>Confirm the send action</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>S&amp;end</source>
+        <translation>&amp;Жөнөтүү</translation>
     </message>
     <message>
         <location filename="../sendcoinsdialog.cpp" line="-173"/>
@@ -2246,7 +2226,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+13"/>
+        <source>(no label)</source>
+        <translation>(аты жок)</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>WARNING: unknown change address</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2254,17 +2239,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>SendCoinsEntry</name>
     <message>
-        <location filename="../forms/sendcoinsentry.ui" line="+107"/>
-        <source>Paste address from clipboard</source>
-        <translation>Даректи алмашуу буферинен коюу</translation>
-    </message>
-    <message>
-        <location line="+33"/>
-        <source>Message:</source>
-        <translation>Билдирүү:</translation>
-    </message>
-    <message>
-        <location line="-126"/>
+        <location filename="../forms/sendcoinsentry.ui" line="+14"/>
         <source>Form</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2300,7 +2275,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+7"/>
+        <source>Paste address from clipboard</source>
+        <translation>Даректи алмашуу буферинен коюу</translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <source>Alt+P</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2310,7 +2290,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+16"/>
+        <source>Message:</source>
+        <translation>Билдирүү:</translation>
+    </message>
+    <message>
+        <location line="+21"/>
         <source>Send Custom Message to a Gridcoin Recipient</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2338,18 +2323,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>SignVerifyMessageDialog</name>
     <message>
-        <location filename="../forms/signverifymessagedialog.ui" line="+81"/>
-        <source>Paste address from clipboard</source>
-        <translation>Даректи алмашуу буферинен коюу</translation>
-    </message>
-    <message>
-        <location line="+87"/>
-        <location line="+146"/>
-        <source>Clear &amp;All</source>
-        <translation>&amp;Бардыгын тазалоо</translation>
-    </message>
-    <message>
-        <location line="-300"/>
+        <location filename="../forms/signverifymessagedialog.ui" line="+14"/>
         <source>Signatures - Sign / Verify a Message</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2381,7 +2355,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-183"/>
+        <location line="-193"/>
+        <source>Paste address from clipboard</source>
+        <translation>Даректи алмашуу буферинен коюу</translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <source>Alt+P</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2411,7 +2390,13 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+62"/>
+        <location line="+3"/>
+        <location line="+146"/>
+        <source>Clear &amp;All</source>
+        <translation>&amp;Бардыгын тазалоо</translation>
+    </message>
+    <message>
+        <location line="-87"/>
         <location line="+70"/>
         <source>&amp;Verify Message</source>
         <translation type="unfinished"></translation>
@@ -2521,23 +2506,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 </context>
 <context>
     <name>TransactionDesc</name>
-    <message>
-        <location filename="../transactiondesc.cpp" line="+46"/>
-        <source>%1/offline</source>
-        <translation>%1/тармакта эмес</translation>
-    </message>
-    <message>
-        <location line="+60"/>
-        <source>Date</source>
-        <translation>Дата</translation>
-    </message>
-    <message>
-        <location line="+154"/>
-        <source>Message</source>
-        <translation>Билдирүү</translation>
-    </message>
     <message numerus="yes">
-        <location line="-224"/>
+        <location filename="../transactiondesc.cpp" line="+36"/>
         <source>Open for %n more block(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -2555,7 +2525,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+2"/>
+        <source>%1/offline</source>
+        <translation>%1/тармакта эмес</translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>%1/unconfirmed</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2583,7 +2558,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         </translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+4"/>
+        <source>Date</source>
+        <translation>Дата</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Source</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2626,12 +2606,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+12"/>
         <location line="+45"/>
         <location line="+17"/>
-        <location line="+45"/>
+        <location line="+43"/>
         <source>Credit</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location line="-117"/>
+        <location line="-115"/>
         <source>matures in %n more block(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -2647,12 +2627,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+44"/>
         <location line="+8"/>
         <location line="+15"/>
-        <location line="+45"/>
+        <location line="+43"/>
         <source>Debit</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-54"/>
+        <location line="-52"/>
         <source>Transaction fee</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2662,7 +2642,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+6"/>
+        <source>Message</source>
+        <translation>Билдирүү</translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Comment</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2672,7 +2657,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+7"/>
         <source>Block Type</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2904,17 +2889,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>TransactionView</name>
     <message>
-        <location filename="../transactionview.cpp" line="+287"/>
-        <source>Date</source>
-        <translation>Дата</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Address</source>
-        <translation>Дарек</translation>
-    </message>
-    <message>
-        <location line="-235"/>
+        <location filename="../transactionview.cpp" line="+55"/>
         <location line="+16"/>
         <source>All</source>
         <translation type="unfinished"></translation>
@@ -3030,7 +3005,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
+        <source>Date</source>
+        <translation>Дата</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Type</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3040,7 +3020,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
+        <source>Address</source>
+        <translation>Дарек</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Amount</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3132,12 +3117,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>VotingDialog</name>
     <message>
-        <location line="-349"/>
-        <source>Gridcoin Voting System 1.1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="-343"/>
         <source>Active Polls (Right Click to Vote)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3170,7 +3150,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>VotingTableModel</name>
     <message>
-        <location line="-391"/>
+        <location line="-387"/>
         <source>#</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3196,12 +3176,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+1"/>
-        <location line="+157"/>
+        <location line="+158"/>
         <source>Answers</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-156"/>
+        <location line="-157"/>
         <source># Voters</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3221,7 +3201,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+143"/>
+        <location line="+144"/>
         <source>Row Number.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3269,7 +3249,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>VotingVoteDialog</name>
     <message>
-        <location line="+533"/>
+        <location line="+528"/>
         <source>PlaceVote</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3310,12 +3290,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>bitcoin-core</name>
     <message>
-        <location filename="../bitcoinstrings.cpp" line="+22"/>
-        <source>Error</source>
-        <translation>Ката</translation>
-    </message>
-    <message>
-        <location line="-14"/>
+        <location filename="../bitcoinstrings.cpp" line="+8"/>
         <source>To use the %s option</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3335,7 +3310,12 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+13"/>
+        <source>Error</source>
+        <translation>Ката</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3984,4 +3964,3 @@ If the file does not exist, create it with owner-readable-only file permissions.
     </message>
 </context>
 </TS>
-

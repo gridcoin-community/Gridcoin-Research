@@ -47,7 +47,27 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>&amp;Copïo</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+53"/>
+        <source>&amp;Delete</source>
+        <translation>&amp;Dileu</translation>
+    </message>
+    <message>
+        <location line="-119"/>
+        <source>Address Book</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Double-click to edit address or label</source>
+        <translation>Clicio dwywaith i olygu cyfeiriad neu label</translation>
+    </message>
+    <message>
+        <location line="+55"/>
         <source>Show &amp;QR Code</source>
         <translation type="unfinished"></translation>
     </message>
@@ -75,26 +95,6 @@ This product includes software developed by the OpenSSL Project for use in the O
         <location line="+11"/>
         <source>Delete the currently selected address from the list</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>&amp;Delete</source>
-        <translation>&amp;Dileu</translation>
-    </message>
-    <message>
-        <location line="-119"/>
-        <source>Address Book</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+16"/>
-        <source>Double-click to edit address or label</source>
-        <translation>Clicio dwywaith i olygu cyfeiriad neu label</translation>
     </message>
     <message>
         <location filename="../addressbookpage.cpp" line="+65"/>
@@ -163,18 +163,18 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Ailadroddwch gyfrinymadrodd newydd</translation>
     </message>
     <message>
-        <location line="+33"/>
+        <location line="-49"/>
+        <source>Passphrase Dialog</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+82"/>
         <source>Serves to disable the trivial sendmoney when OS account compromised. Provides no real security.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+3"/>
         <source>For staking only</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-85"/>
-        <source>Passphrase Dialog</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -299,7 +299,7 @@ This product includes software developed by the OpenSSL Project for use in the O
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+664"/>
+        <location filename="../bitcoingui.cpp" line="+667"/>
         <source>&amp;Overview</source>
         <translation>&amp;Trosolwg</translation>
     </message>
@@ -309,17 +309,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Dangos trosolwg cyffredinol y waled</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>Send coins to a Gridcoin address</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Show the list of addresses for receiving payments</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+14"/>
         <source>&amp;Transactions</source>
         <translation>&amp;Trafodion</translation>
     </message>
@@ -329,7 +319,112 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Pori hanes trafodion</translation>
     </message>
     <message>
+        <location line="+52"/>
+        <source>E&amp;xit</source>
+        <translation>A&amp;llanfa</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Quit application</source>
+        <translation>Gadael rhaglen</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>&amp;Options...</source>
+        <translation>&amp;Opsiynau</translation>
+    </message>
+    <message>
         <location line="+4"/>
+        <source>&amp;Encrypt Wallet...</source>
+        <translation>&amp;Amgryptio&apos;r waled...</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>&amp;Change Passphrase...</source>
+        <translation>&amp;Newid cyfrinymadrodd...</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Change the passphrase used for wallet encryption</source>
+        <translation>Newid y cyfrinymadrodd a ddefnyddiwyd ar gyfer amgryptio&apos;r waled</translation>
+    </message>
+    <message>
+        <location line="-617"/>
+        <source>Wallet</source>
+        <translation>Waled</translation>
+    </message>
+    <message>
+        <location line="+496"/>
+        <source>&amp;Send</source>
+        <translation>&amp;Anfon</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>&amp;Receive</source>
+        <translation>&amp;Derbyn</translation>
+    </message>
+    <message>
+        <location line="+109"/>
+        <source>&amp;Show / Hide</source>
+        <translation>&amp;Dangos / Cuddio</translation>
+    </message>
+    <message>
+        <location line="+57"/>
+        <source>&amp;File</source>
+        <translation>&amp;Ffeil</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>&amp;Settings</source>
+        <translation>&amp;Gosodiadau</translation>
+    </message>
+    <message>
+        <location line="+32"/>
+        <source>&amp;Help</source>
+        <translation>&amp;Cymorth</translation>
+    </message>
+    <message>
+        <location line="+316"/>
+        <source>Up to date</source>
+        <translation>Cyfamserol</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Catching up...</source>
+        <translation>Dal i fyny</translation>
+    </message>
+    <message>
+        <location line="+218"/>
+        <source>Sent transaction</source>
+        <translation>Trafodiad a anfonwyd</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Incoming transaction</source>
+        <translation>Trafodiad sy&apos;n cyrraedd</translation>
+    </message>
+    <message>
+        <location line="+245"/>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
+        <translation>Mae&apos;r waled &lt;b&gt;wedi&apos;i amgryptio&lt;/b&gt; ac &lt;b&gt;heb ei gloi&lt;/b&gt; ar hyn o bryd</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
+        <translation>Mae&apos;r waled &lt;b&gt;wedi&apos;i amgryptio&lt;/b&gt; ac &lt;b&gt;ar glo&lt;/b&gt; ar hyn o bryd</translation>
+    </message>
+    <message>
+        <location line="-1007"/>
+        <source>Send coins to a Gridcoin address</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Show the list of addresses for receiving payments</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>&amp;Address Book</source>
         <translation type="unfinished"></translation>
     </message>
@@ -339,7 +434,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+9"/>
         <source>&amp;Block Explorer</source>
         <translation type="unfinished"></translation>
     </message>
@@ -385,17 +480,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+20"/>
-        <source>E&amp;xit</source>
-        <translation>A&amp;llanfa</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Quit application</source>
-        <translation>Gadael rhaglen</translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="+28"/>
         <source>&amp;Rebuild Block Chain</source>
         <translation type="unfinished"></translation>
     </message>
@@ -461,12 +546,12 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="+1"/>
-        <location line="+597"/>
+        <location line="+590"/>
         <source>New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-594"/>
+        <location line="-665"/>
         <source>&amp;Voting</source>
         <translation type="unfinished"></translation>
     </message>
@@ -476,7 +561,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+77"/>
         <source>&amp;Foundation</source>
         <translation type="unfinished"></translation>
     </message>
@@ -576,7 +661,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+57"/>
+        <location line="+56"/>
         <source>&amp;Community</source>
         <translation type="unfinished"></translation>
     </message>
@@ -586,7 +671,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+138"/>
+        <location line="+133"/>
         <location line="+9"/>
         <source>[testnet]</source>
         <translation>[testnet]</translation>
@@ -597,16 +682,10 @@ This product includes software developed by the OpenSSL Project for use in the O
         <source>Gridcoin client</source>
         <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
-        <location line="+79"/>
+    <message>
+        <location line="+82"/>
         <source>%1 active connection(s) to Gridcoin network</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
+        <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
         <location line="+12"/>
@@ -619,49 +698,25 @@ This product includes software developed by the OpenSSL Project for use in the O
             <numerusform></numerusform>
         </translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+13"/>
         <source>%1 second(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
+        <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+4"/>
         <source>%1 minute(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
+        <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+4"/>
         <source>%1 hour(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
+        <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
+    <message>
         <location line="+4"/>
         <source>%1 day(s) ago</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+23"/>
@@ -751,7 +806,7 @@ Address: %4
     </message>
     <message numerus="yes">
         <location line="+300"/>
-        <source>%1 second(s)</source>
+        <source>%n second(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -762,7 +817,7 @@ Address: %4
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%1 minute(s)</source>
+        <source>%n minute(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -773,7 +828,7 @@ Address: %4
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%1 hour(s)</source>
+        <source>%n hour(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -784,7 +839,7 @@ Address: %4
     </message>
     <message numerus="yes">
         <location line="+4"/>
-        <source>%1 day(s)</source>
+        <source>%n day(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -834,92 +889,7 @@ Address: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1309"/>
-        <source>&amp;Options...</source>
-        <translation>&amp;Opsiynau</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>&amp;Encrypt Wallet...</source>
-        <translation>&amp;Amgryptio&apos;r waled...</translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>&amp;Change Passphrase...</source>
-        <translation>&amp;Newid cyfrinymadrodd...</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Change the passphrase used for wallet encryption</source>
-        <translation>Newid y cyfrinymadrodd a ddefnyddiwyd ar gyfer amgryptio&apos;r waled</translation>
-    </message>
-    <message>
-        <location line="-612"/>
-        <source>Wallet</source>
-        <translation>Waled</translation>
-    </message>
-    <message>
-        <location line="+493"/>
-        <source>&amp;Send</source>
-        <translation>&amp;Anfon</translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>&amp;Receive</source>
-        <translation>&amp;Derbyn</translation>
-    </message>
-    <message>
-        <location line="+107"/>
-        <source>&amp;Show / Hide</source>
-        <translation>&amp;Dangos / Cuddio</translation>
-    </message>
-    <message>
-        <location line="+58"/>
-        <source>&amp;File</source>
-        <translation>&amp;Ffeil</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>&amp;Settings</source>
-        <translation>&amp;Gosodiadau</translation>
-    </message>
-    <message>
-        <location line="+38"/>
-        <source>&amp;Help</source>
-        <translation>&amp;Cymorth</translation>
-    </message>
-    <message>
-        <location line="+312"/>
-        <source>Up to date</source>
-        <translation>Cyfamserol</translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Catching up...</source>
-        <translation>Dal i fyny</translation>
-    </message>
-    <message>
-        <location line="+218"/>
-        <source>Sent transaction</source>
-        <translation>Trafodiad a anfonwyd</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Incoming transaction</source>
-        <translation>Trafodiad sy&apos;n cyrraedd</translation>
-    </message>
-    <message>
-        <location line="+245"/>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
-        <translation>Mae&apos;r waled &lt;b&gt;wedi&apos;i amgryptio&lt;/b&gt; ac &lt;b&gt;heb ei gloi&lt;/b&gt; ar hyn o bryd</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
-        <translation>Mae&apos;r waled &lt;b&gt;wedi&apos;i amgryptio&lt;/b&gt; ac &lt;b&gt;ar glo&lt;/b&gt; ar hyn o bryd</translation>
-    </message>
-    <message>
-        <location line="-1502"/>
+        <location line="-1913"/>
         <source>Gridcoin</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1204,17 +1174,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>&amp;Label</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <source>The label associated with this address book entry</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location line="+17"/>
         <source>&amp;Address</source>
         <translation>&amp;Cyfeiriad</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="-7"/>
+        <source>The label associated with this address book entry</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+17"/>
         <source>The address associated with this address book entry. This can only be modified for sending addresses.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1305,7 +1275,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>NewPollDialog</name>
     <message>
-        <location filename="../votingdialog.cpp" line="+900"/>
+        <location filename="../votingdialog.cpp" line="+896"/>
         <location line="+96"/>
         <source>Create Poll</source>
         <translation type="unfinished"></translation>
@@ -1384,7 +1354,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Opsiynau</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+148"/>
+        <source>&amp;Network</source>
+        <translation>&amp;Rhwydwaith</translation>
+    </message>
+    <message>
+        <location line="+129"/>
+        <source>&amp;Window</source>
+        <translation>&amp;Ffenestr</translation>
+    </message>
+    <message>
+        <location line="+40"/>
+        <source>&amp;Display</source>
+        <translation>&amp;Dangos</translation>
+    </message>
+    <message>
+        <location line="-301"/>
         <source>&amp;Main</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1429,12 +1414,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+21"/>
-        <source>&amp;Network</source>
-        <translation>&amp;Rhwydwaith</translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="+27"/>
         <source>Automatically open the Gridcoin client port on the router. This only works when your router supports UPnP and it is enabled.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1567,16 +1547,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+10"/>
         <source>&amp;Apply</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-216"/>
-        <source>&amp;Window</source>
-        <translation>&amp;Ffenestr</translation>
-    </message>
-    <message>
-        <location line="+40"/>
-        <source>&amp;Display</source>
-        <translation>&amp;Dangos</translation>
     </message>
     <message>
         <location filename="../optionsdialog.cpp" line="+55"/>
@@ -1807,7 +1777,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Gwybodaeth</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+349"/>
+        <source>&amp;Open</source>
+        <translation>&amp;Agor</translation>
+    </message>
+    <message>
+        <location line="-365"/>
+        <source>Gridcoin - Debug Console</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+25"/>
         <source>Boost version</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1962,16 +1942,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-352"/>
-        <source>&amp;Open</source>
-        <translation>&amp;Agor</translation>
-    </message>
-    <message>
-        <location line="-365"/>
-        <source>Gridcoin - Debug Console</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location filename="../rpcconsole.cpp" line="-35"/>
         <source>Welcome to the Gridcoin RPC console! </source>
         <translation type="unfinished"></translation>
@@ -2037,7 +2007,27 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Anfon arian</translation>
     </message>
     <message>
-        <location line="+73"/>
+        <location line="+282"/>
+        <source>Amount:</source>
+        <translation>Maint</translation>
+    </message>
+    <message>
+        <location line="+357"/>
+        <source>Send to multiple recipients at once</source>
+        <translation>Anfon at pobl lluosog ar yr un pryd</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>Balance:</source>
+        <translation>Gweddill:</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>Confirm the send action</source>
+        <translation>Cadarnhau&apos;r gweithrediad anfon</translation>
+    </message>
+    <message>
+        <location line="-667"/>
         <source>Coin Control Features</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2073,12 +2063,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+48"/>
-        <source>Amount:</source>
-        <translation>Maint</translation>
-    </message>
-    <message>
-        <location line="+22"/>
+        <location line="+70"/>
         <location line="+80"/>
         <location line="+80"/>
         <location line="+29"/>
@@ -2126,12 +2111,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+115"/>
-        <source>Send to multiple recipients at once</source>
-        <translation>Anfon at pobl lluosog ar yr un pryd</translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="+118"/>
         <source>Add &amp;Recipient</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2146,22 +2126,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+28"/>
-        <source>Balance:</source>
-        <translation>Gweddill:</translation>
-    </message>
-    <message>
-        <location line="+16"/>
+        <location line="+44"/>
         <source>123.456 GRC</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+31"/>
-        <source>Confirm the send action</source>
-        <translation>Cadarnhau&apos;r gweithrediad anfon</translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="+34"/>
         <source>S&amp;end</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2284,7 +2254,37 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>SendCoinsEntry</name>
     <message>
-        <location filename="../forms/sendcoinsentry.ui" line="+14"/>
+        <location filename="../forms/sendcoinsentry.ui" line="+170"/>
+        <source>A&amp;mount:</source>
+        <translation>&amp;Maint</translation>
+    </message>
+    <message>
+        <location line="-138"/>
+        <source>&amp;Label:</source>
+        <translation>&amp;Label:</translation>
+    </message>
+    <message>
+        <location line="+68"/>
+        <source>Alt+A</source>
+        <translation>Alt+A</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Paste address from clipboard</source>
+        <translation>Gludo cyfeiriad o&apos;r glipfwrdd</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Alt+P</source>
+        <translation>Alt+P</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Message:</source>
+        <translation>Neges:</translation>
+    </message>
+    <message>
+        <location line="-126"/>
         <source>Form</source>
         <translation type="unfinished">Ffurflen</translation>
     </message>
@@ -2320,12 +2320,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>A&amp;mount:</source>
-        <translation>&amp;Maint</translation>
-    </message>
-    <message>
-        <location line="+13"/>
+        <location line="+22"/>
         <source>Track Coins</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2333,31 +2328,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+7"/>
         <source>Add Attachment</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-158"/>
-        <source>&amp;Label:</source>
-        <translation>&amp;Label:</translation>
-    </message>
-    <message>
-        <location line="+68"/>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Paste address from clipboard</source>
-        <translation>Gludo cyfeiriad o&apos;r glipfwrdd</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
-    </message>
-    <message>
-        <location line="+23"/>
-        <source>Message:</source>
-        <translation>Neges:</translation>
     </message>
     <message>
         <location filename="../sendcoinsentry.cpp" line="+1"/>
@@ -2657,12 +2627,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+12"/>
         <location line="+45"/>
         <location line="+17"/>
-        <location line="+45"/>
+        <location line="+43"/>
         <source>Credit</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location line="-117"/>
+        <location line="-115"/>
         <source>matures in %n more block(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -2681,12 +2651,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+44"/>
         <location line="+8"/>
         <location line="+15"/>
-        <location line="+45"/>
+        <location line="+43"/>
         <source>Debit</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-54"/>
+        <location line="-52"/>
         <source>Transaction fee</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2711,7 +2681,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+7"/>
         <source>Block Type</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3174,12 +3144,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>VotingDialog</name>
     <message>
-        <location line="-349"/>
-        <source>Gridcoin Voting System 1.1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="-343"/>
         <source>Active Polls (Right Click to Vote)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3212,7 +3177,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>VotingTableModel</name>
     <message>
-        <location line="-391"/>
+        <location line="-387"/>
         <source>#</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3238,12 +3203,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+1"/>
-        <location line="+157"/>
+        <location line="+158"/>
         <source>Answers</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-156"/>
+        <location line="-157"/>
         <source># Voters</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3263,7 +3228,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+143"/>
+        <location line="+144"/>
         <source>Row Number.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3311,7 +3276,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>VotingVoteDialog</name>
     <message>
-        <location line="+533"/>
+        <location line="+528"/>
         <source>PlaceVote</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4026,4 +3991,3 @@ If the file does not exist, create it with owner-readable-only file permissions.
     </message>
 </context>
 </TS>
-
