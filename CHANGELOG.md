@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Print beacons as they are loaded and debug3=true (@tomasbrod).
  - Show superblock information in getblock (@tomasbrod).
  - Code cleanup (@skcin).
+ - Update Lithuanian translations, #469 (@Rytiss).
 
 ### Fixed
  - High CPU usage, #349 (@tomasbrod)
@@ -34,6 +35,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Fixed reloading of polls in the voting GUI, #431 (@skcin) 
  - Fix crash when listing receivedby on addresses with no transactions,
    #456 (@denravonska).
+ - Fix buffer overflow in TX message unscambling, #468 (@tomasbrod).
 
 ### Removed
  - Removed newbie boost, #332

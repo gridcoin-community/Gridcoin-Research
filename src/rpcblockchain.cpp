@@ -5355,13 +5355,16 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
     double researchtotal = 0;
     double interesttotal = 0;
     int64_t minttotal = 0;
-    int64_t stakeinputtotal = 0;
+    //int64_t stakeinputtotal = 0;
     int64_t poscount = 0;
     int64_t emptyblockscount = 0;
     int64_t l_first = INT_MAX;
     int64_t l_last = 0;
     unsigned int l_first_time = 0;
     unsigned int l_last_time = 0;
+    unsigned size_min_blk=INT_MAX;
+    unsigned size_max_blk=0;
+    uint64_t size_sum_blk=0;
     for( ; (cur
             &&( cur->nHeight>=lowheight )
             &&( lowheight>0 || blockcount<=14000 )
@@ -5409,6 +5412,10 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         interesttotal+=bb.InterestSubsidy;
         researchcount+=(bb.ResearchSubsidy>0.001);
         minttotal+=cur->nMint;
+        unsigned sizeblock = block.GetSerializeSize(SER_NETWORK, PROTOCOL_VERSION);
+        size_min_blk=std::min(size_min_blk,sizeblock);
+        size_max_blk=std::max(size_max_blk,sizeblock);
+        size_sum_blk+=sizeblock;
     }
 
     {
@@ -5419,6 +5426,8 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         result.push_back(Pair("first_time", TimestampToHRDate(l_first_time)));
         result.push_back(Pair("last_time", TimestampToHRDate(l_last_time)));
         result.push_back(Pair("time_span_hour", ((double)l_last_time-(double)l_first_time)/(double)3600));
+        result.push_back(Pair("min_blocksizek", size_min_blk/(double)1024));
+        result.push_back(Pair("max_blocksizek", size_max_blk/(double)1024));
         result1.push_back(Pair("general", result));
     }
     {
@@ -5436,7 +5445,8 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         result.push_back(Pair("research", researchtotal));
         result.push_back(Pair("interest", interesttotal));
         result.push_back(Pair("mint", minttotal/(double)COIN));
-        result.push_back(Pair("stake_input", stakeinputtotal/(double)COIN));
+        //result.push_back(Pair("stake_input", stakeinputtotal/(double)COIN));
+        result.push_back(Pair("blocksizek", size_sum_blk/(double)1024));
         result1.push_back(Pair("totals", result));
     }
     {
@@ -5444,10 +5454,11 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         result.push_back(Pair("research", researchtotal/(double)researchcount));
         result.push_back(Pair("interest", interesttotal/(double)blockcount));
         result.push_back(Pair("mint", (minttotal/(double)blockcount)/(double)COIN));
-        result.push_back(Pair("stake_input", (stakeinputtotal/(double)poscount)/(double)COIN));
+        //result.push_back(Pair("stake_input", (stakeinputtotal/(double)poscount)/(double)COIN));
         result.push_back(Pair("spacing_sec", ((double)l_last_time-(double)l_first_time)/(double)blockcount));
         result.push_back(Pair("block_per_day", ((double)blockcount*86400.0)/((double)l_last_time-(double)l_first_time)));
         result.push_back(Pair("transaction", transactioncount/(double)(blockcount-emptyblockscount)));
+        result.push_back(Pair("blocksizek", size_sum_blk/(double)blockcount/(double)1024));
         result1.push_back(Pair("averages", result));
     }
     {
@@ -5466,8 +5477,10 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         std::vector<PAIRTYPE(std::string, long)> list;
         std::copy(c_cpid.begin(), c_cpid.end(), back_inserter(list));
         std::sort(list.begin(),list.end(),compare_second);
+        int limit=64;
         BOOST_FOREACH(const PAIRTYPE(std::string, long)& item, list)
         {
+            if(!(limit--)) break;
             result.push_back(Pair(item.first, item.second/(double)blockcount));
         }
         result1.push_back(Pair("cpids", result));
@@ -5477,8 +5490,10 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         std::vector<PAIRTYPE(std::string, long)> list;
         std::copy(c_org.begin(), c_org.end(), back_inserter(list));
         std::sort(list.begin(),list.end(),compare_second);
+        int limit=64;
         BOOST_FOREACH(const PAIRTYPE(std::string, long)& item, list)
         {
+            if(!(limit--)) break;
             result.push_back(Pair(item.first, item.second/(double)blockcount));
         }
         result1.push_back(Pair("orgs", result));
