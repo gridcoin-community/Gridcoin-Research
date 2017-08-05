@@ -127,7 +127,7 @@ std::string GetCommandNonce(std::string command)
 {
     //1-11-2015 Message Attacks - Halford
     std::string sboinchashargs = DefaultOrgKey(12);
-    std::string nonce = RoundToString((double)GetAdjustedTime(),0);
+    std::string nonce = std::to_string(GetAdjustedTime());
     std::string org = DefaultOrg();
     std::string pub_key_prefix = OrgId();
     std::string pw1 = RetrieveMd5(nonce+","+command+","+org+","+pub_key_prefix+","+sboinchashargs);
@@ -1170,7 +1170,7 @@ void ThreadSocketHandler2(void* parg)
             }
             else if (nInbound >= GetArg("-maxconnections", 250) - MAX_OUTBOUND_CONNECTIONS)
             {
-                if (fDebug10) printf("\r\n Surpassed max inbound connections maxconnections:%f minus max_outbound:%f",(double)GetArg("-maxconnections",250),(double)MAX_OUTBOUND_CONNECTIONS);
+                if (fDebug10) printf("\r\n Surpassed max inbound connections maxconnections:%i minus max_outbound:%i", GetArg("-maxconnections",250), MAX_OUTBOUND_CONNECTIONS);
                 closesocket(hSocket);
             }
             else if (CNode::IsBanned(addr))
@@ -2336,7 +2336,7 @@ void StartNode(void* parg)
         semOutbound = new CSemaphore(nMaxOutbound);
     }
 
-    printf("\r\nUsing %f OutboundConnections with a MaxConnections of %f\r\n",(double)MAX_OUTBOUND_CONNECTIONS,(double)GetArg("-maxconnections", 125));
+    printf("\r\nUsing %i OutboundConnections with a MaxConnections of %i\r\n", MAX_OUTBOUND_CONNECTIONS, GetArg("-maxconnections", 125));
 
     if (pnodeLocalHost == NULL)
         pnodeLocalHost = new CNode(INVALID_SOCKET, CAddress(CService("127.0.0.1", 0), nLocalServices));
