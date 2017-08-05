@@ -12,12 +12,12 @@ EXTRA_LIBRARIES =
 BITCOIN_CONFIG_INCLUDES=-I$(builddir)/config
 BITCOIN_INCLUDES=-I$(builddir) -I$(builddir)/obj $(BDB_CPPFLAGS) $(BOOST_CPPFLAGS) $(LEVELDB_CPPFLAGS) $(CRYPTO_CFLAGS) $(SSL_CFLAGS) $(CURL_CFLAGS) $(LIBZIP_CFLAGS)
 
-LIBBITCOIN_UTIL=libbitcoin_util.a
-LIBBITCOINQT=qt/libbitcoinqt.a
+LIBGRIDCOIN_UTIL=libgridcoin_util.a
+LIBGRIDCOINQT=qt/libgridcoinqt.a
 
 # Make is not made aware of per-object dependencies to avoid limiting building parallelization
 # But to build the less dependent modules first, we manually select their order here:
-EXTRA_LIBRARIES += $(LIBBITCOIN_UTIL) 
+EXTRA_LIBRARIES += $(LIBGRIDCOIN_UTIL) 
 
 bin_PROGRAMS =
 noinst_PROGRAMS =
@@ -25,7 +25,7 @@ TESTS =
 BENCHMARKS =
 
 if BUILD_BITCOIND
-  bin_PROGRAMS += bitcoind
+  bin_PROGRAMS += gridcoinresearchd
 endif
 
 
@@ -97,9 +97,9 @@ obj/build.h: FORCE
 # util: shared between all executables.
 # This library *must* be included to make sure that the glibc
 # backward-compatibility objects and their sanity checks are linked.
-libbitcoin_util_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
-libbitcoin_util_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-libbitcoin_util_a_SOURCES = addrman.cpp \
+libgridcoin_util_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
+libgridcoin_util_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+libgridcoin_util_a_SOURCES = addrman.cpp \
   alert.cpp \
   beacon.cpp \
   bitcoinrpc.cpp \
@@ -139,26 +139,26 @@ libbitcoin_util_a_SOURCES = addrman.cpp \
   $(BITCOIN_CORE_H)
 
 if GLIBC_BACK_COMPAT
-  libbitcoin_util_a_SOURCES += compat/glibc_compat.cpp
+  libgridcoin_util_a_SOURCES += compat/glibc_compat.cpp
 endif
 
 # bitcoind binary #
-bitcoind_SOURCES = bitcoind.cpp
-bitcoind_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
-bitcoind_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-bitcoind_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
+gridcoinresearchd_SOURCES = gridcoinresearchd.cpp
+gridcoinresearchd_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
+gridcoinresearchd_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+gridcoinresearchd_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
 
 if TARGET_WINDOWS
-bitcoind_SOURCES += bitcoind-res.rc
+gridcoinresearchd_SOURCES += bitcoind-res.rc
 endif
 
-bitcoind_LDADD = \
- $(LIBBITCOIN_UTIL) \
+gridcoinresearchd_LDADD = \
+ $(LIBGRIDCOIN_UTIL) \
  $(LIBLEVELDB) \
  $(LIBLEVELDB_SSE42) \
  $(LIBMEMENV)
 
-bitcoind_LDADD += $(BOOST_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(CURL_LIBS) $(LIBZIP_LIBS)
+gridcoinresearchd_LDADD += $(BOOST_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(CURL_LIBS) $(LIBZIP_LIBS)
 
 CLEANFILES = $(EXTRA_LIBRARIES)
 

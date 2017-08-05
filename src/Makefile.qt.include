@@ -2,8 +2,8 @@
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-bin_PROGRAMS += qt/bitcoin-qt
-EXTRA_LIBRARIES += qt/libbitcoinqt.a
+bin_PROGRAMS += qt/gridcoinresearch
+EXTRA_LIBRARIES += qt/libgridcoinqt.a
 
 # bitcoin qt core #
 QT_TS = \
@@ -126,19 +126,6 @@ QT_MOC_CPP = \
   qt/moc_upgradedialog.cpp \
   qt/moc_walletmodel.cpp
 
-#qt/moc_walletview.cpp
-#qt/moc_utilitydialog.cpp
-#qt/moc_walletframe.cpp
-#qt/moc_splashscreen.cpp
-#qt/moc_receivecoinsdialog.cpp
-#qt/moc_receiverequestdialog.cpp
-#qt/moc_recentrequeststablemodel.cpp
-#qt/moc_openuridialog.cpp
-#qt/moc_modaloverlay.cpp
-#qt/moc_peertablemodel.cpp
-#qt/moc_paymentserver.cpp
-
-
 BITCOIN_MM = \
   qt/macdockiconhandler.mm \
   qt/macnotificationhandler.mm
@@ -153,11 +140,7 @@ QT_QRC = qt/bitcoin.qrc
 QT_QRC_LOCALE_CPP = qt/qrc_bitcoin_locale.cpp
 QT_QRC_LOCALE = qt/bitcoin_locale.qrc
 
-# PROTOBUF_CC = qt/paymentrequest.pb.cc
-# PROTOBUF_H = qt/paymentrequest.pb.h
-# PROTOBUF_PROTO = qt/paymentrequest.proto
-
-BITCOIN_QT_H = \
+GRIDCOINRESEARCH_H = \
   qt/aboutdialog.h \
   qt/addressbookpage.h \
   qt/addresstablemodel.h \
@@ -197,8 +180,6 @@ BITCOIN_QT_H = \
   qt/transactionview.h \
   qt/upgradedialog.h \
   qt/walletmodel.h
-  # qt/votingdialog.h \
-  # qt/walletmodel.h
 
 RES_ICONS = \
   qt/res/icons/add.png \
@@ -261,15 +242,8 @@ RES_ICONS = \
   qt/res/icons/tx_output.png \
   qt/res/icons/www.png \
   qt/res/icons/wwww.png
-  # qt/res/icons/about_qt.png
-  # qt/res/icons/chevron.png
-  # qt/res/icons/eye.png
-  # qt/res/icons/eye_minus.png
-  # qt/res/icons/eye_plus.png
-  # qt/res/icons/gridcoin.png
 
-
-BITCOIN_QT_BASE_CPP = \
+GRIDCOINRESEARCH_CPP = \
   qt/aboutdialog.cpp \
   qt/addressbookpage.cpp \
   qt/addresstablemodel.cpp \
@@ -306,24 +280,6 @@ BITCOIN_QT_BASE_CPP = \
   qt/transactionview.cpp \
   qt/upgradedialog.cpp \
   qt/walletmodel.cpp
-  # qt/votingdialog.cpp \
-  # qt/bitcoinstrings.cpp
-
-
-#BITCOIN_QT_WALLET_CPP = \
-  qt/paymentrequestplus.cpp \
-  qt/paymentserver.cpp \
-  qt/receivecoinsdialog.cpp \
-  qt/receiverequestdialog.cpp \
-  qt/recentrequeststablemodel.cpp \
-  qt/walletframe.cpp \
-  qt/walletmodeltransaction.cpp \
-  qt/walletview.cpp
-
-BITCOIN_QT_CPP = $(BITCOIN_QT_BASE_CPP)
-#if ENABLE_WALLET
-#BITCOIN_QT_CPP += $(BITCOIN_QT_WALLET_CPP)
-#endif
 
 RES_IMAGES = 
 
@@ -334,14 +290,14 @@ BITCOIN_RC = qt/res/bitcoin-qt-res.rc
 BITCOIN_QT_INCLUDES = -I$(builddir)/qt -I$(srcdir)/qt -I$(srcdir)/qt/forms \
   -I$(builddir)/qt/forms
 
-qt_libbitcoinqt_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(BITCOIN_QT_INCLUDES) \
+qt_libgridcoinqt_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(BITCOIN_QT_INCLUDES) \
   $(QT_INCLUDES) $(QT_DBUS_INCLUDES) $(PROTOBUF_CFLAGS) $(QR_CFLAGS)
-qt_libbitcoinqt_a_CXXFLAGS = $(AM_CXXFLAGS) $(QT_PIE_FLAGS)
+qt_libgridcoinqt_a_CXXFLAGS = $(AM_CXXFLAGS) $(QT_PIE_FLAGS)
 
-qt_libbitcoinqt_a_SOURCES = $(BITCOIN_QT_CPP) $(BITCOIN_QT_H) $(QT_FORMS_UI) \
+qt_libgridcoinqt_a_SOURCES = $(GRIDCOINRESEARCH_CPP) $(GRIDCOINRESEARCH_H) $(QT_FORMS_UI) \
   $(QT_QRC) $(QT_QRC_LOCALE) $(QT_TS) $(PROTOBUF_PROTO) $(RES_ICONS) $(RES_IMAGES) $(RES_MOVIES)
 
-nodist_qt_libbitcoinqt_a_SOURCES = $(QT_MOC_CPP) $(QT_MOC) $(PROTOBUF_CC) \
+nodist_qt_libgridcoinqt_a_SOURCES = $(QT_MOC_CPP) $(QT_MOC) $(PROTOBUF_CC) \
   $(PROTOBUF_H) $(QT_QRC_CPP) $(QT_QRC_LOCALE_CPP)
 
 # forms/foo.h -> forms/ui_foo.h
@@ -350,48 +306,34 @@ QT_FORMS_H=$(join $(dir $(QT_FORMS_UI)),$(addprefix ui_, $(notdir $(QT_FORMS_UI:
 # Most files will depend on the forms and moc files as includes. Generate them
 # before anything else.
 $(QT_MOC): $(QT_FORMS_H)
-$(qt_libbitcoinqt_a_OBJECTS) $(qt_bitcoin_qt_OBJECTS) : | $(QT_MOC)
+$(qt_libgridcoinqt_a_OBJECTS) $(qt_gridcoinresearch_OBJECTS) : | $(QT_MOC)
 
 #Generating these with a half-written protobuf header leads to wacky results.
 #This makes sure it's done.
-#$(QT_MOC): $(PROTOBUF_H)
-#$(QT_MOC_CPP): $(PROTOBUF_H)
 
-# bitcoin-qt binary #
-qt_bitcoin_qt_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(BITCOIN_QT_INCLUDES) \
+# gridcoin-qt binary #
+qt_gridcoinresearch_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(BITCOIN_QT_INCLUDES) \
   $(QT_INCLUDES) $(PROTOBUF_CFLAGS) $(QR_CFLAGS)
-qt_bitcoin_qt_CXXFLAGS = $(AM_CXXFLAGS) $(QT_PIE_FLAGS)
+qt_gridcoinresearch_CXXFLAGS = $(AM_CXXFLAGS) $(QT_PIE_FLAGS)
 
-qt_bitcoin_qt_SOURCES = qt/bitcoin.cpp
+qt_gridcoinresearch_SOURCES = qt/bitcoin.cpp
 if TARGET_DARWIN
-  qt_bitcoin_qt_SOURCES += $(BITCOIN_MM)
+  qt_gridcoinresearch_SOURCES += $(BITCOIN_MM)
 endif
 if TARGET_WINDOWS
-  qt_bitcoin_qt_SOURCES += $(BITCOIN_RC)
+  qt_gridcoinresearch_SOURCES += $(BITCOIN_RC)
 endif
-qt_bitcoin_qt_LDADD = qt/libbitcoinqt.a
-#$(LIBBITCOIN_SERVER)
-# if ENABLE_WALLET
-# qt_bitcoin_qt_LDADD += $(LIBBITCOIN_WALLET)
-# endif
-# if ENABLE_ZMQ
-# qt_bitcoin_qt_LDADD += $(LIBBITCOIN_ZMQ) $(ZMQ_LIBS)
-# endif
-qt_bitcoin_qt_LDADD += $(LIBBITCOIN_UTIL) $(LIBUNIVALUE) $(LIBLEVELDB) $(LIBLEVELDB_SSE42) $(LIBMEMENV) \
+qt_gridcoinresearch_LDADD = qt/libgridcoinqt.a
+qt_gridcoinresearch_LDADD += $(LIBGRIDCOIN_UTIL) $(LIBUNIVALUE) $(LIBLEVELDB) $(LIBLEVELDB_SSE42) $(LIBMEMENV) \
   $(BOOST_LIBS) $(QT_LIBS) $(QT_DBUS_LIBS) $(QR_LIBS) $(PROTOBUF_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(LIBSECP256K1) $(CURL_LIBS) $(LIBZIP_LIBS)\
   $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS)
-qt_bitcoin_qt_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(QT_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
-qt_bitcoin_qt_LIBTOOLFLAGS = --tag CXX
+qt_gridcoinresearch_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(QT_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
+qt_gridcoinresearch_LIBTOOLFLAGS = --tag CXX
 
 #locale/foo.ts -> locale/foo.qm
 QT_QM=$(QT_TS:.ts=.qm)
 
 SECONDARY: $(QT_QM)
-
-#$(libbitcoin_server_a_SOURCES) $(libbitcoin_wallet_a_SOURCES) $(libbitcoin_common_a_SOURCES) $(libbitcoin_zmq_a_SOURCES) $(libbitcoin_consensus_a_SOURCES) 
-# $(srcdir)/qt/bitcoinstrings.cpp: $(libbitcoin_util_a_SOURCES)
-# 	@test -n $(XGETTEXT) || echo "xgettext is required for updating translations"
-# 	$(AM_V_GEN) cd $(srcdir); XGETTEXT=$(XGETTEXT) PACKAGE_NAME="$(PACKAGE_NAME)" COPYRIGHT_HOLDERS="$(COPYRIGHT_HOLDERS)" COPYRIGHT_HOLDERS_SUBSTITUTION="$(COPYRIGHT_HOLDERS_SUBSTITUTION)" $(PYTHON) ../share/qt/extract_strings_qt.py $^
 
 # translate: $(srcdir)/qt/bitcoinstrings.cpp $(QT_FORMS_UI) $(QT_FORMS_UI) $(BITCOIN_QT_BASE_CPP) qt/bitcoin.cpp $(BITCOIN_QT_WINDOWS_CPP) $(BITCOIN_QT_WALLET_CPP) $(BITCOIN_QT_H) $(BITCOIN_MM)
 # 	@test -n $(LUPDATE) || echo "lupdate is required for updating translations"
@@ -409,16 +351,16 @@ $(QT_QRC_CPP): $(QT_QRC) $(QT_FORMS_H) $(RES_ICONS) $(RES_IMAGES) $(RES_MOVIES) 
 	$(AM_V_GEN) QT_SELECT=$(QT_SELECT) $(RCC) -name bitcoin $< | \
 	  $(SED) -e '/^\*\*.*Created:/d' -e '/^\*\*.*by:/d' > $@
 
-CLEAN_QT = $(nodist_qt_libbitcoinqt_a_SOURCES) $(QT_QM) $(QT_FORMS_H) qt/*.gcda qt/*.gcno
+CLEAN_QT = $(nodist_qt_libgridcoinqt_a_SOURCES) $(QT_QM) $(QT_FORMS_H) qt/*.gcda qt/*.gcno
 
 CLEANFILES += $(CLEAN_QT)
 
-bitcoin_qt_clean: FORCE
-	rm -f $(CLEAN_QT) $(qt_bitcoin_qt_OBJECTS) qt/bitcoin-qt$(EXEEXT)
+gridcoinresearch_clean: FORCE
+	rm -f $(CLEAN_QT) $(qt_gridcoinresearch_OBJECTS) qt/gridcoinresearch$(EXEEXT)
 
-bitcoin_qt : 
+gridcoinresearch: 
 	@echo "$(ZIP_LIBS)"
-	qt/bitcoin-qt$(EXEEXT)
+	qt/gridcoinresearch$(EXEEXT)
 
 ui_%.h: %.ui
 	@test -f $(UIC)
