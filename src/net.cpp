@@ -440,13 +440,6 @@ bool IsReachable(const CNetAddr& addr)
     return vfReachable[net] && !vfLimited[net];
 }
 
-void StringToChar(std::string s, char* a)
-{   a=new char[s.size()+1];
-    a[s.size()]=0;
-    memcpy(a,s.c_str(),s.size());
-
-}
-
 bool GetMyExternalIP2(const CService& addrConnect, const char* pszGet, const char* pszKeyword, CNetAddr& ipRet)
 {
     SOCKET hSocket;
