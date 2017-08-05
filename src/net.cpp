@@ -2299,7 +2299,6 @@ void ThreadMessageHandler(void* parg)
 void ThreadMessageHandler2(void* parg)
 {
     if (fDebug10) printf("ThreadMessageHandler started\n");
-    SetThreadPriority(THREAD_PRIORITY_BELOW_NORMAL);
     while (!fShutdown)
     {
         vector<CNode*> vNodesCopy;
