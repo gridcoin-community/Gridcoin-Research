@@ -9,22 +9,35 @@
 #include "main.h"
 #include "wallet.h"
 
-/* Generate a new block, without valid proof-of-work */
-CBlock* CreateNewBlock(CWallet* pwallet, bool fProofOfStake=false, int64_t* pFees = 0);
+struct CMinerStatus
+{
+    CCriticalSection lock;
+    std::string ReasonNotStaking;
+    std::string Message;
+    double WeightSum,WeightMin,WeightMax;
+    double ValueSum;
+    int Version;
+    unsigned long CreatedCnt;
+    unsigned long AcceptedCnt;
+    unsigned long KernelsFound;
+    int64_t nLastCoinStakeSearchInterval;
 
-/** Modify the extranonce in a block */
-void IncrementExtraNonce(CBlock* pblock, CBlockIndex* pindexPrev, unsigned int& nExtraNonce);
+    void Clear()
+    {
+        Message= "";
+        WeightSum= ValueSum= WeightMin= WeightMax= 0;
+        Version= 0;
+        nLastCoinStakeSearchInterval = 0;
+    }
+    CMinerStatus()
+    {
+        Clear();
+        ReasonNotStaking= "";
+        CreatedCnt= AcceptedCnt= KernelsFound= 0;
+    }
+};
 
-/** Do mining precalculation */
-void FormatHashBuffers(CBlock* pblock, char* pmidstate, char* pdata, char* phash1);
-
-/** Check mined proof-of-work block */
-bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey);
-
-/** Check mined proof-of-stake block */
-bool CheckStake(CBlock* pblock, CWallet& wallet);
-
-/** Base sha256 mining transform */
-void SHA256Transform(void* pstate, void* pinput, const void* pinit);
+extern CMinerStatus MinerStatus;
+extern volatile unsigned int nMinerSleep;
 
 #endif // NOVACOIN_MINER_H
