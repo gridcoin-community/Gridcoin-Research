@@ -2,7 +2,7 @@ OpenBSD build guide
 ======================
 (updated for OpenBSD 6.0)
 
-This guide describes how to build bitcoind and command-line utilities on OpenBSD.
+This guide describes how to build gridcoinresearchd and command-line utilities on OpenBSD.
 
 As OpenBSD is most common as a server OS, we will not bother with the GUI.
 
@@ -39,7 +39,7 @@ Do not use `pkg_add boost`! The boost version installed thus is compiled using t
     ...
     Segmentation fault (core dumped)
 
-This makes it necessary to build boost, or at least the parts used by Bitcoin Core, manually:
+This makes it necessary to build boost, or at least the parts used by Gridcoin, manually:
 
 ```
 # Pick some path to install boost to, here we create a directory within the bitcoin directory
@@ -108,7 +108,7 @@ The change will only affect the current shell and processes spawned by it. To
 make the change system-wide, change `datasize-cur` and `datasize-max` in
 `/etc/login.conf`, and reboot.
 
-### Building Bitcoin Core
+### Building Gridcoin
 
 **Important**: use `gmake`, not `make`. The non-GNU `make` will exit with a horrible error.
 
@@ -120,12 +120,6 @@ export AUTOMAKE_VERSION=1.15 # replace this with the automake version that you i
 ```
 Make sure `BDB_PREFIX` and `BOOST_PREFIX` are set to the appropriate paths from the above steps.
 
-To configure with wallet:
-```bash
-./configure --with-gui=no --with-boost=$BOOST_PREFIX \
-    CC=egcc CXX=eg++ CPP=ecpp \
-    BDB_LIBS="-L${BDB_PREFIX}/lib -ldb_cxx-4.8" BDB_CFLAGS="-I${BDB_PREFIX}/include"
-```
 
 To configure without wallet:
 ```bash
