@@ -426,6 +426,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     double StakeValueSum = 0;
     int64_t StakeWeightMin=MAX_MONEY;
     int64_t StakeWeightMax=0;
+    uint64_t StakeCoinAgeSum=0;
     CTransaction &txnew = blocknew.vtx[1]; // second tx is coinstake
 
     //initialize the transaction
@@ -479,7 +480,17 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         if (CoinTx.vout[CoinTxN].nValue > BalanceToStake)
             continue;
 
-        StakeValueSum += CoinTx.vout[CoinTxN].nValue /(double)COIN;
+        {
+            int64_t nStakeValue= CoinTx.vout[CoinTxN].nValue;
+            StakeValueSum += nStakeValue /(double)COIN;
+            //crazy formula...
+            // todo: clean this
+            // todo reuse calculated value for interst
+            CBigNum bn = CBigNum(nStakeValue) * (blocknew.nTime-CoinTx.nTime) / CENT;
+            bn = bn * CENT / COIN / (24 * 60 * 60);
+            StakeCoinAgeSum += bn.getuint64();
+        }
+
         if(blocknew.nVersion==7)
         {
             NetworkTimer();
@@ -586,6 +597,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     MinerStatus.ValueSum = StakeValueSum;
     MinerStatus.WeightMin=StakeWeightMin;
     MinerStatus.WeightMax=StakeWeightMax;
+    MinerStatus.CoinAgeSum=StakeCoinAgeSum;
     MinerStatus.nLastCoinStakeSearchInterval= txnew.nTime;
     return false;
 }

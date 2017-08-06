@@ -16,6 +16,7 @@ struct CMinerStatus
     std::string Message;
     double WeightSum,WeightMin,WeightMax;
     double ValueSum;
+    double CoinAgeSum;
     int Version;
     unsigned long CreatedCnt;
     unsigned long AcceptedCnt;
@@ -27,6 +28,7 @@ struct CMinerStatus
         Message= "";
         WeightSum= ValueSum= WeightMin= WeightMax= 0;
         Version= 0;
+        CoinAgeSum= 0;
         nLastCoinStakeSearchInterval = 0;
     }
     CMinerStatus()

@@ -45,6 +45,7 @@ Value getmininginfo(const Array& params, bool fHelp)
             "Returns an object containing mining-related information.");
 
     uint64_t nWeight = 0;
+    int64_t nTime= GetAdjustedTime();
     pwalletMain->GetStakeWeight(nWeight);
     uint64_t nNetworkWeight = GetPoSKernelPS();
     Object obj, diff, weight;
@@ -75,6 +76,10 @@ Value getmininginfo(const Array& params, bool fHelp)
         obj.push_back(Pair("mining-created", MinerStatus.CreatedCnt));
         obj.push_back(Pair("mining-accepted", MinerStatus.AcceptedCnt));
         obj.push_back(Pair("mining-kernels-found", MinerStatus.KernelsFound));
+        // Avoid calculating coinage of all coins just to get interest,
+        // reuse value found by miner which has to load blocks anyway
+        double dInterest = MinerStatus.CoinAgeSum * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
+        obj.push_back(Pair("InterestSubsidy",dInterest/(double)COIN));
     }
 
     obj.push_back(Pair("difficulty",    diff));
@@ -99,10 +104,13 @@ Value getmininginfo(const Array& params, bool fHelp)
     obj.push_back(Pair("RSAWeight",(double)GetRSAWeightByCPID(msPrimaryCPID)));
     StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
 
-    double dMagnitudeUnit = GRCMagnitudeUnit(GetAdjustedTime());
-    obj.push_back(Pair("Magnitude Unit",dMagnitudeUnit));
-    obj.push_back(Pair("ResearchSubsidy",GlobalCPUMiningCPID.ResearchSubsidy));
-    obj.push_back(Pair("InterestSubsidy",GlobalCPUMiningCPID.InterestSubsidy));
+    {
+        double dMagnitudeUnit = GRCMagnitudeUnit(nTime);
+        double dAccrualAge,AvgMagnitude;
+        int64_t nBoinc = ComputeResearchAccrual(nTime, msPrimaryCPID, "getmininginfo", pindexBest, false, 69, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
+        obj.push_back(Pair("Magnitude Unit",dMagnitudeUnit));
+        obj.push_back(Pair("ResearchSubsidy",nBoinc/(double)COIN));
+    }
 
     obj.push_back(Pair("MiningProject",msMiningProject));
     obj.push_back(Pair("MiningInfo 1", msMiningErrors));
