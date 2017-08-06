@@ -10,7 +10,7 @@
 #include <QDoubleValidator>
 #include <QFont>
 #include <QLineEdit>
-#include <QUrl>
+//#include <QUrl>
 #include <QTextDocument> // For Qt::escape
 #if QT_VERSION >= 0x050000
 #include <QUrlQuery> // For alternative QT5 toHtmlEscaped
@@ -21,7 +21,12 @@
 #include <QFileDialog>
 #include <QDesktopServices>
 #include <QThread>
-#include <QUrlQuery> // For QUrl::queryItems
+
+#if QT_VERSION < 0x050000
+#include <QUrl> // For alternative QT5 toHtmlEscaped
+#else
+#include <QUrlQuery>
+#endif
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
