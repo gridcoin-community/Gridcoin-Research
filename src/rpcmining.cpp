@@ -79,7 +79,7 @@ Value getmininginfo(const Array& params, bool fHelp)
         // Avoid calculating coinage of all coins just to get interest,
         // reuse value found by miner which has to load blocks anyway
         double dInterest = MinerStatus.CoinAgeSum * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
-        obj.push_back(Pair("InterestSubsidy",dInterest/(double)COIN));
+        obj.push_back(Pair("InterestPending",dInterest/(double)COIN));
     }
 
     obj.push_back(Pair("difficulty",    diff));
@@ -109,7 +109,7 @@ Value getmininginfo(const Array& params, bool fHelp)
         double dAccrualAge,AvgMagnitude;
         int64_t nBoinc = ComputeResearchAccrual(nTime, msPrimaryCPID, "getmininginfo", pindexBest, false, 69, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
         obj.push_back(Pair("Magnitude Unit",dMagnitudeUnit));
-        obj.push_back(Pair("ResearchSubsidy",nBoinc/(double)COIN));
+        obj.push_back(Pair("BoincRewardPending",nBoinc/(double)COIN));
     }
 
     obj.push_back(Pair("MiningProject",msMiningProject));
