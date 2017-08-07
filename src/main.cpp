@@ -3295,6 +3295,31 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             // Only reject superblock when it is new And when QuorumHash of Block != the Popular Quorum Hash:
             if (IsLockTimeWithinMinutes(GetBlockTime(),15)  && !fColdBoot)
             {
+                // Let this take effect on block 1 million on prod and immediatly on testnet. Subject To Change.
+                if (fTestNet || (pindex->nHeight > 1000000))
+                {
+                    try
+                    {
+                        CBitcoinAddress address(bb.GRCAddress);
+                        bool validaddressinblock = address.IsValid();
+                        if (!validaddressinblock)
+                        {
+                            return error("ConnectBlock[] : Superblock staked with invalid GRC address in block");
+                        }
+                        if (!IsNeuralNodeParticipant(bb.GRCAddress, nTime))
+                        {
+                            return error("ConnectBlock[] : Superblock staked by ineligible neural node participant");
+                        }
+                    }
+                    catch (std::exception &e)
+                    {
+                        return error("ConnectBlock[] : Superblock stake check caused std::exception with GRC address %s", bb.GRCAddress.c_str());
+                    }
+                    catch (...)
+                    {
+                        return error("ConnectBlock[] : Superblock stake check caused unknwon exception with GRC address %s", bb.GRCAddress.c_str());
+                    }
+                }
                 if (!VerifySuperblock(superblock,pindex->nHeight))
                 {
                     return error("ConnectBlock[] : Superblock avg mag below 10; SuperblockHash: %s, Consensus Hash: %s",
