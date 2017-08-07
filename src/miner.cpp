@@ -706,6 +706,7 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
         miningcpid.cpid.c_str(), mint, (double)RSA_WEIGHT,miningcpid.ResearchSubsidy,miningcpid.InterestSubsidy);
 
     //INVESTORS
+    if(blocknew.nVersion < 8) mintlimit = std::max(mintlimit, 0.0051);
     if (nReward == 0 || mint < mintlimit)
     {
             LOCK(MinerStatus.lock);
