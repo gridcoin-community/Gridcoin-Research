@@ -194,6 +194,12 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     // Create the toolbars
     createToolBars();
 
+    // Create the tray icon (or setup the dock icon)
+    createTrayIcon();
+
+    // Hide Icon to prevent user interaction with UI while loading.
+    trayIcon->hide();
+
     // Create tabs
     overviewPage = new OverviewPage();
 
@@ -992,9 +998,8 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
     this->clientModel = clientModel;
     if(clientModel)
     {
-        // Create system tray menu (or setup the dock menu) that late to prevent users from calling actions,
-        // while the client has not yet fully loaded
-        createTrayIcon();
+        // Show tray icon now that it is safe to.
+        trayIcon->show();
 
         // Replace some strings and icons, when using the testnet
         if(clientModel->isTestNet())
