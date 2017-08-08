@@ -3,6 +3,7 @@
 
 #include <QMainWindow>
 #include <QSystemTrayIcon>
+#include <QMenu>
 #include <stdint.h>
 
 #if defined(WIN32) && defined(QT_GUI)
@@ -131,6 +132,7 @@ private:
     QAction *openRPCConsoleAction;
 
     QSystemTrayIcon *trayIcon;
+    QMenu *trayIconMenu;
     Notificator *notificator;
     TransactionView *transactionView;
     RPCConsole *rpcConsole;
@@ -148,6 +150,9 @@ private:
     void createToolBars();
     /** Create system tray (notification) icon */
     void createTrayIcon();
+    /** Create system tray menu (or setup the dock menu) */
+    void createTrayIconMenu();
+
 
 public slots:
     /** Set number of connections shown in the UI */

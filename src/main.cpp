@@ -3297,6 +3297,28 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             // Only reject superblock when it is new And when QuorumHash of Block != the Popular Quorum Hash:
             if (IsLockTimeWithinMinutes(GetBlockTime(),15)  && !fColdBoot)
             {
+                // Let this take effect together with stakev8
+                if (nVersion>=8)
+                {
+                    try
+                    {
+                        CBitcoinAddress address;
+                        bool validaddressinblock = address.SetString(bb.GRCAddress);
+                        validaddressinblock &= address.IsValid();
+                        if (!validaddressinblock)
+                        {
+                            return error("ConnectBlock[] : Superblock staked with invalid GRC address in block");
+                        }
+                        if (!IsNeuralNodeParticipant(bb.GRCAddress, nTime))
+                        {
+                            return error("ConnectBlock[] : Superblock staked by ineligible neural node participant");
+                        }
+                    }
+                    catch (...)
+                    {
+                        return error("ConnectBlock[] : Superblock stake check caused unknwon exception with GRC address %s", bb.GRCAddress.c_str());
+                    }
+                }
                 if (!VerifySuperblock(superblock,pindex->nHeight))
                 {
                     return error("ConnectBlock[] : Superblock avg mag below 10; SuperblockHash: %s, Consensus Hash: %s",
@@ -4138,12 +4160,13 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     int nHeight = pindexPrev->nHeight+1;
 
     if(       (IsProtocolV2(nHeight) && nVersion < 7)
-            ||(fTestNet && nHeight >= 288160 && nVersion < 8)
+            ||(fTestNet && nHeight >= 312000 && nVersion < 8)
+            ||(!fTestNet && nHeight >= 1001000 && nVersion < 8)
         )
-        return DoS(100, error("AcceptBlock() : reject too old nVersion = %d", nVersion));
+        return DoS(20, error("AcceptBlock() : reject too old nVersion = %d", nVersion));
     else if( (!IsProtocolV2(nHeight) && nVersion >= 7)
-            ||(!fTestNet && nVersion >=8 )
-            ||(fTestNet && nHeight < 288160 && nVersion >= 8)
+            ||(fTestNet && nHeight < 312000 && nVersion >= 8)
+            ||(!fTestNet && nHeight < 1001000 && nVersion >= 8)
         )
         return DoS(100, error("AcceptBlock() : reject too new nVersion = %d", nVersion));
 

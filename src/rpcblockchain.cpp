@@ -17,13 +17,13 @@
 #include <iostream>
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
+#include <boost/algorithm/string.hpp>
 #include <fstream>
 
 using namespace json_spirit;
 using namespace std;
 extern std::string YesNo(bool bin);
 bool BackupConfigFile(const string& strDest);
-std::string getHardDriveSerial();
 int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
 extern double DoubleFromAmount(int64_t amount);
 std::string PubKeyToAddress(const CScript& scriptPubKey);
@@ -354,6 +354,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
     result.push_back(Pair("merkleroot", block.hashMerkleRoot.GetHex()));
     double mint = CoinToDouble(blockindex->nMint);
     result.push_back(Pair("mint", mint));
+    result.push_back(Pair("MoneySupply", blockindex->nMoneySupply));
     result.push_back(Pair("time", (int64_t)block.GetBlockTime()));
     result.push_back(Pair("nonce", (uint64_t)block.nNonce));
     result.push_back(Pair("bits", strprintf("%08x", block.nBits)));
@@ -2642,28 +2643,28 @@ Value execute(const Array& params, bool fHelp)
     }
     else if (sItem == "listpolls")
     {
-            std::string out1 = "";
+            std::string out1;
             Array myPolls = GetJSONPollsReport(false,"",out1,false);
             results.push_back(myPolls);
     }
     else if (sItem == "listallpolls")
     {
-            std::string out1 = "";
+            std::string out1;
             Array myPolls = GetJSONPollsReport(false,"",out1,true);
             results.push_back(myPolls);
     }
     else if (sItem == "listallpolldetails")
     {
-            std::string out1 = "";
+            std::string out1;
             Array myPolls = GetJSONPollsReport(true,"",out1,true);
             results.push_back(myPolls);
 
     }
     else if (sItem=="listpolldetails")
     {
-            std::string out1 = "";
-            Array myPolls = GetJSONPollsReport(true,"",out1,false);
-            results.push_back(myPolls);
+        std::string out1;
+        Array myPolls = GetJSONPollsReport(true,"",out1,false);
+        results.push_back(myPolls);
     }
     else if (sItem=="listpollresults")
     {
@@ -3668,25 +3669,19 @@ std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash)
 
 std::string GetPollContractByTitle(std::string objecttype, std::string title)
 {
-        for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+    for(const auto& item : mvApplicationCache)
+    {
+        const std::string& key_name = item.first;
+        const std::string& contract = item.second;
+        if (boost::algorithm::starts_with(key_name, objecttype))
         {
-                std::string key_name  = (*ii).first;
-                if (key_name.length() > objecttype.length())
-                {
-                    if (key_name.substr(0,objecttype.length())==objecttype)
-                    {
-                                std::string contract = mvApplicationCache[(*ii).first];
-                                std::string PollTitle = ExtractXML(contract,"<TITLE>","</TITLE>");
-                                boost::to_lower(PollTitle);
-                                boost::to_lower(title);
-                                if (PollTitle==title)
-                                {
-                                    return contract;
-                                }
-                    }
-                }
+            const std::string& PollTitle = ExtractXML(contract,"<TITLE>","</TITLE>");
+            if(boost::iequals(PollTitle, title))
+                return contract;
         }
-        return "";
+    }
+
+    return std::string();
 }
 
 bool PollExists(std::string pollname)
@@ -3778,33 +3773,28 @@ double VotesCount(std::string pollname, std::string answer, double sharetype, do
     
     double MoneySupplyFactor = GetMoneySupplyFactor();
 
-    for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+    for(const auto& item : mvApplicationCache)
     {
-                std::string key_name  = (*ii).first;
-                if (key_name.length() > objecttype.length())
+        const std::string& key_name = item.first;
+        const std::string& contract = item.second;
+
+        if (boost::algorithm::starts_with(key_name, objecttype))
+        {
+            const std::string& Title = ExtractXML(contract,"<TITLE>","</TITLE>");
+            const std::string& VoterAnswer = ExtractXML(contract,"<ANSWER>","</ANSWER>");
+            const std::vector<std::string>& vVoterAnswers = split(VoterAnswer.c_str(),";");
+            for (const std::string& voterAnswers : vVoterAnswers)
+            {
+                if (boost::iequals(pollname, Title) && boost::iequals(answer, voterAnswers))
                 {
-                    if (key_name.substr(0,objecttype.length())==objecttype)
-                    {
-                                std::string contract = mvApplicationCache[(*ii).first];
-                                std::string Title = ExtractXML(contract,"<TITLE>","</TITLE>");
-                                std::string VoterAnswer = ExtractXML(contract,"<ANSWER>","</ANSWER>");
-                                boost::to_lower(Title);
-                                boost::to_lower(pollname);
-                                boost::to_lower(VoterAnswer);
-                                boost::to_lower(answer);
-                                std::vector<std::string> vVoterAnswers = split(VoterAnswer.c_str(),";");
-                                for (unsigned int x = 0; x < vVoterAnswers.size(); x++)
-                                {
-                                    if (pollname == Title && answer == vVoterAnswers[x])
-                                    {
-                                        double shares = PollCalculateShares(contract,sharetype,MoneySupplyFactor,vVoterAnswers.size());
-                                        total_shares += shares;
-                                        out_participants += (double)((double)1/(double)vVoterAnswers.size());
-                                    }
-                                }
-                    }
+                    double shares = PollCalculateShares(contract, sharetype, MoneySupplyFactor, vVoterAnswers.size());
+                    total_shares += shares;
+                    out_participants += 1.0 / vVoterAnswers.size();
                 }
+            }
+        }
     }
+
     return total_shares;
 }
 
@@ -4321,100 +4311,96 @@ Array GetJsonVoteDetailsReport(std::string pollname)
 
 Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool IncludeExpired)
 {
-        //Title,ExpirationDate, Question, Answers, ShareType(1=Magnitude,2=Balance,3=Both)
-        Array results;
-        Object entry;
-        entry.push_back(Pair("Polls","Polls Report " + QueryByTitle));
-        std::string datatype="poll";
-        std::string rows = "";
-        std::string row = "";
-        double iPollNumber = 0;
-        double total_participants = 0;
-        double total_shares = 0;
-        boost::to_lower(QueryByTitle);
-        std::string sExport = "";
-        std::string sExportRow = "";
-        out_export="";
-        for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+    //Title,ExpirationDate, Question, Answers, ShareType(1=Magnitude,2=Balance,3=Both)
+    Array results;
+    Object entry;
+    entry.push_back(Pair("Polls","Polls Report " + QueryByTitle));
+    std::string datatype="poll";
+    std::string rows;
+    std::string row;
+    double iPollNumber = 0;
+    double total_participants = 0;
+    double total_shares = 0;
+    boost::to_lower(QueryByTitle);
+    std::string sExport;
+    std::string sExportRow;
+    out_export.clear();
+
+    for(const auto& item : mvApplicationCache)
+    {
+        const std::string& key_name = item.first;
+        const std::string& contract = item.second;
+
+        if (boost::algorithm::starts_with(key_name, datatype))
         {
-                std::string key_name  = (*ii).first;
-                if (key_name.length() > datatype.length())
+            std::string Title = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
+            std::string Expiration = ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>");
+            std::string Question = ExtractXML(contract,"<QUESTION>","</QUESTION>");
+            std::string Answers = ExtractXML(contract,"<ANSWERS>","</ANSWERS>");
+            std::string ShareType = ExtractXML(contract,"<SHARETYPE>","</SHARETYPE>");
+            std::string sURL = ExtractXML(contract,"<URL>","</URL>");
+            boost::to_lower(Title);
+            if (!PollExpired(Title) || IncludeExpired)
+            {
+                if (QueryByTitle.empty() || QueryByTitle == Title)
                 {
-                    if (key_name.substr(0,datatype.length())==datatype)
-                    {
-                                std::string contract = mvApplicationCache[(*ii).first];
-                                std::string Title = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
-                                std::string Expiration = ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>");
-                                std::string Question = ExtractXML(contract,"<QUESTION>","</QUESTION>");
-                                std::string Answers = ExtractXML(contract,"<ANSWERS>","</ANSWERS>");
-                                std::string ShareType = ExtractXML(contract,"<SHARETYPE>","</SHARETYPE>");
-                                std::string sURL = ExtractXML(contract,"<URL>","</URL>");
-                                boost::to_lower(Title);
-                                if (!PollExpired(Title) || IncludeExpired)
-                                {
-                                    if (QueryByTitle=="" || QueryByTitle == Title)
-                                    {
-                                        iPollNumber++;
-                                        total_participants = 0;
-                                        total_shares=0;
-                                        std::string BestAnswer  = "";
-                                        double highest_share = 0;
-                                        std::string ExpirationDate = TimestampToHRDate(cdbl(Expiration,0));
-                                        std::string sShareType = GetShareType(cdbl(ShareType,0));
-                                        std::string TitleNarr = "Poll #" + RoundToString((double)iPollNumber,0) 
+                    iPollNumber++;
+                    total_participants = 0;
+                    total_shares=0;
+                    std::string BestAnswer;
+                    double highest_share = 0;
+                    std::string ExpirationDate = TimestampToHRDate(cdbl(Expiration,0));
+                    std::string sShareType = GetShareType(cdbl(ShareType,0));
+                    std::string TitleNarr = "Poll #" + RoundToString((double)iPollNumber,0)
                                             + " (" + ExpirationDate + " ) - " + sShareType;
-                                        
-                                        entry.push_back(Pair(TitleNarr,Title));
-                                        sExportRow = "<POLL><URL>" + sURL + "</URL><TITLE>" + Title + "</TITLE><EXPIRATION>" + ExpirationDate + "</EXPIRATION><SHARETYPE>" + sShareType + "</SHARETYPE><QUESTION>" + Question + "</QUESTION><ANSWERS>"+Answers+"</ANSWERS>";
 
-                                        if (bDetail)
-                                        {
-                                    
-                                            entry.push_back(Pair("Question",Question));
-                                            std::vector<std::string> vAnswers = split(Answers.c_str(),";");
-                                             sExportRow += "<ARRAYANSWERS>";
-                                            for (unsigned int i = 0; i < vAnswers.size(); i++)
-                                            {
-                                                double participants=0;
-                                                double dShares = VotesCount(Title,vAnswers[i],cdbl(ShareType,0),participants);
-                                                if (dShares > highest_share) 
-                                                {
-                                                        highest_share = dShares;
-                                                        BestAnswer = vAnswers[i];
-                                                }
+                    entry.push_back(Pair(TitleNarr,Title));
+                    sExportRow = "<POLL><URL>" + sURL + "</URL><TITLE>" + Title + "</TITLE><EXPIRATION>" + ExpirationDate + "</EXPIRATION><SHARETYPE>" + sShareType + "</SHARETYPE><QUESTION>" + Question + "</QUESTION><ANSWERS>"+Answers+"</ANSWERS>";
 
-                                                entry.push_back(Pair("#" + RoundToString((double)i+1,0) + " [" + RoundToString(participants,3) + "]. " 
-                                                    + vAnswers[i],dShares));
-                                                total_participants += participants;
-                                                total_shares += dShares;
-                                                sExportRow += "<RESERVED></RESERVED><ANSWERNAME>" + vAnswers[i] + "</ANSWERNAME><PARTICIPANTS>" + RoundToString(participants,0) + "</PARTICIPANTS><SHARES>" + RoundToString(dShares,0) + "</SHARES>";
+                    if (bDetail)
+                    {
+                        entry.push_back(Pair("Question",Question));
+                        const std::vector<std::string>& vAnswers = split(Answers.c_str(),";");
+                        sExportRow += "<ARRAYANSWERS>";
+                        size_t i = 0;
+                        for (const std::string& answer : vAnswers)
+                        {
+                            double participants=0;
+                            double dShares = VotesCount(Title, answer, cdbl(ShareType,0),participants);
+                            if (dShares > highest_share)
+                            {
+                                highest_share = dShares;
+                                BestAnswer = answer;
+                            }
 
-
-                                            }
-                                            sExportRow += "</ARRAYANSWERS>";
-                                            
-                                            //Totals:
-                                            entry.push_back(Pair("Participants",total_participants));
-                                            entry.push_back(Pair("Total Shares",total_shares));
-                                            if (total_participants < 3) BestAnswer = "";
-
-                                            entry.push_back(Pair("Best Answer",BestAnswer));
-                                            sExportRow += "<TOTALPARTICIPANTS>" + RoundToString(total_participants,0)
-                                                + "</TOTALPARTICIPANTS><TOTALSHARES>" + RoundToString(total_shares,0)
-                                                + "</TOTALSHARES><BESTANSWER>" + BestAnswer + "</BESTANSWER>";
-                                        
-                                        }
-                                        sExportRow += "</POLL>";
-                                        sExport += sExportRow;
-                                    }
-                                }
+                            entry.push_back(Pair("#" + std::to_string(++i) + " [" + RoundToString(participants,3) + "]. " + answer,dShares));
+                            total_participants += participants;
+                            total_shares += dShares;
+                            sExportRow += "<RESERVED></RESERVED><ANSWERNAME>" + answer + "</ANSWERNAME><PARTICIPANTS>" + RoundToString(participants,0) + "</PARTICIPANTS><SHARES>" + RoundToString(dShares,0) + "</SHARES>";
                         }
+                        sExportRow += "</ARRAYANSWERS>";
+
+                        //Totals:
+                        entry.push_back(Pair("Participants",total_participants));
+                        entry.push_back(Pair("Total Shares",total_shares));
+                        if (total_participants < 3) BestAnswer = "";
+
+                        entry.push_back(Pair("Best Answer",BestAnswer));
+                        sExportRow += "<TOTALPARTICIPANTS>" + RoundToString(total_participants,0)
+                                      + "</TOTALPARTICIPANTS><TOTALSHARES>" + RoundToString(total_shares,0)
+                                      + "</TOTALSHARES><BESTANSWER>" + BestAnswer + "</BESTANSWER>";
+
+                    }
+                    sExportRow += "</POLL>";
+                    sExport += sExportRow;
                 }
-       }
+            }
+        }
+    }
     
-      results.push_back(entry);
-      out_export = sExport;
-      return results;
+    results.push_back(entry);
+    out_export = sExport;
+    return results;
 }
 
 
@@ -5099,13 +5085,6 @@ Value listitem(const Array& params, bool fHelp)
     {
             results = MagnitudeReport(msPrimaryCPID);
             return results;
-    }
-    else if (sitem == "harddriveserial")
-    {
-        Object entry;
-        std::string response = getHardDriveSerial();
-        entry.push_back(Pair("Serial",response));
-        results.push_back(entry);
     }
     else if (sitem == "memorypool")
     {
