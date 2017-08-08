@@ -995,9 +995,6 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
     this->clientModel = clientModel;
     if(clientModel)
     {
-        // Show tray icon now that it is safe to.
-        trayIcon->show();
-
         // Replace some strings and icons, when using the testnet
         if(clientModel->isTestNet())
         {
