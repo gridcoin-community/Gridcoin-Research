@@ -19,7 +19,11 @@ if [ -e "$(which git)" ]; then
     DESC="$(git describe --dirty 2>/dev/null)"
 
     # get only commit hash, but format like describe
-    DESCHASH="$(git log -n 1 --format="%h")"
+    DESCHASH="$(git rev-parse --short=9 HEAD)"
+
+    # append dirty indicator
+    if ! git diff-index --quiet HEAD --
+      then DESCHASH="${DESCHASH}-mod"; fi
 
     # get a string like "2012-04-10 16:27:19 +0200"
     TIME="$(git log -n 1 --format="%ci")"
