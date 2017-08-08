@@ -273,7 +273,7 @@ AC_DEFUN([_BITCOIN_QT_CHECK_QT5],[
     [[#include <QtCore>]],
     [[
       #if QT_VERSION < 0x050000
-      choke me
+      choke me;
       #else
       return 0;
       #endif
@@ -349,6 +349,10 @@ AC_DEFUN([_BITCOIN_QT_FIND_STATIC_PLUGINS],[
        elif test x$TARGET_OS = xdarwin; then
          PKG_CHECK_MODULES([QTPRINT], [Qt5PrintSupport], [QT_LIBS="$QTPRINT_LIBS $QT_LIBS"])
        fi
+       if ${PKG_CONFIG} --exists "Qt5Core >= 5.8" 2>/dev/null; then
+         PKG_CHECK_MODULES([QTXCBQPA], [Qt5XcbQpa], [QT_LIBS="$QTXCBQPA_LIBS $QT_LIBS"])
+       fi
+
      ])
      else
        if test x$TARGET_OS = xwindows; then
@@ -395,7 +399,12 @@ AC_DEFUN([_BITCOIN_QT_FIND_LIBS_WITH_PKGCONFIG],[
       QT_LIB_PREFIX=Qt
       bitcoin_qt_got_major_vers=4
     fi
-    qt5_modules="Qt5Core Qt5Gui Qt5Network Qt5Widgets"
+    qt5_modules="Qt5Core Qt5Gui Qt5Network Qt5Widgets Qt5Concurrent"
+    if ${PKG_CONFIG} --exists "Qt5Core >= 5.8"; then
+        qt5_modules="$qt5_modules Qt5Charts" 
+    else
+        qt5_modules="$qt5_modules"
+    fi
     qt4_modules="QtCore QtGui QtNetwork"
     BITCOIN_QT_CHECK([
       if test x$bitcoin_qt_want_version = xqt5 || ( test x$bitcoin_qt_want_version = xauto && test x$auto_priority_version = xqt5 ); then
