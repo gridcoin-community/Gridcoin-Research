@@ -8459,7 +8459,8 @@ void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::str
 void IncrementNeuralNetworkSupermajority(const std::string& NeuralHash, const std::string& GRCAddress, double distance, int64_t locktime)
 {
     if (NeuralHash.length() < 5) return;
-    if (fTestNet || (pindexBest->nHeight > 1000000))
+    if ((fTestNet && pindexBest->nHeight > 312000)
+            || (!fTestNet && pindexBest->nHeight > 1001000))
     {
         try
         {
