@@ -23,7 +23,6 @@ using namespace json_spirit;
 using namespace std;
 extern std::string YesNo(bool bin);
 bool BackupConfigFile(const string& strDest);
-std::string getHardDriveSerial();
 int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
 extern double DoubleFromAmount(int64_t amount);
 std::string PubKeyToAddress(const CScript& scriptPubKey);
@@ -5100,13 +5099,6 @@ Value listitem(const Array& params, bool fHelp)
     {
             results = MagnitudeReport(msPrimaryCPID);
             return results;
-    }
-    else if (sitem == "harddriveserial")
-    {
-        Object entry;
-        std::string response = getHardDriveSerial();
-        entry.push_back(Pair("Serial",response));
-        results.push_back(entry);
     }
     else if (sitem == "memorypool")
     {
