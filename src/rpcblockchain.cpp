@@ -5321,7 +5321,7 @@ Value rpc_reorganize(const Array& params, bool fHelp)
     Object results;
     if (fHelp || params.size() != 1)
         throw runtime_error(
-            "rollback <hash>\n"
+            "reorganize <hash>\n"
             "Roll back the block chain to specified block hash.\n"
             "The block hash must already be present in block index");
 

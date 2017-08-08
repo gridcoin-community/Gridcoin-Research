@@ -62,6 +62,15 @@ public:
     }
 };
 
+void CMinerStatus::Clear()
+{
+    Message= "";
+    WeightSum= ValueSum= WeightMin= WeightMax= 0;
+    Version= 0;
+    CoinAgeSum= 0;
+    nLastCoinStakeSearchInterval = 0;
+}
+
 CMinerStatus MinerStatus;
  
 // We want to sort transactions by priority and fee, so:

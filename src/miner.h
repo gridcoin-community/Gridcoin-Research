@@ -23,14 +23,7 @@ struct CMinerStatus
     unsigned long KernelsFound;
     int64_t nLastCoinStakeSearchInterval;
 
-    void Clear()
-    {
-        Message= "";
-        WeightSum= ValueSum= WeightMin= WeightMax= 0;
-        Version= 0;
-        CoinAgeSum= 0;
-        nLastCoinStakeSearchInterval = 0;
-    }
+    void Clear();
     CMinerStatus()
     {
         Clear();

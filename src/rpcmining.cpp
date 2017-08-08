@@ -122,37 +122,3 @@ Value getmininginfo(const Array& params, bool fHelp)
 
     return obj;
 }
-
-Value getstakinginfo(const Array& params, bool fHelp)
-{
-    return getmininginfo(params,fHelp);
-}
-
-Value submitblock(const Array& params, bool fHelp)
-{
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-            "submitblock <hex data> [optional-params-obj]\n"
-            "[optional-params-obj] parameter is currently ignored.\n"
-            "Attempts to submit new block to network.\n"
-            "See https://en.bitcoin.it/wiki/BIP_0022 for full specification.");
-
-    vector<unsigned char> blockData(ParseHex(params[0].get_str()));
-    CDataStream ssBlock(blockData, SER_NETWORK, PROTOCOL_VERSION);
-    CBlock block;
-    try {
-        ssBlock >> block;
-    }
-    catch (std::exception &e) {
-        throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Block decode failed");
-    }
-
-    //bool fAccepted = ProcessBlock(NULL, &block,false);
-    bool fAccepted = false;
-
-    if (!fAccepted)
-        return "rejected";
-
-    return Value::null;
-}
-
