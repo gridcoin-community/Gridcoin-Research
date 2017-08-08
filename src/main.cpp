@@ -116,7 +116,7 @@ extern std::string strReplace(std::string& str, const std::string& oldStr, const
 extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 extern double GetTotalBalance();
 extern std::string PubKeyToAddress(const CScript& scriptPubKey);
-extern void IncrementNeuralNetworkSupermajority(const std::string& NeuralHash, const std::string& GRCAddress, double distance, int64_t locktime);
+extern void IncrementNeuralNetworkSupermajority(const std::string& NeuralHash, const std::string& GRCAddress, double distance, const CBlockIndex* pblockindex);
 extern bool LoadSuperblock(std::string data, int64_t nTime, double height);
 
 
@@ -5736,7 +5736,7 @@ bool ComputeNeuralNetworkSupermajorityHashes()
 
                 IncrementVersionCount(bb.clientversion);
                 //Increment Neural Network Hashes Supermajority (over the last N blocks)
-                IncrementNeuralNetworkSupermajority(bb.NeuralHash,bb.GRCAddress,(nMaxDepth-pblockindex->nHeight)+10,block.nTime);
+                IncrementNeuralNetworkSupermajority(bb.NeuralHash,bb.GRCAddress,(nMaxDepth-pblockindex->nHeight)+10,pblockindex);
                 IncrementCurrentNeuralNetworkSupermajority(bb.CurrentNeuralHash,bb.GRCAddress,(nMaxDepth-pblockindex->nHeight)+10);
 
             }
@@ -8456,11 +8456,10 @@ void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::str
 
 
 
-void IncrementNeuralNetworkSupermajority(const std::string& NeuralHash, const std::string& GRCAddress, double distance, int64_t locktime)
+void IncrementNeuralNetworkSupermajority(const std::string& NeuralHash, const std::string& GRCAddress, double distance, const CBlockIndex* pblockindex)
 {
     if (NeuralHash.length() < 5) return;
-    if ((fTestNet && pindexBest->nHeight > 312000)
-            || (!fTestNet && pindexBest->nHeight > 1001000))
+    if (pblockindex->nVersion >= 8)
     {
         try
         {
@@ -8471,7 +8470,7 @@ void IncrementNeuralNetworkSupermajority(const std::string& NeuralHash, const st
                 printf("INNS : Vote found in block with invalid GRC address. HASH: %s GRC: %s\n", NeuralHash.c_str(), GRCAddress.c_str());
                 return;
             }
-            if (!IsNeuralNodeParticipant(GRCAddress, locktime))
+            if (!IsNeuralNodeParticipant(GRCAddress, pblockindex->nTime))
             {
                 printf("INNS : Vote found in block from ineligible neural node participant. HASH: %s GRC: %s\n", NeuralHash.c_str(), GRCAddress.c_str());
                 return;
