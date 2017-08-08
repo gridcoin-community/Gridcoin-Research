@@ -460,7 +460,7 @@ VotingDialog::VotingDialog(QWidget *parent)
     watcher.setProperty("running", false);
     connect(&watcher, SIGNAL(finished()), this, SLOT(onLoadingFinished()));
     loadingIndicator = new QLabel(this);
-    loadingIndicator->setText(tr("...loading data!"));
+    loadingIndicator->setText(tr("...loading data! Please be patient, this may take 1-2 minutes."));
     loadingIndicator->move(50,170);
 
     chartDialog_ = new VotingChartDialog(this);
