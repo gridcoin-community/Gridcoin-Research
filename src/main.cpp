@@ -8476,9 +8476,9 @@ void IncrementNeuralNetworkSupermajority(const std::string& NeuralHash, const st
                 return;
             }
         }
-        catch (...)
+        catch (const bignum_error& innse)
         {
-            printf("INNS : Exception caught while verifying neural nodes vote eligibility\n");
+            printf("INNS : Exception: %s\n", innse.what());
             return;
         }
     }
