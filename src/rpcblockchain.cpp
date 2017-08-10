@@ -3348,7 +3348,7 @@ Array LifetimeReport(std::string cpid)
 {
        Array results;
        Object c;
-       std::string Narr = RoundToString(GetAdjustedTime(),0);
+       std::string Narr = std::to_string(GetAdjustedTime());
        c.push_back(Pair("Lifetime Payments Report",Narr));
        results.push_back(c);
        Object entry;
@@ -3378,7 +3378,7 @@ Array SuperblockReport(std::string cpid)
 
       Array results;
       Object c;
-      std::string Narr = RoundToString(GetAdjustedTime(),0);
+      std::string Narr = std::to_string(GetAdjustedTime());
       c.push_back(Pair("SuperBlock Report (14 days)",Narr));
       if (!cpid.empty())      c.push_back(Pair("CPID",cpid));
 
@@ -3441,7 +3441,7 @@ Array MagnitudeReport(std::string cpid)
 {
            Array results;
            Object c;
-           std::string Narr = RoundToString(GetAdjustedTime(),0);
+           std::string Narr = std::to_string(GetAdjustedTime());
            c.push_back(Pair("RSA Report",Narr));
            results.push_back(c);
            double total_owed = 0;
@@ -4665,7 +4665,7 @@ Array MagnitudeReportCSV(bool detail)
            Object c;
            StructCPID globalmag = mvMagnitudes["global"];
            double payment_timespan = 14; 
-           std::string Narr = "Research Savings Account Report - Generated " + RoundToString(GetAdjustedTime(),0) + " - Timespan: " + RoundToString(payment_timespan,0);
+           std::string Narr = "Research Savings Account Report - Generated " + std::to_string(GetAdjustedTime()) + " - Timespan: " + RoundToString(payment_timespan,0);
            c.push_back(Pair("RSA Report",Narr));
            results.push_back(c);
            double totalpaid = 0;

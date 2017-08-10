@@ -1259,7 +1259,7 @@ Array StakingReport()
 
     Array results;
     Object c;
-    std::string Narr = RoundToString(GetAdjustedTime(),0);
+    std::string Narr = std::to_string(GetAdjustedTime());
     c.push_back(Pair("Staking Report",Narr));
     results.push_back(c);
     Object entry;
