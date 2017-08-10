@@ -2116,7 +2116,7 @@ void BitcoinGUI::updateStakingIcon()
 		}
 	*/
 
-	//This string wont be translated :(
-	labelStakingIcon->setToolTip("Not staking; "+QString(ReasonNotStaking.c_str()));
+	//Part of this string wont be translated :(
+	labelStakingIcon->setToolTip(tr("Not staking; %1").arg(QString(ReasonNotStaking.c_str())));
     }
 }
