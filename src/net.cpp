@@ -26,7 +26,6 @@
 #endif
 
 using namespace std;
-using namespace boost;
 bool TallyNetworkAverages(bool ColdBoot);
 extern void BusyWaitForTally();
 extern void DoTallyResearchAverages(void* parg);
@@ -1261,9 +1260,15 @@ void ThreadSocketHandler2(void* parg)
             }
         }
 
-        if(vNodes.size() != nPrevNodeCount)
+        size_t vNodesSize;
         {
-            nPrevNodeCount = vNodes.size();
+            LOCK(cs_vNodes);
+            vNodesSize = vNodes.size();
+        }
+
+        if(vNodesSize != nPrevNodeCount)
+        {
+            nPrevNodeCount = vNodesSize;
             uiInterface.NotifyNumConnectionsChanged(nPrevNodeCount);
         }
 
@@ -1478,9 +1483,9 @@ void ThreadSocketHandler2(void* parg)
                 }
             }
                
-            if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && ((int)vNodes.size() > (MAX_OUTBOUND_CONNECTIONS*.75)))
+            if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && (vNodes.size() > (MAX_OUTBOUND_CONNECTIONS*.75)))
             {
-                    if (fDebug10) printf("Node %s connected longer than 2 hours with connection count of %f, disconnecting. \r\n", NodeAddress(pnode).c_str(), (double)vNodes.size());
+                    if (fDebug10) printf("Node %s connected longer than 2 hours with connection count of %i, disconnecting. \r\n", NodeAddress(pnode).c_str(), vNodes.size());
                     pnode->fDisconnect = true;
             }
 
