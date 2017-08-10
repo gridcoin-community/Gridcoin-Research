@@ -27,7 +27,6 @@
 
 using namespace std;
 bool TallyNetworkAverages(bool ColdBoot);
-extern void BusyWaitForTally();
 extern void DoTallyResearchAverages(void* parg);
 extern void ExecGridcoinServices(void* parg);
 std::string DefaultWalletAddress();
@@ -41,18 +40,14 @@ extern std::string GetCommandNonce(std::string command);
 extern std::string DefaultOrg();
 extern std::string DefaultOrgKey(int key_length);
 extern std::string DefaultBlockKey(int key_length);
-std::vector<std::string> split(std::string s, std::string delim);
 
 extern std::string OrgId();
 std::string DefaultBoincHashArgs();
-extern std::string LegacyDefaultBoincHashArgs();
 bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
 extern int nMaxConnections;
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
-std::string cached_boinchash_args = "";
 std::string RetrieveMd5(std::string s1);
 
-std::string msPubKey = "";
 int MAX_OUTBOUND_CONNECTIONS = 8;
 
 void ThreadMessageHandler2(void* parg);
@@ -89,14 +84,9 @@ static std::vector<SOCKET> vhListenSocket;
 CAddrMan addrman;
 
 vector<CNode*> vNodes;
-
 CCriticalSection cs_vNodes;
-
-
-
 vector<std::string> vAddedNodes;
 CCriticalSection cs_vAddedNodes;
-
 
 map<CInv, CDataStream> mapRelay;
 deque<pair<int64_t, CInv> > vRelayExpiration;
@@ -2317,11 +2307,6 @@ void static Discover()
     if (!IsLimited(NET_IPV4))
         NewThread(ThreadGetMyExternalIP, NULL);
 }
-
-
-
-
-
 
 void StartNode(void* parg)
 {
