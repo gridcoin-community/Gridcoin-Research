@@ -1434,25 +1434,6 @@ int64_t AmountFromDouble(double dAmount)
 }
 
 
-Value option(const Array& params, bool fHelp)
-{
-    if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3 && params.size() != 4 && params.size() != 5 && params.size() != 6 && params.size() != 7))
-        throw runtime_error(
-        "option <string::itemname> <string::parameter> \r\n"
-        "Executes an option based command by name.");
-
-    std::string sItem = params[0].get_str();
-    if (sItem=="") throw runtime_error("Item invalid.");
-    Array results;
-    Object oOut;
-    oOut.push_back(Pair("Command",sItem));
-    results.push_back(oOut);
-    Object entry;
-    return results;    
-}
-
-
-
 Value execute(const Array& params, bool fHelp)
 {
     if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3 && params.size() != 4 && params.size() != 5 && params.size() != 6 && params.size() != 7))
