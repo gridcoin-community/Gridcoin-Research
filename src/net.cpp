@@ -13,6 +13,7 @@
 
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/thread.hpp>
+#include <inttypes.h>
 
 #ifdef WIN32
   #include <string.h>
@@ -1160,7 +1161,8 @@ void ThreadSocketHandler2(void* parg)
             }
             else if (nInbound >= GetArg("-maxconnections", 250) - MAX_OUTBOUND_CONNECTIONS)
             {
-                if (fDebug10) printf("\r\n Surpassed max inbound connections maxconnections:%i minus max_outbound:%i", GetArg("-maxconnections",250), MAX_OUTBOUND_CONNECTIONS);
+                if (fDebug10)
+                    printf("\r\n Surpassed max inbound connections maxconnections:%" PRId64 " minus max_outbound:%i", GetArg("-maxconnections",250), MAX_OUTBOUND_CONNECTIONS);
                 closesocket(hSocket);
             }
             else if (CNode::IsBanned(addr))
@@ -1277,7 +1279,8 @@ void ThreadSocketHandler2(void* parg)
                
             if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && (vNodes.size() > (MAX_OUTBOUND_CONNECTIONS*.75)))
             {
-                    if (fDebug10) printf("Node %s connected longer than 2 hours with connection count of %i, disconnecting. \r\n", NodeAddress(pnode).c_str(), vNodes.size());
+                    if (fDebug10)
+                        printf("Node %s connected longer than 2 hours with connection count of %zd, disconnecting. \r\n", NodeAddress(pnode).c_str(), vNodes.size());
                     pnode->fDisconnect = true;
             }
 
@@ -2321,7 +2324,7 @@ void StartNode(void* parg)
         semOutbound = new CSemaphore(nMaxOutbound);
     }
 
-    printf("\r\nUsing %i OutboundConnections with a MaxConnections of %i\r\n", MAX_OUTBOUND_CONNECTIONS, GetArg("-maxconnections", 125));
+    printf("\r\nUsing %i OutboundConnections with a MaxConnections of %" PRId64 "\r\n", MAX_OUTBOUND_CONNECTIONS, GetArg("-maxconnections", 125));
 
     if (pnodeLocalHost == NULL)
         pnodeLocalHost = new CNode(INVALID_SOCKET, CAddress(CService("127.0.0.1", 0), nLocalServices));
