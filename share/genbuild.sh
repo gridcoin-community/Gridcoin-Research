@@ -4,7 +4,7 @@ if [ $# -gt 0 ]; then
     FILE="$1"
     shift
     if [ -f "$FILE" ]; then
-        INFO="$(head -n 1 "$FILE")"
+        INFO="$(head -n 2 "$FILE")"
     fi
 else
     echo "Usage: $0 <filename>"
@@ -19,7 +19,13 @@ if [ -e "$(which git)" ]; then
     DESC="$(git describe --dirty 2>/dev/null)"
 
     # get only commit hash, but format like describe
-    DESCHASH="$(git log -n 1 --format="%h")"
+    DESCHASH="$(git rev-parse --short=9 HEAD 2>/dev/null)"
+
+    # append dirty indicator
+    if [ -n "$DESCHASH" ]; then
+        if ! git diff-index --quiet HEAD -- 2>/dev/null
+            then DESCHASH="${DESCHASH}-dirty" ; fi
+    fi
 
     # get a string like "2012-04-10 16:27:19 +0200"
     TIME="$(git log -n 1 --format="%ci")"
@@ -34,6 +40,9 @@ fi
 if [ -n "$DESCHASH" ]; then
     NEWINFO="$NEWINFO
 #define BUILD_DESCHASH \"$DESCHASH\""
+else
+    NEWINFO="$NEWINFO
+// No build information available"
 fi
 
 # only update build.h if necessary
