@@ -1,3 +1,4 @@
+#include "util.h"
 #include "upgradedialog.h"
 #include "ui_upgradedialog.h"
 #include "clientmodel.h"
@@ -13,8 +14,8 @@
 #include <iostream>
 #include "uint256.h"
 #include "base58.h"
-#include "../global_objects.hpp"
-#include "../global_objects_noui.hpp"
+#include "global_objects.hpp"
+#include "global_objects_noui.hpp"
 #include <QThread>
 #include <QMessageBox>
 
