@@ -1024,6 +1024,10 @@ void NewPollDialog::createPoll(void)
         pollNote_->setText(tr("Creating poll failed! Days value is missing."));
         return;
     }
+    if(sPollDays.toInt() > 180){
+        pollNote_->setText(tr("Creating poll failed! Polls can not last longer than 180 days."));
+        return;
+    }
     if(sPollQuestion.isEmpty()){
         pollNote_->setText(tr("Creating poll failed! Question is missing."));
         return;
