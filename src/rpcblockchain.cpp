@@ -3819,10 +3819,8 @@ Array GetJsonUnspentReport()
 
 Array GetJsonVoteDetailsReport(std::string pollname)
 {
-
     double total_shares = 0;
     double participants = 0;
-    
     double MoneySupplyFactor = GetMoneySupplyFactor();
 
     std::string objecttype="vote";
@@ -3831,61 +3829,47 @@ Array GetJsonVoteDetailsReport(std::string pollname)
     entry.push_back(Pair("Votes","Votes Report " + pollname));
     entry.push_back(Pair("MoneySupplyFactor",RoundToString(MoneySupplyFactor,2)));
 
-    std::string header = "GRCAddress,CPID,Question,Answer,ShareType,URL";
+    // Add header
+    entry.push_back(Pair("GRCAddress,CPID,Question,Answer,ShareType,URL", "Shares"));
 
-    entry.push_back(Pair(header,"Shares"));
-                                    
-    int iRow = 0;
-    for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+    boost::to_lower(pollname);
+    for(const auto& item : mvApplicationCache)
     {
-            std::string key_name  = (*ii).first;
-            if (key_name.length() > objecttype.length())
+        const std::string& key_name = item.first;
+        const std::string& contract = item.second;
+        if (boost::algorithm::starts_with(key_name, objecttype))
+        {
+            const std::string& Title = ExtractXML(contract,"<TITLE>","</TITLE>");
+            if(boost::iequals(pollname, Title))
             {
-                    if (key_name.substr(0,objecttype.length())==objecttype)
-                    {
-                                std::string contract = mvApplicationCache[(*ii).first];
-                                std::string Title = ExtractXML(contract,"<TITLE>","</TITLE>");
+                const std::string& OriginalContract = GetPollContractByTitle("poll",Title);
+                const std::string& Question = ExtractXML(OriginalContract,"<QUESTION>","</QUESTION>");
+                const std::string& GRCAddress = ExtractXML(contract,"<GRCADDRESS>","</GRCADDRESS>");
+                const std::string& CPID = ExtractXML(contract,"<CPID>","</CPID>");
 
-                                std::string OriginalContract = GetPollContractByTitle("poll",Title);
-                                std::string Question = ExtractXML(OriginalContract,"<QUESTION>","</QUESTION>");
+                double dShareType = cdbl(GetPollXMLElementByPollTitle(Title,"<SHARETYPE>","</SHARETYPE>"),0);
+                std::string sShareType= GetShareType(dShareType);
+                std::string sURL = ExtractXML(contract,"<URL>","</URL>");
 
-                                std::string VoterAnswer = ExtractXML(contract,"<ANSWER>","</ANSWER>");
-                                std::string GRCAddress = ExtractXML(contract,"<GRCADDRESS>","</GRCADDRESS>");
-                                std::string CPID = ExtractXML(contract,"<CPID>","</CPID>");
-                                std::string Mag = ExtractXML(contract,"<MAGNITUDE>","</MAGNITUDE>");
+                std::string Balance = ExtractXML(contract,"<BALANCE>","</BALANCE>");
 
-                                double dShareType= cdbl(GetPollXMLElementByPollTitle(Title,"<SHARETYPE>","</SHARETYPE>"),0);
-                                std::string sShareType= GetShareType(dShareType);
-                                std::string sURL = ExtractXML(contract,"<URL>","</URL>");
-
-                                std::string Balance = ExtractXML(contract,"<BALANCE>","</BALANCE>");
-                                boost::to_lower(Title);
-                                boost::to_lower(pollname);
-                                boost::to_lower(VoterAnswer);
-                            
-                                if (pollname == Title)
-                                {
-                                    std::vector<std::string> vVoterAnswers = split(VoterAnswer.c_str(),";");
-                                    for (unsigned int x = 0; x < vVoterAnswers.size(); x++)
-                                    {
-                                        double shares = PollCalculateShares(contract,dShareType,MoneySupplyFactor,vVoterAnswers.size());
-                                        total_shares += shares;
-                                        participants += (double)((double)1/(double)vVoterAnswers.size());
-                                        iRow++;
-                                        std::string voter = GRCAddress + "," + CPID + "," + Question + "," + vVoterAnswers[x] + "," + sShareType + "," + sURL;
-                                        entry.push_back(Pair(voter,RoundToString(shares,0)));
-                                    }
-                                }
-                    }
+                const std::string& VoterAnswer = boost::to_lower_copy(ExtractXML(contract,"<ANSWER>","</ANSWER>"));
+                const std::vector<std::string>& vVoterAnswers = split(VoterAnswer.c_str(),";");
+                for (const auto& answer : vVoterAnswers)
+                {
+                    double shares = PollCalculateShares(contract, dShareType, MoneySupplyFactor, vVoterAnswers.size());
+                    total_shares += shares;
+                    participants += 1.0 / vVoterAnswers.size();
+                    const std::string& voter = GRCAddress + "," + CPID + "," + Question + "," + answer + "," + sShareType + "," + sURL;
+                    entry.push_back(Pair(voter,RoundToString(shares,0)));
+                }
             }
+        }
     }
 
     entry.push_back(Pair("Total Participants",RoundToString(participants,2)));
-                                
-    
     results.push_back(entry);
     return results;
-
 }
 
 
