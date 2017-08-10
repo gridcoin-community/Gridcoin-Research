@@ -1141,33 +1141,29 @@ double GetCountOf(std::string datatype)
     return vScratchPad.size()+1;
 }
 
+// TODO: Make this return std::vector<std::string> instead.
 std::string GetListOf(std::string datatype)
 {
-            std::string rows = "";
-            std::string row = "";
-            for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
-            {
-                std::string key_name  = (*ii).first;
-                if (key_name.length() > datatype.length())
-                {
-                    if (key_name.substr(0,datatype.length())==datatype)
-                    {
-                                std::string key_value = mvApplicationCache[(*ii).first];
-                                std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
-                                row = subkey + "<COL>" + key_value;
-                                if (Contains(row,"INVESTOR") && datatype=="beacon") row = "";
-                                if (row != "")
-                                {
-                                    rows += row + "<ROW>";
-                                }
-                    }
-               
-                }
-           }
-           return rows;
+    std::string rows;
+    for(const auto& item : mvApplicationCache)
+    {
+        const std::string& key_name = item.first;
+        if (boost::algorithm::starts_with(key_name, datatype))
+        {
+            const std::string& key_value = item.second;
+            const std::string& subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
+            std::string row = subkey + "<COL>" + key_value;
+
+            if (datatype=="beacon" && Contains(row,"INVESTOR"))
+                continue;
+
+            if (!row.empty())
+                rows += row + "<ROW>";
+        }
+    }
+
+    return rows;
 }
-
-
 
 std::string GetListOfWithConsensus(std::string datatype)
 {
