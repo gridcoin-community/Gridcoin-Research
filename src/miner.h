@@ -18,9 +18,9 @@ struct CMinerStatus
     double ValueSum;
     double CoinAgeSum;
     int Version;
-    unsigned long CreatedCnt;
-    unsigned long AcceptedCnt;
-    unsigned long KernelsFound;
+    uint64_t CreatedCnt;
+    uint64_t AcceptedCnt;
+    uint64_t KernelsFound;
     int64_t nLastCoinStakeSearchInterval;
 
     void Clear();

@@ -1,7 +1,7 @@
+#include "util.h"
 #include <stdio.h>      // for input output to terminal
 #include <signal.h>
 #include "upgrader.h"
-#include "util.h"
 #include <zip.h>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <sstream>

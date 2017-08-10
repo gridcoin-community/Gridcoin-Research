@@ -18,6 +18,7 @@
 // include <QtSql> // Future Use
 
 #include <fstream>
+#include "util.h"
 
 #include "bitcoingui.h"
 #include "transactiontablemodel.h"
@@ -47,7 +48,6 @@
 #include "wallet.h"
 #include "init.h"
 #include "block.h"
-#include "util.h"
 #include "miner.h"
 
 #ifdef Q_OS_MAC
