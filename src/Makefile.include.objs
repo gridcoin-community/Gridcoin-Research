@@ -38,5 +38,5 @@ OBJS= \
     obj/block.o \
     obj/beacon.o \
     obj/boinc.o \
-    obj/allocators.o
-
+    obj/allocators.o \
+    obj/appcache.o
