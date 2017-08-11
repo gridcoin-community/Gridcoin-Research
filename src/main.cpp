@@ -8657,56 +8657,15 @@ bool MemorizeMessage(std::string msg, int64_t nTime, double dAmount, std::string
 
               if (!sMessageType.empty() && !sMessageKey.empty() && !sMessageValue.empty() && !sMessageAction.empty() && !sSignature.empty())
               {
-
-                  // If this is a DAO, ensure the contents are protected:
-                  if ((sMessageType=="dao" || sMessageType=="daoclient") && !sMessagePublicKey.empty())
-                  {
-                            if (fDebug10) printf("DAO Message %s",msg.c_str());
-
-                            if (sMessageAction=="A")
-                            {
-                                std::string daoPubKey = ReadCache(sMessageType + "pubkey",sMessageKey);
-                                if (daoPubKey.empty())
-                                {
-                                    //We only accept the first message
-                                    WriteCache(sMessageType + "pubkey",sMessageKey,sMessagePublicKey,nTime);
-                                    std::string OrgSymbol = ExtractXML(sMessageValue,"<SYMBOL>","</SYMBOL>");
-                                    std::string OrgName = ExtractXML(sMessageValue,"<NAME>","</NAME>");
-                                    std::string OrgREST = ExtractXML(sMessageValue,"<REST>","</REST>");
-                                    WriteCache(sMessageType + "rest",  OrgSymbol,  OrgREST,    nTime);
-                                    WriteCache(sMessageType + "symbol",sMessageKey,OrgSymbol,  nTime);
-                                    WriteCache(sMessageType + "name",  OrgSymbol,  sMessageKey,nTime);
-                                    WriteCache(sMessageType + "orgname", OrgSymbol,OrgName,    nTime);
-                                }
-                            }
-                  }
-
-                  if (sMessageType=="dao" || sMessageType=="daoclient")
-                  {
-                        sMessagePublicKey = ReadCache(sMessageType+"pubkey",sMessageKey);
-                  }
-                  if (sMessageType == "daofeed")
-                  {
-                        sMessagePublicKey = ReadCache("daopubkey",GetOrgSymbolFromFeedKey(sMessageKey));
-                  }
-
                   //Verify sig first
                   bool Verified = CheckMessageSignature(sMessageAction,sMessageType,sMessageType+sMessageKey+sMessageValue,
                       sSignature,sMessagePublicKey);
-
-                  if ( (sMessageType=="dao" || sMessageType == "daofeed") && !Verified && fDebug3)
-                  {
-                        printf("Message type %s: %s was not verified successfully. PubKey %s \r\n",sMessageType.c_str(),msg.c_str(),sMessagePublicKey.c_str());
-                  }
 
                   if (Verified)
                   {
 
                         if (sMessageAction=="A")
                         {
-                                if ( (sMessageType=="dao" || sMessageType == "daofeed") && fDebug3 )
-                                    printf("Adding MessageKey type %s Key %s Value %s\r\n",
-                                    sMessageType.c_str(),sMessageKey.c_str(),sMessageValue.c_str());
                                 // Ensure we have the TXID of the contract in memory
                                 if (!(sMessageType=="project" || sMessageType=="projectmapping" || sMessageType=="beacon" ))
                                 {

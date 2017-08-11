@@ -222,9 +222,6 @@ extern json_spirit::Value getcheckpoint(const json_spirit::Array& params, bool f
 extern json_spirit::Value showblock(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value listitem(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value execute(const json_spirit::Array& params, bool fHelp);
-extern json_spirit::Value option(const json_spirit::Array& params, bool fHelp);
-extern json_spirit::Value dao(const json_spirit::Array& params, bool fHelp);
-
 extern json_spirit::Value rpc_reorganize(const json_spirit::Array& params, bool fHelp);
 
 //Upgrader RPC Commands:

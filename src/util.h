@@ -591,37 +591,6 @@ public:
 };
 
 bool NewThread(void(*pfn)(void*), void* parg);
-
-#ifdef WIN32
-inline void SetThreadPriority(int nPriority)
-{
-    SetThreadPriority(GetCurrentThread(), nPriority);
-}
-#else
-
-#define THREAD_PRIORITY_LOWEST          PRIO_MAX
-#define THREAD_PRIORITY_BELOW_NORMAL    2
-#define THREAD_PRIORITY_NORMAL          0
-#define THREAD_PRIORITY_ABOVE_NORMAL    -2
-#define THREAD_PRIORITY_HIGHEST        PRIO_MIN
-
-inline void SetThreadPriority(int nPriority)
-{
-    // It's unclear if it's even possible to change thread priorities on Linux,
-    // but we really and truly need it for the generation threads.
-#ifdef PRIO_THREAD
-    setpriority(PRIO_THREAD, 0, nPriority);
-#else
-    setpriority(PRIO_PROCESS, 0, nPriority);
-#endif
-}
-
-inline void ExitThread(size_t nExitCode)
-{
-    pthread_exit((void*)nExitCode);
-}
-#endif
-
 void RenameThread(const char* name);
 
 #endif

@@ -145,7 +145,6 @@ extern std::string TimestampToHRDate(double dtm);
 
 std::string qtGRCCodeExecutionSubsystem(std::string sCommand);
 std::string LegacyDefaultBoincHashArgs();
-std::string GetHttpPage(std::string url);
 double CoinToDouble(double surrogate);
 int64_t GetRSAWeightByCPID(std::string cpid);
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
@@ -167,7 +166,6 @@ std::string getfilecontents(std::string filename);
 
 extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
-std::string GetHttpPage(std::string cpid, bool usedns, bool clearcache);
 void ExecuteCode();
 static BlockFinder RPCBlockFinder;
 
@@ -1143,33 +1141,29 @@ double GetCountOf(std::string datatype)
     return vScratchPad.size()+1;
 }
 
+// TODO: Make this return std::vector<std::string> instead.
 std::string GetListOf(std::string datatype)
 {
-            std::string rows = "";
-            std::string row = "";
-            for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
-            {
-                std::string key_name  = (*ii).first;
-                if (key_name.length() > datatype.length())
-                {
-                    if (key_name.substr(0,datatype.length())==datatype)
-                    {
-                                std::string key_value = mvApplicationCache[(*ii).first];
-                                std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
-                                row = subkey + "<COL>" + key_value;
-                                if (Contains(row,"INVESTOR") && datatype=="beacon") row = "";
-                                if (row != "")
-                                {
-                                    rows += row + "<ROW>";
-                                }
-                    }
-               
-                }
-           }
-           return rows;
+    std::string rows;
+    for(const auto& item : mvApplicationCache)
+    {
+        const std::string& key_name = item.first;
+        if (boost::algorithm::starts_with(key_name, datatype))
+        {
+            const std::string& key_value = item.second;
+            const std::string& subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
+            std::string row = subkey + "<COL>" + key_value;
+
+            if (datatype=="beacon" && Contains(row,"INVESTOR"))
+                continue;
+
+            if (!row.empty())
+                rows += row + "<ROW>";
+        }
+    }
+
+    return rows;
 }
-
-
 
 std::string GetListOfWithConsensus(std::string datatype)
 {
@@ -1434,199 +1428,6 @@ int64_t AmountFromDouble(double dAmount)
     if (!MoneyRange(nAmount))         throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount");
     return nAmount;
 }
-
-
-std::string GetDomainForSymbol(std::string sSymbol)
-{
-            std::string RegRest   = ReadCache("daorest",sSymbol);
-            return RegRest;
-}
-
-
-Value dao(const Array& params, bool fHelp)
-{
-    if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3 && params.size() != 4 && params.size() != 5 && params.size() != 6 && params.size() != 7))
-        throw runtime_error(
-        "dao <string::itemname> <string::parameter> \r\n"
-        "Executes a DAO based command by name.");
-    // Add DAO features - 1-30-2016
-    std::string sItem = params[0].get_str();
-
-    if (sItem=="") throw runtime_error("Item invalid.");
-
-    Array results;
-    Object oOut;
-    oOut.push_back(Pair("Command",sItem));
-    results.push_back(oOut);
-    Object entry;
-        
-    if (sItem == "metric")
-    {
-        if (params.size() < 3)
-        {
-            entry.push_back(Pair("Error","You must specify the ticker and metric_name.  Example: dao metric GRCQ nav."));
-            results.push_back(entry);
-        }
-        else
-        {
-            // Verify the Ticker exists:  1-27-2016
-            std::string sTicker = params[1].get_str();
-            boost::to_upper(sTicker);
-            std::string sMetric = params[2].get_str();
-            boost::to_upper(sMetric);
-            std::string sGRCAddress = DefaultWalletAddress();
-            // Query DAO
-            //std::string OrgPubKey = ReadCache("daopubkey",org);
-            //std::string RegSymbol = ReadCache("daosymbol",org);
-            std::string RegName   = ReadCache("daoorgname",sTicker);
-            std::string RegRest   = ReadCache("daorest",sTicker);
-            if (RegName.empty())
-            {
-                    entry.push_back(Pair("Error","DAO does not exist."));
-                    results.push_back(entry);
-                    return results;
-            }
-            entry.push_back(Pair("DAO ID",sTicker));
-            entry.push_back(Pair("Metric",sMetric));
-            entry.push_back(Pair("Org Name",RegName));
-            entry.push_back(Pair("REST Access",RegRest));
-            std::string sDomain = GetDomainForSymbol(sTicker);
-            // Domain Example = [http://]RESTsubdomain.RESTdomain.DNSdomain/RESTWebServiceDirectory/RESTPage.[protocol]?[QuerystringDirective]=[Key]&[QueryDirectiveII]=[Key]
-            std::string sURL = sDomain + "?address=" + sGRCAddress + "&metric=" + sMetric + "&id=" + sGRCAddress;
-            std::string sResults = GetHttpPage(sURL);
-            std::string sOutput = ExtractXML(sResults,"<metric>","</metric>");
-            entry.push_back(Pair(sMetric.c_str(),sOutput));
-            results.push_back(entry);
-        }
-    }
-    else if (sItem == "link")
-    {
-        if (params.size() < 4)
-        {
-            entry.push_back(Pair("Error","You must specify the ticker, username and password.  Example: dao link myusername mypassword."));
-            results.push_back(entry);
-        }
-        else
-        {
-            // Verify the Ticker exists:  1-27-2016
-            std::string sTicker = params[1].get_str();
-            std::string sUser   = params[2].get_str();
-            std::string sPass   = params[3].get_str();
-            boost::to_upper(sTicker);
-            entry.push_back(Pair("DAO ID",sTicker));
-            entry.push_back(Pair("User",sUser));
-            std::string sEncodedPassword = EncodeBase64(sPass);
-            std::string sGRCAddress = DefaultWalletAddress();
-            std::string sDomain = GetDomainForSymbol(sTicker);
-            std::string RegName   = ReadCache("daoorgname",sTicker);
-            std::string RegRest   = ReadCache("daorest",sTicker);
-            if (RegName.empty())
-            {
-                    entry.push_back(Pair("Error","DAO does not exist."));
-                    results.push_back(entry);
-                    return results;
-            }
-            std::string sURL = sDomain + "?metric=link&address=" + sGRCAddress + "&username=" + sUser + "&pass=" + sEncodedPassword;
-            std::string sResults = GetHttpPage(sURL);
-            std::string sOutput = ExtractXML(sResults,"<response>","</response>");
-            entry.push_back(Pair("Result",sOutput));
-            results.push_back(entry);
-        }
-    }
-    else if (sItem == "adddao")
-    {
-        //execute adddao org_name dao_currency_symbol org_receive_grc_address RESTfulURL
-
-        if (params.size() != 5)
-        {
-            entry.push_back(Pair("Error","You must specify the Organization_Name, DAO_CURRENCY_SYMBOL, ORG_RECEIVING_ADDRESS and RESTfulURL.  For example: execute adddao PetsRUs PETS xKBQaegxasEyBVxmsTMg3HnasNg77CtjLo http://petsrus.com/rest/restquery.php"));
-
-            results.push_back(entry);
-        }
-        else
-        {
-                std::string org    = params[1].get_str();
-                std::string symbol = params[2].get_str();
-                std::string grc    = params[3].get_str();
-                std::string rest   = params[4].get_str();
-                boost::to_upper(org);
-                boost::to_upper(symbol);
-
-                CBitcoinAddress address(grc);
-                bool isValid = address.IsValid();
-                std::string               err = "";
-                if (org.empty())          err = "Org must be specified.";
-                if (symbol.length() != 3 && symbol.length() != 4) err = "Symbol must be 3-4 characters.";
-                if (!isValid)             err = "You must specify a valid GRC receiving address.";
-                std::string OrgPubKey    = ReadCache("daopubkey",org);
-                std::string CachedSymbol = ReadCache("daosymbol",org);
-                std::string CachedName   = ReadCache("daoname",CachedSymbol);
-                if (!CachedSymbol.empty())                         err = "DAO Symbol already exists.  Please choose a different symbol.";
-                if (!OrgPubKey.empty() || !CachedName.empty())     err = "DAO already exists.  Please choose a different Org Name.";
-                if (rest.empty())        err = "You must specify the RESTful URL.";
-                if (!err.empty())
-                {
-                    entry.push_back(Pair("Error",err));
-                    results.push_back(entry);
-                }
-                else
-                {
-                    //Generate the key pair for the org
-                    CKey key;
-                    key.MakeNewKey(false);
-                    CPrivKey vchPrivKey = key.GetPrivKey();
-                    std::string PrivateKey =  HexStr<CPrivKey::iterator>(vchPrivKey.begin(), vchPrivKey.end());
-                    std::string PubKey = HexStr(key.GetPubKey().Raw());
-                    std::string sAction = "add";
-                    std::string sType = "dao";
-                    std::string sPass = PrivateKey;
-                    std::string sName = symbol;
-                    std::string contract = "<NAME>" + org + "</NAME><SYMBOL>" + symbol + "</SYMBOL><ADDRESS>" + grc + "</ADDRESS><PUBKEY>" + PubKey + "</PUBKEY><REST>" + rest + "</REST>";
-                    std::string result = AddMessage(true,sType,sName,contract,sPass,AmountFromValue(100),1,PubKey);
-                    entry.push_back(Pair("DAO Name",org));
-                    entry.push_back(Pair("SYMBOL",symbol));
-                    entry.push_back(Pair("Rest URL",rest));
-                    entry.push_back(Pair("Default Receive Address",grc));
-                    std::string sKeyNarr = "dao" + symbol + "=" + PrivateKey;
-                    entry.push_back(Pair("PrivateKey",sKeyNarr));
-                    entry.push_back(Pair("Warning!","Do not lose your private key.  It is non-recoverable.  You may add it to your config file as noted above OR specify it manually via RPC commands."));
-                    results.push_back(entry);
-    
-                }
-            }
-    }
-
-
-    else
-    {
-            entry.push_back(Pair("Command " + sItem + " not found.",-1));
-            results.push_back(entry);
-    }
-    return results;    
-
-}
-
-
-
-
-
-Value option(const Array& params, bool fHelp)
-{
-    if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3 && params.size() != 4 && params.size() != 5 && params.size() != 6 && params.size() != 7))
-        throw runtime_error(
-        "option <string::itemname> <string::parameter> \r\n"
-        "Executes an option based command by name.");
-
-    std::string sItem = params[0].get_str();
-    if (sItem=="") throw runtime_error("Item invalid.");
-    Array results;
-    Object oOut;
-    oOut.push_back(Pair("Command",sItem));
-    results.push_back(oOut);
-    Object entry;
-    return results;    
-}
-
 
 
 Value execute(const Array& params, bool fHelp)
@@ -2128,235 +1929,10 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("Sent.",fResult));
         results.push_back(entry);
     }
-    else if (sItem == "joindao")
-    {
-        //execute joindao dao_symbol your_receive_grc_address your_email
-
-        if (params.size() != 5)
-        {
-            entry.push_back(Pair("Error","You must specify the DAO_CURRENCY_SYMBOL, your nickname, your GRC_RECEIVING_ADDRESS, and Your_Email (do not use your boinc email; this is used for emergency communication from the DAO to clients).  For example: execute joindao CRG jondoe SKBQaegxasEyBVxmsTMg3HnasNg77CtjLo myemail@mail.com"));
-            results.push_back(entry);
-        }
-        else
-        {
-                std::string symbol       = params[1].get_str();
-                std::string nickname     = params[2].get_str();
-                std::string grc          = params[3].get_str();
-                std::string client_email = params[4].get_str();
-                boost::to_upper(grc);
-                boost::to_upper(symbol);
-                boost::to_upper(client_email);
-
-                CBitcoinAddress address(grc);
-                bool isValid = address.IsValid();
-                std::string               err = "";
-                if (symbol.length() != 3 && symbol.length() != 4) err = "Symbol must be 3-4 characters.";
-                if (nickname.empty())     err = "You must specify a nickname.";
-                if (!isValid)             err = "You must specify a valid GRC receiving address.";
-                std::string OrgPubKey    = ReadCache("daopubkey",symbol);
-                std::string CachedSymbol = ReadCache("daosymbol",symbol);
-                std::string CachedName   = ReadCache("daoname",CachedSymbol);
-                if (CachedSymbol.empty())  err = "DAO does not exist.  Please choose a different symbol.";
-                if (OrgPubKey.empty() || CachedName.empty())  err = "DAO does not exist or cannot be found.  Please choose a different DAO Symbol.";
-
-                
-                if (!err.empty())
-                {
-                    entry.push_back(Pair("Error",err));
-                    results.push_back(entry);
-                }
-                else
-                {
-                    //Generate the key pair for the client
-                    CKey key;
-                    key.MakeNewKey(false);
-                    CPrivKey vchPrivKey = key.GetPrivKey();
-                    std::string PrivateKey =  HexStr<CPrivKey::iterator>(vchPrivKey.begin(), vchPrivKey.end());
-                    std::string PubKey = HexStr(key.GetPubKey().Raw());
-                    std::string sAction = "add";
-                    std::string sType = "daoclient";
-                    std::string sPass = PrivateKey;
-                    std::string sName = nickname + "-" + symbol;
-                    std::string contract = "<NAME>" + nickname + "</NAME><SYMBOL>" + symbol + "</SYMBOL><ADDRESS>" + grc + "</ADDRESS><PUBKEY>" + PubKey + "</PUBKEY><EMAIL>" + client_email + "</EMAIL>";
-
-                    std::string result = AddMessage(true,sType,sName,contract,sPass,AmountFromValue(2500),.1,PubKey);
-                    entry.push_back(Pair("Nickname",nickname));
-                    entry.push_back(Pair("SYMBOL",symbol));
-                    entry.push_back(Pair("Default Receive Address",grc));
-
-                    std::string sKeyNarr = "daoclient" + nickname + "-" + symbol + "=" + PrivateKey;
-                    entry.push_back(Pair("PrivateKey",sKeyNarr));
-                    entry.push_back(Pair("Warning!","Do not lose your private key.  It is non-recoverable.  You may add it to your config file as noted above OR specify it manually via RPC commands."));
-                    results.push_back(entry);
-    
-                }
-            }
-    }
-    
     else if (sItem == "readconfig")
     {
         ReadConfigFile(mapArgs, mapMultiArgs);
 
-    }
-    else if (sItem == "readfeedvalue")
-    {
-        //execute readfeedvalue org_name feed_key
-        if (params.size() != 3)
-        {
-            entry.push_back(Pair("Error","You must specify the org_name, and feed_key: Ex.: execute readfeedvalue COOLORG shares."));
-            results.push_back(entry);
-        }
-        else
-        {
-                std::string orgname   = params[1].get_str();
-                std::string feedkey   = params[2].get_str();
-                std::string symbol    = ReadCache("daosymbol",orgname);
-                boost::to_upper(orgname);
-                boost::to_upper(feedkey);
-                boost::to_upper(symbol);
-
-                if (symbol.empty())
-                {
-                    entry.push_back(Pair("Error","DAO does not exist."));
-                    results.push_back(entry);
-                }
-                else
-                {
-                    //Get the latest feed value (daofeed,symbol-feedkey)
-                    std::string contract = ReadCache("daofeed",symbol+"-"+feedkey);
-                    std::string OrgPubKey = ReadCache("daopubkey",orgname);
-                    std::string feed_value = ExtractXML(contract,"<FEEDVALUE>","</FEEDVALUE>");
-                    entry.push_back(Pair("Contract",contract));
-                    entry.push_back(Pair(feedkey,feed_value));
-                    results.push_back(entry);
-                }
-        }
-
-    }
-    else if (sItem == "daowithdrawalrequest")
-    {
-        //execute sendfeed org_name feed_key feed_value
-        if (params.size() != 4)
-        {
-            entry.push_back(Pair("Error","You must specify your nickname, the dao_symbol and amount: Ex.: execute daowithdrawalrequest jondoe CLG 10000"));
-            results.push_back(entry);
-        }
-        else
-        {
-                
-                std::string nickname  = params[1].get_str();
-                std::string symbol    = params[2].get_str();
-                std::string sAmount   = params[3].get_str();
-                boost::to_upper(symbol);
-                std::string orgname   = ReadCache("daoname",symbol);
-            
-                if (orgname.empty())
-                {
-                    entry.push_back(Pair("Error","DAO does not exist."));
-                    results.push_back(entry);
-                }
-                else
-                {
-                    ReadConfigFile(mapArgs, mapMultiArgs);
-                                        
-                    std::string privkey   = GetArgument("daoclient" + nickname+"-"+symbol, "");
-                    std::string OrgPubKey = ReadCache("daoclientpubkey",nickname+"-"+symbol);
-        
-                    if (OrgPubKey.empty())
-                    {
-                        entry.push_back(Pair("Error","Public Key is missing. Org is corrupted or not yet synchronized."));
-                        results.push_back(entry);
-                    }
-                    else
-                    {
-        
-                        if (privkey.empty())
-                        {
-                            entry.push_back(Pair("Error","Private Key is missing.  To send a message to a dao, you must set the private key." 
-                            + symbol + " key."));
-                            results.push_back(entry);
-                        }
-                        else
-                        {
-                            std::string sAction = "add";
-                            std::string sType = "daowithdrawalrequest";
-                            std::string contract = "<NAME>" + nickname + "</NAME><AMOUNT>" + sAmount + "</AMOUNT>";
-                            std::string result = AddMessage(true,sType,nickname+"-"+symbol,
-                                contract,privkey,AmountFromValue(2500),.01,OrgPubKey);
-                            entry.push_back(Pair("SYMBOL",symbol));
-                            entry.push_back(Pair("PrivKeyPrefix",privkey.substr(0,10)));
-                            entry.push_back(Pair("Amount",sAmount));
-                            entry.push_back(Pair("Results",result));
-                            results.push_back(entry);
-                        }
-                    }
-                }
-        }
-    }
-    
-    else if (sItem == "sendfeed")
-    {
-        //execute sendfeed org_name feed_key feed_value
-        if (params.size() != 4)
-        {
-            entry.push_back(Pair("Error","You must specify the orgname, feed_key and feed_value: Ex.: execute sendfeed COOLORG shares 10000"));
-            results.push_back(entry);
-        }
-        else
-        {
-                std::string orgname   = params[1].get_str();
-                std::string feedkey   = params[2].get_str();
-                std::string feedvalue = params[3].get_str();
-                boost::to_upper(orgname);
-                std::string symbol    = ReadCache("daosymbol",orgname);
-        
-                boost::to_upper(feedkey);
-                boost::to_upper(symbol);
-                boost::to_upper(feedvalue);
-            
-                if (symbol.empty())
-                {
-                    entry.push_back(Pair("Error","DAO does not exist."));
-                    results.push_back(entry);
-                }
-                else
-                {
-                    ReadConfigFile(mapArgs, mapMultiArgs);
-                    std::string privkey   = GetArgument("dao" + symbol, "");
-                    std::string OrgPubKey = ReadCache("daopubkey",orgname);
-        
-                    if (OrgPubKey.empty())
-                    {
-                        entry.push_back(Pair("Error","Public Key is missing. Org is corrupted or not yet synchronized."));
-                        results.push_back(entry);
-                    }
-                    else
-                    {
-        
-                        if (privkey.empty())
-                        {
-                            entry.push_back(Pair("Error","Private Key is missing.  To update a feed value, you must set the dao" 
-                            + symbol + " key."));
-                            results.push_back(entry);
-                        }
-                        else
-                        {
-                            std::string sAction = "add";
-                            std::string sType = "daofeed";
-                            std::string contract = "<FEEDKEY>" + feedkey + "</FEEDKEY><FEEDVALUE>" + feedvalue + "</FEEDVALUE>";
-                            std::string result = AddMessage(true,sType,symbol+"-"+feedkey,
-                                contract,privkey,AmountFromValue(2500),.01,OrgPubKey);
-                            entry.push_back(Pair("SYMBOL",symbol));
-                            entry.push_back(Pair("Feed Key Field",feedkey));
-                            entry.push_back(Pair("PrivKeyPrefix",privkey.substr(0,10)));
-
-                            entry.push_back(Pair("Feed Key Value",feedvalue));
-                            entry.push_back(Pair("Results",result));
-                            results.push_back(entry);
-                        }
-                    }
-                }
-        }
     }
     else if (sItem == "writedata")
     {
@@ -4239,10 +3815,8 @@ Array GetJsonUnspentReport()
 
 Array GetJsonVoteDetailsReport(std::string pollname)
 {
-
     double total_shares = 0;
     double participants = 0;
-    
     double MoneySupplyFactor = GetMoneySupplyFactor();
 
     std::string objecttype="vote";
@@ -4251,61 +3825,47 @@ Array GetJsonVoteDetailsReport(std::string pollname)
     entry.push_back(Pair("Votes","Votes Report " + pollname));
     entry.push_back(Pair("MoneySupplyFactor",RoundToString(MoneySupplyFactor,2)));
 
-    std::string header = "GRCAddress,CPID,Question,Answer,ShareType,URL";
+    // Add header
+    entry.push_back(Pair("GRCAddress,CPID,Question,Answer,ShareType,URL", "Shares"));
 
-    entry.push_back(Pair(header,"Shares"));
-                                    
-    int iRow = 0;
-    for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+    boost::to_lower(pollname);
+    for(const auto& item : mvApplicationCache)
     {
-            std::string key_name  = (*ii).first;
-            if (key_name.length() > objecttype.length())
+        const std::string& key_name = item.first;
+        const std::string& contract = item.second;
+        if (boost::algorithm::starts_with(key_name, objecttype))
+        {
+            const std::string& Title = ExtractXML(contract,"<TITLE>","</TITLE>");
+            if(boost::iequals(pollname, Title))
             {
-                    if (key_name.substr(0,objecttype.length())==objecttype)
-                    {
-                                std::string contract = mvApplicationCache[(*ii).first];
-                                std::string Title = ExtractXML(contract,"<TITLE>","</TITLE>");
+                const std::string& OriginalContract = GetPollContractByTitle("poll",Title);
+                const std::string& Question = ExtractXML(OriginalContract,"<QUESTION>","</QUESTION>");
+                const std::string& GRCAddress = ExtractXML(contract,"<GRCADDRESS>","</GRCADDRESS>");
+                const std::string& CPID = ExtractXML(contract,"<CPID>","</CPID>");
 
-                                std::string OriginalContract = GetPollContractByTitle("poll",Title);
-                                std::string Question = ExtractXML(OriginalContract,"<QUESTION>","</QUESTION>");
+                double dShareType = cdbl(GetPollXMLElementByPollTitle(Title,"<SHARETYPE>","</SHARETYPE>"),0);
+                std::string sShareType= GetShareType(dShareType);
+                std::string sURL = ExtractXML(contract,"<URL>","</URL>");
 
-                                std::string VoterAnswer = ExtractXML(contract,"<ANSWER>","</ANSWER>");
-                                std::string GRCAddress = ExtractXML(contract,"<GRCADDRESS>","</GRCADDRESS>");
-                                std::string CPID = ExtractXML(contract,"<CPID>","</CPID>");
-                                std::string Mag = ExtractXML(contract,"<MAGNITUDE>","</MAGNITUDE>");
+                std::string Balance = ExtractXML(contract,"<BALANCE>","</BALANCE>");
 
-                                double dShareType= cdbl(GetPollXMLElementByPollTitle(Title,"<SHARETYPE>","</SHARETYPE>"),0);
-                                std::string sShareType= GetShareType(dShareType);
-                                std::string sURL = ExtractXML(contract,"<URL>","</URL>");
-
-                                std::string Balance = ExtractXML(contract,"<BALANCE>","</BALANCE>");
-                                boost::to_lower(Title);
-                                boost::to_lower(pollname);
-                                boost::to_lower(VoterAnswer);
-                            
-                                if (pollname == Title)
-                                {
-                                    std::vector<std::string> vVoterAnswers = split(VoterAnswer.c_str(),";");
-                                    for (unsigned int x = 0; x < vVoterAnswers.size(); x++)
-                                    {
-                                        double shares = PollCalculateShares(contract,dShareType,MoneySupplyFactor,vVoterAnswers.size());
-                                        total_shares += shares;
-                                        participants += (double)((double)1/(double)vVoterAnswers.size());
-                                        iRow++;
-                                        std::string voter = GRCAddress + "," + CPID + "," + Question + "," + vVoterAnswers[x] + "," + sShareType + "," + sURL;
-                                        entry.push_back(Pair(voter,RoundToString(shares,0)));
-                                    }
-                                }
-                    }
+                const std::string& VoterAnswer = boost::to_lower_copy(ExtractXML(contract,"<ANSWER>","</ANSWER>"));
+                const std::vector<std::string>& vVoterAnswers = split(VoterAnswer.c_str(),";");
+                for (const auto& answer : vVoterAnswers)
+                {
+                    double shares = PollCalculateShares(contract, dShareType, MoneySupplyFactor, vVoterAnswers.size());
+                    total_shares += shares;
+                    participants += 1.0 / vVoterAnswers.size();
+                    const std::string& voter = GRCAddress + "," + CPID + "," + Question + "," + answer + "," + sShareType + "," + sURL;
+                    entry.push_back(Pair(voter,RoundToString(shares,0)));
+                }
             }
+        }
     }
 
     entry.push_back(Pair("Total Participants",RoundToString(participants,2)));
-                                
-    
     results.push_back(entry);
     return results;
-
 }
 
 

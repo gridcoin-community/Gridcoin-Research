@@ -7,6 +7,7 @@
 
 #include <deque>
 #include <array>
+#include <atomic>
 #include <boost/foreach.hpp>
 #include <openssl/rand.h>
 
@@ -359,15 +360,13 @@ public:
 
 private:
 
-	CNode(const CNode&);
+    CNode(const CNode&);
     void operator=(const CNode&);
 
-	// Network usage totals
-	 static CCriticalSection cs_totalBytesRecv;
-     static CCriticalSection cs_totalBytesSent;
-     static uint64_t nTotalBytesRecv;
-     static uint64_t nTotalBytesSent;
- 
+    // Network usage totals
+    static std::atomic<uint64_t> nTotalBytesRecv;
+    static std::atomic<uint64_t> nTotalBytesSent;
+
 
 public:
 

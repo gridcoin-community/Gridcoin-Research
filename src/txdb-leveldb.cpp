@@ -354,9 +354,6 @@ bool CTxDB::LoadBlockIndex()
     iterator->Seek(ssStartKey.str());
 
     int nLoaded = 0;
-    #if defined(WIN32) && defined(QT_GUI)
-        SetThreadPriority(THREAD_PRIORITY_HIGHEST);
-    #endif
     
     // Now read each entry.
     printf("Loading DiskIndex %d\n",nHighest);
@@ -696,9 +693,6 @@ bool CTxDB::LoadBlockIndex()
     }
 
     printf("RA Complete - RA Time %15" PRId64 "ms\n", GetTimeMillis() - nStart);
-    #if defined(WIN32) && defined(QT_GUI)
-        SetThreadPriority(THREAD_PRIORITY_NORMAL);
-    #endif
 
     return true;
 }

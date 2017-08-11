@@ -205,9 +205,7 @@ void Shutdown(void* parg)
     else
     {
         while (!fExit)
-        MilliSleep(100);
-        MilliSleep(100);
-        ExitThread(0);
+            MilliSleep(100);
     }
 }
 
