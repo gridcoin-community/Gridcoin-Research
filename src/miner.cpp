@@ -1250,7 +1250,7 @@ bool IsMiningAllowed(CWallet *pwallet)
         return false;
     }
 
-    while (!bNetAveragesLoaded)
+    if (!bNetAveragesLoaded)
     {
         msMiningErrors5+="Net averages not yet loaded; ";
         if (LessVerbose(100) && msPrimaryCPID != "INVESTOR") printf("ResearchMiner:Net averages not yet loaded...");
