@@ -744,7 +744,7 @@ bool IsMiningAllowed(CWallet *pwallet)
         status=false;
     }
 
-    while (!bNetAveragesLoaded)
+    if (!bNetAveragesLoaded)
     {
         LOCK(MinerStatus.lock);
         MinerStatus.ReasonNotStaking+="Net averages not yet loaded; ";
