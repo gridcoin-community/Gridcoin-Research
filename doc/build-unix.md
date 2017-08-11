@@ -14,6 +14,20 @@ for example, when specifying the path of the dependency:
 Here BDB_PREFIX must be an absolute path - it is defined using $(pwd) which ensures
 the usage of the absolute path.
 
+Preparing the Build
+--------------------
+
+Install git:
+Ubuntu & Debian: `sudo apt-get install git`
+openSUSE: `sudo zypper install git`
+Clone the repository and cd into it:
+
+```bash
+git clone https://github.com/gridcoin/Gridcoin-Research
+cd Gridcoin-Research
+```
+Go to platform specific instructions for the required depencies below. 
+
 To Build
 ---------------------
 
@@ -68,15 +82,15 @@ individual boost development packages, so the following can be used to only
 install necessary parts of boost:
 
         sudo apt-get install libboost-system-dev libboost-filesystem-dev libboost-chrono-dev libboost-program-options-dev libboost-test-dev libboost-thread-dev
-        sudo apt-get install libcurl3-dev
-        sudo apt-get install libzip-dev 
-        (or aptitude install libcurl3-dev
-        + aptitude install libssl-dev
-    on Debian)
 
 2. If that doesn't work, you can install all boost development packages with:
 
         sudo apt-get install libboost-all-dev
+
+For the upgrader additional packages are needed:
+
+        sudo apt-get install libcurl3-dev libzip-dev
+
 
 BerkeleyDB is required for the wallet.
 
@@ -122,136 +136,75 @@ libqrencode (optional) can be installed with:
 Once these are installed, they will be found by configure and a gridcoinresearch executable will be
 built by default.
 
-Dependency Build Instructions: Fedora
--------------------------------------
+Dependency Build Instructions: OpenSUSE
+----------------------------------------------
 Build requirements:
 
-    sudo dnf install gcc-c++ libtool make autoconf automake openssl-devel libevent-devel boost-devel libdb4-devel libdb4-cxx-devel libcurl-devel libzip-devel
+    sudo zypper install -t pattern devel_basis
+    sudo zypper install libtool automake autoconf pkg-config libopenssl-devel libevent-devel 
 
-Optional:
+Options when installing required Boost library files:
 
-    sudo dnf install miniupnpc-devel
+1. On at least openSUSE Leap there are generic names for the
+individual boost development packages, so the following can be used to only
+install necessary parts of boost:
+
+Tumbleweed:
+
+        sudo zypper install libboost_system1_64_0-devel libboost_filesystem1_64_0-devel libboost_chrono1_64_0-devel libboost_program_options1_64_0-devel libboost_test1_64_0-devel libboost_thread1_64_0-devel
+        
+Leap:
+
+        sudo zypper install libboost_system1_61_0-devel libboost_filesystem1_61_0-devel libboost_chrono1_61_0-devel libboost_program_options1_61_0-devel libboost_test1_61_0-devel libboost_thread1_61_0-devel
+
+2. If that doesn't work, you can install all boost development packages with:
+
+Tumbleweed:
+
+        sudo zypper install boost_1_64-devel
+Leap:
+
+        sudo zypper install boost_1_61-devel
+
+For the upgrader additional packages are needed:
+
+        sudo zypper install libcurl-devel libzip-devel
+
+
+BerkeleyDB is required for the wallet.
+
+      sudo zypper install libdb-4_8-devel
+
+Optional (see --with-miniupnpc and --enable-upnp-default):
+
+    sudo zypper install libminiupnpc-devel
+
+Dependencies for the GUI: openSUSE
+-----------------------------------------
+
+If you want to build gridcoinresearch, make sure that the required packages for Qt development
+are installed. Either Qt 5 or Qt 4 are necessary to build the GUI.
+If both Qt 4 and Qt 5 are installed, Qt 5 will be used. Pass `--with-gui=qt4` to configure to choose Qt4.
+To build without GUI pass `--without-gui`.
 
 To build with Qt 5 (recommended) you need the following:
 
-    sudo dnf install qt5-qttools-devel qt5-qtbase-devel protobuf-devel
+    sudo zypper install libQt5Gui5 libQt5Core5 libQt5DBus5 libQt5Network-devel libqt5-qttools-devel libqt5-qttools
+
+Additionally for Tumbleweed:
+
+    sudo zypper install libQt5Charts5-designer
+
+Alternatively, to build with Qt 4 you need the following:
+
+    sudo zypper install libqt4-devel
 
 libqrencode (optional) can be installed with:
 
-    sudo dnf install qrencode-devel
+    sudo zypper install qrencode-devel
 
-Notes
------
-The release is built with GCC and then "strip gridcoinresearchd" to strip the debug
-symbols, which reduces the executable size by about 90%.
-
-
-miniupnpc
----------
-
-[miniupnpc](http://miniupnp.free.fr/) may be used for UPnP port mapping.  It can be downloaded from [here](
-http://miniupnp.tuxfamily.org/files/).  UPnP support is compiled in and
-turned off by default.  See the configure options for upnp behavior desired:
-
-	--without-miniupnpc      No UPnP support miniupnp not required
-	--disable-upnp-default   (the default) UPnP support turned off by default at runtime
-	--enable-upnp-default    UPnP support turned on by default at runtime
-
-
-Berkeley DB
------------
-It is recommended to use Berkeley DB 4.8. If you have to build it yourself:
-
-```bash
-GRIDCOIN_ROOT=$(pwd)
-
-# Pick some path to install BDB to, here we create a directory within the Gridcoin-Research directory
-BDB_PREFIX="${GRIDCOIN_ROOT}/db4"
-mkdir -p $BDB_PREFIX
-
-# Fetch the source and verify that it is not tampered with
-wget 'http://download.oracle.com/berkeley-db/db-4.8.30.NC.tar.gz'
-echo '12edc0df75bf9abd7f82f821795bcee50f42cb2e5f76a6a281b85732798364ef  db-4.8.30.NC.tar.gz' | sha256sum -c
-# -> db-4.8.30.NC.tar.gz: OK
-tar -xzvf db-4.8.30.NC.tar.gz
-
-# Build the library and install to our prefix
-cd db-4.8.30.NC/build_unix/
-#  Note: Do a static build so that it can be embedded into the executable, instead of having to find a .so at runtime
-../dist/configure --enable-cxx --disable-shared --with-pic --prefix=$BDB_PREFIX
-make install
-
-# Configure Gridcoin to use our own-built instance of BDB
-cd $GRIDCOIN_ROOT
-./autogen.sh
-./configure LDFLAGS="-L${BDB_PREFIX}/lib/" CPPFLAGS="-I${BDB_PREFIX}/include/" # (other args...)
-```
-
-**Note**: You only need Berkeley DB if the wallet is enabled (see the section *Disable-Wallet mode* below).
-
-Boost
------
-If you need to build Boost yourself:
-
-	sudo su
-	./bootstrap.sh
-	./bjam install
-
-
-Security
---------
-To help make your gridcoin installation more secure by making certain attacks impossible to
-exploit even if a vulnerability is found, binaries are hardened by default.
-This can be disabled with:
-
-Hardening Flags:
-
-	./configure --enable-hardening
-	./configure --disable-hardening
-
-
-Hardening enables the following features:
-
-* Position Independent Executable
-    Build position independent code to take advantage of Address Space Layout Randomization
-    offered by some kernels. Attackers who can cause execution of code at an arbitrary memory
-    location are thwarted if they don't know where anything useful is located.
-    The stack and heap are randomly located by default but this allows the code section to be
-    randomly located as well.
-
-    On an AMD64 processor where a library was not compiled with -fPIC, this will cause an error
-    such as: "relocation R_X86_64_32 against `......' can not be used when making a shared object;"
-
-    To test that you have built PIE executable, install scanelf, part of paxutils, and use:
-
-    	scanelf -e ./Gridcoin-Research
-
-    The output should contain:
-
-     TYPE
-    ET_DYN
-
-* Non-executable Stack
-    If the stack is executable then trivial stack based buffer overflow exploits are possible if
-    vulnerable buffers are found. By default, gridcoin should be built with a non-executable stack
-    but if one of the libraries it uses asks for an executable stack or someone makes a mistake
-    and uses a compiler extension which requires an executable stack, it will silently build an
-    executable without the non-executable stack protection.
-
-    To verify that the stack is non-executable after compiling use:
-    `scanelf -e ./Gridcoin-Research`
-
-    the output should contain:
-	STK/REL/PTL
-	RW- R-- RW-
-
-    The STK RW- means that the stack is readable and writeable but not executable.
-
-Additional Configure Flags
---------------------------
-A list of additional configure flags can be displayed with:
-
-    ./configure --help
+Once these are installed, they will be found by configure and a gridcoinresearch executable will be
+built by default.
 
 
 Setup and Build Example: Arch Linux
