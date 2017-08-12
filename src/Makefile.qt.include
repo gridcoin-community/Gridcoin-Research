@@ -83,8 +83,6 @@ QT_FORMS_UI = \
   qt/forms/sendcoinsdialog.ui \
   qt/forms/transactiondescdialog.ui \
   qt/forms/askpassphrasedialog.ui \
-  qt/forms/miningdialog.ui \
-  qt/forms/qrcodedialog.ui \
   qt/forms/sendcoinsentry.ui \
   qt/forms/upgradedialog.ui
 
@@ -163,7 +161,6 @@ GRIDCOINRESEARCH_H = \
   qt/optionsdialog.h \
   qt/optionsmodel.h \
   qt/overviewpage.h \
-  qt/qrcodedialog.h \
   qt/qtipcserver.h \
   qt/qvalidatedlineedit.h \
   qt/qvaluecombobox.h \
@@ -264,7 +261,6 @@ GRIDCOINRESEARCH_CPP = \
   qt/optionsdialog.cpp \
   qt/optionsmodel.cpp \
   qt/overviewpage.cpp \
-  qt/qrcodedialog.cpp \
   qt/qtipcserver.cpp \
   qt/qvalidatedlineedit.cpp \
   qt/qvaluecombobox.cpp \
@@ -288,6 +284,13 @@ RES_IMAGES =
 RES_MOVIES = $(wildcard $(srcdir)/qt/res/movies/spinner-*.png)
 
 BITCOIN_RC = qt/res/bitcoin-qt-res.rc
+
+if USE_QRCODE
+GRIDCOINRESEARCH_CPP += qt/qrcodedialog.cpp
+GRIDCOINRESEARCH_H += qt/qrcodedialog.h
+QT_FORMS_UI += qt/forms/qrcodedialog.ui
+endif
+
 
 BITCOIN_QT_INCLUDES = -I$(builddir)/qt -I$(srcdir)/qt -I$(srcdir)/qt/forms \
   -I$(builddir)/qt/forms
@@ -331,7 +334,6 @@ qt_gridcoinresearch_LDADD += $(LIBGRIDCOIN_UTIL) $(LIBUNIVALUE) $(LIBLEVELDB) $(
   $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS)
 qt_gridcoinresearch_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(QT_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
 qt_gridcoinresearch_LIBTOOLFLAGS = --tag CXX
-
 #locale/foo.ts -> locale/foo.qm
 QT_QM=$(QT_TS:.ts=.qm)
 
