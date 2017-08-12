@@ -143,7 +143,6 @@ MiningCPID GetNextProject(bool bForce);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 extern std::string TimestampToHRDate(double dtm);
 
-std::string qtGRCCodeExecutionSubsystem(std::string sCommand);
 std::string LegacyDefaultBoincHashArgs();
 double CoinToDouble(double surrogate);
 int64_t GetRSAWeightByCPID(std::string cpid);
@@ -2719,17 +2718,6 @@ Value execute(const Array& params, bool fHelp)
     
 
     }
-    else if (sItem == "DISABLE_WINDOWS_ERROR_REPORTING")
-    {
-        std::string result = "FAIL";
-        #if defined(WIN32) && defined(QT_GUI)
-            qtGRCCodeExecutionSubsystem("DISABLE_WINDOWS_ERROR_REPORTING");
-        #endif
-        Object entry;
-        entry.push_back(Pair("DISABLE_WINDOWS_ERROR_REPORTING",result));
-        results.push_back(entry);
-    }
-
     else if (sItem == "testcpid")
     {
         std::string bpk = "29dbf4a4f2e2baaff5f5e89e2df98bc8";
