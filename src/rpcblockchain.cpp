@@ -4407,31 +4407,6 @@ Value listitem(const Array& params, bool fHelp)
         results.push_back(entry);
 
 	}
-    else if (sitem == "betatest")
-    {
-        Object entry;
-        // Test a sample CPID keypair
-        entry.push_back(Pair("CPID",msPrimaryCPID));
-        std::string sBeaconPublicKey = GetBeaconPublicKey(msPrimaryCPID, false);
-        entry.push_back(Pair("Beacon Public Key",sBeaconPublicKey));
-        std::string sSignature = SignBlockWithCPID(msPrimaryCPID,"1000");
-        entry.push_back(Pair("Signature",sSignature));
-        // Validate the signature
-        bool fResult = VerifyCPIDSignature(msPrimaryCPID, "1000", sSignature);
-        entry.push_back(Pair("Sig Valid",fResult));
-        fResult = VerifyCPIDSignature(msPrimaryCPID, "1001", sSignature);
-        entry.push_back(Pair("Wrong Block Sig Valid",fResult));
-        fResult = VerifyCPIDSignature(msPrimaryCPID, "1000", "wrong_signature" + sSignature + "wrong_signature");
-        entry.push_back(Pair("Right block, Wrong Signature Valid",fResult));
-        // Missing Beacon, with wrong CPID
-        std::string sCPID = "1234567890";
-        sBeaconPublicKey = GetBeaconPublicKey(sCPID, false);
-        sSignature = SignBlockWithCPID(sCPID,"1001");
-        entry.push_back(Pair("Signature",sSignature));
-        fResult = VerifyCPIDSignature(sCPID, "1001", sSignature);
-        entry.push_back(Pair("Bad CPID with missing beacon",fResult));
-        results.push_back(entry);
-    }
     else if (sitem == "debugexplainmagnitude")
     {
         double dMag = ExtractMagnitudeFromExplainMagnitude();
