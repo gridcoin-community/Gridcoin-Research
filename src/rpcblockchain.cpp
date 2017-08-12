@@ -2876,28 +2876,6 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("Error","You must specify true or false as an option."));
         results.push_back(entry);
     }
-    else if (sItem == "debug4")
-    {
-        if (params.size() == 2 && (params[1].get_str() == "true" || params[1].get_str() == "false"))
-        {
-            fDebug4 = (params[1].get_str() == "true") ? true : false;
-            entry.push_back(Pair("Debug4", fDebug4 ? "Entering debug mode." : "Exiting debug mode."));
-        }
-        else
-            entry.push_back(Pair("Error","You must specify true or false as an option."));
-        results.push_back(entry);
-    }
-    else if (sItem == "debug5")
-    {
-        if (params.size() == 2 && (params[1].get_str() == "true" || params[1].get_str() == "false"))
-        {
-            fDebug5 = (params[1].get_str() == "true") ? true : false;
-            entry.push_back(Pair("Debug5", fDebug5 ? "Entering debug mode." : "Exiting debug mode."));
-        }
-        else
-            entry.push_back(Pair("Error","You must specify true or false as an option."));
-        results.push_back(entry);
-    }
     else if (sItem == "debug10")
     {
         if (params.size() == 2 && (params[1].get_str() == "true" || params[1].get_str() == "false"))
