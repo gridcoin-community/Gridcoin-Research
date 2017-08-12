@@ -2362,26 +2362,6 @@ Value execute(const Array& params, bool fHelp)
         }
     
     }
-    else if (sItem == "testboinckey")
-    {
-        std::string sType="project";
-
-        std::string strMasterPrivateKey = (sType=="project" || sType=="projectmapping") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
-        std::string sig = SignMessage("hello",strMasterPrivateKey);
-        entry.push_back(Pair("hello",sig));
-        //Forged Key
-        std::string forgedKey = "3082011302010104202b1c9faef66d42218eefb7c66fb6e49292972c8992b4100bb48835d325ec2d34a081a53081a2020101302c06072a8648ce3d0101022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f300604010004010704410479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141020101a144034200040cb218ee7495c2ba5d6ba069f97810e85dae8b446c0e4a1c6dec7fe610ab0fa4378bda5320f00e7a08a8e428489f41ad79d0428a091aa548aca18adbbbe64d41";
-        std::string sig2 = SignMessage("hello",forgedKey);
-        bool r10 = CheckMessageSignature("R",sType,"hello",sig2,"");
-        entry.push_back(Pair("FK10",r10));
-        std::string sig3 = SignMessage("hi",strMasterPrivateKey);
-        bool r11 = CheckMessageSignature("R","project","hi",sig3,"");
-        entry.push_back(Pair("FK11",r11));
-        bool r12 = CheckMessageSignature("R","general","1",sig3,"");
-        entry.push_back(Pair("FK12",r12));
-        results.push_back(entry);
-    
-    }
     else if (sItem == "genboinckey")
     {
         //Gridcoin - R Halford - Generate Boinc Mining Key - 2-6-2015
