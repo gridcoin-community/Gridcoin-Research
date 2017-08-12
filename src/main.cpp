@@ -301,7 +301,6 @@ extern std::string aes_complex_hash(uint256 scrypt_hash);
 volatile bool bNetAveragesLoaded = false;
 volatile bool bTallyStarted      = false;
 volatile bool bForceUpdate = false;
-volatile bool bExecuteCode = false;
 volatile bool bCheckedForUpgrade = false;
 volatile bool bCheckedForUpgradeLive = false;
 volatile bool bGlobalcomInitialized = false;

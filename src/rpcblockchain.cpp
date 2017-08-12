@@ -2642,11 +2642,6 @@ Value execute(const Array& params, bool fHelp)
             #endif
 
     }
-    else if (sItem == "volatilecode")
-    {
-        bExecuteCode = true;
-        printf("Executing volatile code \r\n");
-    }
     else if (sItem == "getnextproject")
     {
             GetNextProject(true);
