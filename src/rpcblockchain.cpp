@@ -2662,37 +2662,6 @@ Value execute(const Array& params, bool fHelp)
         }
     
     }
-
-    else if (sItem == "testcpidv2")
-    {
-        if (params.size() != 3)
-        {
-            entry.push_back(Pair("Error","You must specify both parameters boincruntimepublickey and boinccpid"));
-            results.push_back(entry);
-        }
-        else
-        {
-            std::string sParam1 = params[1].get_str();
-            std::string sParam2 = params[2].get_str();
-            entry.push_back(Pair("Param1",sParam1));
-            entry.push_back(Pair("Param2",sParam2));
-            //12-25-2014 Test CPIDv2
-            std::string newcpid = ComputeCPIDv2(sParam2,sParam1,0);
-            std::string shortcpid = RetrieveMd5(sParam1+sParam2);
-            entry.push_back(Pair("CPID1",shortcpid));
-            bool isvalid = CPID_IsCPIDValid(shortcpid, newcpid,0);
-            entry.push_back(Pair("CPIDv2 is valid",isvalid));
-            isvalid = CPID_IsCPIDValid(shortcpid, newcpid,10);
-            entry.push_back(Pair("CPIDv2 is valid on bad block",isvalid));
-            std::string me = ComputeCPIDv2(sParam2,sParam1,0);
-            entry.push_back(Pair("CPIDv2 on block0",me));
-            me = ComputeCPIDv2(sParam2,sParam1,10);
-            entry.push_back(Pair("CPIDv2 on block10",me));
-            results.push_back(entry);
-        }
-    
-
-    }
     else if (sItem == "reindex")
     {
             int r=-1;
