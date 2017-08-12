@@ -1435,7 +1435,9 @@ Value execute(const Array& params, bool fHelp)
     if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3 && params.size() != 4 && params.size() != 5 && params.size() != 6 && params.size() != 7))
         throw runtime_error(
         "execute <string::itemname> <string::parameter> \r\n"
-        "Executes an arbitrary command by name.");
+        "Executes an arbitrary command by name.\n"
+        "execute help\n"
+        "Displays help on various available execute commands.\n");
 
     std::string sItem = params[0].get_str();
 
@@ -1496,7 +1498,12 @@ Value execute(const Array& params, bool fHelp)
     {
         if (params.size() < 5)
         {
-            entry.push_back(Pair("Error","You must specify Burn Address, Amount, Burn_Key and Burn_Message.  Example: execute burn GRCADDRESS 10 burn_key burn_detail..."));
+            entry.push_back(Pair("Error","You must specify Burn Address, Amount, Burn_Key and Burn_Message"));
+            entry.push_back(Pair("execute burn <burnaddress> <burnamount> <burnkey> <burndetail>", "Burn coins for contract"));
+            entry.push_back(Pair("<burnaddress>", "Address of the coins will be burned to"));
+            entry.push_back(Pair("<burnamount>", "Amount of coins to be burned"));
+            entry.push_back(Pair("<burnkey>", "Burn key to be used"));
+            entry.push_back(Pair("<burndetail>", "Details of the burn"));
             results.push_back(entry);
         }
         else
@@ -2127,6 +2134,13 @@ Value execute(const Array& params, bool fHelp)
         if (params.size() != 7)
         {
             entry.push_back(Pair("Error","You must specify the Poll Title, Expiration In DAYS from Now, Question, Answers delimited by a semicolon, ShareType (1=Magnitude,2=Balance,3=Both,4=CPIDCount,5=ParticipantCount) and discussion URL (use TinyURL.com to make a small URL).  Please use underscores in place of spaces inside a sentence.  "));
+            entry.push_back(Pair("execute addpoll <title> <days> <question> <answers> <sharetype> <url>", "Add a poll (Requires minimum 100000 GRC balance)"));
+            entry.push_back(Pair("<title>", "Title for poll with no spaces. Use _ in between words"));
+            entry.push_back(Pair("<days>", "Number of days the poll will run"));
+            entry.push_back(Pair("<question>", "The poll question in which you seek input for"));
+            entry.push_back(Pair("<answers>", "The available answers to which a voter can vote seperated by a semicolon"));
+            entry.push_back(Pair("<sharetype>", "1 = Magnitude 2 = Balance 3 = Magnitude + Balance 4 = CPID count 5 = Participant count"));
+            entry.push_back(Pair("<url>", "Short url for information about the poll"));
             results.push_back(entry);
         }
         else
@@ -2907,6 +2921,87 @@ Value execute(const Array& params, bool fHelp)
         }
         else
             entry.push_back(Pair("Error","You must specify true or false as an option."));
+        results.push_back(entry);
+    }
+    else if (sItem == "help")
+    {
+        entry.push_back(Pair("execute addpoll <title> <days> <question> <answers> <sharetype> <url>", "Add a poll (Requires minimum 100000 GRC balance)"));
+        entry.push_back(Pair("execute advertisebeacon", "Advertise a beacon (Requires wallet to be fully unlocked"));
+        entry.push_back(Pair("execute askforoutstandingblock", "Asks nodes for outstanding blocks"));
+        entry.push_back(Pair("execute backupwallet", "Backup wallet"));
+        entry.push_back(Pair("execute beaconreport", "Displays information about current active beacons in the network"));
+        entry.push_back(Pair("execute beaconstatus", "Displays information about your beacon"));
+        entry.push_back(Pair("execute burn <burnaddress> <burnamount> <burnkey> <burndetail>", "Burn coins for contract"));
+        entry.push_back(Pair("execute cleanchain", "Cleans current chain and attempts to reorganize"));
+        entry.push_back(Pair("execute currentneuralhash", "Displays the popular hash in current neural report from all neural nodes"));
+        entry.push_back(Pair("execute currentneuralreport", "Displays all hashes staked recently by neural nodes"));
+        entry.push_back(Pair("execute debug <true/false>", "Turn on/off debug messages on the fly"));
+        entry.push_back(Pair("execute debug2 <true/false>", "Turn on/of debug2 messages on the fly"));
+        entry.push_back(Pair("execute debug3 <true/false>", "Turn on/off debug3 messages on the fly"));
+        entry.push_back(Pair("execute debug10 <true/false>", "Turn on/off debug10 messages on the fly"));
+        entry.push_back(Pair("execute debugnew <true/false>", "Turn on/off debugnet messages on the fly"));
+        entry.push_back(Pair("execute decryptphrase <phrase>", "Decrypt an encrypted phrase"));
+        #if defined(WIN32) && defined(QT_GUI)
+        entry.push_back(Pair("execute DISABLE_WINDOWS_ERROR_REPORTING", "Disable windows error reporting"));
+        entry.push_back(Pair("execute downloadblocks", "Download blocks from blockchain"));
+        #endif
+        entry.push_back(Pair("execute dportally", "Tally magnitudes in superblock"));
+        entry.push_back(Pair("execute encrypt <phrase>", "Encrypt a wallet pass phrase (autounlock feature)"));
+        entry.push_back(Pair("execute encryptphrase <phrase>", "Encrypt a phrase or message"));
+        entry.push_back(Pair("execute explainmagnitude2 <true>", "Explains your neural network magnitude. True is optioinal for force"));
+        entry.push_back(Pair("execute listallpolldetails", "Displays all polls past and present with details"));
+        entry.push_back(Pair("execute listallpolls", "Displays all polls past and present"));
+        entry.push_back(Pair("execute listpolldetails", "Displays all active polls details"));
+        entry.push_back(Pair("execute listpollresults <title> <true>", "Displays poll results for specified title. True is optional for expired polls"));
+        entry.push_back(Pair("execute listpolls", "Displays all active polls"));
+        #if defined(WIN32) && defined(QT_GUI)
+        entry.push_back(Pair("execute myneuralhash", "Displays your current neural hash from contract"));
+        #endif
+        entry.push_back(Pair("execute neuralhash", "Displays the network popular hash in neural report (Participating nodes)"));
+        entry.push_back(Pair("execute neuralreport", "Dispalys information of recently staked neural votes by participating nodes"));
+        entry.push_back(Pair("execute neuralresponse", "Requests a response from neural network"));
+        entry.push_back(Pair("execute rain <raindata>", "Sends rain to specified users. Format Address<COL>Amount<ROW>..."));
+        #if defined(WIN32) && defined(QT_GUI)
+        entry.push_back(Pair("execute reboot", "Reboots wallet"));
+        entry.push_back(Pair("execute reindex", "Reindex blockchain"));
+        #endif
+        entry.push_back(Pair("execute resendwallettx", "Resends a wallet tx"));
+        entry.push_back(Pair("execute resetcpids", "Resets wallet cpids (can be used to correct cpids after a split cpid is fixed)"));
+        #if defined(WIN32) && defined(QT_GUI)
+        entry.push_back(Pair("execute restart", "Restarts wallet"));
+        entry.push_back(Pair("execute restorepoint", "Creates a restore point for wallet"));
+        #endif
+        entry.push_back(Pair("execute restorewallet", "Restore wallet from backup made by 'backupwallet'"));
+        entry.push_back(Pair("execute staketime", "Displays unix timestamp based on stake gric time and cpid time"));
+        entry.push_back(Pair("execute superblockage", "Displays information and age about current superblock"));
+        entry.push_back(Pair("execute syncdpor2", "Syncronize with neural network"));
+        entry.push_back(Pair("execute tally", "Tallys research averages"));
+        entry.push_back(Pair("execute tallyneural", "Tally neural quorum data"));
+        entry.push_back(Pair("execute unspentreport", "Displays unspent wallet information"));
+        entry.push_back(Pair("execute upgradedbeaconreport", "Displays information about upgraded beacons"));
+        entry.push_back(Pair("execute updatequorumdata", "Updates neural quorum data"));
+        entry.push_back(Pair("execute versionreport", "Displays information about client versions that staked the last 100 blocks"));
+        entry.push_back(Pair("execute vote <title> <answer>", "Casts a vote for a specific poll with chosen answer"));
+        entry.push_back(Pair("execute votedetails <title>", "Displays information on a specified polls votes"));
+        results.push_back(entry);
+    }
+    else if (sItem == "helpdev")
+    {
+        entry.push_back(Pair("execute addkey <add_or_delete> <keytype> <projectname> <value>", "Add or delete key to network"));
+        #if defined(WIN32) && defined(QT_GUI)
+        entry.push_back(Pair("execute executecode", "Excute .net code"));
+        #endif
+        entry.push_back(Pair("execute forcequorum", "Force quorum"));
+        entry.push_back(Pair("execute gatherneuralhashes", "Gather neural hashes"));
+        entry.push_back(Pair("execute getlistof <keytype>", "Get list of keytype data"));
+        entry.push_back(Pair("execute listdata <keytype>", "List data in a keytype"));
+        entry.push_back(Pair("execute memorizekeys", "Memorize keys from admin messages"));
+        entry.push_back(Pair("execute readdata <key> <value>", "Display value from a keys data"));
+        entry.push_back(Pair("execute refhash <grcaddress>", "Check if a grc address is a neural node participant as well as you"));
+        entry.push_back(Pair("execute sendblock <hash>", "Send a block to network"));
+        entry.push_back(Pair("execute testnewcontract", "Test current neural contract"));
+        entry.push_back(Pair("execute volatilecode", "Execute volatile code"));
+        entry.push_back(Pair("execute writedata <key> <value>", "Write data to a key with value"));
         results.push_back(entry);
     }
     else
