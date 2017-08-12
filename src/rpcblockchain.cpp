@@ -2626,22 +2626,6 @@ Value execute(const Array& params, bool fHelp)
         }
     
     }
-    else if (sItem == "chainrsa")
-    {
-        if (params.size() != 2)
-        {
-            entry.push_back(Pair("Error","You must specify a cpid"));
-            results.push_back(entry);
-        }
-        else
-        {
-            std::string sParam1 = params[1].get_str();
-            entry.push_back(Pair("CPID",sParam1));
-            
-        }
-
-
-    }
     else if (sItem == "testorgkey")
     {
         if (params.size() != 3)
