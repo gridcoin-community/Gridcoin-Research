@@ -2,11 +2,11 @@
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-TESTS += test/test_bitcoin
-bin_PROGRAMS += test/test_bitcoin
+TESTS += test/test_gridcoin
+bin_PROGRAMS += test/test_gridcoin
 # noinst_PROGRAMS += test/test_bitcoin_fuzzy
 TEST_SRCDIR = test
-TEST_BINARY=test/test_bitcoin$(EXEEXT)
+TEST_BINARY=test/test_gridcoin$(EXEEXT)
 
 JSON_TEST_FILES = \
   test/data/base58_keys_valid.json \
@@ -21,8 +21,8 @@ RAW_TEST_FILES =
 
 GENERATED_TEST_FILES = $(JSON_TEST_FILES:.json=.json.h) $(RAW_TEST_FILES:.raw=.raw.h)
 
-# test_bitcoin binary #
-BITCOIN_TESTS =\
+# test_n binary #
+GRIDCOIN_TESTS =\
   test/Checkpoints_tests.cpp \
   test/DoS_tests.cpp \
   test/accounting_tests.cpp \
@@ -52,43 +52,29 @@ BITCOIN_TESTS =\
   test/wallet_tests.cpp
 
 
-test_test_bitcoin_SOURCES = $(BITCOIN_TESTS) $(JSON_TEST_FILES) $(RAW_TEST_FILES)
-test_test_bitcoin_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) -I$(builddir)/test/ $(TESTDEFS) $(EVENT_CFLAGS)
-test_test_bitcoin_LDADD = $(LIBLEVELDB) $(LIBMEMENV) $(BOOST_LIBS) $(BOOST_UNIT_TEST_FRAMEWORK_LIB) $(EVENT_LIBS) $(EVENT_PTHREADS_LIBS)
-test_test_bitcoin_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+test_test_gridcoin_SOURCES = $(GRIDCOIN_TESTS) $(JSON_TEST_FILES) $(RAW_TEST_FILES)
+test_test_gridcoin_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) -I$(builddir)/test/ $(TESTDEFS) $(EVENT_CFLAGS)
+test_test_gridcoin_LDADD = $(LIBGRIDCOIN_UTIL) $(LIBLEVELDB) $(LIBMEMENV) $(BOOST_LIBS) $(BOOST_UNIT_TEST_FRAMEWORK_LIB) $(EVENT_LIBS) $(EVENT_PTHREADS_LIBS) $(CURL_LIBS) $(LIBZIP_LIBS)
+test_test_gridcoin_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 
-test_test_bitcoin_LDADD += $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS)
-test_test_bitcoin_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) -static
+test_test_gridcoin_LDADD += $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS)
+test_test_gridcoin_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) -static
 
-#
+nodist_test_test_gridcoin_SOURCES = $(GENERATED_TEST_FILES)
 
-# test_bitcoin_fuzzy binary #
-#test_test_bitcoin_fuzzy_SOURCES = test/test_bitcoin_fuzzy.cpp
-#test_test_bitcoin_fuzzy_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
-#test_test_bitcoin_fuzzy_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-#test_test_bitcoin_fuzzy_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
+$(GRIDCOIN_TESTS): $(GENERATED_TEST_FILES)
 
-#test_test_bitcoin_fuzzy_LDADD = \
-#  $(LIBBITCOIN_UTIL) \
+CLEAN_GRIDCOIN_TEST = test/*.gcda test/*.gcno $(GENERATED_TEST_FILES)
 
-#test_test_bitcoin_fuzzy_LDADD += $(BOOST_LIBS) $(CRYPTO_LIBS)
-##
+CLEANFILES += $(CLEAN_GRIDCOIN_TEST)
 
-nodist_test_test_bitcoin_SOURCES = $(GENERATED_TEST_FILES)
+gridcoin_test: $(TEST_BINARY)
 
-$(BITCOIN_TESTS): $(GENERATED_TEST_FILES)
-
-CLEAN_BITCOIN_TEST = test/*.gcda test/*.gcno $(GENERATED_TEST_FILES)
-
-CLEANFILES += $(CLEAN_BITCOIN_TEST)
-
-bitcoin_test: $(TEST_BINARY)
-
-bitcoin_test_check: $(TEST_BINARY) FORCE
+gridcoin_test_check: $(TEST_BINARY) FORCE
 	$(MAKE) check-TESTS TESTS=$^
 
-bitcoin_test_clean : FORCE
-	rm -f $(CLEAN_BITCOIN_TEST) $(test_test_bitcoin_OBJECTS) $(TEST_BINARY)
+gridcoin_test_clean : FORCE
+	rm -f $(CLEAN_GRIDCOIN_TEST) $(test_test_GRIDCOIN_OBJECTS) $(TEST_BINARY)
 
 check-local:
 	@echo "Running test/util/bitcoin-util-test.py..."
