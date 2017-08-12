@@ -220,9 +220,9 @@ if EMBEDDED_LEVELDB
 include Makefile.leveldb.include
 endif
 
-# if ENABLE_TESTS
-# include Makefile.test.include
-# endif
+if ENABLE_TESTS
+  include Makefile.test.include
+endif
 
 # if ENABLE_BENCH
 # include Makefile.bench.include
@@ -232,6 +232,6 @@ if ENABLE_QT
 include Makefile.qt.include
 endif
 
-# if ENABLE_QT_TESTS
-# include Makefile.qttest.include
-# endif
+if ENABLE_QT_TESTS
+  include Makefile.qttest.include
+endif

@@ -22,7 +22,7 @@ RAW_TEST_FILES =
 GENERATED_TEST_FILES = $(JSON_TEST_FILES:.json=.json.h) $(RAW_TEST_FILES:.raw=.raw.h)
 
 # test_bitcoin binary #
-BITCOIN_TESTS =\	
+BITCOIN_TESTS =\
   test/Checkpoints_tests.cpp \
   test/DoS_tests.cpp \
   test/accounting_tests.cpp \
