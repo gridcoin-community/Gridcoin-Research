@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Fixed
  - Fix a crash when starting up as a new user, #488 (@Foggyx420, 
    @denravonska).
+ - Fix an out of memory crash when syncing from 0, #508 (@tomasbrod).
 
 ## [3.5.9.9] - 2017-08-05
 ### Changed
