@@ -1667,18 +1667,6 @@ Value execute(const Array& params, bool fHelp)
         results.push_back(entry);
 
     }
-    else if (sItem=="testnet0917")
-    {
-    
-        WriteKey("testnet10","09172016");       
-        std::string testnet = GetArgument("testnet10", "NA3");
-        entry.push_back(Pair("testnetval4", testnet.c_str()));
-        WriteKey("testnet11","0917");
-        WriteKey("testnet11","0920162");
-        testnet = GetArgument("testnet11", "NA4");
-        entry.push_back(Pair("testnetval5", testnet.c_str()));
-        results.push_back(entry);
-    }
     else if (sItem=="rain")
     {
         if (params.size() < 2)
