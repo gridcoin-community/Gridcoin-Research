@@ -143,7 +143,6 @@ MiningCPID GetNextProject(bool bForce);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 extern std::string TimestampToHRDate(double dtm);
 
-std::string qtGRCCodeExecutionSubsystem(std::string sCommand);
 std::string LegacyDefaultBoincHashArgs();
 double CoinToDouble(double surrogate);
 int64_t GetRSAWeightByCPID(std::string cpid);
@@ -795,31 +794,6 @@ std::string RestoreGridcoinBackupWallet()
     return errors;
 
 }
-
-void WriteCPIDToRPC(std::string email, std::string bpk, uint256 block, Array &results)
-{
-    std::string output = "";
-    output = ComputeCPIDv2(email,bpk,block);
-    Object entry;
-    entry.push_back(Pair("Long CPID for " + email + " " + block.GetHex(),output));
-    output = RetrieveMd5(bpk + email);
-    std::string shortcpid = RetrieveMd5(bpk + email);
-    entry.push_back(Pair("std_md5",output));
-    //Stress test
-    std::string me = ComputeCPIDv2(email,bpk,block);
-    entry.push_back(Pair("LongCPID2",me));
-    bool result;
-    result =  CPID_IsCPIDValid(shortcpid, me,block);
-    entry.push_back(Pair("Stress Test 1",result));
-    result =  CPID_IsCPIDValid(shortcpid, me,block+1);
-    entry.push_back(Pair("Stress Test 2",result));
-    results.push_back(entry);
-    shortcpid = RetrieveMd5(bpk + "0" + email);
-    result = CPID_IsCPIDValid(shortcpid,me,block);
-    entry.push_back(Pair("Stress Test 3 (missing bpk)",result));
-    results.push_back(entry);
-}
-
 
 std::string SignMessage(std::string sMsg, std::string sPrivateKey)
 {
@@ -1693,18 +1667,6 @@ Value execute(const Array& params, bool fHelp)
         results.push_back(entry);
 
     }
-    else if (sItem=="testnet0917")
-    {
-    
-        WriteKey("testnet10","09172016");       
-        std::string testnet = GetArgument("testnet10", "NA3");
-        entry.push_back(Pair("testnetval4", testnet.c_str()));
-        WriteKey("testnet11","0917");
-        WriteKey("testnet11","0920162");
-        testnet = GetArgument("testnet11", "NA4");
-        entry.push_back(Pair("testnetval5", testnet.c_str()));
-        results.push_back(entry);
-    }
     else if (sItem=="rain")
     {
         if (params.size() < 2)
@@ -2388,26 +2350,6 @@ Value execute(const Array& params, bool fHelp)
         }
     
     }
-    else if (sItem == "testboinckey")
-    {
-        std::string sType="project";
-
-        std::string strMasterPrivateKey = (sType=="project" || sType=="projectmapping") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
-        std::string sig = SignMessage("hello",strMasterPrivateKey);
-        entry.push_back(Pair("hello",sig));
-        //Forged Key
-        std::string forgedKey = "3082011302010104202b1c9faef66d42218eefb7c66fb6e49292972c8992b4100bb48835d325ec2d34a081a53081a2020101302c06072a8648ce3d0101022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f300604010004010704410479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141020101a144034200040cb218ee7495c2ba5d6ba069f97810e85dae8b446c0e4a1c6dec7fe610ab0fa4378bda5320f00e7a08a8e428489f41ad79d0428a091aa548aca18adbbbe64d41";
-        std::string sig2 = SignMessage("hello",forgedKey);
-        bool r10 = CheckMessageSignature("R",sType,"hello",sig2,"");
-        entry.push_back(Pair("FK10",r10));
-        std::string sig3 = SignMessage("hi",strMasterPrivateKey);
-        bool r11 = CheckMessageSignature("R","project","hi",sig3,"");
-        entry.push_back(Pair("FK11",r11));
-        bool r12 = CheckMessageSignature("R","general","1",sig3,"");
-        entry.push_back(Pair("FK12",r12));
-        results.push_back(entry);
-    
-    }
     else if (sItem == "genboinckey")
     {
         //Gridcoin - R Halford - Generate Boinc Mining Key - 2-6-2015
@@ -2652,22 +2594,6 @@ Value execute(const Array& params, bool fHelp)
         }
     
     }
-    else if (sItem == "chainrsa")
-    {
-        if (params.size() != 2)
-        {
-            entry.push_back(Pair("Error","You must specify a cpid"));
-            results.push_back(entry);
-        }
-        else
-        {
-            std::string sParam1 = params[1].get_str();
-            entry.push_back(Pair("CPID",sParam1));
-            
-        }
-
-
-    }
     else if (sItem == "testorgkey")
     {
         if (params.size() != 3)
@@ -2687,73 +2613,6 @@ Value execute(const Array& params, bool fHelp)
     
         }
     
-    }
-
-    else if (sItem == "testcpidv2")
-    {
-        if (params.size() != 3)
-        {
-            entry.push_back(Pair("Error","You must specify both parameters boincruntimepublickey and boinccpid"));
-            results.push_back(entry);
-        }
-        else
-        {
-            std::string sParam1 = params[1].get_str();
-            std::string sParam2 = params[2].get_str();
-            entry.push_back(Pair("Param1",sParam1));
-            entry.push_back(Pair("Param2",sParam2));
-            //12-25-2014 Test CPIDv2
-            std::string newcpid = ComputeCPIDv2(sParam2,sParam1,0);
-            std::string shortcpid = RetrieveMd5(sParam1+sParam2);
-            entry.push_back(Pair("CPID1",shortcpid));
-            bool isvalid = CPID_IsCPIDValid(shortcpid, newcpid,0);
-            entry.push_back(Pair("CPIDv2 is valid",isvalid));
-            isvalid = CPID_IsCPIDValid(shortcpid, newcpid,10);
-            entry.push_back(Pair("CPIDv2 is valid on bad block",isvalid));
-            std::string me = ComputeCPIDv2(sParam2,sParam1,0);
-            entry.push_back(Pair("CPIDv2 on block0",me));
-            me = ComputeCPIDv2(sParam2,sParam1,10);
-            entry.push_back(Pair("CPIDv2 on block10",me));
-            results.push_back(entry);
-        }
-    
-
-    }
-    else if (sItem == "DISABLE_WINDOWS_ERROR_REPORTING")
-    {
-        std::string result = "FAIL";
-        #if defined(WIN32) && defined(QT_GUI)
-            qtGRCCodeExecutionSubsystem("DISABLE_WINDOWS_ERROR_REPORTING");
-        #endif
-        Object entry;
-        entry.push_back(Pair("DISABLE_WINDOWS_ERROR_REPORTING",result));
-        results.push_back(entry);
-    }
-
-    else if (sItem == "testcpid")
-    {
-        std::string bpk = "29dbf4a4f2e2baaff5f5e89e2df98bc8";
-        std::string email = "ebola@gridcoin.us";
-        uint256 block("0x000005a247b397eadfefa58e872bc967c2614797bdc8d4d0e6b09fea5c191599");
-        std::string hi = "";
-        //1
-        WriteCPIDToRPC(email,bpk,block,results);
-        //2
-        email = "ebol349324923849023908429084892098023423432423423424332a@gridcoin.us";
-        WriteCPIDToRPC(email,bpk,block,results);
-        email="test";
-        WriteCPIDToRPC(email,bpk,block,results);
-        //Empty
-        email="";
-        WriteCPIDToRPC(email,bpk,block,results);
-        //Wrong Block
-        email="ebola@gridcoin.us";
-        WriteCPIDToRPC(email,bpk,0,results);
-        WriteCPIDToRPC(email,bpk,1,results);
-        WriteCPIDToRPC(email,bpk,123499934534,results);
-        //Stolen CPID either missing bpk or unknown email
-        WriteCPIDToRPC(email,"0",0,results);
-
     }
     else if (sItem == "reindex")
     {
@@ -2782,11 +2641,6 @@ Value execute(const Array& params, bool fHelp)
             ExecuteCode();
             #endif
 
-    }
-    else if (sItem == "volatilecode")
-    {
-        bExecuteCode = true;
-        printf("Executing volatile code \r\n");
     }
     else if (sItem == "getnextproject")
     {
@@ -2871,28 +2725,6 @@ Value execute(const Array& params, bool fHelp)
         {
             fDebug3 = (params[1].get_str() == "true") ? true : false;
             entry.push_back(Pair("Debug3", fDebug3 ? "Entering debug mode." : "Exiting debug mode."));
-        }
-        else
-            entry.push_back(Pair("Error","You must specify true or false as an option."));
-        results.push_back(entry);
-    }
-    else if (sItem == "debug4")
-    {
-        if (params.size() == 2 && (params[1].get_str() == "true" || params[1].get_str() == "false"))
-        {
-            fDebug4 = (params[1].get_str() == "true") ? true : false;
-            entry.push_back(Pair("Debug4", fDebug4 ? "Entering debug mode." : "Exiting debug mode."));
-        }
-        else
-            entry.push_back(Pair("Error","You must specify true or false as an option."));
-        results.push_back(entry);
-    }
-    else if (sItem == "debug5")
-    {
-        if (params.size() == 2 && (params[1].get_str() == "true" || params[1].get_str() == "false"))
-        {
-            fDebug5 = (params[1].get_str() == "true") ? true : false;
-            entry.push_back(Pair("Debug5", fDebug5 ? "Entering debug mode." : "Exiting debug mode."));
         }
         else
             entry.push_back(Pair("Error","You must specify true or false as an option."));
@@ -4429,31 +4261,6 @@ Value listitem(const Array& params, bool fHelp)
         results.push_back(entry);
 
 	}
-    else if (sitem == "betatest")
-    {
-        Object entry;
-        // Test a sample CPID keypair
-        entry.push_back(Pair("CPID",msPrimaryCPID));
-        std::string sBeaconPublicKey = GetBeaconPublicKey(msPrimaryCPID, false);
-        entry.push_back(Pair("Beacon Public Key",sBeaconPublicKey));
-        std::string sSignature = SignBlockWithCPID(msPrimaryCPID,"1000");
-        entry.push_back(Pair("Signature",sSignature));
-        // Validate the signature
-        bool fResult = VerifyCPIDSignature(msPrimaryCPID, "1000", sSignature);
-        entry.push_back(Pair("Sig Valid",fResult));
-        fResult = VerifyCPIDSignature(msPrimaryCPID, "1001", sSignature);
-        entry.push_back(Pair("Wrong Block Sig Valid",fResult));
-        fResult = VerifyCPIDSignature(msPrimaryCPID, "1000", "wrong_signature" + sSignature + "wrong_signature");
-        entry.push_back(Pair("Right block, Wrong Signature Valid",fResult));
-        // Missing Beacon, with wrong CPID
-        std::string sCPID = "1234567890";
-        sBeaconPublicKey = GetBeaconPublicKey(sCPID, false);
-        sSignature = SignBlockWithCPID(sCPID,"1001");
-        entry.push_back(Pair("Signature",sSignature));
-        fResult = VerifyCPIDSignature(sCPID, "1001", sSignature);
-        entry.push_back(Pair("Bad CPID with missing beacon",fResult));
-        results.push_back(entry);
-    }
     else if (sitem == "debugexplainmagnitude")
     {
         double dMag = ExtractMagnitudeFromExplainMagnitude();

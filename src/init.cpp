@@ -630,8 +630,6 @@ bool AppInit2()
             fDebug3 = true;
             printf("Entering GRC debug mode.\r\n");
     }
-    fDebug4 = (GetArg("-debug4","false")=="true");
-    fDebug5 = (GetArg("-debug5","false")=="true");
     fDebug10= (GetArg("-debug10","false")=="true");
 
 #if !defined(WIN32) && !defined(QT_GUI)
