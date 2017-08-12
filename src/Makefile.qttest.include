@@ -11,7 +11,7 @@ TEST_QT_MOC_CPP = \
 TEST_QT_H = \
   qt/test/uritests.h
 
-qt_test_test_gridcoin_qt_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(BITCOIN_QT_INCLUDES) \
+qt_test_test_gridcoin_qt_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES) $(GRIDCOIN_QT_INCLUDES) \
   $(QT_INCLUDES) $(QT_TEST_INCLUDES) $(PROTOBUF_CFLAGS)
 
 qt_test_test_gridcoin_qt_SOURCES = \

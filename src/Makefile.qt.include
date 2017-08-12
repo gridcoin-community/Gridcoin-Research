@@ -124,7 +124,7 @@ QT_MOC_CPP = \
   qt/moc_votingdialog.cpp \
   qt/moc_walletmodel.cpp
 
-BITCOIN_MM = \
+GRIDOIN_MM = \
   qt/macdockiconhandler.mm \
   qt/macnotificationhandler.mm
 
@@ -283,7 +283,7 @@ RES_IMAGES =
 
 RES_MOVIES = $(wildcard $(srcdir)/qt/res/movies/spinner-*.png)
 
-BITCOIN_RC = qt/res/bitcoin-qt-res.rc
+GRIDCOIN_RC = qt/res/bitcoin-qt-res.rc
 
 if USE_QRCODE
 GRIDCOINRESEARCH_CPP += qt/qrcodedialog.cpp
@@ -292,10 +292,10 @@ QT_FORMS_UI += qt/forms/qrcodedialog.ui
 endif
 
 
-BITCOIN_QT_INCLUDES = -I$(builddir)/qt -I$(srcdir)/qt -I$(srcdir)/qt/forms \
+GRIDCOIN_QT_INCLUDES = -I$(builddir)/qt -I$(srcdir)/qt -I$(srcdir)/qt/forms \
   -I$(builddir)/qt/forms
 
-qt_libgridcoinqt_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(BITCOIN_QT_INCLUDES) \
+qt_libgridcoinqt_a_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES) $(GRIDCOIN_QT_INCLUDES) \
   $(QT_INCLUDES) $(QT_DBUS_INCLUDES) $(PROTOBUF_CFLAGS) $(QR_CFLAGS)
 qt_libgridcoinqt_a_CXXFLAGS = $(AM_CXXFLAGS) $(QT_PIE_FLAGS)
 
@@ -317,16 +317,16 @@ $(qt_libgridcoinqt_a_OBJECTS) $(qt_gridcoinresearch_OBJECTS) : | $(QT_MOC)
 #This makes sure it's done.
 
 # gridcoin-qt binary #
-qt_gridcoinresearch_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(BITCOIN_QT_INCLUDES) \
+qt_gridcoinresearch_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES) $(GRIDCOIN_QT_INCLUDES) \
   $(QT_INCLUDES) $(PROTOBUF_CFLAGS) $(QR_CFLAGS)
 qt_gridcoinresearch_CXXFLAGS = $(AM_CXXFLAGS) $(QT_PIE_FLAGS)
 
 qt_gridcoinresearch_SOURCES = qt/bitcoin.cpp
 if TARGET_DARWIN
-  qt_gridcoinresearch_SOURCES += $(BITCOIN_MM)
+  qt_gridcoinresearch_SOURCES += $(GRIDCOIN_MM)
 endif
 if TARGET_WINDOWS
-  qt_gridcoinresearch_SOURCES += $(BITCOIN_RC)
+  qt_gridcoinresearch_SOURCES += $(GRIDCOIN_RC)
 endif
 qt_gridcoinresearch_LDADD = qt/libgridcoinqt.a
 qt_gridcoinresearch_LDADD += $(LIBGRIDCOIN_UTIL) $(LIBUNIVALUE) $(LIBLEVELDB) $(LIBLEVELDB_SSE42) $(LIBMEMENV) \
