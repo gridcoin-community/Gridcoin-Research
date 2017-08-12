@@ -795,31 +795,6 @@ std::string RestoreGridcoinBackupWallet()
 
 }
 
-void WriteCPIDToRPC(std::string email, std::string bpk, uint256 block, Array &results)
-{
-    std::string output = "";
-    output = ComputeCPIDv2(email,bpk,block);
-    Object entry;
-    entry.push_back(Pair("Long CPID for " + email + " " + block.GetHex(),output));
-    output = RetrieveMd5(bpk + email);
-    std::string shortcpid = RetrieveMd5(bpk + email);
-    entry.push_back(Pair("std_md5",output));
-    //Stress test
-    std::string me = ComputeCPIDv2(email,bpk,block);
-    entry.push_back(Pair("LongCPID2",me));
-    bool result;
-    result =  CPID_IsCPIDValid(shortcpid, me,block);
-    entry.push_back(Pair("Stress Test 1",result));
-    result =  CPID_IsCPIDValid(shortcpid, me,block+1);
-    entry.push_back(Pair("Stress Test 2",result));
-    results.push_back(entry);
-    shortcpid = RetrieveMd5(bpk + "0" + email);
-    result = CPID_IsCPIDValid(shortcpid,me,block);
-    entry.push_back(Pair("Stress Test 3 (missing bpk)",result));
-    results.push_back(entry);
-}
-
-
 std::string SignMessage(std::string sMsg, std::string sPrivateKey)
 {
      CKey key;
@@ -2716,31 +2691,6 @@ Value execute(const Array& params, bool fHelp)
             results.push_back(entry);
         }
     
-
-    }
-    else if (sItem == "testcpid")
-    {
-        std::string bpk = "29dbf4a4f2e2baaff5f5e89e2df98bc8";
-        std::string email = "ebola@gridcoin.us";
-        uint256 block("0x000005a247b397eadfefa58e872bc967c2614797bdc8d4d0e6b09fea5c191599");
-        std::string hi = "";
-        //1
-        WriteCPIDToRPC(email,bpk,block,results);
-        //2
-        email = "ebol349324923849023908429084892098023423432423423424332a@gridcoin.us";
-        WriteCPIDToRPC(email,bpk,block,results);
-        email="test";
-        WriteCPIDToRPC(email,bpk,block,results);
-        //Empty
-        email="";
-        WriteCPIDToRPC(email,bpk,block,results);
-        //Wrong Block
-        email="ebola@gridcoin.us";
-        WriteCPIDToRPC(email,bpk,0,results);
-        WriteCPIDToRPC(email,bpk,1,results);
-        WriteCPIDToRPC(email,bpk,123499934534,results);
-        //Stolen CPID either missing bpk or unknown email
-        WriteCPIDToRPC(email,"0",0,results);
 
     }
     else if (sItem == "reindex")
