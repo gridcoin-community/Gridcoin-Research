@@ -2942,7 +2942,6 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute debugnew <true/false>", "Turn on/off debugnet messages on the fly"));
         entry.push_back(Pair("execute decryptphrase <phrase>", "Decrypt an encrypted phrase"));
         #if defined(WIN32) && defined(QT_GUI)
-        entry.push_back(Pair("execute DISABLE_WINDOWS_ERROR_REPORTING", "Disable windows error reporting"));
         entry.push_back(Pair("execute downloadblocks", "Download blocks from blockchain"));
         #endif
         entry.push_back(Pair("execute dportally", "Tally magnitudes in superblock"));
@@ -3000,7 +2999,6 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute refhash <grcaddress>", "Check if a grc address is a neural node participant as well as you"));
         entry.push_back(Pair("execute sendblock <hash>", "Send a block to network"));
         entry.push_back(Pair("execute testnewcontract", "Test current neural contract"));
-        entry.push_back(Pair("execute volatilecode", "Execute volatile code"));
         entry.push_back(Pair("execute writedata <key> <value>", "Write data to a key with value"));
         results.push_back(entry);
     }
