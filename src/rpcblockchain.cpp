@@ -4486,7 +4486,9 @@ Value listitem(const Array& params, bool fHelp)
     if (fHelp || (params.size() != 1 && params.size() != 2 && params.size() != 3 && params.size() != 4))
         throw runtime_error(
         "list <string::itemname>\n"
-        "Returns details of a given item by name.");
+        "Returns details of a given item by name.\n"
+        "list help\n"
+        "Displays help on various available list commands.\n");
 
     std::string sitem = params[0].get_str();
     
@@ -4904,6 +4906,27 @@ Value listitem(const Array& params, bool fHelp)
             }
         }
 
+    }
+    else if (sitem == "help")
+    {
+        Object entry;
+        entry.push_back(Pair("list cpids", "Displays information on cpids and the projects they are associated with"));
+        entry.push_back(Pair("list currenttime", "Displays current unix time as well as UTC time and date"));
+        entry.push_back(Pair("list detailmagnitudecsv", "Records more detailed magnitude report into a csv file"));
+        entry.push_back(Pair("list debugexplainmagnitude", "Displays more in detail your explainmagnitude from NN"));
+        entry.push_back(Pair("list explainmagnitude", "Displays information about your magnitude from NN"));
+        entry.push_back(Pair("list lifetime", "Displays information on the life time of your cpid"));
+        entry.push_back(Pair("list magnitude <cpid>", "Displays information on magnitude. cpid is optional."));
+        entry.push_back(Pair("list magnitudecsv", "Records magnitude report into a csv file"));
+        entry.push_back(Pair("list memorypool", "Displays information currently on Txs in memory pool"));
+        entry.push_back(Pair("list network", "Displays detailed information on the network"));
+        entry.push_back(Pair("list projects", "Displays information on whitelisted projects on the network"));
+        entry.push_back(Pair("list rsa", "Displays information on your RSA/CPID history"));
+        entry.push_back(Pair("list rsaweight", "Displays information on RSA Weight"));
+        entry.push_back(Pair("list staking", "Displays information on your staking"));
+        entry.push_back(Pair("list superblocks", "Displays information on superblocks over last 14 days. cpid optional"));
+        entry.push_back(Pair("list validcpids", "Displays information on your valid cpid"));
+        results.push_back(entry);
     }
     else
     {
