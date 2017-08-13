@@ -5499,10 +5499,10 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
 
             AdjustTimestamps(stMag,pIndex->nTime, pIndex->nResearchSubsidy);
             // Track detailed payments made to each CPID
-            stMag.PaymentTimestamps         += std::to_string(pIndex->nTime) + ",";
+            stMag.PaymentTimestamps         += std::to_string(pIndex->nTime).c_str() + ",";
             stMag.PaymentAmountsResearch    += RoundToString(pIndex->nResearchSubsidy,2) + ",";
             stMag.PaymentAmountsInterest    += RoundToString(pIndex->nInterestSubsidy,2) + ",";
-            stMag.PaymentAmountsBlocks      += std::to_string(pIndex->nHeight) + ",";
+            stMag.PaymentAmountsBlocks      += std::to_string(pIndex->nHeight).c_str() + ",";
             stMag.Accuracy++;
             stMag.AverageRAC = stMag.rac / (stMag.entries+.01);
             double total_owed = 0;
