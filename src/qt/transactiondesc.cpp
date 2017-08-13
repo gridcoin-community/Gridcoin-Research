@@ -268,8 +268,8 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
         int out_blocktype = 0;
         double out_rac = 0;
         GetTxProject(wtx.GetHash(),out_blocknumber, out_blocktype, out_rac);
-        strHTML += "<br>" + tr("Block Type") + ":</b> " + RoundToString(out_blocktype,0).c_str() +
-                "<br>" + tr("Block Number") + ":</b> " + RoundToString(out_blocknumber,0).c_str() +
+        strHTML += "<br>" + tr("Block Type") + ":</b> " + std::to_string(out_blocktype).c_str() +
+                "<br>" + tr("Block Number") + ":</b> " + std::to_string(out_blocknumber).c_str() +
                 "<br><br>" + tr("Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to \"not accepted\" and it won't be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.") + "<br>";
     }
 
