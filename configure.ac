@@ -866,12 +866,6 @@ if test x$use_pkgconfig = xyes; then
       PKG_CHECK_MODULES([LIBZIP], [libzip],,[AC_MSG_ERROR(libzip  not found.)])
       PKG_CHECK_MODULES([CURL], [libcurl],,[AC_MSG_ERROR(libcurl  not found.)])
       BITCOIN_QT_CHECK([PKG_CHECK_MODULES([QR], [libqrencode], [have_qrencode=yes], [have_qrencode=no])])
-      if test x$build_bitcoin_utils$build_gridcoinresearchd$bitcoin_enable_qt$use_tests != xnononono; then
-        PKG_CHECK_MODULES([EVENT], [libevent],, [AC_MSG_ERROR(libevent not found.)])
-        if test x$TARGET_OS != xwindows; then
-          PKG_CHECK_MODULES([EVENT_PTHREADS], [libevent_pthreads],, [AC_MSG_ERROR(libevent_pthreads not found.)])
-        fi
-      fi
     ]
   )
 else
@@ -887,16 +881,8 @@ else
   AC_CHECK_HEADER([curl/curl.h],, AC_MSG_ERROR(libcurl headers missing),)
   AC_CHECK_LIB([curl], [main],CURL_LIBS=-lcurl, AC_MSG_ERROR(libcurl missing))
 
-  if test x$build_bitcoin_utils$build_gridcoinresearchd$bitcoin_enable_qt$use_tests != xnononono; then
-    AC_CHECK_HEADER([event2/event.h],, AC_MSG_ERROR(libevent headers missing),)
-    AC_CHECK_LIB([event],[main],EVENT_LIBS=-levent,AC_MSG_ERROR(libevent missing))
-    if test x$TARGET_OS != xwindows; then
-      AC_CHECK_LIB([event_pthreads],[main],EVENT_PTHREADS_LIBS=-levent_pthreads,AC_MSG_ERROR(libevent_pthreads missing))
-    fi
-  fi
-
-    BITCOIN_QT_CHECK([AC_CHECK_LIB([qrencode], [main],[QR_LIBS=-lqrencode], [have_qrencode=no])])
-    BITCOIN_QT_CHECK([AC_CHECK_HEADER([qrencode.h],, have_qrencode=no)])
+  BITCOIN_QT_CHECK([AC_CHECK_LIB([qrencode], [main],[QR_LIBS=-lqrencode], [have_qrencode=no])])
+  BITCOIN_QT_CHECK([AC_CHECK_HEADER([qrencode.h],, have_qrencode=no)])
 fi
 
 save_CXXFLAGS="${CXXFLAGS}"
