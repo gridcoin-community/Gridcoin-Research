@@ -126,7 +126,6 @@ extern double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_
 
 
 extern double GetOwedAmount(std::string cpid);
-extern double Round(double d, int place);
 extern bool ComputeNeuralNetworkSupermajorityHashes();
 
 extern void DeleteCache(std::string section, std::string keyname);
@@ -5195,15 +5194,6 @@ std::string RetrieveMd5(std::string s1)
 }
 
 
-
-double Round(double d, int place)
-{
-    std::ostringstream ss;
-    ss << std::fixed << std::setprecision(place) << d ;
-    double r = lexical_cast<double>(ss.str());
-    return r;
-}
-
 double cdbl(std::string s, int place)
 {
     if (s=="") s="0";
@@ -8904,7 +8894,8 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
     double ReferencePPD = dMagnitudeUnit*dAvgMag;
     if ((PPD > ReferencePPD*5))
     {
-            printf("Researcher PPD %f > Reference PPD %f for CPID %s with Lifetime Avg Mag of %f, Days %f \r\n",PPD,ReferencePPD,cpid.c_str(),dAvgMag,days);
+            printf("Researcher PPD %f > Reference PPD %f for CPID %s with Lifetime Avg Mag of %f, Days %f, MagUnit %f",
+                   PPD,ReferencePPD,cpid.c_str(),dAvgMag,days, dMagnitudeUnit);
             Accrual = 0; //Since this condition can occur when a user ramps up computing power, lets return 0 so as to not shortchange the researcher, but instead, owed will continue to accrue and will be paid later when PPD falls below 5
     }
     // Note that if the RA Block Span < 10, we want to return 0 for the Accrual Amount so the CPID can still receive an accurate accrual in the future
