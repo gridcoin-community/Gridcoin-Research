@@ -293,8 +293,8 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             {
                 if (fDebug10) printf("Tx size too large for tx %s  blksize %f , tx siz %f",tx.GetHash().GetHex().c_str(),(double)nBlockSize,(double)nTxSize);
                 msMiningErrorsExcluded += tx.GetHash().GetHex() + ":SizeTooLarge(" 
-                    + RoundToString((double)nBlockSize,0) + "," +RoundToString((double)nTxSize,0) + ")(" 
-                    + RoundToString((double)nBlockSize,0) + ");";
+                    + ToString(nBlockSize) + "," + ToString(nTxSize) + ")("
+                    + ToString(nBlockSize) + ");";
             
                 continue;
             }
@@ -304,16 +304,16 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             if (nBlockSigOps + nTxSigOps >= MAX_BLOCK_SIGOPS)
             {
                 msMiningErrorsExcluded += tx.GetHash().GetHex() + ":LegacySigOpLimit(" + 
-                    RoundToString((double)nBlockSigOps,0) + "," +RoundToString((double)nTxSigOps,0) + ")(" 
-                    + RoundToString((double)MAX_BLOCK_SIGOPS,0) + ");";
+                    ToString(nBlockSigOps) + "," + ToString(nTxSigOps) + ")("
+                    + ToString(MAX_BLOCK_SIGOPS) + ");";
                 continue;
             }
 
             // Timestamp limit
             if (tx.nTime >  block.nTime)
             {
-                msMiningErrorsExcluded += tx.GetHash().GetHex() + ":TimestampLimit(" + RoundToString((double)tx.nTime,0) + "," 
-                    +RoundToString((double)block.vtx[0].nTime,0) + ");";
+                msMiningErrorsExcluded += tx.GetHash().GetHex() + ":TimestampLimit(" + ToString(tx.nTime) + ","
+                    + ToString(block.vtx[0].nTime) + ");";
                 continue;
             }
 
@@ -361,8 +361,8 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
                 if (fDebug10) printf("Not including tx %s  due to exceeding max sigops of %f ; sigops is %f",
                     tx.GetHash().GetHex().c_str(),(double)(nBlockSigOps+nTxSigOps),(double)MAX_BLOCK_SIGOPS);
                 msMiningErrorsExcluded += tx.GetHash().GetHex() + ":ExceededSigOps(" 
-                    + RoundToString((double)nBlockSigOps,0) + "," +RoundToString((double)nTxSigOps,0) + ")(" 
-                    + RoundToString((double)MAX_BLOCK_SIGOPS,0) + ");";
+                    + ToString(nBlockSigOps) + "," + ToString(nTxSigOps) + ")("
+                    + ToString(MAX_BLOCK_SIGOPS) + ");";
             
                 continue;
             }
@@ -594,14 +594,14 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
             printf("CreateCoinStake: added kernel type=%d credit=%f\n", whichType,CoinToDouble(nCredit));
 
             LOCK(MinerStatus.lock);
-            MinerStatus.Message+="Found Kernel "+RoundToString(CoinToDouble(nCredit),0)+"; ";
+            MinerStatus.Message+="Found Kernel "+ ToString(CoinToDouble(nCredit))+"; ";
             MinerStatus.KernelsFound++;
             return true;
         }
     }
 
     LOCK(MinerStatus.lock);
-    MinerStatus.Message+="Stake Weight "+RoundToString(StakeWeightSum,0)+"; ";
+    MinerStatus.Message+="Stake Weight "+ ToString(StakeWeightSum)+"; ";
     MinerStatus.WeightSum = StakeWeightSum;
     MinerStatus.ValueSum = StakeValueSum;
     MinerStatus.WeightMin=StakeWeightMin;

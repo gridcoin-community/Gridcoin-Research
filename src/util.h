@@ -17,6 +17,8 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <ostream>
+#include <locale>
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/path.hpp>
@@ -191,20 +193,44 @@ std::string FormatFullVersion();
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments);
 void AddTimeData(const CNetAddr& ip, int64_t nTime);
 void runCommand(std::string strCommand);
+
+//!
+//! \brief Round decimal value to N decimal places.
+//! \param d Value to round.
+//! \param place Number of decimal places.
+//!
 double Round(double d, int place);
+
+//!
+//! \brief Round a decimal value and convert it to a string.
+//! \param d Value to round.
+//! \param place Number of decimal places.
+//! \note This always produces an output with dot as decimal separator.
+//!
 std::string RoundToString(double d, int place);
+
+//!
+//! \brief Convert any value to a string.
+//! \param val Value to convert.
+//! \note This ignores locale settings.
+//!
+template<typename T>
+std::string ToString(const T& val)
+{
+    std::ostringstream ss;
+    ss.imbue(std::locale::classic());
+    ss << val;
+    return ss.str();
+}
+
 bool Contains(const std::string& data, const std::string& instring);
 
 std::string MakeSafeMessage(const std::string& messagestring);
 
+// TODO: Replace this with ToString
 inline std::string i64tostr(int64_t n)
 {
     return strprintf("%" PRId64, n);
-}
-
-inline std::string itostr(int n)
-{
-    return strprintf("%d", n);
 }
 
 inline int64_t atoi64(const char* psz)

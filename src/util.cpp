@@ -1472,9 +1472,8 @@ std::string GetNeuralVersion()
     std::string neural_v = "0";
 
     #if defined(WIN32) && defined(QT_GUI)
-        double neural_id = 0;
-        neural_id = (double)IsNeural();
-        neural_v = RoundToString(MINOR_VERSION, 0) + "." + RoundToString(neural_id,0);
+        int64_t neural_id = IsNeural();
+        neural_v = ToString(MINOR_VERSION) + "." + ToString(neural_id);
     #endif
 
     return neural_v;
