@@ -2823,7 +2823,7 @@ Array SuperblockReport(std::string cpid)
                                         if (avg_mag > 10)
                                         {
                                                 Object c;
-                                                c.push_back(Pair("Block #" + std::to_string(pblockindex->nHeight),pblockindex->GetBlockHash().GetHex()));
+                                                c.push_back(Pair("Block #" + ToString(pblockindex->nHeight),pblockindex->GetBlockHash().GetHex()));
                                                 c.push_back(Pair("Date",TimestampToHRDate(pblockindex->nTime)));
                                                 c.push_back(Pair("Average Mag",out_avg));
                                                 c.push_back(Pair("Wallet Version",bb.clientversion));
@@ -3281,7 +3281,7 @@ std::string GetProvableVotingWeightXML()
 			// Find the Magnitude from the last staked block, within the last 6 months, and ensure researcher has a valid current beacon (if the beacon is expired, the signature contain an error message)
 			sXML += "<CPID>" + msPrimaryCPID + "</CPID><INNERMAGNITUDE>" 
 				+ RoundToString(pHistorical->nMagnitude,2) + "</INNERMAGNITUDE>" + 
-                "<HEIGHT>" + std::to_string(pHistorical->nHeight)
+                "<HEIGHT>" + ToString(pHistorical->nHeight)
 				+ "</HEIGHT><BLOCKHASH>" + sBlockhash + "</BLOCKHASH><SIGNATURE>" + sSignature + "</SIGNATURE>";
 		}
 	}
@@ -3468,7 +3468,7 @@ Array GetJsonUnspentReport()
 			// Find the Magnitude from the last staked block, within the last 6 months, and ensure researcher has a valid current beacon (if the beacon is expired, the signature contain an error message)
 
 			std::string sMagXML = "<CPID>" + msPrimaryCPID + "</CPID><INNERMAGNITUDE>" + RoundToString(pHistorical->nMagnitude,2) + "</INNERMAGNITUDE>" + 
-                "<HEIGHT>" + std::to_string(pHistorical->nHeight) + "</HEIGHT><BLOCKHASH>" + sBlockhash + "</BLOCKHASH><SIGNATURE>" + sSignature + "</SIGNATURE>";
+                "<HEIGHT>" + ToString(pHistorical->nHeight) + "</HEIGHT><BLOCKHASH>" + sBlockhash + "</BLOCKHASH><SIGNATURE>" + sSignature + "</SIGNATURE>";
 			std::string sMagnitude = ExtractXML(sMagXML,"<INNERMAGNITUDE>","</INNERMAGNITUDE>");
 			std::string sXmlSigned = ExtractXML(sMagXML,"<SIGNATURE>","</SIGNATURE>");
 			std::string sXmlBlockHash = ExtractXML(sMagXML,"<BLOCKHASH>","</BLOCKHASH>");
@@ -4056,7 +4056,7 @@ Array MagnitudeReportCSV(bool detail)
            Object c;
            StructCPID globalmag = mvMagnitudes["global"];
            double payment_timespan = 14; 
-           std::string Narr = "Research Savings Account Report - Generated " + std::to_string(GetAdjustedTime()) + " - Timespan: " + std::to_string(payment_timespan);
+           std::string Narr = "Research Savings Account Report - Generated " + ToString(GetAdjustedTime()) + " - Timespan: " + ToString(payment_timespan);
            c.push_back(Pair("RSA Report",Narr));
            results.push_back(c);
            double totalpaid = 0;
@@ -4346,14 +4346,14 @@ Value listitem(const Array& params, bool fHelp)
                 
              }
         }
-        entry.push_back(Pair("Whitelisted Project Count", std::to_string(WHITELISTED_PROJECTS)));
+        entry.push_back(Pair("Whitelisted Project Count", ToString(WHITELISTED_PROJECTS)));
         entry.push_back(Pair("Grand-Total Verified RAC",mytotalrac));
         entry.push_back(Pair("Grand-Total Network RAC",nettotalrac));
         entry.push_back(Pair("Total Magnitude for All Projects",TotalMagnitude));
-        entry.push_back(Pair("Grand-Total Whitelisted Projects",std::to_string(WHITELISTED_PROJECTS)));
+        entry.push_back(Pair("Grand-Total Whitelisted Projects",ToString(WHITELISTED_PROJECTS)));
         entry.push_back(Pair("Participating Project Count",ParticipatingProjectCount));
         Mag = TotalMagnitude;
-        std::string babyNarr = "(" + RoundToString(TotalUserVerifiedRAC,2) + "/" + RoundToString(TotalProjectRAC,2) + ")/" + std::to_string(WHITELISTED_PROJECTS) + "*" + std::to_string(NeuralNetworkMultiplier) + "=";
+        std::string babyNarr = "(" + RoundToString(TotalUserVerifiedRAC,2) + "/" + RoundToString(TotalProjectRAC,2) + ")/" + ToString(WHITELISTED_PROJECTS) + "*" + ToString(NeuralNetworkMultiplier) + "=";
         entry.push_back(Pair(babyNarr,Mag));
         results.push_back(entry);
         return results;

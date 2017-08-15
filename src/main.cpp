@@ -431,7 +431,7 @@ bool UpdateNeuralNetworkQuorumData()
                 std::string myNeuralHash = "";
                 double popularity = 0;
                 std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-                std::string sAge = std::to_string(superblock_age);
+                std::string sAge = ToString(superblock_age);
                 std::string sBlock = mvApplicationCache["superblock;block_number"];
                 std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
                 std::string data = "<QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
@@ -455,7 +455,7 @@ bool PushGridcoinDiagnostics()
                 int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
                 double popularity = 0;
                 std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-                std::string sAge = std::to_string(superblock_age);
+                std::string sAge = ToString(superblock_age);
                 std::string sBlock = mvApplicationCache["superblock;block_number"];
                 std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
                 printf("Pushing diagnostic data...");
@@ -463,7 +463,7 @@ bool PushGridcoinDiagnostics()
                 double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
                 std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
                     + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
-                    + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID><LASTBLOCKAGE>" + std::to_string(lastblockage) + "</LASTBLOCKAGE><DIFFICULTY>" + RoundToString(PORDiff,2) + "</DIFFICULTY></QUORUMDATA>";
+                    + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID><LASTBLOCKAGE>" + ToString(lastblockage) + "</LASTBLOCKAGE><DIFFICULTY>" + RoundToString(PORDiff,2) + "</DIFFICULTY></QUORUMDATA>";
                 std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
                 qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
                 double dResponse = qtPushGridcoinDiagnosticData(data);
@@ -500,7 +500,7 @@ bool FullSyncWithDPORNodes()
 				printf(" list of cpids %s \r\n",cpiddata.c_str());
                 double popularity = 0;
                 std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-                std::string sAge = std::to_string(superblock_age);
+                std::string sAge = ToString(superblock_age);
                 std::string sBlock = mvApplicationCache["superblock;block_number"];
                 std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
                 std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
@@ -572,7 +572,7 @@ void GetGlobalStatus()
 
         LOCK(GlobalStatusStruct.lock);
         { LOCK(MinerStatus.lock);
-        GlobalStatusStruct.blocks = std::to_string(nBestHeight).c_str();
+        GlobalStatusStruct.blocks = ToString(nBestHeight);
         GlobalStatusStruct.difficulty = RoundToString(PORDiff,3);
         GlobalStatusStruct.netWeight = RoundToString(GetPoSKernelPS2(),2);
         //todo: use the real weight from miner status (requires scaling)
@@ -2751,7 +2751,7 @@ bool LoadSuperblock(std::string data, int64_t nTime, double height)
         WriteCache("superblock","averages",ExtractXML(data,"<AVERAGES>","</AVERAGES>"),nTime);
         WriteCache("superblock","quotes",ExtractXML(data,"<QUOTES>","</QUOTES>"),nTime);
         WriteCache("superblock","all",data,nTime);
-        WriteCache("superblock","block_number",std::to_string(height),nTime);
+        WriteCache("superblock","block_number",ToString(height),nTime);
         return true;
 }
 
@@ -5499,10 +5499,10 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
 
             AdjustTimestamps(stMag,pIndex->nTime, pIndex->nResearchSubsidy);
             // Track detailed payments made to each CPID
-            stMag.PaymentTimestamps         += std::to_string(pIndex->nTime).c_str() + ",";
+            stMag.PaymentTimestamps         += ToString(pIndex->nTime) + ",";
             stMag.PaymentAmountsResearch    += RoundToString(pIndex->nResearchSubsidy,2) + ",";
             stMag.PaymentAmountsInterest    += RoundToString(pIndex->nInterestSubsidy,2) + ",";
-            stMag.PaymentAmountsBlocks      += std::to_string(pIndex->nHeight).c_str() + ",";
+            stMag.PaymentAmountsBlocks      += ToString(pIndex->nHeight) + ",";
             stMag.Accuracy++;
             stMag.AverageRAC = stMag.rac / (stMag.entries+.01);
             double total_owed = 0;
@@ -5744,7 +5744,7 @@ bool ComputeNeuralNetworkSupermajorityHashes()
                     std::string superblock = UnpackBinarySuperblock(bb.superblock);
                     if (VerifySuperblock(superblock,pblockindex->nHeight))
                     {
-                        WriteCache("neuralsecurity","pending",std::to_string(pblockindex->nHeight),GetAdjustedTime());
+                        WriteCache("neuralsecurity","pending",ToString(pblockindex->nHeight),GetAdjustedTime());
                     }
                 }
 
@@ -7296,7 +7296,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 void AddPeek(std::string data)
 {
     return;
-    std::string buffer = std::to_string(GetAdjustedTime()) + ":" + data + "<CR>";
+    std::string buffer = ToString(GetAdjustedTime()) + ":" + data + "<CR>";
     msPeek += buffer;
     if (msPeek.length() > 60000) msPeek = "";
     if ((GetAdjustedTime() - nLastPeek) > 60)

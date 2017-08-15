@@ -415,7 +415,7 @@ bool CTxDB::LoadBlockIndex()
                 nLoaded +=10000;
                 if (nLoaded > nHighest) nHighest=nLoaded;
                 if (nHighest < nGrandfather) nHighest=nGrandfather;
-                std::string sBlocksLoaded = std::to_string(nLoaded) + "/" + std::to_string(nHighest) + " Blocks Loaded";
+                std::string sBlocksLoaded = ToString(nLoaded) + "/" + ToString(nHighest) + " Blocks Loaded";
                 uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
                 fprintf(stdout,"%d ",nLoaded); fflush(stdout);
             }
@@ -516,7 +516,7 @@ bool CTxDB::LoadBlockIndex()
                 nLoaded +=1000;
                 if (nLoaded > nHighest) nHighest=nLoaded;
                 if (nHighest < nGrandfather) nHighest=nGrandfather;
-                std::string sBlocksLoaded = std::to_string(nLoaded) + "/" + std::to_string(nHighest) + " Blocks Verified";
+                std::string sBlocksLoaded = ToString(nLoaded) + "/" + ToString(nHighest) + " Blocks Verified";
                 uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
             }
         #endif
@@ -657,7 +657,7 @@ bool CTxDB::LoadBlockIndex()
                 nLoaded +=10000;
                 if (nLoaded > nHighest) nHighest=nLoaded;
                 if (nHighest < nGrandfather) nHighest=nGrandfather;
-                std::string sBlocksLoaded = std::to_string(nLoaded) + "/" + std::to_string(nHighest) + " POR Blocks Verified";
+                std::string sBlocksLoaded = ToString(nLoaded) + "/" + ToString(nHighest) + " POR Blocks Verified";
                 uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
             }
 #endif
