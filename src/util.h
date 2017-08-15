@@ -191,6 +191,7 @@ std::string FormatFullVersion();
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments);
 void AddTimeData(const CNetAddr& ip, int64_t nTime);
 void runCommand(std::string strCommand);
+double Round(double d, int place);
 std::string RoundToString(double d, int place);
 bool Contains(const std::string& data, const std::string& instring);
 

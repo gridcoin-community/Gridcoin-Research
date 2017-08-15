@@ -348,4 +348,16 @@ BOOST_AUTO_TEST_CASE(util_IsLockTimeWithinMinutes)
     BOOST_CHECK(IsLockTimeWithinMinutes(now - minutesInSeconds - 1, minutes) == false);
 }
 
+BOOST_AUTO_TEST_CASE(util_VerifyRound)
+{
+    BOOST_CHECK_EQUAL(1.2346, Round(1.23456789, 4));
+    BOOST_CHECK_EQUAL(1,      Round(1.23456789, 0));
+    BOOST_CHECK_EQUAL(2,      Round(1.5, 0));
+}
+
+BOOST_AUTO_TEST_CASE(util_VerifyRoundToString)
+{
+    BOOST_CHECK_EQUAL("1.2346", RoundToString(1.23456789, 4));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

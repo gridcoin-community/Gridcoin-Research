@@ -8,8 +8,10 @@
 #include "strlcpy.h"
 #include "version.h"
 #include "ui_interface.h"
+
 #include <boost/algorithm/string/join.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>  //For day of year
+#include <cmath>
 
 // Work around clang compilation problem in Boost 1.46:
 // /usr/include/boost/program_options/detail/config_file.hpp:163:17: error: call to function 'to_internal' that is neither visible in the template definition nor found by argument-dependent lookup
@@ -1446,11 +1448,17 @@ string FormatFullVersion()
 
 #endif
 
+double Round(double d, int place)
+{
+    const double accuracy = std::pow(10, place);
+    return std::round(d * accuracy) / accuracy;
+}
+
 std::string RoundToString(double d, int place)
 {
     std::ostringstream ss;
-    ss << std::fixed << std::setprecision(place) << d ;
-    return ss.str() ;
+    ss << std::fixed << std::setprecision(place) << d;
+    return ss.str();
 }
 
 bool Contains(const std::string& data, const std::string& instring)
