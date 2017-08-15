@@ -1457,6 +1457,7 @@ double Round(double d, int place)
 std::string RoundToString(double d, int place)
 {
     std::ostringstream ss;
+    ss.imbue(std::locale::classic());
     ss << std::fixed << std::setprecision(place) << d;
     return ss.str();
 }
