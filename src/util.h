@@ -227,14 +227,10 @@ bool Contains(const std::string& data, const std::string& instring);
 
 std::string MakeSafeMessage(const std::string& messagestring);
 
+// TODO: Replace this with ToString
 inline std::string i64tostr(int64_t n)
 {
     return strprintf("%" PRId64, n);
-}
-
-inline std::string itostr(int n)
-{
-    return strprintf("%d", n);
 }
 
 inline int64_t atoi64(const char* psz)
