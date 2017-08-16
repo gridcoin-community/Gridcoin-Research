@@ -50,6 +50,7 @@
 #include "miner.h"
 #include "main.h"
 #include "backup.h"
+#include "clicklabel.h"
 
 #ifdef Q_OS_MAC
 #include "macdockiconhandler.h"
@@ -602,7 +603,7 @@ void BitcoinGUI::createActions()
     connect(websiteAction, SIGNAL(triggered()), this, SLOT(websiteClicked()));
     connect(bxAction, SIGNAL(triggered()), this, SLOT(bxClicked()));
     connect(exchangeAction, SIGNAL(triggered()), this, SLOT(exchangeClicked()));
-    connect(boincAction, SIGNAL(triggered()), this, SLOT(boincClicked()));
+    connect(boincAction, SIGNAL(triggered()), this, SLOT(boincStatsClicked()));
     connect(chatAction, SIGNAL(triggered()), this, SLOT(chatClicked()));
 
     quitAction = new QAction(QIcon(":/icons/quit"), tr("E&xit"), this);
@@ -851,11 +852,9 @@ void BitcoinGUI::createToolBars()
     logoSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     toolbar3->addWidget(logoSpacer);
     logoSpacer->setObjectName("logoSpacer");
-    QLabel *boincLogoLabel = new QLabel();
-    boincLogoLabel->setText("<html><head/><body><p align=\"center\"><a href=\"https://boinc.berkeley.edu\"><span style=\" text-decoration: underline; color:#0000ff;\"><img src=\":/images/boinc\"/></span></a></p></body></html>");
-    boincLogoLabel->setTextFormat(Qt::RichText);
-    boincLogoLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
-    boincLogoLabel->setOpenExternalLinks(true);
+    ClickLabel *boincLogoLabel = new ClickLabel();
+    boincLogoLabel->setObjectName("boincLogo");
+    connect(boincLogoLabel, SIGNAL(clicked()), this, SLOT(boincClicked()));
     toolbar3->addWidget(boincLogoLabel);
 
 
@@ -1415,6 +1414,11 @@ void BitcoinGUI::chatClicked()
 }
 
 void BitcoinGUI::boincClicked()
+{
+    QDesktopServices::openUrl(QUrl("https://boinc.berkeley.edu"));
+}
+
+void BitcoinGUI::boincStatsClicked()
 {
     QDesktopServices::openUrl(QUrl("https://boincstats.com/en/stats/-1/team/detail/118094994/overview"));
 }

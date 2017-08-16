@@ -210,6 +210,7 @@ private slots:
 	void websiteClicked();
 	void exchangeClicked();
 	void boincClicked();
+    void boincStatsClicked();
 	void chatClicked();
 
 	void rebuildClicked();

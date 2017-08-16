@@ -57,7 +57,7 @@
         <file alias="splash">res/images/splash3.png</file>
         <file alias="bkg">res/images/bkg.png</file>
         <file alias="logo_hz">res/images/gridcoin_horizontal.png</file>
-        <file alias="boinc">res/images/boinc_logo.png</file>
+        <file alias="boinc">res/images/boinc_logo.svg</file>
     </qresource>
     <qresource prefix="/movies">
         <file alias="update_spinner">res/movies/update_spinner.gif</file>
