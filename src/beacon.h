@@ -54,3 +54,11 @@ void ActivateBeaconKeys(
         const std::string &cpid,
         const std::string &pubKey,
         const std::string &privKey);
+
+// Lets move more of the beacon functions out of rpcblockchain.cpp and main.cpp
+// Lets also use header space where applicable - iFoggz
+
+void GetBeaconElements(std::string& sBeacon,std::string& out_cpid, std::string& out_address, std::string& out_publickey);
+std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertisingBeacon);
+int64_t BeaconTimeStamp(std::string& cpid, bool bZeroOutAfterPOR);
+bool HasActiveBeacon(const std::string& cpid);
