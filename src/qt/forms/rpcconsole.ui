@@ -23,7 +23,7 @@
       <bool>false</bool>
      </property>
      <property name="currentIndex">
-      <number>1</number>
+      <number>0</number>
      </property>
      <widget class="QWidget" name="tab_info">
       <attribute name="title">
@@ -176,11 +176,6 @@
        </item>
        <item row="0" column="0">
         <widget class="QLabel" name="label_9">
-         <property name="font">
-          <font>
-           <family>Century Gothic</family>
-          </font>
-         </property>
          <property name="autoFillBackground">
           <bool>false</bool>
          </property>
@@ -268,11 +263,6 @@
        </item>
        <item row="9" column="0">
         <widget class="QLabel" name="label_11">
-         <property name="font">
-          <font>
-           <family>Century Gothic</family>
-          </font>
-         </property>
          <property name="autoFillBackground">
           <bool>false</bool>
          </property>
@@ -351,11 +341,6 @@
        </item>
        <item row="18" column="0">
         <widget class="QLabel" name="labelDebugLogfile">
-         <property name="font">
-          <font>
-           <family>Century Gothic</family>
-          </font>
-         </property>
          <property name="autoFillBackground">
           <bool>false</bool>
          </property>
@@ -385,11 +370,6 @@
        </item>
        <item row="20" column="0">
         <widget class="QLabel" name="labelCLOptions">
-         <property name="font">
-          <font>
-           <family>Century Gothic</family>
-          </font>
-         </property>
          <property name="text">
           <string>Command-line options</string>
          </property>

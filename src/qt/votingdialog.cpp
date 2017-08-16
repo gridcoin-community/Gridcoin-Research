@@ -15,7 +15,6 @@
 #include <QtConcurrentRun>
 #include <QClipboard>
 #include <QEvent>
-#include <QFont>
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QHeaderView>
@@ -444,7 +443,7 @@ VotingDialog::VotingDialog(QWidget *parent)
     tableView_->verticalHeader()->hide();
 
     tableView_->setModel(proxyModel_);
-    tableView_->setFont(QFont("Arial", 8));
+
 #if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
     tableView_->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
 #else

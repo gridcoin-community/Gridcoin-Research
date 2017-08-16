@@ -1,14 +1,13 @@
+/* general */
+
 QMainWindow {
     background-image:url(:images/bkg);
     border:none;
-    font-family:'Open Sans,sans-serif';
+    font-family:'Open Sans';
 }
 
-#line {
-    qproperty-maximumSize: 330px 16777215px;
-}
-#line_2 {
-    qproperty-maximumSize: 330px 16777215px;
+BitcoinAmountField{
+    background-color: rgb(200,200,200);
 }
 
 QToolButton {
@@ -33,74 +32,30 @@ QToolButton:checked:hover {
     border:none;
 }
 
-QToolBar#toolbar QLabel{
-    padding-top:5px;
-    padding-bottom:5px;
-    margin:0px;
-}
-
-QToolBar#toolbar2 QLabel{
-    border:none;
-    padding-top:15px;
-    padding-bottom:10px;
-    padding-left:0px;
-    padding-right:0px;
-    margin:0px;
-    qproperty-alignment: AlignCenter;
-}
-
-QToolBar#toolbar3 QLabel{
-    padding-top:0px;
-    padding-bottom:0px;
-    margin:1px;
-}
-
-#spacer {
-    background-color:transparent;
-    border:none;
-}
-
-#toolbar {
-    border:none;
-    height:100%;
-    padding-top:20px;
-    background: transparent;
+QMenuBar {
+    background: rgba(200,200,200,25%);
     color: black;
-    min-width:160px;
-    max-width:160px;
+    border-bottom : 0.125em solid rgb(160,175,5);
 }
 
-#toolbar2 {
-    border:none;
-    width:26px;
-    background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(160,175,5), stop: 1 rgb(160,175,5));
-    padding-left: 0px;
-    padding-right: 0px;
-    min-width:26px;
-    max-width:26px;
+QMenuBar::item {
+    padding-bottom:0.5em;
+    padding-top:0.5em;
+    padding-left:1em;
+    padding-right:1em;
+    color: black;
+    background-color: transparent;
 }
 
-#toolbar3 {
-    border:none;
-    background-color:transparent;
-    border-bottom : 2px solid rgb(160,175,5);
-    min-height:52px;
-    max-height:52px;
-}
-
-QToolBar#toolbar QToolButton {
-    padding-left:20px;
-    padding-right:20px;
-    padding-top:7px;
-    padding-bottom:7px;
-    margin:3px;
-    width:100%;
+QMenuBar::item:selected {
+    background-color:rgb(160,175,5);
+    color: white;
 }
 
 QMenu {
     background: rgb(200,200,200);
     color: black;
-    padding-bottom:10px;
+    padding-bottom:0.625;
 }
 
 QMenu::item {
@@ -113,46 +68,26 @@ QMenu::item:selected {
     color:white;
 }
 
-QMenuBar {
-    background: rgba(200,200,200,25%);
-    color: black;
-    border-bottom : 2px solid rgb(160,175,5);
-}
-
-QMenuBar::item {
-    padding-bottom:8px;
-    padding-top:8px;
-    padding-left:15px;
-    padding-right:15px;
-    color: black;
-    background-color: transparent;
-}
-
-QMenuBar::item:selected {
-    background-color:rgb(160,175,5);
-    color: white;
-}
-
 /* horizontal scrollbar */
 
 QScrollBar:horizontal {
     background: rgb(200,200,200);
-    height: 10px;
+    height: 0.625em;
     margin: 0 0 0 0;
 }
 
 QScrollBar::handle:horizontal {
     background: rgb(150,150,150);
-    border: 1px rgb(150,150,150);
-    border-radius: 3px;
-    min-width: 20px;
+    border: 0.065em rgb(150,150,150);
+    border-radius: 0.19em;
+    min-width: 1.25wm;
 }
 
 QScrollBar::handle:horizontal:hover {
     background: rgb(160,175,5);
-    border: 1px rgb(160,175,5);
-    border-radius: 3px;
-    min-width: 20px;
+    border: 0.065em rgb(160,175,5);
+    border-radius: 0.19em;
+    min-width: 1.25em;
 }
 
 QScrollBar::add-line:horizontal {
@@ -173,22 +108,22 @@ QScrollBar::sub-line:horizontal {
 
 QScrollBar:vertical {
     background: rgb(200,200,200);
-    width: 10px;
+    width: 0.625em;
     margin: 0 0 0 0;
 }
 
 QScrollBar::handle:vertical {
     background: rgb(150,150,150);
-    border: 1px rgb(150,150,150);
-    border-radius: 3px;
-    min-height: 20px;
+    border: 0.065em rgb(150,150,150);
+    border-radius: 0.19em;
+    min-height: 1.25em;
 }
 
 QScrollBar::handle:vertical:hover {
     background: rgb(160,175,5);
-    border: 1px rgb(160,175,5);
-    border-radius: 3px;
-    min-height: 20px;
+    border: 0.065em rgb(160,175,5);
+    border-radius: 0.19em;
+    min-height: 1.25em;
 }
 
 QScrollBar::add-line:vertical {
@@ -204,8 +139,6 @@ QScrollBar::sub-line:vertical {
       width: 0;
       height: 0;      
 }
-
-
 
 QToolTip {
     color: black;
@@ -254,9 +187,8 @@ QComboBox {
     color: black; 
     selection-color: white;
     selection-background-color:rgb(160,175,5);
-    padding: 1px 0px 1px 3px;
+    padding: 0.065em 0em 0.065em 0.19em;
 } 
-
 
 QComboBox:!editable:hover,
 QComboBox::drop-down:!editable:hover
@@ -321,7 +253,7 @@ QWidget{
 }
 
 QWidget:focus{
-    border: 1px solid rgb(160,175,5);
+    border: 0.065em solid rgb(160,175,5);
 }
 
 QPushButton{
@@ -341,7 +273,7 @@ QPushButton:hover{
 QPushButton:focus{
     background-color: rgb(200,200,200);
     color: black;
-    border: 1px solid rgb(160,175,5);
+    border: 0.065em solid rgb(160,175,5);
 }
 
 QTreeWidget{
@@ -370,10 +302,6 @@ QListView::item:checked {
     color:white;
 }
 
-#listTransactions{ 
-    font-size: 12px;  
-}
-
 QDoubleSpinBox{
     background-color: rgb(200,200,200);
 }
@@ -383,20 +311,20 @@ QTabWidget{
 }
 
 QTabWidget::pane {  /* The tab widget frame */
-    border: 1px solid rgb(100,100,100);
+    border: 0.065em solid rgb(100,100,100);
 } 
 
 QTabBar::tab {
     background: rgb(150,150,150);
-    border: 1px solid rgb(100,100,100);
-    min-height:20px;
-    min-width: 8ex;
-    padding: 2px;
+    border: 0.065em solid rgb(100,100,100);
+    min-height:1.25em;
+    min-width: 0.5em;
+    padding: 0.125em;
 }
 
 QTabBar::tab:selected {
     background: rgb(200,200,200);
-    border: 1px solid rgb(100,100,100);
+    border: 0.065em solid rgb(100,100,100);
     border-bottom-color: rgb(200,200,200);
 }
 
@@ -406,7 +334,11 @@ QTabBar::tab:hover {
 }
 
 QTabBar::tab:!selected {
-    margin-top: 3px;  /* make non-selected tabs look smaller */
+    margin-top: 0.18em;  /* make non-selected tabs look smaller */
+}
+
+QTextEdit{
+    background-color: transparent;
 }
 
 QPlainTextEdit{
@@ -422,10 +354,80 @@ QListWidget{
     background-color:transparent;
 } 
 
+/* Main Window*/
+
+#toolbar {
+    border:none;
+    padding-top:1.25em;
+    min-width:8em;
+    height:100%;    
+    background: transparent;
+    color: black;
+}
+
+#toolbar2 {
+    border:none;
+    width:1.625em;
+    background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(160,175,5), stop: 1 rgb(160,175,5));
+    min-width:1.625em;
+    max-width:1.625em;
+}
+
+#toolbar3 {
+    border:none;
+    background-color:transparent;
+    border-bottom : 0.125em solid rgb(160,175,5);
+    min-height:3.25em;
+    max-height:3.25em;
+}
+
+QToolBar#toolbar QToolButton {
+    padding-left:1em;
+    padding-right:1em;
+    padding-top:0.5em;
+    padding-bottom:0.5em;
+    margin:0.25em;
+    width:100%;
+}
+
+QToolBar#toolbar2 QLabel{
+    border:none;
+    padding-top:1em;
+    padding-bottom:1em;
+    qproperty-alignment: AlignCenter;
+}
+
+QToolBar#toolbar3 QLabel{
+    margin:0.5em;
+}
+
+#spacer {
+    background-color:transparent;
+    border:none;
+}
+
 /* overview page */
 
-#OverviewPage{
-    font-family: "Open Sans";
+#labelOverviewWallet{
+    font-size:16pt;
+    font-weight:bold;
+}
+
+#labelAvailable{
+    font-weight:bold;
+}
+
+#labelImmatureText{
+    font-weight:bold;
+}
+
+#labelTotalBalance{
+    font-weight:bold;
+}
+
+#labelRecentTrans{
+    font-size:16pt;
+    font-weight:bold;
 }
 
 #labelWalletStatus{
@@ -437,6 +439,7 @@ QListWidget{
 }
 
 /* coincontrol dialog*/
+
 #labelCoinControlFeatures{
     font-weight:bold;
 }
@@ -478,14 +481,30 @@ QListWidget{
     font-weight:bold;
 }
 
-/*sendcoinsentry*/
+/* options dialog */
 
-BitcoinAmountField{
-    background-color: rgb(200,200,200);
+#statusLabel{
+    font-weight:bold;
 }
 
+/* sign verify message dialog */
 
+#signatureOut_SM{
+    font-style: italic;
+}
 
+#statusLabel_SM{
+    font-weight:bold;
+}
 
+#statusLabel_VM{
+    font-weight:bold;
+}
+
+/* ask passphrase dialog */
+
+#capsLabel{
+    font-weight:bold;
+}
 
 
