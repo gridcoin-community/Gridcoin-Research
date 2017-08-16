@@ -274,38 +274,6 @@ double GetBlockDifficulty(unsigned int nBits)
     return dDiff;
 }
 
-
-
-
-
-
-double GetPoWMHashPS()
-{
-    if (pindexBest->nHeight >= LAST_POW_BLOCK)
-        return 0;
-
-    int nPoWInterval = 72;
-    int64_t nTargetSpacingWorkMin = 30, nTargetSpacingWork = 30;
-
-    CBlockIndex* pindex = pindexGenesisBlock;
-    CBlockIndex* pindexPrevWork = pindexGenesisBlock;
-
-    while (pindex)
-    {
-        if (pindex->IsProofOfWork())
-        {
-            int64_t nActualSpacingWork = pindex->GetBlockTime() - pindexPrevWork->GetBlockTime();
-            nTargetSpacingWork = ((nPoWInterval - 1) * nTargetSpacingWork + nActualSpacingWork + nActualSpacingWork) / (nPoWInterval + 1);
-            nTargetSpacingWork = max(nTargetSpacingWork, nTargetSpacingWorkMin);
-            pindexPrevWork = pindex;
-        }
-
-        pindex = pindex->pnext;
-    }
-
-    return GetDifficulty() * 4294.967296 / nTargetSpacingWork;
-}
-
 double GetPoSKernelPS()
 {
     int nPoSInterval = 72;
