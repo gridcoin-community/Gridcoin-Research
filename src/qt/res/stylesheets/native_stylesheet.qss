@@ -60,6 +60,14 @@ QToolBar#toolbar3 QLabel{
     background-color:transparent;
 }
 
+#boincLogo{
+    image:url(:/images/boinc);
+    min-width:5.38em;
+    max-width:5.38em;
+    min-height:2.25em;
+    max-height:2.25em;
+}
+
 /* overview page */
 
 #labelOverviewWallet{

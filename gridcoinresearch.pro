@@ -270,7 +270,8 @@ HEADERS += src/qt/bitcoingui.h \
     src/threadsafety.h \
     src/cpid.h \
     src/upgrader.h \
-    src/boinc.h
+    src/boinc.h \
+    src/qt/clicklabel.h
 
 
 SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
@@ -349,7 +350,8 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/cpid.cpp \
     src/upgrader.cpp \
     src/boinc.cpp \
-    src/allocators.cpp
+    src/allocators.cpp \
+    src/qt/clicklabel.cpp
 
 ##
 #RC_FILE  = qaxserver.rc
