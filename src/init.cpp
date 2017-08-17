@@ -44,7 +44,6 @@ using namespace std;
 using namespace boost;
 CWallet* pwalletMain;
 CClientUIInterface uiInterface;
-std::vector<std::string> split(std::string s, std::string delim);
 extern bool fConfChange;
 extern bool fEnforceCanonical;
 extern unsigned int nNodeLifespan;
