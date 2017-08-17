@@ -38,6 +38,7 @@ public slots:
 
 signals:
     void transactionClicked(const QModelIndex &index);
+    void pollLabelClicked();
 
 protected:
     void resizeEvent(QResizeEvent *event);
@@ -59,6 +60,7 @@ private:
 private slots:
     void updateDisplayUnit();
     void handleTransactionClicked(const QModelIndex &index);
+    void handlePollLabelClicked();
 };
 
 #endif // OVERVIEWPAGE_H

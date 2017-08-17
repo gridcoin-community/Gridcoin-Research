@@ -194,6 +194,8 @@ private slots:
     void gotoReceiveCoinsPage();
     /** Switch to send coins page */
     void gotoSendCoinsPage();
+    /** Switch to voting page */
+    void gotoVotingPage();
 
     /** Show Sign/Verify Message dialog and switch to sign message tab */
     void gotoSignMessageTab(QString addr = "");
@@ -219,7 +221,6 @@ private slots:
 	void downloadClicked();
 	void configClicked();
 	void miningClicked();
-    void votingClicked();
 
 	void faqClicked();
     void diagnosticsClicked();
