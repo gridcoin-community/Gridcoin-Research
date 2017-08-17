@@ -79,38 +79,38 @@ void ActivateBeaconKeys(
 
 void GetBeaconElements(std::string& sBeacon,std::string& out_cpid, std::string& out_address, std::string& out_publickey)
 {
-   if (sBeacon.empty()) return;
-   std::string sContract = DecodeBase64(sBeacon);
-   std::vector<std::string> vContract = split(sContract.c_str(),";");
-   if (vContract.size() < 4) return;
-   out_cpid = vContract[0];
-   out_address = vContract[2];
-   out_publickey = vContract[3];
+    if (sBeacon.empty()) return;
+    std::string sContract = DecodeBase64(sBeacon);
+    std::vector<std::string> vContract = split(sContract.c_str(),";");
+    if (vContract.size() < 4) return;
+    out_cpid = vContract[0];
+    out_address = vContract[2];
+    out_publickey = vContract[3];
 }
 
 std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertisingBeacon)
 {
-   //3-26-2017 - Ensure beacon public key is within 6 months of network age (If advertising, let it be returned as missing after 5 months, to ensure the public key is renewed seamlessly).
-   int iMonths = bAdvertisingBeacon ? 5 : 6;
-   int64_t iMaxSeconds = 60 * 24 * 30 * iMonths * 60;
-   std::string sBeacon = RetrieveBeaconValueWithMaxAge(cpid, iMaxSeconds);
-   if (sBeacon.empty()) return "";
-   // Beacon data structure: CPID,hashRand,Address,beacon public key: base64 encoded
-   std::string sContract = DecodeBase64(sBeacon);
-   std::vector<std::string> vContract = split(sContract.c_str(),";");
-   if (vContract.size() < 4) return "";
-   std::string sBeaconPublicKey = vContract[3];
-   return sBeaconPublicKey;
+    //3-26-2017 - Ensure beacon public key is within 6 months of network age (If advertising, let it be returned as missing after 5 months, to ensure the public key is renewed seamlessly).
+    int iMonths = bAdvertisingBeacon ? 5 : 6;
+    int64_t iMaxSeconds = 60 * 24 * 30 * iMonths * 60;
+    std::string sBeacon = RetrieveBeaconValueWithMaxAge(cpid, iMaxSeconds);
+    if (sBeacon.empty()) return "";
+    // Beacon data structure: CPID,hashRand,Address,beacon public key: base64 encoded
+    std::string sContract = DecodeBase64(sBeacon);
+    std::vector<std::string> vContract = split(sContract.c_str(),";");
+    if (vContract.size() < 4) return "";
+    std::string sBeaconPublicKey = vContract[3];
+    return sBeaconPublicKey;
 }
 
 int64_t BeaconTimeStamp(std::string& cpid, bool bZeroOutAfterPOR)
 {
-            std::string sBeacon = mvApplicationCache["beacon;" + cpid];
-            int64_t iLocktime = mvApplicationCacheTimestamp["beacon;" + cpid];
-            int64_t iRSAWeight = GetRSAWeightByCPIDWithRA(cpid);
-            if (fDebug10) printf("\r\n Beacon %s, Weight %f, Locktime %f \r\n",sBeacon.c_str(),(double)iRSAWeight,(double)iLocktime);
-            if (bZeroOutAfterPOR && iRSAWeight==0) iLocktime = 0;
-            return iLocktime;
+    std::string sBeacon = mvApplicationCache["beacon;" + cpid];
+    int64_t iLocktime = mvApplicationCacheTimestamp["beacon;" + cpid];
+    int64_t iRSAWeight = GetRSAWeightByCPIDWithRA(cpid);
+    if (fDebug10) printf("\r\n Beacon %s, Weight %f, Locktime %f \r\n",sBeacon.c_str(),(double)iRSAWeight,(double)iLocktime);
+    if (bZeroOutAfterPOR && iRSAWeight==0) iLocktime = 0;
+    return iLocktime;
 
 }
 
