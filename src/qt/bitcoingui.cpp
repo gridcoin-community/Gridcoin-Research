@@ -227,6 +227,9 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     connect(overviewPage, SIGNAL(transactionClicked(QModelIndex)), this, SLOT(gotoHistoryPage()));
     connect(overviewPage, SIGNAL(transactionClicked(QModelIndex)), transactionView, SLOT(focusTransaction(QModelIndex)));
 
+    // Clicking on the current poll label on the overview page simply sends you to the voting page
+    connect(overviewPage, SIGNAL(pollLabelClicked()), this, SLOT(gotoVotingPage()));
+
     // Double-clicking on a transaction on the transaction history page shows details
     connect(transactionView, SIGNAL(doubleClicked(QModelIndex)), transactionView, SLOT(showDetails()));
 
@@ -598,7 +601,7 @@ void BitcoinGUI::createActions()
     connect(historyAction, SIGNAL(triggered()), this, SLOT(gotoHistoryPage()));
     connect(addressBookAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(addressBookAction, SIGNAL(triggered()), this, SLOT(gotoAddressBookPage()));
-    connect(votingAction, SIGNAL(triggered()), this, SLOT(votingClicked()));
+    connect(votingAction, SIGNAL(triggered()), this, SLOT(gotoVotingPage()));
 
     connect(websiteAction, SIGNAL(triggered()), this, SLOT(websiteClicked()));
     connect(bxAction, SIGNAL(triggered()), this, SLOT(bxClicked()));
@@ -1012,18 +1015,6 @@ void BitcoinGUI::aboutClicked()
     dlg.setModel(clientModel);
     dlg.exec();
 }
-
-
-void BitcoinGUI::votingClicked()
-{
-    votingAction->setChecked(true);
-    votingPage->resetData();
-    centralWidget->setCurrentWidget(votingPage);
-
-    exportAction->setEnabled(false);
-    disconnect(exportAction, SIGNAL(triggered()), 0, 0);
-}
-
 
 void BitcoinGUI::setNumConnections(int count)
 {
@@ -1476,6 +1467,16 @@ void BitcoinGUI::gotoSendCoinsPage()
 {
     sendCoinsAction->setChecked(true);
     centralWidget->setCurrentWidget(sendCoinsPage);
+
+    exportAction->setEnabled(false);
+    disconnect(exportAction, SIGNAL(triggered()), 0, 0);
+}
+
+void BitcoinGUI::gotoVotingPage()
+{
+    votingAction->setChecked(true);
+    votingPage->resetData();
+    centralWidget->setCurrentWidget(votingPage);
 
     exportAction->setEnabled(false);
     disconnect(exportAction, SIGNAL(triggered()), 0, 0);
