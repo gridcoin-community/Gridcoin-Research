@@ -4315,19 +4315,6 @@ bool CBlockIndex::IsSuperMajority(int minVersion, const CBlockIndex* pstart, uns
     return (nFound >= nRequired);
 }
 
-/*
-bool static ReserealizeBlockSignature(CBlock* pblock)
-{
-    if (pblock->IsProofOfWork()) {
-        pblock->vchBlockSig.clear();
-        return true;
-    }
-
-    return CKey::ReserealizeSignature(pblock->vchBlockSig);
-}
-*/
-
-
 bool ServicesIncludesNN(CNode* pNode)
 {
     return (Contains(pNode->strSubVer,"1999")) ? true : false;

@@ -269,38 +269,6 @@ double GetBlockDifficulty(unsigned int nBits)
     return dDiff;
 }
 
-
-
-
-
-
-double GetPoWMHashPS()
-{
-    if (pindexBest->nHeight >= LAST_POW_BLOCK)
-        return 0;
-
-    int nPoWInterval = 72;
-    int64_t nTargetSpacingWorkMin = 30, nTargetSpacingWork = 30;
-
-    CBlockIndex* pindex = pindexGenesisBlock;
-    CBlockIndex* pindexPrevWork = pindexGenesisBlock;
-
-    while (pindex)
-    {
-        if (pindex->IsProofOfWork())
-        {
-            int64_t nActualSpacingWork = pindex->GetBlockTime() - pindexPrevWork->GetBlockTime();
-            nTargetSpacingWork = ((nPoWInterval - 1) * nTargetSpacingWork + nActualSpacingWork + nActualSpacingWork) / (nPoWInterval + 1);
-            nTargetSpacingWork = max(nTargetSpacingWork, nTargetSpacingWorkMin);
-            pindexPrevWork = pindex;
-        }
-
-        pindex = pindex->pnext;
-    }
-
-    return GetDifficulty() * 4294.967296 / nTargetSpacingWork;
-}
-
 double GetPoSKernelPS()
 {
     int nPoSInterval = 72;
@@ -3070,17 +3038,6 @@ double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID)
             return structMag.Magnitude;
         }
         return 0;
-}
-
-std::string GetBeaconPublicKeyFromContract(std::string sEncContract)
-{
-   if (sEncContract.empty()) return "";
-   // Beacon data structure: CPID,hashRand,Address,beacon public key: base64 encoded
-   std::string sContract = DecodeBase64(sEncContract);
-   std::vector<std::string> vContract = split(sContract.c_str(),";");
-   if (vContract.size() < 4) return "";
-   std::string sBeaconPublicKey = vContract[3];
-   return sBeaconPublicKey;
 }
 
 bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature)
