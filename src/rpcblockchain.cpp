@@ -3105,20 +3105,6 @@ void GetBeaconElements(std::string sBeacon,std::string& out_cpid, std::string& o
    out_publickey = vContract[3];
 }
 
-
-
-
-std::string GetBeaconPublicKeyFromContract(std::string sEncContract)
-{
-   if (sEncContract.empty()) return "";
-   // Beacon data structure: CPID,hashRand,Address,beacon public key: base64 encoded
-   std::string sContract = DecodeBase64(sEncContract);
-   std::vector<std::string> vContract = split(sContract.c_str(),";");
-   if (vContract.size() < 4) return "";
-   std::string sBeaconPublicKey = vContract[3];
-   return sBeaconPublicKey;
-}
-
 bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature)
 {
     std::string sBeaconPublicKey = GetBeaconPublicKey(sCPID, false);
