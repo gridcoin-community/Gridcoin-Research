@@ -75,9 +75,7 @@ void ActivateBeaconKeys(
     SetArgument("privatekey" + cpid + GetNetSuffix(), privKey);
 }
 
-// Move more beacon functions - iFoggz
-
-void GetBeaconElements(std::string& sBeacon,std::string& out_cpid, std::string& out_address, std::string& out_publickey)
+void GetBeaconElements(const std::string& sBeacon, std::string& out_cpid, std::string& out_address, std::string& out_publickey)
 {
     if (sBeacon.empty()) return;
     std::string sContract = DecodeBase64(sBeacon);
@@ -103,13 +101,15 @@ std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertisingBeacon)
     return sBeaconPublicKey;
 }
 
-int64_t BeaconTimeStamp(std::string& cpid, bool bZeroOutAfterPOR)
+int64_t BeaconTimeStamp(const std::string& cpid, bool bZeroOutAfterPOR)
 {
     std::string sBeacon = mvApplicationCache["beacon;" + cpid];
     int64_t iLocktime = mvApplicationCacheTimestamp["beacon;" + cpid];
     int64_t iRSAWeight = GetRSAWeightByCPIDWithRA(cpid);
-    if (fDebug10) printf("\r\n Beacon %s, Weight %f, Locktime %f \r\n",sBeacon.c_str(),(double)iRSAWeight,(double)iLocktime);
-    if (bZeroOutAfterPOR && iRSAWeight==0) iLocktime = 0;
+    if (fDebug10)
+        printf("\r\n Beacon %s, Weight %" PRId64 ", Locktime %" PRId64 "\r\n",sBeacon.c_str(), iRSAWeight, iLocktime);
+    if (bZeroOutAfterPOR && iRSAWeight==0)
+        iLocktime = 0;
     return iLocktime;
 
 }
