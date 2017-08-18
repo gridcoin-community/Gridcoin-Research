@@ -57,15 +57,12 @@ static std::string GetFoundationGuid(const std::string &sTitle)
 
 static int column_alignments[] = {
     Qt::AlignRight|Qt::AlignVCenter, // RowNumber
-    Qt::AlignLeft|Qt::AlignVCenter, // Title
     Qt::AlignLeft|Qt::AlignVCenter, // Expiration
-    Qt::AlignLeft|Qt::AlignVCenter, // ShareType
-    Qt::AlignLeft|Qt::AlignVCenter, // Question
-    Qt::AlignLeft|Qt::AlignVCenter, // Answers
+    Qt::AlignLeft|Qt::AlignVCenter, // Title
+    Qt::AlignLeft|Qt::AlignVCenter, // BestAnswer
     Qt::AlignRight|Qt::AlignVCenter, // TotalParticipants
     Qt::AlignRight|Qt::AlignVCenter, // TotalShares
-    Qt::AlignLeft|Qt::AlignVCenter, // Url
-    Qt::AlignLeft|Qt::AlignVCenter, // BestAnswer
+    Qt::AlignLeft|Qt::AlignVCenter, // ShareType
     };
 
 // VotingTableModel
@@ -74,15 +71,12 @@ VotingTableModel::VotingTableModel(void)
 {
     columns_
         << tr("#")
-        << tr("Title")
         << tr("Expiration")
-        << tr("Share Type")
-        << tr("Question")
-        << tr("Answers")
+        << tr("Title")
+        << tr("Best Answer")
         << tr("# Voters")  // Total Participants
         << tr("Total Shares")
-        << tr("URL")
-        << tr("Best Answer")
+        << tr("Share Type")
         ;
 }
 
@@ -125,16 +119,10 @@ QVariant VotingTableModel::data(const QModelIndex &index, int role) const
             return item->expiration_.toString();
         case ShareType:
             return item->shareType_;
-        case Question:
-            return item->question_;
-        case Answers:
-            return item->answers_;
         case TotalParticipants:
             return item->totalParticipants_;
         case TotalShares:
             return item->totalShares_;
-        case Url:
-            return item->url_;
         case BestAnswer:
             return item->bestAnswer_;
         default:
@@ -153,16 +141,10 @@ QVariant VotingTableModel::data(const QModelIndex &index, int role) const
             return item->expiration_;
         case ShareType:
             return item->shareType_;
-        case Question:
-            return item->question_;
-        case Answers:
-            return item->answers_;
         case TotalParticipants:
             return item->totalParticipants_;
         case TotalShares:
             return item->totalShares_;
-        case Url:
-            return item->url_;
         case BestAnswer:
             return item->bestAnswer_;
         default:
@@ -182,20 +164,11 @@ QVariant VotingTableModel::data(const QModelIndex &index, int role) const
     case ShareTypeRole:
         return item->shareType_;
 
-    case QuestionRole:
-        return item->question_;
-
-    case AnswersRole:
-        return item->answers_;
-
     case TotalParticipantsRole:
         return item->totalParticipants_;
 
     case TotalSharesRole:
         return item->totalShares_;
-
-    case UrlRole:
-        return item->url_;
 
     case BestAnswerRole:
         return item->bestAnswer_;
@@ -233,16 +206,10 @@ QVariant VotingTableModel::headerData(int section, Qt::Orientation orientation, 
                 return tr("Expiration.");
             case ShareType:
                 return tr("Share Type.");
-            case Question:
-                return tr("Question.");
-            case Answers:
-                return tr("Answers");
             case TotalParticipants:
                 return tr("Total Participants.");
             case TotalShares:
                 return tr("Total Shares.");
-            case Url:
-                return tr("URL.");
             case BestAnswer:
                 return tr("Best Answer.");
             }
@@ -358,11 +325,8 @@ bool VotingProxyModel::filterAcceptsRow(int row, const QModelIndex &sourceParent
     QModelIndex index = sourceModel()->index(row, 0, sourceParent);
 
     QString title = index.data(VotingTableModel::TitleRole).toString();
-    QString question = index.data(VotingTableModel::QuestionRole).toString();
-    QString answers = index.data(VotingTableModel::AnswersRole).toString();
-    QString url = index.data(VotingTableModel::UrlRole).toString();
-    if (!title.contains(filterTQAU_, Qt::CaseInsensitive) && !question.contains(filterTQAU_, Qt::CaseInsensitive) &&
-        !answers.contains(filterTQAU_, Qt::CaseInsensitive) && !url.contains(filterTQAU_, Qt::CaseInsensitive)){
+
+    if (!title.contains(filterTQAU_, Qt::CaseInsensitive)){
         return false;
     }
     return true;
@@ -394,7 +358,7 @@ VotingDialog::VotingDialog(QWidget *parent)
     QHBoxLayout *filterhlayout = new QHBoxLayout();
     groupboxvlayout->addLayout(filterhlayout);
 
-    // Filter by Title/Question/Answers/Url with one QLineEdit
+    // Filter by Title with one QLineEdit
     QLabel *filterByTQAULabel = new QLabel(tr("Filter: "));
     filterByTQAULabel->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
     filterByTQAULabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
@@ -450,7 +414,7 @@ VotingDialog::VotingDialog(QWidget *parent)
 #else
     tableView_->horizontalHeader()->setResizeMode(QHeaderView::Interactive);
 #endif
-    tableView_->horizontalHeader()->setMinimumWidth(VOTINGDIALOG_WIDTH_RowNumber + VOTINGDIALOG_WIDTH_Title + VOTINGDIALOG_WIDTH_Expiration + VOTINGDIALOG_WIDTH_ShareType + VOTINGDIALOG_WIDTH_Question + VOTINGDIALOG_WIDTH_Answers + VOTINGDIALOG_WIDTH_TotalParticipants + VOTINGDIALOG_WIDTH_TotalShares + VOTINGDIALOG_WIDTH_Url + VOTINGDIALOG_WIDTH_BestAnswer);
+    tableView_->horizontalHeader()->setMinimumWidth(VOTINGDIALOG_WIDTH_RowNumber + VOTINGDIALOG_WIDTH_Title + VOTINGDIALOG_WIDTH_Expiration + VOTINGDIALOG_WIDTH_ShareType + VOTINGDIALOG_WIDTH_TotalParticipants + VOTINGDIALOG_WIDTH_TotalShares + VOTINGDIALOG_WIDTH_BestAnswer);
 
     groupboxvlayout->addWidget(tableView_);
 
@@ -507,8 +471,8 @@ void VotingDialog::tableColResize(void)
     int fixedColWidth = VOTINGDIALOG_WIDTH_RowNumber + VOTINGDIALOG_WIDTH_Expiration + VOTINGDIALOG_WIDTH_ShareType + VOTINGDIALOG_WIDTH_TotalParticipants + VOTINGDIALOG_WIDTH_TotalShares;
 
     int dynamicWidth = tableView_->horizontalHeader()->width() - fixedColWidth;
-    int nColumns = 5; // 5 dynamic columns
-    int columns[] = {VotingTableModel::Title,VotingTableModel::Question,VotingTableModel::Answers,VotingTableModel::Url,VotingTableModel::BestAnswer};
+    int nColumns = 2; // 2 dynamic columns
+    int columns[] = {VotingTableModel::Title,VotingTableModel::BestAnswer};
     int remainingWidth = dynamicWidth % nColumns;
     for(int cNum = 0; cNum < nColumns; cNum++) {
         if(remainingWidth > 0)

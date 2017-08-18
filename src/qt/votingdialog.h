@@ -45,11 +45,8 @@ QT_CHARTS_END_NAMESPACE
 #define VOTINGDIALOG_WIDTH_Title              225
 #define VOTINGDIALOG_WIDTH_Expiration         175
 #define VOTINGDIALOG_WIDTH_ShareType          80
-#define VOTINGDIALOG_WIDTH_Question           140
-#define VOTINGDIALOG_WIDTH_Answers            80
 #define VOTINGDIALOG_WIDTH_TotalParticipants  80
 #define VOTINGDIALOG_WIDTH_TotalShares        100
-#define VOTINGDIALOG_WIDTH_Url                150
 #define VOTINGDIALOG_WIDTH_BestAnswer         80
 
 class VotingItem {
@@ -80,28 +77,22 @@ public:
 
     enum ColumnIndex {
         RowNumber = 0,
-        Title = 1,
-        Expiration = 2,
-        ShareType = 3,
-        Question = 4,
-        Answers = 5,
-        TotalParticipants = 6,
-        TotalShares = 7,
-        Url = 8,
-        BestAnswer = 9,
+        Expiration = 1,
+        Title = 2,
+        BestAnswer = 3,
+        TotalParticipants = 4,
+        TotalShares = 5,
+        ShareType = 6,
     };
 
     enum Roles {
         RowNumberRole = Qt::UserRole,
-        TitleRole,
         ExpirationRole,
-        ShareTypeRole,
-        QuestionRole,
-        AnswersRole,
+        TitleRole,
+        BestAnswerRole,
         TotalParticipantsRole,
         TotalSharesRole,
-        UrlRole,
-        BestAnswerRole,
+        ShareTypeRole,
 
         SortRole,
     };
@@ -130,7 +121,7 @@ class VotingProxyModel
 
 public:
     explicit VotingProxyModel(QObject *parent=0);
-    void setFilterTQAU(const QString &); // filter Title/Question/Answers/Url
+    void setFilterTQAU(const QString &); // filter Title
 
 protected:
     bool filterAcceptsRow(int, const QModelIndex &) const;
