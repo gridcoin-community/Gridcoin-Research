@@ -590,10 +590,10 @@ void VotingDialog::showVoteDialog(void)
 
     // take the row of the top selected cell
     std::sort(indexes.begin(), indexes.end());
-    int row = indexes.at(0).row();
-    const VotingItem *item = tableModel_->index(row);
+    int row = proxyModel_->mapToSource(indexes.at(0)).row();
 
     // reset the dialog's data
+    const VotingItem *item = tableModel_->index(row);
     voteDialog_->resetData(item);
 
     voteDialog_->show();
