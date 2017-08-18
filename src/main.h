@@ -106,6 +106,7 @@ inline int64_t FutureDrift(int64_t nTime, int nHeight) { return IsProtocolV2(nHe
 inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight) ? 90 : 60; }
 
 extern bool IsNeuralNodeParticipant(const std::string& addr, int64_t locktime);
+bool VerifySuperblock(const std::string& superblock, const CBlockIndex* parent);
 
 extern std::map<std::string, std::string> mvApplicationCache;
 extern std::map<std::string, int64_t> mvApplicationCacheTimestamp;

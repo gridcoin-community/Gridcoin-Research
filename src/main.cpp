@@ -62,7 +62,6 @@ extern MiningCPID GetInitializedMiningCPID(std::string name, std::map<std::strin
 std::string GetListOfWithConsensus(std::string datatype);
 extern std::string getHardDriveSerial();
 extern bool IsSuperBlock(CBlockIndex* pIndex);
-extern bool VerifySuperblock(std::string superblock, int nHeight);
 extern double ExtractMagnitudeFromExplainMagnitude();
 extern void AddPeek(std::string data);
 extern void GridcoinServices();
@@ -3313,7 +3312,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                         return error("ConnectBlock[] : Superblock stake check caused unknwon exception with GRC address %s", bb.GRCAddress.c_str());
                     }
                 }
-                if (!VerifySuperblock(superblock,pindex->nHeight))
+                if (!VerifySuperblock(superblock, pindex))
                 {
                     return error("ConnectBlock[] : Superblock avg mag below 10; SuperblockHash: %s, Consensus Hash: %s",
                                         neural_hash.c_str(), consensus_hash.c_str());
@@ -3345,7 +3344,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                     if (bb.superblock.length() > 20)
                     {
                             std::string superblock = UnpackBinarySuperblock(bb.superblock);
-                            if (VerifySuperblock(superblock,pindex->nHeight))
+                            if (VerifySuperblock(superblock, pindex))
                             {
                                         LoadSuperblock(superblock,pindex->nTime,pindex->nHeight);
                                         if (fDebug3) printf("ConnectBlock(): Superblock Loaded %f \r\n",(double)pindex->nHeight);
@@ -4320,52 +4319,69 @@ bool ServicesIncludesNN(CNode* pNode)
     return (Contains(pNode->strSubVer,"1999")) ? true : false;
 }
 
-bool VerifySuperblock(std::string superblock, int nHeight)
+bool VerifySuperblock(const std::string& superblock, const CBlockIndex* parent)
 {
-        bool bPassed = false;
-        double out_avg = 0;
-        double out_beacon_count=0;
-        double out_participant_count=0;
-        double avg_mag = 0;
-        if (superblock.length() > 20)
-        {
-            avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,false,nHeight);
-            bPassed=true;
-            if (!IsResearchAgeEnabled(nHeight))
-            {
-                return (avg_mag < 10 ? false : true);
-            }
-            // New rules added here:
-            if (out_avg < 10 && fTestNet)  bPassed = false;
-            if (out_avg < 70 && !fTestNet) bPassed = false;
-            if (avg_mag < 10 && !fTestNet) bPassed = false;
-			// Verify distinct project count matches whitelist
-        }
-        if (fDebug3 && !bPassed)
-        {
-            if (fDebug) printf(" Verification of Superblock Failed ");
-            //if (fDebug3) printf("\r\n Verification of Superblock Failed outavg: %f, avg_mag %f, Height %f, Out_Beacon_count %f, Out_participant_count %f, block %s", (double)out_avg,(double)avg_mag,(double)nHeight,(double)out_beacon_count,(double)out_participant_count,superblock.c_str());
-        }
-        return bPassed;
+    // Pre-condition checks.
+    if(!parent)
+    {
+        printf("Invalid block passed to VerifySuperblock");
+        return false;
+    }
+
+    if(superblock.length() <= 20)
+    {
+        printf("Invalid superblock passed to VerifySuperblock");
+        return false;
+    }
+
+    // Validate superblock contents.
+    bool bPassed = true;
+    double out_avg = 0;
+    double out_beacon_count=0;
+    double out_participant_count=0;
+    double avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,false, parent->nHeight);
+
+    // New rules added here:
+    if (out_avg < 10 && fTestNet)  bPassed = false;
+    if (out_avg < 70 && !fTestNet) bPassed = false;
+
+    // Before block version- and stake engine 8 there used to be a requirement
+    // that the average magnitude across all researchers must be at least 10.
+    // This is not necessary but cannot be changed until a mandatory is released.
+    //
+    // TODO: Remove this after V8 has kicked in?
+    if(!fTestNet && parent->nVersion < 8 && avg_mag < 10)
+        bPassed = false;
+
+    if (!bPassed)
+    {
+        if (fDebug) printf(" Verification of Superblock Failed ");
+        //if (fDebug3) printf("\r\n Verification of Superblock Failed outavg: %f, avg_mag %f, Height %f, Out_Beacon_count %f, Out_participant_count %f, block %s", (double)out_avg,(double)avg_mag,(double)nHeight,(double)out_beacon_count,(double)out_participant_count,superblock.c_str());
+    }
+
+    return bPassed;
 }
 
 bool NeedASuperblock()
 {
-        bool bDireNeedOfSuperblock = false;
-        std::string superblock = ReadCache("superblock","all");
-        if (superblock.length() > 20 && !OutOfSyncByAge())
-        {
-            if (!VerifySuperblock(superblock,pindexBest->nHeight)) bDireNeedOfSuperblock = true;
-			/*
-			// Check project count in last superblock
-			double out_project_count = 0;
-			double out_whitelist_count = 0;
-			GetSuperblockProjectCount(superblock, out_project_count, out_whitelist_count);
-			*/
-        }
-        int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-        if ((double)superblock_age > (double)(GetSuperblockAgeSpacing(nBestHeight))) bDireNeedOfSuperblock = true;
-        return bDireNeedOfSuperblock;
+    bool bDireNeedOfSuperblock = false;
+    std::string superblock = ReadCache("superblock","all");
+    if (superblock.length() > 20 && !OutOfSyncByAge())
+    {
+        if (!VerifySuperblock(superblock, pindexBest))
+            bDireNeedOfSuperblock = true;
+        /*
+         // Check project count in last superblock
+         double out_project_count = 0;
+         double out_whitelist_count = 0;
+         GetSuperblockProjectCount(superblock, out_project_count, out_whitelist_count);
+         */
+    }
+    int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+    if (superblock_age > GetSuperblockAgeSpacing(nBestHeight))
+        bDireNeedOfSuperblock = true;
+
+    return bDireNeedOfSuperblock;
 }
 
 
@@ -4536,11 +4552,11 @@ void GridcoinServices()
             if (NeedASuperblock() && IsNeuralNodeParticipant(DefaultWalletAddress(), GetAdjustedTime()))
             {
                 // First verify my node has a synced contract
-                std::string contract = "";
+                std::string contract;
                 #if defined(WIN32) && defined(QT_GUI)
                     contract = qtGetNeuralContract("");
                 #endif
-                if (VerifySuperblock(contract,nBestHeight))
+                if (VerifySuperblock(contract, pindexBest))
                 {
                         AsyncNeuralRequest("quorum","gridcoin",25);
                 }
@@ -5725,7 +5741,7 @@ bool ComputeNeuralNetworkSupermajorityHashes()
                 if (bb.superblock.length() > 20)
                 {
                     std::string superblock = UnpackBinarySuperblock(bb.superblock);
-                    if (VerifySuperblock(superblock,pblockindex->nHeight))
+                    if (VerifySuperblock(superblock, pblockindex))
                     {
                         WriteCache("neuralsecurity","pending",ToString(pblockindex->nHeight),GetAdjustedTime());
                     }
@@ -5828,24 +5844,27 @@ bool TallyResearchAverages(bool Forcefully)
                                 if (bb.superblock.length() > 20)
                                 {
                                         std::string superblock = UnpackBinarySuperblock(bb.superblock);
-                                        if (VerifySuperblock(superblock,pblockindex->nHeight))
+                                        if (VerifySuperblock(superblock, pblockindex))
                                         {
                                                 LoadSuperblock(superblock,pblockindex->nTime,pblockindex->nHeight);
                                                 superblockloaded=true;
-                                                if (fDebug) printf(" Superblock Loaded %f \r\n",(double)pblockindex->nHeight);
+                                                if (fDebug)
+                                                   printf(" Superblock Loaded %i", pblockindex->nHeight);
                                         }
                                 }
                             }
 
                         }
                         // End of critical section
-                        if (fDebug3) printf("TNA loaded in %f",(double)GetTimeMillis()-nStart);
+                        if (fDebug3) printf("TNA loaded in %" PRId64, GetTimeMillis()-nStart);
                         nStart=GetTimeMillis();
 
 
                         if (pblockindex)
                         {
-                            if (fDebug3) printf("Min block %f, Rows %f \r\n",(double)pblockindex->nHeight,(double)iRow);
+                            if (fDebug3)
+                               printf("Min block %i, Rows %i", pblockindex->nHeight, iRow);
+
                             StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetworkCopy);
                             network.projectname="NETWORK";
                             network.payments = NetworkPayments;
