@@ -57,7 +57,6 @@ MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 extern double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid);
 extern bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
 bool NeedASuperblock();
-bool VerifySuperblock(std::string superblock, int nHeight);
 double ExtractMagnitudeFromExplainMagnitude();
 std::string GetQuorumHash(const std::string& data);
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
@@ -2445,7 +2444,7 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("beacon_count",out_beacon_count));
         entry.push_back(Pair("beacon_participant_count",out_participant_count));
         entry.push_back(Pair("average_magnitude",out_avg));
-        entry.push_back(Pair("superblock_valid",VerifySuperblock(superblock,pindexBest->nHeight)));
+        entry.push_back(Pair("superblock_valid", VerifySuperblock(superblock, pindexBest)));
         int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
         entry.push_back(Pair("Superblock Age",superblock_age));
         bool bDireNeed = NeedASuperblock();
@@ -2454,7 +2453,7 @@ Value execute(const Array& params, bool fHelp)
     }
     else if (sItem == "currentcontractaverage")
     {
-        std::string contract = "";
+        std::string contract;
         #if defined(WIN32) && defined(QT_GUI)
                     contract = qtGetNeuralContract("");
         #endif
@@ -2463,7 +2462,7 @@ Value execute(const Array& params, bool fHelp)
         double out_participant_count = 0;
         double out_avg = 0;
         double avg = GetSuperblockAvgMag(contract,out_beacon_count,out_participant_count,out_avg,false,nBestHeight);
-        bool bValid = VerifySuperblock(contract,pindexBest->nHeight);
+        bool bValid = VerifySuperblock(contract, pindexBest);
         entry.push_back(Pair("avg",avg));
         entry.push_back(Pair("beacon_count",out_beacon_count));
         entry.push_back(Pair("avg_mag",out_avg));
