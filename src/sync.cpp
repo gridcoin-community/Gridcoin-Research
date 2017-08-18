@@ -3,6 +3,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "sync.h"
+
 #include "util.h"
 
 #include <stdio.h>
@@ -65,10 +66,10 @@ struct LockData {
 
     LockOrders lockorders;
     InvLockOrders invlockorders;
-    std::mutex dd_mutex;
+    boost::mutex dd_mutex;
 } static lockdata;
 
-std::thread_specific_ptr<LockStack> lockstack;
+boost::thread_specific_ptr<LockStack> lockstack;
 
 static void potential_deadlock_detected(const std::pair<void*, void*>& mismatch, const LockStack& s1, const LockStack& s2)
 {
@@ -101,7 +102,7 @@ static void push_lock(void* c, const CLockLocation& locklocation, bool fTry)
     if (lockstack.get() == NULL)
         lockstack.reset(new LockStack);
 
-    std::unique_lock<std::mutex> lock(lockdata.dd_mutex);
+    boost::unique_lock<boost::mutex> lock(lockdata.dd_mutex);
 
     (*lockstack).push_back(std::make_pair(c, locklocation));
 
@@ -159,7 +160,7 @@ void DeleteLock(void* cs)
         // We're already shutting down.
         return;
     }
-    std::unique_lock<std::mutex> lock(lockdata.dd_mutex);
+    boost::unique_lock<boost::mutex> lock(lockdata.dd_mutex);
     std::pair<void*, void*> item = std::make_pair(cs, (void*)0);
     LockOrders::iterator it = lockdata.lockorders.lower_bound(item);
     while (it != lockdata.lockorders.end() && it->first.first == cs) {
