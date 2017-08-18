@@ -4342,16 +4342,18 @@ bool VerifySuperblock(const std::string& superblock, const CBlockIndex* parent)
     double avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,false, parent->nHeight);
 
     // New rules added here:
-    if (out_avg < 10 && fTestNet)  bPassed = false;
-    if (out_avg < 70 && !fTestNet) bPassed = false;
-
     // Before block version- and stake engine 8 there used to be a requirement
     // that the average magnitude across all researchers must be at least 10.
     // This is not necessary but cannot be changed until a mandatory is released.
     //
     // TODO: Remove this after V8 has kicked in?
-    if(!fTestNet && parent->nVersion < 8 && avg_mag < 10)
-        bPassed = false;
+    if(parent->nVersion < 8)
+    {
+        if (out_avg < 10 && fTestNet)  bPassed = false;
+        if (out_avg < 70 && !fTestNet) bPassed = false;
+
+        if (avg_mag < 10 && !fTestNet) bPassed = false;
+    }
 
     if (!bPassed)
     {
