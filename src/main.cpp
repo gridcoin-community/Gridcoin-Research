@@ -4336,23 +4336,34 @@ bool VerifySuperblock(const std::string& superblock, const CBlockIndex* parent)
 
     // Validate superblock contents.
     bool bPassed = true;
-    double out_avg = 0;
-    double out_beacon_count=0;
-    double out_participant_count=0;
-    double avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,false, parent->nHeight);
 
-    // New rules added here:
-    // Before block version- and stake engine 8 there used to be a requirement
-    // that the average magnitude across all researchers must be at least 10.
-    // This is not necessary but cannot be changed until a mandatory is released.
-    //
-    // TODO: Remove this after V8 has kicked in?
     if(parent->nVersion < 8)
     {
+        double out_avg = 0;
+        double out_beacon_count=0;
+        double out_participant_count=0;
+        double avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,false, parent->nHeight);
+
+        // New rules added here:
+        // Before block version- and stake engine 8 there used to be a requirement
+        // that the average magnitude across all researchers must be at least 10.
+        // This is not necessary but cannot be changed until a mandatory is released.
+
         if (out_avg < 10 && fTestNet)  bPassed = false;
         if (out_avg < 70 && !fTestNet) bPassed = false;
 
         if (avg_mag < 10 && !fTestNet) bPassed = false;
+    }
+    else
+    {
+        // Block version above 8
+        // none, as they are easy to work arount and complicate sb production
+
+        // previously:
+        // * low/high limit of average of researcher magnitudes
+        // * low limit of project avg rac
+        // * count of researchers within 10% of their beacon count
+        // * count of projects at least half of previous sb project count
     }
 
     if (!bPassed)
