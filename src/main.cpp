@@ -36,13 +36,11 @@
 #include <ctime>
 #include <math.h>
 
-void GetBeaconElements(std::string sBeacon,std::string& out_cpid, std::string& out_address, std::string& out_publickey);
 extern std::string NodeAddress(CNode* pfrom);
 extern std::string ConvertBinToHex(std::string a);
 extern std::string ConvertHexToBin(std::string a);
 extern bool WalletOutOfSync();
 extern bool WriteKey(std::string sKey, std::string sValue);
-std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertisingBeacon);
 bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 extern void CleanInboundConnections(bool bClearAll);
@@ -68,7 +66,6 @@ extern bool VerifySuperblock(std::string superblock, int nHeight);
 extern double ExtractMagnitudeFromExplainMagnitude();
 extern void AddPeek(std::string data);
 extern void GridcoinServices();
-int64_t BeaconTimeStamp(std::string cpid, bool bZeroOutAfterPOR);
 extern bool NeedASuperblock();
 extern double SnapToGrid(double d);
 extern bool StrLessThanReferenceHash(std::string rh);
@@ -85,7 +82,6 @@ extern std::string getCpuHash();
 std::string getMacAddress();
 std::string TimestampToHRDate(double dtm);
 bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
-bool HasActiveBeacon(const std::string& cpid);
 extern bool BlockNeedsChecked(int64_t BlockTime);
 extern void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector<CBlockIndex*> vConnect);
 int64_t GetEarliestWalletTransaction();
