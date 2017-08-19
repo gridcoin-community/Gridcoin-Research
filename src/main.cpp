@@ -36,6 +36,7 @@
 #include <ctime>
 #include <math.h>
 
+bool VerifyBeaconContractTx(const std::string& txhashBoinc);
 extern std::string NodeAddress(CNode* pfrom);
 extern std::string ConvertBinToHex(std::string a);
 extern std::string ConvertHexToBin(std::string a);
@@ -1379,7 +1380,6 @@ bool CTransaction::CheckTransaction() const
         if (!MoneyRange(nValueOut))
             return DoS(100, error("CTransaction::CheckTransaction() : txout total out of range"));
     }
-
     // Check for duplicate inputs
     set<COutPoint> vInOutPoints;
     BOOST_FOREACH(const CTxIn& txin, vin)
@@ -1400,7 +1400,6 @@ bool CTransaction::CheckTransaction() const
             if (txin.prevout.IsNull())
                 return DoS(10, error("CTransaction::CheckTransaction() : prevout is null"));
     }
-
     return true;
 }
 
@@ -1442,6 +1441,10 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
 
     if (!tx.CheckTransaction())
         return error("AcceptToMemoryPool : CheckTransaction failed");
+
+    // Verify beacon contract in tx if found
+    if (!VerifyBeaconContractTx(tx.hashBoinc))
+        return tx.DoS(25, "AcceptToMemoryPool : bad beacon contract in tx; rejected");
 
     // Coinbase is only valid in a block, not as a loose transaction
     if (tx.IsCoinBase())
@@ -3964,7 +3967,6 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
     for (unsigned int i = 1; i < vtx.size(); i++)
         if (vtx[i].IsCoinBase())
             return DoS(100, error("CheckBlock[] : more than one coinbase"));
-
     //Research Age
     MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc,nVersion);
     //For higher security, plus lets catch these bad blocks before adding them to the chain to prevent reorgs:
@@ -4106,6 +4108,10 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
         // ppcoin: check transaction timestamp
         if (GetBlockTime() < (int64_t)tx.nTime)
             return DoS(50, error("CheckBlock[] : block timestamp earlier than transaction timestamp"));
+
+        // Verify beacon contract if a transaction contains a beacon contract
+        if (!VerifyBeaconContractTx(tx.hashBoinc))
+            return DoS(25, "CheckBlock[] : bad beacon contract found in tx contained within block; rejected");
     }
 
     // Check for duplicate txids. This is caught by ConnectInputs(),
@@ -9187,4 +9193,45 @@ std::string GetBackupFilename(const std::string& basename, const std::string& su
     return suffix.empty()
         ? basename + "-" + std::string(boTime)
         : basename + "-" + std::string(boTime) + "-" + suffix;
+}
+
+bool VerifyBeaconContractTx(const std::string& txhashBoinc)
+{
+    // Check if tx contains beacon advertisement and evaluate for certain conditions
+    std::string chkMessageType = ExtractXML(txhashBoinc, "<MT>", "</MT>");
+    std::string chkMessageAction = ExtractXML(txhashBoinc, "<MA>", "</MA>");
+    if (chkMessageAction != "A" && chkMessageType != "beacon")
+        return true; // Not beacon contract
+    std::string chkMessageContract = ExtractXML(txhashBoinc, "<MV>", "</MV>");
+    std::string chkMessageContractCPID = ExtractXML(txhashBoinc, "<MK>", "</MK>");
+    // Here we GetBeaconElements for the contract in the tx
+    std::string tx_out_cpid;
+    std::string tx_out_address;
+    std::string tx_out_publickey;
+    GetBeaconElements(chkMessageContract, tx_out_cpid, tx_out_address, tx_out_publickey);
+    if (tx_out_cpid == "" || tx_out_address == "" || tx_out_publickey == "" || chkMessageContractCPID == "")
+        return false;
+    std::string chkKey = "beacon;" + chkMessageContractCPID;
+    std::string chkValue = mvApplicationCache[chkKey];
+    int64_t chkiAge = pindexBest != NULL
+        ? pindexBest->nTime - mvApplicationCacheTimestamp[chkKey]
+        : 0;
+    int64_t chkSecondsBase = 60 * 24 * 30 * 60;
+    // Conditions
+    // Condition a) if beacon is younger then 5 months deny tx
+    if (chkiAge <= chkSecondsBase * 5 && chkiAge >= 1)
+        return false;
+    // Condition b) if beacon is younger then 6 months but older then 5 months verify using the same keypair; if not deny tx
+    if (chkiAge >= chkSecondsBase * 5 && chkiAge <= chkSecondsBase * 6)
+    {
+        std::string chk_out_cpid;
+        std::string chk_out_address;
+        std::string chk_out_publickey;
+        // Here we GetBeaconElements for the contract in the current beacon in chain
+        GetBeaconElements(chkValue, chk_out_cpid, chk_out_address, chk_out_publickey);
+        if (tx_out_publickey != chk_out_publickey)
+            return false;
+    }
+    // Passed checks
+    return true;
 }
