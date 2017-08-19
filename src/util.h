@@ -17,6 +17,8 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <ostream>
+#include <locale>
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/path.hpp>
@@ -90,8 +92,6 @@ extern bool fDebug;
 extern bool fDebugNet;
 extern bool fDebug2;
 extern bool fDebug3;
-extern bool fDebug4;
-extern bool fDebug5;
 extern bool fDebug10;
 
 extern bool fPrintToConsole;
@@ -193,19 +193,44 @@ std::string FormatFullVersion();
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments);
 void AddTimeData(const CNetAddr& ip, int64_t nTime);
 void runCommand(std::string strCommand);
+
+//!
+//! \brief Round decimal value to N decimal places.
+//! \param d Value to round.
+//! \param place Number of decimal places.
+//!
+double Round(double d, int place);
+
+//!
+//! \brief Round a decimal value and convert it to a string.
+//! \param d Value to round.
+//! \param place Number of decimal places.
+//! \note This always produces an output with dot as decimal separator.
+//!
 std::string RoundToString(double d, int place);
+
+//!
+//! \brief Convert any value to a string.
+//! \param val Value to convert.
+//! \note This ignores locale settings.
+//!
+template<typename T>
+std::string ToString(const T& val)
+{
+    std::ostringstream ss;
+    ss.imbue(std::locale::classic());
+    ss << val;
+    return ss.str();
+}
+
 bool Contains(const std::string& data, const std::string& instring);
 
 std::string MakeSafeMessage(const std::string& messagestring);
 
+// TODO: Replace this with ToString
 inline std::string i64tostr(int64_t n)
 {
     return strprintf("%" PRId64, n);
-}
-
-inline std::string itostr(int n)
-{
-    return strprintf("%d", n);
 }
 
 inline int64_t atoi64(const char* psz)
@@ -591,44 +616,7 @@ public:
 };
 
 bool NewThread(void(*pfn)(void*), void* parg);
-
-#ifdef WIN32
-inline void SetThreadPriority(int nPriority)
-{
-    SetThreadPriority(GetCurrentThread(), nPriority);
-}
-#else
-
-#define THREAD_PRIORITY_LOWEST          PRIO_MAX
-#define THREAD_PRIORITY_BELOW_NORMAL    2
-#define THREAD_PRIORITY_NORMAL          0
-#define THREAD_PRIORITY_ABOVE_NORMAL    -2
-#define THREAD_PRIORITY_HIGHEST        PRIO_MIN
-
-inline void SetThreadPriority(int nPriority)
-{
-    // It's unclear if it's even possible to change thread priorities on Linux,
-    // but we really and truly need it for the generation threads.
-#ifdef PRIO_THREAD
-    setpriority(PRIO_THREAD, 0, nPriority);
-#else
-    setpriority(PRIO_PROCESS, 0, nPriority);
-#endif
-}
-
-inline void ExitThread(size_t nExitCode)
-{
-    pthread_exit((void*)nExitCode);
-}
-#endif
-
 void RenameThread(const char* name);
-
-inline uint32_t ByteReverse(uint32_t value)
-{
-    value = ((value & 0xFF00FF00) >> 8) | ((value & 0x00FF00FF) << 8);
-    return (value<<16) | (value>>16);
-}
 
 #endif
 

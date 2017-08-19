@@ -20,6 +20,7 @@
 #include "json/json_spirit_value.h"
 #include "boinc.h"
 #include "beacon.h"
+#include "miner.h"
 
 #include <boost/lexical_cast.hpp>
 #include <boost/filesystem.hpp>
@@ -35,13 +36,11 @@
 #include <ctime>
 #include <math.h>
 
-void GetBeaconElements(std::string sBeacon,std::string& out_cpid, std::string& out_address, std::string& out_publickey);
 extern std::string NodeAddress(CNode* pfrom);
 extern std::string ConvertBinToHex(std::string a);
 extern std::string ConvertHexToBin(std::string a);
 extern bool WalletOutOfSync();
 extern bool WriteKey(std::string sKey, std::string sValue);
-std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertisingBeacon);
 bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 extern void CleanInboundConnections(bool bClearAll);
@@ -63,11 +62,9 @@ extern MiningCPID GetInitializedMiningCPID(std::string name, std::map<std::strin
 std::string GetListOfWithConsensus(std::string datatype);
 extern std::string getHardDriveSerial();
 extern bool IsSuperBlock(CBlockIndex* pIndex);
-extern bool VerifySuperblock(std::string superblock, int nHeight);
 extern double ExtractMagnitudeFromExplainMagnitude();
 extern void AddPeek(std::string data);
 extern void GridcoinServices();
-int64_t BeaconTimeStamp(std::string cpid, bool bZeroOutAfterPOR);
 extern bool NeedASuperblock();
 extern double SnapToGrid(double d);
 extern bool StrLessThanReferenceHash(std::string rh);
@@ -84,7 +81,6 @@ extern std::string getCpuHash();
 std::string getMacAddress();
 std::string TimestampToHRDate(double dtm);
 bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
-bool HasActiveBeacon(const std::string& cpid);
 extern bool BlockNeedsChecked(int64_t BlockTime);
 extern void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector<CBlockIndex*> vConnect);
 int64_t GetEarliestWalletTransaction();
@@ -97,7 +93,6 @@ extern std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_populari
 extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
        
 extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
-extern int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string operation, CBlockIndex* pindexLast, bool bVerifyingBlock, int VerificationPhase, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
 
 
 
@@ -116,7 +111,7 @@ extern std::string strReplace(std::string& str, const std::string& oldStr, const
 extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 extern double GetTotalBalance();
 extern std::string PubKeyToAddress(const CScript& scriptPubKey);
-extern void IncrementNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress,double distance);
+extern void IncrementNeuralNetworkSupermajority(const std::string& NeuralHash, const std::string& GRCAddress, double distance, const CBlockIndex* pblockindex);
 extern bool LoadSuperblock(std::string data, int64_t nTime, double height);
 
 
@@ -126,7 +121,6 @@ extern double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_
 
 
 extern double GetOwedAmount(std::string cpid);
-extern double Round(double d, int place);
 extern bool ComputeNeuralNetworkSupermajorityHashes();
 
 extern void DeleteCache(std::string section, std::string keyname);
@@ -301,7 +295,6 @@ extern std::string aes_complex_hash(uint256 scrypt_hash);
 volatile bool bNetAveragesLoaded = false;
 volatile bool bTallyStarted      = false;
 volatile bool bForceUpdate = false;
-volatile bool bExecuteCode = false;
 volatile bool bCheckedForUpgrade = false;
 volatile bool bCheckedForUpgradeLive = false;
 volatile bool bGlobalcomInitialized = false;
@@ -433,7 +426,7 @@ bool UpdateNeuralNetworkQuorumData()
                 std::string myNeuralHash = "";
                 double popularity = 0;
                 std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-                std::string sAge = RoundToString((double)superblock_age,0);
+                std::string sAge = ToString(superblock_age);
                 std::string sBlock = mvApplicationCache["superblock;block_number"];
                 std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
                 std::string data = "<QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
@@ -457,7 +450,7 @@ bool PushGridcoinDiagnostics()
                 int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
                 double popularity = 0;
                 std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-                std::string sAge = RoundToString((double)superblock_age,0);
+                std::string sAge = ToString(superblock_age);
                 std::string sBlock = mvApplicationCache["superblock;block_number"];
                 std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
                 printf("Pushing diagnostic data...");
@@ -465,7 +458,7 @@ bool PushGridcoinDiagnostics()
                 double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
                 std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
                     + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
-                    + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID><LASTBLOCKAGE>" + RoundToString(lastblockage,0) + "</LASTBLOCKAGE><DIFFICULTY>" + RoundToString(PORDiff,2) + "</DIFFICULTY></QUORUMDATA>";
+                    + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID><LASTBLOCKAGE>" + ToString(lastblockage) + "</LASTBLOCKAGE><DIFFICULTY>" + RoundToString(PORDiff,2) + "</DIFFICULTY></QUORUMDATA>";
                 std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
                 qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
                 double dResponse = qtPushGridcoinDiagnosticData(data);
@@ -502,7 +495,7 @@ bool FullSyncWithDPORNodes()
 				printf(" list of cpids %s \r\n",cpiddata.c_str());
                 double popularity = 0;
                 std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-                std::string sAge = RoundToString((double)superblock_age,0);
+                std::string sAge = ToString(superblock_age);
                 std::string sBlock = mvApplicationCache["superblock;block_number"];
                 std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
                 std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
@@ -573,18 +566,20 @@ void GetGlobalStatus()
         }
 
         LOCK(GlobalStatusStruct.lock);
-        GlobalStatusStruct.blocks = RoundToString((double)nBestHeight,0);
+        { LOCK(MinerStatus.lock);
+        GlobalStatusStruct.blocks = ToString(nBestHeight);
         GlobalStatusStruct.difficulty = RoundToString(PORDiff,3);
         GlobalStatusStruct.netWeight = RoundToString(GetPoSKernelPS2(),2);
+        //todo: use the real weight from miner status (requires scaling)
         GlobalStatusStruct.dporWeight = sWeight;
         GlobalStatusStruct.magnitude = RoundToString(boincmagnitude,2);
         GlobalStatusStruct.project = msMiningProject;
         GlobalStatusStruct.cpid = GlobalCPUMiningCPID.cpid;
         GlobalStatusStruct.status = msMiningErrors;
         GlobalStatusStruct.poll = msPoll;
-        GlobalStatusStruct.errors =  msMiningErrors5 + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + msMiningErrors8;
+        GlobalStatusStruct.errors =  MinerStatus.ReasonNotStaking + MinerStatus.Message + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + msMiningErrors8;
         GlobalStatusStruct.rsaOverview =  msRSAOverview; // not displayed on overview page anymore.
-
+        }
         return;
     }
     catch (std::exception& e)
@@ -2751,7 +2746,7 @@ bool LoadSuperblock(std::string data, int64_t nTime, double height)
         WriteCache("superblock","averages",ExtractXML(data,"<AVERAGES>","</AVERAGES>"),nTime);
         WriteCache("superblock","quotes",ExtractXML(data,"<QUOTES>","</QUOTES>"),nTime);
         WriteCache("superblock","all",data,nTime);
-        WriteCache("superblock","block_number",RoundToString(height,0),nTime);
+        WriteCache("superblock","block_number",ToString(height),nTime);
         return true;
 }
 
@@ -3317,7 +3312,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                         return error("ConnectBlock[] : Superblock stake check caused unknwon exception with GRC address %s", bb.GRCAddress.c_str());
                     }
                 }
-                if (!VerifySuperblock(superblock,pindex->nHeight))
+                if (!VerifySuperblock(superblock, pindex))
                 {
                     return error("ConnectBlock[] : Superblock avg mag below 10; SuperblockHash: %s, Consensus Hash: %s",
                                         neural_hash.c_str(), consensus_hash.c_str());
@@ -3349,7 +3344,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                     if (bb.superblock.length() > 20)
                     {
                             std::string superblock = UnpackBinarySuperblock(bb.superblock);
-                            if (VerifySuperblock(superblock,pindex->nHeight))
+                            if (VerifySuperblock(superblock, pindex))
                             {
                                         LoadSuperblock(superblock,pindex->nTime,pindex->nHeight);
                                         if (fDebug3) printf("ConnectBlock(): Superblock Loaded %f \r\n",(double)pindex->nHeight);
@@ -4319,70 +4314,87 @@ bool CBlockIndex::IsSuperMajority(int minVersion, const CBlockIndex* pstart, uns
     return (nFound >= nRequired);
 }
 
-/*
-bool static ReserealizeBlockSignature(CBlock* pblock)
-{
-    if (pblock->IsProofOfWork()) {
-        pblock->vchBlockSig.clear();
-        return true;
-    }
-
-    return CKey::ReserealizeSignature(pblock->vchBlockSig);
-}
-*/
-
-
 bool ServicesIncludesNN(CNode* pNode)
 {
     return (Contains(pNode->strSubVer,"1999")) ? true : false;
 }
 
-bool VerifySuperblock(std::string superblock, int nHeight)
+bool VerifySuperblock(const std::string& superblock, const CBlockIndex* parent)
 {
-        bool bPassed = false;
+    // Pre-condition checks.
+    if(!parent)
+    {
+        printf("Invalid block passed to VerifySuperblock");
+        return false;
+    }
+
+    if(superblock.length() <= 20)
+    {
+        printf("Invalid superblock passed to VerifySuperblock");
+        return false;
+    }
+
+    // Validate superblock contents.
+    bool bPassed = true;
+
+    if(parent->nVersion < 8)
+    {
         double out_avg = 0;
         double out_beacon_count=0;
         double out_participant_count=0;
-        double avg_mag = 0;
-        if (superblock.length() > 20)
-        {
-            avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,false,nHeight);
-            bPassed=true;
-            if (!IsResearchAgeEnabled(nHeight))
-            {
-                return (avg_mag < 10 ? false : true);
-            }
-            // New rules added here:
-            if (out_avg < 10 && fTestNet)  bPassed = false;
-            if (out_avg < 70 && !fTestNet) bPassed = false;
-            if (avg_mag < 10 && !fTestNet) bPassed = false;
-			// Verify distinct project count matches whitelist
-        }
-        if (fDebug3 && !bPassed)
-        {
-            if (fDebug) printf(" Verification of Superblock Failed ");
-            //if (fDebug3) printf("\r\n Verification of Superblock Failed outavg: %f, avg_mag %f, Height %f, Out_Beacon_count %f, Out_participant_count %f, block %s", (double)out_avg,(double)avg_mag,(double)nHeight,(double)out_beacon_count,(double)out_participant_count,superblock.c_str());
-        }
-        return bPassed;
+        double avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,false, parent->nHeight);
+
+        // New rules added here:
+        // Before block version- and stake engine 8 there used to be a requirement
+        // that the average magnitude across all researchers must be at least 10.
+        // This is not necessary but cannot be changed until a mandatory is released.
+
+        if (out_avg < 10 && fTestNet)  bPassed = false;
+        if (out_avg < 70 && !fTestNet) bPassed = false;
+
+        if (avg_mag < 10 && !fTestNet) bPassed = false;
+    }
+    else
+    {
+        // Block version above 8
+        // none, as they are easy to work arount and complicate sb production
+
+        // previously:
+        // * low/high limit of average of researcher magnitudes
+        // * low limit of project avg rac
+        // * count of researchers within 10% of their beacon count
+        // * count of projects at least half of previous sb project count
+    }
+
+    if (!bPassed)
+    {
+        if (fDebug) printf(" Verification of Superblock Failed ");
+        //if (fDebug3) printf("\r\n Verification of Superblock Failed outavg: %f, avg_mag %f, Height %f, Out_Beacon_count %f, Out_participant_count %f, block %s", (double)out_avg,(double)avg_mag,(double)nHeight,(double)out_beacon_count,(double)out_participant_count,superblock.c_str());
+    }
+
+    return bPassed;
 }
 
 bool NeedASuperblock()
 {
-        bool bDireNeedOfSuperblock = false;
-        std::string superblock = ReadCache("superblock","all");
-        if (superblock.length() > 20 && !OutOfSyncByAge())
-        {
-            if (!VerifySuperblock(superblock,pindexBest->nHeight)) bDireNeedOfSuperblock = true;
-			/*
-			// Check project count in last superblock
-			double out_project_count = 0;
-			double out_whitelist_count = 0;
-			GetSuperblockProjectCount(superblock, out_project_count, out_whitelist_count);
-			*/
-        }
-        int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-        if ((double)superblock_age > (double)(GetSuperblockAgeSpacing(nBestHeight))) bDireNeedOfSuperblock = true;
-        return bDireNeedOfSuperblock;
+    bool bDireNeedOfSuperblock = false;
+    std::string superblock = ReadCache("superblock","all");
+    if (superblock.length() > 20 && !OutOfSyncByAge())
+    {
+        if (!VerifySuperblock(superblock, pindexBest))
+            bDireNeedOfSuperblock = true;
+        /*
+         // Check project count in last superblock
+         double out_project_count = 0;
+         double out_whitelist_count = 0;
+         GetSuperblockProjectCount(superblock, out_project_count, out_whitelist_count);
+         */
+    }
+    int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+    if (superblock_age > GetSuperblockAgeSpacing(nBestHeight))
+        bDireNeedOfSuperblock = true;
+
+    return bDireNeedOfSuperblock;
 }
 
 
@@ -4553,11 +4565,11 @@ void GridcoinServices()
             if (NeedASuperblock() && IsNeuralNodeParticipant(DefaultWalletAddress(), GetAdjustedTime()))
             {
                 // First verify my node has a synced contract
-                std::string contract = "";
+                std::string contract;
                 #if defined(WIN32) && defined(QT_GUI)
                     contract = qtGetNeuralContract("");
                 #endif
-                if (VerifySuperblock(contract,nBestHeight))
+                if (VerifySuperblock(contract, pindexBest))
                 {
                         AsyncNeuralRequest("quorum","gridcoin",25);
                 }
@@ -5194,15 +5206,6 @@ std::string RetrieveMd5(std::string s1)
 }
 
 
-
-double Round(double d, int place)
-{
-    std::ostringstream ss;
-    ss << std::fixed << std::setprecision(place) << d ;
-    double r = lexical_cast<double>(ss.str());
-    return r;
-}
-
 double cdbl(std::string s, int place)
 {
     if (s=="") s="0";
@@ -5508,10 +5511,10 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
 
             AdjustTimestamps(stMag,pIndex->nTime, pIndex->nResearchSubsidy);
             // Track detailed payments made to each CPID
-            stMag.PaymentTimestamps         += RoundToString(pIndex->nTime,0) + ",";
+            stMag.PaymentTimestamps         += ToString(pIndex->nTime) + ",";
             stMag.PaymentAmountsResearch    += RoundToString(pIndex->nResearchSubsidy,2) + ",";
             stMag.PaymentAmountsInterest    += RoundToString(pIndex->nInterestSubsidy,2) + ",";
-            stMag.PaymentAmountsBlocks      += RoundToString(pIndex->nHeight,0) + ",";
+            stMag.PaymentAmountsBlocks      += ToString(pIndex->nHeight) + ",";
             stMag.Accuracy++;
             stMag.AverageRAC = stMag.rac / (stMag.entries+.01);
             double total_owed = 0;
@@ -5751,15 +5754,15 @@ bool ComputeNeuralNetworkSupermajorityHashes()
                 if (bb.superblock.length() > 20)
                 {
                     std::string superblock = UnpackBinarySuperblock(bb.superblock);
-                    if (VerifySuperblock(superblock,pblockindex->nHeight))
+                    if (VerifySuperblock(superblock, pblockindex))
                     {
-                        WriteCache("neuralsecurity","pending",RoundToString((double)pblockindex->nHeight,0),GetAdjustedTime());
+                        WriteCache("neuralsecurity","pending",ToString(pblockindex->nHeight),GetAdjustedTime());
                     }
                 }
 
                 IncrementVersionCount(bb.clientversion);
                 //Increment Neural Network Hashes Supermajority (over the last N blocks)
-                IncrementNeuralNetworkSupermajority(bb.NeuralHash,bb.GRCAddress,(nMaxDepth-pblockindex->nHeight)+10);
+                IncrementNeuralNetworkSupermajority(bb.NeuralHash,bb.GRCAddress,(nMaxDepth-pblockindex->nHeight)+10,pblockindex);
                 IncrementCurrentNeuralNetworkSupermajority(bb.CurrentNeuralHash,bb.GRCAddress,(nMaxDepth-pblockindex->nHeight)+10);
 
             }
@@ -5854,24 +5857,27 @@ bool TallyResearchAverages(bool Forcefully)
                                 if (bb.superblock.length() > 20)
                                 {
                                         std::string superblock = UnpackBinarySuperblock(bb.superblock);
-                                        if (VerifySuperblock(superblock,pblockindex->nHeight))
+                                        if (VerifySuperblock(superblock, pblockindex))
                                         {
                                                 LoadSuperblock(superblock,pblockindex->nTime,pblockindex->nHeight);
                                                 superblockloaded=true;
-                                                if (fDebug) printf(" Superblock Loaded %f \r\n",(double)pblockindex->nHeight);
+                                                if (fDebug)
+                                                   printf(" Superblock Loaded %i", pblockindex->nHeight);
                                         }
                                 }
                             }
 
                         }
                         // End of critical section
-                        if (fDebug3) printf("TNA loaded in %f",(double)GetTimeMillis()-nStart);
+                        if (fDebug3) printf("TNA loaded in %" PRId64, GetTimeMillis()-nStart);
                         nStart=GetTimeMillis();
 
 
                         if (pblockindex)
                         {
-                            if (fDebug3) printf("Min block %f, Rows %f \r\n",(double)pblockindex->nHeight,(double)iRow);
+                            if (fDebug3)
+                               printf("Min block %i, Rows %i", pblockindex->nHeight, iRow);
+
                             StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetworkCopy);
                             network.projectname="NETWORK";
                             network.payments = NetworkPayments;
@@ -7305,7 +7311,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 void AddPeek(std::string data)
 {
     return;
-    std::string buffer = RoundToString((double)GetAdjustedTime(),0) + ":" + data + "<CR>";
+    std::string buffer = ToString(GetAdjustedTime()) + ":" + data + "<CR>";
     msPeek += buffer;
     if (msPeek.length() > 60000) msPeek = "";
     if ((GetAdjustedTime() - nLastPeek) > 60)
@@ -8479,9 +8485,32 @@ void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::str
 
 
 
-void IncrementNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance)
+void IncrementNeuralNetworkSupermajority(const std::string& NeuralHash, const std::string& GRCAddress, double distance, const CBlockIndex* pblockindex)
 {
     if (NeuralHash.length() < 5) return;
+    if (pblockindex->nVersion >= 8)
+    {
+        try
+        {
+            CBitcoinAddress address(GRCAddress);
+            bool validaddresstovote = address.IsValid();
+            if (!validaddresstovote)
+            {
+                printf("INNS : Vote found in block with invalid GRC address. HASH: %s GRC: %s\n", NeuralHash.c_str(), GRCAddress.c_str());
+                return;
+            }
+            if (!IsNeuralNodeParticipant(GRCAddress, pblockindex->nTime))
+            {
+                printf("INNS : Vote found in block from ineligible neural node participant. HASH: %s GRC: %s\n", NeuralHash.c_str(), GRCAddress.c_str());
+                return;
+            }
+        }
+        catch (const bignum_error& innse)
+        {
+            printf("INNS : Exception: %s\n", innse.what());
+            return;
+        }
+    }
     double temp_hashcount = 0;
     if (mvNeuralNetworkHash.size() > 0)
     {
@@ -8632,56 +8661,15 @@ bool MemorizeMessage(std::string msg, int64_t nTime, double dAmount, std::string
 
               if (!sMessageType.empty() && !sMessageKey.empty() && !sMessageValue.empty() && !sMessageAction.empty() && !sSignature.empty())
               {
-
-                  // If this is a DAO, ensure the contents are protected:
-                  if ((sMessageType=="dao" || sMessageType=="daoclient") && !sMessagePublicKey.empty())
-                  {
-                            if (fDebug10) printf("DAO Message %s",msg.c_str());
-
-                            if (sMessageAction=="A")
-                            {
-                                std::string daoPubKey = ReadCache(sMessageType + "pubkey",sMessageKey);
-                                if (daoPubKey.empty())
-                                {
-                                    //We only accept the first message
-                                    WriteCache(sMessageType + "pubkey",sMessageKey,sMessagePublicKey,nTime);
-                                    std::string OrgSymbol = ExtractXML(sMessageValue,"<SYMBOL>","</SYMBOL>");
-                                    std::string OrgName = ExtractXML(sMessageValue,"<NAME>","</NAME>");
-                                    std::string OrgREST = ExtractXML(sMessageValue,"<REST>","</REST>");
-                                    WriteCache(sMessageType + "rest",  OrgSymbol,  OrgREST,    nTime);
-                                    WriteCache(sMessageType + "symbol",sMessageKey,OrgSymbol,  nTime);
-                                    WriteCache(sMessageType + "name",  OrgSymbol,  sMessageKey,nTime);
-                                    WriteCache(sMessageType + "orgname", OrgSymbol,OrgName,    nTime);
-                                }
-                            }
-                  }
-
-                  if (sMessageType=="dao" || sMessageType=="daoclient")
-                  {
-                        sMessagePublicKey = ReadCache(sMessageType+"pubkey",sMessageKey);
-                  }
-                  if (sMessageType == "daofeed")
-                  {
-                        sMessagePublicKey = ReadCache("daopubkey",GetOrgSymbolFromFeedKey(sMessageKey));
-                  }
-
                   //Verify sig first
                   bool Verified = CheckMessageSignature(sMessageAction,sMessageType,sMessageType+sMessageKey+sMessageValue,
                       sSignature,sMessagePublicKey);
-
-                  if ( (sMessageType=="dao" || sMessageType == "daofeed") && !Verified && fDebug3)
-                  {
-                        printf("Message type %s: %s was not verified successfully. PubKey %s \r\n",sMessageType.c_str(),msg.c_str(),sMessagePublicKey.c_str());
-                  }
 
                   if (Verified)
                   {
 
                         if (sMessageAction=="A")
                         {
-                                if ( (sMessageType=="dao" || sMessageType == "daofeed") && fDebug3 )
-                                    printf("Adding MessageKey type %s Key %s Value %s\r\n",
-                                    sMessageType.c_str(),sMessageKey.c_str(),sMessageValue.c_str());
                                 // Ensure we have the TXID of the contract in memory
                                 if (!(sMessageType=="project" || sMessageType=="projectmapping" || sMessageType=="beacon" ))
                                 {
@@ -8921,7 +8909,8 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
     double ReferencePPD = dMagnitudeUnit*dAvgMag;
     if ((PPD > ReferencePPD*5))
     {
-            printf("Researcher PPD %f > Reference PPD %f for CPID %s with Lifetime Avg Mag of %f, Days %f \r\n",PPD,ReferencePPD,cpid.c_str(),dAvgMag,days);
+            printf("Researcher PPD %f > Reference PPD %f for CPID %s with Lifetime Avg Mag of %f, Days %f, MagUnit %f",
+                   PPD,ReferencePPD,cpid.c_str(),dAvgMag,days, dMagnitudeUnit);
             Accrual = 0; //Since this condition can occur when a user ramps up computing power, lets return 0 so as to not shortchange the researcher, but instead, owed will continue to accrue and will be paid later when PPD falls below 5
     }
     // Note that if the RA Block Span < 10, we want to return 0 for the Accrual Amount so the CPID can still receive an accurate accrual in the future

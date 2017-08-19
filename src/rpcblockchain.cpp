@@ -24,7 +24,6 @@ using namespace json_spirit;
 using namespace std;
 extern std::string YesNo(bool bin);
 bool BackupConfigFile(const string& strDest);
-int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
 extern double DoubleFromAmount(int64_t amount);
 std::string PubKeyToAddress(const CScript& scriptPubKey);
 CBlockIndex* GetHistoricalMagnitude(std::string cpid);
@@ -33,13 +32,11 @@ std::string PackBinarySuperblock(std::string sBlock);
 extern std::string GetProvableVotingWeightXML();
 extern double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityUpgrade);
 extern double ReturnVerifiedVotingMagnitude(std::string sXML, bool bCreatedAfterSecurityUpgrade);
-extern void GetBeaconElements(std::string sBeacon,std::string& out_cpid, std::string& out_address, std::string& out_publickey);
 bool AskForOutstandingBlocks(uint256 hashStart);
 bool WriteKey(std::string sKey, std::string sValue);
 bool ForceReorganizeToHash(uint256 NewHash);
 extern std::string SendReward(std::string sAddress, int64_t nAmount);
 extern double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID);
-std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertising);
 extern std::string SuccessFail(bool f);
 extern Array GetUpgradedBeaconReport();
 extern Array MagnitudeReport(std::string cpid);
@@ -58,10 +55,8 @@ extern Array SuperblockReport(std::string cpid);
 bool IsSuperBlock(CBlockIndex* pIndex);
 MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 extern double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid);
-extern int64_t BeaconTimeStamp(std::string cpid, bool bZeroOutAfterPOR);
 extern bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
 bool NeedASuperblock();
-bool VerifySuperblock(std::string superblock, int nHeight);
 double ExtractMagnitudeFromExplainMagnitude();
 std::string GetQuorumHash(const std::string& data);
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
@@ -72,7 +67,6 @@ Array StakingReport();
 extern std::string AddContract(std::string sType, std::string sName, std::string sContract);
 StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
-bool HasActiveBeacon(const std::string& cpid);
 int64_t GetEarliestWalletTransaction();
 extern bool CheckMessageSignature(std::string sAction,std::string messagetype, std::string sMsg, std::string sSig, std::string opt_pubkey);
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
@@ -143,9 +137,7 @@ MiningCPID GetNextProject(bool bForce);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 extern std::string TimestampToHRDate(double dtm);
 
-std::string qtGRCCodeExecutionSubsystem(std::string sCommand);
 std::string LegacyDefaultBoincHashArgs();
-std::string GetHttpPage(std::string url);
 double CoinToDouble(double surrogate);
 int64_t GetRSAWeightByCPID(std::string cpid);
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
@@ -167,7 +159,6 @@ std::string getfilecontents(std::string filename);
 
 extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
-std::string GetHttpPage(std::string cpid, bool usedns, bool clearcache);
 void ExecuteCode();
 static BlockFinder RPCBlockFinder;
 
@@ -275,38 +266,6 @@ double GetBlockDifficulty(unsigned int nBits)
     }
 
     return dDiff;
-}
-
-
-
-
-
-
-double GetPoWMHashPS()
-{
-    if (pindexBest->nHeight >= LAST_POW_BLOCK)
-        return 0;
-
-    int nPoWInterval = 72;
-    int64_t nTargetSpacingWorkMin = 30, nTargetSpacingWork = 30;
-
-    CBlockIndex* pindex = pindexGenesisBlock;
-    CBlockIndex* pindexPrevWork = pindexGenesisBlock;
-
-    while (pindex)
-    {
-        if (pindex->IsProofOfWork())
-        {
-            int64_t nActualSpacingWork = pindex->GetBlockTime() - pindexPrevWork->GetBlockTime();
-            nTargetSpacingWork = ((nPoWInterval - 1) * nTargetSpacingWork + nActualSpacingWork + nActualSpacingWork) / (nPoWInterval + 1);
-            nTargetSpacingWork = max(nTargetSpacingWork, nTargetSpacingWorkMin);
-            pindexPrevWork = pindex;
-        }
-
-        pindex = pindex->pnext;
-    }
-
-    return GetDifficulty() * 4294.967296 / nTargetSpacingWork;
 }
 
 double GetPoSKernelPS()
@@ -506,7 +465,6 @@ Value getdifficulty(const Array& params, bool fHelp)
     Object obj;
     obj.push_back(Pair("proof-of-work",        GetDifficulty()));
     obj.push_back(Pair("proof-of-stake",       GetDifficulty(GetLastBlockIndex(pindexBest, true))));
-    obj.push_back(Pair("search-interval",      (int)nLastCoinStakeSearchInterval));
     return obj;
 }
 
@@ -798,31 +756,6 @@ std::string RestoreGridcoinBackupWallet()
     return errors;
 
 }
-
-void WriteCPIDToRPC(std::string email, std::string bpk, uint256 block, Array &results)
-{
-    std::string output = "";
-    output = ComputeCPIDv2(email,bpk,block);
-    Object entry;
-    entry.push_back(Pair("Long CPID for " + email + " " + block.GetHex(),output));
-    output = RetrieveMd5(bpk + email);
-    std::string shortcpid = RetrieveMd5(bpk + email);
-    entry.push_back(Pair("std_md5",output));
-    //Stress test
-    std::string me = ComputeCPIDv2(email,bpk,block);
-    entry.push_back(Pair("LongCPID2",me));
-    bool result;
-    result =  CPID_IsCPIDValid(shortcpid, me,block);
-    entry.push_back(Pair("Stress Test 1",result));
-    result =  CPID_IsCPIDValid(shortcpid, me,block+1);
-    entry.push_back(Pair("Stress Test 2",result));
-    results.push_back(entry);
-    shortcpid = RetrieveMd5(bpk + "0" + email);
-    result = CPID_IsCPIDValid(shortcpid,me,block);
-    entry.push_back(Pair("Stress Test 3 (missing bpk)",result));
-    results.push_back(entry);
-}
-
 
 std::string SignMessage(std::string sMsg, std::string sPrivateKey)
 {
@@ -1144,33 +1077,29 @@ double GetCountOf(std::string datatype)
     return vScratchPad.size()+1;
 }
 
+// TODO: Make this return std::vector<std::string> instead.
 std::string GetListOf(std::string datatype)
 {
-            std::string rows = "";
-            std::string row = "";
-            for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
-            {
-                std::string key_name  = (*ii).first;
-                if (key_name.length() > datatype.length())
-                {
-                    if (key_name.substr(0,datatype.length())==datatype)
-                    {
-                                std::string key_value = mvApplicationCache[(*ii).first];
-                                std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
-                                row = subkey + "<COL>" + key_value;
-                                if (Contains(row,"INVESTOR") && datatype=="beacon") row = "";
-                                if (row != "")
-                                {
-                                    rows += row + "<ROW>";
-                                }
-                    }
-               
-                }
-           }
-           return rows;
+    std::string rows;
+    for(const auto& item : mvApplicationCache)
+    {
+        const std::string& key_name = item.first;
+        if (boost::algorithm::starts_with(key_name, datatype))
+        {
+            const std::string& key_value = item.second;
+            const std::string& subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
+            std::string row = subkey + "<COL>" + key_value;
+
+            if (datatype=="beacon" && Contains(row,"INVESTOR"))
+                continue;
+
+            if (!row.empty())
+                rows += row + "<ROW>";
+        }
+    }
+
+    return rows;
 }
-
-
 
 std::string GetListOfWithConsensus(std::string datatype)
 {
@@ -1203,17 +1132,6 @@ std::string GetListOfWithConsensus(std::string datatype)
              }
        }
        return rows;
-}
-
-int64_t BeaconTimeStamp(std::string cpid, bool bZeroOutAfterPOR)
-{
-            std::string sBeacon = mvApplicationCache["beacon;" + cpid];
-            int64_t iLocktime = mvApplicationCacheTimestamp["beacon;" + cpid];
-            int64_t iRSAWeight = GetRSAWeightByCPIDWithRA(cpid);
-            if (fDebug10) printf("\r\n Beacon %s, Weight %f, Locktime %f \r\n",sBeacon.c_str(),(double)iRSAWeight,(double)iLocktime);
-            if (bZeroOutAfterPOR && iRSAWeight==0) iLocktime = 0;
-            return iLocktime;
-
 }
 
 std::string AddContract(std::string sType, std::string sName, std::string sContract)
@@ -1437,205 +1355,14 @@ int64_t AmountFromDouble(double dAmount)
 }
 
 
-std::string GetDomainForSymbol(std::string sSymbol)
-{
-            std::string RegRest   = ReadCache("daorest",sSymbol);
-            return RegRest;
-}
-
-
-Value dao(const Array& params, bool fHelp)
-{
-    if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3 && params.size() != 4 && params.size() != 5 && params.size() != 6 && params.size() != 7))
-        throw runtime_error(
-        "dao <string::itemname> <string::parameter> \r\n"
-        "Executes a DAO based command by name.");
-    // Add DAO features - 1-30-2016
-    std::string sItem = params[0].get_str();
-
-    if (sItem=="") throw runtime_error("Item invalid.");
-
-    Array results;
-    Object oOut;
-    oOut.push_back(Pair("Command",sItem));
-    results.push_back(oOut);
-    Object entry;
-        
-    if (sItem == "metric")
-    {
-        if (params.size() < 3)
-        {
-            entry.push_back(Pair("Error","You must specify the ticker and metric_name.  Example: dao metric GRCQ nav."));
-            results.push_back(entry);
-        }
-        else
-        {
-            // Verify the Ticker exists:  1-27-2016
-            std::string sTicker = params[1].get_str();
-            boost::to_upper(sTicker);
-            std::string sMetric = params[2].get_str();
-            boost::to_upper(sMetric);
-            std::string sGRCAddress = DefaultWalletAddress();
-            // Query DAO
-            //std::string OrgPubKey = ReadCache("daopubkey",org);
-            //std::string RegSymbol = ReadCache("daosymbol",org);
-            std::string RegName   = ReadCache("daoorgname",sTicker);
-            std::string RegRest   = ReadCache("daorest",sTicker);
-            if (RegName.empty())
-            {
-                    entry.push_back(Pair("Error","DAO does not exist."));
-                    results.push_back(entry);
-                    return results;
-            }
-            entry.push_back(Pair("DAO ID",sTicker));
-            entry.push_back(Pair("Metric",sMetric));
-            entry.push_back(Pair("Org Name",RegName));
-            entry.push_back(Pair("REST Access",RegRest));
-            std::string sDomain = GetDomainForSymbol(sTicker);
-            // Domain Example = [http://]RESTsubdomain.RESTdomain.DNSdomain/RESTWebServiceDirectory/RESTPage.[protocol]?[QuerystringDirective]=[Key]&[QueryDirectiveII]=[Key]
-            std::string sURL = sDomain + "?address=" + sGRCAddress + "&metric=" + sMetric + "&id=" + sGRCAddress;
-            std::string sResults = GetHttpPage(sURL);
-            std::string sOutput = ExtractXML(sResults,"<metric>","</metric>");
-            entry.push_back(Pair(sMetric.c_str(),sOutput));
-            results.push_back(entry);
-        }
-    }
-    else if (sItem == "link")
-    {
-        if (params.size() < 4)
-        {
-            entry.push_back(Pair("Error","You must specify the ticker, username and password.  Example: dao link myusername mypassword."));
-            results.push_back(entry);
-        }
-        else
-        {
-            // Verify the Ticker exists:  1-27-2016
-            std::string sTicker = params[1].get_str();
-            std::string sUser   = params[2].get_str();
-            std::string sPass   = params[3].get_str();
-            boost::to_upper(sTicker);
-            entry.push_back(Pair("DAO ID",sTicker));
-            entry.push_back(Pair("User",sUser));
-            std::string sEncodedPassword = EncodeBase64(sPass);
-            std::string sGRCAddress = DefaultWalletAddress();
-            std::string sDomain = GetDomainForSymbol(sTicker);
-            std::string RegName   = ReadCache("daoorgname",sTicker);
-            std::string RegRest   = ReadCache("daorest",sTicker);
-            if (RegName.empty())
-            {
-                    entry.push_back(Pair("Error","DAO does not exist."));
-                    results.push_back(entry);
-                    return results;
-            }
-            std::string sURL = sDomain + "?metric=link&address=" + sGRCAddress + "&username=" + sUser + "&pass=" + sEncodedPassword;
-            std::string sResults = GetHttpPage(sURL);
-            std::string sOutput = ExtractXML(sResults,"<response>","</response>");
-            entry.push_back(Pair("Result",sOutput));
-            results.push_back(entry);
-        }
-    }
-    else if (sItem == "adddao")
-    {
-        //execute adddao org_name dao_currency_symbol org_receive_grc_address RESTfulURL
-
-        if (params.size() != 5)
-        {
-            entry.push_back(Pair("Error","You must specify the Organization_Name, DAO_CURRENCY_SYMBOL, ORG_RECEIVING_ADDRESS and RESTfulURL.  For example: execute adddao PetsRUs PETS xKBQaegxasEyBVxmsTMg3HnasNg77CtjLo http://petsrus.com/rest/restquery.php"));
-
-            results.push_back(entry);
-        }
-        else
-        {
-                std::string org    = params[1].get_str();
-                std::string symbol = params[2].get_str();
-                std::string grc    = params[3].get_str();
-                std::string rest   = params[4].get_str();
-                boost::to_upper(org);
-                boost::to_upper(symbol);
-
-                CBitcoinAddress address(grc);
-                bool isValid = address.IsValid();
-                std::string               err = "";
-                if (org.empty())          err = "Org must be specified.";
-                if (symbol.length() != 3 && symbol.length() != 4) err = "Symbol must be 3-4 characters.";
-                if (!isValid)             err = "You must specify a valid GRC receiving address.";
-                std::string OrgPubKey    = ReadCache("daopubkey",org);
-                std::string CachedSymbol = ReadCache("daosymbol",org);
-                std::string CachedName   = ReadCache("daoname",CachedSymbol);
-                if (!CachedSymbol.empty())                         err = "DAO Symbol already exists.  Please choose a different symbol.";
-                if (!OrgPubKey.empty() || !CachedName.empty())     err = "DAO already exists.  Please choose a different Org Name.";
-                if (rest.empty())        err = "You must specify the RESTful URL.";
-                if (!err.empty())
-                {
-                    entry.push_back(Pair("Error",err));
-                    results.push_back(entry);
-                }
-                else
-                {
-                    //Generate the key pair for the org
-                    CKey key;
-                    key.MakeNewKey(false);
-                    CPrivKey vchPrivKey = key.GetPrivKey();
-                    std::string PrivateKey =  HexStr<CPrivKey::iterator>(vchPrivKey.begin(), vchPrivKey.end());
-                    std::string PubKey = HexStr(key.GetPubKey().Raw());
-                    std::string sAction = "add";
-                    std::string sType = "dao";
-                    std::string sPass = PrivateKey;
-                    std::string sName = symbol;
-                    std::string contract = "<NAME>" + org + "</NAME><SYMBOL>" + symbol + "</SYMBOL><ADDRESS>" + grc + "</ADDRESS><PUBKEY>" + PubKey + "</PUBKEY><REST>" + rest + "</REST>";
-                    std::string result = AddMessage(true,sType,sName,contract,sPass,AmountFromValue(100),1,PubKey);
-                    entry.push_back(Pair("DAO Name",org));
-                    entry.push_back(Pair("SYMBOL",symbol));
-                    entry.push_back(Pair("Rest URL",rest));
-                    entry.push_back(Pair("Default Receive Address",grc));
-                    std::string sKeyNarr = "dao" + symbol + "=" + PrivateKey;
-                    entry.push_back(Pair("PrivateKey",sKeyNarr));
-                    entry.push_back(Pair("Warning!","Do not lose your private key.  It is non-recoverable.  You may add it to your config file as noted above OR specify it manually via RPC commands."));
-                    results.push_back(entry);
-    
-                }
-            }
-    }
-
-
-    else
-    {
-            entry.push_back(Pair("Command " + sItem + " not found.",-1));
-            results.push_back(entry);
-    }
-    return results;    
-
-}
-
-
-
-
-
-Value option(const Array& params, bool fHelp)
-{
-    if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3 && params.size() != 4 && params.size() != 5 && params.size() != 6 && params.size() != 7))
-        throw runtime_error(
-        "option <string::itemname> <string::parameter> \r\n"
-        "Executes an option based command by name.");
-
-    std::string sItem = params[0].get_str();
-    if (sItem=="") throw runtime_error("Item invalid.");
-    Array results;
-    Object oOut;
-    oOut.push_back(Pair("Command",sItem));
-    results.push_back(oOut);
-    Object entry;
-    return results;    
-}
-
-
-
 Value execute(const Array& params, bool fHelp)
 {
     if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3 && params.size() != 4 && params.size() != 5 && params.size() != 6 && params.size() != 7))
         throw runtime_error(
         "execute <string::itemname> <string::parameter> \r\n"
-        "Executes an arbitrary command by name.");
+        "Executes an arbitrary command by name.\n"
+        "execute help\n"
+        "Displays help on various available execute commands.\n");
 
     std::string sItem = params[0].get_str();
 
@@ -1696,7 +1423,12 @@ Value execute(const Array& params, bool fHelp)
     {
         if (params.size() < 5)
         {
-            entry.push_back(Pair("Error","You must specify Burn Address, Amount, Burn_Key and Burn_Message.  Example: execute burn GRCADDRESS 10 burn_key burn_detail..."));
+            entry.push_back(Pair("Error","You must specify Burn Address, Amount, Burn_Key and Burn_Message"));
+            entry.push_back(Pair("execute burn <burnaddress> <burnamount> <burnkey> <burndetail>", "Burn coins for contract"));
+            entry.push_back(Pair("<burnaddress>", "Address of the coins will be burned to"));
+            entry.push_back(Pair("<burnamount>", "Amount of coins to be burned"));
+            entry.push_back(Pair("<burnkey>", "Burn key to be used"));
+            entry.push_back(Pair("<burndetail>", "Details of the burn"));
             results.push_back(entry);
         }
         else
@@ -1892,18 +1624,6 @@ Value execute(const Array& params, bool fHelp)
         }
         results.push_back(entry);
 
-    }
-    else if (sItem=="testnet0917")
-    {
-    
-        WriteKey("testnet10","09172016");       
-        std::string testnet = GetArgument("testnet10", "NA3");
-        entry.push_back(Pair("testnetval4", testnet.c_str()));
-        WriteKey("testnet11","0917");
-        WriteKey("testnet11","0920162");
-        testnet = GetArgument("testnet11", "NA4");
-        entry.push_back(Pair("testnetval5", testnet.c_str()));
-        results.push_back(entry);
     }
     else if (sItem=="rain")
     {
@@ -2129,235 +1849,10 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("Sent.",fResult));
         results.push_back(entry);
     }
-    else if (sItem == "joindao")
-    {
-        //execute joindao dao_symbol your_receive_grc_address your_email
-
-        if (params.size() != 5)
-        {
-            entry.push_back(Pair("Error","You must specify the DAO_CURRENCY_SYMBOL, your nickname, your GRC_RECEIVING_ADDRESS, and Your_Email (do not use your boinc email; this is used for emergency communication from the DAO to clients).  For example: execute joindao CRG jondoe SKBQaegxasEyBVxmsTMg3HnasNg77CtjLo myemail@mail.com"));
-            results.push_back(entry);
-        }
-        else
-        {
-                std::string symbol       = params[1].get_str();
-                std::string nickname     = params[2].get_str();
-                std::string grc          = params[3].get_str();
-                std::string client_email = params[4].get_str();
-                boost::to_upper(grc);
-                boost::to_upper(symbol);
-                boost::to_upper(client_email);
-
-                CBitcoinAddress address(grc);
-                bool isValid = address.IsValid();
-                std::string               err = "";
-                if (symbol.length() != 3 && symbol.length() != 4) err = "Symbol must be 3-4 characters.";
-                if (nickname.empty())     err = "You must specify a nickname.";
-                if (!isValid)             err = "You must specify a valid GRC receiving address.";
-                std::string OrgPubKey    = ReadCache("daopubkey",symbol);
-                std::string CachedSymbol = ReadCache("daosymbol",symbol);
-                std::string CachedName   = ReadCache("daoname",CachedSymbol);
-                if (CachedSymbol.empty())  err = "DAO does not exist.  Please choose a different symbol.";
-                if (OrgPubKey.empty() || CachedName.empty())  err = "DAO does not exist or cannot be found.  Please choose a different DAO Symbol.";
-
-                
-                if (!err.empty())
-                {
-                    entry.push_back(Pair("Error",err));
-                    results.push_back(entry);
-                }
-                else
-                {
-                    //Generate the key pair for the client
-                    CKey key;
-                    key.MakeNewKey(false);
-                    CPrivKey vchPrivKey = key.GetPrivKey();
-                    std::string PrivateKey =  HexStr<CPrivKey::iterator>(vchPrivKey.begin(), vchPrivKey.end());
-                    std::string PubKey = HexStr(key.GetPubKey().Raw());
-                    std::string sAction = "add";
-                    std::string sType = "daoclient";
-                    std::string sPass = PrivateKey;
-                    std::string sName = nickname + "-" + symbol;
-                    std::string contract = "<NAME>" + nickname + "</NAME><SYMBOL>" + symbol + "</SYMBOL><ADDRESS>" + grc + "</ADDRESS><PUBKEY>" + PubKey + "</PUBKEY><EMAIL>" + client_email + "</EMAIL>";
-
-                    std::string result = AddMessage(true,sType,sName,contract,sPass,AmountFromValue(2500),.1,PubKey);
-                    entry.push_back(Pair("Nickname",nickname));
-                    entry.push_back(Pair("SYMBOL",symbol));
-                    entry.push_back(Pair("Default Receive Address",grc));
-
-                    std::string sKeyNarr = "daoclient" + nickname + "-" + symbol + "=" + PrivateKey;
-                    entry.push_back(Pair("PrivateKey",sKeyNarr));
-                    entry.push_back(Pair("Warning!","Do not lose your private key.  It is non-recoverable.  You may add it to your config file as noted above OR specify it manually via RPC commands."));
-                    results.push_back(entry);
-    
-                }
-            }
-    }
-    
     else if (sItem == "readconfig")
     {
         ReadConfigFile(mapArgs, mapMultiArgs);
 
-    }
-    else if (sItem == "readfeedvalue")
-    {
-        //execute readfeedvalue org_name feed_key
-        if (params.size() != 3)
-        {
-            entry.push_back(Pair("Error","You must specify the org_name, and feed_key: Ex.: execute readfeedvalue COOLORG shares."));
-            results.push_back(entry);
-        }
-        else
-        {
-                std::string orgname   = params[1].get_str();
-                std::string feedkey   = params[2].get_str();
-                std::string symbol    = ReadCache("daosymbol",orgname);
-                boost::to_upper(orgname);
-                boost::to_upper(feedkey);
-                boost::to_upper(symbol);
-
-                if (symbol.empty())
-                {
-                    entry.push_back(Pair("Error","DAO does not exist."));
-                    results.push_back(entry);
-                }
-                else
-                {
-                    //Get the latest feed value (daofeed,symbol-feedkey)
-                    std::string contract = ReadCache("daofeed",symbol+"-"+feedkey);
-                    std::string OrgPubKey = ReadCache("daopubkey",orgname);
-                    std::string feed_value = ExtractXML(contract,"<FEEDVALUE>","</FEEDVALUE>");
-                    entry.push_back(Pair("Contract",contract));
-                    entry.push_back(Pair(feedkey,feed_value));
-                    results.push_back(entry);
-                }
-        }
-
-    }
-    else if (sItem == "daowithdrawalrequest")
-    {
-        //execute sendfeed org_name feed_key feed_value
-        if (params.size() != 4)
-        {
-            entry.push_back(Pair("Error","You must specify your nickname, the dao_symbol and amount: Ex.: execute daowithdrawalrequest jondoe CLG 10000"));
-            results.push_back(entry);
-        }
-        else
-        {
-                
-                std::string nickname  = params[1].get_str();
-                std::string symbol    = params[2].get_str();
-                std::string sAmount   = params[3].get_str();
-                boost::to_upper(symbol);
-                std::string orgname   = ReadCache("daoname",symbol);
-            
-                if (orgname.empty())
-                {
-                    entry.push_back(Pair("Error","DAO does not exist."));
-                    results.push_back(entry);
-                }
-                else
-                {
-                    ReadConfigFile(mapArgs, mapMultiArgs);
-                                        
-                    std::string privkey   = GetArgument("daoclient" + nickname+"-"+symbol, "");
-                    std::string OrgPubKey = ReadCache("daoclientpubkey",nickname+"-"+symbol);
-        
-                    if (OrgPubKey.empty())
-                    {
-                        entry.push_back(Pair("Error","Public Key is missing. Org is corrupted or not yet synchronized."));
-                        results.push_back(entry);
-                    }
-                    else
-                    {
-        
-                        if (privkey.empty())
-                        {
-                            entry.push_back(Pair("Error","Private Key is missing.  To send a message to a dao, you must set the private key." 
-                            + symbol + " key."));
-                            results.push_back(entry);
-                        }
-                        else
-                        {
-                            std::string sAction = "add";
-                            std::string sType = "daowithdrawalrequest";
-                            std::string contract = "<NAME>" + nickname + "</NAME><AMOUNT>" + sAmount + "</AMOUNT>";
-                            std::string result = AddMessage(true,sType,nickname+"-"+symbol,
-                                contract,privkey,AmountFromValue(2500),.01,OrgPubKey);
-                            entry.push_back(Pair("SYMBOL",symbol));
-                            entry.push_back(Pair("PrivKeyPrefix",privkey.substr(0,10)));
-                            entry.push_back(Pair("Amount",sAmount));
-                            entry.push_back(Pair("Results",result));
-                            results.push_back(entry);
-                        }
-                    }
-                }
-        }
-    }
-    
-    else if (sItem == "sendfeed")
-    {
-        //execute sendfeed org_name feed_key feed_value
-        if (params.size() != 4)
-        {
-            entry.push_back(Pair("Error","You must specify the orgname, feed_key and feed_value: Ex.: execute sendfeed COOLORG shares 10000"));
-            results.push_back(entry);
-        }
-        else
-        {
-                std::string orgname   = params[1].get_str();
-                std::string feedkey   = params[2].get_str();
-                std::string feedvalue = params[3].get_str();
-                boost::to_upper(orgname);
-                std::string symbol    = ReadCache("daosymbol",orgname);
-        
-                boost::to_upper(feedkey);
-                boost::to_upper(symbol);
-                boost::to_upper(feedvalue);
-            
-                if (symbol.empty())
-                {
-                    entry.push_back(Pair("Error","DAO does not exist."));
-                    results.push_back(entry);
-                }
-                else
-                {
-                    ReadConfigFile(mapArgs, mapMultiArgs);
-                    std::string privkey   = GetArgument("dao" + symbol, "");
-                    std::string OrgPubKey = ReadCache("daopubkey",orgname);
-        
-                    if (OrgPubKey.empty())
-                    {
-                        entry.push_back(Pair("Error","Public Key is missing. Org is corrupted or not yet synchronized."));
-                        results.push_back(entry);
-                    }
-                    else
-                    {
-        
-                        if (privkey.empty())
-                        {
-                            entry.push_back(Pair("Error","Private Key is missing.  To update a feed value, you must set the dao" 
-                            + symbol + " key."));
-                            results.push_back(entry);
-                        }
-                        else
-                        {
-                            std::string sAction = "add";
-                            std::string sType = "daofeed";
-                            std::string contract = "<FEEDKEY>" + feedkey + "</FEEDKEY><FEEDVALUE>" + feedvalue + "</FEEDVALUE>";
-                            std::string result = AddMessage(true,sType,symbol+"-"+feedkey,
-                                contract,privkey,AmountFromValue(2500),.01,OrgPubKey);
-                            entry.push_back(Pair("SYMBOL",symbol));
-                            entry.push_back(Pair("Feed Key Field",feedkey));
-                            entry.push_back(Pair("PrivKeyPrefix",privkey.substr(0,10)));
-
-                            entry.push_back(Pair("Feed Key Value",feedvalue));
-                            entry.push_back(Pair("Results",result));
-                            results.push_back(entry);
-                        }
-                    }
-                }
-        }
     }
     else if (sItem == "writedata")
     {
@@ -2552,6 +2047,13 @@ Value execute(const Array& params, bool fHelp)
         if (params.size() != 7)
         {
             entry.push_back(Pair("Error","You must specify the Poll Title, Expiration In DAYS from Now, Question, Answers delimited by a semicolon, ShareType (1=Magnitude,2=Balance,3=Both,4=CPIDCount,5=ParticipantCount) and discussion URL (use TinyURL.com to make a small URL).  Please use underscores in place of spaces inside a sentence.  "));
+            entry.push_back(Pair("execute addpoll <title> <days> <question> <answers> <sharetype> <url>", "Add a poll (Requires minimum 100000 GRC balance)"));
+            entry.push_back(Pair("<title>", "Title for poll with no spaces. Use _ in between words"));
+            entry.push_back(Pair("<days>", "Number of days the poll will run"));
+            entry.push_back(Pair("<question>", "The poll question in which you seek input for"));
+            entry.push_back(Pair("<answers>", "The available answers to which a voter can vote seperated by a semicolon"));
+            entry.push_back(Pair("<sharetype>", "1 = Magnitude 2 = Balance 3 = Magnitude + Balance 4 = CPID count 5 = Participant count"));
+            entry.push_back(Pair("<url>", "Short url for information about the poll"));
             results.push_back(entry);
         }
         else
@@ -2813,26 +2315,6 @@ Value execute(const Array& params, bool fHelp)
         }
     
     }
-    else if (sItem == "testboinckey")
-    {
-        std::string sType="project";
-
-        std::string strMasterPrivateKey = (sType=="project" || sType=="projectmapping") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
-        std::string sig = SignMessage("hello",strMasterPrivateKey);
-        entry.push_back(Pair("hello",sig));
-        //Forged Key
-        std::string forgedKey = "3082011302010104202b1c9faef66d42218eefb7c66fb6e49292972c8992b4100bb48835d325ec2d34a081a53081a2020101302c06072a8648ce3d0101022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f300604010004010704410479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141020101a144034200040cb218ee7495c2ba5d6ba069f97810e85dae8b446c0e4a1c6dec7fe610ab0fa4378bda5320f00e7a08a8e428489f41ad79d0428a091aa548aca18adbbbe64d41";
-        std::string sig2 = SignMessage("hello",forgedKey);
-        bool r10 = CheckMessageSignature("R",sType,"hello",sig2,"");
-        entry.push_back(Pair("FK10",r10));
-        std::string sig3 = SignMessage("hi",strMasterPrivateKey);
-        bool r11 = CheckMessageSignature("R","project","hi",sig3,"");
-        entry.push_back(Pair("FK11",r11));
-        bool r12 = CheckMessageSignature("R","general","1",sig3,"");
-        entry.push_back(Pair("FK12",r12));
-        results.push_back(entry);
-    
-    }
     else if (sItem == "genboinckey")
     {
         //Gridcoin - R Halford - Generate Boinc Mining Key - 2-6-2015
@@ -2962,7 +2444,7 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("beacon_count",out_beacon_count));
         entry.push_back(Pair("beacon_participant_count",out_participant_count));
         entry.push_back(Pair("average_magnitude",out_avg));
-        entry.push_back(Pair("superblock_valid",VerifySuperblock(superblock,pindexBest->nHeight)));
+        entry.push_back(Pair("superblock_valid", VerifySuperblock(superblock, pindexBest)));
         int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
         entry.push_back(Pair("Superblock Age",superblock_age));
         bool bDireNeed = NeedASuperblock();
@@ -2971,7 +2453,7 @@ Value execute(const Array& params, bool fHelp)
     }
     else if (sItem == "currentcontractaverage")
     {
-        std::string contract = "";
+        std::string contract;
         #if defined(WIN32) && defined(QT_GUI)
                     contract = qtGetNeuralContract("");
         #endif
@@ -2980,7 +2462,7 @@ Value execute(const Array& params, bool fHelp)
         double out_participant_count = 0;
         double out_avg = 0;
         double avg = GetSuperblockAvgMag(contract,out_beacon_count,out_participant_count,out_avg,false,nBestHeight);
-        bool bValid = VerifySuperblock(contract,pindexBest->nHeight);
+        bool bValid = VerifySuperblock(contract, pindexBest);
         entry.push_back(Pair("avg",avg));
         entry.push_back(Pair("beacon_count",out_beacon_count));
         entry.push_back(Pair("avg_mag",out_avg));
@@ -3077,22 +2559,6 @@ Value execute(const Array& params, bool fHelp)
         }
     
     }
-    else if (sItem == "chainrsa")
-    {
-        if (params.size() != 2)
-        {
-            entry.push_back(Pair("Error","You must specify a cpid"));
-            results.push_back(entry);
-        }
-        else
-        {
-            std::string sParam1 = params[1].get_str();
-            entry.push_back(Pair("CPID",sParam1));
-            
-        }
-
-
-    }
     else if (sItem == "testorgkey")
     {
         if (params.size() != 3)
@@ -3112,73 +2578,6 @@ Value execute(const Array& params, bool fHelp)
     
         }
     
-    }
-
-    else if (sItem == "testcpidv2")
-    {
-        if (params.size() != 3)
-        {
-            entry.push_back(Pair("Error","You must specify both parameters boincruntimepublickey and boinccpid"));
-            results.push_back(entry);
-        }
-        else
-        {
-            std::string sParam1 = params[1].get_str();
-            std::string sParam2 = params[2].get_str();
-            entry.push_back(Pair("Param1",sParam1));
-            entry.push_back(Pair("Param2",sParam2));
-            //12-25-2014 Test CPIDv2
-            std::string newcpid = ComputeCPIDv2(sParam2,sParam1,0);
-            std::string shortcpid = RetrieveMd5(sParam1+sParam2);
-            entry.push_back(Pair("CPID1",shortcpid));
-            bool isvalid = CPID_IsCPIDValid(shortcpid, newcpid,0);
-            entry.push_back(Pair("CPIDv2 is valid",isvalid));
-            isvalid = CPID_IsCPIDValid(shortcpid, newcpid,10);
-            entry.push_back(Pair("CPIDv2 is valid on bad block",isvalid));
-            std::string me = ComputeCPIDv2(sParam2,sParam1,0);
-            entry.push_back(Pair("CPIDv2 on block0",me));
-            me = ComputeCPIDv2(sParam2,sParam1,10);
-            entry.push_back(Pair("CPIDv2 on block10",me));
-            results.push_back(entry);
-        }
-    
-
-    }
-    else if (sItem == "DISABLE_WINDOWS_ERROR_REPORTING")
-    {
-        std::string result = "FAIL";
-        #if defined(WIN32) && defined(QT_GUI)
-            qtGRCCodeExecutionSubsystem("DISABLE_WINDOWS_ERROR_REPORTING");
-        #endif
-        Object entry;
-        entry.push_back(Pair("DISABLE_WINDOWS_ERROR_REPORTING",result));
-        results.push_back(entry);
-    }
-
-    else if (sItem == "testcpid")
-    {
-        std::string bpk = "29dbf4a4f2e2baaff5f5e89e2df98bc8";
-        std::string email = "ebola@gridcoin.us";
-        uint256 block("0x000005a247b397eadfefa58e872bc967c2614797bdc8d4d0e6b09fea5c191599");
-        std::string hi = "";
-        //1
-        WriteCPIDToRPC(email,bpk,block,results);
-        //2
-        email = "ebol349324923849023908429084892098023423432423423424332a@gridcoin.us";
-        WriteCPIDToRPC(email,bpk,block,results);
-        email="test";
-        WriteCPIDToRPC(email,bpk,block,results);
-        //Empty
-        email="";
-        WriteCPIDToRPC(email,bpk,block,results);
-        //Wrong Block
-        email="ebola@gridcoin.us";
-        WriteCPIDToRPC(email,bpk,0,results);
-        WriteCPIDToRPC(email,bpk,1,results);
-        WriteCPIDToRPC(email,bpk,123499934534,results);
-        //Stolen CPID either missing bpk or unknown email
-        WriteCPIDToRPC(email,"0",0,results);
-
     }
     else if (sItem == "reindex")
     {
@@ -3207,11 +2606,6 @@ Value execute(const Array& params, bool fHelp)
             ExecuteCode();
             #endif
 
-    }
-    else if (sItem == "volatilecode")
-    {
-        bExecuteCode = true;
-        printf("Executing volatile code \r\n");
     }
     else if (sItem == "getnextproject")
     {
@@ -3301,28 +2695,6 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("Error","You must specify true or false as an option."));
         results.push_back(entry);
     }
-    else if (sItem == "debug4")
-    {
-        if (params.size() == 2 && (params[1].get_str() == "true" || params[1].get_str() == "false"))
-        {
-            fDebug4 = (params[1].get_str() == "true") ? true : false;
-            entry.push_back(Pair("Debug4", fDebug4 ? "Entering debug mode." : "Exiting debug mode."));
-        }
-        else
-            entry.push_back(Pair("Error","You must specify true or false as an option."));
-        results.push_back(entry);
-    }
-    else if (sItem == "debug5")
-    {
-        if (params.size() == 2 && (params[1].get_str() == "true" || params[1].get_str() == "false"))
-        {
-            fDebug5 = (params[1].get_str() == "true") ? true : false;
-            entry.push_back(Pair("Debug5", fDebug5 ? "Entering debug mode." : "Exiting debug mode."));
-        }
-        else
-            entry.push_back(Pair("Error","You must specify true or false as an option."));
-        results.push_back(entry);
-    }
     else if (sItem == "debug10")
     {
         if (params.size() == 2 && (params[1].get_str() == "true" || params[1].get_str() == "false"))
@@ -3332,6 +2704,85 @@ Value execute(const Array& params, bool fHelp)
         }
         else
             entry.push_back(Pair("Error","You must specify true or false as an option."));
+        results.push_back(entry);
+    }
+    else if (sItem == "help")
+    {
+        entry.push_back(Pair("execute addpoll <title> <days> <question> <answers> <sharetype> <url>", "Add a poll (Requires minimum 100000 GRC balance)"));
+        entry.push_back(Pair("execute advertisebeacon", "Advertise a beacon (Requires wallet to be fully unlocked"));
+        entry.push_back(Pair("execute askforoutstandingblock", "Asks nodes for outstanding blocks"));
+        entry.push_back(Pair("execute backupwallet", "Backup wallet"));
+        entry.push_back(Pair("execute beaconreport", "Displays information about current active beacons in the network"));
+        entry.push_back(Pair("execute beaconstatus", "Displays information about your beacon"));
+        entry.push_back(Pair("execute burn <burnaddress> <burnamount> <burnkey> <burndetail>", "Burn coins for contract"));
+        entry.push_back(Pair("execute cleanchain", "Cleans current chain and attempts to reorganize"));
+        entry.push_back(Pair("execute currentneuralhash", "Displays the popular hash in current neural report from all neural nodes"));
+        entry.push_back(Pair("execute currentneuralreport", "Displays all hashes staked recently by neural nodes"));
+        entry.push_back(Pair("execute debug <true/false>", "Turn on/off debug messages on the fly"));
+        entry.push_back(Pair("execute debug2 <true/false>", "Turn on/of debug2 messages on the fly"));
+        entry.push_back(Pair("execute debug3 <true/false>", "Turn on/off debug3 messages on the fly"));
+        entry.push_back(Pair("execute debug10 <true/false>", "Turn on/off debug10 messages on the fly"));
+        entry.push_back(Pair("execute debugnew <true/false>", "Turn on/off debugnet messages on the fly"));
+        entry.push_back(Pair("execute decryptphrase <phrase>", "Decrypt an encrypted phrase"));
+        #if defined(WIN32) && defined(QT_GUI)
+        entry.push_back(Pair("execute downloadblocks", "Download blocks from blockchain"));
+        #endif
+        entry.push_back(Pair("execute dportally", "Tally magnitudes in superblock"));
+        entry.push_back(Pair("execute encrypt <phrase>", "Encrypt a wallet pass phrase (autounlock feature)"));
+        entry.push_back(Pair("execute encryptphrase <phrase>", "Encrypt a phrase or message"));
+        entry.push_back(Pair("execute explainmagnitude2 <true>", "Explains your neural network magnitude. True is optioinal for force"));
+        entry.push_back(Pair("execute listallpolldetails", "Displays all polls past and present with details"));
+        entry.push_back(Pair("execute listallpolls", "Displays all polls past and present"));
+        entry.push_back(Pair("execute listpolldetails", "Displays all active polls details"));
+        entry.push_back(Pair("execute listpollresults <title> <true>", "Displays poll results for specified title. True is optional for expired polls"));
+        entry.push_back(Pair("execute listpolls", "Displays all active polls"));
+        #if defined(WIN32) && defined(QT_GUI)
+        entry.push_back(Pair("execute myneuralhash", "Displays your current neural hash from contract"));
+        #endif
+        entry.push_back(Pair("execute neuralhash", "Displays the network popular hash in neural report (Participating nodes)"));
+        entry.push_back(Pair("execute neuralreport", "Dispalys information of recently staked neural votes by participating nodes"));
+        entry.push_back(Pair("execute neuralresponse", "Requests a response from neural network"));
+        entry.push_back(Pair("execute rain <raindata>", "Sends rain to specified users. Format Address<COL>Amount<ROW>..."));
+        #if defined(WIN32) && defined(QT_GUI)
+        entry.push_back(Pair("execute reboot", "Reboots wallet"));
+        entry.push_back(Pair("execute reindex", "Reindex blockchain"));
+        #endif
+        entry.push_back(Pair("execute resendwallettx", "Resends a wallet tx"));
+        entry.push_back(Pair("execute resetcpids", "Resets wallet cpids (can be used to correct cpids after a split cpid is fixed)"));
+        #if defined(WIN32) && defined(QT_GUI)
+        entry.push_back(Pair("execute restart", "Restarts wallet"));
+        entry.push_back(Pair("execute restorepoint", "Creates a restore point for wallet"));
+        #endif
+        entry.push_back(Pair("execute restorewallet", "Restore wallet from backup made by 'backupwallet'"));
+        entry.push_back(Pair("execute staketime", "Displays unix timestamp based on stake gric time and cpid time"));
+        entry.push_back(Pair("execute superblockage", "Displays information and age about current superblock"));
+        entry.push_back(Pair("execute syncdpor2", "Syncronize with neural network"));
+        entry.push_back(Pair("execute tally", "Tallys research averages"));
+        entry.push_back(Pair("execute tallyneural", "Tally neural quorum data"));
+        entry.push_back(Pair("execute unspentreport", "Displays unspent wallet information"));
+        entry.push_back(Pair("execute upgradedbeaconreport", "Displays information about upgraded beacons"));
+        entry.push_back(Pair("execute updatequorumdata", "Updates neural quorum data"));
+        entry.push_back(Pair("execute versionreport", "Displays information about client versions that staked the last 100 blocks"));
+        entry.push_back(Pair("execute vote <title> <answer>", "Casts a vote for a specific poll with chosen answer"));
+        entry.push_back(Pair("execute votedetails <title>", "Displays information on a specified polls votes"));
+        results.push_back(entry);
+    }
+    else if (sItem == "helpdev")
+    {
+        entry.push_back(Pair("execute addkey <add_or_delete> <keytype> <projectname> <value>", "Add or delete key to network"));
+        #if defined(WIN32) && defined(QT_GUI)
+        entry.push_back(Pair("execute executecode", "Excute .net code"));
+        #endif
+        entry.push_back(Pair("execute forcequorum", "Force quorum"));
+        entry.push_back(Pair("execute gatherneuralhashes", "Gather neural hashes"));
+        entry.push_back(Pair("execute getlistof <keytype>", "Get list of keytype data"));
+        entry.push_back(Pair("execute listdata <keytype>", "List data in a keytype"));
+        entry.push_back(Pair("execute memorizekeys", "Memorize keys from admin messages"));
+        entry.push_back(Pair("execute readdata <key> <value>", "Display value from a keys data"));
+        entry.push_back(Pair("execute refhash <grcaddress>", "Check if a grc address is a neural node participant as well as you"));
+        entry.push_back(Pair("execute sendblock <hash>", "Send a block to network"));
+        entry.push_back(Pair("execute testnewcontract", "Test current neural contract"));
+        entry.push_back(Pair("execute writedata <key> <value>", "Write data to a key with value"));
         results.push_back(entry);
     }
     else
@@ -3348,7 +2799,7 @@ Array LifetimeReport(std::string cpid)
 {
        Array results;
        Object c;
-       std::string Narr = RoundToString(GetAdjustedTime(),0);
+       std::string Narr = std::to_string(GetAdjustedTime());
        c.push_back(Pair("Lifetime Payments Report",Narr));
        results.push_back(c);
        Object entry;
@@ -3378,7 +2829,7 @@ Array SuperblockReport(std::string cpid)
 
       Array results;
       Object c;
-      std::string Narr = RoundToString(GetAdjustedTime(),0);
+      std::string Narr = std::to_string(GetAdjustedTime());
       c.push_back(Pair("SuperBlock Report (14 days)",Narr));
       if (!cpid.empty())      c.push_back(Pair("CPID",cpid));
 
@@ -3416,7 +2867,7 @@ Array SuperblockReport(std::string cpid)
                                         if (avg_mag > 10)
                                         {
                                                 Object c;
-                                                c.push_back(Pair("Block #" + RoundToString(pblockindex->nHeight,0),pblockindex->GetBlockHash().GetHex()));
+                                                c.push_back(Pair("Block #" + ToString(pblockindex->nHeight),pblockindex->GetBlockHash().GetHex()));
                                                 c.push_back(Pair("Date",TimestampToHRDate(pblockindex->nTime)));
                                                 c.push_back(Pair("Average Mag",out_avg));
                                                 c.push_back(Pair("Wallet Version",bb.clientversion));
@@ -3441,7 +2892,7 @@ Array MagnitudeReport(std::string cpid)
 {
            Array results;
            Object c;
-           std::string Narr = RoundToString(GetAdjustedTime(),0);
+           std::string Narr = std::to_string(GetAdjustedTime());
            c.push_back(Pair("RSA Report",Narr));
            results.push_back(c);
            double total_owed = 0;
@@ -3586,69 +3037,6 @@ double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID)
             return structMag.Magnitude;
         }
         return 0;
-}
-
-bool HasActiveBeacon(const std::string& cpid)
-{
-    return GetBeaconPublicKey(cpid, false).empty() == false;
-}
-
-std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds)
-{
-    const std::string key = "beacon;" + cpid;
-    const std::string& value = mvApplicationCache[key];
-
-    // Compare the age of the beacon to the age of the current block. If we have
-    // no current block we assume that the beacon is valid.
-    int64_t iAge = pindexBest != NULL
-          ? pindexBest->nTime - mvApplicationCacheTimestamp[key]
-          : 0;
-
-    return (iAge > iMaxSeconds)
-          ? ""
-          : value;
-}
-
-std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertisingBeacon)
-{
-   //3-26-2017 - Ensure beacon public key is within 6 months of network age (If advertising, let it be returned as missing after 5 months, to ensure the public key is renewed seamlessly).
-   int iMonths = bAdvertisingBeacon ? 5 : 6;
-   int64_t iMaxSeconds = 60 * 24 * 30 * iMonths * 60;
-   std::string sBeacon = RetrieveBeaconValueWithMaxAge(cpid, iMaxSeconds);
-   if (sBeacon.empty()) return "";
-   // Beacon data structure: CPID,hashRand,Address,beacon public key: base64 encoded
-   std::string sContract = DecodeBase64(sBeacon);
-   std::vector<std::string> vContract = split(sContract.c_str(),";");
-   if (vContract.size() < 4) return "";
-   std::string sBeaconPublicKey = vContract[3];
-   return sBeaconPublicKey;
-}
-
-
-
-void GetBeaconElements(std::string sBeacon,std::string& out_cpid, std::string& out_address, std::string& out_publickey)
-{
-   if (sBeacon.empty()) return;
-   std::string sContract = DecodeBase64(sBeacon);
-   std::vector<std::string> vContract = split(sContract.c_str(),";");
-   if (vContract.size() < 4) return;
-   out_cpid = vContract[0];
-   out_address = vContract[2];
-   out_publickey = vContract[3];
-}
-
-
-
-
-std::string GetBeaconPublicKeyFromContract(std::string sEncContract)
-{
-   if (sEncContract.empty()) return "";
-   // Beacon data structure: CPID,hashRand,Address,beacon public key: base64 encoded
-   std::string sContract = DecodeBase64(sEncContract);
-   std::vector<std::string> vContract = split(sContract.c_str(),";");
-   if (vContract.size() < 4) return "";
-   std::string sBeaconPublicKey = vContract[3];
-   return sBeaconPublicKey;
 }
 
 bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature)
@@ -3874,7 +3262,7 @@ std::string GetProvableVotingWeightXML()
 			// Find the Magnitude from the last staked block, within the last 6 months, and ensure researcher has a valid current beacon (if the beacon is expired, the signature contain an error message)
 			sXML += "<CPID>" + msPrimaryCPID + "</CPID><INNERMAGNITUDE>" 
 				+ RoundToString(pHistorical->nMagnitude,2) + "</INNERMAGNITUDE>" + 
-				"<HEIGHT>" + RoundToString(pHistorical->nHeight,0) 
+                "<HEIGHT>" + ToString(pHistorical->nHeight)
 				+ "</HEIGHT><BLOCKHASH>" + sBlockhash + "</BLOCKHASH><SIGNATURE>" + sSignature + "</SIGNATURE>";
 		}
 	}
@@ -4061,7 +3449,7 @@ Array GetJsonUnspentReport()
 			// Find the Magnitude from the last staked block, within the last 6 months, and ensure researcher has a valid current beacon (if the beacon is expired, the signature contain an error message)
 
 			std::string sMagXML = "<CPID>" + msPrimaryCPID + "</CPID><INNERMAGNITUDE>" + RoundToString(pHistorical->nMagnitude,2) + "</INNERMAGNITUDE>" + 
-				"<HEIGHT>" + RoundToString(pHistorical->nHeight,0) + "</HEIGHT><BLOCKHASH>" + sBlockhash + "</BLOCKHASH><SIGNATURE>" + sSignature + "</SIGNATURE>";
+                "<HEIGHT>" + ToString(pHistorical->nHeight) + "</HEIGHT><BLOCKHASH>" + sBlockhash + "</BLOCKHASH><SIGNATURE>" + sSignature + "</SIGNATURE>";
 			std::string sMagnitude = ExtractXML(sMagXML,"<INNERMAGNITUDE>","</INNERMAGNITUDE>");
 			std::string sXmlSigned = ExtractXML(sMagXML,"<SIGNATURE>","</SIGNATURE>");
 			std::string sXmlBlockHash = ExtractXML(sMagXML,"<BLOCKHASH>","</BLOCKHASH>");
@@ -4240,10 +3628,8 @@ Array GetJsonUnspentReport()
 
 Array GetJsonVoteDetailsReport(std::string pollname)
 {
-
     double total_shares = 0;
     double participants = 0;
-    
     double MoneySupplyFactor = GetMoneySupplyFactor();
 
     std::string objecttype="vote";
@@ -4252,61 +3638,47 @@ Array GetJsonVoteDetailsReport(std::string pollname)
     entry.push_back(Pair("Votes","Votes Report " + pollname));
     entry.push_back(Pair("MoneySupplyFactor",RoundToString(MoneySupplyFactor,2)));
 
-    std::string header = "GRCAddress,CPID,Question,Answer,ShareType,URL";
+    // Add header
+    entry.push_back(Pair("GRCAddress,CPID,Question,Answer,ShareType,URL", "Shares"));
 
-    entry.push_back(Pair(header,"Shares"));
-                                    
-    int iRow = 0;
-    for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+    boost::to_lower(pollname);
+    for(const auto& item : mvApplicationCache)
     {
-            std::string key_name  = (*ii).first;
-            if (key_name.length() > objecttype.length())
+        const std::string& key_name = item.first;
+        const std::string& contract = item.second;
+        if (boost::algorithm::starts_with(key_name, objecttype))
+        {
+            const std::string& Title = ExtractXML(contract,"<TITLE>","</TITLE>");
+            if(boost::iequals(pollname, Title))
             {
-                    if (key_name.substr(0,objecttype.length())==objecttype)
-                    {
-                                std::string contract = mvApplicationCache[(*ii).first];
-                                std::string Title = ExtractXML(contract,"<TITLE>","</TITLE>");
+                const std::string& OriginalContract = GetPollContractByTitle("poll",Title);
+                const std::string& Question = ExtractXML(OriginalContract,"<QUESTION>","</QUESTION>");
+                const std::string& GRCAddress = ExtractXML(contract,"<GRCADDRESS>","</GRCADDRESS>");
+                const std::string& CPID = ExtractXML(contract,"<CPID>","</CPID>");
 
-                                std::string OriginalContract = GetPollContractByTitle("poll",Title);
-                                std::string Question = ExtractXML(OriginalContract,"<QUESTION>","</QUESTION>");
+                double dShareType = cdbl(GetPollXMLElementByPollTitle(Title,"<SHARETYPE>","</SHARETYPE>"),0);
+                std::string sShareType= GetShareType(dShareType);
+                std::string sURL = ExtractXML(contract,"<URL>","</URL>");
 
-                                std::string VoterAnswer = ExtractXML(contract,"<ANSWER>","</ANSWER>");
-                                std::string GRCAddress = ExtractXML(contract,"<GRCADDRESS>","</GRCADDRESS>");
-                                std::string CPID = ExtractXML(contract,"<CPID>","</CPID>");
-                                std::string Mag = ExtractXML(contract,"<MAGNITUDE>","</MAGNITUDE>");
+                std::string Balance = ExtractXML(contract,"<BALANCE>","</BALANCE>");
 
-                                double dShareType= cdbl(GetPollXMLElementByPollTitle(Title,"<SHARETYPE>","</SHARETYPE>"),0);
-                                std::string sShareType= GetShareType(dShareType);
-                                std::string sURL = ExtractXML(contract,"<URL>","</URL>");
-
-                                std::string Balance = ExtractXML(contract,"<BALANCE>","</BALANCE>");
-                                boost::to_lower(Title);
-                                boost::to_lower(pollname);
-                                boost::to_lower(VoterAnswer);
-                            
-                                if (pollname == Title)
-                                {
-                                    std::vector<std::string> vVoterAnswers = split(VoterAnswer.c_str(),";");
-                                    for (unsigned int x = 0; x < vVoterAnswers.size(); x++)
-                                    {
-                                        double shares = PollCalculateShares(contract,dShareType,MoneySupplyFactor,vVoterAnswers.size());
-                                        total_shares += shares;
-                                        participants += (double)((double)1/(double)vVoterAnswers.size());
-                                        iRow++;
-                                        std::string voter = GRCAddress + "," + CPID + "," + Question + "," + vVoterAnswers[x] + "," + sShareType + "," + sURL;
-                                        entry.push_back(Pair(voter,RoundToString(shares,0)));
-                                    }
-                                }
-                    }
+                const std::string& VoterAnswer = boost::to_lower_copy(ExtractXML(contract,"<ANSWER>","</ANSWER>"));
+                const std::vector<std::string>& vVoterAnswers = split(VoterAnswer.c_str(),";");
+                for (const auto& answer : vVoterAnswers)
+                {
+                    double shares = PollCalculateShares(contract, dShareType, MoneySupplyFactor, vVoterAnswers.size());
+                    total_shares += shares;
+                    participants += 1.0 / vVoterAnswers.size();
+                    const std::string& voter = GRCAddress + "," + CPID + "," + Question + "," + answer + "," + sShareType + "," + sURL;
+                    entry.push_back(Pair(voter,RoundToString(shares,0)));
+                }
             }
+        }
     }
 
     entry.push_back(Pair("Total Participants",RoundToString(participants,2)));
-                                
-    
     results.push_back(entry);
     return results;
-
 }
 
 
@@ -4665,7 +4037,7 @@ Array MagnitudeReportCSV(bool detail)
            Object c;
            StructCPID globalmag = mvMagnitudes["global"];
            double payment_timespan = 14; 
-           std::string Narr = "Research Savings Account Report - Generated " + RoundToString(GetAdjustedTime(),0) + " - Timespan: " + RoundToString(payment_timespan,0);
+           std::string Narr = "Research Savings Account Report - Generated " + ToString(GetAdjustedTime()) + " - Timespan: " + ToString(payment_timespan);
            c.push_back(Pair("RSA Report",Narr));
            results.push_back(c);
            double totalpaid = 0;
@@ -4834,7 +4206,9 @@ Value listitem(const Array& params, bool fHelp)
     if (fHelp || (params.size() != 1 && params.size() != 2 && params.size() != 3 && params.size() != 4))
         throw runtime_error(
         "list <string::itemname>\n"
-        "Returns details of a given item by name.");
+        "Returns details of a given item by name.\n"
+        "list help\n"
+        "Displays help on various available list commands.\n");
 
     std::string sitem = params[0].get_str();
     
@@ -4870,31 +4244,6 @@ Value listitem(const Array& params, bool fHelp)
         results.push_back(entry);
 
 	}
-    else if (sitem == "betatest")
-    {
-        Object entry;
-        // Test a sample CPID keypair
-        entry.push_back(Pair("CPID",msPrimaryCPID));
-        std::string sBeaconPublicKey = GetBeaconPublicKey(msPrimaryCPID, false);
-        entry.push_back(Pair("Beacon Public Key",sBeaconPublicKey));
-        std::string sSignature = SignBlockWithCPID(msPrimaryCPID,"1000");
-        entry.push_back(Pair("Signature",sSignature));
-        // Validate the signature
-        bool fResult = VerifyCPIDSignature(msPrimaryCPID, "1000", sSignature);
-        entry.push_back(Pair("Sig Valid",fResult));
-        fResult = VerifyCPIDSignature(msPrimaryCPID, "1001", sSignature);
-        entry.push_back(Pair("Wrong Block Sig Valid",fResult));
-        fResult = VerifyCPIDSignature(msPrimaryCPID, "1000", "wrong_signature" + sSignature + "wrong_signature");
-        entry.push_back(Pair("Right block, Wrong Signature Valid",fResult));
-        // Missing Beacon, with wrong CPID
-        std::string sCPID = "1234567890";
-        sBeaconPublicKey = GetBeaconPublicKey(sCPID, false);
-        sSignature = SignBlockWithCPID(sCPID,"1001");
-        entry.push_back(Pair("Signature",sSignature));
-        fResult = VerifyCPIDSignature(sCPID, "1001", sSignature);
-        entry.push_back(Pair("Bad CPID with missing beacon",fResult));
-        results.push_back(entry);
-    }
     else if (sitem == "debugexplainmagnitude")
     {
         double dMag = ExtractMagnitudeFromExplainMagnitude();
@@ -4980,14 +4329,14 @@ Value listitem(const Array& params, bool fHelp)
                 
              }
         }
-        entry.push_back(Pair("Whitelisted Project Count",(double)WHITELISTED_PROJECTS));
+        entry.push_back(Pair("Whitelisted Project Count", ToString(WHITELISTED_PROJECTS)));
         entry.push_back(Pair("Grand-Total Verified RAC",mytotalrac));
         entry.push_back(Pair("Grand-Total Network RAC",nettotalrac));
         entry.push_back(Pair("Total Magnitude for All Projects",TotalMagnitude));
-        entry.push_back(Pair("Grand-Total Whitelisted Projects",RoundToString(WHITELISTED_PROJECTS,0)));
+        entry.push_back(Pair("Grand-Total Whitelisted Projects",ToString(WHITELISTED_PROJECTS)));
         entry.push_back(Pair("Participating Project Count",ParticipatingProjectCount));
         Mag = TotalMagnitude;
-        std::string babyNarr = "(" + RoundToString(TotalUserVerifiedRAC,2) + "/" + RoundToString(TotalProjectRAC,2) + ")/" + RoundToString(WHITELISTED_PROJECTS,0) + "*" + RoundToString(NeuralNetworkMultiplier,0) + "=";
+        std::string babyNarr = "(" + RoundToString(TotalUserVerifiedRAC,2) + "/" + RoundToString(TotalProjectRAC,2) + ")/" + ToString(WHITELISTED_PROJECTS) + "*" + ToString(NeuralNetworkMultiplier) + "=";
         entry.push_back(Pair(babyNarr,Mag));
         results.push_back(entry);
         return results;
@@ -5253,6 +4602,27 @@ Value listitem(const Array& params, bool fHelp)
         }
 
     }
+    else if (sitem == "help")
+    {
+        Object entry;
+        entry.push_back(Pair("list cpids", "Displays information on cpids and the projects they are associated with"));
+        entry.push_back(Pair("list currenttime", "Displays current unix time as well as UTC time and date"));
+        entry.push_back(Pair("list detailmagnitudecsv", "Records more detailed magnitude report into a csv file"));
+        entry.push_back(Pair("list debugexplainmagnitude", "Displays more in detail your explainmagnitude from NN"));
+        entry.push_back(Pair("list explainmagnitude", "Displays information about your magnitude from NN"));
+        entry.push_back(Pair("list lifetime", "Displays information on the life time of your cpid"));
+        entry.push_back(Pair("list magnitude <cpid>", "Displays information on magnitude. cpid is optional."));
+        entry.push_back(Pair("list magnitudecsv", "Records magnitude report into a csv file"));
+        entry.push_back(Pair("list memorypool", "Displays information currently on Txs in memory pool"));
+        entry.push_back(Pair("list network", "Displays detailed information on the network"));
+        entry.push_back(Pair("list projects", "Displays information on whitelisted projects on the network"));
+        entry.push_back(Pair("list rsa", "Displays information on your RSA/CPID history"));
+        entry.push_back(Pair("list rsaweight", "Displays information on RSA Weight"));
+        entry.push_back(Pair("list staking", "Displays information on your staking"));
+        entry.push_back(Pair("list superblocks", "Displays information on superblocks over last 14 days. cpid optional"));
+        entry.push_back(Pair("list validcpids", "Displays information on your valid cpid"));
+        results.push_back(entry);
+    }
     else
     {
         throw runtime_error("Item invalid.");
@@ -5301,7 +4671,7 @@ Value rpc_reorganize(const Array& params, bool fHelp)
     Object results;
     if (fHelp || params.size() != 1)
         throw runtime_error(
-            "rollback <hash>\n"
+            "reorganize <hash>\n"
             "Roll back the block chain to specified block hash.\n"
             "The block hash must already be present in block index");
 

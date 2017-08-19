@@ -1,0 +1,138 @@
+Stake Miner
+===========
+
+Job of the StakeMiner is to search for valid kernel and create new blocks.
+It received considerable development attention lately, lot was changed to a
+point you may notice a difference in behavior. Let me describe how it works.
+
+## Stake weight
+
+In ~dev~ ~staging~ master branch, the stake weight is reported in two places on
+the overview screen.
+
+The "DPOR Weight:" is calculated somewhere in gui code as balance+magnitude and
+**may not reflect real staking weight**.
+
+Second is in "Client message:" is calculated in stake miner as sum of weights
+of all mature UTXOs and reflects the **real weight**. It is **not in coin**
+units.
+
+* For version 7 blocks, 1 GRC and 0 Mag equals to 800 of weight.
+* For version **8** blocks 1 GRC equals to 80 of weight.
+
+## Command getmininginfo
+
+RPC command (also in debug console) can be used to obtain additional
+information from StakeMiner.
+
+* `stakeweight.combined`; no unit natural;
+  Sum of stake weights of all your mature UTXOs.
+  This is your total, real stake weight.
+  The minimum and maximum if then min/max of them.
+* `stakeweight.valuesum`; GRC real;
+  Total balance that is mature and considered for staking.
+* `stakeweight.legacy`; GRC real;
+  Calculation of the above, done in different code.
+* `staking`; bool; Indication that the stake miner is doing it's job.
+* `mining-error`; test; Reason why stake miner is not doing it's job.
+* `mining-message`; text;
+  various message by miner, previously contained in `MiningInfo 5`.
+* `time-to-stake_days`; days real; Estimated time to stake.
+* `expectedtime`; seconds natural; Estimated time to stake.
+* `mining-version`; integer; Version of block the miner will create.
+* `mining-kernels-found`; count natural; Count of CoinStake kernels found.
+  You can figure out how many blocks were aborted or rejected by subtracting.
+* `mining-created`; count natural; Count of blocks fully created.
+* `mining-accepted`; count natural; Count of blocks locally accepted.
+  They might still get rejected by network. Too many locally rejected blocks
+  usually mean a problem. But v7 blocks usually are rejected for reward too low.
+
+* `InterestPending` GRC real;
+  Sum of interest currently owed on all UTXOs.
+  When you stake, you usually get only part of this.
+  When you send coins, the interest is destroyed.
+* `BoincRewardPending`; GRC real;
+   The amount one would receive for research if he were to stake at that moment.
+* `difficulty.proof-of-stake`; no unit real; Current staking difficulty.
+  Higher number means more secure and healthier network,
+  but it is less probable to stake.
+  This number is perfect for network health monitoring.
+* `netstakeweight`; GRC natural;
+  Estimated weight of the network.
+  I wouldn't make any conclusions based on this value.
+* `netstakeweight2`; GRC natural; Different function calculating network weight.
+* `difficulty.search-interval`; millisecond natural;
+  How long miners sleeps between attempts.
+  Configured using `minersleep` config option.
+* `pooledtx` count natural; Number of unconfirmed transactions in mempool.
+* `stakeinterest`; micro percent APR natural; Current interest rate.
+* `CPID`; hex; Your mining CPID or investor.
+* `Magnitude Unit`; real; Current magnitude unit.
+
+## Code flow description
+
+It runs in a loop in it's own thread. The loop is composed of several
+commands as illustrated below. If any of the commands fails, the loop
+starts over.
+
+```
+while not shutdown do begin {
+  Sleep( minersleep );
+  IsMiningAllowed
+  CreateCoinStake;
+  CreateRestOfTheBlock
+  AddGridcoinReward
+  SignStakeBlock
+  ProcessBlocks
+end
+```
+
+### CreateCoinStake
+
+This function loops over all own unspent transaction outputs (UTXOs)
+and for each it checks validity of the stake kernel. When a tx
+meeting all stake conditions and the stake meets the difficulty
+target, the search is stopped and miner proceeds to actually create
+the CoinStake block, otherwise the miner loop starts over.
+
+A stake time-stamp mask is applied to current time-stamp before it is
+used in the kernel. This mask is 16 seconds. During this 16 second
+period, the outcome of stake kernel evaluation for given UTXO does not
+change. It is either failure the whole time, or success. So **it makes
+no sense to evaluate more often**. To account for processing drift and
+stake modifier change caused by incoming block, Miner waits only 8
+seconds before trying again.
+
+If you enable debug2 flag, stake hash and target will be written to
+log file.
+
+This function adds a valid CoinStake transaction to second transaction
+in block (first is CoinBase tx) and returns true on success.
+
+### CreateRestOfTheBlock
+
+If a valid stake is found, rest of the block must be created.
+Most notably unconfirmed transactions (from `mempool`) are
+included into the block and their fees added to reward.
+
+This function was not modified. Previously it was called before
+searching for coinstake which resulted in lot of unused blocks
+being created and work wasted.
+
+### AddGridcoinReward
+
+Here Fees, Interest reward and Boinc rewards are calculated
+and added to the block. Also `boincHash` is constructed
+from the results of reward calculation and added to,
+interestingly, the CoinBase transaction. CoinBase is
+otherwise not used, has zero input and output.
+
+Description of the boincHash and reward calculation can be found
+in other article.
+
+### ProcessBlocks
+
+When the block is ready, it is passed to the same function which
+processes blocks received from other peers. It takes care of
+verification, adding to local block-chain and propagating to
+other peers.

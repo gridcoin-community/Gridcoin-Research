@@ -18,6 +18,7 @@
 // include <QtSql> // Future Use
 
 #include <fstream>
+#include "util.h"
 
 #include "bitcoingui.h"
 #include "transactiontablemodel.h"
@@ -47,8 +48,8 @@
 #include "wallet.h"
 #include "init.h"
 #include "block.h"
-#include "util.h"
 #include "clicklabel.h"
+#include "miner.h"
 
 #ifdef Q_OS_MAC
 #include "macdockiconhandler.h"
@@ -95,11 +96,9 @@
 #include "boinc.h"
 
 extern CWallet* pwalletMain;
-extern int64_t nLastCoinStakeSearchInterval;
 int ReindexWallet();
 extern int RebootClient();
 extern QString ToQstring(std::string s);
-extern std::string qtGRCCodeExecutionSubsystem(std::string sCommand);
 extern void qtUpdateConfirm(std::string txid);
 extern void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string txid);
 extern void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double magnitude);
@@ -540,23 +539,6 @@ void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double ma
 		printf("rs%f",(double)result);
 	#endif
 }
-
-std::string qtGRCCodeExecutionSubsystem(std::string sCommand)
-{
-	std::string sResult = "FAIL";
-	if (!bGlobalcomInitialized) return "FAIL";
-
-	#if defined(WIN32) && defined(QT_GUI)
-		QString qsParms = ToQstring(sCommand);
-		QString qsResult = globalcom->dynamicCall("GRCCodeExecutionSubsystem(Qstring)",qsParms).toString();
-		sResult = FromQString(qsResult);
-		printf("@qtGRCCodeExecutionSubsystem returned %s",sResult.c_str());
-	#endif
-	return sResult;
-
-}
-
-
 
 int RebootClient()
 {
@@ -2048,31 +2030,43 @@ QString BitcoinGUI::GetEstimatedTime(unsigned int nEstimateTime)
 
 void BitcoinGUI::updateStakingIcon()
 {
-    updateWeight();
 
-    if (nLastCoinStakeSearchInterval && nWeight)
+    uint64_t nWeight, nLastInterval;
+    std::string ReasonNotStaking;
+    { LOCK(MinerStatus.lock);
+        // not using real weigh to not break calculation
+        nWeight = MinerStatus.ValueSum;
+        nLastInterval = MinerStatus.nLastCoinStakeSearchInterval;
+	ReasonNotStaking = MinerStatus.ReasonNotStaking;
+    }
+
+    uint64_t nNetworkWeight = GetPoSKernelPS();
+    bool staking = nLastInterval && nWeight;
+    uint64_t nEstimateTime = staking ? (GetTargetSpacing(nBestHeight) * nNetworkWeight / nWeight) : 0;
+
+    if (staking)
     {
-		uint64_t nWeight = this->nWeight;
-        uint64_t nNetworkWeight = GetPoSKernelPS();
-        unsigned nEstimateTime = GetTargetSpacing(nBestHeight) * (nNetworkWeight / ((nWeight/COIN)+.001)) * 1;
 		if (fDebug10) printf("StakeIcon Vitals BH %f, NetWeight %f, Weight %f \r\n", (double)GetTargetSpacing(nBestHeight),(double)nNetworkWeight,(double)nWeight);
         QString text = GetEstimatedTime(nEstimateTime);
+	/*
         //Halford - 1-9-2015 - Calculate time for POR Block:
 		unsigned int nPOREstimate = (unsigned int)GetPOREstimatedTime(GlobalCPUMiningCPID.RSAWeight);
 		QString PORText = "Estimated time to earn POR Reward: " + GetEstimatedTime(nPOREstimate);
 		if (nPOREstimate == 0) PORText="";
-        if (IsProtocolV2(nBestHeight+1))
-        {
-            nWeight /= COIN;
-        }
-	    labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
-        labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> time to earn reward is %3. %4").arg(nWeight).arg(nNetworkWeight).arg(text).arg(PORText));
+	*/
+	labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
+
+        labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> time to earn reward is %3.")
+	    .arg(nWeight).arg(nNetworkWeight).arg(text));
+	/*
 		msMiningErrors5 = "Interest: " + FromQString(text);
 		if (nPOREstimate > 0 && !(msPrimaryCPID=="INVESTOR" || msMiningCPID.empty())) msMiningErrors6 = "POR: " + FromQString(GetEstimatedTime(nPOREstimate));
+	*/
     }
     else
     {
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
+	/*
         if (pwalletMain && pwalletMain->IsLocked())
 		{
             labelStakingIcon->setToolTip(tr("Not staking because wallet is locked"));
@@ -2107,5 +2101,9 @@ void BitcoinGUI::updateStakingIcon()
             labelStakingIcon->setToolTip(tr("Not staking"));
 			msMiningErrors6 = "Not staking yet";
 		}
+	*/
+
+	//Part of this string wont be translated :(
+	labelStakingIcon->setToolTip(tr("Not staking; %1").arg(QString(ReasonNotStaking.c_str())));
     }
 }

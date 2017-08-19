@@ -13,6 +13,7 @@
 
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/thread.hpp>
+#include <inttypes.h>
 
 #ifdef WIN32
   #include <string.h>
@@ -26,9 +27,7 @@
 #endif
 
 using namespace std;
-using namespace boost;
 bool TallyNetworkAverages(bool ColdBoot);
-extern void BusyWaitForTally();
 extern void DoTallyResearchAverages(void* parg);
 extern void ExecGridcoinServices(void* parg);
 std::string DefaultWalletAddress();
@@ -42,19 +41,14 @@ extern std::string GetCommandNonce(std::string command);
 extern std::string DefaultOrg();
 extern std::string DefaultOrgKey(int key_length);
 extern std::string DefaultBlockKey(int key_length);
-extern std::string GetHttpPage(std::string url);
-std::vector<std::string> split(std::string s, std::string delim);
 
 extern std::string OrgId();
 std::string DefaultBoincHashArgs();
-extern std::string LegacyDefaultBoincHashArgs();
 bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
 extern int nMaxConnections;
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
-std::string cached_boinchash_args = "";
 std::string RetrieveMd5(std::string s1);
 
-std::string msPubKey = "";
 int MAX_OUTBOUND_CONNECTIONS = 8;
 
 void ThreadMessageHandler2(void* parg);
@@ -91,14 +85,9 @@ static std::vector<SOCKET> vhListenSocket;
 CAddrMan addrman;
 
 vector<CNode*> vNodes;
-
 CCriticalSection cs_vNodes;
-
-
-
 vector<std::string> vAddedNodes;
 CCriticalSection cs_vAddedNodes;
-
 
 map<CInv, CDataStream> mapRelay;
 deque<pair<int64_t, CInv> > vRelayExpiration;
@@ -129,7 +118,7 @@ std::string GetCommandNonce(std::string command)
 {
     //1-11-2015 Message Attacks - Halford
     std::string sboinchashargs = DefaultOrgKey(12);
-    std::string nonce = RoundToString((double)GetAdjustedTime(),0);
+    std::string nonce = std::to_string(GetAdjustedTime());
     std::string org = DefaultOrg();
     std::string pub_key_prefix = OrgId();
     std::string pw1 = RetrieveMd5(nonce+","+command+","+org+","+pub_key_prefix+","+sboinchashargs);
@@ -442,199 +431,6 @@ bool IsReachable(const CNetAddr& addr)
     return vfReachable[net] && !vfLimited[net];
 }
 
-
-
-
-void StringToChar(std::string s, char* a)
-{   a=new char[s.size()+1];
-    a[s.size()]=0;
-    memcpy(a,s.c_str(),s.size());
-
-}
-
-
-
-std::string GetLargeHttpContent(const CService& addrConnect, std::string getdata)
-{
-
-    try
-    {
-    char *pszGet = (char*)getdata.c_str();
-
-    SOCKET hSocket;
-    if (!ConnectSocket(addrConnect, hSocket))
-    {
-        return "GetLargeHttpContent() : connection to address failed";
-    }
-
-    if (fDebug10) printf("Trying %s",getdata.c_str());
-
-    send(hSocket, pszGet, strlen(pszGet), MSG_NOSIGNAL);
-    string strLine;
-    std::string strOut="null";
-    MilliSleep(62);
-    double timeout = 0;
-    clock_t begin = clock();
-    while (RecvLine2(hSocket, strLine))
-    {
-                strOut = strOut + strLine + "\r\n";
-                MilliSleep(10);
-                timeout=timeout+10;
-                clock_t end = clock();
-                double elapsed_secs = double(end - begin) / (CLOCKS_PER_SEC+.01);
-                if (timeout > 20000) break;
-                if (elapsed_secs > 20) break;
-                if (strLine.find("<END>") != string::npos) break;
-                if (strLine.find("</html>") != string::npos) break;
-                if (strLine.find("</users>") != string::npos) break;
-                if (strLine.find("</error>") != string::npos) break;
-
-    }
-    closesocket(hSocket);
-    return strOut;
-    }
-    catch (std::exception &e)
-    {
-        return "";
-
-    }
-    catch (...)
-    {
-        return "";
-    }
-
-}
-
-
-
-std::string GetHttpContent(const CService& addrConnect, std::string getdata)
-{
-
-    try
-    {
-    char *pszGet = (char*)getdata.c_str();
-
-    SOCKET hSocket;
-    if (!ConnectSocket(addrConnect, hSocket))
-    {
-        return "GetHttpContent() : connection to address failed";
-    }
-
-    if (fDebug3) printf("Trying %s",getdata.c_str());
-
-    send(hSocket, pszGet, strlen(pszGet), MSG_NOSIGNAL);
-    string strLine;
-    std::string strOut="null";
-    MilliSleep(1);
-    double timeout = 0;
-    clock_t begin = clock();
-    while (RecvLine2(hSocket, strLine))
-    {
-                strOut = strOut + strLine + "\r\n";
-                MilliSleep(1);
-                timeout=timeout+1;
-                clock_t end = clock();
-                double elapsed_secs = double(end - begin) / (CLOCKS_PER_SEC+.01);
-                if (elapsed_secs > 8) break;
-                if (strLine.find("<END>") != string::npos) break;
-                if (strLine.find("</html>") != string::npos) break;
-                if (strLine.find("</user>") != string::npos) break;
-
-    }
-    closesocket(hSocket);
-    return strOut;
-    }
-    catch (std::exception &e)
-    {
-        return "";
-
-    }
-    catch (...)
-    {
-        return "";
-    }
-
-}
-
-std::string ExtractDomainFromURL(std::string url, int partid)
-{
-    boost::to_lower(url);
-
-//  std::string domain = "milkyway.cs.rpi.edu";
-    //std::string page = "milkyway/team_email_list.php?teamid=6566&xml=1";
-    std::string out_url = "";
-    std::string domain = "";
-
-    std::vector<std::string> vURL = split(url.c_str(),"http://");
-    if (vURL.size() > 0)
-    {
-        std::string protocol = vURL[0];
-        std::string raw_url = vURL[1];
-        //Extract the domain from the URL:
-        std::vector<std::string> vElements = split(raw_url.c_str(),"/");
-        domain = vElements[0];
-        //Join the remaining elements to obtain the actual URL
-
-        for (unsigned int i = 1; i < vElements.size(); i++)
-        {
-            out_url += vElements[i] + "/";
-        }
-    }
-
-    if (out_url.length() > 2) out_url = out_url.substr(0,out_url.length()-1);
-    if (partid == 0) return domain;
-    if (partid == 1) return out_url;
-    return "";
-}
-
-
-
-std::string GetHttpPage(std::string url)
-{
-
-    try
-    {
-
-        std::string domain = ExtractDomainFromURL(url,0);
-        std::string page = ExtractDomainFromURL(url,1);
-        if (fDebug10) printf("domain %s, page %s\r\n",domain.c_str(),page.c_str());
-
-        CService addrConnect;
-
-        CService addrIP(domain, 80, true);
-        if (addrIP.IsValid())
-        {
-                addrConnect = addrIP;
-        }
-        else
-        {
-            return "";
-        }
-
-        std::string getdata = "GET /" + page + " HTTP/1.1\r\n"
-                     "Host: " + domain + "\r\n"
-                     "User-Agent: Mozilla/4.0\r\n"
-                     "\r\n";
-
-        std::string http = GetHttpContent(addrConnect,getdata);
-        std::string resultset = "" + http;
-        return resultset;
-    }
-    catch (std::exception &e)
-    {
-        printf("Error while querying address for XML %s",url.c_str());
-
-        return "";
-    }
-    catch (...)
-    {
-
-        return "";
-    }
-
-}
-
-
 bool GetMyExternalIP2(const CService& addrConnect, const char* pszGet, const char* pszKeyword, CNetAddr& ipRet)
 {
     SOCKET hSocket;
@@ -767,12 +563,8 @@ void AddressCurrentlyConnected(const CService& addr)
 
 
 
-uint64_t CNode::nTotalBytesRecv = 0;
-uint64_t CNode::nTotalBytesSent = 0;
-CCriticalSection CNode::cs_totalBytesRecv;
-CCriticalSection CNode::cs_totalBytesSent;
-
-
+std::atomic<uint64_t> CNode::nTotalBytesRecv{ 0 };
+std::atomic<uint64_t> CNode::nTotalBytesSent{ 0 };
 
 CNode* FindNode(const CNetAddr& ip)
 {
@@ -1261,9 +1053,15 @@ void ThreadSocketHandler2(void* parg)
             }
         }
 
-        if(vNodes.size() != nPrevNodeCount)
+        size_t vNodesSize;
         {
-            nPrevNodeCount = vNodes.size();
+            LOCK(cs_vNodes);
+            vNodesSize = vNodes.size();
+        }
+
+        if(vNodesSize != nPrevNodeCount)
+        {
+            nPrevNodeCount = vNodesSize;
             uiInterface.NotifyNumConnectionsChanged(nPrevNodeCount);
         }
 
@@ -1363,7 +1161,8 @@ void ThreadSocketHandler2(void* parg)
             }
             else if (nInbound >= GetArg("-maxconnections", 250) - MAX_OUTBOUND_CONNECTIONS)
             {
-                if (fDebug10) printf("\r\n Surpassed max inbound connections maxconnections:%f minus max_outbound:%f",(double)GetArg("-maxconnections",250),(double)MAX_OUTBOUND_CONNECTIONS);
+                if (fDebug10)
+                    printf("\r\n Surpassed max inbound connections maxconnections:%" PRId64 " minus max_outbound:%i", GetArg("-maxconnections",250), MAX_OUTBOUND_CONNECTIONS);
                 closesocket(hSocket);
             }
             else if (CNode::IsBanned(addr))
@@ -1478,9 +1277,10 @@ void ThreadSocketHandler2(void* parg)
                 }
             }
                
-            if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && ((int)vNodes.size() > (MAX_OUTBOUND_CONNECTIONS*.75)))
+            if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && (vNodes.size() > (MAX_OUTBOUND_CONNECTIONS*.75)))
             {
-                    if (fDebug10) printf("Node %s connected longer than 2 hours with connection count of %f, disconnecting. \r\n", NodeAddress(pnode).c_str(), (double)vNodes.size());
+                    if (fDebug10)
+                        printf("Node %s connected longer than 2 hours with connection count of %zd, disconnecting. \r\n", NodeAddress(pnode).c_str(), vNodes.size());
                     pnode->fDisconnect = true;
             }
 
@@ -2000,25 +1800,21 @@ void static ThreadStakeMiner(void* parg)
 
 void CNode::RecordBytesRecv(uint64_t bytes)
 {
-    LOCK(cs_totalBytesRecv);
     nTotalBytesRecv += bytes;
 }
 
 void CNode::RecordBytesSent(uint64_t bytes)
 {
-    LOCK(cs_totalBytesSent);
     nTotalBytesSent += bytes;
 }
 
 uint64_t CNode::GetTotalBytesRecv()
 {
-    LOCK(cs_totalBytesRecv);
     return nTotalBytesRecv;
 }
 
 uint64_t CNode::GetTotalBytesSent()
 {
-    LOCK(cs_totalBytesSent);
     return nTotalBytesSent;
 }
 
@@ -2294,7 +2090,6 @@ void ThreadMessageHandler(void* parg)
 void ThreadMessageHandler2(void* parg)
 {
     if (fDebug10) printf("ThreadMessageHandler started\n");
-    SetThreadPriority(THREAD_PRIORITY_BELOW_NORMAL);
     while (!fShutdown)
     {
         vector<CNode*> vNodesCopy;
@@ -2516,11 +2311,6 @@ void static Discover()
         NewThread(ThreadGetMyExternalIP, NULL);
 }
 
-
-
-
-
-
 void StartNode(void* parg)
 {
     // Make this thread recognisable as the startup thread
@@ -2534,7 +2324,7 @@ void StartNode(void* parg)
         semOutbound = new CSemaphore(nMaxOutbound);
     }
 
-    printf("\r\nUsing %f OutboundConnections with a MaxConnections of %f\r\n",(double)MAX_OUTBOUND_CONNECTIONS,(double)GetArg("-maxconnections", 125));
+    printf("\r\nUsing %i OutboundConnections with a MaxConnections of %" PRId64 "\r\n", MAX_OUTBOUND_CONNECTIONS, GetArg("-maxconnections", 125));
 
     if (pnodeLocalHost == NULL)
         pnodeLocalHost = new CNode(INVALID_SOCKET, CAddress(CService("127.0.0.1", 0), nLocalServices));

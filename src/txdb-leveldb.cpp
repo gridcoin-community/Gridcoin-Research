@@ -354,9 +354,6 @@ bool CTxDB::LoadBlockIndex()
     iterator->Seek(ssStartKey.str());
 
     int nLoaded = 0;
-    #if defined(WIN32) && defined(QT_GUI)
-        SetThreadPriority(THREAD_PRIORITY_HIGHEST);
-    #endif
     
     // Now read each entry.
     printf("Loading DiskIndex %d\n",nHighest);
@@ -418,7 +415,7 @@ bool CTxDB::LoadBlockIndex()
                 nLoaded +=10000;
                 if (nLoaded > nHighest) nHighest=nLoaded;
                 if (nHighest < nGrandfather) nHighest=nGrandfather;
-                std::string sBlocksLoaded = RoundToString(nLoaded,0) + "/" + RoundToString(nHighest,0) + " Blocks Loaded";
+                std::string sBlocksLoaded = ToString(nLoaded) + "/" + ToString(nHighest) + " Blocks Loaded";
                 uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
                 fprintf(stdout,"%d ",nLoaded); fflush(stdout);
             }
@@ -519,7 +516,7 @@ bool CTxDB::LoadBlockIndex()
                 nLoaded +=1000;
                 if (nLoaded > nHighest) nHighest=nLoaded;
                 if (nHighest < nGrandfather) nHighest=nGrandfather;
-                std::string sBlocksLoaded = RoundToString(nLoaded,0) + "/" + RoundToString(nHighest,0) + " Blocks Verified";
+                std::string sBlocksLoaded = ToString(nLoaded) + "/" + ToString(nHighest) + " Blocks Verified";
                 uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
             }
         #endif
@@ -660,7 +657,7 @@ bool CTxDB::LoadBlockIndex()
                 nLoaded +=10000;
                 if (nLoaded > nHighest) nHighest=nLoaded;
                 if (nHighest < nGrandfather) nHighest=nGrandfather;
-                std::string sBlocksLoaded = RoundToString(nLoaded,0) + "/" + RoundToString(nHighest,0) + " POR Blocks Verified";
+                std::string sBlocksLoaded = ToString(nLoaded) + "/" + ToString(nHighest) + " POR Blocks Verified";
                 uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
             }
 #endif
@@ -696,9 +693,6 @@ bool CTxDB::LoadBlockIndex()
     }
 
     printf("RA Complete - RA Time %15" PRId64 "ms\n", GetTimeMillis() - nStart);
-    #if defined(WIN32) && defined(QT_GUI)
-        SetThreadPriority(THREAD_PRIORITY_NORMAL);
-    #endif
 
     return true;
 }

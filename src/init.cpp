@@ -44,7 +44,6 @@ using namespace std;
 using namespace boost;
 CWallet* pwalletMain;
 CClientUIInterface uiInterface;
-std::vector<std::string> split(std::string s, std::string delim);
 extern bool fConfChange;
 extern bool fEnforceCanonical;
 extern unsigned int nNodeLifespan;
@@ -205,9 +204,7 @@ void Shutdown(void* parg)
     else
     {
         while (!fExit)
-        MilliSleep(100);
-        MilliSleep(100);
-        ExitThread(0);
+            MilliSleep(100);
     }
 }
 
@@ -632,8 +629,6 @@ bool AppInit2()
             fDebug3 = true;
             printf("Entering GRC debug mode.\r\n");
     }
-    fDebug4 = (GetArg("-debug4","false")=="true");
-    fDebug5 = (GetArg("-debug5","false")=="true");
     fDebug10= (GetArg("-debug10","false")=="true");
 
 #if !defined(WIN32) && !defined(QT_GUI)

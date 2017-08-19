@@ -7,3 +7,6 @@ implementation of Gridcoin.
 See doc/build-*.txt for instructions on building gridcoind,
 the intended-for-services, no-graphical-interface, reference
 implementation of Gridcoin.
+
+Qmake config for building on mingw:
+	qmake BDB_INCLUDE_PATH=/usr/local/include/ BDB_LIB_PATH=/usr/local/lib BOOST_LIB_SUFFIX=-mt

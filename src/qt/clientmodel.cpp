@@ -36,6 +36,7 @@ ClientModel::~ClientModel()
 
 int ClientModel::getNumConnections() const
 {
+    LOCK(cs_vNodes);
     return vNodes.size();
 }
 

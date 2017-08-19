@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [3.6.0.0] - 2017-08-14
+### Fixed
+ - Fix a crash when starting up as a new user, #488 (@Foggyx420, 
+   @denravonska).
+ - Fix an out of memory crash when syncing from 0, #508 (@tomasbrod).
+
 ## [3.5.9.9] - 2017-08-05
 ### Changed
  - Staking cleanup, #301 (@tomasbrod). This also solves several other issues:
