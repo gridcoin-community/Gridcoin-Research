@@ -4152,15 +4152,14 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     CBlockIndex* pindexPrev = (*mi).second;
     int nHeight = pindexPrev->nHeight+1;
 
+    // The block height at which point we start rejecting v7 blocks and
+    // start accepting v8 blocks.
     if(       (IsProtocolV2(nHeight) && nVersion < 7)
-            ||(fTestNet && nHeight >= 312000 && nVersion < 8)
-            ||(!fTestNet && nHeight >= 1001000 && nVersion < 8)
-        )
+              || IsV8Enabled(nHeight) && nVersion < 8)
         return DoS(20, error("AcceptBlock() : reject too old nVersion = %d", nVersion));
     else if( (!IsProtocolV2(nHeight) && nVersion >= 7)
-            ||(fTestNet && nHeight < 312000 && nVersion >= 8)
-            ||(!fTestNet && nHeight < 1001000 && nVersion >= 8)
-        )
+             ||(!IsV8Enabled(nHeight) && nVersion >= 8)
+             )
         return DoS(100, error("AcceptBlock() : reject too new nVersion = %d", nVersion));
 
     if (IsProofOfWork() && nHeight > LAST_POW_BLOCK)
