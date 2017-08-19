@@ -629,7 +629,7 @@ VotingChartDialog::VotingChartDialog(QWidget *parent)
     ,answerTable_(NULL)
 {
     setWindowTitle(tr("Poll Results"));
-    resize(800, 320);
+    resize(QDesktopWidget().availableGeometry(this).size() * 0.4);
 
     QVBoxLayout *vlayout = new QVBoxLayout(this);
 
@@ -742,7 +742,7 @@ VotingVoteDialog::VotingVoteDialog(QWidget *parent)
     : QDialog(parent)
 {
     setWindowTitle(tr("PlaceVote"));
-    resize(800, 320);
+    resize(QDesktopWidget().availableGeometry(this).size() * 0.4);
 
     QVBoxLayout *vlayout = new QVBoxLayout(this);
 
@@ -861,7 +861,7 @@ NewPollDialog::NewPollDialog(QWidget *parent)
     : QDialog(parent)
 {
     setWindowTitle(tr("Create Poll"));
-    resize(800, 320);
+    resize(QDesktopWidget().availableGeometry(this).size() * 0.4);
 
     QVBoxLayout *vlayout = new QVBoxLayout(this);
 
