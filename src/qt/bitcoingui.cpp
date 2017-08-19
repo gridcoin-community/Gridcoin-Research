@@ -172,8 +172,8 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     nWeight(0)
 {
 
-    setGeometry(QStyle::alignedRect(Qt::LeftToRight,Qt::AlignCenter,QSize(980,550),qApp->desktop()->availableGeometry()));
-    
+    setGeometry(QStyle::alignedRect(Qt::LeftToRight,Qt::AlignCenter,QDesktopWidget().availableGeometry(this).size() * 0.6,QDesktopWidget().availableGeometry(this)));
+
     setWindowTitle(tr("Gridcoin") + " " + tr("Wallet"));
 
 #ifndef Q_OS_MAC
