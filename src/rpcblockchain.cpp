@@ -4693,10 +4693,27 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
     (void)mode; //TODO
     long lowheight= 0;
     long highheight= INT_MAX;
-    if(params.size()>=2)
-        lowheight= cdbl(params[1].get_str(),0);
-    if(params.size()>=3)
-        highheight= cdbl(params[2].get_str(),0);
+    long maxblocks= 14000;
+    if (mode==0)
+    {
+        if(params.size()>=2)
+        {
+            lowheight= cdbl(params[1].get_str(),0);
+            maxblocks= INT_MAX;
+        }
+        if(params.size()>=3)
+            highheight= cdbl(params[2].get_str(),0);
+    }
+    else if(mode==1)
+    {
+        /* count highheight */
+        maxblocks= 30000;
+        if(params.size()>=2)
+            maxblocks= cdbl(params[1].get_str(),0);
+        if(params.size()>=3)
+            highheight= cdbl(params[2].get_str(),0);
+    }
+    else throw runtime_error("getblockstats: Invalid mode specified");
     CBlockIndex* cur;
     Object result1;
     {
@@ -4725,7 +4742,7 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
     uint64_t size_sum_blk=0;
     for( ; (cur
             &&( cur->nHeight>=lowheight )
-            &&( lowheight>0 || blockcount<=14000 )
+            &&( blockcount<maxblocks )
         );
         cur= cur->pprev
         )
