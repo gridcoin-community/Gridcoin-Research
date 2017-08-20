@@ -8658,6 +8658,12 @@ bool MemorizeMessage(std::string msg, int64_t nTime, double dAmount, std::string
                   }
               }
 
+              if (sMessageType=="superblock")
+              {
+                  // Deny access to superblock processing runtime data
+                  sMessageValue="";
+              }
+
               if (!sMessageType.empty() && !sMessageKey.empty() && !sMessageValue.empty() && !sMessageAction.empty() && !sSignature.empty())
               {
                   //Verify sig first
