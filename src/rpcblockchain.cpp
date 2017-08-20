@@ -4743,6 +4743,7 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
     double diff_sum = 0;
     double diff_max=0;
     double diff_min=INT_MAX;
+    int64_t super_count = 0;
     for( ; (cur
             &&( cur->nHeight>=lowheight )
             &&( blockcount<maxblocks )
@@ -4798,6 +4799,7 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         size_min_blk=std::min(size_min_blk,sizeblock);
         size_max_blk=std::max(size_max_blk,sizeblock);
         size_sum_blk+=sizeblock;
+        super_count += (bb.superblock.length()>20);
     }
 
     {
@@ -4821,6 +4823,7 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         result.push_back(Pair("transaction", transactioncount));
         result.push_back(Pair("proof_of_stake", poscount));
         result.push_back(Pair("boincreward", researchcount));
+        result.push_back(Pair("super", super_count));
         result1.push_back(Pair("counts", result));
     }
     {
@@ -4845,6 +4848,7 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         result.push_back(Pair("transaction", transactioncount/(double)(blockcount-emptyblockscount)));
         result.push_back(Pair("blocksizek", size_sum_blk/(double)blockcount/(double)1024));
         result.push_back(Pair("posdiff", diff_sum/(double)poscount));
+        result.push_back(Pair("super_spacing_hrs", (((double)l_last_time-(double)l_first_time)/(double)super_count)/3600.0));
         result1.push_back(Pair("averages", result));
     }
     {
