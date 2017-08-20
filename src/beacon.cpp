@@ -10,6 +10,8 @@ extern bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::
 std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds);
 int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
 
+std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
+
 namespace
 {
     std::string GetNetSuffix()
@@ -133,4 +135,45 @@ std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxS
     return (iAge > iMaxSeconds)
           ? ""
           : value;
+}
+
+bool VerifyBeaconContractTx(const std::string& txhashBoinc)
+{
+    // Check if tx contains beacon advertisement and evaluate for certain conditions
+    std::string chkMessageType = ExtractXML(txhashBoinc, "<MT>", "</MT>");
+    std::string chkMessageAction = ExtractXML(txhashBoinc, "<MA>", "</MA>");
+    if (chkMessageAction != "A" && chkMessageType != "beacon")
+        return true; // Not beacon contract
+    std::string chkMessageContract = ExtractXML(txhashBoinc, "<MV>", "</MV>");
+    std::string chkMessageContractCPID = ExtractXML(txhashBoinc, "<MK>", "</MK>");
+    // Here we GetBeaconElements for the contract in the tx
+    std::string tx_out_cpid;
+    std::string tx_out_address;
+    std::string tx_out_publickey;
+    GetBeaconElements(chkMessageContract, tx_out_cpid, tx_out_address, tx_out_publickey);
+    if (tx_out_cpid == "" || tx_out_address == "" || tx_out_publickey == "" || chkMessageContractCPID == "")
+        return false;
+    std::string chkKey = "beacon;" + chkMessageContractCPID;
+    std::string chkValue = mvApplicationCache[chkKey];
+    int64_t chkiAge = pindexBest != NULL
+        ? pindexBest->nTime - mvApplicationCacheTimestamp[chkKey]
+        : 0;
+    int64_t chkSecondsBase = 60 * 24 * 30 * 60;
+    // Conditions
+    // Condition a) if beacon is younger then 5 months deny tx
+    if (chkiAge <= chkSecondsBase * 5 && chkiAge >= 1)
+        return false;
+    // Condition b) if beacon is younger then 6 months but older then 5 months verify using the same keypair; if not deny tx
+    if (chkiAge >= chkSecondsBase * 5 && chkiAge <= chkSecondsBase * 6)
+    {
+        std::string chk_out_cpid;
+        std::string chk_out_address;
+        std::string chk_out_publickey;
+        // Here we GetBeaconElements for the contract in the current beacon in chain
+        GetBeaconElements(chkValue, chk_out_cpid, chk_out_address, chk_out_publickey);
+        if (tx_out_publickey != chk_out_publickey)
+            return false;
+    }
+    // Passed checks
+    return true;
 }
