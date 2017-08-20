@@ -2862,21 +2862,19 @@ Array SuperblockReport(std::string cpid)
                 // Binary Support 12-20-2015
                 std::string superblock = UnpackBinarySuperblock(bb.superblock);
                 double avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,true,pblockindex->nHeight);
-                if (avg_mag > 10)
-                {
-                    Object c;
-                    c.push_back(Pair("Block #" + ToString(pblockindex->nHeight),pblockindex->GetBlockHash().GetHex()));
-                    c.push_back(Pair("Date",TimestampToHRDate(pblockindex->nTime)));
-                    c.push_back(Pair("Average Mag",out_avg));
-                    c.push_back(Pair("Wallet Version",bb.clientversion));
-                    double mag = GetSuperblockMagnitudeByCPID(superblock, cpid);
-                    if (!cpid.empty())
-                    {
-                        c.push_back(Pair("Magnitude",mag));
-                    }
 
-                    results.push_back(c);
+                Object c;
+                c.push_back(Pair("Block #" + ToString(pblockindex->nHeight),pblockindex->GetBlockHash().GetHex()));
+                c.push_back(Pair("Date",TimestampToHRDate(pblockindex->nTime)));
+                c.push_back(Pair("Average Mag",out_avg));
+                c.push_back(Pair("Wallet Version",bb.clientversion));
+                double mag = GetSuperblockMagnitudeByCPID(superblock, cpid);
+                if (!cpid.empty())
+                {
+                    c.push_back(Pair("Magnitude",mag));
                 }
+
+                results.push_back(c);
             }
         }
     }
