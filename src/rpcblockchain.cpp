@@ -2826,66 +2826,62 @@ Array LifetimeReport(std::string cpid)
 
 Array SuperblockReport(std::string cpid)
 {
+    Array results;
+    Object c;
+    std::string Narr = std::to_string(GetAdjustedTime());
+    c.push_back(Pair("SuperBlock Report (14 days)",Narr));
+    if (!cpid.empty())      c.push_back(Pair("CPID",cpid));
 
-      Array results;
-      Object c;
-      std::string Narr = std::to_string(GetAdjustedTime());
-      c.push_back(Pair("SuperBlock Report (14 days)",Narr));
-      if (!cpid.empty())      c.push_back(Pair("CPID",cpid));
+    results.push_back(c);
 
-      results.push_back(c);
-         
-      int nMaxDepth = nBestHeight;
-      int nLookback = BLOCKS_PER_DAY * 14;
-      int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
-      //int iRow = 0;
-      CBlockIndex* pblockindex = pindexBest;
-      while (pblockindex->nHeight > nMaxDepth)
-      {
-                if (!pblockindex || !pblockindex->pprev || pblockindex == pindexGenesisBlock) return results;
-                pblockindex = pblockindex->pprev;
-      }
+    int nMaxDepth = nBestHeight;
+    int nLookback = BLOCKS_PER_DAY * 14;
+    int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
+    //int iRow = 0;
+    CBlockIndex* pblockindex = pindexBest;
+    while (pblockindex->nHeight > nMaxDepth)
+    {
+        if (!pblockindex || !pblockindex->pprev || pblockindex == pindexGenesisBlock) return results;
+        pblockindex = pblockindex->pprev;
+    }
 
-                        
-      while (pblockindex->nHeight > nMinDepth)
-      {
-                            if (!pblockindex || !pblockindex->pprev) return results;  
-                            pblockindex = pblockindex->pprev;
-                            if (pblockindex == pindexGenesisBlock) return results;
-                            if (!pblockindex->IsInMainChain()) continue;
-                            if (IsSuperBlock(pblockindex))
-                            {
-                                MiningCPID bb = GetBoincBlockByIndex(pblockindex);
-                                if (bb.superblock.length() > 20)
-                                {
-                                        double out_beacon_count = 0;
-                                        double out_participant_count = 0;
-                                        double out_avg = 0;
-                                        // Binary Support 12-20-2015
-                                        std::string superblock = UnpackBinarySuperblock(bb.superblock);
-                                        double avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,true,pblockindex->nHeight);
-                                        if (avg_mag > 10)
-                                        {
-                                                Object c;
-                                                c.push_back(Pair("Block #" + ToString(pblockindex->nHeight),pblockindex->GetBlockHash().GetHex()));
-                                                c.push_back(Pair("Date",TimestampToHRDate(pblockindex->nTime)));
-                                                c.push_back(Pair("Average Mag",out_avg));
-                                                c.push_back(Pair("Wallet Version",bb.clientversion));
-                                                double mag = GetSuperblockMagnitudeByCPID(superblock, cpid);
-                                                if (!cpid.empty())
-                                                {
-                                                    c.push_back(Pair("Magnitude",mag));
-                                                }
+    while (pblockindex->nHeight > nMinDepth)
+    {
+        if (!pblockindex || !pblockindex->pprev) return results;
+        pblockindex = pblockindex->pprev;
+        if (pblockindex == pindexGenesisBlock) return results;
+        if (!pblockindex->IsInMainChain()) continue;
+        if (IsSuperBlock(pblockindex))
+        {
+            MiningCPID bb = GetBoincBlockByIndex(pblockindex);
+            if (bb.superblock.length() > 20)
+            {
+                double out_beacon_count = 0;
+                double out_participant_count = 0;
+                double out_avg = 0;
+                // Binary Support 12-20-2015
+                std::string superblock = UnpackBinarySuperblock(bb.superblock);
+                double avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,true,pblockindex->nHeight);
+                if (avg_mag > 10)
+                {
+                    Object c;
+                    c.push_back(Pair("Block #" + ToString(pblockindex->nHeight),pblockindex->GetBlockHash().GetHex()));
+                    c.push_back(Pair("Date",TimestampToHRDate(pblockindex->nTime)));
+                    c.push_back(Pair("Average Mag",out_avg));
+                    c.push_back(Pair("Wallet Version",bb.clientversion));
+                    double mag = GetSuperblockMagnitudeByCPID(superblock, cpid);
+                    if (!cpid.empty())
+                    {
+                        c.push_back(Pair("Magnitude",mag));
+                    }
 
-                                                results.push_back(c);
-        
-                                        }
-                                }
-                            }
-                    
-                        }
-      return results;
+                    results.push_back(c);
+                }
+            }
+        }
+    }
 
+    return results;
 }
 
 Array MagnitudeReport(std::string cpid)
