@@ -30,7 +30,7 @@ endif
 
 
 .PHONY: FORCE check-symbols check-security
-# bitcoin core #
+# gridcoin core #
 GRIDCOIN_CORE_H = \
   addrman.h \
   alert.h \
@@ -139,18 +139,23 @@ libgridcoin_util_a_SOURCES = addrman.cpp \
   walletdb.cpp \
   $(GRIDCOIN_CORE_H)
 
+if TARGET_WINDOWS
+libgridcoin_util_a_CXXFLAGS += -DWIN32 -DUNICODE
+endif
+
 if GLIBC_BACK_COMPAT
   libgridcoin_util_a_SOURCES += compat/glibc_compat.cpp
 endif
 
-# bitcoind binary #
+# gridcoinresearchd binary #
 gridcoinresearchd_SOURCES = gridcoinresearchd.cpp
 gridcoinresearchd_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES)
 gridcoinresearchd_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 gridcoinresearchd_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
 
 if TARGET_WINDOWS
-gridcoinresearchd_SOURCES += bitcoind-res.rc
+gridcoinresearchd_SOURCES += gridcoinresearchd-res.rc
+gridcoinresearchd_CXXFLAGS += -DWIN32 -DUNICODE
 endif
 
 gridcoinresearchd_LDADD = \
