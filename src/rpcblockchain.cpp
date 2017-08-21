@@ -2799,7 +2799,7 @@ Array LifetimeReport(std::string cpid)
 {
        Array results;
        Object c;
-       std::string Narr = std::to_string(GetAdjustedTime());
+       std::string Narr = ToString(GetAdjustedTime());
        c.push_back(Pair("Lifetime Payments Report",Narr));
        results.push_back(c);
        Object entry;
@@ -2828,7 +2828,7 @@ Array SuperblockReport(std::string cpid)
 {
     Array results;
     Object c;
-    std::string Narr = std::to_string(GetAdjustedTime());
+    std::string Narr = ToString(GetAdjustedTime());
     c.push_back(Pair("SuperBlock Report (14 days)",Narr));
     if (!cpid.empty())      c.push_back(Pair("CPID",cpid));
 
@@ -2886,7 +2886,7 @@ Array MagnitudeReport(std::string cpid)
 {
            Array results;
            Object c;
-           std::string Narr = std::to_string(GetAdjustedTime());
+           std::string Narr = ToString(GetAdjustedTime());
            c.push_back(Pair("RSA Report",Narr));
            results.push_back(c);
            double total_owed = 0;
@@ -3740,7 +3740,7 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
                                 BestAnswer = answer;
                             }
 
-                            entry.push_back(Pair("#" + std::to_string(++i) + " [" + RoundToString(participants,3) + "]. " + answer,dShares));
+                            entry.push_back(Pair("#" + ToString(++i) + " [" + RoundToString(participants,3) + "]. " + answer,dShares));
                             total_participants += participants;
                             total_shares += dShares;
                             sExportRow += "<RESERVED></RESERVED><ANSWERNAME>" + answer + "</ANSWERNAME><PARTICIPANTS>" + RoundToString(participants,0) + "</PARTICIPANTS><SHARES>" + RoundToString(dShares,0) + "</SHARES>";
