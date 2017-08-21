@@ -4693,10 +4693,27 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
     (void)mode; //TODO
     long lowheight= 0;
     long highheight= INT_MAX;
-    if(params.size()>=2)
-        lowheight= cdbl(params[1].get_str(),0);
-    if(params.size()>=3)
-        highheight= cdbl(params[2].get_str(),0);
+    long maxblocks= 14000;
+    if (mode==0)
+    {
+        if(params.size()>=2)
+        {
+            lowheight= cdbl(params[1].get_str(),0);
+            maxblocks= INT_MAX;
+        }
+        if(params.size()>=3)
+            highheight= cdbl(params[2].get_str(),0);
+    }
+    else if(mode==1)
+    {
+        /* count highheight */
+        maxblocks= 30000;
+        if(params.size()>=2)
+            maxblocks= cdbl(params[1].get_str(),0);
+        if(params.size()>=3)
+            highheight= cdbl(params[2].get_str(),0);
+    }
+    else throw runtime_error("getblockstats: Invalid mode specified");
     CBlockIndex* cur;
     Object result1;
     {
@@ -4723,9 +4740,13 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
     unsigned size_min_blk=INT_MAX;
     unsigned size_max_blk=0;
     uint64_t size_sum_blk=0;
+    double diff_sum = 0;
+    double diff_max=0;
+    double diff_min=INT_MAX;
+    int64_t super_count = 0;
     for( ; (cur
             &&( cur->nHeight>=lowheight )
-            &&( lowheight>0 || blockcount<=14000 )
+            &&( blockcount<maxblocks )
         );
         cur= cur->pprev
         )
@@ -4755,6 +4776,10 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
             {
                 poscount++;
                 //stakeinputtotal+=block.vtx[1].vin[0].nValue;
+                double diff = GetDifficulty(cur);
+                diff_sum += diff;
+                diff_max=std::max(diff_max,diff);
+                diff_min=std::min(diff_min,diff);
             }
             else
                 txcountinblock+=1;
@@ -4774,6 +4799,7 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         size_min_blk=std::min(size_min_blk,sizeblock);
         size_max_blk=std::max(size_max_blk,sizeblock);
         size_sum_blk+=sizeblock;
+        super_count += (bb.superblock.length()>20);
     }
 
     {
@@ -4786,6 +4812,8 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         result.push_back(Pair("time_span_hour", ((double)l_last_time-(double)l_first_time)/(double)3600));
         result.push_back(Pair("min_blocksizek", size_min_blk/(double)1024));
         result.push_back(Pair("max_blocksizek", size_max_blk/(double)1024));
+        result.push_back(Pair("min_posdiff", diff_min));
+        result.push_back(Pair("max_posdiff", diff_max));
         result1.push_back(Pair("general", result));
     }
     {
@@ -4795,6 +4823,7 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         result.push_back(Pair("transaction", transactioncount));
         result.push_back(Pair("proof_of_stake", poscount));
         result.push_back(Pair("boincreward", researchcount));
+        result.push_back(Pair("super", super_count));
         result1.push_back(Pair("counts", result));
     }
     {
@@ -4805,6 +4834,7 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         result.push_back(Pair("mint", minttotal/(double)COIN));
         //result.push_back(Pair("stake_input", stakeinputtotal/(double)COIN));
         result.push_back(Pair("blocksizek", size_sum_blk/(double)1024));
+        result.push_back(Pair("posdiff", diff_sum));
         result1.push_back(Pair("totals", result));
     }
     {
@@ -4817,6 +4847,8 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         result.push_back(Pair("block_per_day", ((double)blockcount*86400.0)/((double)l_last_time-(double)l_first_time)));
         result.push_back(Pair("transaction", transactioncount/(double)(blockcount-emptyblockscount)));
         result.push_back(Pair("blocksizek", size_sum_blk/(double)blockcount/(double)1024));
+        result.push_back(Pair("posdiff", diff_sum/(double)poscount));
+        result.push_back(Pair("super_spacing_hrs", (((double)l_last_time-(double)l_first_time)/(double)super_count)/3600.0));
         result1.push_back(Pair("averages", result));
     }
     {
