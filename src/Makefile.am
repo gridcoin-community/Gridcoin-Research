@@ -153,11 +153,6 @@ gridcoinresearchd_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES)
 gridcoinresearchd_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 gridcoinresearchd_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
 
-if TARGET_WINDOWS
-gridcoinresearchd_SOURCES += gridcoinresearchd-res.rc
-gridcoinresearchd_CXXFLAGS += -DWIN32 -DUNICODE
-endif
-
 gridcoinresearchd_LDADD = \
  $(LIBGRIDCOIN_UTIL) \
  $(LIBLEVELDB) \
@@ -165,6 +160,13 @@ gridcoinresearchd_LDADD = \
  $(LIBMEMENV)
 
 gridcoinresearchd_LDADD += $(BOOST_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(CURL_LIBS) $(LIBZIP_LIBS)
+
+if TARGET_WINDOWS
+gridcoinresearchd_SOURCES += gridcoinresearchd-res.rc
+gridcoinresearchd_CXXFLAGS += -DWIN32 -DUNICODE
+gridcoinresearchd_LDFLAGS += $(QT_LDFLAGS)
+gridcoinresearchd_LDADD += $(QT_LIBS)
+endif
 
 CLEANFILES = $(EXTRA_LIBRARIES)
 

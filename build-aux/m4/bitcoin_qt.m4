@@ -284,6 +284,8 @@ AC_DEFUN([_BITCOIN_QT_CHECK_QT5],[
 
 dnl Internal. Check if the linked version of Qt was built as static libs.
 dnl Requires: Qt5. This check cannot determine if Qt4 is static.
+dnl gridcoinresearchd_LDFLAGS += $(QT_LDFLAGS)
+dnl gridcoinresearchd_LDADD += $(QT_LIBS)
 dnl Requires: INCLUDES and LIBS must be populated as necessary.
 dnl Output: bitcoin_cv_static_qt=yes|no
 dnl Output: Defines QT_STATICPLUGIN if plugins are static.
@@ -404,6 +406,9 @@ AC_DEFUN([_BITCOIN_QT_FIND_LIBS_WITH_PKGCONFIG],[
         qt5_modules="$qt5_modules Qt5Charts" 
     else
         qt5_modules="$qt5_modules"
+    fi
+    if test x$TARGET_OS = xwindows; then
+        qt5_modules="$qt5_modules QAxcontainer QAxServer"
     fi
     qt4_modules="QtCore QtGui QtNetwork"
     BITCOIN_QT_CHECK([
