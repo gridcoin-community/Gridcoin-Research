@@ -18,6 +18,7 @@ $(package)_qttools_sha256_hash=22d67de915cb8cd93e16fdd38fa006224ad9170bd217c2be1
 
 $(package)_qtactiveqt_file_name=qtactiveqt-$($(package)_suffix)
 $(package)_qtactiveqt_sha256_hash=57b39e9fe1d8d430da14d38d8c0de39bede1cd3ce1540f3d51c1fa0a2ef149cf
+$(package)_qtactiveqt_libs=axcontainer
 
 $(package)_extra_sources  = $($(package)_qttranslations_file_name)
 $(package)_extra_sources += $($(package)_qttools_file_name)
@@ -167,23 +168,31 @@ define $(package)_config_cmds
   cd ../qttranslations && ../qtbase/bin/qmake qttranslations.pro -o Makefile && \
   cd translations && ../../qtbase/bin/qmake translations.pro -o Makefile && cd ../.. && \
   cd qttools/src/linguist/lrelease/ && ../../../../qtbase/bin/qmake lrelease.pro -o Makefile && cd ../../../.. && \
-  cd qtactiveqt/src/activeqt/container && ../../../../qtbase/bin/qmake container.pro -o Makefile && \
-  cd ../control && ../../../../qtbase/bin/qmake control.pro -o Makefile
+  cd qtactiveqt/src/activeqt && ../../../qtbase/bin/qmake activeqt.pro -o Makefile
 endef
+
+#  cd container && ../../../../qtbase/bin/qmake container.pro -o Makefile && \
+#  cd ../control && ../../../../qtbase/bin/qmake control.pro -o Makefile
+#  $(MAKE) -C ../qtactiveqt/src/activeqt/container && \
+#  $(MAKE) -C ../qtactiveqt/src/activeqt/control && \
+
+
 
 define $(package)_build_cmds
   $(MAKE) -C src $(addprefix sub-,$($(package)_qt_libs)) && \
   $(MAKE) -C ../qttools/src/linguist/lrelease && \
-  $(MAKE) -C ../qtactiveqt/src/activeqt/container && \
-  $(MAKE) -C ../qtactiveqt/src/activeqt/control && \
+  $(MAKE) -C ../qtactiveqt/src/activeqt && \
   $(MAKE) -C ../qttranslations
 endef
+
+#  $(MAKE) -C qtactiveqt/src/activeqt/container INSTALL_ROOT=$($(package)_staging_dir) install_target && \
+#  $(MAKE) -C qtactiveqt/src/activeqt/control INSTALL_ROOT=$($(package)_staging_dir) install_target && \
+
 
 define $(package)_stage_cmds
   $(MAKE) -C src INSTALL_ROOT=$($(package)_staging_dir) $(addsuffix -install_subtargets,$(addprefix sub-,$($(package)_qt_libs))) && cd .. && \
   $(MAKE) -C qttools/src/linguist/lrelease INSTALL_ROOT=$($(package)_staging_dir) install_target && \
-  $(MAKE) -C qtactiveqt/src/activeqt/container INSTALL_ROOT=$($(package)_staging_dir) install_target && \
-  $(MAKE) -C qtactiveqt/src/activeqt/control INSTALL_ROOT=$($(package)_staging_dir) install_target && \
+  $(MAKE) -C qtactiveqt/src/activeqt INSTALL_ROOT=$($(package)_staging_dir) install &&\
   $(MAKE) -C qttranslations INSTALL_ROOT=$($(package)_staging_dir) install_subtargets && \
   if `test -f qtbase/src/plugins/platforms/xcb/xcb-static/libxcb-static.a`; then \
     cp qtbase/src/plugins/platforms/xcb/xcb-static/libxcb-static.a $($(package)_staging_prefix_dir)/lib; \
