@@ -50,6 +50,7 @@
         <file alias="boinc">res/icons/boinc.png</file>
         <file alias="gold_cpumined">res/icons/gold_cpumined.png</file>
         <file alias="chat">res/icons/chat.png</file>
+        <file alias="voting">res/icons/voting.png</file>
     </qresource>
     <qresource prefix="/images">
         <file alias="about">res/images/about.png</file>
