@@ -674,7 +674,7 @@ void BitcoinGUI::createActions()
     addressBookAction->setCheckable(true);
     addressBookAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_5));
 
-    votingAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Voting"), tabGroup);
+    votingAction = new QAction(QIcon(":/icons/voting"), tr("&Voting"), tabGroup);
     votingAction->setToolTip(tr("Voting"));
     votingAction->setCheckable(true);
     votingAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_6));
