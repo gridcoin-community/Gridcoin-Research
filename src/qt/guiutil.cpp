@@ -12,7 +12,9 @@
 #include <QLineEdit>
 #include <QUrl>
 #include <QTextDocument> // For Qt::escape
+#if QT_VERSION >= 0x050000
 #include <QUrlQuery> // For alternative QT5 toHtmlEscaped
+#endif
 #include <QAbstractItemView>
 #include <QApplication>
 #include <QClipboard>
