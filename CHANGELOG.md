@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
+## [3.6.0.1] 08-22-2017
 ### Added
  - Added [V8 stake engine](https://github.com/gridcoin/Gridcoin-Research/wiki/Stake-V8)
    set to start producing V8 blocks at block 1010000. This fixes several security issues,
@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
     - DAO, #486 (@denravonska).
     - volatilecode, testnet0917, testboinckey, chainrsa, testcpidv2, testcpid, windows
       error report disabling, list betatest, fDebug4/fDebug5 flags (@Foggyx420).
+ - Set magnitude boost to be removed at 2017-Sep-07 00:00:00 UTC
 
 ### Fixed
  - Fixed security issue where superblocks could be injected, #526 (@tomasbrod).
