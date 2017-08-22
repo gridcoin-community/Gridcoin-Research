@@ -2709,7 +2709,7 @@ Value execute(const Array& params, bool fHelp)
     else if (sItem == "help")
     {
         entry.push_back(Pair("execute addpoll <title> <days> <question> <answers> <sharetype> <url>", "Add a poll (Requires minimum 100000 GRC balance)"));
-        entry.push_back(Pair("execute advertisebeacon", "Advertise a beacon (Requires wallet to be fully unlocked"));
+        entry.push_back(Pair("execute advertisebeacon", "Advertise a beacon (Requires wallet to be fully unlocked)"));
         entry.push_back(Pair("execute askforoutstandingblock", "Asks nodes for outstanding blocks"));
         entry.push_back(Pair("execute backupwallet", "Backup wallet"));
         entry.push_back(Pair("execute beaconreport", "Displays information about current active beacons in the network"));
@@ -2719,7 +2719,7 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute currentneuralhash", "Displays the popular hash in current neural report from all neural nodes"));
         entry.push_back(Pair("execute currentneuralreport", "Displays all hashes staked recently by neural nodes"));
         entry.push_back(Pair("execute debug <true/false>", "Turn on/off debug messages on the fly"));
-        entry.push_back(Pair("execute debug2 <true/false>", "Turn on/of debug2 messages on the fly"));
+        entry.push_back(Pair("execute debug2 <true/false>", "Turn on/off debug2 messages on the fly"));
         entry.push_back(Pair("execute debug3 <true/false>", "Turn on/off debug3 messages on the fly"));
         entry.push_back(Pair("execute debug10 <true/false>", "Turn on/off debug10 messages on the fly"));
         entry.push_back(Pair("execute debugnew <true/false>", "Turn on/off debugnet messages on the fly"));
@@ -2730,7 +2730,7 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute dportally", "Tally magnitudes in superblock"));
         entry.push_back(Pair("execute encrypt <phrase>", "Encrypt a wallet pass phrase (autounlock feature)"));
         entry.push_back(Pair("execute encryptphrase <phrase>", "Encrypt a phrase or message"));
-        entry.push_back(Pair("execute explainmagnitude2 <true>", "Explains your neural network magnitude. True is optioinal for force"));
+        entry.push_back(Pair("execute explainmagnitude2 <true>", "Explains your neural network magnitude. True is optional for force"));
         entry.push_back(Pair("execute listallpolldetails", "Displays all polls past and present with details"));
         entry.push_back(Pair("execute listallpolls", "Displays all polls past and present"));
         entry.push_back(Pair("execute listpolldetails", "Displays all active polls details"));
@@ -2740,7 +2740,7 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute myneuralhash", "Displays your current neural hash from contract"));
         #endif
         entry.push_back(Pair("execute neuralhash", "Displays the network popular hash in neural report (Participating nodes)"));
-        entry.push_back(Pair("execute neuralreport", "Dispalys information of recently staked neural votes by participating nodes"));
+        entry.push_back(Pair("execute neuralreport", "Displays information of recently staked neural votes by participating nodes"));
         entry.push_back(Pair("execute neuralresponse", "Requests a response from neural network"));
         entry.push_back(Pair("execute rain <raindata>", "Sends rain to specified users. Format Address<COL>Amount<ROW>..."));
         #if defined(WIN32) && defined(QT_GUI)
@@ -2756,7 +2756,7 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute restorewallet", "Restore wallet from backup made by 'backupwallet'"));
         entry.push_back(Pair("execute staketime", "Displays unix timestamp based on stake gric time and cpid time"));
         entry.push_back(Pair("execute superblockage", "Displays information and age about current superblock"));
-        entry.push_back(Pair("execute syncdpor2", "Syncronize with neural network"));
+        entry.push_back(Pair("execute syncdpor2", "Synchronize with neural network"));
         entry.push_back(Pair("execute tally", "Tallys research averages"));
         entry.push_back(Pair("execute tallyneural", "Tally neural quorum data"));
         entry.push_back(Pair("execute unspentreport", "Displays unspent wallet information"));
@@ -2764,7 +2764,7 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute updatequorumdata", "Updates neural quorum data"));
         entry.push_back(Pair("execute versionreport", "Displays information about client versions that staked the last 100 blocks"));
         entry.push_back(Pair("execute vote <title> <answer>", "Casts a vote for a specific poll with chosen answer"));
-        entry.push_back(Pair("execute votedetails <title>", "Displays information on a specified polls votes"));
+        entry.push_back(Pair("execute votedetails <title>", "Displays information on a specified poll's votes"));
         results.push_back(entry);
     }
     else if (sItem == "helpdev")
