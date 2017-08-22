@@ -162,8 +162,12 @@ Module modPersistedDataSystem
         Return total
     End Function
     Public Function GetMagnitudeContract() As String
-        Try
 
+        Dim dLegacyMagnitudeBoost As Double = 1.35
+        Dim dtCutoverDate As DateTime = TimeZoneInfo.ConvertTimeToUtc(New DateTime(2017, 9, 7))
+        If Now > dtCutoverDate Then dLegacyMagnitudeBoost = 1.0
+
+        Try
             If GetWindowsFileAge(GetGridPath("NeuralNetwork") + "\contract.dat") < 240 Then
                 Dim sData As String
                 sData = FileToString(GetGridPath("NeuralNetwork") + "\contract.dat")
@@ -172,7 +176,7 @@ Module modPersistedDataSystem
 
             Dim lAgeOfMaster As Long = GetWindowsFileAge(GetGridPath("NeuralNetwork") + "\db.dat")
             If lAgeOfMaster > PROJECT_SYNC_THRESHOLD Then Return ""
-            
+
             Dim surrogateRow As New Row
             surrogateRow.Database = "CPID"
             surrogateRow.Table = "CPIDS"
@@ -190,7 +194,7 @@ Module modPersistedDataSystem
 
             For Each cpid As Row In lstCPIDs
                 If cpid.DataColumn5 = "True" Then
-                    Dim dLocalMagnitude As Double = Val("0" + Num(cpid.Magnitude)) * 1.35 'Ensure culture is neutral first - and then that magnitude passes through the bar
+                    Dim dLocalMagnitude As Double = Val("0" + Num(cpid.Magnitude)) * dLegacyMagnitudeBoost
                     If dLocalMagnitude > 32766 Then dLocalMagnitude = 32766
 
                     Dim sRow As String = cpid.PrimaryKey + "," + Num(dLocalMagnitude) + ";"

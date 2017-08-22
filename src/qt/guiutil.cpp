@@ -12,7 +12,9 @@
 #include <QLineEdit>
 #include <QUrl>
 #include <QTextDocument> // For Qt::escape
+#if QT_VERSION >= 0x050000
 #include <QUrlQuery> // For alternative QT5 toHtmlEscaped
+#endif
 #include <QAbstractItemView>
 #include <QApplication>
 #include <QClipboard>
@@ -91,7 +93,7 @@ bool parseBitcoinURI(const QUrl &uri, SendCoinsRecipient *out)
     rv.amount = 0;
 
 #if QT_VERSION < 0x050000
-    QList<QPair<QString, QString> > items = QUrlQuery::queryItems(uri);
+    QList<QPair<QString, QString> > items = uri.queryItems();
 #else
     QUrlQuery uriQuery(uri);
     QList<QPair<QString, QString> > items = uriQuery.queryItems();

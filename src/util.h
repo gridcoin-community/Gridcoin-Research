@@ -220,7 +220,7 @@ std::string ToString(const T& val)
 {
     std::ostringstream ss;
     ss.imbue(std::locale::classic());
-    ss << val;
+    ss << std::fixed << val;
     return ss.str();
 }
 
