@@ -6,7 +6,7 @@ $(package)_sha256_hash=6cf9840e427db96ebf3936665430bab204c9ebbd0120c326459077ed9
 $(package)_dependencies=zlib
 
 define $(package)_config_cmds
-  ./configure --prefix=$(host_prefix) 
+  ./configure --prefix=$(host_prefix) --with-zlib=$(host_prefix)
 endef
 
 define $(package)_build_cmds
