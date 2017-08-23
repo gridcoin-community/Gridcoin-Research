@@ -3,6 +3,7 @@
 // Block data structures.
 class CBlock;
 class CBlockIndex;
+class CNetAddr;
 
 // Gridcoin
 struct MiningCPID;

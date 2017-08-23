@@ -118,7 +118,7 @@ std::string GetCommandNonce(std::string command)
 {
     //1-11-2015 Message Attacks - Halford
     std::string sboinchashargs = DefaultOrgKey(12);
-    std::string nonce = std::to_string(GetAdjustedTime());
+    std::string nonce = ToString(GetAdjustedTime());
     std::string org = DefaultOrg();
     std::string pub_key_prefix = OrgId();
     std::string pw1 = RetrieveMd5(nonce+","+command+","+org+","+pub_key_prefix+","+sboinchashargs);

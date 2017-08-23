@@ -90,6 +90,15 @@ inline bool IsResearchAgeEnabled(int nHeight)
 	return (fTestNet ?  nHeight > 0 : nHeight > 364500); 
 }
 
+// TODO: Move this and the other height thresholds to their own files.
+// Do not put the code in the headers!
+inline uint32_t IsV8Enabled(int nHeight)
+{
+    return fTestNet
+            ? nHeight > 312000
+            : nHeight > 1010000;
+}
+
 inline int GetSuperblockAgeSpacing(int nHeight)
 {
 	return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);

@@ -2709,7 +2709,7 @@ Value execute(const Array& params, bool fHelp)
     else if (sItem == "help")
     {
         entry.push_back(Pair("execute addpoll <title> <days> <question> <answers> <sharetype> <url>", "Add a poll (Requires minimum 100000 GRC balance)"));
-        entry.push_back(Pair("execute advertisebeacon", "Advertise a beacon (Requires wallet to be fully unlocked"));
+        entry.push_back(Pair("execute advertisebeacon", "Advertise a beacon (Requires wallet to be fully unlocked)"));
         entry.push_back(Pair("execute askforoutstandingblock", "Asks nodes for outstanding blocks"));
         entry.push_back(Pair("execute backupwallet", "Backup wallet"));
         entry.push_back(Pair("execute beaconreport", "Displays information about current active beacons in the network"));
@@ -2719,7 +2719,7 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute currentneuralhash", "Displays the popular hash in current neural report from all neural nodes"));
         entry.push_back(Pair("execute currentneuralreport", "Displays all hashes staked recently by neural nodes"));
         entry.push_back(Pair("execute debug <true/false>", "Turn on/off debug messages on the fly"));
-        entry.push_back(Pair("execute debug2 <true/false>", "Turn on/of debug2 messages on the fly"));
+        entry.push_back(Pair("execute debug2 <true/false>", "Turn on/off debug2 messages on the fly"));
         entry.push_back(Pair("execute debug3 <true/false>", "Turn on/off debug3 messages on the fly"));
         entry.push_back(Pair("execute debug10 <true/false>", "Turn on/off debug10 messages on the fly"));
         entry.push_back(Pair("execute debugnew <true/false>", "Turn on/off debugnet messages on the fly"));
@@ -2730,7 +2730,7 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute dportally", "Tally magnitudes in superblock"));
         entry.push_back(Pair("execute encrypt <phrase>", "Encrypt a wallet pass phrase (autounlock feature)"));
         entry.push_back(Pair("execute encryptphrase <phrase>", "Encrypt a phrase or message"));
-        entry.push_back(Pair("execute explainmagnitude2 <true>", "Explains your neural network magnitude. True is optioinal for force"));
+        entry.push_back(Pair("execute explainmagnitude2 <true>", "Explains your neural network magnitude. True is optional for force"));
         entry.push_back(Pair("execute listallpolldetails", "Displays all polls past and present with details"));
         entry.push_back(Pair("execute listallpolls", "Displays all polls past and present"));
         entry.push_back(Pair("execute listpolldetails", "Displays all active polls details"));
@@ -2740,7 +2740,7 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute myneuralhash", "Displays your current neural hash from contract"));
         #endif
         entry.push_back(Pair("execute neuralhash", "Displays the network popular hash in neural report (Participating nodes)"));
-        entry.push_back(Pair("execute neuralreport", "Dispalys information of recently staked neural votes by participating nodes"));
+        entry.push_back(Pair("execute neuralreport", "Displays information of recently staked neural votes by participating nodes"));
         entry.push_back(Pair("execute neuralresponse", "Requests a response from neural network"));
         entry.push_back(Pair("execute rain <raindata>", "Sends rain to specified users. Format Address<COL>Amount<ROW>..."));
         #if defined(WIN32) && defined(QT_GUI)
@@ -2756,7 +2756,7 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute restorewallet", "Restore wallet from backup made by 'backupwallet'"));
         entry.push_back(Pair("execute staketime", "Displays unix timestamp based on stake gric time and cpid time"));
         entry.push_back(Pair("execute superblockage", "Displays information and age about current superblock"));
-        entry.push_back(Pair("execute syncdpor2", "Syncronize with neural network"));
+        entry.push_back(Pair("execute syncdpor2", "Synchronize with neural network"));
         entry.push_back(Pair("execute tally", "Tallys research averages"));
         entry.push_back(Pair("execute tallyneural", "Tally neural quorum data"));
         entry.push_back(Pair("execute unspentreport", "Displays unspent wallet information"));
@@ -2764,7 +2764,7 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute updatequorumdata", "Updates neural quorum data"));
         entry.push_back(Pair("execute versionreport", "Displays information about client versions that staked the last 100 blocks"));
         entry.push_back(Pair("execute vote <title> <answer>", "Casts a vote for a specific poll with chosen answer"));
-        entry.push_back(Pair("execute votedetails <title>", "Displays information on a specified polls votes"));
+        entry.push_back(Pair("execute votedetails <title>", "Displays information on a specified poll's votes"));
         results.push_back(entry);
     }
     else if (sItem == "helpdev")
@@ -2799,7 +2799,7 @@ Array LifetimeReport(std::string cpid)
 {
        Array results;
        Object c;
-       std::string Narr = std::to_string(GetAdjustedTime());
+       std::string Narr = ToString(GetAdjustedTime());
        c.push_back(Pair("Lifetime Payments Report",Narr));
        results.push_back(c);
        Object entry;
@@ -2826,73 +2826,67 @@ Array LifetimeReport(std::string cpid)
 
 Array SuperblockReport(std::string cpid)
 {
+    Array results;
+    Object c;
+    std::string Narr = ToString(GetAdjustedTime());
+    c.push_back(Pair("SuperBlock Report (14 days)",Narr));
+    if (!cpid.empty())      c.push_back(Pair("CPID",cpid));
 
-      Array results;
-      Object c;
-      std::string Narr = std::to_string(GetAdjustedTime());
-      c.push_back(Pair("SuperBlock Report (14 days)",Narr));
-      if (!cpid.empty())      c.push_back(Pair("CPID",cpid));
+    results.push_back(c);
 
-      results.push_back(c);
-         
-      int nMaxDepth = nBestHeight;
-      int nLookback = BLOCKS_PER_DAY * 14;
-      int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
-      //int iRow = 0;
-      CBlockIndex* pblockindex = pindexBest;
-      while (pblockindex->nHeight > nMaxDepth)
-      {
-                if (!pblockindex || !pblockindex->pprev || pblockindex == pindexGenesisBlock) return results;
-                pblockindex = pblockindex->pprev;
-      }
+    int nMaxDepth = nBestHeight;
+    int nLookback = BLOCKS_PER_DAY * 14;
+    int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
+    //int iRow = 0;
+    CBlockIndex* pblockindex = pindexBest;
+    while (pblockindex->nHeight > nMaxDepth)
+    {
+        if (!pblockindex || !pblockindex->pprev || pblockindex == pindexGenesisBlock) return results;
+        pblockindex = pblockindex->pprev;
+    }
 
-                        
-      while (pblockindex->nHeight > nMinDepth)
-      {
-                            if (!pblockindex || !pblockindex->pprev) return results;  
-                            pblockindex = pblockindex->pprev;
-                            if (pblockindex == pindexGenesisBlock) return results;
-                            if (!pblockindex->IsInMainChain()) continue;
-                            if (IsSuperBlock(pblockindex))
-                            {
-                                MiningCPID bb = GetBoincBlockByIndex(pblockindex);
-                                if (bb.superblock.length() > 20)
-                                {
-                                        double out_beacon_count = 0;
-                                        double out_participant_count = 0;
-                                        double out_avg = 0;
-                                        // Binary Support 12-20-2015
-                                        std::string superblock = UnpackBinarySuperblock(bb.superblock);
-                                        double avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,true,pblockindex->nHeight);
-                                        if (avg_mag > 10)
-                                        {
-                                                Object c;
-                                                c.push_back(Pair("Block #" + ToString(pblockindex->nHeight),pblockindex->GetBlockHash().GetHex()));
-                                                c.push_back(Pair("Date",TimestampToHRDate(pblockindex->nTime)));
-                                                c.push_back(Pair("Average Mag",out_avg));
-                                                c.push_back(Pair("Wallet Version",bb.clientversion));
-                                                double mag = GetSuperblockMagnitudeByCPID(superblock, cpid);
-                                                if (!cpid.empty())
-                                                {
-                                                    c.push_back(Pair("Magnitude",mag));
-                                                }
+    while (pblockindex->nHeight > nMinDepth)
+    {
+        if (!pblockindex || !pblockindex->pprev) return results;
+        pblockindex = pblockindex->pprev;
+        if (pblockindex == pindexGenesisBlock) return results;
+        if (!pblockindex->IsInMainChain()) continue;
+        if (IsSuperBlock(pblockindex))
+        {
+            MiningCPID bb = GetBoincBlockByIndex(pblockindex);
+            if (bb.superblock.length() > 20)
+            {
+                double out_beacon_count = 0;
+                double out_participant_count = 0;
+                double out_avg = 0;
+                // Binary Support 12-20-2015
+                std::string superblock = UnpackBinarySuperblock(bb.superblock);
+                double avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,true,pblockindex->nHeight);
 
-                                                results.push_back(c);
-        
-                                        }
-                                }
-                            }
-                    
-                        }
-      return results;
+                Object c;
+                c.push_back(Pair("Block #" + ToString(pblockindex->nHeight),pblockindex->GetBlockHash().GetHex()));
+                c.push_back(Pair("Date",TimestampToHRDate(pblockindex->nTime)));
+                c.push_back(Pair("Average Mag",out_avg));
+                c.push_back(Pair("Wallet Version",bb.clientversion));
+                double mag = GetSuperblockMagnitudeByCPID(superblock, cpid);
+                if (!cpid.empty())
+                {
+                    c.push_back(Pair("Magnitude",mag));
+                }
 
+                results.push_back(c);
+            }
+        }
+    }
+
+    return results;
 }
 
 Array MagnitudeReport(std::string cpid)
 {
            Array results;
            Object c;
-           std::string Narr = std::to_string(GetAdjustedTime());
+           std::string Narr = ToString(GetAdjustedTime());
            c.push_back(Pair("RSA Report",Narr));
            results.push_back(c);
            double total_owed = 0;
@@ -3746,7 +3740,7 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
                                 BestAnswer = answer;
                             }
 
-                            entry.push_back(Pair("#" + std::to_string(++i) + " [" + RoundToString(participants,3) + "]. " + answer,dShares));
+                            entry.push_back(Pair("#" + ToString(++i) + " [" + RoundToString(participants,3) + "]. " + answer,dShares));
                             total_participants += participants;
                             total_shares += dShares;
                             sExportRow += "<RESERVED></RESERVED><ANSWERNAME>" + answer + "</ANSWERNAME><PARTICIPANTS>" + RoundToString(participants,0) + "</PARTICIPANTS><SHARES>" + RoundToString(dShares,0) + "</SHARES>";
@@ -4699,10 +4693,27 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
     (void)mode; //TODO
     long lowheight= 0;
     long highheight= INT_MAX;
-    if(params.size()>=2)
-        lowheight= cdbl(params[1].get_str(),0);
-    if(params.size()>=3)
-        highheight= cdbl(params[2].get_str(),0);
+    long maxblocks= 14000;
+    if (mode==0)
+    {
+        if(params.size()>=2)
+        {
+            lowheight= cdbl(params[1].get_str(),0);
+            maxblocks= INT_MAX;
+        }
+        if(params.size()>=3)
+            highheight= cdbl(params[2].get_str(),0);
+    }
+    else if(mode==1)
+    {
+        /* count highheight */
+        maxblocks= 30000;
+        if(params.size()>=2)
+            maxblocks= cdbl(params[1].get_str(),0);
+        if(params.size()>=3)
+            highheight= cdbl(params[2].get_str(),0);
+    }
+    else throw runtime_error("getblockstats: Invalid mode specified");
     CBlockIndex* cur;
     Object result1;
     {
@@ -4729,9 +4740,13 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
     unsigned size_min_blk=INT_MAX;
     unsigned size_max_blk=0;
     uint64_t size_sum_blk=0;
+    double diff_sum = 0;
+    double diff_max=0;
+    double diff_min=INT_MAX;
+    int64_t super_count = 0;
     for( ; (cur
             &&( cur->nHeight>=lowheight )
-            &&( lowheight>0 || blockcount<=14000 )
+            &&( blockcount<maxblocks )
         );
         cur= cur->pprev
         )
@@ -4761,6 +4776,10 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
             {
                 poscount++;
                 //stakeinputtotal+=block.vtx[1].vin[0].nValue;
+                double diff = GetDifficulty(cur);
+                diff_sum += diff;
+                diff_max=std::max(diff_max,diff);
+                diff_min=std::min(diff_min,diff);
             }
             else
                 txcountinblock+=1;
@@ -4780,6 +4799,7 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         size_min_blk=std::min(size_min_blk,sizeblock);
         size_max_blk=std::max(size_max_blk,sizeblock);
         size_sum_blk+=sizeblock;
+        super_count += (bb.superblock.length()>20);
     }
 
     {
@@ -4792,6 +4812,8 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         result.push_back(Pair("time_span_hour", ((double)l_last_time-(double)l_first_time)/(double)3600));
         result.push_back(Pair("min_blocksizek", size_min_blk/(double)1024));
         result.push_back(Pair("max_blocksizek", size_max_blk/(double)1024));
+        result.push_back(Pair("min_posdiff", diff_min));
+        result.push_back(Pair("max_posdiff", diff_max));
         result1.push_back(Pair("general", result));
     }
     {
@@ -4801,6 +4823,7 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         result.push_back(Pair("transaction", transactioncount));
         result.push_back(Pair("proof_of_stake", poscount));
         result.push_back(Pair("boincreward", researchcount));
+        result.push_back(Pair("super", super_count));
         result1.push_back(Pair("counts", result));
     }
     {
@@ -4811,6 +4834,7 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         result.push_back(Pair("mint", minttotal/(double)COIN));
         //result.push_back(Pair("stake_input", stakeinputtotal/(double)COIN));
         result.push_back(Pair("blocksizek", size_sum_blk/(double)1024));
+        result.push_back(Pair("posdiff", diff_sum));
         result1.push_back(Pair("totals", result));
     }
     {
@@ -4823,6 +4847,8 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         result.push_back(Pair("block_per_day", ((double)blockcount*86400.0)/((double)l_last_time-(double)l_first_time)));
         result.push_back(Pair("transaction", transactioncount/(double)(blockcount-emptyblockscount)));
         result.push_back(Pair("blocksizek", size_sum_blk/(double)blockcount/(double)1024));
+        result.push_back(Pair("posdiff", diff_sum/(double)poscount));
+        result.push_back(Pair("super_spacing_hrs", (((double)l_last_time-(double)l_first_time)/(double)super_count)/3600.0));
         result1.push_back(Pair("averages", result));
     }
     {

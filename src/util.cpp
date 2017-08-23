@@ -7,6 +7,7 @@
 #include "sync.h"
 #include "strlcpy.h"
 #include "version.h"
+#include "netbase.h" // for AddTimeData
 #include "ui_interface.h"
 
 #include <boost/algorithm/string/join.hpp>

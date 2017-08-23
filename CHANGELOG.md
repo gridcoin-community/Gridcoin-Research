@@ -4,6 +4,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [3.6.0.1] 08-22-2017
+### Added
+ - Added [V8 stake engine](https://github.com/gridcoin/Gridcoin-Research/wiki/Stake-V8)
+   set to start producing V8 blocks at block 1010000. This fixes several security issues,
+   see wiki for details.
+ - Blocks can now carry identification from the "org" argument/configuration option (@tomasbrod).
+ - Add "reorganize" RPC command (@tomasbrod).
+
+### Changed
+ - Berkeley DB V6+ compatibility, #451 (@xPh03n1x).
+ - Improved poll loading speeds, #497 (@denravonska).
+ - Versions now contain the git hash, #500 (@tomasbrod).
+ - Improved security on NeuralNet votes, #496 (@Foggyx420).
+ - Improved RPC help. It now supports "execute help" and "list help",
+   #512 (@Foggyx420).
+ - Voting is now integrated in wallet as a tab and cleaned up, #416 (@skcin, @JoShoeAh).
+ - Improve low-peer mining ability on testnet (@tomasbrod).
+ - Improve poll error message when low on funds, #415 (@Erkan-Yilmaz).
+ - Code cleanup (@denravonska, @tomasbrod, @Foggyx420, @skcin).
+
+### Removed
+ - Remove RPC commands:
+    - DAO, #486 (@denravonska).
+    - volatilecode, testnet0917, testboinckey, chainrsa, testcpidv2, testcpid, windows
+      error report disabling, list betatest, fDebug4/fDebug5 flags (@Foggyx420).
+ - Set magnitude boost to be removed at 2017-Sep-07 00:00:00 UTC
+
+### Fixed
+ - Fixed security issue where superblocks could be injected, #526 (@tomasbrod).
+ - Fix poll sorting bug, #512 (@skcin)
+
 ## [3.6.0.0] - 2017-08-14
 ### Fixed
  - Fix a crash when starting up as a new user, #488 (@Foggyx420, 
