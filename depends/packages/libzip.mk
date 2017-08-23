@@ -6,7 +6,7 @@ $(package)_sha256_hash=6cf9840e427db96ebf3936665430bab204c9ebbd0120c326459077ed9
 $(package)_dependencies=zlib
 
 define $(package)_config_cmds
-  ./configure --prefix=$(host_prefix) --with-zlib=$(host_prefix)
+  ./configure --prefix=$(host_prefix) --with-zlib=$(host_prefix) --with-pic --enable-static --enable-shared=no
 endef
 
 define $(package)_build_cmds
@@ -18,5 +18,5 @@ define $(package)_stage_cmds
 endef
 
 define $(package)_postprocess_cmds
-  cp -av $($(package)_staging_dir)$(host_prefix)/lib/libzip/include/zipconf.h $($(package)_staging_dir)$(host_prefix)/include/zipconf.h
+  cp $($(package)_staging_dir)$(host_prefix)/lib/libzip/include/zipconf.h $($(package)_staging_dir)$(host_prefix)/include/zipconf.h
 endef
