@@ -95,8 +95,8 @@ inline bool IsResearchAgeEnabled(int nHeight)
 inline uint32_t IsV8Enabled(int nHeight)
 {
     return fTestNet
-            ? nHeight > 312000
-            : nHeight > 1010000;
+            ? nHeight >= 312000
+            : nHeight >= 1010000;
 }
 
 inline int GetSuperblockAgeSpacing(int nHeight)
