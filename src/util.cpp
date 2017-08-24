@@ -31,7 +31,7 @@ namespace boost {
 #include <boost/thread.hpp>
 #include <openssl/crypto.h>
 #include <openssl/rand.h>
-#include <stdarg.h>
+#include <cstdarg>
 
 #ifdef WIN32
 #ifdef _MSC_VER

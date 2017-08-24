@@ -11,8 +11,8 @@ DEFS=-DBOOST_SPIRIT_THREADSAFE
 
 # Dependency library locations can be customized with:
 #    BOOST_INCLUDE_PATH, BOOST_LIB_PATH, BDB_INCLUDE_PATH,
-#    BDB_LIB_PATH, OPENSSL_INCLUDE_PATH, OPENSSL_LIB_PATH, 
-#    CURL_INCLUDE_PATH, CURL_LIB_PATH, LIBZIP_INCLUDE_PATH 
+#    BDB_LIB_PATH, OPENSSL_INCLUDE_PATH, OPENSSL_LIB_PATH,
+#    CURL_INCLUDE_PATH, CURL_LIB_PATH, LIBZIP_INCLUDE_PATH
 #    and LIBZIP_LIB_PATH respectively
 
 ifeq (${NO_UPGRADE}, 1)  # Upgrade cannot be performed if shipped as a package
@@ -96,7 +96,7 @@ endif
 
 # CXXFLAGS can be specified on the make command line, so we use xCXXFLAGS that only
 # adds some defaults in front. Unfortunately, CXXFLAGS=... $(CXXFLAGS) does not work.
-xCXXFLAGS=-O2 $(EXT_OPTIONS) -DUPGRADERFLAG -pthread -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wformat-security -Wno-unused-parameter \
+xCXXFLAGS=-O2 $(EXT_OPTIONS) -DUPGRADERFLAG -DBOOST_NO_CXX11_SCOPED_ENUMS -std=c++11 -pthread -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wformat-security -Wno-unused-parameter \
     $(DEBUGFLAGS) $(DEFS) $(HARDENING) $(CXXFLAGS)
 
 # LDFLAGS can be specified on the make command line, so we use xLDFLAGS that only
@@ -104,9 +104,10 @@ xCXXFLAGS=-O2 $(EXT_OPTIONS) -DUPGRADERFLAG -pthread -Wall -Wextra -Wno-ignored-
 xLDFLAGS=$(LDHARDENING) $(LDFLAGS)
 
 OBJS= \
+    obj-upgrader/allocators.o \
     obj-upgrader/util.o \
     obj-upgrader/version.o \
-    obj-upgrader/upgrader.o 
+    obj-upgrader/upgrader.o
 
 all: gridcoinupgrader
 
