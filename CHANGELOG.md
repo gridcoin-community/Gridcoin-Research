@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 ### Fixed
- - Fix incorrect V8 height trigger check.
+ - Fix incorrect V8 height trigger check. Many thanks to @barton2526 for discovering this.
  - Fix invalid superblock height formatting, #532 (@denravonska).
  - Fix several spelling mistakes, 533 (@Erkan-Yilmaz).
 
