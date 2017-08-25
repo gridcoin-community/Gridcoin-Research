@@ -1722,7 +1722,7 @@ Value execute(const Array& params, bool fHelp)
                 std::string sError = "";
                 std::string sMessage = "";
 
-                bool fResult = AdvertiseBeacon(false,sOutPrivKey,sOutPubKey,sError,sMessage);
+                bool fResult = AdvertiseBeacon(true,sOutPrivKey,sOutPubKey,sError,sMessage);
                 entry.push_back(Pair("Result",SuccessFail(fResult)));
                 entry.push_back(Pair("CPID",GlobalCPUMiningCPID.cpid.c_str()));
                 entry.push_back(Pair("Message",sMessage.c_str()));
