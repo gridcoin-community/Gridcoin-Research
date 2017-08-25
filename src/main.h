@@ -94,9 +94,11 @@ inline bool IsResearchAgeEnabled(int nHeight)
 // Do not put the code in the headers!
 inline uint32_t IsV8Enabled(int nHeight)
 {
+    // Start creating V8 blocks after these heights.
+    // In testnet the first V8 block was created on block height 320000.
     return fTestNet
-            ? nHeight >= 312000
-            : nHeight >= 1010000;
+            ? nHeight > 311999
+            : nHeight > 1010000;
 }
 
 inline int GetSuperblockAgeSpacing(int nHeight)
