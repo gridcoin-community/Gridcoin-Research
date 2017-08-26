@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased]
+### Fixed
+ - Fix incorrect V8 height trigger check. Many thanks to @barton2526 for discovering this.
+ - Fix invalid superblock height formatting, #532 (@denravonska).
+ - Fix several spelling mistakes, 533 (@Erkan-Yilmaz).
+
 ## [3.6.0.1] 08-22-2017
 ### Added
  - Added [V8 stake engine](https://github.com/gridcoin/Gridcoin-Research/wiki/Stake-V8)
