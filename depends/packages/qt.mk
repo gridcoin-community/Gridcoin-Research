@@ -171,13 +171,6 @@ define $(package)_config_cmds
   cd qtactiveqt/src/activeqt && ../../../qtbase/bin/qmake activeqt.pro -o Makefile
 endef
 
-#  cd container && ../../../../qtbase/bin/qmake container.pro -o Makefile && \
-#  cd ../control && ../../../../qtbase/bin/qmake control.pro -o Makefile
-#  $(MAKE) -C ../qtactiveqt/src/activeqt/container && \
-#  $(MAKE) -C ../qtactiveqt/src/activeqt/control && \
-
-
-
 define $(package)_build_cmds
   $(MAKE) -C src $(addprefix sub-,$($(package)_qt_libs)) && \
   $(MAKE) -C ../qttools/src/linguist/lrelease && \
@@ -192,7 +185,7 @@ endef
 define $(package)_stage_cmds
   $(MAKE) -C src INSTALL_ROOT=$($(package)_staging_dir) $(addsuffix -install_subtargets,$(addprefix sub-,$($(package)_qt_libs))) && cd .. && \
   $(MAKE) -C qttools/src/linguist/lrelease INSTALL_ROOT=$($(package)_staging_dir) install_target && \
-  $(MAKE) -C qtactiveqt/src/activeqt INSTALL_ROOT=$($(package)_staging_dir) install &&\
+  $(MAKE) -C qtactiveqt/src/activeqt INSTALL_ROOT=$($(package)_staging_dir) install_subtargets &&\
   $(MAKE) -C qttranslations INSTALL_ROOT=$($(package)_staging_dir) install_subtargets && \
   if `test -f qtbase/src/plugins/platforms/xcb/xcb-static/libxcb-static.a`; then \
     cp qtbase/src/plugins/platforms/xcb/xcb-static/libxcb-static.a $($(package)_staging_prefix_dir)/lib; \

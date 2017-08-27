@@ -147,26 +147,6 @@ if GLIBC_BACK_COMPAT
   libgridcoin_util_a_SOURCES += compat/glibc_compat.cpp
 endif
 
-# gridcoinresearchd binary #
-gridcoinresearchd_SOURCES = gridcoinresearchd.cpp
-gridcoinresearchd_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES)
-gridcoinresearchd_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-gridcoinresearchd_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
-
-gridcoinresearchd_LDADD = \
- $(LIBGRIDCOIN_UTIL) \
- $(LIBLEVELDB) \
- $(LIBLEVELDB_SSE42) \
- $(LIBMEMENV)
-
-gridcoinresearchd_LDADD += $(BOOST_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(CURL_LIBS) $(LIBZIP_LIBS)
-
-if TARGET_WINDOWS
-gridcoinresearchd_SOURCES += gridcoinresearchd-res.rc
-gridcoinresearchd_CXXFLAGS += -DWIN32 -DUNICODE
-gridcoinresearchd_LDFLAGS += $(QT_LDFLAGS)
-gridcoinresearchd_LDADD += $(QT_LIBS)
-endif
 
 CLEANFILES = $(EXTRA_LIBRARIES)
 
@@ -227,12 +207,34 @@ if EMBEDDED_LEVELDB
 include Makefile.leveldb.include
 endif
 
-if ENABLE_TESTS
-include Makefile.test.include
-endif
 
 if ENABLE_QT
 include Makefile.qt.include
+endif
+
+# gridcoinresearchd binary #
+gridcoinresearchd_SOURCES = gridcoinresearchd.cpp
+gridcoinresearchd_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES)
+gridcoinresearchd_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+gridcoinresearchd_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
+
+gridcoinresearchd_LDADD = \
+ $(LIBGRIDCOIN_UTIL) \
+ $(LIBLEVELDB) \
+ $(LIBLEVELDB_SSE42) \
+ $(LIBMEMENV)
+
+gridcoinresearchd_LDADD += $(BOOST_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(CURL_LIBS) $(LIBZIP_LIBS)
+
+if TARGET_WINDOWS
+gridcoinresearchd_SOURCES += gridcoinresearchd-res.rc
+gridcoinresearchd_CXXFLAGS += -DWIN32 -DUNICODE
+gridcoinresearchd_LDFLAGS += $(QT_LDFLAGS)
+gridcoinresearchd_LDADD += $(QT_LIBS) qt/libgridcoinqt.a
+endif
+
+if ENABLE_TESTS
+include Makefile.test.include
 endif
 
 if ENABLE_QT_TESTS
