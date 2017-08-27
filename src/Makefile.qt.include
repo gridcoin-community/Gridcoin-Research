@@ -283,7 +283,7 @@ RES_IMAGES =
 
 RES_MOVIES = $(wildcard $(srcdir)/qt/res/movies/spinner-*.png)
 
-GRIDCOIN_RC = qt/res/gridcoinresearch-res.rc
+GRIDCOIN_RC = qt/res/bitcoin-qt.rc
 
 if USE_QRCODE
 GRIDCOINRESEARCH_CPP += qt/qrcodedialog.cpp
