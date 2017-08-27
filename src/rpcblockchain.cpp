@@ -2009,8 +2009,6 @@ Value execute(const Array& params, bool fHelp)
         std::string myNeuralHash = "";
         #if defined(WIN32) && defined(QT_GUI)
             contract = qtGetNeuralContract("");
-        #endif
-        #if defined(WIN32) && defined(QT_GUI)
             myNeuralHash = qtGetNeuralHash("");
             entry.push_back(Pair("My Neural Hash",myNeuralHash.c_str()));
             results.push_back(entry);
