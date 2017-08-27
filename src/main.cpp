@@ -8857,6 +8857,7 @@ double GRCMagnitudeUnit(int64_t locktime)
 int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string operation, CBlockIndex* pindexLast, bool bVerifyingBlock, int iVerificationPhase, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
     double dCurrentMagnitude = CalculatedMagnitude2(cpid, nTime, false);
+    dMagnitudeUnit = GRCMagnitudeUnit(nTime);
     CBlockIndex* pHistorical = GetHistoricalMagnitude(cpid);
     if (pHistorical->nHeight <= nNewIndex || pHistorical->nMagnitude==0 || pHistorical->nTime == 0)
     {
@@ -8905,7 +8906,6 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
 
     dAccrualAge = ((double)nTime - (double)pHistorical->nTime) / 86400;
     if (dAccrualAge < 0) dAccrualAge=0;
-    dMagnitudeUnit = GRCMagnitudeUnit(nTime);
 
     int64_t Accrual = (int64_t)(dAccrualAge*AvgMagnitude*dMagnitudeUnit*COIN);
     // Double check researcher lifetime paid
