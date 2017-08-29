@@ -5,8 +5,8 @@
 DIST_SUBDIRS = 
 
 AM_LDFLAGS = $(PTHREAD_CFLAGS) $(LIBTOOL_LDFLAGS) $(HARDENED_LDFLAGS)
-AM_CXXFLAGS = $(HARDENED_CXXFLAGS) $(ERROR_CXXFLAGS)
-AM_CPPFLAGS = $(HARDENED_CPPFLAGS)
+AM_CXXFLAGS = $(HARDENED_CXXFLAGS) -fPIC $(ERROR_CXXFLAGS)
+AM_CPPFLAGS = $(HARDENED_CPPFLAGS) -fPIC
 EXTRA_LIBRARIES =
 
 GRIDCOIN_CONFIG_INCLUDES=-I$(builddir)/config
@@ -55,6 +55,7 @@ GRIDCOIN_CORE_H = \
   easy.h \
   fwd.h \
   gridcoin.h \
+  grcrestarter.h \
   init.h \
   irc.h \
   kernel.h \
@@ -65,6 +66,7 @@ GRIDCOIN_CORE_H = \
   mprintf.h \
   mruset.h \
   multi.h \
+  neuralnet.h \
   netbase.h \
   net.h \
   pbkdf2.h \
@@ -115,8 +117,10 @@ libgridcoin_util_a_SOURCES = addrman.cpp \
   kernel.cpp \
   key.cpp \
   keystore.cpp \
+  grcrestarter_stub.cpp \
   main.cpp \
   miner.cpp \
+  neuralnet_stub.cpp \
   netbase.cpp \
   net.cpp \
   noui.cpp \
@@ -147,6 +151,23 @@ if GLIBC_BACK_COMPAT
   libgridcoin_util_a_SOURCES += compat/glibc_compat.cpp
 endif
 
+# gridcoinresearchd binary #
+gridcoinresearchd_SOURCES = gridcoinresearchd.cpp
+gridcoinresearchd_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES)
+gridcoinresearchd_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+gridcoinresearchd_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
+
+gridcoinresearchd_LDADD = \
+ $(LIBGRIDCOIN_UTIL) \
+ $(LIBLEVELDB) \
+ $(LIBLEVELDB_SSE42) \
+ $(LIBMEMENV)
+
+gridcoinresearchd_LDADD += $(BOOST_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(CURL_LIBS) $(LIBZIP_LIBS)
+
+if TARGET_WINDOWS
+gridcoinresearchd_SOURCES += gridcoinresearchd-res.rc
+endif
 
 CLEANFILES = $(EXTRA_LIBRARIES)
 
@@ -210,27 +231,6 @@ endif
 
 if ENABLE_QT
 include Makefile.qt.include
-endif
-
-# gridcoinresearchd binary #
-gridcoinresearchd_SOURCES = gridcoinresearchd.cpp
-gridcoinresearchd_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES)
-gridcoinresearchd_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-gridcoinresearchd_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
-
-gridcoinresearchd_LDADD = \
- $(LIBGRIDCOIN_UTIL) \
- $(LIBLEVELDB) \
- $(LIBLEVELDB_SSE42) \
- $(LIBMEMENV)
-
-gridcoinresearchd_LDADD += $(BOOST_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(CURL_LIBS) $(LIBZIP_LIBS)
-
-if TARGET_WINDOWS
-gridcoinresearchd_SOURCES += gridcoinresearchd-res.rc
-gridcoinresearchd_CXXFLAGS += -DWIN32 -DUNICODE
-gridcoinresearchd_LDFLAGS += $(QT_LDFLAGS)
-gridcoinresearchd_LDADD += $(QT_LIBS) qt/libgridcoinqt.a
 endif
 
 if ENABLE_TESTS

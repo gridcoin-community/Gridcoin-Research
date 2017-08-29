@@ -12,6 +12,8 @@
 #include "txdb.h"
 #include "beacon.h"
 #include "util.h"
+#include "neuralnet.h"
+#include "grcrestarter.h"
 #include "backup.h"
 #include "appcache.h"
 
@@ -44,7 +46,6 @@ std::string ConvertHexToBin(std::string a);
 extern std::vector<unsigned char> readFileToVector(std::string filename);
 bool bNetAveragesLoaded_retired;
 bool TallyResearchAverages_retired(bool);
-int RestartClient();
 extern std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress);
 extern std::string GetBurnAddress();
@@ -118,8 +119,8 @@ extern std::string GetListOf(std::string datatype);
 extern std::string GetListOfWithConsensus(std::string datatype);
 
 void qtSyncWithDPORNodes(std::string data);
-std::string qtGetNeuralHash(std::string data);
-std::string qtGetNeuralContract(std::string data);
+//std::string qtGetNeuralHash(std::string data);
+//std::string qtGetNeuralContract(std::string data);
 
 extern bool TallyMagnitudesInSuperblock();
 double GetTotalBalance();
@@ -135,7 +136,7 @@ double CoinToDouble(double surrogate);
 int64_t GetRSAWeightByCPID(std::string cpid);
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spirit::Object& entry);
-int ReindexWallet();
+extern enum Checkpoints::CPMode CheckpointsMode;
 extern Array MagnitudeReportCSV(bool detail);
 std::string getfilecontents(std::string filename);
 int CreateRestorePoint();
@@ -150,7 +151,7 @@ std::string ToOfficialName(std::string proj);
 
 extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
-void ExecuteCode();
+//void ExecuteCode();
 static BlockFinder RPCBlockFinder;
 
 double GetNetworkAvgByProject(std::string projectname)
@@ -1181,24 +1182,19 @@ Value execute(const Array& params, bool fHelp)
 
     if (sItem == "restorepoint")
     {
-            int r=-1;
-            #if defined(WIN32) && defined(QT_GUI)
+            int r= Restarter::CreateGridcoinRestorePoint();
             //We must stop the node before we can do this
-            r = CreateRestorePoint();
             //RestartGridcoin();
-            #endif
             entry.push_back(Pair("Restore Point",r));
             results.push_back(entry);
     }
     else if (sItem == "restart")
     {
         printf("Restarting Gridcoin...");
-        int iResult = 0;
-#if defined(WIN32) && defined(QT_GUI)
-        iResult = RestartClient();
-#endif
-        entry.push_back(Pair("result", iResult));
+        int iResult = Restarter::RestartGridcoin();
+        entry.push_back(Pair("RebootClient",r));
         results.push_back(entry);
+
     }
     else if (sItem == "sendblock")
     {
@@ -1592,11 +1588,9 @@ Value execute(const Array& params, bool fHelp)
     }
     else if (sItem=="myneuralhash")
     {
-        #if defined(WIN32) && defined(QT_GUI)
-            std::string myNeuralHash = qtGetNeuralHash("");
-            entry.push_back(Pair("My Neural Hash",myNeuralHash.c_str()));
-            results.push_back(entry);
-        #endif
+        std::string myNeuralHash = NN::GetNeuralHash();
+        entry.push_back(Pair("My Neural Hash",myNeuralHash.c_str()));
+        results.push_back(entry);
     }
     else if (sItem == "superblockage")
     {
@@ -2005,14 +1999,11 @@ Value execute(const Array& params, bool fHelp)
     }
     else if (sItem=="testnewcontract")
     {
-        std::string contract = "";
-        std::string myNeuralHash = "";
-        #if defined(WIN32) && defined(QT_GUI)
-            contract = qtGetNeuralContract("");
-            myNeuralHash = qtGetNeuralHash("");
-            entry.push_back(Pair("My Neural Hash",myNeuralHash.c_str()));
-            results.push_back(entry);
-        #endif
+        std::string contract = NN::GetNeuralContract();
+        std::string myNeuralHash = NN::GetNeuralHash();
+        entry.push_back(Pair("My Neural Hash",myNeuralHash.c_str()));
+        results.push_back(entry);
+
         entry.push_back(Pair("Contract Test",contract));
         // Convert to Binary
         std::string sBin = PackBinarySuperblock(contract);
@@ -2225,10 +2216,7 @@ Value execute(const Array& params, bool fHelp)
     }
     else if (sItem == "currentcontractaverage")
     {
-        std::string contract;
-        #if defined(WIN32) && defined(QT_GUI)
-                    contract = qtGetNeuralContract("");
-        #endif
+        std::string contract = NN::GetNeuralContract();
         entry.push_back(Pair("Contract",contract));
         double out_beacon_count = 0;
         double out_participant_count = 0;
@@ -2241,13 +2229,8 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("beacon_participant_count",out_participant_count));
         entry.push_back(Pair("superblock_valid",bValid));
         //Show current contract neural hash
-        std::string sNeuralHash = "";
-
-        #if defined(WIN32) && defined(QT_GUI)
-            sNeuralHash = qtGetNeuralHash("");
-            entry.push_back(Pair(".NET Neural Hash",sNeuralHash.c_str()));
-        #endif
-
+        std::string sNeuralHash = NN::GetNeuralHash();
+        entry.push_back(Pair(".NET Neural Hash",sNeuralHash.c_str()));
         entry.push_back(Pair("Length",(double)contract.length()));
         std::string neural_hash = GetQuorumHash(contract);
         entry.push_back(Pair("Wallet Neural Hash",neural_hash));
@@ -2343,20 +2326,14 @@ Value execute(const Array& params, bool fHelp)
     }
     else if (sItem == "reindex")
     {
-            int r=-1;
-            #if defined(WIN32) && defined(QT_GUI)
-            ReindexWallet();
-            r = CreateRestorePoint();
-            #endif
+            int r = Restarter::CreateGridcoinRestorePoint();
+            Restarter::ReindexGridcoinWallet();
             entry.push_back(Pair("Reindex Chain",r));
             results.push_back(entry);
     }
     else if (sItem == "downloadblocks")
     {
-            int r=-1;
-            #if defined(WIN32) && defined(QT_GUI)
-                r = DownloadBlocks();
-            #endif
+            int r=Restarter::DownloadGridcoinBlocks();
             entry.push_back(Pair("Download Blocks",r));
             results.push_back(entry);
     }
@@ -2465,9 +2442,7 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute debug10 <true/false>", "Turn on/off debug10 messages on the fly"));
         entry.push_back(Pair("execute debugnew <true/false>", "Turn on/off debugnet messages on the fly"));
         entry.push_back(Pair("execute decryptphrase <phrase>", "Decrypt an encrypted phrase"));
-        #if defined(WIN32) && defined(QT_GUI)
         entry.push_back(Pair("execute downloadblocks", "Download blocks from blockchain"));
-        #endif
         entry.push_back(Pair("execute dportally", "Tally magnitudes in superblock"));
         entry.push_back(Pair("execute encrypt <phrase>", "Encrypt a wallet pass phrase (autounlock feature)"));
         entry.push_back(Pair("execute encryptphrase <phrase>", "Encrypt a phrase or message"));
@@ -2476,22 +2451,16 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute listpolldetails", "Displays all active polls details"));
         entry.push_back(Pair("execute listpollresults <title> <true>", "Displays poll results for specified title. True is optional for expired polls"));
         entry.push_back(Pair("execute listpolls", "Displays all active polls"));
-        #if defined(WIN32) && defined(QT_GUI)
         entry.push_back(Pair("execute myneuralhash", "Displays your current neural hash from contract"));
-        #endif
         entry.push_back(Pair("execute neuralhash", "Displays the network popular hash in neural report (Participating nodes)"));
         entry.push_back(Pair("execute neuralreport", "Displays information of recently staked neural votes by participating nodes"));
         entry.push_back(Pair("execute neuralresponse", "Requests a response from neural network"));
         entry.push_back(Pair("execute rain <raindata>", "Sends rain to specified users. Format Address<COL>Amount<ROW>..."));
-        #if defined(WIN32) && defined(QT_GUI)
         entry.push_back(Pair("execute reindex", "Reindex blockchain"));
-        #endif
         entry.push_back(Pair("execute resendwallettx", "Resends a wallet tx"));
         entry.push_back(Pair("execute resetcpids", "Resets wallet cpids (can be used to correct cpids after a split cpid is fixed)"));
-        #if defined(WIN32) && defined(QT_GUI)
         entry.push_back(Pair("execute restart", "Restarts wallet"));
         entry.push_back(Pair("execute restorepoint", "Creates a restore point for wallet"));
-        #endif
         entry.push_back(Pair("execute staketime", "Displays unix timestamp based on stake gric time and cpid time"));
         entry.push_back(Pair("execute superblockage", "Displays information and age about current superblock"));
         entry.push_back(Pair("execute syncdpor2", "Synchronize with neural network"));
@@ -2508,9 +2477,7 @@ Value execute(const Array& params, bool fHelp)
     else if (sItem == "helpdev")
     {
         entry.push_back(Pair("execute addkey <add_or_delete> <keytype> <projectname> <value>", "Add or delete key to network"));
-        #if defined(WIN32) && defined(QT_GUI)
         entry.push_back(Pair("execute executecode", "Excute .net code"));
-        #endif
         entry.push_back(Pair("execute forcequorum", "Force quorum"));
         entry.push_back(Pair("execute gatherneuralhashes", "Gather neural hashes"));
         entry.push_back(Pair("execute getlistof <keytype>", "Get list of keytype data"));

@@ -21,6 +21,8 @@
 #include "boinc.h"
 #include "beacon.h"
 #include "miner.h"
+#include "neuralnet.h"
+#include "grcrestarter.h"
 #include "backup.h"
 #include "appcache.h"
 
@@ -46,7 +48,6 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 extern void CleanInboundConnections(bool bClearAll);
 extern bool PushGridcoinDiagnostics();
-double qtPushGridcoinDiagnosticData(std::string data);
 bool RequestSupermajorityNeuralData();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern bool CleanChain();
@@ -92,10 +93,9 @@ extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseL
 
 extern bool UpdateNeuralNetworkQuorumData();
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
-double qtExecuteGenericFunction(std::string function,std::string data);
 extern bool FullSyncWithDPORNodes();
 
-std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
+//std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
 
 
 bool CheckMessageSignature(std::string sMessageAction, std::string sMessageType, std::string sMsg, std::string sSig,std::string opt_pubkey);
@@ -116,11 +116,11 @@ extern void DeleteCache(std::string section, std::string keyname);
 extern void ClearCache(std::string section);
 bool TallyMagnitudesInSuperblock();
 extern void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
-std::string qtGetNeuralContract(std::string data);
+//std::string qtGetNeuralContract(std::string data);
 extern std::string GetNeuralNetworkReport();
-void qtSyncWithDPORNodes(std::string data);
+//void qtSyncWithDPORNodes(std::string data);
 std::string GetListOf(std::string datatype);
-std::string qtGetNeuralHash(std::string data);
+//std::string qtGetNeuralHash(std::string data);
 std::string GetCommandNonce(std::string command);
 std::string DefaultBlockKey(int key_length);
 
@@ -163,7 +163,7 @@ double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t lo
 double GetLastPaymentTimeByCPID(std::string cpid);
 extern double CoinToDouble(double surrogate);
 extern int64_t PreviousBlockAge();
-void CheckForUpgrade();
+//void CheckForUpgrade();
 int64_t GetRSAWeightByCPID(std::string cpid);
 extern MiningCPID GetMiningCPID();
 extern StructCPID GetStructCPID();
@@ -363,92 +363,78 @@ bool TimerMain(std::string timer_name, int max_ms)
 
 bool UpdateNeuralNetworkQuorumData()
 {
-            #if defined(WIN32) && defined(QT_GUI)
-                if (!bGlobalcomInitialized) return false;
-                std::string errors1 = "";
-                int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-                std::string myNeuralHash = "";
-                double popularity = 0;
-                std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-                std::string sAge = ToString(superblock_age);
-                std::string sBlock = mvApplicationCache["superblock;block_number"];
-                std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
-                std::string data = "<QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
-                    + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
-                std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-                qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-                qtExecuteDotNetStringFunction("SetQuorumData",data);
-                return true;
-            #endif
-            return false;
+    if (!bGlobalcomInitialized) return false;
+    std::string errors1 = "";
+    int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+    std::string myNeuralHash = "";
+    double popularity = 0;
+    std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
+    std::string sAge = ToString(superblock_age);
+    std::string sBlock = mvApplicationCache["superblock;block_number"];
+    std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
+    std::string data = "<QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
+        + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
+    NN::SetTestnetFlag(fTestNet);
+    NN::ExecuteDotNetStringFunction("SetQuorumData",data);
+    return true;
 }
 
 bool PushGridcoinDiagnostics()
 {
-        #if defined(WIN32) && defined(QT_GUI)
-                if (!bGlobalcomInitialized) return false;
-                std::string errors1 = "";
-                LoadAdminMessages(false,errors1);
-                std::string cpiddata = GetListOf("beacon");
-                std::string sWhitelist = GetListOf("project");
-                int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-                double popularity = 0;
-                std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-                std::string sAge = ToString(superblock_age);
-                std::string sBlock = mvApplicationCache["superblock;block_number"];
-                std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
-                printf("Pushing diagnostic data...");
-                double lastblockage = PreviousBlockAge();
-                double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-                std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
-                    + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
-                    + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID><LASTBLOCKAGE>" + ToString(lastblockage) + "</LASTBLOCKAGE><DIFFICULTY>" + RoundToString(PORDiff,2) + "</DIFFICULTY></QUORUMDATA>";
-                std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-                qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-                double dResponse = qtPushGridcoinDiagnosticData(data);
-                return true;
-        #endif
-        return false;
+    if (!bGlobalcomInitialized) return false;
+    std::string errors1 = "";
+    LoadAdminMessages(false,errors1);
+    std::string cpiddata = GetListOf("beacon");
+    std::string sWhitelist = GetListOf("project");
+    int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+    double popularity = 0;
+    std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
+    std::string sAge = ToString(superblock_age);
+    std::string sBlock = mvApplicationCache["superblock;block_number"];
+    std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
+    printf("Pushing diagnostic data...");
+    double lastblockage = PreviousBlockAge();
+    double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+    std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
+        + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
+        + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID><LASTBLOCKAGE>" + ToString(lastblockage) + "</LASTBLOCKAGE><DIFFICULTY>" + RoundToString(PORDiff,2) + "</DIFFICULTY></QUORUMDATA>";
+    NN::SetTestnetFlag(fTestNet);
+    double dResponse = Restarter::PushGridcoinDiagnosticData(data);
+    return true;
 }
 
 bool FullSyncWithDPORNodes()
 {
-            #if defined(WIN32) && defined(QT_GUI)
-
-                std::string sDisabled = GetArgument("disableneuralnetwork", "false");
-                if (sDisabled=="true") return false;
-                // 3-30-2016 : First try to get the master database from another neural network node if these conditions occur:
-                // The foreign node is fully synced.  The foreign nodes quorum hash matches the supermajority hash.  My hash != supermajority hash.
-                double dCurrentPopularity = 0;
-                std::string sCurrentNeuralSupermajorityHash = GetCurrentNeuralNetworkSupermajorityHash(dCurrentPopularity);
-                std::string sMyNeuralHash = "";
-                #if defined(WIN32) && defined(QT_GUI)
-                           sMyNeuralHash = qtGetNeuralHash("");
-                #endif
-                if (!sMyNeuralHash.empty() && !sCurrentNeuralSupermajorityHash.empty() && sMyNeuralHash != sCurrentNeuralSupermajorityHash)
-                {
-                    bool bNodeOnline = RequestSupermajorityNeuralData();
-                    if (bNodeOnline) return false;  // Async call to another node will continue after the node responds.
-                }
-                std::string errors1;
-                LoadAdminMessages(false,errors1);
-                std::string cpiddata = GetListOfWithConsensus("beacon");
-		        std::string sWhitelist = GetListOf("project");
-                int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-				printf(" list of cpids %s \r\n",cpiddata.c_str());
-                double popularity = 0;
-                std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-                std::string sAge = ToString(superblock_age);
-                std::string sBlock = mvApplicationCache["superblock;block_number"];
-                std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
-                std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
-                    + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
-                    + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
-                std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-                qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-                qtSyncWithDPORNodes(data);
-            #endif
-            return true;
+    if(!NN::IsEnabled())
+        return false;
+    // 3-30-2016 : First try to get the master database from another neural network node if these conditions occur:
+    // The foreign node is fully synced.  The foreign nodes quorum hash matches the supermajority hash.  My hash != supermajority hash.
+    double dCurrentPopularity = 0;
+    std::string sCurrentNeuralSupermajorityHash = GetCurrentNeuralNetworkSupermajorityHash(dCurrentPopularity);
+    std::string sMyNeuralHash = "";
+    sMyNeuralHash = NN::GetNeuralHash();
+    if (!sMyNeuralHash.empty() && !sCurrentNeuralSupermajorityHash.empty() && sMyNeuralHash != sCurrentNeuralSupermajorityHash)
+    {
+        bool bNodeOnline = RequestSupermajorityNeuralData();
+        if (bNodeOnline) return false;  // Async call to another node will continue after the node responds.
+    }
+    std::string errors1;
+    LoadAdminMessages(false,errors1);
+    std::string cpiddata = GetListOfWithConsensus("beacon");
+    std::string sWhitelist = GetListOf("project");
+    int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+    printf(" list of cpids %s \r\n",cpiddata.c_str());
+    double popularity = 0;
+    std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
+    std::string sAge = ToString(superblock_age);
+    std::string sBlock = mvApplicationCache["superblock;block_number"];
+    std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
+    std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
+        + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
+        + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
+    NN::SetTestnetFlag(fTestNet);
+    NN::SynchronizeDPOR(data);
+    return true;
 }
 
 double GetPoSKernelPS()
@@ -4426,9 +4412,7 @@ void GridcoinServices()
             {
                 // First verify my node has a synced contract
                 std::string contract;
-                #if defined(WIN32) && defined(QT_GUI)
-                    contract = qtGetNeuralContract("");
-                #endif
+                contract = NN::GetNeuralContract();
                 if (VerifySuperblock(contract, pindexBest))
                 {
                         AsyncNeuralRequest("quorum","gridcoin",25);
@@ -4480,15 +4464,13 @@ void GridcoinServices()
         bCheckedForUpgradeLive = true;
     }
 
-    #if defined(WIN32) && defined(QT_GUI)
-        if (bCheckedForUpgradeLive && !fTestNet && bProjectsInitialized && bGlobalcomInitialized)
-        {
-            bCheckedForUpgradeLive=false;
-            printf("{Checking for Upgrade} ");
-            CheckForUpgrade();
-            printf("{Done checking for upgrade} ");
-        }
-    #endif
+    if (bCheckedForUpgradeLive && !fTestNet && bProjectsInitialized && bGlobalcomInitialized)
+    {
+        bCheckedForUpgradeLive=false;
+        printf("{Checking for Upgrade} ");
+        Restarter::CheckUpgrade();
+        printf("{Done checking for upgrade} ");
+    }
     if (fDebug10) printf(" {/SVC} ");
 
 }
@@ -6840,36 +6822,17 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
     else if (strCommand == "neural")
     {
-            //printf("Received Neural Request \r\n");
+        //printf("Received Neural Request \r\n");
 
-            std::string neural_request = "";
-            std::string neural_request_id = "";
-            vRecv >> neural_request >> neural_request_id;  // foreign node issued neural request with request ID:
-            //printf("neural request %s \r\n",neural_request.c_str());
-            std::string neural_response = "generic_response";
+        std::string neural_request = "";
+        std::string neural_request_id = "";
+        vRecv >> neural_request >> neural_request_id;  // foreign node issued neural request with request ID:
+        //printf("neural request %s \r\n",neural_request.c_str());
+        std::string neural_response = "generic_response";
 
-            if (neural_request=="neural_data")
-            {
-                if (!PreventCommandAbuse("neural_data",NodeAddress(pfrom)))
-                {
-                    std::string contract = "";
-                    #if defined(WIN32) && defined(QT_GUI)
-                            std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-                            qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-                            contract = qtGetNeuralContract("");
-                    #endif
-                    pfrom->PushMessage("ndata_nresp", contract);
-                }
-            }
-            else if (neural_request=="neural_hash")
-            {
-                #if defined(WIN32) && defined(QT_GUI)
-                    neural_response = qtGetNeuralHash("");
-                #endif
-                //printf("Neural response %s",neural_response.c_str());
-                pfrom->PushMessage("hash_nresp", neural_response);
-            }
-            else if (neural_request=="explainmag")
+        if (neural_request=="neural_data")
+        {
+            if (!PreventCommandAbuse("neural_data",NodeAddress(pfrom)))
             {
                 // To prevent abuse, only respond to a certain amount of explainmag requests per day per cpid
                 bool bIgnore = false;
@@ -6883,29 +6846,48 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 {
                     WriteCache("explainmag",neural_request_id,RoundToString(RoundFromString("0"+ReadCache("explainmag",neural_request_id),0),0),GetAdjustedTime());
                     // 7/11/2015 - Allow linux/mac to make neural requests
-                    #if defined(WIN32) && defined(QT_GUI)
-                        neural_response = qtExecuteDotNetStringFunction("ExplainMag",neural_request_id);
-                    #endif
+                    neural_response = NN::ExecuteDotNetStringFunction("ExplainMag",neural_request_id);
                     pfrom->PushMessage("expmag_nresp", neural_response);
                 }
+		//std::string contract = "";
+                //NN::SetTestnetFlag(fTestNet);
+                //pfrom->PushMessage("ndata_nresp", NN::GetNeuralContract());
             }
-            else if (neural_request=="quorum")
+        }
+        else if (neural_request=="neural_hash")
+        {
+            //printf("Neural response %s",neural_response.c_str());
+            pfrom->PushMessage("hash_nresp", NN::GetNeuralHash());
+        }
+        else if (neural_request=="explainmag")
+        {
+            // To prevent abuse, only respond to a certain amount of explainmag requests per day per cpid
+            bool bIgnore = false;
+            if (cdbl("0"+ReadCache("explainmag",neural_request_id),0) > 10)
             {
-                // 7-12-2015 Resolve discrepencies in the neural network intelligently - allow nodes to speak to each other
-                std::string contract = "";
-                #if defined(WIN32) && defined(QT_GUI)
-                        std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-                        qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-                        contract = qtGetNeuralContract("");
-                #endif
-                //if (fDebug10) printf("Quorum response %f \r\n",(double)contract.length());
-                pfrom->PushMessage("quorum_nresp", contract);
+                if (fDebug10) printf("Ignoring explainmag request for %s",neural_request_id.c_str());
+                pfrom->Misbehaving(1);
+                bIgnore = true;
             }
-            else
+            if (!bIgnore)
             {
-                neural_response="generic_response";
+                WriteCache("explainmag",neural_request_id,RoundToString(cdbl("0"+ReadCache("explainmag",neural_request_id),0),0),GetAdjustedTime());
+                // 7/11/2015 - Allow linux/mac to make neural requests
+                neural_response = NN::ExecuteDotNetStringFunction("ExplainMag",neural_request_id);
+                pfrom->PushMessage("expmag_nresp", neural_response);
             }
-
+        }
+        else if (neural_request=="quorum")
+        {
+            // 7-12-2015 Resolve discrepencies in the neural network intelligently - allow nodes to speak to each other
+            std::string contract = "";
+            NN::SetTestnetFlag(fTestNet);
+            pfrom->PushMessage("quorum_nresp", NN::GetNeuralContract());
+        }
+        else
+        {
+            neural_response="generic_response";
+        }
     }
     else if (strCommand == "ping")
     {
@@ -7014,14 +6996,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             if (fDebug && neural_contract.length() > 100) printf("Quorum contract received %s",neural_contract.substr(0,80).c_str());
             if (neural_contract.length() > 10)
             {
-                 std::string results = "";
-                 //Resolve discrepancies
-                 #if defined(WIN32) && defined(QT_GUI)
-                    std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-                    qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-                    results = qtExecuteDotNetStringFunction("ResolveDiscrepancies",neural_contract);
-                 #endif
-                 if (fDebug && !results.empty()) printf("Quorum Resolution: %s \r\n",results.c_str());
+                std::string results = "";
+                //Resolve discrepancies
+                NN::SetTestnetFlag(fTestNet);
+                results = NN::ExecuteDotNetStringFunction("ResolveDiscrepancies",neural_contract);
+                if (fDebug && !results.empty()) printf("Quorum Resolution: %s \r\n",results.c_str());
             }
     }
     else if (strCommand == "ndata_nresp")
@@ -7031,17 +7010,14 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             if (fDebug3 && neural_contract.length() > 100) printf("Quorum contract received %s",neural_contract.substr(0,80).c_str());
             if (neural_contract.length() > 10)
             {
-                 std::string results = "";
-                 //Resolve discrepancies
-                 #if defined(WIN32) && defined(QT_GUI)
-                    std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-                    qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-                    printf("\r\n** Sync neural network data from supermajority **\r\n");
-                    results = qtExecuteDotNetStringFunction("ResolveCurrentDiscrepancies",neural_contract);
-                 #endif
-                 if (fDebug && !results.empty()) printf("Quorum Resolution: %s \r\n",results.c_str());
-                 // Resume the full DPOR sync at this point now that we have the supermajority data
-                 if (results=="SUCCESS")  FullSyncWithDPORNodes();
+                std::string results = "";
+                //Resolve discrepancies
+                NN::SetTestnetFlag(fTestNet);
+                printf("\r\n** Sync neural network data from supermajority **\r\n");
+                results = NN::ExecuteDotNetStringFunction("ResolveCurrentDiscrepancies",neural_contract);
+                if (fDebug && !results.empty()) printf("Quorum Resolution: %s \r\n",results.c_str());
+                // Resume the full DPOR sync at this point now that we have the supermajority data
+                if (results=="SUCCESS")  FullSyncWithDPORNodes();
             }
     }
     else if (strCommand == "alert")
@@ -7725,11 +7701,9 @@ void HarvestCPIDs(bool cleardata)
                                     if (structcpid.team=="gridcoin")
                                     {
                                         msPrimaryCPID = structcpid.cpid;
-                                        #if defined(WIN32) && defined(QT_GUI)
-                                            //Let the Neural Network know what your CPID is so it can be charted:
-                                            std::string sXML = "<KEY>PrimaryCPID</KEY><VALUE>" + msPrimaryCPID + "</VALUE>";
-                                            std::string sData = qtExecuteDotNetStringFunction("WriteKey",sXML);
-                                        #endif
+                                        //Let the Neural Network know what your CPID is so it can be charted:
+                                        std::string sXML = "<KEY>PrimaryCPID</KEY><VALUE>" + msPrimaryCPID + "</VALUE>";
+                                        std::string sData = NN::ExecuteDotNetStringFunction("WriteKey",sXML);
                                         //Try to get a neural RAC report
                                         AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
                                     }
