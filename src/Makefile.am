@@ -25,69 +25,107 @@ TESTS =
 BENCHMARKS =
 
 if BUILD_GRIDCOINRESEARCHD
-  bin_PROGRAMS += gridcoinresearchd
+    bin_PROGRAMS += gridcoinresearchd
 endif
 
 
 .PHONY: FORCE check-symbols check-security
 # gridcoin core #
 GRIDCOIN_CORE_H = \
-  addrman.h \
-  alert.h \
-  allocators.h \
-  base58.h \
-  beacon.h \
-  bignum.h \
-  bitcoinrpc.h \
-  block.h \
-  boinc.h \
-  checkpoints.h \
-  clientversion.h \
-  coincontrol.h \
-  compat.h \
-  cpid.h \
-  crypter.h \
-  curlbuild.h \
-  curl.h \
-  curlrules.h \
-  curlver.h \
-  db.h \
-  easy.h \
-  fwd.h \
-  gridcoin.h \
-  grcrestarter.h \
-  init.h \
-  irc.h \
-  kernel.h \
-  key.h \
-  keystore.h \
-  main.h \
-  miner.h \
-  mprintf.h \
-  mruset.h \
-  multi.h \
-  neuralnet.h \
-  netbase.h \
-  net.h \
-  pbkdf2.h \
-  protocol.h \
-  script.h \
-  scrypt.h \
-  serialize.h \
-  stdcheaders.h \
-  strlcpy.h \
-  sync.h \
-  threadsafety.h \
-  txdb.h \
-  txdb-leveldb.h \
-  ui_interface.h \
-  uint256.h \
-  upgrader.h \
-  util.h \
-  version.h \
-  walletdb.h \
-  wallet.h
+	addrman.h \
+	alert.h \
+	allocators.h \
+	base58.h \
+	beacon.h \
+	bignum.h \
+	bitcoinrpc.h \
+	block.h \
+	boinc.h \
+	checkpoints.h \
+	clientversion.h \
+	coincontrol.h \
+	compat.h \
+	cpid.h \
+	crypter.h \
+	curlbuild.h \
+	curl.h \
+	curlrules.h \
+	curlver.h \
+	db.h \
+	easy.h \
+	fwd.h \
+	gridcoin.h \
+	grcrestarter.h \
+	init.h \
+	irc.h \
+	kernel.h \
+	key.h \
+	keystore.h \
+	main.h \
+	miner.h \
+	mprintf.h \
+	mruset.h \
+	multi.h \
+	neuralnet.h \
+	netbase.h \
+	net.h \
+	pbkdf2.h \
+	protocol.h \
+	script.h \
+	scrypt.h \
+	serialize.h \
+	stdcheaders.h \
+	strlcpy.h \
+	sync.h \
+	threadsafety.h \
+	txdb.h \
+	txdb-leveldb.h \
+	ui_interface.h \
+	uint256.h \
+	upgrader.h \
+	util.h \
+	version.h \
+	walletdb.h \
+	wallet.h
 
+GRIDCOIN_CORE_CPP = addrman.cpp \
+	alert.cpp \
+	allocators.cpp \
+	beacon.cpp \
+	bitcoinrpc.cpp \
+	block.cpp \
+	boinc.cpp \
+	checkpoints.cpp \
+	cpid.cpp \
+	crypter.cpp \
+	db.cpp \
+	init.cpp \
+	irc.cpp \
+	kernel.cpp \
+	key.cpp \
+	keystore.cpp \
+	main.cpp \
+	miner.cpp \
+	netbase.cpp \
+	net.cpp \
+	noui.cpp \
+	pbkdf2.cpp \
+	protocol.cpp \
+	rpcblockchain.cpp \
+	rpcdump.cpp \
+	rpcmining.cpp \
+	rpcnet.cpp \
+	rpcrawtransaction.cpp \
+	rpcwallet.cpp \
+	script.cpp \
+	scrypt.cpp \
+	sync.cpp \
+	txdb-leveldb.cpp \
+	upgrader.cpp \
+	util.cpp \
+	version.cpp \
+	wallet.cpp \
+	walletdb.cpp
 
 obj/build.h: FORCE
 	@$(MKDIR_P) $(builddir)/obj
@@ -101,54 +139,17 @@ obj/build.h: FORCE
 # backward-compatibility objects and their sanity checks are linked.
 libgridcoin_util_a_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES)
 libgridcoin_util_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-libgridcoin_util_a_SOURCES = addrman.cpp \
-  alert.cpp \
-  allocators.cpp \
-  beacon.cpp \
-  bitcoinrpc.cpp \
-  block.cpp \
-  boinc.cpp \
-  checkpoints.cpp \
-  cpid.cpp \
-  crypter.cpp \
-  db.cpp \
-  init.cpp \
-  irc.cpp \
-  kernel.cpp \
-  key.cpp \
-  keystore.cpp \
-  grcrestarter_stub.cpp \
-  main.cpp \
-  miner.cpp \
-  neuralnet_stub.cpp \
-  netbase.cpp \
-  net.cpp \
-  noui.cpp \
-  pbkdf2.cpp \
-  protocol.cpp \
-  rpcblockchain.cpp \
-  rpcdump.cpp \
-  rpcmining.cpp \
-  rpcnet.cpp \
-  rpcrawtransaction.cpp \
-  rpcwallet.cpp \
-  script.cpp \
-  scrypt.cpp \
-  sync.cpp \
-  txdb-leveldb.cpp \
-  upgrader.cpp \
-  util.cpp \
-  version.cpp \
-  wallet.cpp \
-  walletdb.cpp \
-  $(GRIDCOIN_CORE_H)
+libgridcoin_util_a_SOURCES = $(GRIDCOIN_CORE_CPP) \
+    grcrestarter_stub.cpp \
+    neuralnet_stub.cpp \
+    $(GRIDCOIN_CORE_H)
 
 if TARGET_WINDOWS
 libgridcoin_util_a_CXXFLAGS += -DWIN32 -DUNICODE
 endif
 
 if GLIBC_BACK_COMPAT
-  libgridcoin_util_a_SOURCES += compat/glibc_compat.cpp
+libgridcoin_util_a_SOURCES += compat/glibc_compat.cpp
 endif
 
 # gridcoinresearchd binary #
@@ -227,7 +228,6 @@ endif
 if EMBEDDED_LEVELDB
 include Makefile.leveldb.include
 endif
-
 
 if ENABLE_QT
 include Makefile.qt.include
