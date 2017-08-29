@@ -213,7 +213,6 @@ std::string msMasterMessagePrivateKey = "308201130201010420fbd45ffb02ff05a3322c0
 std::string msMasterMessagePublicKey  = "044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252467f692ec9c5ba7e5eaa898ab99cbd9949496f7e3cafbf56304b1cc2e5bdf06e";
 
 std::string BackupGridcoinWallet();
-extern double GetPoSKernelPS2();
 
 extern bool OutOfSyncByAgeWithChanceOfMining();
 
@@ -508,9 +507,7 @@ bool FullSyncWithDPORNodes()
             return true;
 }
 
-
-
-double GetPoSKernelPS2()
+double GetPoSKernelPS()
 {
     int nPoSInterval = 72;
     double dStakeKernelsTriedAvg = 0;
@@ -543,7 +540,6 @@ double GetPoSKernelPS2()
     return result/100;
 }
 
-
 void GetGlobalStatus()
 {
     //Populate overview
@@ -569,7 +565,7 @@ void GetGlobalStatus()
         { LOCK(MinerStatus.lock);
         GlobalStatusStruct.blocks = ToString(nBestHeight);
         GlobalStatusStruct.difficulty = RoundToString(PORDiff,3);
-        GlobalStatusStruct.netWeight = RoundToString(GetPoSKernelPS2(),2);
+        GlobalStatusStruct.netWeight = RoundToString(GetPoSKernelPS(),2);
         //todo: use the real weight from miner status (requires scaling)
         GlobalStatusStruct.dporWeight = sWeight;
         GlobalStatusStruct.magnitude = RoundToString(boincmagnitude,2);

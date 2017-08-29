@@ -18,7 +18,6 @@ int64_t GetCoinYearReward(int64_t nTime);
 //CCriticalSection cs_main;
 //static boost::thread_group* postThreads = NULL;
 
-double GetPoSKernelPS2();
 double GRCMagnitudeUnit(int64_t locktime);
 std::string qtGetNeuralHash(std::string data);
 volatile bool bCPIDsLoaded;
@@ -47,7 +46,6 @@ Value getmininginfo(const Array& params, bool fHelp)
     uint64_t nWeight = 0;
     int64_t nTime= GetAdjustedTime();
     pwalletMain->GetStakeWeight(nWeight);
-    uint64_t nNetworkWeight = GetPoSKernelPS();
     Object obj, diff, weight;
     obj.push_back(Pair("blocks",        (int)nBestHeight));
     diff.push_back(Pair("proof-of-work",        GetDifficulty()));
@@ -57,7 +55,7 @@ Value getmininginfo(const Array& params, bool fHelp)
     { LOCK(MinerStatus.lock);
         // not using real weigh to not break calculation
         bool staking = MinerStatus.nLastCoinStakeSearchInterval && MinerStatus.WeightSum;
-        uint64_t nExpectedTime = staking ? (GetTargetSpacing(nBestHeight) * nNetworkWeight / MinerStatus.ValueSum) : 0;
+        uint64_t nExpectedTime = staking ? (GetTargetSpacing(nBestHeight) * (uint64_t)GetPoSKernelPS() / MinerStatus.ValueSum) : 0;
         diff.push_back(Pair("search-interval",      (int)nMinerSleep));
         diff.push_back(Pair("last-search-interval", (int)MinerStatus.nLastCoinStakeSearchInterval));
         weight.push_back(Pair("minimum",    MinerStatus.WeightMin));
@@ -66,7 +64,7 @@ Value getmininginfo(const Array& params, bool fHelp)
         weight.push_back(Pair("valuesum",   MinerStatus.ValueSum));
         weight.push_back(Pair("legacy",   nWeight/(double)COIN));
         obj.push_back(Pair("stakeweight", weight));
-        obj.push_back(Pair("netstakeweight", nNetworkWeight));
+        obj.push_back(Pair("netstakeweight", GetPoSKernelPS()));
         obj.push_back(Pair("staking", staking));
         obj.push_back(Pair("mining-error", MinerStatus.ReasonNotStaking));
         obj.push_back(Pair("mining-message", MinerStatus.Message));
@@ -84,7 +82,6 @@ Value getmininginfo(const Array& params, bool fHelp)
 
     obj.push_back(Pair("difficulty",    diff));
     obj.push_back(Pair("blockvalue",    (uint64_t)GetProofOfWorkReward(0,  GetAdjustedTime(),1)));
-    obj.push_back(Pair("netstakeweight2", GetPoSKernelPS2()));
     obj.push_back(Pair("errors",        GetWarnings("statusbar")));
     obj.push_back(Pair("pooledtx",      (uint64_t)mempool.size()));
     //double nCutoff =  GetAdjustedTime() - (60*60*24*14);

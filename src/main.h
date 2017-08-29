@@ -267,6 +267,7 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion);
 std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion);
 
+double GetPoSKernelPS();
 
 unsigned int ComputeMinWork(unsigned int nBase, int64_t nTime);
 unsigned int ComputeMinStake(unsigned int nBase, int64_t nTime, unsigned int nBlockTime);
