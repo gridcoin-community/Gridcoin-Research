@@ -60,7 +60,7 @@ Public Class clsBoincProjectDownload
             Return 1
         Else
             Dim sCacheFileName As String = RetrieveCacheProjectFilename(sGzipURL)
-            Dim bStatus As Boolean = ResilientDownload(sGridcoinBaseUrl + sCacheFileName, sEtagFilePath, sGridcoinBaseUrl + sCacheFileName)
+            Dim bStatus As Boolean = ResilientDownload(sGridcoinBaseUrl + sCacheFileName, sEtagFilePath, sGzipURL)
             If bStatus Then
                 Return 2
             Else
