@@ -47,6 +47,7 @@ Value getmininginfo(const Array& params, bool fHelp)
     int64_t nTime= GetAdjustedTime();
     pwalletMain->GetStakeWeight(nWeight);
     Object obj, diff, weight;
+    uint64_t nNetworkWeight = GetPoSKernelPS();
     obj.push_back(Pair("blocks",        (int)nBestHeight));
     diff.push_back(Pair("proof-of-work",        GetDifficulty()));
     diff.push_back(Pair("proof-of-research",    GetDifficulty(GetLastBlockIndex(pindexBest, true))));
@@ -55,7 +56,7 @@ Value getmininginfo(const Array& params, bool fHelp)
     { LOCK(MinerStatus.lock);
         // not using real weigh to not break calculation
         bool staking = MinerStatus.nLastCoinStakeSearchInterval && MinerStatus.WeightSum;
-        uint64_t nExpectedTime = staking ? (GetTargetSpacing(nBestHeight) * (uint64_t)GetPoSKernelPS() / MinerStatus.ValueSum) : 0;
+        uint64_t nExpectedTime = staking ? (GetTargetSpacing(nBestHeight) * nNetworkWeight / MinerStatus.ValueSum) : 0;
         diff.push_back(Pair("search-interval",      (int)nMinerSleep));
         diff.push_back(Pair("last-search-interval", (int)MinerStatus.nLastCoinStakeSearchInterval));
         weight.push_back(Pair("minimum",    MinerStatus.WeightMin));
