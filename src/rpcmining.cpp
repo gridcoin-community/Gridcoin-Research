@@ -47,7 +47,7 @@ Value getmininginfo(const Array& params, bool fHelp)
     int64_t nTime= GetAdjustedTime();
     pwalletMain->GetStakeWeight(nWeight);
     Object obj, diff, weight;
-    uint64_t nNetworkWeight = GetPoSKernelPS();
+    double nNetworkWeight = GetPoSKernelPS();
     obj.push_back(Pair("blocks",        (int)nBestHeight));
     diff.push_back(Pair("proof-of-work",        GetDifficulty()));
     diff.push_back(Pair("proof-of-research",    GetDifficulty(GetLastBlockIndex(pindexBest, true))));
@@ -65,7 +65,7 @@ Value getmininginfo(const Array& params, bool fHelp)
         weight.push_back(Pair("valuesum",   MinerStatus.ValueSum));
         weight.push_back(Pair("legacy",   nWeight/(double)COIN));
         obj.push_back(Pair("stakeweight", weight));
-        obj.push_back(Pair("netstakeweight", GetPoSKernelPS()));
+        obj.push_back(Pair("netstakeweight", nNetworkWeight));
         obj.push_back(Pair("staking", staking));
         obj.push_back(Pair("mining-error", MinerStatus.ReasonNotStaking));
         obj.push_back(Pair("mining-message", MinerStatus.Message));
