@@ -86,7 +86,7 @@ Value getmininginfo(const Array& params, bool fHelp)
     obj.push_back(Pair("errors",        GetWarnings("statusbar")));
     obj.push_back(Pair("pooledtx",      (uint64_t)mempool.size()));
     //double nCutoff =  GetAdjustedTime() - (60*60*24*14);
-    obj.push_back(Pair("pos_interest_year", GetCoinYearReward( GetAdjustedTime())/(double)COIN));
+    obj.push_back(Pair("stakeinterest", GetCoinYearReward( GetAdjustedTime())/(double)COIN));
     obj.push_back(Pair("testnet",       fTestNet));
     double neural_popularity = 0;
     std::string neural_hash = GetNeuralNetworkSupermajorityHash(neural_popularity);
