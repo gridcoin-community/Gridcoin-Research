@@ -75,7 +75,7 @@ double GRCMagnitudeUnit(int64_t locktime);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 std::string ExtractHTML(std::string HTMLdata, std::string tagstartprefix,  std::string tagstart_suffix, std::string tag_end);
 std::string NeuralRequest(std::string MyNeuralRequest);
-extern bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
+extern bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 
 double Round(double d, int place);
 bool UnusualActivityReport();
@@ -1153,7 +1153,7 @@ bool CPIDAcidTest2(std::string bpk, std::string externalcpid)
 }
         
 
-bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage)
+bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage)
 {	
      LOCK(cs_main);
      {
@@ -1161,17 +1161,17 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
             if (GlobalCPUMiningCPID.cpid=="INVESTOR")
             {
                 sError = "INVESTORS_CANNOT_SEND_BEACONS";
-                return bFromService ? true : false;
+                return false;
             }
 
             //If beacon is already in the chain, exit early
-            std::string sBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,bFromService);
+            std::string sBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,true);
             if (!sBeaconPublicKey.empty()) 
             {
                 // Ensure they can re-send the beacon if > 5 months old : GetBeaconPublicKey returns an empty string when > 5 months: OK.
                 // Note that we allow the client to re-advertise the beacon in 5 months, so that they have a seamless and uninterrupted keypair in use (prevents a hacker from hijacking a keypair that is in use)		
                 sError = "ALREADY_IN_CHAIN";
-                return bFromService ? true : false;
+                return false;
             }
             
             uint256 hashRand = GetRandHash();
@@ -1722,7 +1722,7 @@ Value execute(const Array& params, bool fHelp)
                 std::string sError = "";
                 std::string sMessage = "";
 
-                bool fResult = AdvertiseBeacon(false,sOutPrivKey,sOutPubKey,sError,sMessage);
+                bool fResult = AdvertiseBeacon(sOutPrivKey,sOutPubKey,sError,sMessage);
                 entry.push_back(Pair("Result",SuccessFail(fResult)));
                 entry.push_back(Pair("CPID",GlobalCPUMiningCPID.cpid.c_str()));
                 entry.push_back(Pair("Message",sMessage.c_str()));
