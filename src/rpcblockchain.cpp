@@ -3700,6 +3700,12 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
 
         if (boost::algorithm::starts_with(key_name, datatype))
         {
+            // Creating polls also create additional cache instances with ";burnamount" and ";recipient"
+            // appended. Skip all keys containing those fields.
+            if(boost::iends_with(key_name, ";burnamount") ||
+               boost::iends_with(key_name, ";recipient"))
+               continue;
+
             std::string Title = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
             std::string Expiration = ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>");
             std::string Question = ExtractXML(contract,"<QUESTION>","</QUESTION>");
@@ -3707,6 +3713,8 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
             std::string ShareType = ExtractXML(contract,"<SHARETYPE>","</SHARETYPE>");
             std::string sURL = ExtractXML(contract,"<URL>","</URL>");
             boost::to_lower(Title);
+
+            // TODO: Pass contract instead of title to PollExpired
             if (!PollExpired(Title) || IncludeExpired)
             {
                 if (QueryByTitle.empty() || QueryByTitle == Title)
