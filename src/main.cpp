@@ -41,7 +41,7 @@ extern std::string ConvertBinToHex(std::string a);
 extern std::string ConvertHexToBin(std::string a);
 extern bool WalletOutOfSync();
 extern bool WriteKey(std::string sKey, std::string sValue);
-bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
+bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 extern void CleanInboundConnections(bool bClearAll);
 extern bool PushGridcoinDiagnostics();
@@ -4578,7 +4578,7 @@ void GridcoinServices()
         std::string sOutPrivKey = "";
         std::string sError = "";
         std::string sMessage = "";
-        bool fResult = AdvertiseBeacon(true,sOutPrivKey,sOutPubKey,sError,sMessage);
+        bool fResult = AdvertiseBeacon(sOutPrivKey,sOutPubKey,sError,sMessage);
         if (!fResult)
         {
             printf("BEACON ERROR!  Unable to send beacon %s \r\n",sError.c_str());
